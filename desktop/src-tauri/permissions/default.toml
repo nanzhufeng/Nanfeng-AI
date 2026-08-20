@@ -9,6 +9,11 @@ description = "Allows a preflighted private staging ID to become one new isolate
 commands.allow = ["import_staged_exchange_as_new_workspace"]
 
 [[permission]]
+identifier = "allow-import-desktop-workspace-exchange-v2-selected"
+description = "Allows one user-selected exact .nfai-exchange or Android DocumentsUI .nfai-exchange.zip package to enter only the v2 strict-preflight/private-archive/single-transaction owner. It grants no path projection, arbitrary filesystem API, v1 staging, credential, transport, Provider or model access."
+commands.allow = ["import_desktop_workspace_exchange_v2_selected"]
+
+[[permission]]
 identifier = "allow-list-desktop-workspaces"
 description = "Allows read-only workspace summaries from Rust-owned SQLite."
 commands.allow = ["list_desktop_workspaces"]

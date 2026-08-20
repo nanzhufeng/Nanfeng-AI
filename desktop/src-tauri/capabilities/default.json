@@ -7,6 +7,7 @@
     "dialog:default",
     "allow-stage-preflight-selected-exchange",
     "allow-import-staged-exchange-as-new-workspace",
+    "allow-import-desktop-workspace-exchange-v2-selected",
     "allow-list-desktop-workspaces",
     "allow-read-desktop-workspace",
     "allow-export-desktop-workspace-to-selected-path",

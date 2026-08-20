@@ -4,11 +4,11 @@
 
 本合同冻结 `nfai.exchange.v2` 在 Desktop 的**未来内部导入 owner**。它只消费已由 `protocol/nfai.exchange.v2.schema.json`、`protocol/scripts/exchange-v2-lib.mjs` 和 `NfaiExchangeV2Ir` 确认的 exact IR；不重新解释、不补默认值、不把 v2 降级为 v1，也不把 v1 的 `workspaces/workspace_exchange/import_journal` 当作 v2 owner。
 
-已实现 v2 package writer、private archive、SQLite migration 和独立 Tauri command；Desktop 设置的 native picker 只把用户选中的单一 `.nfai-exchange` 交给该 command。该桥接不接受 v1 staging ID、不返回路径/正文/显示名/bytes、不读写 v1 工作区表，失败不生成可见 workspace。Android 没有 v2 SAF/UI。没有网络、Keychain、Provider、设备或数据库注入验收；尚无真实 native picker 人工文件验收、跨端 v2 互通、Windows 或发布结论。
+已实现 v2 package writer、private archive、SQLite migration 和独立 Tauri command；Desktop 设置的 native picker 只把用户选中的单一精确 `.nfai-exchange` 或 Android DocumentsUI 兼容 `.nfai-exchange.zip` 交给该 command。该 command 必须同时由专用 Tauri capability `allow-import-desktop-workspace-exchange-v2-selected` 显式允许；它不接受 v1 staging ID、不返回路径/正文/显示名/MIME/bytes、不读写 v1 工作区表，失败不生成可见 workspace。Android 从设置范围选择后经 `application/zip` SAF 输出 v2 包；DocumentsUI 可能追加 `.zip`，但这不改变内容身份。没有网络、Keychain、Provider、设备或数据库注入验收；尚无真实 native picker 人工文件验收、跨端 v2 互通、Windows 或发布结论。
 
 ## v2 私有 package 与严格 preflight
 
-v2 package 使用独立 `packageVersion: 2`，且 `exchangeVersion: 2`；v1 预检必须拒绝它。ZIP 仅允许下列 manifest 列出的文件：
+v2 package 使用独立 `packageVersion: 2`，且 `exchangeVersion: 2`；v1 预检必须拒绝它。文件名/MIME 不参与 version 或 hash 判断，任何获准显示名仍必须先通过本节严格预检。ZIP 仅允许下列 manifest 列出的文件：
 
 | entry | 必须内容 | 校验 |
 | --- | --- | --- |

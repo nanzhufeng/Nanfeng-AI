@@ -108,6 +108,11 @@ import com.nanzhufeng.ai.domain.NanfengKnowledgeImportItemId
 import com.nanzhufeng.ai.domain.NanfengKnowledgeImportTask
 import com.nanzhufeng.ai.domain.NanfengKnowledgeImportTaskId
 
+// DocumentsUI may materialize the ZIP MIME type by appending `.zip`. The suggested display
+// name remains the v2 protocol label; receipts never use either value as package identity.
+internal const val WORKSPACE_EXCHANGE_V2_DOCUMENT_MIME = "application/zip"
+internal const val WORKSPACE_EXCHANGE_V2_SUGGESTED_DISPLAY_NAME = "nanfeng-ai-workspace-v2.nfai-exchange"
+
 internal val PageBackground = Color(0xFFE6EAE7)
 /** Semantic success only; it must not be reused as the interactive brand accent. */
 internal val BrandGreen = Color(0xFF167A61)
@@ -272,7 +277,7 @@ internal fun NanfengAiApp(
         if (uri != null && conversationId != null) conversationExchangeExportViewModel.export(conversationId, uri)
     }
     var pendingWorkspaceExchangeV2Scope by remember { mutableStateOf<com.nanzhufeng.ai.domain.WorkspaceExchangeV2ScopeSummary?>(null) }
-    val workspaceExchangeV2ExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+    val workspaceExchangeV2ExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(WORKSPACE_EXCHANGE_V2_DOCUMENT_MIME)) { uri ->
         val scope = pendingWorkspaceExchangeV2Scope
         pendingWorkspaceExchangeV2Scope = null
         if (uri != null && scope != null) workspaceExchangeV2ExportViewModel.export(uri) else workspaceExchangeV2ExportViewModel.clearScope()
@@ -441,7 +446,7 @@ internal fun NanfengAiApp(
                     onDismiss = workspaceExchangeV2ExportViewModel::clearScope,
                     onExport = { onScope ->
                         pendingWorkspaceExchangeV2Scope = onScope
-                        workspaceExchangeV2ExportPicker.launch("nanfeng-ai-workspace-v2.nfai-exchange")
+                        workspaceExchangeV2ExportPicker.launch(WORKSPACE_EXCHANGE_V2_SUGGESTED_DISPLAY_NAME)
                     },
                 )
             }

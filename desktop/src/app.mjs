@@ -227,7 +227,7 @@ async function pickClaudeExport() { if (!native) { state.status = 'Web 预览不
 async function pickP6kZip(provider) { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } if (!state.current) { state.error = '先导入或创建一个本地工作区。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: `${provider} data export ZIP`, extensions: ['zip'] }] }); if (!selectedPath) return; try { state.p6kTask = await invoke('stage_p6k_zip_import_selected', { args: { workspaceId: state.current.summary.id, provider, selectedPath } }); state.status = `${provider} ZIP 已完成私有校验并直接导入：${state.p6kTask.importedCount} 个会话；失败 ${state.p6kTask.failedCount}，未关联媒体 ${state.p6kTask.unmappedAssetCount}。`; state.error = ''; await refresh(); } catch (error) { state.error = `ZIP 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
 async function pickV2WorkspaceExchange() {
   if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; }
-  const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 完整工作区交换（v2）', extensions: ['nfai-exchange'] }] });
+  const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 完整工作区交换（v2）', extensions: ['nfai-exchange', 'zip'] }] });
   if (!selectedPath) return;
   try {
     const receipt = await invoke('import_desktop_workspace_exchange_v2_selected', { selectedPath });
@@ -235,7 +235,7 @@ async function pickV2WorkspaceExchange() {
     state.error = '';
   } catch (error) {
     state.error = `完整工作区交换（v2）被拒绝：${String(error)}`;
-    state.status = '未创建可见工作区或导入记录。';
+    state.status = state.error;
   }
   render();
 }

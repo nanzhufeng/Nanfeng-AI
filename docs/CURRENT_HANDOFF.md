@@ -1,5 +1,19 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 v2 Android DocumentsUI ZIP → Desktop native picker：真实跨端导入与 replay 已闭合，实际回导待独立入口
+
+- **真实链路：** 只读从 `emulator-5558` 的 DocumentsUI 下载目录取得实际 `nanfeng-ai-workspace-v2.nfai-exchange.zip`（1,091 B；package SHA-256 `3601aeb…205c53`），在新建且起始零项的 `/tmp/nanfeng-ai-p6-v2-picker-acceptance.09id6Q` 根中，用当前 ad-hoc 严格验签 Desktop bundle 的设置 → 数据与导入 → 完整工作区交换（v2）→ 原生 picker 选择该文件。UI 返回 content-free receipt，semantic hash `d0c3df7b…6d986`、附件 0；第二次同一 picker 选择返回“已验证重放回执”。未打开或输出任何 package 正文。
+- **结果与隔离：** SQLite 只读 reopen 证明 `exchange_v2_imports/journal/receipts=1/1/1`、owner provenance=2（Project + settings），receipt package/semantic hash 与 Android 一致、owner-field-hashes JSON 已持久；v1 `workspaces/workspace_exchange/import_journal=0/0/0`。本轮的临时 login-session 环境变量和只属于验收根的 Desktop 进程均已移除；OPPO、5554、5556 未触及。
+- **修正：** native picker 首次真实执行暴露 capability 漏登记而安全拒绝（`not allowed by ACL`）；已只新增 `allow-import-desktop-workspace-exchange-v2-selected`，并让 UI 显示真实脱敏拒绝而非泛化状态。名称兼容仍只接纳两种精确终止名，严格 v2 preflight 不变。
+- **验证：** Node v2 golden、Desktop lint、91/91 Node UI tests、Rust picker bridge 与 clippy、Android DocumentsUI UI contract 均通过；当前 bundle deep/strict codesign 通过，主可执行 SHA-256 `ffa500e8…e4bec9`。实际已提交数据的回导文件尚无设置入口，本轮未用 SQL/文件注入伪造 re-export；现有 Rust re-export 自动合同仍不替代这一真实回导缺口。
+
+## 2026-08-20 P6 v2 DocumentsUI `.zip` 名称兼容：代码/合同与自动门已接入，真实 Desktop picker 待 Mac 解锁
+
+- **决策与实现：** Android 继续以 `application/zip` 创建文件，并固定建议显示名 `nanfeng-ai-workspace-v2.nfai-exchange`；DocumentsUI 实际追加 `.zip` 被定义为允许的系统命名行为，而非协议版本或内容标识。Desktop picker 的展示过滤器增加 ZIP，但 Rust 最终门禁只接受非空 `<stem>.nfai-exchange` 或 `<stem>.nfai-exchange.zip`，拒绝路径片段、追加扩展、`.zip.nfai-exchange` 与嵌套后缀；通过名字门禁后仍必须走既有 v2 strict preflight、私有 archive 和 SQLite transaction。没有为兼容名放宽 ZIP entry、manifest、semantic hash、asset hash、owner-field hash 或 v1/v2 version 门禁。
+- **回执与治理：** Android 建议名/MIME、Desktop 允许名、拒绝样例和 content-free receipt 语义已写入 `P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md` 与 Desktop transaction 合同。显示名、MIME、path、正文和附件 bytes 不进入 Android SAF 成功回执或 Desktop committed/replay 回执；文件名变化不产生语义身份。功能仍只在双端设置二级入口，功能审阅不新增常驻按键。
+- **自动验证待本轮运行：** Node golden 新增两种允许名与投毒名拒绝；Desktop Rust bridge 新增 `.nfai-exchange.zip` 严格导入/replay 及投毒名拒绝；Android UI 合同新增 MIME、建议名和无显示名/MIME回执字段检查。尚未因此执行任何 picker、SQLite 注入、AVD 写入、OPPO 或网络动作。
+- **下一停止门：** Mac 解锁后，在唯一空的 `NANFENG_AI_P6_V2_PICKER_ACCEPTANCE_ROOT` 内，用已由 Android 5558 导出的实际 `.nfai-exchange.zip` 仅经 Desktop 设置 → 数据与导入 → 完整工作区交换（v2）→ native picker 导入；读取 content-free receipt，再核对 reopen/replay/re-export semantic + field hash 与 v1 三表不变。若仍锁屏，不猜测或绕过，记录阻断并转其他本地 P6 工作。
+
 ## 2026-08-20 P6 工作区 v2 Android DocumentsUI 隔离验收：真实导出/readback 与 Desktop strict reader 已完成
 
 - **5556 保护与新隔离环境：** `emulator-5556` 的输入焦点曾转入既有 `com.nanzhufeng.videodownloader`，因此未再对它执行 UI 或写入。只读 SDK/AVD 核对后，不克隆、不修改、不启动任何既有 AVD，而是以已存在的 Android 35 Google APIs arm64-v8a image 新建 `NanfengAiP6V2DocumentsUiAcceptance`，唯一 serial 为 `emulator-5558`。OPPO 与 `emulator-5554` 未被写入。

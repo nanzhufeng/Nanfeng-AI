@@ -1,5 +1,17 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-20 P6 v2 Android DocumentsUI ZIP → Desktop native picker：真实导入/replay 子链已关闭
+
+- **已确认：** 当前严格验签 Desktop bundle 在全新独立 `/tmp` 根，通过设置原生 picker 选择 5558 的实际 `.nfai-exchange.zip` 后成功给出 content-free committed receipt；同一文件第二次选择显示 replay receipt。package/semantic hash 与 Android readback 一致，v2 import/journal/receipt 各 1 条、两项 owner provenance，v1 三表均为零；无 OPPO、5554、5556、Key、网络或正文读取。
+- **修正：** 真链首次暴露 Tauri ACL 遗漏，安全拒绝未写入任何 v2/v1 行。补入只允许该单一 v2 command 的 capability 并让 UI显式展示真实拒绝后，重建 bundle 和重跑隔离链成功；没有放宽文件名、manifest、hash、version 或 owner 门禁。
+- **仍未确认且不得推断：** Desktop 实际已提交数据的 native re-export 文件/semantic+field-hash readback 没有用户设置入口，尚未以真实文件关闭；P6、跨端完整对象恢复、Windows、发布及 P0–P11仍未退出。
+
+## 2026-08-20 P6 v2 DocumentsUI `.zip` 名称兼容：实现/合同已闭合，Desktop native picker 真实跨端链待继续
+
+- **已确认：** Android 的 `application/zip` DocumentsUI 允许将建议 `.nfai-exchange` 显示名保存为 `.nfai-exchange.zip`。Desktop picker 已只为这一个兼容事实增加精确终止名接纳（两种允许形式）和 ZIP 展示过滤；Rust 在读 bytes 前拒绝追加扩展、嵌套协议/ZIP 后缀与路径欺骗，随后仍必须通过 v2 exact manifest、semantic、asset 和 owner-field hash strict preflight。v1 继续由 v2 version/preflight 拒绝，v1 owner/table 不被读取或写入。
+- **合同/回执：** Android MIME/建议显示名、Desktop picker 名称规则和 content-free receipt 已纳入 v2 字段保真及 Desktop transaction 合同。名称或 MIME 从不成为 content identity，也不回传或持久化至 receipt；严格 hash 与 manifest 证明不因名称兼容而放宽。
+- **仍未确认且不得推断：** 本增量尚未在真实 native picker 选择 Android 实际 `.nfai-exchange.zip`，未产生 Desktop committed receipt、reopen/replay/re-export 或 v1 三表现场 readback；更不关闭 P6、跨端、Windows、发布或 P0–P11。Mac 未解锁时禁止绕过或伪造验收。
+
 ## 2026-08-20 P6 v2 Android DocumentsUI 隔离验收：新 AVD 的真实导出子链已关闭
 
 - **隔离与产物：** 因 5556 有既有另一产品前台且输入焦点不可靠，未再触碰 5556。只读 SDK/AVD 核对后新建独占 `NanfengAiP6V2DocumentsUiAcceptance` / `emulator-5558`，不克隆或修改任何既有 AVD。新包 `com.nanzhufeng.ai.p6v2safemptyacceptance` 在该 AVD 首装，显式关闭 P6E fixture；APK 与 installed base.apk SHA-256 一致。OPPO 与 5554 未写入。

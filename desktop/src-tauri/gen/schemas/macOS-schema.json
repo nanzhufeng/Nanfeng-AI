@@ -213,6 +213,12 @@
           "markdownDescription": "Allows only user-mediated local attachment import; it grants no filesystem API, transport, or credential access."
         },
         {
+          "description": "Allows one user-selected exact .nfai-exchange or Android DocumentsUI .nfai-exchange.zip package to enter only the v2 strict-preflight/private-archive/single-transaction owner. It grants no path projection, arbitrary filesystem API, v1 staging, credential, transport, Provider or model access.",
+          "type": "string",
+          "const": "allow-import-desktop-workspace-exchange-v2-selected",
+          "markdownDescription": "Allows one user-selected exact .nfai-exchange or Android DocumentsUI .nfai-exchange.zip package to enter only the v2 strict-preflight/private-archive/single-transaction owner. It grants no path projection, arbitrary filesystem API, v1 staging, credential, transport, Provider or model access."
+        },
+        {
           "description": "Allows a preflighted private staging ID to become one new isolated Desktop workspace.",
           "type": "string",
           "const": "allow-import-staged-exchange-as-new-workspace",

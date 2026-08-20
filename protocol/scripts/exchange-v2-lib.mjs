@@ -2,6 +2,27 @@ import { createHash } from 'node:crypto';
 
 export const FORMAT = 'nfai.exchange';
 export const VERSION = 2;
+// These names are transport admission labels only. They are deliberately not protocol fields:
+// the v2 manifest, canonical export and hashes remain the only content identity.
+export const V2_PACKAGE_FILE_SUFFIX = '.nfai-exchange';
+export const V2_DOCUMENTS_UI_FILE_SUFFIX = '.nfai-exchange.zip';
+
+/**
+ * Accepts the Android DocumentsUI-compatible name only as an exact terminal suffix.
+ * A path, empty stem, nested protocol suffix, or a suffix appended after the allowed form is
+ * never a valid v2 picker filename. Callers must still run strict package preflight.
+ */
+export function isV2PickerDisplayName(value) {
+  if (typeof value !== 'string' || !value || value.includes('/') || value.includes('\\')) return false;
+  const suffix = value.endsWith(V2_DOCUMENTS_UI_FILE_SUFFIX)
+    ? V2_DOCUMENTS_UI_FILE_SUFFIX
+    : value.endsWith(V2_PACKAGE_FILE_SUFFIX)
+      ? V2_PACKAGE_FILE_SUFFIX
+      : null;
+  if (!suffix) return false;
+  const stem = value.slice(0, -suffix.length);
+  return Boolean(stem) && !stem.endsWith(V2_PACKAGE_FILE_SUFFIX) && !stem.endsWith('.zip');
+}
 const forbidden = /(?:credential|api[_-]?key|authorization|provider[_-]?(?:raw|payload)|runtime[_-]?chunk|diagnostic|route[_-]?pref|\buri\b|\bpath\b)/i;
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
 export const utf8 = value => Buffer.from(value, 'utf8');

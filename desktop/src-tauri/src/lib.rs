@@ -61,6 +61,8 @@ const P6J_ACCEPTANCE_ROOT_NAME: &str = "nanfeng-ai-p6j-acceptance-20260815";
 // temporary root without ever falling back to the user's normal app-data directory.
 const P6_V2_PICKER_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_P6_V2_PICKER_ACCEPTANCE_ROOT";
 const P6_V2_PICKER_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-p6-v2-picker-acceptance.";
+const P6_V2_PACKAGE_FILE_SUFFIX: &str = ".nfai-exchange";
+const P6_V2_DOCUMENTS_UI_FILE_SUFFIX: &str = ".nfai-exchange.zip";
 // FB-P6-050 is a UI-only acceptance run.  It must never reuse a normal Desktop
 // app-data directory just because the temporary bundle was copied with a new ID.
 const FB_P6_050_ACCEPTANCE_ENV: &str = "NANFENG_AI_FB_P6_050_ACCEPTANCE";
@@ -3120,7 +3122,8 @@ impl DesktopWorkspaceStore {
     fn read_selected_v2_package(&self, selected_path: &str) -> Result<Vec<u8>, String> {
         const MAX_SELECTED_V2_PACKAGE_BYTES: u64 = 128 * 1024 * 1024;
         let selected = Path::new(selected_path);
-        if selected.extension().and_then(|extension| extension.to_str()) != Some("nfai-exchange") {
+        let name = selected.file_name().and_then(|value| value.to_str());
+        if !name.is_some_and(is_selected_v2_package_filename) {
             return Err(json_error("完整工作区交换文件类型无效"));
         }
         let metadata = fs::metadata(selected)
@@ -6310,6 +6313,26 @@ trait Pipe: Sized {
 }
 impl<T> Pipe for T {}
 
+/// Filename admission is intentionally narrower than the picker filter. `DocumentsUI` is
+/// allowed to append `.zip` to Android's `.nfai-exchange` display name because its MIME is
+/// `application/zip`; any other nested/after-suffix extension remains rejected before bytes are
+/// read. This function never grants content validity: strict v2 preflight remains mandatory.
+fn is_selected_v2_package_filename(name: &str) -> bool {
+    let suffix = if name.ends_with(P6_V2_DOCUMENTS_UI_FILE_SUFFIX) {
+        P6_V2_DOCUMENTS_UI_FILE_SUFFIX
+    } else if name.ends_with(P6_V2_PACKAGE_FILE_SUFFIX) {
+        P6_V2_PACKAGE_FILE_SUFFIX
+    } else {
+        return false;
+    };
+    let Some(stem) = name.strip_suffix(suffix) else {
+        return false;
+    };
+    !stem.is_empty()
+        && !stem.ends_with(P6_V2_PACKAGE_FILE_SUFFIX)
+        && !stem.ends_with(".zip")
+}
+
 #[tauri::command]
 fn stage_preflight_selected_exchange(
     state: State<'_, AppState>,
@@ -7202,6 +7225,12 @@ mod tests {
             .import_selected_v2_workspace_exchange(selected.to_str().unwrap())
             .unwrap();
         assert!(replay.replayed);
+        let documents_ui_selected = directory.path().join("selected.nfai-exchange.zip");
+        fs::copy(&selected, &documents_ui_selected).unwrap();
+        let documents_ui_replay = store
+            .import_selected_v2_workspace_exchange(documents_ui_selected.to_str().unwrap())
+            .unwrap();
+        assert!(documents_ui_replay.replayed);
         let connection = store.connection().unwrap();
         let v1_rows: i64 = connection
             .query_row(
@@ -7216,6 +7245,19 @@ mod tests {
             .unwrap_err();
         assert!(rejected.contains("文件类型无效"));
         assert!(!rejected.contains("not-selected.txt"));
+        for invalid_name in [
+            "selected.nfai-exchange.zip.exe",
+            "selected.zip.nfai-exchange",
+            "selected.nfai-exchange.nfai-exchange",
+        ] {
+            let invalid = directory.path().join(invalid_name);
+            fs::copy(&selected, &invalid).unwrap();
+            let rejected = store
+                .import_selected_v2_workspace_exchange(invalid.to_str().unwrap())
+                .unwrap_err();
+            assert!(rejected.contains("文件类型无效"));
+            assert!(!rejected.contains(invalid_name));
+        }
     }
 
     #[test]

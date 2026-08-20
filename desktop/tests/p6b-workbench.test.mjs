@@ -23,7 +23,7 @@ test('P6-D keyboard, focus and compact contracts remain code-owned', () => {
 
 test('P6-B keeps the picker and command surface least-privileged', () => {
   for (const token of ['stage_preflight_selected_exchange', 'import_staged_exchange_as_new_workspace', 'export_desktop_workspace_to_selected_path']) assert.ok(permissions.includes(token));
-  for (const token of ['allow-stage-preflight-selected-exchange', 'allow-import-staged-exchange-as-new-workspace', 'allow-export-desktop-workspace-to-selected-path']) assert.ok(capability.includes(token));
+  for (const token of ['allow-stage-preflight-selected-exchange', 'allow-import-staged-exchange-as-new-workspace', 'allow-import-desktop-workspace-exchange-v2-selected', 'allow-export-desktop-workspace-to-selected-path']) assert.ok(capability.includes(token));
   assert.ok(!capability.includes('fs:'));
   assert.ok(!cargo.includes('tauri-plugin-shell'));
   assert.ok(!cargo.includes('tauri-plugin-http'));

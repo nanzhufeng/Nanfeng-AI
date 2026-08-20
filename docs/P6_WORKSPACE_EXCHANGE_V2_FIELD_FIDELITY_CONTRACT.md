@@ -30,8 +30,15 @@ v2 只接纳下表中有现存 Android owner、清晰字段语义、并且不会
 - v2 预检为**纯 IR**：不读 Room、SQLite、私有附件、SAF、文件 picker、网络、Provider 或 Key，也不注册 UI。它的功能是把上述 owner 字段缺失/不安全/不可验证的情况明确拒绝，防止 v1 的静默丢失被重新引入。
 - Android 的 `NfaiExchangeV2OwnerMapper` 已能从显式选择的 owner 只读生成并复验 exact IR；它仅在内存中核验附件 bytes/hash，不保留 bytes、不写 Room，也不注册 UI/SAF。它拒绝缺 history、`sourceReference`、定位符、私有 `reference` 外泄、运行时节点与无法证实的附件。这个 owner mapper 不能替代本段的纯 IR validator，后者仍不访问任何 owner。
 - Android 的未注册 `NfaiExchangeV2PackageWriter` 是 mapper 后的本地 serializer，不是 SAF 或持久化 adapter：它只为 IR 账本明确引用的附件再次只读核验 bytes/hash，在内存中写 canonical `manifest.json + exchange.json + assets/<sha256>`，并对成品执行 v2 package preflight。唯一输出是要求原子发布的有限 port；mapper/ledger/preflight 任一步失败时不得调用该 port，receipt 只含 hash、枚举、计数与 `ownerFieldHashes`。没有 app-data archive、Room/SQLite 写入、导入、UI、SAF、picker、网络或 Key。
-- Desktop 的独立 schema version、package、private staging、asset archive、SQLite transaction、journal/receipt、失败注入、重开与回导的唯一正文见 [v2 Desktop 原子导入合同](P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md)。v2 不开放 Android SAF；Desktop 的受限 native picker 入口只接纳单一用户选择的 package，不能说成 Desktop 原生 owner 恢复。
+- Desktop 的独立 schema version、package、private staging、asset archive、SQLite transaction、journal/receipt、失败注入、重开与回导的唯一正文见 [v2 Desktop 原子导入合同](P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md)。Android 只经设置范围选择后的 SAF CreateDocument 输出；Desktop 的受限 native picker 只接纳单一用户选择的 package，不能说成 Desktop 原生 owner 恢复。
+
+## 文件名、MIME 与回执边界
+
+- Android 建议显示名固定为 `nanfeng-ai-workspace-v2.nfai-exchange`，CreateDocument MIME 固定为 `application/zip`。系统 DocumentsUI 可以把实际用户可见文件名保存为 `*.nfai-exchange.zip`；这是 provider 的显示/扩展名行为，不改变 package bytes、manifest、semantic hash 或任一 `ownerFieldHash`。
+- Desktop picker 只可展示并接纳两种**精确终止**名：`<stem>.nfai-exchange` 或 `<stem>.nfai-exchange.zip`。`<stem>` 非空，且不能再以 `.nfai-exchange` 或 `.zip` 结尾；路径片段、任何附加后缀（如 `.nfai-exchange.zip.exe`）、嵌套协议/ZIP 后缀（如 `.zip.nfai-exchange`）一律在读 bytes 前拒绝。picker filter 展示 `.zip` 不代表接纳普通 ZIP。
+- 文件名与 MIME 只是系统 picker 的入场标签，绝不构成包身份、来源证明或内容豁免。两种允许名都必须依次通过 v2 ZIP entry/size/path 防护、exact manifest、canonical export、IR semantic hash、asset ledger/bytes hash 和全量 owner-field-hash preflight；v1 或任何混入 v1 的包仍由 `packageVersion: 2` / `exchangeVersion: 2` 门禁拒绝。
+- Android SAF 成功回执与 Desktop committed/replay 回执都只含 package/semantic hash、匿名计数、枚举和 owner field hashes（以及 Desktop workspace/replay 状态）；不得返回或持久化 selected path、用户显示名、MIME、正文或附件 bytes。文件名改变而 bytes 不变不产生新的语义身份。
 
 ## 用户入口
 
-Desktop 现在只在“设置 → 数据与导入”提供 `完整工作区交换（v2）` 的 native picker 二级入口：它只读取用户所选 `.nfai-exchange` 的有限 bytes，依次执行 v2 strict preflight 与独立 private archive/transaction owner，返回 content-free receipt 或脱敏的真实拒绝，不创建 v1/可见工作区。Android 尚无 v2 用户入口。Android/Desktop 的“设置 → 功能审阅”同改登记其“待您判断”去留；建议保留 Desktop 设置二级入口，不新增聊天、Composer 或工作页常驻按键。本条不是已完成真实用户文件验收、跨端互通、备份/同步或 Desktop 原生 owner 恢复声明。
+Desktop 现在只在“设置 → 数据与导入”提供 `完整工作区交换（v2）` 的 native picker 二级入口：它只读取用户所选的精确 `.nfai-exchange` 或 DocumentsUI 兼容 `.nfai-exchange.zip` 有限 bytes，依次执行 v2 strict preflight 与独立 private archive/transaction owner，返回 content-free receipt 或脱敏的真实拒绝，不创建 v1/可见工作区。Android 在同一设置层通过显式完整范围与系统保存位置输出 v2 包。Android/Desktop 的“设置 → 功能审阅”同改登记其“待您判断”去留；建议保留设置二级入口，不新增聊天、Composer 或工作页常驻按键。本条不是已完成真实用户文件验收、跨端互通、备份/同步或 Desktop 原生 owner 恢复声明。

@@ -141,6 +141,13 @@ test('P6 v2 complete exchange stays in Settings and never presents itself as a r
   assert.ok(!rendered.includes('完整工作区交换（v2）</strong><p>选择后严格预检并直接导入为新的独立工作区'));
 });
 
+test('P6 v2 picker preserves the content-free native rejection instead of replacing it with a generic success-like status', () => {
+  const picker = source.slice(source.indexOf('async function pickV2WorkspaceExchange'), source.indexOf('async function pickNanfengKnowledgeExport'));
+  assert.ok(picker.includes("extensions: ['nfai-exchange', 'zip']"));
+  assert.ok(picker.includes('state.status = state.error;'));
+  assert.ok(!picker.includes("state.status = '未创建可见工作区或导入记录。'"));
+});
+
 test('P6-K exposes direct ZIP import with recovery controls without changing the settings layout', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'data', status: '', error: '', connection: {} });
   for (const token of ['第三方 ZIP 导入', 'data-action="select-p6k-chatgpt-zip"', 'data-action="select-p6k-claude-zip"', 'data-action="retry-p6k-zip"', 'data-action="skip-p6k-zip-failures"', 'data-action="delete-p6k-zip-batch"']) assert.ok(rendered.includes(token));
