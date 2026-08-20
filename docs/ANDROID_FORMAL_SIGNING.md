@@ -1,7 +1,7 @@
 # 南枫 AI Android 正式签名
 
 > 建立日期：2026-08-12  
-> 当前状态：legacy 签名已冻结；release v2 初始化脚本与配置门禁已就绪，等待本机交互式生成。
+> 当前状态：legacy 签名已冻结；release v2 已完成首次构建并安装至 OPPO 真机。
 
 ## 固定边界
 
@@ -47,7 +47,7 @@
 - Debug 与 Release 均通过 APK Signature Scheme v2/v3 校验，证书 SHA-256 相同。
 - 模拟器先记录旧 Android Debug 证书 `0f89bc92cb127895e6881cda9d3c3c641e0efc0f39a9728eedf2585f8e12fdf3`，随后仅在模拟器卸载旧开发包，安装正式签名开发验收包。
 - 从模拟器拉回的已安装 APK 与本地 `南枫AI-开发验收.apk` SHA-256 一致。
-- OPPO/真实设备尚未安装；不得把模拟器证据写成真机覆盖升级通过。
+- OPPO 真机的 legacy 安装曾读取为 SHA-256 `3b442c47e16dccd5995901df01a56dbd2fb4a471f6d03fad58080824e081989e`，并已归档为历史 APK 证据；不得将其写成与 release v2 的同签名升级。
 
 ## release v2 首次构建证据（2026-08-20）
 
@@ -55,7 +55,7 @@
 - `apksigner verify --verbose --print-certs`：APK Signature Scheme v2 / v3 均通过，单一 signer；v1、v3.1、v4 未启用。
 - signer certificate SHA-1：`2ab70dee32bc61f0596380cd328fa673c0c86149`；SHA-256：`6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；RSA 4096-bit。
 - 从最终 APK 的公开签名块解析的证书有效期：`2026-08-20T06:55:35Z` 至 `2076-08-20T06:55:35Z`。
-- 尚未安装到 emulator 或 OPPO。由于 release v2 与 legacy 证书不同，禁止对历史安装执行覆盖安装或以清数据绕过签名不一致。
+- 2026-08-20 已首次安装到 OPPO PKH120（Android 16）。安装前复查时旧同包名安装已不在包管理器中；本轮没有执行卸载或清数据命令。通过 `pm install -r --user 0` 安装后，`dumpsys` 记录 versionCode `51` / versionName `0.3.0-p10a`，UIAutomator XML 归属 `com.nanzhufeng.ai`，设备 `base.apk` SHA-256 与本地最终 APK 一致。设备 APK 的 signer SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
 
 ## legacy 保护边界
 
