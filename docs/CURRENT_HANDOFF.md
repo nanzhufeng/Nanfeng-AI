@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：P6-L1 双端本地精确复用安全索引（当前）
+
+- **结论：** Android `LocalExactReuseIndex` 与 Desktop `local_exact_reuse_v1::LocalExactReuseIndex` 新增同语义的 content-free 索引：只有完整相同的 scope/provider/model/endpoint/参数/tool/context/tree/attachment/template/policy/request hash，且非 TEMP、非高敏、未撤销、未过期时才返回既有 `responseMessageId` 与 `LOCAL_EXACT_HIT`。缺键/非法键为 `UNKNOWN`，其余不匹配为 `MISS`，TEMP/高敏为 `INELIGIBLE`；不保存 Prompt、回答、Key、路径、Provider event 或网络状态。
+- **验证与边界：** Android `LocalExactReuseV1ContractsTest` 与功能审阅 UI 合同通过；Desktop Rust 定向 2/2、`clippy -D warnings`、Node UI 89/89、lint/typecheck 通过。双端设置 → 功能审阅均新增“本地精确复用”去留与入口建议：不加聊天/Composer 常驻按键。该索引尚未持久化，也未接入普通聊天执行、renderer、Provider cache 或用量台账，不能说已经复用或节省成本；没有 Keychain、HTTP、安装、emulator 或 OPPO 操作。
+
 ## 2026-08-20 总控推进：Desktop Compare 阶段 5 mock-only adapter 与安全 receipt（当前）
 
 - **结论：** `desktop_compare_execution_v1` 已建立为未注册的固定 OpenAI-compatible adapter seam：它只接受阶段 4 的一次性 direct-click command、已核验的 ChatGPT/Claude provider model + price catalog 与短作用域文本，并为两支写入 content-free runtime receipt。未知/空 model 或未知价格在 catalog 构造时失败关闭；空草稿、无效/过期点击也在触及 fake credential、mock HTTP 或 receipt 前拒绝。每支 receipt 仅含 execution id、logical/provider model、success/failure category、HTTP status（如有）、耗时和记录时点；测试 SQLite 仅为 `:memory:`。

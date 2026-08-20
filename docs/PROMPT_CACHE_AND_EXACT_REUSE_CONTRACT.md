@@ -1,6 +1,12 @@
-# Prompt Cache 与精确复用合同（未来阶段；未实现）
+# Prompt Cache 与精确复用合同（P6-L1 本地索引已实现；Provider 缓存仍未实现）
 
 本合同不编号为 P6-H，避免路线冲突；P6-E 不读取 Key、不构造 Provider 请求或联网。集成时必须复核实时 catalog/capability/policy 表；2026-08-13 官方依据：[Claude](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)、[OpenAI](https://developers.openai.com/api/docs/guides/prompt-caching)、[data controls](https://platform.openai.com/docs/models/default-usage-policies-by-endpoint)。
+
+## P6-L1：双端本地精确复用索引（2026-08-20）
+
+- Android `LocalExactReuseIndex` 与 Desktop `local_exact_reuse_v1::LocalExactReuseIndex` 是唯一 owner。它们只接收已经计算的 canonical request hash、各项安全 hash、scope/provider/model/endpoint/template/policy 元数据与既有本地 `responseMessageId`；不接收 Prompt、回答、Key、URI/path、Provider event 或网络状态。
+- 仅非临时、非高敏感且字段完整的同一精确键可记录与命中。撤销、过期、任何字段变化、临时会话或高敏感请求均不命中；缺键或非法键为 `UNKNOWN`，绝不推断为命中。命中只返回既有本地消息引用，并明确“不请求 Provider”。
+- 本阶段是**领域索引和双端合同**，尚未持久化、尚未接入 P3/P2 执行、消息 renderer、Provider cache 或用量台账；不得把它写成普通聊天已经复用、真实节省成本或 Provider cache 命中。
 
 - 结果层固定为 `LOCAL_EXACT_HIT`（本地精确复用、零网络）、`PROVIDER_PREFIX_HIT`（仍有 Provider 请求/外发）、`MISS`、`INELIGIBLE`、`UNKNOWN`；预计或缺 usage 绝不冒充命中。
 - Prompt 顺序：工具/schema → 安全/system/template version → 产品/workspace/project 指令 → 规范排序的显式 Knowledge/Memory Context → root-to-leaf 对话历史 → 当前用户内容及时间/随机/requestId 动态后缀；动态字段不在断点前。

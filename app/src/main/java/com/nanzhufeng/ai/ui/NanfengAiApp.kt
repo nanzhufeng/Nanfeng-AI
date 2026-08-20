@@ -851,6 +851,13 @@ private fun FeatureReviewSettingsCard() {
             Spacer(Modifier.height(6.dp))
             Text("阶段 1/2 已有 fail-closed owner 与 Security.framework 边界；建议：复用现有“对比”操作，不新增 Composer 常驻按钮；固定预设与状态只放在设置 → AI 模型服务。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
+        WhiteCard {
+            Text("本地精确复用", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("当前：待您判断是否保留；仅完成离线精确键与既有消息引用的安全索引，尚未接入普通聊天执行。入口：设置 → 功能审阅。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("建议：暂不增加聊天或 Composer 按键；只有将来真实复用、用量和清理能力完整后，再在设置提供独立开关与清理入口，避免误解为联网缓存或省费承诺。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 

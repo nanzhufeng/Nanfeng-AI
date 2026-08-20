@@ -143,7 +143,7 @@ test('P6-K exposes direct ZIP import with recovery controls without changing the
 
 test('new user features have a Settings review entry with a decision state and entry recommendation', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'feature-review', status: '', error: '', connection: {} });
-  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮']) assert.ok(rendered.includes(token));
+  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮', '本地精确复用', '暂不增加聊天或 Composer 按键', '避免误解为联网缓存或省费承诺']) assert.ok(rendered.includes(token));
 });
 
 test('FB-P6-039 keeps attachment previews as role-aligned siblings of text surfaces', () => {

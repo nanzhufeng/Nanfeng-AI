@@ -2,6 +2,7 @@ pub mod conversation_real_text_execution_v1;
 pub mod desktop_compare_credentials_v1;
 pub mod desktop_compare_execution_v1;
 pub mod dual_path_contract_v1;
+pub mod local_exact_reuse_v1;
 pub mod p6g_model_selection;
 pub mod p7c_remote_gateway_v1;
 pub mod p7d_sync_coordinator_v1;
