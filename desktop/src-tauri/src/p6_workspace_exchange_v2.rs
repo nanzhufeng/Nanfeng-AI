@@ -766,8 +766,11 @@ mod tests {
         let package = preflight(fs::read(path).expect("Android contract package must be readable"))
             .expect("Android v2 package must pass the Desktop strict reader");
         assert_eq!(package.receipt.origin, "ANDROID");
-        assert_eq!(package.receipt.asset_count, 1);
-        assert!(package.receipt.owner_field_hashes.contains_key("settings/root"));
+        assert_eq!(package.receipt.asset_count, package.assets.len() as u64);
+        assert!(package
+            .receipt
+            .owner_field_hashes
+            .contains_key("settings/root"));
     }
 
     #[test]

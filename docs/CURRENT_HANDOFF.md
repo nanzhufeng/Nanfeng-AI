@@ -1,5 +1,13 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v2 Android DocumentsUI 隔离验收：真实导出/readback 与 Desktop strict reader 已完成
+
+- **5556 保护与新隔离环境：** `emulator-5556` 的输入焦点曾转入既有 `com.nanzhufeng.videodownloader`，因此未再对它执行 UI 或写入。只读 SDK/AVD 核对后，不克隆、不修改、不启动任何既有 AVD，而是以已存在的 Android 35 Google APIs arm64-v8a image 新建 `NanfengAiP6V2DocumentsUiAcceptance`，唯一 serial 为 `emulator-5558`。OPPO 与 `emulator-5554` 未被写入。
+- **受控包与空数据：** 仅增加 `p6V2SafEmptyAcceptance` build type；新 application ID 为 `com.nanzhufeng.ai.p6v2safemptyacceptance`，显式 `P6E_ACCEPTANCE=false`，不改变 debug/release 或正式签名配置。5558 安装前该包不存在；本地 APK 与 installed `base.apk` SHA-256 同为 `b1a694044c51b1e39303e78450e4ae92d978c3ea97c8fcf1f4472877399955a0`，version `51 / 0.3.0-p10a-p6-v2-saf-empty-acceptance`。仅在这个新包自身数据中通过本机 Projects 表单创建最小非敏感 Project；没有对话、知识、记忆、关系或附件。
+- **真实用户链与回读：** 正常进入 `设置 → 数据与导入 → 导入中心 → 完整工作区交换（v2）`，范围对话匿名显示 `项目 1 / 对话、知识、记忆、关系、附件各 0`。真实 `com.google.android.documentsui` CreateDocument 保存后返回 App，UI 显示“完整工作区 v2 已严格回读：d0c3df7b5e92… · 1 项对象 · 0 项附件”。DocumentsUI 写入文件仅含 `manifest.json` 与 `exchange.json`，大小 1,091 bytes；Android port 的写后 readback 已成功，未输出正文或附件 bytes。
+- **内容无关交叉验证：** 导出文件 package SHA-256 为 `3601aeb36f00f94288c5df89c8c20b5f53aa0e4a2c8f65529e308fa90f205c53`，semantic hash 为 `d0c3df7b5e9296b5adf4a975077c7d7796381342942c3167cd2acc70c056d986`。root counts 为 `projects=1, conversations=0, knowledge=0, memory=0, relations=0`；owner-field namespaces 仅 `project/*`（`f46d29158ead355ddc57ff331ecf02f30ba498d62fe6c965d98b8e9375fae1f6`）与 `settings/root`（`778838e3f038975396707ec0a192eb9dbf94dd262bc5c354e746628fe4959b22`）。Node strict verifier 通过；Desktop Rust strict reader 对同一文件只读通过（1/1），不替代 Desktop native picker 的后续验收。
+- **仍未关闭：** DocumentsUI 因 `application/zip` 将默认名实际保存为 `.nfai-exchange.zip`，而 Desktop native picker 当前只接纳扩展名恰为 `.nfai-exchange`；同一 bytes 的 strict reader 已通过，但该实文件不能替代未来 Desktop picker 验收，需另行决定兼容策略。Android v2 导入/archive/transaction/恢复、跨端用户导入、Desktop native picker、Windows、正式发布和 OPPO 均未开始或未完成；P6 与 P0–P11 不得据此宣称完成。macOS 解锁后，Desktop 只能从其独立设置 picker 恢复。
+
 ## 2026-08-20 P6 工作区 v2 Android SAF 导出桥接：代码/合同已接入，真实 DocumentsUI 链尚未验收
 
 - **已实现：** Android 在 `设置 → 数据与导入` 增加已审阅范围内的“完整工作区交换（v2）”候选入口。用户先显式查看完整范围的匿名聚合计数（项目、对话、知识、记忆、关系、附件）并选择系统保存位置；`WorkspaceExchangeV2ScopePlanner` 形成 exact all-owner selection，附件一律标记 `HIGH_SENSITIVE`，不静默降级或省略 owner。`AndroidWorkspaceExchangeV2ExportPort` 只调用既有 v2 mapper/package writer：完整内存序列化与 strict preflight 成功后才写一次 SAF URI，随后 readback SHA-256 必须等于 package receipt；写入或 readback 失败请求删除未完成文档，且不显示成功回执、路径、文件名、正文或附件 bytes。

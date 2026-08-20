@@ -1,5 +1,11 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-20 P6 v2 Android DocumentsUI 隔离验收：新 AVD 的真实导出子链已关闭
+
+- **隔离与产物：** 因 5556 有既有另一产品前台且输入焦点不可靠，未再触碰 5556。只读 SDK/AVD 核对后新建独占 `NanfengAiP6V2DocumentsUiAcceptance` / `emulator-5558`，不克隆或修改任何既有 AVD。新包 `com.nanzhufeng.ai.p6v2safemptyacceptance` 在该 AVD 首装，显式关闭 P6E fixture；APK 与 installed base.apk SHA-256 一致。OPPO 与 5554 未写入。
+- **真实链路：** 新包空数据中仅经本机 UI 创建最小非敏感 Project，随后正常 `设置 → 数据与导入 → 导入中心 → 完整工作区交换（v2） → DocumentsUI SAVE`。范围匿名聚合为对象 1/附件 0，回 App 显示严格 readback receipt；文件 package SHA-256、semantic hash、`project/*` 与 `settings/root` owner-field hash 已分别取证，Node verifier 与 Desktop Rust strict reader 对同一文件只读通过。
+- **边界：** DocumentsUI 实际追加 `.zip` 后缀，而 Desktop native picker 目前只接纳 `.nfai-exchange`；strict reader 的通过不覆盖该 picker 文件名兼容缺口。这只关闭 Android v2 的新隔离 AVD 导出/SAF readback/跨端 strict-reader 子链；未验证 Android v2 import/archive/transaction/恢复、Desktop native picker、用户可见 Desktop import/reopen、Windows、发布或 OPPO。P6 与 P0–P11 的原有未退出结论不变。
+
 ## 2026-08-20 P6 工作区 v2 Android SAF 导出桥接：本地用户入口/合同已接入，真实文件链未关闭
 
 - **已确认：** Android 已在设置 → 数据与导入提供已审阅的 v2 候选导出入口；范围选择只显示对象聚合计数，严格 mapper/writer 先在内存构成并 preflight package，再一次性写入系统 SAF URI，readback package hash 相等才返回 content-free receipt。失败请求删除未完成文档，且不把路径、名称、正文或附件 bytes 暴露给 UI。Android/Desktop 功能审阅同步保持“待您判断”，建议仅设置二级入口。

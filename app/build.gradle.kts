@@ -134,6 +134,13 @@ android {
             buildConfigField("boolean", "P6E_ACCEPTANCE", "true")
             signingConfig = signingConfigs.findByName("formal")
         }
+        create("p6V2SafEmptyAcceptance") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".p6v2safemptyacceptance"
+            versionNameSuffix = "-p6-v2-saf-empty-acceptance"
+            buildConfigField("boolean", "P6E_ACCEPTANCE", "false")
+            signingConfig = signingConfigs.findByName("formal")
+        }
         create("p5dAcceptance") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".p5dacceptance"
