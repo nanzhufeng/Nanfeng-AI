@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P2 Provider/成本质量：最小真实健康门因凭据/授权外部门停止
+
+- **结论：** 当前工作树干净，HEAD 已包含 `04b9c1f` 与 `94838b7`。依 `P2M_REAL_TEXT_EXECUTION_CONTRACT.md` 审核唯一的 `p2m-openrouter-text-v2` 最小文本路径后，正式签名的用户级项目命名配置为完整；但允许检查的项目专属 Provider 环境变量不存在，用户级项目命名属性也没有 Provider 凭据 schema。Android 应用私有加密凭据存储本轮没有被读取、解密、导出、记录或探测，故不存在可合法用于本轮的 Provider 凭据/可见逐次同意。没有发行或消费 nonce、没有构造 Authorization、没有 HTTP、没有 Provider Attempt、Token、费用、Candidate 或 Knowledge 写入。
+- **非敏感事实与边界：** 唯一 Provider 是 OpenRouter，固定 `POST https://openrouter.ai/api/v1/chat/completions`；实际模型只能由已保存、启用且已验证的 OpenRouter preset 解析，本轮未读取应用私有实际选择值。若未来重新满足门，范围仍限合成文本、`stream=false`、`temperature=0.2`、结构化 `title/body`、USD 0.01 上限与 `retryCount=0` 的至多一次 Attempt。图片、附件、用户内容、实际质量、真实 Token/费用、真实保存/重启/导出、真机及 OPPO 仍完全未验证。
+- **本地回归：** Android Studio JBR + `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` + `--no-daemon` 下，P2-K transport 5/5、P2-L acceptance 9/9、P2-M bridge 3/3，共 **17/17**、0 failures/errors/skipped。它们只证明 DryRun 零网络/零 Key bytes、单次 nonce 与零重试 fail-closed 合同；未启动 Android 设备、未访问 Provider 网络，不能替代真实健康、成本或质量证据。详情见 `P2_PROVIDER_REAL_GATE_EVIDENCE_20260821.md`。
+- **下一步：** 仅在用户明确配置并允许检查凭据存在性、同一冻结 RunSpec 在应用可见确认页获得逐次同意时，才可通过 P2-M 发出一次合成非敏感文本请求；成功或失败均立刻停止。P2 图片与完整 P2 出口仍需独立合同。此条不宣称 P2 或 P0–P11 完成，也不新增用户功能/常驻入口，故功能审阅无需变化。
+
 ## 2026-08-21 P11 供应链复核：Desktop PDF 解析高危项已修复；总控下一门仍受外部条件约束
 
 - **已完成与提交：** `04b9c1f fix(p11): patch desktop PDF parser advisory` 将 Desktop `lopdf` 从 `0.35.0` 升至 RustSec `RUSTSEC-2026-0187` 的修复线 `0.42.0`。`cargo check --locked`、`cargo clippy -- -D warnings` 与 Rust `97/97` 均通过；`cargo fmt --check` 只暴露既有 `desktop/src-tauri/src/lib.rs` 大范围格式债务，未写入格式化改动。完整清点、npm（0 production dependencies / 0 vulnerabilities）、Android release runtime 解析和未覆盖面见 `P11_SUPPLY_CHAIN_REVIEW_20260821.md`。
