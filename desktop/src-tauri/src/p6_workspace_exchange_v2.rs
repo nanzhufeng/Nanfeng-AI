@@ -766,11 +766,34 @@ mod tests {
         let package = preflight(fs::read(path).expect("Android contract package must be readable"))
             .expect("Android v2 package must pass the Desktop strict reader");
         assert_eq!(package.receipt.origin, "ANDROID");
+        assert_eq!(
+            package.receipt.root_counts,
+            BTreeMap::from([
+                ("conversations".into(), 1),
+                ("knowledge".into(), 1),
+                ("memory".into(), 1),
+                ("projects".into(), 1),
+                ("relations".into(), 1),
+            ])
+        );
+        assert_eq!(package.receipt.asset_count, 1);
         assert_eq!(package.receipt.asset_count, package.assets.len() as u64);
-        assert!(package
-            .receipt
-            .owner_field_hashes
-            .contains_key("settings/root"));
+        for owner in [
+            "project/project-v2-01",
+            "conversation/conversation-v2-01",
+            "knowledge/knowledge-v2-01",
+            "memory/memory-v2-01",
+            "relation/relation-v2-01",
+            "settings/root",
+        ] {
+            assert!(
+                package.receipt.owner_field_hashes.contains_key(owner),
+                "missing {owner}"
+            );
+        }
+        assert!(package.receipt.owner_field_hashes.contains_key(
+            "asset/f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d",
+        ));
     }
 
     #[test]

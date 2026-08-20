@@ -49,7 +49,10 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
 
     @Test fun `writer emits only a strict v2 package receipt after read-only owners map`() {
         val source = fixture()
-        val output = RecordingOutput(System.getProperty("nfai.v2.package.contract.output"))
+        val output = RecordingOutput(
+            System.getProperty("nfai.v2.package.contract.output")
+                ?: System.getenv("NANFENG_AI_V2_PACKAGE_CONTRACT_OUTPUT"),
+        )
         val result = NfaiExchangeV2PackageWriter(mapper(source), source).write(
             source.selection,
             NfaiExchangeSafeSettings("zh-CN", "SYSTEM"),

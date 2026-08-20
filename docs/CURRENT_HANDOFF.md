@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 原规格证据矩阵与完整 owner 跨端自动门（HEAD 673f2d6）
+
+- **总控口径：** “总控方案”只指 `MASTER_DEVELOPMENT_BLUEPRINT.md` §17 的 P0–P11 完整路线；本轮 `docs/P6_EVIDENCE_MATRIX_20260820.md` 只核对其中的 P6 原始范围和出口，不能替代或缩小总控方案。矩阵确认：Android v2 import/archive/recovery 与将 Desktop v2 private record 恢复为 Desktop 原生业务对象均不是 §17 的原始 P6 退出门，故未擅自实现或改写为本轮范围。
+- **已补的最大安全出口：** 当前实际 v2 Android DocumentsUI→Desktop native Open/Save 文件链只含 Project + safe settings、0 附件；完整 Project/Conversation/Knowledge/Memory/Relation/附件组合此前仅有分端本地合同。新增 `scripts/verify-p6-v2-owner-fidelity-cross-platform.sh`：Android `WorkspaceExchangeV2OwnerMapperContractsTest` 以非敏感 fixture 写出完整 owner package，Node strict verifier 复验 package/semantic/asset ledger，Desktop `p6_workspace_exchange_v2` strict reader 必须读入 5 个 root、1 个附件及 Project/Conversation/Knowledge/Memory/Relation/settings/asset 的 field hash。脚本的临时包在退出时删除，不触及 picker、SQLite workspace、用户数据、设备、Keychain、网络或 Provider。
+- **本轮验证：** Android Studio JBR + `TieredStopAtLevel=1` 的定向 JVM 类通过；Node 输出 semantic hash `ae8039c083529c42c5a72274fb633fc5f2fcbfefc2c6e33d8da4bbab33b10cf1`、3 entries/1 asset；Desktop Rust 定向 strict-reader test 1/1 通过。未写 OPPO、`emulator-5554/5556/5558`，未读 Key、未发 HTTP、未做 DB 注入。
+- **仍未关闭：** P6 不是完成态。完整 owner 的真实 Android DocumentsUI→Desktop native picker/readback、受影响紧凑/展开与异常恢复的独立平台回归、Windows WebView2/安装/签名/SQLite/缩放/IME 本机验收仍各自待证；Windows 不在 macOS 伪造。下一步不得把本轮自动门外推为 Android v2 import/recovery、Desktop native object restore、备份/同步、OPPO、发布或 P0–P11 完成。
+
 ## 2026-08-20 P6 v2 Desktop 设置内回导：独立 bundle 的真实 Android→Desktop→native save picker 链已关闭
 
 - **验收实例隔离：** 新增 `desktop/scripts/prepare-p6-v2-picker-acceptance.mjs` 和 `npm run prepare:p6-v2-picker-acceptance`，只复制已验签开发 bundle 到新的项目专属临时 `.app`、改副本 `CFBundleIdentifier` 与 `CFBundleExecutable`、对副本 ad-hoc 重签并输出隔离元数据。此次副本 identifier 为 `com.nanzhufeng.ai.desktop.p6v2pickeracceptance.37537.mt1m33x8`，副本可执行路径独立；源 bundle 可执行 SHA-256 在副本制作前后同为 `8858dff03bfffd5690b262d6c2ddc81140e49de6935f823a15897431d27e387b`。主 bundle、release 签名、Keychain 和既有同 identifier 实例均未改动；v2 import/re-export 两项 ACL 都在 capability 和生成 schema 内。
