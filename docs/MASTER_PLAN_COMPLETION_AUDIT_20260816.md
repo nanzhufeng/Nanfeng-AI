@@ -1,5 +1,20 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-20 当前总控状态（优先于以下历史审计）
+
+以下状态以 `docs/CURRENT_HANDOFF.md` 顶部的当前记录、当前工作树、当前 release APK 与连接设备读回为准。历史段落保留为当时事实，不再作为排程结论。
+
+| 总控项 | 当前事实 | 状态 |
+| --- | --- | --- |
+| release v2 签名与正式 APK | 新的项目专属 v2 签名已生成；当前 release APK 为 `com.nanzhufeng.ai` `51 / 0.3.0-p10a`，SHA-256 `fc8f9ac604c57492cabb4b8bc74fe4284623d3a5385b50ad782f798b75252546`，v2/v3 签名校验通过 | 已关闭 |
+| OPPO 安装链 | OPPO PKH120 已安装当前 release v2；`dumpsys`、UIAutomator package 与拉回的 `base.apk` SHA-256 三方一致 | 已关闭（仅安装/启动，不等同于所有功能验收） |
+| Desktop P6-K 正式 bundle | 资源封印缺失已修复；最终 ad-hoc bundle 严格验签、原生 WebView、Settings 匿名 aggregate readback 已完成 | 已关闭 |
+| Android P6-K 真正入口 | 旧 emulator 包在此前交接中记录为 legacy 签名；本轮复核时 emulator 已离线，尚未重新拉取证书。无论如何不得假设可覆盖；当前 v2 源码尚未完成 Android Settings 系统 picker 的两份授权 ZIP 导入、冷启动和匿名 aggregate readback | 未关闭 |
+| 实包媒体关联 | 两份实包没有可证明的 message-to-asset relation；`UNMAPPED_REJECTED` 是正确安全结果。K8 的人工精确关联功能已实现，但尚未发生用户在 Settings 中明确选择资产和目标消息的真实动作 | 外部用户操作 |
+| 真实 Provider / 账号同步 / 生态 | 本地 owner、禁用状态和合同已存在；真实 HTTP、账号、OAuth/发布白名单、同步及生态目标仍分别需要已配置的外部服务和可验证账户/目标 | 外部条件，不得伪报完成 |
+
+**接下来唯一可实现的产品闭环：** 先为 Android 当前 v2 源码建立不覆盖 legacy emulator 包、不清除其既有导入数据的隔离验收路径；随后只经 Android Settings 的正常系统 picker 导入两份已授权 ZIP，完整退出重开后只读回匿名 aggregate。不得用旧 APK、数据库注入、卸载/clear、OPPO 导入或文件名推测代替。完成该路径前，总控方案仍不能标记为全部落地。
+
 ## 结论
 
 总控方案不能标记为“完整落地”。当前源码中的 P6-K Android 真实导入闭环被既有正式签名链的非交互口令读取阻断；Desktop 最终 bundle 的正常窗口则在已可操作的 macOS GUI 环境中显示纯白内容区，无法进入 Settings/readback；其余尚未闭环的项目分别依赖用户在正常 UI 中作出的精确选择、真实 Provider/账号/目标生态条件或明确禁止操作的 OPPO。没有以旧 APK、数据库注入、卸载、清数据、Key 或 HTTP 绕过任一门禁。
