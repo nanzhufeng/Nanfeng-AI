@@ -127,6 +127,13 @@ android {
             buildConfigField("boolean", "P6E_ACCEPTANCE", "true")
             signingConfig = signingConfigs.findByName("formal")
         }
+        create("acceptanceV2") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".p6eacceptancev2"
+            versionNameSuffix = "-p6e-acceptance-v2"
+            buildConfigField("boolean", "P6E_ACCEPTANCE", "true")
+            signingConfig = signingConfigs.findByName("formal")
+        }
     }
 }
 
