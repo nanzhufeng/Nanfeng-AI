@@ -1,5 +1,6 @@
 //! P6-L1 local exact-reuse index. It stores only hashes and existing message references.
 
+use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,6 +102,24 @@ impl LocalExactReuseIndex {
             }
         }
     }
+    pub fn restore(&mut self, entry: Entry) -> Result<bool, &'static str> {
+        entry.key.validate()?;
+        if !stable_id(&entry.response_message_id)
+            || entry.expires_at_ms <= entry.created_at_ms
+            || entry.key.sensitivity == Sensitivity::High
+        {
+            return Ok(false);
+        }
+        match self.entries.get(&entry.key.canonical_request_hash) {
+            Some(old) if old != &entry => Ok(false),
+            Some(_) => Ok(true),
+            None => {
+                self.entries
+                    .insert(entry.key.canonical_request_hash.clone(), entry);
+                Ok(true)
+            }
+        }
+    }
     pub fn resolve(&self, key: Option<&ExactKey>, temporary: bool, now_ms: u64) -> Decision {
         let Some(key) = key else {
             return decision(Outcome::Unknown, None, "缺少完整精确复用键");
@@ -128,6 +147,87 @@ impl LocalExactReuseIndex {
             Some(entry.response_message_id.clone()),
             "复用既有本地消息；不会请求 Provider",
         )
+    }
+}
+
+/// P6-L2's durable adapter. The table contains hashes, safe identifiers and lifecycle metadata only.
+pub struct SqliteLocalExactReuseStore;
+
+impl SqliteLocalExactReuseStore {
+    pub fn migrate(connection: &Connection) -> Result<(), String> {
+        connection.execute_batch("CREATE TABLE IF NOT EXISTS local_exact_reuse_entries (canonical_request_hash TEXT PRIMARY KEY NOT NULL, scope_id TEXT NOT NULL, provider_id TEXT NOT NULL, model_snapshot_id TEXT NOT NULL, endpoint_mode TEXT NOT NULL, generation_parameters_hash TEXT NOT NULL, tool_schema_hash TEXT NOT NULL, context_manifest_hash TEXT NOT NULL, message_tree_hash TEXT NOT NULL, attachment_hash TEXT NOT NULL, template_version TEXT NOT NULL, policy_version INTEGER NOT NULL, sensitivity TEXT NOT NULL, response_message_id TEXT NOT NULL, created_at_ms INTEGER NOT NULL, expires_at_ms INTEGER NOT NULL, revoked INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS local_exact_reuse_entries_expiry ON local_exact_reuse_entries(expires_at_ms); CREATE INDEX IF NOT EXISTS local_exact_reuse_entries_revoked ON local_exact_reuse_entries(revoked);").map_err(|_| "local exact reuse migration failed".to_owned())
+    }
+
+    pub fn record(connection: &Connection, entry: &Entry) -> Result<bool, String> {
+        entry.key.validate().map_err(str::to_owned)?;
+        if !stable_id(&entry.response_message_id) || entry.expires_at_ms <= entry.created_at_ms {
+            return Err("local exact reuse entry invalid".into());
+        }
+        if entry.key.sensitivity == Sensitivity::High || entry.revoked {
+            return Ok(false);
+        }
+        let existing = Self::find(connection, &entry.key.canonical_request_hash)?;
+        if let Some(existing) = existing {
+            return Ok(existing == *entry);
+        }
+        connection.execute("INSERT INTO local_exact_reuse_entries(canonical_request_hash,scope_id,provider_id,model_snapshot_id,endpoint_mode,generation_parameters_hash,tool_schema_hash,context_manifest_hash,message_tree_hash,attachment_hash,template_version,policy_version,sensitivity,response_message_id,created_at_ms,expires_at_ms,revoked) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,0)", params![entry.key.canonical_request_hash, entry.key.scope_id, entry.key.provider_id, entry.key.model_snapshot_id, entry.key.endpoint_mode, entry.key.generation_parameters_hash, entry.key.tool_schema_hash, entry.key.context_manifest_hash, entry.key.message_tree_hash, entry.key.attachment_hash, entry.key.template_version, entry.key.policy_version, sensitivity_name(entry.key.sensitivity), entry.response_message_id, entry.created_at_ms, entry.expires_at_ms]).map_err(|_| "local exact reuse insert failed".to_owned())?;
+        Ok(true)
+    }
+
+    pub fn resolve(
+        connection: &Connection,
+        key: Option<&ExactKey>,
+        temporary: bool,
+        now_ms: u64,
+    ) -> Decision {
+        let Some(key) = key else {
+            return LocalExactReuseIndex::default().resolve(None, temporary, now_ms);
+        };
+        let Ok(entry) = Self::find(connection, &key.canonical_request_hash) else {
+            return decision(Outcome::Unknown, None, "本地精确复用记录不可读");
+        };
+        let mut index = LocalExactReuseIndex::default();
+        if let Some(entry) = entry {
+            if index.restore(entry).ok() != Some(true) {
+                return decision(Outcome::Unknown, None, "本地精确复用记录无效");
+            }
+        }
+        index.resolve(Some(key), temporary, now_ms)
+    }
+
+    pub fn revoke(connection: &Connection, canonical_request_hash: &str) -> Result<bool, String> {
+        if !sha256(canonical_request_hash) {
+            return Ok(false);
+        }
+        Ok(connection.execute("UPDATE local_exact_reuse_entries SET revoked=1 WHERE canonical_request_hash=?1 AND revoked=0", [canonical_request_hash]).map_err(|_| "local exact reuse revoke failed".to_owned())? > 0)
+    }
+
+    pub fn purge_expired_or_revoked(connection: &Connection, now_ms: u64) -> Result<usize, String> {
+        connection
+            .execute(
+                "DELETE FROM local_exact_reuse_entries WHERE revoked=1 OR expires_at_ms<=?1",
+                [now_ms],
+            )
+            .map_err(|_| "local exact reuse purge failed".to_owned())
+    }
+
+    fn find(
+        connection: &Connection,
+        canonical_request_hash: &str,
+    ) -> Result<Option<Entry>, String> {
+        connection.query_row("SELECT scope_id,provider_id,model_snapshot_id,endpoint_mode,generation_parameters_hash,tool_schema_hash,context_manifest_hash,message_tree_hash,attachment_hash,template_version,policy_version,sensitivity,response_message_id,created_at_ms,expires_at_ms,revoked FROM local_exact_reuse_entries WHERE canonical_request_hash=?1", [canonical_request_hash], |row| {
+            let sensitivity: String = row.get(11)?;
+            let sensitivity = match sensitivity.as_str() { "LOW" => Sensitivity::Low, "MEDIUM" => Sensitivity::Medium, "HIGH" => Sensitivity::High, _ => return Err(rusqlite::Error::InvalidQuery) };
+            Ok(Entry { key: ExactKey { scope_id: row.get(0)?, provider_id: row.get(1)?, model_snapshot_id: row.get(2)?, endpoint_mode: row.get(3)?, generation_parameters_hash: row.get(4)?, tool_schema_hash: row.get(5)?, context_manifest_hash: row.get(6)?, message_tree_hash: row.get(7)?, attachment_hash: row.get(8)?, template_version: row.get(9)?, policy_version: row.get(10)?, canonical_request_hash: canonical_request_hash.to_owned(), sensitivity }, response_message_id: row.get(12)?, created_at_ms: row.get(13)?, expires_at_ms: row.get(14)?, revoked: row.get::<_, i64>(15)? != 0 })
+        }).optional().map_err(|_| "local exact reuse read failed".to_owned())
+    }
+}
+
+fn sensitivity_name(value: Sensitivity) -> &'static str {
+    match value {
+        Sensitivity::Low => "LOW",
+        Sensitivity::Medium => "MEDIUM",
+        Sensitivity::High => "HIGH",
     }
 }
 fn decision(
@@ -158,6 +258,7 @@ fn sha256(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
     fn key(hash: char, sensitivity: Sensitivity) -> ExactKey {
         ExactKey {
             scope_id: "workspace:fixture".into(),
@@ -244,5 +345,47 @@ mod tests {
                 revoked: true
             })
             .unwrap());
+    }
+
+    #[test]
+    fn sqlite_store_reopens_and_invalidates_without_storing_text() {
+        let directory = tempdir().unwrap();
+        let database = directory.path().join("reuse.sqlite3");
+        let exact = key('a', Sensitivity::Low);
+        let connection = Connection::open(&database).unwrap();
+        SqliteLocalExactReuseStore::migrate(&connection).unwrap();
+        assert!(SqliteLocalExactReuseStore::record(
+            &connection,
+            &Entry {
+                key: exact.clone(),
+                response_message_id: "message:fixture".into(),
+                created_at_ms: 10,
+                expires_at_ms: 30,
+                revoked: false
+            }
+        )
+        .unwrap());
+        assert_eq!(
+            SqliteLocalExactReuseStore::resolve(&connection, Some(&exact), false, 11).outcome,
+            Outcome::LocalExactHit
+        );
+        assert_eq!(connection.query_row("SELECT COUNT(*) FROM local_exact_reuse_entries WHERE response_message_id='message:fixture'", [], |row| row.get::<_, i64>(0)).unwrap(), 1);
+        drop(connection);
+        let reopened = Connection::open(&database).unwrap();
+        assert_eq!(
+            SqliteLocalExactReuseStore::resolve(&reopened, Some(&exact), false, 11).outcome,
+            Outcome::LocalExactHit
+        );
+        assert!(
+            SqliteLocalExactReuseStore::revoke(&reopened, &exact.canonical_request_hash).unwrap()
+        );
+        assert_eq!(
+            SqliteLocalExactReuseStore::resolve(&reopened, Some(&exact), false, 11).outcome,
+            Outcome::Miss
+        );
+        assert_eq!(
+            SqliteLocalExactReuseStore::purge_expired_or_revoked(&reopened, 11).unwrap(),
+            1
+        );
     }
 }

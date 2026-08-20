@@ -3042,7 +3042,7 @@ impl DesktopWorkspaceStore {
         let current: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|_| json_error("无法读取 SQLite schema version"))?;
-        if current > 19 {
+        if current > 20 {
             return Err(json_error("SQLite schema 版本比当前客户端更新"));
         }
         if current == 0 {
@@ -3255,6 +3255,12 @@ impl DesktopWorkspaceStore {
                 .map_err(|_| json_error("SQLite migration 19 失败"))?;
             transaction.pragma_update(None, "user_version", 19).map_err(|_| json_error("无法写入 SQLite schema version 19"))?;
             transaction.commit().map_err(|_| json_error("SQLite migration 19 无法提交"))?;
+        }
+        if current < 20 {
+            let transaction = connection.transaction().map_err(|_| json_error("无法开启 SQLite migration 20"))?;
+            local_exact_reuse_v1::SqliteLocalExactReuseStore::migrate(&transaction).map_err(|_| json_error("SQLite migration 20 失败"))?;
+            transaction.pragma_update(None, "user_version", 20).map_err(|_| json_error("无法写入 SQLite schema version 20"))?;
+            transaction.commit().map_err(|_| json_error("SQLite migration 20 无法提交"))?;
         }
         Ok(())
     }
@@ -7256,7 +7262,7 @@ mod tests {
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
                 .unwrap(),
             // P6-K then appends its isolated ZIP recovery ledger, K6 profile owner and K8 asset receipts.
-            19
+            20
         );
     }
 
@@ -8552,7 +8558,7 @@ mod tests {
         let strict_readback = preflight_package(fs::read(exported).unwrap()).unwrap();
         assert_eq!(strict_readback.receipt.semantic_hash, receipt.semantic_hash);
         assert_eq!(strict_readback.receipt.package_hash, receipt.package_hash);
-        assert_eq!(reopened.connection().unwrap().pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0)).unwrap(), 19);
+        assert_eq!(reopened.connection().unwrap().pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0)).unwrap(), 20);
         assert!(reopened.retry_nanfeng_knowledge_import_task(&task.id).is_err());
     }
 }

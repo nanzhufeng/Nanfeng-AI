@@ -27,11 +27,19 @@ data class LocalExactReuseEntry(val key: LocalExactReuseKey, val responseMessage
 
 data class LocalExactReuseDecision(val outcome: LocalExactReuseOutcome, val responseMessageId: String? = null, val reason: String)
 
+/** Persistence may retain only this content-free exact-key fact. It never dispatches a request. */
+interface LocalExactReuseEntryStore {
+    fun record(entry: LocalExactReuseEntry): Boolean
+    fun resolve(key: LocalExactReuseKey?, isTemporaryConversation: Boolean, nowEpochMs: Long): LocalExactReuseDecision
+    fun revoke(canonicalRequestHash: String): Boolean
+    fun purgeExpiredOrRevoked(nowEpochMs: Long): Int
+}
+
 /** A fail-closed owner. Future execution must reuse the normal message renderer, never raw cache text. */
-class LocalExactReuseIndex {
+class LocalExactReuseIndex : LocalExactReuseEntryStore {
     private val entries = linkedMapOf<String, LocalExactReuseEntry>()
 
-    fun record(entry: LocalExactReuseEntry): Boolean {
+    override fun record(entry: LocalExactReuseEntry): Boolean {
         if (entry.key.sensitivity == LocalExactReuseSensitivity.HIGH || entry.revoked) return false
         val old = entries[entry.key.canonicalRequestHash]
         if (old != null && old != entry) return false
@@ -39,7 +47,16 @@ class LocalExactReuseIndex {
         return true
     }
 
-    fun resolve(key: LocalExactReuseKey?, isTemporaryConversation: Boolean, nowEpochMs: Long): LocalExactReuseDecision {
+    /** Restores a durable content-free row; callers must still resolve through this owner. */
+    fun restore(entry: LocalExactReuseEntry): Boolean {
+        if (entry.key.sensitivity == LocalExactReuseSensitivity.HIGH) return false
+        val old = entries[entry.key.canonicalRequestHash]
+        if (old != null && old != entry) return false
+        entries[entry.key.canonicalRequestHash] = entry
+        return true
+    }
+
+    override fun resolve(key: LocalExactReuseKey?, isTemporaryConversation: Boolean, nowEpochMs: Long): LocalExactReuseDecision {
         if (key == null) return LocalExactReuseDecision(LocalExactReuseOutcome.UNKNOWN, reason = "缺少完整精确复用键")
         if (isTemporaryConversation) return LocalExactReuseDecision(LocalExactReuseOutcome.INELIGIBLE, reason = "临时会话不建立本地精确复用")
         if (key.sensitivity == LocalExactReuseSensitivity.HIGH) return LocalExactReuseDecision(LocalExactReuseOutcome.INELIGIBLE, reason = "高敏感请求不建立本地精确复用")
@@ -47,6 +64,20 @@ class LocalExactReuseIndex {
         if (entry.key != key) return LocalExactReuseDecision(LocalExactReuseOutcome.MISS, reason = "精确键字段不一致")
         if (entry.revoked || nowEpochMs >= entry.expiresAtEpochMs) return LocalExactReuseDecision(LocalExactReuseOutcome.MISS, reason = "本地结果已撤销或过期")
         return LocalExactReuseDecision(LocalExactReuseOutcome.LOCAL_EXACT_HIT, entry.responseMessageId, "复用既有本地消息；不会请求 Provider")
+    }
+
+    override fun revoke(canonicalRequestHash: String): Boolean {
+        if (!canonicalRequestHash.isSha256()) return false
+        val entry = entries[canonicalRequestHash] ?: return false
+        if (entry.revoked) return true
+        entries[canonicalRequestHash] = entry.copy(revoked = true)
+        return true
+    }
+
+    override fun purgeExpiredOrRevoked(nowEpochMs: Long): Int {
+        val keys = entries.filterValues { it.revoked || nowEpochMs >= it.expiresAtEpochMs }.keys
+        keys.forEach(entries::remove)
+        return keys.size
     }
 }
 

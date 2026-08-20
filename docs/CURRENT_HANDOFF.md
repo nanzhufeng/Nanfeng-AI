@@ -1,9 +1,14 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：P6-L2 双端本地精确复用持久化边界（当前）
+
+- **结论：** L1 的 content-free 精确键索引现在有 Android Room 37→38 与 Desktop workspace SQLite 19→20 的单独持久表。它只保存精确键安全字段、既有本地 `responseMessageId`、创建/过期/撤销状态；同一条目重放一致、重启读回、撤销和过期/撤销清理均由 Android `RoomLocalExactReuseEntryStore` / Desktop `SqliteLocalExactReuseStore` 回到 L1 owner 判定。损坏记录为 `UNKNOWN`，不猜测命中。
+- **验证与严格边界：** Android `LocalExactReuseRoomStoreContractsTest`、L1 合同、37→38 迁移和完整历史迁移链通过，`lintDebug` 与 `assembleDebug` 通过；Desktop L2 Rust 重启/撤销/清理合同、受影响 P6-J workspace 重启回归与 `clippy -D warnings` 通过。此增量没有接普通聊天执行、P2/P3、renderer、Provider cache、设置 UI 或 Usage/Cost Ledger；不会产生真实复用、Provider 请求节省或缓存命中声明。没有 Key/HTTP、安装、emulator 或 OPPO 操作；没有新增用户可见功能，所以不新增功能审阅登记或常驻入口。
+
 ## 2026-08-20 总控推进：P6-L1 双端本地精确复用安全索引（当前）
 
 - **结论：** Android `LocalExactReuseIndex` 与 Desktop `local_exact_reuse_v1::LocalExactReuseIndex` 新增同语义的 content-free 索引：只有完整相同的 scope/provider/model/endpoint/参数/tool/context/tree/attachment/template/policy/request hash，且非 TEMP、非高敏、未撤销、未过期时才返回既有 `responseMessageId` 与 `LOCAL_EXACT_HIT`。缺键/非法键为 `UNKNOWN`，其余不匹配为 `MISS`，TEMP/高敏为 `INELIGIBLE`；不保存 Prompt、回答、Key、路径、Provider event 或网络状态。
-- **验证与边界：** Android `LocalExactReuseV1ContractsTest` 与功能审阅 UI 合同通过；Desktop Rust 定向 2/2、`clippy -D warnings`、Node UI 89/89、lint/typecheck 通过。双端设置 → 功能审阅均新增“本地精确复用”去留与入口建议：不加聊天/Composer 常驻按键。该索引尚未持久化，也未接入普通聊天执行、renderer、Provider cache 或用量台账，不能说已经复用或节省成本；没有 Keychain、HTTP、安装、emulator 或 OPPO 操作。
+- **验证与边界：** Android `LocalExactReuseV1ContractsTest` 与功能审阅 UI 合同通过；Desktop Rust 定向 2/2、`clippy -D warnings`、Node UI 89/89、lint/typecheck 通过。双端设置 → 功能审阅均新增“本地精确复用”去留与入口建议：不加聊天/Composer 常驻按键。L1 当时尚未持久化；该缺口已由上方 L2 处理，但仍未接入普通聊天执行、renderer、Provider cache 或用量台账，不能说已经复用或节省成本；没有 Keychain、HTTP、安装、emulator 或 OPPO 操作。
 
 ## 2026-08-20 总控推进：Desktop Compare 阶段 5 mock-only adapter 与安全 receipt（当前）
 

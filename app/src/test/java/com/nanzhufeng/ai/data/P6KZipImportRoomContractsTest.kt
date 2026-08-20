@@ -49,4 +49,16 @@ class P6KZipImportRoomContractsTest {
         listOf("p6k_zip_asset_link_receipts", "p6k_zip_asset_link_provenance").forEach { table -> sqlite.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use { assertTrue(it.moveToFirst()) } }
         helper.close(); context.deleteDatabase(name)
     }
+
+    @Test fun `schema thirty seven to thirty eight appends only content free local exact reuse rows`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6l-reuse-migration-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(37) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) { db.execSQL("CREATE TABLE conversations (id TEXT NOT NULL PRIMARY KEY)"); db.execSQL("INSERT INTO conversations VALUES ('preserved')") }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase; NanfengAiDatabase.MIGRATION_37_38.migrate(sqlite)
+        sqlite.query("SELECT id FROM conversations").use { assertTrue(it.moveToFirst()); assertEquals("preserved", it.getString(0)) }
+        sqlite.query("PRAGMA table_info(local_exact_reuse_entries)").use { columns -> val names = generateSequence { if (columns.moveToNext()) columns.getString(1) else null }.toSet(); assertTrue("text" !in names && "responseMessageId" in names && "canonicalRequestHash" in names) }
+        helper.close(); context.deleteDatabase(name)
+    }
 }

@@ -359,6 +359,17 @@ data class UsageLedgerEntryEntity(
     val occurredAtEpochMs: Long,
 )
 
+/** P6-L2 stores only exact-key hashes and a local message reference, never request or response text. */
+@Entity(tableName = "local_exact_reuse_entries", indices = [Index("expiresAtEpochMs"), Index("revoked")])
+data class LocalExactReuseEntryEntity(
+    @androidx.room.PrimaryKey val canonicalRequestHash: String,
+    val scopeId: String, val providerId: String, val modelSnapshotId: String, val endpointMode: String,
+    val generationParametersHash: String, val toolSchemaHash: String, val contextManifestHash: String,
+    val messageTreeHash: String, val attachmentHash: String, val templateVersion: String, val policyVersion: Long,
+    val sensitivity: String, val keyVersion: String, val responseMessageId: String,
+    val createdAtEpochMs: Long, val expiresAtEpochMs: Long, val revoked: Boolean,
+)
+
 /** Reviewable local output. This is intentionally not part of the content-free invocation ledger. */
 @Entity(
     tableName = "generated_candidates",
@@ -1491,6 +1502,14 @@ interface UsageLedgerDao {
 }
 
 @Dao
+interface LocalExactReuseEntryDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: LocalExactReuseEntryEntity)
+    @Query("SELECT * FROM local_exact_reuse_entries WHERE canonicalRequestHash=:canonicalRequestHash") fun find(canonicalRequestHash: String): LocalExactReuseEntryEntity?
+    @Query("UPDATE local_exact_reuse_entries SET revoked=1 WHERE canonicalRequestHash=:canonicalRequestHash AND revoked=0") fun revoke(canonicalRequestHash: String): Int
+    @Query("DELETE FROM local_exact_reuse_entries WHERE revoked=1 OR expiresAtEpochMs<=:nowEpochMs") fun purge(nowEpochMs: Long): Int
+}
+
+@Dao
 interface CompareConversationDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertSession(value: CompareConversationSessionEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertBranches(values: List<CompareConversationBranchEntity>)
@@ -1978,6 +1997,7 @@ interface AgentLedgerDao {
         GenerationValidationEntity::class,
         ConversationRealTextExecutionEntity::class,
         UsageLedgerEntryEntity::class,
+        LocalExactReuseEntryEntity::class,
         GeneratedCandidateEntity::class,
         ConversationEntity::class,
         MessageNodeEntity::class,
@@ -2063,7 +2083,7 @@ interface AgentLedgerDao {
         P9BIntegrationEventEntity::class,
         P9BIntegrationReceiptEntity::class,
     ],
-    version = 37,
+    version = 38,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2083,6 +2103,7 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun invocationLedgerDao(): InvocationLedgerDao
     abstract fun conversationRealTextExecutionDao(): ConversationRealTextExecutionDao
     abstract fun usageLedgerDao(): UsageLedgerDao
+    abstract fun localExactReuseEntryDao(): LocalExactReuseEntryDao
     abstract fun compareConversationDao(): CompareConversationDao
     abstract fun generatedCandidateDao(): GeneratedCandidateDao
     abstract fun conversationDao(): ConversationDao
@@ -2551,6 +2572,14 @@ abstract class NanfengAiDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_p6k_zip_asset_link_receipts_conversationId ON p6k_zip_asset_link_receipts(conversationId)")
                 db.execSQL("CREATE TABLE IF NOT EXISTS p6k_zip_asset_link_provenance (attachmentId TEXT NOT NULL, taskId TEXT NOT NULL, entryName TEXT NOT NULL, sha256 TEXT NOT NULL, conversationId TEXT NOT NULL, messageId TEXT NOT NULL, importedAtEpochMs INTEGER NOT NULL, PRIMARY KEY(attachmentId))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_p6k_zip_asset_link_provenance_taskId ON p6k_zip_asset_link_provenance(taskId)")
+            }
+        }
+        /** P6-L2 appends only content-free exact reuse facts; it does not alter messages or usage. */
+        val MIGRATION_37_38 = object : Migration(37, 38) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS local_exact_reuse_entries (canonicalRequestHash TEXT NOT NULL, scopeId TEXT NOT NULL, providerId TEXT NOT NULL, modelSnapshotId TEXT NOT NULL, endpointMode TEXT NOT NULL, generationParametersHash TEXT NOT NULL, toolSchemaHash TEXT NOT NULL, contextManifestHash TEXT NOT NULL, messageTreeHash TEXT NOT NULL, attachmentHash TEXT NOT NULL, templateVersion TEXT NOT NULL, policyVersion INTEGER NOT NULL, sensitivity TEXT NOT NULL, keyVersion TEXT NOT NULL, responseMessageId TEXT NOT NULL, createdAtEpochMs INTEGER NOT NULL, expiresAtEpochMs INTEGER NOT NULL, revoked INTEGER NOT NULL, PRIMARY KEY(canonicalRequestHash))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_local_exact_reuse_entries_expiresAtEpochMs ON local_exact_reuse_entries(expiresAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_local_exact_reuse_entries_revoked ON local_exact_reuse_entries(revoked)")
             }
         }
     }

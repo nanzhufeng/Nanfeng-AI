@@ -1,4 +1,4 @@
-# Prompt Cache 与精确复用合同（P6-L1 本地索引已实现；Provider 缓存仍未实现）
+# Prompt Cache 与精确复用合同（P6-L2 本地持久索引已实现；Provider 缓存仍未实现）
 
 本合同不编号为 P6-H，避免路线冲突；P6-E 不读取 Key、不构造 Provider 请求或联网。集成时必须复核实时 catalog/capability/policy 表；2026-08-13 官方依据：[Claude](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)、[OpenAI](https://developers.openai.com/api/docs/guides/prompt-caching)、[data controls](https://platform.openai.com/docs/models/default-usage-policies-by-endpoint)。
 
@@ -7,6 +7,12 @@
 - Android `LocalExactReuseIndex` 与 Desktop `local_exact_reuse_v1::LocalExactReuseIndex` 是唯一 owner。它们只接收已经计算的 canonical request hash、各项安全 hash、scope/provider/model/endpoint/template/policy 元数据与既有本地 `responseMessageId`；不接收 Prompt、回答、Key、URI/path、Provider event 或网络状态。
 - 仅非临时、非高敏感且字段完整的同一精确键可记录与命中。撤销、过期、任何字段变化、临时会话或高敏感请求均不命中；缺键或非法键为 `UNKNOWN`，绝不推断为命中。命中只返回既有本地消息引用，并明确“不请求 Provider”。
 - 本阶段是**领域索引和双端合同**，尚未持久化、尚未接入 P3/P2 执行、消息 renderer、Provider cache 或用量台账；不得把它写成普通聊天已经复用、真实节省成本或 Provider cache 命中。
+
+## P6-L2：双端 content-free 持久化与重启读回（2026-08-20）
+
+- Android Room 37→38 与 Desktop workspace SQLite 19→20 只新增 `local_exact_reuse_entries`。其列仅包含 L1 精确键的安全字段、既有 `responseMessageId`、创建/过期时间和撤销状态；不保存 Prompt、回答、Key、URI/path、Provider event、网络状态、token 或金额。
+- `RoomLocalExactReuseEntryStore` 与 Desktop `SqliteLocalExactReuseStore` 仍回到 L1 owner 判定，支持相同条目的幂等记录、重启后读回、撤销和过期/撤销清理；损坏或不能重建的本地记录为 `UNKNOWN`，不会推断命中。
+- 本增量没有接入普通聊天、P2/P3 dispatch、renderer、Provider prefix cache、设置 UI 或用量/成本台账。因此没有真实复用、网络节省、Provider cache 命中或用户可见新功能，也不需要新增常驻入口。
 
 - 结果层固定为 `LOCAL_EXACT_HIT`（本地精确复用、零网络）、`PROVIDER_PREFIX_HIT`（仍有 Provider 请求/外发）、`MISS`、`INELIGIBLE`、`UNKNOWN`；预计或缺 usage 绝不冒充命中。
 - Prompt 顺序：工具/schema → 安全/system/template version → 产品/workspace/project 指令 → 规范排序的显式 Knowledge/Memory Context → root-to-leaf 对话历史 → 当前用户内容及时间/随机/requestId 动态后缀；动态字段不在断点前。
