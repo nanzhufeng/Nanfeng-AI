@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P7-E Desktop 隔离候选身份与崩溃遗留门：本地代码/合同通过，P7 真实服务仍未启动
+
+- **本轮边界：** 仅收紧 `p7e_isolated_workspace_v1` 的 app-private staging。候选目录名现在必须与重读的 canonical semantic hash 一致；既有候选复用、切换前与切换后均验证 header 和全部 typed semantic record。任一内容或 header 篡改均在写入 P7-E isolated workspace 前拒绝；不读取/修改 P6 workspace，不增加 Tauri command、设置入口、OAuth、HTTP、Keychain、账号、恢复码或网络。
+- **崩溃与删除边界：** 旧式 `.hash.tmp` 遗留目录保留原样，新的 temporary candidate 使用 process-scoped 路径，故可安全重建且不把遗留/并发目录当成删除目标；仅本次自建 candidate 在失败时可被删除。这个增量不新增用户可见功能，Android/Desktop “设置 → 功能审阅”无需新增条目。
+- **本地验证：** Rust 定向 `p7e_isolated_workspace_v1` 7/7 通过（含 legacy temporary 不阻塞、staged content 篡改拒绝、原有原子切换/回滚/P6 隔离）；`rustfmt --check` 与 `cargo clippy --lib -- -D warnings` 通过。未写 OPPO、`emulator-5554/5556/5558/5570`，未做 DB 注入、GUI、HTTP 或 Keychain 操作。
+- **仍未关闭：** 这只加固 P7-E 本地隔离恢复候选，不证明真实 Google/Supabase/OAuth、受控 HTTP、部署回读、真实 Android/Desktop 跨设备恢复或 P7/P0–P11 完成。P6 在 macOS 解锁后仍按既有 5570 正常 UI 续跑顺序恢复，本轮没有触碰该 AVD。
+
 ## 2026-08-20 P6 v2 真实完整 owner 文件链：隔离环境和唯一验收包就绪，macOS 锁屏阻断正常 UI 创建
 
 - **本轮边界：** 目标仍是 §17 P6 的真实完整 owner 文件链，而不是 P6 或 P0–P11 完成声明。只读盘点已确认 Project、Conversation、手工 Knowledge、长期 Memory、Knowledge 关系和 DocumentsUI 文件附件均有正常生产 UI；完整范围会从 Conversation 的已提交消息节点和 Knowledge 收集附件，故附件必须经正常 UI 加入草稿后本地发送进入消息树。未发现需要或允许使用 DB/SQL/command 注入的对象路径。

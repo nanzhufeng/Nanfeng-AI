@@ -29,6 +29,8 @@ Android P7-E restore 有独立 `restore plan` 与 allowlist writer，不复用 P
 
 Desktop 只能将 sync document open/restore 到全新、显式命名的隔离 workspace；默认不覆盖当前 workspace。替换现有 workspace 必须由未来明确 UI 确认并经 staging/SQLite transaction 原子切换，本阶段 harness 不触碰当前 workspace。stable ID、revision、conversation tree、relation、content hash 与不可信文本 IR 必须保真。
 
+Desktop staged candidate 的目录名必须等于重读后的 canonical semantic hash；复用既有候选、原子切换前和切换后均重读 header 与所有 semantic record 验证这一身份。内容或 header 被改写即拒绝，不能替换隔离 workspace。崩溃遗留的旧 `.hash.tmp` 只保留原状，新的 process-scoped temporary candidate 不复用、不删除它；临时候选只在其自身失败时删除。
+
 两端遵守 P7-C expected-revision RPC 语义：重复 commit/worker/intent 返回原 receipt 而不递增 revision；stale revision 拒绝；remote 更新同时 local dirty 时停写 `CONFLICT`；读回同 revision/hash 才可标记成功。账号切换、退出保留本机、两账户/两文档隔离均不允许跨 scope 写入。
 
 ## 最小本地矩阵
@@ -40,6 +42,7 @@ Desktop 只能将 sync document open/restore 到全新、显式命名的隔离 w
 3. wrong recovery code、header/ciphertext/hash 篡改、高敏整体拒绝、cross-app/document 与两个账号/文档隔离；
 4. Android/desktop 新隔离目标的 restore、B 修改后 A 回读、每一步 readback hash；
 5. 账号切换与默认退出保留本机业务真值。
+6. Desktop 候选复用、候选篡改拒绝、切换前后 identity readback 与 legacy temporary 遗留不阻塞新 candidate。
 
 fixture 仅使用非敏感 synthetic records、temporary private roots 与随机测试 key/recovery code；日志只输出 case 名、scope hash 截短、revision、record count 和 SHA-256，不能输出 plaintext/envelope/key/recovery code。
 

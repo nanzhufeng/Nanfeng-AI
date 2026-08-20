@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 const RECORD_FORMAT: &str = "nfai.sync.semantic-record.v1";
@@ -19,6 +20,7 @@ const KINDS: [&str; 6] = [
     "relation",
     "safe_settings",
 ];
+static TEMPORARY_STAGE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SemanticRecord {
@@ -29,7 +31,7 @@ pub struct SemanticRecord {
     pub content_json: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SemanticSnapshot {
     pub app_id: String,
     pub document_id: String,
@@ -58,9 +60,12 @@ impl IsolatedWorkspaceStore {
         let id = sha256(canonical.as_bytes());
         let stage = self.root.join("staging").join(&id);
         if stage.exists() {
+            verify_database(&stage.join("workspace.sqlite3"), snapshot, &id)?;
             return Ok(id);
         }
-        let temporary = self.root.join("staging").join(format!(".{id}.tmp"));
+        // A legacy deterministic `.hash.tmp` may remain after a crash. Never reuse or delete it:
+        // a fresh process-scoped candidate keeps recovery non-destructive.
+        let temporary = temporary_stage_path(&self.root, &id);
         fs::create_dir(&temporary).map_err(|_| "P7E staging creation failed".to_owned())?;
         let result = (|| -> Result<(), String> {
             let database = temporary.join("workspace.sqlite3");
@@ -85,9 +90,18 @@ impl IsolatedWorkspaceStore {
             let _ = fs::remove_dir_all(&temporary);
         }
         result?;
-        fs::rename(&temporary, &stage)
-            .map_err(|_| "P7E staging atomic publish failed".to_owned())?;
-        Ok(id)
+        match fs::rename(&temporary, &stage) {
+            Ok(()) => Ok(id),
+            Err(_) => {
+                let _ = fs::remove_dir_all(&temporary);
+                if stage.is_dir() {
+                    verify_database(&stage.join("workspace.sqlite3"), snapshot, &id)?;
+                    Ok(id)
+                } else {
+                    Err("P7E staging atomic publish failed".into())
+                }
+            }
+        }
     }
 
     /// Atomically exposes a staged candidate only under this explicit isolated workspace name.
@@ -105,6 +119,7 @@ impl IsolatedWorkspaceStore {
         if !database.is_file() {
             return Err("P7E staged workspace missing".into());
         }
+        verify_staged_identity(&database, staging_id)?;
         let target = self.root.join("workspaces").join(workspace_id);
         if target.exists() && !replace_confirmed {
             return Err("P7E replacement confirmation required".into());
@@ -121,10 +136,19 @@ impl IsolatedWorkspaceStore {
                 .map_err(|_| "P7E checkpoint switch failed".to_owned())?;
         }
         match fs::rename(&staged, &target) {
-            Ok(()) => {
-                let _ = fs::remove_dir_all(checkpoint);
-                Ok(read_hash(&target.join("workspace.sqlite3"))?)
-            }
+            Ok(()) => match verify_staged_identity(&target.join("workspace.sqlite3"), staging_id) {
+                Ok(()) => {
+                    let _ = fs::remove_dir_all(checkpoint);
+                    Ok(staging_id.into())
+                }
+                Err(_) => {
+                    let _ = fs::remove_dir_all(&target);
+                    if checkpoint.exists() {
+                        let _ = fs::rename(&checkpoint, &target);
+                    }
+                    Err("P7E isolated workspace readback mismatch".into())
+                }
+            },
             Err(_) => {
                 if checkpoint.exists() {
                     let _ = fs::rename(&checkpoint, &target);
@@ -187,36 +211,7 @@ impl IsolatedWorkspaceStore {
             .join("workspaces")
             .join(workspace_id)
             .join("workspace.sqlite3");
-        let db = Connection::open(&database)
-            .map_err(|_| "P7E isolated workspace unavailable".to_owned())?;
-        let (app_id, document_id, revision, expected_hash): (String, String, u64, String) = db
-            .query_row(
-                "SELECT app_id,document_id,revision,snapshot_hash FROM sync_workspace WHERE id=1",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )
-            .map_err(|_| "P7E isolated workspace header unreadable".to_owned())?;
-        let mut statement = db.prepare("SELECT kind,id,revision,classification,content_json FROM sync_semantic_records ORDER BY kind,id,revision")
-            .map_err(|_| "P7E isolated workspace records unreadable".to_owned())?;
-        let records = statement
-            .query_map([], |row| {
-                Ok(SemanticRecord {
-                    kind: row.get(0)?,
-                    id: row.get(1)?,
-                    revision: row.get(2)?,
-                    classification: row.get(3)?,
-                    content_json: row.get(4)?,
-                })
-            })
-            .map_err(|_| "P7E isolated workspace record query failed".to_owned())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| "P7E isolated workspace record decode failed".to_owned())?;
-        let snapshot = SemanticSnapshot {
-            app_id,
-            document_id,
-            revision,
-            records,
-        };
+        let (snapshot, expected_hash) = read_database_snapshot(&database)?;
         validate_snapshot(&snapshot)?;
         if sha256(canonical_snapshot(&snapshot)?.as_bytes()) != expected_hash {
             return Err("P7E isolated workspace hash mismatch".into());
@@ -483,30 +478,69 @@ fn canonical(value: &Value) -> Result<String, String> {
 fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+fn temporary_stage_path(root: &Path, id: &str) -> PathBuf {
+    let counter = TEMPORARY_STAGE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    root.join("staging")
+        .join(format!(".{id}.{}.{}.tmp", std::process::id(), counter))
+}
+fn read_database_snapshot(database: &Path) -> Result<(SemanticSnapshot, String), String> {
+    let db = Connection::open(database).map_err(|_| "P7E staged SQLite unreadable".to_owned())?;
+    let (app_id, document_id, revision, expected_hash): (String, String, u64, String) = db
+        .query_row(
+            "SELECT app_id,document_id,revision,snapshot_hash FROM sync_workspace WHERE id=1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|_| "P7E staged SQLite header unreadable".to_owned())?;
+    let mut statement = db.prepare("SELECT kind,id,revision,classification,content_json FROM sync_semantic_records ORDER BY kind,id,revision")
+        .map_err(|_| "P7E staged SQLite records unreadable".to_owned())?;
+    let records = statement
+        .query_map([], |row| {
+            Ok(SemanticRecord {
+                kind: row.get(0)?,
+                id: row.get(1)?,
+                revision: row.get(2)?,
+                classification: row.get(3)?,
+                content_json: row.get(4)?,
+            })
+        })
+        .map_err(|_| "P7E staged SQLite record query failed".to_owned())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| "P7E staged SQLite record decode failed".to_owned())?;
+    Ok((
+        SemanticSnapshot {
+            app_id,
+            document_id,
+            revision,
+            records,
+        },
+        expected_hash,
+    ))
+}
 fn verify_database(
     database: &Path,
     snapshot: &SemanticSnapshot,
     expected_hash: &str,
 ) -> Result<(), String> {
-    let db = Connection::open(database).map_err(|_| "P7E staged SQLite unreadable".to_owned())?;
-    let count: usize = db
-        .query_row("SELECT COUNT(*) FROM sync_semantic_records", [], |row| {
-            row.get(0)
-        })
-        .map_err(|_| "P7E staged SQLite count unreadable".to_owned())?;
-    if count != snapshot.records.len() || read_hash(database)? != expected_hash {
+    let (actual, stored_hash) = read_database_snapshot(database)?;
+    validate_snapshot(&actual)?;
+    if stored_hash != expected_hash
+        || canonical_snapshot(&actual)? != canonical_snapshot(snapshot)?
+        || sha256(canonical_snapshot(&actual)?.as_bytes()) != expected_hash
+    {
         return Err("P7E staged SQLite readback mismatch".into());
     }
     Ok(())
 }
-fn read_hash(database: &Path) -> Result<String, String> {
-    let db = Connection::open(database).map_err(|_| "P7E staged SQLite unreadable".to_owned())?;
-    db.query_row(
-        "SELECT snapshot_hash FROM sync_workspace WHERE id=1",
-        [],
-        |row| row.get(0),
-    )
-    .map_err(|_| "P7E staged SQLite header unreadable".to_owned())
+fn verify_staged_identity(database: &Path, expected_hash: &str) -> Result<(), String> {
+    let (snapshot, stored_hash) = read_database_snapshot(database)?;
+    validate_snapshot(&snapshot)?;
+    if stored_hash != expected_hash
+        || sha256(canonical_snapshot(&snapshot)?.as_bytes()) != expected_hash
+    {
+        return Err("P7E staged workspace identity mismatch".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -694,6 +728,51 @@ mod tests {
         )
         .unwrap();
         assert_eq!("first", db.query_row("SELECT json_extract(content_json, '$.value.title') FROM sync_semantic_records WHERE kind='project'", [], |row| row.get::<_, String>(0)).unwrap());
+    }
+
+    #[test]
+    fn stale_legacy_temporary_candidate_cannot_block_a_fresh_verified_stage() {
+        let temp = tempdir().unwrap();
+        let store = IsolatedWorkspaceStore::open(temp.path().join("p7e")).unwrap();
+        let fixture = snapshot("recover safely");
+        let id = sha256(canonical_snapshot(&fixture).unwrap().as_bytes());
+        let legacy = temp.path().join("p7e/staging").join(format!(".{id}.tmp"));
+        fs::create_dir(&legacy).unwrap();
+
+        assert_eq!(id, store.stage(&fixture).unwrap());
+        assert!(legacy.is_dir());
+        assert!(temp
+            .path()
+            .join("p7e/staging")
+            .join(id)
+            .join("workspace.sqlite3")
+            .is_file());
+    }
+
+    #[test]
+    fn tampered_staged_candidate_is_rejected_before_it_can_replace_an_isolated_workspace() {
+        let temp = tempdir().unwrap();
+        let store = IsolatedWorkspaceStore::open(temp.path().join("p7e")).unwrap();
+        let fixture = snapshot("original");
+        let stage = store.stage(&fixture).unwrap();
+        let database = temp
+            .path()
+            .join("p7e/staging")
+            .join(&stage)
+            .join("workspace.sqlite3");
+        Connection::open(&database)
+            .unwrap()
+            .execute("UPDATE sync_semantic_records SET content_json=?1 WHERE kind='project'", [format!(r#"{{"format":"{RECORD_FORMAT}","id":"project-p7e","kind":"project","revision":2,"semanticVersion":1,"value":{{"archived":false,"title":"tampered"}}}}"#)])
+            .unwrap();
+
+        assert_eq!(
+            "P7E staged workspace identity mismatch",
+            store
+                .switch_atomically(&stage, "desktop-b", false)
+                .unwrap_err()
+        );
+        assert!(!temp.path().join("p7e/workspaces/desktop-b").exists());
+        assert!(store.stage(&fixture).is_err());
     }
 
     #[test]
