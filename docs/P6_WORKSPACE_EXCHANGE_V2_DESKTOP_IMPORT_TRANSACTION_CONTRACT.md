@@ -4,7 +4,7 @@
 
 本合同冻结 `nfai.exchange.v2` 在 Desktop 的**未来内部导入 owner**。它只消费已由 `protocol/nfai.exchange.v2.schema.json`、`protocol/scripts/exchange-v2-lib.mjs` 和 `NfaiExchangeV2Ir` 确认的 exact IR；不重新解释、不补默认值、不把 v2 降级为 v1，也不把 v1 的 `workspaces/workspace_exchange/import_journal` 当作 v2 owner。
 
-本轮只冻结数据与失败合同，并增加 v1/v2 隔离回归。尚未实现 v2 package writer、private staging、SQLite migration、Tauri command、native picker 或用户入口；因此“完整工作区交换”继续不得出现在 UI、SAF 或“设置 → 功能审阅”。没有网络、Keychain、Provider、设备或数据库注入验收。
+已实现 v2 package writer、private archive、SQLite migration 和独立 Tauri command；Desktop 设置的 native picker 只把用户选中的单一 `.nfai-exchange` 交给该 command。该桥接不接受 v1 staging ID、不返回路径/正文/显示名/bytes、不读写 v1 工作区表，失败不生成可见 workspace。Android 没有 v2 SAF/UI。没有网络、Keychain、Provider、设备或数据库注入验收；尚无真实 native picker 人工文件验收、跨端 v2 互通、Windows 或发布结论。
 
 ## v2 私有 package 与严格 preflight
 
@@ -57,8 +57,8 @@ v2 **没有中途 resume**。进程在 commit 前终止时，下一次只能从�
 | commit 后 reopen | journal、canonical IR、field hashes、archive bytes 全部一致才读为已提交 | 返回幂等 replay；不重复写入 |
 | 回导写入/rename/readback | 不发布目标文件或保留可识别 `.part` 供用户处理；不改已提交 import | 原 committed import 可继续被重新回导 |
 
-最小自动合同必须覆盖：v1 package/export 不能接纳 v2 IR；v2 preflight 的 owner/attachment 引用账本和 hash mismatch 拒绝；每个 SQLite 写入点失败后的零行；commit 后 reopen/replay；回导 semantic 与全量 ownerFieldHash/asset hash 相等。上述是本地领域/文件系统合同，不替代 native picker、真实文件、Windows 或用户可见验收。
+最小自动合同必须覆盖：v1 package/export 不能接纳 v2 IR；v2 preflight 的 owner/attachment 引用账本和 hash mismatch 拒绝；每个 SQLite 写入点失败后的零行；commit 后 reopen/replay；回导 semantic 与全量 ownerFieldHash/asset hash 相等。上述自动合同覆盖了 command 所调用的 owner，但不替代真实 native picker 人工文件、跨端、Windows 或发布验收。
 
 ## 用户入口与后续实现顺序
 
-下一实现只能依次为：独立 v2 preflight/package reader → private archive writer → migration + single transaction + failure injection → private reopen/re-export readback → 真实 Desktop picker 链。每一步都保持 v1 隔离。只有最后真实链闭合时，才同改动登记“设置 → 功能审阅”的去留、设置二级入口与“不增加聊天/Composer 常驻按键”的小字建议。
+已完成的顺序为：独立 v2 preflight/package reader → private archive writer → migration + single transaction + failure injection → private reopen/re-export readback → 最小 Desktop native picker command/UI bridge。每一步保持 v1 隔离。该 bridge 已在 Android/Desktop “设置 → 功能审阅”登记为待判断功能，并只给 Desktop 设置二级入口；下一验证只能在隔离 Desktop 环境经真实 native picker 选择 v2 fixture，读取 committed receipt 并核对 reopen/re-export readback。不可用时必须如实记录，不得用 command、SQLite 或文件注入伪造验收。

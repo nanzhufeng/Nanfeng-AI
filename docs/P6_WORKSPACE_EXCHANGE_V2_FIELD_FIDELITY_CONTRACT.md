@@ -4,7 +4,7 @@
 
 `nfai.exchange.v2` 是 P6 全对象交换的**协议/IR 前置**，不是 Android 完整工作区 UI、SAF 或任一端生产导入已开放的声明。v1 保持为已交付的窄语义投影；不得把 v2 fixture、schema 或预检说成真实迁移完成。
 
-v2 只接纳下表中有现存 Android owner、清晰字段语义、并且不会携带路径、URI、凭据、运行时事件或 Provider 原始负载的事实。Desktop 的当前唯一持久 owner 仍是 `workspace_exchange.exchange_json` + `object_provenance` + `import_journal`：在完成 SQLite migration 和原子 transaction 前，它只能严格验证并保留 v2 IR，不能声称已还原为 Desktop 原生 Project/Knowledge/Memory owner。
+v2 只接纳下表中有现存 Android owner、清晰字段语义、并且不会携带路径、URI、凭据、运行时事件或 Provider 原始负载的事实。Desktop 的 v2 唯一持久 owner 是独立 `exchange_v2_*` 五表、`exchange-v2/archives/<packageHash>/` 与 journal/receipt；它不读写 v1 的 `workspace_exchange.exchange_json`、`object_provenance` 或 `import_journal`，也不能声称已还原为 Desktop 原生 Project/Knowledge/Memory owner。
 
 ## 逐字段矩阵
 
@@ -29,8 +29,8 @@ v2 只接纳下表中有现存 Android owner、清晰字段语义、并且不会
 - `protocol/nfai.exchange.v2.schema.json` 与 `protocol/scripts/exchange-v2-lib.mjs` 是 schema/canonical semantic hash 的唯一协议事实；`nfai.exchange.v2.golden.json` 同时由 Android 和 Desktop 定向合同读取。
 - v2 预检为**纯 IR**：不读 Room、SQLite、私有附件、SAF、文件 picker、网络、Provider 或 Key，也不注册 UI。它的功能是把上述 owner 字段缺失/不安全/不可验证的情况明确拒绝，防止 v1 的静默丢失被重新引入。
 - Android 的 `NfaiExchangeV2OwnerMapper` 已能从显式选择的 owner 只读生成并复验 exact IR；它仅在内存中核验附件 bytes/hash，不保留 bytes、不建 package、不写 Room，也不注册 UI/SAF。它拒绝缺 history、`sourceReference`、定位符、私有 `reference` 外泄、运行时节点与无法证实的附件。这个 owner mapper 不能替代本段的纯 IR validator，后者仍不访问任何 owner。
-- Desktop 的独立 schema version、package、private staging、asset archive、SQLite transaction、journal/receipt、失败注入、重开与回导的唯一正文见 [v2 Desktop 原子导入合同](P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md)。完成前不开放“完整工作区”选择或 SAF。
+- Desktop 的独立 schema version、package、private staging、asset archive、SQLite transaction、journal/receipt、失败注入、重开与回导的唯一正文见 [v2 Desktop 原子导入合同](P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md)。v2 不开放 Android SAF；Desktop 的受限 native picker 入口只接纳单一用户选择的 package，不能说成 Desktop 原生 owner 恢复。
 
 ## 用户入口
 
-本增量没有用户可见能力、按钮或设置入口，故 Android/Desktop 的“设置 → 功能审阅”不新增条目。将来仅当 v2 owner mapper、原子导入及真实文件链都闭合时，才在同一改动登记“完整工作区交换”的去留、设置二级入口与不新增聊天/Composer 常驻按键建议。
+Desktop 现在只在“设置 → 数据与导入”提供 `完整工作区交换（v2）` 的 native picker 二级入口：它只读取用户所选 `.nfai-exchange` 的有限 bytes，依次执行 v2 strict preflight 与独立 private archive/transaction owner，返回 content-free receipt 或脱敏的真实拒绝，不创建 v1/可见工作区。Android 尚无 v2 用户入口。Android/Desktop 的“设置 → 功能审阅”同改登记其“待您判断”去留；建议保留 Desktop 设置二级入口，不新增聊天、Composer 或工作页常驻按键。本条不是已完成真实用户文件验收、跨端互通、备份/同步或 Desktop 原生 owner 恢复声明。

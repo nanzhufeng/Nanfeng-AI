@@ -622,7 +622,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(appSource.contains("contentDescription = if (destination == SettingsDestination.HOME) \"返回侧栏\" else \"返回设置\""))
         assertTrue(hierarchy.contains("if (destination == SettingsDestination.HOME)"))
         for (token in listOf("ModelServiceStatusCard", "ConversationManagementSettingsCard", "FeatureReviewSettingsCard", "PrivacyDataCard", "onOpenImport")) assertTrue("missing detail owner $token", hierarchy.contains(token))
-        for (token in listOf("ChatGPT / Claude ZIP 导入", "设置 → 数据与导入 → 导入中心", "暂不在对话主页添加快捷按钮", "未关联媒体人工关联", "Desktop Compare 联网执行", "阶段 1/2 已有 fail-closed owner 与 Security.framework 边界", "复用现有“对比”操作，不新增 Composer 常驻按钮", "本地精确复用", "暂不增加聊天或 Composer 按键", "避免误解为联网缓存或省费承诺", "跨端文本会话交换", "不是本机备份、云同步，也不代表完整工作区跨端保真")) assertTrue("missing feature review detail $token", appSource.contains(token))
+        for (token in listOf("ChatGPT / Claude ZIP 导入", "设置 → 数据与导入 → 导入中心", "暂不在对话主页添加快捷按钮", "未关联媒体人工关联", "Desktop Compare 联网执行", "阶段 1/2 已有 fail-closed owner 与 Security.framework 边界", "复用现有“对比”操作，不新增 Composer 常驻按钮", "本地精确复用", "暂不增加聊天或 Composer 按键", "避免误解为联网缓存或省费承诺", "跨端文本会话交换", "不是本机备份、云同步，也不代表完整工作区跨端保真", "完整工作区交换（v2）", "Android 尚无用户入口", "只保留 Desktop 设置二级入口")) assertTrue("missing feature review detail $token", appSource.contains(token))
         assertTrue(source.contains("Text(\"导出当前文本会话到 Desktop\")"))
         assertFalse(categoryList.contains("ConversationManagementSettingsCard"))
         assertFalse(categoryList.contains("P6GModelSelectionSettingsCard"))

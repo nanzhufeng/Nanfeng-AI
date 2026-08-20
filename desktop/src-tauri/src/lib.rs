@@ -620,6 +620,20 @@ struct RecycleBinEntry {
     revision: u64,
 }
 
+/// Content-free result for the only user-facing v2 import bridge. It intentionally excludes
+/// selected paths, display names, bodies and attachment bytes.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopWorkspaceV2ImportReceipt {
+    workspace_id: String,
+    package_hash: String,
+    semantic_hash: String,
+    root_counts: BTreeMap<String, u64>,
+    asset_count: u64,
+    asset_byte_count: u64,
+    replayed: bool,
+}
+
 struct DesktopWorkspaceStore {
     root: PathBuf,
     database: PathBuf,
@@ -1908,12 +1922,8 @@ pub(crate) fn safe_entry(name: &str) -> bool {
         && !name.ends_with('/')
 }
 
-/// P6 v2 is intentionally an IR-only gate for now. It proves both runtimes reject lossy or
-/// unsafe owner data before a future v2 staging/SQLite transaction is allowed to exist.
-#[allow(
-    dead_code,
-    reason = "P6 v2 kernel is intentionally unregistered until the later picker/UI contract"
-)]
+/// P6 v2 is the strict IR gate used by the private Desktop import owner. It rejects lossy or
+/// unsafe owner data before any archive or SQLite transaction is started.
 pub(crate) fn validate_exchange_v2_ir(exchange: &Value) -> Result<String, String> {
     let root = object(exchange, "v2 exchange")?;
     let expected: BTreeSet<&str> = ["format", "version", "export", "projects", "conversations", "knowledge", "memory", "relations", "settings"].into_iter().collect();
@@ -3097,6 +3107,47 @@ impl DesktopWorkspaceStore {
             .busy_timeout(std::time::Duration::from_secs(3))
             .map_err(|_| json_error("无法设置 SQLite busy timeout"))?;
         Ok(connection)
+    }
+
+    /// Reads exactly one picker-selected v2 package. The selected path is never persisted,
+    /// projected or included in an error/receipt; directory traversal and broad file discovery
+    /// are deliberately absent from this bridge.
+    fn read_selected_v2_package(&self, selected_path: &str) -> Result<Vec<u8>, String> {
+        const MAX_SELECTED_V2_PACKAGE_BYTES: u64 = 128 * 1024 * 1024;
+        let selected = Path::new(selected_path);
+        if selected.extension().and_then(|extension| extension.to_str()) != Some("nfai-exchange") {
+            return Err(json_error("完整工作区交换文件类型无效"));
+        }
+        let metadata = fs::metadata(selected)
+            .map_err(|_| json_error("所选完整工作区交换文件不可读"))?;
+        if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_SELECTED_V2_PACKAGE_BYTES {
+            return Err(json_error("所选完整工作区交换文件大小或类型无效"));
+        }
+        fs::read(selected).map_err(|_| json_error("所选完整工作区交换文件读取失败"))
+    }
+
+    /// The v2 picker bridge has no staging ID and does not touch v1 workspaces/tables. A failed
+    /// preflight creates no visible workspace; the v2 kernel remains the sole archive/transaction
+    /// owner after the selected bytes have passed its strict reader.
+    fn import_selected_v2_workspace_exchange(
+        &self,
+        selected_path: &str,
+    ) -> Result<DesktopWorkspaceV2ImportReceipt, String> {
+        let package = p6_workspace_exchange_v2::preflight(self.read_selected_v2_package(selected_path)?)?;
+        let root_counts = package.receipt.root_counts.clone();
+        let asset_count = package.receipt.asset_count;
+        let asset_byte_count = package.receipt.asset_bytes;
+        let mut connection = self.connection()?;
+        let committed = p6_workspace_exchange_v2::import(&self.root, &mut connection, &package, None)?;
+        Ok(DesktopWorkspaceV2ImportReceipt {
+            workspace_id: committed.workspace_id,
+            package_hash: committed.package_hash,
+            semantic_hash: committed.semantic_hash,
+            root_counts,
+            asset_count,
+            asset_byte_count,
+            replayed: committed.replayed,
+        })
     }
 
     fn migrate(&self) -> Result<(), String> {
@@ -6266,6 +6317,20 @@ fn stage_preflight_selected_exchange(
         .stage_selected_file(&selected_path)
 }
 
+/// User-selected P6 workspace-exchange v2 only. This accepts no v1 staging ID, exposes no
+/// selected path, and returns the content-free committed receipt from the isolated v2 owner.
+#[tauri::command]
+fn import_desktop_workspace_exchange_v2_selected(
+    state: State<'_, AppState>,
+    selected_path: String,
+) -> Result<DesktopWorkspaceV2ImportReceipt, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .import_selected_v2_workspace_exchange(&selected_path)
+}
+
 #[tauri::command]
 fn stage_chatgpt_export_selected(
     state: State<'_, AppState>,
@@ -6988,6 +7053,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             stage_preflight_selected_exchange,
+            import_desktop_workspace_exchange_v2_selected,
             stage_chatgpt_export_selected,
             stage_p6k_zip_import_selected,
             retry_p6k_zip_import_task,
@@ -7067,6 +7133,64 @@ mod tests {
 
     fn golden() -> Vec<u8> {
         fs::read("../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange").expect("golden")
+    }
+
+    #[test]
+    fn v2_picker_bridge_reads_only_the_selected_package_and_returns_a_content_free_receipt() {
+        let directory = tempdir().unwrap();
+        let store = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let mut exchange: Value = serde_json::from_str(include_str!(
+            "../../../protocol/fixtures/nfai.exchange.v2.golden.json"
+        ))
+        .unwrap();
+        let asset_hash = sha256(b"a");
+        for attachment in exchange["knowledge"][0]["attachments"]
+            .as_array_mut()
+            .unwrap()
+        {
+            attachment["entry"] = Value::String(format!("assets/{asset_hash}"));
+            attachment["sha256"] = Value::String(asset_hash.clone());
+        }
+        exchange["export"]["semanticHash"] = Value::String(semantic_hash(&exchange).unwrap());
+        let selected = directory.path().join("selected.nfai-exchange");
+        fs::write(
+            &selected,
+            p6_workspace_exchange_v2::package(
+                &exchange,
+                &BTreeMap::from([(format!("assets/{asset_hash}"), b"a".to_vec())]),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let receipt = store
+            .import_selected_v2_workspace_exchange(selected.to_str().unwrap())
+            .unwrap();
+        assert!(!receipt.replayed);
+        assert_eq!(receipt.asset_count, 1);
+        assert_eq!(receipt.root_counts.get("knowledge"), Some(&1));
+        let serialized = serde_json::to_string(&receipt).unwrap();
+        assert!(!serialized.contains(selected.to_str().unwrap()));
+        assert!(!serialized.contains("displayName"));
+
+        let replay = store
+            .import_selected_v2_workspace_exchange(selected.to_str().unwrap())
+            .unwrap();
+        assert!(replay.replayed);
+        let connection = store.connection().unwrap();
+        let v1_rows: i64 = connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM workspaces)+(SELECT COUNT(*) FROM workspace_exchange)+(SELECT COUNT(*) FROM import_journal)",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(v1_rows, 0);
+        let rejected = store
+            .import_selected_v2_workspace_exchange(directory.path().join("not-selected.txt").to_str().unwrap())
+            .unwrap_err();
+        assert!(rejected.contains("文件类型无效"));
+        assert!(!rejected.contains("not-selected.txt"));
     }
 
     #[test]

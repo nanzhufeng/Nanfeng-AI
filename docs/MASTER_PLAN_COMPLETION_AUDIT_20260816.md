@@ -1,5 +1,11 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-20 P6 工作区 v2 Desktop native picker 桥接：本地合同闭合，真实用户文件链仍待隔离验收
+
+- **代码与入口：** Desktop 已登记唯一 v2 command `import_desktop_workspace_exchange_v2_selected` 与 Settings → 数据与导入 → `完整工作区交换（v2）` picker。该桥接只读取一个用户所选 `.nfai-exchange`（regular-file、扩展名、128 MiB 上限）→ strict v2 preflight → 既有 private archive + schema 21 single transaction；没有 v1 staging、目录扫描或路径/正文/byte/显示名回传。失败没有可见 workspace，成功回传 content-free receipt。
+- **治理与自动证据：** Android/Desktop 功能审阅均登记“待您判断”，建议只保留 Desktop 设置二级入口、不加聊天/Composer/工作页常驻按键。新增 bridge 合同覆盖 import、replay、receipt 脱敏与 v1 三表零行；Rust library 90/90（Keychain historical self-test 主动排除）、`cargo check`、Desktop UI 90/90、lint/typecheck/static build 与 Android 功能审阅定向单测通过。
+- **仍未关闭：** 未在真实 native picker 选择实际 v2 fixture，未做真人文件的 committed reopen/re-export readback；没有 Android v2 用户链、跨端互通、Windows、正式 bundle/发布或任何 OPPO 操作。不能把本地 command/UI 合同写成真实文件、完整对象恢复、备份/同步或 P6/P0–P11 完成。
+
 ## 2026-08-20 P6 工作区 v2 Desktop 私有导入内核：生产数据链闭合，真实用户文件链未开始
 
 - **结论：** Desktop 已实现独立的 v2 package reader/preflight、随机 private prepare→fsync/hash readback→archive rename、SQLite schema 20→21 的五张 v2 owner/journal/receipt 表、`BEGIN IMMEDIATE` 单 transaction、committed reopen/replay 与 committed-only re-export readback。它严格接纳 `manifest.json`、`exchange.json` 与引用账本对应的 `assets/<sha256>`；manifest/export canonical equality、IR semantic hash、attachment metadata/hash 与每个 root/asset 的 `ownerFieldHashes` 都必须一致。

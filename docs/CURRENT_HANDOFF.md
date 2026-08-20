@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v2 Desktop native picker 桥接：代码与本地合同完成，真实 picker 文件验收待隔离环境
+
+- **已实现：** `import_desktop_workspace_exchange_v2_selected` 是唯一注册的 v2 Tauri command；Desktop Settings 的“数据与导入 → 完整工作区交换（v2）”先经 native picker 选择一个 `.nfai-exchange`，再在 Rust 中只读取该文件（类型、regular-file 与 128 MiB 限制）→ v2 strict preflight → `p6_workspace_exchange_v2` private archive/SQLite transaction。它不接受 v1 staging ID、不读写 `workspaces/workspace_exchange/import_journal`、不扫描目录，也不把路径、显示名、正文或附件 bytes 放进 receipt/错误；失败不产生可见 workspace，成功只返回 content-free hash/计数/workspace ID/replay receipt。
+- **设置治理：** Desktop 入口仅位于设置二级页；Android 保持无 v2 UI/SAF 入口。双端“设置 → 功能审阅”同步登记“完整工作区交换（v2）”为待您判断，明确建议不增加聊天、Composer 或工作页常驻按键，也不称为备份、云同步或 Desktop 原生对象恢复。
+- **本地验证（2026-08-20）：** 新 Rust picker-bridge 合同验证 selected fixture 的 import/replay、content-free serialization 和 v1 三表零行；Desktop Rust library 为 90/90（主动跳过会触发 macOS Keychain 的历史自测）、`cargo check` 通过；Desktop Node UI 90/90、lint、typecheck 与 static build 通过；Android Studio JBR 下 `P6DConversationRowAccessibilityContractsTest` 通过。`cargo fmt --check` 仍会报告仓库既有大范围格式差异，未对无关历史代码批量重排。
+- **停止门与下一唯一候选：** 未在真实 Desktop native picker 中选择 fixture，未进行人工 readback/re-export，也没有跨端、Windows、发布、Android v2 owner/package/UI 或 OPPO 结论。若隔离 Desktop 环境可用，只能通过正常 Settings picker 选择 v2 fixture，并在成功后以真实 receipt 与 committed reopen/re-export readback 核对；不可用时如实记录，禁止 command/SQLite/文件注入伪验收。
+
 ## 2026-08-20 P6 工作区 v2 Desktop 私有导入内核：preflight/archive/SQLite/reopen/re-export 已实现，用户入口仍未开放
 
 - **已实现：** `desktop/src-tauri/src/p6_workspace_exchange_v2.rs` 是未注册的独立 v2 内核。它只读取独立 `packageVersion: 2` / `exchangeVersion: 2` 的 `manifest.json + exchange.json + assets/<sha256>`，将 manifest/export canonical equality、完整 v2 IR semantic hash、会话 `ASSET_REF` 与 Knowledge attachments 的统一账本、每项元数据/bytes SHA-256、未知条目和 128 MiB 限制全部 fail-closed。receipt 只保存 package/semantic hash、枚举、计数和 `ownerFieldHashes`，不保存正文、路径或 bytes。

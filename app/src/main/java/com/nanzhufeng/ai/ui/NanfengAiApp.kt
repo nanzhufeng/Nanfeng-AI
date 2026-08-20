@@ -885,6 +885,13 @@ private fun FeatureReviewSettingsCard() {
             Spacer(Modifier.height(6.dp))
             Text("建议：只保留设置二级入口，不在聊天主页或 Composer 增加按键；它不是本机备份、云同步，也不代表完整工作区跨端保真。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
+        WhiteCard {
+            Text("完整工作区交换（v2）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("当前：待您判断是否保留；Desktop 仅可从设置 → 数据与导入选择 v2 包，严格预检后保存私有归档、provenance 与回执；Android 尚无用户入口。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("建议：只保留 Desktop 设置二级入口，不在聊天主页、Composer 或工作页增加按键；它不是备份、云同步，也不表示已恢复为 Desktop 原生对象。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 

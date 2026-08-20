@@ -135,6 +135,12 @@ test('settings exposes the existing workspace exchange import without calling it
   assert.ok(!rendered.includes('恢复备份'));
 });
 
+test('P6 v2 complete exchange stays in Settings and never presents itself as a restored workspace', () => {
+  const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'data', status: '', error: '', connection: {} });
+  for (const token of ['完整工作区交换（v2）', 'data-action="select-v2-workspace-exchange"', '私有归档与回执', '不合并、覆盖或恢复为当前 Desktop 工作区']) assert.ok(rendered.includes(token));
+  assert.ok(!rendered.includes('完整工作区交换（v2）</strong><p>选择后严格预检并直接导入为新的独立工作区'));
+});
+
 test('P6-K exposes direct ZIP import with recovery controls without changing the settings layout', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'data', status: '', error: '', connection: {} });
   for (const token of ['第三方 ZIP 导入', 'data-action="select-p6k-chatgpt-zip"', 'data-action="select-p6k-claude-zip"', 'data-action="retry-p6k-zip"', 'data-action="skip-p6k-zip-failures"', 'data-action="delete-p6k-zip-batch"']) assert.ok(rendered.includes(token));
@@ -143,7 +149,7 @@ test('P6-K exposes direct ZIP import with recovery controls without changing the
 
 test('new user features have a Settings review entry with a decision state and entry recommendation', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'feature-review', status: '', error: '', connection: {} });
-  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮', '本地精确复用', '暂不增加聊天或 Composer 按键', '避免误解为联网缓存或省费承诺', '跨端文本会话交换', 'Android 现只从设置导出符合条件的文本会话为 .nfai-exchange', '它不是备份、云同步或完整工作区跨端保真承诺']) assert.ok(rendered.includes(token));
+  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮', '本地精确复用', '暂不增加聊天或 Composer 按键', '避免误解为联网缓存或省费承诺', '跨端文本会话交换', 'Android 现只从设置导出符合条件的文本会话为 .nfai-exchange', '它不是备份、云同步或完整工作区跨端保真承诺', '完整工作区交换（v2）', '只保留设置二级入口，不增加聊天、Composer 或工作页常驻按键']) assert.ok(rendered.includes(token));
 });
 
 test('FB-P6-039 keeps attachment previews as role-aligned siblings of text surfaces', () => {
