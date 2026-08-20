@@ -20,6 +20,16 @@
 - 仓库不保存 keystore、口令、私钥、Keychain 导出或本机敏感配置。
 - 恢复时必须先核对证书 SHA-256；证书不符不能构建可安装包。
 
+## 构建时凭据优先级
+
+构建脚本只按以下顺序读取正式签名配置，任何密码值均不写入仓库、日志或构建产物：
+
+1. 环境变量：`NANFENG_AI_KEYSTORE`、`NANFENG_AI_KEYSTORE_PASSWORD`。
+2. 用户级 `~/.gradle/gradle.properties`：`nanfengAi.keystore`、`nanfengAi.storePassword`。
+3. macOS Keychain：仅作为可选回退，service `com.nanzhufeng.ai.signing`、account `keystore-password`。
+
+项目根目录的 `gradle.properties` 与 `local.properties` 不承载正式签名口令。三层均不可用时，构建门禁立即失败并给出中文配置说明；不得循环重试、创建替代 keystore 或回退到 Android debug 签名。
+
 ## 构建门禁
 
 - `assembleDebug`、`assembleRelease`、`bundle*`、`package*` 和 `install*` 缺少正式签名时直接失败。

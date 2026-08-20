@@ -9,6 +9,8 @@ tmp/
 .DS_Store
 app/hs_err_pid*.log
 app/replay_pid*.log
+__pycache__/
+*.py[cod]
 delivery/**/*.apk
 docs/evidence/**/*.apk
 local.properties
