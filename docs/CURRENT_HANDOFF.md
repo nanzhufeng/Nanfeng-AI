@@ -13,6 +13,7 @@
 - **匿名 readback：** 同一隔离包 force-stop/cold-start 后，设置页恢复 `CLAUDE 导入批次 1 · COMPLETED` 与 `CHATGPT 导入批次 2 · COMPLETED`。可见 aggregate 为 Claude **162** 个对话、**0** 个未关联媒体、`NO_SAFE_PROFILE_FIELDS (0)`；ChatGPT **23** 个对话、**719** 个未关联媒体、`NO_SAFE_PROFILE_FIELDS (0)`。仅 Room 聚合交叉验证显示 Claude **120** 个严格失败项（119 `EMPTY_CONTENT`、1 `INVALID_TREE`），与 Desktop 同源结果一致；未读取/输出对话正文、标题、ID、文件名或账户资料。
 - **兼容修正：** Android Claude parser 现与 Desktop 同样接受缺失/`null` 的 `name` 与 `parent_message_uuid`，缺失标题规范为“未命名 Claude 对话”。此前 153 成功/129 失败的差异已消除；定向 Android 契约测试通过。
 - **新增功能审阅规则：** 新增项目 `AGENTS.md` 路由到 `docs/ANDROID_DESKTOP_USER_ENTRY_AUDIT_20260816.md` 的唯一规则正文：每个面向普通用户的新功能必须同改动登记 Android 与 Desktop “设置 → 功能审阅”，显示去留状态、现有入口、是否建议新增常用界面按键及小字理由。默认只给设置二级入口。当前 Android/ Desktop 已实际登记 ZIP 导入与未关联媒体人工关联；Android 隔离包正常 Settings 路径可见该页。
+- **入口文案防回退：** Desktop 的 ZIP 审阅项已与 Android 对齐为“设置 → 数据与导入 → 导入中心”，不再显示历史“第三方 ZIP 导入”路径；Desktop 全量 UI 合同 82/82 与 Android Settings 定向合同均覆盖该路径。
 - **当前交付产物：** `:app:assembleRelease` 已重新通过，正式 APK `app/build/outputs/apk/release/南枫AI.apk` SHA-256 为 `24177f946be0d4ac2db3f5b8aa0240b4f3f354fa68cfa10695c5c3b78e4acecb`；v2/v3 验签通过，仍为既有 release v2 证书（SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`）。本产物未安装到 OPPO 或 legacy/emulator 包。
 - **当前总控结论：** P6-K Android 主链与 Desktop P6-K 均已关闭；总控方案整体仍未关闭。后续只推进矩阵中的独立欠项：用户明确选择的实包媒体人工关联、真实 Provider/账号同步/生态外部条件，以及尚未完成的双端 UI/readback。不得重复安装、不得把隔离 emulator 或 OPPO 安装扩展为全部验收。
 

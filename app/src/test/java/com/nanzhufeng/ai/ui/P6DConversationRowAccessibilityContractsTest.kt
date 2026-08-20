@@ -622,6 +622,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(appSource.contains("contentDescription = if (destination == SettingsDestination.HOME) \"返回侧栏\" else \"返回设置\""))
         assertTrue(hierarchy.contains("if (destination == SettingsDestination.HOME)"))
         for (token in listOf("ModelServiceStatusCard", "ConversationManagementSettingsCard", "FeatureReviewSettingsCard", "PrivacyDataCard", "onOpenImport")) assertTrue("missing detail owner $token", hierarchy.contains(token))
+        for (token in listOf("ChatGPT / Claude ZIP 导入", "设置 → 数据与导入 → 导入中心", "暂不在对话主页添加快捷按钮", "未关联媒体人工关联")) assertTrue("missing feature review detail $token", appSource.contains(token))
         assertFalse(categoryList.contains("ConversationManagementSettingsCard"))
         assertFalse(categoryList.contains("P6GModelSelectionSettingsCard"))
         for (token in listOf("InvocationLedgerCard", "P6GModelSelectionSettingsCard", "P6ETemporaryMaintenanceAcceptanceCard", "installP6GLocalFixtureCatalog")) assertFalse("normal settings must hide $token", hierarchy.contains(token))
