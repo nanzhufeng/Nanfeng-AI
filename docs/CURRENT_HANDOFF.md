@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P3 真实对话执行：一次去内容化复核后保持外部门；P11 Gradle 元数据待无争用窗口
+
+- **P3 结论：** §17 P3-A～H 的本地对话主体、preflight、receipt 与 fail-closed transport 合同仍在；原始退出所需的真实流/停止/失败/重试/换模型、部分计费、真实用量/成本、长会话实测与 OpenRouter 充分性判断均未获得本轮证据。只读源码/合同复核确认普通聊天没有 production egress owner，`DisabledNoNetworkProviderTransport` 不发事件或假回复；P2-M bridge 与未引用的 Direct composition 都在默认拒绝端口前停止。详情见 `P3_REAL_EXECUTION_GATE_AUDIT_20260821.md`。
+- **严格边界：** 未读/探测应用私有凭据，未访问 Keychain，未构造 Authorization、HTTP、nonce、Provider Attempt、Token、费用、Candidate 或 Knowledge；未运行 Android/模拟器/OPPO。未以 DB/命令注入、假回执或启动参数替代真实出口，未新增产品功能、常驻入口或功能审阅条目。
+- **P11 下一候选：** 仓库尚不存在 `gradle/verification-metadata.xml`。本轮两次只读进程核对均发现另一项目仍在运行 Gradle 测试，因此依当前“无 Gradle 争用”门禁没有启动本项目 Gradle 或生成半成品。其结束后，可在 Android Studio JBR、`--no-daemon`、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` 下独立离线生成并校验 dependency verification metadata；这只能关闭 P11 的一小段可复现供应链证据，不能替代 P2–P9 或 P11 的持续门。
+
 ## 2026-08-21 P2 Provider/成本质量：最小真实健康门因凭据/授权外部门停止
 
 - **结论：** 当前工作树干净，HEAD 已包含 `04b9c1f` 与 `94838b7`。依 `P2M_REAL_TEXT_EXECUTION_CONTRACT.md` 审核唯一的 `p2m-openrouter-text-v2` 最小文本路径后，正式签名的用户级项目命名配置为完整；但允许检查的项目专属 Provider 环境变量不存在，用户级项目命名属性也没有 Provider 凭据 schema。Android 应用私有加密凭据存储本轮没有被读取、解密、导出、记录或探测，故不存在可合法用于本轮的 Provider 凭据/可见逐次同意。没有发行或消费 nonce、没有构造 Authorization、没有 HTTP、没有 Provider Attempt、Token、费用、Candidate 或 Knowledge 写入。

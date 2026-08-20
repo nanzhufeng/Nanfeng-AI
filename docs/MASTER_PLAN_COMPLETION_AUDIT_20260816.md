@@ -1,5 +1,11 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-21 P3 真实执行去内容化复核：仍为 Provider/授权外部门
+
+- **已确认：** §17 P3 的本地 Conversation、preflight、receipt、fail-closed transport 与 P2-M bridge 仍只形成受限合同。普通聊天 production egress owner 不存在；默认 transport 返回安全 `DISABLED_NO_NETWORK` 终态、不发事件、不制造回答。P2-M bridge 和未引用的 Direct composition 均在默认拒绝端口前停止，不是 Provider、Key 或 HTTP 已接通的证据。
+- **未关闭且不伪造：** P3 原始退出仍须真实流、停止/失败/重试/换模型、部分计费、真实用量/成本可见追踪、长会话实测及 OpenRouter 充分性判断。它们需要用户明确的非敏感内容/逐次确认、可合法检查的凭据 presence、冻结目录/价格和一次受控真实服务 readback；任何结果都不得自动重试。本轮没有读凭据、Keychain、HTTP、nonce、Provider Attempt、Token、费用、设备或 OPPO，也没有用 mock、DB 注入或假 receipt 替代。
+- **排程：** 详见 `P3_REAL_EXECUTION_GATE_AUDIT_20260821.md`。该检查不增加用户功能或功能审阅项，不关闭 P3/P0–P11。下一本机候选仍是 P11 Gradle dependency verification metadata；另一个项目当前 Gradle 测试未退出，故尚未生成 metadata，避免并发 Gradle 争用。
+
 ## 2026-08-21 P11 供应链复核与 P6 原始出口校正
 
 - **P6 原始出口校正：** §17 的原始 P6 退出证据是 Android 导出 → Desktop 导入 → 再导出精确保真，以及紧凑/展开、本地文件、更新与异常恢复的独立验证；它**不**把 Android v2 回导/archive/recovery 规定为 P6 必经门。最新 `CURRENT_HANDOFF.md` 顶部已经记录 macOS 上完整 owner 的 Android DocumentsUI → Desktop native Open/Save/re-export 严格子链关闭；Android v2 回导若未来实施只能是独立质量项，不能延后下一总控阶段或被写作 P6 总门。
