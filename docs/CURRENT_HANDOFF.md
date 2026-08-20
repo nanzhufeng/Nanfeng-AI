@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P5 OPPO：正式签名 fallback 完整，已递增版本号待单次构建
+
+- **签名结论：** 四项 `NANFENG_AI_RELEASE_V2_*` 环境变量不存在；按“环境变量优先、用户级项目命名属性备用”的正式规则，仅检查 `~/.gradle/gradle.properties` 中四项 `nanfengAi.releaseV2.*` 的非空布尔状态，均完整。未读取/输出任何值，未访问 Keychain。
+- **最窄实现与构建停止：** `app/build.gradle.kts` 已从 `versionCode=51` 递增至 `52`，`versionName` 仍为 `0.3.0-p10a`；没有用户功能或功能审阅改动。随后仅一次 `:app:assembleRelease --offline --no-daemon` 在 `:app:kspReleaseKotlin` 因 Gradle dependency verification 缺少 3 个 detached-configuration 工件校验条目而失败。未更新校验清单或重试，未生成本轮 APK、验签、安装、启动或 UI 验收；OPPO 仍未再次读取或写入。
+- **下一唯一门：** P11 必须在独立授权任务中修复并回读该 dependency-verification 缺口，之后才能以当前 code 52 重新申请一次正式构建。构建成功后，只有 package 一致、code 大于 51、v2/v3、release-v2 证书一致且 OPPO package/data fingerprint 正常，才可一次 `push -> pm install -r --user 0`；任一门失败即停止。见 `P5_OPPO_READONLY_GATE_AUDIT_20260821.md`。
+
 ## 2026-08-21 P5 OPPO：同版本字节差异触发只读停止；未安装、未启动或操作数据
 
 - **只读结论：** OPPO Find N5 `3B157F009E800000` 上的 `com.nanzhufeng.ai` 为 `51 / 0.3.0-p10a`，已安装 `base.apk` SHA-256 为 `fc8f9ac6…52546`；当前源码正式 APK 为同样的 `51 / 0.3.0-p10a`、SHA-256 `7406d1de…1ea2`。两者均为同一 release-v2 证书（SHA-256 `6d1d56ec…611f8`）且 `apksigner` v2/v3 通过，但当前 APK **不是更高版本**，故不满足授权中的唯一覆盖安装前提。

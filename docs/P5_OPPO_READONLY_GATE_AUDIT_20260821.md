@@ -28,3 +28,10 @@ P5 的 OPPO 正式覆盖安装与可见 UI 验收本轮均**未执行**。当前
 P5 §17 仍缺当前源码的正式升级迁移、目标 OPPO 真机可见 UI、数据不丢失与发布/回下载校验。P2/P3 的真实 Provider/成本质量、P6 Windows 原生验收、P7 OAuth/Supabase、P8 真实工具、P9 真实生态目标和 P10 双消费者触发也各自是独立门；本次只读审计不关闭 P5 或 P0–P11。
 
 下一次 OPPO 尝试前，必须先取得一个**更高 versionCode**、同包名、正式 v2/v3 验签通过的 APK，并在安装前再次只读核对设备包/证书/数据 inode。条件满足时最多允许一次 `push -> pm install -r --user 0`；否则继续保持只读。
+
+## 2026-08-21 P5 正式签名来源校正与构建前状态
+
+- **签名来源：** 项目专属环境变量四项均不存在，但这不构成停止条件：正式优先级是“完整环境变量优先；完整用户级 `~/.gradle/gradle.properties` 的 `nanfengAi.releaseV2.*` 属性备用”。随后只检查该四项用户级属性的非空布尔状态，四项完整；未读取或输出任何属性值、未访问 Keychain。
+- **最窄版本变动：** 因正式 fallback 可用，`app/build.gradle.kts` 已将 `versionCode` 从 `51` 递增为 `52`；`versionName` 保持 `0.3.0-p10a`，没有用户功能变动。
+- **单次构建结果与停止：** 已以 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 单次执行 `:app:assembleRelease`。任务在 `:app:kspReleaseKotlin` 失败，原因是 `gradle/verification-metadata.xml` 缺少 3 个 detached configuration 工件的校验条目：`kotlinx-coroutines-core-jvm-1.6.4.jar`、`symbol-processing-aa-embeddable-2.2.10-2.0.2.jar` 及其 POM。按本轮“失败即停止、不重试”，未更新校验清单、未再次构建、未生成可用于本轮的 APK、未执行 `apksigner`、未运行测试或操作 OPPO。
+- **后续门：** 此构建依赖校验缺口须由独立、授权的 P11 任务先处理并回读；之后才可用当前 code `52` 重新申请一次 P5 正式构建。成功后仍须重新核对 APK package、versionCode 大于 `51`、v2/v3、release-v2 证书以及 OPPO package/data fingerprint，所有条件都成立才可执行一次数据保留覆盖安装。
