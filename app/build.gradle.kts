@@ -20,41 +20,55 @@ fun privateClientValue(name: String): String =
 fun userGradleValue(name: String): String = userGradleProperties.getProperty(name).orEmpty()
 fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
-val formalSigningAlias = "nanfeng-ai"
-val formalSigningService = "com.nanzhufeng.ai.signing"
-val formalSigningAccount = "keystore-password"
-val formalKeystorePath = providers.environmentVariable("NANFENG_AI_KEYSTORE").orNull
-    ?.takeIf(String::isNotBlank)
-    ?: userGradleValue("nanfengAi.keystore").takeIf(String::isNotBlank)
-    ?: "${System.getProperty("user.home")}/Library/Application Support/" +
-        "NanzhufengSigning/NanfengAI-Android/nanfeng-ai-release.jks"
+data class NanfengAiReleaseV2SigningConfig(
+    val storeFilePath: String,
+    val storePassword: String,
+    val keyAlias: String,
+    val keyPassword: String,
+)
 
-fun readFormalSigningPasswordFromMacKeychain(): String? {
-    if (!System.getProperty("os.name").startsWith("Mac", ignoreCase = true)) return null
-    return runCatching {
-        val result = providers.exec {
-            commandLine(
-                "/usr/bin/security",
-                "find-generic-password",
-                "-w",
-                "-a",
-                formalSigningAccount,
-                "-s",
-                formalSigningService,
-            )
-            isIgnoreExitValue = true
-        }
-        result.standardOutput.asText.get().trim()
-            .takeIf { result.result.get().exitValue == 0 && it.isNotEmpty() }
-    }.getOrNull()
+fun nonBlank(value: String?): String? = value?.takeIf(String::isNotBlank)
+
+fun resolveNanfengAiReleaseV2SigningConfig(
+    source: String,
+    storeFilePath: String?,
+    storePassword: String?,
+    keyAlias: String?,
+    keyPassword: String?,
+): NanfengAiReleaseV2SigningConfig? {
+    val values = listOf(storeFilePath, storePassword, keyAlias, keyPassword)
+    if (values.all { it.isNullOrBlank() }) return null
+    if (values.any { it.isNullOrBlank() }) {
+        throw GradleException(
+            "南枫 AI release v2 签名的 $source 配置不完整；必须同时提供 storeFile、" +
+                "storePassword、keyAlias 和 keyPassword。",
+        )
+    }
+    return NanfengAiReleaseV2SigningConfig(
+        storeFilePath = storeFilePath!!,
+        storePassword = storePassword!!,
+        keyAlias = keyAlias!!,
+        keyPassword = keyPassword!!,
+    )
 }
 
-val formalSigningPassword = providers.environmentVariable("NANFENG_AI_KEYSTORE_PASSWORD").orNull
-    ?.takeIf(String::isNotBlank)
-    ?: userGradleValue("nanfengAi.storePassword").takeIf(String::isNotBlank)
-    ?: readFormalSigningPasswordFromMacKeychain()
-val formalKeystoreFile = file(formalKeystorePath)
-val formalSigningReady = formalKeystoreFile.isFile && !formalSigningPassword.isNullOrBlank()
+val environmentReleaseV2SigningConfig = resolveNanfengAiReleaseV2SigningConfig(
+    source = "环境变量",
+    storeFilePath = nonBlank(providers.environmentVariable("NANFENG_AI_RELEASE_V2_KEYSTORE").orNull),
+    storePassword = nonBlank(providers.environmentVariable("NANFENG_AI_RELEASE_V2_STORE_PASSWORD").orNull),
+    keyAlias = nonBlank(providers.environmentVariable("NANFENG_AI_RELEASE_V2_KEY_ALIAS").orNull),
+    keyPassword = nonBlank(providers.environmentVariable("NANFENG_AI_RELEASE_V2_KEY_PASSWORD").orNull),
+)
+val userGradleReleaseV2SigningConfig = resolveNanfengAiReleaseV2SigningConfig(
+    source = "用户级 ~/.gradle/gradle.properties",
+    storeFilePath = nonBlank(userGradleValue("nanfengAi.releaseV2.keystore")),
+    storePassword = nonBlank(userGradleValue("nanfengAi.releaseV2.storePassword")),
+    keyAlias = nonBlank(userGradleValue("nanfengAi.releaseV2.keyAlias")),
+    keyPassword = nonBlank(userGradleValue("nanfengAi.releaseV2.keyPassword")),
+)
+val formalSigningConfig = environmentReleaseV2SigningConfig ?: userGradleReleaseV2SigningConfig
+val formalKeystoreFile = formalSigningConfig?.let { file(it.storeFilePath) }
+val formalSigningReady = formalKeystoreFile?.isFile == true
 
 android {
     namespace = "com.nanzhufeng.ai"
@@ -86,9 +100,9 @@ android {
         if (formalSigningReady) {
             create("formal") {
                 storeFile = formalKeystoreFile
-                storePassword = formalSigningPassword
-                keyAlias = formalSigningAlias
-                keyPassword = formalSigningPassword
+                storePassword = formalSigningConfig!!.storePassword
+                keyAlias = formalSigningConfig.keyAlias
+                keyPassword = formalSigningConfig.keyPassword
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
@@ -122,10 +136,11 @@ gradle.taskGraph.whenReady {
     }
     if (needsInstallableApp && !formalSigningReady) {
         throw GradleException(
-            "南枫 AI 的可安装构建缺少正式签名配置。按顺序检查环境变量 " +
-                "NANFENG_AI_KEYSTORE / NANFENG_AI_KEYSTORE_PASSWORD、用户级 " +
-                "~/.gradle/gradle.properties 的 nanfengAi.keystore / nanfengAi.storePassword，" +
-                "以及 macOS Keychain 可选回退。不会重试、不会生成替代签名。",
+            "南枫 AI 的可安装构建缺少 release v2 签名配置。优先配置全部环境变量 " +
+                "NANFENG_AI_RELEASE_V2_KEYSTORE、NANFENG_AI_RELEASE_V2_STORE_PASSWORD、" +
+                "NANFENG_AI_RELEASE_V2_KEY_ALIAS、NANFENG_AI_RELEASE_V2_KEY_PASSWORD；" +
+                "或配置用户级 ~/.gradle/gradle.properties 的 nanfengAi.releaseV2.*。" +
+                "不会访问 macOS Keychain、不会重试、不会生成替代签名。",
         )
     }
 }

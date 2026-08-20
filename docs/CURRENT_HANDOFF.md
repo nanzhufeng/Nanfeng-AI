@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 Android release v2 签名迁移（当前）
+
+- **决策与边界：** 用户明确停止 legacy keystore 的恢复、猜测与 macOS Keychain 操作。历史 `nanfeng-ai-release.jks`、legacy APK 与其证据保留且不覆盖；当前南枫 AI release 构建改用独立 `nanfeng-ai-release-v2.jks` / `nanfeng-ai-release-v2` alias，不影响其他项目或全局 debug 签名。
+- **实现：** `app/build.gradle.kts` 只从完整的项目专属环境变量 `NANFENG_AI_RELEASE_V2_*` 读取，或从用户级 `~/.gradle/gradle.properties` 的 `nanfengAi.releaseV2.*` 读取；部分配置或两层均缺失时立即中文失败。已移除 macOS Keychain 的读取与重试路径。`scripts/initialize_nanfeng_ai_release_v2_keystore.sh` 以交互式 `keytool` 创建 4096-bit RSA、SHA256withRSA、18,263 天的 JKS，拒绝覆盖既有 v2 文件，不读/写/打印密码。
+- **当前验证：** 脚本 `bash -n` 通过；无凭据的 `:app:tasks --all` 配置通过。release APK、`apksigner` 指纹、模拟器/真机安装尚未执行：必须先由用户在本机交互式输入新密码生成 v2 keystore，并在用户级配置或受控环境变量提供完整四项值。不得以 legacy APK、Keychain 或 debug 签名替代。
+- **外部绑定审计：** 工程仅发现未启用的 Google web client 配置入口；未发现 Firebase Auth / Firebase 配置、Android Google Sign-In 实现、`assetlinks.json` / `autoVerify` App Links、Play Integrity SDK 或自定义签名权限。release v2 证书生成后，仍须在真实 Google OAuth / 云端配置和发布渠道逐项复核 SHA-1 / SHA-256 白名单，不能以源码检索代替外部系统验收。
+
 ## 2026-08-20 Desktop 最终 bundle 白屏修复与 Settings 匿名回读
 
 - **根因与修复：** 现场复核发现 `南枫 AI Desktop.app` 的 `codesign --verify --deep --strict` 实际失败，报资源封印缺失；其 Mach-O 仅有 linker ad-hoc 签名、bundle 缺少 `Contents/_CodeSignature/CodeResources`。Tauri 正常产出 `.app` 后未自动封签。已新增 `desktop/scripts/bundle-macos.mjs` 与 `npm run bundle:macos`：先重建静态前端与 Tauri app，再对唯一最终 bundle 运行 `codesign --force --deep --sign -`，并在脚本内严格验签。该脚本本轮实际完成，最终包显示 `Signature=adhoc`、`Sealed Resources version=2`、`TeamIdentifier=not set`；它仍是本地开发包，未 notarize、未发布。
