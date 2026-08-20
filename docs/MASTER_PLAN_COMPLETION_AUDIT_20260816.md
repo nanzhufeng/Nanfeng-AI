@@ -1,5 +1,10 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-20 P6 工作区 v2 Desktop native picker 隔离验收：bundle/root 已就绪，macOS 锁屏使真实链待继续
+
+- **已确认：** picker bridge 已在 `75c28c1` 窄提交；本轮仅新增受限验收根门禁，确保 bundle 启动只能使用新建的项目专属 `/tmp/nanfeng-ai-p6-v2-picker-acceptance.*` 根，不会触碰用户 app-data 或历史 P6-E/P6-H 根。写前与 fixture 生成后均证明验收数据根为零项。定向 Rust 2/2、clippy、check 通过；实际 ad-hoc `.app` 离线重建并 `codesign --verify --deep --strict` 通过。
+- **未确认且不得推断：** Computer Use 在第一次读取 GUI 时被 macOS 锁屏阻断，尚未打开任何设置/picker，未选择 fixture，未产生 receipt/workspace/SQLite 业务状态，未做 reopen/replay/re-export 或 v1 不变核对。故只记录 P6 的 bundle 与隔离准备，不关闭 native picker 文件子链，更不关闭 P6、跨端、Windows、发布或 P0–P11。
+
 ## 2026-08-20 P6 工作区 v2 Desktop native picker 桥接：本地合同闭合，真实用户文件链仍待隔离验收
 
 - **代码与入口：** Desktop 已登记唯一 v2 command `import_desktop_workspace_exchange_v2_selected` 与 Settings → 数据与导入 → `完整工作区交换（v2）` picker。该桥接只读取一个用户所选 `.nfai-exchange`（regular-file、扩展名、128 MiB 上限）→ strict v2 preflight → 既有 private archive + schema 21 single transaction；没有 v1 staging、目录扫描或路径/正文/byte/显示名回传。失败没有可见 workspace，成功回传 content-free receipt。

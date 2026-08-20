@@ -56,6 +56,11 @@ const P6I_ACCEPTANCE_ENV: &str = "NANFENG_AI_P6I_ACCEPTANCE";
 const P6I_ACCEPTANCE_ROOT_NAME: &str = "nanfeng-ai-p6i-acceptance-20260815";
 const P6J_ACCEPTANCE_ENV: &str = "NANFENG_AI_P6J_ACCEPTANCE";
 const P6J_ACCEPTANCE_ROOT_NAME: &str = "nanfeng-ai-p6j-acceptance-20260815";
+// This is intentionally not a product capability.  It lets the P6 v2 native-picker
+// acceptance start a normal bundled app against one freshly created, project-scoped
+// temporary root without ever falling back to the user's normal app-data directory.
+const P6_V2_PICKER_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_P6_V2_PICKER_ACCEPTANCE_ROOT";
+const P6_V2_PICKER_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-p6-v2-picker-acceptance.";
 // FB-P6-050 is a UI-only acceptance run.  It must never reuse a normal Desktop
 // app-data directory just because the temporary bundle was copied with a new ID.
 const FB_P6_050_ACCEPTANCE_ENV: &str = "NANFENG_AI_FB_P6_050_ACCEPTANCE";
@@ -7006,6 +7011,24 @@ fn run_p6e_temporary_maintenance_acceptance(
         .run_p6e_temporary_maintenance_acceptance()
 }
 
+fn validate_p6_v2_picker_acceptance_root(root: PathBuf) -> Result<PathBuf, String> {
+    if !root.is_absolute()
+        || !root
+            .to_str()
+            .is_some_and(|path| path.starts_with(P6_V2_PICKER_ACCEPTANCE_ROOT_PREFIX))
+    {
+        return Err("P6 v2 picker 验收根无效".to_owned());
+    }
+    Ok(root)
+}
+
+fn p6_v2_picker_acceptance_root() -> Result<Option<PathBuf>, String> {
+    std::env::var_os(P6_V2_PICKER_ACCEPTANCE_ROOT_ENV)
+        .map(PathBuf::from)
+        .map(validate_p6_v2_picker_acceptance_root)
+        .transpose()
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -7026,7 +7049,9 @@ pub fn run() {
                 .as_deref()
                 == Some("1")
                 || std::env::args().any(|argument| argument == "--fb-p6-050-acceptance");
-            let root = if p6e_acceptance_enabled {
+            let root = if let Some(root) = p6_v2_picker_acceptance_root()? {
+                root
+            } else if p6e_acceptance_enabled {
                 PathBuf::from("/tmp").join(P6E_ACCEPTANCE_ROOT_NAME)
             } else if p6h_acceptance_enabled {
                 PathBuf::from("/tmp").join(P6H_ACCEPTANCE_ROOT_NAME)
@@ -7191,6 +7216,19 @@ mod tests {
             .unwrap_err();
         assert!(rejected.contains("文件类型无效"));
         assert!(!rejected.contains("not-selected.txt"));
+    }
+
+    #[test]
+    fn v2_picker_acceptance_root_is_limited_to_a_new_project_scoped_tmp_root() {
+        assert_eq!(
+            validate_p6_v2_picker_acceptance_root(PathBuf::from(
+                "/tmp/nanfeng-ai-p6-v2-picker-acceptance.fixture/app-home",
+            ))
+            .unwrap(),
+            PathBuf::from("/tmp/nanfeng-ai-p6-v2-picker-acceptance.fixture/app-home")
+        );
+        assert!(validate_p6_v2_picker_acceptance_root(PathBuf::from("relative-root")).is_err());
+        assert!(validate_p6_v2_picker_acceptance_root(PathBuf::from("/tmp/not-nanfeng-ai")).is_err());
     }
 
     #[test]

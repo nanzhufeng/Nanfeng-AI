@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v2 Desktop native picker 隔离验收：正式开发 bundle 已重建，macOS 锁屏阻断 GUI（未伪验收）
+
+- **已完成的安全准备：** `75c28c1` 已窄提交 picker bridge；随后为本轮加入仅验收用的 `NANFENG_AI_P6_V2_PICKER_ACCEPTANCE_ROOT`，它只接纳新建的 `/tmp/nanfeng-ai-p6-v2-picker-acceptance.*` 根，不能回退到用户 app-data 或 P6-E/P6-H 根。创建后先证明数据根为零项；无敏感 v2 fixture 与数据根分离，fixture 写入后数据根仍为零项。定向 Rust 合同 2/2、`cargo clippy --lib --tests -- -D warnings`、`cargo check` 通过；`rustfmt --check src/lib.rs` 只报告仓库既有大范围格式债务，未重排。
+- **实际 bundle：** 已用离线 `npm run bundle:macos` 重建 `南枫 AI Desktop.app`，深度严格验签通过；它是 ad-hoc 开发签名（非 Developer ID/notarized），主可执行 SHA-256 为 `ddac7fe18f209170ad25df957f37d958578fdc25f7ca98e603f93e874fd327c2`。以该 bundle 主进程和新根启动后，Computer Use 读取 macOS GUI 时收到“Mac is locked，需手动解锁”的系统结果。
+- **停止门：** 尚未进入设置、打开或选择 picker、导入 fixture、读取 receipt、重开/重放或回导；数据根没有业务数据，绝不以启动、命令、SQLite 或路径写入替代。Mac 解锁后只能继续同一已启动 bundle 的“设置 → 数据与导入 → 完整工作区交换（v2）”系统 picker 链，再做 content-free receipt、committed reopen/replay、re-export field/semantic hash 与 v1 三表零行核对。
+
 ## 2026-08-20 P6 工作区 v2 Desktop native picker 桥接：代码与本地合同完成，真实 picker 文件验收待隔离环境
 
 - **已实现：** `import_desktop_workspace_exchange_v2_selected` 是唯一注册的 v2 Tauri command；Desktop Settings 的“数据与导入 → 完整工作区交换（v2）”先经 native picker 选择一个 `.nfai-exchange`，再在 Rust 中只读取该文件（类型、regular-file 与 128 MiB 限制）→ v2 strict preflight → `p6_workspace_exchange_v2` private archive/SQLite transaction。它不接受 v1 staging ID、不读写 `workspaces/workspace_exchange/import_journal`、不扫描目录，也不把路径、显示名、正文或附件 bytes 放进 receipt/错误；失败不产生可见 workspace，成功只返回 content-free hash/计数/workspace ID/replay receipt。
