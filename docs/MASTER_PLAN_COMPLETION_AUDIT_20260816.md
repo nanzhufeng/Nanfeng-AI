@@ -39,7 +39,7 @@
 | profile / personalization | 白名单 owner 已实现；两份实包均为无可采纳字段的安全结果 | 实包安全聚合 + 双端合成 owner 合同 | 无可写的真实字段，因此不应人为重试或制造写入 |
 | P6-K Settings 隐私与撤销恢复 | Android 不显示所选 ZIP 名；撤销失败保留 recovery task/archive；Desktop 与 Android 均有正常 Settings 的匿名 aggregate readback | 双端真实/自动合同 | P6-K Settings 已关闭；真实媒体人工关联仍需用户明确操作 |
 | 既定聊天、抽屉、Composer 不回退 | Desktop UI 合同 80/80；含 P6-K 入口、Compare、精确 placeholder、抽屉/Composer 保护 | 自动 UI 合同 | Android 最新包不可生成，故不等同于 Android 可见验收 |
-| Compare 可见入口 | Android/ Desktop 源码与定向合同存在；Android 历史 emulator 仅验证关闭态与空草稿 fail-closed | 代码/局部 emulator | 非空草稿的确认面仍需正常 UI；真实执行另受凭据/HTTP 门禁，不在本轮执行 |
+| Compare 可见入口 | Android/Desktop 均有模型菜单、Composer `对比`、模型长按三入口；Android 为空草稿先返回，Desktop 直接显示无执行 owner 且不读 Key/发内容 | 代码/局部 emulator | 显式 Compare 是直接产品命令，不再有第二次产品确认面；Android 非空草稿的真实执行仍受用户内容、凭据与 HTTP 门禁，不在本轮执行 |
 | 普通聊天真实 Provider | 生产边界、确认合同、账本和失败关闭机制已实现 | 本地合同 | 需要已验证目录、可用凭据、当次可见确认和用户明确非敏感输入；真实 HTTP 未授权执行 |
 | P5 备份/迁移等真实 Android 链 | 本地合同和既有模拟器证据存在 | 自动化/历史模拟器 | 最新签名构建不可产出，且真实文件/迁移链不能由旧包替代 |
 | P7 同步、P9 生态、P10 联网路径 | 本地协议、禁用状态和 LOCAL_TEST_ONLY/配置表面已实现 | 本地合同 | 仍需要真实账号、目标服务/应用、外部授权及网络；不能借“总控”推定完成 |

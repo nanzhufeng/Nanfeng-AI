@@ -20,7 +20,7 @@
 | 功能 / 实现 owner | Android 入口 | Desktop 入口 | Settings 入口 | 普通用户适合度 | 缺口 | 风险 | 最小验证 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 本地对话、草稿、附件与会话管理 / `ConversationFoundationViewModel` | 对话 Composer、Drawer、长按会话、搜索 | Chat Composer、侧栏、消息工具 | Android 对话；Desktop 隐私与数据管理 | 是 | 无 | 不得把本地发送改为外发 | 现有聊天 shell 回归、重启读回 |
-| Compare 显式汇总确认 / `CompareVisibleExecutionOwner` → `CompareExecutionApplicationOwner` | 模型菜单行、Composer `对比`、模型长按 | 同三入口；确认面明确禁用 | 不进入设置 | 是（仅显式外发动作） | Android 带用户给出的非敏感短文本的两入口确认面待验；Desktop **没有执行 adapter** | 未确认不读 Key/不发 HTTP；附件拒绝；Desktop 不得假装外发 | 已有 Android/Node 合同；模拟器关闭态、菜单态、重启；真实外发不在本批 |
+| Compare 显式直接执行 / `CompareVisibleExecutionOwner` → `CompareExecutionApplicationOwner` | 模型菜单行、Composer `对比`、模型长按 | 同三入口；直接显示 Desktop 不可执行状态 | 不进入设置 | 是（仅显式外发动作） | Android 的非空草稿真实直接执行仍需用户给出的非敏感短文本、已配置凭据与 HTTP 授权；Desktop **没有执行 adapter** | 空草稿不触及 owner；附件拒绝；Desktop 不得假装外发 | Android/Node 合同覆盖三入口、空草稿与 Desktop 无 owner；模拟器关闭态、菜单态、重启；真实外发不在本批 |
 | 当前对话导出 / `ConversationFoundationViewModel` | Drawer → 设置 → 对话 → 导出当前对话 | 无同语义 owner | Android 有；Desktop 仅工作区交换包导出 | 是 | Desktop 不应把工作区交换包伪称当前对话导出 | 导出范围必须准确 | Android 既有导出读回；Desktop 仅声明当前能力 |
 | 本地工作区交换包 / Desktop Rust workspace exchange owner | 无同类跨端格式 owner | 工作模式导入入口、顶部导出 | Desktop 数据设置已有导出；本批补充导入入口 | 是 | 设置页缺少已实现的导入工作区入口 | 导入必须预检、显式确认、独立工作区，不能覆盖 | Desktop Node 渲染契约、native picker 后续验收 |
 | ChatGPT / Claude / 南枫知识库静态会话导入 / 各自 import task owner | 设置 → 数据与导入 | 设置 → 数据 → 三个导入任务 | 双端均有 | 是 | 无 | app-private 副本、逐项确认，正文不执行 | Android/desktop 各自 importer 合同 |
@@ -34,7 +34,7 @@
 
 1. Android：只补四个已有本地 import/snapshot owner 的设置入口，不改变其解析、确认、持久化或网络边界。
 2. Desktop：只补既有 workspace exchange 的设置“导入工作区”入口，复用既有 `start-import` → 预检 → 确认链路；不称其为备份恢复。
-3. Compare：保留现有三种 Android/Desktop UI trigger；Desktop 外发仍明确未实现，未经用户提供非敏感短文本不触发 Android 确认面，也不读 Key/HTTP。
+3. Compare：保留现有三种 Android/Desktop UI trigger；显式 Compare 本身就是产品命令，不再额外显示产品级确认面。Desktop 外发仍明确未实现；Android 的非空草稿真实执行仍需用户提供非敏感短文本、外部凭据与 HTTP 授权。
 
 ## 不在本批实施
 

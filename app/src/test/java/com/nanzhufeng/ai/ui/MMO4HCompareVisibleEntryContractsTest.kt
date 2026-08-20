@@ -24,6 +24,18 @@ class MMO4HCompareVisibleEntryContractsTest {
         assertTrue(viewModel.contains("compareVisibleExecutionOwner.execute(conversationId, draft)"))
     }
 
+    @Test fun `blank Compare draft returns before the execution owner is touched`() {
+        val requestCompare = viewModel
+            .substringAfter("fun requestCompareChatGptAndClaude()")
+            .substringBefore("fun onConversationPhotoPickerResult")
+        val blankGuard = requestCompare.indexOf("draft.text.isBlank()) return")
+        val execution = requestCompare.indexOf("compareVisibleExecutionOwner.execute(conversationId, draft)")
+
+        assertTrue(blankGuard >= 0)
+        assertTrue(execution >= 0)
+        assertTrue(blankGuard < execution)
+    }
+
     @Test fun `ordinary submit stays local and Compare is a separate explicit callback`() {
         val submitLambda = workspace.substringAfter("onSubmit = {").substringBefore("onStop = onStop")
         assertTrue(submitLambda.contains("onSubmitDraft()"))

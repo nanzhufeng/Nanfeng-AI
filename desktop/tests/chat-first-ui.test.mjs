@@ -376,6 +376,9 @@ test('Compare controls submit directly and truthfully report that Desktop has no
   for (const token of ['对比 ChatGPT + Claude', 'open-compare-confirmation', 'data-compare-long-press']) assert.ok(html.includes(token));
   const appSource = await readFile(resolve(root, 'src/app.mjs'), 'utf8');
   for (const token of ['executeDesktopCompare', 'compareLongPressTimer', '550', 'Desktop execution owner 不可用', '未读取 Key 或发送内容']) assert.ok(appSource.includes(token));
+  const desktopCompare = appSource.substring(appSource.indexOf('function executeDesktopCompare()'), appSource.indexOf("app.addEventListener('pointerdown'"));
+  assert.ok(!desktopCompare.includes('invoke('));
+  assert.ok(!desktopCompare.includes('state.dialog = {'));
   assert.ok(!appSource.includes("kind: 'compare'"));
 });
 
