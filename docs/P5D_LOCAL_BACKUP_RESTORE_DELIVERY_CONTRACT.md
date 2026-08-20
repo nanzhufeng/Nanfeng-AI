@@ -28,3 +28,5 @@
 ## 验收边界
 
 自动覆盖 manifest/hash roundtrip、manifest 与当前打开数据库 Schema 一致、空库恢复、非空取消/替换、rollback/interrupt、资产引用、运行态降级、恶意 ZIP/高敏拒绝、Auto Backup 规则和完整 1→37 迁移链。预检同时要求 manifest 与候选 SQLite 都精确匹配当前 Schema。真实验收只在 `emulator-5554`：先成功导出并回读，再创建专用非敏感变更，强确认恢复并核对回到备份状态；force-stop 后不自动恢复。迁移使用同正式证书旧 APK `install -r` 升级且不卸载、不清数据。P5-D 不能证明 P5 整体退出、OPPO、发布、云同步或真实 Provider。
+
+2026-08-20 已按该边界以独立 `com.nanzhufeng.ai.p5dacceptance` 包完成 SAF 导出/回读、受控替换与 force-stop/cold-start readback；该验收包的本地与 installed `base.apk` SHA-256 均为 `e07de2cc1aa4438592bf0aa83d467b3b92c3faaf1941b3d4faf537bb3aad2965`。未安装、清除、重置或读取 OPPO/legacy app-data，未触及 Keychain 或 HTTP。旧 APK 迁移仍是独立门槛。

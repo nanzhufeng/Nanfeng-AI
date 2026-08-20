@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：P5-D 隔离 SAF 导出、替换恢复与冷启动验收（当前）
+
+- **结论：** P5-D 的当前 Schema 37 真实链已仅在 `emulator-5554` 的隔离签名包 `com.nanzhufeng.ai.p5dacceptance` 关闭：经 Settings → 数据与导入 → 本地备份与恢复 → DocumentsUI 完成 SAF 导出及回读；随后创建专用非敏感验收草稿、导入同一备份并明确选择替换本地，force-stop/cold-start 后草稿未回流，界面恢复可发送。没有合并、数据库注入、`clear data` 或对 legacy/OPPO 包的操作。
+- **可追溯验证：** 前台 activity、UIAutomator package 与 installed `base.apk` 均为上述隔离 applicationId；安装的 `base.apk` 与本地 `p5dAcceptance` APK SHA-256 同为 `e07de2cc1aa4438592bf0aa83d467b3b92c3faaf1941b3d4faf537bb3aad2965`。产物为 `51 / 0.3.0-p10a-p5d-acceptance`，继续使用 release-v2 证书。构建 `:app:assembleP5dAcceptance --no-daemon` 成功。
+- **边界：** 这是 emulator 隔离 app-data 的 P5-D 真实链，不等同于 OPPO、旧 APK 升级迁移、云同步、Provider 或发布验收；没有 HTTP、真实 Keychain、Key 读写或 OPPO 安装/清除/重置。
+
 ## 2026-08-20 总控推进：P5-D 当前 Schema 备份守卫（当前）
 
 - **结论：** `AndroidLocalBackupRestoreManager` 不再把 `.nfai-backup` manifest 与预检的 Room Schema 硬编码为 17，而是读取当前已打开数据库的版本（现在为 37）。恢复在关闭 Room、替换前额外核验候选 SQLite 的 user version；manifest、候选 DB 或计数任一不匹配均整体拒绝，避免以当前包装入旧 Schema。

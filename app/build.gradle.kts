@@ -134,12 +134,18 @@ android {
             buildConfigField("boolean", "P6E_ACCEPTANCE", "true")
             signingConfig = signingConfigs.findByName("formal")
         }
+        create("p5dAcceptance") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".p5dacceptance"
+            versionNameSuffix = "-p5d-acceptance"
+            signingConfig = signingConfigs.findByName("formal")
+        }
     }
 }
 
 gradle.taskGraph.whenReady {
     val needsInstallableApp = allTasks.any { task ->
-        task.name.matches(Regex("(?i)(assemble|bundle|package|install)(Debug|Release)"))
+        task.name.matches(Regex("(?i)(assemble|bundle|package|install).+"))
     }
     if (needsInstallableApp && !formalSigningReady) {
         throw GradleException(
