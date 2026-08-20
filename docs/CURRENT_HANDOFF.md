@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P5 OPPO：同版本字节差异触发只读停止；未安装、未启动或操作数据
+
+- **只读结论：** OPPO Find N5 `3B157F009E800000` 上的 `com.nanzhufeng.ai` 为 `51 / 0.3.0-p10a`，已安装 `base.apk` SHA-256 为 `fc8f9ac6…52546`；当前源码正式 APK 为同样的 `51 / 0.3.0-p10a`、SHA-256 `7406d1de…1ea2`。两者均为同一 release-v2 证书（SHA-256 `6d1d56ec…611f8`）且 `apksigner` v2/v3 通过，但当前 APK **不是更高版本**，故不满足授权中的唯一覆盖安装前提。
+- **主设备保护：** 本轮只有 `adb devices`、目标包 `dumpsys`/`pm path` 和 installed `base.apk` 只读拉回；没有 `connected*AndroidTest`、Debug/Instrumentation、自动部署、清理、卸载、清数据、迁移、DB 注入、安装或 UI 启动。User 0 的 `ceDataInode=1459104`、`deDataInode=1433378`、首次/最后安装时间均已记录；应用私有目录受系统权限保护，未绕过读取。
+- **P5 停止门：** 当前源码的 OPPO 覆盖安装/可见 UI/升级迁移/数据不丢失和发布回下载仍未验证；不能用同版本同证书推断可安全升级。只有出现更高 `versionCode`、同包名、正式 v2/v3 验签通过的 APK，才重新走一次安装前只读复核并最多执行一次 `push -> pm install -r --user 0`。详见 `P5_OPPO_READONLY_GATE_AUDIT_20260821.md`。
+
 ## 2026-08-21 P3 真实对话执行：一次去内容化复核后保持外部门；P11 Gradle 元数据已完成本机回读
 
 - **P3 结论：** §17 P3-A～H 的本地对话主体、preflight、receipt 与 fail-closed transport 合同仍在；原始退出所需的真实流/停止/失败/重试/换模型、部分计费、真实用量/成本、长会话实测与 OpenRouter 充分性判断均未获得本轮证据。只读源码/合同复核确认普通聊天没有 production egress owner，`DisabledNoNetworkProviderTransport` 不发事件或假回复；P2-M bridge 与未引用的 Direct composition 都在默认拒绝端口前停止。详情见 `P3_REAL_EXECUTION_GATE_AUDIT_20260821.md`。
