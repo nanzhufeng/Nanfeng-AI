@@ -35,3 +35,9 @@ P5 §17 仍缺当前源码的正式升级迁移、目标 OPPO 真机可见 UI、
 - **最窄版本变动：** 因正式 fallback 可用，`app/build.gradle.kts` 已将 `versionCode` 从 `51` 递增为 `52`；`versionName` 保持 `0.3.0-p10a`，没有用户功能变动。
 - **单次构建结果与停止：** 已以 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 单次执行 `:app:assembleRelease`。任务在 `:app:kspReleaseKotlin` 失败，原因是 `gradle/verification-metadata.xml` 缺少 3 个 detached configuration 工件的校验条目：`kotlinx-coroutines-core-jvm-1.6.4.jar`、`symbol-processing-aa-embeddable-2.2.10-2.0.2.jar` 及其 POM。按本轮“失败即停止、不重试”，未更新校验清单、未再次构建、未生成可用于本轮的 APK、未执行 `apksigner`、未运行测试或操作 OPPO。
 - **后续门：** 此构建依赖校验缺口须由独立、授权的 P11 任务先处理并回读；之后才可用当前 code `52` 重新申请一次 P5 正式构建。成功后仍须重新核对 APK package、versionCode 大于 `51`、v2/v3、release-v2 证书以及 OPPO package/data fingerprint，所有条件都成立才可执行一次数据保留覆盖安装。
+
+## 2026-08-21 P5 后续正式构建：KSP 门通过后在 AAPT2 verification 停止
+
+- **先决 P11 已满足：** 提交 `a00c708` 仅补齐原 KSP 输出指定的三个 SHA-256 verification 条目，并以相同 JBR/离线/no-daemon 的 `:app:kspReleaseKotlin` 无写入回读成功。没有升级依赖、放宽验证、访问 Keychain 或操作设备。
+- **一次构建与新停止点：** 正式 signing fallback 的四项属性仅以非空布尔状态确认完整，随后用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 执行一次新的 `:app:assembleRelease`。KSP 已通过，但 `:app:processReleaseResources` 的 `:app:detachedConfiguration1` 报告另一个未登记 source：Google `com.android.tools.build:aapt2:9.3.1-15703166` 的 `aapt2-9.3.1-15703166-osx.jar` 与 POM。构建失败，未生成可用于本轮的 APK。
+- **严格停止：** 这两个 AAPT2 工件不是本授权任务的“唯一 P11 KSP 缺口”，故不更新 metadata、不重复 assemble，不运行 `apksigner`，不读取/写入 OPPO、安装、启动、卸载、清数据或做任何 UI 验收。P5 与 P0–P11 仍未完成；若继续，须以新的、单独范围的 P11 供应链授权处理并回读该 AAPT2 缺口。

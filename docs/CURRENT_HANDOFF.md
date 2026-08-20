@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P5：新的单次正式 build 在 AAPT2 verification 处停止
+
+- **事实：** P11 KSP metadata 增量已提交为 `a00c708` 并无写入回读成功后，按授权只执行一次 code 52 的正式 `:app:assembleRelease --offline --no-daemon`（Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`）。正式签名 fallback 只以四项用户级项目命名属性的非空状态确认完整，未读/打印其值或访问 Keychain。
+- **停止原因与范围：** `:app:kspReleaseKotlin` 已通过；` :app:processReleaseResources` 的 detached configuration 随后发现不同的未登记工件：Google `com.android.tools.build:aapt2:9.3.1-15703166` 的 macOS JAR 与 POM。此任务只授权原先三个 KSP 工件，故未写入这两个 AAPT2 SHA-256、未重试 assemble。没有可用本轮 APK、验签、OPPO 读取/写入、安装、启动或可见 UI 验收。
+- **唯一下一步：** 只有新的、明确范围的 P11 授权补齐并无写入回读这两个 AAPT2 条目，才可再申请正式 build。P5 与 P0–P11 绝不因 KSP 局部修复而称完成。
+
 ## 2026-08-21 P11：KSP dependency verification 缺口已最窄补齐并回读
 
 - **精确范围与修改：** 基于失败的 `:app:kspReleaseKotlin` 输出，只在 `gradle/verification-metadata.xml` 增加三个 detached-configuration 工件的 SHA-256：`kotlinx-coroutines-core-jvm-1.6.4.jar`、`symbol-processing-aa-embeddable-2.2.10-2.0.2.jar` 与同版本 POM。diff 为单文件 11 行新增；XML 有效，秘密模式检查和 `git diff --check` 均干净。未升级依赖、未放宽/关闭验证、未访问 Keychain、签名值、网络、设备或应用数据。
