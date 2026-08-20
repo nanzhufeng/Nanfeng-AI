@@ -1,5 +1,12 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-20 P6 v2 Desktop 真实 native save picker：隔离实例与 Android→Desktop→回导子链已关闭
+
+- **已确认：** 受控临时 bundle 副本使用唯一 `CFBundleIdentifier`、独立可执行路径与新建 acceptance app-data root；源 bundle hash 前后不变，源/副本均 deep/strict ad-hoc 验签。Computer Use 精确定位副本而非已有同 bundle-id 实例。空 root 的 v1/v2 计数均为零，空输出目录为零文件。
+- **真实链路：** 用户追加授权只读 `emulator-5558` DocumentsUI 下载目录；实际 1,091 B `.nfai-exchange.zip` 的 device/local SHA-256 均为 `3601aeb…205c53`，不匹配的 2,340 B 自动合同样本被排除。该只读 fixture 由 Desktop 设置 native Open picker 选择并成功私有导入，随后由“回导已提交交换 1”的 native Save picker 写入空输出目录；UI 两次回执均为 semantic `d0c3df7b…6d986`、0 附件。
+- **内容无关 readback：** 输出包为 1,023 B、SHA-256 `91fc…1062`；Node strict verifier 通过，semantic hash 与 Android 同为 `d0c3df7b5e9296b5adf4a975077c7d7796381342942c3167cd2acc70c056d986`、entries=2、assets=0。SQLite receipt/provenance 的 project/settings owner-field hash 分别为 `f46d2915…e1f6` / `778838e3…9b22`；v1 三表仍 `0/0/0`，v2 import/journal/receipt/provenance/assets 为 `1/1/1/2/0`。Rust re-export 在 UI 成功前严格重验 canonical package、semantic、全部 field hash 与附件账本。
+- **仍未确认且不得推断：** 这只关闭 P6 v2 的最小、非敏感实际文件子链。Android v2 import/archive/recovery、跨端完整对象恢复、Windows、正式发布/Developer ID/notarization、OPPO 与 P6/P0–P11 的其他退出门仍未关闭；macOS 在成功证据取得后锁屏，没有进行自动解锁或额外 UI 操作。
+
 ## 2026-08-20 P6 v2 Android DocumentsUI ZIP → Desktop native picker：真实导入/replay 子链已关闭
 
 - **已确认：** 当前严格验签 Desktop bundle 在全新独立 `/tmp` 根，通过设置原生 picker 选择 5558 的实际 `.nfai-exchange.zip` 后成功给出 content-free committed receipt；同一文件第二次选择显示 replay receipt。package/semantic hash 与 Android readback 一致，v2 import/journal/receipt 各 1 条、两项 owner provenance，v1 三表均为零；无 OPPO、5554、5556、Key、网络或正文读取。

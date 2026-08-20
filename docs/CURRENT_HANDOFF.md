@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 v2 Desktop 设置内回导：独立 bundle 的真实 Android→Desktop→native save picker 链已关闭
+
+- **验收实例隔离：** 新增 `desktop/scripts/prepare-p6-v2-picker-acceptance.mjs` 和 `npm run prepare:p6-v2-picker-acceptance`，只复制已验签开发 bundle 到新的项目专属临时 `.app`、改副本 `CFBundleIdentifier` 与 `CFBundleExecutable`、对副本 ad-hoc 重签并输出隔离元数据。此次副本 identifier 为 `com.nanzhufeng.ai.desktop.p6v2pickeracceptance.37537.mt1m33x8`，副本可执行路径独立；源 bundle 可执行 SHA-256 在副本制作前后同为 `8858dff03bfffd5690b262d6c2ddc81140e49de6935f823a15897431d27e387b`。主 bundle、release 签名、Keychain 和既有同 identifier 实例均未改动；v2 import/re-export 两项 ACL 都在 capability 和生成 schema 内。
+- **唯一实际输入：** 用户本轮明确授权仅只读 `emulator-5558` 的 DocumentsUI 保存目录。未启动/安装/写入/UI/数据库访问该 emulator；实际 `.nfai-exchange.zip` 为 1,091 B，设备端与 pull 后只读 fixture SHA-256 均为 `3601aeb36f00f94288c5df89c8c20b5f53aa0e4a2c8f65529e308fa90f205c53`。此前定位到的 2,340 B `android-v2-contract.nfai-exchange`（`fb81…5174`）不匹配，已排除。
+- **真实 native UI 与 readback：** 空隔离 root 初值 v1 `0/0/0`、v2 `0/0/0/0/0`，空输出目录为 0 文件。Computer Use 以独立 identifier 精确定位副本，经设置 native Open picker 选中只读 Android 实际包，UI 回执为 `d0c3df7b5e92… · 0 项附件`，随后出现唯一“回导已提交交换 1”。该条目打开 native Save picker 并写入空输出目录后，UI 回执为“已从私有记录回导并严格回读：`d0c3df7b5e92… · 0 项附件`”。输出唯一文件为 1,023 B、SHA-256 `91fc13be723cef67a16b8ebaaea270f2964011a978929542b627d367ce731062`；Node strict verifier 的 semantic hash 为 `d0c3df7b5e9296b5adf4a975077c7d7796381342942c3167cd2acc70c056d986`、entries=2、assets=0。receipt/provenance 的 project/settings field hash 分别是 `f46d29158ead355ddc57ff331ecf02f30ba498d62fe6c965d98b8e9375fae1f6` / `778838e3f038975396707ec0a192eb9dbf94dd262bc5c354e746628fe4959b22`；最终 v1 仍 `0/0/0`，v2 为 `1/1/1/2/0`。无 DB/command 注入。完成后 macOS 锁屏，未尝试自动解锁或额外 GUI 操作。
+- **自动门与边界：** `npm run lint`、Desktop Node UI `92/92`、Rust v2 root gate/re-export 定向合同各 `1/1` 通过；源/副本均 `codesign --verify --deep --strict`，`plutil -lint` 通过。此项只关闭 P6 v2 的最小非敏感 Android DocumentsUI→Desktop import→committed re-export 实际文件子链；不等同于 Android v2 import/archive/recovery、跨端完整对象恢复、Windows、正式签名/发布、OPPO，亦不关闭 P6 或总控 §17 P0–P11。
+
 ## 2026-08-20 P6 v2 Desktop 设置内受限回导：代码/自动门与 bundle 已通过，真实 native save picker 被既有同 Bundle ID 实例阻断
 
 - **实现：** Desktop “设置 → 数据与导入 → 完整工作区交换（v2）”现在只枚举 import、journal、receipt 三者完整的 private v2 record（匿名 root/附件计数），用户选择一项后才打开 native save picker。新最小 capability 只允许该 committed-record list 与一个 `workspace-v2-*` 的 canonical `.nfai-exchange` 回导；Rust 从已提交 canonical `exchange_json` 和内容寻址 private assets 只读重建，`.part` 原子发布后重跑 strict preflight 并比对 semantic hash、全量 owner-field hash 与附件账本。没有 v1 表、普通 workspace、聊天/Composer、Provider、Keychain 或路径/正文/显示名/附件 bytes 投影。

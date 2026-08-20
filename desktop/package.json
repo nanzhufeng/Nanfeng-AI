@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "protocol:test": "node ../protocol/scripts/run-golden.mjs",
-    "lint": "node --check src/app.mjs && node --check src/chat-shell.mjs && node --check src/desktop-compare-execution-owner.mjs && node --check src/p8-inspect.mjs && node --check src/pwa-boundaries.mjs && node --check scripts/build.mjs && node --check scripts/bundle-macos.mjs",
+    "lint": "node --check src/app.mjs && node --check src/chat-shell.mjs && node --check src/desktop-compare-execution-owner.mjs && node --check src/p8-inspect.mjs && node --check src/pwa-boundaries.mjs && node --check scripts/build.mjs && node --check scripts/bundle-macos.mjs && node --check scripts/prepare-p6-v2-picker-acceptance.mjs",
     "typecheck": "node scripts/typecheck.mjs",
     "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build.mjs",
     "bundle:macos": "node scripts/bundle-macos.mjs",
+    "prepare:p6-v2-picker-acceptance": "node scripts/prepare-p6-v2-picker-acceptance.mjs",
     "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml"
   }
 }
