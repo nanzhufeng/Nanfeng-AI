@@ -75,6 +75,35 @@ class P8ControlledAgentRuntimeContractsTest {
         assertEquals("TOOL_CANCELLED", result.code); assertEquals(AgentRunStatus.CANCELLED, result.snapshot!!.run.status); assertEquals(0L, ledger.status().receiptCount)
     }
 
+    @Test fun `P8-B plan admission reserves all remaining budgets and rejects duplicate step intents`() {
+        val ledger = MemoryLedger(); val harness = ControlledAgentRuntime(ledger, LocalTestOnlyAgentToolRegistry.fixture(), Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneOffset.UTC))
+        fun run(key: String, budget: AgentBudget) = (harness.start(request(key).copy(budget = budget)) as AgentExecutionResult.Accepted).snapshot.run.id
+        fun plan(runId: String, id: String, tool: String, input: String = "x") = AgentExecutionPlan(runId, "$id-plan", listOf(AgentPlanStep(id, tool, sha(input))))
+
+        val exhaustedSteps = run("plan-steps", AgentBudget(1, 2, 1))
+        harness.execute(exhaustedSteps, AgentToolInvocation("used-step", "fixture_research", "x"))
+        assertEquals("PLAN_BUDGET_DENIED", (harness.plan(plan(exhaustedSteps, "next-step", "fixture_research")) as AgentExecutionResult.Rejected).code)
+
+        val exhaustedCalls = run("plan-calls", AgentBudget(2, 1, 1))
+        harness.execute(exhaustedCalls, AgentToolInvocation("used-call", "fixture_research", "x"))
+        assertEquals("PLAN_BUDGET_DENIED", (harness.plan(plan(exhaustedCalls, "next-call", "fixture_research")) as AgentExecutionResult.Rejected).code)
+
+        val exhaustedEffects = run("plan-effects", AgentBudget(2, 2, 1))
+        harness.execute(exhaustedEffects, AgentToolInvocation("used-effect", "fixture_reversible_action", "x"))
+        assertEquals("PLAN_BUDGET_DENIED", (harness.plan(plan(exhaustedEffects, "next-effect", "fixture_reversible_action")) as AgentExecutionResult.Rejected).code)
+
+        val receiptsBeforeDuplicate = ledger.status().receiptCount
+        val duplicate = run("plan-duplicate", AgentBudget(2, 2, 0))
+        val duplicatePlan = AgentExecutionPlan(duplicate, "duplicate-plan", listOf(
+            AgentPlanStep("same-intent", "fixture_research", sha("first")),
+            AgentPlanStep("same-intent", "fixture_research", sha("second")),
+        ))
+        val rejected = harness.plan(duplicatePlan) as AgentExecutionResult.Rejected
+        assertEquals("PLAN_DUPLICATE_IDEMPOTENCY_KEY", rejected.code)
+        assertEquals(AgentRunStatus.FAILED, rejected.snapshot!!.run.status)
+        assertEquals(receiptsBeforeDuplicate, ledger.status().receiptCount)
+    }
+
     @Test fun `P8-C production action is explicit one-shot local ledger inspect and rebuild never auto executes`() {
         val ledger = MemoryLedger()
         val controller = P8CProductionLocalAgentController(ledger, Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneOffset.UTC))

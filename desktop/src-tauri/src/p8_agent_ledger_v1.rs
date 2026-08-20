@@ -3,6 +3,7 @@
 use rusqlite::{params, Connection};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 pub const TOOL_SCHEMA_VERSION: u32 = 1;
@@ -288,7 +289,14 @@ impl AgentLedgerStore {
             )
             .map_err(|_| "RUN_NOT_FOUND".to_owned())?;
         let mut effects = 0;
+        let mut planned_idempotency_keys = HashSet::new();
         for step in &plan.steps {
+            if !planned_idempotency_keys.insert(&step.idempotency_key) {
+                Self::fail_state_tx(&tx, &run, "PLAN_DUPLICATE_IDEMPOTENCY_KEY")?;
+                tx.commit()
+                    .map_err(|_| "P8 plan failure 提交失败".to_owned())?;
+                return Err("PLAN_DUPLICATE_IDEMPOTENCY_KEY".into());
+            }
             let Some((risk, effect, permission, _)) = fixture_meta(&step.tool_id) else {
                 Self::fail_state_tx(&tx, &run, "PLAN_TOOL_NOT_REGISTERED")?;
                 tx.commit()
@@ -943,6 +951,35 @@ mod tests {
             reopened.snapshot_for_test("p8-run").unwrap().event_count,
             before.event_count
         );
+    }
+    #[test]
+    fn p8b_plan_admission_rejects_duplicate_step_intents_before_approval() {
+        let d = tempdir().unwrap();
+        let s = AgentLedgerStore::open(d.path()).unwrap();
+        s.start(&request()).unwrap();
+        let duplicate = ExecutionPlan {
+            run_id: "p8-run".into(),
+            plan_id: "duplicate-plan".into(),
+            steps: vec![
+                PlanStep {
+                    idempotency_key: "same-intent".into(),
+                    tool_id: "fixture_research".into(),
+                    input_hash: hash("first"),
+                },
+                PlanStep {
+                    idempotency_key: "same-intent".into(),
+                    tool_id: "fixture_research".into(),
+                    input_hash: hash("second"),
+                },
+            ],
+        };
+        assert_eq!(
+            s.plan_local_test_only(&duplicate).unwrap_err(),
+            "PLAN_DUPLICATE_IDEMPOTENCY_KEY"
+        );
+        let snapshot = s.snapshot_for_test("p8-run").unwrap();
+        assert_eq!(snapshot.status, "FAILED");
+        assert_eq!(s.read_only_status().receipt_count, Some(0));
     }
     #[test]
     fn p8b_harness_records_failure_and_cancellation_without_receipt() {

@@ -22,7 +22,7 @@ Android AppContainer / Desktop DesktopWorkspaceStore（无 UI、无 Tauri comman
 
 ## P8-B 内部受控 executor
 
-`AgentExecutionPlan` 只含稳定 run/plan/step id、Tool ID 和不可信输入的 SHA-256；没有正文、Prompt、路径、URI 或系统句柄。先 `plan`，再取得显式、绑定同一 plan hash 的 `AgentApprovalToken`，才能 `executeApproved`。计划在调用工具前重验 schema v1、`LOCAL_TEST_ONLY`、permission、risk、每一预算及预计 side effect；`UNKNOWN`、未知/超额预算、未知工具、越权或外部副作用均失败关闭。
+`AgentExecutionPlan` 只含稳定 run/plan/step id、Tool ID 和不可信输入的 SHA-256；没有正文、Prompt、路径、URI 或系统句柄。先 `plan`，再取得显式、绑定同一 plan hash 的 `AgentApprovalToken`，才能 `executeApproved`。计划在调用工具前重验 schema v1、`LOCAL_TEST_ONLY`、permission、risk、每一预算及预计 side effect。三类预算必须以“已用 + 完整计划”分别预检；同一计划内 idempotency key 必须唯一。`UNKNOWN`、未知/超额预算、重复 step intent、未知工具、越权或外部副作用均失败关闭，并写入对应的 durable failure Event/Checkpoint。
 
 计划接受和批准都写 P8-A 的 Event/Checkpoint；token 原值不落盘，只审计 plan hash。重建后绝不自动 plan/approve/execute，P8-B 的 `executeApproved` 调用方必须显式重新给出同一安全计划和 token。P8-A 既有直接 fixture `execute` 仅保留旧定向回归、未绑定 production；新 P8-B 计划路径不允许绕过批准。重复 receipt 只回读，不再调用工具；重复 event ID + 同 fingerprint 只回读，冲突 fingerprint 拒绝。fixture failure 写 `TOOL_ERROR` 的失败 Event/Checkpoint；fixture cancel 写 `TOOL_CANCELLED`/`CANCELLED` 的 Event/Checkpoint；两者先提交后报错，不能因错误返回回滚 durable 安全事实。rollback 继续仅允许可回滚 fixture receipt。
 
@@ -45,6 +45,6 @@ Android AppContainer / Desktop DesktopWorkspaceStore（无 UI、无 Tauri comman
 
 ## 最小验证与停止条件
 
-Android Domain/Room 与 Desktop Rust contract tests 必须证明：空账本返回已知零；计划→approval→成功、approval 拒绝、注入仅 hash、unknown/权限/risk/预算 fail-closed、tool failure/cancel、pause/resume、checkpoint/restart、receipt replay、duplicate event/replay conflict 与 rollback 的 durable 语义；状态读本身不增加任何计数，Room/SQLite reopen 后同一聚合回读。P8-A 既有越权、工具错、预算、取消、重放、rollback 合同持续回归。
+Android Domain/Room 与 Desktop Rust contract tests 必须证明：空账本返回已知零；计划→approval→成功、approval 拒绝、注入仅 hash、unknown/权限/risk/三类剩余预算/重复 step intent fail-closed、tool failure/cancel、pause/resume、checkpoint/restart、receipt replay、duplicate event/replay conflict 与 rollback 的 durable 语义；状态读本身不增加任何计数，Room/SQLite reopen 后同一聚合回读。P8-A 既有越权、工具错、预算、取消、重放、rollback 合同持续回归。
 
 只完成上述 test-only harness 与不可见生产状态双端闭环即停止。可见 Agent UI、production executor、真实研究/文件/系统工具、Provider、HTTP、外部副作用、P9/P10、OPPO、Windows、发布均需新的独立合同。

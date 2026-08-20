@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P8 本地计划准入双端收紧：只强化 test-only 合同，未开启真实工具
+
+- **本轮边界：** 只修改 `ControlledAgentRuntime` 与 Desktop `AgentLedgerStore` 的 `LOCAL_TEST_ONLY` plan admission。批准前必须把 Run 已用量与完整计划分别对照 steps、tool calls、side effects 三类预算；同一计划的 step idempotency key 重复时，在 approval 前写 durable failure Event/Checkpoint 并拒绝，绝不产生 receipt 或执行。没有新增 Agent UI、Tauri executor/capability、Settings entry、Provider/HTTP/Key、文件、跨应用、购买、删除、外发或业务数据写入。
+- **合同与证据：** `P8B_READ_ONLY_AGENT_LEDGER_STATUS_CONTRACT.md` 和 P8-D red-team matrix 同步为上述双端规则。Android 定向 `P8ControlledAgentRuntimeContractsTest`、`P8BReadOnlyAgentLedgerStatusContractsTest`、`P8AgentLedgerRoomContractsTest` 通过；Desktop `p8_agent_ledger_v1::tests` 7/7、`cargo clippy --lib -- -D warnings` 和 `rustfmt --check src/p8_agent_ledger_v1.rs` 通过。未启动、安装或写入 OPPO、`emulator-5554/5556/5558/5570`，未执行 GUI、DB 注入、网络或 Keychain 操作。
+- **功能审阅：** 本轮没有新增用户可见功能或常驻入口，Android/Desktop “设置 → 功能审阅”无需新增条目。
+- **仍未关闭：** P8 仍只完成本地主体。真实研究、文件/系统、跨应用、Provider/HTTP、外发、购买、删除等每个工具都必须另立合同并完成真实 success/failure/cancel/audit/idempotency/recovery 链；本轮 fixture 和本地回执不代表真实 Agent。P7 的真实身份/OAuth/HTTP、远端部署/跨设备恢复也继续未关闭；macOS 解锁后仅可按既有 P6 5570 正常 UI 续跑，不触该 AVD。
+
 ## 2026-08-20 P7-E Desktop 隔离候选身份与崩溃遗留门：本地代码/合同通过，P7 真实服务仍未启动
 
 - **本轮边界：** 仅收紧 `p7e_isolated_workspace_v1` 的 app-private staging。候选目录名现在必须与重读的 canonical semantic hash 一致；既有候选复用、切换前与切换后均验证 header 和全部 typed semantic record。任一内容或 header 篡改均在写入 P7-E isolated workspace 前拒绝；不读取/修改 P6 workspace，不增加 Tauri command、设置入口、OAuth、HTTP、Keychain、账号、恢复码或网络。

@@ -17,7 +17,8 @@ P8-D 不新增 Agent 能力。`ControlledAgentRuntime → AgentLedger` 仍是 An
 | 越权、Risk `UNKNOWN`、外部 effect | Runtime `validSchema`/permission/risk tests | Rust `start/plan/execute` guards 与测试 | 通过；release 不允许 external effect |
 | Prompt Injection 是不可信工具数据 | Android input SHA-256 assertion | Rust hash-only fixture/reopen test | 通过；无工具参数可由正文提升权限 |
 | success / failure / cancel / timeout / crash | Android fixture success + `fixture_failure/cancel/timeout`，rebuild no-auto-execute | Rust fixture success + failure/cancel/timeout，reopen tests | 通过；crash 以 durable checkpoint 后 reopen/no auto replay 验证，不伪称 OS 级外部工具崩溃 |
-| unknown / `0` / exhausted budget | Android `AgentBudget`/P8-B status tests | Rust `ReadOnlyLedgerStatus`/budget tests | 通过；unknown 不是零 |
+| unknown / `0` / exhausted budget | Android `AgentBudget`/P8-B status tests | Rust `ReadOnlyLedgerStatus`/budget tests | 通过；unknown 不是零，本轮 plan admission 以已用+完整计划预检三类预算 |
+| duplicate plan step intent | Android P8-B plan admission test | Rust P8-B plan admission test | 通过；同一 plan 的 idempotency key 冲突在 approval 前 durable fail-closed，不产生 receipt |
 | approval binding、expiry、one-shot | Android P8-C production controller tests | Harness plan hash/approval tests；Desktop 无 executor | 通过；取消会立即废弃 pending approval |
 | pause / resume / cancel、restart/checkpoint | Android P8-A/P8-C and Room tests | Rust replay/pause/resume/cancel/reopen tests | 通过 |
 | duplicate intent/event/receipt/replay | Android receipt/event tests | Rust replay conflict/reopen tests | 通过 |

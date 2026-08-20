@@ -182,11 +182,19 @@ class ControlledAgentRuntime(
     fun plan(plan: AgentExecutionPlan): AgentExecutionResult {
         val snapshot = ledger.findRun(plan.runId) ?: return AgentExecutionResult.Rejected("RUN_NOT_FOUND")
         if (snapshot.run.status !in setOf(AgentRunStatus.PENDING, AgentRunStatus.RUNNING) || plan.steps.isEmpty()) return fail(snapshot, "INVALID_PLAN")
-        if (plan.steps.size > snapshot.run.budget.maxSteps!!) return fail(snapshot, "PLAN_BUDGET_DENIED")
+        if (plan.steps.map { it.idempotencyKey }.toSet().size != plan.steps.size) return fail(snapshot, "PLAN_DUPLICATE_IDEMPOTENCY_KEY")
+        var plannedSideEffects = 0L
         for (step in plan.steps) {
             val schema = tools?.tool(step.toolId)?.first ?: return fail(snapshot, "PLAN_TOOL_NOT_REGISTERED")
             if (!validSchema(schema) || !allows(snapshot.run.permissionGrant, schema.requiredPermission) || schema.riskLevel.ordinal > snapshot.run.riskCeiling.ordinal || schema.sideEffectClass == AgentSideEffectClass.EXTERNAL) return fail(snapshot, "PLAN_PERMISSION_OR_RISK_DENIED")
+            if (schema.sideEffectClass != AgentSideEffectClass.NONE) plannedSideEffects += 1
         }
+        val budget = snapshot.run.budget
+        val plannedCalls = plan.steps.size.toLong()
+        if (snapshot.run.usedSteps + plannedCalls > budget.maxSteps!! ||
+            snapshot.run.usedToolCalls + plannedCalls > budget.maxToolCalls!! ||
+            snapshot.run.usedSideEffects + plannedSideEffects > budget.maxSideEffects!!
+        ) return fail(snapshot, "PLAN_BUDGET_DENIED")
         val now = clock.instant(); val planHash = planHash(plan)
         val event = event(snapshot.run, snapshot.events.size.toLong(), "PLAN_ACCEPTED", planHash, now)
         return AgentExecutionResult.Accepted(ledger.append(snapshot, null, event, checkpoint(snapshot.run, snapshot.checkpoints.size.toLong(), snapshot.steps.size.toLong(), now), null), "local test plan accepted")
