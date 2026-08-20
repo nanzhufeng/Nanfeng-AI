@@ -2,6 +2,10 @@
 
 ## 2026-08-20 当前总控状态（优先于以下历史审计）
 
+### P6 v2 Android owner mapper 增量（2026-08-20）
+
+`NfaiExchangeV2OwnerMapper` 已形成未注册的 Android 只读 owner→exact-IR 合同：它保留 Project appearance/instruction history、Conversation settings/memory sources、Knowledge source/provenance/history/附件 metadata、Memory title/source/history 与 relationship scope/history，并拒绝 locator、`sourceReference`、私有路径、运行时节点、缺 owner history 与附件内容 hash 不符。Android Studio JBR 下 mapper 2 项与共享 IR 2 项定向单测通过；无 Room/SQLite 写入、package、SAF/UI、模拟器或 OPPO 操作。此项只关闭 Android mapper 的领域证据，**不**关闭 P6：Desktop v2 staging/asset archive/SQLite transaction/journal、重开/回导、真实文件链、紧凑/展开与 Windows 门仍未开始，完整工作区入口继续禁止。
+
 以下状态以 `docs/CURRENT_HANDOFF.md` 顶部的当前记录、当前工作树、当前 release APK 与连接设备读回为准。历史段落保留为当时事实，不再作为排程结论。
 
 | 总控项 | 当前事实 | 状态 |

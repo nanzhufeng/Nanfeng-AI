@@ -1,6 +1,13 @@
 # 南枫 AI 当前交接
 
-## 2026-08-20 P6 工作区 v2 字段保真/拒绝矩阵：双端共享 IR 合同已闭合，生产 mapper/import 未开始
+## 2026-08-20 P6 工作区 v2 Android owner→IR mapper：字段闭合，生产导入仍未开始
+
+- **结论：** 新增未注册的 `NfaiExchangeV2OwnerMapper`。它只通过既有 `NfaiExchangeWorkspaceSource` 读取显式选中的 Project、Conversation、Knowledge、Memory、Relationship 与附件 owner，生成经 `NfaiExchangeV2Ir` 复验的 exact v2 JSON。Project appearance/instruction history、Conversation settings/memory sources、Knowledge source/provenance/history+附件 metadata、Memory title/source/history 与 relation scope/history 现在都不再依赖 v1/default/文件名猜测。
+- **失败关闭与数据边界：** mapper 拒绝 `sourceReference`、定位符/URI/路径式 memory source、疑似凭据/诊断/route 字段、草稿/WORK/已删除/运行时节点/ToolResult、缺 owner history、跨 scope 依赖、附件 owner 不一致及内容 hash 不符。附件只在内存中只读核验 byte/hash，既不把私有 `reference` 放入 IR，也不保留 bytes、生成 package、写 Room/SQLite 或注册 UI/SAF。
+- **本地验证：** Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` 与 `--no-daemon` 下，`WorkspaceExchangeV2OwnerMapperContractsTest`（2/2）和既有 `NfaiExchangeV2IrContractsTest`（2/2）通过。范围是 Android 领域/IR 合同；未运行模拟器、OPPO、SAF、文件导出、网络、Provider、Key 或数据库写入。
+- **停止门与下一唯一候选：** v2 仍没有 package/asset archive、Desktop v2 staging/SQLite transaction/import journal migration、重开/回导或真实文件链。因此不得开放“完整工作区”选择、SAF 或功能审阅条目；下一步仅可在独立合同下设计 Desktop v2 staging/asset archive/原子 importer，且必须保留现有 v1 路径隔离。
+
+## 2026-08-20 P6 工作区 v2 字段保真/拒绝矩阵：双端共享 IR 合同已闭合，生产 mapper/import 未开始（历史记录，已由上方 mapper 增量取代）
 
 - **结论：** 已新增 `P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md`，按 Android 与 Desktop 的现有 owner 对 Project、Conversation、Knowledge、Memory、Relationship、附件和 safe settings 逐字段列出 v1 状态、v2 目标、可逆性及降级/拒绝。v2 明确保留 Project appearance+instruction history、Conversation settings+memory sources、Knowledge source/provenance/history+附件 metadata、Memory 标题/来源/concept/history 与 Relationship scope/project/time/history；路径/URI、`sourceReference`、picker token、Key、Provider raw payload/runtime/diagnostic/route preference 仍一律拒绝。
 - **最小协议实现与验证：** `protocol/nfai.exchange.v2.schema.json`、共享 v2 golden 与 Node canonical validator 固定 semantic hash `aaeafcfb…1c0ef8`。Android `NfaiExchangeV2Ir` 与 Desktop `validate_exchange_v2_ir` 对同一 golden 独立验证并共同覆盖 locator 和缺 owner history 的 fail-closed；Android Studio JBR 下 `:app:testDebugUnitTest --tests NfaiExchangeV2IrContractsTest --no-daemon` 通过（2/2），Desktop `cargo test v2_owner_fidelity_golden_is_shared_and_rejects_lossy_or_locator_fields --lib` 通过（1/1），Node `protocol/scripts/run-v2-golden.mjs` 通过。测试仅解析 IR，无 Room/SQLite、附件 bytes、SAF、picker、网络、Provider、Key、模拟器或 OPPO 操作。
