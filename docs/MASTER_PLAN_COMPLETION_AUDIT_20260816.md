@@ -7,14 +7,14 @@
 | 总控项 | 当前事实 | 状态 |
 | --- | --- | --- |
 | release v2 签名与正式 APK | 新的项目专属 v2 签名已生成；当前源码 release APK 为 `com.nanzhufeng.ai` `51 / 0.3.0-p10a`，SHA-256 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`，v2/v3 签名校验通过。该产物包含功能审阅、Claude 兼容修正与当前版本备份/诊断/Eval 元数据修正，尚未安装到 OPPO。 | 已关闭 |
-| OPPO 安装链 | OPPO PKH120 已安装当前 release v2；`dumpsys`、UIAutomator package 与拉回的 `base.apk` SHA-256 三方一致 | 已关闭（仅安装/启动，不等同于所有功能验收） |
+| OPPO 安装链 | OPPO PKH120 当前只读保留较早 release-v2 APK `fc8f9ac6…`；它不是当前源码 APK `57d048…`，本轮未覆盖安装。 | 保留数据；当前源码的 OPPO 安装/启动未验证 |
 | Desktop P6-K 正式 bundle | 资源封印缺失已修复；最终 ad-hoc bundle 严格验签、原生 WebView、Settings 匿名 aggregate readback 已完成 | 已关闭 |
 | Android P6-K 真正入口 | 当前源码以独立 `com.nanzhufeng.ai.p6eacceptancev2` 验收包运行，未覆盖 legacy `com.nanzhufeng.ai` / `com.nanzhufeng.ai.p6eacceptance`。经设置 → 数据与导入 → 导入中心 → 系统 DocumentsUI，已导入两份已授权 ZIP；临时中性来源均在私有暂存后删除。force-stop/cold-start 后只读回匿名 aggregate：ChatGPT 23 对话 / 719 未关联媒体；Claude 162 对话 / 0 未关联媒体；Claude 另有 120 项严格失败，与 Desktop 同源聚合一致。 | 已关闭（隔离 emulator 验收；不等同于 OPPO 导入） |
 | 实包媒体关联 | 两份实包没有可证明的 message-to-asset relation；`UNMAPPED_REJECTED` 是正确安全结果。K8 的人工精确关联功能已实现，但尚未发生用户在 Settings 中明确选择资产和目标消息的真实动作 | 外部用户操作 |
 | 真实 Provider / 账号同步 / 生态 | 本地 owner、禁用状态和合同已存在；真实 HTTP、账号、OAuth/发布白名单、同步及生态目标仍分别需要已配置的外部服务和可验证账户/目标 | 外部条件，不得伪报完成 |
 | 新增功能审阅与入口建议 | Android 与 Desktop 设置均新增“功能审阅”；当前登记 ZIP 导入与未关联媒体人工关联，展示待您判断的去留状态和小字入口建议。今后每项普通用户新功能必须同步登记，默认不增加聊天主页/Composer 常驻按键。 | 已建立规则与双端实现 |
 
-**当前可继续的总控工作：** P6-K Android 正常入口已闭环。后续按总控矩阵分别推进真实媒体人工关联（仅用户在 Settings 明确选择时）、真实 Provider/账号同步/生态的外部条件验收，以及各项未完成的双端 UI/readback；不得将 P6-K 闭环、隔离 emulator 或 OPPO 的安装事实扩大为全部总控完成。
+**当前可继续的总控工作：** P6-K Android 正常入口已闭环。后续按总控矩阵分别推进真实媒体人工关联（仅用户在 Settings 明确选择时）、真实 Provider/账号同步/生态的外部条件验收，以及各项未完成的双端 UI/readback；OPPO 仅保留较早 v2 包，当前源码 APK 未安装，均不得将其扩大为当前产物或全部总控完成。
 
 ## 结论
 
