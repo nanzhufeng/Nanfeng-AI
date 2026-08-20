@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 v2 真实完整 owner 文件链：隔离环境和唯一验收包就绪，macOS 锁屏阻断正常 UI 创建
+
+- **本轮边界：** 目标仍是 §17 P6 的真实完整 owner 文件链，而不是 P6 或 P0–P11 完成声明。只读盘点已确认 Project、Conversation、手工 Knowledge、长期 Memory、Knowledge 关系和 DocumentsUI 文件附件均有正常生产 UI；完整范围会从 Conversation 的已提交消息节点和 Knowledge 收集附件，故附件必须经正常 UI 加入草稿后本地发送进入消息树。未发现需要或允许使用 DB/SQL/command 注入的对象路径。
+- **新隔离环境：** 既有 AVD 均不复用、不修复。已基于本机 Android 35 Google APIs arm64-v8a 镜像新建 `NanfengAiP6V2FullOwnerAcceptance`，并仅以新的 `emulator-5570` 冷启动；没有对既有模拟器或用户设备写入。新增唯一 build type `p6V2FullOwnerAcceptance`，applicationId 为 `com.nanzhufeng.ai.p6v2fullowneracceptance`，不改生产包、数据模型或用户入口。产物 `app/build/outputs/apk/p6V2FullOwnerAcceptance/南枫AI-开发验收.apk` 使用正式 v2/v3 签名，SHA-256 为 `210eb393953a66f08dade69c7d6df972a9d0db673c7f06b28279350ce2a674af`；首次定向安装后 pull 回的 installed `base.apk` SHA-256 相同，版本为 `51 / 0.3.0-p10a-p6-v2-full-owner-acceptance`。
+- **真实 UI 停止点：** 将验收包启动到新模拟器后，Computer Use 返回“Mac is locked，无法自动解锁”。因此尚未通过 UI 创建任一 Project/Conversation/Knowledge/Memory/Relation/附件，尚未打开 Android 设置范围或 DocumentsUI，未产生交换文件、Desktop private import、native Save 回导、receipt/replay/v1 readback 或布局/异常恢复证据。没有以 shell、Room、SQLite、fixture 或文件注入伪造任何对象或 UI 验收。
+- **安全续跑顺序：** 用户手动解锁 macOS 后，只在 `emulator-5570` 中经正常 UI 创建最小无敏感 Project、Conversation（含本地发送附件）、两条手工 Knowledge、RELATED 关系及长期 Memory；随后设置 → 完整工作区 v2 → DocumentsUI 导出，独立 Desktop bundle 的 native Open picker 导入、native Save picker 回导，最后仅比较 semantic、全量 owner-field hashes、asset ledger、receipt/replay 与 v1 三表不变。Windows 本机验收仍为外部门，不在 macOS 伪造。
+
 ## 2026-08-20 P6 原规格证据矩阵与完整 owner 跨端自动门（HEAD 673f2d6）
 
 - **总控口径：** “总控方案”只指 `MASTER_DEVELOPMENT_BLUEPRINT.md` §17 的 P0–P11 完整路线；本轮 `docs/P6_EVIDENCE_MATRIX_20260820.md` 只核对其中的 P6 原始范围和出口，不能替代或缩小总控方案。矩阵确认：Android v2 import/archive/recovery 与将 Desktop v2 private record 恢复为 Desktop 原生业务对象均不是 §17 的原始 P6 退出门，故未擅自实现或改写为本轮范围。
