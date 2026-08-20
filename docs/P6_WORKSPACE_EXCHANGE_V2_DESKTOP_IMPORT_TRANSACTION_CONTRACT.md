@@ -4,7 +4,7 @@
 
 本合同冻结 `nfai.exchange.v2` 在 Desktop 的**未来内部导入 owner**。它只消费已由 `protocol/nfai.exchange.v2.schema.json`、`protocol/scripts/exchange-v2-lib.mjs` 和 `NfaiExchangeV2Ir` 确认的 exact IR；不重新解释、不补默认值、不把 v2 降级为 v1，也不把 v1 的 `workspaces/workspace_exchange/import_journal` 当作 v2 owner。
 
-已实现 v2 package writer、private archive、SQLite migration 和独立 Tauri command；Desktop 设置的 native picker 只把用户选中的单一精确 `.nfai-exchange` 或 Android DocumentsUI 兼容 `.nfai-exchange.zip` 交给该 command。该 command 必须同时由专用 Tauri capability `allow-import-desktop-workspace-exchange-v2-selected` 显式允许；它不接受 v1 staging ID、不返回路径/正文/显示名/MIME/bytes、不读写 v1 工作区表，失败不生成可见 workspace。Android 从设置范围选择后经 `application/zip` SAF 输出 v2 包；DocumentsUI 可能追加 `.zip`，但这不改变内容身份。没有网络、Keychain、Provider、设备或数据库注入验收；尚无真实 native picker 人工文件验收、跨端 v2 互通、Windows 或发布结论。
+已实现 v2 package writer、private archive、SQLite migration 和独立 Tauri command；Desktop 设置的 native picker 只把用户选中的单一精确 `.nfai-exchange`、`.nfai-exchange.zip` 或 Android DocumentsUI 实际 `.zip` 交给该 command。该 command 必须同时由专用 Tauri capability `allow-import-desktop-workspace-exchange-v2-selected` 显式允许；它不接受 v1 staging ID、不返回路径/正文/显示名/MIME/bytes、不读写 v1 工作区表，失败不生成可见 workspace。普通 `.zip` 仍必须经完整 strict preflight，不能凭名称获得任何持久化资格。Android 从设置范围选择后经 `application/zip` SAF 输出 v2 包；DocumentsUI 可能追加或以 `.zip` 保存，但这不改变内容身份。没有网络、Keychain、Provider、设备或数据库注入验收；尚无真实 native picker 人工文件验收、跨端 v2 互通、Windows 或发布结论。
 
 ## v2 私有 package 与严格 preflight
 

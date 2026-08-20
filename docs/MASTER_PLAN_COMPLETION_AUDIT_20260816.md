@@ -1,5 +1,11 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-21 P6 v2 完整 owner Desktop native Open/Save：macOS 独立真实文件子链已关闭
+
+- **新增真实证据：** 全新项目专属 `/tmp` Desktop acceptance bundle/root 由正常设置页的 native Open picker 选择 Android DocumentsUI 真实 3,955 B `.zip`，strict preflight 后写入 private v2 owner；同一 committed record 再由 native Save picker 回导至空输出目录。两次 UI receipt 均为 semantic `fdf9f95ac840…d9ff9`、1 asset。Node strict verifier 在 Android 输入和 Desktop 回导均通过（3 entries / 1 asset）；semantic、8 项 owner-field hash（field-set digest `ead2f34e…4aea1c`）及 asset ledger 全量一致。独立 SQLite v1 三表为 `0/0/0`，v2 import/assets/provenance/journal/receipt 为 `1/1/8/1/1`。
+- **兼容修复：** 实际 Android DocumentsUI 普通 `.zip` 曾被 picker 展示却被 Rust 文件名 gate 拒绝。现仅把显式选择的非嵌套 `<stem>.zip` 纳入 v2 输入候选；它仍在任何私有 archive/SQLite 写入前经过完整 strict package preflight，回导输出保持仅 `.nfai-exchange`。这是既有设置二级入口的修复，不增新入口；功能审阅无需新增条目。
+- **未扩张结论：** 这只关闭 macOS 上完整 owner 的 Android DocumentsUI → Desktop private import → native re-export/readback 子链；Android v2 import/archive/recovery、Desktop 原生对象恢复、Windows WebView2/安装/签名/缩放/IME、发布、OPPO 及 P6/P0–P11 总门均未关闭。Windows 是外部本机门，不能在 macOS 伪造。
+
 ## 2026-08-20 P5-A 紧凑用户入口缺口：双端设置内本地控制面与新空 UI owner 创建已验证，P6 文件链待继续
 
 - **已实现：** `P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md` 将唯一普通入口固定为双端“设置 → 更多本地控制面”；Android 进入既有 `P5ARoute.CONTROL` 并包含 Projects、知识（含关系）与长期 Memory 路径，Desktop 只跳转已有 Projects、知识与关系、长期 Memory work-mode action。双端功能审阅登记“待您判断保留或删减”，建议仅保留设置二级入口、不在聊天主页/Composer/会话详情新增按键。

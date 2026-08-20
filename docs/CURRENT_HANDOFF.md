@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P6 v2 完整 owner：Android DocumentsUI → Desktop native Open/Save 独立验收已闭合；P6 总门仍未退出
+
+- **真实 Desktop 子链：** 新生成且 deep/strict 验签的 macOS acceptance bundle 只使用全新项目专属 `/tmp` root，经 Desktop 设置 → 数据导入 → 完整工作区交换（v2）打开原生 Open picker，实际选择 Android 的 3,955 B 普通 `.zip`；strict preflight、private archive/transaction 与 content-free UI receipt 成功。随后由同一已提交私有记录打开原生 Save picker，在新的空输出目录回导 3,851 B `.nfai-exchange`，UI 两次显示 semantic `fdf9f95ac840…d9ff9` 与 1 项附件。
+- **真实缺陷与最窄修复：** Android DocumentsUI 实际普通 `.zip` 被 Desktop picker filter 展示却在 Rust 读 bytes 前拒绝，因旧 gate 只接纳 `.nfai-exchange` / `.nfai-exchange.zip`。现在普通 `<stem>.zip` 只作为显式输入候选；空 stem、嵌套/追加后缀仍拒绝，且 name 永不成为身份或持久化豁免，必须完整通过 exact manifest、semantic、owner-field hash 与 asset ledger strict preflight。回导继续只接受 `.nfai-exchange`。这是既有设置二级入口的兼容修复，不新增用户功能或常驻入口，功能审阅无需新增条目。
+- **严格去内容化读回：** 输入/输出 Node strict verifier 均为 entries `3`、assets `1`、semantic `fdf9f95ac84005a173807779c055f0a3bd2112b01beb9f7bb28763dbe19d9ff9`；8 项 owner-field hash 的 field-set digest 为 `ead2f34eea50ffce928c97d9e117b766de9b2ea07bd52864da1649a6ed4aea1c`，receipt 与所有 provenance 一致。独立 root 的 v1 `workspaces/workspace_exchange/import_journal` 为 `0/0/0`；v2 `imports/assets/provenance/journal/receipts` 为 `1/1/8/1/1`。输入 package SHA-256 `54b48a470033bde62761a6030b4fdf7a6dfb70ee8bef3f0393f38324f910c37c`，回导 package SHA-256 `acb46537e30227cfbe538ca8eff4c06b953bbdecc8dfc3936bd270fd34a06ede`；byte package 不同但不是语义或字段差异。
+- **严格边界与下一步：** 未触碰 OPPO、Android 设备或任何禁止的 AVD，未用 DB/command 注入、Keychain、Provider 或网络；此前失败的独立根未导入/回导且未复用。此 macOS 子链不证明 Android v2 import/archive/recovery、Desktop 原生业务对象恢复、Windows WebView2/安装/签名/缩放/IME、发布、P6 完成或 §17 P0–P11 完成。Windows 是当前该原始出口的外部门，本机不得伪造；在开始其他 P0–P11 子任务前先运行 context gate 并从总控审计选择未受外部门阻断的最窄候选。
+
 ## 2026-08-21 P6 v2 完整 owner：Android DocumentsUI 真实导出与严格去内容化读回已闭合；Desktop 独立 native Open/Save 因 context gate 待新线程
 
 - **真实 Android 链：** 仅在新建的 `NanfengAiLocalControlOwnerAcceptance` / `emulator-5582`（`com.nanzhufeng.ai.p6v2fullowneracceptance`）经可见正常 UI 完成：Settings → 数据与导入 → 导入中心 → 完整工作区交换（v2）→ DocumentsUI。范围弹窗实测为 `项目 1 · 对话 1 · 知识 2 · 记忆 1 · 关系 1 · 附件 1`；DocumentsUI 保存后 App 显示严格回读 `fdf9f95ac840… · 6 项对象 · 1 项附件`。输出 `nanfeng-ai-workspace-v2-owner-acceptance.zip` 3,955 B，只读 pull package SHA-256 为 `54b48a470033bde62761a6030b4fdf7a6dfb70ee8bef3f0393f38324f910c37c`；Node strict verifier 通过：semantic `fdf9f95ac84005a173807779c055f0a3bd2112b01beb9f7bb28763dbe19d9ff9`、entries 3、assets 1。

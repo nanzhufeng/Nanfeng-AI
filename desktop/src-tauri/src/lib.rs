@@ -6423,15 +6423,16 @@ trait Pipe: Sized {
 }
 impl<T> Pipe for T {}
 
-/// Filename admission is intentionally narrower than the picker filter. `DocumentsUI` is
-/// allowed to append `.zip` to Android's `.nfai-exchange` display name because its MIME is
-/// `application/zip`; any other nested/after-suffix extension remains rejected before bytes are
-/// read. This function never grants content validity: strict v2 preflight remains mandatory.
+/// Filename admission accepts a user-selected Android DocumentsUI `.zip` output as an input
+/// candidate. Any nested/after-suffix extension remains rejected before bytes are read. This
+/// function never grants content validity: strict v2 preflight remains mandatory.
 fn is_selected_v2_package_filename(name: &str) -> bool {
     let suffix = if name.ends_with(P6_V2_DOCUMENTS_UI_FILE_SUFFIX) {
         P6_V2_DOCUMENTS_UI_FILE_SUFFIX
     } else if name.ends_with(P6_V2_PACKAGE_FILE_SUFFIX) {
         P6_V2_PACKAGE_FILE_SUFFIX
+    } else if name.ends_with(".zip") {
+        ".zip"
     } else {
         return false;
     };
@@ -7371,6 +7372,12 @@ mod tests {
             .import_selected_v2_workspace_exchange(documents_ui_selected.to_str().unwrap())
             .unwrap();
         assert!(documents_ui_replay.replayed);
+        let generic_android_zip = directory.path().join("android-v2-owner-acceptance.zip");
+        fs::copy(&selected, &generic_android_zip).unwrap();
+        let generic_android_replay = store
+            .import_selected_v2_workspace_exchange(generic_android_zip.to_str().unwrap())
+            .unwrap();
+        assert!(generic_android_replay.replayed);
         let connection = store.connection().unwrap();
         let v1_rows: i64 = connection
             .query_row(
@@ -7387,6 +7394,7 @@ mod tests {
         assert!(!rejected.contains("not-selected.txt"));
         for invalid_name in [
             "selected.nfai-exchange.zip.exe",
+            "selected.zip.zip",
             "selected.zip.nfai-exchange",
             "selected.nfai-exchange.nfai-exchange",
         ] {

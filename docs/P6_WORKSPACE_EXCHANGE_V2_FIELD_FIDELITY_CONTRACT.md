@@ -34,9 +34,9 @@ v2 只接纳下表中有现存 Android owner、清晰字段语义、并且不会
 
 ## 文件名、MIME 与回执边界
 
-- Android 建议显示名固定为 `nanfeng-ai-workspace-v2.nfai-exchange`，CreateDocument MIME 固定为 `application/zip`。系统 DocumentsUI 可以把实际用户可见文件名保存为 `*.nfai-exchange.zip`；这是 provider 的显示/扩展名行为，不改变 package bytes、manifest、semantic hash 或任一 `ownerFieldHash`。
-- Desktop picker 只可展示并接纳两种**精确终止**名：`<stem>.nfai-exchange` 或 `<stem>.nfai-exchange.zip`。`<stem>` 非空，且不能再以 `.nfai-exchange` 或 `.zip` 结尾；路径片段、任何附加后缀（如 `.nfai-exchange.zip.exe`）、嵌套协议/ZIP 后缀（如 `.zip.nfai-exchange`）一律在读 bytes 前拒绝。picker filter 展示 `.zip` 不代表接纳普通 ZIP。
-- 文件名与 MIME 只是系统 picker 的入场标签，绝不构成包身份、来源证明或内容豁免。两种允许名都必须依次通过 v2 ZIP entry/size/path 防护、exact manifest、canonical export、IR semantic hash、asset ledger/bytes hash 和全量 owner-field-hash preflight；v1 或任何混入 v1 的包仍由 `packageVersion: 2` / `exchangeVersion: 2` 门禁拒绝。
+- Android 建议显示名固定为 `nanfeng-ai-workspace-v2.nfai-exchange`，CreateDocument MIME 固定为 `application/zip`。系统 DocumentsUI 可以把实际用户可见文件名保存为 `*.nfai-exchange.zip`，也可能仅保留普通 `*.zip`；这是 provider 的显示/扩展名行为，不改变 package bytes、manifest、semantic hash 或任一 `ownerFieldHash`。
+- Desktop picker 可展示并接纳用户显式选择的 `<stem>.nfai-exchange`、`<stem>.nfai-exchange.zip` 或 Android DocumentsUI 实际保存的 `<stem>.zip` 输入候选。`<stem>` 非空，且不能再以 `.nfai-exchange` 或 `.zip` 结尾；路径片段、任何附加后缀（如 `.nfai-exchange.zip.exe`）、嵌套协议/ZIP 后缀（如 `.zip.nfai-exchange`）一律在读 bytes 前拒绝。普通 `.zip` 从不获得内容有效性或持久化资格，仍必须先通过 v2 exact manifest、语义、owner-field hash 和 asset ledger 的 strict preflight；回导输出继续只接纳 `.nfai-exchange`。
+- 文件名与 MIME 只是系统 picker 的入场标签，绝不构成包身份、来源证明或内容豁免。三种允许名都必须依次通过 v2 ZIP entry/size/path 防护、exact manifest、canonical export、IR semantic hash、asset ledger/bytes hash 和全量 owner-field-hash preflight；v1 或任何混入 v1 的包仍由 `packageVersion: 2` / `exchangeVersion: 2` 门禁拒绝。
 - Android SAF 成功回执与 Desktop committed/replay 回执都只含 package/semantic hash、匿名计数、枚举和 owner field hashes（以及 Desktop workspace/replay 状态）；不得返回或持久化 selected path、用户显示名、MIME、正文或附件 bytes。文件名改变而 bytes 不变不产生新的语义身份。
 
 ## 用户入口
