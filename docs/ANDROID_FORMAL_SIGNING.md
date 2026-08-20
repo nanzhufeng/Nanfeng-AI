@@ -32,6 +32,7 @@
 ## 初始化与迁移影响
 
 - 执行 `scripts/initialize_nanfeng_ai_release_v2_keystore.sh` 时，`keytool` 在本机终端交互式输入新密码；脚本不接收、打印或存储密码。
+- 新 keystore 创建后，执行 `scripts/configure_nanfeng_ai_release_v2_gradle_properties.sh` 在本机交互式输入同一套密码；该脚本仅原子写入用户级 `~/.gradle/gradle.properties` 的 release v2 四项配置，拒绝覆盖既有 v2 配置，且不回显密码。
 - 新证书有效期为 50 年（18,263 天）。构建成功后用 `apksigner verify --print-certs` 记录 package name、SHA-1、SHA-256 与证书有效期，且不输出密码。
 - 新证书与 legacy 证书不同。同包名的历史安装不能用新证书覆盖更新；Google 登录、Firebase Auth、App Links、Play Integrity、签名权限及第三方证书指纹白名单须逐项复核后再发布。
 
