@@ -28,6 +28,7 @@ import java.io.InputStream
 data class P6KZipImportUiState(val working: Boolean = false, val tasks: List<P6KZipImportTask> = emptyList(), val viewedTaskId: String? = null, val manualTargets: List<P6KZipManualLinkTarget> = emptyList(), val selectedAssetEntryName: String? = null, val selectedTarget: P6KZipManualLinkTarget? = null, val revokeFailure: Boolean = false)
 class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewModel() {
     var state by mutableStateOf(P6KZipImportUiState()); private set
+    init { show() }
     fun show() { viewModelScope.launch { state = state.copy(tasks = withContext(Dispatchers.IO) { store.list() }) } }
     fun selected(provider: ThirdPartyZipProvider, name: String, mime: String, input: InputStream) { state = state.copy(working = true, revokeFailure = false); viewModelScope.launch { val tasks = withContext(Dispatchers.IO) { val task = store.stage(provider, name, mime, input); listOf(task) + store.list().filterNot { it.id == task.id } }; state = state.copy(working = false, tasks = tasks) } }
     fun clear(id: String) { viewModelScope.launch { val result = withContext(Dispatchers.IO) { store.cancel(id) to store.list() }; state = state.copy(tasks = result.second, revokeFailure = !result.first) } }

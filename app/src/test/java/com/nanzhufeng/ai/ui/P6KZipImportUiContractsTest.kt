@@ -14,6 +14,7 @@ class P6KZipImportUiContractsTest {
         assertTrue(source.contains("导入 Claude ZIP"))
         assertTrue(source.contains("导入批次"))
         assertTrue(source.contains("删除导入批次"))
+        assertTrue(source.contains("init { show() }"))
         assertTrue(source.contains("已保留任务与私有副本；请重试删除"))
         assertFalse(source.contains("task.displayName"))
         assertFalse(source.contains("item.candidate!!.title"))

@@ -177,9 +177,14 @@ class ClaudeExportJsonAdapter {
     }
 
     private fun StrictJsonValue.Obj.nullableSafeTitle(key: String): String = when (val value = fields[key]) {
-        StrictJsonValue.Null -> "无标题对话"
-        is StrictJsonValue.Str -> value.value.trim().takeIf { it.isNotEmpty() && it.length <= 120 && it.none(Char::isISOControl) }
-            ?: reject(ClaudeExportParseFailure.INVALID_CONVERSATION)
+        StrictJsonValue.Null -> "未命名 Claude 对话"
+        is StrictJsonValue.Str -> value.value.trim().let { title ->
+            when {
+                title.isEmpty() -> "未命名 Claude 对话"
+                title.length <= 120 && title.none(Char::isISOControl) -> title
+                else -> reject(ClaudeExportParseFailure.INVALID_CONVERSATION)
+            }
+        }
         else -> reject(ClaudeExportParseFailure.INVALID_CONVERSATION)
     }
 

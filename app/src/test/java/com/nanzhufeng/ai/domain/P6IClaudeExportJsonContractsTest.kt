@@ -37,6 +37,11 @@ class P6IClaudeExportJsonContractsTest {
         assertEquals(ClaudeExportParseFailure.INVALID_TREE, invalidTree.items.single().failure)
     }
 
+    @Test fun `blank Claude title uses the same safe fallback as Desktop`() {
+        val parsed = adapter.parse(source().replace("\"name\":\"Imported\"", "\"name\":\"   \"").toByteArray()) as ClaudeExportParseResult.Parsed
+        assertEquals("未命名 Claude 对话", parsed.items.single().candidate!!.title)
+    }
+
     @Test fun `unsupported roles nontext payloads and duplicate source ids fail closed per conversation`() {
         val unsupportedRole = adapter.parse(source().replace("\"assistant\"", "\"system\"").toByteArray()) as ClaudeExportParseResult.Parsed
         assertEquals(ClaudeExportParseFailure.UNSUPPORTED_ROLE, unsupportedRole.items.single().failure)
