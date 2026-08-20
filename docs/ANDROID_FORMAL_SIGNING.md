@@ -51,11 +51,12 @@
 
 ## release v2 首次构建证据（2026-08-20）
 
-- 最终 APK：`app/build/outputs/apk/release/南枫AI.apk`，package name `com.nanzhufeng.ai`，versionCode `51`，versionName `0.3.0-p10a`，SHA-256 `49f516d5fa94c65f2238eef0a30fcee772dcfd8b1034f252e93242fbf9258817`。
+- 首次构建 APK：`app/build/outputs/apk/release/南枫AI.apk`，package name `com.nanzhufeng.ai`，versionCode `51`，versionName `0.3.0-p10a`，SHA-256 `49f516d5fa94c65f2238eef0a30fcee772dcfd8b1034f252e93242fbf9258817`。
 - `apksigner verify --verbose --print-certs`：APK Signature Scheme v2 / v3 均通过，单一 signer；v1、v3.1、v4 未启用。
 - signer certificate SHA-1：`2ab70dee32bc61f0596380cd328fa673c0c86149`；SHA-256：`6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；RSA 4096-bit。
 - 从最终 APK 的公开签名块解析的证书有效期：`2026-08-20T06:55:35Z` 至 `2076-08-20T06:55:35Z`。
 - 2026-08-20 已首次安装到 OPPO PKH120（Android 16）。安装前复查时旧同包名安装已不在包管理器中；本轮没有执行卸载或清数据命令。通过 `pm install -r --user 0` 安装后，`dumpsys` 记录 versionCode `51` / versionName `0.3.0-p10a`，UIAutomator XML 归属 `com.nanzhufeng.ai`，设备 `base.apk` SHA-256 与本地最终 APK 一致。设备 APK 的 signer SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- 当前完成审计再次执行 `:app:assembleRelease` 后，APK 因打包元数据变化产生新字节哈希 `fc8f9ac604c57492cabb4b8bc74fe4284623d3a5385b50ad782f798b75252546`。已以同一 v2 证书对 OPPO 执行保留数据更新；重新拉回的设备 `base.apk`、`dumpsys` 与 UIAutomator XML 均匹配当前 APK。
 
 ## legacy 保护边界
 
