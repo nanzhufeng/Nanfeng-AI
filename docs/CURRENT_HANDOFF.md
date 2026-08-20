@@ -1,9 +1,9 @@
 # 南枫 AI 当前交接
 
-## 2026-08-20 总控推进：P5-D 当前版本备份元数据修正（当前）
+## 2026-08-20 总控推进：运行时交付元数据当前版本修正（当前）
 
-- **结论：** `AndroidPrivacyDataManager` 与 `AndroidLocalBackupRestoreManager` 不再把当前 release 的 manifest/诊断版本硬编码为历史 `0.3.0-p5d`，统一注入 `BuildConfig.VERSION_NAME`。因此当前 `0.3.0-p10a` 导出的本地备份与诊断会如实携带当前版本，恢复预检和故障定位不再误指向历史交付。
-- **验证：** `P5DLocalBackupRestoreContractsTest` 新增 runtime owner 版本回归，连同 Settings 定向合同通过；`:app:assembleRelease :app:lintDebug` 通过（lint `0 errors`）；正式 APK SHA-256 `1599da4608c59f738e65b001841079e455f5362a8b845bcc2c14f23d3091b707`，v2/v3 验签通过，证书 SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **结论：** `AndroidPrivacyDataManager`、`AndroidLocalBackupRestoreManager` 与 `RunOfflineEvalUseCase` 不再把当前 release 的 manifest/诊断/Eval report 版本硬编码为历史 `0.3.0-p5d` / `0.3.0-p4m`，统一注入 `BuildConfig.VERSION_NAME`。因此当前 `0.3.0-p10a` 生成的本地备份、诊断与离线 Eval 报告会如实携带当前版本，恢复预检和故障定位不再误指向历史交付。
+- **验证：** `AppContainerRuntimeVersionContractsTest`、`P5DLocalBackupRestoreContractsTest`、`P4IOfflineEvalContractsTest` 与 Settings 定向合同通过；`:app:assembleRelease` 通过，正式 APK SHA-256 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`，v2/v3 验签通过，证书 SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；前一轮 `:app:lintDebug` 为 `0 errors`。
 - **边界：** 该修正不导出、恢复、覆盖或读取任何用户数据；OPPO 仍保留安装的较早 v2 `fc8f9ac6…` 包，本轮不安装。当前 P5 的真实 SAF 成功导出、受控恢复与冷启动验收仍须在隔离数据环境按正常 UI 链完成。
 
 ## 2026-08-20 总控推进：Compare 直接执行合同与矩阵校正（当前）
@@ -20,7 +20,7 @@
 - **兼容修正：** Android Claude parser 现与 Desktop 同样接受缺失/`null` 的 `name` 与 `parent_message_uuid`，缺失标题规范为“未命名 Claude 对话”。此前 153 成功/129 失败的差异已消除；定向 Android 契约测试通过。
 - **新增功能审阅规则：** 新增项目 `AGENTS.md` 路由到 `docs/ANDROID_DESKTOP_USER_ENTRY_AUDIT_20260816.md` 的唯一规则正文：每个面向普通用户的新功能必须同改动登记 Android 与 Desktop “设置 → 功能审阅”，显示去留状态、现有入口、是否建议新增常用界面按键及小字理由。默认只给设置二级入口。当前 Android/ Desktop 已实际登记 ZIP 导入与未关联媒体人工关联；Android 隔离包正常 Settings 路径可见该页。
 - **入口文案防回退：** Desktop 的 ZIP 审阅项已与 Android 对齐为“设置 → 数据与导入 → 导入中心”，不再显示历史“第三方 ZIP 导入”路径；Desktop 全量 UI 合同 82/82 与 Android Settings 定向合同均覆盖该路径。
-- **当前交付产物：** `:app:assembleRelease` 已重新通过，正式 APK `app/build/outputs/apk/release/南枫AI.apk` SHA-256 为 `1599da4608c59f738e65b001841079e455f5362a8b845bcc2c14f23d3091b707`；v2/v3 验签通过，仍为既有 release v2 证书（SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`）。本产物未安装到 OPPO 或 legacy/emulator 包。
+- **当前交付产物：** `:app:assembleRelease` 已重新通过，正式 APK `app/build/outputs/apk/release/南枫AI.apk` SHA-256 为 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`；v2/v3 验签通过，仍为既有 release v2 证书（SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`）。本产物未安装到 OPPO 或 legacy/emulator 包。
 - **当前总控结论：** P6-K Android 主链与 Desktop P6-K 均已关闭；总控方案整体仍未关闭。后续只推进矩阵中的独立欠项：用户明确选择的实包媒体人工关联、真实 Provider/账号同步/生态外部条件，以及尚未完成的双端 UI/readback。不得重复安装、不得把隔离 emulator 或 OPPO 安装扩展为全部验收。
 
 ## 2026-08-20 Android release v2 签名迁移（当前）

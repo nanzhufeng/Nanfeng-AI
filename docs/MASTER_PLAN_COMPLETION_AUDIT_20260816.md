@@ -6,7 +6,7 @@
 
 | 总控项 | 当前事实 | 状态 |
 | --- | --- | --- |
-| release v2 签名与正式 APK | 新的项目专属 v2 签名已生成；当前源码 release APK 为 `com.nanzhufeng.ai` `51 / 0.3.0-p10a`，SHA-256 `1599da4608c59f738e65b001841079e455f5362a8b845bcc2c14f23d3091b707`，v2/v3 签名校验通过。该产物包含功能审阅、Claude 兼容修正与当前版本备份元数据修正，尚未安装到 OPPO。 | 已关闭 |
+| release v2 签名与正式 APK | 新的项目专属 v2 签名已生成；当前源码 release APK 为 `com.nanzhufeng.ai` `51 / 0.3.0-p10a`，SHA-256 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`，v2/v3 签名校验通过。该产物包含功能审阅、Claude 兼容修正与当前版本备份/诊断/Eval 元数据修正，尚未安装到 OPPO。 | 已关闭 |
 | OPPO 安装链 | OPPO PKH120 已安装当前 release v2；`dumpsys`、UIAutomator package 与拉回的 `base.apk` SHA-256 三方一致 | 已关闭（仅安装/启动，不等同于所有功能验收） |
 | Desktop P6-K 正式 bundle | 资源封印缺失已修复；最终 ad-hoc bundle 严格验签、原生 WebView、Settings 匿名 aggregate readback 已完成 | 已关闭 |
 | Android P6-K 真正入口 | 当前源码以独立 `com.nanzhufeng.ai.p6eacceptancev2` 验收包运行，未覆盖 legacy `com.nanzhufeng.ai` / `com.nanzhufeng.ai.p6eacceptance`。经设置 → 数据与导入 → 导入中心 → 系统 DocumentsUI，已导入两份已授权 ZIP；临时中性来源均在私有暂存后删除。force-stop/cold-start 后只读回匿名 aggregate：ChatGPT 23 对话 / 719 未关联媒体；Claude 162 对话 / 0 未关联媒体；Claude 另有 120 项严格失败，与 Desktop 同源聚合一致。 | 已关闭（隔离 emulator 验收；不等同于 OPPO 导入） |
@@ -40,7 +40,7 @@
 | 既定聊天、抽屉、Composer 不回退 | Desktop UI 合同 82/82；含 P6-K 入口、Compare、精确 placeholder、抽屉/Composer 保护；Android 当前源码可完成定向合同与正式 release/lint | 自动 UI 合同 + 当前构建 | 仍须逐项以真实 Android 交互验收，不以构建替代可见行为 |
 | Compare 可见入口 | Android/Desktop 均有模型菜单、Composer `对比`、模型长按三入口；Android 为空草稿先返回，Desktop 直接显示无执行 owner 且不读 Key/发内容 | 代码/局部 emulator | 显式 Compare 是直接产品命令，不再有第二次产品确认面；Android 非空草稿的真实执行仍受用户内容、凭据与 HTTP 门禁，不在本轮执行 |
 | 普通聊天真实 Provider | 生产边界、确认合同、账本和失败关闭机制已实现 | 本地合同 | 需要已验证目录、可用凭据、当次可见确认和用户明确非敏感输入；真实 HTTP 未授权执行 |
-| P5 备份/迁移等真实 Android 链 | 本地合同和既有模拟器证据存在；运行时备份/隐私 owner 已改用当前 `BuildConfig.VERSION_NAME`，不再把新包元数据写成历史 `0.3.0-p5d` | 自动化/历史模拟器 + 当前定向合同 | 当前签名构建可产出；仍缺以当前隔离包完成的 SAF 成功导出、受控恢复和冷启动真实链，不能由旧包替代 |
+| P5 备份/迁移等真实 Android 链 | 本地合同和既有模拟器证据存在；运行时备份/隐私/Eval owner 已改用当前 `BuildConfig.VERSION_NAME`，不再把新包元数据写成历史 `0.3.0-p5d` / `0.3.0-p4m` | 自动化/历史模拟器 + 当前定向合同 | 当前签名构建可产出；仍缺以当前隔离包完成的 SAF 成功导出、受控恢复和冷启动真实链，不能由旧包替代 |
 | P7 同步、P9 生态、P10 联网路径 | 本地协议、禁用状态和 LOCAL_TEST_ONLY/配置表面已实现 | 本地合同 | 仍需要真实账号、目标服务/应用、外部授权及网络；不能借“总控”推定完成 |
 | OPPO 验收 | OPPO 当前保留数据安装的是 release v2 `0.3.0-p10a`、SHA-256 `fc8f9ac6…` 的较早正式包；当前源码 release 未覆盖安装 | 安装/版本/包哈希只读核对 | 安装链已存在，但本轮不覆盖安装；当前源码功能、折叠连续性与 OEM 交互仍待按单项真实验收 |
 

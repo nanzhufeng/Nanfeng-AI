@@ -287,7 +287,7 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         receipts = AndroidP7ERestoreReceiptStore(context.applicationContext),
         semanticSource = AndroidP7ESemanticSnapshotSourceAdapter(database),
     )
-    val runOfflineEval = RunOfflineEvalUseCase(offlineEvalRepository, clock, "0.3.0-p4m")
+    val runOfflineEval = RunOfflineEvalUseCase(offlineEvalRepository, clock, BuildConfig.VERSION_NAME)
     val exportOfflineEvalReport = ExportOfflineEvalReportUseCase(offlineEvalRepository, AndroidOfflineEvalReportStore(context))
     val manageProject = ManageProjectUseCase(ProjectDomain(clock), projectRepository)
     val manageMemory = ManageMemoryUseCase(MemoryDomain(clock), memoryRepository)
