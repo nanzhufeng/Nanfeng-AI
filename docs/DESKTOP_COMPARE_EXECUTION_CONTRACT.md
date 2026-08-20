@@ -21,12 +21,12 @@
 ## 后续阶段门
 
 - 阶段 2 才可增加 macOS `Security.framework` 直接 API 的 app-owned credential adapter；严禁 `security -w`、命令行参数携带秘密、枚举、重置、真实读取或 self-test。测试只用 in-memory fake，真实凭据输入只能由用户在最终 Settings UI 动作完成。
-- 阶段 3 才可实现 Settings → AI 模型服务的固定服务商/模型 preset 与仅存在性 readiness，且 Key 不得进入 SQLite、备份、同步、日志、前端状态或调用记录。
+- 阶段 3 已实现 Settings → AI 模型服务的固定逻辑 Compare preset（ChatGPT、Claude）与 `NOT_CHECKED` / `BLOCKED` safe projection。provider-facing model 与价格在目录核验前明确显示为未知并失败关闭；Key 不得进入 SQLite、备份、同步、日志、前端状态或调用记录。
 - 阶段 4 才可把既有显式 Compare 动作组合到一条 text-only、当次 direct-click command；unknown model/price 必须继续失败关闭。
 - 阶段 5 才可接入固定 endpoint transport、分支状态与内容安全的 receipt。真实 HTTP 仍须另有用户对非敏感文本、凭据和当次执行的授权。
 
 ## 验收
 
 - Node mock-only 单测覆盖默认关闭、空草稿/附件优先拒绝、未知模型/价格、未组合 transport 和 source 无 I/O/content/key surface。
-- Rust `desktop_compare_credentials_v1` 已把 Compare 的固定 app-owned service/account 封装为 Security.framework 直接 API；作用域内仅有 presence、用户提供 secret 的未来保存和 one-shot scoped read，secret 会在临时副本上清零。它没有 Tauri command、Settings 输入或生产组合。旧 P7 adapter 同步移除 `/usr/bin/security` 与真实 Keychain self-test，改用相同的直接 API。
+- Rust `desktop_compare_credentials_v1` 已把 Compare 的固定 app-owned service/account 封装为 Security.framework 直接 API；作用域内仅有 presence、用户提供 secret 的未来保存和 one-shot scoped read，secret 使用 `Zeroizing` 临时副本，并在回调异常展开时仍析构清零。它没有 Tauri command、Settings 输入或生产组合。旧 P7 adapter 同步移除 `/usr/bin/security` 与真实 Keychain self-test，改用相同的直接 API。
 - 本阶段不读取或写入 macOS Keychain，不读取/写入 SQLite，不更新备份/同步，不安装任何 app，不访问 OPPO，不发 HTTP。

@@ -2,7 +2,7 @@
 //! It uses macOS Security.framework directly when a future user-initiated Settings action needs
 //! it; this phase never invokes the implementation against a real Keychain.
 
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 pub const OPENROUTER_COMPARE_SERVICE: &str = "com.nanzhufeng.ai.desktop.compare.openrouter.v1";
 pub const OPENROUTER_COMPARE_ACCOUNT: &str = "api-key";
@@ -60,10 +60,10 @@ impl CompareCredentialStore for MacSecurityFrameworkCompareCredentialStore {
         &self,
         operation: impl FnOnce(&[u8]) -> Result<T, String>,
     ) -> Result<T, String> {
-        let mut secret = self.read_secret()?;
-        let result = operation(&secret);
-        secret.zeroize();
-        result
+        // Drop also runs during unwinding, so a future transport callback cannot
+        // bypass temporary-secret cleanup by panicking.
+        let secret = Zeroizing::new(self.read_secret()?);
+        operation(secret.as_slice())
     }
 }
 
@@ -117,10 +117,8 @@ mod tests {
             &self,
             operation: impl FnOnce(&[u8]) -> Result<T, String>,
         ) -> Result<T, String> {
-            let mut secret = self.0.borrow().clone().ok_or_else(rejected)?;
-            let result = operation(&secret);
-            secret.zeroize();
-            result
+            let secret = Zeroizing::new(self.0.borrow().clone().ok_or_else(rejected)?);
+            operation(secret.as_slice())
         }
     }
 

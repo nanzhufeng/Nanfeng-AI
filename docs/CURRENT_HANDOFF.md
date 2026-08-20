@@ -2,7 +2,7 @@
 
 ## 2026-08-20 总控推进：Desktop Compare 阶段 2 Security.framework 凭据边界（当前）
 
-- **结论：** 新增未注册的 `desktop_compare_credentials_v1`：固定 Compare 的 app-owned OpenRouter service/account，凭据仅可经未来用户发起的 Settings 动作保存或在 future transport 的同一短作用域读取；macOS 实现直接调用 `security-framework 3.5.1`，临时副本清零。它没有 Tauri command、前端 Key 状态、SQLite/备份/同步写入、HTTP 或实际 Keychain 调用。既有 P7 macOS store 也已移除 `/usr/bin/security` 和会写读删随机条目的 self-test，改为同一 Security.framework 直接 API。
+- **结论：** 新增未注册的 `desktop_compare_credentials_v1`：固定 Compare 的 app-owned OpenRouter service/account，凭据仅可经未来用户发起的 Settings 动作保存或在 future transport 的同一短作用域读取；macOS 实现直接调用 `security-framework 3.5.1`。Scoped read 的临时副本以 `Zeroizing` 析构清零，连 future transport 回调异常展开时也不例外。它没有 Tauri command、前端 Key 状态、SQLite/备份/同步写入、HTTP 或本轮实际 Keychain 调用。既有 P7 macOS store 也已移除 `/usr/bin/security` 和会写读删随机条目的 self-test，改为同一 Security.framework 直接 API。
 - **验证与边界：** Rust 全量库测试 71/71、`cargo clippy -- -D warnings` 通过，所有 Compare 凭据测试只使用 in-memory fake；静态检索确认 `src-tauri/src` 无 `/usr/bin/security`、`security -w` 或 `macos_keychain_self_test`。本轮没有读取、写入、枚举、删除或重置真实 Keychain，没有 HTTP、app 安装或 OPPO 操作。下一阶段前须 context gate；凭据输入只可在最终 Settings UI 由用户亲自完成。
 
 ## 2026-08-20 总控推进：Desktop Compare 阶段 1 唯一状态 owner（当前）
