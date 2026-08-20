@@ -1,0 +1,10 @@
+{
+  "appId": "com.nanzhufeng.ai",
+  "documentId": "p7e-semantic-golden",
+  "revision": 4,
+  "records": [
+    {"kind":"project","id":"project-p7e","revision":3,"classification":"NORMAL","content":{"format":"nfai.sync.semantic-record.v1","semanticVersion":1,"kind":"project","id":"project-p7e","revision":3,"value":{"archived":false,"description":"non-sensitive scope","title":"P7-E Project"}}},
+    {"kind":"knowledge","id":"knowledge-p7e","revision":2,"classification":"NORMAL","content":{"format":"nfai.sync.semantic-record.v1","semanticVersion":1,"kind":"knowledge","id":"knowledge-p7e","revision":2,"value":{"body":"non-sensitive semantic fixture","contentHash":"95f2c6a1e42f5f9e70450be8d2f42a73f58cf1f00be763d6ce2ab995c32e4990","status":"ACTIVE","title":"P7-E Knowledge"}}},
+    {"kind":"safe_settings","id":"safe-settings","revision":1,"classification":"NORMAL","content":{"format":"nfai.sync.semantic-record.v1","semanticVersion":1,"kind":"safe_settings","id":"safe-settings","revision":1,"value":{"theme":"SYSTEM","uiLanguage":"zh-CN"}}}
+  ]
+}

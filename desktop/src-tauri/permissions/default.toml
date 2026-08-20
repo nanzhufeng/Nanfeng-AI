@@ -1,0 +1,129 @@
+[[permission]]
+identifier = "allow-stage-preflight-selected-exchange"
+description = "Allows only a user-selected .nfai-exchange file to be bounded and copied into private app data staging."
+commands.allow = ["stage_preflight_selected_exchange"]
+
+[[permission]]
+identifier = "allow-import-staged-exchange-as-new-workspace"
+description = "Allows a preflighted private staging ID to become one new isolated Desktop workspace."
+commands.allow = ["import_staged_exchange_as_new_workspace"]
+
+[[permission]]
+identifier = "allow-list-desktop-workspaces"
+description = "Allows read-only workspace summaries from Rust-owned SQLite."
+commands.allow = ["list_desktop_workspaces"]
+
+[[permission]]
+identifier = "allow-read-desktop-workspace"
+description = "Allows one typed workspace ID to be projected from Rust-owned SQLite."
+commands.allow = ["read_desktop_workspace"]
+
+[[permission]]
+identifier = "allow-export-desktop-workspace-to-selected-path"
+description = "Allows a typed workspace ID to export only to a user-selected .nfai-exchange path."
+commands.allow = ["export_desktop_workspace_to_selected_path"]
+
+[[permission]]
+identifier = "allow-mutate-desktop-domain"
+description = "Allows only typed, revision-checked local P6-C domain intents through Rust SQLite."
+commands.allow = ["mutate_desktop_domain"]
+
+[[permission]]
+identifier = "allow-import-desktop-conversation-attachment"
+description = "Allows only user-mediated local attachment import; it grants no filesystem API, transport, or credential access."
+commands.allow = ["import_desktop_conversation_attachment"]
+
+[[permission]]
+identifier = "allow-desktop-temporary-conversation"
+description = "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, private attachment binding/removal, and irreversible clear. It grants no normal Conversation, workspace, search, export, cache, credential, or transport command."
+commands.allow = ["enter_or_restore_desktop_temporary_conversation", "read_desktop_temporary_conversation", "update_desktop_temporary_conversation", "append_desktop_temporary_message", "import_desktop_temporary_attachment", "clear_desktop_temporary_conversation", "remove_desktop_temporary_attachment"]
+
+[[permission]]
+identifier = "allow-desktop-domain-history"
+description = "Allows persistent local undo, redo and recycle-bin projections."
+commands.allow = ["undo_desktop_domain", "redo_desktop_domain", "read_desktop_workbench_history"]
+
+[[permission]]
+identifier = "allow-upsert-desktop-model-metadata"
+description = "Allows typed local-only safe provider/model metadata; no credentials or network catalog."
+commands.allow = ["upsert_desktop_model_metadata"]
+
+[[permission]]
+identifier = "allow-desktop-p6g-model-selection"
+description = "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual override, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access."
+commands.allow = ["read_desktop_p6g_catalog", "read_desktop_p6g_global_default", "upsert_desktop_p6g_catalog_candidate", "remove_desktop_p6g_catalog_candidate", "read_desktop_p6g_selection", "set_desktop_p6g_global_default", "set_desktop_p6g_conversation_override", "clear_desktop_p6g_conversation_override", "evaluate_desktop_p6g_auto_route"]
+
+[[permission]]
+identifier = "allow-inspect-p8-agent-runs"
+description = "Allows only read-only P8 ledger inspection metadata; it cannot plan, approve, execute, pause, resume, cancel, or invoke a tool."
+commands.allow = ["inspect_p8_agent_runs"]
+
+[[permission]]
+identifier = "allow-read-dual-path-status"
+description = "Allows read-only dual-path configuration status; it cannot read credentials, create a transport, or write sync state."
+commands.allow = ["read_dual_path_status"]
+
+[[permission]]
+identifier = "allow-p6e-temporary-maintenance-acceptance"
+description = "Allows only the no-argument P6-E acceptance status and fixed owner-maintenance fixture. Rust rejects both unless the explicit acceptance environment marker selected the isolated /tmp app-private root."
+commands.allow = ["read_p6e_temporary_maintenance_acceptance_status", "run_p6e_temporary_maintenance_acceptance"]
+
+[[permission]]
+identifier = "allow-p6h-chatgpt-export-import"
+description = "Allows only the P6-H ChatGPT conversations.json adapter task: user-selected private copy, inert bounded candidate projection, explicit per-item confirm/skip/cancel/retry, and task recovery. It grants no arbitrary filesystem read, path projection, credential, transport, Provider or model invocation access."
+commands.allow = ["stage_chatgpt_export_selected", "confirm_chatgpt_import_item", "skip_chatgpt_import_item", "read_chatgpt_import_task", "cancel_chatgpt_import_task", "retry_chatgpt_import_task", "read_latest_chatgpt_import_task", "read_p6h_diagnostics_status"]
+
+[[permission]]
+identifier = "allow-p6i-claude-export-import"
+description = "Allows only the P6-I Claude conversations.json adapter task: user-selected private copy, inert bounded candidate projection, explicit per-item confirm/skip/cancel/retry, and task recovery. It grants no arbitrary filesystem read, path projection, credential, transport, Provider or model invocation access."
+commands.allow = ["stage_claude_export_selected", "confirm_claude_import_item", "skip_claude_import_item", "read_claude_import_task", "cancel_claude_import_task", "retry_claude_import_task", "read_latest_claude_import_task"]
+
+[[permission]]
+identifier = "allow-p6j-nanfeng-knowledge-export-import"
+description = "Allows only the P6-J user-selected 南枫知识库完整 JSON adapter task: private copy, inert static chat candidate projection, explicit per-item confirm/skip/retry, and task recovery. It grants no arbitrary filesystem read, credential, transport, Provider, model or tool invocation access."
+commands.allow = ["stage_nanfeng_knowledge_export_selected", "confirm_nanfeng_knowledge_import_item", "skip_nanfeng_knowledge_import_item", "read_nanfeng_knowledge_import_task", "retry_nanfeng_knowledge_import_task", "read_latest_nanfeng_knowledge_import_task"]
+
+[[permission]]
+identifier = "allow-p6k-zip-import"
+description = "Allows only P6-K user-selected ChatGPT or Claude ZIP imports: private staging, bounded strict adapter, receipt-backed direct commit, recovery, and soft-delete. It grants no arbitrary filesystem read, credential, transport, Provider, model or tool invocation access."
+commands.allow = ["stage_p6k_zip_import_selected", "retry_p6k_zip_import_task", "skip_p6k_zip_import_failures", "delete_p6k_zip_import_batch", "read_latest_p6k_zip_import_task"]
+
+[[permission]]
+identifier = "allow-search-desktop-local-index"
+description = "Allows one normalized local query to read the Rust-owned safe search index and record only that normalized query in owner-local history. It grants no filesystem, transport, credential, export, or media access."
+commands.allow = ["search_desktop_local_index"]
+
+[[permission]]
+identifier = "allow-read-desktop-local-search-history"
+description = "Allows read-only projection of normalized owner-local search history."
+commands.allow = ["read_desktop_local_search_history"]
+
+[[permission]]
+identifier = "allow-clear-desktop-local-search-history"
+description = "Allows clearing only normalized owner-local search history; it cannot clear conversations, index rows, or workspace content."
+commands.allow = ["clear_desktop_local_search_history"]
+
+[[permission]]
+identifier = "allow-read-desktop-image-preview"
+description = "Allows a workspace-owned image attachment ID to produce verified local thumbnail or user-requested original display bytes; no path, URI or arbitrary file read is granted."
+commands.allow = ["read_desktop_image_preview"]
+
+[[permission]]
+identifier = "allow-read-desktop-pdf-preview"
+description = "Allows only a workspace-owned PDF attachment ID and 1-based page to produce an owner-verified inert local display payload; no path, URI, text extraction, script action, transport or arbitrary file read is granted."
+commands.allow = ["read_desktop_pdf_preview"]
+
+[[permission]]
+identifier = "allow-read-desktop-video-preview"
+description = "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce an owner-verified local video payload; no path, URI, transport, decoder control, or arbitrary file read is granted."
+commands.allow = ["read_desktop_video_preview"]
+
+[[permission]]
+identifier = "allow-read-desktop-audio-preview"
+description = "Allows only a workspace-owned verified audio attachment ID and local resume position; no path, URI, transport, or arbitrary file read is granted."
+commands.allow = ["read_desktop_audio_preview"]
+
+[[permission]]
+identifier = "allow-read-desktop-text-preview"
+description = "Allows only a workspace-owned verified text attachment ID to return bounded inert UTF-8 text; no path, URI, HTML, script, transport, or arbitrary file read is granted."
+commands.allow = ["read_desktop_text_preview"]

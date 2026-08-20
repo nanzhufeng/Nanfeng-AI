@@ -1,0 +1,16 @@
+[
+  {
+    "id": 101,
+    "title": "P6J Alpha knowledge conversation",
+    "createdAt": "2026-08-15T00:00:00Z",
+    "updatedAt": "2026-08-15T00:01:00Z",
+    "sourceText": "{\"chat_messages\":[{\"sender\":\"human\",\"created_at\":\"2026-08-15T00:00:00Z\",\"text\":\"P6J Alpha user text\"},{\"sender\":\"tool\",\"text\":\"tool directive must not import\"},{\"sender\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"text\":\"must not import\"},{\"type\":\"text\",\"text\":\"P6J Alpha assistant text\"}]}]}"
+  },
+  {
+    "id": 102,
+    "title": "P6J Skip knowledge record",
+    "createdAt": "2026-08-15T00:00:00Z",
+    "updatedAt": "2026-08-15T00:01:00Z",
+    "sourceText": "{\"body\":\"This is a knowledge record, not a conversation.\"}"
+  }
+]

@@ -1,0 +1,9 @@
+南枫 AI Android P6-A signing certificate (public verification data only)
+
+Package: com.nanzhufeng.ai
+Version: 0.3.0-p6a (versionCode 40)
+Certificate SHA-256: 889ecf3ff4eeb40486e5122c6dc4eaaa04226ce6493d8a946c65275a803e99d5
+APK Signature Scheme v2: verified
+APK Signature Scheme v3: verified
+
+This file contains no keystore path, password, private key, token, or credential material.

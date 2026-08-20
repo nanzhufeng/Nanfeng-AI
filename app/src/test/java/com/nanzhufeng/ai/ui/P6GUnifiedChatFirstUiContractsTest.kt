@@ -1,0 +1,88 @@
+package com.nanzhufeng.ai.ui
+
+import java.io.File
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class P6GUnifiedChatFirstUiContractsTest {
+    private val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+
+    @Test
+    fun `work projects the selected conversation rather than a module dashboard`() {
+        for (token in listOf("if (state.surface == com.nanzhufeng.ai.domain.ConversationSurface.WORK)", "ConversationWorkScope(", "state.messages", "MessageBubble(", "right alignment and responsive reading width", "sentFromMessageCount = workSentFromMessageCount", "workSentFromMessageCount = state.messages.size")) {
+            assertTrue("missing $token", workspace.contains(token))
+        }
+        val workScope = workspace.substring(workspace.indexOf("private fun ConversationWorkScope"), workspace.indexOf("private fun ConversationAttemptHistory"))
+        for (token in listOf("listState: LazyListState", "followLatest: Boolean", "showJumpToLatest", "contentDescription = \"到最新消息\"", "onSentToLatestConsumed()")) assertTrue("missing $token", workScope.contains(token))
+        assertFalse(workScope.contains("widthIn(max = 680.dp)"))
+        assertFalse(workScope.contains("work-project-context"))
+        assertFalse(workspace.contains("Text(\"项目\")\n                    Text(\"知识\")\n                    Text(\"记忆\")"))
+    }
+
+    @Test
+    fun `normal work and temporary conversations share the same right aligned user bubble geometry`() {
+        val sharedBubble = workspace.substring(workspace.indexOf("private fun RightAlignedUserBubble"), workspace.indexOf("private fun AssistantMessageActionRow"))
+        assertTrue(sharedBubble.contains(".widthIn(max = maxWidth * 0.82f)"))
+        assertTrue(sharedBubble.contains(".wrapContentWidth(Alignment.End)"))
+        assertTrue(workspace.contains("RightAlignedUserBubble(surfaceColor = roleVisual.surface"))
+        val temporaryPane = workspace.substring(workspace.indexOf("private fun TemporaryConversationPane"))
+        assertTrue(temporaryPane.contains("RightAlignedUserBubble {"))
+        assertFalse(temporaryPane.contains("widthIn(max = 680.dp)"))
+    }
+
+    @Test
+    fun `empty local catalog stays explicit until a local-only fixture is deliberately installed`() {
+        for (token in listOf("state.p6gCatalog?.candidates.orEmpty()", "null to \"自动\"", "onSelectP6GModel(modelId)")) {
+            assertTrue("missing $token", workspace.contains(token))
+        }
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val owner = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
+        assertTrue(owner.contains("installP6GLocalFixtureCatalog"))
+        assertTrue(owner.contains("P6GProviderFamily.LOCAL"))
+        assertFalse(app.contains("添加本地确定性 fixture（仅验收）"))
+        assertFalse(app.contains("P6GModelSelectionSettingsCard"))
+    }
+
+    @Test
+    fun `normal work and temporary panes never replace the shared composer with an engineering empty state`() {
+        for (token in listOf("TemporaryConversationPane(", "ConversationWorkScope(", "ConversationComposerDock(", "state.conversations.isEmpty() && !state.isLoading && !state.isCreating", "LaunchedEffect(state.conversations.isEmpty(), state.isCreating) { onCreate() }")) {
+            assertTrue("missing $token", workspace.contains(token))
+        }
+        assertFalse(workspace.contains("还没有本地对话。创建后可验证草稿、Markdown 和安全错误恢复。"))
+    }
+
+    @Test
+    fun `chat and work keep independent transcript positions across a surface switch`() {
+        for (token in listOf(
+            "val chatTranscriptListState = rememberLazyListState()",
+            "val workTranscriptListState = rememberLazyListState()",
+            "var chatFollowLatest by rememberSaveable",
+            "var workFollowLatest by rememberSaveable",
+            "listState = workTranscriptListState",
+            "followLatest = workFollowLatest",
+            "onFollowLatestChanged = { workFollowLatest = it }",
+            "val listState = chatTranscriptListState",
+            "collect { atLatest -> chatFollowLatest = atLatest }",
+        )) assertTrue("missing $token", workspace.contains(token))
+        val workScope = workspace.substring(workspace.indexOf("private fun ConversationWorkScope"), workspace.indexOf("private fun ConversationAttemptHistory"))
+        assertFalse(workScope.contains("rememberLazyListState()"))
+    }
+
+    @Test
+    fun `surface swap commits the matching transcript atomically without a local mode mirror`() {
+        assertTrue(workspace.contains("val workMode = state.surface == com.nanzhufeng.ai.domain.ConversationSurface.WORK"))
+        assertFalse(workspace.contains("var workMode by rememberSaveable"))
+        val owner = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
+        val reload = owner.substring(owner.indexOf("fun reload("), owner.indexOf("fun openImagePreview"))
+        val switch = owner.substring(owner.indexOf("fun selectSurface"), owner.indexOf("fun setListScope"))
+        for (token in listOf(
+            "targetSurface: ConversationSurface = state.surface",
+            "requestedSurfaceGeneration: Long? = null",
+            "if (reloadRequest != reloadGeneration",
+            "surface = surface,",
+            "reload(targetSurface = surface, selectedBefore = selectedBefore, requestedSurfaceGeneration = request)",
+        )) assertTrue("missing $token", "$reload\n$switch".contains(token))
+        assertFalse(switch.contains("state = state.copy(surface = surface"))
+    }
+}

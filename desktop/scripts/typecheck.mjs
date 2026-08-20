@@ -1,0 +1,10 @@
+import { readFile } from 'node:fs/promises'; import { resolve } from 'node:path';
+const root = resolve(import.meta.dirname, '..'); const [source, chatShell, p8Inspect, buildScript] = await Promise.all([readFile(resolve(root, 'src/app.mjs'), 'utf8'), readFile(resolve(root, 'src/chat-shell.mjs'), 'utf8'), readFile(resolve(root, 'src/p8-inspect.mjs'), 'utf8'), readFile(resolve(root, 'scripts/build.mjs'), 'utf8')]);
+for (const expected of ['stage_preflight_selected_exchange', 'import_staged_exchange_as_new_workspace', 'export_desktop_workspace_to_selected_path', 'window.__TAURI_INTERNALS__', 'plugin:dialog|', "event.key.toLowerCase() === 'o'"]) if (!source.includes(expected)) throw new Error(`desktop P6-B boundary missing ${expected}`);
+for (const expected of ['inspect_p8_agent_runs', 'show-p8-inspect']) if (!source.includes(expected)) throw new Error(`desktop P8-C inspect boundary missing ${expected}`);
+for (const expected of ["pane: 'chat'", 'renderChatFirstShell', 'saveLocalMessage', 'appendMessage']) if (!source.includes(expected)) throw new Error(`desktop chat-first boundary missing ${expected}`);
+for (const expected of ['今天想一起做什么？', '模型选择与自动路由', '本地可用', 'chat-composer']) if (!chatShell.includes(expected)) throw new Error(`desktop chat-first UI missing ${expected}`);
+for (const expected of ["from './icon-source.mjs'", "'icon-source.mjs'"]) if (!(chatShell.includes(expected) || buildScript.includes(expected))) throw new Error(`desktop static module packaging missing ${expected}`);
+if (chatShell.includes("from './icon-source.mjs'") && !buildScript.includes("'icon-source.mjs'")) throw new Error('desktop build must copy chat-shell static dependency icon-source.mjs');
+for (const expected of ['READ_ONLY · LOCAL_READ · NONE', '未连接模型与外部工具']) if (!p8Inspect.includes(expected)) throw new Error(`desktop P8-C inspect copy missing ${expected}`);
+console.log('P6-B static command and keyboard boundary check passed');

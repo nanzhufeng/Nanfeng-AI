@@ -1,0 +1,337 @@
+package com.nanzhufeng.ai.domain
+
+import java.net.URI
+import java.security.MessageDigest
+
+/**
+ * P3-D's in-memory-only projection boundary. It never accepts provider chunks and it never
+ * writes parsed content back into Conversation/Room. Text is untrusted presentation input.
+ */
+const val MESSAGE_PRESENTATION_PARSER_VERSION = 2
+
+data class PresentationBlockIdentity(
+    val messageId: MessageNodeId,
+    val contentBlockPosition: Int,
+    val parserVersion: Int = MESSAGE_PRESENTATION_PARSER_VERSION,
+)
+
+sealed interface InlinePresentation {
+    data class Text(val value: String) : InlinePresentation
+    data class Code(val value: String) : InlinePresentation
+    /** A strictly http(s) URL rendered as a real Compose link action. */
+    data class Link(val label: String, val url: String) : InlinePresentation
+}
+
+sealed interface PresentationBlock {
+    val identity: PresentationBlockIdentity
+    data class Paragraph(override val identity: PresentationBlockIdentity, val spans: List<InlinePresentation>) : PresentationBlock
+    data class Heading(override val identity: PresentationBlockIdentity, val level: Int, val spans: List<InlinePresentation>) : PresentationBlock
+    data class UnorderedList(override val identity: PresentationBlockIdentity, val items: List<List<InlinePresentation>>) : PresentationBlock
+    data class OrderedList(override val identity: PresentationBlockIdentity, val items: List<OrderedPresentationItem>) : PresentationBlock
+    data class Quote(override val identity: PresentationBlockIdentity, val spans: List<InlinePresentation>) : PresentationBlock
+    data class CodeFence(override val identity: PresentationBlockIdentity, val language: String?, val code: String) : PresentationBlock
+    /** A bounded Markdown pipe table; cells reuse the same safe inline projection as prose. */
+    data class Table(
+        override val identity: PresentationBlockIdentity,
+        val headers: List<List<InlinePresentation>>,
+        val rows: List<List<List<InlinePresentation>>>,
+    ) : PresentationBlock
+    /** Lossless fallback for malformed/unknown syntax, including incomplete fenced blocks. */
+    data class PlainText(override val identity: PresentationBlockIdentity, val raw: String) : PresentationBlock
+    data class AttachmentReference(
+        override val identity: PresentationBlockIdentity,
+        val attachment: ConversationAttachmentReference,
+    ) : PresentationBlock
+    data class SafeToolSummary(override val identity: PresentationBlockIdentity, val toolName: String, val summary: String) : PresentationBlock
+}
+
+data class OrderedPresentationItem(val ordinal: Int, val spans: List<InlinePresentation>)
+
+data class PresentedMessage(
+    val messageId: MessageNodeId,
+    val role: MessageRole,
+    val deliveryState: MessageDeliveryState,
+    val blocks: List<PresentationBlock>,
+)
+
+/** Small, testable contract consumed by Compose LazyColumn; no index is ever a message identity. */
+object ConversationListVirtualizationContract {
+    fun itemKey(message: PresentedMessage): String = message.messageId.value
+    fun contentType(message: PresentedMessage): String = message.role.name
+}
+
+/**
+ * Cache ownership deliberately ends at this object. The key includes block identity and parser
+ * version; a delta changes only its message's text fingerprint, leaving the rest untouched.
+ */
+class MessagePresentationRenderer(private val parserVersion: Int = MESSAGE_PRESENTATION_PARSER_VERSION) {
+    private data class Cached(val fingerprint: String, val blocks: List<PresentationBlock>)
+    private val cache = linkedMapOf<PresentationBlockIdentity, Cached>()
+
+    fun render(messages: List<MessageNode>): List<PresentedMessage> {
+        val active = linkedSetOf<PresentationBlockIdentity>()
+        val projected = messages.map { message ->
+            val blocks = message.content.flatMapIndexed { index, block ->
+                val identity = PresentationBlockIdentity(message.id, index, parserVersion)
+                active += identity
+                val fingerprint = block.fingerprint()
+                val cached = cache[identity]
+                if (cached?.fingerprint == fingerprint) cached.blocks else parse(identity, block).also { cache[identity] = Cached(fingerprint, it) }
+            }
+            PresentedMessage(message.id, message.role, message.deliveryState, blocks)
+        }
+        cache.keys.retainAll(active)
+        return projected
+    }
+
+    fun cachedBlockCount(): Int = cache.size
+
+    private fun parse(identity: PresentationBlockIdentity, block: ContentBlock): List<PresentationBlock> = when (block) {
+        is ContentBlock.Text -> SafeMarkdownParser.parse(identity, block.text)
+        is ContentBlock.Attachment -> listOf(PresentationBlock.AttachmentReference(identity, block.attachment))
+        is ContentBlock.ToolResult -> listOf(PresentationBlock.SafeToolSummary(identity, block.toolName, block.safeSummary))
+    }
+
+    private fun ContentBlock.fingerprint(): String {
+        val raw = when (this) {
+            is ContentBlock.Text -> "text|$schemaVersion|$text"
+            is ContentBlock.Attachment -> "attachment|$schemaVersion|${attachment.id.value}|${attachment.mimeType}|${attachment.displayName}|${attachment.byteCount}|${attachment.sha256}"
+            is ContentBlock.ToolResult -> "tool|$schemaVersion|$toolName|$safeSummary"
+        }
+        return MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).joinToString("") { "%02x".format(it) }
+    }
+}
+
+private object SafeMarkdownParser {
+    private val fence = Regex("^\\s*```([A-Za-z0-9_+.-]{0,32})\\s*$")
+    private val heading = Regex("^(#{1,6})\\s+(.+)$")
+    private val unordered = Regex("^\\s*[-*+]\\s+(.+)$")
+    private val ordered = Regex("^\\s*(\\d+)\\.\\s+(.+)$")
+    private val quote = Regex("^\\s*>\\s?(.*)$")
+    private val tableDivider = Regex("^\\s*\\|?\\s*:?-{3,}:?\\s*(?:\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$")
+    private val rawHttpUrl = Regex("https?://[^\\s<>()]+")
+
+    fun parse(identity: PresentationBlockIdentity, source: String): List<PresentationBlock> {
+        val lines = source.split("\n")
+        val result = mutableListOf<PresentationBlock>()
+        var index = 0
+        while (index < lines.size) {
+            val line = lines[index]
+            if (line.isBlank()) { index++; continue }
+            val fenceMatch = fence.matchEntire(line)
+            if (fenceMatch != null) {
+                val close = (index + 1 until lines.size).firstOrNull { fence.matchEntire(lines[it]) != null }
+                if (close == null) return listOf(PresentationBlock.PlainText(identity, source))
+                val language = fenceMatch.groupValues[1].ifBlank { null }
+                result += PresentationBlock.CodeFence(identity, language, lines.subList(index + 1, close).joinToString("\n"))
+                index = close + 1
+                continue
+            }
+            if (index + 1 < lines.size && tableDivider.matches(lines[index + 1])) {
+                val headers = tableCells(lines[index]) ?: return listOf(PresentationBlock.PlainText(identity, source))
+                val rows = mutableListOf<List<List<InlinePresentation>>>()
+                index += 2
+                while (index < lines.size) {
+                    val cells = tableCells(lines[index]) ?: break
+                    if (cells.size != headers.size) return listOf(PresentationBlock.PlainText(identity, source))
+                    rows += cells.map(::inline)
+                    index++
+                }
+                if (rows.isEmpty()) return listOf(PresentationBlock.PlainText(identity, source))
+                result += PresentationBlock.Table(identity, headers.map(::inline), rows)
+                continue
+            }
+            heading.matchEntire(line)?.let { match ->
+                result += PresentationBlock.Heading(identity, match.groupValues[1].length, inline(match.groupValues[2]))
+                index++
+                return@let
+            } ?: run {
+                val unorderedFirst = unordered.matchEntire(line)
+                val orderedFirst = ordered.matchEntire(line)
+                val quoteFirst = quote.matchEntire(line)
+                when {
+                    unorderedFirst != null -> {
+                        val items = mutableListOf<List<InlinePresentation>>()
+                        while (index < lines.size) {
+                            val item = unordered.matchEntire(lines[index]) ?: break
+                            items += inline(item.groupValues[1]); index++
+                        }
+                        result += PresentationBlock.UnorderedList(identity, items)
+                    }
+                    orderedFirst != null -> {
+                        val items = mutableListOf<OrderedPresentationItem>()
+                        while (index < lines.size) {
+                            val item = ordered.matchEntire(lines[index]) ?: break
+                            items += OrderedPresentationItem(item.groupValues[1].toInt(), inline(item.groupValues[2])); index++
+                        }
+                        result += PresentationBlock.OrderedList(identity, items)
+                    }
+                    quoteFirst != null -> {
+                        val quoted = mutableListOf<String>()
+                        while (index < lines.size) {
+                            val item = quote.matchEntire(lines[index]) ?: break
+                            quoted += item.groupValues[1]; index++
+                        }
+                        result += PresentationBlock.Quote(identity, inline(quoted.joinToString("\n")))
+                    }
+                    else -> {
+                        val paragraph = mutableListOf<String>()
+                        while (index < lines.size && lines[index].isNotBlank() &&
+                            fence.matchEntire(lines[index]) == null && heading.matchEntire(lines[index]) == null &&
+                            unordered.matchEntire(lines[index]) == null && ordered.matchEntire(lines[index]) == null && quote.matchEntire(lines[index]) == null
+                        ) { paragraph += lines[index]; index++ }
+                        result += PresentationBlock.Paragraph(identity, inline(paragraph.joinToString("\n")))
+                    }
+                }
+            }
+        }
+        return result.ifEmpty { listOf(PresentationBlock.PlainText(identity, source)) }
+    }
+
+    /** Recognizes only explicitly closed code/link forms; all other bytes stay visible as text. */
+    private fun inline(source: String): List<InlinePresentation> {
+        val result = mutableListOf<InlinePresentation>()
+        var cursor = 0
+        fun appendText(until: Int) { if (until > cursor) result += InlinePresentation.Text(source.substring(cursor, until)) }
+        while (cursor < source.length) {
+            val codeStart = source.indexOf('`', cursor)
+            val linkStart = source.indexOf('[', cursor)
+            val rawUrlMatch = rawHttpUrl.find(source, cursor)
+            val rawUrlStart = rawUrlMatch?.range?.first ?: -1
+            val start = listOf(codeStart, linkStart, rawUrlStart).filter { it >= 0 }.minOrNull() ?: break
+            if (start == codeStart) {
+                val end = source.indexOf('`', start + 1)
+                if (end > start + 1) {
+                    appendText(start); result += InlinePresentation.Code(source.substring(start + 1, end)); cursor = end + 1; continue
+                }
+            } else if (start == linkStart) {
+                val labelEnd = source.indexOf("](", start + 1)
+                val urlEnd = if (labelEnd >= 0) source.indexOf(')', labelEnd + 2) else -1
+                if (labelEnd > start + 1 && urlEnd > labelEnd + 2) {
+                    appendText(start)
+                    result += InlinePresentation.Link(source.substring(start + 1, labelEnd), source.substring(labelEnd + 2, urlEnd))
+                    cursor = urlEnd + 1
+                    continue
+                }
+            } else if (rawUrlMatch != null) {
+                val url = rawUrlMatch.value.trimEnd('.', ',', ';', '。', '，', '；')
+                if (url.isNotBlank()) {
+                    appendText(start)
+                    result += InlinePresentation.Link(linkLabel(url), url)
+                    rawUrlMatch.value.removePrefix(url).takeIf(String::isNotEmpty)?.let { result += InlinePresentation.Text(it) }
+                    cursor = start + rawUrlMatch.value.length
+                    continue
+                }
+            }
+            appendText(start + 1); cursor = start + 1
+        }
+        appendText(source.length)
+        return result.ifEmpty { listOf(InlinePresentation.Text(source)) }
+    }
+
+    private fun tableCells(line: String): List<String>? {
+        if (!line.contains('|')) return null
+        return line.trim().removePrefix("|").removeSuffix("|").split('|').map(String::trim).takeIf { it.size >= 2 }
+    }
+
+    private fun linkLabel(url: String): String = runCatching { URI(url).host?.removePrefix("www.") }.getOrNull() ?: url
+}
+
+const val CONVERSATION_DRAFT_MAX_LENGTH = 12_000
+
+object ConversationDraftPolicy {
+    fun normalize(text: String, attachments: List<ConversationAttachmentReference>, updatedAt: java.time.Instant): ConversationDraft {
+        val normalizedText = text.trim()
+        require(normalizedText.length <= CONVERSATION_DRAFT_MAX_LENGTH) { "草稿不能超过 $CONVERSATION_DRAFT_MAX_LENGTH 个字符。" }
+        val deduplicated = attachments.distinctBy { it.id }
+        require(deduplicated.size <= CONVERSATION_ATTACHMENT_MAX_COUNT) { "每个会话最多添加 $CONVERSATION_ATTACHMENT_MAX_COUNT 张图片。" }
+        require(deduplicated.sumOf { it.byteCount } <= CONVERSATION_ATTACHMENT_MAX_TOTAL_BYTES) { "会话图片总大小不能超过 40 MB。" }
+        return ConversationDraft(normalizedText, deduplicated, updatedAt)
+    }
+
+    fun isSendable(draft: ConversationDraft): Boolean = draft.text.isNotBlank() || draft.attachments.isNotEmpty()
+}
+
+sealed interface ConversationDraftResult {
+    data class Saved(val draft: ConversationDraft) : ConversationDraftResult
+    data class Rejected(val reason: String) : ConversationDraftResult
+}
+
+sealed interface ConversationDraftSubmissionResult {
+    data class Submitted(val snapshot: ConversationSnapshot) : ConversationDraftSubmissionResult
+    data class Rejected(val reason: String) : ConversationDraftSubmissionResult
+}
+
+class SaveConversationDraftUseCase(
+    private val repository: ConversationDraftRepository,
+    private val clock: java.time.Clock,
+) {
+    fun execute(conversationId: ConversationId, text: String, attachments: List<ConversationAttachmentReference>): ConversationDraftResult = runCatching {
+        ConversationDraftResult.Saved(repository.saveDraft(conversationId, ConversationDraftPolicy.normalize(text, attachments, clock.instant())))
+    }.getOrElse { ConversationDraftResult.Rejected(it.message ?: "草稿未保存，本地内容保持不变。") }
+}
+
+class SubmitConversationDraftUseCase(
+    private val conversations: ConversationRepository,
+    private val drafts: ConversationDraftRepository,
+    private val tree: ConversationTreeService,
+) {
+    fun execute(conversationId: ConversationId): ConversationDraftSubmissionResult {
+        val snapshot = conversations.findById(conversationId) ?: return ConversationDraftSubmissionResult.Rejected("会话未能从本机回读。")
+        val draft = drafts.loadDraft(conversationId) ?: return ConversationDraftSubmissionResult.Rejected("草稿未能从本机回读。")
+        if (!ConversationDraftPolicy.isSendable(draft)) return ConversationDraftSubmissionResult.Rejected("请输入文字或保留附件后再发送。")
+        val content = buildList {
+            if (draft.text.isNotBlank()) add(ContentBlock.Text(draft.text))
+            draft.attachments.forEach { add(ContentBlock.Attachment(it)) }
+        }
+        val appended = tree.append(snapshot, AppendMessageRequest(MessageRole.USER, content))
+        val titled = ConversationAutoTitle.titleForFirstMessage(snapshot, draft)?.let { title ->
+            appended.copy(conversation = appended.conversation.copy(
+                title = title,
+                autoTitlePending = false,
+                revision = appended.conversation.revision + 1,
+            ))
+        } ?: appended
+        val cleared = tree.saveDraft(titled, "", emptyList())
+        return drafts.submitDraft(cleared, draft)
+    }
+}
+
+data class ConversationRecoveryPresentation(
+    val title: String,
+    val detail: String,
+    val canContinue: Boolean,
+    val canRetry: Boolean,
+)
+
+object ConversationRecoveryPresenter {
+    fun present(state: ConversationRuntimeState?, message: MessageNode?): ConversationRecoveryPresentation? {
+        if (state == null || !state.isTerminal || message == null) return null
+        val hasPartial = message.content.filterIsInstance<ContentBlock.Text>().any { it.text.isNotBlank() }
+        return when (state.status) {
+            ConversationRuntimeStatus.CANCELLED -> ConversationRecoveryPresentation("已停止本地生成", if (hasPartial) "已保留部分内容；可继续或重试。" else "没有可继续的输出；可重新发送。", hasPartial, false)
+            ConversationRuntimeStatus.FAILED -> when (state.safeErrorCode) {
+                "AUTH", "AUTH_FAILED", "BALANCE", "INSUFFICIENT_BALANCE" -> ConversationRecoveryPresentation("本地状态显示不可自动重试的服务问题", "鉴权或余额问题不能盲目重试；本地 fixture 未读取凭据。", false, false)
+                else -> ConversationRecoveryPresentation("本地生成未完成", if (hasPartial) "已保留部分内容；可继续或新建本地回答版本。" else "没有部分输出；请重新发送，不显示继续。", hasPartial, true)
+            }
+            ConversationRuntimeStatus.COMPLETED -> ConversationRecoveryPresentation("本地回答已完成", "可新建保留原回答的本地回答版本。", false, true)
+            ConversationRuntimeStatus.STREAMING -> null
+        }
+    }
+}
+
+/** A deterministic, auditable fixture for list identity and virtualization contract tests. */
+object DeterministicLongConversationFixture {
+    const val MESSAGE_COUNT = 240
+    fun messages(conversationId: ConversationId): List<MessageNode> = (0 until MESSAGE_COUNT).map { index ->
+        val id = MessageNodeId("p3d-fixture-message-${index.toString().padStart(3, '0')}")
+        MessageNode(
+            id = id, conversationId = conversationId,
+            parentMessageId = if (index == 0) null else MessageNodeId("p3d-fixture-message-${(index - 1).toString().padStart(3, '0')}"),
+            siblingPosition = 0,
+            role = if (index % 2 == 0) MessageRole.USER else MessageRole.ASSISTANT,
+            content = listOf(ContentBlock.Text("fixture-$index: 可审计的本地长会话内容。")),
+            createdAt = java.time.Instant.EPOCH.plusSeconds(index.toLong()),
+        )
+    }
+}

@@ -1,0 +1,47 @@
+# 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
+
+## 结论
+
+总控方案不能标记为“完整落地”。当前源码中的 P6-K Android 真实导入闭环被既有正式签名链的非交互口令读取阻断；Desktop 最终 bundle 的正常窗口则在已可操作的 macOS GUI 环境中显示纯白内容区，无法进入 Settings/readback；其余尚未闭环的项目分别依赖用户在正常 UI 中作出的精确选择、真实 Provider/账号/目标生态条件或明确禁止操作的 OPPO。没有以旧 APK、数据库注入、卸载、清数据、Key 或 HTTP 绕过任一门禁。
+
+本轮已完成的无外部条件复验：Desktop P6-K 定向测试 7/7、Desktop 全量 Rust 库测试 68/68（唯一会触达 macOS Keychain 的既有自测主动过滤）、Desktop UI 合同 80/80、lint、typecheck 与静态 build 均通过。
+
+## 事实源与审计方法
+
+- 当前事实以 `docs/CURRENT_HANDOFF.md` 顶部的 P6-K/K9 记录为准；`MASTER_DEVELOPMENT_BLUEPRINT.md` 的历史“下一唯一入口”不再可作为当前排程事实。
+- P6-K 的产品边界和完成门槛以 `P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md` 为准。
+- 本轮只复验本地、无网络、无凭据读取的 Desktop 代码与合同；Android Gradle 在配置阶段即被正式签名门禁停止，未产生 APK。
+
+## 需求—证据矩阵
+
+| 需求 | 当前证据 | 验证等级 | 结论 / 缺口 |
+| --- | --- | --- | --- |
+| ChatGPT / Claude ZIP 选择即直接导入 | Desktop 已按正常系统 picker 完成真实 ZIP 私有导入、退出重开与安全聚合/receipt 回读；本轮 P6-K Rust 7/7 | Desktop 真实文件链；Android 代码/合同 | Android 仍缺最新正式签名 APK 的正常 picker、重启和可见回读 |
+| Conversation + Message Tree 复用既有 owner | 双端均无第二消息真值；Desktop 真包已写既有文本树并重开；P6-K 合同覆盖原子提交/幂等/撤销 | Desktop 真实；Android 合成/静态 | Android 设备级读回被签名门禁阻断 |
+| 未关联媒体安全处理 | 实包没有可证明 message-to-asset relation；保持 `UNMAPPED_REJECTED`；人工精确关联有双端合成 owner-to-renderer 合同 | 实包只读安全审计 + 合成验证 | 真实媒体只能由用户在 Settings 明确选择资产与目标消息后验证；不得推测关联 |
+| profile / personalization | 白名单 owner 已实现；两份实包均为无可采纳字段的安全结果 | 实包安全聚合 + 双端合成 owner 合同 | 无可写的真实字段，因此不应人为重试或制造写入 |
+| P6-K Settings 隐私与撤销恢复 | Android 不显示所选 ZIP 名；撤销失败保留 recovery task/archive；Desktop UI 合同通过 | 源码/自动合同 | Android 可见回读待签名 APK；Desktop 最终 bundle 当前白屏，正常 Settings readback 已重新打开 |
+| 既定聊天、抽屉、Composer 不回退 | Desktop UI 合同 80/80；含 P6-K 入口、Compare、精确 placeholder、抽屉/Composer 保护 | 自动 UI 合同 | Android 最新包不可生成，故不等同于 Android 可见验收 |
+| Compare 可见入口 | Android/ Desktop 源码与定向合同存在；Android 历史 emulator 仅验证关闭态与空草稿 fail-closed | 代码/局部 emulator | 非空草稿的确认面仍需正常 UI；真实执行另受凭据/HTTP 门禁，不在本轮执行 |
+| 普通聊天真实 Provider | 生产边界、确认合同、账本和失败关闭机制已实现 | 本地合同 | 需要已验证目录、可用凭据、当次可见确认和用户明确非敏感输入；真实 HTTP 未授权执行 |
+| P5 备份/迁移等真实 Android 链 | 本地合同和既有模拟器证据存在 | 自动化/历史模拟器 | 最新签名构建不可产出，且真实文件/迁移链不能由旧包替代 |
+| P7 同步、P9 生态、P10 联网路径 | 本地协议、禁用状态和 LOCAL_TEST_ONLY/配置表面已实现 | 本地合同 | 仍需要真实账号、目标服务/应用、外部授权及网络；不能借“总控”推定完成 |
+| OPPO 验收 | 无 | 未执行 | 明确不在本轮授权范围，保持未触碰 |
+
+## 本轮正式签名失败记录
+
+受控命令为 `:app:assembleDebug`，只使用项目既有正式签名配置与 Android Studio JBR；Gradle 在项目配置阶段停止，提示必须恢复仓库外 keystore 与 macOS 钥匙串口令，或配置既有签名环境。没有读取、打印、导出、创建、替换或输入任何秘密；没有 APK、安装、picker、数据库写入、HTTP 或 OPPO 操作。
+
+## 可继续的安全序列
+
+1. 恢复既有签名记录的非交互可用性后，重新生成 APK；对 `emulator-5554` 仅 `install -r` 覆盖，核对本地 APK、安装 `base.apk`、前台 activity 与 UIAutomator package 三方一致。
+2. 仅经 Android Settings 正常系统 picker 依次选择两份已授权 ZIP；使用中性临时名，私有暂存后删除临时源，并且不记录正文、外部 ID、附件名或账户资料。
+3. force-stop/cold-start 后仅回读 task/receipt/conversation/message/media/profile 的安全聚合；真实媒体不做人工精确关联，除非用户在 UI 中选择具体匿名资产和目标消息。
+4. 在不触及任何导入数据的前提下，先诊断并恢复 Desktop 最终 bundle 的白屏/WebView 启动可见性；恢复后才从正常 Settings 路径重做无正文 aggregate readback。真实 Provider、账号/同步、生态目标和 OPPO 仍分别保持独立验收债务。
+
+## 不可关闭项
+
+- 正式 Android APK、模拟器真实 ZIP 导入和冷启动读回。
+- Desktop 最终 bundle 白屏后的正常 Settings 无正文可见回读。
+- 用户在 UI 中进行的实包媒体精确关联（当前没有自动关联依据）。
+- 真实 Provider/HTTP、真实账号/同步、真实生态目标和 OPPO。

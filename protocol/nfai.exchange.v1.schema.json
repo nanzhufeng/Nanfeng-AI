@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nanzhufeng.com/schemas/nfai.exchange.v1.json",
+  "title": "Nanfeng AI semantic exchange v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "export", "projects", "conversations", "knowledge", "memory", "relations", "settings"],
+  "properties": {
+    "format": { "const": "nfai.exchange" },
+    "version": { "const": 1 },
+    "export": { "$ref": "#/$defs/export" },
+    "projects": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/project" } },
+    "conversations": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/conversation" } },
+    "knowledge": { "type": "array", "maxItems": 50000, "items": { "$ref": "#/$defs/knowledge" } },
+    "memory": { "type": "array", "maxItems": 50000, "items": { "$ref": "#/$defs/memory" } },
+    "relations": { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/relation" } },
+    "settings": { "$ref": "#/$defs/settings" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,63}$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "instant": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$" },
+    "classification": { "type": "string", "enum": ["NORMAL", "HIGH_SENSITIVE"] },
+    "revision": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+    "export": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "createdAt", "origin", "semanticHash", "sensitivity"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "createdAt": { "$ref": "#/$defs/instant" },
+        "origin": { "type": "object", "additionalProperties": false, "required": ["platform", "appVersion"], "properties": { "platform": { "enum": ["ANDROID", "DESKTOP"] }, "appVersion": { "type": "string", "maxLength": 80 } } },
+        "semanticHash": { "$ref": "#/$defs/sha256" }, "sensitivity": { "$ref": "#/$defs/classification" }
+      }
+    },
+    "project": {
+      "type": "object", "additionalProperties": false, "required": ["id", "title", "description", "pinned", "archived", "revision", "createdAt", "updatedAt"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "title": { "type": "string", "maxLength": 120 }, "description": { "type": "string", "maxLength": 2000 }, "pinned": { "type": "boolean" }, "archived": { "type": "boolean" }, "revision": { "$ref": "#/$defs/revision" }, "createdAt": { "$ref": "#/$defs/instant" }, "updatedAt": { "$ref": "#/$defs/instant" } }
+    },
+    "conversation": {
+      "type": "object", "additionalProperties": false, "required": ["id", "projectId", "title", "currentLeafId", "pinned", "archived", "revision", "createdAt", "updatedAt", "messages"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "projectId": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "title": { "type": "string", "maxLength": 120 }, "currentLeafId": { "$ref": "#/$defs/id" }, "pinned": { "type": "boolean" }, "archived": { "type": "boolean" }, "revision": { "$ref": "#/$defs/revision" }, "createdAt": { "$ref": "#/$defs/instant" }, "updatedAt": { "$ref": "#/$defs/instant" }, "messages": { "type": "array", "maxItems": 200000, "items": { "$ref": "#/$defs/message" } }
+      }
+    },
+    "message": {
+      "type": "object", "additionalProperties": false, "required": ["id", "parentId", "ordinal", "role", "delivery", "revision", "createdAt", "blocks"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "parentId": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "ordinal": { "type": "integer", "minimum": 0 }, "role": { "enum": ["system", "user", "assistant", "tool"] }, "delivery": { "enum": ["COMPLETE", "PARTIAL", "FAILED", "CANCELLED"] }, "revision": { "$ref": "#/$defs/revision" }, "createdAt": { "$ref": "#/$defs/instant" }, "blocks": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/block" } } }
+    },
+    "block": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "ordinal"],
+      "properties": { "kind": { "enum": ["TEXT", "MARKDOWN", "CODE", "ASSET_REF"] }, "ordinal": { "type": "integer", "minimum": 0 }, "text": { "type": "string", "maxLength": 2000000 }, "asset": { "$ref": "#/$defs/asset" } },
+      "allOf": [{ "if": { "properties": { "kind": { "const": "ASSET_REF" } } }, "then": { "required": ["asset"] }, "else": { "required": ["text"] } }]
+    },
+    "asset": { "type": "object", "additionalProperties": false, "required": ["id", "entry", "mimeType", "displayName", "byteCount", "sha256", "classification"], "properties": { "id": { "$ref": "#/$defs/id" }, "entry": { "type": "string", "pattern": "^assets/[a-f0-9]{64}$" }, "mimeType": { "type": "string", "maxLength": 120 }, "displayName": { "type": "string", "maxLength": 255 }, "byteCount": { "type": "integer", "minimum": 0, "maximum": 52428800 }, "sha256": { "$ref": "#/$defs/sha256" }, "classification": { "$ref": "#/$defs/classification" } } },
+    "knowledge": { "type": "object", "additionalProperties": false, "required": ["id", "title", "body", "tags", "scope", "projectId", "status", "revision", "contentHash", "createdAt", "updatedAt", "classification"], "properties": { "id": { "$ref": "#/$defs/id" }, "title": { "type": "string", "maxLength": 120 }, "body": { "type": "string", "maxLength": 2000000 }, "tags": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 100 } }, "scope": { "enum": ["GLOBAL", "PROJECT"] }, "projectId": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "status": { "enum": ["ACTIVE", "ARCHIVED", "DELETED"] }, "revision": { "$ref": "#/$defs/revision" }, "contentHash": { "$ref": "#/$defs/sha256" }, "createdAt": { "$ref": "#/$defs/instant" }, "updatedAt": { "$ref": "#/$defs/instant" }, "classification": { "$ref": "#/$defs/classification" } } },
+    "memory": { "type": "object", "additionalProperties": false, "required": ["id", "body", "scope", "scopeId", "status", "revision", "contentHash", "createdAt", "updatedAt", "classification"], "properties": { "id": { "$ref": "#/$defs/id" }, "body": { "type": "string", "maxLength": 2000000 }, "scope": { "enum": ["GLOBAL", "PROJECT", "CONVERSATION"] }, "scopeId": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "status": { "enum": ["ACTIVE", "PAUSED", "DELETED"] }, "revision": { "$ref": "#/$defs/revision" }, "contentHash": { "$ref": "#/$defs/sha256" }, "createdAt": { "$ref": "#/$defs/instant" }, "updatedAt": { "$ref": "#/$defs/instant" }, "classification": { "$ref": "#/$defs/classification" } } },
+    "relation": { "type": "object", "additionalProperties": false, "required": ["id", "fromId", "toId", "kind", "status", "revision", "createdAt"], "properties": { "id": { "$ref": "#/$defs/id" }, "fromId": { "$ref": "#/$defs/id" }, "toId": { "$ref": "#/$defs/id" }, "kind": { "enum": ["RELATED", "DERIVED_FROM", "REFERENCES"] }, "status": { "enum": ["ACTIVE", "REVOKED"] }, "revision": { "$ref": "#/$defs/revision" }, "createdAt": { "$ref": "#/$defs/instant" } } },
+    "settings": { "type": "object", "additionalProperties": false, "required": ["uiLanguage", "theme"], "properties": { "uiLanguage": { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$" }, "theme": { "enum": ["SYSTEM", "LIGHT", "DARK"] } } }
+  }
+}

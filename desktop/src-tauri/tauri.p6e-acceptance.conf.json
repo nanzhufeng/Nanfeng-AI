@@ -1,0 +1,17 @@
+{
+  "productName": "南枫 AI P6-E 独立验收",
+  "version": "0.6.0-p6e-acceptance.2",
+  "identifier": "com.nanzhufeng.p6eacceptance",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "南枫 AI Desktop · P6-E 验收",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 780,
+        "minHeight": 560
+      }
+    ]
+  }
+}

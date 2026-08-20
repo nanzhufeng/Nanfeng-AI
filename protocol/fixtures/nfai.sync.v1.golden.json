@@ -1,0 +1,34 @@
+{
+  "recoveryCode": "fixture recovery code only",
+  "material": {
+    "dataKey": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "salt": "AAECAwQFBgcICQoLDA0ODw",
+    "wrappingNonce": "ICEiIyQlJicoKSor",
+    "payloadNonce": "MDEyMzQ1Njc4OTo7"
+  },
+  "payload": {
+    "format": "nfai.sync.payload",
+    "protocolVersion": 1,
+    "schemaVersion": 1,
+    "appId": "com.nanzhufeng.ai",
+    "documentId": "sync-fixture-v1",
+    "revision": 7,
+    "records": [
+      { "kind": "project", "id": "project-p7a-01", "revision": 1, "classification": "NORMAL", "content": { "title": "P7-A fixture", "archived": false } },
+      { "kind": "knowledge", "id": "knowledge-p7a-01", "revision": 2, "classification": "NORMAL", "content": { "title": "Encrypted only", "body": "Non-sensitive cross-platform fixture" } }
+    ]
+  },
+  "envelope": {
+    "format": "nfai.sync.envelope",
+    "protocolVersion": 1,
+    "schemaVersion": 1,
+    "appId": "com.nanzhufeng.ai",
+    "documentId": "sync-fixture-v1",
+    "revision": 7,
+    "payloadHash": "d10aa4552c67f3bb84f55d25040309f19fb946ef49c5b56139164e7a3a2fc316",
+    "payloadByteCount": 451,
+    "kdf": { "algorithm": "PBKDF2-HMAC-SHA256", "version": 1, "iterations": 210000, "salt": "AAECAwQFBgcICQoLDA0ODw" },
+    "wrappedDataKey": { "algorithm": "AES-256-GCM", "nonce": "ICEiIyQlJicoKSor", "ciphertext": "VtQyuL-sG-o2dyB6KL548qMXgFqoJMiVBnLPZ9I_qr1543gQsWAI1HFy7mEtweKN" },
+    "payload": { "algorithm": "AES-256-GCM", "nonce": "MDEyMzQ1Njc4OTo7", "ciphertext": "yBdQsJkmLiEQEe2Df7dQCfJdJyKlWypiCd84bsSRGlEgFWEBQrTSw4weMDoDqLAAyCUlPV7DoArbcUN4Yi4-hj0Hyq2ui1lZkXK3JR8BH-5MuElv7KR2_SnES8AMJHCLpNsAfCILbmIwiyFhKNWbdFwLPD0jZFmzSXLf2j4gBIWVO7501ypJYZaEaTe4jph6FjrBeBQxo6SK9jIkzJKVem6sIDbBKsAHny52XoPjKPW1g4yzsl0asQMZyFY5edeQ9VzFQT904QdFX0DH7yaJfGV9QuBTIPd8JPNQh2DNuco2ABmndOZj29RiJE7CIp_FrAdt5bzLYFq-pPIZKznSSu_z2xVTvJ5GLJC2DsiI3vZlWXgTAoX97v_5iLsB7vEnDqtV8EEGAULhtVjCWxSFObLqYBj9VFOFwMfkZmyWi7g6uTW5L37TQ5KA9duq6aIzlzTu0zWl2TbTcC1IY4Pkqx-4qGsUHyy8TokJkwk_iAeyXvRRk5NS33qUomFf_adI_gnUV6u9IR_3AgNEIY1RWVtgozvxd0miX_SAjzQMKqFKvwW2WHiLwVHUAtCwhjjulbcP7BzBF1cPGQ_0xw-pSvzUu8zrCaRIwOp20dL3HU1a1fM" }
+  }
+}
