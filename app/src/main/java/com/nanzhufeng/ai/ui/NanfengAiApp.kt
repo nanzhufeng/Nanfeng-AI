@@ -844,6 +844,13 @@ private fun FeatureReviewSettingsCard() {
             Spacer(Modifier.height(6.dp))
             Text("建议：仅在存在未关联媒体时提供二级操作；不在聊天主界面常驻功能按钮。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
+        WhiteCard {
+            Text("Desktop Compare 联网执行", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("当前：待您判断是否保留；需先完成服务商、模型、费用与凭据安全方案。入口：既有对话 Composer 的“对比”操作。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("建议：复用现有“对比”操作，不新增 Composer 常驻按钮；配置与状态只放在设置 → AI 模型服务。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 

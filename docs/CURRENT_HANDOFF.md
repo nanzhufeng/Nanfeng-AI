@@ -6,6 +6,11 @@
 - **验证：** `AppContainerRuntimeVersionContractsTest`、`P5DLocalBackupRestoreContractsTest`、`P4IOfflineEvalContractsTest` 与 Settings 定向合同通过；全量 `:app:testDebugUnitTest` 为 0 failures，`:app:lintDebug` 为 `0 errors`；`:app:assembleRelease` 通过，正式 APK SHA-256 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`，v2/v3 验签通过，证书 SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
 - **边界：** 该修正不导出、恢复、覆盖或读取任何用户数据；OPPO 仍保留安装的较早 v2 `fc8f9ac6…` 包，本轮不安装。当前 P5 的真实 SAF 成功导出、受控恢复与冷启动验收仍须在隔离数据环境按正常 UI 链完成。
 
+## 2026-08-20 总控推进：Desktop Compare 外部执行取舍已进入设置审阅（当前）
+
+- **结论：** Desktop Compare 的真实联网执行不是当前无 owner 文案能够替代的微调：它需要服务商、模型、费用、凭据安全存储、固定 endpoint transport、调用账本与分支持久化的完整方案。因此已同步登记到 Android/Desktop 的“设置 → 功能审阅”，状态为待用户判断保留，不新增 Composer 常驻按钮，建议只复用现有“对比”操作并把配置/状态放在“设置 → AI 模型服务”。
+- **验证与边界：** Desktop 82/82 UI 合同与 Android `P6DConversationRowAccessibilityContractsTest` 通过；未新增 HTTP、Keychain 读取、凭据输入、模型调用、账本写入或设备安装。当前 Desktop Compare 仍如实 fail-closed，不能把审阅登记说成执行 adapter 已完成。
+
 ## 2026-08-20 总控推进：Compare 直接执行合同与矩阵校正（当前）
 
 - **结论：** 当前 Android 与 Desktop Compare 已是三入口（模型菜单行、Composer `对比`、模型长按）的显式直接产品命令；不再存在第二次产品确认面。Android 空草稿在触及 `CompareVisibleExecutionOwner` 前返回；Desktop 没有 Compare execution adapter，三个入口均如实显示不可执行，且 handler 不创建 Dialog、不调用 Tauri command、不读 Key、不发送内容。普通本地发送与模型点按保持原语义。
@@ -27,7 +32,7 @@
 
 - **决策与边界：** 用户明确停止 legacy keystore 的恢复、猜测与 macOS Keychain 操作。历史 `nanfeng-ai-release.jks`、legacy APK 与其证据保留且不覆盖；当前南枫 AI release 构建改用独立 `nanfeng-ai-release-v2.jks` / `nanfeng-ai-release-v2` alias，不影响其他项目或全局 debug 签名。
 - **实现：** `app/build.gradle.kts` 只从完整的项目专属环境变量 `NANFENG_AI_RELEASE_V2_*` 读取，或从用户级 `~/.gradle/gradle.properties` 的 `nanfengAi.releaseV2.*` 读取；部分配置或两层均缺失时立即中文失败。已移除 macOS Keychain 的读取与重试路径。`scripts/initialize_nanfeng_ai_release_v2_keystore.sh` 以交互式 `keytool` 创建 4096-bit RSA、SHA256withRSA、18,263 天的 JKS，拒绝覆盖既有 v2 文件，不读/写/打印密码。
-- **当前验证：** `nanfeng-ai-release-v2.jks` 已由用户在本机交互式 `keytool` 成功创建（3,878 bytes）；两份本机脚本 `bash -n` 通过，用户级 release v2 四项配置齐全。完成审计的 `--no-daemon :app:assembleRelease` 已生成当前 `南枫AI.apk`（SHA-256 `fc8f9ac604c57492cabb4b8bc74fe4284623d3a5385b50ad782f798b75252546`）；`apksigner` 验证 v2/v3 均通过，signer SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，公开证书有效期至 2076-08-20。2026-08-20 已在 OPPO PKH120（Android 16）首次安装，随后以同一 v2 证书保留数据更新为当前产物：安装前旧同包名应用已不在包管理器中，本轮未执行卸载或清数据；`pm install -r --user 0` 成功，`dumpsys`、UIAutomator XML 归属和从设备拉回的 `base.apk` SHA-256 均与当前 release v2 一致。legacy APK 已保留为本机历史归档；不得以 legacy APK、Keychain 或 debug 签名替代。
+- **当前验证：** `nanfeng-ai-release-v2.jks` 已由用户在本机交互式 `keytool` 成功创建（3,878 bytes）；两份本机脚本 `bash -n` 通过，用户级 release v2 四项配置齐全。较早 release-v2 APK `fc8f9ac604c57492cabb4b8bc74fe4284623d3a5385b50ad782f798b75252546` 已完成 v2/v3 验签（signer SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，公开证书有效期至 2076-08-20）。OPPO PKH120 当前只读保留该较早 v2 包；本次当前源码 APK 是 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`，未安装到 OPPO。不得以旧包、Keychain 或 debug 签名替代当前源码验证；更不得为复验覆盖、卸载或清除 OPPO 数据。
 - **外部绑定审计：** 工程仅发现未启用的 Google web client 配置入口；未发现 Firebase Auth / Firebase 配置、Android Google Sign-In 实现、`assetlinks.json` / `autoVerify` App Links、Play Integrity SDK 或自定义签名权限。release v2 证书生成后，仍须在真实 Google OAuth / 云端配置和发布渠道逐项复核 SHA-1 / SHA-256 白名单，不能以源码检索代替外部系统验收。
 
 ## 2026-08-20 Desktop 最终 bundle 白屏修复与 Settings 匿名回读
