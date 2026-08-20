@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：Desktop Compare 阶段 4 直接点击命令门（当前）
+
+- **结论：** 三个既有 Compare 入口现在统一传入当前点击时点；仅在凭据、固定模型、价格和 composition readiness 全部满足后，owner 才会签发一个 30 秒的 content-free direct-click command。它只包含固定 provider、ChatGPT/Claude logical pair 与时效；无点击、未来/过期点击、空草稿、附件、未知模型/价格均失败关闭。当前没有 command consumer 或 transport，所以 default Desktop UI 仍只显示未执行状态。
+- **验证与边界：** Desktop Node 定向 67/67 与 lint 通过；未增加 Composer 常驻按钮、Dialog、Tauri invoke、Keychain、HTTP、SQLite/receipt 或 branch 写入。下一阶段前须 context gate；真实 HTTP 仍未授权。
+
 ## 2026-08-20 总控推进：Desktop Compare 阶段 3 AI 模型服务安全投影（当前）
 
 - **结论：** Desktop Settings 新增唯一的“AI 模型服务”二级页，且只在此页呈现 Compare 的固定逻辑 preset（ChatGPT、Claude）、OpenRouter OpenAI-compatible 身份以及 `NOT_CHECKED` / `BLOCKED` 状态。provider-facing model 和价格明确是“等待目录核验／价格未知，禁止执行”；页面无 Key 输入、显示、Keychain 探测或网络行为。Android/Desktop 的“功能审阅”同改为阶段 1/2 已完成、仍待用户去留判断的真实状态。

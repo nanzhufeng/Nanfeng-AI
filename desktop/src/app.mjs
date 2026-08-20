@@ -28,9 +28,10 @@ function executeDesktopCompare() {
   const decision = desktopCompareExecutionOwner.requestDirectCompare({
     hasText: state.composerDraft.trim().length > 0,
     attachmentCount: state.composerAttachments.length,
+    directClickAt: Date.now(),
   });
-  state.error = `Compare 未执行：${decision.blocker}；未读取 Key 或发送内容。`;
-  state.status = 'Compare 已直接提交执行请求，但当前 Desktop 尚未完成安全执行组合。';
+  state.error = `Compare 未执行：${decision.blocker || 'EXECUTION_NOT_COMPOSED'}；未读取 Key 或发送内容。`;
+  state.status = 'Compare 已直接提交当次执行命令，但当前 Desktop 尚未完成安全执行组合。';
   render();
 }
 

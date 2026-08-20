@@ -32,6 +32,15 @@ test('Desktop Compare owner fails closed for unknown model price and absent tran
   assert.deepEqual(new DesktopCompareExecutionOwner({ credentialPresent: true, fixedModelsVerified: true, fixedPricesKnown: true }).requestDirectCompare({ hasText: true }), { outcome: 'BLOCKED', blocker: DesktopCompareBlocker.EXECUTION_NOT_COMPOSED });
 });
 
+test('Desktop Compare grants only a current direct-click command after every safe readiness gate', () => {
+  const owner = new DesktopCompareExecutionOwner({ credentialPresent: true, fixedModelsVerified: true, fixedPricesKnown: true, transportComposed: true, now: () => 10_000 });
+  assert.deepEqual(owner.requestDirectCompare({ hasText: true }), { outcome: 'BLOCKED', blocker: DesktopCompareBlocker.DIRECT_CLICK_REQUIRED });
+  assert.deepEqual(owner.requestDirectCompare({ hasText: true, directClickAt: 9_000 }), {
+    outcome: 'GRANTED', command: { provider: 'openrouter', logicalModels: ['ChatGPT', 'Claude'], issuedAt: 9_000, expiresAt: 39_000 },
+  });
+  assert.deepEqual(owner.requestDirectCompare({ hasText: true, directClickAt: -21_000 }), { outcome: 'BLOCKED', blocker: DesktopCompareBlocker.DIRECT_CLICK_EXPIRED });
+});
+
 test('the owner has no content, credential, persistence, or transport parameters', async () => {
   const source = await readFile(new URL('../src/desktop-compare-execution-owner.mjs', import.meta.url), 'utf8');
   for (const forbidden of ['invoke(', 'fetch(', 'Authorization', 'localStorage', 'console.', 'draftText', 'apiKey']) assert.ok(!source.includes(forbidden));

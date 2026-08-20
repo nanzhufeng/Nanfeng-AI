@@ -22,7 +22,7 @@
 
 - 阶段 2 才可增加 macOS `Security.framework` 直接 API 的 app-owned credential adapter；严禁 `security -w`、命令行参数携带秘密、枚举、重置、真实读取或 self-test。测试只用 in-memory fake，真实凭据输入只能由用户在最终 Settings UI 动作完成。
 - 阶段 3 已实现 Settings → AI 模型服务的固定逻辑 Compare preset（ChatGPT、Claude）与 `NOT_CHECKED` / `BLOCKED` safe projection。provider-facing model 与价格在目录核验前明确显示为未知并失败关闭；Key 不得进入 SQLite、备份、同步、日志、前端状态或调用记录。
-- 阶段 4 才可把既有显式 Compare 动作组合到一条 text-only、当次 direct-click command；unknown model/price 必须继续失败关闭。
+- 阶段 4 已把既有显式 Compare 动作组合为一条 30 秒、一时点的 content-free direct-click command；command 只携带固定 provider、ChatGPT/Claude logical pair 与时效，不携带正文或 Key。无点击、过期、未来时间、未知模型/价格和未组合 transport 都失败关闭；当前没有 consumer，因此 `GRANTED` command 不会产生 transport。
 - 阶段 5 才可接入固定 endpoint transport、分支状态与内容安全的 receipt。真实 HTTP 仍须另有用户对非敏感文本、凭据和当次执行的授权。
 
 ## 验收

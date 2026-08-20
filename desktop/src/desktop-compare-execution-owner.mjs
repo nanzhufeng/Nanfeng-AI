@@ -16,6 +16,8 @@ export const DesktopCompareBlocker = Object.freeze({
   CREDENTIAL_NOT_CONFIGURED: 'CREDENTIAL_NOT_CONFIGURED',
   MODEL_OR_PRICE_UNVERIFIED: 'MODEL_OR_PRICE_UNVERIFIED',
   EXECUTION_NOT_COMPOSED: 'EXECUTION_NOT_COMPOSED',
+  DIRECT_CLICK_REQUIRED: 'DIRECT_CLICK_REQUIRED',
+  DIRECT_CLICK_EXPIRED: 'DIRECT_CLICK_EXPIRED',
 });
 
 /** Safe Settings projection. It intentionally cannot trigger a Keychain probe or network call. */
@@ -34,8 +36,10 @@ export const DESKTOP_COMPARE_SETTINGS_PROJECTION = Object.freeze({
 export class DesktopCompareExecutionOwner {
   #readiness;
 
-  constructor({ credentialPresent = false, fixedModelsVerified = false, fixedPricesKnown = false, transportComposed = false } = {}) {
+  constructor({ credentialPresent = false, fixedModelsVerified = false, fixedPricesKnown = false, transportComposed = false, now = () => Date.now(), directClickTtlMs = 30_000 } = {}) {
     this.#readiness = Object.freeze({ credentialPresent, fixedModelsVerified, fixedPricesKnown, transportComposed });
+    this.now = now;
+    this.directClickTtlMs = directClickTtlMs;
   }
 
   /** Returns safe configuration facts only; neither a key nor user content can enter this shape. */
@@ -45,10 +49,23 @@ export class DesktopCompareExecutionOwner {
   }
 
   /** Explicit Compare command; metadata prevents this owner from retaining user content. */
-  requestDirectCompare({ hasText, attachmentCount = 0 } = {}) {
+  requestDirectCompare({ hasText, attachmentCount = 0, directClickAt } = {}) {
     if (!hasText) return blocked(DesktopCompareBlocker.EMPTY_DRAFT);
     if (attachmentCount > 0) return blocked(DesktopCompareBlocker.ATTACHMENTS_NOT_SUPPORTED);
-    return blocked(this.#blockerForReadiness() || DesktopCompareBlocker.EXECUTION_NOT_COMPOSED);
+    const readinessBlocker = this.#blockerForReadiness();
+    if (readinessBlocker) return blocked(readinessBlocker);
+    if (!Number.isSafeInteger(directClickAt)) return blocked(DesktopCompareBlocker.DIRECT_CLICK_REQUIRED);
+    const now = this.now();
+    if (directClickAt > now || now - directClickAt > this.directClickTtlMs) return blocked(DesktopCompareBlocker.DIRECT_CLICK_EXPIRED);
+    return Object.freeze({
+      outcome: 'GRANTED',
+      command: Object.freeze({
+        provider: DESKTOP_COMPARE_EXECUTION_PROVIDER.id,
+        logicalModels: Object.freeze(['ChatGPT', 'Claude']),
+        issuedAt: directClickAt,
+        expiresAt: directClickAt + this.directClickTtlMs,
+      }),
+    });
   }
 
   #blockerForReadiness() {

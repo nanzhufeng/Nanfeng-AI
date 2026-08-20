@@ -375,7 +375,7 @@ test('Compare controls submit directly through the fail-closed Desktop execution
   const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'ordinary', composerDraft: '', profileOpen: false, pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true });
   for (const token of ['对比 ChatGPT + Claude', 'open-compare-confirmation', 'data-compare-long-press']) assert.ok(html.includes(token));
   const appSource = await readFile(resolve(root, 'src/app.mjs'), 'utf8');
-  for (const token of ['executeDesktopCompare', 'DesktopCompareExecutionOwner', 'desktopCompareExecutionOwner.requestDirectCompare', 'compareLongPressTimer', '550', '未读取 Key 或发送内容']) assert.ok(appSource.includes(token));
+  for (const token of ['executeDesktopCompare', 'DesktopCompareExecutionOwner', 'desktopCompareExecutionOwner.requestDirectCompare', 'directClickAt: Date.now()', 'compareLongPressTimer', '550', '未读取 Key 或发送内容']) assert.ok(appSource.includes(token));
   const desktopCompare = appSource.substring(appSource.indexOf('function executeDesktopCompare()'), appSource.indexOf("app.addEventListener('pointerdown'"));
   assert.ok(!desktopCompare.includes('invoke('));
   assert.ok(!desktopCompare.includes('state.dialog = {'));
