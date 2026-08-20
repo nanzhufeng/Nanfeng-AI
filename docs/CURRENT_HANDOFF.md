@@ -4,6 +4,7 @@
 
 - **结论：** 当前 Android 与 Desktop Compare 已是三入口（模型菜单行、Composer `对比`、模型长按）的显式直接产品命令；不再存在第二次产品确认面。Android 空草稿在触及 `CompareVisibleExecutionOwner` 前返回；Desktop 没有 Compare execution adapter，三个入口均如实显示不可执行，且 handler 不创建 Dialog、不调用 Tauri command、不读 Key、不发送内容。普通本地发送与模型点按保持原语义。
 - **本轮最小收口：** 新增 Android 空草稿先于 owner 调用的定向静态契约，并收紧 Desktop Node 契约为 no-owner handler 不含 `invoke` 或 Dialog 创建；`MMO4HCompareVisibleEntryContractsTest`、Desktop `npm run lint` 与 `chat-first-ui.test.mjs`（60/60）均通过。同步修正 `ANDROID_DESKTOP_USER_ENTRY_AUDIT_20260816.md`、`MASTER_PLAN_COMPLETION_AUDIT_20260816.md` 与 MM-O4-H 证据中已过时的“待确认面”描述。未改 Compose/Desktop UI、Provider、Key、HTTP、Room/SQLite、导入批次或 OPPO。
+- **Desktop 正常 UI/readback：** 以最终严格验签 bundle 的 P6-E 隔离 `/tmp` 根启动，原生 Accessibility tree 实际读到 Composer 的模型菜单、`对比`与模型长按三个 Compare 入口；只点击空草稿的 `对比 ChatGPT + Claude`，页面即时显示“Desktop execution owner 不可用／未读取 Key 或发送内容”，无确认 Dialog。隔离根含历史受控验收会话，本轮未再读取或报告任何会话文本、标题或附件；未访问正式 app-data、Key、HTTP、导入批次或 OPPO。该证据只关闭 Desktop 的无 owner 可见 fail-closed 读回，不替代 Android UI、Desktop adapter 或真实执行。
 - **仍待外部条件：** Android 非空草稿的真实 direct execution 必须由用户提供非敏感短文本，并另有已配置凭据和 HTTP 授权；Desktop execution adapter 尚不存在。两者均不能由空草稿、fixture、构建或历史 emulator 画面伪报关闭。
 
 ## 2026-08-20 总控推进：Android P6-K 闭环与功能审阅规则（当前）
