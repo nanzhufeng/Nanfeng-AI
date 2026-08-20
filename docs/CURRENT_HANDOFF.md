@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v2 Android package writer：本地序列化与跨端 reader 合同完成，Android 用户链继续禁止
+
+- **已实现：** 新的未注册 `NfaiExchangeV2PackageWriter` 仅消费既有 `NfaiExchangeV2OwnerMapper` 的只读 owner→exact-IR 链；随后只对 IR 账本明确引用的附件重新只读核验 bytes/hash，在内存中生成 `manifest.json + exchange.json + assets/<sha256>`。它严格重验 IR semantic hash、canonical manifest/export equality、每个 manifest 文件 hash/长度、会话与 Knowledge 的统一 attachment 账本、content-addressed assets、未知 entry 与全部 `ownerFieldHashes`。输出被限制为一次性原子 port；preflight 失败或 mapper 拒绝时 port 不会被调用，receipt 只含 package/semantic hash、来源/敏感枚举、计数与 field hash。
+- **跨端定向验证：** Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` 和 `--no-daemon` 下，mapper/writer 合同 3/3、既有 v2 IR 2/2 通过；测试生成的非敏感临时 package 被 Node `verify-v2-package.mjs` 和 Desktop Rust strict reader 先后只读接受。共享 Node v2 golden 继续通过。未运行模拟器、OPPO、SAF、文件 picker、Room/SQLite 写入、网络、Provider 或 Keychain。
+- **停止门：** Android 仍没有 v2 SAF/UI、持久 package/archive、导入/事务、功能审阅新增条目或真实文件验收；不能将测试 port 或临时 fixture 称为用户导出、跨端用户互通、备份/同步或对象恢复。macOS 解锁后，Desktop native picker 的原定隔离验收仍须恢复，不能用此 Android 合同替代。
+
 ## 2026-08-20 P6 工作区 v2 Desktop native picker 隔离验收：正式开发 bundle 已重建，macOS 锁屏阻断 GUI（未伪验收）
 
 - **已完成的安全准备：** `75c28c1` 已窄提交 picker bridge；随后为本轮加入仅验收用的 `NANFENG_AI_P6_V2_PICKER_ACCEPTANCE_ROOT`，它只接纳新建的 `/tmp/nanfeng-ai-p6-v2-picker-acceptance.*` 根，不能回退到用户 app-data 或 P6-E/P6-H 根。创建后先证明数据根为零项；无敏感 v2 fixture 与数据根分离，fixture 写入后数据根仍为零项。定向 Rust 合同 2/2、`cargo clippy --lib --tests -- -D warnings`、`cargo check` 通过；`rustfmt --check src/lib.rs` 只报告仓库既有大范围格式债务，未重排。

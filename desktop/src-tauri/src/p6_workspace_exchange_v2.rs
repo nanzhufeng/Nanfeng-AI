@@ -759,6 +759,18 @@ mod tests {
     }
 
     #[test]
+    fn android_writer_package_is_accepted_by_the_desktop_reader_when_supplied() {
+        let Ok(path) = std::env::var("NANFENG_AI_ANDROID_V2_PACKAGE_GOLDEN") else {
+            return;
+        };
+        let package = preflight(fs::read(path).expect("Android contract package must be readable"))
+            .expect("Android v2 package must pass the Desktop strict reader");
+        assert_eq!(package.receipt.origin, "ANDROID");
+        assert_eq!(package.receipt.asset_count, 1);
+        assert!(package.receipt.owner_field_hashes.contains_key("settings/root"));
+    }
+
+    #[test]
     fn every_transaction_injection_leaves_no_v2_rows() {
         for point in [
             FailurePoint::Begin,

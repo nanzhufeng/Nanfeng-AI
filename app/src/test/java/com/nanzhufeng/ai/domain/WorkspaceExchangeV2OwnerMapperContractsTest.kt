@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.File
 import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
@@ -44,6 +45,45 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
             assertTrue("mapped=$mapped", mapped is WorkspaceExchangeV2Mapping.Rejected)
             assertEquals(0, source.privateReadCount)
         }
+    }
+
+    @Test fun `writer emits only a strict v2 package receipt after read-only owners map`() {
+        val source = fixture()
+        val output = RecordingOutput(System.getProperty("nfai.v2.package.contract.output"))
+        val result = NfaiExchangeV2PackageWriter(mapper(source), source).write(
+            source.selection,
+            NfaiExchangeSafeSettings("zh-CN", "SYSTEM"),
+            output,
+        )
+        assertTrue("result=$result", result is NfaiExchangeV2PackageWrite.Written)
+        val receipt = (result as NfaiExchangeV2PackageWrite.Written).receipt
+        assertEquals(1, output.writes)
+        assertTrue(output.bytes.isNotEmpty())
+        assertEquals(receipt.packageHash, hash(output.bytes))
+        assertEquals("ANDROID", receipt.origin)
+        assertEquals(1, receipt.assetCount)
+        assertEquals(hash(source.assetBytes()), receipt.ownerFieldHashes["asset/${source.asset.sha256}"])
+        assertTrue(!receipt.toString().contains("fixture.txt"))
+
+        val unsafe = fixture(sourceReference = "content://forbidden")
+        val rejectedOutput = RecordingOutput(null)
+        val rejected = NfaiExchangeV2PackageWriter(mapper(unsafe), unsafe).write(
+            unsafe.selection,
+            NfaiExchangeSafeSettings("zh-CN", "SYSTEM"),
+            rejectedOutput,
+        )
+        assertTrue(rejected is NfaiExchangeV2PackageWrite.Rejected)
+        assertEquals(0, rejectedOutput.writes)
+
+        val failingSource = fixture()
+        val failedOutput = RecordingOutput(null, fail = true)
+        val failed = NfaiExchangeV2PackageWriter(mapper(failingSource), failingSource).write(
+            failingSource.selection,
+            NfaiExchangeSafeSettings("zh-CN", "SYSTEM"),
+            failedOutput,
+        )
+        assertTrue(failed is NfaiExchangeV2PackageWrite.Failed)
+        assertEquals(1, failedOutput.writes)
     }
 
     private fun mapper(source: Fixture) = NfaiExchangeV2OwnerMapper(source, "0.3.0-test", clock) { "export-v2-test" }
@@ -100,6 +140,18 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
         override fun relationship(id: KnowledgeRelationshipId) = relation.takeIf { it.relationship.id == id }
         override fun attachment(id: AttachmentId) = asset.takeIf { it.id == id }
         override fun readPrivateAttachment(asset: AttachmentReference): AttachmentReadResult { privateReadCount++; return AttachmentReadResult.Content(assetBytes) }
+        fun assetBytes() = assetBytes.copyOf()
+    }
+
+    private class RecordingOutput(private val contractPath: String?, private val fail: Boolean = false) : NfaiExchangeV2PackageOutputPort {
+        var writes = 0
+        var bytes = ByteArray(0)
+        override fun writeOnce(packageBytes: ByteArray): NfaiExchangeV2PackageOutput {
+            writes++
+            bytes = packageBytes.copyOf()
+            contractPath?.let { File(it).writeBytes(bytes) }
+            return if (fail) NfaiExchangeV2PackageOutput.Failed("test output failure") else NfaiExchangeV2PackageOutput.Written
+        }
     }
 
     private fun ownerHash(title: String, body: String) = MemoryDomain.sha256("${canonical(title)}\n${canonical(body)}")
