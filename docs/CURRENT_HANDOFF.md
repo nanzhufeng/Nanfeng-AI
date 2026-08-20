@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v2 字段保真/拒绝矩阵：双端共享 IR 合同已闭合，生产 mapper/import 未开始
+
+- **结论：** 已新增 `P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md`，按 Android 与 Desktop 的现有 owner 对 Project、Conversation、Knowledge、Memory、Relationship、附件和 safe settings 逐字段列出 v1 状态、v2 目标、可逆性及降级/拒绝。v2 明确保留 Project appearance+instruction history、Conversation settings+memory sources、Knowledge source/provenance/history+附件 metadata、Memory 标题/来源/concept/history 与 Relationship scope/project/time/history；路径/URI、`sourceReference`、picker token、Key、Provider raw payload/runtime/diagnostic/route preference 仍一律拒绝。
+- **最小协议实现与验证：** `protocol/nfai.exchange.v2.schema.json`、共享 v2 golden 与 Node canonical validator 固定 semantic hash `aaeafcfb…1c0ef8`。Android `NfaiExchangeV2Ir` 与 Desktop `validate_exchange_v2_ir` 对同一 golden 独立验证并共同覆盖 locator 和缺 owner history 的 fail-closed；Android Studio JBR 下 `:app:testDebugUnitTest --tests NfaiExchangeV2IrContractsTest --no-daemon` 通过（2/2），Desktop `cargo test v2_owner_fidelity_golden_is_shared_and_rejects_lossy_or_locator_fields --lib` 通过（1/1），Node `protocol/scripts/run-v2-golden.mjs` 通过。测试仅解析 IR，无 Room/SQLite、附件 bytes、SAF、picker、网络、Provider、Key、模拟器或 OPPO 操作。
+- **尚未完成/停止门：** v2 尚无 Android owner→IR mapper、ZIP/package、Desktop v2 staging/asset archive/SQLite transaction/import journal migration、重开/回导或真实文件链；Desktop 仍不能把 v2 说成已恢复成原生 owner。故完整工作区 SAF/选择 UI 与文案继续阻止；没有新用户功能，功能审阅不新增条目。下一唯一候选是先实现 Android 只读 mapper 与完整的 v2 attachments/source/history fail-closed 合同，再接 Desktop 原子 importer；P6 与 P0–P11 全路线仍未完成。
+
 ## 2026-08-20 P6 工作区 v1 表示审计：协议兼容，但不能宣称完整对象保真
 
 - **结论：** 现场审查确认 Android mapper 输出可进入 Desktop 的既有 `validate_exchange` → private staging → asset/package archive → 单一 SQLite transaction → provenance/`import_journal` 原子链；根对象、闭包、body hash、消息树、资产内容寻址和安全 settings 均兼容。然而 `nfai.exchange.v1` 是语义 IR，不表示 Project 颜色/图标/instruction revisions、Conversation settings/memory sources、Knowledge/Memory/Relationship 的来源与完整 history、Memory 标题/来源/concept hash、Relationship scope/project/timestamps 或 Knowledge 附件，Desktop 无法猜回这些事实。

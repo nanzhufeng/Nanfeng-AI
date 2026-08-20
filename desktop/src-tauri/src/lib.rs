@@ -1903,6 +1903,59 @@ fn safe_entry(name: &str) -> bool {
         && !name.ends_with('/')
 }
 
+/// P6 v2 is intentionally an IR-only gate for now. It proves both runtimes reject lossy or
+/// unsafe owner data before a future v2 staging/SQLite transaction is allowed to exist.
+fn validate_exchange_v2_ir(exchange: &Value) -> Result<String, String> {
+    let root = object(exchange, "v2 exchange")?;
+    let expected: BTreeSet<&str> = ["format", "version", "export", "projects", "conversations", "knowledge", "memory", "relations", "settings"].into_iter().collect();
+    if root.keys().map(String::as_str).collect::<BTreeSet<_>>() != expected
+        || root.get("format").and_then(Value::as_str) != Some("nfai.exchange")
+        || root.get("version").and_then(Value::as_u64) != Some(2) {
+        return Err(json_error("不是受支持的 nfai.exchange.v2 IR"));
+    }
+    ensure_no_forbidden_keys(exchange)?;
+    fn reject_source_reference(value: &Value) -> Result<(), String> {
+        match value {
+            Value::Object(map) => { if map.contains_key("sourceReference") { return Err(json_error("v2 不接受 sourceReference locator")); } for child in map.values() { reject_source_reference(child)?; } }
+            Value::Array(items) => for child in items { reject_source_reference(child)?; },
+            _ => {}
+        }
+        Ok(())
+    }
+    reject_source_reference(exchange)?;
+    let export = object(root.get("export").ok_or_else(|| json_error("v2 export 缺失"))?, "v2 export")?;
+    let export_expected: BTreeSet<&str> = ["id", "createdAt", "origin", "semanticHash", "sensitivity"].into_iter().collect();
+    if export.keys().map(String::as_str).collect::<BTreeSet<_>>() != export_expected { return Err(json_error("v2 export 字段无效")); }
+    let semantic = require_string(export, "semanticHash")?;
+    if !is_stable_id(require_string(export, "id")?) || !is_sha256(semantic) || semantic_hash(exchange)? != semantic { return Err(json_error("v2 semantic hash 无效")); }
+    let projects = require_array(root, "projects")?; let conversations = require_array(root, "conversations")?; let knowledge = require_array(root, "knowledge")?; let memory = require_array(root, "memory")?; let relations = require_array(root, "relations")?;
+    let mut ids = BTreeSet::new();
+    for (name, entries) in [("projects", projects), ("conversations", conversations), ("knowledge", knowledge), ("memory", memory), ("relations", relations)] {
+        for entry in entries { let item = object(entry, name)?; let id = require_string(item, "id")?; if !is_stable_id(id) || !ids.insert(id.to_owned()) { return Err(json_error("v2 stable ID 无效或重复")); } }
+    }
+    for entry in projects {
+        let item = object(entry, "v2 project")?; let expected: BTreeSet<&str> = ["id", "title", "description", "appearance", "pinned", "archived", "createdAt", "updatedAt", "schemaVersion", "instructionHistory"].into_iter().collect();
+        if item.keys().map(String::as_str).collect::<BTreeSet<_>>() != expected { return Err(json_error("v2 project 字段无效")); }
+        let appearance = object(item.get("appearance").ok_or_else(|| json_error("v2 project appearance 缺失"))?, "appearance")?;
+        if appearance.keys().map(String::as_str).collect::<BTreeSet<_>>() != ["color", "icon"].into_iter().collect() { return Err(json_error("v2 project appearance 字段无效")); }
+        let history = require_array(item, "instructionHistory")?; let mut revisions = BTreeSet::new();
+        for revision in history { let revision = object(revision, "instructionHistory")?; let expected: BTreeSet<&str> = ["id", "revision", "content", "source", "contentHash", "createdAt", "schemaVersion"].into_iter().collect(); if revision.keys().map(String::as_str).collect::<BTreeSet<_>>() != expected || revision.get("source").and_then(Value::as_str) != Some("USER") || sha256(require_string(revision, "content")?.as_bytes()) != require_string(revision, "contentHash")? || !revisions.insert(require_string(revision, "id")?.to_owned()) { return Err(json_error("v2 project instruction history 无效")); } }
+    }
+    for entry in conversations {
+        let item = object(entry, "v2 conversation")?; let expected: BTreeSet<&str> = ["id", "projectId", "title", "currentLeafId", "pinned", "archived", "revision", "createdAt", "updatedAt", "autoTitlePending", "surface", "schemaVersion", "settings", "messages"].into_iter().collect(); if item.keys().map(String::as_str).collect::<BTreeSet<_>>() != expected || item.get("surface").and_then(Value::as_str) != Some("CHAT") { return Err(json_error("v2 conversation 字段或 surface 无效")); }
+        if let Some(project) = item.get("projectId").and_then(Value::as_str) { if !ids.contains(project) { return Err(json_error("v2 conversation project 缺失")); } }
+        let settings = object(item.get("settings").ok_or_else(|| json_error("v2 conversation settings 缺失"))?, "settings")?; let settings_expected: BTreeSet<&str> = ["defaultProviderId", "defaultModelId", "harnessId", "harnessVersion", "contextPolicyVersion", "memorySources", "schemaVersion"].into_iter().collect(); if settings.keys().map(String::as_str).collect::<BTreeSet<_>>() != settings_expected { return Err(json_error("v2 conversation settings 字段无效")); }
+        for source in require_array(settings, "memorySources")? { let source = object(source, "memorySource")?; if source.keys().map(String::as_str).collect::<BTreeSet<_>>() != ["memoryId", "sourceKind", "sourceVersion"].into_iter().collect() || !memory.iter().any(|item| object(item, "memory").ok().and_then(|item| item.get("id")).and_then(Value::as_str) == source.get("memoryId").and_then(Value::as_str)) { return Err(json_error("v2 memory source 无效")); } }
+    }
+    for (name, entries, expected) in [
+        ("knowledge", knowledge, ["id", "title", "body", "sourceEvidence", "provenance", "attachments", "status", "scope", "projectId", "tags", "contentHash", "createdAt", "updatedAt", "schemaVersion", "history"].as_slice()),
+        ("memory", memory, ["id", "title", "body", "scope", "scopeId", "source", "sourceStableId", "sourceSummary", "status", "contentHash", "conceptHash", "createdAt", "updatedAt", "lastConfirmedAt", "deletedAt", "schemaVersion", "history"].as_slice()),
+        ("relation", relations, ["id", "type", "fromId", "toId", "scope", "projectId", "status", "createdAt", "updatedAt", "createdByIntentId", "latestIntentId", "suggestionSource", "history"].as_slice()),
+    ] { for entry in entries { let item = object(entry, name)?; if item.keys().map(String::as_str).collect::<BTreeSet<_>>() != expected.iter().copied().collect() || !item.get("history").is_some_and(Value::is_array) { return Err(json_error("v2 owner history 或字段无效")); } } }
+    for relation in relations { let relation = object(relation, "relation")?; if !knowledge.iter().any(|item| object(item, "knowledge").ok().and_then(|item| item.get("id")).and_then(Value::as_str) == relation.get("fromId").and_then(Value::as_str)) || !knowledge.iter().any(|item| object(item, "knowledge").ok().and_then(|item| item.get("id")).and_then(Value::as_str) == relation.get("toId").and_then(Value::as_str)) { return Err(json_error("v2 relation endpoint 缺失")); } }
+    Ok(semantic.to_owned())
+}
+
 fn preflight_package(bytes: Vec<u8>) -> Result<PreflightedPackage, String> {
     if bytes.is_empty() || bytes.len() as u64 > MAX_PACKAGE_BYTES {
         return Err(json_error("交换包为空或超过 128 MiB 限制"));
@@ -6998,6 +7051,19 @@ mod tests {
 
     fn golden() -> Vec<u8> {
         fs::read("../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange").expect("golden")
+    }
+
+    #[test]
+    fn v2_owner_fidelity_golden_is_shared_and_rejects_lossy_or_locator_fields() {
+        let mut exchange: Value = serde_json::from_str(include_str!("../../../protocol/fixtures/nfai.exchange.v2.golden.json")).unwrap();
+        assert_eq!(validate_exchange_v2_ir(&exchange).unwrap(), "aaeafcfbcfdf1d36ab4c8484e5d6d3537b6d4a60abc7216b3aa4fd702b1c0ef8");
+        exchange["knowledge"][0]["sourceEvidence"][0]["sourceReference"] = Value::String("content://forbidden".into());
+        let semantic = semantic_hash(&exchange).unwrap(); exchange["export"]["semanticHash"] = Value::String(semantic);
+        assert!(validate_exchange_v2_ir(&exchange).is_err());
+        let mut lossy: Value = serde_json::from_str(include_str!("../../../protocol/fixtures/nfai.exchange.v2.golden.json")).unwrap();
+        lossy["projects"][0].as_object_mut().unwrap().remove("instructionHistory");
+        let semantic = semantic_hash(&lossy).unwrap(); lossy["export"]["semanticHash"] = Value::String(semantic);
+        assert!(validate_exchange_v2_ir(&lossy).is_err());
     }
 
     #[test]

@@ -1,5 +1,12 @@
 # 南枫 AI 决策日志
 
+## 决策：P6 完整工作区交换先以 v2 字段保真/拒绝 IR 阻止静默降级（已确定）
+
+- 当前选择：`nfai.exchange.v1` 继续只用于既有语义投影；P6 完整对象必须先经过 v2 的逐字段矩阵与共享 canonical semantic-hash IR。Project appearance/instruction history、Conversation settings/memory sources、Knowledge source/provenance/history/attachment metadata、Memory title/source/concept/history 及 Relationship scope/project/time/history 是 v2 的必保留事实。
+- 固定安全边界：v2 不接受 path、URI、picker token、`sourceReference`、credential、Provider raw payload、runtime、diagnostic 或 route preference。任何 owner history/依赖/内容寻址附件无法验证，或 Desktop 无法原子持久化，均拒绝整包；不从 v1、默认值或文件名推断丢失事实。
+- 不采用方案：不把 v2 schema/golden 当作 Android mapper、Desktop SQLite import、SAF、备份或真实跨端验收；在 Android/desktop完整 mapper、asset archive、transaction/journal、重开和回导合同闭合前，不新增完整工作区入口或功能审阅条目。
+- 重新评估触发条件：Android 只读 mapper 可以产生 exact v2 IR，Desktop 以版本化 staging/asset archive/transaction/journal 导入并完成中断回滚和真实回导后，才评估设置二级入口及双端功能审阅。
+
 ## 决策：用户操作直接执行，安全约束不以二次确认表达（已确定）
 
 - 当前选择：用户在应用内选择导入或执行即直接运行；ChatGPT ZIP 在严格预检/解析后自动逐项原子导入，普通聊天与 Compare 不再要求应用内二次确认。
