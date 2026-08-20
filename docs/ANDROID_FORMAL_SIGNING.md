@@ -56,7 +56,7 @@
 - signer certificate SHA-1：`2ab70dee32bc61f0596380cd328fa673c0c86149`；SHA-256：`6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；RSA 4096-bit。
 - 从最终 APK 的公开签名块解析的证书有效期：`2026-08-20T06:55:35Z` 至 `2076-08-20T06:55:35Z`。
 - `fc8f9ac604c57492cabb4b8bc74fe4284623d3a5385b50ad782f798b75252546` 是较早 release-v2 APK 的历史字节身份；OPPO PKH120 当前只读保留该包。它不得被写成当前源码或当前产物验证。
-- 当前源码正式 APK 为 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`；未对 OPPO 执行安装、覆盖、卸载、清数据或其他写入。若未来需要 OPPO 验收，必须先取得逐项明确授权，并以 `dumpsys`、UIAutomator package 与拉回 `base.apk` 哈希三方一致单独证明。
+- 当前源码正式 APK 为 `7406d1de5818e013227d7a1ffb4083043e0922f767d013317040bab5f2c41ea2`；未对 OPPO 执行安装、覆盖、卸载、清数据或其他写入。若未来需要 OPPO 验收，必须先取得逐项明确授权，并以 `dumpsys`、UIAutomator package 与拉回 `base.apk` 哈希三方一致单独证明。
 
 ## legacy 保护边界
 
