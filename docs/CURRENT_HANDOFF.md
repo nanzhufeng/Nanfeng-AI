@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：P5-D 当前 Schema 备份守卫（当前）
+
+- **结论：** `AndroidLocalBackupRestoreManager` 不再把 `.nfai-backup` manifest 与预检的 Room Schema 硬编码为 17，而是读取当前已打开数据库的版本（现在为 37）。恢复在关闭 Room、替换前额外核验候选 SQLite 的 user version；manifest、候选 DB 或计数任一不匹配均整体拒绝，避免以当前包装入旧 Schema。
+- **验证与边界：** `P5DLocalBackupRestoreContractsTest` 4/4 通过，覆盖 manifest 的实际 Schema 与完整 1→37 migration chain；`:app:assembleDebug` 通过。没有导出、恢复、安装、SAF/模拟器操作、Key、HTTP 或 OPPO 操作。当前 P5-D 仍缺隔离 `emulator-5554` 正常 SAF 导出、受控恢复和冷启动读回，不能由本地测试替代。
+
 ## 2026-08-20 总控推进：Desktop Compare 阶段 4 直接点击命令门（当前）
 
 - **结论：** 三个既有 Compare 入口现在统一传入当前点击时点；仅在凭据、固定模型、价格和 composition readiness 全部满足后，owner 才会签发一个 30 秒的 content-free direct-click command。它只包含固定 provider、ChatGPT/Claude logical pair 与时效；无点击、未来/过期点击、空草稿、附件、未知模型/价格均失败关闭。当前没有 command consumer 或 transport，所以 default Desktop UI 仍只显示未执行状态。

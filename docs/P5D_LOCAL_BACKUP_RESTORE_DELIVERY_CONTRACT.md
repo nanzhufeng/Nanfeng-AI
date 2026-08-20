@@ -1,7 +1,7 @@
 # 南枫 AI P5-D 本地备份、恢复与交付合同
 
 日期：2026-08-13  
-状态：P5 的第四个独立增量；不是 P5 或项目终点。当前 Room Schema 17。
+状态：P5 的第四个独立增量；不是 P5 或项目终点。当前 Room Schema 37；备份 owner 从实际打开的 Room 数据库读取该版本，不另存硬编码副本。
 
 ## 目标与唯一所有者
 
@@ -27,4 +27,4 @@
 
 ## 验收边界
 
-自动覆盖 manifest/hash roundtrip、空库恢复、非空取消/替换、rollback/interrupt、资产引用、运行态降级、恶意 ZIP/高敏拒绝、Auto Backup 规则和 1→17 迁移链。真实验收只在 `emulator-5554`：先成功导出并回读，再创建专用非敏感变更，强确认恢复并核对回到备份状态；force-stop 后不自动恢复。迁移使用同正式证书旧 APK `install -r` 升级且不卸载、不清数据。P5-D 不能证明 P5 整体退出、OPPO、发布、云同步或真实 Provider。
+自动覆盖 manifest/hash roundtrip、manifest 与当前打开数据库 Schema 一致、空库恢复、非空取消/替换、rollback/interrupt、资产引用、运行态降级、恶意 ZIP/高敏拒绝、Auto Backup 规则和完整 1→37 迁移链。预检同时要求 manifest 与候选 SQLite 都精确匹配当前 Schema。真实验收只在 `emulator-5554`：先成功导出并回读，再创建专用非敏感变更，强确认恢复并核对回到备份状态；force-stop 后不自动恢复。迁移使用同正式证书旧 APK `install -r` 升级且不卸载、不清数据。P5-D 不能证明 P5 整体退出、OPPO、发布、云同步或真实 Provider。

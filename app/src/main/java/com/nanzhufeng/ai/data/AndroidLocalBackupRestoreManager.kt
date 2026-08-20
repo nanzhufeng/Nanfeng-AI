@@ -52,7 +52,7 @@ class AndroidLocalBackupRestoreManager(
                 ?: return LocalBackupResult.Failed("无法写入所选位置。", false)
             val written = app.contentResolver.openInputStream(destination)?.use(::sha256) ?: return LocalBackupResult.Failed("无法回读所选位置。", false)
             if (written != hash) return LocalBackupResult.Failed("所选位置回读哈希不一致。", false)
-            LocalBackupResult.Exported(LocalBackupArtifact("nanfeng-ai-local-backup.nfai-backup", hash, packageFile.length(), CURRENT_SCHEMA, counts))
+            LocalBackupResult.Exported(LocalBackupArtifact("nanfeng-ai-local-backup.nfai-backup", hash, packageFile.length(), currentSchema, counts))
         } finally { stage.deleteRecursively() }
     }.getOrElse { LocalBackupResult.Failed("备份失败：${it.javaClass.simpleName}", false) }
 
@@ -80,7 +80,7 @@ class AndroidLocalBackupRestoreManager(
             extractVerified(inbox, root)
             val stagedDb = File(root, LocalBackupFormat.DATABASE_ENTRY)
             if (containsSensitiveText(stagedDb)) return LocalBackupResult.Rejected("备份包包含疑似凭据或高敏内容；恢复已整体拒绝。")
-            if (!sqliteHealthy(stagedDb) || tableCounts(stagedDb) != current.tableCounts) return LocalBackupResult.Rejected("候选数据库完整性或计数不匹配。")
+            if (!sqliteHealthy(stagedDb) || schemaVersion(stagedDb) != currentSchema || tableCounts(stagedDb) != current.tableCounts) return LocalBackupResult.Rejected("候选数据库完整性、Schema 或计数不匹配。")
             checkpointDatabase(File(checkpoint, "nanfeng-ai.snapshot"))
             checkpointAssets(checkpoint)
             // After close, no repository/container may keep using this process. The caller must restart.
@@ -120,7 +120,7 @@ class AndroidLocalBackupRestoreManager(
         assets.forEach { entries += it.relativeTo(requireNotNull(snapshot.parentFile)).invariantSeparatorsPath to it }
         require(entries.none { (_, f) -> MemoryDomain.sensitiveRejection(f.name) != null }) { "sensitive file name" }
         val list = JSONArray(entries.sortedBy { it.first }.map { (path, file) -> JSONObject().put("path", path).put("bytes", file.length()).put("sha256", sha256(file)) })
-        val manifest = JSONObject().put("format", LocalBackupFormat.FORMAT).put("version", LocalBackupFormat.VERSION).put("appVersion", appVersion).put("schemaVersion", CURRENT_SCHEMA).put("scope", "room_and_private_assets").put("excluded", JSONArray(EXCLUDED)).put("tableCounts", JSONObject(counts)).put("entries", list)
+        val manifest = JSONObject().put("format", LocalBackupFormat.FORMAT).put("version", LocalBackupFormat.VERSION).put("appVersion", appVersion).put("schemaVersion", currentSchema).put("scope", "room_and_private_assets").put("excluded", JSONArray(EXCLUDED)).put("tableCounts", JSONObject(counts)).put("entries", list)
         manifest.put("manifestSha256", sha256(manifest.toString().toByteArray()))
         ZipOutputStream(FileOutputStream(out)).use { zip ->
             zip.putNextEntry(ZipEntry(LocalBackupFormat.MANIFEST_ENTRY)); zip.write(manifest.toString().toByteArray()); zip.closeEntry()
@@ -138,14 +138,14 @@ class AndroidLocalBackupRestoreManager(
             val manifestEntry = zip.getEntry(LocalBackupFormat.MANIFEST_ENTRY) ?: error("missing manifest")
             val manifest = JSONObject(zip.getInputStream(manifestEntry).bufferedReader().readText())
             require(manifest.getString("format") == LocalBackupFormat.FORMAT && manifest.getInt("version") == LocalBackupFormat.VERSION) { "version" }
-            require(manifest.getInt("schemaVersion") == CURRENT_SCHEMA) { "schema" }
+            require(manifest.getInt("schemaVersion") == currentSchema) { "schema" }
             val originalHash = manifest.getString("manifestSha256"); manifest.remove("manifestSha256"); require(originalHash == sha256(manifest.toString().toByteArray())) { "manifest hash" }
             val listed = manifest.getJSONArray("entries"); require(listed.length() + 1 == all.size) { "entry count" }
             for (i in 0 until listed.length()) { val item = listed.getJSONObject(i); val entry = zip.getEntry(item.getString("path")) ?: error("missing entry"); require(sha256(zip.getInputStream(entry)) == item.getString("sha256") && entry.size == item.getLong("bytes")) { "entry hash" } }
             val counts = manifest.getJSONObject("tableCounts").keys().asSequence().associateWith { manifest.getJSONObject("tableCounts").getLong(it) }
             require(!manifest.toString().contains(Regex("(?i)(api[ _-]?key|authorization|credential|token)"))) { "secret metadata" }
             val assetBytes = (0 until listed.length()).asSequence().map { listed.getJSONObject(it) }.filter { it.getString("path").startsWith("assets/") }.sumOf { it.getLong("bytes") }
-            LocalBackupPreflight(LocalBackupFormat.FORMAT, LocalBackupFormat.VERSION, CURRENT_SCHEMA, counts, assetBytes, emptyList(), emptyList(), emptyList(), sha256(file))
+            LocalBackupPreflight(LocalBackupFormat.FORMAT, LocalBackupFormat.VERSION, currentSchema, counts, assetBytes, emptyList(), emptyList(), emptyList(), sha256(file))
         }
     }.getOrNull()
     private fun extractVerified(zipFile: File, root: File) { ZipFile(zipFile).use { zip -> zip.entries().toList().filter { it.name != LocalBackupFormat.MANIFEST_ENTRY }.forEach { entry -> val target = File(root, entry.name); require(safeChild(root, target)); target.parentFile?.mkdirs(); zip.getInputStream(entry).use { input -> FileOutputStream(target).use(input::copyTo) } } } }
@@ -153,6 +153,7 @@ class AndroidLocalBackupRestoreManager(
     private fun replaceAssets(root: File) { allowedRoots().forEach { key -> val destination = File(files, key); destination.deleteRecursively(); val source = File(root, "assets/$key"); if (source.exists()) source.copyRecursively(destination, overwrite = true) } }
     private fun restoreCheckpoint(checkpoint: File) { replaceFile(File(checkpoint, "nanfeng-ai.snapshot"), dbFile); val assets = File(checkpoint, "assets"); if (assets.exists()) replaceAssets(checkpoint) }
     private fun tableCounts(file: File): Map<String, Long> { if (!file.isFile || file.length() == 0L) return emptyMap(); val sql = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY); return try { sql.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('android_metadata','room_master_table') ORDER BY name", null).use { c -> buildMap { while (c.moveToNext()) { val name = c.getString(0); sql.rawQuery("SELECT COUNT(*) FROM `" + name.replace("`", "``") + "`", null).use { n -> n.moveToFirst(); put(name, n.getLong(0)) } } } } } finally { sql.close() } }
+    private fun schemaVersion(file: File): Int = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY).use { it.version }
     private fun sqliteHealthy(file: File): Boolean = runCatching { val sql = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY); try { sql.rawQuery("PRAGMA integrity_check", null).use { it.moveToFirst() && it.getString(0) == "ok" } } finally { sql.close() } }.getOrDefault(false)
     private fun containsSensitiveText(file: File): Boolean = runCatching {
         val sql = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
@@ -170,5 +171,6 @@ class AndroidLocalBackupRestoreManager(
     private fun sha256(input: java.io.InputStream): String { val digest = MessageDigest.getInstance("SHA-256"); val buffer = ByteArray(8192); while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }; return digest.digest().joinToString("") { "%02x".format(it) } }
     private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun copyBounded(input: java.io.InputStream, output: java.io.OutputStream, limit: Long) { val buffer = ByteArray(8192); var total = 0L; while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= limit) { "too large" }; output.write(buffer, 0, n) } }
-    private companion object { const val DB_NAME = "nanfeng-ai.db"; const val CURRENT_SCHEMA = 17; const val STATE_PREFS = "p5d_local_backup"; const val PREF_FINGERPRINT = "preflight_fingerprint"; const val PREF_OPERATION = "operation"; const val PREF_CHECKPOINT = "checkpoint"; val EXCLUDED = listOf("provider-secret-material", "route-preferences", "diagnostics", "exports", "registry", "signing-secrets") }
+    private val currentSchema get() = database.openHelper.writableDatabase.version
+    private companion object { const val DB_NAME = "nanfeng-ai.db"; const val STATE_PREFS = "p5d_local_backup"; const val PREF_FINGERPRINT = "preflight_fingerprint"; const val PREF_OPERATION = "operation"; const val PREF_CHECKPOINT = "checkpoint"; val EXCLUDED = listOf("provider-secret-material", "route-preferences", "diagnostics", "exports", "registry", "signing-secrets") }
 }
