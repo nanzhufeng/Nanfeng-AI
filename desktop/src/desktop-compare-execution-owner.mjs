@@ -18,6 +18,19 @@ export const DesktopCompareBlocker = Object.freeze({
   EXECUTION_NOT_COMPOSED: 'EXECUTION_NOT_COMPOSED',
 });
 
+/** Safe Settings projection. It intentionally cannot trigger a Keychain probe or network call. */
+export const DESKTOP_COMPARE_SETTINGS_PROJECTION = Object.freeze({
+  provider: 'OpenRouter',
+  protocol: DESKTOP_COMPARE_EXECUTION_PROVIDER.protocol,
+  credentialPresence: 'NOT_CHECKED',
+  executionState: 'BLOCKED',
+  blocker: 'CREDENTIAL_CHECK_REQUIRED',
+  presets: Object.freeze([
+    Object.freeze({ logicalModel: 'ChatGPT', providerModel: '等待目录核验', price: '价格未知，禁止执行' }),
+    Object.freeze({ logicalModel: 'Claude', providerModel: '等待目录核验', price: '价格未知，禁止执行' }),
+  ]),
+});
+
 export class DesktopCompareExecutionOwner {
   #readiness;
 

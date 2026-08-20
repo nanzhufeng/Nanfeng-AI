@@ -143,7 +143,7 @@ test('P6-K exposes direct ZIP import with recovery controls without changing the
 
 test('new user features have a Settings review entry with a decision state and entry recommendation', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'feature-review', status: '', error: '', connection: {} });
-  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1 仅有 fail-closed 状态 owner', '复用现有“对比”操作，不新增 Composer 常驻按钮']) assert.ok(rendered.includes(token));
+  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮']) assert.ok(rendered.includes(token));
 });
 
 test('FB-P6-039 keeps attachment previews as role-aligned siblings of text surfaces', () => {
@@ -410,6 +410,12 @@ test('P6-G Settings can deliberately install only a local deterministic fixture'
   for (const token of ['install-p6g-local-fixture', '添加本地确定性 fixture（仅验收）', '不配置 Provider、不会联网']) assert.ok(html.includes(token));
   for (const token of ["async function installP6GLocalFixture", "upsert_desktop_p6g_catalog_candidate", "providerFamily: 'LOCAL'", "knownCostMicros: 0", "action === 'install-p6g-local-fixture'"]) assert.ok(source.includes(token));
   for (const forbidden of ['endpoint:', 'apiKey:', 'requestBody:']) assert.ok(!source.includes(forbidden));
+});
+
+test('Desktop Compare fixed presets and readiness appear only in Settings AI 模型服务', () => {
+  const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'ordinary', composerDraft: '', profileOpen: false, pane: 'settings', settingsSection: 'ai-model-service', status: '', error: '', connection: {} });
+  for (const token of ['AI 模型服务', 'Desktop Compare', 'OpenRouter', 'OPENAI_COMPATIBLE', '凭据 NOT_CHECKED', 'CREDENTIAL_CHECK_REQUIRED', 'ChatGPT', 'Claude', '价格未知，禁止执行']) assert.ok(html.includes(token));
+  for (const forbidden of ['apiKey', 'Authorization', 'save-api-key', '检查钥匙串']) assert.ok(!html.includes(forbidden));
 });
 
 test('work mode keeps the same shell while exposing only the current conversation scope', () => {

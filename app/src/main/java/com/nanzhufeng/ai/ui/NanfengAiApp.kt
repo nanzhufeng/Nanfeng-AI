@@ -849,7 +849,7 @@ private fun FeatureReviewSettingsCard() {
             Spacer(Modifier.height(4.dp))
             Text("当前：待您判断是否保留；需先完成服务商、模型、费用与凭据安全方案。入口：既有对话 Composer 的“对比”操作。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
-            Text("建议：复用现有“对比”操作，不新增 Composer 常驻按钮；配置与状态只放在设置 → AI 模型服务。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("阶段 1/2 已有 fail-closed owner 与 Security.framework 边界；建议：复用现有“对比”操作，不新增 Composer 常驻按钮；固定预设与状态只放在设置 → AI 模型服务。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

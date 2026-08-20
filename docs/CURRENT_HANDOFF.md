@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：Desktop Compare 阶段 3 AI 模型服务安全投影（当前）
+
+- **结论：** Desktop Settings 新增唯一的“AI 模型服务”二级页，且只在此页呈现 Compare 的固定逻辑 preset（ChatGPT、Claude）、OpenRouter OpenAI-compatible 身份以及 `NOT_CHECKED` / `BLOCKED` 状态。provider-facing model 和价格明确是“等待目录核验／价格未知，禁止执行”；页面无 Key 输入、显示、Keychain 探测或网络行为。Android/Desktop 的“功能审阅”同改为阶段 1/2 已完成、仍待用户去留判断的真实状态。
+- **验证与边界：** Desktop Node 88/88、lint、typecheck、静态 build 通过；Android `P6DConversationRowAccessibilityContractsTest` 通过。当前 Compare 仍未配置、未联网、不可执行；没有真实 Keychain、HTTP、SQLite/备份/同步、安装或 OPPO 操作。下一阶段前须 context gate。
+
 ## 2026-08-20 总控推进：Desktop Compare 阶段 2 Security.framework 凭据边界（当前）
 
 - **结论：** 新增未注册的 `desktop_compare_credentials_v1`：固定 Compare 的 app-owned OpenRouter service/account，凭据仅可经未来用户发起的 Settings 动作保存或在 future transport 的同一短作用域读取；macOS 实现直接调用 `security-framework 3.5.1`。Scoped read 的临时副本以 `Zeroizing` 析构清零，连 future transport 回调异常展开时也不例外。它没有 Tauri command、前端 Key 状态、SQLite/备份/同步写入、HTTP 或本轮实际 Keychain 调用。既有 P7 macOS store 也已移除 `/usr/bin/security` 和会写读删随机条目的 self-test，改为同一 Security.framework 直接 API。

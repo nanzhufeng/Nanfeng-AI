@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import {
   DESKTOP_COMPARE_EXECUTION_PROVIDER,
+  DESKTOP_COMPARE_SETTINGS_PROJECTION,
   DesktopCompareBlocker,
   DesktopCompareExecutionOwner,
 } from '../src/desktop-compare-execution-owner.mjs';
@@ -11,6 +12,13 @@ test('Desktop Compare owner starts fail-closed on the fixed OpenRouter-compatibl
   const owner = new DesktopCompareExecutionOwner();
   assert.deepEqual(owner.status(), { provider: 'openrouter', protocol: 'OPENAI_COMPATIBLE', enabled: false, blocker: DesktopCompareBlocker.CREDENTIAL_NOT_CONFIGURED });
   assert.deepEqual(DESKTOP_COMPARE_EXECUTION_PROVIDER, { id: 'openrouter', protocol: 'OPENAI_COMPATIBLE', endpoint: 'https://openrouter.ai/api/v1/chat/completions' });
+});
+
+test('Desktop Compare Settings projection is fixed, key-free, and blocks unknown model pricing', () => {
+  assert.equal(DESKTOP_COMPARE_SETTINGS_PROJECTION.credentialPresence, 'NOT_CHECKED');
+  assert.equal(DESKTOP_COMPARE_SETTINGS_PROJECTION.executionState, 'BLOCKED');
+  assert.deepEqual(DESKTOP_COMPARE_SETTINGS_PROJECTION.presets.map(item => item.logicalModel), ['ChatGPT', 'Claude']);
+  assert.ok(DESKTOP_COMPARE_SETTINGS_PROJECTION.presets.every(item => item.price === '价格未知，禁止执行'));
 });
 
 test('Desktop Compare owner rejects empty drafts and attachments before readiness', () => {
