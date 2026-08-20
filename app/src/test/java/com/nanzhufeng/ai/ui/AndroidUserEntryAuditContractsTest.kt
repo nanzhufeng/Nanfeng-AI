@@ -38,4 +38,18 @@ class AndroidUserEntryAuditContractsTest {
         ).forEach { token -> assertTrue("missing v2 review detail: $token", card.contains(token)) }
         assertTrue(card.contains("也不表示已恢复为原生对象"))
     }
+
+    @Test
+    fun localControlIsSettingsOnlyAndReusesExistingWorkspaceOwners() {
+        val source = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val settings = source.substringAfter("private fun SettingsHierarchy(").substringBefore("@Composable\nprivate fun SettingsCategoryList")
+        val control = source.substringAfter("private fun LocalControlEntryCard").substringBefore("@Composable\nprivate fun FeatureReviewSettingsCard")
+        val hub = source.substringAfter("private fun ControlHub").substringBefore("@Composable\nprivate fun ConversationFoundationCard")
+        val review = source.substringAfter("private fun FeatureReviewSettingsCard()").substringBefore("@Composable\nprivate fun SettingsCategoryRow")
+
+        assertTrue(settings.contains("SettingsDestination.LOCAL_CONTROL -> LocalControlEntryCard(onOpenLocalControl)"))
+        for (token in listOf("Projects", "知识", "长期 Memory", "不会读取凭据", "不调用 Provider", "不发起外部访问")) assertTrue("missing local-control boundary: $token", control.contains(token))
+        for (route in listOf("P5ARoute.PROJECTS", "P5ARoute.KNOWLEDGE", "P5ARoute.MEMORY")) assertTrue("missing reachable route: $route", hub.contains(route))
+        for (token in listOf("更多本地控制面", "待您判断保留或删减", "设置二级入口", "不建议在聊天主页、Composer 或会话详情增加按键")) assertTrue("missing feature review: $token", review.contains(token))
+    }
 }

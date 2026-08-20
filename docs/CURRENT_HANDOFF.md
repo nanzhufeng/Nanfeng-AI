@@ -1,10 +1,16 @@
 # 南枫 AI 当前交接
 
-## 2026-08-20 P6 v2 真实完整 owner 文件链：解锁后确认紧凑 UI 的生产入口缺口，按合同停止
+## 2026-08-20 P5-A 更多本地控制面：双端设置入口、构建与新空 UI owner 创建已验证；P6 文件链因 context gate 待新线程继续
+
+- **已实现与自动门：** 新合同 `P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md` 固定“设置 → 更多本地控制面”作为唯一普通入口。Android 仅由该二级页进入既有 `P5ARoute.CONTROL`，并补齐 Projects、知识（含关系）与长期 Memory 用户路径；CONTROL 可返回设置。Desktop 在同名设置页仅调用已有 `show-projects`、`show-knowledge`、`show-memory` 工作页 action。Android `AndroidUserEntryAuditContractsTest`、`assembleDebug`、正式签名 `assembleP6V2FullOwnerAcceptance`、Desktop lint/65 个 Node UI 测试/静态 build/Rust check 均通过。
+- **新空 UI evidence：** 仅新建 `NanfengAiLocalControlOwnerAcceptance` / `emulator-5582`，安装 `com.nanzhufeng.ai.p6v2fullowneracceptance`。可见启动器 → 对话抽屉 → 设置 → 更多本地控制面 → CONTROL 显示无 Provider/外部访问边界及 Projects/知识/记忆路径；同一空数据仅经正常表单和 DocumentsUI 创建 `OwnerProject`、两条手工 Knowledge、一条人工 RELATED、`OwnerMemory` 和含 `owner-attachment.json` 的已提交 Conversation 附件。未操作 OPPO、`5554/5556/5558/5570` 或既有数据，未用 Activity extra、deep link、Room/SQLite、DB 注入、Provider、HTTP 或 Keychain。
+- **唯一下一步：** 从该仍运行、已唯一写入上述非敏感对象的 `emulator-5582`，仅用设置 → 数据与导入 → 完整工作区交换（v2）→ DocumentsUI 导出，取得 content-free readback 后再转独立 Desktop native Open/Save 与 strict semantic/owner-field/asset-ledger readback；Windows 不在 macOS 伪造。`context_gate.py` 已因 91.7% 返回 HANDOFF，当前线程不得继续该 P6 scope。
+
+## 2026-08-20 P6 v2 真实完整 owner 文件链：原紧凑 UI 入口缺口已由 P5-A 独立合同修复；新环境文件链待继续
 
 - **只读 GUI 复查：** macOS 已解锁，隔离验收包在 `emulator-5570` 前台可读。实际用户 UI 的对话抽屉只呈现“设置”和“新对话”；“设置”只呈现 AI 模型、对话、数据与导入、功能审阅、隐私。未通过 Activity extra、deep link、SharedPreferences、DB、shell 业务 command 或任何其他内部路由切换页面，也未创建任何验收对象。
 - **真实缺口：** 源码和实际 UI 一致表明 `P5ARoute.CONTROL` 仅有枚举、渲染与说明，缺少所有用户可点击的进入路径；`P5ARoute.PROJECTS`、`MEMORY`、`KNOWLEDGE` 只在 ControlHub 内部作为后续目标。故当前紧凑用户 UI 无法到达 Project、手工 Knowledge 或长期 Memory 的正常生产表单，进一步也无法从 UI 创建其上的 RELATED 关系。当前对话/附件路径本身可见，但不能单独填充其余 owner 后将这条不完整数据称为完整 owner 文件链。
-- **停止结论：** 这是 P6 真实验收前的产品入口缺口，不是 DocumentsUI、Desktop picker 或字段保真失败；也不授权用启动 Intent、内存 ViewModel、fixture、Room/SQLite 或 command 注入绕过。完整 owner 的 Android DocumentsUI → Desktop native Open/Save 回导没有开始，所有 P6、Windows 和 P0–P11 未完成结论保持不变。下一步须先以独立合同恢复一个可见、可返回、双端功能审阅已登记的紧凑 UI “更多本地控制面”入口，或由用户明确改变验收边界；之后从全新验收包重新走正常 UI 创建链。
+- **修复后边界：** 入口缺口不是 DocumentsUI、Desktop picker 或字段保真失败；已按独立 P5-A 合同恢复可见、可返回、双端功能审阅登记的紧凑 UI “更多本地控制面”入口，且已在新的 `emulator-5582` 正常 UI 创建最小 owner。完整 owner 的 Android DocumentsUI → Desktop native Open/Save 回导仍没有开始，所有 P6、Windows 和 P0–P11 未完成结论保持不变；后续不得用启动 Intent、内存 ViewModel、fixture、Room/SQLite 或 command 注入替代新环境 UI 链。
 
 ## 2026-08-20 P9-B 续行授权收紧：本地合成目标仍非生态接入
 

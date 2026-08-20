@@ -1,5 +1,10 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-20 P5-A 紧凑用户入口缺口：双端设置内本地控制面与新空 UI owner 创建已验证，P6 文件链待继续
+
+- **已实现：** `P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md` 将唯一普通入口固定为双端“设置 → 更多本地控制面”；Android 进入既有 `P5ARoute.CONTROL` 并包含 Projects、知识（含关系）与长期 Memory 路径，Desktop 只跳转已有 Projects、知识与关系、长期 Memory work-mode action。双端功能审阅登记“待您判断保留或删减”，建议仅保留设置二级入口、不在聊天主页/Composer/会话详情新增按键。
+- **已验证与边界：** Android 定向合同/Debug/正式签名 acceptance build、Desktop lint/Node 65/65/static build/Rust check 均通过。全新 `emulator-5582` 首装 acceptance package 后，从启动器可见 UI 进入 CONTROL，并正常创建最小 Project、两条 Knowledge、RELATED、长期 Memory 和带 DocumentsUI 选择附件的已提交 Conversation；没有 Key/凭据、Provider/HTTP/外部访问、Keychain、DB 或内部导航，也没有操作 OPPO/既有 AVD。`context_gate.py` 已返回 HANDOFF，Android v2 DocumentsUI 导出、Desktop native Open/Save 与 strict readback 留给新线程；不得将当前入口/owner UI 证据写作 P6 完整 owner 文件链、Windows、发布、OPPO 或 §17 P0–P11 完成。
+
 ## 2026-08-20 P6 v2 Desktop 真实 native save picker：隔离实例与 Android→Desktop→回导子链已关闭
 
 - **已确认：** 受控临时 bundle 副本使用唯一 `CFBundleIdentifier`、独立可执行路径与新建 acceptance app-data root；源 bundle hash 前后不变，源/副本均 deep/strict ad-hoc 验签。Computer Use 精确定位副本而非已有同 bundle-id 实例。空 root 的 v1/v2 计数均为零，空输出目录为零文件。

@@ -14,6 +14,7 @@
 - 默认仅提供设置二级入口；若建议在聊天、Composer、会话详情或工作页新增按键，必须在“功能审阅”中明确写出建议位置和误触/隐私影响，待用户判断后才可加。
 - 凭据、Provider 诊断、fixture、离线 Eval、工程控制不得借“功能审阅”进入普通设置；未具备真实 owner 的候选能力仅可作为“待您判断”的审阅条目，不得展示为可用配置或执行入口。
 - 当前登记项：ChatGPT / Claude ZIP 导入（建议保留设置入口、不加对话主页快捷键）；未关联媒体人工关联（建议仅在存在候选时于批次详情提供二级操作）；Desktop Compare 联网执行（待您判断，阶段 1–5 已完成 fail-closed owner、Security.framework 边界和未注册 mock-only adapter/安全 receipt；建议复用既有“对比”操作，不新增 Composer 常驻按钮；固定预设与状态仅由设置 → AI 模型服务承载）；本地精确复用（待您判断，仅双端离线精确键/既有消息引用索引，未接入普通聊天或 Provider；建议暂不增加常驻按键，未来真实复用、用量和清理完整后只在设置提供控制）；跨端文本会话交换（待您判断，Android 仅导出当前活动、未归属项目且无草稿/附件/工具结果的文本会话，Desktop 复用既有工作区导入；建议仅保留设置二级入口，不加聊天或 Composer 按键，且不把它写成备份、云同步或完整工作区保真）；完整工作区交换（v2）（待您判断，Android 从设置 → 数据与导入显式选择完整范围并经系统保存位置导出 v2 包，Desktop 从设置选择单一 v2 包私有导入；建议只保留双端设置二级入口，不加聊天、Composer 或工作页按键，且不把它写成备份、云同步或原生对象恢复）。
+- 更多本地控制面（待您判断，Android 设置二级页进入既有 CONTROL，Desktop 设置二级页分别进入已有 Projects、知识与关系、长期 Memory；建议仅保留设置二级入口，不在聊天主页、Composer 或会话详情新增按键，避免将本地管理误解为发送、联网或自动执行）。
 
 ## 入口矩阵
 
@@ -29,7 +30,7 @@ Desktop 的 v2 已提交回导仍为“设置 → 数据与导入”的二级入
 | ChatGPT / Claude / 南枫知识库静态会话导入 / 各自 import task owner | 设置 → 数据与导入 | 设置 → 数据 → 三个导入任务 | 双端均有 | 是 | 无 | app-private 副本、逐项确认，正文不执行 | Android/desktop 各自 importer 合同 |
 | Markdown、JSON 知识、PDF 文本、网页文本快照 / Android 各自 ViewModel | 已有 picker / Dialog handler，但 `导入与适配` 未渲染普通入口 | 无 Desktop production owner | Android 本批补到设置 → 数据与导入；Desktop 标记不存在 | Android 是；Desktop 不存在 | Android 可用功能此前不可发现；Desktop 不虚构入口 | 外部文本不可信；网页入口仍以既有独立确认 owner 为准 | Android 源码入口合同、assembleDebug |
 | 本地备份与恢复 / `LocalBackupRestoreViewModel` | 设置 → 数据与导入 → 备份与恢复 | 无等价 Desktop backup/restore owner | Android 有 | 是 | Desktop 不能把交换包导入写成“恢复备份” | Android 恢复具有替换语义；Desktop 导入独立工作区 | Android 既有合同；Desktop 保持不存在 |
-| 项目、知识、记忆、当前 Context / 各自 Android ViewModel；Desktop workspace owner | Android 非聊天 route / `更多` 控制面未由当前 Drawer 普通路径公开 | Desktop 工作模式 | 不应塞入普通聊天设置 | 需单独 IA 决策 | Android 普通用户发现性不足，但不是本批的安全入口缺失 | Context/记忆不能暗中加入 Prompt；不得以工程控制代替产品 IA | 先做独立产品 IA 合同，不直接暴露 |
+| 更多本地控制面 / Android `P5ANavigationViewModel` + `P5ARoute.CONTROL`；Desktop 既有 work-mode route | 设置 → 更多本地控制面 → 打开更多本地控制面 → Projects、知识（含关系）、长期 Memory | 设置 → 更多本地控制面 → Projects / 知识与关系 / 长期 Memory | 双端设置 → 功能审阅 | 是；仅可达既有本地 owner | Context 与离线 Eval 仍仅 Android CONTROL 现有范围，Desktop 不虚构相应 production owner | 不读凭据、不调用 Provider、不外发；不以内部 route/DB 注入创建对象 | `P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md`、Android/Node UI 定向合同、后续全新 acceptance GUI |
 | 模型本地目录与自动路由 / P6-G owner | Composer 模型菜单；设置模型服务 | Composer 模型菜单；设置模型与路由 | 双端有 | 是（仅本地选择） | 无 | 不得把目录/fixture 当 Provider 或凭据配置 | 现有 P6-G 合同 |
 | 凭据、Provider 诊断、离线 Eval、P8 控制与 fixture | 不作为普通入口 | 不作为普通入口 | 不作为普通设置 | 否 | 非缺口 | 暴露会误导真实联网能力或污染用户路径 | 静态搜索/渲染合同确认不出现 |
 

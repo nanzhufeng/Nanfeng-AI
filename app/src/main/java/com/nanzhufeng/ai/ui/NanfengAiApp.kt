@@ -155,6 +155,7 @@ private enum class SettingsDestination(val label: String) {
     MODEL("模型服务"),
     CONVERSATIONS("对话与存储"),
     IMPORT("数据与导入"),
+    LOCAL_CONTROL("更多本地控制面"),
     FEATURE_REVIEW("功能审阅"),
     PRIVACY("隐私与安全"),
 }
@@ -675,7 +676,10 @@ private fun CaptureScreen(
                 onBack = returnFromSettings,
             )
         } else if (route != P5ARoute.CAPTURE && route != P5ARoute.CONVERSATION) {
-            TextButton(onClick = { onRouteSelected(P5ARoute.CONVERSATION) }, shape = RoundedCornerShape(12.dp)) { Text("返回对话") }
+            val returnRoute = if (route == P5ARoute.CONTROL) P5ARoute.SETTINGS else P5ARoute.CONVERSATION
+            TextButton(onClick = { onRouteSelected(returnRoute) }, shape = RoundedCornerShape(12.dp)) {
+                Text(if (route == P5ARoute.CONTROL) "返回设置" else "返回对话")
+            }
             Header(route)
         }
         when (route) {
@@ -699,6 +703,7 @@ private fun CaptureScreen(
                 onOpenPrivacyData = onOpenPrivacyData,
                 onOpenImport = { onRouteSelected(P5ARoute.ADAPTERS) },
                 onOpenBackup = onOpenLocalBackup,
+                onOpenLocalControl = { onRouteSelected(P5ARoute.CONTROL) },
                 conversationExchangeExportState = conversationExchangeExportState,
                 onExportConversationExchange = onExportConversationExchange,
                 onSelect = { settingsDestination = it },
@@ -857,6 +862,7 @@ private fun SettingsHierarchy(
     onOpenPrivacyData: () -> Unit,
     onOpenImport: () -> Unit,
     onOpenBackup: () -> Unit,
+    onOpenLocalControl: () -> Unit,
     conversationExchangeExportState: ConversationExchangeExportUiState,
     onExportConversationExchange: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onSelect: (SettingsDestination) -> Unit,
@@ -895,6 +901,7 @@ private fun SettingsHierarchy(
                     OutlinedButton(onClick = onOpenBackup, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text("打开备份与恢复") }
                 }
             }
+            SettingsDestination.LOCAL_CONTROL -> LocalControlEntryCard(onOpenLocalControl)
             SettingsDestination.FEATURE_REVIEW -> FeatureReviewSettingsCard()
             SettingsDestination.PRIVACY -> PrivacyDataCard(privacyDataState, onOpenPrivacyData)
         }
@@ -910,9 +917,21 @@ private fun SettingsCategoryList(onSelect: (SettingsDestination) -> Unit) {
         SettingsCategoryRow(Icons.Outlined.Settings, "AI 模型") { onSelect(SettingsDestination.MODEL) }
         SettingsCategoryRow(Icons.Outlined.ChatBubbleOutline, "对话") { onSelect(SettingsDestination.CONVERSATIONS) }
         SettingsCategoryRow(Icons.Outlined.Save, "数据与导入") { onSelect(SettingsDestination.IMPORT) }
+        SettingsCategoryRow(Icons.Outlined.Settings, "更多本地控制面") { onSelect(SettingsDestination.LOCAL_CONTROL) }
         SettingsCategoryRow(Icons.Outlined.Settings, "功能审阅") { onSelect(SettingsDestination.FEATURE_REVIEW) }
         SettingsCategoryRow(Icons.Outlined.Lock, "隐私") { onSelect(SettingsDestination.PRIVACY) }
     }
+}
+
+@Composable
+private fun LocalControlEntryCard(onOpen: () -> Unit) = WhiteCard {
+    Text("更多本地控制面", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    Spacer(Modifier.height(4.dp))
+    Text("进入已有的 Projects、知识、长期 Memory、Context 与离线评测工作区。入口只切换页面，不创建或修改本地数据。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    Spacer(Modifier.height(6.dp))
+    Text("不会读取凭据、不调用 Provider、不发起外部访问或自动加入对话上下文。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(10.dp))
+    Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text("打开更多本地控制面") }
 }
 
 @Composable
@@ -922,6 +941,13 @@ private fun FeatureReviewSettingsCard() {
             Text("新增功能审阅", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text("新增能力在进入常用界面前，先在这里列出用途、现有入口与待您判断项。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        }
+        WhiteCard {
+            Text("更多本地控制面", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("当前：待您判断保留或删减 · 入口：设置 → 更多本地控制面 → 打开更多本地控制面。可进入已有的 Projects、知识、长期 Memory、Context 与离线评测。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("建议：保留设置二级入口；不建议在聊天主页、Composer 或会话详情增加按键，避免把本地管理误解为发送、联网或自动执行。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
         WhiteCard {
             Text("ChatGPT / Claude ZIP 导入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -1025,7 +1051,7 @@ private fun ControlHub(onRouteSelected: (P5ARoute) -> Unit) = WhiteCard {
     Spacer(Modifier.height(6.dp))
     Text("入口只切换工作区，不复制 Projects、Memory、Context 或离线 Eval 的业务状态。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
-    listOf(P5ARoute.PROJECTS, P5ARoute.MEMORY, P5ARoute.CONTEXT, P5ARoute.EVAL, P5ARoute.ADAPTERS).forEach { item ->
+    listOf(P5ARoute.PROJECTS, P5ARoute.KNOWLEDGE, P5ARoute.MEMORY, P5ARoute.CONTEXT, P5ARoute.EVAL, P5ARoute.ADAPTERS).forEach { item ->
         OutlinedButton(onClick = { onRouteSelected(item) }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text(item.label) }
         Spacer(Modifier.height(8.dp))
     }
