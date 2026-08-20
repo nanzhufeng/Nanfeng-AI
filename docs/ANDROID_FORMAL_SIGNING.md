@@ -49,6 +49,14 @@
 - 从模拟器拉回的已安装 APK 与本地 `南枫AI-开发验收.apk` SHA-256 一致。
 - OPPO/真实设备尚未安装；不得把模拟器证据写成真机覆盖升级通过。
 
+## release v2 首次构建证据（2026-08-20）
+
+- 最终 APK：`app/build/outputs/apk/release/南枫AI.apk`，package name `com.nanzhufeng.ai`，versionCode `51`，versionName `0.3.0-p10a`，SHA-256 `49f516d5fa94c65f2238eef0a30fcee772dcfd8b1034f252e93242fbf9258817`。
+- `apksigner verify --verbose --print-certs`：APK Signature Scheme v2 / v3 均通过，单一 signer；v1、v3.1、v4 未启用。
+- signer certificate SHA-1：`2ab70dee32bc61f0596380cd328fa673c0c86149`；SHA-256：`6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；RSA 4096-bit。
+- 从最终 APK 的公开签名块解析的证书有效期：`2026-08-20T06:55:35Z` 至 `2076-08-20T06:55:35Z`。
+- 尚未安装到 emulator 或 OPPO。由于 release v2 与 legacy 证书不同，禁止对历史安装执行覆盖安装或以清数据绕过签名不一致。
+
 ## legacy 保护边界
 
 1. 不删除、覆盖、导出、猜测或恢复 legacy keystore / 口令。
