@@ -143,6 +143,10 @@ class RoomKnowledgeRepository(private val database: NanfengAiDatabase, private v
 
     override fun listSnapshots(filter: KnowledgeSearchFilter): List<KnowledgeSnapshot> = database.knowledgeDao().listKnowledgeIncludingHidden()
         .mapNotNull { database.knowledgeDao().loadSnapshot(KnowledgeItemId(it.id)) }
+        .filter { it.lifecycle.status == filter.status }
+        .filter { filter.scope == null || it.lifecycle.scope == filter.scope }
+        .filter { filter.projectId == null || it.lifecycle.projectId == filter.projectId }
+        .filter { filter.sourceType == null || filter.sourceType in it.item.sourceEvidence.map(SourceEvidence::sourceType) }
 
     override fun mutate(intent: KnowledgeIntent, fingerprint: String): KnowledgeMutationResult = database.inTransaction {
         val dao = database.knowledgeDao(); val current = dao.loadSnapshot(intent.knowledgeId)
@@ -152,7 +156,7 @@ class RoomKnowledgeRepository(private val database: NanfengAiDatabase, private v
                 if (current != null) return@inTransaction KnowledgeMutationResult.Rejected(KnowledgeRejectionCode.INVALID_ACTION)
                 if (intent.scope == KnowledgeScope.PROJECT && database.projectDao().findProject(requireNotNull(intent.projectId).value) == null) return@inTransaction KnowledgeMutationResult.Rejected(KnowledgeRejectionCode.INVALID_SCOPE)
                 val title = managementDomain.normalizedTitle(requireNotNull(intent.title)); val body = managementDomain.normalizedBody(requireNotNull(intent.body)); val tags = managementDomain.normalizedTags(intent.tags); val now = managementDomain.now()
-                val item = KnowledgeItem(intent.knowledgeId, title, body, listOf(SourceEvidence(CaptureSourceType.MANUAL_TEXT, now, "manual", setOf("knowledge"))), CandidateProvenance(CandidateId("manual:${intent.knowledgeId.value}"), InvocationId("manual:${intent.knowledgeId.value}"), ProviderId.MOCK, "local-manual", 0), now, schemaVersion = 2)
+                val item = KnowledgeItem(intent.knowledgeId, title, body, listOf(SourceEvidence(CaptureSourceType.MANUAL_TEXT, now, null, setOf("knowledge"))), CandidateProvenance(CandidateId("manual:${intent.knowledgeId.value}"), InvocationId("manual:${intent.knowledgeId.value}"), ProviderId.MOCK, "local-manual", 0), now, schemaVersion = 2)
                 val snapshot = KnowledgeSnapshot(item, KnowledgeLifecycle(KnowledgeStatus.ACTIVE, intent.scope, intent.projectId, tags, managementDomain.contentHash(title, body), now), emptyList()).appendRevision(now)
                 persistManaged(dao, snapshot); KnowledgeMutationResult.Applied(requireNotNull(dao.loadSnapshot(intent.knowledgeId)))
             }

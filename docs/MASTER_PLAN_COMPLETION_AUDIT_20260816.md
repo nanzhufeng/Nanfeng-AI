@@ -77,6 +77,12 @@
 
 `MASTER_DEVELOPMENT_BLUEPRINT.md` 第 17 节定义的是总控方案的**完整路线**。本表是唯一的总控排程入口；上表和后文需求矩阵只记录阶段内已获得的证据，不能缩小或替代 P0–P11 的退出门。
 
+### 2026-08-21 P6 v2 完整 owner Android DocumentsUI 增量（Desktop 尚未开始）
+
+- **新增真实证据：** 只在新的 `emulator-5582` 通过正常 Android UI 形成最小非敏感完整 owner，并以 Settings → 数据与导入 → 导入中心 → 完整工作区交换（v2）→ DocumentsUI 实际保存。范围为 Project/Conversation/Knowledge/Memory/Relation = `1/1/2/1/1`、附件 1；App 严格回读 semantic `fdf9f95ac84005a173807779c055f0a3bd2112b01beb9f7bb28763dbe19d9ff9`。对实际保存包的只读 Node strict verifier 也通过（entries 3、asset 1），匿名 owner-field structure 为 8 项、field-set digest `ead2f34eea50ffce928c97d9e117b766de9b2ea07bd52864da1649a6ed4aea1c`。
+- **根因修复：** 真实导出先正确拒绝遗留手工 Knowledge 的 `sourceReference=manual`；修复后新的手工 Knowledge 不再写 locator。另修复 repository filter 缺失导致回收站 Knowledge 可能被完整范围纳入的问题。两项均有 Android 定向 JVM 回归，且本次 UI 范围实测为上述准确计数。
+- **未扩张结论：** Desktop 的全新独立 acceptance bundle、native Open/Save、private receipt/provenance 与 re-export 比对尚未开始；Android v2 import/archive/recovery、Desktop 原生对象恢复、Windows、正式发布、OPPO 和 P0–P11 总控均仍未退出。context gate 已要求在此停下，下一线程只能继续该 Desktop 独立验收，不得重用历史 bundle/root 或用文件/数据库注入替代 native picker。
+
 | 原始阶段 | 已确认的当前落点 | 仍未关闭的原始退出门 / 下一类工作 | 总控结论 |
 | --- | --- | --- | --- |
 | P0 总方案与治理冻结 | 蓝图、合同、交接、审计与功能审阅规则都已存在。 | 每次扩展继续维持蓝图、合同、当前事实三者一致；用户对总体方向的持续确认不由旧记录替代。 | 治理基线已建立；持续维护。 |

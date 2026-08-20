@@ -11,6 +11,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,6 +30,7 @@ class P4EKnowledgeRoomContractsTest {
     @Test fun `manual create revision tags archive trash and restore survive room rebuild`() {
         val id = KnowledgeItemId("knowledge-e")
         assertTrue(manage.execute(KnowledgeIntent(KnowledgeIntentId("create"), KnowledgeIntentAction.CREATE_MANUAL, id, "本地检索", "Markdown `code` 与中文", setOf("Android", "检索"))) is KnowledgeMutationResult.Applied)
+        assertNull(repository.findSnapshot(id)!!.item.sourceEvidence.single().sourceReference)
         assertTrue(manage.execute(KnowledgeIntent(KnowledgeIntentId("edit"), KnowledgeIntentAction.UPDATE, id, "本地检索", "English search body", setOf("code", "search"))) is KnowledgeMutationResult.Applied)
         assertEquals(2, repository.findSnapshot(id)!!.revisions.size)
         assertEquals(setOf("code", "search"), repository.findSnapshot(id)!!.lifecycle.tags)
@@ -39,6 +41,8 @@ class P4EKnowledgeRoomContractsTest {
         manage.execute(KnowledgeIntent(KnowledgeIntentId("restore"), KnowledgeIntentAction.RESTORE, id))
         manage.execute(KnowledgeIntent(KnowledgeIntentId("delete"), KnowledgeIntentAction.DELETE, id))
         assertEquals(KnowledgeStatus.DELETED, repository.findSnapshot(id)!!.lifecycle.status)
+        assertTrue(repository.listSnapshots().isEmpty())
+        assertEquals(listOf(id), repository.listSnapshots(KnowledgeSearchFilter(status = KnowledgeStatus.DELETED)).map { it.item.id })
         manage.execute(KnowledgeIntent(KnowledgeIntentId("trash-restore"), KnowledgeIntentAction.RESTORE_FROM_TRASH, id))
         assertEquals(KnowledgeStatus.ACTIVE, repository.findSnapshot(id)!!.lifecycle.status)
     }

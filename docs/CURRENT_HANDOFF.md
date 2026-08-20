@@ -1,5 +1,13 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P6 v2 完整 owner：Android DocumentsUI 真实导出与严格去内容化读回已闭合；Desktop 独立 native Open/Save 因 context gate 待新线程
+
+- **真实 Android 链：** 仅在新建的 `NanfengAiLocalControlOwnerAcceptance` / `emulator-5582`（`com.nanzhufeng.ai.p6v2fullowneracceptance`）经可见正常 UI 完成：Settings → 数据与导入 → 导入中心 → 完整工作区交换（v2）→ DocumentsUI。范围弹窗实测为 `项目 1 · 对话 1 · 知识 2 · 记忆 1 · 关系 1 · 附件 1`；DocumentsUI 保存后 App 显示严格回读 `fdf9f95ac840… · 6 项对象 · 1 项附件`。输出 `nanfeng-ai-workspace-v2-owner-acceptance.zip` 3,955 B，只读 pull package SHA-256 为 `54b48a470033bde62761a6030b4fdf7a6dfb70ee8bef3f0393f38324f910c37c`；Node strict verifier 通过：semantic `fdf9f95ac84005a173807779c055f0a3bd2112b01beb9f7bb28763dbe19d9ff9`、entries 3、assets 1。
+- **字段/账本读回：** 只输出匿名结构：roots 为 Project/Conversation/Knowledge/Memory/Relation = `1/1/2/1/1`，`ownerFieldHashes` 为 8 项（project、conversation、knowledge×2、memory、relation、settings、asset），asset=1，field-set digest `ead2f34eea50ffce928c97d9e117b766de9b2ea07bd52864da1649a6ed4aea1c`。package 只含 `manifest.json`、`exchange.json` 和一条 content-addressed asset；未打印正文、标题、ID、路径或附件 bytes。
+- **本轮收敛的真实缺陷：** 首次 UI 导出安全拒绝 `知识 sourceReference 不能进入 v2 交换。`。根因是手工 Knowledge 把 `sourceReference` 硬编码为 `manual`，与 v2 locator 拒绝合同冲突；现改为 null。另修复 `RoomKnowledgeRepository.listSnapshots` 忽略 filter、使回收站 Knowledge 泄入“完整工作区范围”的错误。定向 JVM `P4EKnowledgeRoomContractsTest` + `WorkspaceExchangeV2OwnerMapperContractsTest` 通过；最终正式签名验收 APK SHA-256 `dc2724421404161ff7b5e626fc96835ac381f038104e3a0bc8c02dcc50ff6869`，v2/v3 verify 通过，仅对 5582 覆盖安装且 `firstInstallTime` 未变。
+- **严格边界：** 未触碰 OPPO、`5554/5556/5558/5570`，未运行 instrumentation/connected test/自动部署或清理，未使用 Activity extra、deep link、Room/SQLite/DB 注入、Provider/HTTP/Keychain。旧 relation 由可见 UI 撤销、旧 Knowledge 由 UI 移入回收站，后以两条新的非敏感 Knowledge 建立一条 RELATED；这不是 P6、Android import/recovery、Desktop 原生对象恢复、Windows、发布或 P0–P11 完成声明。
+- **唯一下一步：** `context_gate.py` 于 00:17 返回 HANDOFF（94.3%），故本线程不启动 Desktop。新线程先读 `desktop/scripts/prepare-p6-v2-picker-acceptance.mjs`，创建全新项目专属 Desktop bundle/root；随后仅经 Desktop Settings 的 native Open picker 选择 `/tmp/nanfeng-ai-p6-v2-owner-acceptance.Vv2U3s/android-v2-owner-acceptance.zip`，native Save picker 回导，再对独立 root 的 receipt/provenance/v1-zero 做 content-free semantic、全量 owner-field 和 asset-ledger 比对。当前两处源码修复未提交，不得覆盖。
+
 ## 2026-08-20 P5-A 更多本地控制面：双端设置入口、构建与新空 UI owner 创建已验证；P6 文件链因 context gate 待新线程继续
 
 - **已实现与自动门：** 新合同 `P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md` 固定“设置 → 更多本地控制面”作为唯一普通入口。Android 仅由该二级页进入既有 `P5ARoute.CONTROL`，并补齐 Projects、知识（含关系）与长期 Memory 用户路径；CONTROL 可返回设置。Desktop 在同名设置页仅调用已有 `show-projects`、`show-knowledge`、`show-memory` 工作页 action。Android `AndroidUserEntryAuditContractsTest`、`assembleDebug`、正式签名 `assembleP6V2FullOwnerAcceptance`、Desktop lint/65 个 Node UI 测试/静态 build/Rust check 均通过。
