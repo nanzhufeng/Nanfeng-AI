@@ -10,15 +10,16 @@
 | OPPO 安装链 | OPPO PKH120 当前只读保留较早 release-v2 APK `fc8f9ac6…`；它不是当前源码 APK `57d048…`，本轮未覆盖安装。 | 保留数据；当前源码的 OPPO 安装/启动未验证 |
 | Desktop P6-K 正式 bundle | 资源封印缺失已修复；最终 ad-hoc bundle 严格验签、原生 WebView、Settings 匿名 aggregate readback 已完成 | 已关闭 |
 | Android P6-K 真正入口 | 当前源码以独立 `com.nanzhufeng.ai.p6eacceptancev2` 验收包运行，未覆盖 legacy `com.nanzhufeng.ai` / `com.nanzhufeng.ai.p6eacceptance`。经设置 → 数据与导入 → 导入中心 → 系统 DocumentsUI，已导入两份已授权 ZIP；临时中性来源均在私有暂存后删除。force-stop/cold-start 后只读回匿名 aggregate：ChatGPT 23 对话 / 719 未关联媒体；Claude 162 对话 / 0 未关联媒体；Claude 另有 120 项严格失败，与 Desktop 同源聚合一致。 | 已关闭（隔离 emulator 验收；不等同于 OPPO 导入） |
+| Desktop Compare 本地执行边界 | 阶段 1–5 已形成 fail-closed owner、Security.framework credential seam、Settings 安全投影、30 秒 content-free direct-click command，以及未注册的 OpenAI-compatible mock adapter/安全双支 receipt。阶段 5 定向 Rust 合同 5/5 与 `clippy -D warnings` 通过，且仅使用 in-memory credential、mock HTTP 与内存 SQLite。 | 本地 mock-only 合同 | 不等同于真实执行：尚无 UI/Tauri 组合、用户凭据输入或读取、已核验 model/price catalog，亦无 HTTP 授权；用户仍须决定保留与费用上限。 |
 | 实包媒体关联 | 两份实包没有可证明的 message-to-asset relation；`UNMAPPED_REJECTED` 是正确安全结果。K8 的人工精确关联功能已实现，但尚未发生用户在 Settings 中明确选择资产和目标消息的真实动作 | 外部用户操作 |
 | 真实 Provider / 账号同步 / 生态 | 本地 owner、禁用状态和合同已存在；真实 HTTP、账号、OAuth/发布白名单、同步及生态目标仍分别需要已配置的外部服务和可验证账户/目标 | 外部条件，不得伪报完成 |
-| 新增功能审阅与入口建议 | Android 与 Desktop 设置均新增“功能审阅”；当前登记 ZIP 导入与未关联媒体人工关联，展示待您判断的去留状态和小字入口建议。今后每项普通用户新功能必须同步登记，默认不增加聊天主页/Composer 常驻按键。 | 已建立规则与双端实现 |
+| 新增功能审阅与入口建议 | Android 与 Desktop 设置均新增“功能审阅”；当前登记 ZIP 导入、未关联媒体人工关联与 Desktop Compare 联网执行，展示待您判断的去留状态、入口建议与小字理由。今后每项普通用户新功能必须同步登记，默认不增加聊天主页/Composer 常驻按键。 | 已建立规则与双端实现 |
 
-**当前可继续的总控工作：** P6-K Android 正常入口已闭环。后续按总控矩阵分别推进真实媒体人工关联（仅用户在 Settings 明确选择时）、真实 Provider/账号同步/生态的外部条件验收，以及各项未完成的双端 UI/readback；OPPO 仅保留较早 v2 包，当前源码 APK 未安装，均不得将其扩大为当前产物或全部总控完成。
+**当前可继续的总控工作：** P6-K Android 正常入口与 Desktop Compare 的本地阶段 5 mock-only 适配边界已闭环。后续按总控矩阵分别推进真实媒体人工关联（仅用户在 Settings 明确选择时）、用户对 Compare model pair/cost cap 的明确决定，以及真实 Provider/账号同步/生态的外部条件验收；OPPO 仅保留较早 v2 包，当前源码 APK 未安装，均不得将其扩大为当前产物或全部总控完成。
 
 ## 结论
 
-总控方案仍不能标记为“完整落地”，但 Android P6-K 签名、正常系统 picker、私有暂存删除、冷启动与匿名回读均已关闭；Desktop P6-K bundle/readback 亦已关闭。剩余项分别是用户明确选择的真实媒体人工关联、真实 Provider/账号/同步/生态条件，以及尚未完成的跨端 UI/readback 项。没有以旧 APK、数据库注入、卸载、清数据、Key 或 HTTP 绕过任一门禁。
+总控方案仍不能标记为“完整落地”，但 Android P6-K 签名、正常系统 picker、私有暂存删除、冷启动与匿名回读均已关闭；Desktop P6-K bundle/readback 与 Compare 阶段 5 的 mock-only adapter/receipt 边界亦已关闭。剩余项分别是用户明确选择的真实媒体人工关联、Compare model pair/cost cap 决定、真实 Provider/账号/同步/生态条件，以及尚未完成的跨端 UI/readback 项。没有以旧 APK、数据库注入、卸载、清数据、Key 或 HTTP 绕过任一门禁。
 
 本轮已完成的无外部条件复验：Desktop P6-K 定向测试 7/7、Desktop 全量 Rust 库测试 68/68（唯一会触达 macOS Keychain 的既有自测主动过滤）、Desktop UI 合同 82/82、lint、typecheck 与静态 build 均通过。
 
@@ -38,7 +39,7 @@
 | profile / personalization | 白名单 owner 已实现；两份实包均为无可采纳字段的安全结果 | 实包安全聚合 + 双端合成 owner 合同 | 无可写的真实字段，因此不应人为重试或制造写入 |
 | P6-K Settings 隐私与撤销恢复 | Android 不显示所选 ZIP 名；撤销失败保留 recovery task/archive；Desktop 与 Android 均有正常 Settings 的匿名 aggregate readback | 双端真实/自动合同 | P6-K Settings 已关闭；真实媒体人工关联仍需用户明确操作 |
 | 既定聊天、抽屉、Composer 不回退 | Desktop UI 合同 82/82；含 P6-K 入口、Compare、精确 placeholder、抽屉/Composer 保护；Android 当前源码可完成定向合同与正式 release/lint | 自动 UI 合同 + 当前构建 | 仍须逐项以真实 Android 交互验收，不以构建替代可见行为 |
-| Compare 可见入口 | Android/Desktop 均有模型菜单、Composer `对比`、模型长按三入口；Android 为空草稿先返回，Desktop 直接显示无执行 owner 且不读 Key/发内容 | 代码/局部 emulator | 显式 Compare 是直接产品命令，不再有第二次产品确认面；Android 非空草稿的真实执行仍受用户内容、凭据与 HTTP 门禁，不在本轮执行 |
+| Compare 可见入口与 Desktop 本地适配边界 | Android/Desktop 均有模型菜单、Composer `对比`、模型长按三入口；Android 为空草稿先返回。Desktop 保持 UI fail-closed，但底层已有未注册的阶段 5 adapter seam，可在 mock HTTP 与内存 receipt 中写入两支安全状态 | 代码/局部 emulator + Rust mock-only 合同 | 显式 Compare 是直接产品命令，不再有第二次产品确认面；Desktop adapter 仍未组合至 UI/Tauri/真实凭据或 HTTP。Android 非空草稿真实执行同样受用户内容、凭据与 HTTP 门禁，不在本轮执行 |
 | 普通聊天真实 Provider | 生产边界、确认合同、账本和失败关闭机制已实现 | 本地合同 | 需要已验证目录、可用凭据、当次可见确认和用户明确非敏感输入；真实 HTTP 未授权执行 |
 | P5 备份/迁移等真实 Android 链 | P5-D manifest/preflight 从当前打开的 Room 读取 Schema（37），候选 SQLite 也须一致；完整 1→37 迁移链受定向测试保护。当前以 release-v2 签名隔离包 `com.nanzhufeng.ai.p5dacceptance` 经 Settings/SAF 完成成功导出回读、非敏感变更后的受控替换、force-stop/cold-start readback，installed base.apk 与本地验收 APK SHA-256 一致 | 自动化 + 当前隔离 emulator 正常 UI/readback | P5-D 的当前包 SAF 恢复链已关闭；旧 APK `install -r` 升级迁移、OPPO、发布、云同步与 Provider 仍为独立门槛 |
 | P7 同步、P9 生态、P10 联网路径 | 本地协议、禁用状态和 LOCAL_TEST_ONLY/配置表面已实现 | 本地合同 | 仍需要真实账号、目标服务/应用、外部授权及网络；不能借“总控”推定完成 |
