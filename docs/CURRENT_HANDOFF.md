@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P11 供应链复核：Desktop PDF 解析高危项已修复；总控下一门仍受外部条件约束
+
+- **已完成与提交：** `04b9c1f fix(p11): patch desktop PDF parser advisory` 将 Desktop `lopdf` 从 `0.35.0` 升至 RustSec `RUSTSEC-2026-0187` 的修复线 `0.42.0`。`cargo check --locked`、`cargo clippy -- -D warnings` 与 Rust `97/97` 均通过；`cargo fmt --check` 只暴露既有 `desktop/src-tauri/src/lib.rs` 大范围格式债务，未写入格式化改动。完整清点、npm（0 production dependencies / 0 vulnerabilities）、Android release runtime 解析和未覆盖面见 `P11_SUPPLY_CHAIN_REVIEW_20260821.md`。
+- **P6 原始出口校正：** §17 的 P6 退出只要求 Android 导出 → Desktop 导入 → 再导出精确保真，以及紧凑/展开、本地文件、更新与异常恢复的独立验收；**不要求** Android v2 回导/archive/recovery。最新 macOS 完整 owner DocumentsUI→Desktop native Open/Save/re-export 已闭合；Android v2 回导最多是独立质量增量，不能再当作 P6 或 P0–P11 排程前置。
+- **严格停止与下一步：** `context_gate.py` 已在本阶段返回 `WARN` 并生成交接卡；不得在本线程展开新功能。P2–P4 真实 Provider/流/成本质量、P5 当前源码 OPPO/发布、P6 Windows 原生验收、P7 OAuth/Supabase、P8 真实工具、P9 真实目标均仍是各自外部门；P10 尚未满足双消费者触发条件。若下一线程继续 P11 的 Gradle 供应链完整性，应在无其他 Gradle 争用时独立生成并验证仓库内 dependency verification metadata；本轮该生成未产出文件，绝不记为完成。未读 Key、未发 Provider HTTP、未操作 OPPO、`5554/5556/5558/5570` 或 `5582`。
+
 ## 2026-08-21 P6 v2 完整 owner：Android DocumentsUI → Desktop native Open/Save 独立验收已闭合；P6 总门仍未退出
 
 - **真实 Desktop 子链：** 新生成且 deep/strict 验签的 macOS acceptance bundle 只使用全新项目专属 `/tmp` root，经 Desktop 设置 → 数据导入 → 完整工作区交换（v2）打开原生 Open picker，实际选择 Android 的 3,955 B 普通 `.zip`；strict preflight、private archive/transaction 与 content-free UI receipt 成功。随后由同一已提交私有记录打开原生 Save picker，在新的空输出目录回导 3,851 B `.nfai-exchange`，UI 两次显示 semantic `fdf9f95ac840…d9ff9` 与 1 项附件。
