@@ -166,5 +166,5 @@ private fun JSONArray.ids(): Set<String> = buildSet { forEachObject { add(it.get
 private fun JSONArray.forEachObject(block: (JSONObject) -> Unit) { repeat(length()) { index -> block(getJSONObject(index)) } }
 private fun JSONObject.requireKey(key: String) { require(has(key)) { "缺少 $key" } }
 private fun JSONObject.requireExact(vararg keys: String) { val actual = this.keys().asSequence().toSet(); require(actual == keys.toSet()) { "未知或缺少字段：$actual" } }
-private fun requireStableId(value: String) { require(value.matches(Regex("[a-z][a-z0-9_-]{1,63}"))) { "稳定 ID 无效。" } }
+private fun requireStableId(value: String) { require(value.matches(Regex("[a-z0-9][a-z0-9_-]{1,63}"))) { "稳定 ID 无效。" } }
 private fun requireHash(value: String) { require(value.matches(Regex("[a-f0-9]{64}"))) { "SHA-256 无效。" } }

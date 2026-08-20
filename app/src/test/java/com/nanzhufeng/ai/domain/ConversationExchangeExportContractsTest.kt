@@ -17,7 +17,7 @@ class ConversationExchangeExportContractsTest {
 
     @Test fun `active standalone text conversation becomes a strict P6 exchange package`() {
         val snapshot = textSnapshot()
-        val useCase = ExportConversationExchangeUseCase(repository(snapshot), "0.3.0-test", clock) { "export-conversation-test" }
+        val useCase = ExportConversationExchangeUseCase(repository(snapshot), "0.3.0-test", clock) { "3export-conversation-test" }
 
         val candidate = useCase.prepare(snapshot.conversation.id)
         assertTrue("candidate=$candidate", candidate is ConversationExchangePreparation.Prepared)
@@ -50,8 +50,8 @@ class ConversationExchangeExportContractsTest {
     }
 
     private fun textSnapshot(): ConversationSnapshot {
-        val conversationId = ConversationId("conversation-export-test")
-        val messageId = MessageNodeId("message-export-test")
+        val conversationId = ConversationId("1conversation-export-test")
+        val messageId = MessageNodeId("2message-export-test")
         return ConversationSnapshot(
             conversation = Conversation(conversationId, "跨端文本", currentLeafMessageId = messageId, createdAt = now, updatedAt = now),
             nodes = listOf(MessageNode(messageId, conversationId, null, 0, MessageRole.USER, listOf(ContentBlock.Text("非敏感文本")), now)),

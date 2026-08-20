@@ -782,7 +782,7 @@ fn require_array<'a>(object: &'a Map<String, Value>, key: &str) -> Result<&'a Ve
 fn is_stable_id(value: &str) -> bool {
     let bytes = value.as_bytes();
     (2..=64).contains(&bytes.len())
-        && bytes[0].is_ascii_lowercase()
+        && (bytes[0].is_ascii_lowercase() || bytes[0].is_ascii_digit())
         && bytes.iter().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'_' || *byte == b'-'
         })
@@ -7702,6 +7702,12 @@ mod tests {
         duplicate["knowledge"][0]["id"] = duplicate["projects"][0]["id"].clone();
         assert!(validate_exchange(&duplicate).is_err());
         assert!(store.list_workspaces().unwrap().is_empty());
+    }
+
+    #[test]
+    fn stable_ids_accept_uuid_compatible_numeric_prefixes() {
+        assert!(is_stable_id("0f10b4af-c7b0-4f86-bd70-7e6dfd10b29d"));
+        assert!(!is_stable_id("-f10b4af-c7b0-4f86-bd70-7e6dfd10b29d"));
     }
 
     #[test]

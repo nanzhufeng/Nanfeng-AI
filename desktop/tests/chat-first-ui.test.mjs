@@ -348,7 +348,7 @@ test('rendered first screen follows the lightweight sidebar, single canvas and f
   const settings = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', profileOpen: false, pane: 'settings', settingsSection: 'data', status: '导入任务待处理', error: '', connection: {} });
   for (const token of ['settings-return-app', '返回应用', '搜索设置', '数据导入', 'ChatGPT 对话', '导入任务待处理']) assert.ok(settings.includes(token));
   for (const token of ['grid-template-columns: var(--chat-sidebar-width', 'chat-sidebar-divider', '.chat-composer-wrap', '#fff', 'overflow: hidden']) assert.ok(css.includes(token));
-  for (const token of ['chat-shell.mjs', 'chat-shell.css', 'nanfeng-ai-icon.png']) assert.ok(build.includes(token));
+  for (const token of ['chat-shell.mjs', 'chat-shell.css', 'desktop-compare-execution-owner.mjs', 'nanfeng-ai-icon.png']) assert.ok(build.includes(token));
 });
 
 test('FB-P6-070 removes persistent Composer implementation copy while preserving send semantics', () => {
