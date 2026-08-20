@@ -6,7 +6,7 @@
 
 | 总控项 | 当前事实 | 状态 |
 | --- | --- | --- |
-| release v2 签名与正式 APK | 新的项目专属 v2 签名已生成；当前 release APK 为 `com.nanzhufeng.ai` `51 / 0.3.0-p10a`，SHA-256 `fc8f9ac604c57492cabb4b8bc74fe4284623d3a5385b50ad782f798b75252546`，v2/v3 签名校验通过 | 已关闭 |
+| release v2 签名与正式 APK | 新的项目专属 v2 签名已生成；当前源码 release APK 为 `com.nanzhufeng.ai` `51 / 0.3.0-p10a`，SHA-256 `24177f946be0d4ac2db3f5b8aa0240b4f3f354fa68cfa10695c5c3b78e4acecb`，v2/v3 签名校验通过。该产物包含功能审阅与 Claude 兼容修正，尚未安装到 OPPO。 | 已关闭 |
 | OPPO 安装链 | OPPO PKH120 已安装当前 release v2；`dumpsys`、UIAutomator package 与拉回的 `base.apk` SHA-256 三方一致 | 已关闭（仅安装/启动，不等同于所有功能验收） |
 | Desktop P6-K 正式 bundle | 资源封印缺失已修复；最终 ad-hoc bundle 严格验签、原生 WebView、Settings 匿名 aggregate readback 已完成 | 已关闭 |
 | Android P6-K 真正入口 | 当前源码以独立 `com.nanzhufeng.ai.p6eacceptancev2` 验收包运行，未覆盖 legacy `com.nanzhufeng.ai` / `com.nanzhufeng.ai.p6eacceptance`。经设置 → 数据与导入 → 导入中心 → 系统 DocumentsUI，已导入两份已授权 ZIP；临时中性来源均在私有暂存后删除。force-stop/cold-start 后只读回匿名 aggregate：ChatGPT 23 对话 / 719 未关联媒体；Claude 162 对话 / 0 未关联媒体；Claude 另有 120 项严格失败，与 Desktop 同源聚合一致。 | 已关闭（隔离 emulator 验收；不等同于 OPPO 导入） |
