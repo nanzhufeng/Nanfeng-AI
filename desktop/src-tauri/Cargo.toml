@@ -9,6 +9,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 aes-gcm = "0.10"
 base64 = "0.22"
+getrandom = "0.3"
 hex = "0.4"
 image = { version = "0.25.5", default-features = false, features = ["jpeg", "png", "webp"] }
 lopdf = "0.35"

@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v2 Desktop 私有导入内核：preflight/archive/SQLite/reopen/re-export 已实现，用户入口仍未开放
+
+- **已实现：** `desktop/src-tauri/src/p6_workspace_exchange_v2.rs` 是未注册的独立 v2 内核。它只读取独立 `packageVersion: 2` / `exchangeVersion: 2` 的 `manifest.json + exchange.json + assets/<sha256>`，将 manifest/export canonical equality、完整 v2 IR semantic hash、会话 `ASSET_REF` 与 Knowledge attachments 的统一账本、每项元数据/bytes SHA-256、未知条目和 128 MiB 限制全部 fail-closed。receipt 只保存 package/semantic hash、枚举、计数和 `ownerFieldHashes`，不保存正文、路径或 bytes。
+- **私有持久化与恢复：** archive 仅写入 `exchange-v2/archives/<packageHash>/`；随机 `.prepare-*`、逐文件 fsync/hash 回读和原子 rename 全在 SQLite transaction 前完成。schema 20→21 仅新增 `exchange_v2_imports/assets/owner_provenance/import_journal/import_receipts`；以 `BEGIN IMMEDIATE` 原子写入。任一写入注入失败均 rollback 为五表零行；pre-commit 无 resume，post-commit 按 journal、canonical IR、field hash 与 archive bytes 复验后幂等 replay。回导只从 committed canonical IR 和 archive bytes 写 `.part` 后 rename，并回读 semantic/全部 field hash/asset identity。
+- **v1 隔离与验证：** v2 不读写 `workspaces/workspace_exchange/import_journal`，生产 migration 回归确认 schema 21 后 v1 三表仍为零。Desktop 定向内核 4/4、既有 v2 IR 与 v1 boundary 各 1/1、`cargo clippy --lib --tests -- -D warnings`、新增模块 `rustfmt --check`、Node v2 golden 均通过；`cargo test --lib -- --skip macos_keychain_self_test_uses_and_cleans_only_a_random_app_owned_entry` 为 89/89。未运行会触发 macOS Keychain 的历史自测；未调用网络、Key、picker、设备或真实用户数据。
+- **停止门与下一唯一候选：** 内核刻意没有 Tauri command、native picker、UI、SAF 或“功能审阅”入口，尚不能宣称完整工作区交换的真实文件链已关闭。下一步只能先为该私有内核接入正常 Desktop picker 的最小真实文件链并独立验收；仍保持 v1 隔离，且在真实链完成前不增加用户可见入口。
+
 ## 2026-08-20 P6 工作区 v2 Desktop 原子导入合同：事务/receipt/rollback/reopen/re-export 已冻结，生产实现仍未开始
 
 - **结论：** `P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md` 已冻结独立 v2 package、private archive、五张 SQLite owner/journal/receipt 表、单一 `BEGIN IMMEDIATE` 可见性、ownerFieldHashes、无中途 resume、commit 后重开幂等和回导 readback。v2 继续与 v1 `workspaces/workspace_exchange/import_journal` 隔离；新增 Desktop 定向回归证明 v2 IR 不能误入 v1 package writer/importer，且不会创建 workspace/journal。

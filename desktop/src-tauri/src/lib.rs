@@ -4,6 +4,11 @@ pub mod desktop_compare_execution_v1;
 pub mod dual_path_contract_v1;
 pub mod local_exact_reuse_v1;
 pub mod p6g_model_selection;
+#[allow(
+    dead_code,
+    reason = "P6 v2 kernel is intentionally unregistered until the later picker/UI contract"
+)]
+pub mod p6_workspace_exchange_v2;
 pub mod p7c_remote_gateway_v1;
 pub mod p7d_sync_coordinator_v1;
 pub mod p7e_isolated_workspace_v1;
@@ -648,7 +653,7 @@ struct PreflightedPackage {
     receipt: PreflightReceipt,
 }
 
-fn sha256(bytes: &[u8]) -> String {
+pub(crate) fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
@@ -761,7 +766,7 @@ fn p6k_zip_candidates(file: &Path, provider: &str) -> Result<P6kZipParseResult, 
     Ok((selected, assets, profile.0, profile.1, profile.2))
 }
 
-fn json_error(message: &str) -> String {
+pub(crate) fn json_error(message: &str) -> String {
     format!("Desktop 本地数据错误：{message}")
 }
 
@@ -1614,7 +1619,7 @@ fn apply_domain_mutation(
     Ok((id.to_owned(), next))
 }
 
-fn canonical_json(value: &Value) -> Result<String, String> {
+pub(crate) fn canonical_json(value: &Value) -> Result<String, String> {
     match value {
         Value::Null => Ok("null".to_owned()),
         Value::Bool(value) => Ok(value.to_string()),
@@ -1644,7 +1649,7 @@ fn canonical_json(value: &Value) -> Result<String, String> {
     }
 }
 
-fn semantic_hash(exchange: &Value) -> Result<String, String> {
+pub(crate) fn semantic_hash(exchange: &Value) -> Result<String, String> {
     let mut copy = exchange.clone();
     copy.get_mut("export")
         .and_then(Value::as_object_mut)
@@ -1895,7 +1900,7 @@ fn validate_exchange(exchange: &Value) -> Result<(bool, usize), String> {
     Ok((high_sensitive, messages))
 }
 
-fn safe_entry(name: &str) -> bool {
+pub(crate) fn safe_entry(name: &str) -> bool {
     !name.is_empty()
         && !name.starts_with('/')
         && !name.contains("..")
@@ -1905,7 +1910,11 @@ fn safe_entry(name: &str) -> bool {
 
 /// P6 v2 is intentionally an IR-only gate for now. It proves both runtimes reject lossy or
 /// unsafe owner data before a future v2 staging/SQLite transaction is allowed to exist.
-fn validate_exchange_v2_ir(exchange: &Value) -> Result<String, String> {
+#[allow(
+    dead_code,
+    reason = "P6 v2 kernel is intentionally unregistered until the later picker/UI contract"
+)]
+pub(crate) fn validate_exchange_v2_ir(exchange: &Value) -> Result<String, String> {
     let root = object(exchange, "v2 exchange")?;
     let expected: BTreeSet<&str> = ["format", "version", "export", "projects", "conversations", "knowledge", "memory", "relations", "settings"].into_iter().collect();
     if root.keys().map(String::as_str).collect::<BTreeSet<_>>() != expected
@@ -3095,7 +3104,7 @@ impl DesktopWorkspaceStore {
         let current: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|_| json_error("无法读取 SQLite schema version"))?;
-        if current > 20 {
+        if current > 21 {
             return Err(json_error("SQLite schema 版本比当前客户端更新"));
         }
         if current == 0 {
@@ -3314,6 +3323,13 @@ impl DesktopWorkspaceStore {
             local_exact_reuse_v1::SqliteLocalExactReuseStore::migrate(&transaction).map_err(|_| json_error("SQLite migration 20 失败"))?;
             transaction.pragma_update(None, "user_version", 20).map_err(|_| json_error("无法写入 SQLite schema version 20"))?;
             transaction.commit().map_err(|_| json_error("SQLite migration 20 无法提交"))?;
+        }
+        if current < 21 {
+            let transaction = connection.transaction().map_err(|_| json_error("无法开启 SQLite migration 21"))?;
+            p6_workspace_exchange_v2::migrate(&transaction)
+                .map_err(|_| json_error("SQLite migration 21 失败"))?;
+            transaction.pragma_update(None, "user_version", 21).map_err(|_| json_error("无法写入 SQLite schema version 21"))?;
+            transaction.commit().map_err(|_| json_error("SQLite migration 21 无法提交"))?;
         }
         Ok(())
     }
@@ -7340,8 +7356,8 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
                 .unwrap(),
-            // P6-K then appends its isolated ZIP recovery ledger, K6 profile owner and K8 asset receipts.
-            20
+            // P6-K appends its isolated recovery owners; P6 v2 then appends its fully isolated import kernel.
+            21
         );
     }
 
@@ -8599,7 +8615,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            19
+            21
         );
     }
 
@@ -8643,7 +8659,7 @@ mod tests {
         let strict_readback = preflight_package(fs::read(exported).unwrap()).unwrap();
         assert_eq!(strict_readback.receipt.semantic_hash, receipt.semantic_hash);
         assert_eq!(strict_readback.receipt.package_hash, receipt.package_hash);
-        assert_eq!(reopened.connection().unwrap().pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0)).unwrap(), 20);
+        assert_eq!(reopened.connection().unwrap().pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0)).unwrap(), 21);
         assert!(reopened.retry_nanfeng_knowledge_import_task(&task.id).is_err());
     }
 }
