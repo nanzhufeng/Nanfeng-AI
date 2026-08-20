@@ -23,9 +23,11 @@
 | Desktop 格式 | `cargo fmt --check` | 未通过：`desktop/src-tauri/src/lib.rs` 存在既有大范围格式债务；本轮未运行写入格式化，也未把它误报为依赖升级失败。 |
 | Desktop 前端 | `npm audit --omit=dev --package-lock=false --json` | 无运行时依赖，0 漏洞。 |
 | Android release 依赖 | `:app:dependencies --configuration releaseRuntimeClasspath --no-daemon` | 成功解析当前 release 运行时树；本轮未更新 Android 依赖，也未执行安装/设备操作。 |
+| Android release SHA-256 校验清单 | Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` 下运行 `./gradlew :app:dependencies --configuration releaseRuntimeClasspath --write-verification-metadata sha256 --offline --no-daemon` | 确认无活动 Gradle/GradleDaemon 后生成原生 `gradle/verification-metadata.xml`。当前为 516 个 component、923 个 artifact SHA-256；清单文件 SHA-256 为 `2bc1ea7266a3fbe6ab3adfd5690ea3812d344409793d958207f1bc23ae962add`。不升级依赖、不构建/安装 APK、不触及设备、Keychain 或密钥。 |
+| Android release SHA-256 回读 | 同一 JBR/`JAVA_TOOL_OPTIONS` 下运行 `./gradlew :app:dependencies --configuration releaseRuntimeClasspath --offline --no-daemon` | 成功；未带 metadata 写入参数的 release runtime 解析实际应用清单完成校验。 |
 
 ## 未覆盖与后续门
 
 - 本机没有预装 `cargo-audit`；临时构建在执行环境时限内未形成可执行结果，因此没有把它写成“全量 RustSec 扫描通过”。本次高风险项由 RustSec 官方公告逐项核验发现并修复。
-- Gradle 当前可解析 release 依赖，但尚未启用仓库内的 dependency locking/verification metadata；在单独 P11 变更前，不把此次解析视为可复现供应链锁定。
+- 仓库现有 SHA-256 verification metadata，但它不是 dependency locking，也不证明冷缓存、CI、所有 build variant 或未来依赖解析均已复现；这些仍须按版本和发布环境持续复核。
 - RustSec、npm audit 或 Gradle 解析均不能代替 Android/Windows/macOS 目标平台的安装、运行、签名、真实文件、Provider 或设备验收。

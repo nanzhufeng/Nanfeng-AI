@@ -4,12 +4,12 @@
 
 - **已确认：** §17 P3 的本地 Conversation、preflight、receipt、fail-closed transport 与 P2-M bridge 仍只形成受限合同。普通聊天 production egress owner 不存在；默认 transport 返回安全 `DISABLED_NO_NETWORK` 终态、不发事件、不制造回答。P2-M bridge 和未引用的 Direct composition 均在默认拒绝端口前停止，不是 Provider、Key 或 HTTP 已接通的证据。
 - **未关闭且不伪造：** P3 原始退出仍须真实流、停止/失败/重试/换模型、部分计费、真实用量/成本可见追踪、长会话实测及 OpenRouter 充分性判断。它们需要用户明确的非敏感内容/逐次确认、可合法检查的凭据 presence、冻结目录/价格和一次受控真实服务 readback；任何结果都不得自动重试。本轮没有读凭据、Keychain、HTTP、nonce、Provider Attempt、Token、费用、设备或 OPPO，也没有用 mock、DB 注入或假 receipt 替代。
-- **排程：** 详见 `P3_REAL_EXECUTION_GATE_AUDIT_20260821.md`。该检查不增加用户功能或功能审阅项，不关闭 P3/P0–P11。下一本机候选仍是 P11 Gradle dependency verification metadata；另一个项目当前 Gradle 测试未退出，故尚未生成 metadata，避免并发 Gradle 争用。
+- **排程：** 详见 `P3_REAL_EXECUTION_GATE_AUDIT_20260821.md`。该检查不增加用户功能或功能审阅项，不关闭 P3/P0–P11。P11 的最小本机 Gradle SHA-256 verification metadata 已在无 Gradle 争用窗口生成并离线回读：`gradle/verification-metadata.xml` 含 516 个 component、923 个 artifact SHA-256，文件 SHA-256 `2bc1ea7266a3fbe6ab3adfd5690ea3812d344409793d958207f1bc23ae962add`；它不替代 dependency locking、P11 持续门或 P0–P11 总控退出。
 
 ## 2026-08-21 P11 供应链复核与 P6 原始出口校正
 
 - **P6 原始出口校正：** §17 的原始 P6 退出证据是 Android 导出 → Desktop 导入 → 再导出精确保真，以及紧凑/展开、本地文件、更新与异常恢复的独立验证；它**不**把 Android v2 回导/archive/recovery 规定为 P6 必经门。最新 `CURRENT_HANDOFF.md` 顶部已经记录 macOS 上完整 owner 的 Android DocumentsUI → Desktop native Open/Save/re-export 严格子链关闭；Android v2 回导若未来实施只能是独立质量项，不能延后下一总控阶段或被写作 P6 总门。
-- **P11 当前增量：** Desktop PDF 预览使用的 `lopdf` 已从 0.35.0 升至 RustSec `RUSTSEC-2026-0187` 修复线 0.42.0；`cargo check --locked` 与 Rust 97/97 回归通过。详见 `P11_SUPPLY_CHAIN_REVIEW_20260821.md`。本项是 P11 持续责任，未关闭 P11 或 P0–P11 总控。
+- **P11 当前增量：** Desktop PDF 预览使用的 `lopdf` 已从 0.35.0 升至 RustSec `RUSTSEC-2026-0187` 修复线 0.42.0；`cargo check --locked` 与 Rust 97/97 回归通过。另已在 Android Studio JBR、离线 `releaseRuntimeClasspath` 下生成并二次回读 Gradle SHA-256 verification metadata。详见 `P11_SUPPLY_CHAIN_REVIEW_20260821.md`。两项均为 P11 持续责任，未关闭 P11 或 P0–P11 总控。
 
 ## 2026-08-21 P6 v2 完整 owner Desktop native Open/Save：macOS 独立真实文件子链已关闭
 
