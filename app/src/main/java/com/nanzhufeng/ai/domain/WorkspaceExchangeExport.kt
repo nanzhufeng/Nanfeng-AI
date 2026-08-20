@@ -102,6 +102,7 @@ class ExportWorkspaceExchangeUseCase(
         relations.forEach { snapshot ->
             val relation = snapshot.relationship
             require(relation.fromKnowledgeId.value in objects.knowledgeIds && relation.toKnowledgeId.value in objects.knowledgeIds) { "关系两端知识必须都被明确选择。" }
+            require(relation.type == KnowledgeRelationshipType.RELATED) { "当前 v1 不能表示此知识关系类型。" }
         }
 
         val assetReferences = conversations.flatMap { snapshot ->
@@ -169,7 +170,10 @@ class ExportWorkspaceExchangeUseCase(
         val item = value.item; val lifecycle = value.lifecycle
         put("id", item.id.value); put("title", item.title); put("body", item.body); put("tags", JSONArray(lifecycle.tags.sorted()))
         put("scope", lifecycle.scope.name); put("projectId", lifecycle.projectId?.value ?: JSONObject.NULL); put("status", lifecycle.status.name)
-        put("revision", value.revisions.maxOfOrNull { it.revision } ?: 0); put("contentHash", lifecycle.contentHash)
+        // v1 defines contentHash as the exchanged body bytes. Android's lifecycle hash also
+        // includes owner-specific title normalization, so forwarding it would create a package
+        // that its own gateway (and Desktop's semantic IR) correctly rejects.
+        put("revision", value.revisions.maxOfOrNull { it.revision } ?: 0); put("contentHash", sha256(item.body.toByteArray()))
         put("createdAt", item.createdAt.toString()); put("updatedAt", lifecycle.updatedAt.toString())
         put("classification", if (isHighSensitive(item.body)) "HIGH_SENSITIVE" else "NORMAL")
     } }

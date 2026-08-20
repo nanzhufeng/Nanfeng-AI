@@ -29,6 +29,7 @@ class WorkspaceExchangeExportContractsTest {
         assertEquals(2, exchange.getJSONArray("knowledge").length())
         assertEquals(1, exchange.getJSONArray("memory").length())
         assertEquals(1, exchange.getJSONArray("relations").length())
+        assertEquals(hash("知识一".toByteArray()), exchange.getJSONArray("knowledge").getJSONObject(0).getString("contentHash"))
         assertEquals(1, snapshot.assets.size)
         val output = createTempFile("p6-workspace", ".nfai-exchange")
         try {
@@ -65,10 +66,20 @@ class WorkspaceExchangeExportContractsTest {
         assertTrue("result=$result", result is WorkspaceExchangePreparation.Rejected)
     }
 
+    @Test fun `mapper rejects a relationship whose meaning v1 cannot represent`() {
+        val fixture = fixture(relationshipType = KnowledgeRelationshipType.SUPPORTS)
+        val result = ExportWorkspaceExchangeUseCase(fixture, "0.3.0-test", clock) { "workspace-exchange-test" }
+            .prepare(fixture.selection(), NfaiExchangeSafeSettings("zh-CN", "SYSTEM"))
+        assertTrue("result=$result", result is WorkspaceExchangePreparation.Rejected)
+    }
+
     private fun Fixture.selection(objects: NfaiExchangeExportSelection = this.selection): NfaiExchangeWorkspaceSelection =
         NfaiExchangeWorkspaceSelection(objects, objects.attachmentIds.associateWith { "NORMAL" })
 
-    private fun fixture(readableAttachment: Boolean = true): Fixture {
+    private fun fixture(
+        readableAttachment: Boolean = true,
+        relationshipType: KnowledgeRelationshipType = KnowledgeRelationshipType.RELATED,
+    ): Fixture {
         val projectId = ProjectId("project-1")
         val conversationId = ConversationId("conversation-1")
         val assetId = AttachmentId("asset-1")
@@ -84,7 +95,7 @@ class WorkspaceExchangeExportContractsTest {
         val project = ProjectSnapshot(Project(projectId, "项目", createdAt = now, updatedAt = now), emptyList())
         fun knowledge(id: String, body: String) = KnowledgeSnapshot(
             KnowledgeItem(KnowledgeItemId(id), id, body, emptyList(), CandidateProvenance(CandidateId("candidate-$id"), InvocationId("invocation-$id"), ProviderId.MOCK, "test", 1), now),
-            KnowledgeLifecycle(scope = KnowledgeScope.PROJECT, projectId = projectId, contentHash = hash(body.toByteArray()), updatedAt = now),
+            KnowledgeLifecycle(scope = KnowledgeScope.PROJECT, projectId = projectId, contentHash = hash("owner:$id:$body".toByteArray()), updatedAt = now),
             emptyList(),
         )
         val firstKnowledge = knowledge("knowledge-1", "知识一")
@@ -94,7 +105,7 @@ class WorkspaceExchangeExportContractsTest {
             emptyList(),
         )
         val relation = KnowledgeRelationshipSnapshot(
-            KnowledgeRelationship(KnowledgeRelationshipId("relation-1"), KnowledgeRelationshipType.RELATED, firstKnowledge.item.id, secondKnowledge.item.id, KnowledgeScope.PROJECT, projectId, KnowledgeRelationshipStatus.ACTIVE, now, now, KnowledgeRelationshipIntentId("relation-intent-1"), KnowledgeRelationshipIntentId("relation-intent-1"), KnowledgeRelationshipSuggestionSource.MANUAL),
+            KnowledgeRelationship(KnowledgeRelationshipId("relation-1"), relationshipType, firstKnowledge.item.id, secondKnowledge.item.id, KnowledgeScope.PROJECT, projectId, KnowledgeRelationshipStatus.ACTIVE, now, now, KnowledgeRelationshipIntentId("relation-intent-1"), KnowledgeRelationshipIntentId("relation-intent-1"), KnowledgeRelationshipSuggestionSource.MANUAL),
             emptyList(),
         )
         return Fixture(

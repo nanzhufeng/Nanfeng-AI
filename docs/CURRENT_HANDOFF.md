@@ -1,11 +1,17 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v1 表示审计：协议兼容，但不能宣称完整对象保真
+
+- **结论：** 现场审查确认 Android mapper 输出可进入 Desktop 的既有 `validate_exchange` → private staging → asset/package archive → 单一 SQLite transaction → provenance/`import_journal` 原子链；根对象、闭包、body hash、消息树、资产内容寻址和安全 settings 均兼容。然而 `nfai.exchange.v1` 是语义 IR，不表示 Project 颜色/图标/instruction revisions、Conversation settings/memory sources、Knowledge/Memory/Relationship 的来源与完整 history、Memory 标题/来源/concept hash、Relationship scope/project/timestamps 或 Knowledge 附件，Desktop 无法猜回这些事实。
+- **修正与定向验证：** mapper 现在把 Android Knowledge owner 的 title+body lifecycle hash 转为 v1 规定的 body-byte hash，并在写包前拒绝没有 v1 安全等价的 `SUPPORTS`/`DUPLICATE_CANDIDATE`/`CONTRADICTS` relationship；Android Studio JBR 下 `:app:testDebugUnitTest --tests WorkspaceExchangeExportContractsTest --no-daemon` 通过（4/4）。本机还复验 Desktop `import_is_atomic_and_export_roundtrips_semantics`（1/1）及 `protocol/scripts/run-golden.mjs`（semantic hash `ad41c1…2d4031`）；这些是领域/协议/原子导入合同，不是 Android UI、SAF、模拟器或真实文件验收。
+- **停止门与下一步：** 不接 Android 全对象选择 UI、SAF 导出或“完整工作区”文案；否则会将语义投影误称逐字段保真。先建立 v2 字段保真/拒绝矩阵及双端 schema/IR/原子导入合同，再接现有 Desktop native picker 的真实跨端文件链。现有 P6-A 单文本 SAF 出口保持不变；没有新增用户能力，故本轮不变更双端功能审阅。无 Room 写入、SAF、文件、HTTP、Key、模拟器或 OPPO 操作；P6 与 P0–P11 均未完成。
+
 ## 2026-08-20 P6 工作区对象交换 mapper：领域合同已闭合，真实全对象链未开始
 
 - **结论：** 新增 `ExportWorkspaceExchangeUseCase` 与 `P6_WORKSPACE_EXCHANGE_MAPPER_CONTRACT.md`。它从既有 Project、Conversation、Knowledge、Memory、Relationship 与私有附件 owner 只读构造 `nfai.exchange.v1`，并复用唯一 canonical hash/gateway。选择现在显式包含 object IDs、attachment IDs 及每个附件敏感级别；没有从 Project/关系/目录隐式扩大 scope。
 - **失败与恢复边界：** scope/relationship endpoint/attachment 引用必须形成完整选择闭包；草稿、WORK/已删除对话、ToolResult、缺 leaf、附件不可读或 hash 不符、未选依赖，以及当前 v1 无法表示的 Knowledge 附件均在写包前失败关闭。Desktop 既有 private staging、asset/package archive、SQLite transaction、import journal 与 package/semantic hash receipt 保持不变；本轮没有新增 Android import、SAF/UI、Room 写入、HTTP、Key、模拟器或 OPPO 操作。
 - **本地验证：** `WorkspaceExchangeExportContractsTest` 3/3、既有 `ConversationExchangeExportContractsTest` 2/2 与 `P6AExchangeContractsTest` 1/1 经 Android Studio JBR、`--no-daemon` 与 `TieredStopAtLevel=1` 通过；protocol golden 保持既有 semantic/package hash；Desktop `import_is_atomic_and_export_roundtrips_semantics` 1/1 通过。Android Lint 当前 SARIF 65 条均为 `none`、0 Error/Warning；原 wrapper 调用在最终退出信息返回前超时，故这只是静态 SARIF 证据，不冒充 Gradle 完整任务成功。
-- **总控边界：** 这只关闭 P6 全对象 Android mapper 的领域合同，不关闭 P6 的 Android/desktop 真实完整对象导入导出、真实 UI/readback、紧凑/展开、Windows 或发布门；P0–P11 均未完成。
+- **总控边界：** 这只关闭 P6 五类对象的 v1 语义 mapper 合同；它不等于 Android domain 的完整字段保真，具体表示停止门见上方新审计。不关闭 P6 的 Android/desktop 真实完整对象导入导出、真实 UI/readback、紧凑/展开、Windows 或发布门；P0–P11 均未完成。
 
 ## 2026-08-20 P6-A Android→Desktop 真实文本交换验收：已关闭本增量
 

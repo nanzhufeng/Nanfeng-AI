@@ -2,7 +2,7 @@
 
 ## 目标与停止条件
 
-本增量让 Android 可从既有 Project、Conversation、Knowledge、Memory、Knowledge Relationship 与私有附件 owner 生成一个 `nfai.exchange.v1` 安全快照。它是纯领域 mapper：不写 Room、不做 Android 导入、不启动 SAF、不新增界面或常驻按键，也不调用 Provider、Key、HTTP、同步或设备。
+本增量让 Android 可从既有 Project、Conversation、Knowledge、Memory、Knowledge Relationship 与私有附件 owner 生成一个 `nfai.exchange.v1` 安全**语义投影**。它不是 Android domain 的逐字段备份或迁移格式：不写 Room、不做 Android 导入、不启动 SAF、不新增界面或常驻按键，也不调用 Provider、Key、HTTP、同步或设备。
 
 停止条件是 mapper 与协议 gateway 的本地合同闭环；Android 正常 Settings/SAF 的完整工作区选择、Android 导入、Desktop/Android 的真实全对象往返、紧凑/展开恢复、Windows 与发布仍是 P6 的独立退出门。
 
@@ -21,12 +21,19 @@
 
 ## 映射、失败与恢复
 
-- Project、Conversation message tree、Knowledge lifecycle/scope、Memory scope/status、Relationship endpoint/type/status 均映射到 v1 的对应 payload；revision 使用 owner 的当前最大 revision，稳定顺序按 ID 或消息时间/ID 保留。
+- Project、Conversation message tree、Knowledge lifecycle/scope、Memory scope/status、`RELATED` Relationship endpoint/status 均映射到 v1 的对应 payload；revision 使用 owner 的当前最大 revision，稳定顺序按 ID 或消息时间/ID 保留。Knowledge 的 v1 `contentHash` 固定为已交换 body UTF-8 bytes 的 SHA-256，不能转发 Android owner 的 title+body lifecycle hash。
 - 未保存草稿、`WORK`/已删除 conversation、缺少 leaf、ToolResult、缺少/不匹配/不可读取附件、未选引用依赖、Project 删除和 Knowledge 自带附件都在准备阶段失败关闭；不会构造部分 JSON 或写出文件。Knowledge 附件在 v1 没有关联位置，必须另立版本化协议后才可支持。
 - 现有 `NfaiExchangeV1Gateway` 再核验所选 IDs 与所有 `ASSET_REF`、内容寻址 asset entry 的双向一致性，计算唯一 canonical `semanticHash`，并在 export 后 preflight 回读。失败只返回拒绝，不报告成功。
 - Desktop 继续先 private staging/preflight，再私有 asset/package 落盘和 SQLite transaction；只有 `workspace`、IR、asset index、provenance 与 `import_journal` 都提交才可见。提交前中断只可能留下不可见 orphan blob；不创建半工作区。receipt 同时保留 package hash 与 semantic hash，重复包拒绝隐式合并。
 
+## v1 表示审计与 Android UI 停止门（2026-08-20）
+
+- **已验证的 IR 兼容面：** mapper 的 v1 根对象、显式闭包、body hash、message tree、资产内容寻址和安全 settings 与 Desktop `validate_exchange`、private staging、asset/package archive、SQLite transaction、provenance、`import_journal` 一致；Desktop 可原子导入为新工作区，绝不隐式 merge。
+- **v1 明确不表示的 Android owner 事实：** Project 的颜色、图标和 instruction revisions；Conversation 的 provider/model/harness/context settings、auto-title 与 memory-source 引用；Knowledge/Memory/Relationship 的来源、完整 revision history、schema metadata 与关系 scope/project/timestamps；Memory 的 title、source attribution 与 concept hash；Knowledge 附件。它们不能被 Desktop 从 v1 IR 猜回。`SUPPORTS`、`DUPLICATE_CANDIDATE`、`CONTRADICTS` Relationship 也没有安全等价 v1 enum，mapper 必须在写包前拒绝，不能输出 schema 外字符串。
+- **结论：** 当前“全对象”仅指五类对象均有 v1 projection，**不等于既有 Android domain 的完整字段保真**。在 v2 schema、两端 mapper/IR/transaction、迁移策略与跨端回读合同明确前，禁止新增 Android“完整工作区交换”选择 UI、SAF 导出入口或把 v1 文案称作完整备份/全对象保真。现有单文本 P6-A 入口不受影响。
+- **下一唯一候选：** 先建立 v2 字段保真与降级/拒绝矩阵，逐项决定哪些 owner 事实进入协议、哪些因安全边界必须拒绝；之后才可接 Android 显式选择 → SAF 和以现有 Desktop native picker 原子导入的真实文件验收。新 UI 如获准实施，必须同改 Android/Desktop 设置 → 功能审阅，不加聊天或 Composer 常驻按键。
+
 ## 验证与产品入口
 
-- `WorkspaceExchangeExportContractsTest` 覆盖全对象映射→gateway export/preflight、scope/relationship/attachment 三类显式选择缺失与私有附件不可读失败关闭。
+- `WorkspaceExchangeExportContractsTest` 覆盖 v1 语义投影→gateway export/preflight、owner hash→v1 body hash、schema 无表示 Relationship、scope/relationship/attachment 三类显式选择缺失与私有附件不可读失败关闭。
 - 本增量没有新的用户可见入口，因此不新增 Android/Desktop 设置 → 功能审阅条目；后续把 mapper 接入 Settings/SAF 或导入入口时，必须在同一变更登记两端审阅，并验证真实文件链。
