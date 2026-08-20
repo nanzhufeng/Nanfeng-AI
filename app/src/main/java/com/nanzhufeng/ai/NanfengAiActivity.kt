@@ -37,6 +37,7 @@ import com.nanzhufeng.ai.ui.P5A_CONVERSATION_DRAWER_PREFERENCE_KEY
 import com.nanzhufeng.ai.ui.P5ARoute
 import com.nanzhufeng.ai.ui.PrivacyDataViewModel
 import com.nanzhufeng.ai.ui.LocalBackupRestoreViewModel
+import com.nanzhufeng.ai.ui.ConversationExchangeExportViewModel
 import com.nanzhufeng.ai.ui.P7DAccountSyncViewModel
 import com.nanzhufeng.ai.ui.DualPathConnectionViewModel
 import com.nanzhufeng.ai.ui.P8ControlledAgentViewModel
@@ -70,6 +71,7 @@ class NanfengAiActivity : ComponentActivity() {
     private lateinit var navigationViewModel: P5ANavigationViewModel
     private lateinit var privacyDataViewModel: PrivacyDataViewModel
     private lateinit var localBackupRestoreViewModel: LocalBackupRestoreViewModel
+    private lateinit var conversationExchangeExportViewModel: ConversationExchangeExportViewModel
     private lateinit var accountSyncViewModel: P7DAccountSyncViewModel
     private lateinit var dualPathConnectionViewModel: DualPathConnectionViewModel
     private lateinit var p8ControlledAgentViewModel: P8ControlledAgentViewModel
@@ -176,6 +178,7 @@ class NanfengAiActivity : ComponentActivity() {
         webTextSnapshotViewModel = ViewModelProvider(this, WebTextSnapshotViewModel.Factory(container.manageWebTextSnapshot))[WebTextSnapshotViewModel::class.java]
         privacyDataViewModel = ViewModelProvider(this, PrivacyDataViewModel.Factory(container.privacyDataManager))[PrivacyDataViewModel::class.java]
         localBackupRestoreViewModel = ViewModelProvider(this, LocalBackupRestoreViewModel.Factory(container.localBackupRestoreManager))[LocalBackupRestoreViewModel::class.java]
+        conversationExchangeExportViewModel = ViewModelProvider(this, ConversationExchangeExportViewModel.Factory(container.conversationExchangeExportPort))[ConversationExchangeExportViewModel::class.java]
         accountSyncViewModel = ViewModelProvider(this)[P7DAccountSyncViewModel::class.java]
         dualPathConnectionViewModel = ViewModelProvider(this, DualPathConnectionViewModel.Factory(container.readConnectionCapability))[DualPathConnectionViewModel::class.java]
         p8ControlledAgentViewModel = ViewModelProvider(this, P8ControlledAgentViewModel.Factory(container.p8CProductionLocalAgent))[P8ControlledAgentViewModel::class.java]
@@ -206,6 +209,7 @@ class NanfengAiActivity : ComponentActivity() {
                 offlineEvalViewModel,
                 privacyDataViewModel,
                 localBackupRestoreViewModel,
+                conversationExchangeExportViewModel,
                 accountSyncViewModel,
                 dualPathConnectionViewModel,
                 p8ControlledAgentViewModel,

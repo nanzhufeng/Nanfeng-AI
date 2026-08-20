@@ -1218,6 +1218,8 @@ internal fun ConversationManagementSettingsCard(
     onScope: (ConversationListScope) -> Unit,
     onManage: (com.nanzhufeng.ai.domain.Conversation, ConversationManagementAction, String?) -> Unit,
     onExport: () -> Unit,
+    exchangeExportState: ConversationExchangeExportUiState,
+    onExchangeExport: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
 ) {
     Surface(color = Color(0xFFF8FAF8), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1269,6 +1271,15 @@ internal fun ConversationManagementSettingsCard(
                 }
             }
             OutlinedButton(onClick = onExport, enabled = state.selectedConversationId != null, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("导出当前对话") }
+            OutlinedButton(
+                onClick = { state.selectedConversationId?.let(onExchangeExport) },
+                enabled = state.selectedConversationId != null && !exchangeExportState.working,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+            ) { Text("导出当前文本会话到 Desktop") }
+            Text("只导出当前活动、未归属项目、无草稿且无附件/工具结果的文本会话为 .nfai-exchange；通过系统文件选择器写入并回读校验，不是备份或云同步。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+            exchangeExportState.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BrandGreen) }
+            exchangeExportState.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = ErrorRed) }
         }
     }
 }

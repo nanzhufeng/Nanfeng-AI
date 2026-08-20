@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：P6-A Android 文本会话 SAF 交换导出（当前）
+
+- **结论：** 为避免继续堆叠 P6-L1–L4 的未注册复用门，本轮接入既有 P6-A 共享交换协议的 Android 输出链。`ExportConversationExchangeUseCase` 是唯一语义 mapper，只从既有 `ConversationRepository.findById` 读取当前活动 `CHAT` 的独立文本会话；它拒绝 Project、草稿、附件、工具结果、WORK/TEMP、已归档/删除或空消息。`AndroidConversationExchangeExportPort` 以私有 staging 调用 `NfaiExchangeV1Gateway`，只经用户选择的 SAF URI 输出并读回 SHA-256；`withComputedSemanticHash` 是唯一 canonical hash 路径。该入口位于设置 → 对话 → “导出当前文本会话到 Desktop”，Desktop 沿用已有 workspace exchange import，不新增聊天/Composer 常驻按键。
+- **验证与严格边界：** Android 新领域合同覆盖可封包/严格预检与草稿、Project、WORK/TEMP、附件/工具结果失败关闭；既有 Android P6-A shared golden contract 同跑通过。设置入口合同与 `lintDebug` 通过（SARIF 无 error）；Desktop feature-review UI 合同 89/89 通过。Android/Desktop 设置 → 功能审阅均登记“跨端文本会话交换”。没有启动 Android app、DocumentsUI、Desktop 实际导入、HTTP、Key、安装、emulator 或 OPPO；不宣称完整工作区跨端保真、备份/同步、成本节省或 P6 退出。
+
 ## 2026-08-20 总控推进：P6-L4 双端本地消息引用有效性门（当前）
 
 - **结论：** L4 补上 L3 的消息引用安全前置。Android `LocalExactReuseResponseReferenceVerifier` 与 Desktop `ResponseReferenceVerifier` 必须以 `scopeId + responseMessageId` 返回 `VALID`，命中才可交回复用分支；`MISSING`、`SCOPE_MISMATCH`、`UNREADABLE` 或无效 scope 一律降为 `UNKNOWN` 并进入普通 continuation。非命中不会查询消息引用。

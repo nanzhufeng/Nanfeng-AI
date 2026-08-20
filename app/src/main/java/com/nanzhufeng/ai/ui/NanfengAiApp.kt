@@ -225,6 +225,7 @@ internal fun NanfengAiApp(
     offlineEvalViewModel: OfflineEvalViewModel,
     privacyDataViewModel: PrivacyDataViewModel,
     localBackupRestoreViewModel: LocalBackupRestoreViewModel,
+    conversationExchangeExportViewModel: ConversationExchangeExportViewModel,
     accountSyncViewModel: P7DAccountSyncViewModel,
     dualPathConnectionViewModel: DualPathConnectionViewModel,
     p8ControlledAgentViewModel: P8ControlledAgentViewModel,
@@ -263,6 +264,12 @@ internal fun NanfengAiApp(
     }
     val localBackupExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri -> uri?.let(localBackupRestoreViewModel::exported) }
     val localBackupImportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(localBackupRestoreViewModel::selected) }
+    var pendingConversationExchangeId by remember { mutableStateOf<com.nanzhufeng.ai.domain.ConversationId?>(null) }
+    val conversationExchangeExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        val conversationId = pendingConversationExchangeId
+        pendingConversationExchangeId = null
+        if (uri != null && conversationId != null) conversationExchangeExportViewModel.export(conversationId, uri)
+    }
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = AccentOrange,
@@ -318,6 +325,11 @@ internal fun NanfengAiApp(
                 privacyDataState = privacyDataViewModel.state,
                 onOpenPrivacyData = privacyDataViewModel::show,
                 onOpenLocalBackup = localBackupRestoreViewModel::show,
+                conversationExchangeExportState = conversationExchangeExportViewModel.state,
+                onExportConversationExchange = { conversationId ->
+                    pendingConversationExchangeId = conversationId
+                    conversationExchangeExportPicker.launch("${conversationId.value}.nfai-exchange")
+                },
                 accountSyncState = accountSyncViewModel.state,
                 onOpenAccountSync = accountSyncViewModel::open,
                 dualPathState = dualPathConnectionViewModel.state,
@@ -523,6 +535,8 @@ private fun CaptureScreen(
     privacyDataState: PrivacyDataUiState,
     onOpenPrivacyData: () -> Unit,
     onOpenLocalBackup: () -> Unit,
+    conversationExchangeExportState: ConversationExchangeExportUiState,
+    onExportConversationExchange: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     accountSyncState: P7DAccountSyncUiState,
     onOpenAccountSync: () -> Unit,
     dualPathState: DualPathConnectionUiState,
@@ -659,6 +673,8 @@ private fun CaptureScreen(
                 onOpenPrivacyData = onOpenPrivacyData,
                 onOpenImport = { onRouteSelected(P5ARoute.ADAPTERS) },
                 onOpenBackup = onOpenLocalBackup,
+                conversationExchangeExportState = conversationExchangeExportState,
+                onExportConversationExchange = onExportConversationExchange,
                 onSelect = { settingsDestination = it },
             )
             P5ARoute.ADAPTERS -> WorkbenchRoute(expanded) {
@@ -768,6 +784,8 @@ private fun SettingsHierarchy(
     onOpenPrivacyData: () -> Unit,
     onOpenImport: () -> Unit,
     onOpenBackup: () -> Unit,
+    conversationExchangeExportState: ConversationExchangeExportUiState,
+    onExportConversationExchange: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onSelect: (SettingsDestination) -> Unit,
 ) {
     if (destination == SettingsDestination.HOME) {
@@ -785,6 +803,8 @@ private fun SettingsHierarchy(
                 onScope = conversationViewModel::setListScope,
                 onManage = { conversation, action, title -> conversationViewModel.manage(conversation, action, title) },
                 onExport = conversationViewModel::exportCurrentConversation,
+                exchangeExportState = conversationExchangeExportState,
+                onExchangeExport = onExportConversationExchange,
             )
             SettingsDestination.IMPORT -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 WhiteCard {
@@ -857,6 +877,13 @@ private fun FeatureReviewSettingsCard() {
             Text("当前：待您判断是否保留；仅完成离线精确键与既有消息引用的安全索引，尚未接入普通聊天执行。入口：设置 → 功能审阅。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
             Text("建议：暂不增加聊天或 Composer 按键；只有将来真实复用、用量和清理能力完整后，再在设置提供独立开关与清理入口，避免误解为联网缓存或省费承诺。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
+        WhiteCard {
+            Text("跨端文本会话交换", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("当前：待您判断是否保留；Android 现只可从设置 → 对话导出当前活动、未归属项目且无附件/工具结果的文本会话为 .nfai-exchange，Desktop 可按既有工作区导入。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("建议：只保留设置二级入口，不在聊天主页或 Composer 增加按键；它不是本机备份、云同步，也不代表完整工作区跨端保真。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

@@ -33,6 +33,7 @@ import com.nanzhufeng.ai.data.AndroidWebTextSnapshotPrivateAssetStore
 import com.nanzhufeng.ai.data.AndroidJsonKnowledgeExportStore
 import com.nanzhufeng.ai.data.AndroidOfflineEvalReportStore
 import com.nanzhufeng.ai.data.AndroidConversationExportStore
+import com.nanzhufeng.ai.data.AndroidConversationExchangeExportPort
 import com.nanzhufeng.ai.data.AndroidTextShareAdapter
 import com.nanzhufeng.ai.data.AndroidP7BAccountVault
 import com.nanzhufeng.ai.data.AndroidP7ERestoreReceiptStore
@@ -162,6 +163,7 @@ import com.nanzhufeng.ai.domain.ExportOfflineEvalReportUseCase
 import com.nanzhufeng.ai.domain.JsonKnowledgeAdapter
 import com.nanzhufeng.ai.domain.ManageJsonKnowledgeImportUseCase
 import com.nanzhufeng.ai.domain.ExportJsonKnowledgeUseCase
+import com.nanzhufeng.ai.domain.ExportConversationExchangeUseCase
 import com.nanzhufeng.ai.domain.PdfTextKnowledgeAdapter
 import com.nanzhufeng.ai.domain.ManagePdfTextKnowledgeImportUseCase
 import com.nanzhufeng.ai.domain.ManageWebTextSnapshotUseCase
@@ -259,6 +261,11 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
     val invocationRepository = RoomInvocationRepository(database)
     val generatedCandidateRepository = RoomGeneratedCandidateRepository(database)
     val conversationRepository = RoomConversationRepository(database)
+    /** P6-A: one active, standalone, text-only conversation can reach the shared exchange gateway via SAF. */
+    val conversationExchangeExportPort = AndroidConversationExchangeExportPort(
+        context,
+        ExportConversationExchangeUseCase(conversationRepository, BuildConfig.VERSION_NAME, clock),
+    )
     private val p6kZipCommitStore = RoomP6KZipImportCommitStore(database, conversationRepository)
     private val p6kZipManualAssetLinkOwner = RoomP6KZipManualAssetLinkOwner(database, conversationRepository)
     private val manageP6KChatGptZipImport = com.nanzhufeng.ai.domain.ManageP6KChatGptZipImportUseCase(p6kZipImportTasks, p6kZipCommitStore, clock)

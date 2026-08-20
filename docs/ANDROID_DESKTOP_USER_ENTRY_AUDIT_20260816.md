@@ -13,7 +13,7 @@
 - 每条登记必须写明：功能名称、当前去留状态（默认“待您判断保留或删减”）、现有设置入口、是否建议在常用界面新增按键，以及一条小字建议和理由。
 - 默认仅提供设置二级入口；若建议在聊天、Composer、会话详情或工作页新增按键，必须在“功能审阅”中明确写出建议位置和误触/隐私影响，待用户判断后才可加。
 - 凭据、Provider 诊断、fixture、离线 Eval、工程控制不得借“功能审阅”进入普通设置；未具备真实 owner 的候选能力仅可作为“待您判断”的审阅条目，不得展示为可用配置或执行入口。
-- 当前登记项：ChatGPT / Claude ZIP 导入（建议保留设置入口、不加对话主页快捷键）；未关联媒体人工关联（建议仅在存在候选时于批次详情提供二级操作）；Desktop Compare 联网执行（待您判断，阶段 1–5 已完成 fail-closed owner、Security.framework 边界和未注册 mock-only adapter/安全 receipt；建议复用既有“对比”操作，不新增 Composer 常驻按钮；固定预设与状态仅由设置 → AI 模型服务承载）；本地精确复用（待您判断，仅双端离线精确键/既有消息引用索引，未接入普通聊天或 Provider；建议暂不增加常驻按键，未来真实复用、用量和清理完整后只在设置提供控制）。
+- 当前登记项：ChatGPT / Claude ZIP 导入（建议保留设置入口、不加对话主页快捷键）；未关联媒体人工关联（建议仅在存在候选时于批次详情提供二级操作）；Desktop Compare 联网执行（待您判断，阶段 1–5 已完成 fail-closed owner、Security.framework 边界和未注册 mock-only adapter/安全 receipt；建议复用既有“对比”操作，不新增 Composer 常驻按钮；固定预设与状态仅由设置 → AI 模型服务承载）；本地精确复用（待您判断，仅双端离线精确键/既有消息引用索引，未接入普通聊天或 Provider；建议暂不增加常驻按键，未来真实复用、用量和清理完整后只在设置提供控制）；跨端文本会话交换（待您判断，Android 仅导出当前活动、未归属项目且无草稿/附件/工具结果的文本会话，Desktop 复用既有工作区导入；建议仅保留设置二级入口，不加聊天或 Composer 按键，且不把它写成备份、云同步或完整工作区保真）。
 
 ## 入口矩阵
 
@@ -22,7 +22,7 @@
 | 本地对话、草稿、附件与会话管理 / `ConversationFoundationViewModel` | 对话 Composer、Drawer、长按会话、搜索 | Chat Composer、侧栏、消息工具 | Android 对话；Desktop 隐私与数据管理 | 是 | 无 | 不得把本地发送改为外发 | 现有聊天 shell 回归、重启读回 |
 | Compare 显式直接执行 / `CompareVisibleExecutionOwner` → `CompareExecutionApplicationOwner` | 模型菜单行、Composer `对比`、模型长按 | 同三入口；直接显示 Desktop 不可执行状态 | 双端设置 → 功能审阅（仅去留审阅）；Desktop 设置 → AI 模型服务（仅 preset/status） | 是（仅显式外发动作） | Android 的非空草稿真实直接执行仍需用户给出的非敏感短文本、已配置凭据与 HTTP 授权；Desktop 只有未注册的 mock-only adapter，尚无 UI/Tauri/真实凭据/HTTP 组合 | 空草稿不触及 owner；附件拒绝；Desktop 不得假装外发 | Android/Node 三入口合同；Desktop 阶段 5 Rust mock adapter/内存 receipt 合同；真实外发不在本批 |
 | 当前对话导出 / `ConversationFoundationViewModel` | Drawer → 设置 → 对话 → 导出当前对话 | 无同语义 owner | Android 有；Desktop 仅工作区交换包导出 | 是 | Desktop 不应把工作区交换包伪称当前对话导出 | 导出范围必须准确 | Android 既有导出读回；Desktop 仅声明当前能力 |
-| 本地工作区交换包 / Desktop Rust workspace exchange owner | 无同类跨端格式 owner | 工作模式导入入口、顶部导出 | Desktop 数据设置已有导出；本批补充导入入口 | 是 | 设置页缺少已实现的导入工作区入口 | 导入必须预检、显式确认、独立工作区，不能覆盖 | Desktop Node 渲染契约、native picker 后续验收 |
+| 本地工作区交换包 / Android `ExportConversationExchangeUseCase` + SAF output port；Desktop Rust workspace exchange owner | 设置 → 对话 → 导出当前文本会话到 Desktop（仅当前活动、未归属项目、无草稿/附件/工具结果） | 工作模式导入入口、顶部导出 | Android/Desktop 设置 → 功能审阅；Desktop 数据设置已有导出 | 是（Android 仅窄范围文本会话） | Android 尚无项目、Knowledge、Memory、关系、附件或导入 mapper；完整跨端出口仍未关闭 | 严格预检、SAF 回读；Desktop 导入为独立工作区，不能覆盖 | Android 领域/入口合同；Desktop Rust preflight/re-export；真实 Android→Desktop 文件链待后续 |
 | ChatGPT / Claude / 南枫知识库静态会话导入 / 各自 import task owner | 设置 → 数据与导入 | 设置 → 数据 → 三个导入任务 | 双端均有 | 是 | 无 | app-private 副本、逐项确认，正文不执行 | Android/desktop 各自 importer 合同 |
 | Markdown、JSON 知识、PDF 文本、网页文本快照 / Android 各自 ViewModel | 已有 picker / Dialog handler，但 `导入与适配` 未渲染普通入口 | 无 Desktop production owner | Android 本批补到设置 → 数据与导入；Desktop 标记不存在 | Android 是；Desktop 不存在 | Android 可用功能此前不可发现；Desktop 不虚构入口 | 外部文本不可信；网页入口仍以既有独立确认 owner 为准 | Android 源码入口合同、assembleDebug |
 | 本地备份与恢复 / `LocalBackupRestoreViewModel` | 设置 → 数据与导入 → 备份与恢复 | 无等价 Desktop backup/restore owner | Android 有 | 是 | Desktop 不能把交换包导入写成“恢复备份” | Android 恢复具有替换语义；Desktop 导入独立工作区 | Android 既有合同；Desktop 保持不存在 |

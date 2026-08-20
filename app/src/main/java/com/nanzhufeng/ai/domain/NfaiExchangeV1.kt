@@ -55,6 +55,18 @@ sealed interface NfaiExchangeResult {
 
 /** Callable Android gateway; no Room, Key, Provider, Prompt, or import mutation path exists here. */
 object NfaiExchangeV1Gateway {
+    /**
+     * Produces the one canonical exchange JSON accepted by [export]. Callers provide semantic
+     * facts but never calculate a hash over their own non-canonical serialization.
+     */
+    fun withComputedSemanticHash(exchange: JSONObject): String {
+        val normalized = JSONObject(canonical(exchange))
+        val export = normalized.getJSONObject("export")
+        export.put("semanticHash", semanticHash(normalized))
+        validateExchange(normalized)
+        return canonical(normalized)
+    }
+
     fun export(snapshot: NfaiExchangePreparedSnapshot, destination: File): NfaiExchangeResult = runCatching {
         val exchange = JSONObject(snapshot.exchangeJson)
         val verified = validateExchange(exchange)
