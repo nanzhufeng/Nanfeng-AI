@@ -1,5 +1,10 @@
 # 南枫 AI 总控方案需求—证据完成审计（2026-08-16）
 
+## 2026-08-21 P11 供应链复核与 P6 原始出口校正
+
+- **P6 原始出口校正：** §17 的原始 P6 退出证据是 Android 导出 → Desktop 导入 → 再导出精确保真，以及紧凑/展开、本地文件、更新与异常恢复的独立验证；它**不**把 Android v2 回导/archive/recovery 规定为 P6 必经门。最新 `CURRENT_HANDOFF.md` 顶部已经记录 macOS 上完整 owner 的 Android DocumentsUI → Desktop native Open/Save/re-export 严格子链关闭；Android v2 回导若未来实施只能是独立质量项，不能延后下一总控阶段或被写作 P6 总门。
+- **P11 当前增量：** Desktop PDF 预览使用的 `lopdf` 已从 0.35.0 升至 RustSec `RUSTSEC-2026-0187` 修复线 0.42.0；`cargo check --locked` 与 Rust 97/97 回归通过。详见 `P11_SUPPLY_CHAIN_REVIEW_20260821.md`。本项是 P11 持续责任，未关闭 P11 或 P0–P11 总控。
+
 ## 2026-08-21 P6 v2 完整 owner Desktop native Open/Save：macOS 独立真实文件子链已关闭
 
 - **新增真实证据：** 全新项目专属 `/tmp` Desktop acceptance bundle/root 由正常设置页的 native Open picker 选择 Android DocumentsUI 真实 3,955 B `.zip`，strict preflight 后写入 private v2 owner；同一 committed record 再由 native Save picker 回导至空输出目录。两次 UI receipt 均为 semantic `fdf9f95ac840…d9ff9`、1 asset。Node strict verifier 在 Android 输入和 Desktop 回导均通过（3 entries / 1 asset）；semantic、8 项 owner-field hash（field-set digest `ead2f34e…4aea1c`）及 asset ledger 全量一致。独立 SQLite v1 三表为 `0/0/0`，v2 import/assets/provenance/journal/receipt 为 `1/1/8/1/1`。
