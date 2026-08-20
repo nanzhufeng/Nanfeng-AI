@@ -78,6 +78,36 @@ pub struct Decision {
     pub response_message_id: Option<String>,
     pub reason: &'static str,
 }
+
+/// P6-L3's content-free route result. It does not render a message or start an execution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DispatchResult {
+    Reused { response_message_id: String },
+    Continued { decision: Decision },
+}
+
+/// A future explicit execution owner may implement this port. P6-L3 never sees text, a
+/// credential, a transport, a Provider Attempt or a Usage Ledger.
+pub trait DispatchPort {
+    fn reuse_existing_local_response(&mut self, response_message_id: &str);
+    fn continue_without_reuse(&mut self, decision: &Decision);
+}
+
+pub fn dispatch(decision: Decision, port: &mut impl DispatchPort) -> DispatchResult {
+    if decision.outcome == Outcome::LocalExactHit {
+        if let Some(response_message_id) = decision.response_message_id.as_deref() {
+            port.reuse_existing_local_response(response_message_id);
+            return DispatchResult::Reused {
+                response_message_id: response_message_id.to_owned(),
+            };
+        }
+        let safe = make_decision(Outcome::Unknown, None, "本地精确复用记录缺少消息引用");
+        port.continue_without_reuse(&safe);
+        return DispatchResult::Continued { decision: safe };
+    }
+    port.continue_without_reuse(&decision);
+    DispatchResult::Continued { decision }
+}
 #[derive(Default)]
 pub struct LocalExactReuseIndex {
     entries: BTreeMap<String, Entry>,
@@ -122,27 +152,27 @@ impl LocalExactReuseIndex {
     }
     pub fn resolve(&self, key: Option<&ExactKey>, temporary: bool, now_ms: u64) -> Decision {
         let Some(key) = key else {
-            return decision(Outcome::Unknown, None, "缺少完整精确复用键");
+            return make_decision(Outcome::Unknown, None, "缺少完整精确复用键");
         };
         if key.validate().is_err() {
-            return decision(Outcome::Unknown, None, "精确复用键无效");
+            return make_decision(Outcome::Unknown, None, "精确复用键无效");
         }
         if temporary {
-            return decision(Outcome::Ineligible, None, "临时会话不建立本地精确复用");
+            return make_decision(Outcome::Ineligible, None, "临时会话不建立本地精确复用");
         }
         if key.sensitivity == Sensitivity::High {
-            return decision(Outcome::Ineligible, None, "高敏感请求不建立本地精确复用");
+            return make_decision(Outcome::Ineligible, None, "高敏感请求不建立本地精确复用");
         }
         let Some(entry) = self.entries.get(&key.canonical_request_hash) else {
-            return decision(Outcome::Miss, None, "没有完全一致的本地结果");
+            return make_decision(Outcome::Miss, None, "没有完全一致的本地结果");
         };
         if entry.key != *key {
-            return decision(Outcome::Miss, None, "精确键字段不一致");
+            return make_decision(Outcome::Miss, None, "精确键字段不一致");
         }
         if entry.revoked || now_ms >= entry.expires_at_ms {
-            return decision(Outcome::Miss, None, "本地结果已撤销或过期");
+            return make_decision(Outcome::Miss, None, "本地结果已撤销或过期");
         }
-        decision(
+        make_decision(
             Outcome::LocalExactHit,
             Some(entry.response_message_id.clone()),
             "复用既有本地消息；不会请求 Provider",
@@ -184,12 +214,12 @@ impl SqliteLocalExactReuseStore {
             return LocalExactReuseIndex::default().resolve(None, temporary, now_ms);
         };
         let Ok(entry) = Self::find(connection, &key.canonical_request_hash) else {
-            return decision(Outcome::Unknown, None, "本地精确复用记录不可读");
+            return make_decision(Outcome::Unknown, None, "本地精确复用记录不可读");
         };
         let mut index = LocalExactReuseIndex::default();
         if let Some(entry) = entry {
             if index.restore(entry).ok() != Some(true) {
-                return decision(Outcome::Unknown, None, "本地精确复用记录无效");
+                return make_decision(Outcome::Unknown, None, "本地精确复用记录无效");
             }
         }
         index.resolve(Some(key), temporary, now_ms)
@@ -230,7 +260,7 @@ fn sensitivity_name(value: Sensitivity) -> &'static str {
         Sensitivity::High => "HIGH",
     }
 }
-fn decision(
+fn make_decision(
     outcome: Outcome,
     response_message_id: Option<String>,
     reason: &'static str,
@@ -386,6 +416,83 @@ mod tests {
         assert_eq!(
             SqliteLocalExactReuseStore::purge_expired_or_revoked(&reopened, 11).unwrap(),
             1
+        );
+    }
+
+    #[test]
+    fn dispatches_exact_hit_only_to_existing_local_response() {
+        struct Port {
+            reused: Vec<String>,
+            continued: Vec<Outcome>,
+        }
+        impl DispatchPort for Port {
+            fn reuse_existing_local_response(&mut self, response_message_id: &str) {
+                self.reused.push(response_message_id.to_owned());
+            }
+            fn continue_without_reuse(&mut self, decision: &Decision) {
+                self.continued.push(decision.outcome);
+            }
+        }
+
+        let mut index = LocalExactReuseIndex::default();
+        let exact = key('a', Sensitivity::Low);
+        index
+            .record(Entry {
+                key: exact.clone(),
+                response_message_id: "message:fixture".into(),
+                created_at_ms: 10,
+                expires_at_ms: 30,
+                revoked: false,
+            })
+            .unwrap();
+        let mut port = Port {
+            reused: vec![],
+            continued: vec![],
+        };
+
+        assert_eq!(
+            dispatch(index.resolve(Some(&exact), false, 11), &mut port),
+            DispatchResult::Reused {
+                response_message_id: "message:fixture".into()
+            },
+        );
+        assert_eq!(port.reused, vec!["message:fixture"]);
+        assert!(port.continued.is_empty());
+    }
+
+    #[test]
+    fn dispatches_miss_ineligible_and_unknown_only_to_content_free_continuation() {
+        struct Port {
+            reused: Vec<String>,
+            continued: Vec<Outcome>,
+        }
+        impl DispatchPort for Port {
+            fn reuse_existing_local_response(&mut self, response_message_id: &str) {
+                self.reused.push(response_message_id.to_owned());
+            }
+            fn continue_without_reuse(&mut self, decision: &Decision) {
+                self.continued.push(decision.outcome);
+            }
+        }
+        let index = LocalExactReuseIndex::default();
+        let mut port = Port {
+            reused: vec![],
+            continued: vec![],
+        };
+        for decision in [
+            index.resolve(Some(&key('a', Sensitivity::Low)), false, 11),
+            index.resolve(Some(&key('a', Sensitivity::Low)), true, 11),
+            index.resolve(None, false, 11),
+        ] {
+            assert!(matches!(
+                dispatch(decision, &mut port),
+                DispatchResult::Continued { .. }
+            ));
+        }
+        assert!(port.reused.is_empty());
+        assert_eq!(
+            port.continued,
+            vec![Outcome::Miss, Outcome::Ineligible, Outcome::Unknown]
         );
     }
 }

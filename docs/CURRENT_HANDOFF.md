@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：P6-L3 双端本地精确复用分派门（当前）
+
+- **结论：** L3 在 L2 持久索引之上新增唯一 content-free 分派门。Android `LocalExactReuseDispatchOwner` 与 Desktop `local_exact_reuse_v1::dispatch` 对 `LOCAL_EXACT_HIT` 仅交出既有 `responseMessageId` 的复用分支，且不会调用普通分派 continuation；`MISS`、`INELIGIBLE`、`UNKNOWN` 只传递安全 decision。任何不带消息引用的损坏命中降级为 `UNKNOWN`。
+- **验证与严格边界：** Android L3 定向合同覆盖 hit 与非 hit 互斥；Desktop Rust L3 定向合同覆盖同一分派事实。L3 不渲染/复制正文、不创建 Conversation/Message Tree、不建 Provider Attempt、不写 Usage/Cost Ledger；未注册至 Android AppContainer、Desktop Tauri/UI、P2/P3 dispatch 或 Provider adapter。没有 UI 或新用户功能，故不新增功能审阅登记/常驻入口；没有 Key、HTTP、安装、emulator 或 OPPO 操作，也没有真实复用、节省或 Provider cache 声明。
+
 ## 2026-08-20 总控推进：P6-L2 双端本地精确复用持久化边界（当前）
 
 - **结论：** L1 的 content-free 精确键索引现在有 Android Room 37→38 与 Desktop workspace SQLite 19→20 的单独持久表。它只保存精确键安全字段、既有本地 `responseMessageId`、创建/过期/撤销状态；同一条目重放一致、重启读回、撤销和过期/撤销清理均由 Android `RoomLocalExactReuseEntryStore` / Desktop `SqliteLocalExactReuseStore` 回到 L1 owner 判定。损坏记录为 `UNKNOWN`，不猜测命中。
