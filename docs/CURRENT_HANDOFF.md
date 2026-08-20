@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v2 Android SAF 导出桥接：代码/合同已接入，真实 DocumentsUI 链尚未验收
+
+- **已实现：** Android 在 `设置 → 数据与导入` 增加已审阅范围内的“完整工作区交换（v2）”候选入口。用户先显式查看完整范围的匿名聚合计数（项目、对话、知识、记忆、关系、附件）并选择系统保存位置；`WorkspaceExchangeV2ScopePlanner` 形成 exact all-owner selection，附件一律标记 `HIGH_SENSITIVE`，不静默降级或省略 owner。`AndroidWorkspaceExchangeV2ExportPort` 只调用既有 v2 mapper/package writer：完整内存序列化与 strict preflight 成功后才写一次 SAF URI，随后 readback SHA-256 必须等于 package receipt；写入或 readback 失败请求删除未完成文档，且不显示成功回执、路径、文件名、正文或附件 bytes。
+- **双端治理：** Android 与 Desktop 的 `设置 → 功能审阅` 同步为“待您判断是否保留”；建议只保留双端设置二级入口，不增加聊天、Composer 或工作页按键，且不称为备份、云同步或原生对象恢复。v1 当前文本会话 SAF 出口没有改动，v2 不接入导入、Room transaction/archive、网络、Provider、Keychain 或任何聊天按钮。
+- **本地验证：** Android Studio JBR + `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` + `--no-daemon` 下，v2 mapper/writer/scope 定向 JVM 合同 4/4 与 Android 功能审阅静态合同通过；Desktop `npm run lint` 与 `npm test` 90/90 通过。未启动 emulator、DocumentsUI、ADB 或 OPPO，未产生用户 package，也未验收 SAF provider 的删除语义或真实 Android 文件 readback。
+- **下一停止门：** 仅可在空隔离 AVD 通过正常 Settings → 数据与导入 → 范围 → DocumentsUI 保存一份非敏感 v2 fixture，再做 content-free receipt/readback 和 Desktop strict reader/import 的独立验证；不得以 JVM port、内部 URI、旧 v1 文件或 Desktop 结果替代，也不得操作 OPPO。Android v2 导入/持久 archive/事务/恢复仍未开始。
+
 ## 2026-08-20 P6 工作区 v2 Android package writer：本地序列化与跨端 reader 合同完成，Android 用户链继续禁止
 
 - **已实现：** 新的未注册 `NfaiExchangeV2PackageWriter` 仅消费既有 `NfaiExchangeV2OwnerMapper` 的只读 owner→exact-IR 链；随后只对 IR 账本明确引用的附件重新只读核验 bytes/hash，在内存中生成 `manifest.json + exchange.json + assets/<sha256>`。它严格重验 IR semantic hash、canonical manifest/export equality、每个 manifest 文件 hash/长度、会话与 Knowledge 的统一 attachment 账本、content-addressed assets、未知 entry 与全部 `ownerFieldHashes`。输出被限制为一次性原子 port；preflight 失败或 mapper 拒绝时 port 不会被调用，receipt 只含 package/semantic hash、来源/敏感枚举、计数与 field hash。

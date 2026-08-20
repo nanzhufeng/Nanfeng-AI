@@ -86,6 +86,48 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
         assertEquals(1, failedOutput.writes)
     }
 
+    @Test fun `complete workspace scope is explicit exhaustive and marks binary attachments high sensitive`() {
+        val source = fixture()
+        val planner = WorkspaceExchangeV2ScopePlanner(
+            source = source,
+            projects = object : ProjectRepository {
+                override fun apply(intent: ProjectIntent, fingerprint: String, mutate: () -> ProjectSnapshot) = error("unused")
+                override fun findById(id: ProjectId) = source.project(id)
+                override fun list(scope: ProjectListScope) = listOf(source.project)
+                override fun projectForConversation(conversationId: ConversationId) = source.project.project.id
+                override fun knowledgeScope(knowledgeId: KnowledgeItemId) = source.project.project.id
+                override fun assignConversation(intent: ProjectIntent, fingerprint: String) = error("unused")
+                override fun assignKnowledge(intent: ProjectIntent, fingerprint: String) = error("unused")
+            },
+            conversations = object : ConversationListRepository {
+                override fun list(scope: ConversationListScope) = listOf(source.conversation.conversation)
+            },
+            knowledge = object : KnowledgeManagementRepository {
+                override fun mutate(intent: KnowledgeIntent, fingerprint: String) = error("unused")
+                override fun findSnapshot(id: KnowledgeItemId) = source.knowledge(id)
+                override fun listSnapshots(filter: KnowledgeSearchFilter) = listOf(source.knowledge)
+            },
+            memories = object : MemoryRepository {
+                override fun mutate(intent: MemoryIntent, fingerprint: String) = error("unused")
+                override fun findById(id: MemoryId) = source.memory(id)
+                override fun list(scope: MemoryScopeKind?, status: MemoryStatus?, search: String) = listOf(source.memory)
+                override fun conflict(id: MemoryConflictId) = null
+            },
+            relationships = object : KnowledgeRelationshipRepository {
+                override fun apply(intent: KnowledgeRelationshipIntent, fingerprint: String, decide: (List<KnowledgeSnapshot>, List<KnowledgeRelationshipSnapshot>) -> RelationshipDecision) = error("unused")
+                override fun list(filter: KnowledgeRelationshipListFilter) = listOf(source.relation)
+            },
+        )
+
+        val prepared = planner.prepareCompleteWorkspace()
+        assertTrue("prepared=$prepared", prepared is WorkspaceExchangeV2ScopePreparation.Prepared)
+        val scope = (prepared as WorkspaceExchangeV2ScopePreparation.Prepared).value
+        assertEquals(source.selection.objects, scope.selection.objects)
+        assertEquals(mapOf(source.asset.id.value to "HIGH_SENSITIVE"), scope.selection.attachmentClassifications)
+        assertEquals(5, scope.objectCount)
+        assertEquals(1, scope.attachmentCount)
+    }
+
     private fun mapper(source: Fixture) = NfaiExchangeV2OwnerMapper(source, "0.3.0-test", clock) { "export-v2-test" }
 
     private fun fixture(

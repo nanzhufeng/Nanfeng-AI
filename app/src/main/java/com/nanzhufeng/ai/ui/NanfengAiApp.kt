@@ -226,6 +226,7 @@ internal fun NanfengAiApp(
     privacyDataViewModel: PrivacyDataViewModel,
     localBackupRestoreViewModel: LocalBackupRestoreViewModel,
     conversationExchangeExportViewModel: ConversationExchangeExportViewModel,
+    workspaceExchangeV2ExportViewModel: WorkspaceExchangeV2ExportViewModel,
     accountSyncViewModel: P7DAccountSyncViewModel,
     dualPathConnectionViewModel: DualPathConnectionViewModel,
     p8ControlledAgentViewModel: P8ControlledAgentViewModel,
@@ -269,6 +270,12 @@ internal fun NanfengAiApp(
         val conversationId = pendingConversationExchangeId
         pendingConversationExchangeId = null
         if (uri != null && conversationId != null) conversationExchangeExportViewModel.export(conversationId, uri)
+    }
+    var pendingWorkspaceExchangeV2Scope by remember { mutableStateOf<com.nanzhufeng.ai.domain.WorkspaceExchangeV2ScopeSummary?>(null) }
+    val workspaceExchangeV2ExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        val scope = pendingWorkspaceExchangeV2Scope
+        pendingWorkspaceExchangeV2Scope = null
+        if (uri != null && scope != null) workspaceExchangeV2ExportViewModel.export(uri) else workspaceExchangeV2ExportViewModel.clearScope()
     }
     MaterialTheme(
         colorScheme = lightColorScheme(
@@ -330,6 +337,8 @@ internal fun NanfengAiApp(
                     pendingConversationExchangeId = conversationId
                     conversationExchangeExportPicker.launch("${conversationId.value}.nfai-exchange")
                 },
+                workspaceExchangeV2ExportState = workspaceExchangeV2ExportViewModel.state,
+                onSelectWorkspaceExchangeV2Scope = workspaceExchangeV2ExportViewModel::selectCompleteWorkspaceScope,
                 accountSyncState = accountSyncViewModel.state,
                 onOpenAccountSync = accountSyncViewModel::open,
                 dualPathState = dualPathConnectionViewModel.state,
@@ -424,6 +433,16 @@ internal fun NanfengAiApp(
                     onDismiss = modelSettingsViewModel::dismissDialog,
                     onSave = modelSettingsViewModel::save,
                     onRevealStoredCredential = modelSettingsViewModel::revealStoredCredential,
+                )
+            }
+            workspaceExchangeV2ExportViewModel.state.scope?.let { scope ->
+                WorkspaceExchangeV2ScopeDialog(
+                    scope = scope,
+                    onDismiss = workspaceExchangeV2ExportViewModel::clearScope,
+                    onExport = { onScope ->
+                        pendingWorkspaceExchangeV2Scope = onScope
+                        workspaceExchangeV2ExportPicker.launch("nanfeng-ai-workspace-v2.nfai-exchange")
+                    },
                 )
             }
             if (privacyDataViewModel.state.visible) {
@@ -537,6 +556,8 @@ private fun CaptureScreen(
     onOpenLocalBackup: () -> Unit,
     conversationExchangeExportState: ConversationExchangeExportUiState,
     onExportConversationExchange: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
+    workspaceExchangeV2ExportState: WorkspaceExchangeV2ExportUiState,
+    onSelectWorkspaceExchangeV2Scope: () -> Unit,
     accountSyncState: P7DAccountSyncUiState,
     onOpenAccountSync: () -> Unit,
     dualPathState: DualPathConnectionUiState,
@@ -714,6 +735,10 @@ private fun CaptureScreen(
                     onSelectTarget = onSelectP6KTarget,
                     onLink = onLinkP6KAsset,
                 )
+                WorkspaceExchangeV2ExportCard(
+                    state = workspaceExchangeV2ExportState,
+                    onSelectScope = onSelectWorkspaceExchangeV2Scope,
+                )
                 NanfengKnowledgeExportImportSettingsPage(
                     state = nanfengKnowledgeImportState,
                     onChoose = onOpenNanfengKnowledgeExportImport,
@@ -726,6 +751,49 @@ private fun CaptureScreen(
             P5ARoute.CONTROL -> ControlHub(onRouteSelected)
         }
     }
+}
+
+@Composable
+private fun WorkspaceExchangeV2ExportCard(
+    state: WorkspaceExchangeV2ExportUiState,
+    onSelectScope: () -> Unit,
+) {
+    WhiteCard {
+        Text("完整工作区交换（v2）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(4.dp))
+        Text("先选择完整工作区范围，再由系统选择保存位置。导出前严格校验；只在写入后回读哈希一致时显示成功。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(6.dp))
+        Text("附件一律按高敏感内容处理；它不是备份、云同步或对象恢复。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        state.notice?.let { notice -> Spacer(Modifier.height(8.dp)); Text(notice, color = SecondaryText, style = MaterialTheme.typography.bodySmall) }
+        state.error?.let { error -> Spacer(Modifier.height(8.dp)); Text(error, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
+        Spacer(Modifier.height(10.dp))
+        Button(onClick = onSelectScope, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) {
+            if (state.working) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = AccentOnPrimary)
+            else Text("选择完整工作区范围")
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceExchangeV2ScopeDialog(
+    scope: com.nanzhufeng.ai.domain.WorkspaceExchangeV2ScopeSummary,
+    onDismiss: () -> Unit,
+    onExport: (com.nanzhufeng.ai.domain.WorkspaceExchangeV2ScopeSummary) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("完整工作区范围") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("将严格导出当前范围内的全部对象；任一对象不完整、不可读取或不符合 v2 合同，均不会写入文件。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("项目 ${scope.projectCount} · 对话 ${scope.conversationCount} · 知识 ${scope.knowledgeCount}", style = MaterialTheme.typography.bodyMedium)
+                Text("记忆 ${scope.memoryCount} · 关系 ${scope.relationCount} · 附件 ${scope.attachmentCount}", style = MaterialTheme.typography.bodyMedium)
+                Text("附件按高敏感级别处理；选择保存位置后即开始生成与回读，不再显示第二次产品确认。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        confirmButton = { Button(onClick = { onExport(scope) }, shape = P5AInteractiveShape) { Text("选择保存位置") } },
+    )
 }
 
 /** Existing local import owners are exposed here only; this card owns no parsing or network work. */
@@ -888,9 +956,9 @@ private fun FeatureReviewSettingsCard() {
         WhiteCard {
             Text("完整工作区交换（v2）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
-            Text("当前：待您判断是否保留；Desktop 仅可从设置 → 数据与导入选择 v2 包，严格预检后保存私有归档、provenance 与回执；Android 尚无用户入口。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("当前：待您判断是否保留；Android 可从设置 → 数据与导入显式选择完整范围并经系统保存位置导出 v2 包，Desktop 仅可从设置选择 v2 包后私有导入。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
-            Text("建议：只保留 Desktop 设置二级入口，不在聊天主页、Composer 或工作页增加按键；它不是备份、云同步，也不表示已恢复为 Desktop 原生对象。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("建议：只保留双端设置二级入口，不在聊天主页、Composer 或工作页增加按键；它不是备份、云同步，也不表示已恢复为原生对象。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

@@ -34,6 +34,7 @@ import com.nanzhufeng.ai.data.AndroidJsonKnowledgeExportStore
 import com.nanzhufeng.ai.data.AndroidOfflineEvalReportStore
 import com.nanzhufeng.ai.data.AndroidConversationExportStore
 import com.nanzhufeng.ai.data.AndroidConversationExchangeExportPort
+import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2ExportPort
 import com.nanzhufeng.ai.data.AndroidTextShareAdapter
 import com.nanzhufeng.ai.data.AndroidP7BAccountVault
 import com.nanzhufeng.ai.data.AndroidP7ERestoreReceiptStore
@@ -164,6 +165,10 @@ import com.nanzhufeng.ai.domain.JsonKnowledgeAdapter
 import com.nanzhufeng.ai.domain.ManageJsonKnowledgeImportUseCase
 import com.nanzhufeng.ai.domain.ExportJsonKnowledgeUseCase
 import com.nanzhufeng.ai.domain.ExportConversationExchangeUseCase
+import com.nanzhufeng.ai.domain.NfaiExchangeV2PackageWriter
+import com.nanzhufeng.ai.domain.NfaiExchangeV2OwnerMapper
+import com.nanzhufeng.ai.domain.RepositoryNfaiExchangeWorkspaceSource
+import com.nanzhufeng.ai.domain.WorkspaceExchangeV2ScopePlanner
 import com.nanzhufeng.ai.domain.PdfTextKnowledgeAdapter
 import com.nanzhufeng.ai.domain.ManagePdfTextKnowledgeImportUseCase
 import com.nanzhufeng.ai.domain.ManageWebTextSnapshotUseCase
@@ -275,6 +280,31 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
     private val nanfengKnowledgeConversationCommitStore = RoomNanfengKnowledgeImportCommitStore(database, conversationRepository)
     val projectRepository = RoomProjectRepository(database)
     val memoryRepository = RoomMemoryRepository(database, clock)
+    private val workspaceExchangeV2Source = RepositoryNfaiExchangeWorkspaceSource(
+        projects = projectRepository,
+        conversations = conversationRepository,
+        knowledge = knowledgeRepository,
+        memories = memoryRepository,
+        relationships = knowledgeRelationshipRepository,
+        attachments = privateAttachmentRepository,
+        privateStore = privateAttachmentStore,
+    )
+    private val workspaceExchangeV2Planner = WorkspaceExchangeV2ScopePlanner(
+        source = workspaceExchangeV2Source,
+        projects = projectRepository,
+        conversations = conversationRepository,
+        knowledge = knowledgeRepository,
+        memories = memoryRepository,
+        relationships = knowledgeRelationshipRepository,
+    )
+    val workspaceExchangeV2ExportPort = AndroidWorkspaceExchangeV2ExportPort(
+        context = context,
+        planner = workspaceExchangeV2Planner,
+        writer = NfaiExchangeV2PackageWriter(
+            mapper = NfaiExchangeV2OwnerMapper(workspaceExchangeV2Source, BuildConfig.VERSION_NAME, clock),
+            source = workspaceExchangeV2Source,
+        ),
+    )
     val offlineEvalRepository = RoomOfflineEvalRepository(database)
     // P8-B is an internal read-only status bridge. It has no runtime, fixture registry, UI or worker.
     private val p8AgentLedger = RoomAgentLedger(database)
