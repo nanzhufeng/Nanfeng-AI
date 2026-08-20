@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：Desktop Compare 阶段 1 唯一状态 owner（当前）
+
+- **结论：** Desktop Compare 已由 `DesktopCompareExecutionOwner` 统一三个既有显式入口的 readiness/拒绝决定，固定未来 OpenRouter OpenAI-compatible 边界；owner 只接收 `hasText`、附件数和安全 readiness facts，不能接受或保存草稿正文、附件、响应或 Key。空草稿、附件、无凭据存在性、未知模型/价格及未组合 transport 均明确失败关闭；当前仍没有 native credential adapter、Settings 凭据输入、HTTP、SQLite receipt 或 branch persistence。
+- **验证与边界：** Desktop Node owner mock-only 4/4、chat-first UI 60/60 与 lint 通过；“设置 → 功能审阅”的 `Desktop Compare 联网执行` 已同步改为“阶段 1 仅有 fail-closed 状态 owner”。没有读取/写入 Keychain、SQLite、备份或同步，未发 HTTP、未安装 app、未触碰 OPPO。完整阶段合同见 `DESKTOP_COMPARE_EXECUTION_CONTRACT.md`；阶段 2 之前必须通过 context gate。
+
 ## 2026-08-20 总控推进：运行时交付元数据当前版本修正（当前）
 
 - **结论：** `AndroidPrivacyDataManager`、`AndroidLocalBackupRestoreManager` 与 `RunOfflineEvalUseCase` 不再把当前 release 的 manifest/诊断/Eval report 版本硬编码为历史 `0.3.0-p5d` / `0.3.0-p4m`，统一注入 `BuildConfig.VERSION_NAME`。因此当前 `0.3.0-p10a` 生成的本地备份、诊断与离线 Eval 报告会如实携带当前版本，恢复预检和故障定位不再误指向历史交付。

@@ -143,7 +143,7 @@ test('P6-K exposes direct ZIP import with recovery controls without changing the
 
 test('new user features have a Settings review entry with a decision state and entry recommendation', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'feature-review', status: '', error: '', connection: {} });
-  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '复用现有“对比”操作，不新增 Composer 常驻按钮']) assert.ok(rendered.includes(token));
+  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1 仅有 fail-closed 状态 owner', '复用现有“对比”操作，不新增 Composer 常驻按钮']) assert.ok(rendered.includes(token));
 });
 
 test('FB-P6-039 keeps attachment previews as role-aligned siblings of text surfaces', () => {
@@ -371,11 +371,11 @@ test('P6-G composer renders only the current conversation override and returns t
   assert.ok(!html.includes('temporary-model-override'));
 });
 
-test('Compare controls submit directly and truthfully report that Desktop has no execution owner', async () => {
+test('Compare controls submit directly through the fail-closed Desktop execution owner', async () => {
   const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'ordinary', composerDraft: '', profileOpen: false, pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true });
   for (const token of ['对比 ChatGPT + Claude', 'open-compare-confirmation', 'data-compare-long-press']) assert.ok(html.includes(token));
   const appSource = await readFile(resolve(root, 'src/app.mjs'), 'utf8');
-  for (const token of ['executeDesktopCompare', 'compareLongPressTimer', '550', 'Desktop execution owner 不可用', '未读取 Key 或发送内容']) assert.ok(appSource.includes(token));
+  for (const token of ['executeDesktopCompare', 'DesktopCompareExecutionOwner', 'desktopCompareExecutionOwner.requestDirectCompare', 'compareLongPressTimer', '550', '未读取 Key 或发送内容']) assert.ok(appSource.includes(token));
   const desktopCompare = appSource.substring(appSource.indexOf('function executeDesktopCompare()'), appSource.indexOf("app.addEventListener('pointerdown'"));
   assert.ok(!desktopCompare.includes('invoke('));
   assert.ok(!desktopCompare.includes('state.dialog = {'));

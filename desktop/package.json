@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "protocol:test": "node ../protocol/scripts/run-golden.mjs",
-    "lint": "node --check src/app.mjs && node --check src/chat-shell.mjs && node --check src/p8-inspect.mjs && node --check src/pwa-boundaries.mjs && node --check scripts/build.mjs && node --check scripts/bundle-macos.mjs",
+    "lint": "node --check src/app.mjs && node --check src/chat-shell.mjs && node --check src/desktop-compare-execution-owner.mjs && node --check src/p8-inspect.mjs && node --check src/pwa-boundaries.mjs && node --check scripts/build.mjs && node --check scripts/bundle-macos.mjs",
     "typecheck": "node scripts/typecheck.mjs",
     "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build.mjs",

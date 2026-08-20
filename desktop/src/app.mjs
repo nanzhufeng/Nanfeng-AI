@@ -1,6 +1,7 @@
 import { p8InspectCanvas } from './p8-inspect.mjs';
 import { activeConversations, clampDesktopSidebarWidth, messagePlainText, renderChatFirstShell, resolveConversation, resolveConversationMenuAnchor } from './chat-shell.mjs';
 import { beginConversationRecycle, completeConversationRecycle, failConversationRecycle } from './recycle-confirmation.mjs';
+import { DesktopCompareExecutionOwner } from './desktop-compare-execution-owner.mjs';
 
 const app = document.querySelector('#app');
 const tauriBridge = window.__TAURI__?.core ?? window.__TAURI_INTERNALS__;
@@ -14,6 +15,7 @@ const state = { workspaces: [], current: null, pane: 'chat', selectedConversatio
 let compareLongPressTimer = null;
 let p6kManualLink = { assetOrdinal: null, conversationId: null, messageId: null };
 globalThis.__nanfengP6kManualLink = p6kManualLink;
+const desktopCompareExecutionOwner = new DesktopCompareExecutionOwner();
 
 function cancelCompareLongPress() {
   if (compareLongPressTimer !== null) window.clearTimeout(compareLongPressTimer);
@@ -23,8 +25,12 @@ function cancelCompareLongPress() {
 function executeDesktopCompare() {
   state.p6gModelPickerOpen = false;
   state.dialog = null;
-  state.error = 'Compare 已直接提交执行请求，但当前 Desktop 没有可用执行 owner；未读取 Key 或发送内容。';
-  state.status = 'Compare 未执行：Desktop execution owner 不可用。';
+  const decision = desktopCompareExecutionOwner.requestDirectCompare({
+    hasText: state.composerDraft.trim().length > 0,
+    attachmentCount: state.composerAttachments.length,
+  });
+  state.error = `Compare 未执行：${decision.blocker}；未读取 Key 或发送内容。`;
+  state.status = 'Compare 已直接提交执行请求，但当前 Desktop 尚未完成安全执行组合。';
   render();
 }
 
@@ -1218,11 +1224,7 @@ app.addEventListener('click', event => {
     if (state.temporaryModelOpen) closeTopOverlay(); else openTransientOverlay('temporary-model', target);
   } else if (action === 'open-compare-confirmation') {
     event.preventDefault();
-    state.p6gModelPickerOpen = false;
-    state.dialog = null;
-    state.error = 'Compare 尚未接入 Desktop 执行 owner，未读取 Key 或发送内容。';
-    state.status = 'Compare 已直接提交执行请求，但当前 Desktop 没有可用执行 owner。';
-    render();
+    executeDesktopCompare();
   } else if (action === 'toggle-p6g-model-picker') {
     event.preventDefault();
     if (state.compareLongPressTriggered) {
