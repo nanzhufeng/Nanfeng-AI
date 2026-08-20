@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 P11：KSP dependency verification 缺口已最窄补齐并回读
+
+- **精确范围与修改：** 基于失败的 `:app:kspReleaseKotlin` 输出，只在 `gradle/verification-metadata.xml` 增加三个 detached-configuration 工件的 SHA-256：`kotlinx-coroutines-core-jvm-1.6.4.jar`、`symbol-processing-aa-embeddable-2.2.10-2.0.2.jar` 与同版本 POM。diff 为单文件 11 行新增；XML 有效，秘密模式检查和 `git diff --check` 均干净。未升级依赖、未放宽/关闭验证、未访问 Keychain、签名值、网络、设备或应用数据。
+- **实际回读：** Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 下，写入命令仅为 `:app:kspReleaseKotlin --write-verification-metadata sha256`；同一 release KSP 任务随后不带写入参数成功，证明当前元数据已实际应用。清单 SHA-256 为 `beb92e5168e69ed2396e97ac52a6b48b07372885d17299b0cdd1dca7ca82bd21`。
+- **严格边界与唯一下一步：** 预检看见两个其他 Gradle 版本的空闲 daemon；本轮仍以 `--no-daemon` 单次 daemon 执行并停止。该局部 P11 门不等于 P11 或 P0–P11 完成。元数据提交后，唯一允许的后续动作是对 code 52 执行一次新的正式 `:app:assembleRelease --offline --no-daemon`；只有成功后才做 APK、OPPO 只读门与一次数据保留覆盖安装。
+
 ## 2026-08-21 P5 OPPO：正式签名 fallback 完整，已递增版本号待单次构建
 
 - **签名结论：** 四项 `NANFENG_AI_RELEASE_V2_*` 环境变量不存在；按“环境变量优先、用户级项目命名属性备用”的正式规则，仅检查 `~/.gradle/gradle.properties` 中四项 `nanfengAi.releaseV2.*` 的非空布尔状态，均完整。未读取/输出任何值，未访问 Keychain。

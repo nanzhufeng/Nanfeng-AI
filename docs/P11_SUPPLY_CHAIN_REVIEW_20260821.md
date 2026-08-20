@@ -1,5 +1,12 @@
 # P11 供应链复核（2026-08-21）
 
+## P11 KSP verification metadata 补齐与回读（后续增量）
+
+- 上一次正式 `:app:assembleRelease --offline --no-daemon` 的 `:app:kspReleaseKotlin` 精确报告缺少三个 detached-configuration 工件：`kotlinx-coroutines-core-jvm-1.6.4.jar`、`symbol-processing-aa-embeddable-2.2.10-2.0.2.jar` 与同版本 POM。
+- 使用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon`，仅对 `:app:kspReleaseKotlin` 执行 `--write-verification-metadata sha256`。清单 diff 仅为 11 行：上述三个工件各新增一个 Gradle 生成的 SHA-256；没有升级依赖、禁用或放宽验证，也没有访问 Keychain、签名值、设备或网络。
+- 随后以相同 JBR/离线/no-daemon 条件、不带写入参数执行 `:app:kspReleaseKotlin`，任务成功并实际应用 verification metadata；XML 解析有效。更新后 `gradle/verification-metadata.xml` SHA-256 为 `beb92e5168e69ed2396e97ac52a6b48b07372885d17299b0cdd1dca7ca82bd21`。
+- 预检观察到两个其他 Gradle 版本的空闲 daemon；本次仍使用 `--no-daemon` 单次 daemon，结束后停止，未共享该守护进程。此记录不把该局部校验回读称为 P11 或 P0–P11 完成。
+
 ## 结论与边界
 
 这是 §17 P11 的一次本机依赖安全复核，不是 P0–P11 总控完成、P6 退出、正式发布或 Windows/OPPO/Provider 验收。
