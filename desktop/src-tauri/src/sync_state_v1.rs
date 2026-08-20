@@ -2,7 +2,6 @@
 use aes_gcm::aead::{rand_core::RngCore, OsRng};
 use rusqlite::{params, Connection};
 use sha2::{Digest, Sha256};
-use std::process::Command;
 use zeroize::Zeroize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,88 +74,32 @@ impl CredentialStore for MacKeychainCredentialStore {
         if !cfg!(target_os = "macos") || secret.len() != 32 {
             return Err(err());
         }
-        let encoded = hex::encode(secret);
-        let status = Command::new("/usr/bin/security")
-            .args([
-                "add-generic-password",
-                "-U",
-                "-s",
-                service,
-                "-a",
-                account,
-                "-w",
-                &encoded,
-            ])
-            .output()
-            .map_err(|_| err())?;
-        if status.status.success() {
-            Ok(())
-        } else {
-            Err(err())
-        }
+        #[cfg(target_os = "macos")]
+        return security_framework::passwords::set_generic_password(service, account, secret)
+            .map_err(|_| err());
+        #[cfg(not(target_os = "macos"))]
+        Err(err())
     }
     fn read(&self, service: &str, account: &str) -> Result<Vec<u8>, String> {
         if !cfg!(target_os = "macos") {
             return Err(err());
         }
-        let output = Command::new("/usr/bin/security")
-            .args(["find-generic-password", "-w", "-s", service, "-a", account])
-            .output()
-            .map_err(|_| err())?;
-        if !output.status.success() {
-            return Err(err());
-        }
-        hex::decode(String::from_utf8(output.stdout).map_err(|_| err())?.trim()).map_err(|_| err())
+        #[cfg(target_os = "macos")]
+        return security_framework::passwords::get_generic_password(service, account)
+            .map_err(|_| err());
+        #[cfg(not(target_os = "macos"))]
+        Err(err())
     }
     fn delete(&self, service: &str, account: &str) -> Result<(), String> {
         if !cfg!(target_os = "macos") {
             return Err(err());
         }
-        let status = Command::new("/usr/bin/security")
-            .args(["delete-generic-password", "-s", service, "-a", account])
-            .output()
-            .map_err(|_| err())?;
-        if status.status.success() {
-            Ok(())
-        } else {
-            Err(err())
-        }
+        #[cfg(target_os = "macos")]
+        return security_framework::passwords::delete_generic_password(service, account)
+            .map_err(|_| err());
+        #[cfg(not(target_os = "macos"))]
+        Err(err())
     }
-}
-
-/// macOS evidence only: a random app-owned entry is written, read, deleted, then checked absent.
-pub fn macos_keychain_self_test() -> Result<(), String> {
-    if !cfg!(target_os = "macos") {
-        return Err(err());
-    }
-    let mut random = [0u8; 32];
-    OsRng.fill_bytes(&mut random);
-    let suffix = format!("{:x}", Sha256::digest(random))[..24].to_owned();
-    random.zeroize();
-    let service = format!("com.nanzhufeng.ai.p7b.selftest.{suffix}");
-    let account = format!("temporary-{suffix}");
-    let store = MacKeychainCredentialStore;
-    let mut secret = [0u8; 32];
-    OsRng.fill_bytes(&mut secret);
-    let result = (|| {
-        store.save(&service, &account, &secret)?;
-        let mut read = store.read(&service, &account)?;
-        let matches = read == secret;
-        read.zeroize();
-        if !matches {
-            return Err(err());
-        }
-        store.delete(&service, &account)?;
-        if store.read(&service, &account).is_ok() {
-            return Err(err());
-        }
-        Ok(())
-    })();
-    secret.zeroize();
-    if result.is_err() {
-        let _ = store.delete(&service, &account);
-    };
-    result
 }
 
 pub struct SqliteMetadataStore<'a> {
@@ -500,10 +443,5 @@ mod tests {
                 .state,
             State::SignedOutKeepLocal
         );
-    }
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn macos_keychain_self_test_uses_and_cleans_only_a_random_app_owned_entry() {
-        macos_keychain_self_test().unwrap();
     }
 }

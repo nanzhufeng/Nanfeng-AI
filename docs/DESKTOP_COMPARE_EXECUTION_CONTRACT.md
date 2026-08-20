@@ -1,6 +1,6 @@
 # Desktop Compare 联网执行合同
 
-状态：阶段 1 已建立唯一状态 owner（2026-08-20）；**未配置、未联网、不可执行**。
+状态：阶段 2 已建立安全凭据 adapter（2026-08-20）；**未配置、未联网、不可执行**。
 
 ## 范围与唯一归属
 
@@ -28,4 +28,5 @@
 ## 验收
 
 - Node mock-only 单测覆盖默认关闭、空草稿/附件优先拒绝、未知模型/价格、未组合 transport 和 source 无 I/O/content/key surface。
+- Rust `desktop_compare_credentials_v1` 已把 Compare 的固定 app-owned service/account 封装为 Security.framework 直接 API；作用域内仅有 presence、用户提供 secret 的未来保存和 one-shot scoped read，secret 会在临时副本上清零。它没有 Tauri command、Settings 输入或生产组合。旧 P7 adapter 同步移除 `/usr/bin/security` 与真实 Keychain self-test，改用相同的直接 API。
 - 本阶段不读取或写入 macOS Keychain，不读取/写入 SQLite，不更新备份/同步，不安装任何 app，不访问 OPPO，不发 HTTP。
