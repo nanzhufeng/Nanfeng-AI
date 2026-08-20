@@ -2,6 +2,7 @@ package com.nanzhufeng.ai.app
 
 import android.content.Context
 import androidx.room.Room
+import com.nanzhufeng.ai.BuildConfig
 import com.nanzhufeng.ai.ai.MockAiTaskRunner
 import com.nanzhufeng.ai.ai.OpenRouterOfflineAdapterContract
 import com.nanzhufeng.ai.ai.OfficialOpenRouterInferenceTransport
@@ -361,9 +362,9 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         clock = clock,
     )
     /** P5-C owns aggregate-only privacy inventory, scoped deletion and user-initiated diagnostics. */
-    val privacyDataManager = AndroidPrivacyDataManager(context, database, "0.3.0-p5d")
+    val privacyDataManager = AndroidPrivacyDataManager(context, database, BuildConfig.VERSION_NAME)
     /** P5-D is manual local portability only; it never participates in lifecycle recovery or cloud backup. */
-    val localBackupRestoreManager = AndroidLocalBackupRestoreManager(context, database, "0.3.0-p5d")
+    val localBackupRestoreManager = AndroidLocalBackupRestoreManager(context, database, BuildConfig.VERSION_NAME)
     private val modelServiceSettingsRepository = AndroidModelServiceSettingsRepository(context)
     private val providerCredentialStore = createAndroidProviderCredentialStore(context)
     private val modelRegistrySnapshotStore = AndroidModelRegistrySnapshotStore(context)

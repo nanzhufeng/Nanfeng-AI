@@ -6,13 +6,12 @@
 
 | 总控项 | 当前事实 | 状态 |
 | --- | --- | --- |
-| release v2 签名与正式 APK | 新的项目专属 v2 签名已生成；当前源码 release APK 为 `com.nanzhufeng.ai` `51 / 0.3.0-p10a`，SHA-256 `24177f946be0d4ac2db3f5b8aa0240b4f3f354fa68cfa10695c5c3b78e4acecb`，v2/v3 签名校验通过。该产物包含功能审阅与 Claude 兼容修正，尚未安装到 OPPO。 | 已关闭 |
+| release v2 签名与正式 APK | 新的项目专属 v2 签名已生成；当前源码 release APK 为 `com.nanzhufeng.ai` `51 / 0.3.0-p10a`，SHA-256 `1599da4608c59f738e65b001841079e455f5362a8b845bcc2c14f23d3091b707`，v2/v3 签名校验通过。该产物包含功能审阅、Claude 兼容修正与当前版本备份元数据修正，尚未安装到 OPPO。 | 已关闭 |
 | OPPO 安装链 | OPPO PKH120 已安装当前 release v2；`dumpsys`、UIAutomator package 与拉回的 `base.apk` SHA-256 三方一致 | 已关闭（仅安装/启动，不等同于所有功能验收） |
 | Desktop P6-K 正式 bundle | 资源封印缺失已修复；最终 ad-hoc bundle 严格验签、原生 WebView、Settings 匿名 aggregate readback 已完成 | 已关闭 |
 | Android P6-K 真正入口 | 当前源码以独立 `com.nanzhufeng.ai.p6eacceptancev2` 验收包运行，未覆盖 legacy `com.nanzhufeng.ai` / `com.nanzhufeng.ai.p6eacceptance`。经设置 → 数据与导入 → 导入中心 → 系统 DocumentsUI，已导入两份已授权 ZIP；临时中性来源均在私有暂存后删除。force-stop/cold-start 后只读回匿名 aggregate：ChatGPT 23 对话 / 719 未关联媒体；Claude 162 对话 / 0 未关联媒体；Claude 另有 120 项严格失败，与 Desktop 同源聚合一致。 | 已关闭（隔离 emulator 验收；不等同于 OPPO 导入） |
 | 实包媒体关联 | 两份实包没有可证明的 message-to-asset relation；`UNMAPPED_REJECTED` 是正确安全结果。K8 的人工精确关联功能已实现，但尚未发生用户在 Settings 中明确选择资产和目标消息的真实动作 | 外部用户操作 |
 | 真实 Provider / 账号同步 / 生态 | 本地 owner、禁用状态和合同已存在；真实 HTTP、账号、OAuth/发布白名单、同步及生态目标仍分别需要已配置的外部服务和可验证账户/目标 | 外部条件，不得伪报完成 |
-
 | 新增功能审阅与入口建议 | Android 与 Desktop 设置均新增“功能审阅”；当前登记 ZIP 导入与未关联媒体人工关联，展示待您判断的去留状态和小字入口建议。今后每项普通用户新功能必须同步登记，默认不增加聊天主页/Composer 常驻按键。 | 已建立规则与双端实现 |
 
 **当前可继续的总控工作：** P6-K Android 正常入口已闭环。后续按总控矩阵分别推进真实媒体人工关联（仅用户在 Settings 明确选择时）、真实 Provider/账号同步/生态的外部条件验收，以及各项未完成的双端 UI/readback；不得将 P6-K 闭环、隔离 emulator 或 OPPO 的安装事实扩大为全部总控完成。
@@ -38,12 +37,12 @@
 | 未关联媒体安全处理 | 实包没有可证明 message-to-asset relation；保持 `UNMAPPED_REJECTED`；人工精确关联有双端合成 owner-to-renderer 合同 | 实包只读安全审计 + 合成验证 | 真实媒体只能由用户在 Settings 明确选择资产与目标消息后验证；不得推测关联 |
 | profile / personalization | 白名单 owner 已实现；两份实包均为无可采纳字段的安全结果 | 实包安全聚合 + 双端合成 owner 合同 | 无可写的真实字段，因此不应人为重试或制造写入 |
 | P6-K Settings 隐私与撤销恢复 | Android 不显示所选 ZIP 名；撤销失败保留 recovery task/archive；Desktop 与 Android 均有正常 Settings 的匿名 aggregate readback | 双端真实/自动合同 | P6-K Settings 已关闭；真实媒体人工关联仍需用户明确操作 |
-| 既定聊天、抽屉、Composer 不回退 | Desktop UI 合同 80/80；含 P6-K 入口、Compare、精确 placeholder、抽屉/Composer 保护 | 自动 UI 合同 | Android 最新包不可生成，故不等同于 Android 可见验收 |
+| 既定聊天、抽屉、Composer 不回退 | Desktop UI 合同 82/82；含 P6-K 入口、Compare、精确 placeholder、抽屉/Composer 保护；Android 当前源码可完成定向合同与正式 release/lint | 自动 UI 合同 + 当前构建 | 仍须逐项以真实 Android 交互验收，不以构建替代可见行为 |
 | Compare 可见入口 | Android/Desktop 均有模型菜单、Composer `对比`、模型长按三入口；Android 为空草稿先返回，Desktop 直接显示无执行 owner 且不读 Key/发内容 | 代码/局部 emulator | 显式 Compare 是直接产品命令，不再有第二次产品确认面；Android 非空草稿的真实执行仍受用户内容、凭据与 HTTP 门禁，不在本轮执行 |
 | 普通聊天真实 Provider | 生产边界、确认合同、账本和失败关闭机制已实现 | 本地合同 | 需要已验证目录、可用凭据、当次可见确认和用户明确非敏感输入；真实 HTTP 未授权执行 |
-| P5 备份/迁移等真实 Android 链 | 本地合同和既有模拟器证据存在 | 自动化/历史模拟器 | 最新签名构建不可产出，且真实文件/迁移链不能由旧包替代 |
+| P5 备份/迁移等真实 Android 链 | 本地合同和既有模拟器证据存在；运行时备份/隐私 owner 已改用当前 `BuildConfig.VERSION_NAME`，不再把新包元数据写成历史 `0.3.0-p5d` | 自动化/历史模拟器 + 当前定向合同 | 当前签名构建可产出；仍缺以当前隔离包完成的 SAF 成功导出、受控恢复和冷启动真实链，不能由旧包替代 |
 | P7 同步、P9 生态、P10 联网路径 | 本地协议、禁用状态和 LOCAL_TEST_ONLY/配置表面已实现 | 本地合同 | 仍需要真实账号、目标服务/应用、外部授权及网络；不能借“总控”推定完成 |
-| OPPO 验收 | 无 | 未执行 | 明确不在本轮授权范围，保持未触碰 |
+| OPPO 验收 | OPPO 当前保留数据安装的是 release v2 `0.3.0-p10a`、SHA-256 `fc8f9ac6…` 的较早正式包；当前源码 release 未覆盖安装 | 安装/版本/包哈希只读核对 | 安装链已存在，但本轮不覆盖安装；当前源码功能、折叠连续性与 OEM 交互仍待按单项真实验收 |
 
 ## 本轮正式签名失败记录
 

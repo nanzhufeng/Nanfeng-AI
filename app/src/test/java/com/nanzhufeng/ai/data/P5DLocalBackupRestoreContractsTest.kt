@@ -18,6 +18,14 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P5DLocalBackupRestoreContractsTest {
+    @Test fun `runtime backup and privacy owners use the actual build version`() {
+        val container = File("src/main/java/com/nanzhufeng/ai/app/AppContainer.kt").readText()
+        assertTrue(container.contains("import com.nanzhufeng.ai.BuildConfig"))
+        assertTrue(container.contains("AndroidPrivacyDataManager(context, database, BuildConfig.VERSION_NAME)"))
+        assertTrue(container.contains("AndroidLocalBackupRestoreManager(context, database, BuildConfig.VERSION_NAME)"))
+        assertFalse(container.contains("\"0.3.0-p5d\""))
+    }
+
     @Test fun `manual package is consistent manifest checked and excludes non business roots`() {
         val context = ApplicationProvider.getApplicationContext<Context>(); context.deleteDatabase("nanfeng-ai.db")
         val attachment = File(context.filesDir, "attachments/v1/p5d-fixture.bin").also { it.parentFile?.mkdirs(); it.writeBytes(byteArrayOf(1, 2, 3)) }
