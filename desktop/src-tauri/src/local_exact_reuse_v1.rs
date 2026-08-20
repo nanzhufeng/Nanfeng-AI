@@ -79,7 +79,7 @@ pub struct Decision {
     pub reason: &'static str,
 }
 
-/// P6-L3's content-free route result. It does not render a message or start an execution.
+/// P6-L4's content-free route result. It does not render a message or start an execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DispatchResult {
     Reused { response_message_id: String },
@@ -93,13 +93,38 @@ pub trait DispatchPort {
     fn continue_without_reuse(&mut self, decision: &Decision);
 }
 
-pub fn dispatch(decision: Decision, port: &mut impl DispatchPort) -> DispatchResult {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResponseReferenceState {
+    Valid,
+    Missing,
+    ScopeMismatch,
+    Unreadable,
+}
+
+/// Content-free reference authority check only; it must not project or copy message text.
+pub trait ResponseReferenceVerifier {
+    fn verify(&self, scope_id: &str, response_message_id: &str) -> ResponseReferenceState;
+}
+
+pub fn dispatch(
+    decision: Decision,
+    scope_id: &str,
+    verifier: &impl ResponseReferenceVerifier,
+    port: &mut impl DispatchPort,
+) -> DispatchResult {
     if decision.outcome == Outcome::LocalExactHit {
         if let Some(response_message_id) = decision.response_message_id.as_deref() {
-            port.reuse_existing_local_response(response_message_id);
-            return DispatchResult::Reused {
-                response_message_id: response_message_id.to_owned(),
-            };
+            if stable_id(scope_id)
+                && verifier.verify(scope_id, response_message_id) == ResponseReferenceState::Valid
+            {
+                port.reuse_existing_local_response(response_message_id);
+                return DispatchResult::Reused {
+                    response_message_id: response_message_id.to_owned(),
+                };
+            }
+            let safe = make_decision(Outcome::Unknown, None, "本地精确复用消息引用不可用");
+            port.continue_without_reuse(&safe);
+            return DispatchResult::Continued { decision: safe };
         }
         let safe = make_decision(Outcome::Unknown, None, "本地精确复用记录缺少消息引用");
         port.continue_without_reuse(&safe);
@@ -433,6 +458,14 @@ mod tests {
                 self.continued.push(decision.outcome);
             }
         }
+        struct Verifier;
+        impl ResponseReferenceVerifier for Verifier {
+            fn verify(&self, scope_id: &str, response_message_id: &str) -> ResponseReferenceState {
+                assert_eq!(scope_id, "workspace:fixture");
+                assert_eq!(response_message_id, "message:fixture");
+                ResponseReferenceState::Valid
+            }
+        }
 
         let mut index = LocalExactReuseIndex::default();
         let exact = key('a', Sensitivity::Low);
@@ -451,7 +484,12 @@ mod tests {
         };
 
         assert_eq!(
-            dispatch(index.resolve(Some(&exact), false, 11), &mut port),
+            dispatch(
+                index.resolve(Some(&exact), false, 11),
+                &exact.scope_id,
+                &Verifier,
+                &mut port
+            ),
             DispatchResult::Reused {
                 response_message_id: "message:fixture".into()
             },
@@ -474,6 +512,12 @@ mod tests {
                 self.continued.push(decision.outcome);
             }
         }
+        struct Verifier;
+        impl ResponseReferenceVerifier for Verifier {
+            fn verify(&self, _: &str, _: &str) -> ResponseReferenceState {
+                panic!("non-hit must not inspect a response reference")
+            }
+        }
         let index = LocalExactReuseIndex::default();
         let mut port = Port {
             reused: vec![],
@@ -485,7 +529,7 @@ mod tests {
             index.resolve(None, false, 11),
         ] {
             assert!(matches!(
-                dispatch(decision, &mut port),
+                dispatch(decision, "workspace:fixture", &Verifier, &mut port),
                 DispatchResult::Continued { .. }
             ));
         }
@@ -494,5 +538,84 @@ mod tests {
             port.continued,
             vec![Outcome::Miss, Outcome::Ineligible, Outcome::Unknown]
         );
+    }
+
+    #[test]
+    fn invalid_exact_reference_fails_closed_without_reuse() {
+        struct Port {
+            reused: Vec<String>,
+            continued: Vec<Outcome>,
+        }
+        impl DispatchPort for Port {
+            fn reuse_existing_local_response(&mut self, response_message_id: &str) {
+                self.reused.push(response_message_id.to_owned());
+            }
+            fn continue_without_reuse(&mut self, decision: &Decision) {
+                self.continued.push(decision.outcome);
+            }
+        }
+        struct Verifier(ResponseReferenceState);
+        impl ResponseReferenceVerifier for Verifier {
+            fn verify(&self, _: &str, _: &str) -> ResponseReferenceState {
+                self.0
+            }
+        }
+        let mut index = LocalExactReuseIndex::default();
+        let exact = key('a', Sensitivity::Low);
+        index
+            .record(Entry {
+                key: exact.clone(),
+                response_message_id: "message:fixture".into(),
+                created_at_ms: 10,
+                expires_at_ms: 30,
+                revoked: false,
+            })
+            .unwrap();
+        for state in [
+            ResponseReferenceState::Missing,
+            ResponseReferenceState::ScopeMismatch,
+            ResponseReferenceState::Unreadable,
+        ] {
+            let mut port = Port {
+                reused: vec![],
+                continued: vec![],
+            };
+            assert!(matches!(
+                dispatch(
+                    index.resolve(Some(&exact), false, 11),
+                    &exact.scope_id,
+                    &Verifier(state),
+                    &mut port
+                ),
+                DispatchResult::Continued {
+                    decision: Decision {
+                        outcome: Outcome::Unknown,
+                        ..
+                    }
+                }
+            ));
+            assert!(port.reused.is_empty());
+            assert_eq!(port.continued, vec![Outcome::Unknown]);
+        }
+        let mut port = Port {
+            reused: vec![],
+            continued: vec![],
+        };
+        assert!(matches!(
+            dispatch(
+                index.resolve(Some(&exact), false, 11),
+                "invalid scope",
+                &Verifier(ResponseReferenceState::Valid),
+                &mut port
+            ),
+            DispatchResult::Continued {
+                decision: Decision {
+                    outcome: Outcome::Unknown,
+                    ..
+                }
+            }
+        ));
+        assert!(port.reused.is_empty());
+        assert_eq!(port.continued, vec![Outcome::Unknown]);
     }
 }

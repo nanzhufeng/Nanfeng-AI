@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 总控推进：P6-L4 双端本地消息引用有效性门（当前）
+
+- **结论：** L4 补上 L3 的消息引用安全前置。Android `LocalExactReuseResponseReferenceVerifier` 与 Desktop `ResponseReferenceVerifier` 必须以 `scopeId + responseMessageId` 返回 `VALID`，命中才可交回复用分支；`MISSING`、`SCOPE_MISMATCH`、`UNREADABLE` 或无效 scope 一律降为 `UNKNOWN` 并进入普通 continuation。非命中不会查询消息引用。
+- **验证与严格边界：** Android 与 Desktop 定向合同覆盖有效/三种无效引用和非命中不查询。L4 未读取/复制正文，不改 renderer、Conversation/Message Tree、Provider Attempt 或 Usage/Cost Ledger，未注册到 AppContainer、Tauri/UI、P2/P3 dispatch 或 Provider adapter；没有 UI/新用户功能，故不新增功能审阅登记或常驻入口。没有 Key、HTTP、安装、emulator 或 OPPO 操作，也没有真实复用、节省或 Provider cache 声明。
+
 ## 2026-08-20 总控推进：P6-L3 双端本地精确复用分派门（当前）
 
 - **结论：** L3 在 L2 持久索引之上新增唯一 content-free 分派门。Android `LocalExactReuseDispatchOwner` 与 Desktop `local_exact_reuse_v1::dispatch` 对 `LOCAL_EXACT_HIT` 仅交出既有 `responseMessageId` 的复用分支，且不会调用普通分派 continuation；`MISS`、`INELIGIBLE`、`UNKNOWN` 只传递安全 decision。任何不带消息引用的损坏命中降级为 `UNKNOWN`。
