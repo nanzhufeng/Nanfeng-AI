@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 v2 真实完整 owner 文件链：解锁后确认紧凑 UI 的生产入口缺口，按合同停止
+
+- **只读 GUI 复查：** macOS 已解锁，隔离验收包在 `emulator-5570` 前台可读。实际用户 UI 的对话抽屉只呈现“设置”和“新对话”；“设置”只呈现 AI 模型、对话、数据与导入、功能审阅、隐私。未通过 Activity extra、deep link、SharedPreferences、DB、shell 业务 command 或任何其他内部路由切换页面，也未创建任何验收对象。
+- **真实缺口：** 源码和实际 UI 一致表明 `P5ARoute.CONTROL` 仅有枚举、渲染与说明，缺少所有用户可点击的进入路径；`P5ARoute.PROJECTS`、`MEMORY`、`KNOWLEDGE` 只在 ControlHub 内部作为后续目标。故当前紧凑用户 UI 无法到达 Project、手工 Knowledge 或长期 Memory 的正常生产表单，进一步也无法从 UI 创建其上的 RELATED 关系。当前对话/附件路径本身可见，但不能单独填充其余 owner 后将这条不完整数据称为完整 owner 文件链。
+- **停止结论：** 这是 P6 真实验收前的产品入口缺口，不是 DocumentsUI、Desktop picker 或字段保真失败；也不授权用启动 Intent、内存 ViewModel、fixture、Room/SQLite 或 command 注入绕过。完整 owner 的 Android DocumentsUI → Desktop native Open/Save 回导没有开始，所有 P6、Windows 和 P0–P11 未完成结论保持不变。下一步须先以独立合同恢复一个可见、可返回、双端功能审阅已登记的紧凑 UI “更多本地控制面”入口，或由用户明确改变验收边界；之后从全新验收包重新走正常 UI 创建链。
+
 ## 2026-08-20 P9-B 续行授权收紧：本地合成目标仍非生态接入
 
 - **修复与所有权：** `P9BLocalTestOnlyHarness` 与 Desktop `p9b_integration_contract_v1` 现在在 `AUTHORIZE/PREVIEW/CONFIRM/RESULT/READBACK` 每步重新绑定同一 opaque `appHandle`、未过期 grant；目标重选或 expiry 立即安全终止，不再触碰 synthetic target、确认或创建新的 local receipt。`CANCEL/REVOKE` 保持可用以收束。receipt 仍只属于 `LOCAL_TEST_ONLY` 合成 metadata，绝不表示目标应用结果、写入或外部副作用。
