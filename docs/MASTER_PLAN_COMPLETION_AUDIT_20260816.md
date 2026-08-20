@@ -21,7 +21,7 @@
 
 总控方案仍不能标记为“完整落地”，但 Android P6-K 签名、正常系统 picker、私有暂存删除、冷启动与匿名回读均已关闭；Desktop P6-K bundle/readback 与 Compare 阶段 5 的 mock-only adapter/receipt 边界亦已关闭。剩余项分别是用户明确选择的真实媒体人工关联、Compare model pair/cost cap 决定、真实 Provider/账号/同步/生态条件，以及尚未完成的跨端 UI/readback 项。没有以旧 APK、数据库注入、卸载、清数据、Key 或 HTTP 绕过任一门禁。
 
-本轮已完成的无外部条件复验：Desktop P6-K 定向测试 7/7、Desktop 全量 Rust 库测试 68/68（唯一会触达 macOS Keychain 的既有自测主动过滤）、Desktop UI 合同 82/82、lint、typecheck 与静态 build 均通过。
+本轮已完成的无外部条件复验：Desktop P6-K 定向测试 7/7、Desktop 全量 Rust 库测试 68/68（唯一会触达 macOS Keychain 的既有自测主动过滤）、Desktop UI 合同当前复验 89/89、lint 与 typecheck 均通过。Compare 阶段 5 另有 Rust mock-only 合同 5/5 与 `clippy -D warnings`；没有真实 Keychain 或 HTTP 调用。
 
 ## 事实源与审计方法
 

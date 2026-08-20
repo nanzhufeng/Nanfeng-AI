@@ -3,7 +3,7 @@
 ## 2026-08-20 总控推进：Desktop Compare 阶段 5 mock-only adapter 与安全 receipt（当前）
 
 - **结论：** `desktop_compare_execution_v1` 已建立为未注册的固定 OpenAI-compatible adapter seam：它只接受阶段 4 的一次性 direct-click command、已核验的 ChatGPT/Claude provider model + price catalog 与短作用域文本，并为两支写入 content-free runtime receipt。未知/空 model 或未知价格在 catalog 构造时失败关闭；空草稿、无效/过期点击也在触及 fake credential、mock HTTP 或 receipt 前拒绝。每支 receipt 仅含 execution id、logical/provider model、success/failure category、HTTP status（如有）、耗时和记录时点；测试 SQLite 仅为 `:memory:`。
-- **验证与边界：** `cargo test desktop_compare_execution_v1 --lib` 为 5/5，`cargo clippy --lib -- -D warnings` 通过。测试只用 in-memory credential、mock HTTP port 与内存 SQLite；source contract 确认无 Tauri command、真实 HTTP client 或 Security.framework/`/usr/bin/security` 调用。本模块未注册到 Desktop UI、Tauri command、真实 credential store、用户数据库、备份或同步，因此当前 UI 仍不可执行；没有 Keychain 读取/写入/枚举/重置/self-test、HTTP、安装或 OPPO 操作。
+- **验证与边界：** `cargo test desktop_compare_execution_v1 --lib` 为 5/5，`cargo clippy --lib -- -D warnings` 通过；随后 Desktop `npm test` 为 89/89、lint 与 typecheck 通过，三个既有入口仍由 fail-closed owner 接管。adapter 测试只用 in-memory credential、mock HTTP port 与内存 SQLite；source contract 确认无 Tauri command、真实 HTTP client 或 Security.framework/`/usr/bin/security` 调用。本模块未注册到 Desktop UI、Tauri command、真实 credential store、用户数据库、备份或同步，因此当前 UI 仍不可执行；没有 Keychain 读取/写入/枚举/重置/self-test、HTTP、安装或 OPPO 操作。
 
 ## 2026-08-20 总控推进：P5-D 隔离 SAF 导出、替换恢复与冷启动验收（当前）
 
