@@ -961,7 +961,7 @@ private fun FeatureReviewSettingsCard() {
         WhiteCard {
             Text("完整工作区交换（v2）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
-            Text("当前：待您判断是否保留；Android 可从设置 → 数据与导入显式选择完整范围并经系统保存位置导出 v2 包，Desktop 仅可从设置选择 v2 包后私有导入。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("当前：待您判断是否保留；Android 仅可从设置 → 数据与导入显式选择完整范围并经系统保存位置导出 v2 包；Desktop 仅可从设置选择 v2 包私有导入，或从已提交私有记录经系统保存位置回导。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
             Text("建议：只保留双端设置二级入口，不在聊天主页、Composer 或工作页增加按键；它不是备份、云同步，也不表示已恢复为原生对象。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }

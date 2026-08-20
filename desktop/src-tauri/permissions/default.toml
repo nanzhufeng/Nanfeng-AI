@@ -14,6 +14,11 @@ description = "Allows one user-selected exact .nfai-exchange or Android Document
 commands.allow = ["import_desktop_workspace_exchange_v2_selected"]
 
 [[permission]]
+identifier = "allow-reexport-desktop-workspace-exchange-v2-selected"
+description = "Allows listing committed private v2 exchange records and re-exporting exactly one UI-selected committed v2 owner only to a native-save-picker-selected .nfai-exchange target. It grants no v1 workspace, path projection, arbitrary filesystem API, credential, transport, Provider or model access."
+commands.allow = ["list_desktop_workspace_exchange_v2_committed", "reexport_desktop_workspace_exchange_v2_selected"]
+
+[[permission]]
 identifier = "allow-list-desktop-workspaces"
 description = "Allows read-only workspace summaries from Rust-owned SQLite."
 commands.allow = ["list_desktop_workspaces"]

@@ -12,6 +12,8 @@ const settingsLocalKey = 'nanfeng-ai.desktop.settings.sidebar-width.v1';
 function readSidebarWidth() { try { return clampDesktopSidebarWidth(Number(localStorage.getItem(settingsLocalKey)), window.innerWidth); } catch { return 256; } }
 function persistSidebarWidth(width) { try { localStorage.setItem(settingsLocalKey, String(width)); } catch { /* browser preview may deny local storage */ } }
 const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'data', settingsSearch: '', showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, temporaryModelOpen: false, p6gModelPickerOpen: false, compareLongPressTriggered: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；联网模型尚未配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', scale: 1, searchResults: [], searchPanel: false, searchAnchorMessageId: null, searchHistory: [], searchHistoryOpen: false, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null };
+state.v2CommittedExchanges = [];
+globalThis.__nanfengV2CommittedExchanges = state.v2CommittedExchanges;
 let compareLongPressTimer = null;
 let p6kManualLink = { assetOrdinal: null, conversationId: null, messageId: null };
 globalThis.__nanfengP6kManualLink = p6kManualLink;
@@ -231,10 +233,26 @@ async function pickV2WorkspaceExchange() {
   if (!selectedPath) return;
   try {
     const receipt = await invoke('import_desktop_workspace_exchange_v2_selected', { selectedPath });
+    state.v2CommittedExchanges = await invoke('list_desktop_workspace_exchange_v2_committed');
+    globalThis.__nanfengV2CommittedExchanges = state.v2CommittedExchanges;
     state.status = `完整工作区交换（v2）已私有导入并回读：${short(receipt.semanticHash)} · ${receipt.assetCount} 项附件${receipt.replayed ? ' · 已验证重放回执' : ''}。`;
     state.error = '';
   } catch (error) {
     state.error = `完整工作区交换（v2）被拒绝：${String(error)}`;
+    state.status = state.error;
+  }
+  render();
+}
+async function reexportV2WorkspaceExchange(workspaceId) {
+  if (!native) { state.status = 'Web 预览不会请求保存位置；请在 Tauri Desktop 开发包中使用系统保存窗口。'; render(); return; }
+  const selectedPath = await dialogInvoke('save', { defaultPath: 'nanfeng-ai-workspace-v2.nfai-exchange', filters: [{ name: '南枫 AI 完整工作区交换（v2）', extensions: ['nfai-exchange'] }] });
+  if (!selectedPath) return;
+  try {
+    const receipt = await invoke('reexport_desktop_workspace_exchange_v2_selected', { workspaceId, selectedPath });
+    state.status = `完整工作区交换（v2）已从私有记录回导并严格回读：${short(receipt.semanticHash)} · ${receipt.assetCount} 项附件。`;
+    state.error = '';
+  } catch (error) {
+    state.error = `完整工作区交换（v2）回导被拒绝：${String(error)}`;
     state.status = state.error;
   }
   render();
@@ -244,6 +262,7 @@ app.addEventListener('click', event => { const target = event.target.closest?.('
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-claude-export"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickClaudeExport(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-p6k-chatgpt-zip"],[data-action="select-p6k-claude-zip"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickP6kZip(target.dataset.action === 'select-p6k-chatgpt-zip' ? 'CHATGPT' : 'CLAUDE'); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-v2-workspace-exchange"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickV2WorkspaceExchange(); }, true);
+app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="reexport-v2-workspace-exchange"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); reexportV2WorkspaceExchange(target.dataset.workspaceId); }, true);
 app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="retry-p6k-zip"],[data-action="skip-p6k-zip-failures"],[data-action="delete-p6k-zip-batch"]'); if (!target || !state.p6kTask) return; event.preventDefault(); event.stopImmediatePropagation(); try { if (target.dataset.action === 'retry-p6k-zip') state.p6kTask = await invoke('retry_p6k_zip_import_task', { taskId: state.p6kTask.id }); else if (target.dataset.action === 'skip-p6k-zip-failures') state.p6kTask = await invoke('skip_p6k_zip_import_failures', { taskId: state.p6kTask.id }); else { await invoke('delete_p6k_zip_import_batch', { taskId: state.p6kTask.id }); state.p6kTask = null; } state.status = target.dataset.action === 'delete-p6k-zip-batch' ? '已软删除该导入批次并移除其回执；私有副本已清除。' : 'ZIP 导入状态已更新。'; state.error = ''; if (state.current) await refresh(); } catch (error) { state.error = `ZIP 导入状态未更新：${String(error)}`; } render(); }, true);
 app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="select-p6k-manual-asset"],[data-action="select-p6k-manual-target"],[data-action="link-p6k-manual-asset"]'); if (!target || !state.p6kTask) return; event.preventDefault(); event.stopImmediatePropagation(); if (target.dataset.action === 'select-p6k-manual-asset') { p6kManualLink = { assetOrdinal: Number(target.dataset.assetOrdinal), conversationId: null, messageId: null }; globalThis.__nanfengP6kManualLink = p6kManualLink; render(); return; } if (target.dataset.action === 'select-p6k-manual-target') { p6kManualLink = { ...p6kManualLink, conversationId: target.dataset.conversationId, messageId: target.dataset.messageId }; globalThis.__nanfengP6kManualLink = p6kManualLink; render(); return; } if (p6kManualLink.assetOrdinal === null || !p6kManualLink.conversationId || !p6kManualLink.messageId || !state.current) return; try { state.p6kTask = await invoke('link_p6k_zip_manual_asset', { args: { taskId: state.p6kTask.id, assetOrdinal: p6kManualLink.assetOrdinal, workspaceId: state.current.summary.id, conversationId: p6kManualLink.conversationId, messageId: p6kManualLink.messageId } }); p6kManualLink = { assetOrdinal: null, conversationId: null, messageId: null }; globalThis.__nanfengP6kManualLink = p6kManualLink; state.status = '已按所选媒体与消息建立精确关联；附件现在只在该消息位置呈现。'; state.error = ''; await refresh(); } catch (error) { state.error = `媒体关联未完成：${String(error)}`; } render(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-nanfeng-knowledge-export"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickNanfengKnowledgeExport(); }, true);
@@ -1328,6 +1347,11 @@ if (native) {
 async function bootDesktopShell() {
   try {
     await refresh();
+    if (native) {
+      state.v2CommittedExchanges = await invoke('list_desktop_workspace_exchange_v2_committed');
+      globalThis.__nanfengV2CommittedExchanges = state.v2CommittedExchanges;
+      render();
+    }
   } catch {
     state.error = '本地工作区启动读取未完成；请重新打开应用后再试。';
     state.status = '启动读取失败；未修改本地数据。';

@@ -321,6 +321,12 @@
           "markdownDescription": "Allows read-only dual-path configuration status; it cannot read credentials, create a transport, or write sync state."
         },
         {
+          "description": "Allows listing committed private v2 exchange records and re-exporting exactly one UI-selected committed v2 owner only to a native-save-picker-selected .nfai-exchange target. It grants no v1 workspace, path projection, arbitrary filesystem API, credential, transport, Provider or model access.",
+          "type": "string",
+          "const": "allow-reexport-desktop-workspace-exchange-v2-selected",
+          "markdownDescription": "Allows listing committed private v2 exchange records and re-exporting exactly one UI-selected committed v2 owner only to a native-save-picker-selected .nfai-exchange target. It grants no v1 workspace, path projection, arbitrary filesystem API, credential, transport, Provider or model access."
+        },
+        {
           "description": "Allows one normalized local query to read the Rust-owned safe search index and record only that normalized query in owner-local history. It grants no filesystem, transport, credential, export, or media access.",
           "type": "string",
           "const": "allow-search-desktop-local-index",

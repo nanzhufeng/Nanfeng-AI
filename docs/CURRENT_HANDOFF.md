@@ -1,5 +1,13 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 v2 Desktop 设置内受限回导：代码/自动门与 bundle 已通过，真实 native save picker 被既有同 Bundle ID 实例阻断
+
+- **实现：** Desktop “设置 → 数据与导入 → 完整工作区交换（v2）”现在只枚举 import、journal、receipt 三者完整的 private v2 record（匿名 root/附件计数），用户选择一项后才打开 native save picker。新最小 capability 只允许该 committed-record list 与一个 `workspace-v2-*` 的 canonical `.nfai-exchange` 回导；Rust 从已提交 canonical `exchange_json` 和内容寻址 private assets 只读重建，`.part` 原子发布后重跑 strict preflight 并比对 semantic hash、全量 owner-field hash 与附件账本。没有 v1 表、普通 workspace、聊天/Composer、Provider、Keychain 或路径/正文/显示名/附件 bytes 投影。
+- **功能审阅与合同：** Android/Desktop “设置 → 功能审阅”同步写明 Desktop 仅可在设置二级入口从已提交 private record 经系统保存位置回导；不新增聊天主页、Composer 或工作页按键，且不表示原生对象恢复、备份或同步。字段保真、Desktop transaction 与入口审计合同同步了 exact output、receipt、v1 隔离和失败语义。
+- **自动/构建：** 新 Rust 设置回导合同通过；Rust library `93/93`、`cargo check`、`clippy --lib --tests -D warnings` 通过；Desktop lint/typecheck、Node UI `92/92`、static build 通过；Android Studio JBR + `TieredStopAtLevel=1` 的 `AndroidUserEntryAuditContractsTest` 通过。`cargo fmt --check` 仍只报告仓库既有大范围格式债务，未重排无关历史代码。`CARGO_NET_OFFLINE=true cargo tauri build --bundles app` 通过；随后仅对刚生成开发 bundle 做 ad-hoc 重签，`codesign --verify --deep --strict` 通过，主可执行 SHA-256 `8858dff03bfffd5690b262d6c2ddc81140e49de6935f823a15897431d27e387b`。
+- **真实 UI 验收停止点：** 复用 `/tmp/nanfeng-ai-p6-v2-picker-acceptance.09id6Q`（启动前已有 3 个 private 文件）并新建独立输出目录。两次启动 bundle 时，macOS accessibility 都只定位到既有同 Bundle ID 的非隔离实例；发现后立即停止，未点击、未选择记录、未打开保存窗口，也未将该实例用作本轮验收。输出目录保持 `0` 文件；未用 command、SQLite 或文件注入替代 native save picker。因此回导的真实系统保存、输出 readback 以及与 Android 最初 hash 的 UI 路径对照仍**未验收**，不得以本轮自动/构建结果声称 P6 或 P0–P11 完成。
+- **下一停止门：** 只有能可靠将 accessibility/窗口焦点绑定到此隔离 acceptance root 的 Desktop 实例后，才从设置二级入口选择已提交 v2 record → 原生保存窗口 → content-free receipt，并以输出 strict reader 核对 Android `d0c3df7b…6d986`、两项 owner-field hash 与 v1 三表不变；否则保持本条 UI 验收缺口。
+
 ## 2026-08-20 P6 v2 Android DocumentsUI ZIP → Desktop native picker：真实跨端导入与 replay 已闭合，实际回导待独立入口
 
 - **真实链路：** 只读从 `emulator-5558` 的 DocumentsUI 下载目录取得实际 `nanfeng-ai-workspace-v2.nfai-exchange.zip`（1,091 B；package SHA-256 `3601aeb…205c53`），在新建且起始零项的 `/tmp/nanfeng-ai-p6-v2-picker-acceptance.09id6Q` 根中，用当前 ad-hoc 严格验签 Desktop bundle 的设置 → 数据与导入 → 完整工作区交换（v2）→ 原生 picker 选择该文件。UI 返回 content-free receipt，semantic hash `d0c3df7b…6d986`、附件 0；第二次同一 picker 选择返回“已验证重放回执”。未打开或输出任何 package 正文。

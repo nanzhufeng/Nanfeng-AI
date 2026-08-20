@@ -17,6 +17,8 @@
 
 ## 入口矩阵
 
+Desktop 的 v2 已提交回导仍为“设置 → 数据与导入”的二级入口：用户只可选择匿名已提交私有记录，再经 native save picker 输出。Android/Desktop 功能审阅均写明此限制；不新增聊天主页、Composer 或工作页按键，且 Android 本轮不新增导入/回导能力。
+
 | 功能 / 实现 owner | Android 入口 | Desktop 入口 | Settings 入口 | 普通用户适合度 | 缺口 | 风险 | 最小验证 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 本地对话、草稿、附件与会话管理 / `ConversationFoundationViewModel` | 对话 Composer、Drawer、长按会话、搜索 | Chat Composer、侧栏、消息工具 | Android 对话；Desktop 隐私与数据管理 | 是 | 无 | 不得把本地发送改为外发 | 现有聊天 shell 回归、重启读回 |

@@ -61,4 +61,6 @@ v2 **没有中途 resume**。进程在 commit 前终止时，下一次只能从�
 
 ## 用户入口与后续实现顺序
 
+已提交回导的设置页只列出同时存在 import、journal 与 receipt 的 v2 private owner，投影仅含 `workspace_id`、root 匿名计数与附件计数。用户选择一项后才可打开 native save picker；输出只接纳精确 `.nfai-exchange` 终止名，不能把 DocumentsUI 的 `.zip` 输入兼容扩张为任意回导输出。command 以该 `workspace_id` 定位同一 transaction 的 package hash，并完全委托既有 `reexport` 内核；失败不改 import/journal/receipt 或 v1 表，成功回执不含 output path、内容、显示名或 bytes。
+
 已完成的顺序为：独立 v2 preflight/package reader → private archive writer → migration + single transaction + failure injection → private reopen/re-export readback → 最小 Desktop native picker command/UI bridge。每一步保持 v1 隔离。该 bridge 已在 Android/Desktop “设置 → 功能审阅”登记为待判断功能，并只给 Desktop 设置二级入口；下一验证只能在隔离 Desktop 环境经真实 native picker 选择 v2 fixture，读取 committed receipt 并核对 reopen/re-export readback。不可用时必须如实记录，不得用 command、SQLite 或文件注入伪造验收。

@@ -641,6 +641,29 @@ struct DesktopWorkspaceV2ImportReceipt {
     replayed: bool,
 }
 
+/// Content-free projection of a v2 import that has fully committed. It is deliberately
+/// separate from ordinary Desktop workspaces, so the settings-only re-export flow cannot
+/// be mistaken for native-owner restoration.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopWorkspaceV2CommittedProjection {
+    workspace_id: String,
+    root_counts: BTreeMap<String, u64>,
+    asset_count: u64,
+}
+
+/// Content-free result for a settings-only v2 re-export. The chosen output path, package
+/// bytes, display names and owner bodies never leave the Rust owner.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopWorkspaceV2ReexportReceipt {
+    workspace_id: String,
+    semantic_hash: String,
+    root_counts: BTreeMap<String, u64>,
+    asset_count: u64,
+    asset_byte_count: u64,
+}
+
 struct DesktopWorkspaceStore {
     root: PathBuf,
     database: PathBuf,
@@ -3155,6 +3178,93 @@ impl DesktopWorkspaceStore {
             asset_count,
             asset_byte_count,
             replayed: committed.replayed,
+        })
+    }
+
+    /// Lists only fully committed v2 private owners for the settings re-export selector. It
+    /// returns no selected path, package hash, display name, owner body or attachment bytes.
+    fn list_committed_v2_workspace_exchanges(
+        &self,
+    ) -> Result<Vec<DesktopWorkspaceV2CommittedProjection>, String> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT i.workspace_id,r.root_counts_json,r.asset_count
+                 FROM exchange_v2_imports i
+                 JOIN exchange_v2_import_journal j ON j.workspace_id=i.workspace_id AND j.package_hash=i.package_hash
+                 JOIN exchange_v2_import_receipts r ON r.package_hash=i.package_hash
+                 ORDER BY j.committed_at DESC, i.workspace_id ASC",
+            )
+            .map_err(|_| json_error("无法读取已提交 v2 交换记录"))?;
+        let records = statement
+            .query_map([], |row| {
+                let root_counts_json: String = row.get(1)?;
+                let root_counts = serde_json::from_str(&root_counts_json).map_err(|_| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        1,
+                        rusqlite::types::Type::Text,
+                        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "v2 receipt")),
+                    )
+                })?;
+                Ok(DesktopWorkspaceV2CommittedProjection {
+                    workspace_id: row.get(0)?,
+                    root_counts,
+                    asset_count: row.get(2)?,
+                })
+            })
+            .map_err(|_| json_error("无法读取已提交 v2 交换记录"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| json_error("已提交 v2 交换记录无效"))?;
+        Ok(records)
+    }
+
+    /// Re-exports one UI-selected, already committed v2 private owner. The selected output is
+    /// limited to the canonical v2 suffix before the kernel reconstructs and readbacks it.
+    fn reexport_selected_v2_workspace_exchange(
+        &self,
+        workspace_id: &str,
+        selected_path: &str,
+    ) -> Result<DesktopWorkspaceV2ReexportReceipt, String> {
+        if !workspace_id.starts_with("workspace-v2-") {
+            return Err(json_error("已提交完整工作区交换记录无效"));
+        }
+        let target = Path::new(selected_path);
+        if !target
+            .file_name()
+            .and_then(|value| value.to_str())
+            .is_some_and(|name| name.ends_with(P6_V2_PACKAGE_FILE_SUFFIX) && is_selected_v2_package_filename(name))
+        {
+            return Err(json_error("完整工作区交换输出文件类型无效"));
+        }
+        let connection = self.connection()?;
+        let (package_hash, semantic_hash, root_counts_json, asset_count, asset_byte_count):
+            (String, String, String, u64, u64) = connection
+            .query_row(
+                "SELECT i.package_hash,r.semantic_hash,r.root_counts_json,r.asset_count,r.asset_byte_count
+                 FROM exchange_v2_imports i
+                 JOIN exchange_v2_import_journal j ON j.workspace_id=i.workspace_id AND j.package_hash=i.package_hash
+                 JOIN exchange_v2_import_receipts r ON r.package_hash=i.package_hash
+                 WHERE i.workspace_id=?1",
+                [workspace_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            )
+            .map_err(|_| json_error("已提交完整工作区交换记录不存在"))?;
+        let root_counts = serde_json::from_str(&root_counts_json)
+            .map_err(|_| json_error("已提交完整工作区交换回执无效"))?;
+        let readback = p6_workspace_exchange_v2::reexport(&self.root, &connection, &package_hash, target)?;
+        if readback.semantic_hash != semantic_hash
+            || readback.root_counts != root_counts
+            || readback.asset_count != asset_count
+            || readback.asset_bytes != asset_byte_count
+        {
+            return Err(json_error("完整工作区交换回导回执不一致"));
+        }
+        Ok(DesktopWorkspaceV2ReexportReceipt {
+            workspace_id: workspace_id.to_owned(),
+            semantic_hash,
+            root_counts,
+            asset_count,
+            asset_byte_count,
         })
     }
 
@@ -6359,6 +6469,34 @@ fn import_desktop_workspace_exchange_v2_selected(
         .import_selected_v2_workspace_exchange(&selected_path)
 }
 
+/// Lists only committed v2 private exchange records for the Settings re-export selector.
+#[tauri::command]
+fn list_desktop_workspace_exchange_v2_committed(
+    state: State<'_, AppState>,
+) -> Result<Vec<DesktopWorkspaceV2CommittedProjection>, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .list_committed_v2_workspace_exchanges()
+}
+
+/// Reconstructs a canonical v2 package only from one committed private v2 owner and writes it
+/// only to a native-save-picker-selected canonical target. It accepts no v1 workspace or path
+/// projection and returns a content-free readback receipt.
+#[tauri::command]
+fn reexport_desktop_workspace_exchange_v2_selected(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    selected_path: String,
+) -> Result<DesktopWorkspaceV2ReexportReceipt, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .reexport_selected_v2_workspace_exchange(&workspace_id, &selected_path)
+}
+
 #[tauri::command]
 fn stage_chatgpt_export_selected(
     state: State<'_, AppState>,
@@ -7102,6 +7240,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             stage_preflight_selected_exchange,
             import_desktop_workspace_exchange_v2_selected,
+            list_desktop_workspace_exchange_v2_committed,
+            reexport_desktop_workspace_exchange_v2_selected,
             stage_chatgpt_export_selected,
             stage_p6k_zip_import_selected,
             retry_p6k_zip_import_task,
@@ -7258,6 +7398,74 @@ mod tests {
             assert!(rejected.contains("文件类型无效"));
             assert!(!rejected.contains(invalid_name));
         }
+    }
+
+    #[test]
+    fn v2_settings_reexport_reads_only_committed_private_owner_and_returns_content_free_readback() {
+        let directory = tempdir().unwrap();
+        let store = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let mut exchange: Value = serde_json::from_str(include_str!(
+            "../../../protocol/fixtures/nfai.exchange.v2.golden.json"
+        ))
+        .unwrap();
+        let asset_hash = sha256(b"a");
+        for attachment in exchange["knowledge"][0]["attachments"]
+            .as_array_mut()
+            .unwrap()
+        {
+            attachment["entry"] = Value::String(format!("assets/{asset_hash}"));
+            attachment["sha256"] = Value::String(asset_hash.clone());
+        }
+        exchange["export"]["semanticHash"] = Value::String(semantic_hash(&exchange).unwrap());
+        let selected = directory.path().join("selected.nfai-exchange");
+        fs::write(
+            &selected,
+            p6_workspace_exchange_v2::package(
+                &exchange,
+                &BTreeMap::from([(format!("assets/{asset_hash}"), b"a".to_vec())]),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let imported = store
+            .import_selected_v2_workspace_exchange(selected.to_str().unwrap())
+            .unwrap();
+        let committed = store.list_committed_v2_workspace_exchanges().unwrap();
+        assert_eq!(committed.len(), 1);
+        assert_eq!(committed[0].workspace_id, imported.workspace_id);
+        assert_eq!(committed[0].asset_count, 1);
+
+        let target = directory.path().join("reexported.nfai-exchange");
+        let receipt = store
+            .reexport_selected_v2_workspace_exchange(&committed[0].workspace_id, target.to_str().unwrap())
+            .unwrap();
+        assert_eq!(receipt.semantic_hash, imported.semantic_hash);
+        assert_eq!(receipt.root_counts, committed[0].root_counts);
+        assert_eq!(receipt.asset_count, committed[0].asset_count);
+        let readback = p6_workspace_exchange_v2::preflight(fs::read(&target).unwrap()).unwrap();
+        assert_eq!(readback.receipt.semantic_hash, receipt.semantic_hash);
+        assert_eq!(readback.receipt.root_counts, receipt.root_counts);
+
+        let serialized = serde_json::to_string(&receipt).unwrap();
+        assert!(!serialized.contains(target.to_str().unwrap()));
+        assert!(!serialized.contains("displayName"));
+        assert!(store
+            .reexport_selected_v2_workspace_exchange(&committed[0].workspace_id, directory.path().join("wrong.zip").to_str().unwrap())
+            .unwrap_err()
+            .contains("输出文件类型无效"));
+        assert!(store
+            .reexport_selected_v2_workspace_exchange("workspace-v2-not-committed", target.to_str().unwrap())
+            .unwrap_err()
+            .contains("记录不存在"));
+        let connection = store.connection().unwrap();
+        let v1_rows: i64 = connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM workspaces)+(SELECT COUNT(*) FROM workspace_exchange)+(SELECT COUNT(*) FROM import_journal)",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(v1_rows, 0);
     }
 
     #[test]

@@ -41,4 +41,6 @@ v2 只接纳下表中有现存 Android owner、清晰字段语义、并且不会
 
 ## 用户入口
 
+Desktop 回导只从 import、journal 与 receipt 均完整的 private v2 owner 读取 canonical IR 和内容寻址附件。设置页只投影匿名已提交候选与附件计数；用户点选后，native save picker 只能输出精确 `.nfai-exchange` 名称，Rust 仍须严格 preflight 并比较 semantic hash、每一个 `ownerFieldHash` 与附件账本。路径、显示名、正文和附件 bytes 不进入候选、回执或错误。回导不读 v1 工作区、不开放聊天/Composer/工作页入口，且不代表 Desktop 原生对象恢复、备份或同步。
+
 Desktop 现在只在“设置 → 数据与导入”提供 `完整工作区交换（v2）` 的 native picker 二级入口：它只读取用户所选的精确 `.nfai-exchange` 或 DocumentsUI 兼容 `.nfai-exchange.zip` 有限 bytes，依次执行 v2 strict preflight 与独立 private archive/transaction owner，返回 content-free receipt 或脱敏的真实拒绝，不创建 v1/可见工作区。Android 在同一设置层通过显式完整范围与系统保存位置输出 v2 包。Android/Desktop 的“设置 → 功能审阅”同改登记其“待您判断”去留；建议保留设置二级入口，不新增聊天、Composer 或工作页常驻按键。本条不是已完成真实用户文件验收、跨端互通、备份/同步或 Desktop 原生 owner 恢复声明。

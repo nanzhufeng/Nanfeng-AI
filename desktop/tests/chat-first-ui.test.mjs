@@ -148,6 +148,14 @@ test('P6 v2 picker preserves the content-free native rejection instead of replac
   assert.ok(!picker.includes("state.status = '未创建可见工作区或导入记录。'"));
 });
 
+test('P6 v2 re-export remains a Settings-only native-save flow over committed private records', () => {
+  const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'data', status: '', error: '', connection: {}, v2CommittedExchanges: [{ workspaceId: 'workspace-v2-safe', rootCounts: { projects: 1 }, assetCount: 0 }] });
+  for (const token of ['回导已提交 v2 交换', 'data-action="reexport-v2-workspace-exchange"', 'native save picker', '只读重建 canonical 包']) assert.ok(rendered.includes(token));
+  const reexport = source.slice(source.indexOf('async function reexportV2WorkspaceExchange'), source.indexOf('async function pickNanfengKnowledgeExport'));
+  for (const token of ["dialogInvoke('save'", 'reexport_desktop_workspace_exchange_v2_selected', "extensions: ['nfai-exchange']", 'state.status = state.error']) assert.ok(reexport.includes(token));
+  for (const forbidden of ['Composer', 'show-chat', 'start-export']) assert.ok(!reexport.includes(forbidden));
+});
+
 test('P6-K exposes direct ZIP import with recovery controls without changing the settings layout', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'data', status: '', error: '', connection: {} });
   for (const token of ['第三方 ZIP 导入', 'data-action="select-p6k-chatgpt-zip"', 'data-action="select-p6k-claude-zip"', 'data-action="retry-p6k-zip"', 'data-action="skip-p6k-zip-failures"', 'data-action="delete-p6k-zip-batch"']) assert.ok(rendered.includes(token));
@@ -156,7 +164,7 @@ test('P6-K exposes direct ZIP import with recovery controls without changing the
 
 test('new user features have a Settings review entry with a decision state and entry recommendation', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'feature-review', status: '', error: '', connection: {} });
-  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮', '本地精确复用', '暂不增加聊天或 Composer 按键', '避免误解为联网缓存或省费承诺', '跨端文本会话交换', 'Android 现只从设置导出符合条件的文本会话为 .nfai-exchange', '它不是备份、云同步或完整工作区跨端保真承诺', '完整工作区交换（v2）', '显式选择完整范围', '只保留双端设置二级入口']) assert.ok(rendered.includes(token));
+  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮', '本地精确复用', '暂不增加聊天或 Composer 按键', '避免误解为联网缓存或省费承诺', '跨端文本会话交换', 'Android 现只从设置导出符合条件的文本会话为 .nfai-exchange', '它不是备份、云同步或完整工作区跨端保真承诺', '完整工作区交换（v2）', '显式选择完整范围', '从已提交私有记录经系统保存位置回导', '只保留双端设置二级入口']) assert.ok(rendered.includes(token));
 });
 
 test('FB-P6-039 keeps attachment previews as role-aligned siblings of text surfaces', () => {
