@@ -171,16 +171,22 @@ impl Ledger {
         if !allowed {
             return Err("INVALID_STATE_TRANSITION".into());
         }
-        if action == "AUTHORIZE" && session.request.app_handle != target.app_handle() {
-            return self.reject(&session, "APP_SCOPE_DENIED");
-        }
-        if action == "AUTHORIZE"
-            && session
-                .request
-                .expires_at
-                .is_some_and(|value| now_ms > value)
+        if matches!(
+            action,
+            "AUTHORIZE" | "PREVIEW" | "CONFIRM" | "RESULT" | "READBACK"
+        ) && session
+            .request
+            .expires_at
+            .is_some_and(|value| now_ms > value)
         {
             return self.expire(&session);
+        }
+        if matches!(
+            action,
+            "AUTHORIZE" | "PREVIEW" | "CONFIRM" | "RESULT" | "READBACK"
+        ) && session.request.app_handle != target.app_handle()
+        {
+            return self.reject(&session, "APP_SCOPE_DENIED");
         }
         if action == "PREVIEW" {
             let preview = target.preview(&session.request.subject_handle, session.request.limit);
@@ -397,11 +403,12 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     struct Target {
+        app_handle: String,
         current: Preview,
     }
     impl LocalTestOnlyTarget for Target {
         fn app_handle(&self) -> &str {
-            "app_fixture"
+            &self.app_handle
         }
         fn preview(&self, _: &str, _: u64) -> Preview {
             self.current.clone()
@@ -421,6 +428,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let ledger = Ledger::open(dir.path()).unwrap();
         let target = Target {
+            app_handle: "app_fixture".into(),
             current: Preview {
                 revision: 1,
                 content_hash: "a".repeat(64),
@@ -467,6 +475,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let ledger = Ledger::open(dir.path()).unwrap();
         let mut target = Target {
+            app_handle: "app_fixture".into(),
             current: Preview {
                 revision: 1,
                 content_hash: "a".repeat(64),
@@ -486,5 +495,61 @@ mod tests {
             .unwrap();
         assert_eq!(rejected.state, "REJECTED");
         assert_eq!(rejected.error.as_deref(), Some("TARGET_UPDATED"));
+    }
+    #[test]
+    fn expiry_and_target_reselection_prevent_continuation_before_synthetic_receipt() {
+        let dir = tempdir().unwrap();
+        let ledger = Ledger::open(dir.path()).unwrap();
+        let mut target = Target {
+            app_handle: "app_fixture".into(),
+            current: Preview {
+                revision: 1,
+                content_hash: "a".repeat(64),
+                item_count: 1,
+                next_cursor: None,
+            },
+        };
+        let request = parse_preflight(&raw("")).unwrap();
+        ledger.request(&request).unwrap();
+        ledger
+            .advance("request_one", "AUTHORIZE", &target, 0)
+            .unwrap();
+        target.app_handle = "app_reselected".into();
+        let reselected = ledger
+            .advance("request_one", "PREVIEW", &target, 0)
+            .unwrap();
+        assert_eq!(reselected.state, "REJECTED");
+        assert_eq!(reselected.error.as_deref(), Some("APP_SCOPE_DENIED"));
+        assert_eq!(reselected.result_hash, None);
+
+        let dir = tempdir().unwrap();
+        let ledger = Ledger::open(dir.path()).unwrap();
+        let target = Target {
+            app_handle: "app_fixture".into(),
+            current: Preview {
+                revision: 1,
+                content_hash: "a".repeat(64),
+                item_count: 1,
+                next_cursor: None,
+            },
+        };
+        let request = Request {
+            expires_at: Some(0),
+            ..parse_preflight(&raw("")).unwrap()
+        };
+        ledger.request(&request).unwrap();
+        ledger
+            .advance("request_one", "AUTHORIZE", &target, 0)
+            .unwrap();
+        ledger
+            .advance("request_one", "PREVIEW", &target, 0)
+            .unwrap();
+        ledger
+            .advance("request_one", "CONFIRM", &target, 0)
+            .unwrap();
+        let expired = ledger.advance("request_one", "RESULT", &target, 1).unwrap();
+        assert_eq!(expired.state, "EXPIRED");
+        assert_eq!(expired.error.as_deref(), Some("PERMISSION_EXPIRED"));
+        assert_eq!(expired.result_hash, None);
     }
 }

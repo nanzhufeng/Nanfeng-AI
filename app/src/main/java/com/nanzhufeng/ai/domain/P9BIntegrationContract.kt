@@ -115,33 +115,33 @@ class P9BLocalTestOnlyHarness(private val ledger: P9BIntegrationLedger, private 
         val session = P9BSession(request, P9BState.REQUESTED)
         return P9BResult.Accepted(ledger.create(session, event(session, "REQUESTED")))
     }
-    fun authorize(requestId: String): P9BResult = transition(requestId, setOf(P9BState.REQUESTED), "AUTHORIZED") { session ->
-        when {
-            session.request.appHandle != target.appHandle -> P9BResult.Rejected("APP_SCOPE_DENIED", reject(session, "APP_SCOPE_DENIED"))
-            session.request.expiresAtEpochMs?.let { clock.millis() > it } == true -> P9BResult.Rejected("PERMISSION_EXPIRED", expire(session))
-            else -> null
+    fun authorize(requestId: String): P9BResult = transition(requestId, setOf(P9BState.REQUESTED), "AUTHORIZED") { session -> requireContinuable(session) }
+    fun preview(requestId: String): P9BResult = transition(requestId, setOf(P9BState.AUTHORIZED), "PREVIEWED") { session ->
+        requireContinuable(session) ?: run {
+            val preview = target.preview(session.request.subjectHandle, session.request.pageLimit, session.request.pageCursor)
+            if (preview.itemCount !in 0..session.request.pageLimit || preview.revision != session.request.provenance.revision || preview.contentHash != session.request.provenance.contentHash) P9BResult.Rejected("SOURCE_PROVENANCE_MISMATCH", reject(session, "SOURCE_PROVENANCE_MISMATCH"))
+            else P9BResult.Accepted(append(session, session.copy(state = P9BState.PREVIEWED, preview = preview), "PREVIEWED"))
         }
     }
-    fun preview(requestId: String): P9BResult = transition(requestId, setOf(P9BState.AUTHORIZED), "PREVIEWED") { session ->
-        val preview = target.preview(session.request.subjectHandle, session.request.pageLimit, session.request.pageCursor)
-        if (preview.itemCount !in 0..session.request.pageLimit || preview.revision != session.request.provenance.revision || preview.contentHash != session.request.provenance.contentHash) P9BResult.Rejected("SOURCE_PROVENANCE_MISMATCH", reject(session, "SOURCE_PROVENANCE_MISMATCH"))
-        else P9BResult.Accepted(append(session, session.copy(state = P9BState.PREVIEWED, preview = preview), "PREVIEWED"))
-    }
-    fun confirm(requestId: String): P9BResult = transition(requestId, setOf(P9BState.PREVIEWED), "CONFIRMED")
+    fun confirm(requestId: String): P9BResult = transition(requestId, setOf(P9BState.PREVIEWED), "CONFIRMED") { session -> requireContinuable(session) }
     fun result(requestId: String): P9BResult {
         ledger.byRequest(requestId)?.let { snapshot ->
             if (snapshot.session.state in setOf(P9BState.RESULT_READY, P9BState.READBACK_VERIFIED, P9BState.REVOKED)) return P9BResult.Replayed(snapshot)
         }
         return transition(requestId, setOf(P9BState.CONFIRMED), "RESULT_READY") { session ->
-            val hash = p9bHash("${session.request.requestId}|${session.preview!!.revision}|${session.preview.contentHash}")
-            P9BResult.Accepted(append(session, session.copy(state = P9BState.RESULT_READY, resultHash = hash), "RESULT_READY", P9BReceipt(session.request.idempotencyKey, hash)))
+            requireContinuable(session) ?: run {
+                val hash = p9bHash("${session.request.requestId}|${session.preview!!.revision}|${session.preview.contentHash}")
+                P9BResult.Accepted(append(session, session.copy(state = P9BState.RESULT_READY, resultHash = hash), "RESULT_READY", P9BReceipt(session.request.idempotencyKey, hash)))
+            }
         }
     }
     fun readback(requestId: String): P9BResult = transition(requestId, setOf(P9BState.RESULT_READY), "READBACK_VERIFIED") { session ->
-        val now = target.readback(session.request.subjectHandle)
-        val preview = session.preview!!
-        if (now.revision != preview.revision || now.contentHash != preview.contentHash) P9BResult.Rejected("TARGET_UPDATED", reject(session, "TARGET_UPDATED"))
-        else null
+        requireContinuable(session) ?: run {
+            val now = target.readback(session.request.subjectHandle)
+            val preview = session.preview!!
+            if (now.revision != preview.revision || now.contentHash != preview.contentHash) P9BResult.Rejected("TARGET_UPDATED", reject(session, "TARGET_UPDATED"))
+            else null
+        }
     }
     fun revoke(requestId: String): P9BResult = transition(requestId, setOf(P9BState.AUTHORIZED, P9BState.PREVIEWED, P9BState.CONFIRMED, P9BState.RESULT_READY, P9BState.READBACK_VERIFIED), "REVOKED")
     fun cancel(requestId: String): P9BResult = transition(requestId, setOf(P9BState.REQUESTED, P9BState.AUTHORIZED, P9BState.PREVIEWED, P9BState.CONFIRMED, P9BState.RESULT_READY), "CANCELLED")
@@ -155,6 +155,16 @@ class P9BLocalTestOnlyHarness(private val ledger: P9BIntegrationLedger, private 
     private fun append(old: P9BSession, next: P9BSession, kind: String, receipt: P9BReceipt? = null) = ledger.append(ledger.byRequest(old.request.requestId)!!, next, event(next, kind), receipt)
     private fun reject(session: P9BSession, code: String) = append(session, session.copy(state = P9BState.REJECTED, errorCode = code), code)
     private fun expire(session: P9BSession) = append(session, session.copy(state = P9BState.EXPIRED, errorCode = "PERMISSION_EXPIRED"), "PERMISSION_EXPIRED")
+    /**
+     * A synthetic target may change or a grant may expire between any two local steps.
+     * Never let a previously authorized request reach preview, confirmation, receipt or readback.
+     * Cancel and revoke deliberately do not call this gate so they remain available for safe cleanup.
+     */
+    private fun requireContinuable(session: P9BSession): P9BResult? = when {
+        session.request.expiresAtEpochMs?.let { clock.millis() > it } == true -> P9BResult.Rejected("PERMISSION_EXPIRED", expire(session))
+        session.request.appHandle != target.appHandle -> P9BResult.Rejected("APP_SCOPE_DENIED", reject(session, "APP_SCOPE_DENIED"))
+        else -> null
+    }
     private fun event(session: P9BSession, kind: String) = P9BEvent(ledger.byRequest(session.request.requestId)?.events?.size?.toLong() ?: 0, kind, p9bHash("${session.request.requestId}|$kind|${session.state}|${session.resultHash ?: ""}"))
 }
 

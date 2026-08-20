@@ -12,12 +12,13 @@
 | provenance/revision/hash/target 更新 | Room/domain 覆盖 revision/hash 重验和 `TARGET_UPDATED` | Rust test 覆盖 revision/hash 改变后 `REJECTED/TARGET_UPDATED` | 无真实 source/用户数据 |
 | 秘密无关 durable ledger | Schema 20→21，`P9BIntegrationRoomContractsTest` 回读 session/event/receipt | 独立 `p9b-local-test-only.sqlite3` v1 | 无真实跨应用账本/数据库访问 |
 | release surface 无 harness | `AppContainer`/Manifest 无 P9-B registry/DI/UI；静态审计 | 无 Tauri command/capability/frontend binding，只有 module declaration | 未来 target UI 只能诚实 disabled |
+| 续行目标/权限门 | `P9BIntegrationContractTest`：目标重选或任一步骤到期后，不再 preview、确认、产生 synthetic receipt 或 readback | `p9b_integration_contract_v1`：同一 target/expiry gate 在 `AUTHORIZE/PREVIEW/CONFIRM/RESULT/READBACK` 逐步重验 | synthetic handle/clock 不代表真实目标选择、授权或超时 |
 
 ## 自动与构建
 
-- Android：全量 `:app:testDebugUnitTest --rerun-tasks`，234 tests、0 failures、0 errors；`lintDebug` 报告 0 issue；正式 Debug/Release 均构建。
+- Android：历史全量 `:app:testDebugUnitTest --rerun-tasks`，234 tests、0 failures、0 errors；`lintDebug` 报告 0 issue；正式 Debug/Release 均构建。2026-08-20 本次仅定向 `P9BIntegrationContractTest` 5/5 通过（新增续行 gate），未重跑全量/lint/产物。
 - Android 签名：`0.3.0-p9b` / code 50；Debug `e16aaf8de53291183cf4b0c800f59c957f0afb22501a39af3f0093789faee6f9`，Release `6167e373ea9bbf28f87d1dbafb30bae817ab27082c052e17be88d0714a209ac3`；两包 APK Signature Scheme v2/v3 为 true，签名证书 SHA-256 为 `889ecf3ff4eeb40486e5122c6dc4eaaa04226ce6493d8a946c65275a803e99d5`。
-- Desktop：frontend typecheck/lint/5 tests/build，Rust fmt/31 tests/clippy/check 与 Tauri app bundle 均通过；ad-hoc `codesign --verify --deep --strict` 通过，TeamIdentifier none，非 Developer ID/notarized。可执行文件 SHA-256：`5583b6c4961a67454ab0d0b9c7b2c1f7473987f13f10467838a7e8990220ab58`。
+- Desktop：历史 frontend typecheck/lint/5 tests/build，Rust fmt/31 tests/clippy/check 与 Tauri app bundle 均通过；ad-hoc `codesign --verify --deep --strict` 通过，TeamIdentifier none，非 Developer ID/notarized。可执行文件 SHA-256：`5583b6c4961a67454ab0d0b9c7b2c1f7473987f13f10467838a7e8990220ab58`。2026-08-20 本次 `cargo test p9b_integration_contract_v1` 3/3 通过；全仓 `cargo fmt --check` 只暴露既有 `lib.rs` 格式债务，未写入，P9-B 单文件格式检查另列。
 
 ## 模拟器与图标产物
 

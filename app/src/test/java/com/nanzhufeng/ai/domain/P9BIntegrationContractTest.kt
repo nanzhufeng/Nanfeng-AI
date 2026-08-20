@@ -13,12 +13,20 @@ class P9BIntegrationContractTest {
     private val hash = "a".repeat(64)
     private fun raw(app: String = "app_fixture", classification: String = "NON_SENSITIVE", limit: Int = 1, expiry: String = "null", extra: String = "") = """{"format":"nfai.integration-contract","version":1,"mode":"LOCAL_TEST_ONLY","requestId":"request_one","idempotencyKey":"idem_one","appHandle":"$app","subjectHandle":"subject_one","capability":"READ_ONLY_PREVIEW","permission":"READ_ONLY","classification":"$classification","provenance":{"source":"LOCAL_TEST_ONLY","revision":1,"contentHash":"$hash"},"page":{"limit":$limit,"cursor":null},"expiresAtEpochMs":$expiry$extra}"""
     private val target = object : P9BLocalTestOnlyTarget {
-        override val appHandle = "app_fixture"
+        var selectedAppHandle = "app_fixture"
+        override val appHandle get() = selectedAppHandle
         var current = P9BPreview(1, hash, 1, null)
-        override fun preview(subjectHandle: String, limit: Int, cursor: String?) = current
-        override fun readback(subjectHandle: String) = current
+        var previewCalls = 0
+        var readbackCalls = 0
+        override fun preview(subjectHandle: String, limit: Int, cursor: String?): P9BPreview { previewCalls++; return current }
+        override fun readback(subjectHandle: String): P9BPreview { readbackCalls++; return current }
     }
-    private fun harness(ledger: MemoryLedger = MemoryLedger()) = P9BLocalTestOnlyHarness(ledger, target, Clock.fixed(Instant.ofEpochMilli(1000), ZoneOffset.UTC))
+    private class MutableClock(var now: Long) : Clock() {
+        override fun getZone() = ZoneOffset.UTC
+        override fun withZone(zone: java.time.ZoneId) = this
+        override fun instant() = Instant.ofEpochMilli(now)
+    }
+    private fun harness(ledger: MemoryLedger = MemoryLedger(), clock: Clock = Clock.fixed(Instant.ofEpochMilli(1000), ZoneOffset.UTC)) = P9BLocalTestOnlyHarness(ledger, target, clock)
 
     @Test fun `local test only path is explicit read only confirmed readback revocable and receipt replayable`() {
         val ledger = MemoryLedger(); val harness = harness(ledger)
@@ -50,6 +58,47 @@ class P9BIntegrationContractTest {
         target.current = P9BPreview(2, "b".repeat(64), 1, null)
         assertEquals("TARGET_UPDATED", (harness.readback("request_one") as P9BResult.Rejected).code)
         target.current = P9BPreview(1, hash, 1, null)
+    }
+
+    @Test fun `expired permission prevents later preview confirmation receipt and readback without target calls`() {
+        val clock = MutableClock(1000)
+        val previewExpired = harness(clock = clock)
+        previewExpired.request(raw(expiry = "1000")); previewExpired.authorize("request_one")
+        clock.now = 1001
+        assertEquals("PERMISSION_EXPIRED", (previewExpired.preview("request_one") as P9BResult.Rejected).code)
+        assertEquals(0, target.previewCalls)
+
+        val confirmationClock = MutableClock(999)
+        val confirmationExpired = harness(clock = confirmationClock)
+        confirmationExpired.request(raw(expiry = "1000")); confirmationExpired.authorize("request_one"); confirmationExpired.preview("request_one")
+        confirmationClock.now = 1001
+        assertEquals("PERMISSION_EXPIRED", (confirmationExpired.confirm("request_one") as P9BResult.Rejected).code)
+
+        val receiptClock = MutableClock(999)
+        val receiptExpired = harness(clock = receiptClock)
+        receiptExpired.request(raw(expiry = "1000")); receiptExpired.authorize("request_one"); receiptExpired.preview("request_one"); receiptExpired.confirm("request_one")
+        receiptClock.now = 1001
+        val blocked = receiptExpired.result("request_one") as P9BResult.Rejected
+        assertEquals("PERMISSION_EXPIRED", blocked.code)
+        assertNull(blocked.snapshot!!.session.resultHash)
+
+        val readbackClock = MutableClock(999)
+        val readbackExpired = harness(clock = readbackClock)
+        readbackExpired.request(raw(expiry = "1000")); readbackExpired.authorize("request_one"); readbackExpired.preview("request_one"); readbackExpired.confirm("request_one"); readbackExpired.result("request_one")
+        readbackClock.now = 1001
+        assertEquals("PERMISSION_EXPIRED", (readbackExpired.readback("request_one") as P9BResult.Rejected).code)
+        assertEquals(0, target.readbackCalls)
+    }
+
+    @Test fun `target selection change prevents continuation and leaves no synthetic receipt`() {
+        val ledger = MemoryLedger(); val harness = harness(ledger)
+        harness.request(raw()); harness.authorize("request_one")
+        target.selectedAppHandle = "app_reselected"
+        val blocked = harness.preview("request_one") as P9BResult.Rejected
+        assertEquals("APP_SCOPE_DENIED", blocked.code)
+        assertEquals(0, target.previewCalls)
+        assertNull(blocked.snapshot!!.session.resultHash)
+        target.selectedAppHandle = "app_fixture"
     }
 
     private class MemoryLedger : P9BIntegrationLedger {

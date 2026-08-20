@@ -35,11 +35,13 @@ untrusted JSON
 
 状态只能为：`REQUESTED → AUTHORIZED → PREVIEWED → CONFIRMED → RESULT_READY → READBACK_VERIFIED → REVOKED`；`REQUESTED/AUTHORIZED/PREVIEWED/CONFIRMED/RESULT_READY → CANCELLED`；授权过期为 `EXPIRED`；拒绝为 `REJECTED`。终态不恢复、不自动重试、不自动授权。result receipt 以 idempotency key 唯一；同 key 只读回既有 session/receipt，不再次生成动作。
 
+`AUTHORIZE`、`PREVIEW`、`CONFIRM`、`RESULT` 与 `READBACK` 在每一步都重新核对同一 opaque `appHandle` 与 expiry；一旦目标选择已变化或授权已过期，立刻以 `APP_SCOPE_DENIED` 或 `PERMISSION_EXPIRED` 落入终态，绝不再调用 synthetic target、确认、产生新的 local receipt 或 readback。`CANCEL`/`REVOKE` 不受此继续门阻挡，确保用户仍能安全收束已有本地 session。`RESULT_READY` 的 hash/receipt 只归属于 `LOCAL_TEST_ONLY` harness 的合成 metadata，不代表目标应用结果、写入或外部副作用。
+
 账本只保存 opaque handle、capability/permission/classification、source/preview/result hash、revision、bounded pagination、state、safe error 和单调 event fingerprint。Android 新增三张 P9-B 表并通过 `MIGRATION_20_21` 保留 P8 Agent 表；Desktop 是独立 `p9b-local-test-only.sqlite3`，不复用 P6 workspace/P8/P7 ledger。两端都不记录正文、路径、URI、token、Key、数据库句柄或真实目标数据。
 
 ## LOCAL_TEST_ONLY harness 与生产禁区
 
-harness target 只能合成非敏感 metadata：固定 app/subject handle、revision、hash、item count 和 cursor。它覆盖请求→许可→只读 preview→用户确认→result→目标 readback→revoke，以及未知字段、超限、HIGH_SENSITIVE、UNKNOWN、过期、idempotent replay、cancel、target revision update、cross-app 和越权拒绝。readback 只核对同一 synthetic revision/hash，绝不写入 target、复制 Key 或绕过目标确认。
+harness target 只能合成非敏感 metadata：固定 app/subject handle、revision、hash、item count 和 cursor。它覆盖请求→许可→只读 preview→用户确认→result→目标 readback→revoke，以及未知字段、超限、HIGH_SENSITIVE、UNKNOWN、任一步骤过期、目标重选、idempotent replay、cancel、target revision update、cross-app 和越权拒绝。readback 只核对同一 synthetic revision/hash，绝不写入 target、复制 Key 或绕过目标确认。
 
 - Android `AppContainer`、Manifest、release UI 和 release DI 不创建 P9-B target registry/harness，不新增 query、ContentResolver、Provider、Service binding、文件扫描、网络或跨应用调用。
 - Desktop 没有 P9-B Tauri command、capability、frontend state、target registry 或 workspace binding；Rust target 仅在 `cfg(test)` 构造。

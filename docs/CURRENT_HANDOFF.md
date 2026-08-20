@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P9-B 续行授权收紧：本地合成目标仍非生态接入
+
+- **修复与所有权：** `P9BLocalTestOnlyHarness` 与 Desktop `p9b_integration_contract_v1` 现在在 `AUTHORIZE/PREVIEW/CONFIRM/RESULT/READBACK` 每步重新绑定同一 opaque `appHandle`、未过期 grant；目标重选或 expiry 立即安全终止，不再触碰 synthetic target、确认或创建新的 local receipt。`CANCEL/REVOKE` 保持可用以收束。receipt 仍只属于 `LOCAL_TEST_ONLY` 合成 metadata，绝不表示目标应用结果、写入或外部副作用。
+- **合同与验证：** `P9B_LOCAL_TEST_ONLY_INTEGRATION_CONTRACT.md`、`P9B_LOCAL_EXIT_EVIDENCE.md` 已同步。Android 定向 `P9BIntegrationContractTest` 5/5 通过；Desktop `cargo test p9b_integration_contract_v1` 3/3、单文件 `rustfmt --check` 与 `cargo clippy --lib -- -D warnings` 通过。全仓 `cargo fmt --check` 仅报告既有 `desktop/src-tauri/src/lib.rs` 格式债务，未写入。本轮未运行 Android 全量/lint/构建、Desktop frontend/bundle、GUI 或安装。
+- **仍未关闭：** 没有目标应用的公开稳定入口、权限 UI、真实目标侧确认、跨应用读取、真实结果归属、真实超时或撤销。因此 P9 真实只读闭环仍未开始；候选写入继续未授权。没有网络/Provider/Keychain/文件/DB 注入，也没有操作 OPPO 或 `5554/5556/5558/5570`。
+
 ## 2026-08-20 P8 本地计划准入双端收紧：只强化 test-only 合同，未开启真实工具
 
 - **本轮边界：** 只修改 `ControlledAgentRuntime` 与 Desktop `AgentLedgerStore` 的 `LOCAL_TEST_ONLY` plan admission。批准前必须把 Run 已用量与完整计划分别对照 steps、tool calls、side effects 三类预算；同一计划的 step idempotency key 重复时，在 approval 前写 durable failure Event/Checkpoint 并拒绝，绝不产生 receipt 或执行。没有新增 Agent UI、Tauri executor/capability、Settings entry、Provider/HTTP/Key、文件、跨应用、购买、删除、外发或业务数据写入。
