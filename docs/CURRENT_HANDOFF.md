@@ -3,7 +3,7 @@
 ## 2026-08-20 总控推进：运行时交付元数据当前版本修正（当前）
 
 - **结论：** `AndroidPrivacyDataManager`、`AndroidLocalBackupRestoreManager` 与 `RunOfflineEvalUseCase` 不再把当前 release 的 manifest/诊断/Eval report 版本硬编码为历史 `0.3.0-p5d` / `0.3.0-p4m`，统一注入 `BuildConfig.VERSION_NAME`。因此当前 `0.3.0-p10a` 生成的本地备份、诊断与离线 Eval 报告会如实携带当前版本，恢复预检和故障定位不再误指向历史交付。
-- **验证：** `AppContainerRuntimeVersionContractsTest`、`P5DLocalBackupRestoreContractsTest`、`P4IOfflineEvalContractsTest` 与 Settings 定向合同通过；`:app:assembleRelease` 通过，正式 APK SHA-256 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`，v2/v3 验签通过，证书 SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；前一轮 `:app:lintDebug` 为 `0 errors`。
+- **验证：** `AppContainerRuntimeVersionContractsTest`、`P5DLocalBackupRestoreContractsTest`、`P4IOfflineEvalContractsTest` 与 Settings 定向合同通过；全量 `:app:testDebugUnitTest` 为 0 failures，`:app:lintDebug` 为 `0 errors`；`:app:assembleRelease` 通过，正式 APK SHA-256 `57d048e2f131561933c760a56b054a55dea994c868a92a9494bcc0dd2a9635c1`，v2/v3 验签通过，证书 SHA-1 `2ab70dee32bc61f0596380cd328fa673c0c86149`、SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
 - **边界：** 该修正不导出、恢复、覆盖或读取任何用户数据；OPPO 仍保留安装的较早 v2 `fc8f9ac6…` 包，本轮不安装。当前 P5 的真实 SAF 成功导出、受控恢复与冷启动验收仍须在隔离数据环境按正常 UI 链完成。
 
 ## 2026-08-20 总控推进：Compare 直接执行合同与矩阵校正（当前）
