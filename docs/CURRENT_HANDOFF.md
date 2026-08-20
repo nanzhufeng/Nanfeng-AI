@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6-A 跨端实链尝试：安全停止，未形成验收（当前）
+
+- **已获得的低层证据：** 当前 `acceptanceV2` 由提交 `484f169` 重新生成：`app/build/outputs/apk/acceptanceV2/南枫AI-开发验收.apk`，32,211,314 B，SHA-256 `7d32aa6483b5a59e9e1e2d03e62cc9b85464a1acafbc36d060ca8f535924eede`；v2/v3 验签通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。只对指定 `emulator-5554` 的隔离包 `com.nanzhufeng.ai.p6eacceptancev2` 以 `pm install -r --user 0` 覆盖，`firstInstallTime` 保持不变；cold-start 能进入正常 App 壳及既有设置→导入与适配页面。Android `ConversationExchangeExportContractsTest` 2/2、`P6AExchangeContractsTest` 1/1、`lintDebug`（无 Error/Fatal）通过；Desktop `import_is_atomic_and_export_roundtrips_semantics`、P6-J 回导合同、`clippy -D warnings` 与功能审阅 UI 89/89 通过。
+- **安全停止原因：** 从该模拟器的正常对话导航发现其含有并非本轮创建的既有会话，故立即停止，不读取正文、不清库、不卸载、不删除或再写入其数据。此前对 Composer 的临时非敏感输入未得到可靠的持久化/回读证据，不能将其表述为已保存的导出源。为建立新 AVD 而调用 `avdmanager create avd` 亦失败：本机 API 35 `google_apis/arm64-v8a` system image 缺失 `devices.xml`；未创建 AVD、未复用其他 AVD。
+- **结论与下一安全命令：** 没有 DocumentsUI 导出、没有 Android 产生的 `.nfai-exchange`、没有 Desktop 实际导入或再次导出，因此 P6 的 Android→Desktop→回导哈希门仍完全未关闭；上述只可作为构建/覆盖/自动合同证据。先修复本机可用的临时 AVD system image 或由用户提供明确空白模拟器，再以固定隔离序列号执行：正常新建非敏感文本会话 → Settings→对话→DocumentsUI 保存 → Desktop 正常 picker 导入 → Desktop 导出并严格回读 semantic/package SHA-256。不得触及 OPPO 或含既有数据的模拟器。
+
 ## 2026-08-20 总控推进：P6-A Android 文本会话 SAF 交换导出（当前）
 
 - **结论：** 为避免继续堆叠 P6-L1–L4 的未注册复用门，本轮接入既有 P6-A 共享交换协议的 Android 输出链。`ExportConversationExchangeUseCase` 是唯一语义 mapper，只从既有 `ConversationRepository.findById` 读取当前活动 `CHAT` 的独立文本会话；它拒绝 Project、草稿、附件、工具结果、WORK/TEMP、已归档/删除或空消息。`AndroidConversationExchangeExportPort` 以私有 staging 调用 `NfaiExchangeV1Gateway`，只经用户选择的 SAF URI 输出并读回 SHA-256；`withComputedSemanticHash` 是唯一 canonical hash 路径。该入口位于设置 → 对话 → “导出当前文本会话到 Desktop”，Desktop 沿用已有 workspace exchange import，不新增聊天/Composer 常驻按键。
