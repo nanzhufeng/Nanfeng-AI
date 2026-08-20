@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区对象交换 mapper：领域合同已闭合，真实全对象链未开始
+
+- **结论：** 新增 `ExportWorkspaceExchangeUseCase` 与 `P6_WORKSPACE_EXCHANGE_MAPPER_CONTRACT.md`。它从既有 Project、Conversation、Knowledge、Memory、Relationship 与私有附件 owner 只读构造 `nfai.exchange.v1`，并复用唯一 canonical hash/gateway。选择现在显式包含 object IDs、attachment IDs 及每个附件敏感级别；没有从 Project/关系/目录隐式扩大 scope。
+- **失败与恢复边界：** scope/relationship endpoint/attachment 引用必须形成完整选择闭包；草稿、WORK/已删除对话、ToolResult、缺 leaf、附件不可读或 hash 不符、未选依赖，以及当前 v1 无法表示的 Knowledge 附件均在写包前失败关闭。Desktop 既有 private staging、asset/package archive、SQLite transaction、import journal 与 package/semantic hash receipt 保持不变；本轮没有新增 Android import、SAF/UI、Room 写入、HTTP、Key、模拟器或 OPPO 操作。
+- **本地验证：** `WorkspaceExchangeExportContractsTest` 3/3、既有 `ConversationExchangeExportContractsTest` 2/2 与 `P6AExchangeContractsTest` 1/1 经 Android Studio JBR、`--no-daemon` 与 `TieredStopAtLevel=1` 通过；protocol golden 保持既有 semantic/package hash；Desktop `import_is_atomic_and_export_roundtrips_semantics` 1/1 通过。Android Lint 当前 SARIF 65 条均为 `none`、0 Error/Warning；原 wrapper 调用在最终退出信息返回前超时，故这只是静态 SARIF 证据，不冒充 Gradle 完整任务成功。
+- **总控边界：** 这只关闭 P6 全对象 Android mapper 的领域合同，不关闭 P6 的 Android/desktop 真实完整对象导入导出、真实 UI/readback、紧凑/展开、Windows 或发布门；P0–P11 均未完成。
+
 ## 2026-08-20 P6-A Android→Desktop 真实文本交换验收：已关闭本增量
 
 - **真实用户路径与数据边界：** 未触碰 `emulator-5554` 或 OPPO。发现 `NanfengAiP6AExchangeTemporary` 是仅 4 KiB、无 userdata/snapshot 的项目专属 API 35 AVD 后，以固定 `emulator-5556` 启动；缺失的 `devices.xml` 只阻断 `avdmanager create avd`，不阻断该已配置镜像。空机上只用正常 Composer 创建中性文本会话，再经设置 → 对话 → “导出当前文本会话到 Desktop” → DocumentsUI 输出。首次 UI 实测暴露 UUID 数字前缀被 stable-ID validator 错拒；Android 与 Desktop 已同步放宽为首字符可为小写字母或数字，仍限制长度与字符集。此前失败遗留的 0 B DocumentsUI 文件原样保留，成功包另名写入。

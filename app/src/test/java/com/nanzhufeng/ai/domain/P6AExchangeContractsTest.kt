@@ -16,7 +16,20 @@ class P6AExchangeContractsTest {
         val exchange = JSONObject(json)
         val asset = File(root, "fixtures/assets/golden-note.txt").readBytes()
         fun ids(key: String) = exchange.getJSONArray(key).let { array -> buildSet { repeat(array.length()) { add(array.getJSONObject(it).getString("id")) } } }
-        val selection = NfaiExchangeExportSelection(ids("projects"), ids("conversations"), ids("knowledge"), ids("memory"), ids("relations"))
+        val attachmentIds = buildSet {
+            val conversations = exchange.getJSONArray("conversations")
+            repeat(conversations.length()) { conversationIndex ->
+                val messages = conversations.getJSONObject(conversationIndex).getJSONArray("messages")
+                repeat(messages.length()) { messageIndex ->
+                    val blocks = messages.getJSONObject(messageIndex).getJSONArray("blocks")
+                    repeat(blocks.length()) { blockIndex ->
+                        val block = blocks.getJSONObject(blockIndex)
+                        if (block.getString("kind") == "ASSET_REF") add(block.getJSONObject("asset").getString("id"))
+                    }
+                }
+            }
+        }
+        val selection = NfaiExchangeExportSelection(ids("projects"), ids("conversations"), ids("knowledge"), ids("memory"), ids("relations"), attachmentIds)
         val target = createTempFile("nfai-exchange", ".zip")
         try {
             val desktopPackage = File(root, "artifacts/nfai.exchange.v1.golden.nfai-exchange")

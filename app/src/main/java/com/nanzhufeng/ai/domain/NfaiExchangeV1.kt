@@ -28,6 +28,8 @@ data class NfaiExchangeExportSelection(
     val knowledgeIds: Set<String>,
     val memoryIds: Set<String>,
     val relationIds: Set<String>,
+    /** Asset IDs are explicit because bytes may cross the SAF boundary only by user choice. */
+    val attachmentIds: Set<String> = emptySet(),
 ) {
     init { require(projectIds.isNotEmpty() || conversationIds.isNotEmpty() || knowledgeIds.isNotEmpty() || memoryIds.isNotEmpty() || relationIds.isNotEmpty()) { "跨端交换必须有明确选择。" } }
 }
@@ -75,6 +77,8 @@ object NfaiExchangeV1Gateway {
         require(snapshot.selection.knowledgeIds == exchange.getJSONArray("knowledge").ids()) { "选择与知识快照不一致。" }
         require(snapshot.selection.memoryIds == exchange.getJSONArray("memory").ids()) { "选择与记忆快照不一致。" }
         require(snapshot.selection.relationIds == exchange.getJSONArray("relations").ids()) { "选择与关系快照不一致。" }
+        require(snapshot.selection.attachmentIds == exchange.assetIds()) { "选择与附件快照不一致。" }
+        require(snapshot.assets.map(NfaiExchangeAsset::entry).toSet() == exchange.assetEntries()) { "附件内容与消息引用不一致。" }
         val entries = linkedMapOf(
             "payload/projects.json" to canonical(exchange.getJSONArray("projects")).toByteArray(),
             "payload/conversations.json" to canonical(exchange.getJSONArray("conversations")).toByteArray(),
@@ -128,6 +132,7 @@ object NfaiExchangeV1Gateway {
                 put("relations", JSONArray(entries.required("payload/relations.json").toString(Charsets.UTF_8))); put("settings", JSONObject(entries.required("payload/settings.safe.json").toString(Charsets.UTF_8)))
             }
             val verified = validateExchange(exchange)
+            require(entries.keys.filter { it.startsWith("assets/") }.toSet() == exchange.assetEntries()) { "附件内容与消息引用不一致。" }
             NfaiExchangeResult.Preflighted(NfaiExchangePreflight(verified.semanticHash, exchange.getJSONArray("projects").length(), exchange.getJSONArray("conversations").length(), exchange.getJSONArray("knowledge").length(), exchange.getJSONArray("memory").length(), exchange.getJSONArray("relations").length(), verified.highSensitive, stagedPackage.length()))
         }
     }.getOrElse { NfaiExchangeResult.Rejected("PREFLIGHT_REJECTED") }
@@ -164,6 +169,24 @@ private fun Map<String, ByteArray>.required(key: String) = get(key) ?: error("�
 private fun java.io.InputStream.readBounded(max: Long): ByteArray { val out = ByteArrayOutputStream(); val buffer = ByteArray(8192); while (true) { val read = read(buffer); if (read < 0) break; require(out.size().toLong() + read <= max) { "entry 超限。" }; out.write(buffer, 0, read) }; return out.toByteArray() }
 private fun JSONArray.ids(): Set<String> = buildSet { forEachObject { add(it.getString("id")) } }
 private fun JSONArray.forEachObject(block: (JSONObject) -> Unit) { repeat(length()) { index -> block(getJSONObject(index)) } }
+private fun JSONObject.assetIds(): Set<String> = buildSet {
+    getJSONArray("conversations").forEachObject { conversation ->
+        conversation.getJSONArray("messages").forEachObject { message ->
+            message.getJSONArray("blocks").forEachObject { block ->
+                if (block.getString("kind") == "ASSET_REF") add(block.getJSONObject("asset").getString("id"))
+            }
+        }
+    }
+}
+private fun JSONObject.assetEntries(): Set<String> = buildSet {
+    getJSONArray("conversations").forEachObject { conversation ->
+        conversation.getJSONArray("messages").forEachObject { message ->
+            message.getJSONArray("blocks").forEachObject { block ->
+                if (block.getString("kind") == "ASSET_REF") add(block.getJSONObject("asset").getString("entry"))
+            }
+        }
+    }
+}
 private fun JSONObject.requireKey(key: String) { require(has(key)) { "缺少 $key" } }
 private fun JSONObject.requireExact(vararg keys: String) { val actual = this.keys().asSequence().toSet(); require(actual == keys.toSet()) { "未知或缺少字段：$actual" } }
 private fun requireStableId(value: String) { require(value.matches(Regex("[a-z0-9][a-z0-9_-]{1,63}"))) { "稳定 ID 无效。" } }

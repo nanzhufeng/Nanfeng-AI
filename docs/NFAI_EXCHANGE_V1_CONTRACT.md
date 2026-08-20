@@ -20,4 +20,4 @@ Canonical JSON 为 UTF-8、递归字典序 key、无无意义空白、数组保�
 
 ## 实现与验收
 
-Android 唯一入口是 `NfaiExchangeV1Gateway`：调用者必须提交显式 `NfaiExchangeExportSelection` 和已构造安全快照；gateway 只导出，或从 staging 包返回 `NfaiExchangePreflight`，不接 Room 写入。Desktop 使用临时内存 IR 与同一 fixture，不读 Android DB。`protocol/scripts/run-golden.mjs` 覆盖 deterministic desktop byte roundtrip、semantic IR、hash、资产和恶意包；Android `P6AExchangeContractsTest` 覆盖同一 golden 的显式选择→导出→preflight。fixture 与生成物路径见 `protocol/fixtures/` 和 `protocol/artifacts/`。
+Android 唯一入口是 `NfaiExchangeV1Gateway`：调用者必须提交显式 `NfaiExchangeExportSelection`（含精确 attachment ID）和已构造安全快照；gateway 只导出，或从 staging 包返回 `NfaiExchangePreflight`，不接 Room 写入。选择的 attachment ID 必须与所有消息 `ASSET_REF` 双向一致，且 `assets/<sha256>` 集合必须与引用集合完全相同。`ExportWorkspaceExchangeUseCase` 的全对象 scope/关系/附件 mapper 规则见 [`P6_WORKSPACE_EXCHANGE_MAPPER_CONTRACT.md`](P6_WORKSPACE_EXCHANGE_MAPPER_CONTRACT.md)。Desktop 使用临时内存 IR 与同一 fixture，不读 Android DB。`protocol/scripts/run-golden.mjs` 覆盖 deterministic desktop byte roundtrip、semantic IR、hash、资产和恶意包；Android `P6AExchangeContractsTest` 覆盖同一 golden 的显式选择→导出→preflight。fixture 与生成物路径见 `protocol/fixtures/` 和 `protocol/artifacts/`。
