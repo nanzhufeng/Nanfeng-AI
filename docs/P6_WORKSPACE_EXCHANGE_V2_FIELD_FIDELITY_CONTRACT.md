@@ -29,7 +29,7 @@ v2 只接纳下表中有现存 Android owner、清晰字段语义、并且不会
 - `protocol/nfai.exchange.v2.schema.json` 与 `protocol/scripts/exchange-v2-lib.mjs` 是 schema/canonical semantic hash 的唯一协议事实；`nfai.exchange.v2.golden.json` 同时由 Android 和 Desktop 定向合同读取。
 - v2 预检为**纯 IR**：不读 Room、SQLite、私有附件、SAF、文件 picker、网络、Provider 或 Key，也不注册 UI。它的功能是把上述 owner 字段缺失/不安全/不可验证的情况明确拒绝，防止 v1 的静默丢失被重新引入。
 - Android 的 `NfaiExchangeV2OwnerMapper` 已能从显式选择的 owner 只读生成并复验 exact IR；它仅在内存中核验附件 bytes/hash，不保留 bytes、不建 package、不写 Room，也不注册 UI/SAF。它拒绝缺 history、`sourceReference`、定位符、私有 `reference` 外泄、运行时节点与无法证实的附件。这个 owner mapper 不能替代本段的纯 IR validator，后者仍不访问任何 owner。
-- 下一增量才可让 Desktop 使用独立 schema version 的 staging + asset archive + SQLite transaction + journal 原子导入；两端都要覆盖重开、回导、拒绝和中断回滚。完成前不开放“完整工作区”选择或 SAF。
+- Desktop 的独立 schema version、package、private staging、asset archive、SQLite transaction、journal/receipt、失败注入、重开与回导的唯一正文见 [v2 Desktop 原子导入合同](P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md)。完成前不开放“完整工作区”选择或 SAF。
 
 ## 用户入口
 

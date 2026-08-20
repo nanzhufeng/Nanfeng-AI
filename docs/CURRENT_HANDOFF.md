@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-20 P6 工作区 v2 Desktop 原子导入合同：事务/receipt/rollback/reopen/re-export 已冻结，生产实现仍未开始
+
+- **结论：** `P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md` 已冻结独立 v2 package、private archive、五张 SQLite owner/journal/receipt 表、单一 `BEGIN IMMEDIATE` 可见性、ownerFieldHashes、无中途 resume、commit 后重开幂等和回导 readback。v2 继续与 v1 `workspaces/workspace_exchange/import_journal` 隔离；新增 Desktop 定向回归证明 v2 IR 不能误入 v1 package writer/importer，且不会创建 workspace/journal。
+- **失败关闭与数据边界：** package/IR/asset preflight、archive prepare、任意 transaction 写入和模拟中断均规定为零 SQLite 可见状态；未引用 private archive 最多是可维护孤儿，绝不成为可见半工作区。attachment 必须同时由会话/Knowledge 元数据账本、manifest 与 bytes SHA-256 证明；receipt 只存 hash/计数，不含正文、路径或 bytes。
+- **停止门与下一唯一候选：** 这是合同与 v1/v2 隔离测试，不是 v2 package/staging/migration/importer 或真实文件链。下一步仅可按合同实现 v2 preflight + private archive + SQLite failure-injection；仍不得开放完整工作区 UI/SAF/功能审阅。
+
 ## 2026-08-20 P6 工作区 v2 Android owner→IR mapper：字段闭合，生产导入仍未开始
 
 - **结论：** 新增未注册的 `NfaiExchangeV2OwnerMapper`。它只通过既有 `NfaiExchangeWorkspaceSource` 读取显式选中的 Project、Conversation、Knowledge、Memory、Relationship 与附件 owner，生成经 `NfaiExchangeV2Ir` 复验的 exact v2 JSON。Project appearance/instruction history、Conversation settings/memory sources、Knowledge source/provenance/history+附件 metadata、Memory title/source/history 与 relation scope/history 现在都不再依赖 v1/default/文件名猜测。

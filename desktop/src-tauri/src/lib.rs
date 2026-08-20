@@ -7067,6 +7067,19 @@ mod tests {
     }
 
     #[test]
+    fn v1_package_boundary_rejects_v2_owner_fidelity_ir_without_persistence() {
+        let directory = tempdir().unwrap();
+        let store = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let exchange: Value = serde_json::from_str(include_str!("../../../protocol/fixtures/nfai.exchange.v2.golden.json")).unwrap();
+
+        // v2 has no production package/staging owner yet.  It must not silently pass through the
+        // v1 package writer/importer merely because its top-level collections look similar.
+        assert!(package_exchange(&exchange, &BTreeMap::new()).is_err());
+        assert!(store.list_workspaces().unwrap().is_empty());
+        assert_eq!(store.connection().unwrap().query_row("SELECT COUNT(*) FROM import_journal", [], |row| row.get::<_, u64>(0)).unwrap(), 0);
+    }
+
+    #[test]
     fn chatgpt_export_parser_keeps_branch_order_roles_and_model_inert() {
         let bytes = br#"[{"id":"chatgpt-alpha","title":"Alpha","create_time":1700000000,"update_time":1700000001,"mapping":{"m-user":{"parent":null,"children":["m-assistant"],"message":{"author":{"role":"user"},"content":{"parts":["hello"]},"create_time":1700000000}},"m-assistant":{"parent":"m-user","children":[],"message":{"author":{"role":"assistant"},"content":{"parts":["world"]},"metadata":{"model_slug":"gpt-local"},"create_time":1700000001}}}}]"#;
         let parsed = parse_chatgpt_export(bytes).unwrap();
