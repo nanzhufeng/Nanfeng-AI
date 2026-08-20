@@ -171,13 +171,13 @@ class ClaudeExportJsonAdapter {
         (fields[key] as? StrictJsonValue.Str)?.value ?: reject(ClaudeExportParseFailure.INVALID_CONVERSATION)
 
     private fun StrictJsonValue.Obj.nullableString(key: String): String? = when (val value = fields[key]) {
-        StrictJsonValue.Null -> null
+        null, StrictJsonValue.Null -> null
         is StrictJsonValue.Str -> value.value
         else -> reject(ClaudeExportParseFailure.INVALID_CONVERSATION)
     }
 
     private fun StrictJsonValue.Obj.nullableSafeTitle(key: String): String = when (val value = fields[key]) {
-        StrictJsonValue.Null -> "未命名 Claude 对话"
+        null, StrictJsonValue.Null -> "未命名 Claude 对话"
         is StrictJsonValue.Str -> value.value.trim().let { title ->
             when {
                 title.isEmpty() -> "未命名 Claude 对话"

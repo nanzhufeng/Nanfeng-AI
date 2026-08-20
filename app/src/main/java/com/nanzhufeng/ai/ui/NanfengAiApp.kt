@@ -150,6 +150,7 @@ private enum class SettingsDestination(val label: String) {
     MODEL("模型服务"),
     CONVERSATIONS("对话与存储"),
     IMPORT("数据与导入"),
+    FEATURE_REVIEW("功能审阅"),
     PRIVACY("隐私与安全"),
 }
 
@@ -787,11 +788,11 @@ private fun SettingsHierarchy(
             )
             SettingsDestination.IMPORT -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 WhiteCard {
-                    Text("导入对话", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("导入中心", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
-                    Text("从本机选择 ChatGPT 对话导出文件。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text("选择 ChatGPT、Claude、ZIP、知识文件或本机备份的导入方式。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(10.dp))
-                    Button(onClick = onOpenImport, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text("选择导入文件") }
+                    Button(onClick = onOpenImport, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text("打开导入中心") }
                 }
                 WhiteCard {
                     Text("备份与恢复", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -801,6 +802,7 @@ private fun SettingsHierarchy(
                     OutlinedButton(onClick = onOpenBackup, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text("打开备份与恢复") }
                 }
             }
+            SettingsDestination.FEATURE_REVIEW -> FeatureReviewSettingsCard()
             SettingsDestination.PRIVACY -> PrivacyDataCard(privacyDataState, onOpenPrivacyData)
         }
     }
@@ -815,7 +817,33 @@ private fun SettingsCategoryList(onSelect: (SettingsDestination) -> Unit) {
         SettingsCategoryRow(Icons.Outlined.Settings, "AI 模型") { onSelect(SettingsDestination.MODEL) }
         SettingsCategoryRow(Icons.Outlined.ChatBubbleOutline, "对话") { onSelect(SettingsDestination.CONVERSATIONS) }
         SettingsCategoryRow(Icons.Outlined.Save, "数据与导入") { onSelect(SettingsDestination.IMPORT) }
+        SettingsCategoryRow(Icons.Outlined.Settings, "功能审阅") { onSelect(SettingsDestination.FEATURE_REVIEW) }
         SettingsCategoryRow(Icons.Outlined.Lock, "隐私") { onSelect(SettingsDestination.PRIVACY) }
+    }
+}
+
+@Composable
+private fun FeatureReviewSettingsCard() {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        WhiteCard {
+            Text("新增功能审阅", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("新增能力在进入常用界面前，先在这里列出用途、现有入口与待您判断项。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        }
+        WhiteCard {
+            Text("ChatGPT / Claude ZIP 导入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("当前：待您判断保留或删减 · 入口：设置 → 数据与导入 → 导入中心。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("建议：保留设置入口；暂不在对话主页添加快捷按钮，避免高敏感导入被误触。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
+        WhiteCard {
+            Text("未关联媒体人工关联", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("当前：待外部归属证据后再判断是否启用 · 入口：ZIP 导入批次详情。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("建议：仅在存在未关联媒体时提供二级操作；不在聊天主界面常驻功能按钮。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 

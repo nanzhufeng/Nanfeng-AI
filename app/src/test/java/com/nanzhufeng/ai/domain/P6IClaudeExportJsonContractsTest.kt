@@ -42,6 +42,18 @@ class P6IClaudeExportJsonContractsTest {
         assertEquals("未命名 Claude 对话", parsed.items.single().candidate!!.title)
     }
 
+    @Test fun `missing optional Claude title and root parent use Desktop canonical defaults`() {
+        val parsed = adapter.parse(
+            source()
+                .replace("\"name\":\"Imported\",", "")
+                .replace(",\"parent_message_uuid\":null", "")
+                .toByteArray(),
+        ) as ClaudeExportParseResult.Parsed
+        val candidate = requireNotNull(parsed.items.single().candidate)
+        assertEquals("未命名 Claude 对话", candidate.title)
+        assertEquals(null, candidate.messages.first().parentSourceId)
+    }
+
     @Test fun `unsupported roles nontext payloads and duplicate source ids fail closed per conversation`() {
         val unsupportedRole = adapter.parse(source().replace("\"assistant\"", "\"system\"").toByteArray()) as ClaudeExportParseResult.Parsed
         assertEquals(ClaudeExportParseFailure.UNSUPPORTED_ROLE, unsupportedRole.items.single().failure)
