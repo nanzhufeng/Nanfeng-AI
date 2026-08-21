@@ -1,5 +1,15 @@
 # 南枫 AI 当前交接
 
+## 2026-08-21 总控 P0–P11：交接卡（当前恢复点）
+
+- **当前目标：** 只以 `docs/MASTER_DEVELOPMENT_BLUEPRINT.md` §17 的 P0–P11 为“总控方案”。P6 本机 Android→Desktop 实链、P11 本机供应链项均有已证实增量；P0–P11 整体仍未完成，不能以构建、审计或单一验收替代总控退出。
+- **当前事实源：** 工作树在 `d02e70b6d88afe0642dabae52b7f115a24deaaec` 后干净。P5 已把 `versionCode` 从 51 升至 52；P11 已补过 release/KSP verification metadata，但 `:app:assembleRelease --offline --no-daemon` 的唯一一次尝试在 AAPT2 macOS JAR/POM 的两个未登记 SHA-256 条目处停止，未生成本轮 APK、未验签、未操作 OPPO。
+- **已完成：** P6 完整 owner 的 Android DocumentsUI→Desktop native Open/Save 严格语义/字段/附件链已闭合；P11 修复 Desktop `lopdf` 高危 PDF 解析依赖、生成 release runtime/KSP verification metadata 并完成各自无写入回读；P2/P3 已严格确认 Provider 凭据/真实服务外部门且未发 HTTP；P5 已对 OPPO 做过只读包/证书/数据指纹核验。
+- **未完成与外部门：** P2–P4 的真实 Provider/成本质量，P5 的 code-52 正式构建、一次数据保留 OPPO 覆盖与发布回读，P6 Windows 原生验收，P7 OAuth/Supabase，P8 真实工具，P9 真实生态目标，以及 P10 双消费者触发均未关闭。OPPO 禁止 Debug/Instrumentation/清数据/卸载；只允许经正式验签、更高 versionCode、同证书的单次 `pm install -r --user 0` 数据保留覆盖。
+- **当前阻塞：** 另一项目 `NanzhufengVideoDownloader-Android` 的 Gradle 8.7 正运行 `:app:testReleaseUnitTest :app:stageFormalReleaseArtifacts`，相关 wrapper/daemon/Kotlin daemon/test worker 长时间未退出。按无 Gradle 争用门禁，南枫 AI 不能并发写 metadata、构建或中断对方进程。
+- **下一条安全命令：** 在确认该外部 Gradle 完全退出后，使用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon`，仅为 `aapt2-9.3.1-15703166-osx.jar` 与同版本 POM 写入 SHA-256 verification metadata；以同一 AAPT2/release task 无写入回读并提交。之后才可重新进行一次 code-52 `:app:assembleRelease`，并依次 `apksigner`、OPPO 只读指纹复核、一次覆盖安装和可见 UI 验收。任一门失败即停止，绝不循环重试。
+- **关键提交：** `3f67852`、`ae3d8ce`（P6 实链）；`04b9c1f`、`734ec23`、`a00c708`、`d02e70b`（P11/P5 供应链与停止证据）；`9cee1b8`、`7973f18`（OPPO 只读门与 code-52 准备）。
+
 ## 2026-08-21 P5：新的单次正式 build 在 AAPT2 verification 处停止
 
 - **事实：** P11 KSP metadata 增量已提交为 `a00c708` 并无写入回读成功后，按授权只执行一次 code 52 的正式 `:app:assembleRelease --offline --no-daemon`（Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`）。正式签名 fallback 只以四项用户级项目命名属性的非空状态确认完整，未读/打印其值或访问 Keychain。
