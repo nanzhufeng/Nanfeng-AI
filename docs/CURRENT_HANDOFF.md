@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P5：code-53 正式包已冻结并通过本机门；OPPO 未连接，严格停止且未触机
+
+- **最窄变动与唯一构建：** `app/build.gradle.kts` 仅将正式 `versionCode` 从 52 升为 **53**，`versionName` 保持 `0.3.0-p10a`，没有功能、入口或功能审阅改动。在确认无外部 Gradle/GradleDaemon 后，使用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`ANDROID_HOME=/Users/nanzhufeng/Library/Android/sdk`、`--offline --no-daemon` 对 `:app:assembleRelease` 执行**一次**并成功（51 tasks）。四项用户级 `nanfengAi.releaseV2.*` 备用签名属性仅核对为 non-empty，未读取或输出秘密。
+- **冻结 APK 本机核验：** `app/build/outputs/apk/release/南枫AI.apk` SHA-256 为 `edb0c55df090ba3eb7cfdb9d1d1d18ac2233c0bbafa4057e15586f7c605a10aa`。Android SDK Build Tools 36.0.0 的 `aapt` 证实 `com.nanzhufeng.ai / versionCode 53 / versionName 0.3.0-p10a`，manifest 无 `debuggable` marker；同一工具链的 `apksigner` 证实 v2/v3 为 true，证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。最初一次 `apksigner` 因 shell 未设置 JBR 无法定位 Java；随后只设置 `JAVA_HOME/PATH` 重做**读取**核验，未重建或重签名 APK。
+- **OPPO 强制停止：** 构建后开始只读预检时，`adb devices -l` 的设备列表为空，`adb -s 3B157F009E800000 get-state` 返回 `device ... not found`。因此**没有**确认现装 code-52、`DEBUGGABLE`、证书、`firstInstallTime` 或 CE/DE inode；也没有 pull、push、`pm install -r --user 0`、Launcher 启动、卸载、清数据、业务数据读取、Debug/Instrumentation 或 `connected*AndroidTest`。本地临时证据目录在设备状态命令失败前已创建但未写入 APK；未执行删除。
+- **下一条安全动作：** 本轮 APK 在 versionCode 变更尚未提交时生成，只能作为本机预检证据，不能当作正式可部署产物。先提交这两个最窄源码/交接变更；待 OPPO `3B157F009E800000` 重新以 `device` 状态连接后，必须从已提交的 code-53 重建一次并重新验签，再从完整只读前置门开始。只有 code 52、非 Debug、同 release-v2 证书及首次安装时间/CE/DE inode 全部读取并匹配后，才允许一次限定的 `push -> pm install -r --user 0`；否则再次停止。当前不得称为 OPPO 覆盖、设备启动、数据保留、发布或 P5/P0–P11 完成。
+
 ## 2026-08-23 P11：同一冻结 revision 的 ZIP 完全相同，但 APK Signing Block 单一 pair 仍令字节不可复现；不安装、不发布
 
 - **本轮结果：** 干净 `main` 的 `290297de4f42c3d79a59b2cf7426c772bef1e471` 被 detached 到新的项目专属临时 worktree；无外部 Gradle/GradleDaemon。Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`ANDROID_HOME`、`--offline --no-daemon` 下，常规构建 A（1m58s）与唯一 `--rerun-tasks` B（1m57s）都成功。A/B 均为 23,605,206 B，但 SHA-256 分别为 `11990ecd7ac50a2143abe38eb25e09e7ab8d1d46e87cdcba96b095bdecaf4c9c` / `1ddf57b941101ae8f61d6eb812a79f88bae0abd60c0418b811a9a83b76449609`，故冻结 revision 在此环境仍不可字节重复。
