@@ -1,5 +1,13 @@
 # P11 供应链复核（2026-08-21）
 
+## 2026-08-23 同源代码树重建差异：冻结样本缺失，根因未锁定；不修复、不安装、不发布
+
+- **本轮只读范围：** 未启动 Gradle、未改源或依赖、未触及设备/AVD/OPPO、安装/卸载/清数据、网络/Provider/Key/凭据或 `connected*AndroidTest`。开始时 `main` 工作树无改动。按既有记录定位项目专属 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/`，并在 `/tmp` 与 `/private/tmp` 的有限深度内按南枫 AI/P11 APK 名称只读检索；两份冻结 APK 均已不存在。当前 `app/build/outputs/apk/release/南枫AI.apk` 只剩重建后的 `3f1408b74efbc7ccb64e4bed569d154f907234cebc2e48637b79ca96d7675f2e`，不能代替前包做两包结构比较。
+- **已精确区分的输入：** `d612…` 是 `a4eebd1` 的正式构建，`3f1408…` 是 `5dbfc47fa7ee` 的 `--rerun-tasks` 重建。两提交的 Git tree object 对 `app/`、`build.gradle.kts`、`settings.gradle.kts`、`gradle.properties` 与 `gradle/` 完全相同；仅有 `docs/CURRENT_HANDOFF.md`、`docs/MASTER_PLAN_COMPLETION_AUDIT_20260816.md`、本文三处文档改动。因此它们是**相同 Android/Gradle 输入树**，但不是相同 Git revision。
+- **已解释项与未解释项：** 当前 APK 的 `META-INF/version-control-info.textproto` 固定写入 `revision: "5dbfc47fa7ee0d2bcad208a5be395738a9218ca7"`，故此前记录的该 entry 内容变化可由 revision 输入变化解释，不能当作 DEX 不可重复的证据。另一方面，已记录的 `classes.dex`、`classes2.dex`、`classes3.dex` 及 `baseline.prof/.profm` 未压缩大小变化仍是实际产物变化；冻结前包缺失后，无法再比较 DEX header/section、class/method definition order、code item 或 profile 的语义投影，不能判断它们仅是 D8/Kotlin/KSP 的发射顺序还是存在更深层字节码输入差异。
+- **配置收敛：** `release` 为 `isMinifyEnabled = false`，故 R8 shrink/optimize 不是这次 release DEX 差异的直接执行路径；仍会经过 D8 dexing。KSP 仅配置 Room `schemaLocation`；当前 Gradle 属性没有已经证实可控制 D8/Kotlin/KSP 产物顺序的 release-only 确定性开关。不能依据“单 worker”“关闭并行”或未经验证的实验属性声称修复；这些设置即使不改变运行语义，也尚无证据会收敛本例。
+- **根因结论与最小方案：** 根因尚未锁定，**本轮不改任何构建设置或源码**。下个独立增量只能在同一 Git revision 下，先把 before/after APK 复制到新的项目专属 `/tmp/nanfeng-ai-p11-repro.<random>/` 并记录工具/JBR/Gradle/AGP/Kotlin/KSP 版本（不记录密钥）；随后比较 ZIP 解压 SHA-256、三份 DEX header/section 与 class/method/code 映射、`baseline.prof/.profm` 的解析投影。只有证明差异仅来自确定的、可局部固定的生成顺序，且候选设置不降级签名/验证、不改变运行语义、不依赖秘密时，才可另开任务实施最小 release-only 修复；验证必须再另开任务做第二次强制重建。此前及当前 APK 一律**禁止安装、覆盖或发布**。
+
 ## 2026-08-23 同源 Release 强制重建：当前环境未实现字节可重复，停止在本地证据
 
 - **范围与前置：** 在 `main` `5dbfc47fa7ee`、开始时工作树干净且未发现外部 Gradle/GradleDaemon 进程后，先将现有 release APK 保护性复制至项目专属 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/南枫AI-before-rerun.apk`。没有执行 `clean`、安装、设备/AVD 操作、网络/Provider/Key/凭据读取或 `connected*AndroidTest`。

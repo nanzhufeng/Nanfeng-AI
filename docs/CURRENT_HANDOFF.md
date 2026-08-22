@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P11：冻结 APK 已缺失；修正 Git revision 混淆，未锁定 DEX 根因，禁止安装/发布
+
+- **本轮事实：** `main` 干净；没有启动 Gradle、改源/依赖、设备/AVD/OPPO、安装、网络、Provider、Key、凭据或 `connected*AndroidTest`。原记录的 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/` 与 `/tmp`/`/private/tmp` 有限深度的南枫 AI/P11 APK 检索均未找到两份冻结件。仓库当前 release APK 仅为 `3f1408…`，不能复原两个样本的 ZIP/DEX/profile 比较。
+- **已收敛：** `d612…` 出自 `a4eebd1`，`3f1408…` 出自 `5dbfc47`；`app/`、所有 Gradle 配置与 `gradle/` 的 Git tree object 相同，提交之间只改三份文档。`META-INF/version-control-info.textproto` 中的 Git revision 因此必然不同，不能被归入 DEX 非确定性。已记录的三份 DEX 和两份 baseline profile 的大小/内容差异仍未解释；release 未启用 R8，只有 D8/Kotlin/KSP 发射或尚未记录的构建输入是候选，不能在样本缺失时断言“仅排序”或“语义变化”。
+- **停止点：** 不存在有证据支持的安全局部 deterministic 设置，故本轮无代码/Gradle 修复。下一独立任务须在**同一 Git revision**保留两份项目专属临时 APK，比较 DEX header/section、definition/code 映射和 profile 语义投影后才评估局部设置；重现验证还须再分离为另一任务。当前及历史 P11 APK 均**不得安装、覆盖或发布**。
+
 ## 2026-08-23 P11：同源 release 强制重建未字节复现；不安装、不发布，停在 DEX 生成差异
 
 - **已执行的唯一实验：** 在 `main` `5dbfc47fa7ee`、干净工作树、无外部 Gradle/GradleDaemon 后，保护性复制 `d612c417985f4e21623239b2722c63bcb3d60bf6dbf63f90e98c01e1f7db9af0`（23,605,205 B）到项目专属 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/`；Android Studio JBR + `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` + `--offline --no-daemon` 下只运行一次 `:app:assembleRelease --rerun-tasks`，无 `clean`。daemon 记录 `BUILD SUCCESSFUL in 1m 53s`；复制的第二包为 `3f1408b74efbc7ccb64e4bed569d154f907234cebc2e48637b79ca96d7675f2e`（23,605,202 B）。
