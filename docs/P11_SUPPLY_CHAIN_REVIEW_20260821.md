@@ -1,5 +1,13 @@
 # P11 供应链复核（2026-08-21）
 
+## 2026-08-23 同源 Release 强制重建：当前环境未实现字节可重复，停止在本地证据
+
+- **范围与前置：** 在 `main` `5dbfc47fa7ee`、开始时工作树干净且未发现外部 Gradle/GradleDaemon 进程后，先将现有 release APK 保护性复制至项目专属 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/南枫AI-before-rerun.apk`。没有执行 `clean`、安装、设备/AVD 操作、网络/Provider/Key/凭据读取或 `connected*AndroidTest`。
+- **唯一构建：** Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 下仅执行一次 `:app:assembleRelease --rerun-tasks`；daemon 日志为 `BUILD SUCCESSFUL in 1m 53s`。第二份 APK 复制为 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/南枫AI-after-rerun.apk`。前/后完整 SHA-256 分别为 `d612c417985f4e21623239b2722c63bcb3d60bf6dbf63f90e98c01e1f7db9af0`（23,605,205 B）与 `3f1408b74efbc7ccb64e4bed569d154f907234cebc2e48637b79ca96d7675f2e`（23,605,202 B），故当前同源环境**不能**证明字节可重复。
+- **签名与 ZIP 结构：** 两包均由 Android Studio JBR 环境的 `apksigner verify --verbose --print-certs` 验证 v2/v3 为真、单 signer 证书 SHA-256 同为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。均有 281 个 ZIP entries，entry 名称/顺序和全部 ZIP 时间戳相同；APK Signing Block 都是 12,288 B，但 block SHA-256 分别为 `d5bf9696a5eb0a698da3f36c17d0de2107eb29c2de2926029b798fa02ddcf2a3` 与 `50fe4aeb0e54c2f5c57b0aea6b7c9a2ebd2bf7a95a65be88c38727639be6cbe1`。
+- **差异收敛：** 这不是仅签名差异。9 个 entry 的 CRC/内容不同：`META-INF/version-control-info.textproto`、`assets/dexopt/baseline.prof`、`assets/dexopt/baseline.profm`、`classes.dex`、`classes2.dex`、`classes3.dex`、`META-INF/CERT.SF`、`META-INF/CERT.RSA`、`META-INF/MANIFEST.MF`；全部时间戳仍相同。`resources.arsc` 与 `AndroidManifest.xml` 的解压内容 SHA-256 相同。三份 DEX 的前→后未压缩大小是 `32,101,500→32,100,348`、`10,437,520→10,468,144`、`11,779,380→11,760,476` B；因此 JAR 签名条目与 APK 签名块的变化是这些已观测包内容变化的伴随结果，不能把差异归因于签名时间戳。
+- **停止结论：** `git diff --check` 通过，构建后源码工作树仍无改动；本轮只增加本文档和交接记录。旧 `c511…` 精确 bytes 仍不在工作区，本结果不解释其差异。不得安装、覆盖、发布任一 APK，也不在本增量修复源码或依赖；若要继续，须另行授权后独立定位 DEX/baseline profile/version-control-info 的生成非确定性。
+
 ## 2026-08-23 AAPT2 当前回读与一次正式 Release 构建
 
 - 当前 `main` `a4eebd1` 的 `gradle/verification-metadata.xml` 已含 `08cd46c` 写入的 `aapt2-9.3.1-15703166-osx.jar` 与同版本 POM SHA-256。Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 下，`:app:processReleaseResources` 的带写入/无写入两次回读均通过；带写入模式没有产生 metadata diff，XML 校验有效。

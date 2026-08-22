@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P11：同源 release 强制重建未字节复现；不安装、不发布，停在 DEX 生成差异
+
+- **已执行的唯一实验：** 在 `main` `5dbfc47fa7ee`、干净工作树、无外部 Gradle/GradleDaemon 后，保护性复制 `d612c417985f4e21623239b2722c63bcb3d60bf6dbf63f90e98c01e1f7db9af0`（23,605,205 B）到项目专属 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/`；Android Studio JBR + `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` + `--offline --no-daemon` 下只运行一次 `:app:assembleRelease --rerun-tasks`，无 `clean`。daemon 记录 `BUILD SUCCESSFUL in 1m 53s`；复制的第二包为 `3f1408b74efbc7ccb64e4bed569d154f907234cebc2e48637b79ca96d7675f2e`（23,605,202 B）。
+- **确证的收敛结果：** 两包 `apksigner` v2/v3 均通过、单一 release 证书 SHA-256 同为 `6d1d56ec…8661f8`；均为 281 entries，ZIP 名称/顺序/时间戳相同。但 CRC/解压内容不同的 9 项明确包含 `classes.dex`、`classes2.dex`、`classes3.dex`、两份 baseline profile、`version-control-info.textproto` 及三份 `META-INF` 签名条目；`resources.arsc`、`AndroidManifest.xml` 内容相同。两包 APK Signing Block 大小均为 12,288 B、内容 hash 不同。这是实际 DEX/profile 产物差异，不是仅签名或时间戳差异；完整细节在 `docs/P11_SUPPLY_CHAIN_REVIEW_20260821.md`。
+- **严格停止：** 未触及 OPPO/AVD、安装/卸载/清数据、`connected*AndroidTest`、Provider、网络、Key 或签名凭据值；没有改依赖或源码。`git diff --check` 通过，除本交接与 P11 文档外无改动。历史 `c511…` 文件不在工作区，绝不从当前实验猜测其原因。当前 APK 均不得安装、覆盖或发布；下次若获授权，只能以独立增量定位 DEX/baseline-profile/version-control-info 的非确定性，先不实施修复。
+
 ## 2026-08-23 P11：AAPT2 当前清单回读与一次正式 Release 重建通过；产物字节差异待独立收敛
 
 - **当前事实：** 当前 `main` 为 `a4eebd1` 且开始与结束均为干净工作树。AAPT2 macOS JAR/POM SHA-256 已由既有提交 `08cd46c` 写入；本轮在无 Gradle JVM 争用时，用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 对 `:app:processReleaseResources` 先后执行带/不带 `--write-verification-metadata sha256` 的回读，两次均成功，XML 有效且 metadata/worktree 均无新增 diff。
