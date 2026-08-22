@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P11：AAPT2 当前清单回读与一次正式 Release 重建通过；产物字节差异待独立收敛
+
+- **当前事实：** 当前 `main` 为 `a4eebd1` 且开始与结束均为干净工作树。AAPT2 macOS JAR/POM SHA-256 已由既有提交 `08cd46c` 写入；本轮在无 Gradle JVM 争用时，用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 对 `:app:processReleaseResources` 先后执行带/不带 `--write-verification-metadata sha256` 的回读，两次均成功，XML 有效且 metadata/worktree 均无新增 diff。
+- **正式构建与结构核验：** 随后仅一次 `:app:assembleRelease --offline --no-daemon` 成功（1m22s）。输出 APK 为 `com.nanzhufeng.ai / 52 / 0.3.0-p10a`，不含 `application-debuggable` 标记，Android Studio JBR `apksigner` 验证 v2/v3 为真、release-v2 证书摘要仍为 `6d1d56ec…8661f8`；本次 APK SHA-256 为 `d612c417985f4e21623239b2722c63bcb3d60bf6dbf63f90e98c01e1f7db9af0`。
+- **不可跳过的风险与停止点：** 此 hash 与历史交接记录的 code-52 产物 `c511…` 不同，而旧精确 bytes 不在当前工作区，故尚不能收窄 APK 字节差异；本轮不把它当作可覆盖或可发布产物。没有读取凭据、没有操作 OPPO/AVD、安装、卸载、清数据、`connected*AndroidTest`、Provider、网络或 Key。P11 仅确认当前离线构建与供应链回读；任何正式设备或发布动作须先独立处理该可重复性风险并重新走相应门禁。
+
 ## 2026-08-23 P6：schema 38→39 独立同签名升级验收包与静态合同已就绪；新 Android 35 AVD 未能注册，真实链未执行
 
 - **两份冻结验收 APK：** 旧包来自 detached 临时工作树的 schema-38 提交 `822f3f4`，只为验收将专属 package versionCode 调为 **51**、新增同名 build type，未改业务逻辑；产物为 `/tmp/nanfeng-ai-schema38-upgrade.hCuijb/app/build/outputs/apk/p6V2Schema38UpgradeAcceptance/南枫AI-开发验收.apk`，SHA-256 `111d57a3349ad9303225ba1102d325ee5238802e8dec302070241f7ff4552917`。当前 migration 包为 `app/build/outputs/apk/p6V2Schema38UpgradeAcceptance/南枫AI-开发验收.apk`，versionCode **52**，SHA-256 `996d8b2c1396eccb4cfe752636c5905d52c608f7707b382149ca6d315bd05a4a`。两包均为 `com.nanzhufeng.ai.p6v2schema38upgradeacceptance`，`apksigner` v2/v3 通过，同一正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；不得拿它们作正式发布包。

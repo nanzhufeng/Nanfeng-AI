@@ -1,5 +1,11 @@
 # P11 供应链复核（2026-08-21）
 
+## 2026-08-23 AAPT2 当前回读与一次正式 Release 构建
+
+- 当前 `main` `a4eebd1` 的 `gradle/verification-metadata.xml` 已含 `08cd46c` 写入的 `aapt2-9.3.1-15703166-osx.jar` 与同版本 POM SHA-256。Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 下，`:app:processReleaseResources` 的带写入/无写入两次回读均通过；带写入模式没有产生 metadata diff，XML 校验有效。
+- 随后只执行一次同条件的 `:app:assembleRelease`，1m22s 成功。APK 结构为 `com.nanzhufeng.ai / versionCode 52 / versionName 0.3.0-p10a`、无 `application-debuggable` 标记；Android Studio JBR `apksigner` 验证 v2/v3 为真，release-v2 证书 SHA-256 摘要为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本次输出 SHA-256 为 `d612c417985f4e21623239b2722c63bcb3d60bf6dbf63f90e98c01e1f7db9af0`。
+- 该 SHA-256 与旧交接中的 code-52 产物 `c511…` 不同；旧精确文件不在当前工作区，不能把差异归因为时间戳或其他因素。本轮未进行安装、设备读取、网络、Provider 或凭据访问，且不将此 APK 用于覆盖安装、发布或 P0–P11 完成声明。后续设备/发布前必须先独立收窄可重复性差异并重新走相应门禁。
+
 ## P11 KSP verification metadata 补齐与回读（后续增量）
 
 - 上一次正式 `:app:assembleRelease --offline --no-daemon` 的 `:app:kspReleaseKotlin` 精确报告缺少三个 detached-configuration 工件：`kotlinx-coroutines-core-jvm-1.6.4.jar`、`symbol-processing-aa-embeddable-2.2.10-2.0.2.jar` 与同版本 POM。
