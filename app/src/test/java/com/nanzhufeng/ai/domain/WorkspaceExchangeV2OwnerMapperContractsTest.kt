@@ -95,6 +95,80 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
         assertEquals(1, failedOutput.writes)
     }
 
+    @Test fun `atomic restore owner reads strict package first and commits one recoverable boundary`() {
+        val source = fixture()
+        val output = RecordingOutput(null)
+        val write = NfaiExchangeV2PackageWriter(mapper(source), source).write(
+            source.selection, NfaiExchangeSafeSettings("zh-CN", "SYSTEM"), output,
+        ) as NfaiExchangeV2PackageWrite.Written
+        val store = RecordingRestoreStore()
+        val owner = WorkspaceExchangeV2AtomicRestoreOwner(store, clock)
+
+        val restored = owner.restore(WorkspaceExchangeV2RestoreRequest("restore-v2-0001", output.bytes))
+        assertTrue("restored=$restored", restored is WorkspaceExchangeV2AtomicRestoreResult.Restored)
+        assertEquals(1, store.commitCalls)
+        assertEquals(1, store.localTruthChecks)
+        assertEquals(write.receipt.packageHash, store.lastCommit?.receipt?.packageHash)
+        assertEquals(write.receipt.semanticHash, store.lastCommit?.receipt?.semanticHash)
+        assertEquals(source.assetBytes().toList(), store.lastCommit?.packageRead?.assets?.get("assets/${source.asset.sha256}")?.toList())
+        assertTrue(!store.lastCommit!!.receipt.toString().contains("fixture.txt"))
+
+        val replay = owner.restore(WorkspaceExchangeV2RestoreRequest("restore-v2-0001", output.bytes))
+        assertTrue("replay=$replay", replay is WorkspaceExchangeV2AtomicRestoreResult.Replayed)
+        assertEquals(1, store.commitCalls)
+    }
+
+    @Test fun `atomic restore rejects malformed package or nonempty local truth without a write`() {
+        val source = fixture()
+        val output = RecordingOutput(null)
+        NfaiExchangeV2PackageWriter(mapper(source), source).write(
+            source.selection, NfaiExchangeSafeSettings("zh-CN", "SYSTEM"), output,
+        )
+
+        val malformedStore = RecordingRestoreStore()
+        val malformed = WorkspaceExchangeV2AtomicRestoreOwner(malformedStore, clock).restore(
+            WorkspaceExchangeV2RestoreRequest("restore-v2-0002", output.bytes.copyOf().also { it[0] = (it[0].toInt() xor 0x01).toByte() }),
+        )
+        assertEquals(WorkspaceExchangeV2AtomicRestoreResult.Rejected("PACKAGE_REJECTED"), malformed)
+        assertEquals(0, malformedStore.receiptChecks)
+        assertEquals(0, malformedStore.localTruthChecks)
+        assertEquals(0, malformedStore.commitCalls)
+
+        val nonemptyStore = RecordingRestoreStore(truth = WorkspaceExchangeV2LocalTruth.PRESENT)
+        val nonempty = WorkspaceExchangeV2AtomicRestoreOwner(nonemptyStore, clock).restore(
+            WorkspaceExchangeV2RestoreRequest("restore-v2-0003", output.bytes),
+        )
+        assertEquals(WorkspaceExchangeV2AtomicRestoreResult.Rejected("LOCAL_TRUTH_PRESENT"), nonempty)
+        assertEquals(0, nonemptyStore.commitCalls)
+    }
+
+    @Test fun `atomic restore never treats a mismatched intent receipt or failed commit as success`() {
+        val source = fixture()
+        val output = RecordingOutput(null)
+        NfaiExchangeV2PackageWriter(mapper(source), source).write(
+            source.selection, NfaiExchangeSafeSettings("zh-CN", "SYSTEM"), output,
+        )
+        val read = NfaiExchangeV2PackageReader.read(output.bytes)
+        val conflicting = WorkspaceExchangeV2RestoreReceipt(
+            "restore-v2-0004", "a".repeat(64), read.receipt.semanticHash, read.receipt.origin,
+            read.receipt.sensitivity, read.receipt.rootCounts, read.receipt.assetCount, read.receipt.assetBytes,
+            read.receipt.ownerFieldHashes, now,
+        )
+        val conflictStore = RecordingRestoreStore(existing = conflicting)
+        val conflict = WorkspaceExchangeV2AtomicRestoreOwner(conflictStore, clock).restore(
+            WorkspaceExchangeV2RestoreRequest("restore-v2-0004", output.bytes),
+        )
+        assertEquals(WorkspaceExchangeV2AtomicRestoreResult.Rejected("INTENT_CONFLICT"), conflict)
+        assertEquals(0, conflictStore.commitCalls)
+
+        val failedStore = RecordingRestoreStore(next = WorkspaceExchangeV2AtomicRestoreStoreResult.FailedRecoverably)
+        val failed = WorkspaceExchangeV2AtomicRestoreOwner(failedStore, clock).restore(
+            WorkspaceExchangeV2RestoreRequest("restore-v2-0005", output.bytes),
+        )
+        assertEquals(WorkspaceExchangeV2AtomicRestoreResult.FailedRecoverably, failed)
+        assertEquals(1, failedStore.commitCalls)
+    }
+
     @Test fun `complete workspace scope is explicit exhaustive and marks binary attachments high sensitive`() {
         val source = fixture()
         val planner = WorkspaceExchangeV2ScopePlanner(
@@ -202,6 +276,23 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
             bytes = packageBytes.copyOf()
             contractPath?.let { File(it).writeBytes(bytes) }
             return if (fail) NfaiExchangeV2PackageOutput.Failed("test output failure") else NfaiExchangeV2PackageOutput.Written
+        }
+    }
+
+    private class RecordingRestoreStore(
+        private var existing: WorkspaceExchangeV2RestoreReceipt? = null,
+        private val truth: WorkspaceExchangeV2LocalTruth = WorkspaceExchangeV2LocalTruth.EMPTY,
+        private val next: WorkspaceExchangeV2AtomicRestoreStoreResult? = null,
+    ) : WorkspaceExchangeV2AtomicRestoreStore {
+        var receiptChecks = 0
+        var localTruthChecks = 0
+        var commitCalls = 0
+        var lastCommit: WorkspaceExchangeV2AtomicRestoreCommit? = null
+        override fun receipt(intentId: String): WorkspaceExchangeV2RestoreReceipt? { receiptChecks++; return existing }
+        override fun localTruth(): WorkspaceExchangeV2LocalTruth { localTruthChecks++; return truth }
+        override fun commitEmptyLocal(commit: WorkspaceExchangeV2AtomicRestoreCommit): WorkspaceExchangeV2AtomicRestoreStoreResult {
+            commitCalls++; lastCommit = commit
+            return next ?: WorkspaceExchangeV2AtomicRestoreStoreResult.Committed(commit.receipt).also { existing = commit.receipt }
         }
     }
 

@@ -1,5 +1,13 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P6：Android v2 原子恢复唯一领域 owner 已立约；持久写入仍未接入
+
+- **唯一所有者与入口：** 新增 `WorkspaceExchangeV2AtomicRestoreOwner.restore`。它只接收有界 package bytes 与 opaque intent ID，且必先经 `NfaiExchangeV2PackageReader` strict preflight；自身不接受或触及 URI/path、SAF、UI、Room/DAO、Context、网络、Provider 或 Key。
+- **不覆盖门：** 只有 atomic store 报告本机业务真值为空才允许提交；已存在对象、私有附件、v2 provenance 或恢复 journal 都以 `LOCAL_TRUTH_PRESENT` 停止，绝不 merge/upsert/替换/删除。相同 intent 仅可回读相同 package+semantic hash receipt；不同包是 `INTENT_CONFLICT`。reader 拒绝在任何本机读取/commit 前停止。
+- **原子边界合同：** 未来唯一 store 的 `commitEmptyLocal` 必须在一个 Room transaction 或等价可恢复边界中，二次重验空本机/intent，写完整 typed workspace、私有附件 staging/hash readback、provenance、content-free receipt 与 typed readback；失败不得发布成功 receipt，candidate 只能按 recovery journal 保存。完整合同见 `P6_ANDROID_V2_ATOMIC_RESTORE_CONTRACT.md`。
+- **定向验证：** Android Studio JBR、`--offline --no-daemon` 下 `WorkspaceExchangeV2OwnerMapperContractsTest` **7/7** 通过：有效包只调用一次 atomic commit、篡包零本机观察/零写、非空本机零 commit、同 intent 重放不重写、intent 冲突及 recoverable commit 失败不返回成功。`git diff --check` 通过。
+- **严格停止：** 还没有 concrete Room atomic store、schema/DAO、private attachment staging、Settings/OpenDocument/ViewModel、模拟器或真实用户文件路径；不可称 Android v2 已导入/恢复或 P6/P0–P11 完成。下一步只可实现并定向验证 concrete Room atomic store（含 full typed mapping、附件/receipt/provenance 同一恢复边界与重开 readback），再另立 UI/SAF 增量。
+
 ## 2026-08-23 P6：Android v2 严格 package reader 基础已闭合；尚未导入或恢复
 
 - **唯一所有者：** 新增纯内存 `NfaiExchangeV2PackageReader`，是 Android `nfai.exchange.v2` bytes 的唯一 strict preflight reader；`NfaiExchangeV2PackageWriter` 已在发布前回读自身 package 时复用该 reader，避免 writer 与未来导入各自解释 ZIP/manifest/IR/asset ledger。
