@@ -41,6 +41,7 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 - atomic store 的失败或中断：不返回成功、零 partial receipt/provenance；已存在本机真值不变。只有精确同包、hash-complete、数据库仍空的 journal 可回收并安全重试；其余 candidate 只按 `RECOVERY_REQUIRED` 保留。
 - 真机 journal 门只能由一次性、独立 applicationId 的验收 build 触发：首项附件完成 staged→final 提升、但任何 Room owner/receipt/provenance/settings 写入之前，先 fsync 一个 app-private one-shot marker，再 `killProcess`。该 hook 同时要求独立 BuildConfig 与精确 package name，普通包、其他验收包及所有 UI 均不可触发；重启仅向 logcat 输出 journal/owner/attachment/receipt/provenance/settings 的去内容化计数，不新增设置或常驻入口。下一次只能由用户重新经 DocumentsUI 选择同一 bytes 包触发合同定义的 journal 回收和 retry。
 - schema 38 历史实例升级至 39 只追加 v2 receipt/provenance/settings 表，不改写既有事实；完整 migration 链必须连续至 39。
+- schema 38→39 的真实验收只能由新建隔离 AVD 上、相同 applicationId 和正式同签名的旧 schema-38 验收 APK 覆盖升级到当前 migration 验收 APK 完成；旧事实必须只经普通 UI 创建。当前验收 APK 仅在精确独立包名启动后记录 project/conversation/draft/knowledge/memory/relation/attachment 与 v2 metadata 的去内容化计数，不含正文、标题、URI、path 或展示名，也不新增 UI。升级后的现有本机仍须从设置 → DocumentsUI 选择 strict v2 包，显示既有的中文脱敏 `LOCAL_TRUTH_PRESENT` 拒绝；不得以 DB/SQL 注入、Activity extra、deep link、清数据、卸载或测试包替代。
 
 ## 尚未接入
 

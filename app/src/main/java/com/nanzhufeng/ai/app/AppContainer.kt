@@ -38,6 +38,7 @@ import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2ExportPort
 import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2AtomicRestoreStore
 import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2OpenDocumentRestorePort
 import com.nanzhufeng.ai.data.P6V2JournalInterruptAcceptance
+import com.nanzhufeng.ai.data.P6V2Schema38UpgradeAcceptance
 import com.nanzhufeng.ai.data.AndroidTextShareAdapter
 import com.nanzhufeng.ai.data.AndroidP7BAccountVault
 import com.nanzhufeng.ai.data.AndroidP7ERestoreReceiptStore
@@ -311,6 +312,7 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         ),
     )
     private val p6V2JournalInterruptAcceptance = P6V2JournalInterruptAcceptance(context, database)
+    private val p6V2Schema38UpgradeAcceptance = P6V2Schema38UpgradeAcceptance(context, database)
     private val workspaceExchangeV2AtomicRestoreStore = AndroidWorkspaceExchangeV2AtomicRestoreStore(
         context,
         database,
@@ -321,6 +323,9 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
             Thread {
                 p6V2JournalInterruptAcceptance.recordStartupAudit(workspaceExchangeV2AtomicRestoreStore)
             }.start()
+        }
+        if (BuildConfig.P6_V2_SCHEMA38_UPGRADE_ACCEPTANCE) {
+            Thread { p6V2Schema38UpgradeAcceptance.recordStartupAudit() }.start()
         }
     }
     val workspaceExchangeV2AtomicRestoreOwner = WorkspaceExchangeV2AtomicRestoreOwner(workspaceExchangeV2AtomicRestoreStore, clock)
