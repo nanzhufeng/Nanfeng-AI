@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P11：同一冻结 revision 的 ZIP 完全相同，但 APK Signing Block 单一 pair 仍令字节不可复现；不安装、不发布
+
+- **本轮结果：** 干净 `main` 的 `290297de4f42c3d79a59b2cf7426c772bef1e471` 被 detached 到新的项目专属临时 worktree；无外部 Gradle/GradleDaemon。Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`ANDROID_HOME`、`--offline --no-daemon` 下，常规构建 A（1m58s）与唯一 `--rerun-tasks` B（1m57s）都成功。A/B 均为 23,605,206 B，但 SHA-256 分别为 `11990ecd7ac50a2143abe38eb25e09e7ab8d1d46e87cdcba96b095bdecaf4c9c` / `1ddf57b941101ae8f61d6eb812a79f88bae0abd60c0418b811a9a83b76449609`，故冻结 revision 在此环境仍不可字节重复。
+- **精确差异：** 281 个 ZIP entry 的顺序、payload、原始压缩流、local header、ZipInfo 元数据逐项全同；`apksigner` 的 v2/v3、单 RSA-4096 signer 与证书结构全同。只有 12,288 B APK Signing Block 的 pair `0x504b4453` value 不同：A/B 长度均 6,456 B，6,430 byte offsets 不同；其余三个 pair 与 block 外 bytes 全同。完整可复查产物、构建日志、entry TSV、签名输出与 block 摘要已保留在项目外证据目录；详情见 `docs/P11_SUPPLY_CHAIN_REVIEW_20260821.md`。
+- **过程偏差与停止：** 因 detached worktree 不含未跟踪 `local.properties`，最初一次 `assembleRelease` 在 SDK 配置阶段失败、未生成 APK；随后以环境变量补足 SDK 后才得到 A/B 两次成功包。因此成功产物构建为两次，但字面命令调用为三次，必须保留此事实。未触及当前工作树、Gradle 缓存、源码/依赖、设备/AVD/OPPO、安装、网络、Provider、Key、凭据或 `connected*AndroidTest`；没有清理临时 worktree。不得把结果解释为 `d612`、`3f` 或 `c511`，不得安装、覆盖、发布或实施修复；若继续须另立任务、先明确是否接受此调用次数偏差。
+
 ## 2026-08-23 P11：冻结 APK 已缺失；修正 Git revision 混淆，未锁定 DEX 根因，禁止安装/发布
 
 - **本轮事实：** `main` 干净；没有启动 Gradle、改源/依赖、设备/AVD/OPPO、安装、网络、Provider、Key、凭据或 `connected*AndroidTest`。原记录的 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/` 与 `/tmp`/`/private/tmp` 有限深度的南枫 AI/P11 APK 检索均未找到两份冻结件。仓库当前 release APK 仅为 `3f1408…`，不能复原两个样本的 ZIP/DEX/profile 比较。

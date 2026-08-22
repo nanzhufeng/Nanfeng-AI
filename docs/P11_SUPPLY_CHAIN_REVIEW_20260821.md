@@ -1,5 +1,14 @@
 # P11 供应链复核（2026-08-21）
 
+## 2026-08-23 完全相同 Git revision 的两次 Release：ZIP 完全相同，APK Signing Block 单一 pair 非确定；不安装、不发布
+
+- **冻结输入与边界：** 从干净 `main` 的精确 `290297de4f42c3d79a59b2cf7426c772bef1e471` 建立新的 detached 项目专属 worktree；开始前未发现外部 Gradle/GradleDaemon。仅使用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`ANDROID_HOME` 环境变量、`--offline --no-daemon`。没有改动当前工作树、冻结源、Gradle 缓存、源码或依赖；没有设备/AVD/OPPO、安装、网络、Provider、Key、凭据或 `connected*AndroidTest`。
+- **构建次数的精确记录：** detached worktree 不含未跟踪的 `local.properties`，首次 `assembleRelease` 在 SDK location 配置阶段失败，未编译也未生成 APK。随后仅以环境变量补足既有本机 SDK 路径，完成用户指定的两次产物构建：常规构建（`BUILD SUCCESSFUL in 1m 58s`，51 tasks）固定 A；一次 `--rerun-tasks`（`BUILD SUCCESSFUL in 1m 57s`，51 tasks）固定 B。故 A/B 是两次成功产物构建，但若把无产物的配置失败命令也计入 `assembleRelease` 调用，则本轮字面调用数为三；此偏差已如实保留，不能隐去。
+- **全包结果：** A 为 23,605,206 B、SHA-256 `11990ecd7ac50a2143abe38eb25e09e7ab8d1d46e87cdcba96b095bdecaf4c9c`；B 为 23,605,206 B、SHA-256 `1ddf57b941101ae8f61d6eb812a79f88bae0abd60c0418b811a9a83b76449609`。`cmp` 为不同，故该冻结 revision 在该环境的 APK 仍**不可字节重复**。
+- **ZIP entry 逐项审计：** 两包均为 281 entries，名称与顺序相同；所有 281 项的解压 payload、原始压缩数据流、local header 与 `ZipInfo` 元数据（时间、CRC、压缩/未压缩大小、flags、extra/comment hash、属性与 offset）逐项相同。完整逐项 TSV 与摘要作为项目外本轮证据保留。由此 DEX、baseline profile、`version-control-info`、资源与 JAR entry 均不再是本次同 revision A/B 的差异来源。
+- **签名结构逐项审计：** Android SDK Build Tools 36.0.0 的 `apksigner verify --verbose --print-certs` 对 A/B 的输出完全相同：v2/v3 均为 true、v1/v3.1/v4/SourceStamp 均为 false、1 个 RSA-4096 signer，证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。两 APK signing block 均为 12,288 B、同一 offset；block 外所有 bytes 相同。四个 pair 的 ID、顺序和长度相同，其中 `0x7109871a`（2,557 B）、`0xf05368c0`（2,557 B）与 `0x42726577`（638 B）内容相同；仅 `0x504b4453` 的 6,456 B value 不同（6,430 个 byte offsets 不同，首个 5、末个 6,455）。A/B block SHA-256 分别为 `5a4643be7f2be43be8e89ff258961610a77c8435ef9f1f0011a53aad79beb7cf` / `aec6df568243d1d65276e8a866c43ff1d7d11047913bcfea361ee447698b0096`。
+- **停止结论：** 本次只确认相同 revision 的两份成功 Release 在 ZIP 内容和 v2/v3 身份结构上相同、但因 APK Signing Block 的单一 pair 差异而不是同一字节序列；不推论 `d612`、`3f` 或历史 `c511`，不解释该 pair 的生成原因，也不实施修复。两包不得安装、覆盖或发布；冻结 worktree 与项目外证据仍保留，未执行广泛清理。
+
 ## 2026-08-23 同源代码树重建差异：冻结样本缺失，根因未锁定；不修复、不安装、不发布
 
 - **本轮只读范围：** 未启动 Gradle、未改源或依赖、未触及设备/AVD/OPPO、安装/卸载/清数据、网络/Provider/Key/凭据或 `connected*AndroidTest`。开始时 `main` 工作树无改动。按既有记录定位项目专属 `/tmp/nanfeng-ai-p11-repro.q3kyxQ/`，并在 `/tmp` 与 `/private/tmp` 的有限深度内按南枫 AI/P11 APK 名称只读检索；两份冻结 APK 均已不存在。当前 `app/build/outputs/apk/release/南枫AI.apk` 只剩重建后的 `3f1408b74efbc7ccb64e4bed569d154f907234cebc2e48637b79ca96d7675f2e`，不能代替前包做两包结构比较。
