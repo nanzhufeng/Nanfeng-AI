@@ -39,6 +39,7 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 - Knowledge 的 `sourceEvidence.contributedFields` 必须经与 Room 读取端一致的字段编码持久化并逐项回读；不得以逗号拼接而把多个安全字段误还原为一个字段，避免恢复后的 strict owner mapper 拒绝再导出。
 - 同 intent 同包重放只回读 receipt；同 intent 异包拒绝，均零新写入。
 - atomic store 的失败或中断：不返回成功、零 partial receipt/provenance；已存在本机真值不变。只有精确同包、hash-complete、数据库仍空的 journal 可回收并安全重试；其余 candidate 只按 `RECOVERY_REQUIRED` 保留。
+- 真机 journal 门只能由一次性、独立 applicationId 的验收 build 触发：首项附件完成 staged→final 提升、但任何 Room owner/receipt/provenance/settings 写入之前，先 fsync 一个 app-private one-shot marker，再 `killProcess`。该 hook 同时要求独立 BuildConfig 与精确 package name，普通包、其他验收包及所有 UI 均不可触发；重启仅向 logcat 输出 journal/owner/attachment/receipt/provenance/settings 的去内容化计数，不新增设置或常驻入口。下一次只能由用户重新经 DocumentsUI 选择同一 bytes 包触发合同定义的 journal 回收和 retry。
 - schema 38 历史实例升级至 39 只追加 v2 receipt/provenance/settings 表，不改写既有事实；完整 migration 链必须连续至 39。
 
 ## 尚未接入

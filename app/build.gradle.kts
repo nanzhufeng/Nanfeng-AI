@@ -76,6 +76,7 @@ android {
 
     defaultConfig {
         buildConfigField("boolean", "P6E_ACCEPTANCE", "false")
+        buildConfigField("boolean", "P6_V2_JOURNAL_INTERRUPT_ACCEPTANCE", "false")
         applicationId = "com.nanzhufeng.ai"
         minSdk = 26
         targetSdk = 36
@@ -146,6 +147,14 @@ android {
             applicationIdSuffix = ".p6v2fullowneracceptance"
             versionNameSuffix = "-p6-v2-full-owner-acceptance"
             buildConfigField("boolean", "P6E_ACCEPTANCE", "false")
+            signingConfig = signingConfigs.findByName("formal")
+        }
+        create("p6V2JournalInterruptAcceptance") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".p6v2journalinterruptacceptance"
+            versionNameSuffix = "-p6-v2-journal-interrupt-acceptance"
+            buildConfigField("boolean", "P6E_ACCEPTANCE", "false")
+            buildConfigField("boolean", "P6_V2_JOURNAL_INTERRUPT_ACCEPTANCE", "true")
             signingConfig = signingConfigs.findByName("formal")
         }
         create("p5dAcceptance") {

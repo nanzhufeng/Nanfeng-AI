@@ -65,6 +65,20 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
         else -> WorkspaceExchangeV2LocalTruth.EMPTY
     }
 
+    /** Content-free counts used only by the separately gated interruption acceptance diagnostic. */
+    internal fun journalInterruptAcceptanceAudit() = JournalInterruptAcceptanceAudit(
+        journalCount = stagingRoot.listFiles()?.size ?: 0,
+        ownerCount = database.projectDao().listAllForP7ESemanticSnapshot().size +
+            database.conversationDao().listAllForP7ESemanticSnapshot().size +
+            database.knowledgeDao().listKnowledgeIncludingHidden().size +
+            database.memoryDao().listMemories(null, null).size +
+            database.knowledgeRelationshipDao().all().size,
+        attachmentCount = database.privateAttachmentAssetDao().assetCount(),
+        receiptCount = database.workspaceExchangeV2RestoreDao().receiptCount(),
+        provenanceCount = database.workspaceExchangeV2RestoreDao().provenanceCount(),
+        settingsCount = database.workspaceExchangeV2RestoreDao().settingsCount(),
+    )
+
     override fun recoverInterruptedForRetry(receipt: WorkspaceExchangeV2RestoreReceipt): WorkspaceExchangeV2LocalTruth {
         val journal = File(stagingRoot, receipt.intentId)
         if (!journal.exists()) return localTruth()
@@ -231,6 +245,15 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
         val ATTACHMENT_EXTENSIONS = setOf(".jpg", ".png", ".webp", ".mp4", ".mp3", ".wav", ".m4a", ".pdf", ".md", ".json", ".csv", ".txt")
     }
 }
+
+internal data class JournalInterruptAcceptanceAudit(
+    val journalCount: Int,
+    val ownerCount: Int,
+    val attachmentCount: Int,
+    val receiptCount: Int,
+    val provenanceCount: Int,
+    val settingsCount: Int,
+)
 
 private fun WorkspaceExchangeV2RestoreReceipt.matches(other: WorkspaceExchangeV2RestoreReceipt) = intentId == other.intentId && packageHash == other.packageHash && semanticHash == other.semanticHash
 private fun WorkspaceExchangeV2RestoreReceipt.toEntity() = WorkspaceExchangeV2RestoreReceiptEntity(intentId, packageHash, semanticHash, origin, sensitivity, rootCounts.getValue("projects"), rootCounts.getValue("conversations"), rootCounts.getValue("knowledge"), rootCounts.getValue("memory"), rootCounts.getValue("relations"), assetCount, assetBytes, importedAt.toEpochMilli(), importerVersion)

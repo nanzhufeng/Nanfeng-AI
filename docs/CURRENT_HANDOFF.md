@@ -1,5 +1,13 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P6：Android v2 journal 附件提升中断→同包 DocumentsUI 重试已在新空 AVD 验收；仍非完整 P6
+
+- **隔离、输入与最窄诊断：** 仅新建 Android 35 `NanfengAiP6V2JournalInterruptAcceptanceFinal` / `emulator-5560`，独立包名 `com.nanzhufeng.ai.p6v2journalinterruptacceptance`；未复用或修改 `5574`、Desktop roots、其他 AVD 或 OPPO。验收 build type 仅在该准确 applicationId 启用一次性钩子：首个附件从 staging 提升为 final 后，先 fsync 无内容 marker，再由该进程自身 `killProcess`；无 UI 入口、无 URI/path/body/Key/网络记录。输入为同一台 AVD Downloads 中的 non-sensitive strict v2 fixture，2,340 B，SHA-256 `fb81be2ad662d871f48b8c7044bf79f7bd56b536983bd9b7d06a0fdf0b675174`，semantic `ae8039c083529c42c5a72274fb633fc5f2fcbfefc2c6e33d8da4bbab33b10cf1`。
+- **真实中断与未发布状态：** 只经正常 Launcher → 设置 → 数据与导入 → 导入中心 → 完整工作区交换（v2）→ “选择 v2 交换包并恢复” 打开 DocumentsUI 并选择该文件。logcat 实测 `stage=ATTACHMENT_PROMOTED_FIRST marker=durable action=kill-process`，系统返回 Launcher。首次正常重新打开后，验收包自己的仅计数 startup audit 为 `journal=1 owners=0 attachments=0 receipt=0 provenance=0 settings=0`；私有文件只读盘点为一个提升后的附件候选、无 staging 文件，marker 仍在。即无半成品 owner、asset ledger、receipt、provenance 或 settings 发布。
+- **唯一恢复路径与严格成功：** 未提供或使用其他恢复入口；从同一应用、同一设置页再次经 DocumentsUI 选择同一 exact package，UI 显示 `已严格恢复：ae8039c08352… · 5 项对象 · 1 项附件`。这是 production atomic store 的 strict package/owner-field hash、asset-ledger 与 typed readback 成功结果；成功后私有 journal staging 目录仍为 0 文件、final attachment 为 1，验收 marker 作为一次性中断证据保留且不会再次终止。误选“完整备份”端口时 strict preflight 曾安全拒绝该 exchange fixture，未触及 journal；随后才切换到正确的 v2 exchange 入口。
+- **代码、合同与自动门：** 新增独立 acceptance build type、精确 BuildConfig/applicationId gate、content-free startup audit 和静态合同测试；`P6_ANDROID_V2_ATOMIC_RESTORE_CONTRACT.md` 与 `ANDROID_DESKTOP_USER_ENTRY_AUDIT_20260816.md` 同步为无常驻入口的受控诊断边界。Android Studio JBR、离线无 daemon 下 `P6V2JournalInterruptAcceptanceContractsTest` 与 `WorkspaceExchangeV2OwnerMapperContractsTest` 均通过；正式签名验收 APK 的 v2/v3 已核验。首台独立尝试 AVD 在诊断最初同步读 Room 时启动即失败，未产生 journal/owner/receipt 后即保留不再触碰；钩子改为后台计数审计后才新建上述 final AVD 取得本证据。
+- **严格边界与下一步：** 无 `connected*AndroidTest`、无 Activity extra/deep link、DB/SQL/业务 command 注入、清数据/卸载、Provider、网络或 Key；只用可见 UI 与 DocumentsUI。此增量仅关闭 Android v2 fixture 的真实“附件提升中断→零发布→同包 retry”门；不证明真实用户附件、历史全库迁移、Desktop 原生对象恢复、Windows、发布、P6 或 P0–P11 完成。
+
 ## 2026-08-23 P6：Android 5574 DocumentsUI 真文件 → 新隔离 Desktop native Open/Save/replay 已验收；仍非完整 P6
 
 - **输入与隔离：** 仅只读检查 `emulator-5574`，验收 applicationId `com.nanzhufeng.ai.p6v2fullowneracceptance` 仍在；DocumentsUI Download 保留 `nanfeng-ai-workspace-v2.nfai-exchange.zip`（2,452 B）。设备 `sha256sum` 与只读 pull 到新的 `/tmp/nanfeng-ai-p6-v2-picker-input.R4Sqd5` 均为 `62975440c4e30aff5a6ea817e69265921efbc87b6e8e35c49206247e25ad99a7`。新建、初始为空的 Desktop bundle/root 为专属验收副本，不复用主 bundle、既有 root、其他 AVD 或 OPPO；副本 deep/strict 验签通过。
