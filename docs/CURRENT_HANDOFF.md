@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P11：AAPT2 verification metadata 最窄闭环；P5 build 门已恢复
+
+- **当前事实：** 外部 Gradle 8.7 的 wrapper、worker 与 daemon 已不在进程列表；仅保留与该任务无关的空闲 Kotlin daemon。当前工作树基于 `041bb14`，只修改 `gradle/verification-metadata.xml`。
+- **精确变更：** 使用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 对 `:app:processReleaseResources` 执行一次 `--write-verification-metadata sha256`，只新增 `com.android.tools.build:aapt2:9.3.1-15703166` 的 macOS JAR 与 POM SHA-256；未升级依赖、未访问签名值、网络、设备或应用数据。
+- **回读：** 同一 `:app:processReleaseResources --offline --no-daemon` 无写入任务通过（14 项均已是最新）；XML diff 仅 8 行新增，`git diff --check` 通过。
+- **下一唯一门：** 提交此 P11 最窄增量后，才可用相同 JBR/offline/no-daemon 运行一次 code-52 `:app:assembleRelease`。若成功才继续验签、OPPO 只读复核与最多一次 `pm install -r --user 0` 数据保留覆盖；任一门失败即停止，不循环重试。
+
 ## 2026-08-21 总控 P0–P11：交接卡（当前恢复点）
 
 - **当前目标：** 只以 `docs/MASTER_DEVELOPMENT_BLUEPRINT.md` §17 的 P0–P11 为“总控方案”。P6 本机 Android→Desktop 实链、P11 本机供应链项均有已证实增量；P0–P11 整体仍未完成，不能以构建、审计或单一验收替代总控退出。
