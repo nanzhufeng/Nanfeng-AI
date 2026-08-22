@@ -1,5 +1,13 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P6：Android 5574 DocumentsUI 真文件 → 新隔离 Desktop native Open/Save/replay 已验收；仍非完整 P6
+
+- **输入与隔离：** 仅只读检查 `emulator-5574`，验收 applicationId `com.nanzhufeng.ai.p6v2fullowneracceptance` 仍在；DocumentsUI Download 保留 `nanfeng-ai-workspace-v2.nfai-exchange.zip`（2,452 B）。设备 `sha256sum` 与只读 pull 到新的 `/tmp/nanfeng-ai-p6-v2-picker-input.R4Sqd5` 均为 `62975440c4e30aff5a6ea817e69265921efbc87b6e8e35c49206247e25ad99a7`。新建、初始为空的 Desktop bundle/root 为专属验收副本，不复用主 bundle、既有 root、其他 AVD 或 OPPO；副本 deep/strict 验签通过。
+- **真实用户链：** 只通过独立 Desktop 的 `设置 → 数据导入 → 完整工作区交换（v2）→ 选择 v2 交换包` 打开 native Open picker，选择上述 Android DocumentsUI `.nfai-exchange.zip` 后 UI 显示 content-free `已私有导入并回读：4840bd0bf153… · 1 项附件`。随后从唯一已提交私有记录经 native Save picker 保存到新的空输出目录，UI 显示 `已从私有记录回导并严格回读：4840bd0bf153… · 1 项附件`；同一 native Open picker 再选原输入，UI 显示 `已验证重放回执`。
+- **严格 readback：** 输入与回导 output 均由 Node strict verifier 通过（semantic hash `4840bd0bf15365ef4c84c60572cdb1646fa027534f4a019b49537cce07f8b828`、3 entries、1 asset）。output 是 2,349 B、SHA-256 `89a72a7ae43026ee59bdb148922e7fd70ed291bc468a188e2dc0fa3269b8426d`，与输入 bytes 不同但全量 7 项 owner-field hashes、asset ledger（id/entry/hash/7 B/classification）以及 semantic hash 均相同。隔离 SQLite 只读回读为 v2 imports/assets/provenance/journal/receipts = `1/1/7/1/1`，receipt 与 provenance field hashes 一致；v1 workspaces/workspace_exchange/import_journal 均为 `0/0/0`。
+- **安全升级差异：** Android restore 后的完整范围 re-export 已保守将二进制附件与 exchange sensitivity 标为 `HIGH_SENSITIVE`；Desktop 输入与回导均保持该等级，未降级。Knowledge `sourceEvidence.contributedFields` 输入/输出同为 `[body,title]`；此前相对 non-sensitive restore fixture 的 Knowledge owner hash 变化属于该分类升级，不是 source-field 丢失。Desktop 只保存独立 private v2 archive/receipt/provenance，未恢复或创建 Desktop 原生 Project/Conversation/Knowledge/Memory owner。
+- **边界与下一步：** 未运行 `connected*AndroidTest`，未写入 Android 业务数据、未操作其他 AVD/OPPO，未使用 Activity extra、DB/command 注入、Provider、网络或 Key。此增量关闭本轮 macOS v2 DocumentsUI→Desktop native Open/Save/replay 证据；Android 用户真实附件/中断恢复、Desktop 原生业务对象恢复、Windows、发布及 P0–P11 其余门仍分别开放，不能据此宣称 P6 或总控完成。
+
 ## 2026-08-23 P6：Android v2 新空 AVD 恢复→导出 DocumentsUI 真文件闭环；仍非完整 P6
 
 - **本次唯一修复：** `08b3d0d` 修复的空 `conversation_drafts` 占位行已在新的独立验收环境实际生效；本轮再发现并修复 `sourceEvidence.contributedFields` 以逗号写入、而 Room 以字段分隔符读取导致严格 writer 认为 `title,body` 是非法单字段的问题。`AndroidWorkspaceExchangeV2AtomicRestoreStore` 现以 Room 一致的安全字段分隔符持久化；`WorkspaceExchangeV2OwnerMapperContractsTest` 增加 concrete Room restore 后用生产 repository/source 重新 mapper+strict writer 的合同。
