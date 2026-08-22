@@ -61,7 +61,7 @@ class NfaiExchangeV2PackageWriter(
         val prepared = runCatching {
             val assets = readLedgerAssets(exchange)
             val packageBytes = packageBytes(exchange, assets)
-            packageBytes to preflight(packageBytes)
+            packageBytes to NfaiExchangeV2PackageReader.read(packageBytes).receipt
         }.getOrElse { return NfaiExchangeV2PackageWrite.Rejected(it.message ?: "完整 v2 交换包预检失败。") }
         return runCatching {
             val (packageBytes, receipt) = prepared
@@ -112,47 +112,6 @@ class NfaiExchangeV2PackageWriter(
             }
             raw.toByteArray()
         }
-    }
-
-    /** Pure reader for locally serialized bytes; it has no output or owner side effect. */
-    private fun preflight(packageBytes: ByteArray): NfaiExchangeV2PackageReceipt {
-        require(packageBytes.size in 1..MAX_PACKAGE_BYTES.toInt()) { "v2 package 为空或超过 128 MiB 限制。" }
-        val entries = readZip(packageBytes)
-        val manifest = JSONObject(entries["manifest.json"]?.toString(Charsets.UTF_8) ?: error("v2 缺少 manifest。"))
-        manifest.requireExact("format", "packageVersion", "exchangeVersion", "export", "files")
-        require(manifest.optString("format") == PACKAGE_FORMAT && manifest.optInt("packageVersion") == 2 && manifest.optInt("exchangeVersion") == 2) { "v2 manifest 版本不支持。" }
-        val files = manifest.getJSONArray("files")
-        require(files.length() + 1 == entries.size) { "v2 package 包含未知或未列 entry。" }
-        val listed = mutableSetOf<String>()
-        repeat(files.length()) { index ->
-            val file = files.getJSONObject(index); file.requireExact("path", "byteCount", "sha256")
-            val path = file.getString("path"); val bytes = entries[path] ?: error("v2 manifest entry 不存在。")
-            require(path != "manifest.json" && listed.add(path) && file.getLong("byteCount") == bytes.size.toLong() && file.getString("sha256") == hash(bytes)) { "v2 manifest hash、大小或清单不符。" }
-        }
-        require(listed == entries.keys - "manifest.json") { "v2 manifest entry 集合不一致。" }
-        val exchange = JSONObject(entries["exchange.json"]?.toString(Charsets.UTF_8) ?: error("v2 缺少 exchange.json。"))
-        val verified = NfaiExchangeV2Ir.validate(exchange)
-        require(canonical(manifest.getJSONObject("export")) == canonical(exchange.getJSONObject("export"))) { "v2 manifest export 与 exchange 不一致。" }
-        val ledger = attachmentLedger(exchange)
-        val expectedAssets = ledger.values.map { it.entry }.toSet()
-        require(entries.keys.filter { it.startsWith("assets/") }.toSet() == expectedAssets && entries.keys.all { it == "manifest.json" || it == "exchange.json" || it.startsWith("assets/") }) { "v2 asset 账本与 package entry 不一致。" }
-        ledger.values.forEach { asset ->
-            val bytes = entries[asset.entry] ?: error("v2 attachment asset 不存在。")
-            require(bytes.size.toLong() == asset.byteCount && hash(bytes) == asset.sha256) { "v2 attachment asset hash 或大小不符。" }
-        }
-        val ownerHashes = sortedMapOf<String, String>()
-        listOf("project" to "projects", "conversation" to "conversations", "knowledge" to "knowledge", "memory" to "memory", "relation" to "relations").forEach { (kind, group) ->
-            exchange.getJSONArray(group).objects().forEach { owner -> ownerHashes["$kind/${owner.getString("id")}"] = hash(canonical(owner).toByteArray(Charsets.UTF_8)) }
-        }
-        ownerHashes["settings/root"] = hash(canonical(exchange.getJSONObject("settings")).toByteArray(Charsets.UTF_8))
-        ledger.values.forEach { asset -> ownerHashes["asset/${asset.sha256}"] = asset.sha256 }
-        return NfaiExchangeV2PackageReceipt(
-            packageHash = hash(packageBytes), semanticHash = verified.semanticHash,
-            origin = exchange.getJSONObject("export").getJSONObject("origin").getString("platform"),
-            sensitivity = exchange.getJSONObject("export").getString("sensitivity"),
-            rootCounts = listOf("projects", "conversations", "knowledge", "memory", "relations").associateWith { exchange.getJSONArray(it).length() },
-            assetCount = expectedAssets.size, assetBytes = expectedAssets.sumOf { entries.getValue(it).size.toLong() }, ownerFieldHashes = ownerHashes,
-        )
     }
 
     private fun attachmentLedger(exchange: JSONObject): Map<String, Asset> {

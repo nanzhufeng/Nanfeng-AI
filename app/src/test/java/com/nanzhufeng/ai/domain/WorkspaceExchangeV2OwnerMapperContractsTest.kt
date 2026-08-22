@@ -63,6 +63,12 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
         assertEquals(1, output.writes)
         assertTrue(output.bytes.isNotEmpty())
         assertEquals(receipt.packageHash, hash(output.bytes))
+        val reread = NfaiExchangeV2PackageReader.read(output.bytes)
+        assertEquals(receipt, reread.receipt)
+        assertEquals(receipt.semanticHash, JSONObject(reread.exchangeJson).getJSONObject("export").getString("semanticHash"))
+        assertEquals(source.assetBytes().toList(), reread.assets["assets/${source.asset.sha256}"]?.toList())
+        val tampered = output.bytes.copyOf().also { it[0] = (it[0].toInt() xor 0x01).toByte() }
+        assertTrue(runCatching { NfaiExchangeV2PackageReader.read(tampered) }.isFailure)
         assertEquals("ANDROID", receipt.origin)
         assertEquals(1, receipt.assetCount)
         assertEquals(hash(source.assetBytes()), receipt.ownerFieldHashes["asset/${source.asset.sha256}"])

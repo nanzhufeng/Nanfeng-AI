@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P6：Android v2 严格 package reader 基础已闭合；尚未导入或恢复
+
+- **唯一所有者：** 新增纯内存 `NfaiExchangeV2PackageReader`，是 Android `nfai.exchange.v2` bytes 的唯一 strict preflight reader；`NfaiExchangeV2PackageWriter` 已在发布前回读自身 package 时复用该 reader，避免 writer 与未来导入各自解释 ZIP/manifest/IR/asset ledger。
+- **范围与安全：** reader 只接收调用方提供的有限 bytes，逐项验证 ZIP 安全、精确 manifest、canonical IR/semantic hash、附件账本/bytes hash 与 owner-field hash；结果仅含 content-free receipt、canonical IR 和本次调用的内存附件 bytes。不读写 SAF、Room、私有 staging/文件、URI/path、网络、Provider 或 Key。
+- **定向验证：** Android Studio JBR、`--offline --no-daemon` 下 `WorkspaceExchangeV2OwnerMapperContractsTest` 4/4 通过：writer 输出经 reader 获得同一 receipt，附件字节在当前调用内一致，篡改 ZIP 整体拒绝。`git diff --check` 通过。
+- **严格停止：** 尚无 Settings/OpenDocument、ViewModel、Room transaction、staging、冲突/恢复语义、模拟器或真实用户文件路径；不能称 Android v2 导入、双向恢复、P6 或 P0–P11 完成。下一步必须先为 Android 恢复定义独立的原子所有者与“不覆盖现有本机真值”边界，再接 UI。
+
 ## 2026-08-23 P5：code-52 正式构建、OPPO 数据保留覆盖与前台启动已验收
 
 - **产物与本机验证：** `app/build/outputs/apk/release/南枫AI.apk` 是 `com.nanzhufeng.ai / versionCode=52 / versionName=0.3.0-p10a`，SHA-256 为 `c5112374643319617e8cffa1e32fab94605bd4cccadda6fbb6d390f99fd23f91`。Android Studio JBR 下 `apksigner` 验证 v2/v3 为真，release-v2 证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
