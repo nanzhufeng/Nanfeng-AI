@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P0–P11 外部门 readiness：全项阻断；仅作去敏只读审计并停止
+
+- **本轮边界：** 只读检查 ADB 当前设备清单、Git remote 是否存在、仓库声明的配置入口、P7 本地 readiness 脚本、P8–P10 合同、既有 P6 失败交接与现有 code-53 APK；没有 Provider/HTTP、Supabase/Google 远端、Key/凭据值、应用私有数据、AVD 启动、安装/卸载/清数据、`connected*AndroidTest` 或 push。开始时工作树为 0 改动。
+- **现场结论：** ADB 当前无已连接设备，OPPO `3B157F009E800000` 不在清单；Git remote 不存在。P2/P3 没有允许的项目专属 Provider 环境变量或用户级 Gradle 凭据 schema，应用私有加密凭据仍未读取。P7 的 Supabase CLI、project link、私有客户端配置、认证会话和指定 target 均为缺失；P8 没有已批准的真实工具合同/目标，P9 没有真实目标应用与稳定入口证据，P10 未有两个真实消费者。P6 只能确认当前无 ADB 设备，既有三个新 Android 35 AVD 的注册失败仍是唯一证据，Windows 本机门未具备。
+- **code-53 只读记录：** `app/build/outputs/apk/release/南枫AI.apk` 仍存在，package/versionCode=53，大小与交接记录一致；其 SHA-256 与记录一致，使用 Android Studio JBR 的 Build Tools 36.0.0 `apksigner` 只读核验 v2/v3 通过。此事实不授予安装、覆盖、发布或重建权限：OPPO 不在线，且 P11 的可重复性/发布边界仍须独立收敛。
+- **唯一恢复路由：** 总控表已更新至 `MASTER_PLAN_COMPLETION_AUDIT_20260816.md` 顶部。任一外部门到位时，都只可按该表所列的最小恢复动作另开独立增量；不得把配置存在、产物存在、fixture 或本地合同写成真实 Provider、同步、Agent、生态、Windows、OPPO 或 P0–P11 完成。
+
 ## 2026-08-23 P4：全量本机候选审计，无可独立实现的遗留合同；未触设备、网络、Provider 或 Key
 
 - **审计范围与现场：** 开始时工作区 0 改动；本轮只读核对 `MASTER_PLAN_COMPLETION_AUDIT_20260816.md` 的 P4 行、`MASTER_DEVELOPMENT_BLUEPRINT.md` §17、`P4A` 至 `P4O` 全部合同，以及 Android 生产/测试目录。P4-A–O 均已有唯一领域链、`AppContainer` 生产装配和定向合同测试；典型 owner 为 `ProjectDomain`、`ContextSelectionDomain`、`MemoryDomain`、`KnowledgeDomain`、`LocalContextCompressionDomain`、`JsonKnowledgeAdapter`、`PdfTextKnowledgeAdapter` 与 `ManageWebTextSnapshotUseCase`。对应 `P4A…P4O` 的 domain 或 Room contracts 均仍在当前源树，未发现“合同已立但尚未编码/测试”的 P4 子项。
