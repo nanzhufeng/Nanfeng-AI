@@ -13,6 +13,7 @@
 - 采用：以 exact package SHA-256 派生 opaque intent ID，使用户重新选择同一 byte package 时才可能回收同一未发布 journal；非空本机、不同 intent/package 或任何未知 journal 不覆盖、不合并、不删除，按拒绝或 `RECOVERY_REQUIRED` 停止。
 - 不采用：聊天/Composer/工作页入口、目录扫描、多文件选择、SAF/UI 自行解析、用新 intent 绕过同包 journal、将 Android 恢复描述成备份或云同步。
 - 配套修正：chat-first 首次启动不得自动写入空“新对话”，否则用户正常打开设置前本机已非空而恢复入口不可用。保留抽屉中的显式新对话动作，不新增常驻按键。
+- 配套修正：v2 不携带未发送草稿，但 atomic restore 必须为每个已恢复 Conversation 写入空、无附件的本机 draft 占位并在 typed readback 验证。否则恢复虽可提交，却会使既有严格 writer 因缺少 snapshot 必需记录而拒绝重新映射；这不是放宽 v2 的草稿可移植范围，也不新增入口。
 
 ## 决策：用户操作直接执行，安全约束不以二次确认表达（已确定）
 

@@ -19,7 +19,7 @@
 通过 preflight 后，owner 将 canonical IR、当前调用内的附件 bytes 及 content-free `packageHash/semanticHash/origin/sensitivity/counts/owner-field hashes` 作为一个不可拆分的 `WorkspaceExchangeV2AtomicRestoreCommit` 交给唯一 atomic store。store 必须在同一 Room transaction 或等价可恢复边界内完成：
 
 1. 再次核对“本机为空”和 intent replay/conflict；
-2. 写入全部 Project、Conversation/Message、Knowledge、Memory、Relationship 和安全 Settings；
+2. 写入全部 Project、Conversation/Message、Knowledge、Memory、Relationship 和安全 Settings；每个恢复的 Conversation 同时创建空、无附件的 `ConversationDraft` 行。v2 明确不携带未发送草稿，但普通 typed snapshot/export 仍要求该本机占位行；
 3. 将每个附件先安全置入 app-private staged root，逐字节 hash 回读，再把附件 owner/reference 与业务记录一起提交；
 4. 在同一原子边界写入 v2 provenance 和 content-free receipt；
 5. 完成 typed readback（引用完整性、semantic hash、asset ledger 与 owner-field hashes）后才发布 committed receipt。
@@ -35,6 +35,7 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 - ZIP/manifest/IR/asset 任何严格 reader 失败：零本机读取、零 staging、零 commit。
 - 非空本机：返回 `LOCAL_TRUTH_PRESENT`，零对象/附件/receipt/provenance 写入。
 - 空本机且 package 有效：仅一次 atomic commit，commit input 的 receipt/hash 与 reader 完全一致。
+- 空本机恢复的每个 Conversation 都有空、无附件、可回读的 draft 行；缺少该行不得发布 receipt，避免恢复后的完整工作区 strict writer 无法重新映射。
 - 同 intent 同包重放只回读 receipt；同 intent 异包拒绝，均零新写入。
 - atomic store 的失败或中断：不返回成功、零 partial receipt/provenance；已存在本机真值不变。只有精确同包、hash-complete、数据库仍空的 journal 可回收并安全重试；其余 candidate 只按 `RECOVERY_REQUIRED` 保留。
 - schema 38 历史实例升级至 39 只追加 v2 receipt/provenance/settings 表，不改写既有事实；完整 migration 链必须连续至 39。

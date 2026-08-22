@@ -2,6 +2,7 @@ package com.nanzhufeng.ai.data
 
 import android.content.Context
 import com.nanzhufeng.ai.data.local.ConversationEntity
+import com.nanzhufeng.ai.data.local.ConversationDraftEntity
 import com.nanzhufeng.ai.data.local.ConversationMemorySourceEntity
 import com.nanzhufeng.ai.data.local.KnowledgeAttachmentEntity
 import com.nanzhufeng.ai.data.local.KnowledgeEvidenceEntity
@@ -137,7 +138,7 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
         decoded.projects.forEach { (entity, revisions) -> database.projectDao().insertProject(entity); revisions.forEach(database.projectDao()::insertRevision) }
         decoded.assets.forEach { asset -> database.privateAttachmentAssetDao().insert(PrivateAttachmentAssetEntity(asset.id, "attachments/v1/${asset.sha256}${extensionFor(asset.mimeType)}", asset.mimeType, asset.displayName, asset.byteCount, asset.sha256)) }
         decoded.conversations.forEach { value ->
-            database.conversationDao().insertConversation(value.entity); value.nodes.forEach(database.conversationDao()::insertNode); value.blocks.values.forEach(database.conversationDao()::insertBlocks); database.conversationDao().insertMemorySources(value.memorySources)
+            database.conversationDao().insertConversation(value.entity); value.nodes.forEach(database.conversationDao()::insertNode); value.blocks.values.forEach(database.conversationDao()::insertBlocks); database.conversationDao().upsertDraft(value.draft); database.conversationDao().insertMemorySources(value.memorySources)
         }
         decoded.knowledge.forEach { value ->
             database.knowledgeDao().insertKnowledge(value.entity); database.knowledgeDao().insertEvidence(value.evidence); database.knowledgeDao().insertAttachments(value.attachments); value.revisions.forEach(database.knowledgeDao()::insertRevision)
@@ -155,6 +156,11 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
         require(database.workspaceExchangeV2RestoreDao().provenanceCount() == receipt.ownerFieldHashes.size)
         require(database.projectDao().listAllForP7ESemanticSnapshot().size == decoded.projects.size)
         require(database.conversationDao().listAllForP7ESemanticSnapshot().size == decoded.conversations.size)
+        decoded.conversations.forEach { value ->
+            val draft = requireNotNull(database.conversationDao().draftFor(value.entity.id))
+            require(draft.text.isEmpty() && draft.updatedAtEpochMs == value.draft.updatedAtEpochMs && draft.schemaVersion == value.draft.schemaVersion)
+            require(database.conversationDao().draftAttachmentsFor(value.entity.id).isEmpty())
+        }
         require(database.knowledgeDao().listKnowledgeIncludingHidden().size == decoded.knowledge.size)
         require(database.memoryDao().listMemories(null, null).size == decoded.memories.size)
         require(database.knowledgeRelationshipDao().all().size == decoded.relations.size)
@@ -184,7 +190,7 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
     }
 
     private data class Asset(val id: String, val entry: String, val mimeType: String, val displayName: String, val byteCount: Long, val sha256: String)
-    private data class ConversationPayload(val entity: ConversationEntity, val nodes: List<MessageNodeEntity>, val blocks: Map<String, List<MessageContentBlockEntity>>, val memorySources: List<ConversationMemorySourceEntity>)
+    private data class ConversationPayload(val entity: ConversationEntity, val nodes: List<MessageNodeEntity>, val blocks: Map<String, List<MessageContentBlockEntity>>, val draft: ConversationDraftEntity, val memorySources: List<ConversationMemorySourceEntity>)
     private data class KnowledgePayload(val entity: KnowledgeItemEntity, val evidence: List<KnowledgeEvidenceEntity>, val attachments: List<KnowledgeAttachmentEntity>, val revisions: List<KnowledgeRevisionEntity>, val tags: List<String>, val revisionTags: Map<String, List<String>>, val scope: KnowledgeProjectScopeEntity)
     private data class DecodedWorkspace(val projects: List<Pair<ProjectEntity, List<ProjectInstructionRevisionEntity>>>, val conversations: List<ConversationPayload>, val knowledge: List<KnowledgePayload>, val memories: List<Pair<MemoryEntity, List<MemoryRevisionEntity>>>, val relations: List<Pair<KnowledgeRelationshipEntity, List<KnowledgeRelationshipRevisionEntity>>>, val assets: List<Asset>, val settings: WorkspaceExchangeV2RestoreSettingsEntity) {
         companion object {
@@ -198,7 +204,7 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
                 val conversations = exchange.array("conversations").map { c ->
                     val updated = c.instant("updatedAt"); val entity = ConversationEntity(c.getString("id"), c.getString("title"), c.nullable("projectId"), c.getString("currentLeafId"), c.instant("createdAt"), updated, c.getJSONObject("settings").nullable("defaultProviderId"), c.getJSONObject("settings").nullable("defaultModelId"), c.getJSONObject("settings").nullable("harnessId"), c.getJSONObject("settings").nullableInt("harnessVersion"), c.getJSONObject("settings").getInt("contextPolicyVersion"), if (c.getBoolean("archived")) updated else null, if (c.getBoolean("pinned")) updated else null, null, c.getInt("schemaVersion"), c.getLong("revision"), c.getBoolean("autoTitlePending"), c.getString("surface"))
                     val blocks = linkedMapOf<String, List<MessageContentBlockEntity>>(); val nodes = c.array("messages").map { n -> val id = n.getString("id"); blocks[id] = n.array("blocks").map { b -> when (b.getString("kind")) { "TEXT" -> MessageContentBlockEntity(id, b.getInt("ordinal"), "TEXT", b.getString("text"), null, null, null, null, null, null, null, null, 1); "ASSET_REF" -> asset(b.getJSONObject("asset")).let { a -> MessageContentBlockEntity(id, b.getInt("ordinal"), "ATTACHMENT", null, a.id, "attachments/v1/${a.sha256}${extension(a.mimeType)}", a.mimeType, a.displayName, a.byteCount, a.sha256, null, null, 1) }; else -> error("unsupported block") } }; MessageNodeEntity(id, c.getString("id"), n.nullable("parentId"), n.getInt("ordinal"), n.getString("role").uppercase(), n.instant("createdAt"), n.getString("delivery"), n.getInt("revision"), null, null, null, null, 1) }
-                    ConversationPayload(entity, nodes, blocks, c.getJSONObject("settings").array("memorySources").mapIndexed { index, source -> ConversationMemorySourceEntity(c.getString("id"), index, source.getString("memoryId"), source.getString("sourceKind"), source.getInt("sourceVersion")) })
+                    ConversationPayload(entity, nodes, blocks, ConversationDraftEntity(entity.id, "", updated, 1), c.getJSONObject("settings").array("memorySources").mapIndexed { index, source -> ConversationMemorySourceEntity(c.getString("id"), index, source.getString("memoryId"), source.getString("sourceKind"), source.getInt("sourceVersion")) })
                 }
                 val knowledge = exchange.array("knowledge").map { k ->
                     val updated = k.instant("updatedAt"); val attachments = k.array("attachments").mapIndexed { index, value -> asset(value).let { a -> KnowledgeAttachmentEntity(k.getString("id"), index, a.id, "attachments/v1/${a.sha256}${extension(a.mimeType)}", a.mimeType, a.displayName, a.byteCount, a.sha256) } }; val history = k.array("history").map { h -> KnowledgeRevisionEntity(h.getString("id"), k.getString("id"), h.getInt("revision"), h.getString("title"), h.getString("body"), h.getString("status"), h.nullable("projectId"), h.getString("contentHash"), h.instant("createdAt")) }; val tags = k.getJSONArray("tags").let { List(it.length()) { index -> it.getString(index) } }; KnowledgePayload(KnowledgeItemEntity(k.getString("id"), k.getString("title"), k.getString("body"), k.getJSONObject("provenance").getString("candidateId"), k.getJSONObject("provenance").getString("invocationId"), k.getJSONObject("provenance").getString("providerId"), k.getJSONObject("provenance").getString("modelId"), k.getJSONObject("provenance").getInt("harnessVersion"), k.instant("createdAt"), k.getInt("schemaVersion"), k.getString("status"), updated, if (k.getString("status") == "ARCHIVED") updated else null, if (k.getString("status") == "DELETED") updated else null, k.getString("contentHash")), k.array("sourceEvidence").mapIndexed { index, e -> KnowledgeEvidenceEntity(k.getString("id"), index, e.getString("sourceType"), e.instant("receivedAt"), e.optString("sourceReference").ifBlank { null }, e.getJSONArray("contributedFields").let { values -> List(values.length()) { position -> values.getString(position) }.joinToString(",") }) }, attachments, history, tags, history.associate { it.id to tags }, KnowledgeProjectScopeEntity(k.getString("id"), k.nullable("projectId"), updated, k.getInt("schemaVersion")))

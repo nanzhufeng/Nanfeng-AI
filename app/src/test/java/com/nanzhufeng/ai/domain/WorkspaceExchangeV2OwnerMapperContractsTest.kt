@@ -7,6 +7,7 @@ import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2AtomicRestoreStore
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -99,6 +100,26 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
         )
         assertTrue(failed is NfaiExchangeV2PackageWrite.Failed)
         assertEquals(1, failedOutput.writes)
+    }
+
+    @Test fun `alternate safe fixture is a distinct strict writer package for local truth acceptance`() {
+        val baseline = RecordingOutput(null)
+        val alternate = RecordingOutput(
+            System.getProperty("nfai.v2.package.localtruth.output")
+                ?: System.getenv("NANFENG_AI_V2_LOCALTRUTH_OUTPUT"),
+        )
+        val baselineSource = fixture()
+        val baselineWritten = NfaiExchangeV2PackageWriter(mapper(baselineSource), baselineSource).write(
+            baselineSource.selection, NfaiExchangeSafeSettings("zh-CN", "SYSTEM"), baseline,
+        ) as NfaiExchangeV2PackageWrite.Written
+        val alternateSource = fixture(memorySourceSummary = "Second local confirmation")
+        val alternateWritten = NfaiExchangeV2PackageWriter(mapper(alternateSource), alternateSource).write(
+            alternateSource.selection, NfaiExchangeSafeSettings("zh-CN", "SYSTEM"), alternate,
+        ) as NfaiExchangeV2PackageWrite.Written
+        assertNotEquals(baselineWritten.receipt.packageHash, alternateWritten.receipt.packageHash)
+        assertNotEquals(baselineWritten.receipt.semanticHash, alternateWritten.receipt.semanticHash)
+        assertEquals(alternateWritten.receipt, NfaiExchangeV2PackageReader.read(alternate.bytes).receipt)
+        assertTrue(!alternateWritten.receipt.toString().contains("Second local confirmation"))
     }
 
     @Test fun `atomic restore owner reads strict package first and commits one recoverable boundary`() {
@@ -199,6 +220,10 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
             assertEquals(1, database.workspaceExchangeV2RestoreDao().receiptCount())
             assertEquals(written.receipt.ownerFieldHashes.size, database.workspaceExchangeV2RestoreDao().provenanceCount())
             assertEquals("Fixture only", database.conversationDao().blocksFor("message-v2-01").single().textContent)
+            val draft = requireNotNull(database.conversationDao().draftFor("conversation-v2-01"))
+            assertEquals("", draft.text)
+            assertEquals(now.toEpochMilli(), draft.updatedAtEpochMs)
+            assertTrue(database.conversationDao().draftAttachmentsFor("conversation-v2-01").isEmpty())
             assertTrue(File(context.filesDir, "attachments/v1/${source.asset.sha256}.txt").isFile)
             val replay = WorkspaceExchangeV2AtomicRestoreOwner(
                 AndroidWorkspaceExchangeV2AtomicRestoreStore(context, database), clock,
