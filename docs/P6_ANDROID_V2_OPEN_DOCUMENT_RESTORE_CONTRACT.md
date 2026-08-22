@@ -24,4 +24,4 @@ ViewModel/UI state 只能包含：忙碌状态、脱敏 outcome、semantic hash 
 ## 自动与真实验收
 
 - 自动合同：UI 不解析 package；adapter 对单 URI 流限长；只调用 atomic owner；UI state/失败显示不含内容或 locator；strict reader、空本机、replay、冲突和 journal 合同继续复用既有 owner/store tests。
-- 真实验收：已在新建项目专属空 AVD `emulator-5588`，经实际 DocumentsUI Download 选择 2,340 B non-sensitive strict v2 fixture；App 显示 content-free success，Room typed owners/asset/receipt/provenance/settings 的只读 count 与 package 一致。篡改包、nonempty-local 拒绝、process interruption 后同包重选仍需独立真实证据。不得运行 `connected*AndroidTest`，不得操作 OPPO。
+- 真实验收：已在新建项目专属空 AVD `emulator-5588`，经实际 DocumentsUI Download 选择 2,340 B non-sensitive strict v2 fixture；App 显示 content-free success，Room typed owners/asset/receipt/provenance/settings 的只读 count 为 `1/1/1/1/1/1/1/7/1`。从同一设置二级入口再选同一实际文件，App 显示“已验证相同恢复回执”，上述 counts 不变。再经 DocumentsUI 分别选择单字节篡改的 2,340 B 包和安全生成的 129 MiB（`135,266,304 B`）包，两次均只显示“所选交换包未通过完整校验，未读取或覆盖本机数据”，上述 counts 仍不变；两种输入均没有用户内容。nonempty-local 拒绝与 process interruption 后同包重选仍需独立真实证据。不得运行 `connected*AndroidTest`，不得操作 OPPO。
