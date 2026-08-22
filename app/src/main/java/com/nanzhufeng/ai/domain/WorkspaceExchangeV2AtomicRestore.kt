@@ -83,8 +83,10 @@ class WorkspaceExchangeV2AtomicRestoreOwner(
             return if (existing.matches(candidateReceipt)) WorkspaceExchangeV2AtomicRestoreResult.Replayed(existing)
             else WorkspaceExchangeV2AtomicRestoreResult.Rejected("INTENT_CONFLICT")
         }
-        if (store.recoverInterruptedForRetry(candidateReceipt) != WorkspaceExchangeV2LocalTruth.EMPTY) {
-            return WorkspaceExchangeV2AtomicRestoreResult.Rejected("LOCAL_TRUTH_PRESENT")
+        when (store.recoverInterruptedForRetry(candidateReceipt)) {
+            WorkspaceExchangeV2LocalTruth.EMPTY -> Unit
+            WorkspaceExchangeV2LocalTruth.PRESENT -> return WorkspaceExchangeV2AtomicRestoreResult.Rejected("LOCAL_TRUTH_PRESENT")
+            WorkspaceExchangeV2LocalTruth.RECOVERY_REQUIRED -> return WorkspaceExchangeV2AtomicRestoreResult.Rejected("RECOVERY_REQUIRED")
         }
         return when (val committed = store.commitEmptyLocal(WorkspaceExchangeV2AtomicRestoreCommit(candidateReceipt, read))) {
             is WorkspaceExchangeV2AtomicRestoreStoreResult.Committed ->

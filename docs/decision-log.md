@@ -7,6 +7,13 @@
 - 不采用方案：不把 v2 schema/golden 当作 Android mapper、Desktop SQLite import、SAF、备份或真实跨端验收；在 Android/desktop完整 mapper、asset archive、transaction/journal、重开和回导合同闭合前，不新增完整工作区入口或功能审阅条目。
 - 重新评估触发条件：Android 只读 mapper 可以产生 exact v2 IR，Desktop 以版本化 staging/asset archive/transaction/journal 导入并完成中断回滚和真实回导后，才评估设置二级入口及双端功能审阅。
 
+## 决策：Android v2 恢复只允许设置 OpenDocument 的单文件、空本机路径（2026-08-23）
+
+- 采用：`设置 → 数据与导入 → 完整工作区交换（v2）` 内的 OpenDocument 只消费用户明确选择的一个 URI，受控 bridge 有界读取 bytes 后直达 strict reader → atomic restore owner。UI 不读取流、不解析 ZIP/JSON、不持久化 URI/path/name 或包正文；UI state 只含 content-free outcome、semantic hash 前缀和匿名计数。
+- 采用：以 exact package SHA-256 派生 opaque intent ID，使用户重新选择同一 byte package 时才可能回收同一未发布 journal；非空本机、不同 intent/package 或任何未知 journal 不覆盖、不合并、不删除，按拒绝或 `RECOVERY_REQUIRED` 停止。
+- 不采用：聊天/Composer/工作页入口、目录扫描、多文件选择、SAF/UI 自行解析、用新 intent 绕过同包 journal、将 Android 恢复描述成备份或云同步。
+- 配套修正：chat-first 首次启动不得自动写入空“新对话”，否则用户正常打开设置前本机已非空而恢复入口不可用。保留抽屉中的显式新对话动作，不新增常驻按键。
+
 ## 决策：用户操作直接执行，安全约束不以二次确认表达（已确定）
 
 - 当前选择：用户在应用内选择导入或执行即直接运行；ChatGPT ZIP 在严格预检/解析后自动逐项原子导入，普通聊天与 Compare 不再要求应用内二次确认。

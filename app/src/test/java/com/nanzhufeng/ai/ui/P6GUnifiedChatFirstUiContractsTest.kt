@@ -45,10 +45,11 @@ class P6GUnifiedChatFirstUiContractsTest {
     }
 
     @Test
-    fun `normal work and temporary panes never replace the shared composer with an engineering empty state`() {
-        for (token in listOf("TemporaryConversationPane(", "ConversationWorkScope(", "ConversationComposerDock(", "state.conversations.isEmpty() && !state.isLoading && !state.isCreating", "LaunchedEffect(state.conversations.isEmpty(), state.isCreating) { onCreate() }")) {
+    fun `normal work and temporary panes retain the shared composer while first launch remains empty for controlled restore`() {
+        for (token in listOf("TemporaryConversationPane(", "ConversationWorkScope(", "ConversationComposerDock(", "A first launch must remain an actually empty local truth", "“新对话” from the drawer")) {
             assertTrue("missing $token", workspace.contains(token))
         }
+        assertFalse(workspace.contains("LaunchedEffect(state.conversations.isEmpty(), state.isCreating) { onCreate() }"))
         assertFalse(workspace.contains("还没有本地对话。创建后可验证草稿、Markdown 和安全错误恢复。"))
     }
 

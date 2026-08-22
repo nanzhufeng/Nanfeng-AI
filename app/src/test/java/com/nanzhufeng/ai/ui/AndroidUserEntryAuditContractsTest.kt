@@ -26,17 +26,17 @@ class AndroidUserEntryAuditContractsTest {
     }
 
     @Test
-    fun v2FeatureReviewKeepsDesktopReexportInSettingsWithoutAdvertisingNativeRestore() {
+    fun v2FeatureReviewSynchronizesAndroidEmptyLocalRestoreAndDesktopPrivateReexport() {
         val source = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val card = source.substringAfter("private fun FeatureReviewSettingsCard()").substringBefore("@Composable\nprivate fun SettingsCategoryRow")
 
         listOf(
             "完整工作区交换（v2）",
-            "从已提交私有记录经系统保存位置回导",
+            "Android 可从设置 → 数据与导入选择单个 v2 包，仅在空本机严格恢复",
             "只保留双端设置二级入口",
             "不在聊天主页、Composer 或工作页增加按键",
         ).forEach { token -> assertTrue("missing v2 review detail: $token", card.contains(token)) }
-        assertTrue(card.contains("也不表示已恢复为原生对象"))
+        assertTrue(card.contains("也不会覆盖已有本机数据"))
     }
 
     @Test

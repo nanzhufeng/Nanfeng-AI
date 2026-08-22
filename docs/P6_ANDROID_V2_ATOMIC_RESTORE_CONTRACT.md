@@ -43,4 +43,4 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 
 本增量已实现 schema 38→39 的专属 content-free receipt/provenance/settings 表与 `AndroidWorkspaceExchangeV2AtomicRestoreStore`。它以私有 journal staging、附件 hash 回读和一次 Room transaction 组成可恢复边界：正常失败回滚已移动附件且不发布 receipt；受控中断留下 journal 后，同包在完整 asset ledger 和空 database 双重证明下可从头安全重试，其余 journal 继续阻断恢复，而不把候选对象当作真值。
 
-仍不新增 Settings 功能审阅项、OpenDocument、ViewModel、模拟器、OPPO 或真实用户文件验收。后续 UI/SAF 只能在用户明确选择后有界读取 bytes，并投影 owner 结果；不得直接解析或写库。
+本合同之后已接入独立的 `AndroidWorkspaceExchangeV2OpenDocumentRestorePort`、`WorkspaceExchangeV2RestoreViewModel` 与设置二级入口。OpenDocument 只可在用户明确选择一个文件后读取至多 128 MiB bytes；adapter 不解析 ZIP/JSON、不保留 URI/path/name/正文，且只把有限 bytes 与由 package hash 派生的 opaque intent ID 交给本 owner。UI 只投影 content-free 成功、拒绝或 recovery 状态。真实 DocumentsUI 文件链仍需在项目专属空 AVD 独立验收；OPPO 不在本合同范围。

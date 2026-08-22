@@ -1,5 +1,14 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P6：Android v2 OpenDocument 受控恢复桥与空 AVD 真文件链已闭合；仍非完整 P6
+
+- **用户入口与唯一链路：** Android 仅在 `设置 → 数据与导入 → 导入中心 → 完整工作区交换（v2）` 显示“选择 v2 交换包并恢复”；`ActivityResultContracts.OpenDocument` 只接收用户明确选择的单 URI，UI 不读流、不解析 ZIP/JSON。`AndroidWorkspaceExchangeV2OpenDocumentRestorePort` 流式限制 128 MiB、忽略 URI/path/name/MIME/正文，仅将有限 bytes 与 package-hash 派生的 opaque intent ID 传到 `WorkspaceExchangeV2AtomicRestoreOwner → NfaiExchangeV2PackageReader → AndroidWorkspaceExchangeV2AtomicRestoreStore`。ViewModel/UI state 仅投影 outcome、semantic hash 截断和匿名对象/附件数；原始错误、正文、资产 bytes 与 locator 都不出现。
+- **空本机可达性修复：** 首次 chat-first 壳曾以 `LaunchedEffect` 自动创建“新对话”，使新装 App 在用户进入设置前即被 restore store 视为 `LOCAL_TRUTH_PRESENT`。已移除该隐式写入；抽屉内的“新对话”仍是显式用户操作，首启在此之前保持真正空本机。此修复是空本机恢复合同的必要配套，不新增聊天/Composer 常驻入口。
+- **功能审阅与文档：** Android 与 Desktop 的“功能审阅”均登记为“待您判断是否保留”：Android 仅空本机严格恢复，Desktop 保持 v2 私有导入；建议都只保留设置二级入口，不加聊天、Composer 或工作页按键。`P6_ANDROID_V2_OPEN_DOCUMENT_RESTORE_CONTRACT.md` 记录单 URI、脱敏状态、replay/recovery 及验收门。
+- **定向自动验证：** Android Studio JBR、`--offline --no-daemon`：`WorkspaceExchangeV2OwnerMapperContractsTest` **9/9**、`WorkspaceExchangeV2DocumentsUiContractsTest` **2/2**、`AndroidUserEntryAuditContractsTest` **3/3**、`P6GUnifiedChatFirstUiContractsTest` **5/5** 通过；Desktop `npm test` **93/93** 通过。`assembleP6V2SafEmptyAcceptance` 成功，APK `app/build/outputs/apk/p6V2SafEmptyAcceptance/南枫AI-开发验收.apk` SHA-256 `10f55a95719d3ebe991e963cbfe43b759651314bca4a7f7105e7f1b7cd05c7b6`，v2/v3 签名和正式证书 SHA-256 `6d1d…8661f8` 已核验。
+- **真实隔离 AVD：** 新建且仅本轮使用 `NanfengAiP6V2RestoreOpenDocumentAcceptance` / `emulator-5588`，安装前包不存在；新安装并正常打开后只读 DB owner counts 为 Project/Conversation/Knowledge/Memory/Relation/receipt = **0/0/0/0/0/0**。正常 UI 到设置并实际进入 `com.google.android.documentsui`，从 Download 选择 2,340 B 的本地生成 non-sensitive strict v2 fixture（SHA-256 `fb81be…75174`）；返回 App 显示 `已严格恢复：ae8039c08352… · 5 项对象 · 1 项附件`。只读 DB readback 为 Project/Conversation/Knowledge/Memory/Relation/asset = **1/1/1/1/1/1**，receipt/provenance/settings = **1/7/1**。未运行 `connected*AndroidTest`，未操作 OPPO、Provider、Key、网络或业务 DB 注入。
+- **严格停止与下一步：** 这只关闭 Android 设置单文件 → strict reader → 空本机 atomic restore 的真实 success 链。真实同包 replay、篡包/oversize DocumentsUI 拒绝、进程杀死 journal 恢复、真实历史 schema-38 全库升级、用户真实附件、紧凑/展开视觉、Desktop/Windows/发布与 P0–P11 均未关闭；下一增量必须独立授权，不能把 fixture success 称作这些结论。
+
 ## 2026-08-23 P6：Android v2 schema 38→39 与 journal 失败重试合同已闭合；仍未接 UI/SAF
 
 - **持久实现：** `AndroidWorkspaceExchangeV2AtomicRestoreStore` 是 `WorkspaceExchangeV2AtomicRestoreOwner` 的唯一 concrete store。schema **38→39** 增加 content-free v2 receipt、逐 owner/asset provenance 和安全 settings metadata；`AppContainer` 只装配 owner，不暴露 SAF、ViewModel、worker 或常驻 UI 入口。

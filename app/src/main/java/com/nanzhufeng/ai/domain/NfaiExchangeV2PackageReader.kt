@@ -7,6 +7,9 @@ import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
+/** The largest single v2 package that a user-selected document may enter Android memory as. */
+const val NFAI_EXCHANGE_V2_MAX_PACKAGE_BYTES = 128L * 1024L * 1024L
+
 /**
  * The sole Android v2 package preflight owner. It only accepts caller-bounded bytes and keeps
  * attachment bytes in memory for the current call; it never opens SAF, Room, files, or a network.
@@ -19,7 +22,7 @@ data class NfaiExchangeV2PackageRead(
 
 object NfaiExchangeV2PackageReader {
     fun read(packageBytes: ByteArray): NfaiExchangeV2PackageRead {
-        require(packageBytes.size in 1..MAX_PACKAGE_BYTES.toInt()) { "v2 package 为空或超过 128 MiB 限制。" }
+        require(packageBytes.size in 1..NFAI_EXCHANGE_V2_MAX_PACKAGE_BYTES.toInt()) { "v2 package 为空或超过 128 MiB 限制。" }
         val entries = readZip(packageBytes)
         val manifest = JSONObject(entries["manifest.json"]?.toString(Charsets.UTF_8) ?: error("v2 缺少 manifest。"))
         manifest.requireExact("format", "packageVersion", "exchangeVersion", "export", "files")
@@ -90,7 +93,7 @@ object NfaiExchangeV2PackageReader {
     private data class Asset(val id: String, val entry: String, val mimeType: String, val displayName: String, val byteCount: Long, val sha256: String, val classification: String)
     private const val PACKAGE_FORMAT = "nfai.exchange.package"
     private const val MAX_ENTRIES = 100_000
-    private const val MAX_PACKAGE_BYTES = 128L * 1024L * 1024L
+    private const val MAX_PACKAGE_BYTES = NFAI_EXCHANGE_V2_MAX_PACKAGE_BYTES
     private val STABLE_ID = Regex("[a-z0-9][a-z0-9_-]{1,63}")
     private val SHA256 = Regex("[a-f0-9]{64}")
 }

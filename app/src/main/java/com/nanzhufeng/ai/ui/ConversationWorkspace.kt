@@ -424,12 +424,10 @@ internal fun ConversationWorkspaceDialog(
                     onEnterWork = { onExitTemporary(); onSurfaceChanged(com.nanzhufeng.ai.domain.ConversationSurface.WORK) },
                 )
             } else Box(Modifier.fillMaxSize()) {
-                // A fresh chat canvas owns a real empty local conversation before it is shown.
-                // This preserves the exact same composer on normal, work, and temporary panes;
-                // the canvas never substitutes product UI with an engineering empty-state label.
-                if (state.surface == com.nanzhufeng.ai.domain.ConversationSurface.CHAT && state.conversations.isEmpty() && !state.isLoading && !state.isCreating) {
-                    LaunchedEffect(state.conversations.isEmpty(), state.isCreating) { onCreate() }
-                }
+                // A first launch must remain an actually empty local truth until the user chooses
+                // “新对话” from the drawer. In particular, OpenDocument v2 restore may safely run
+                // before any business owner exists; the normal drawer action still creates the
+                // same chat-first composer on explicit user intent.
                 var workSentFromMessageCount by remember(state.selectedConversationId) { mutableStateOf<Int?>(null) }
                 var chatSentFromMessageCount by remember(state.selectedConversationId) { mutableStateOf<Int?>(null) }
                 var floatingComposerHeight by remember { mutableStateOf(60.dp) }

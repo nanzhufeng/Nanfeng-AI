@@ -233,6 +233,7 @@ internal fun NanfengAiApp(
     localBackupRestoreViewModel: LocalBackupRestoreViewModel,
     conversationExchangeExportViewModel: ConversationExchangeExportViewModel,
     workspaceExchangeV2ExportViewModel: WorkspaceExchangeV2ExportViewModel,
+    workspaceExchangeV2RestoreViewModel: WorkspaceExchangeV2RestoreViewModel,
     accountSyncViewModel: P7DAccountSyncViewModel,
     dualPathConnectionViewModel: DualPathConnectionViewModel,
     p8ControlledAgentViewModel: P8ControlledAgentViewModel,
@@ -282,6 +283,9 @@ internal fun NanfengAiApp(
         val scope = pendingWorkspaceExchangeV2Scope
         pendingWorkspaceExchangeV2Scope = null
         if (uri != null && scope != null) workspaceExchangeV2ExportViewModel.export(uri) else workspaceExchangeV2ExportViewModel.clearScope()
+    }
+    val workspaceExchangeV2RestorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(workspaceExchangeV2RestoreViewModel::selectedDocument)
     }
     MaterialTheme(
         colorScheme = lightColorScheme(
@@ -345,6 +349,10 @@ internal fun NanfengAiApp(
                 },
                 workspaceExchangeV2ExportState = workspaceExchangeV2ExportViewModel.state,
                 onSelectWorkspaceExchangeV2Scope = workspaceExchangeV2ExportViewModel::selectCompleteWorkspaceScope,
+                workspaceExchangeV2RestoreState = workspaceExchangeV2RestoreViewModel.state,
+                onSelectWorkspaceExchangeV2RestoreDocument = {
+                    workspaceExchangeV2RestorePicker.launch(arrayOf(WORKSPACE_EXCHANGE_V2_DOCUMENT_MIME, "application/x-zip-compressed", "application/octet-stream"))
+                },
                 accountSyncState = accountSyncViewModel.state,
                 onOpenAccountSync = accountSyncViewModel::open,
                 dualPathState = dualPathConnectionViewModel.state,
@@ -564,6 +572,8 @@ private fun CaptureScreen(
     onExportConversationExchange: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     workspaceExchangeV2ExportState: WorkspaceExchangeV2ExportUiState,
     onSelectWorkspaceExchangeV2Scope: () -> Unit,
+    workspaceExchangeV2RestoreState: WorkspaceExchangeV2RestoreUiState,
+    onSelectWorkspaceExchangeV2RestoreDocument: () -> Unit,
     accountSyncState: P7DAccountSyncUiState,
     onOpenAccountSync: () -> Unit,
     dualPathState: DualPathConnectionUiState,
@@ -748,6 +758,8 @@ private fun CaptureScreen(
                 WorkspaceExchangeV2ExportCard(
                     state = workspaceExchangeV2ExportState,
                     onSelectScope = onSelectWorkspaceExchangeV2Scope,
+                    restoreState = workspaceExchangeV2RestoreState,
+                    onSelectRestoreDocument = onSelectWorkspaceExchangeV2RestoreDocument,
                 )
                 NanfengKnowledgeExportImportSettingsPage(
                     state = nanfengKnowledgeImportState,
@@ -767,13 +779,15 @@ private fun CaptureScreen(
 private fun WorkspaceExchangeV2ExportCard(
     state: WorkspaceExchangeV2ExportUiState,
     onSelectScope: () -> Unit,
+    restoreState: WorkspaceExchangeV2RestoreUiState,
+    onSelectRestoreDocument: () -> Unit,
 ) {
     WhiteCard {
         Text("完整工作区交换（v2）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text("先选择完整工作区范围，再由系统选择保存位置。导出前严格校验；只在写入后回读哈希一致时显示成功。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(6.dp))
-        Text("附件一律按高敏感内容处理；它不是备份、云同步或对象恢复。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        Text("附件一律按高敏感内容处理；它不是备份、云同步或对现有本机数据的覆盖。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         state.notice?.let { notice -> Spacer(Modifier.height(8.dp)); Text(notice, color = SecondaryText, style = MaterialTheme.typography.bodySmall) }
         state.error?.let { error -> Spacer(Modifier.height(8.dp)); Text(error, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
         Spacer(Modifier.height(10.dp))
@@ -781,7 +795,31 @@ private fun WorkspaceExchangeV2ExportCard(
             if (state.working) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = AccentOnPrimary)
             else Text("选择完整工作区范围")
         }
+        Spacer(Modifier.height(14.dp))
+        Text("受控恢复", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(4.dp))
+        Text("只读取您明确选择的单个 v2 包；仅空本机可恢复，已有本机数据或不确定恢复状态一律不覆盖。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        WorkspaceExchangeV2RestoreUiMessage(restoreState)?.let { message ->
+            Spacer(Modifier.height(8.dp))
+            Text(message.first, color = message.second, style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onSelectRestoreDocument, enabled = !restoreState.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) {
+            if (restoreState.working) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            else Text("选择 v2 交换包并恢复")
+        }
     }
+}
+
+private fun WorkspaceExchangeV2RestoreUiMessage(state: WorkspaceExchangeV2RestoreUiState): Pair<String, Color>? = when (state.outcome) {
+    WorkspaceExchangeV2RestoreUiOutcome.IDLE -> null
+    WorkspaceExchangeV2RestoreUiOutcome.RESTORED -> "已严格恢复：${state.semanticHashPrefix}… · ${state.objectCount} 项对象 · ${state.attachmentCount} 项附件" to SecondaryText
+    WorkspaceExchangeV2RestoreUiOutcome.REPLAYED -> "已验证相同恢复回执：${state.semanticHashPrefix}… · 未重复写入对象或附件" to SecondaryText
+    WorkspaceExchangeV2RestoreUiOutcome.PACKAGE_REJECTED -> "所选交换包未通过完整校验，未读取或覆盖本机数据。" to ErrorRed
+    WorkspaceExchangeV2RestoreUiOutcome.LOCAL_TRUTH_PRESENT -> "当前本机已有数据或待恢复记录，已拒绝覆盖。" to ErrorRed
+    WorkspaceExchangeV2RestoreUiOutcome.INTENT_CONFLICT -> "恢复请求与已确认的交换包不一致，未写入本机数据。" to ErrorRed
+    WorkspaceExchangeV2RestoreUiOutcome.RECOVERY_REQUIRED -> "检测到无法安全判定的恢复状态，已停止；请保留本机数据并联系支持。" to ErrorRed
+    WorkspaceExchangeV2RestoreUiOutcome.FAILED_RECOVERABLY -> "恢复未完成，已保留可恢复状态；请重新选择同一交换包重试，不要清除数据。" to ErrorRed
 }
 
 @Composable
@@ -987,9 +1025,9 @@ private fun FeatureReviewSettingsCard() {
         WhiteCard {
             Text("完整工作区交换（v2）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
-            Text("当前：待您判断是否保留；Android 仅可从设置 → 数据与导入显式选择完整范围并经系统保存位置导出 v2 包；Desktop 仅可从设置选择 v2 包私有导入，或从已提交私有记录经系统保存位置回导。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("当前：待您判断是否保留；Android 可从设置 → 数据与导入选择单个 v2 包，仅在空本机严格恢复；Desktop 仅可从设置选择 v2 包私有导入，或从已提交私有记录经系统保存位置回导。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
-            Text("建议：只保留双端设置二级入口，不在聊天主页、Composer 或工作页增加按键；它不是备份、云同步，也不表示已恢复为原生对象。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("建议：只保留双端设置二级入口，不在聊天主页、Composer 或工作页增加按键；它不是备份、云同步，也不会覆盖已有本机数据。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
