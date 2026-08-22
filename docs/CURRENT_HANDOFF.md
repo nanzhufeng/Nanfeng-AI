@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P4：全量本机候选审计，无可独立实现的遗留合同；未触设备、网络、Provider 或 Key
+
+- **审计范围与现场：** 开始时工作区 0 改动；本轮只读核对 `MASTER_PLAN_COMPLETION_AUDIT_20260816.md` 的 P4 行、`MASTER_DEVELOPMENT_BLUEPRINT.md` §17、`P4A` 至 `P4O` 全部合同，以及 Android 生产/测试目录。P4-A–O 均已有唯一领域链、`AppContainer` 生产装配和定向合同测试；典型 owner 为 `ProjectDomain`、`ContextSelectionDomain`、`MemoryDomain`、`KnowledgeDomain`、`LocalContextCompressionDomain`、`JsonKnowledgeAdapter`、`PdfTextKnowledgeAdapter` 与 `ManageWebTextSnapshotUseCase`。对应 `P4A…P4O` 的 domain 或 Room contracts 均仍在当前源树，未发现“合同已立但尚未编码/测试”的 P4 子项。
+- **已本机闭合：** Projects/Memory/显式 Context/Knowledge 检索与关系、Markdown/JSON/PDF portability、离线 Eval、抽取式压缩/稳定前缀元数据、L3 本地 action trace 及严格 HTTPS 网页 Adapter 的代码和本地合同都已在各自合同范围内收口；P4-O 的公共 DNS/HTTPS 成功仍是网络验收债务，不能由本机代码替代。
+- **剩余门的精确分类：** 语义摘要需要真实 Provider 或另行明确、可证明的本地语义引擎；真实缓存、成本/质量基准、Provider/Harness 回归、长上下文与用户价值都依赖真实执行/服务，当前禁止触碰。后续“更多 Adapter”尚未指定具体格式、用户任务与保真边界；按“一 Adapter 一合同”原则属于产品选择，不能从现有 P4 事实推定实现。P3 的真实退出门同样是 P4 的前置外部门。
+- **停止点：** 本轮没有代码、测试或构建变更，也没有运行 ADB/AVD/OPPO、`connected*AndroidTest`、网络、Provider、Key/账号或凭据读取。下一步只有在南烛枫指定一个具体本地 Adapter/本地语义引擎的用户任务，或单独授权真实 Provider/Harness 验收后，才可新立一个 P4 合同；不得以此审计宣称 P4 或 P0–P11 完成。
+
 ## 2026-08-23 P5：已提交 code-53 的唯一离线正式构建通过本机门；未触设备，严格停止
 
 - **冻结输入与唯一构建：** 干净 `main` 的构建提交为 `a861de330b54846fb1b769b6041f45e941ff9ee1`（开始时工作区 0 改动）；正式 `versionCode` 为 **53**、`versionName` 为 `0.3.0-p10a`。确认无 Gradle/GradleDaemon 争用后，使用 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`ANDROID_HOME=/Users/nanzhufeng/Library/Android/sdk`、`--offline --no-daemon`，仅运行一次 `:app:assembleRelease` 并成功（51 tasks，3 executed、48 up-to-date）。四项用户级 `nanfengAi.releaseV2.*` 备用签名属性仅核对为 non-empty，未读取或输出秘密。
