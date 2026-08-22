@@ -1,5 +1,12 @@
 # P5 OPPO 只读门审计（2026-08-21）
 
+## 2026-08-23 code-52 正式覆盖与数据保留验收
+
+- **前置：** 本地正式 APK 为 `com.nanzhufeng.ai / 52 / 0.3.0-p10a`，SHA-256 `c5112374643319617e8cffa1e32fab94605bd4cccadda6fbb6d390f99fd23f91`；Android Studio JBR `apksigner` 证实 v2/v3 为真、证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。OPPO `3B157F009E800000` 只读复核仍为 code 51，`firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378`，且从已安装 `base.apk` 只读计算的证书摘要相同。
+- **唯一写入：** 在更高 versionCode、同包名和同证书门全部通过后，仅一次将该正式 APK 推送到 `/data/local/tmp/nanfeng-ai-0.3.0-p10a-code52.apk` 并执行 `pm install -r --user 0`，系统返回 `Success`；没有 `adb install`、Debug/Instrumentation、`connected*AndroidTest`、卸载、清数据、数据库访问或自动化测试。
+- **安装后回读：** package 为 code 52，首次安装时间与两个 inode 不变。设备 installed `base.apk` 只读拉回后 SHA-256 与本地产物精确相同，证书摘要保持 release-v2 值。Launcher `com.nanzhufeng.ai/.NanfengAiActivity` 启动返回 `Status: ok` 并成为窗口焦点；未抓取/读取 UI 或会话内容。推送临时 APK 已从 `/data/local/tmp` 移除。
+- **边界：** 此证据关闭正式升级、数据 inode 保留和前台启动，不证明业务会话逐项可用、Provider/账号/外部服务或发布回下载；P0–P11 仍未整体完成。
+
 ## 结论
 
 P5 的 OPPO 正式覆盖安装与可见 UI 验收本轮均**未执行**。当前源码正式 APK 与 OPPO 已安装包同为 `com.nanzhufeng.ai`、`versionCode=51`、`versionName=0.3.0-p10a`，但 APK 字节身份不同；不满足“确有更高版本”的一次 `push -> pm install -r --user 0` 前提。停止于只读证据，不重试、不降级为卸载/清数据，也不启动应用。

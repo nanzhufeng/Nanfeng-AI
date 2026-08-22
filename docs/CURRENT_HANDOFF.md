@@ -1,5 +1,13 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P5：code-52 正式构建、OPPO 数据保留覆盖与前台启动已验收
+
+- **产物与本机验证：** `app/build/outputs/apk/release/南枫AI.apk` 是 `com.nanzhufeng.ai / versionCode=52 / versionName=0.3.0-p10a`，SHA-256 为 `c5112374643319617e8cffa1e32fab94605bd4cccadda6fbb6d390f99fd23f91`。Android Studio JBR 下 `apksigner` 验证 v2/v3 为真，release-v2 证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **构建证据：** 外部 Gradle 8.7 任务退出后，先提交 AAPT2 metadata 最窄修复 `08cd46c`；随后仅一次 Android Studio JBR、`JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`、`--offline --no-daemon` 的 `:app:assembleRelease` 成功（51 个 task，14 执行）。四项 `nanfengAi.releaseV2.*` 备用属性只以非空状态核验，未读取或输出值。
+- **OPPO 覆盖前后：** 目标 `3B157F009E800000` 安装前为 code 51；`firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378`。同包名、较高 versionCode 与同证书门均通过后，仅一次 `push -> pm install -r --user 0` 成功。安装后为 code 52，首次安装时间及两个 inode 不变；从设备只读拉回的 installed `base.apk` SHA-256 与本地产物完全相同。
+- **前台验收与边界：** 精确 Launcher `com.nanzhufeng.ai/.NanfengAiActivity` 返回 `Status: ok`，并成为 OPPO `mCurrentFocus`/`mFocusedApp`。未抓取屏幕或 UI 文本、未读取会话/私有数据、未运行 `connected*AndroidTest`、未卸载或清数据；仅移除 `/data/local/tmp/nanfeng-ai-0.3.0-p10a-code52.apk` 推送临时文件。
+- **总控边界与下一步：** 这关闭 P5 的当前正式构建、验签、一次数据保留 OPPO 覆盖及前台启动门；不等于发布回下载、Provider、Windows、OAuth/Supabase、真实工具/生态目标、P10 双消费者或 P0–P11 总控完成。下一条工作应从 `MASTER_DEVELOPMENT_BLUEPRINT.md` §17 选择一个仍未关闭的最小真实增量，并先重新核对实时外部门。
+
 ## 2026-08-23 P11：AAPT2 verification metadata 最窄闭环；P5 build 门已恢复
 
 - **当前事实：** 外部 Gradle 8.7 的 wrapper、worker 与 daemon 已不在进程列表；仅保留与该任务无关的空闲 Kotlin daemon。当前工作树基于 `041bb14`，只修改 `gradle/verification-metadata.xml`。
