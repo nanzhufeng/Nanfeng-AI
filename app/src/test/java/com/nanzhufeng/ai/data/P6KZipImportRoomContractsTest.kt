@@ -61,4 +61,16 @@ class P6KZipImportRoomContractsTest {
         sqlite.query("PRAGMA table_info(local_exact_reuse_entries)").use { columns -> val names = generateSequence { if (columns.moveToNext()) columns.getString(1) else null }.toSet(); assertTrue("text" !in names && "responseMessageId" in names && "canonicalRequestHash" in names) }
         helper.close(); context.deleteDatabase(name)
     }
+
+    @Test fun `schema thirty eight instance upgrades without changing existing facts and appends v2 restore tables`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "v2-restore-migration-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(38) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) { db.execSQL("CREATE TABLE local_exact_reuse_entries (id TEXT NOT NULL PRIMARY KEY)"); db.execSQL("INSERT INTO local_exact_reuse_entries VALUES ('preserved-38')") }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase; NanfengAiDatabase.MIGRATION_38_39.migrate(sqlite); sqlite.version = 39
+        sqlite.query("SELECT id FROM local_exact_reuse_entries").use { assertTrue(it.moveToFirst()); assertEquals("preserved-38", it.getString(0)) }
+        listOf("workspace_exchange_v2_restore_receipts", "workspace_exchange_v2_restore_provenance", "workspace_exchange_v2_restore_settings").forEach { table -> sqlite.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use { assertTrue(it.moveToFirst()) } }
+        helper.close(); context.deleteDatabase(name)
+    }
 }

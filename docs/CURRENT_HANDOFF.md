@@ -1,12 +1,12 @@
 # 南枫 AI 当前交接
 
-## 2026-08-23 P6：Android v2 concrete Room 原子恢复边界已闭合；仍未接 UI/SAF
+## 2026-08-23 P6：Android v2 schema 38→39 与 journal 失败重试合同已闭合；仍未接 UI/SAF
 
 - **持久实现：** `AndroidWorkspaceExchangeV2AtomicRestoreStore` 是 `WorkspaceExchangeV2AtomicRestoreOwner` 的唯一 concrete store。schema **38→39** 增加 content-free v2 receipt、逐 owner/asset provenance 和安全 settings metadata；`AppContainer` 只装配 owner，不暴露 SAF、ViewModel、worker 或常驻 UI 入口。
-- **可恢复边界：** store 先严格重验 canonical IR，再建立 app-private journal staging，逐附件同步写入并 hash 回读；同一次 Room transaction 复核空本机/intent、提升附件、写 Project/Conversation/Message/Knowledge/Memory/Relationship/settings/provenance/receipt 并作 typed readback。普通失败回退已提升文件且不发布 receipt；中断留下 journal 并使后续恢复以 `RECOVERY_REQUIRED` 停止。
+- **38→39 与可恢复边界：** `MIGRATION_38_39` 仅追加三张 v2 metadata 表，历史 schema-38 事实保持不变，完整 migration 链已连续到 39。store 先严格重验 canonical IR，再建立 app-private journal staging，逐附件同步写入并 hash 回读；同一次 Room transaction 复核空本机/intent、提升附件、写 Project/Conversation/Message/Knowledge/Memory/Relationship/settings/provenance/receipt 并作 typed readback。普通失败回退已提升文件且零 receipt/provenance；同 intent 同 package 只有在 database 仍空、无其他 journal，且 staged 文件名属于 receipt asset ledger、final 文件逐项 hash 匹配该 ledger 时才自动清理未发布候选并从头重试，任何歧义继续 `RECOVERY_REQUIRED`。
 - **不覆盖与重放：** 本机任一业务 owner、private attachment、receipt/provenance/settings 或 journal 均阻断恢复；相同 intent+包只回读完整 content-free receipt，异包 intent 冲突，绝不二次写入。
-- **定向验证：** Android Studio JBR、`--offline --no-daemon` 下 `WorkspaceExchangeV2OwnerMapperContractsTest` **8/8** 通过。新增 Robolectric Room 合同从 strict writer 包实际恢复一组 Project/Conversation/Knowledge/Memory/Relationship、附件、receipt/provenance，核对消息正文与私有附件存在、关闭后 reopen 读回，并验证 replay 的 owner-field hashes 完整。`git diff --check` 通过。
-- **严格停止：** 未接 Settings/OpenDocument/ViewModel、没有用户选文件、模拟器或 OPPO 验收；未验证 schema 38 真实历史库升级、崩溃/进程杀死的 journal 恢复、真实用户附件以及 UI 中文失败提示。不能称 Android v2 恢复、P6 或 P0–P11 完成。下一最小增量应只补 isolated schema-38 migration 与 journal interruption/recovery Room 合同；之后才另立 SAF/UI 增量。
+- **定向验证：** Android Studio JBR、`--offline --no-daemon` 下：`WorkspaceExchangeV2OwnerMapperContractsTest` **9/9**、`P6KZipImportRoomContractsTest` **5/5**、`P5DLocalBackupRestoreContractsTest` **4/4** 全绿。新增 Robolectric Room 合同覆盖 schema-38 实例的既有事实保留与 39 三表存在、完整 migration 链，以及“附件提升后受控中断”零对象/零 receipt/零 provenance、journal 存在、同包安全回收重试、journal 清除与完整 receipt/provenance 发布。`git diff --check` 通过。
+- **严格停止：** 未接 Settings/OpenDocument/ViewModel、没有用户选文件、模拟器或 OPPO 验收；未验证真实历史 schema-38 全库的升级、真实进程杀死后的 journal 恢复、真实用户附件以及 UI 中文失败提示。不能称 Android v2 恢复、P6 或 P0–P11 完成。下一最小增量如获独立授权，才可为既有 owner 接单独的 SAF/UI 合同与真实文件验收；不得绕过当前 empty-local 与 journal 门。
 
 ## 2026-08-23 P6：Android v2 原子恢复唯一领域 owner 已立约；持久写入仍未接入
 

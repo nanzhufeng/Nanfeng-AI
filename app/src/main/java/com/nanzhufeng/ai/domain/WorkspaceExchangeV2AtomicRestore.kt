@@ -54,6 +54,11 @@ sealed interface WorkspaceExchangeV2AtomicRestoreStoreResult {
 interface WorkspaceExchangeV2AtomicRestoreStore {
     /** Existing receipt lookup is content-free and never reconstructs a workspace. */
     fun receipt(intentId: String): WorkspaceExchangeV2RestoreReceipt?
+    /**
+     * Reclaims only a demonstrably unpublished journal for this exact receipt before the empty
+     * local-truth guard.  Implementations must leave any ambiguous candidate recoverable.
+     */
+    fun recoverInterruptedForRetry(receipt: WorkspaceExchangeV2RestoreReceipt): WorkspaceExchangeV2LocalTruth = localTruth()
     fun localTruth(): WorkspaceExchangeV2LocalTruth
     fun commitEmptyLocal(commit: WorkspaceExchangeV2AtomicRestoreCommit): WorkspaceExchangeV2AtomicRestoreStoreResult
 }
@@ -78,7 +83,7 @@ class WorkspaceExchangeV2AtomicRestoreOwner(
             return if (existing.matches(candidateReceipt)) WorkspaceExchangeV2AtomicRestoreResult.Replayed(existing)
             else WorkspaceExchangeV2AtomicRestoreResult.Rejected("INTENT_CONFLICT")
         }
-        if (store.localTruth() != WorkspaceExchangeV2LocalTruth.EMPTY) {
+        if (store.recoverInterruptedForRetry(candidateReceipt) != WorkspaceExchangeV2LocalTruth.EMPTY) {
             return WorkspaceExchangeV2AtomicRestoreResult.Rejected("LOCAL_TRUTH_PRESENT")
         }
         return when (val committed = store.commitEmptyLocal(WorkspaceExchangeV2AtomicRestoreCommit(candidateReceipt, read))) {

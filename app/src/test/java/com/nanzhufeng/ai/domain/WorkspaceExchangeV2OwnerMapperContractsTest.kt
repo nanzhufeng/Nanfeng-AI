@@ -218,6 +218,48 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
         }
     }
 
+    @Test fun `interrupted Room restore leaves no partial receipt and same package safely reclaims its journal`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "v2-restore-journal-${UUID.randomUUID()}.db"
+        val intentId = "restore-v2-journal-${UUID.randomUUID()}"
+        val source = fixture()
+        val output = RecordingOutput(null)
+        NfaiExchangeV2PackageWriter(mapper(source), source).write(
+            source.selection, NfaiExchangeSafeSettings("zh-CN", "SYSTEM"), output,
+        )
+        context.deleteDatabase(name)
+        val database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, name).allowMainThreadQueries().build()
+        val journal = File(context.filesDir, ".nfai-v2-restore/$intentId")
+        val attachment = File(context.filesDir, "attachments/v1/${source.asset.sha256}.txt")
+        try {
+            val interrupted = WorkspaceExchangeV2AtomicRestoreOwner(
+                AndroidWorkspaceExchangeV2AtomicRestoreStore(context, database) { error("test interrupted after promotion") }, clock,
+            ).restore(WorkspaceExchangeV2RestoreRequest(intentId, output.bytes))
+            assertEquals(WorkspaceExchangeV2AtomicRestoreResult.FailedRecoverably, interrupted)
+            assertTrue(journal.isDirectory)
+            assertTrue(!attachment.exists())
+            assertEquals(0, database.projectDao().listAllForP7ESemanticSnapshot().size)
+            assertEquals(0, database.privateAttachmentAssetDao().assetCount())
+            assertEquals(0, database.workspaceExchangeV2RestoreDao().receiptCount())
+            assertEquals(0, database.workspaceExchangeV2RestoreDao().provenanceCount())
+            File(journal, "assets/${source.asset.sha256}.txt").writeText("interrupted staging bytes")
+
+            val retried = WorkspaceExchangeV2AtomicRestoreOwner(
+                AndroidWorkspaceExchangeV2AtomicRestoreStore(context, database), clock,
+            ).restore(WorkspaceExchangeV2RestoreRequest(intentId, output.bytes))
+            assertTrue("retried=$retried", retried is WorkspaceExchangeV2AtomicRestoreResult.Restored)
+            assertTrue(!journal.exists())
+            assertTrue(attachment.isFile)
+            assertEquals(1, database.workspaceExchangeV2RestoreDao().receiptCount())
+            assertEquals(NfaiExchangeV2PackageReader.read(output.bytes).receipt.ownerFieldHashes.size, database.workspaceExchangeV2RestoreDao().provenanceCount())
+        } finally {
+            database.close()
+            context.deleteDatabase(name)
+            journal.deleteRecursively()
+            attachment.delete()
+        }
+    }
+
     @Test fun `complete workspace scope is explicit exhaustive and marks binary attachments high sensitive`() {
         val source = fixture()
         val planner = WorkspaceExchangeV2ScopePlanner(

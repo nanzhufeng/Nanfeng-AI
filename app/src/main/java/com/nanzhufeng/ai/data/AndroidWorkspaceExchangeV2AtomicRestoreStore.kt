@@ -31,6 +31,7 @@ import com.nanzhufeng.ai.domain.WorkspaceExchangeV2AtomicRestoreStoreResult
 import com.nanzhufeng.ai.domain.WorkspaceExchangeV2LocalTruth
 import com.nanzhufeng.ai.domain.WorkspaceExchangeV2RestoreReceipt
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.time.Instant
 import org.json.JSONArray
@@ -38,12 +39,15 @@ import org.json.JSONObject
 
 /**
  * The only concrete Android v2 restore store. A journaled private-file staging root plus one
- * Room transaction is the recoverable boundary: crashes leave the journal and block all further
- * restores; ordinary failures roll the moved files back and publish no receipt.
+ * Room transaction is the recoverable boundary: only an exact, unpublished same-package journal
+ * can be reclaimed for retry; every ambiguous journal blocks further restores. Ordinary failures
+ * roll moved files back and publish no receipt.
  */
 class AndroidWorkspaceExchangeV2AtomicRestoreStore(
     context: Context,
     private val database: NanfengAiDatabase,
+    /** Test-only fault seam; production callers use the no-op default. */
+    private val afterAttachmentPromotion: (Int) -> Unit = {},
 ) : WorkspaceExchangeV2AtomicRestoreStore {
     private val app = context.applicationContext
     private val stagingRoot = File(app.filesDir, ".nfai-v2-restore")
@@ -58,11 +62,33 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
         else -> WorkspaceExchangeV2LocalTruth.EMPTY
     }
 
+    override fun recoverInterruptedForRetry(receipt: WorkspaceExchangeV2RestoreReceipt): WorkspaceExchangeV2LocalTruth {
+        val journal = File(stagingRoot, receipt.intentId)
+        if (!journal.exists()) return localTruth()
+        if (!databaseTruthEmpty() || hasOtherJournal(journal)) return WorkspaceExchangeV2LocalTruth.RECOVERY_REQUIRED
+        val expectedHashes = receipt.ownerFieldHashes
+            .filterKeys { it.startsWith("asset/") }
+            .values
+            .toSet()
+        if (expectedHashes.size != receipt.assetCount || expectedHashes.any { !it.matches(SHA256) }) {
+            return WorkspaceExchangeV2LocalTruth.RECOVERY_REQUIRED
+        }
+        val staged = File(journal, "assets")
+        val journalShapeIsSafe = journal.isDirectory && journal.listFiles()?.all { it == staged } == true &&
+            staged.isDirectory && staged.listFiles().orEmpty().all { it.hasExpectedPartialAssetName(expectedHashes) }
+        val finalShapeIsSafe = attachmentRoot.listFiles().orEmpty().all { it.isExpectedPublishedAsset(expectedHashes) }
+        if (!journalShapeIsSafe || !finalShapeIsSafe) return WorkspaceExchangeV2LocalTruth.RECOVERY_REQUIRED
+        if (!attachmentRoot.listFiles().orEmpty().all(File::delete) || !journal.deleteRecursively()) {
+            return WorkspaceExchangeV2LocalTruth.RECOVERY_REQUIRED
+        }
+        return localTruth()
+    }
+
     override fun commitEmptyLocal(commit: WorkspaceExchangeV2AtomicRestoreCommit): WorkspaceExchangeV2AtomicRestoreStoreResult {
         val decoded = runCatching { DecodedWorkspace.decode(commit) }.getOrElse { return WorkspaceExchangeV2AtomicRestoreStoreResult.FailedRecoverably }
         val existing = receipt(commit.receipt.intentId)
         if (existing != null) return if (existing.matches(commit.receipt)) WorkspaceExchangeV2AtomicRestoreStoreResult.Replayed(existing) else WorkspaceExchangeV2AtomicRestoreStoreResult.IntentConflict
-        if (localTruth() != WorkspaceExchangeV2LocalTruth.EMPTY) return WorkspaceExchangeV2AtomicRestoreStoreResult.LocalTruthPresent
+        if (recoverInterruptedForRetry(commit.receipt) != WorkspaceExchangeV2LocalTruth.EMPTY) return WorkspaceExchangeV2AtomicRestoreStoreResult.LocalTruthPresent
         val journal = File(stagingRoot, commit.receipt.intentId)
         val staged = runCatching { stageAssets(journal, decoded.assets, commit.packageRead.assets) }.getOrElse { return WorkspaceExchangeV2AtomicRestoreStoreResult.FailedRecoverably }
         val moved = mutableListOf<Pair<File, File>>()
@@ -77,6 +103,7 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
                         staged.forEach { (stage, final) ->
                             if (!stage.renameTo(final)) error("v2 attachment promotion failed")
                             moved += stage to final
+                            afterAttachmentPromotion(moved.size)
                         }
                         write(decoded, commit.receipt)
                         verifyReadback(decoded, commit.receipt)
@@ -139,6 +166,22 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
     private fun hasOtherJournal(own: File) = stagingRoot.listFiles()?.any { it != own } == true
     private fun extensionFor(mime: String) = mapOf("image/jpeg" to ".jpg", "image/png" to ".png", "image/webp" to ".webp", "video/mp4" to ".mp4", "audio/mpeg" to ".mp3", "audio/wav" to ".wav", "audio/mp4" to ".m4a", "application/pdf" to ".pdf", "text/markdown" to ".md", "application/json" to ".json", "text/csv" to ".csv", "text/plain" to ".txt").getValue(mime)
     private fun sha256(value: ByteArray) = java.security.MessageDigest.getInstance("SHA-256").digest(value).joinToString("") { "%02x".format(it) }
+    private fun sha256(file: File): String = FileInputStream(file).use { input ->
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        generateSequence { input.read(buffer).takeIf { it > 0 } }.forEach { digest.update(buffer, 0, it) }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }
+    private fun File.hasExpectedPartialAssetName(expectedHashes: Set<String>): Boolean {
+        if (!isFile) return false
+        val dot = name.indexOf('.')
+        return dot == 64 && name.substring(0, dot) in expectedHashes && name.substring(dot) in ATTACHMENT_EXTENSIONS
+    }
+    private fun File.isExpectedPublishedAsset(expectedHashes: Set<String>): Boolean {
+        if (!hasExpectedPartialAssetName(expectedHashes)) return false
+        val dot = name.indexOf('.')
+        return sha256(this) == name.substring(0, dot)
+    }
 
     private data class Asset(val id: String, val entry: String, val mimeType: String, val displayName: String, val byteCount: Long, val sha256: String)
     private data class ConversationPayload(val entity: ConversationEntity, val nodes: List<MessageNodeEntity>, val blocks: Map<String, List<MessageContentBlockEntity>>, val memorySources: List<ConversationMemorySourceEntity>)
@@ -173,6 +216,11 @@ class AndroidWorkspaceExchangeV2AtomicRestoreStore(
             private fun JSONObject.instant(name: String) = Instant.parse(getString(name)).toEpochMilli()
             private fun JSONObject.nullableInstant(name: String): Long? = nullable(name)?.let { Instant.parse(it).toEpochMilli() }
         }
+    }
+
+    private companion object {
+        val SHA256 = Regex("[a-f0-9]{64}")
+        val ATTACHMENT_EXTENSIONS = setOf(".jpg", ".png", ".webp", ".mp4", ".mp3", ".wav", ".m4a", ".pdf", ".md", ".json", ".csv", ".txt")
     }
 }
 

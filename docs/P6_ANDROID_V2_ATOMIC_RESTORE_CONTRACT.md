@@ -24,7 +24,7 @@
 4. 在同一原子边界写入 v2 provenance 和 content-free receipt；
 5. 完成 typed readback（引用完整性、semantic hash、asset ledger 与 owner-field hashes）后才发布 committed receipt。
 
-任一步失败必须保留既有本机真值；未发布的 candidate/附件只可保留为恢复 journal，以便显式重试或清理，不能被业务 UI 当作已恢复内容。恢复成功后若底层采用 database switch，旧 live database 直到 typed readback 成功才可移除；调用方必须重建容器后读取新的真值。
+任一步失败必须保留既有本机真值；未发布的 candidate/附件只可保留为恢复 journal，不能被业务 UI 当作已恢复内容。下一次同 intent、同 package 的 owner 调用只可在 database 仍完全空、没有其他 journal，且 journal staged 文件名逐项属于该 receipt 的 asset ledger、final 残留逐文件 hash 匹配该 ledger 时清理该未发布候选并从头重试（staged bytes 可是不完整的写入）。任何未知文件、未知名称或 final hash 不符都保持 `RECOVERY_REQUIRED`，不得猜测、删除或覆盖。恢复成功后若底层采用 database switch，旧 live database 直到 typed readback 成功才可移除；调用方必须重建容器后读取新的真值。
 
 ## Receipt 与 provenance 最小化
 
@@ -36,10 +36,11 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 - 非空本机：返回 `LOCAL_TRUTH_PRESENT`，零对象/附件/receipt/provenance 写入。
 - 空本机且 package 有效：仅一次 atomic commit，commit input 的 receipt/hash 与 reader 完全一致。
 - 同 intent 同包重放只回读 receipt；同 intent 异包拒绝，均零新写入。
-- atomic store 的失败或中断：不返回成功；已存在本机真值不变，candidate 仅按 recoverable journal 规则保留。
+- atomic store 的失败或中断：不返回成功、零 partial receipt/provenance；已存在本机真值不变。只有精确同包、hash-complete、数据库仍空的 journal 可回收并安全重试；其余 candidate 只按 `RECOVERY_REQUIRED` 保留。
+- schema 38 历史实例升级至 39 只追加 v2 receipt/provenance/settings 表，不改写既有事实；完整 migration 链必须连续至 39。
 
 ## 尚未接入
 
-本增量已实现 schema 38→39 的专属 content-free receipt/provenance/settings 表与 `AndroidWorkspaceExchangeV2AtomicRestoreStore`。它以私有 journal staging、附件 hash 回读和一次 Room transaction 组成可恢复边界：正常失败回滚已移动附件且不发布 receipt；进程中断留下 journal 并阻断下一次恢复，而不把候选对象当作真值。
+本增量已实现 schema 38→39 的专属 content-free receipt/provenance/settings 表与 `AndroidWorkspaceExchangeV2AtomicRestoreStore`。它以私有 journal staging、附件 hash 回读和一次 Room transaction 组成可恢复边界：正常失败回滚已移动附件且不发布 receipt；受控中断留下 journal 后，同包在完整 asset ledger 和空 database 双重证明下可从头安全重试，其余 journal 继续阻断恢复，而不把候选对象当作真值。
 
 仍不新增 Settings 功能审阅项、OpenDocument、ViewModel、模拟器、OPPO 或真实用户文件验收。后续 UI/SAF 只能在用户明确选择后有界读取 bytes，并投影 owner 结果；不得直接解析或写库。
