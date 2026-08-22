@@ -40,4 +40,6 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 
 ## 尚未接入
 
-本增量不新增 Settings 功能审阅项、OpenDocument、ViewModel、Room schema/DAO、私有附件实际 staging、模拟器、OPPO 或真实用户文件验收。接入上述层前，必须先实现并验证本合同的 Room atomic store；任何 UI 只能投影 owner 结果。
+本增量已实现 schema 38→39 的专属 content-free receipt/provenance/settings 表与 `AndroidWorkspaceExchangeV2AtomicRestoreStore`。它以私有 journal staging、附件 hash 回读和一次 Room transaction 组成可恢复边界：正常失败回滚已移动附件且不发布 receipt；进程中断留下 journal 并阻断下一次恢复，而不把候选对象当作真值。
+
+仍不新增 Settings 功能审阅项、OpenDocument、ViewModel、模拟器、OPPO 或真实用户文件验收。后续 UI/SAF 只能在用户明确选择后有界读取 bytes，并投影 owner 结果；不得直接解析或写库。

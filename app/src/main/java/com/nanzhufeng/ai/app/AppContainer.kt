@@ -35,6 +35,7 @@ import com.nanzhufeng.ai.data.AndroidOfflineEvalReportStore
 import com.nanzhufeng.ai.data.AndroidConversationExportStore
 import com.nanzhufeng.ai.data.AndroidConversationExchangeExportPort
 import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2ExportPort
+import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2AtomicRestoreStore
 import com.nanzhufeng.ai.data.AndroidTextShareAdapter
 import com.nanzhufeng.ai.data.AndroidP7BAccountVault
 import com.nanzhufeng.ai.data.AndroidP7ERestoreReceiptStore
@@ -169,6 +170,7 @@ import com.nanzhufeng.ai.domain.NfaiExchangeV2PackageWriter
 import com.nanzhufeng.ai.domain.NfaiExchangeV2OwnerMapper
 import com.nanzhufeng.ai.domain.RepositoryNfaiExchangeWorkspaceSource
 import com.nanzhufeng.ai.domain.WorkspaceExchangeV2ScopePlanner
+import com.nanzhufeng.ai.domain.WorkspaceExchangeV2AtomicRestoreOwner
 import com.nanzhufeng.ai.domain.PdfTextKnowledgeAdapter
 import com.nanzhufeng.ai.domain.ManagePdfTextKnowledgeImportUseCase
 import com.nanzhufeng.ai.domain.ManageWebTextSnapshotUseCase
@@ -229,6 +231,7 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         NanfengAiDatabase.MIGRATION_35_36,
         NanfengAiDatabase.MIGRATION_36_37,
         NanfengAiDatabase.MIGRATION_37_38,
+        NanfengAiDatabase.MIGRATION_38_39,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
@@ -305,6 +308,9 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
             source = workspaceExchangeV2Source,
         ),
     )
+    // Concrete restore storage is present but deliberately has no SAF/UI/worker reachability yet.
+    private val workspaceExchangeV2AtomicRestoreStore = AndroidWorkspaceExchangeV2AtomicRestoreStore(context, database)
+    val workspaceExchangeV2AtomicRestoreOwner = WorkspaceExchangeV2AtomicRestoreOwner(workspaceExchangeV2AtomicRestoreStore, clock)
     val offlineEvalRepository = RoomOfflineEvalRepository(database)
     // P8-B is an internal read-only status bridge. It has no runtime, fixture registry, UI or worker.
     private val p8AgentLedger = RoomAgentLedger(database)

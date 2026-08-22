@@ -1,5 +1,10 @@
 package com.nanzhufeng.ai.domain
 
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2AtomicRestoreStore
+import com.nanzhufeng.ai.data.local.NanfengAiDatabase
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -11,6 +16,7 @@ import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
 class WorkspaceExchangeV2OwnerMapperContractsTest {
@@ -167,6 +173,49 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
         )
         assertEquals(WorkspaceExchangeV2AtomicRestoreResult.FailedRecoverably, failed)
         assertEquals(1, failedStore.commitCalls)
+    }
+
+    @Test fun `concrete Room restore writes complete v2 owners attachments provenance and receipt then reopens`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "v2-restore-${UUID.randomUUID()}.db"
+        val source = fixture()
+        val output = RecordingOutput(null)
+        val written = NfaiExchangeV2PackageWriter(mapper(source), source).write(
+            source.selection, NfaiExchangeSafeSettings("zh-CN", "SYSTEM"), output,
+        ) as NfaiExchangeV2PackageWrite.Written
+        context.deleteDatabase(name)
+        val database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, name).allowMainThreadQueries().build()
+        try {
+            val restored = WorkspaceExchangeV2AtomicRestoreOwner(
+                AndroidWorkspaceExchangeV2AtomicRestoreStore(context, database), clock,
+            ).restore(WorkspaceExchangeV2RestoreRequest("restore-v2-room-0001", output.bytes))
+            assertTrue("restored=$restored", restored is WorkspaceExchangeV2AtomicRestoreResult.Restored)
+            assertEquals(1, database.projectDao().listAllForP7ESemanticSnapshot().size)
+            assertEquals(1, database.conversationDao().listAllForP7ESemanticSnapshot().size)
+            assertEquals(1, database.knowledgeDao().listKnowledgeIncludingHidden().size)
+            assertEquals(1, database.memoryDao().listMemories(null, null).size)
+            assertEquals(1, database.knowledgeRelationshipDao().all().size)
+            assertEquals(1, database.privateAttachmentAssetDao().assetCount())
+            assertEquals(1, database.workspaceExchangeV2RestoreDao().receiptCount())
+            assertEquals(written.receipt.ownerFieldHashes.size, database.workspaceExchangeV2RestoreDao().provenanceCount())
+            assertEquals("Fixture only", database.conversationDao().blocksFor("message-v2-01").single().textContent)
+            assertTrue(File(context.filesDir, "attachments/v1/${source.asset.sha256}.txt").isFile)
+            val replay = WorkspaceExchangeV2AtomicRestoreOwner(
+                AndroidWorkspaceExchangeV2AtomicRestoreStore(context, database), clock,
+            ).restore(WorkspaceExchangeV2RestoreRequest("restore-v2-room-0001", output.bytes))
+            assertTrue("replay=$replay", replay is WorkspaceExchangeV2AtomicRestoreResult.Replayed)
+            assertEquals(written.receipt.ownerFieldHashes, (replay as WorkspaceExchangeV2AtomicRestoreResult.Replayed).receipt.ownerFieldHashes)
+            database.close()
+            val reopened = Room.databaseBuilder(context, NanfengAiDatabase::class.java, name).allowMainThreadQueries().build()
+            try {
+                assertEquals("Local project", reopened.projectDao().findProject("project-v2-01")?.title)
+                assertEquals(1, reopened.workspaceExchangeV2RestoreDao().receiptCount())
+            } finally { reopened.close() }
+        } finally {
+            runCatching { database.close() }
+            context.deleteDatabase(name)
+            File(context.filesDir, "attachments/v1/${source.asset.sha256}.txt").delete()
+        }
     }
 
     @Test fun `complete workspace scope is explicit exhaustive and marks binary attachments high sensitive`() {

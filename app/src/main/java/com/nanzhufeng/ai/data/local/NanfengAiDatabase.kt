@@ -1749,6 +1749,8 @@ interface PrivateAttachmentAssetDao {
     @Query("SELECT * FROM private_attachment_assets WHERE sha256 = :sha256 LIMIT 1")
     fun findBySha256(sha256: String): PrivateAttachmentAssetEntity?
 
+    @Query("SELECT COUNT(*) FROM private_attachment_assets") fun assetCount(): Int
+
     @Query("DELETE FROM private_attachment_assets WHERE attachmentId = :attachmentId")
     fun deleteById(attachmentId: String): Int
 
@@ -1974,6 +1976,56 @@ interface AgentLedgerDao {
     fun updateRun(runId: String, status: String, usedSteps: Long, usedToolCalls: Long, usedSideEffects: Long, checkpoint: Long?, error: String?, updatedAt: Long): Int
 }
 
+/** P6 v2 restore receipt/provenance are content-free; workspace bodies remain in their owners. */
+@Entity(tableName = "workspace_exchange_v2_restore_receipts")
+data class WorkspaceExchangeV2RestoreReceiptEntity(
+    @androidx.room.PrimaryKey val intentId: String,
+    val packageHash: String,
+    val semanticHash: String,
+    val origin: String,
+    val sensitivity: String,
+    val projectCount: Int,
+    val conversationCount: Int,
+    val knowledgeCount: Int,
+    val memoryCount: Int,
+    val relationCount: Int,
+    val assetCount: Int,
+    val assetBytes: Long,
+    val importedAtEpochMs: Long,
+    val importerVersion: Int,
+)
+
+@Entity(tableName = "workspace_exchange_v2_restore_provenance", primaryKeys = ["ownerKind", "ownerId"])
+data class WorkspaceExchangeV2RestoreProvenanceEntity(
+    val ownerKind: String,
+    val ownerId: String,
+    val packageHash: String,
+    val semanticHash: String,
+    val ownerFieldHash: String,
+    val importedAtEpochMs: Long,
+)
+
+@Entity(tableName = "workspace_exchange_v2_restore_settings")
+data class WorkspaceExchangeV2RestoreSettingsEntity(
+    @androidx.room.PrimaryKey val id: String = "root",
+    val uiLanguage: String,
+    val theme: String,
+    val packageHash: String,
+    val updatedAtEpochMs: Long,
+)
+
+@Dao
+interface WorkspaceExchangeV2RestoreDao {
+    @Query("SELECT * FROM workspace_exchange_v2_restore_receipts WHERE intentId=:intentId") fun receipt(intentId: String): WorkspaceExchangeV2RestoreReceiptEntity?
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertReceipt(value: WorkspaceExchangeV2RestoreReceiptEntity)
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertProvenance(values: List<WorkspaceExchangeV2RestoreProvenanceEntity>)
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertSettings(value: WorkspaceExchangeV2RestoreSettingsEntity)
+    @Query("SELECT COUNT(*) FROM workspace_exchange_v2_restore_receipts") fun receiptCount(): Int
+    @Query("SELECT COUNT(*) FROM workspace_exchange_v2_restore_provenance") fun provenanceCount(): Int
+    @Query("SELECT * FROM workspace_exchange_v2_restore_provenance ORDER BY ownerKind, ownerId") fun provenance(): List<WorkspaceExchangeV2RestoreProvenanceEntity>
+    @Query("SELECT COUNT(*) FROM workspace_exchange_v2_restore_settings") fun settingsCount(): Int
+}
+
 @Database(
     entities = [
         CaptureDraftEntity::class,
@@ -2082,8 +2134,11 @@ interface AgentLedgerDao {
         P9BIntegrationSessionEntity::class,
         P9BIntegrationEventEntity::class,
         P9BIntegrationReceiptEntity::class,
+        WorkspaceExchangeV2RestoreReceiptEntity::class,
+        WorkspaceExchangeV2RestoreProvenanceEntity::class,
+        WorkspaceExchangeV2RestoreSettingsEntity::class,
     ],
-    version = 38,
+    version = 39,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2115,6 +2170,7 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun syncJobDao(): SyncJobDao
     abstract fun agentLedgerDao(): AgentLedgerDao
     abstract fun p9bIntegrationLedgerDao(): P9BIntegrationLedgerDao
+    abstract fun workspaceExchangeV2RestoreDao(): WorkspaceExchangeV2RestoreDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -2580,6 +2636,14 @@ abstract class NanfengAiDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS local_exact_reuse_entries (canonicalRequestHash TEXT NOT NULL, scopeId TEXT NOT NULL, providerId TEXT NOT NULL, modelSnapshotId TEXT NOT NULL, endpointMode TEXT NOT NULL, generationParametersHash TEXT NOT NULL, toolSchemaHash TEXT NOT NULL, contextManifestHash TEXT NOT NULL, messageTreeHash TEXT NOT NULL, attachmentHash TEXT NOT NULL, templateVersion TEXT NOT NULL, policyVersion INTEGER NOT NULL, sensitivity TEXT NOT NULL, keyVersion TEXT NOT NULL, responseMessageId TEXT NOT NULL, createdAtEpochMs INTEGER NOT NULL, expiresAtEpochMs INTEGER NOT NULL, revoked INTEGER NOT NULL, PRIMARY KEY(canonicalRequestHash))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_local_exact_reuse_entries_expiresAtEpochMs ON local_exact_reuse_entries(expiresAtEpochMs)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_local_exact_reuse_entries_revoked ON local_exact_reuse_entries(revoked)")
+            }
+        }
+        /** P6 v2 Android restore keeps only content-free receipt/provenance and safe settings metadata. */
+        val MIGRATION_38_39 = object : Migration(38, 39) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `workspace_exchange_v2_restore_receipts` (`intentId` TEXT NOT NULL, `packageHash` TEXT NOT NULL, `semanticHash` TEXT NOT NULL, `origin` TEXT NOT NULL, `sensitivity` TEXT NOT NULL, `projectCount` INTEGER NOT NULL, `conversationCount` INTEGER NOT NULL, `knowledgeCount` INTEGER NOT NULL, `memoryCount` INTEGER NOT NULL, `relationCount` INTEGER NOT NULL, `assetCount` INTEGER NOT NULL, `assetBytes` INTEGER NOT NULL, `importedAtEpochMs` INTEGER NOT NULL, `importerVersion` INTEGER NOT NULL, PRIMARY KEY(`intentId`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `workspace_exchange_v2_restore_provenance` (`ownerKind` TEXT NOT NULL, `ownerId` TEXT NOT NULL, `packageHash` TEXT NOT NULL, `semanticHash` TEXT NOT NULL, `ownerFieldHash` TEXT NOT NULL, `importedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`ownerKind`, `ownerId`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `workspace_exchange_v2_restore_settings` (`id` TEXT NOT NULL, `uiLanguage` TEXT NOT NULL, `theme` TEXT NOT NULL, `packageHash` TEXT NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`))")
             }
         }
     }
