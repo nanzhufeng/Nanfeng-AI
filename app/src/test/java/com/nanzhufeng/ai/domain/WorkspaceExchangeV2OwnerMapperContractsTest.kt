@@ -3,8 +3,15 @@ package com.nanzhufeng.ai.domain
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.nanzhufeng.ai.data.AndroidPrivateAttachmentStore
 import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2AtomicRestoreStore
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
+import com.nanzhufeng.ai.data.local.RoomConversationRepository
+import com.nanzhufeng.ai.data.local.RoomKnowledgeRelationshipRepository
+import com.nanzhufeng.ai.data.local.RoomKnowledgeRepository
+import com.nanzhufeng.ai.data.local.RoomMemoryRepository
+import com.nanzhufeng.ai.data.local.RoomPrivateAttachmentRepository
+import com.nanzhufeng.ai.data.local.RoomProjectRepository
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -225,6 +232,20 @@ class WorkspaceExchangeV2OwnerMapperContractsTest {
             assertEquals(now.toEpochMilli(), draft.updatedAtEpochMs)
             assertTrue(database.conversationDao().draftAttachmentsFor("conversation-v2-01").isEmpty())
             assertTrue(File(context.filesDir, "attachments/v1/${source.asset.sha256}.txt").isFile)
+            val restoredSource = RepositoryNfaiExchangeWorkspaceSource(
+                projects = RoomProjectRepository(database),
+                conversations = RoomConversationRepository(database),
+                knowledge = RoomKnowledgeRepository(database, clock),
+                memories = RoomMemoryRepository(database, clock),
+                relationships = RoomKnowledgeRelationshipRepository(database, clock),
+                attachments = RoomPrivateAttachmentRepository(database),
+                privateStore = AndroidPrivateAttachmentStore(context),
+            )
+            val reexported = NfaiExchangeV2PackageWriter(
+                mapper = NfaiExchangeV2OwnerMapper(restoredSource, "0.3.0-test", clock) { "reexport-v2-test" },
+                source = restoredSource,
+            ).write(source.selection, NfaiExchangeSafeSettings("zh-CN", "SYSTEM"), RecordingOutput(null))
+            assertTrue("reexported=$reexported", reexported is NfaiExchangeV2PackageWrite.Written)
             val replay = WorkspaceExchangeV2AtomicRestoreOwner(
                 AndroidWorkspaceExchangeV2AtomicRestoreStore(context, database), clock,
             ).restore(WorkspaceExchangeV2RestoreRequest("restore-v2-room-0001", output.bytes))

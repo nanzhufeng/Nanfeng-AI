@@ -1,5 +1,14 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P6：Android v2 新空 AVD 恢复→导出 DocumentsUI 真文件闭环；仍非完整 P6
+
+- **本次唯一修复：** `08b3d0d` 修复的空 `conversation_drafts` 占位行已在新的独立验收环境实际生效；本轮再发现并修复 `sourceEvidence.contributedFields` 以逗号写入、而 Room 以字段分隔符读取导致严格 writer 认为 `title,body` 是非法单字段的问题。`AndroidWorkspaceExchangeV2AtomicRestoreStore` 现以 Room 一致的安全字段分隔符持久化；`WorkspaceExchangeV2OwnerMapperContractsTest` 增加 concrete Room restore 后用生产 repository/source 重新 mapper+strict writer 的合同。
+- **自动与构建：** Android Studio JBR、离线、无 daemon 的定向 `WorkspaceExchangeV2OwnerMapperContractsTest` **10/10** 通过；独立 applicationId `com.nanzhufeng.ai.p6v2fullowneracceptance` 验收包为 `app/build/outputs/apk/p6V2FullOwnerAcceptance/南枫AI-开发验收.apk`，SHA-256 `169ea3794db188cee97070e70f0eee1a8fa0f9da0976910cc8a51a830e1a2e57`，v2/v3 与正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8` 已验签。
+- **真实隔离 AVD：** 新建 Android 35 `NanfengAiP6V2RestoreExportFixAcceptance` / `emulator-5574`，未复用、清理或覆盖既有 AVD；安装前独立包不存在，安装后的已装 base APK 哈希与本地产物一致。仅通过正常 Launcher 与 `设置 → 数据与导入 → 导入中心 → 完整工作区交换（v2）` 操作 DocumentsUI：选择既有 2,340 B、non-sensitive strict fixture（SHA-256 `fb81be2ad662d871f48b8c7044bf79f7bd56b536983bd9b7d06a0fdf0b675174`）后，UI 显示 `已严格恢复：ae8039c08352… · 5 项对象 · 1 项附件`；完整范围显示 `1/1/1/1/1/1`，再由同一入口保存至 DocumentsUI Downloads 后 UI 显示 `完整工作区 v2 已严格回读：4840bd0bf153… · 5 项对象 · 1 项附件`。
+- **真文件严格回读：** DocumentsUI 实际生成 `nanfeng-ai-workspace-v2.nfai-exchange.zip`（2,452 B）；设备与拉回主机 SHA-256 均为 `62975440c4e30aff5a6ea817e69265921efbc87b6e8e35c49206247e25ad99a7`。Node strict verifier 对该 exact bytes 通过，semantic hash `4840bd0bf15365ef4c84c60572cdb1646fa027534f4a019b49537cce07f8b828`、1 asset、3 entries；Desktop Rust strict reader 对该 exact bytes **1/1** 通过。项目、对话、记忆、关系、settings owner fields 和 asset ledger（ID/entry/SHA-256/byteCount）保持对应；Knowledge owner hash 只因完整范围 planner 对二进制附件一律保守标为 `HIGH_SENSITIVE` 而改变，`sourceEvidence.contributedFields` 仍逐项为 `body`、`title`，不是数据丢失。
+- **设备与停止边界：** 先前新建的 `emulator-5572` 在发现导出缺陷后保留、未安装修复包，不能作为成功证据；保留的 `emulator-5588` 与 OPPO 均未触及。本轮无 `connected*AndroidTest`、无业务 DB/Activity-extra/deep-link 注入、无 Provider、Key 或网络；受 `run-as` 读取截断与无 sqlite3 权限限制，未取得新 AVD 的 DB 计数，未绕过该限制，真文件/UI/严格 reader 为本轮证据。没有发布、Desktop/Windows 实机或 P0–P11 总控完成。
+- **下一安全停止点：** 此增量只关闭修复后 Android 新空 AVD 的 restore→export 真文件链；进程中断恢复、用户真实数据/附件、Desktop native picker、Windows、发布，以及 P0–P11 其余门仍未关闭。任何下一步须另行授权。
+
 ## 2026-08-23 P6：Android v2 OpenDocument 空 AVD恢复、重放与含非空拒绝的真文件链已闭合；仍非完整 P6
 
 - **用户入口与唯一链路：** Android 仅在 `设置 → 数据与导入 → 导入中心 → 完整工作区交换（v2）` 显示“选择 v2 交换包并恢复”；`ActivityResultContracts.OpenDocument` 只接收用户明确选择的单 URI，UI 不读流、不解析 ZIP/JSON。`AndroidWorkspaceExchangeV2OpenDocumentRestorePort` 流式限制 128 MiB、忽略 URI/path/name/MIME/正文，仅将有限 bytes 与 package-hash 派生的 opaque intent ID 传到 `WorkspaceExchangeV2AtomicRestoreOwner → NfaiExchangeV2PackageReader → AndroidWorkspaceExchangeV2AtomicRestoreStore`。ViewModel/UI state 仅投影 outcome、semantic hash 截断和匿名对象/附件数；原始错误、正文、资产 bytes 与 locator 都不出现。

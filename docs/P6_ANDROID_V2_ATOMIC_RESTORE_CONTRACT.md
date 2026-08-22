@@ -36,6 +36,7 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 - 非空本机：返回 `LOCAL_TRUTH_PRESENT`，零对象/附件/receipt/provenance 写入。
 - 空本机且 package 有效：仅一次 atomic commit，commit input 的 receipt/hash 与 reader 完全一致。
 - 空本机恢复的每个 Conversation 都有空、无附件、可回读的 draft 行；缺少该行不得发布 receipt，避免恢复后的完整工作区 strict writer 无法重新映射。
+- Knowledge 的 `sourceEvidence.contributedFields` 必须经与 Room 读取端一致的字段编码持久化并逐项回读；不得以逗号拼接而把多个安全字段误还原为一个字段，避免恢复后的 strict owner mapper 拒绝再导出。
 - 同 intent 同包重放只回读 receipt；同 intent 异包拒绝，均零新写入。
 - atomic store 的失败或中断：不返回成功、零 partial receipt/provenance；已存在本机真值不变。只有精确同包、hash-complete、数据库仍空的 journal 可回收并安全重试；其余 candidate 只按 `RECOVERY_REQUIRED` 保留。
 - schema 38 历史实例升级至 39 只追加 v2 receipt/provenance/settings 表，不改写既有事实；完整 migration 链必须连续至 39。
