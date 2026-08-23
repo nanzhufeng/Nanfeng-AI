@@ -46,6 +46,14 @@ class NormalChatOpenRouterExecutor(
     }
 
     fun execute(conversationId: ConversationId): Result {
+        val submitted = submitDraft.execute(conversationId)
+        if (submitted !is ConversationDraftSubmissionResult.Submitted) return Result.Blocked(Code.DRAFT_UNAVAILABLE)
+        val userMessage = submitted.snapshot.nodes.lastOrNull()?.content
+            ?.filterIsInstance<ContentBlock.Text>()?.joinToString("") { it.text }.orEmpty()
+        if (userMessage.isBlank()) return Result.Blocked(Code.DRAFT_UNAVAILABLE)
+        if (submitted.snapshot.nodes.lastOrNull()?.content?.any { it is ContentBlock.Attachment } == true) {
+            return Result.Blocked(Code.ATTACHMENTS_UNSUPPORTED)
+        }
         val config = configuration.execute() ?: return Result.Blocked(Code.SERVICE_DISABLED)
         if (!config.settings.enabled) return Result.Blocked(Code.SERVICE_DISABLED)
         if (!credentials.hasCredential(ProviderId.OPENROUTER)) return Result.Blocked(Code.CREDENTIAL_MISSING)
@@ -56,15 +64,6 @@ class NormalChatOpenRouterExecutor(
             )
         }
         if (!model.capabilities.supportsText) return Result.Blocked(Code.MODEL_UNAVAILABLE)
-
-        val submitted = submitDraft.execute(conversationId)
-        if (submitted !is ConversationDraftSubmissionResult.Submitted) return Result.Blocked(Code.DRAFT_UNAVAILABLE)
-        val userMessage = submitted.snapshot.nodes.lastOrNull()?.content
-            ?.filterIsInstance<ContentBlock.Text>()?.joinToString("") { it.text }.orEmpty()
-        if (userMessage.isBlank()) return Result.Blocked(Code.DRAFT_UNAVAILABLE)
-        if (submitted.snapshot.nodes.lastOrNull()?.content?.any { it is ContentBlock.Attachment } == true) {
-            return Result.Blocked(Code.ATTACHMENTS_UNSUPPORTED)
-        }
 
         val credential = credentials.loadCredential(ProviderId.OPENROUTER) ?: return Result.Blocked(Code.CREDENTIAL_MISSING)
         val request = OpenRouterTransportRequest(
