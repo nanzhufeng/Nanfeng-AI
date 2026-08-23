@@ -4,6 +4,7 @@
 
 - **两包及环境：** 旧包从 detached `a4eebd1` 在 Android Studio JBR、`ANDROID_HOME`、`--offline --no-daemon` 下唯一重建；为 `com.nanzhufeng.ai / code 52 / 0.3.0-p10a`、SHA-256 `cf26307a392baf8df46ef12b4130d8bb0939d7dbca2b874fcf43fef35b0db1d8`。新包为当前 main code 57 正式产物；两包 v2/v3 均通过、同 release-v2 证书。只使用全新 Android 35 `NanfengAiP5ReleaseUpgradeMigration` / `emulator-5614`，不触 OPPO。
 - **真实升级与数据保留：** 首装 code 52 后仅经正常 Launcher/UI 创建非敏感 Composer 草稿 `P5UpgradeFact`，不发送、不调用 Provider/网络。随后只执行一次 `adb -s emulator-5614 install -r` 覆盖到 code 57；没有清数据或卸载。`firstInstallTime` 保持 `2026-08-23 10:46:48`，CE/DE inode 保持 `573570` / `401708`。force-stop 后标准 Launcher 冷启动成功（`Status: ok`，约 1.04 秒），正常 UI 仍显示草稿和“会话草稿”语义。
+- **隔离性能基线：** 在保留该隔离数据的 code 57 上，三次 `force-stop` 后标准 Launcher 冷启动均为 `Status: ok`，`TotalTime` 依次为 `1069 ms / 930 ms / 898 ms`（平均约 `966 ms`）。这是 Android 35 SwiftShader 隔离模拟器的启动回归基线，不可推定为 OPPO 或全部设备性能。
 - **边界：** 这是隔离、非敏感的旧版→当前正式包迁移与草稿保留证据；不代表 OPPO、真实用户数据、完整无障碍/性能、商店发布或 P0–P11 完成。code 57 未获 P11 发布资格，禁止安装到 OPPO 或发布。
 
 ## 2026-08-23 P6：schema 38→39 同签名升级、非空本机 DocumentsUI `LOCAL_TRUTH_PRESENT` 拒绝及数据保留已验收
