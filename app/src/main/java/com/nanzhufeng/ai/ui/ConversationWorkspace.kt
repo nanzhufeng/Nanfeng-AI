@@ -913,11 +913,11 @@ private fun ConversationShellHeader(
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            ConversationHeaderFloatingIconButton(onClick = onLeftAction) {
+            ConversationHeaderFloatingIconButton(onClick = onLeftAction, contentDescription = leftDescription) {
                 Icon(leftIcon, contentDescription = leftDescription)
             }
             Spacer(Modifier.weight(1f))
-            ConversationHeaderFloatingIconButton(onClick = onTemporaryAction) {
+            ConversationHeaderFloatingIconButton(onClick = onTemporaryAction, contentDescription = "临时聊天") {
                 Icon(painterResource(R.drawable.ic_lucide_ghost), contentDescription = "临时聊天", tint = temporaryTint)
             }
         }
@@ -931,10 +931,14 @@ private fun ConversationShellHeader(
 
 /** Each header action is its own floating surface; the header never paints a backing strip. */
 @Composable
-private fun ConversationHeaderFloatingIconButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+private fun ConversationHeaderFloatingIconButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    content: @Composable () -> Unit,
+) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.size(44.dp),
+        modifier = Modifier.size(44.dp).semantics { this.contentDescription = contentDescription },
         color = Color.White,
         shape = CircleShape,
         tonalElevation = 0.dp,
