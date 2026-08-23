@@ -166,6 +166,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -936,15 +937,22 @@ private fun ConversationHeaderFloatingIconButton(
     contentDescription: String,
     content: @Composable () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.size(44.dp).semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
-        color = Color.White,
-        shape = CircleShape,
-        tonalElevation = 0.dp,
-        shadowElevation = 3.dp,
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clickable(onClickLabel = contentDescription, role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.White,
+            shape = CircleShape,
+            tonalElevation = 0.dp,
+            shadowElevation = 3.dp,
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+        }
     }
 }
 

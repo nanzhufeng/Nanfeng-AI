@@ -81,7 +81,7 @@ android {
         applicationId = "com.nanzhufeng.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 55
+        versionCode = 56
         versionName = "0.3.0-p10a"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
