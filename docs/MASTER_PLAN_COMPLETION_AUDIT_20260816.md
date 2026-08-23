@@ -55,7 +55,7 @@
 
 - **已确认：** 当前严格验签 Desktop bundle 在全新独立 `/tmp` 根，通过设置原生 picker 选择 5558 的实际 `.nfai-exchange.zip` 后成功给出 content-free committed receipt；同一文件第二次选择显示 replay receipt。package/semantic hash 与 Android readback 一致，v2 import/journal/receipt 各 1 条、两项 owner provenance，v1 三表均为零；无 OPPO、5554、5556、Key、网络或正文读取。
 - **修正：** 真链首次暴露 Tauri ACL 遗漏，安全拒绝未写入任何 v2/v1 行。补入只允许该单一 v2 command 的 capability 并让 UI显式展示真实拒绝后，重建 bundle 和重跑隔离链成功；没有放宽文件名、manifest、hash、version 或 owner 门禁。
-- **仍未确认且不得推断：** Desktop 实际已提交数据的 native re-export 文件/semantic+field-hash readback 没有用户设置入口，尚未以真实文件关闭；P6、跨端完整对象恢复、Windows、发布及 P0–P11仍未退出。
+- **后续事实校正：** 此处“没有用户设置入口/尚未以真实文件关闭”已被后续 macOS 隔离验收取代：设置页的 committed-record 回导已经 native Save、strict re-export/readback 得到 semantic、全部 field hash 与 asset ledger 一致。P6、跨端完整对象恢复、发布及 P0–P11仍未退出；Windows 已为用户豁免的非阻塞债务。
 
 ## 2026-08-20 P6 v2 DocumentsUI `.zip` 名称兼容：实现/合同已闭合，Desktop native picker 真实跨端链待继续
 
