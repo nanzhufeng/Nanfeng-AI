@@ -447,6 +447,7 @@ internal fun NanfengAiApp(
                     onDismiss = modelSettingsViewModel::dismissDialog,
                     onSave = modelSettingsViewModel::save,
                     onRevealStoredCredential = modelSettingsViewModel::revealStoredCredential,
+                    onVerifyRegistry = modelSettingsViewModel::verifyRegistry,
                 )
             }
             workspaceExchangeV2ExportViewModel.state.scope?.let { scope ->
@@ -1142,6 +1143,7 @@ private fun ConversationFoundationCard(
         onSelect = viewModel::selectConversation, onSurfaceChanged = viewModel::selectSurface, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
         onRequestNormalChatExternalSendConfirmation = viewModel::requestNormalChatExternalSendConfirmation,
         onSetNormalChatExternalSendAcknowledgement = viewModel::setNormalChatExternalSendAcknowledgement,
+        onConfirmNormalChatExternalSend = viewModel::confirmNormalChatExternalSend,
         onExpireNormalChatExternalSendConfirmation = viewModel::expireNormalChatExternalSendConfirmation,
         onDismissNormalChatExternalSendConfirmation = viewModel::dismissNormalChatExternalSendConfirmation,
         onRequestCompare = viewModel::requestCompareChatGptAndClaude,

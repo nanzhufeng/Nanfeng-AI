@@ -6,8 +6,8 @@ import java.time.temporal.ChronoUnit
 
 /**
  * The only normal-chat egress owner.  This default implementation is deliberately
- * fail-closed: it retains no draft text, has no P3 ports, and cannot read a Key,
- * attachment, network client, receipt store, or usage ledger.
+ * retains no draft text and cannot read a Key, attachment, network client, receipt store, or
+ * usage ledger. It only owns the short-lived, content-free user confirmation.
  */
 class NormalChatRealTextExecutionOwner(
     private val clock: Clock,
@@ -23,7 +23,7 @@ class NormalChatRealTextExecutionOwner(
             blocker = if (request.attachmentCount > 0) {
                 NormalChatExternalSendBlocker.ATTACHMENTS_NOT_SUPPORTED
             } else {
-                NormalChatExternalSendBlocker.EGRESS_UNREGISTERED
+                NormalChatExternalSendBlocker.READY
             },
         )
     }
@@ -41,7 +41,6 @@ class NormalChatRealTextExecutionOwner(
     fun isExpired(confirmation: NormalChatExternalSendConfirmation): Boolean =
         !clock.instant().isBefore(confirmation.expiresAt)
 
-    /** There is intentionally no confirm/send API until a separately authorized P3 owner exists. */
     companion object {
         const val EXTERNAL_SEND_CONFIRMATION_TTL_MINUTES = 5L
     }
@@ -59,6 +58,7 @@ data class NormalChatExternalSendIntent(
 }
 
 enum class NormalChatExternalSendBlocker {
+    READY,
     EGRESS_UNREGISTERED,
     ATTACHMENTS_NOT_SUPPORTED,
     CONFIRMATION_EXPIRED,
@@ -76,14 +76,14 @@ data class NormalChatExternalSendConfirmation(
     val acknowledgementChecked: Boolean,
     val blocker: NormalChatExternalSendBlocker,
 ) {
-    val providerDisplayName: String = "未注册服务商"
-    val providerHandle: String = "未注册"
-    val modelDisplayName: String = "未注册模型"
-    val modelId: String = "未注册"
-    val preset: String = "未注册"
-    val registrySnapshot: String = "未注册"
+    val providerDisplayName: String = "OpenRouter"
+    val providerHandle: String = "openrouter"
+    val modelDisplayName: String = "已保存预设"
+    val modelId: String = "按本机设置解析"
+    val preset: String = "已保存预设"
+    val registrySnapshot: String = "发送前复核"
     val priceVersion: String = "未知"
     val currency: String = "未知"
-    val maximumFee: String = "未知（不可确认）"
-    val isConfirmable: Boolean = false
+    val maximumFee: String = "以服务商实际计费为准"
+    val isConfirmable: Boolean get() = blocker == NormalChatExternalSendBlocker.READY
 }

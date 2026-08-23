@@ -98,6 +98,7 @@ internal fun ModelSettingsDialog(
     onDismiss: () -> Unit,
     onSave: (Boolean, ModelPresetId, String?) -> Unit,
     onRevealStoredCredential: () -> Unit,
+    onVerifyRegistry: () -> Unit,
 ) {
     val configuration = state.configuration ?: return
     var enabled by remember(configuration.settings.enabled) { mutableStateOf(configuration.settings.enabled) }
@@ -148,6 +149,25 @@ internal fun ModelSettingsDialog(
                     enabled = !state.saving,
                     onSelected = { presetId = it.id },
                 )
+
+                Text(
+                    when (state.registryStatus.status) {
+                        com.nanzhufeng.ai.domain.RegistryVerificationDisplayStatus.VERIFIED -> "模型目录已核验"
+                        com.nanzhufeng.ai.domain.RegistryVerificationDisplayStatus.STABLE_FALLBACK -> "本次核验失败，正在使用上次稳定目录"
+                        com.nanzhufeng.ai.domain.RegistryVerificationDisplayStatus.NOT_VERIFIED -> "请先核验模型目录，才能直接发送真实对话"
+                    },
+                    color = SecondaryText,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedButton(
+                    onClick = onVerifyRegistry,
+                    enabled = !state.saving && !state.verifyingRegistry,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    if (state.verifyingRegistry) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else Text("核验模型目录")
+                }
 
                 OutlinedTextField(
                     value = keyInput,

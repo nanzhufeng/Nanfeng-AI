@@ -6,6 +6,7 @@ import com.nanzhufeng.ai.BuildConfig
 import com.nanzhufeng.ai.ai.MockAiTaskRunner
 import com.nanzhufeng.ai.ai.OpenRouterOfflineAdapterContract
 import com.nanzhufeng.ai.ai.OfficialOpenRouterInferenceTransport
+import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
 import com.nanzhufeng.ai.ai.OpenRouterEgressPolicy
 import com.nanzhufeng.ai.ai.OpenRouterInferenceAdapter
 import com.nanzhufeng.ai.ai.LoadRealServiceAcceptanceUiStatusUseCase
@@ -413,7 +414,7 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         conversationRepository, conversationRepository, conversationRuntimeStateMachine, clock,
     )
     val deterministicFixtureStreamingAdapter = DeterministicFixtureStreamingAdapter(clock)
-    /** P3-J default owner is UI-only and fail-closed: it owns no Key, HTTP, Room receipt, or ledger port. */
+    /** The confirmation owner remains content-free; the executor receives text only after confirmation. */
     val normalChatRealTextExecutionOwner = NormalChatRealTextExecutionOwner(clock)
     /** P5-B only finalizes interrupted facts at process start; it never schedules or resumes work. */
     val taskRecoveryAudit = TaskRecoveryAudit(
@@ -522,6 +523,15 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         credentialStore = providerCredentialStore,
         transport = OfficialOpenRouterInferenceTransport(),
         egressPolicy = OpenRouterEgressPolicy.Disabled,
+        clock = clock,
+    )
+    val normalChatOpenRouterExecutor = NormalChatOpenRouterExecutor(
+        configuration = loadModelServiceConfiguration,
+        registry = modelRegistry,
+        credentials = providerCredentialStore,
+        submitDraft = submitConversationDraft,
+        appendMessage = appendConversationMessage,
+        transport = OfficialOpenRouterInferenceTransport(),
         clock = clock,
     )
     // P2-M is reachable only from the Android Model Settings confirmation owner. It binds one

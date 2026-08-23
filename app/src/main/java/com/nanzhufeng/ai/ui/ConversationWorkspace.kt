@@ -240,6 +240,7 @@ internal fun ConversationWorkspaceDialog(
     onSubmitDraft: () -> Unit,
     onRequestNormalChatExternalSendConfirmation: () -> Unit,
     onSetNormalChatExternalSendAcknowledgement: (Boolean) -> Unit,
+    onConfirmNormalChatExternalSend: () -> Unit,
     onExpireNormalChatExternalSendConfirmation: () -> Unit,
     onDismissNormalChatExternalSendConfirmation: () -> Unit,
     onRequestCompare: () -> Unit,
@@ -826,6 +827,7 @@ internal fun ConversationWorkspaceDialog(
         NormalChatExplicitEgressConfirmationDialog(
             confirmation = confirmation,
             onAcknowledgementChanged = onSetNormalChatExternalSendAcknowledgement,
+            onConfirm = onConfirmNormalChatExternalSend,
             onExpired = onExpireNormalChatExternalSendConfirmation,
             onDismiss = onDismissNormalChatExternalSendConfirmation,
         )
@@ -841,6 +843,7 @@ internal fun ConversationWorkspaceDialog(
 private fun NormalChatExplicitEgressConfirmationDialog(
     confirmation: com.nanzhufeng.ai.domain.NormalChatExternalSendConfirmation,
     onAcknowledgementChanged: (Boolean) -> Unit,
+    onConfirm: () -> Unit,
     onExpired: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -873,7 +876,7 @@ private fun NormalChatExplicitEgressConfirmationDialog(
                     Text("附件不会发送。${if (confirmation.attachmentCount > 0) "当前草稿含附件，请移除附件或继续当前本地草稿流。" else "本次不读取、预览或上传附件。"}", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                     Text("费用：价格版本 ${confirmation.priceVersion} · 币种 ${confirmation.currency}\n预估输入/输出上限：未知 · 本次最多预留/可能产生：${confirmation.maximumFee}", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                     Text(
-                        if (expired) "此确认已过期，勾选已撤销；请重新发起请求。" else "确认默认未勾选，并将在 5 分钟后过期。当前普通聊天外发未注册，不能确认、预留或产生费用。",
+                        if (expired) "此确认已过期，勾选已撤销；请重新发起请求。" else "确认默认未勾选，并将在 5 分钟后过期。确认后只发送当前这条文字；服务、模型和凭据会在发送前再次检查。",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (expired) MaterialTheme.colorScheme.error else SecondaryText,
                     )
@@ -888,7 +891,7 @@ private fun NormalChatExplicitEgressConfirmationDialog(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                         TextButton(onClick = onDismiss, shape = RoundedCornerShape(16.dp)) { Text("取消") }
                         Button(
-                            onClick = {},
+                            onClick = onConfirm,
                             enabled = confirmation.acknowledgementChecked && confirmation.isConfirmable && !expired,
                             shape = RoundedCornerShape(16.dp),
                         ) { Text("确认外发") }

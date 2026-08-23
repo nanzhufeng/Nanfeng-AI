@@ -103,6 +103,7 @@ import com.nanzhufeng.ai.domain.P6GSelectionMutationResult
 import com.nanzhufeng.ai.domain.NormalChatExternalSendConfirmation
 import com.nanzhufeng.ai.domain.NormalChatExternalSendIntent
 import com.nanzhufeng.ai.domain.NormalChatRealTextExecutionOwner
+import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
 import com.nanzhufeng.ai.app.CompareVisibleExecutionOwner
 import com.nanzhufeng.ai.app.CompareVisibleExecutionResult
 import com.nanzhufeng.ai.domain.TemporaryAttachmentResult
@@ -238,6 +239,7 @@ class ConversationFoundationViewModel(
     private val p6gModelSelection: P6GModelSelectionOwner,
     private val invocations: InvocationRepository,
     private val normalChatRealTextExecutionOwner: NormalChatRealTextExecutionOwner,
+    private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
     private val compareVisibleExecutionOwner: CompareVisibleExecutionOwner,
 ) : ViewModel() {
     private var streamJob: Job? = null
@@ -878,6 +880,21 @@ class ConversationFoundationViewModel(
         if (state.isSending) return
         state = state.copy(isSending = true, notice = null)
         viewModelScope.launch {
+            if (state.surface == ConversationSurface.CHAT) {
+                val result = withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.execute(id) }
+                when (result) {
+                    NormalChatOpenRouterExecutor.Result.Sent -> reload("已收到模型回复；只发送了当前这条文字。")
+                    is NormalChatOpenRouterExecutor.Result.Blocked -> {
+                        state = state.copy(isSending = false, notice = normalChatResultLabel(result.code, sent = false))
+                        reload()
+                    }
+                    is NormalChatOpenRouterExecutor.Result.Failed -> {
+                        state = state.copy(isSending = false, notice = normalChatResultLabel(result.code, sent = true))
+                        reload()
+                    }
+                }
+                return@launch
+            }
             when (val result = withContext(Dispatchers.IO) { submitDraft.execute(id) }) {
                 is ConversationDraftSubmissionResult.Submitted -> reload("已本地发送；草稿已在同一事务清理，未连接 Provider。")
                 is ConversationDraftSubmissionResult.Rejected -> state = state.copy(isSending = false, notice = result.reason)
@@ -890,16 +907,8 @@ class ConversationFoundationViewModel(
      * deliberately independent and remains the only action performed by the composer.
      */
     fun requestNormalChatExternalSendConfirmation() {
-        val draft = state.draft ?: return
-        if (state.surface != ConversationSurface.CHAT || draft.text.isBlank()) return
-        state = state.copy(
-            externalSendConfirmation = normalChatRealTextExecutionOwner.requestConfirmation(
-                NormalChatExternalSendIntent(
-                    draftCharacterCount = draft.text.length,
-                    attachmentCount = draft.attachments.size,
-                ),
-            ),
-        )
+        // Kept only for older deep links. Ordinary composer sends directly via submitCurrentDraft().
+        submitCurrentDraft()
     }
 
     fun setNormalChatExternalSendAcknowledgement(checked: Boolean) {
@@ -907,6 +916,27 @@ class ConversationFoundationViewModel(
         state = state.copy(
             externalSendConfirmation = normalChatRealTextExecutionOwner.setAcknowledgement(confirmation, checked),
         )
+    }
+
+    fun confirmNormalChatExternalSend() {
+        val confirmation = state.externalSendConfirmation ?: return
+        val conversationId = state.selectedConversationId ?: return
+        if (!confirmation.acknowledgementChecked || !confirmation.isConfirmable || normalChatRealTextExecutionOwner.isExpired(confirmation)) return
+        state = state.copy(isSending = true, externalSendConfirmation = null, notice = null)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.execute(conversationId) }
+            when (result) {
+                NormalChatOpenRouterExecutor.Result.Sent -> reload("已收到模型回复；仅本条文字已发送给 OpenRouter。")
+                is NormalChatOpenRouterExecutor.Result.Blocked -> {
+                    state = state.copy(isSending = false, notice = normalChatResultLabel(result.code, sent = false))
+                    reload()
+                }
+                is NormalChatOpenRouterExecutor.Result.Failed -> {
+                    state = state.copy(isSending = false, notice = normalChatResultLabel(result.code, sent = true))
+                    reload()
+                }
+            }
+        }
     }
 
     fun expireNormalChatExternalSendConfirmation() {
@@ -1195,12 +1225,30 @@ class ConversationFoundationViewModel(
         private val p6gModelSelection: P6GModelSelectionOwner,
         private val invocations: InvocationRepository,
         private val normalChatRealTextExecutionOwner: NormalChatRealTextExecutionOwner,
+        private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
         private val compareVisibleExecutionOwner: CompareVisibleExecutionOwner,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ConversationFoundationViewModel::class.java))
-            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, searchHistory, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, invocations, normalChatRealTextExecutionOwner, compareVisibleExecutionOwner) as T
+            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, searchHistory, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, invocations, normalChatRealTextExecutionOwner, normalChatOpenRouterExecutor, compareVisibleExecutionOwner) as T
         }
     }
+}
+
+private fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent: Boolean): String = when (code) {
+    NormalChatOpenRouterExecutor.Code.SERVICE_DISABLED -> "模型服务未启用：请在设置中启用 OpenRouter。"
+    NormalChatOpenRouterExecutor.Code.CREDENTIAL_MISSING -> "未保存 API Key：请在设置中保存后再发送。"
+    NormalChatOpenRouterExecutor.Code.REGISTRY_UNVERIFIED -> "模型目录尚未核验：请在设置中先核验公开目录。"
+    NormalChatOpenRouterExecutor.Code.MODEL_UNAVAILABLE -> "当前预设模型不可用：请在设置中重新选择并核验。"
+    NormalChatOpenRouterExecutor.Code.ATTACHMENTS_UNSUPPORTED -> "本次真实调用只支持纯文字；请移除附件后重新发送。"
+    NormalChatOpenRouterExecutor.Code.DRAFT_UNAVAILABLE -> "草稿未能安全提交，本次没有外发。"
+    NormalChatOpenRouterExecutor.Code.AUTHENTICATION -> "服务商拒绝鉴权：请检查本机保存的 API Key。"
+    NormalChatOpenRouterExecutor.Code.BALANCE -> "服务商余额或额度不足，未自动重试。"
+    NormalChatOpenRouterExecutor.Code.RATE_LIMIT -> "服务商限流，未自动重试。"
+    NormalChatOpenRouterExecutor.Code.TIMEOUT -> "服务响应超时，未自动重试。"
+    NormalChatOpenRouterExecutor.Code.NETWORK -> "网络不可用或连接失败，未自动重试。"
+    NormalChatOpenRouterExecutor.Code.SERVICE -> "服务商未完成本次请求，未自动重试。"
+    NormalChatOpenRouterExecutor.Code.RESPONSE_FORMAT -> "服务返回内容无法安全读取，未自动重试。"
+    NormalChatOpenRouterExecutor.Code.LOCAL_SAVE -> if (sent) "服务已返回，但本机未能保存回复；请先不要重复发送。" else "本机保存失败。"
 }
