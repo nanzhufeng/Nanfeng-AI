@@ -1,5 +1,12 @@
 # P5 OPPO 只读门审计（2026-08-21）
 
+## 2026-08-23 code-53 Launcher 异常离线诊断：旧 component 正确，无源码修复；设备保持零接触
+
+- **审计范围：** 只读分析已冻结的 `app/build/outputs/apk/release/南枫AI.apk`、源码 manifest/Kotlin、release merged/packaged manifest 和 release Gradle 配置；未运行构建、测试、ADB、AVD、OPPO 命令或任何清理，未修改 APK、源码或版本。
+- **最终 APK 事实：** SHA-256 `230cac90c0e54231a73650c1fc1e0a9f3890a03c0e8c1c5150d39a77f183954c` 的 APK 经 Build Tools 36.0.0 `aapt dump badging` 明确报出唯一 `launchable-activity: com.nanzhufeng.ai.NanfengAiActivity`。`aapt dump xmltree` 和在 Android Studio JBR 下运行的 `apkanalyzer manifest print` 均确认 APK package/applicationId 是 `com.nanzhufeng.ai`，该 activity 为 `exported=true`，并在同一 filter 中同时声明 `MAIN` 和 `LAUNCHER`；没有 `activity-alias`。
+- **源码与合并对应：** 源码 `AndroidManifest.xml` 的 `.NanfengAiActivity` 结合 `package com.nanzhufeng.ai` 的 `NanfengAiActivity` 类，解析为该完整类名。`processReleaseMainManifest`、`processReleaseManifest` 和 `processReleaseManifestForPackage` 三份 generated manifest 都为 `com.nanzhufeng.ai.NanfengAiActivity`、`exported=true`、相同 MAIN/LAUNCHER filter。`app/build.gradle.kts` 中 namespace/applicationId 均为 `com.nanzhufeng.ai`；release `isMinifyEnabled=false`，无 mapping 产物，故不存在 shrink/obfuscation 导致 launcher component 改写的路径。
+- **结论与严格恢复边界：** 此前的 `com.nanzhufeng.ai/.NanfengAiActivity` 与完整类名完全等价，未变更且不是错误 component；最终 APK 自身也并非缺少可解析的 MAIN/LAUNCHER。因此不实施任何 manifest/代码修复。离线证据无法判定 OPPO 当时“unable to resolve Intent”的远端原因；如需恢复，必须由南烛枫另开独立、只读主设备任务。该任务中可采用的最小显式启动命令建议为 `adb -s <OPPO_SERIAL> shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.nanzhufeng.ai/.NanfengAiActivity`，但本任务没有执行，也不得据此返回 OPPO、重试启动、安装或删除遗留临时 APK。
+
 ## 2026-08-23 code-53 正式保留数据覆盖：安装与字节回读通过；Launcher 解析异常，严格停止
 
 - **安装前只读门：** OPPO Find N5 `3B157F009E800000` 为 `device`，设备与主机 epoch 相同。目标 `com.nanzhufeng.ai` 为 code `52`、没有 `DEBUGGABLE` 标记、`firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378`；已安装 `base.apk` 为 `c5112374…fd23f91`，v2/v3 均通过且证书 SHA-256 为 `6d1d56ec…8661f8`。本地冻结正式 APK `南枫AI.apk` 为 `com.nanzhufeng.ai / 53 / 0.3.0-p10a`、`230cac90…f183954c`，非 Debug、v2/v3 通过且证书相同；精确远端临时路径在写入前不存在。

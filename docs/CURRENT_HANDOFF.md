@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P5 Launcher 异常：code-53 APK 离线审计确认旧 component 正确；不触设备
+
+- **离线结论：** 最终正式 APK `app/build/outputs/apk/release/南枫AI.apk`（SHA-256 `230cac90c0e54231a73650c1fc1e0a9f3890a03c0e8c1c5150d39a77f183954c`）的真正且唯一 `MAIN`/`LAUNCHER` Activity 是 **`com.nanzhufeng.ai.NanfengAiActivity`**。此前使用的相对 component `com.nanzhufeng.ai/.NanfengAiActivity` 按 Android 规则正是同一完整 component；它没有改名，也不是错误引用。
+- **四方证据：** `aapt dump badging` 给出 `launchable-activity: name='com.nanzhufeng.ai.NanfengAiActivity'`；`aapt dump xmltree`、Android Studio JBR 下的 `apkanalyzer manifest print` 都显示该 activity `android:exported="true"`，同一 intent-filter 同时含 `android.intent.action.MAIN` 与 `android.intent.category.LAUNCHER`。源码 `app/src/main/AndroidManifest.xml` 的 `.NanfengAiActivity` 与 Kotlin `package com.nanzhufeng.ai`/`class NanfengAiActivity` 一致；三个 release generated manifest（main merged、merged、packaged）也都解析为相同完整类名，无 `activity-alias`。`applicationId`、namespace、APK package 均为 `com.nanzhufeng.ai`；release `isMinifyEnabled=false`，且没有 release mapping 输出，因此不存在 R8 改写入口类名的路径。
+- **异常边界与最小恢复建议：** 这次离线证据不能解释 OPPO 当时“unable to resolve Intent”的设备侧原因，也不推翻那次严格停止。若南烛枫另行授权一个新的、只读且独立界定的主设备恢复任务，最小显式启动命令应为 `adb -s <OPPO_SERIAL> shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.nanzhufeng.ai/.NanfengAiActivity`；本任务没有也不得执行它、任何 ADB 命令、安装、清理或远端临时 APK 删除。由于最终 APK 已有正确 launcher，不提出源码/manifest 修复。
+
 ## 2026-08-23 P5 code-53：OPPO 正式保留数据覆盖已写入；Launcher 解析异常，按门禁停止
 
 - **已确认：** 在 `3B157F009E800000` 的完整只读门通过后，现装 `com.nanzhufeng.ai` 从 code 52 以同 release-v2 证书精确覆盖至 code 53。安装前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 不变；安装后只读 pull 的 `base.apk` SHA-256 为 `230cac90c0e54231a73650c1fc1e0a9f3890a03c0e8c1c5150d39a77f183954c`，与本地正式 APK 精确相同，v2/v3 均通过且证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；包仍非 Debug。
