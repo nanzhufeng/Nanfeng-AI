@@ -1,10 +1,11 @@
 # 南枫 AI 当前交接
 
-## 2026-08-23 P6：schema 38→39 同签名真实升级与历史 Conversation/Draft 保留已验收；非空 DocumentsUI 拒绝因 fixture 生成任务不存在而严格停止
+## 2026-08-23 P6：schema 38→39 同签名升级、非空本机 DocumentsUI `LOCAL_TRUTH_PRESENT` 拒绝及数据保留已验收
 
 - **隔离与冻结安装身份：** 只使用新的 Android 35 `NanfengAiP6Schema38UpgradeRecovery` / `emulator-5610`；专属 package `com.nanzhufeng.ai.p6v2schema38upgradeacceptance` 首装前不存在。旧 schema-38 code 51 包 `/tmp/nanfeng-ai-schema38-upgrade.hCuijb/app/build/outputs/apk/p6V2Schema38UpgradeAcceptance/南枫AI-开发验收.apk` 的 SHA-256 为 `111d57a3349ad9303225ba1102d325ee5238802e8dec302070241f7ff4552917`，当前 schema-39 code 52 包 `app/build/outputs/apk/p6V2Schema38UpgradeAcceptance/南枫AI-开发验收.apk` 为 `996d8b2c1396eccb4cfe752636c5905d52c608f7707b382149ca6d315bd05a4a`；两包 v2/v3 均通过，正式证书 SHA-256 同为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。首装 51 后设备 `base.apk` 哈希匹配旧包；普通 Launcher/UI 显式创建两个最小非敏感 Conversation，并保存一个非敏感 Draft，没有发送消息或触发 Provider/网络。
 - **真实覆盖与 owner 读回：** 对 51 数据仅执行 code 52 `adb -s emulator-5610 install -r`；没有清数据或卸载。设备安装后的 `base.apk` 哈希匹配 52 包。再经系统 Launcher 启动新包，`P6V2Schema38UpgradeAcceptance` 去内容化 startup audit 记录 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`；正常 UI 抽屉显示两个历史 Conversation，Composer 读回旧 Draft。因此真实 schema 38→39 同签名升级与 Conversation/Draft owner 保留已关闭；这不证明完整 P6、真实用户数据、发布或 OPPO。
-- **严格停止点（未伪造）：** 设备 Downloads 为空。为生成供 DocumentsUI 选择的 strict v2 local-truth fixture，误调用不存在的 Gradle 任务 `:app:testP6V2Schema38UpgradeAcceptanceUnitTest`；Gradle 明确报 `task ... not found` 后立即停止。未重试、未运行 `connected*AndroidTest`、未启动 DocumentsUI、未选文件、未读写 DB/SQL、未用 Activity extra/deep link，未触及 OPPO/Provider/Key/网络。因此“非空本机显示中文脱敏 `LOCAL_TRUTH_PRESENT` 拒绝且前后计数不变”仍未验收。下一独立增量先只读枚举可用 unit-test task/既有 strict fixture，再决定是否恢复该门；不得在此设备上清数据、卸载或重做升级。
+- **strict fixture 与普通用户路径：** 只读 glob 精确命中唯一既有 `/tmp/nanfeng-ai-p6-v2-local-truth-fixture.oZEEju/local-truth-fixture.nfai-exchange`；`2,346 B`、SHA-256 `d9df67ce64cc325ab35b9f4268c03ed2e956dbeef81e38bf058fb18c16959832`、ZIP 头 `50 4b 03 04` 均精确匹配，才将同一 bytes 仅推送至 `emulator-5610` 公共 Downloads，设备侧大小/哈希回读相同。经普通 Launcher → 设置 → 数据与导入 → 导入中心 → 完整工作区交换（v2）→ 选择 v2 交换包并恢复 → DocumentsUI Downloads，仅选择该文件一次；应用显示中文脱敏结果“当前本机已有数据或待恢复记录，已拒绝覆盖。”
+- **拒绝后的只读计数证明：** 选择前与单次不清数据的进程重启后、再次由 Launcher 启动时，`P6V2Schema38UpgradeAcceptance` startup audit 均为 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`。因此 `conversation=2,draft=2` 与其余计数均不变，非空本机没有被 merge/upsert/覆盖/删除，也未新增 receipt/provenance/settings。没有第二次 DocumentsUI 选择、`connected*AndroidTest`、DB/SQL、Activity extra、deep link、网络、Provider、Key、清数据、卸载、覆盖安装或 OPPO 操作。此独立子链已关闭；完整 P6、发布与 OPPO 仍不由此推出。
 
 ## 2026-08-23 范围变更：Windows 验证不再是总控完成门
 

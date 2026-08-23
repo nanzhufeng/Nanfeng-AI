@@ -47,7 +47,9 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 
 仅在新 Android 35 `NanfengAiP6Schema38UpgradeRecovery` / `emulator-5610` 上，确认专属 package 不存在后，首装 schema-38 / code 51 验收 APK；已安装 `base.apk` SHA-256 为 `111d57a3349ad9303225ba1102d325ee5238802e8dec302070241f7ff4552917`。通过系统 Launcher 与普通 UI 显式创建两个最小非敏感 Conversation，并保存一个非敏感草稿；没有发送消息、Provider、网络、DB/SQL、Activity extra、deep link、清数据或卸载。随后以同 applicationId、同正式证书的 code 52 验收 APK 作 `-r` 覆盖，已安装 `base.apk` SHA-256 为 `996d8b2c1396eccb4cfe752636c5905d52c608f7707b382149ca6d315bd05a4a`。从 Launcher 再次启动后，去内容化审计为 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`，且正常 UI 可读回历史会话及草稿，故同签名 schema 38→39 与历史 Conversation/Draft owner 保留已有设备证据。
 
-本次没有完成非空本机的 DocumentsUI `LOCAL_TRUTH_PRESENT` 拒绝：为生成 strict v2 fixture 而调用的 `:app:testP6V2Schema38UpgradeAcceptanceUnitTest` 不存在，Gradle 在任务解析阶段失败。按本轮“任一步失败即停止”门禁，未重试、未启动 DocumentsUI、未选择文件，也未取得拒绝后的计数不变证据；该门仍待独立增量恢复。
+随后独立完成非空本机的 DocumentsUI `LOCAL_TRUTH_PRESENT` 验收。只读 glob 精确命中唯一 strict fixture `/tmp/nanfeng-ai-p6-v2-local-truth-fixture.oZEEju/local-truth-fixture.nfai-exchange`，先核验 `2,346 B`、SHA-256 `d9df67ce64cc325ab35b9f4268c03ed2e956dbeef81e38bf058fb18c16959832` 和 ZIP 头 `50 4b 03 04`，再仅推送该精确 bytes 到隔离 AVD 的公共 Downloads；设备侧大小与 SHA-256 回读相同。经普通 Launcher → 设置 → 数据与导入 → 导入中心 → 完整工作区交换（v2）→ 选择 v2 交换包并恢复 → DocumentsUI Downloads，仅选择该文件一次。应用可见中文脱敏结果为“当前本机已有数据或待恢复记录，已拒绝覆盖。”没有 merge、upsert、覆盖、删除或第二次选择。
+
+选择前及在不清数据的单次进程重启后再次经 Launcher 启动，专属去内容化 startup audit 均为 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`。因此 schema 39、两个历史 Conversation 与两个 Draft 及其余 owner/v2 metadata 计数均未改变，满足非空本机 `LOCAL_TRUTH_PRESENT` 的 UI 与数据保留门。本次没有 `connected*AndroidTest`、DB/SQL、Activity extra、deep link、网络、Provider、Key、清数据、卸载、覆盖安装或 OPPO 操作；这只关闭该独立拒绝子链，不扩大为完整 P6、发布或 OPPO 验收。
 
 ## 尚未接入
 
