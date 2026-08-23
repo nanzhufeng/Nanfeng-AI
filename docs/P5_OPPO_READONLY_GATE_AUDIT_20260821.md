@@ -1,5 +1,12 @@
 # P5 OPPO 只读门审计（2026-08-21）
 
+## 2026-08-23 code-53 Launcher 恢复：Package Manager 完整解析与一次标准启动成功
+
+- **本增量授权与只读门：** 仅对 OPPO Find N5 `3B157F009E800000` 执行包管理器/焦点读取，未安装、卸载、清数据、push/pull、删除远端临时 APK、读取业务数据或截图，也没有运行 `connected*AndroidTest`。`adb get-state` 为 `device`；`dumpsys package` 的去敏记录显示 `com.nanzhufeng.ai` 为 `versionCode=53`，无 `DEBUGGABLE` flag，User 0 为 `installed=true`、`enabled=0`（默认启用）且 CE/DE inode 仍为 `1459104` / `1433378`。先前已完成的 release-v2 签名和保留数据覆盖证据本轮不重做、不安装。
+- **解析门：** `cmd package resolve-activity --brief --components --user 0` 对 `ACTION_MAIN` + `CATEGORY_LAUNCHER` + package `com.nanzhufeng.ai` 精确返回 `com.nanzhufeng.ai/.NanfengAiActivity`，与冻结 APK 的唯一 exported Launcher component 完全一致；因此满足唯一启动前提。
+- **唯一启动与焦点：** 只执行一次 `am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.nanzhufeng.ai/.NanfengAiActivity`。framework 返回 `Status: ok`、`Activity: com.nanzhufeng.ai/.NanfengAiActivity`；“delivered to currently running top-most instance”表示目标已在前台，非启动失败。随后仅一次 `dumpsys activity activities` 读取到 `mCurrentFocus` 和 `mFocusedApp` 均为该 Activity。未读取 UI、会话或应用私有内容。
+- **结论与边界：** 此前的“unable to resolve Intent”已由当前 Package Manager 完整解析和一次标准 Launcher 成功恢复；code-53 的 Launcher/前台活动门现有真实 OPPO 证据。它不证明业务功能、Provider/账号、性能、可访问性、旧版本升级迁移、发布回下载、P5 完成或 P0–P11 完成。停止全部 OPPO 操作；遗留远端临时 APK 保持不删。
+
 ## 2026-08-23 code-53 Launcher 异常离线诊断：旧 component 正确，无源码修复；设备保持零接触
 
 - **审计范围：** 只读分析已冻结的 `app/build/outputs/apk/release/南枫AI.apk`、源码 manifest/Kotlin、release merged/packaged manifest 和 release Gradle 配置；未运行构建、测试、ADB、AVD、OPPO 命令或任何清理，未修改 APK、源码或版本。

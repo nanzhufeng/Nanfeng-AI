@@ -7,8 +7,8 @@
 | 阶段/外部门 | 所需外部条件 | 当前可用性 | 最小恢复动作 |
 | --- | --- | --- | --- |
 | P2/P3 真实 Provider/流 | 合法可用的应用内凭据、已验证目录/价格、逐次可见确认与用户授权的非敏感 RunSpec | **不可用**：仓库没有允许的 Provider 环境变量或用户级 Gradle 凭据 schema；应用私有存储未读 | 用户在应用内完成合法配置后，另行授权一次冻结的非敏感预检/真实调用；不得从环境变量或 Gradle 旁路 |
-| P5 OPPO/正式交付 | OPPO 在线、安装前只读身份/数据指纹门与当次明确授权 | **已执行且异常停止**：code 52→53 的同证书 `pm install -r --user 0` 返回 Success；首次安装时间、CE/DE inode、非 Debug 边界与设备 `base.apk` 字节回读均通过。但标准 package launcher intent 无法解析，未取得 `Status: ok`，远端精确临时 APK 未清理 | 不得重试安装、改用其他启动方式、清理临时文件或再查询 OPPO；仅由用户另行授权一个最小启动诊断增量 |
-| P5/P11 code-53 产物 | 本地正式 APK、结构验签记录及 P11 发布门 | **已安装但未完成启动验收**：code-53 `230cac…f183954c` 已以一次保留数据覆盖安装，设备 `base.apk` 回读精确匹配，v2/v3 与 release-v2 证书一致；Launcher 异常与 P11 发布风险仍未关闭 | 不重建、重签名、发布或重复安装；若继续，先按独立授权处理 Launcher 异常，再分别收敛 P11 发布门 |
+| P5 OPPO/正式交付 | OPPO 在线、安装前只读身份/数据指纹门与当次明确授权 | **Launcher 局部门已恢复**：code 52→53 的同证书保留数据覆盖、首次安装时间/CE/DE inode/非 Debug 与设备 `base.apk` 精确回读均已通过。新独立诊断中，Package Manager 精确解析唯一 `NanfengAiActivity`，一次标准 `am start -W` 返回 `Status: ok`，焦点也在该 Activity | 停止 OPPO 操作，不重装、重启、改用其他启动方式或清理遗留临时 APK；P5 其余升级迁移、可访问性/性能与正式发布门仍单独待验 |
+| P5/P11 code-53 产物 | 本地正式 APK、结构验签记录及 P11 发布门 | **已安装且已获 Launcher/前台活动证据**：code-53 `230cac…f183954c` 的设备 `base.apk` 回读、v2/v3、release-v2 证书与一次标准 Launcher 成功均已记录；P11 发布/可重复性风险仍未关闭 | 不重建、重签名、发布或重复安装；P11 发布门须独立收敛 |
 | P6 Android/Windows | 全新 Android 35 AVD 的可用 ADB 注册；真实 Windows 主机的 WebView2、安装/签名/picker/缩放/IME 验收 | **不可用**：当前 ADB 无设备，既有三台新 AVD 的 ADB 注册失败；无 Windows 本机证据 | 先恢复一台全新 AVD 的 ADB 注册，不复用失败实例；Windows 仅在 Windows 主机另立验收 |
 | P7 Google/Supabase | 指定 Supabase target、CLI/link、私有客户端配置、受控授权会话及专属 Google OAuth 配置 | **不可用**：CLI/link/私有配置/认证会话/target 均缺失 | 用户给出明确 target 与授权后，先运行只读远端核验；部署、OAuth 和合成 envelope 回读各自另行授权 |
 | P8 真实 Agent 工具 | 一个已批准的真实工具、精确目标、权限/风险/预算、成功失败取消幂等恢复合同 | **不可用**：仅有 LOCAL_TEST_ONLY 与只读账本，未有真实工具合同/目标 | 一工具一合同，先完成外部动作/回滚边界和用户确认，不以 fixture 升格 |
@@ -17,7 +17,7 @@
 
 ## 2026-08-23 补充当前状态（优先于以下历史审计）
 
-- **P5 已获局部门证：** 历史 code-52 正式 APK `c511…` 已完成正式 v2/v3 签名核验、同包名/更高 versionCode/同证书门，以及 OPPO 的一次保留数据覆盖；安装前后的 `firstInstallTime` 和数据 inode 不变，设备回读的 `base.apk` 与该 APK 一致，准确 Launcher 已进入前台。此为 P5 的当前正式构建、验签、保留数据覆盖和启动证据，不等同于 P5、发布或 P0–P11 完成。
+- **P5 已获局部门证：** code-53 正式 APK `230cac…f183954c` 已完成正式 v2/v3 签名核验、同包名/更高 versionCode/同证书门，以及 OPPO 的一次保留数据覆盖；安装前后的 `firstInstallTime` 和数据 inode 不变，设备回读的 `base.apk` 与该 APK 一致。后续独立最小诊断已由 Package Manager 精确解析唯一 Launcher，并以一次标准 `am start -W` 取得 `Status: ok` 与该 Activity 前台焦点。此为 P5 的当前正式构建、验签、保留数据覆盖和启动证据，不等同于 P5、发布或 P0–P11 完成。
 - **P6 已扩展若干真实子链：** Android v2 已在新空隔离 AVD 经 DocumentsUI 获得 restore、同包 replay、篡改/超限拒绝和非空本机拒绝；修复后 restore→DocumentsUI export 的真文件回读，以及 Android DocumentsUI→隔离 Desktop native Open/Save/replay 均已有局部证据。附件提升中断后零发布、同包 DocumentsUI retry 也已验收。Android schema 38→39 的真实升级、历史 owner 保留和非空 DocumentsUI 拒绝尚未执行：三台全新 Android 35 AVD 均因宿主 Emulator/ADB 未注册而停止，未安装验收 APK。P6 仍未退出。
 - **P11 当前边界：** AAPT2 verification metadata 已无写入回读；当前 release build 与非 debuggable/签名结构已核验。但本轮 APK `d612…` 与上述历史 code-52、已用于 OPPO 证据的 `c511…` 字节 hash 不同，旧精确 bytes 不在当前工作区，故当前产物不得作为覆盖安装或发布物。P11 仅增加供应链/构建证据，仍是持续阶段。
 - **总控边界不变：** P0–P11 不因任何上述局部证据完成；P2/P3/P4 的真实 Provider、成本/质量与更多真实输入门，P7 账号/同步，P8 真实工具，P9 真实生态目标及 P10 双消费者触发均保持原外部门。

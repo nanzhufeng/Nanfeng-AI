@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P5 OPPO Launcher 异常已最小恢复：code-53 的标准 Launcher 成功且活动在前台
+
+- **已确认的真机事实：** 在新的、单独授权的最窄诊断中，OPPO `3B157F009E800000` 为 `device`。`com.nanzhufeng.ai` 仍为 code `53`、无 `DEBUGGABLE` 标记；User 0 为 installed/default enabled，CE/DE inode 仍是 `1459104` / `1433378`。没有重新安装或重验签：此前的同 release-v2 signer、code-52→53 保留数据覆盖与设备 `base.apk` 精确回读仍是本次的安装身份事实。
+- **解析与唯一启动：** Package Manager 对 `ACTION_MAIN` + `CATEGORY_LAUNCHER` + package 的 `resolve-activity` 精确返回唯一 component `com.nanzhufeng.ai/.NanfengAiActivity`。因此只执行一次授权的标准 `am start -W`；返回 `Status: ok`、Activity 为该 component，并提示 intent 交付给已在最前的实例。只读 `dumpsys activity activities` 后，`mCurrentFocus` 与 `mFocusedApp` 均为 `NanfengAiActivity`。没有读取 UI、业务数据或会话，也没有第二次启动。
+- **停止点：** code-53 Launcher 解析/前台活动异常已恢复并获得真机证据；立即停止 OPPO 命令。未删除此前远端临时 APK，未执行安装、卸载、清数据、push/pull、截图、业务操作、Debug/Instrumentation 或 `connected*AndroidTest`。这不构成 P5、发布、Provider/账号或 P0–P11 完成；余下 P5 门仍是旧 APK 升级迁移、全设备可访问性/性能和正式发布/回下载。
+
 ## 2026-08-23 P5 Launcher 异常：code-53 APK 离线审计确认旧 component 正确；不触设备
 
 - **离线结论：** 最终正式 APK `app/build/outputs/apk/release/南枫AI.apk`（SHA-256 `230cac90c0e54231a73650c1fc1e0a9f3890a03c0e8c1c5150d39a77f183954c`）的真正且唯一 `MAIN`/`LAUNCHER` Activity 是 **`com.nanzhufeng.ai.NanfengAiActivity`**。此前使用的相对 component `com.nanzhufeng.ai/.NanfengAiActivity` 按 Android 规则正是同一完整 component；它没有改名，也不是错误引用。
