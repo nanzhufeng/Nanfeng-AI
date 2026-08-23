@@ -938,7 +938,7 @@ private fun ConversationHeaderFloatingIconButton(
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.size(44.dp).semantics { this.contentDescription = contentDescription },
+        modifier = Modifier.size(44.dp).semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
         color = Color.White,
         shape = CircleShape,
         tonalElevation = 0.dp,
