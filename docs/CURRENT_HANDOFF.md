@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P5：隔离正式 code-52→57 覆盖升级、草稿保留与冷启动已验收
+
+- **两包及环境：** 旧包从 detached `a4eebd1` 在 Android Studio JBR、`ANDROID_HOME`、`--offline --no-daemon` 下唯一重建；为 `com.nanzhufeng.ai / code 52 / 0.3.0-p10a`、SHA-256 `cf26307a392baf8df46ef12b4130d8bb0939d7dbca2b874fcf43fef35b0db1d8`。新包为当前 main code 57 正式产物；两包 v2/v3 均通过、同 release-v2 证书。只使用全新 Android 35 `NanfengAiP5ReleaseUpgradeMigration` / `emulator-5614`，不触 OPPO。
+- **真实升级与数据保留：** 首装 code 52 后仅经正常 Launcher/UI 创建非敏感 Composer 草稿 `P5UpgradeFact`，不发送、不调用 Provider/网络。随后只执行一次 `adb -s emulator-5614 install -r` 覆盖到 code 57；没有清数据或卸载。`firstInstallTime` 保持 `2026-08-23 10:46:48`，CE/DE inode 保持 `573570` / `401708`。force-stop 后标准 Launcher 冷启动成功（`Status: ok`，约 1.04 秒），正常 UI 仍显示草稿和“会话草稿”语义。
+- **边界：** 这是隔离、非敏感的旧版→当前正式包迁移与草稿保留证据；不代表 OPPO、真实用户数据、完整无障碍/性能、商店发布或 P0–P11 完成。code 57 未获 P11 发布资格，禁止安装到 OPPO 或发布。
+
 ## 2026-08-23 P6：schema 38→39 同签名升级、非空本机 DocumentsUI `LOCAL_TRUTH_PRESENT` 拒绝及数据保留已验收
 
 - **隔离与冻结安装身份：** 只使用新的 Android 35 `NanfengAiP6Schema38UpgradeRecovery` / `emulator-5610`；专属 package `com.nanzhufeng.ai.p6v2schema38upgradeacceptance` 首装前不存在。旧 schema-38 code 51 包 `/tmp/nanfeng-ai-schema38-upgrade.hCuijb/app/build/outputs/apk/p6V2Schema38UpgradeAcceptance/南枫AI-开发验收.apk` 的 SHA-256 为 `111d57a3349ad9303225ba1102d325ee5238802e8dec302070241f7ff4552917`，当前 schema-39 code 52 包 `app/build/outputs/apk/p6V2Schema38UpgradeAcceptance/南枫AI-开发验收.apk` 为 `996d8b2c1396eccb4cfe752636c5905d52c608f7707b382149ca6d315bd05a4a`；两包 v2/v3 均通过，正式证书 SHA-256 同为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。首装 51 后设备 `base.apk` 哈希匹配旧包；普通 Launcher/UI 显式创建两个最小非敏感 Conversation，并保存一个非敏感 Draft，没有发送消息或触发 Provider/网络。
