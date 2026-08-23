@@ -1,5 +1,13 @@
 # P5 OPPO 只读门审计（2026-08-21）
 
+## 2026-08-23 code-53 正式保留数据覆盖：安装与字节回读通过；Launcher 解析异常，严格停止
+
+- **安装前只读门：** OPPO Find N5 `3B157F009E800000` 为 `device`，设备与主机 epoch 相同。目标 `com.nanzhufeng.ai` 为 code `52`、没有 `DEBUGGABLE` 标记、`firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378`；已安装 `base.apk` 为 `c5112374…fd23f91`，v2/v3 均通过且证书 SHA-256 为 `6d1d56ec…8661f8`。本地冻结正式 APK `南枫AI.apk` 为 `com.nanzhufeng.ai / 53 / 0.3.0-p10a`、`230cac90…f183954c`，非 Debug、v2/v3 通过且证书相同；精确远端临时路径在写入前不存在。
+- **唯一写入：** 仅一次 `adb push` 到 `/data/local/tmp/nanfeng-ai-0.3.0-p10a-code53.apk`，随后仅一次 `pm install -r --user 0`，系统返回 `Success`。没有 `adb install`、Debug/Instrumentation、`connected*AndroidTest`、卸载、清数据、私有数据/数据库读取或业务 UI 读取。
+- **安装后只读回读：** 目标包为 code `53`、仍无 `DEBUGGABLE`，`firstInstallTime` 与两项 data inode 均未变；设备时间仍与主机一致。从新的 installed `base.apk` 只读 pull 的 SHA-256 为 `230cac90…f183954c`，与本地安装文件精确一致，v2/v3 与 release-v2 证书摘要也保持一致。
+- **异常停止：** 标准 `ACTION_MAIN` + `CATEGORY_LAUNCHER` 的 package launcher intent 返回“unable to resolve Intent”，没有得到 `Status: ok`。此前最近一次只读窗口焦点仍是系统 Launcher；失败命令因异常退出，未取得安装后焦点。依门禁，未重试安装、未改用其他启动方式、未再读取设备，也未执行远端临时 APK 清理；该路径的剩余状态不作推断。
+- **边界：** 本条只证明一次 code-52→53 同证书覆盖、安装后包字节身份与 data inode 保留；不证明 Launcher 正常启动、业务可用、Provider/账号/外部服务、发布或 P5/P0–P11 完成。
+
 ## 2026-08-23 code-52 正式覆盖与数据保留验收
 
 - **前置：** 本地正式 APK 为 `com.nanzhufeng.ai / 52 / 0.3.0-p10a`，SHA-256 `c5112374643319617e8cffa1e32fab94605bd4cccadda6fbb6d390f99fd23f91`；Android Studio JBR `apksigner` 证实 v2/v3 为真、证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。OPPO `3B157F009E800000` 只读复核仍为 code 51，`firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378`，且从已安装 `base.apk` 只读计算的证书摘要相同。

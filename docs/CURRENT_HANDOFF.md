@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P5 code-53：OPPO 正式保留数据覆盖已写入；Launcher 解析异常，按门禁停止
+
+- **已确认：** 在 `3B157F009E800000` 的完整只读门通过后，现装 `com.nanzhufeng.ai` 从 code 52 以同 release-v2 证书精确覆盖至 code 53。安装前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 不变；安装后只读 pull 的 `base.apk` SHA-256 为 `230cac90c0e54231a73650c1fc1e0a9f3890a03c0e8c1c5150d39a77f183954c`，与本地正式 APK 精确相同，v2/v3 均通过且证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；包仍非 Debug。
+- **唯一写入与停止：** 只执行一次 push 到 `/data/local/tmp/nanfeng-ai-0.3.0-p10a-code53.apk` 与一次 `pm install -r --user 0`，返回 `Success`。随后标准 package launcher intent 报“unable to resolve Intent”，未得到 `Status: ok`；按明确停止门禁，没有重试安装、没有改用其他启动方式、没有再查询设备，也没有清理远端临时 APK。不要把本条写作正常启动、完整 P5、发布或 P0–P11 完成。
+- **唯一后续边界：** 需要南烛枫另行决定是否以新的、只读且单独界定的启动诊断处理该 Launcher 异常；此前不得对 OPPO 执行任何操作。详见 `P5_OPPO_READONLY_GATE_AUDIT_20260821.md`。
+
 ## 2026-08-23 P0–P11 外部门 readiness：全项阻断；仅作去敏只读审计并停止
 
 - **本轮边界：** 只读检查 ADB 当前设备清单、Git remote 是否存在、仓库声明的配置入口、P7 本地 readiness 脚本、P8–P10 合同、既有 P6 失败交接与现有 code-53 APK；没有 Provider/HTTP、Supabase/Google 远端、Key/凭据值、应用私有数据、AVD 启动、安装/卸载/清数据、`connected*AndroidTest` 或 push。开始时工作树为 0 改动。
