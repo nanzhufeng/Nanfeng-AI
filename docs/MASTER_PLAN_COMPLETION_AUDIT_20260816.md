@@ -9,8 +9,8 @@
 | P2/P3 真实 Provider/流 | 合法可用的应用内凭据、已验证目录/价格、逐次可见确认与用户授权的非敏感 RunSpec | **不可用**：仓库没有允许的 Provider 环境变量或用户级 Gradle 凭据 schema；应用私有存储未读 | 用户在应用内完成合法配置后，另行授权一次冻结的非敏感预检/真实调用；不得从环境变量或 Gradle 旁路 |
 | P5 OPPO/正式交付 | OPPO 在线、安装前只读身份/数据指纹门与当次明确授权 | **Launcher 局部门已恢复**：code 52→53 的同证书保留数据覆盖、首次安装时间/CE/DE inode/非 Debug 与设备 `base.apk` 精确回读均已通过。新独立诊断中，Package Manager 精确解析唯一 `NanfengAiActivity`，一次标准 `am start -W` 返回 `Status: ok`，焦点也在该 Activity | 停止 OPPO 操作，不重装、重启、改用其他启动方式或清理遗留临时 APK；P5 其余升级迁移、可访问性/性能与正式发布门仍单独待验 |
 | P5/P11 code-53 产物 | 本地正式 APK、结构验签记录及 P11 发布门 | **已安装且已获 Launcher/前台活动证据**：code-53 `230cac…f183954c` 的设备 `base.apk` 回读、v2/v3、release-v2 证书与一次标准 Launcher 成功均已记录；P11 发布/可重复性风险仍未关闭 | 不重建、重签名、发布或重复安装；P11 发布门须独立收敛 |
-| P6 Android/Windows | 全新 Android 35 AVD 的可用 ADB 注册；真实 Windows 主机的 WebView2、安装/签名/picker/缩放/IME 验收 | **不可用**：当前 ADB 无设备，既有三台新 AVD 的 ADB 注册失败；无 Windows 本机证据 | 先恢复一台全新 AVD 的 ADB 注册，不复用失败实例；Windows 仅在 Windows 主机另立验收 |
-| P7 Google/Supabase | 指定 Supabase target、CLI/link、私有客户端配置、受控授权会话及专属 Google OAuth 配置 | **不可用**：CLI/link/私有配置/认证会话/target 均缺失 | 用户给出明确 target 与授权后，先运行只读远端核验；部署、OAuth 和合成 envelope 回读各自另行授权 |
+| P6 Android/Windows | 一台全新 Android 35 AVD 的可用 ADB 注册；Windows 本机验收已由用户明确豁免，不是完成门 | **已可用**：`emulator-5610` 已正常注册、启动并完成 schema 38→39 覆盖升级；Windows 历史债务保留但非阻塞 | 仅在该隔离 AVD 上续做独立 DocumentsUI/strict-fixture 验收；不复用失败实例，不伪造 Windows 证据 |
+| P7 Google/Supabase | 原为指定 Supabase target、CLI/link、私有客户端配置、受控授权会话及专属 Google OAuth 配置 | **用户明确豁免**：Google 登录、Supabase、云端加密同步与跨设备恢复不是总控完成门；远端条件当前仍未核验 | 保留本地实现和未验证记录为非阻塞债务；不得因豁免而配置、部署、调用远端或声称云同步完成 |
 | P8 真实 Agent 工具 | 一个已批准的真实工具、精确目标、权限/风险/预算、成功失败取消幂等恢复合同 | **不可用**：仅有 LOCAL_TEST_ONLY 与只读账本，未有真实工具合同/目标 | 一工具一合同，先完成外部动作/回滚边界和用户确认，不以 fixture 升格 |
 | P9 生态接入 | 已指定真实目标应用、稳定公开入口、最小只读授权与版本化 schema | **不可用**：现有参考快照不构成真实目标或稳定入口证据 | 用户提供目标应用身份/版本/公开入口及最小授权后，新建一目标一 Adapter 审计 |
 | P10 AI Hub | 至少两个真实应用消费者及隔离、降级、回滚/运维恢复验证对象 | **不可用**：尚无两个真实消费者 | 待两个消费者已真实存在后才立约，不提前建设 Hub |
@@ -131,13 +131,13 @@
 | P4 项目、记忆、上下文与知识完整化 | Projects、Memory、Knowledge、多个单独 Adapter、离线 Eval 与本地上下文控制面均有局部闭环。 | 真实上下文/语义摘要、缓存和成本质量基准、更多 Adapter 的逐个验收、真实 Provider/Harness 回归与用户价值证据；P3 的真实退出门仍是前置。 | 未退出。 |
 | P5 Android 产品化与正式交付 | 历史 code-52 正式 APK `c511…` 已完成 v2/v3/同证书核验、OPPO 一次保留数据覆盖（安装前后首次安装时间与数据 inode 不变、设备 `base.apk` 回读匹配）及准确 Launcher 前台启动；P5-D 隔离 emulator 的 SAF 备份/恢复链亦有证据。 | 旧 APK 升级迁移、全设备可访问性/性能、正式发布/商店交付仍未关闭。另：当前重建 APK `d612…` 与 OPPO 已验收的 `c511…` 字节不同，未收敛前不得作为覆盖安装或发布物。 | 未退出；仅上述 P5 局部门关闭。 |
 | P6 Desktop 与跨端离线体验 | Desktop P6-K bundle/readback、Android 隔离导入和 P6-A 独立文本交换已有证据；v2 已获 Android 空本机 DocumentsUI restore/replay/篡改与超限拒绝/非空拒绝、修复后 restore→DocumentsUI export 真文件回读、Android DocumentsUI→隔离 Desktop native Open/Save/replay，以及附件提升中断→零发布→同包 DocumentsUI retry 的局部证据。新的 Android 35 隔离设备还已得到 schema-38/code-51→schema-39/code-52 同签名覆盖、`schema=39` 启动审计与 2 Conversation/2 Draft 历史 UI readback。P6-L1–L4 保持 content-free 本地精确复用/消息引用有效性边界，未接入执行。 | 原始退出仍要求完整对象的常规跨端导入导出/回读、紧凑/展开和异常恢复的独立验收，及 Windows/正式发布。Desktop 原生业务对象恢复、用户真实附件等仍未获证。此非空升级设备的 DocumentsUI `LOCAL_TRUTH_PRESENT` 中文拒绝/计数不变尚未获得：strict fixture 生成调用不存在的 Gradle task 后已停止，未重试、未绕过。 | 未退出；不得将 fixture 或局部文件链写作 P6/P0–P11 完成。 |
-| P7 可选账号与端到端加密同步 | P7-A 至 P7-E 的本地协议、状态机、部署工件和 typed restore 主体已完成；Desktop P7-E 现对 candidate 的 canonical identity 做复用/切换前后重读，并使 legacy crash temporary 保持隔离、不阻塞新 candidate。 | 真实 Google、Supabase、OAuth、受控 HTTP、真实 Android/Desktop 跨设备恢复与部署回读。 | 未退出。 |
+| P7 可选账号与端到端加密同步 | P7-A 至 P7-E 的本地协议、状态机、部署工件和 typed restore 主体已完成；Desktop P7-E 现对 candidate 的 canonical identity 做复用/切换前后重读，并使 legacy crash temporary 保持隔离、不阻塞新 candidate。 | 真实 Google、Supabase、OAuth、受控 HTTP、真实 Android/Desktop 跨设备恢复与部署回读均由用户明确豁免为非阻塞债务；不得据此声称已完成真实云同步。 | 不作为总控完成门。 |
 | P8 受控 Agent | 本地 ledger、harness、只读 inspect 与本地红队退出已完成；本轮进一步统一双端 plan admission：三类预算按已用+完整计划预检，重复 step intent 在 approval 前 durable fail-closed。 | 每一个将来启用的真实工具必须分别完成成功、失败、取消、审计、幂等与恢复；不得把本地 fixture 说成真实 Agent。 | 本地主体退出；总阶段未退出。 |
 | P9 南枫生态协议接入 | LOCAL_TEST_ONLY 集成底座已完成；每个可继续步骤重验合成目标句柄和 expiry，目标重选/过期前不会产生新的本地 receipt。 | 至少一个真实目标应用的稳定入口、权限 UI、用户确认、结果回读、撤销和审计。 | 未开始真实接入。 |
 | P10 可选 AI Hub | 尚无两个真实应用消费者，触发条件未成立。 | 仅在触发条件成立后，验证 Hub 的多应用隔离、降级、回滚和运维恢复。 | 未触发，不提前建设。 |
 | P11 长期运营与持续演进 | 版本化合同、审计、签名和交接已形成部分运营纪律；AAPT2 metadata 已无写入回读，当前 release build 的非 debuggable/签名结构已核验。 | 当前 APK `d612…` 与历史 code-52 `c511…` 字节不同，必须先收敛可重复性风险，不能用于安装/发布；模型/价格/Provider 复核、迁移、隐私删除、依赖安全、备份演练及 Android/Desktop 发布节奏仍为持续责任。 | 持续阶段，不存在“一次性全部完成”。 |
 
-**总控的真实下一序列：** 先保持 P0/P1 治理与回归；P2–P4 的真实 Provider 与成本/质量证据、P5 的旧 APK 升级迁移/发布门及当前构建字节差异收敛、P6 剩余跨端/Windows 正式门、P7 真实账号同步、P8 每个真实工具、P9 首个真实生态接入，均按原始依赖逐项推进。P10 只在两个真实消费者出现后触发；P11 永续执行。任何局部闭环都只能关闭其所属行的一段证据，不能宣布 P0–P11 总控完成。
+**总控的真实下一序列：** 先保持 P0/P1 治理与回归；P2–P4 的真实 Provider 与成本/质量证据、P5 的旧 APK 升级迁移/发布门及当前构建字节差异收敛、P6 剩余跨端/Android 正式门、P8 每个真实工具、P9 首个真实生态接入，均按原始依赖逐项推进。Windows 验证及 P7 真实账号/云同步均为用户明确豁免的非阻塞债务。P10 只在两个真实消费者出现后触发；P11 永续执行。任何局部闭环都只能关闭其所属行的一段证据，不能宣布 P0–P11 总控完成。
 
 ## 结论
 

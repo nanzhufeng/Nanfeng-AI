@@ -6,6 +6,15 @@
 - **真实覆盖与 owner 读回：** 对 51 数据仅执行 code 52 `adb -s emulator-5610 install -r`；没有清数据或卸载。设备安装后的 `base.apk` 哈希匹配 52 包。再经系统 Launcher 启动新包，`P6V2Schema38UpgradeAcceptance` 去内容化 startup audit 记录 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`；正常 UI 抽屉显示两个历史 Conversation，Composer 读回旧 Draft。因此真实 schema 38→39 同签名升级与 Conversation/Draft owner 保留已关闭；这不证明完整 P6、真实用户数据、发布或 OPPO。
 - **严格停止点（未伪造）：** 设备 Downloads 为空。为生成供 DocumentsUI 选择的 strict v2 local-truth fixture，误调用不存在的 Gradle 任务 `:app:testP6V2Schema38UpgradeAcceptanceUnitTest`；Gradle 明确报 `task ... not found` 后立即停止。未重试、未运行 `connected*AndroidTest`、未启动 DocumentsUI、未选文件、未读写 DB/SQL、未用 Activity extra/deep link，未触及 OPPO/Provider/Key/网络。因此“非空本机显示中文脱敏 `LOCAL_TRUTH_PRESENT` 拒绝且前后计数不变”仍未验收。下一独立增量先只读枚举可用 unit-test task/既有 strict fixture，再决定是否恢复该门；不得在此设备上清数据、卸载或重做升级。
 
+## 2026-08-23 范围变更：Windows 验证不再是总控完成门
+
+- 用户已明确要求“跳过 Windows 验证”。因此，Windows 原生安装、WebView2、签名、picker、缩放与 IME 的本机验收不再阻塞本项目 P0–P11 的完成判定；历史 Windows 未验证记录保留为非阻塞平台债务，不得伪造为已验收。Android、OPPO、Provider、账号同步、真实工具、生态目标、发布与其余合同门保持不变。
+
+## 2026-08-23 范围变更：Google/Supabase 与云同步不再是总控完成门
+
+- 用户已明确要求跳过 Google 登录、Supabase、云端加密同步及跨设备恢复验证。因此，P7 的真实 OAuth、远端部署、受控 HTTP 与跨设备回读不再阻塞本项目总控完成判定；本地 P7 协议/状态机实现与历史未验证记录保留为非阻塞债务，绝不写作真实云同步已经验收。
+- 此范围变更不授权读取、上传、提交、同步或输出任何 API Key、token、私钥或等价认证秘密；该类秘密只能本地受控使用。
+
 ## 2026-08-23 P5 OPPO Launcher 异常已最小恢复：code-53 的标准 Launcher 成功且活动在前台
 
 - **已确认的真机事实：** 在新的、单独授权的最窄诊断中，OPPO `3B157F009E800000` 为 `device`。`com.nanzhufeng.ai` 仍为 code `53`、无 `DEBUGGABLE` 标记；User 0 为 installed/default enabled，CE/DE inode 仍是 `1459104` / `1433378`。没有重新安装或重验签：此前的同 release-v2 signer、code-52→53 保留数据覆盖与设备 `base.apk` 精确回读仍是本次的安装身份事实。
