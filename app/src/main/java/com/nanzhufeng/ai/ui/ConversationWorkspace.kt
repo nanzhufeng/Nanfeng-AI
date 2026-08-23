@@ -633,15 +633,6 @@ internal fun ConversationWorkspaceDialog(
                             onAddAnchorChanged = { composerAddAnchor = it },
                             onModelAnchorChanged = { composerModelAnchor = it },
                         )
-                        state.notice?.let { notice ->
-                            Surface(
-                                modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = 6.dp),
-                                color = Color(0xFFFFF5E6),
-                                shape = RoundedCornerShape(12.dp),
-                            ) {
-                                Text(notice, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = BodyText, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
                         }
                     }
                 }
