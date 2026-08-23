@@ -7,7 +7,7 @@
 | 阶段/外部门 | 所需外部条件 | 当前可用性 | 最小恢复动作 |
 | --- | --- | --- | --- |
 | P2/P3 真实 Provider/流 | 合法可用的应用内凭据、已验证目录/价格、逐次可见确认与用户授权的非敏感 RunSpec | **不可用**：仓库没有允许的 Provider 环境变量或用户级 Gradle 凭据 schema；应用私有存储未读 | 用户在应用内完成合法配置后，另行授权一次冻结的非敏感预检/真实调用；不得从环境变量或 Gradle 旁路 |
-| P5 OPPO/正式交付 | OPPO 在线、安装前只读身份/数据指纹门与当次明确授权 | **Launcher 局部门已恢复**：code 52→53 的同证书保留数据覆盖、首次安装时间/CE/DE inode/非 Debug 与设备 `base.apk` 精确回读均已通过。新独立诊断中，Package Manager 精确解析唯一 `NanfengAiActivity`，一次标准 `am start -W` 返回 `Status: ok`，焦点也在该 Activity | 停止 OPPO 操作，不重装、重启、改用其他启动方式或清理遗留临时 APK；P5 其余升级迁移、可访问性/性能与正式发布门仍单独待验 |
+| P5 OPPO/正式交付 | OPPO 在线、安装前只读身份/数据指纹门与当次明确授权 | **当前正式覆盖已完成**：code 53→57 的同证书 `pm install -r --user 0` 返回成功，首次安装时间/CE/DE inode/非 Debug 均不变，设备 `base.apk` 精确匹配本地 code-57；一次标准 Launcher 冷启动返回 `Status: ok` | 停止 OPPO 操作，不重装、重启、改用其他启动方式或清理遗留临时 APK；真实 Provider 调用、可访问性/性能与正式发布门仍单独待验 |
 | P5/P11 code-53 产物 | 本地正式 APK、结构验签记录及 P11 发布门 | **已安装且已获 Launcher/前台活动证据**：code-53 `230cac…f183954c` 的设备 `base.apk` 回读、v2/v3、release-v2 证书与一次标准 Launcher 成功均已记录；P11 发布/可重复性风险仍未关闭 | 不重建、重签名、发布或重复安装；P11 发布门须独立收敛 |
 | P6 Android/Windows | 一台全新 Android 35 AVD 的可用 ADB 注册；Windows 本机验收已由用户明确豁免，不是完成门 | **本独立子链已验收**：`emulator-5610` 已完成 schema 38→39 覆盖升级，并经正常 Settings/导入中心/DocumentsUI 对 strict v2 文件显示非空本机中文拒绝，前后 owner 计数不变；Windows 历史债务保留但非阻塞 | 停止该 AVD 的重复选择/重装/升级；此局部证据不代表完整 P6、发布或 Windows 验收 |
 | P7 Google/Supabase | 原为指定 Supabase target、CLI/link、私有客户端配置、受控授权会话及专属 Google OAuth 配置 | **用户明确豁免**：Google 登录、Supabase、云端加密同步与跨设备恢复不是总控完成门；远端条件当前仍未核验 | 保留本地实现和未验证记录为非阻塞债务；不得因豁免而配置、部署、调用远端或声称云同步完成 |

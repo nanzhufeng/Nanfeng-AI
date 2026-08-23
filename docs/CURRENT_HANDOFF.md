@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P5：OPPO code-53→57 正式保留数据覆盖与前台启动已验收；真实调用交由用户
+
+- **安装前门禁：** OPPO `3B157F009E800000` 为 `device`，现装 `com.nanzhufeng.ai` code 53、`firstInstallTime=2026-08-20 15:15:31`、CE/DE inode=`1459104/1433378`。当前 main 的唯一正式 APK 为 code 57、SHA-256 `9a38926d68b6e4f4b3539be9783618a6486cf1f9c7f3f08a62f2845af5b73b61`，非 Debug，v2/v3 与设备 code-53 `base.apk` 均为 release-v2 证书 `6d1d…8661f8`。未读取应用私有数据或任何密钥。
+- **唯一写入与回读：** 仅一次 push 到 `/data/local/tmp/nanfeng-ai-0.3.0-p10a-code57.apk`，仅一次 `pm install -r --user 0` 返回 `Success`，随后清理该临时文件。安装后 package 为 code 57，首次安装时间与 CE/DE inode 完全不变；设备 `base.apk` SHA-256 精确匹配本地 code-57 APK。一次标准 `ACTION_MAIN`/`CATEGORY_LAUNCHER` 启动返回 `Status: ok`、`NanfengAiActivity` 冷启动前台。到此立即停止 OPPO 命令。
+- **真实调用边界：** 用户将自行在已经打开的正式 App 内配置并发起真实调用；本任务不读取、记录、输出或上传 Provider/API Key、token、私钥、对话正文、响应、费用或业务数据。真实调用的成功/失败、用量与用户可见结果须由用户在 UI 内自行确认，不能由安装或启动替代。
+
 ## 2026-08-23 P11：冻结 code-57 的两次正式构建 ZIP 内容一致；整体 SHA 差异仍限于签名块
 
 - **同 revision 样本：** 在没有任何工作树/提交变动的 code-57 冻结提交上，常规 `assembleRelease --offline --no-daemon` 与一次 `--rerun-tasks` 都成功。APK A/B 的 SHA-256 分别为 `c4c39839f935051b8820271feadc9641c0ac95fcaa61242356190d9faa3f1f00` / `9890b198949b1b1dc4b167a99458cec96b216ac180e41f4b81e60e82a2b0ea7e`，均为 `23,605,208 B`、281 ZIP entries，v2/v3 验签通过。
