@@ -1,5 +1,10 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P11：冻结 code-57 的两次正式构建 ZIP 内容一致；整体 SHA 差异仍限于签名块
+
+- **同 revision 样本：** 在没有任何工作树/提交变动的 code-57 冻结提交上，常规 `assembleRelease --offline --no-daemon` 与一次 `--rerun-tasks` 都成功。APK A/B 的 SHA-256 分别为 `c4c39839f935051b8820271feadc9641c0ac95fcaa61242356190d9faa3f1f00` / `9890b198949b1b1dc4b167a99458cec96b216ac180e41f4b81e60e82a2b0ea7e`，均为 `23,605,208 B`、281 ZIP entries，v2/v3 验签通过。
+- **内容结论与边界：** 两包 ZIP entry 名称/顺序相同，按同顺序串联的全部解压 payload 逐字节相同。因此当前 source/DEX/resources/assets 的 ZIP 内容在冻结 revision 可重复；整体 SHA 差异不能据此写作业务或字节码差异，仍只保留为 Android APK Signing Block 的签名随机性边界。未安装、发布、上传或触碰 OPPO；这不替代正式发布、回下载或 P0–P11 完成。
+
 ## 2026-08-23 P5：隔离正式 code-52→57 覆盖升级、草稿保留与冷启动已验收
 
 - **两包及环境：** 旧包从 detached `a4eebd1` 在 Android Studio JBR、`ANDROID_HOME`、`--offline --no-daemon` 下唯一重建；为 `com.nanzhufeng.ai / code 52 / 0.3.0-p10a`、SHA-256 `cf26307a392baf8df46ef12b4130d8bb0939d7dbca2b874fcf43fef35b0db1d8`。新包为当前 main code 57 正式产物；两包 v2/v3 均通过、同 release-v2 证书。只使用全新 Android 35 `NanfengAiP5ReleaseUpgradeMigration` / `emulator-5614`，不触 OPPO。

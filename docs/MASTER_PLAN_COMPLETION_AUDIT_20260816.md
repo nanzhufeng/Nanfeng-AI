@@ -19,7 +19,7 @@
 
 - **P5 已获局部门证：** code-53 正式 APK `230cac…f183954c` 已完成 OPPO 的正式 v2/v3、保留数据覆盖与标准 Launcher 前台活动证据。另在全新 `emulator-5614`，从同正式证书的 code-52（detached `a4eebd1` 单次离线重建）首装后经正常 UI 创建非敏感草稿，仅一次 `install -r` 覆盖到当前 code-57；首次安装时间和 CE/DE inode 不变，force-stop 后标准 Launcher 冷启动成功、草稿仍可见。此为隔离旧版迁移/数据保留/启动证据，不等同于 OPPO、全设备无障碍/性能、发布或 P0–P11 完成。
 - **P6 已扩展若干真实子链：** Android v2 已在新空隔离 AVD 经 DocumentsUI 获得 restore、同包 replay、篡改/超限拒绝和非空本机拒绝；修复后 restore→DocumentsUI export 的真文件回读，以及 Android DocumentsUI→隔离 Desktop native Open/Save/replay 均已有局部证据。附件提升中断后零发布、同包 DocumentsUI retry 也已验收。新的 Android 35 `emulator-5610` 先完成同 applicationId、同正式证书的 schema-38/code-51→schema-39/code-52 覆盖升级；普通 Launcher/UI 创建的 2 个 Conversation 和 2 个 Draft 在 startup audit 中按 `schema=39` 读回。随后仅使用唯一既有 strict v2 fixture（`2,346 B`、SHA-256 `d9df67ce64cc325ab35b9f4268c03ed2e956dbeef81e38bf058fb18c16959832`、ZIP 头匹配），经正常 Settings → 数据与导入 → 导入中心 → 完整工作区交换（v2）→ DocumentsUI Downloads 单次选择，显示“当前本机已有数据或待恢复记录，已拒绝覆盖。”；选择前后 audit 均为 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`。因此这个非空本机 `LOCAL_TRUTH_PRESENT` 拒绝与无覆盖子链已关闭。P6 总门仍未退出。
-- **P11 当前边界：** AAPT2 verification metadata 已无写入回读；当前 release build 与非 debuggable/签名结构已核验。但本轮 APK `d612…` 与上述历史 code-52、已用于 OPPO 证据的 `c511…` 字节 hash 不同，旧精确 bytes 不在当前工作区，故当前产物不得作为覆盖安装或发布物。P11 仅增加供应链/构建证据，仍是持续阶段。
+- **P11 当前边界：** AAPT2 verification metadata 已无写入回读；当前冻结 code-57 的两次 release build 在 281 个 ZIP 条目和全部解压 payload 上完全一致，整体 SHA 的差异只保留为 APK Signing Block 签名随机性边界。当前 release 仍只获结构/供应链证据，尚无正式发布、回下载或 OPPO 当前版本安装授权；P11 是持续阶段。
 - **总控边界不变：** P0–P11 不因任何上述局部证据完成；P2/P3/P4 的真实 Provider、成本/质量与更多真实输入门，P7 账号/同步，P8 真实工具，P9 真实生态目标及 P10 双消费者触发均保持原外部门。
 
 ## 2026-08-21 P3 真实执行去内容化复核：仍为 Provider/授权外部门
