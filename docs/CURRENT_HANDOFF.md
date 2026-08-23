@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-08-23 P6：schema 38→39 同签名真实升级与历史 Conversation/Draft 保留已验收；非空 DocumentsUI 拒绝因 fixture 生成任务不存在而严格停止
+
+- **隔离与冻结安装身份：** 只使用新的 Android 35 `NanfengAiP6Schema38UpgradeRecovery` / `emulator-5610`；专属 package `com.nanzhufeng.ai.p6v2schema38upgradeacceptance` 首装前不存在。旧 schema-38 code 51 包 `/tmp/nanfeng-ai-schema38-upgrade.hCuijb/app/build/outputs/apk/p6V2Schema38UpgradeAcceptance/南枫AI-开发验收.apk` 的 SHA-256 为 `111d57a3349ad9303225ba1102d325ee5238802e8dec302070241f7ff4552917`，当前 schema-39 code 52 包 `app/build/outputs/apk/p6V2Schema38UpgradeAcceptance/南枫AI-开发验收.apk` 为 `996d8b2c1396eccb4cfe752636c5905d52c608f7707b382149ca6d315bd05a4a`；两包 v2/v3 均通过，正式证书 SHA-256 同为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。首装 51 后设备 `base.apk` 哈希匹配旧包；普通 Launcher/UI 显式创建两个最小非敏感 Conversation，并保存一个非敏感 Draft，没有发送消息或触发 Provider/网络。
+- **真实覆盖与 owner 读回：** 对 51 数据仅执行 code 52 `adb -s emulator-5610 install -r`；没有清数据或卸载。设备安装后的 `base.apk` 哈希匹配 52 包。再经系统 Launcher 启动新包，`P6V2Schema38UpgradeAcceptance` 去内容化 startup audit 记录 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`；正常 UI 抽屉显示两个历史 Conversation，Composer 读回旧 Draft。因此真实 schema 38→39 同签名升级与 Conversation/Draft owner 保留已关闭；这不证明完整 P6、真实用户数据、发布或 OPPO。
+- **严格停止点（未伪造）：** 设备 Downloads 为空。为生成供 DocumentsUI 选择的 strict v2 local-truth fixture，误调用不存在的 Gradle 任务 `:app:testP6V2Schema38UpgradeAcceptanceUnitTest`；Gradle 明确报 `task ... not found` 后立即停止。未重试、未运行 `connected*AndroidTest`、未启动 DocumentsUI、未选文件、未读写 DB/SQL、未用 Activity extra/deep link，未触及 OPPO/Provider/Key/网络。因此“非空本机显示中文脱敏 `LOCAL_TRUTH_PRESENT` 拒绝且前后计数不变”仍未验收。下一独立增量先只读枚举可用 unit-test task/既有 strict fixture，再决定是否恢复该门；不得在此设备上清数据、卸载或重做升级。
+
 ## 2026-08-23 P5 OPPO Launcher 异常已最小恢复：code-53 的标准 Launcher 成功且活动在前台
 
 - **已确认的真机事实：** 在新的、单独授权的最窄诊断中，OPPO `3B157F009E800000` 为 `device`。`com.nanzhufeng.ai` 仍为 code `53`、无 `DEBUGGABLE` 标记；User 0 为 installed/default enabled，CE/DE inode 仍是 `1459104` / `1433378`。没有重新安装或重验签：此前的同 release-v2 signer、code-52→53 保留数据覆盖与设备 `base.apk` 精确回读仍是本次的安装身份事实。

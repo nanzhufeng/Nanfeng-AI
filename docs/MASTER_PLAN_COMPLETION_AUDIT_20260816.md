@@ -18,7 +18,7 @@
 ## 2026-08-23 补充当前状态（优先于以下历史审计）
 
 - **P5 已获局部门证：** code-53 正式 APK `230cac…f183954c` 已完成正式 v2/v3 签名核验、同包名/更高 versionCode/同证书门，以及 OPPO 的一次保留数据覆盖；安装前后的 `firstInstallTime` 和数据 inode 不变，设备回读的 `base.apk` 与该 APK 一致。后续独立最小诊断已由 Package Manager 精确解析唯一 Launcher，并以一次标准 `am start -W` 取得 `Status: ok` 与该 Activity 前台焦点。此为 P5 的当前正式构建、验签、保留数据覆盖和启动证据，不等同于 P5、发布或 P0–P11 完成。
-- **P6 已扩展若干真实子链：** Android v2 已在新空隔离 AVD 经 DocumentsUI 获得 restore、同包 replay、篡改/超限拒绝和非空本机拒绝；修复后 restore→DocumentsUI export 的真文件回读，以及 Android DocumentsUI→隔离 Desktop native Open/Save/replay 均已有局部证据。附件提升中断后零发布、同包 DocumentsUI retry 也已验收。Android schema 38→39 的真实升级、历史 owner 保留和非空 DocumentsUI 拒绝尚未执行：三台全新 Android 35 AVD 均因宿主 Emulator/ADB 未注册而停止，未安装验收 APK。P6 仍未退出。
+- **P6 已扩展若干真实子链：** Android v2 已在新空隔离 AVD 经 DocumentsUI 获得 restore、同包 replay、篡改/超限拒绝和非空本机拒绝；修复后 restore→DocumentsUI export 的真文件回读，以及 Android DocumentsUI→隔离 Desktop native Open/Save/replay 均已有局部证据。附件提升中断后零发布、同包 DocumentsUI retry 也已验收。新的 Android 35 `emulator-5610` 现已完成同 applicationId、同正式证书的 schema-38/code-51→schema-39/code-52 覆盖升级：只有普通 Launcher/UI 创建的 2 个 Conversation 和 2 个 Draft 在启动审计中按 `schema=39` 读回，且 UI 可读历史 owner。该非空设备的本轮 DocumentsUI `LOCAL_TRUTH_PRESENT` 拒绝尚未执行：strict fixture 生成命令在不存在的 Gradle task 处失败后按门禁停止，未重试或绕过。P6 仍未退出。
 - **P11 当前边界：** AAPT2 verification metadata 已无写入回读；当前 release build 与非 debuggable/签名结构已核验。但本轮 APK `d612…` 与上述历史 code-52、已用于 OPPO 证据的 `c511…` 字节 hash 不同，旧精确 bytes 不在当前工作区，故当前产物不得作为覆盖安装或发布物。P11 仅增加供应链/构建证据，仍是持续阶段。
 - **总控边界不变：** P0–P11 不因任何上述局部证据完成；P2/P3/P4 的真实 Provider、成本/质量与更多真实输入门，P7 账号/同步，P8 真实工具，P9 真实生态目标及 P10 双消费者触发均保持原外部门。
 
@@ -130,7 +130,7 @@
 | P3 Claude 级多模型对话核心 | 对话树、分支、草稿、附件、展示和本地 attempt 谱系已落地。 | 真实流式、停止、失败/重试/换模型、部分计费、真实用量/成本可见追踪、长会话实测与 Provider 充分性判断。 | 未退出。 |
 | P4 项目、记忆、上下文与知识完整化 | Projects、Memory、Knowledge、多个单独 Adapter、离线 Eval 与本地上下文控制面均有局部闭环。 | 真实上下文/语义摘要、缓存和成本质量基准、更多 Adapter 的逐个验收、真实 Provider/Harness 回归与用户价值证据；P3 的真实退出门仍是前置。 | 未退出。 |
 | P5 Android 产品化与正式交付 | 历史 code-52 正式 APK `c511…` 已完成 v2/v3/同证书核验、OPPO 一次保留数据覆盖（安装前后首次安装时间与数据 inode 不变、设备 `base.apk` 回读匹配）及准确 Launcher 前台启动；P5-D 隔离 emulator 的 SAF 备份/恢复链亦有证据。 | 旧 APK 升级迁移、全设备可访问性/性能、正式发布/商店交付仍未关闭。另：当前重建 APK `d612…` 与 OPPO 已验收的 `c511…` 字节不同，未收敛前不得作为覆盖安装或发布物。 | 未退出；仅上述 P5 局部门关闭。 |
-| P6 Desktop 与跨端离线体验 | Desktop P6-K bundle/readback、Android 隔离导入和 P6-A 独立文本交换已有证据；v2 已获 Android 空本机 DocumentsUI restore/replay/篡改与超限拒绝/非空拒绝、修复后 restore→DocumentsUI export 真文件回读、Android DocumentsUI→隔离 Desktop native Open/Save/replay，以及附件提升中断→零发布→同包 DocumentsUI retry 的局部证据。P6-L1–L4 保持 content-free 本地精确复用/消息引用有效性边界，未接入执行。 | 原始退出仍要求完整对象的常规跨端导入导出/回读、紧凑/展开和异常恢复的独立验收，及 Windows/正式发布。Desktop 原生业务对象恢复、用户真实附件等仍未获证。schema 38→39 真实升级、历史 owner 保留和非空 DocumentsUI 拒绝仍未执行：三台新 Android 35 AVD 均在 ADB 注册前/时失败，未安装验收 APK。 | 未退出；不得将 fixture 或局部文件链写作 P6/P0–P11 完成。 |
+| P6 Desktop 与跨端离线体验 | Desktop P6-K bundle/readback、Android 隔离导入和 P6-A 独立文本交换已有证据；v2 已获 Android 空本机 DocumentsUI restore/replay/篡改与超限拒绝/非空拒绝、修复后 restore→DocumentsUI export 真文件回读、Android DocumentsUI→隔离 Desktop native Open/Save/replay，以及附件提升中断→零发布→同包 DocumentsUI retry 的局部证据。新的 Android 35 隔离设备还已得到 schema-38/code-51→schema-39/code-52 同签名覆盖、`schema=39` 启动审计与 2 Conversation/2 Draft 历史 UI readback。P6-L1–L4 保持 content-free 本地精确复用/消息引用有效性边界，未接入执行。 | 原始退出仍要求完整对象的常规跨端导入导出/回读、紧凑/展开和异常恢复的独立验收，及 Windows/正式发布。Desktop 原生业务对象恢复、用户真实附件等仍未获证。此非空升级设备的 DocumentsUI `LOCAL_TRUTH_PRESENT` 中文拒绝/计数不变尚未获得：strict fixture 生成调用不存在的 Gradle task 后已停止，未重试、未绕过。 | 未退出；不得将 fixture 或局部文件链写作 P6/P0–P11 完成。 |
 | P7 可选账号与端到端加密同步 | P7-A 至 P7-E 的本地协议、状态机、部署工件和 typed restore 主体已完成；Desktop P7-E 现对 candidate 的 canonical identity 做复用/切换前后重读，并使 legacy crash temporary 保持隔离、不阻塞新 candidate。 | 真实 Google、Supabase、OAuth、受控 HTTP、真实 Android/Desktop 跨设备恢复与部署回读。 | 未退出。 |
 | P8 受控 Agent | 本地 ledger、harness、只读 inspect 与本地红队退出已完成；本轮进一步统一双端 plan admission：三类预算按已用+完整计划预检，重复 step intent 在 approval 前 durable fail-closed。 | 每一个将来启用的真实工具必须分别完成成功、失败、取消、审计、幂等与恢复；不得把本地 fixture 说成真实 Agent。 | 本地主体退出；总阶段未退出。 |
 | P9 南枫生态协议接入 | LOCAL_TEST_ONLY 集成底座已完成；每个可继续步骤重验合成目标句柄和 expiry，目标重选/过期前不会产生新的本地 receipt。 | 至少一个真实目标应用的稳定入口、权限 UI、用户确认、结果回读、撤销和审计。 | 未开始真实接入。 |
@@ -141,7 +141,7 @@
 
 ## 结论
 
-总控方案仍不能标记为“完整落地”。P5 已有历史 code-52 正式签名、OPPO 保留数据覆盖和前台启动证据；P6 已新增 Android DocumentsUI/空本机恢复与 replay/reject、Android→Desktop native Open/Save/replay、journal interruption retry 等局部证据；P11 已确认 AAPT2 metadata 回读与当前 release build/结构。但 schema 38→39 真实升级尚受新 AVD ADB 启动故障阻断，且当前 `d612…` build 与历史、已在 OPPO 验收的 `c511…` 字节不同，不能用于安装或发布。真实 Provider/账号/同步/生态、P6 Windows 与剩余对象恢复，以及各阶段外部门仍分别开放；没有以数据库注入、卸载、清数据、Key 或 HTTP 绕过任一门禁。
+总控方案仍不能标记为“完整落地”。P5 已有历史 code-52 正式签名、OPPO 保留数据覆盖和前台启动证据；P6 已新增 Android DocumentsUI/空本机恢复与 replay/reject、Android→Desktop native Open/Save/replay、journal interruption retry，以及 schema 38→39 同签名覆盖、历史 Conversation/Draft owner UI readback 的局部证据。但本次非空设备的 DocumentsUI `LOCAL_TRUTH_PRESENT` 中文拒绝/计数不变在 strict fixture 生成任务不存在后已严格停止，未以其他输入或旁路替代；且当前 `d612…` build 与历史、已在 OPPO 验收的 `c511…` 字节不同，不能用于安装或发布。真实 Provider/账号/同步/生态、P6 Windows 与剩余对象恢复，以及各阶段外部门仍分别开放；没有以数据库注入、卸载、清数据、Key 或 HTTP 绕过任一门禁。
 
 历史复验记录（非当前排程结论）：Desktop P6-K 定向测试 7/7、Desktop 全量 Rust 库测试 68/68（唯一会触达 macOS Keychain 的既有自测主动过滤）、Desktop UI 合同当前复验 89/89、lint 与 typecheck 均通过。Compare 阶段 5 另有 Rust mock-only 合同 5/5 与 `clippy -D warnings`；没有真实 Keychain 或 HTTP 调用。
 

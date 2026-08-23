@@ -43,6 +43,12 @@ receipt/provenance 只允许 intent ID、package/semantic hash、origin、sensit
 - schema 38 历史实例升级至 39 只追加 v2 receipt/provenance/settings 表，不改写既有事实；完整 migration 链必须连续至 39。
 - schema 38→39 的真实验收只能由新建隔离 AVD 上、相同 applicationId 和正式同签名的旧 schema-38 验收 APK 覆盖升级到当前 migration 验收 APK 完成；旧事实必须只经普通 UI 创建。当前验收 APK 仅在精确独立包名启动后记录 project/conversation/draft/knowledge/memory/relation/attachment 与 v2 metadata 的去内容化计数，不含正文、标题、URI、path 或展示名，也不新增 UI。升级后的现有本机仍须从设置 → DocumentsUI 选择 strict v2 包，显示既有的中文脱敏 `LOCAL_TRUTH_PRESENT` 拒绝；不得以 DB/SQL 注入、Activity extra、deep link、清数据、卸载或测试包替代。
 
+## 2026-08-23 schema 38→39 隔离设备验收记录
+
+仅在新 Android 35 `NanfengAiP6Schema38UpgradeRecovery` / `emulator-5610` 上，确认专属 package 不存在后，首装 schema-38 / code 51 验收 APK；已安装 `base.apk` SHA-256 为 `111d57a3349ad9303225ba1102d325ee5238802e8dec302070241f7ff4552917`。通过系统 Launcher 与普通 UI 显式创建两个最小非敏感 Conversation，并保存一个非敏感草稿；没有发送消息、Provider、网络、DB/SQL、Activity extra、deep link、清数据或卸载。随后以同 applicationId、同正式证书的 code 52 验收 APK 作 `-r` 覆盖，已安装 `base.apk` SHA-256 为 `996d8b2c1396eccb4cfe752636c5905d52c608f7707b382149ca6d315bd05a4a`。从 Launcher 再次启动后，去内容化审计为 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`，且正常 UI 可读回历史会话及草稿，故同签名 schema 38→39 与历史 Conversation/Draft owner 保留已有设备证据。
+
+本次没有完成非空本机的 DocumentsUI `LOCAL_TRUTH_PRESENT` 拒绝：为生成 strict v2 fixture 而调用的 `:app:testP6V2Schema38UpgradeAcceptanceUnitTest` 不存在，Gradle 在任务解析阶段失败。按本轮“任一步失败即停止”门禁，未重试、未启动 DocumentsUI、未选择文件，也未取得拒绝后的计数不变证据；该门仍待独立增量恢复。
+
 ## 尚未接入
 
 本增量已实现 schema 38→39 的专属 content-free receipt/provenance/settings 表与 `AndroidWorkspaceExchangeV2AtomicRestoreStore`。它以私有 journal staging、附件 hash 回读和一次 Room transaction 组成可恢复边界：正常失败回滚已移动附件且不发布 receipt；受控中断留下 journal 后，同包在完整 asset ledger 和空 database 双重证明下可从头安全重试，其余 journal 继续阻断恢复，而不把候选对象当作真值。
