@@ -166,7 +166,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.activity.compose.BackHandler
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -914,11 +913,11 @@ private fun ConversationShellHeader(
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            ConversationHeaderFloatingIconButton(onClick = onLeftAction, contentDescription = leftDescription) {
+            ConversationHeaderFloatingIconButton(onClick = onLeftAction) {
                 Icon(leftIcon, contentDescription = leftDescription)
             }
             Spacer(Modifier.weight(1f))
-            ConversationHeaderFloatingIconButton(onClick = onTemporaryAction, contentDescription = "临时聊天") {
+            ConversationHeaderFloatingIconButton(onClick = onTemporaryAction) {
                 Icon(painterResource(R.drawable.ic_lucide_ghost), contentDescription = "临时聊天", tint = temporaryTint)
             }
         }
@@ -934,25 +933,17 @@ private fun ConversationShellHeader(
 @Composable
 private fun ConversationHeaderFloatingIconButton(
     onClick: () -> Unit,
-    contentDescription: String,
     content: @Composable () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clickable(onClickLabel = contentDescription, role = Role.Button, onClick = onClick)
-            .semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center,
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(44.dp),
+        color = Color.White,
+        shape = CircleShape,
+        tonalElevation = 0.dp,
+        shadowElevation = 3.dp,
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = Color.White,
-            shape = CircleShape,
-            tonalElevation = 0.dp,
-            shadowElevation = 3.dp,
-        ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
-        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
     }
 }
 
