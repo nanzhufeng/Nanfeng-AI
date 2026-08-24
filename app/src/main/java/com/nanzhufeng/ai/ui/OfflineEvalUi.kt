@@ -44,7 +44,7 @@ class OfflineEvalViewModel(private val eval: RunOfflineEvalUseCase, private val 
 }
 
 @Composable fun OfflineEvalDialog(state: OfflineEvalUiState, onDismiss: () -> Unit, onStart: () -> Unit, onSelect: (EvalRun) -> Unit, onExport: () -> Unit, onAlias: (String) -> Unit, onCase: (EvalCaseId) -> Unit, onScore: (String) -> Unit, onDimension: () -> Unit, onSaveScore: () -> Unit, comparison: EvalComparison?) = AlertDialog(
-    onDismissRequest = { if (!state.working) onDismiss() }, containerColor = Color.White, shape = RoundedCornerShape(24.dp),
+    onDismissRequest = onDismiss, containerColor = Color.White, shape = RoundedCornerShape(24.dp),
     title = { Text("本地离线 Eval", fontWeight = FontWeight.SemiBold) },
     text = { Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("证据等级：OFFLINE_LOCAL。夹具是打包只读版本；运行结果不含生产正文、Prompt、Provider payload、URI/路径或附件字节。真实服务与成本尚未验证。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)

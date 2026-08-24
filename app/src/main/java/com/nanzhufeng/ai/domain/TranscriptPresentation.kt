@@ -55,6 +55,7 @@ class ConversationTranscriptPresentation(
         lineages: List<ConversationAttemptLineage>,
         invocations: Map<InvocationId, InvocationRecord> = emptyMap(),
         runtimeByMessage: Map<MessageNodeId, ConversationRuntimeState> = emptyMap(),
+        responseModelAttributions: Map<MessageNodeId, List<AssistantResponseModelAttribution>> = emptyMap(),
     ): List<PresentedTranscriptMessage> {
         val localLineageByInvocation = lineages.associateBy { it.invocationId }
         return renderer.render(path).map { presented ->
@@ -67,6 +68,7 @@ class ConversationTranscriptPresentation(
                     lineage,
                     node.invocation?.invocationId?.let(invocations::get),
                     runtimeByMessage[node.id],
+                    responseModelAttributions[node.id].orEmpty(),
                 ),
             )
         }
@@ -77,12 +79,17 @@ class ConversationTranscriptPresentation(
         lineage: ConversationAttemptLineage?,
         invocation: InvocationRecord?,
         runtime: ConversationRuntimeState?,
+        responseAttributions: List<AssistantResponseModelAttribution>,
     ): TranscriptMessageMetadata {
-        // P3-C's fixture lineage is the only concrete model fact presently available in this
-        // offline phase.  Any other linked Invocation remains honestly unknown until its own
-        // ledger projection is explicitly provided by a later owner.
+        // Ordinary Provider results use their assistant-message owned Attempt attribution.  A
+        // later Composer change, model-directory refresh or retry may not overwrite that fact.
+        // P3-C fixture lineage remains the legacy local-only source for fixture answers.
         val isLocalFixture = lineage?.selection?.providerId == ProviderId.MOCK
-        val model = lineage?.selection?.let { selection ->
+        val responseModel = responseAttributions
+            .distinctBy { it.attemptId }
+            .joinToString(" / ") { it.footerLabel() }
+            .takeIf { it.isNotBlank() }
+        val fixtureModel = lineage?.selection?.takeIf { isLocalFixture }?.let { selection ->
             val display = P3CLocalFixtureRegistry.snapshot.models
                 .firstOrNull { it.id == selection.modelId }
                 ?.displayName
@@ -93,7 +100,7 @@ class ConversationTranscriptPresentation(
             messageId = node.id,
             createdAt = node.createdAt,
             origin = if (isLocalFixture) TranscriptOrigin.LOCAL_FIXTURE else TranscriptOrigin.LOCAL_RECORD,
-            modelSnapshotLabel = model,
+            modelSnapshotLabel = responseModel ?: fixtureModel,
             workDurationLabel = invocation
                 ?.takeIf { node.role == MessageRole.ASSISTANT && it.status != InvocationStatus.BLOCKED }
                 ?.taskRun

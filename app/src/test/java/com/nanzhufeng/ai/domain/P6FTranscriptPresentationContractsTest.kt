@@ -55,6 +55,44 @@ class P6FTranscriptPresentationContractsTest {
         assertTrue(projected.metadata.modelSnapshotLabel!!.contains(selection.registrySnapshotId.value))
     }
 
+    @Test fun `provider answer footer uses assistant owned attempt route rather than current selection`() {
+        val node = message("provider", MessageRole.ASSISTANT)
+        val attribution = AssistantResponseModelAttribution(
+            assistantMessageId = node.id,
+            attemptId = NormalChatSendAttemptId("p6f-provider-attempt"),
+            providerId = ProviderId.OPENROUTER,
+            receiverProviderId = ProviderId.OPENROUTER,
+            modelId = "anthropic/claude-opus-5",
+            modelDisplayName = "Claude Opus 5",
+            recordedAt = Instant.EPOCH,
+        )
+
+        val projected = ConversationTranscriptPresentation(MessagePresentationRenderer())
+            .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(attribution)))
+            .single()
+
+        assertEquals("模型：Claude Opus 5 · OpenRouter", projected.metadata.modelSnapshotLabel)
+    }
+
+    @Test fun `hosted DeepSeek search footer names Qwen as the real web receiver`() {
+        val node = message("deepseek-qwen-search", MessageRole.ASSISTANT)
+        val attribution = AssistantResponseModelAttribution(
+            assistantMessageId = node.id,
+            attemptId = NormalChatSendAttemptId("p6f-deepseek-qwen-attempt"),
+            providerId = ProviderId.DEEPSEEK,
+            receiverProviderId = ProviderId.QWEN,
+            modelId = "deepseek-v4-pro",
+            modelDisplayName = "DeepSeek V4 Pro",
+            recordedAt = Instant.EPOCH,
+        )
+
+        val projected = ConversationTranscriptPresentation(MessagePresentationRenderer())
+            .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(attribution)))
+            .single()
+
+        assertEquals("模型：DeepSeek V4 Pro · 通义千问官方实时检索", projected.metadata.modelSnapshotLabel)
+    }
+
     @Test fun `assistant duration comes only from its matching persisted invocation run`() {
         val invocation = InvocationId("p6f-duration-invocation")
         val node = message("duration", MessageRole.ASSISTANT, invocation)

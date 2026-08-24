@@ -106,7 +106,7 @@ class P5AAdaptiveNavigationContractsTest {
         val scaffold = File("src/main/java/com/nanzhufeng/ai/ui/P5AAdaptiveUi.kt").readText()
         val manifest = File("src/main/AndroidManifest.xml").readText()
 
-        assertTrue(manifest.contains("android:windowSoftInputMode=\"adjustResize\""))
+        assertTrue(manifest.contains("android:windowSoftInputMode=\"adjustResize|stateAlwaysHidden\""))
         assertFalse(scaffold.contains(".imePadding()"))
         assertTrue(scaffold.contains("WindowInsets.safeDrawing.only"))
     }

@@ -13,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.UploadFile
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -70,7 +69,7 @@ class MarkdownKnowledgeImportViewModel(private val imports: ManageMarkdownImport
 }
 
 @Composable fun MarkdownKnowledgeImportDialog(state: MarkdownImportUiState, onDismiss: () -> Unit, onBack: () -> Unit, onOpen: (MarkdownImportTask) -> Unit, onRetry: (ImportTaskId) -> Unit, onEdit: (ImportItemId) -> Unit, onTitle: (String) -> Unit, onBody: (String) -> Unit, onTags: (String) -> Unit, onConfirm: (ImportItemId) -> Unit, onSkip: (ImportItemId) -> Unit, onCancel: () -> Unit) = AlertDialog(
-    onDismissRequest = { if (!state.isWorking) onDismiss() }, containerColor = Color.White, shape = RoundedCornerShape(24.dp),
+    onDismissRequest = onDismiss, containerColor = Color.White, shape = RoundedCornerShape(24.dp),
     title = { Text(if (state.selectedTask == null) "Markdown 导入任务" else "导入任务详情", fontWeight = FontWeight.SemiBold) },
     text = {
         Column(Modifier.p5aKeyboardTraversal().heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {

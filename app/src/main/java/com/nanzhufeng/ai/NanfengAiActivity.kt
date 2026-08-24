@@ -43,8 +43,13 @@ import com.nanzhufeng.ai.ui.WorkspaceExchangeV2RestoreViewModel
 import com.nanzhufeng.ai.ui.P7DAccountSyncViewModel
 import com.nanzhufeng.ai.ui.DualPathConnectionViewModel
 import com.nanzhufeng.ai.ui.P8ControlledAgentViewModel
+import com.nanzhufeng.ai.domain.ConversationId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** Pinned shortcuts carry only an opaque local conversation ID, never message or provider data. */
+const val CONVERSATION_SHORTCUT_ID_EXTRA = "com.nanzhufeng.ai.extra.CONVERSATION_SHORTCUT_ID"
 
 /** Root activity: all user-visible actions remain rooted in the local app container. */
 class NanfengAiActivity : ComponentActivity() {
@@ -85,8 +90,6 @@ class NanfengAiActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         container = AppContainer(applicationContext)
-        // P5-B maps only stale persisted work to stable failure. It deliberately cannot resume it.
-        lifecycleScope.launch(Dispatchers.IO) { container.taskRecoveryAudit.recoverAfterProcessStart() }
         textShareGate = AndroidTextShareIntentGate(savedInstanceState?.getString(TEXT_SHARE_FINGERPRINT))
         captureViewModel = ViewModelProvider(
             this,
@@ -114,6 +117,12 @@ class NanfengAiActivity : ComponentActivity() {
                 container.loadRealServiceAcceptanceStatus,
                 container.p2mRealServiceReadiness,
                 container.p2mRealServiceExecutor,
+                container.directChatCallAudit,
+                container.providerDiagnostics,
+                container.contextSelectionAudits,
+                container.loadChatRoutingPolicy,
+                container.saveChatRoutingPolicy,
+                container.providerConnectionProbe,
             ),
         )[ModelSettingsViewModel::class.java]
         invocationLedgerViewModel = ViewModelProvider(
@@ -162,10 +171,22 @@ class NanfengAiActivity : ComponentActivity() {
                 container.clearTemporaryConversation,
                 container.p6gModelSelection,
                 container.invocationRepository,
-                container.normalChatRealTextExecutionOwner,
-                container.compareVisibleExecutionOwner,
+                container.assistantResponseModelAttributions,
+                container.normalChatOpenRouterExecutor,
             ),
         )[ConversationFoundationViewModel::class.java]
+        // P5-B maps only stale persisted work to stable failure. It deliberately cannot resume
+        // it.  This runs after the conversation owner exists, then reloads it on the main
+        // dispatcher so an Attempt changed to UNKNOWN cannot be missed by the first UI load.
+        lifecycleScope.launch {
+            val recoveredAttempts = withContext(Dispatchers.IO) {
+                container.recoverInterruptedNormalChatAttemptsAfterProcessStart()
+            }
+            withContext(Dispatchers.IO) {
+                container.taskRecoveryAudit.recoverAfterProcessStart()
+            }
+            if (recoveredAttempts > 0) conversationFoundationViewModel.reload()
+        }
         projectViewModel = ViewModelProvider(this, ProjectViewModel.Factory(container.projectRepository, container.manageProject))[ProjectViewModel::class.java]
         memoryViewModel = ViewModelProvider(this, MemoryViewModel.Factory(container.manageMemory))[MemoryViewModel::class.java]
         contextBodySelectionViewModel = ViewModelProvider(this, ContextBodySelectionViewModel.Factory(container.readExplicitContextBody, container.readLocalContextPreview, container.readExplicitLocalActionTrace))[ContextBodySelectionViewModel::class.java]
@@ -228,6 +249,7 @@ class NanfengAiActivity : ComponentActivity() {
             )
         }
         consumeTextShareIntent(intent)
+        consumeConversationShortcutIntent(intent)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -235,6 +257,7 @@ class NanfengAiActivity : ComponentActivity() {
         setIntent(intent)
         restoreP5ARoute(intent)
         consumeTextShareIntent(intent)
+        consumeConversationShortcutIntent(intent)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -244,6 +267,13 @@ class NanfengAiActivity : ComponentActivity() {
 
     private fun consumeTextShareIntent(intent: android.content.Intent?) {
         textShareGate.consume(container.androidTextShareAdapter.read(intent))?.let(captureViewModel::onTextInput)
+    }
+
+    /** Opens the exact local conversation behind a user-approved pinned launcher shortcut. */
+    private fun consumeConversationShortcutIntent(intent: android.content.Intent?) {
+        val rawId = intent?.getStringExtra(CONVERSATION_SHORTCUT_ID_EXTRA)?.takeIf { it.isNotBlank() } ?: return
+        selectP5ARoute(P5ARoute.CONVERSATION)
+        conversationFoundationViewModel.openConversationShortcut(ConversationId(rawId))
     }
 
     private fun restoreP5ARoute(intent: android.content.Intent?) {

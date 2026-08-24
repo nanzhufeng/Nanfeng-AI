@@ -60,6 +60,22 @@ class P3DMessagePresentationContractsTest {
         assertTrue(paragraph.spans.any { it is InlinePresentation.Text && it.value.endsWith(".") })
     }
 
+    @Test fun `closed double asterisks render as strong while malformed markers remain visible`() {
+        val strong = MessagePresentationRenderer().render(listOf(message("strong", "**降**不是**涨**：*仅作强调*"))).single()
+            .blocks.single() as PresentationBlock.Paragraph
+        assertEquals(listOf("降", "涨"), strong.spans.filterIsInstance<InlinePresentation.Strong>().map { it.value })
+        assertEquals(listOf("仅作强调"), strong.spans.filterIsInstance<InlinePresentation.Emphasis>().map { it.value })
+
+        val malformed = MessagePresentationRenderer().render(listOf(message("malformed", "未闭合 **强调 或普通 * 星号"))).single()
+            .blocks.single() as PresentationBlock.Paragraph
+        assertEquals("未闭合 **强调 或普通 * 星号", malformed.spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value })
+        assertTrue(malformed.spans.none { it is InlinePresentation.Strong || it is InlinePresentation.Emphasis })
+
+        val laterValid = MessagePresentationRenderer().render(listOf(message("later", "未闭合 **标记，后面仍可 *强调*。"))).single()
+            .blocks.single() as PresentationBlock.Paragraph
+        assertEquals(listOf("强调"), laterValid.spans.filterIsInstance<InlinePresentation.Emphasis>().map { it.value })
+    }
+
     @Test fun `deterministic long fixture has stable identities and current path remains isolated`() {
         val messages = DeterministicLongConversationFixture.messages(conversationId)
         assertEquals(DeterministicLongConversationFixture.MESSAGE_COUNT, messages.size)

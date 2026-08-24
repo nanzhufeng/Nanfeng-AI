@@ -10,8 +10,13 @@ import com.nanzhufeng.ai.data.local.RoomConversationRepository
 import com.nanzhufeng.ai.domain.AiRuntimeEventId
 import com.nanzhufeng.ai.domain.AiRuntimeSecurityMetadata
 import com.nanzhufeng.ai.domain.ConversationRuntimePersistenceResult
+import com.nanzhufeng.ai.domain.ConversationRuntimeStatus
 import com.nanzhufeng.ai.domain.ConversationRuntimeStateMachine
 import com.nanzhufeng.ai.domain.ConversationTreeService
+import com.nanzhufeng.ai.domain.ConversationDraft
+import com.nanzhufeng.ai.domain.AppendMessageRequest
+import com.nanzhufeng.ai.domain.ContentBlock
+import com.nanzhufeng.ai.domain.MessageRole
 import com.nanzhufeng.ai.domain.InvocationId
 import com.nanzhufeng.ai.domain.MessageDeliveryState
 import com.nanzhufeng.ai.domain.MessageNodeId
@@ -94,6 +99,27 @@ class P3BConversationRuntimeRoomContractsTest {
                 generateSequence { if (cursor.moveToNext()) cursor.getString(cursor.getColumnIndexOrThrow("name")) else null }.toList()
             }
         }.forEach { column -> assertFalse("P3-B runtime table cannot store raw content: $column", forbidden.any { column.contains(it, true) }) }
+    }
+
+    @Test fun `normal send commits user draft and streaming assistant placeholder together`() {
+        val tree = ConversationTreeService(clock)
+        val draft = ConversationDraft("原子发送", emptyList(), now)
+        repository.saveDraft(snapshot.conversation.id, draft)
+        val user = tree.append(snapshot, AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text(draft.text))))
+        val cleared = tree.saveDraft(user, "", emptyList())
+        val event = RuntimeRunStarted(
+            AiRuntimeEventId("atomic-start"), InvocationId("atomic-invocation"), snapshot.conversation.id,
+            MessageNodeId("atomic-assistant"), 0, now, AiRuntimeSecurityMetadata("DIRECT_PROVIDER_SSE"),
+        )
+        val projection = ConversationRuntimeStateMachine(clock).apply(cleared, null, event)
+
+        assertTrue(repository.submitDraftAndStart(cleared, draft, projection, event) is ConversationRuntimePersistenceResult.Applied)
+
+        val stored = RoomConversationRepository(database).findById(snapshot.conversation.id)!!
+        assertEquals("", stored.draft.text)
+        assertEquals(listOf(MessageRole.USER, MessageRole.ASSISTANT), stored.nodes.map { it.role })
+        assertEquals(MessageDeliveryState.PARTIAL, stored.nodes.last().deliveryState)
+        assertEquals(ConversationRuntimeStatus.STREAMING, RoomConversationRepository(database).stateFor(snapshot.conversation.id)!!.status)
     }
 
     @Test fun `schema four to five retains P2 and P3 rows without destructive reset`() {

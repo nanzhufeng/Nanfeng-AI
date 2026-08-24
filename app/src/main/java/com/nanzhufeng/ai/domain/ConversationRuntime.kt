@@ -239,3 +239,53 @@ class StartLocalConversationRuntimeUseCase(
             .getOrElse { ConversationRuntimePersistenceResult.Rejected(it.message ?: "本地流未能开始。") }
     }
 }
+
+sealed interface ProviderRuntimeDraftSubmissionResult {
+    data class Started(
+        val submittedSnapshot: ConversationSnapshot,
+        val runtime: ConversationRuntimeState,
+    ) : ProviderRuntimeDraftSubmissionResult
+    data class Rejected(val reason: String) : ProviderRuntimeDraftSubmissionResult
+}
+
+/** Starts one ordinary Provider stream without a crash window between user and assistant facts. */
+class SubmitConversationDraftAndStartProviderRuntimeUseCase(
+    private val conversations: ConversationRepository,
+    private val drafts: ConversationDraftRepository,
+    private val runtime: ConversationRuntimeRepository,
+    private val stateMachine: ConversationRuntimeStateMachine,
+    private val tree: ConversationTreeService,
+    private val clock: Clock,
+) {
+    fun execute(conversationId: ConversationId): ProviderRuntimeDraftSubmissionResult {
+        val prior = runtime.stateFor(conversationId)
+        if (prior != null && !prior.isTerminal) return ProviderRuntimeDraftSubmissionResult.Rejected("当前回复仍在生成。")
+        val snapshot = conversations.findById(conversationId) ?: return ProviderRuntimeDraftSubmissionResult.Rejected("会话不存在。")
+        val draft = drafts.loadDraft(conversationId) ?: return ProviderRuntimeDraftSubmissionResult.Rejected("草稿未能从本机回读。")
+        if (!ConversationDraftPolicy.isSendable(draft)) return ProviderRuntimeDraftSubmissionResult.Rejected("请输入文字或保留附件后再发送。")
+        val content = buildList {
+            if (draft.text.isNotBlank()) add(ContentBlock.Text(draft.text))
+            draft.attachments.forEach { add(ContentBlock.Attachment(it)) }
+        }
+        val appended = tree.append(snapshot, AppendMessageRequest(MessageRole.USER, content))
+        val titled = ConversationAutoTitle.titleForFirstMessage(snapshot, draft)?.let { title ->
+            appended.copy(conversation = appended.conversation.copy(
+                title = title,
+                autoTitlePending = false,
+                revision = appended.conversation.revision + 1,
+            ))
+        } ?: appended
+        val cleared = tree.saveDraft(titled, "", emptyList())
+        val event = RuntimeRunStarted(
+            AiRuntimeEventId.new(), InvocationId.new(), conversationId, MessageNodeId.new(), 0, clock.instant(),
+            AiRuntimeSecurityMetadata(source = "DIRECT_PROVIDER_SSE"),
+        )
+        val projection = runCatching { stateMachine.apply(cleared, null, event) }
+            .getOrElse { return ProviderRuntimeDraftSubmissionResult.Rejected(it.message ?: "助手占位消息未能创建。") }
+        return when (val persisted = runtime.submitDraftAndStart(cleared, draft, projection, event)) {
+            is ConversationRuntimePersistenceResult.Applied -> ProviderRuntimeDraftSubmissionResult.Started(cleared, persisted.projection.state)
+            is ConversationRuntimePersistenceResult.Replayed -> ProviderRuntimeDraftSubmissionResult.Started(cleared, persisted.projection.state)
+            is ConversationRuntimePersistenceResult.Rejected -> ProviderRuntimeDraftSubmissionResult.Rejected(persisted.reason)
+        }
+    }
+}

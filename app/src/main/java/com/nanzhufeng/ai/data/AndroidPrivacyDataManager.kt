@@ -264,12 +264,21 @@ class AndroidPrivacyDataManager(
         }
     }
     private fun clearBusinessPreferences() {
-        listOf("model_service_settings_v1", "provider_credentials_v1", "p5a_ui").forEach { context.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit() }
+        listOf(
+            "model_service_settings_v1", "provider_credentials_v1", "p5a_ui",
+            "direct_chat_call_audit_v1", "model-health-v1",
+        ).forEach { context.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit() }
     }
     private fun deleteStaged(pending: File): Int = pending.walkBottomUp().count { file -> file.exists() && !fileDeleter(file) }
     private fun restoreStaged(moved: List<Pair<File, File>>) = moved.asReversed().forEach { (source, staged) -> if (staged.exists() && !source.exists()) runCatching { source.parentFile?.mkdirs(); Files.move(staged.toPath(), source.toPath(), StandardCopyOption.ATOMIC_MOVE) } }
     private fun safeRoot(relative: String): File? = File(filesRoot, relative).canonicalFile.takeIf { it.path.startsWith(filesRoot.path + File.separator) }
-    private fun knownRoots() = listOf("attachments/v1", "markdown-import-assets/v1", "json-knowledge-import-assets/v1", "pdf-text-import-assets/v1", "web-text-snapshots/v1", "exports", "model-registry", "p2m-real-service-tokens", "p2m-real-service-evidence")
+    private fun knownRoots() = listOf(
+        "attachments/v1", "markdown-import-assets/v1", "json-knowledge-import-assets/v1", "pdf-text-import-assets/v1", "web-text-snapshots/v1",
+        "exports", "model-registry", "p2m-real-service-tokens", "p2m-real-service-evidence",
+        // Bounded diagnostics/metadata are local business data too.  They contain no bodies or
+        // credentials, but a full local-data clear must not leave their titles or model choices.
+        "context-selection-audit-v1.json", "model-profile-directory-v1.json",
+    )
     private fun safeErrorCounts(): Map<String, Long> = listOf("markdown_import_tasks", "json_knowledge_import_tasks", "pdf_text_import_tasks", "web_text_snapshot_tasks").flatMap { table -> db.query("SELECT failure, COUNT(*) FROM $table WHERE failure IS NOT NULL GROUP BY failure").use { cursor -> buildList { while (cursor.moveToNext()) SecurityDiagnosticAllowlist.errorCode(cursor.getString(0))?.let { add(it to cursor.getLong(1)) } } } }.groupingBy { it.first }.fold(0L) { total, item -> total + item.second }
     private fun diagnosticPayloadJson(inventory: PrivacyInventory, errors: Map<String, Long>): String = buildString {
         append("{\"app\":{\"version\":\"").append(appVersion).append("\",\"schema\":17,\"egress\":\"DISABLED\"}")

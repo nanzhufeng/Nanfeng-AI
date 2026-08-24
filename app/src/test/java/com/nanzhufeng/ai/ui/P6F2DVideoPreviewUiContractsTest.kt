@@ -7,7 +7,7 @@ class P6F2DVideoPreviewUiContractsTest {
     @Test fun `workspace expands directly into a local video player with one gesture owner`() {
         val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val viewer = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
-        for (token in listOf("VideoPreviewDialog", "VideoView", "VideoControlOverlay", "VideoPlaybackOverlay", "controlsVisible", "delay(12_000)", "onSingleTapConfirmed", "onBottomButton", "onTimeline", "onDoubleTap", "onFling", "ACTION_MOVE", "edgeExitHandled", "fromLeftEdge || fromRightEdge", "togglePlayback()", "Surface(color = Color.Black", "onOpenVideoPreview", "onCloseVideoPreview")) assertTrue(token, source.contains(token))
+        for (token in listOf("VideoPreviewDialog", "VideoView", "VideoControlOverlay", "VideoPlaybackOverlay", "controlsVisible", "rememberFilePreviewChromeState", "FilePreviewChromeAutoHideMillis", "onSingleTapConfirmed", "onBottomButton", "onTimeline", "onDoubleTap", "onFling", "ACTION_MOVE", "edgeExitHandled", "fromLeftEdge || fromRightEdge", "togglePlayback()", "Surface(color = Color.Black", "onOpenVideoPreview", "onCloseVideoPreview")) assertTrue(token, source.contains(token))
         org.junit.Assert.assertFalse(viewer.contains("MediaController"))
         org.junit.Assert.assertFalse(viewer.contains("开始本地播放"))
         org.junit.Assert.assertFalse(viewer.contains("点击播放前不会自动播放、上传或外发"))
@@ -39,6 +39,31 @@ class P6F2DVideoPreviewUiContractsTest {
         assertTrue(viewer.contains("view.pause()"))
         assertTrue(viewer.contains("delay(250)"))
         assertTrue(viewer.contains("Color.Black.copy(alpha = 0.44f)"))
+    }
+
+    @Test fun `opening a prepared local video starts playback without a second tap`() {
+        val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val viewer = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
+        val prepared = viewer.substring(viewer.indexOf("view.setOnPreparedListener"), viewer.indexOf("view.setOnCompletionListener"))
+        assertTrue(prepared.contains("ready.start()"))
+        assertTrue(prepared.contains("isPlaying = true"))
+    }
+
+    @Test fun `all local file viewers share a single tap top-control visibility owner`() {
+        val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val chrome = source.substring(source.indexOf("private const val FilePreviewChromeAutoHideMillis"), source.indexOf("private fun FilePreviewTopActions"))
+        for (token in listOf("FilePreviewChromeState", "rememberFilePreviewChromeState", "delay(FilePreviewChromeAutoHideMillis)", "toggle = { if (visible) visible = false else show() }", "toggleFilePreviewChrome")) {
+            assertTrue("missing shared preview chrome token $token", chrome.contains(token))
+        }
+        for (functionName in listOf("PdfPreviewDialog", "VideoPreviewDialog", "AudioPreviewDialog", "TextPreviewDialog", "ImagePreviewDialog")) {
+            val start = source.indexOf("private fun $functionName")
+            val next = source.indexOf("\n@Composable\nprivate fun", start + 1).let { if (it < 0) source.length else it }
+            val viewer = source.substring(start, next)
+            assertTrue("$functionName must use shared chrome", viewer.contains("rememberFilePreviewChromeState(preview.id.value)"))
+        }
+        val video = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
+        assertTrue(video.contains("if (controlsVisible) {\n                    PreviewCloseButton"))
+        assertTrue(video.contains("onCloseButton && chrome.isVisible()"))
     }
 
     @Test fun `image thumbnails use the same half-strength corner treatment in search`() {

@@ -23,7 +23,10 @@ class P3GConversationAttachmentContractsTest {
         assertEquals(first.draft, duplicate.draft)
         val safe = first.draft.attachments.single()
         assertFalse(safe.toString().contains("attachments/v1/"))
-        assertEquals(ConversationAttachmentEgressScope.LOCAL_ONLY_NO_EGRESS, ConversationAttachmentEgressScope.LOCAL_ONLY_NO_EGRESS)
+        assertEquals(
+            ConversationAttachmentEgressScope.ON_USER_SEND_TO_SELECTED_PROVIDER,
+            ConversationAttachmentEgressScope.ON_USER_SEND_TO_SELECTED_PROVIDER,
+        )
     }
 
     @Test fun `limits rejection and removal preserve private assets while send keeps ordered blocks`() {

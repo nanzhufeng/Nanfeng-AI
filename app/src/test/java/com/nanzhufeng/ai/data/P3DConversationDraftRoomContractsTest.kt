@@ -40,11 +40,12 @@ class P3DConversationDraftRoomContractsTest {
     }
     @After fun tearDown() = database.close()
 
-    @Test fun `draft trims text deduplicates attachments and survives repository rebuild`() {
+    @Test fun `draft preserves exact multiline editor text deduplicates attachments and survives repository rebuild`() {
         val snapshot = repository.save(tree.create("草稿"))
         val attachment = AttachmentReference("private/a", "image/png", id = AttachmentId("a"), byteCount = 1, sha256 = "a".repeat(64))
-        val saved = SaveConversationDraftUseCase(repository, clock).execute(snapshot.conversation.id, "  本地草稿  ", listOf(attachment.toConversationReference(), attachment.toConversationReference())) as ConversationDraftResult.Saved
-        assertEquals("本地草稿", saved.draft.text)
+        val draftText = "  本地草稿\n第二行\n"
+        val saved = SaveConversationDraftUseCase(repository, clock).execute(snapshot.conversation.id, draftText, listOf(attachment.toConversationReference(), attachment.toConversationReference())) as ConversationDraftResult.Saved
+        assertEquals(draftText, saved.draft.text)
         assertEquals(1, saved.draft.attachments.size)
         assertEquals(saved.draft, RoomConversationRepository(database).loadDraft(snapshot.conversation.id))
     }

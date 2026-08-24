@@ -2,6 +2,8 @@
 
 状态：本地 UI/重启读回退出已完成（2026-08-14）；不等于真实模型服务。P6-F2-E 后的 P6-G 仅实现本地、纯领域的路由合同；不读取 Key、不发 HTTP、不执行 Provider 调用。最新证据与阶段切换以 `CURRENT_HANDOFF.md` 的 2026-08-14 当前权威状态为准。
 
+> **当前 Android UI 路由（2026-08-24）：** 本文仍是 Auto、手动 override、持久化与实际模型归因的领域合同；Android Composer 的显示名、固定宽度、模型面位置、激活视觉、遮罩点按和滑动返回，统一以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为准。本文的早期“Dialog/菜单”视觉措辞不构成第二套 UI 规则。
+
 ## 优先级与目录
 
 - 会话手动 override > 全局默认 > Auto；手动选择绝不经过自动路由。

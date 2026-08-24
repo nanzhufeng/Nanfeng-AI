@@ -2,6 +2,8 @@
 
 状态：数据/动作 owner 与 FB-P6-027..034 presentation UI 门均已关闭。平台：Desktop + Android 同阶段；仍不外推为 Provider、账号或后续 Adapter 完成。
 
+> **当前 Android UI 路由（2026-08-24）：** 本文保留 transcript、消息、附件和动作的领域语义及历史证据。凡涉及 Android 会话界面的尺寸、颜色、顶栏、抽屉、Composer、模型面、外部点按或滑动行为，统一以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为准；本文中的阶段性 UI 数值不得与之并列执行。
+
 ## 2026-08-14 用户交接覆盖：双端统一先于后续阶段
 
 - 本合同及 ledger 中所有用户可见反馈都必须同步落在 Desktop 与 Android；任何一端的静态检查、构建、截图或模拟器近似都不能替代另一端的实际交互、退出重开与 readback。

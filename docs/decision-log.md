@@ -1,5 +1,29 @@
 # 南枫 AI 决策日志
 
+## 决策：Android 会话界面只保留一个现行合同（2026-08-24）
+
+- 当前选择：[Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 是 Android `ConversationWorkspace` 的唯一视觉和交互正文，覆盖顶栏分流、材质、左栏会话行、右滑快捷操作、主屏开侧栏、Composer、模型选择面、文本选择菜单及消息页脚。
+- 固定边界：`CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md` 继续定义信息架构，`P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md` 继续定义消息/附件语义，`P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md` 继续定义 Auto/手动选择和路由，`P2D_MODEL_SETTINGS_CONTRACT.md` 继续定义设置凭据；它们不得以历史 Android UI 数值覆盖当前合同。
+- 不采用方案：不在多个阶段合同中同步维护尺寸、颜色、滑动和外点行为；不以截图或安装记录替代明确合同；不把视觉合同扩展为 Provider、凭据或真实外发成功声明。
+
+## 决策：实时检索的实际接收方必须独立于回答模型持久化（2026-08-24）
+
+- 当前选择：复杂推理的 OpenRouter 模型通过 OpenRouter `openrouter:web_search` 发送，千问模型通过其 Chat Completions `enable_search` 发送；DeepSeek V4 Pro 的实时检索使用千问官方 Responses 的 `web_search`，因此逻辑回答模型为 DeepSeek、实际接收服务商为千问。
+- 固定边界：`NormalChatSendAttempt.egressProviderId`、调用诊断和助手归属记录保存实际网络接收方；DeepSeek→千问恢复只能继续原 receiver 和 idempotency key。界面、错误提示和助手尾部必须明确“DeepSeek 回答 · 千问官方实时检索”，不得伪称 DeepSeek 官方 API 已执行检索。
+- 不采用方案：不把所有供应商硬塞进一个 Chat Completions 结构；不因当前 Composer 选择变动而改变未知 Attempt 的 receiver；不让非深度普通对话凭系统提示词假装取得实时来源。
+
+## 决策：助手结果尾部只显示消息绑定的实际模型路由（2026-08-24）
+
+- 当前选择：普通发送创建 `NormalChatSendAttempt` 后，以助手消息 ID + Attempt ID 持久化无正文的 `AssistantResponseModelAttribution`。普通流在请求开始前绑定持久助手占位；对比和按原编号重试在创建新的助手消息前绑定原 Attempt。尾部展示持久化的模型显示名与接收服务商，而非当前 Composer、Auto 规则或后来刷新的模型目录。
+- 固定边界：该表只含助手消息 ID、Attempt ID、Provider、实际 model ID、显示名和记录时间；不保存请求正文、回复、附件、URL、凭据或原始响应。未具有精确归属的历史/导入消息显示“模型信息未记录”，不能从相邻用户消息、时间或当前设置推断。
+- 不采用方案：不以“Auto”“深度”“对比”等逻辑槽位替代真实 model ID；不把调用诊断的最近一条记录套给会话消息；不在消息页新增操作按钮；Desktop 在拥有对应真实发送和消息归属 owner 前不仿制此标签。
+
+## 决策：普通对话、项目工作区与临时对话必须有独立导航投影（2026-08-23）
+
+- `CHAT`、`WORK` 与临时恢复不是同一列表的不同标题：普通和工作会话各按 `ConversationSurfaceRepository` 的持久化 surface 读取并保留各自选中会话；临时对话仅由 `TemporaryConversationDomain` 管理，不展示或写入持久会话列表。
+- 工作区的树形入口以既有 `ProjectDomain` 为唯一项目所有者。创建项目、编辑、置顶、归档经 `ManageProjectUseCase`；在项目中创建工作对话时，持久化同一 `projectId + WORK` 会话，不建立平行文件夹或依赖外部目录。
+- 借鉴 Codex 的信息架构，不复制其本机资源管理、永久工作树或隐藏访问权限；归档或异常项目归属的既有工作对话必须仍可见，不能因 UI 分类而静默丢失。
+
 ## 决策：P6 完整工作区交换先以 v2 字段保真/拒绝 IR 阻止静默降级（已确定）
 
 - 当前选择：`nfai.exchange.v1` 继续只用于既有语义投影；P6 完整对象必须先经过 v2 的逐字段矩阵与共享 canonical semantic-hash IR。Project appearance/instruction history、Conversation settings/memory sources、Knowledge source/provenance/history/attachment metadata、Memory title/source/concept/history 及 Relationship scope/project/time/history 是 v2 的必保留事实。

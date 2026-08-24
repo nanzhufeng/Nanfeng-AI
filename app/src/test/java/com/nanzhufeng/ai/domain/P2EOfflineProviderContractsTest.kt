@@ -66,6 +66,18 @@ class P2EOfflineProviderContractsTest {
     }
 
     @Test
+    fun `chat reply survives fine grained price metadata and typed text parts`() {
+        val decoded = OpenRouterJsonCodec().decodeResponse(
+            """{"choices":[{"message":{"content":[{"type":"text","text":"正常回复"}]}}],"usage":{"prompt_tokens":12,"completion_tokens":8,"cost":0.0000001}}""",
+        ) as OpenRouterAdapterDecodeResult.Decoded
+
+        assertEquals("正常回复", decoded.response.structuredContent)
+        assertTrue(decoded.response.cost.isUnknown)
+        assertEquals(12L, decoded.response.usage.inputTokens)
+        assertEquals(8L, decoded.response.usage.outputTokens)
+    }
+
+    @Test
     fun `adapter refuses unverified registry instead of creating a transport request`() {
         val registry = InMemoryVersionedModelRegistry()
         val adapter = OpenRouterOfflineAdapterContract(registry)

@@ -32,16 +32,14 @@ class P6GUnifiedChatFirstUiContractsTest {
     }
 
     @Test
-    fun `empty local catalog stays explicit until a local-only fixture is deliberately installed`() {
-        for (token in listOf("state.p6gCatalog?.candidates.orEmpty()", "null to \"自动\"", "onSelectP6GModel(modelId)")) {
+    fun `logical model slots stay explicit and selection is persisted per conversation`() {
+        for (token in listOf("ComposerModelSlot.COMPARE", "ComposerModelSlot.DAILY", "ComposerModelSlot.DEEP", "ComposerModelSlot.MULTIMODAL", "onSelectP6GModel(modelId)")) {
             assertTrue("missing $token", workspace.contains(token))
         }
-        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val owner = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
         assertTrue(owner.contains("installP6GLocalFixtureCatalog"))
         assertTrue(owner.contains("P6GProviderFamily.LOCAL"))
-        assertFalse(app.contains("添加本地确定性 fixture（仅验收）"))
-        assertFalse(app.contains("P6GModelSelectionSettingsCard"))
+        assertFalse(workspace.contains("ComposerCompareEntry("))
     }
 
     @Test
@@ -85,5 +83,28 @@ class P6GUnifiedChatFirstUiContractsTest {
             "reload(targetSurface = surface, selectedBefore = selectedBefore, requestedSurfaceGeneration = request)",
         )) assertTrue("missing $token", "$reload\n$switch".contains(token))
         assertFalse(switch.contains("state = state.copy(surface = surface"))
+    }
+
+    @Test
+    fun `chat work and temporary navigation stay on distinct persisted owners`() {
+        val owner = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
+        val reload = owner.substring(owner.indexOf("fun reload("), owner.indexOf("fun openImagePreview"))
+        val select = owner.substring(owner.indexOf("fun selectConversation"), owner.indexOf("fun selectSurface"))
+        val createWork = owner.substring(owner.indexOf("fun createWorkConversation"), owner.indexOf("fun updateDraft"))
+        assertTrue(reload.contains("LoadedConversation(surfaceConversations"))
+        assertTrue(select.contains("ConversationSurface.WORK -> selectedWorkConversationId = id"))
+        assertFalse(select.contains("state = state.copy(surface = ConversationSurface.CHAT"))
+        assertTrue(createWork.contains("createConversation.execute(projectId = projectId.value, surface = ConversationSurface.WORK)"))
+
+        assertTrue(workspace.contains("WorkProjectNavigationDrawer("))
+        assertTrue(workspace.contains("TemporaryConversationNavigationDrawer("))
+        assertTrue(workspace.contains("if (state.temporaryRecovery != null)"))
+        assertTrue(workspace.contains("与普通对话、项目工作区独立"))
+
+        val projectViewModel = File("src/main/java/com/nanzhufeng/ai/ui/ProjectViewModel.kt").readText()
+        val projectWorkspace = File("src/main/java/com/nanzhufeng/ai/ui/ProjectWorkspace.kt").readText()
+        assertTrue(projectViewModel.contains("fun showCreateDialog()"))
+        assertTrue(projectViewModel.contains("createDialogVisible = true"))
+        assertTrue(projectWorkspace.contains("if (state.createDialogVisible) AlertDialog"))
     }
 }

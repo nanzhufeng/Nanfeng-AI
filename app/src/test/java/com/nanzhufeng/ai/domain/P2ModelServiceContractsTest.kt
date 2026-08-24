@@ -69,6 +69,17 @@ class P2ModelServiceContractsTest {
     }
 
     @Test
+    fun `stored local credential repairs a stale disabled flag for settings and composer alike`() {
+        credentials.value = "test-key-not-real".toCharArray()
+
+        val configuration = load.execute(ProviderId.OPENROUTER)!!
+
+        assertFalse(settings.load(ProviderId.OPENROUTER).enabled)
+        assertTrue(configuration.settings.enabled)
+        assertEquals(CredentialState.STORED, configuration.credentialState)
+    }
+
+    @Test
     fun `saving settings with a blank key keeps the existing secure credential`() {
         save.execute(ProviderId.OPENROUTER, true, ModelPresetId.CLAUDE_FABLE_5, "test-key-not-real")
 
@@ -135,15 +146,22 @@ class P2ModelServiceContractsTest {
 
         val restored = AndroidModelServiceSettingsRepository(context).load(ProviderId.OPENROUTER)
 
-        assertEquals(ModelPresetId.CLAUDE_FABLE_5, restored.presetId)
+        assertEquals(ModelPresetId.GPT_5_6_TERRA, restored.presetId)
     }
 
     @Test
-    fun `catalog retains only the seven current official picker models`() {
+    fun `catalog contains the approved logical provider models`() {
         assertEquals(
-            listOf("Claude Fable 5", "Claude Opus 5", "Claude Sonnet 5", "Claude Haiku 4.5", "GPT-5.6 Sol", "GPT-5.6 Terra", "GPT-5.6 Luna"),
-            NanfengModelServiceCatalog.presets.map { it.displayName },
+            listOf("Gemini 3.7 Flash", "Qwen3.7-Plus", "Qwen3.8-Max", "Qwen3.6 Flash", "DeepSeek V4 Pro"),
+            NanfengModelServiceCatalog.presets.filter { it.id in setOf(ModelPresetId.GEMINI_3_7_FLASH, ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH, ModelPresetId.DEEPSEEK_V4_PRO) }.map { it.displayName },
         )
+    }
+
+    @Test fun `provider catalog keeps OpenRouter and official direct endpoints separate`() {
+        assertEquals(ProviderId.OPENROUTER, NanfengModelServiceCatalog.providerFor(ModelPresetId.GEMINI_3_7_FLASH))
+        assertEquals(ProviderId.QWEN, NanfengModelServiceCatalog.providerFor(ModelPresetId.QWEN_3_7_PLUS))
+        assertEquals(ProviderId.DEEPSEEK, NanfengModelServiceCatalog.providerFor(ModelPresetId.DEEPSEEK_V4_PRO))
+        assertEquals("https://dashscope.aliyuncs.com/compatible-mode/v1", NanfengModelServiceCatalog.provider(ProviderId.QWEN)?.fixedEndpoint)
     }
 
     @Test

@@ -3,6 +3,8 @@
 日期：2026-08-14  
 状态：FB-P6-025 已登记；与 FB-P6-023/024 共同实施、共同验收
 
+> **Android UI 路由（2026-08-24）：** 本文继续定义 intent-first 信息架构；当前 Android 会话界面的颜色、尺寸、顶栏状态、抽屉行、Composer、模型面和手势以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为唯一正文。本文较早的 Android 视觉描述不再单独形成冲突规则。
+
 ## 产品定义
 
 南枫 AI 不是把 Conversation、Provider、Model、Search、Files、Memory、Tools 与 Settings 并列陈列的 AI 工具箱；它是用户把事情交代进去后，依照意图、对象与已知上下文组织本地能力的入口。工程模块只保留其领域 owner，不能因此获得根级导航席位。

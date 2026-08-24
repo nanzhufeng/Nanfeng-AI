@@ -5,64 +5,93 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Guards the P3-J root-overlay contract and the default fail-closed normal-chat owner. */
+/** Ordinary chat is one direct path: commit locally, render, then make the configured request. */
 class P3JNormalChatExplicitEgressContractsTest {
-    private val contract = File("../docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md").readText()
     private val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
     private val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
+    private val executor = File("src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt").readText()
     private val appContainer = File("src/main/java/com/nanzhufeng/ai/app/AppContainer.kt").readText()
+    private val activity = File("src/main/java/com/nanzhufeng/ai/NanfengAiActivity.kt").readText()
 
-    private val owner = File("src/main/java/com/nanzhufeng/ai/domain/NormalChatRealTextExecutionOwner.kt").readText()
-
-    @Test fun `normal chat keeps submit local and isolates the unregistered confirmation owner from the composer`() {
-        assertTrue(workspace.contains("onSubmit = {"))
-        assertTrue(viewModel.contains("submitDraft.execute(id)"))
-        assertTrue(viewModel.contains("未连接 Provider"))
-        assertFalse(workspace.contains("onRequestNormalChatExternalSendConfirmation()"))
-        assertTrue(viewModel.contains("requestNormalChatExternalSendConfirmation"))
-        assertTrue(appContainer.contains("normalChatRealTextExecutionOwner = NormalChatRealTextExecutionOwner(clock)"))
-        assertTrue(owner.contains("class NormalChatRealTextExecutionOwner"))
-        assertTrue(owner.contains("There is intentionally no confirm/send API"))
-        assertFalse(owner.contains("ProviderTransport"))
-        assertFalse(owner.contains("Credential"))
-        assertFalse(owner.contains("Http"))
-        assertFalse(owner.contains("UsageLedger"))
-        assertTrue(appContainer.contains("p2mRealTextExecutionBridge"))
+    @Test fun `ordinary send has no confirmation owner or second composer path`() {
+        assertTrue(viewModel.contains("normalChatOpenRouterExecutor.execute("))
+        assertTrue(viewModel.contains("reload(keepSending = true)"))
+        assertFalse(workspace.contains("NormalChatExplicitEgressConfirmationDialog"))
+        assertFalse(workspace.contains("externalSendConfirmation"))
+        assertFalse(viewModel.contains("requestNormalChatExternalSendConfirmation"))
+        assertFalse(viewModel.contains("NormalChatRealTextExecutionOwner"))
     }
 
-    @Test fun `composer submit wiring changes no layout structure or frozen surface tokens`() {
+    @Test fun `direct send commits exact draft and makes only its remaining attachments eligible`() {
+        assertTrue(viewModel.contains("draftMutationMutex.withLock"))
+        assertTrue(executor.contains("submitDraft.execute(conversationId)"))
+        assertTrue(executor.contains("onLocalSubmission()"))
+        assertTrue(executor.contains("ATTACHMENTS_UNSUPPORTED"))
+        assertTrue(executor.contains("Only attachments still referenced by the exact submitted draft"))
+        assertTrue(executor.contains("file_data"))
+        assertTrue(executor.contains("video_url"))
+        assertTrue(executor.contains("attachmentStore.openVerified(asset)"))
+        assertFalse(executor.contains("attachmentStore.read(asset)"))
+        assertFalse(executor.contains("attachmentStore.pdfPage(asset, 1)"))
+        assertFalse(executor.contains("attachmentStore.videoPreview(asset)"))
+        assertTrue(executor.contains("credentials.loadCredential(executionProviderId)"))
+        assertTrue(executor.contains("selection.readConversationOverride(conversationId).modelId\n            ?: selection.readGlobalDefault().modelId"))
+        assertTrue(executor.contains("val automatic = routingPolicy.autoRoutingEnabled && (selectedId == null || choice == ComposerModelRoutingCatalog.auto)"))
+        assertTrue(executor.contains("val presets = if (automatic) listOf(autoPreset) else choice.routes"))
+        assertFalse(executor.contains("automaticFallbackOrder"))
+        assertTrue(executor.contains("fun cancelActive(conversationId: ConversationId)"))
+        assertTrue(viewModel.contains("normalChatOpenRouterExecutor.cancelActive(visibleRuntime.conversationId)"))
+    }
+
+    @Test fun `composer structure stays anchored while its only model entry opens the menu`() {
         val submitLambda = workspace.substringAfter("onSubmit = {").substringBefore("onStop = onStop")
         assertTrue(submitLambda.contains("onSubmitDraft()"))
-        assertFalse(submitLambda.contains("onRequestNormalChatExternalSendConfirmation"))
-        assertTrue(submitLambda.contains("workSentFromMessageCount"))
-        assertTrue(submitLambda.contains("chatSentFromMessageCount"))
-        // The permitted fix is callback removal only. These guard the existing composer structure and surface.
-        for (required in listOf(
-            "Box(\n                        modifier = Modifier\n                            .align(Alignment.BottomCenter)",
-            "padding(start = 18.dp, end = 18.dp, bottom = 6.dp)",
-            "private val ComposerSendSurfaceSize = 36.dp",
-            "DraftComposer(",
-        )) assertTrue(required, workspace.contains(required))
-    }
-
-    @Test fun `contract requires explicit scope bound consent and blocks attachment egress`() {
-        for (required in listOf(
-            "唯一生产编排 owner 必须是新增的", "未勾选的、一次性的显式确认框",
-            "超过 **5 分钟**", "P3-J 为 **text-only**", "ATTACHMENTS_NOT_SUPPORTED",
-            "不自动重试、后台续发", "NormalChatRealTextExecutionOwner",
-            "P3-I prepare + P0 reserve", "P3 普通聊天 egress 保持\n未注册且 fail-closed",
-        )) assertTrue(required, contract.contains(required))
-    }
-
-    @Test fun `confirmation is a root sibling and does not alter frozen composer or drawer geometry`() {
-        assertTrue(workspace.contains("private fun NormalChatExplicitEgressConfirmationDialog"))
-        assertTrue(workspace.contains("state.externalSendConfirmation?.let"))
-        assertTrue(workspace.contains("root sibling of the workspace"))
         assertTrue(workspace.contains("private val ComposerSendSurfaceSize = 36.dp"))
-        assertTrue(workspace.contains("modifier = Modifier.fillMaxSize().padding(18.dp)"))
-        assertTrue(workspace.contains("ModalNavigationDrawer("))
-        assertTrue(workspace.contains("附件不会发送"))
-        assertTrue(workspace.contains("确认默认未勾选，并将在 5 分钟后过期"))
-        assertTrue(workspace.contains("enabled = confirmation.acknowledgementChecked && confirmation.isConfirmable && !expired"))
+        assertTrue(workspace.contains("ComposerModelEntry("))
+        assertTrue(workspace.contains("state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId"))
+        assertFalse(workspace.contains("ComposerCompareEntry("))
+    }
+
+    @Test fun `unknown provider result has an explicit original key retry or mark failed decision`() {
+        assertTrue(executor.contains("fun retryLatestAttempt(conversationId: ConversationId)"))
+        assertTrue(executor.contains("existingAttempt = attempt"))
+        assertTrue(executor.contains("attempt.idempotencyKey"))
+        assertTrue(executor.contains("fun markLatestAttemptFailed"))
+        assertTrue(workspace.contains("按原编号重试"))
+        assertTrue(workspace.contains("标记失败"))
+        assertTrue(workspace.contains("可能重复调用或扣费"))
+        val retry = executor.substringAfter("fun retryLatestAttempt(conversationId: ConversationId)").substringBefore("fun markLatestAttemptFailed")
+        assertTrue(retry.contains("ProviderChatCancellation().also { activeCalls[conversationId] = it }"))
+        assertTrue(retry.contains("activeCalls.remove(conversationId, cancellation)"))
+    }
+
+    @Test fun `mixed non streaming text and tool call never claims a completed answer`() {
+        assertTrue(executor.contains("val toolCallEncountered = !requestOptions.liveWebSearch && (toolOnly != null || reply?.toolCallEncountered == true)"))
+        assertTrue(executor.contains("when { toolCallEncountered -> \"TOOL_CALL_UNSUPPORTED\""))
+    }
+
+    @Test fun `normal streaming completion does not silently clip a model reply`() {
+        assertFalse(executor.contains(".take(12_000)"))
+    }
+
+    @Test fun `deep OpenRouter requests distinguish a live web tool from mere provider connectivity`() {
+        assertTrue(executor.contains("val requestedOptions = adapter.requestOptions(resolvedModel, choice)"))
+        assertTrue(executor.contains("ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)"))
+        assertTrue(executor.contains("val systemFact = systemFactForRequest(requestOptions)"))
+        assertTrue(executor.contains("当前本机日期为 \$date"))
+        assertTrue(executor.contains("OpenRouter 官方实时网页检索"))
+        assertTrue(executor.contains("千问官方 Responses 实时网页检索（回答模型为 DeepSeek V4 Pro）"))
+        assertTrue(executor.contains("不得把训练数据截止时间说成当前日期"))
+        assertTrue(executor.contains("webSearchRoute=\${options.webSearchRoute.name}"))
+        assertTrue(workspace.contains("OpenRouter · 官方实时联网检索"))
+        assertTrue(workspace.contains("DeepSeek 回答 · 千问官方实时检索"))
+    }
+
+    @Test fun `interrupted attempt recovery never writes Room during AppContainer construction and refreshes its owner`() {
+        assertFalse(appContainer.contains("RoomNormalChatSendAttemptStore(database).also"))
+        assertTrue(appContainer.contains("fun recoverInterruptedNormalChatAttemptsAfterProcessStart"))
+        assertTrue(activity.contains("val recoveredAttempts = withContext(Dispatchers.IO)"))
+        assertTrue(activity.contains("recoverInterruptedNormalChatAttemptsAfterProcessStart()"))
+        assertTrue(activity.contains("if (recoveredAttempts > 0) conversationFoundationViewModel.reload()"))
     }
 }

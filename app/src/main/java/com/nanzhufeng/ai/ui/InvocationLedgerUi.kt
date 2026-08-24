@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -101,7 +100,7 @@ fun InvocationLedgerCard(state: InvocationLedgerUiState, onOpen: () -> Unit) {
 @Composable
 fun InvocationLedgerDialog(state: InvocationLedgerUiState, onDismiss: () -> Unit) {
     AlertDialog(
-        onDismissRequest = { if (!state.isLoading) onDismiss() },
+        onDismissRequest = onDismiss,
         containerColor = Color.White,
         shape = RoundedCornerShape(24.dp),
         title = { Text("调用记录", fontWeight = FontWeight.SemiBold) },
@@ -182,6 +181,8 @@ private fun InvocationStatus.uiColor(): Color = when (this) {
 private fun ProviderId.uiLabel(): String = when (this) {
     ProviderId.MOCK -> "本地 Mock（非真实服务）"
     ProviderId.OPENROUTER -> "OpenRouter（未验证真实连接）"
+    ProviderId.QWEN -> "Qwen 官方直连（未验证真实连接）"
+    ProviderId.DEEPSEEK -> "DeepSeek 官方直连（未验证真实连接）"
 }
 
 private fun InvocationRecord.providerLabel(): String = when (providerId) {
@@ -189,6 +190,8 @@ private fun InvocationRecord.providerLabel(): String = when (providerId) {
     // A non-BLOCKED OpenRouter record has an actual ProviderAttempt and therefore represents a
     // real service attempt, including safe failure terminal states.
     ProviderId.OPENROUTER -> if (taskRun.attempts.isNotEmpty()) "OpenRouter（真实服务）" else providerId.uiLabel()
+    ProviderId.QWEN -> if (taskRun.attempts.isNotEmpty()) "Qwen 官方直连（真实服务）" else providerId.uiLabel()
+    ProviderId.DEEPSEEK -> if (taskRun.attempts.isNotEmpty()) "DeepSeek 官方直连（真实服务）" else providerId.uiLabel()
 }
 
 private fun InvocationRecord.usageAndCostLabel(): String {

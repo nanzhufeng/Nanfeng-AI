@@ -6,9 +6,9 @@
 
 | 阶段/外部门 | 所需外部条件 | 当前可用性 | 最小恢复动作 |
 | --- | --- | --- | --- |
-| P2/P3 真实 Provider/流 | 合法可用的应用内凭据、已验证目录/价格、逐次可见确认与用户授权的非敏感 RunSpec | **不可用**：仓库没有允许的 Provider 环境变量或用户级 Gradle 凭据 schema；应用私有存储未读 | 用户在应用内完成合法配置后，另行授权一次冻结的非敏感预检/真实调用；不得从环境变量或 Gradle 旁路 |
-| P5 OPPO/正式交付 | OPPO 在线、安装前只读身份/数据指纹门与当次明确授权 | **当前正式覆盖已完成**：code 53→57 的同证书 `pm install -r --user 0` 返回成功，首次安装时间/CE/DE inode/非 Debug 均不变，设备 `base.apk` 精确匹配本地 code-57；一次标准 Launcher 冷启动返回 `Status: ok` | 停止 OPPO 操作，不重装、重启、改用其他启动方式或清理遗留临时 APK；真实 Provider 调用、可访问性/性能与正式发布门仍单独待验 |
-| P5/P11 code-53 产物 | 本地正式 APK、结构验签记录及 P11 发布门 | **已安装且已获 Launcher/前台活动证据**：code-53 `230cac…f183954c` 的设备 `base.apk` 回读、v2/v3、release-v2 证书与一次标准 Launcher 成功均已记录；P11 发布/可重复性风险仍未关闭 | 不重建、重签名、发布或重复安装；P11 发布门须独立收敛 |
+| P2/P3 真实 Provider/流 | 合法可用的应用内凭据、已验证目录/价格，以及用户点击发送授权本次非敏感输入 | **不可用**：仓库没有允许的 Provider 环境变量或用户级 Gradle 凭据 schema；应用私有存储未读 | 用户在 App 内完成合法配置后，点击发送即授权本次请求；另行用非敏感输入完成一次真实调用，绝不从环境变量或 Gradle 旁路 |
+| P5 OPPO/正式交付 | OPPO 在线、安装前只读身份/数据指纹门与当次明确授权 | **当前正式覆盖已完成**：code 63→64→65 的同证书 `pm install -r --user 0` 返回成功，首次安装时间/CE/DE inode/非 Debug 均不变，设备 `base.apk` 精确匹配本地 code-65；标准 Launcher 冷启动返回 `Status: ok` 并保持 `NanfengAiActivity` 前台 | 停止 OPPO 操作，不重装、重启、改用其他启动方式或清理遗留临时 APK；真实 Provider 调用、可访问性/性能与正式发布门仍单独待验 |
+| P5/P11 code-65 产物 | 本地正式 APK、结构验签记录及 P11 发布门 | **已安装且已获 Launcher/前台活动证据**：code-65 `888c8698853744c6752e0f3afea02733a3aeffef264eb90f88f44131ba963644` 的设备 `base.apk` 回读、v2/v3、release-v2 证书与一次标准 Launcher 成功均已记录；P11 发布/可重复性风险仍未关闭 | 后续源码修复必须重新冻结、构建、签名、回读安装；在此之前不得把 code-65 当作可发布终件 |
 | P6 Android/Windows | 一台全新 Android 35 AVD 的可用 ADB 注册；Windows 本机验收已由用户明确豁免，不是完成门 | **本独立子链已验收**：`emulator-5610` 已完成 schema 38→39 覆盖升级，并经正常 Settings/导入中心/DocumentsUI 对 strict v2 文件显示非空本机中文拒绝，前后 owner 计数不变；Windows 历史债务保留但非阻塞 | 停止该 AVD 的重复选择/重装/升级；此局部证据不代表完整 P6、发布或 Windows 验收 |
 | P7 Google/Supabase | 原为指定 Supabase target、CLI/link、私有客户端配置、受控授权会话及专属 Google OAuth 配置 | **用户明确豁免**：Google 登录、Supabase、云端加密同步与跨设备恢复不是总控完成门；远端条件当前仍未核验 | 保留本地实现和未验证记录为非阻塞债务；不得因豁免而配置、部署、调用远端或声称云同步完成 |
 | P8 真实 Agent 工具 | 一个已批准的真实工具、精确目标、权限/风险/预算、成功失败取消幂等恢复合同 | **不可用**：仅有 LOCAL_TEST_ONLY 与只读账本，未有真实工具合同/目标 | 一工具一合同，先完成外部动作/回滚边界和用户确认，不以 fixture 升格 |
@@ -16,6 +16,9 @@
 | P10 AI Hub | 至少两个真实应用消费者及隔离、降级、回滚/运维恢复验证对象 | **不可用**：尚无两个真实消费者 | 待两个消费者已真实存在后才立约，不提前建设 Hub |
 
 ## 2026-08-23 补充当前状态（优先于以下历史审计）
+
+- **当前规则校正：** 普通聊天与附件不设置逐次外发确认。用户选择附件、预览及草稿阶段只在本机处理；用户点击发送即授权把该准确已提交草稿中的仍存附件或必要解析结果发送给界面明确显示的当前 Provider/模型。切换 Provider 不会静默转发给另一接收方，附件不得进入日志、统计或无关第三方。任何后文“逐次确认”只属于历史 Gate 记录，不得作为当前实现或验收要求。
+- **当前 code 65 纠正：** 本文件中 code 52/53/57 及 `c511`/`230cac` 的安装陈述均为历史样本，不能覆盖 `CURRENT_HANDOFF.md` 顶部的 code 65 当前设备事实。code 65 修复了 AppContainer 主线程 Room 写导致的启动崩溃；其正式 APK SHA-256 为 `888c8698853744c6752e0f3afea02733a3aeffef264eb90f88f44131ba963644`。当前源码后续修复尚未重新冻结成新正式产物。
 
 - **P5 已获局部门证：** code-53 正式 APK `230cac…f183954c` 已完成 OPPO 的正式 v2/v3、保留数据覆盖与标准 Launcher 前台活动证据。另在全新 `emulator-5614`，从同正式证书的 code-52（detached `a4eebd1` 单次离线重建）首装后经正常 UI 创建非敏感草稿，仅一次 `install -r` 覆盖到当前 code-57；首次安装时间和 CE/DE inode 不变，force-stop 后标准 Launcher 冷启动成功、草稿仍可见。此为隔离旧版迁移/数据保留/启动证据，不等同于 OPPO、全设备无障碍/性能、发布或 P0–P11 完成。
 - **P6 已扩展若干真实子链：** Android v2 已在新空隔离 AVD 经 DocumentsUI 获得 restore、同包 replay、篡改/超限拒绝和非空本机拒绝；修复后 restore→DocumentsUI export 的真文件回读，以及 Android DocumentsUI→隔离 Desktop native Open/Save/replay 均已有局部证据。附件提升中断后零发布、同包 DocumentsUI retry 也已验收。新的 Android 35 `emulator-5610` 先完成同 applicationId、同正式证书的 schema-38/code-51→schema-39/code-52 覆盖升级；普通 Launcher/UI 创建的 2 个 Conversation 和 2 个 Draft 在 startup audit 中按 `schema=39` 读回。随后仅使用唯一既有 strict v2 fixture（`2,346 B`、SHA-256 `d9df67ce64cc325ab35b9f4268c03ed2e956dbeef81e38bf058fb18c16959832`、ZIP 头匹配），经正常 Settings → 数据与导入 → 导入中心 → 完整工作区交换（v2）→ DocumentsUI Downloads 单次选择，显示“当前本机已有数据或待恢复记录，已拒绝覆盖。”；选择前后 audit 均为 `schema=39 project=0 conversation=2 draft=2 knowledge=0 memory=0 relation=0 attachment=0 v2receipt=0 v2provenance=0 v2settings=0`。因此这个非空本机 `LOCAL_TRUTH_PRESENT` 拒绝与无覆盖子链已关闭。P6 总门仍未退出。

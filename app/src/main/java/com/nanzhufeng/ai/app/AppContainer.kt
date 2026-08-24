@@ -7,6 +7,14 @@ import com.nanzhufeng.ai.ai.MockAiTaskRunner
 import com.nanzhufeng.ai.ai.OpenRouterOfflineAdapterContract
 import com.nanzhufeng.ai.ai.OfficialOpenRouterInferenceTransport
 import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
+import com.nanzhufeng.ai.ai.ChatProviderAdapters
+import com.nanzhufeng.ai.domain.UnifiedModelResolver
+import com.nanzhufeng.ai.ai.OfficialProviderChatTransport
+import com.nanzhufeng.ai.ai.ProviderConnectionProbe
+import com.nanzhufeng.ai.data.AndroidDirectChatCallAuditStore
+import com.nanzhufeng.ai.data.local.RoomProviderDiagnosticStore
+import com.nanzhufeng.ai.data.local.RoomNormalChatSendAttemptStore
+import com.nanzhufeng.ai.data.local.RoomAssistantResponseModelAttributionStore
 import com.nanzhufeng.ai.ai.OpenRouterEgressPolicy
 import com.nanzhufeng.ai.ai.OpenRouterInferenceAdapter
 import com.nanzhufeng.ai.ai.LoadRealServiceAcceptanceUiStatusUseCase
@@ -51,7 +59,12 @@ import com.nanzhufeng.ai.data.RoomAgentLedger
 import com.nanzhufeng.ai.data.AndroidPrivacyDataManager
 import com.nanzhufeng.ai.data.AndroidLocalBackupRestoreManager
 import com.nanzhufeng.ai.data.AndroidModelServiceSettingsRepository
+import com.nanzhufeng.ai.data.AndroidChatRoutingPolicyRepository
 import com.nanzhufeng.ai.data.AndroidModelRegistrySnapshotStore
+import com.nanzhufeng.ai.data.AndroidModelProfileDirectory
+import com.nanzhufeng.ai.data.AndroidModelHealthStore
+import com.nanzhufeng.ai.data.AndroidProviderModelListClient
+import com.nanzhufeng.ai.data.AndroidContextSelectionAuditStore
 import com.nanzhufeng.ai.data.AndroidP6GModelSelectionStore
 import com.nanzhufeng.ai.data.local.RoomCompareBranchExecutionPorts
 import com.nanzhufeng.ai.data.local.RoomCompareConversationSessionStore
@@ -75,6 +88,7 @@ import com.nanzhufeng.ai.data.local.RoomPrivateAttachmentRepository
 import com.nanzhufeng.ai.data.local.RoomTemporaryConversationRecoveryStore
 import com.nanzhufeng.ai.data.local.RoomProjectRepository
 import com.nanzhufeng.ai.data.local.RoomMemoryRepository
+import com.nanzhufeng.ai.data.local.RoomLocalContextIndex
 import com.nanzhufeng.ai.data.local.RoomKnowledgeRelationshipRepository
 import com.nanzhufeng.ai.data.local.RoomMarkdownImportTaskRepository
 import com.nanzhufeng.ai.data.local.RoomOfflineEvalRepository
@@ -96,6 +110,9 @@ import com.nanzhufeng.ai.domain.InMemoryVersionedModelRegistry
 import com.nanzhufeng.ai.domain.RunAiTaskUseCase
 import com.nanzhufeng.ai.domain.RestoreLatestCaptureDraftUseCase
 import com.nanzhufeng.ai.domain.LoadModelServiceConfigurationUseCase
+import com.nanzhufeng.ai.domain.LoadChatRoutingPolicyUseCase
+import com.nanzhufeng.ai.domain.SaveChatRoutingPolicyUseCase
+import com.nanzhufeng.ai.domain.LocalContextBroker
 import com.nanzhufeng.ai.domain.ReadConnectionCapabilityUseCase
 import com.nanzhufeng.ai.domain.SaveModelServiceConfigurationUseCase
 import com.nanzhufeng.ai.domain.SaveKnowledgeItemUseCase
@@ -130,7 +147,7 @@ import com.nanzhufeng.ai.domain.ApplyConversationRuntimeEventUseCase
 import com.nanzhufeng.ai.domain.ConversationRuntimeStateMachine
 import com.nanzhufeng.ai.domain.DeterministicFixtureStreamingAdapter
 import com.nanzhufeng.ai.domain.StartLocalConversationRuntimeUseCase
-import com.nanzhufeng.ai.domain.NormalChatRealTextExecutionOwner
+import com.nanzhufeng.ai.domain.SubmitConversationDraftAndStartProviderRuntimeUseCase
 import com.nanzhufeng.ai.domain.CompareConversationSessionOwner
 import com.nanzhufeng.ai.domain.CompareExecutionApplicationOwner
 import com.nanzhufeng.ai.domain.MultiModelOrchestrator
@@ -143,6 +160,7 @@ import com.nanzhufeng.ai.domain.ConversationAttachmentPreviewProjection
 import com.nanzhufeng.ai.domain.ReadConversationAttemptHistoryUseCase
 import com.nanzhufeng.ai.domain.P6ETemporaryMaintenanceAcceptanceHarness
 import com.nanzhufeng.ai.domain.VerifyOpenRouterRegistryUseCase
+import com.nanzhufeng.ai.domain.RefreshModelProfilesUseCase
 import com.nanzhufeng.ai.domain.ProjectDomain
 import com.nanzhufeng.ai.domain.ManageProjectUseCase
 import com.nanzhufeng.ai.domain.ReadContextSelectionUseCase
@@ -189,7 +207,7 @@ import java.time.Clock
 import java.io.File
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
-class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
+class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC()) {
     init { PDFBoxResourceLoader.init(context.applicationContext) }
     val captureDraftFactory = CaptureDraftFactory(clock)
     private val mockAiTaskRunner = MockAiTaskRunner(clock)
@@ -236,6 +254,12 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         NanfengAiDatabase.MIGRATION_36_37,
         NanfengAiDatabase.MIGRATION_37_38,
         NanfengAiDatabase.MIGRATION_38_39,
+        NanfengAiDatabase.MIGRATION_39_40,
+        NanfengAiDatabase.MIGRATION_40_41,
+        NanfengAiDatabase.MIGRATION_41_42,
+        NanfengAiDatabase.MIGRATION_42_43,
+        NanfengAiDatabase.MIGRATION_43_44,
+        NanfengAiDatabase.MIGRATION_44_45,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
@@ -413,9 +437,12 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
     val startLocalConversationRuntime = StartLocalConversationRuntimeUseCase(
         conversationRepository, conversationRepository, conversationRuntimeStateMachine, clock,
     )
+    val submitDraftAndStartProviderConversationRuntime = SubmitConversationDraftAndStartProviderRuntimeUseCase(
+        conversationRepository, conversationRepository, conversationRepository,
+        conversationRuntimeStateMachine, conversationTreeService, clock,
+    )
     val deterministicFixtureStreamingAdapter = DeterministicFixtureStreamingAdapter(clock)
     /** The confirmation owner remains content-free; the executor receives text only after confirmation. */
-    val normalChatRealTextExecutionOwner = NormalChatRealTextExecutionOwner(clock)
     /** P5-B only finalizes interrupted facts at process start; it never schedules or resumes work. */
     val taskRecoveryAudit = TaskRecoveryAudit(
         markdown = manageMarkdownImport,
@@ -433,13 +460,26 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
     /** P5-D is manual local portability only; it never participates in lifecycle recovery or cloud backup. */
     val localBackupRestoreManager = AndroidLocalBackupRestoreManager(context, database, BuildConfig.VERSION_NAME)
     private val modelServiceSettingsRepository = AndroidModelServiceSettingsRepository(context)
+    private val chatRoutingPolicyRepository = AndroidChatRoutingPolicyRepository(context)
     private val providerCredentialStore = createAndroidProviderCredentialStore(context)
+    val directChatCallAudit = AndroidDirectChatCallAuditStore(context)
+    val contextSelectionAudits = AndroidContextSelectionAuditStore(context)
+    val providerDiagnostics = RoomProviderDiagnosticStore(database)
+    private val normalChatSendAttempts = RoomNormalChatSendAttemptStore(database)
+    val assistantResponseModelAttributions = RoomAssistantResponseModelAttributionStore(database)
+    private val localContextBroker = LocalContextBroker(RoomLocalContextIndex(database))
     private val modelRegistrySnapshotStore = AndroidModelRegistrySnapshotStore(context)
+    private val modelProfileDirectory = AndroidModelProfileDirectory(context)
+    private val modelHealthStore = AndroidModelHealthStore(context)
+    private val modelProfileRefresher = RefreshModelProfilesUseCase(
+        modelProfileDirectory, providerCredentialStore, AndroidProviderModelListClient(), clock,
+    )
     private val storedModelRegistrySnapshots = modelRegistrySnapshotStore.load()
     private val modelRegistry: VersionedModelRegistry = InMemoryVersionedModelRegistry(
         initialSnapshots = listOf(P3CLocalFixtureRegistry.snapshot) + listOfNotNull(storedModelRegistrySnapshots.current),
         initialPreviousStableSnapshots = listOfNotNull(storedModelRegistrySnapshots.previousStable),
     )
+    private val modelResolver = UnifiedModelResolver(modelRegistry, modelProfileDirectory, modelHealthStore)
     /** MM-O4-H is reachable only from the explicit Compare model-menu item. Construction is inert. */
     private val compareSessionStore = RoomCompareConversationSessionStore(database, clock)
     private val compareBranchExecutionPorts = RoomCompareBranchExecutionPorts(database)
@@ -499,6 +539,8 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         providerCredentialStore,
         loadModelServiceConfiguration,
     )
+    val loadChatRoutingPolicy = LoadChatRoutingPolicyUseCase(chatRoutingPolicyRepository)
+    val saveChatRoutingPolicy = SaveChatRoutingPolicyUseCase(chatRoutingPolicyRepository)
     val loadRegistryVerificationStatus = LoadRegistryVerificationStatusUseCase(modelRegistry)
     /** Status-only dual-path owner. It sees encrypted-entry presence, never the Key value. */
     val readConnectionCapability = ReadConnectionCapabilityUseCase(
@@ -515,6 +557,15 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
         store = modelRegistrySnapshotStore,
         clock = clock,
     )
+    /** Only an explicit Settings action invokes this fixed, content-free connection probe. */
+    val providerConnectionProbe = ProviderConnectionProbe(
+        configuration = loadModelServiceConfiguration,
+        modelResolver = modelResolver,
+        credentials = providerCredentialStore,
+        transport = OfficialProviderChatTransport(),
+        diagnostics = providerDiagnostics,
+        clock = clock,
+    )
     // P2-E's offline codec remains isolated from P2-J's public, no-auth registry GET.
     val openRouterOfflineAdapter = OpenRouterOfflineAdapterContract(modelRegistry)
     // P2-K is transport-ready but disabled: this object cannot read a Key or send content.
@@ -527,13 +578,35 @@ class AppContainer(context: Context, clock: Clock = Clock.systemUTC()) {
     )
     val normalChatOpenRouterExecutor = NormalChatOpenRouterExecutor(
         configuration = loadModelServiceConfiguration,
+        conversations = conversationRepository,
         registry = modelRegistry,
         credentials = providerCredentialStore,
+        selection = p6gModelSelection,
         submitDraft = submitConversationDraft,
         appendMessage = appendConversationMessage,
-        transport = OfficialOpenRouterInferenceTransport(),
+        contextBroker = localContextBroker,
+        transport = OfficialProviderChatTransport(),
+        audit = directChatCallAudit,
+        diagnostics = providerDiagnostics,
+        sendAttempts = normalChatSendAttempts,
+        responseModelAttributions = assistantResponseModelAttributions,
+        adapters = ChatProviderAdapters(),
+        modelResolver = modelResolver,
+        modelHealthReporter = modelResolver,
+        contextSelectionAudits = contextSelectionAudits,
+        modelProfileRefresher = modelProfileRefresher,
         clock = clock,
+        verifyOpenRouterRegistry = verifyOpenRouterRegistry,
+        loadRoutingPolicy = loadChatRoutingPolicy,
+        attachmentRepository = privateAttachmentRepository,
+        attachmentStore = privateAttachmentStore,
+        submitDraftAndStartProviderRuntime = submitDraftAndStartProviderConversationRuntime,
+        applyRuntimeEvent = applyConversationRuntimeEvent,
     )
+
+    /** Must be called from lifecycle IO after construction; Room forbids startup writes on main. */
+    fun recoverInterruptedNormalChatAttemptsAfterProcessStart(): Int =
+        normalChatSendAttempts.markInterruptedAsUnknown(clock.instant())
     // P2-M is reachable only from the Android Model Settings confirmation owner. It binds one
     // fixed synthetic text fixture to the currently saved provider/preset and persists one nonce.
     val p2mRealServiceReadiness = P2MRealServiceReadinessUseCase(loadModelServiceConfiguration, modelRegistry)

@@ -36,10 +36,25 @@ class AndroidP6GModelSelectionStore(context: Context) : P6GModelSelectionStore {
         } }))
     }.toString()).commit()
 
-    override fun readGlobalDefault() = P6GGlobalDefault(prefs.getLong("global.revision", 0), prefs.getString("global.tier", null)?.let(P6GModelTier::valueOf))
-    override fun saveGlobalDefault(value: P6GGlobalDefault) = prefs.edit().putLong("global.revision", value.revision).putString("global.tier", value.tier?.name).commit()
+    override fun readGlobalDefault() = P6GGlobalDefault(
+        prefs.getLong("global.revision", 0),
+        prefs.getString("global.tier", null)?.let(P6GModelTier::valueOf),
+        prefs.getString("global.composerModel", null),
+    )
+    override fun saveGlobalDefault(value: P6GGlobalDefault) = prefs.edit()
+        .putLong("global.revision", value.revision)
+        .putString("global.tier", value.tier?.name)
+        .putString("global.composerModel", value.modelId)
+        .commit()
     override fun readConversationOverride(conversationId: ConversationId): P6GConversationOverride = P6GConversationOverride(conversationId, prefs.getLong("conversation.${conversationId.value}.revision", 0), prefs.getString("conversation.${conversationId.value}.model", null))
     override fun saveConversationOverride(value: P6GConversationOverride) = prefs.edit().putLong("conversation.${value.conversationId.value}.revision", value.revision).putString("conversation.${value.conversationId.value}.model", value.modelId).commit()
+    override fun saveComposerModelSelection(conversation: P6GConversationOverride, global: P6GGlobalDefault) = prefs.edit()
+        .putLong("conversation.${conversation.conversationId.value}.revision", conversation.revision)
+        .putString("conversation.${conversation.conversationId.value}.model", conversation.modelId)
+        .putLong("global.revision", global.revision)
+        .putString("global.tier", global.tier?.name)
+        .putString("global.composerModel", global.modelId)
+        .commit()
     override fun appendRouteMetadata(value: P6GRouteMetadata): Boolean = prefs.edit().putString("last-route.${value.conversationId.value}", JSONObject().apply {
         put("policyVersion", value.policyVersion); put("catalogVersion", value.catalogVersion); put("tier", value.tier.name); put("source", value.source.name); put("reason", value.reason.name); value.modelId?.let { put("modelId", it) }; value.displayName?.let { put("displayName", it) }; put("rejected", JSONArray(value.rejectedCandidates.map { JSONObject().put("modelId", it.modelId).put("reason", it.reason.name) }))
     }.toString()).commit()

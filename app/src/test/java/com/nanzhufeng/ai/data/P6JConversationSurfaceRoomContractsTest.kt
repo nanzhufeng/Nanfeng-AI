@@ -7,11 +7,19 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
 import com.nanzhufeng.ai.data.local.RoomConversationRepository
+import com.nanzhufeng.ai.data.local.RoomProjectRepository
 import com.nanzhufeng.ai.domain.ConversationMutationResult
 import com.nanzhufeng.ai.domain.ConversationSurface
 import com.nanzhufeng.ai.domain.ConversationSurfaceRepository
 import com.nanzhufeng.ai.domain.ConversationTreeService
 import com.nanzhufeng.ai.domain.CreateConversationUseCase
+import com.nanzhufeng.ai.domain.ManageProjectUseCase
+import com.nanzhufeng.ai.domain.ProjectDomain
+import com.nanzhufeng.ai.domain.ProjectId
+import com.nanzhufeng.ai.domain.ProjectIntent
+import com.nanzhufeng.ai.domain.ProjectIntentAction
+import com.nanzhufeng.ai.domain.ProjectIntentId
+import com.nanzhufeng.ai.domain.ProjectMutationResult
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -32,11 +40,19 @@ class P6JConversationSurfaceRoomContractsTest {
         try {
             val repository = RoomConversationRepository(database)
             val create = CreateConversationUseCase(ConversationTreeService(clock), repository)
+            val project = ManageProjectUseCase(ProjectDomain(clock), RoomProjectRepository(database)).execute(
+                ProjectIntent(ProjectIntentId.new(), ProjectIntentAction.CREATE, ProjectId.new(), title = "工作项目"),
+            ) as ProjectMutationResult.Applied
             val chat = create.execute(title = "对话") as ConversationMutationResult.Saved
-            val work = create.execute(title = "工作", surface = ConversationSurface.WORK) as ConversationMutationResult.Saved
+            val work = create.execute(
+                title = "工作",
+                projectId = project.snapshot.project.id.value,
+                surface = ConversationSurface.WORK,
+            ) as ConversationMutationResult.Saved
 
             assertEquals(ConversationSurface.CHAT, repository.findById(chat.snapshot.conversation.id)?.conversation?.surface)
             assertEquals(ConversationSurface.WORK, repository.findById(work.snapshot.conversation.id)?.conversation?.surface)
+            assertEquals(project.snapshot.project.id.value, repository.findById(work.snapshot.conversation.id)?.conversation?.projectId)
             assertEquals(listOf(chat.snapshot.conversation.id), repository.listActive().map { it.id })
             assertEquals(listOf(work.snapshot.conversation.id), (repository as ConversationSurfaceRepository).listActive(ConversationSurface.WORK).map { it.id })
         } finally {

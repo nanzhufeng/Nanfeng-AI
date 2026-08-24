@@ -26,6 +26,7 @@ data class ProjectUiState(
     val activeProjects: List<ProjectSnapshot> = emptyList(),
     val scope: ProjectListScope = ProjectListScope.ACTIVE,
     val dialogVisible: Boolean = false,
+    val createDialogVisible: Boolean = false,
     val selectedProjectId: ProjectId? = null,
     val notice: String? = null,
 )
@@ -35,8 +36,10 @@ class ProjectViewModel(private val repository: ProjectRepository, private val ma
     var state by mutableStateOf(ProjectUiState())
         private set
     init { reload() }
-    fun showDialog() { state = state.copy(dialogVisible = true); reload() }
-    fun dismissDialog() { state = state.copy(dialogVisible = false) }
+    fun showDialog(projectId: ProjectId? = null) { state = state.copy(dialogVisible = true, selectedProjectId = projectId ?: state.selectedProjectId); reload() }
+    fun showCreateDialog() { state = state.copy(dialogVisible = true, createDialogVisible = true); reload() }
+    fun dismissDialog() { state = state.copy(dialogVisible = false, createDialogVisible = false) }
+    fun dismissCreateDialog() { state = state.copy(createDialogVisible = false) }
     fun setScope(scope: ProjectListScope) { state = state.copy(scope = scope); reload() }
     fun select(id: ProjectId) { state = state.copy(selectedProjectId = id) }
     fun reload(notice: String? = null) {

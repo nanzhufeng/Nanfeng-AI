@@ -8,11 +8,11 @@ import org.junit.Test
 class FoldableContainerSizingContractsTest {
     private val source = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
 
-    @Test fun `drawer rails and anchored menus use the current compose container rather than display configuration`() {
+    @Test fun `drawer and anchored menus use the current compose container rather than display configuration`() {
         assertTrue(source.contains("LocalWindowInfo.current.containerSize"))
         assertTrue(source.contains("val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }"))
         assertTrue(source.contains("val drawerWidth = if (windowWidth >= 600.dp) windowWidth * (2f / 3f) else 320.dp"))
-        assertTrue(source.contains("val showInnerTranscriptRail = windowWidth >= 600.dp"))
+        assertFalse(source.contains("TranscriptPositionRail"))
         assertFalse(source.contains("screenWidthDp"))
         assertFalse(source.contains("screenHeightDp"))
     }

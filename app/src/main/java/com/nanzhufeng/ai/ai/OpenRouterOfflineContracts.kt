@@ -96,16 +96,18 @@ class OpenRouterJsonCodec {
         val choices = root.requiredArray("choices")
         val firstChoice = choices.firstOrNull().asObject()
         val message = firstChoice.requiredObject("message")
-        val content = message.requiredString("content")
+        val content = message.replyContent()
         require(content.isNotBlank()) { "响应内容为空。" }
+        // Usage and pricing are optional accounting metadata.  They must never make a valid
+        // user-visible reply disappear merely because a provider uses a finer cost precision.
         val usageObject = root.optionalObject("usage")
         val usage = ProviderUsage(
-            inputTokens = usageObject.optionalLong("prompt_tokens"),
-            outputTokens = usageObject.optionalLong("completion_tokens"),
-            totalTokens = usageObject.optionalLong("total_tokens"),
-            cachedInputTokens = usageObject.optionalObject("prompt_tokens_details").optionalLong("cached_tokens"),
+            inputTokens = usageObject.optionalLongOrNull("prompt_tokens"),
+            outputTokens = usageObject.optionalLongOrNull("completion_tokens"),
+            totalTokens = usageObject.optionalLongOrNull("total_tokens"),
+            cachedInputTokens = usageObject.optionalObject("prompt_tokens_details").optionalLongOrNull("cached_tokens"),
         )
-        val costMicros = usageObject.optionalDecimal("cost")?.toMicros()
+        val costMicros = runCatching { usageObject.optionalDecimal("cost")?.toMicros() }.getOrNull()
         val priceVersion = root.optionalString("price_version") ?: usageObject.optionalString("price_version")
         val currency = root.optionalString("currency") ?: usageObject.optionalString("currency")
         val cost = ProviderCost(
@@ -183,6 +185,17 @@ private fun Map<String, Any?>.requiredArray(key: String): List<Any?> = get(key).
 
 private fun Map<String, Any?>.requiredString(key: String): String = get(key) as? String ?: error("缺少字符串 $key。")
 
+/** OpenRouter normally returns a string, while some upstream adapters return typed text parts. */
+private fun Map<String, Any?>.replyContent(): String = when (val raw = get("content")) {
+    is String -> raw
+    is List<*> -> raw.mapNotNull { part ->
+        val objectPart = part as? Map<*, *> ?: return@mapNotNull null
+        val type = objectPart["type"] as? String
+        if (type == "text" || type == "output_text") objectPart["text"] as? String else null
+    }.joinToString("")
+    else -> error("缺少可显示的回复内容。")
+}
+
 private fun Map<String, Any?>?.optionalObject(key: String): Map<String, Any?> = this?.get(key)?.asObject() ?: emptyMap()
 
 private fun Map<String, Any?>.optionalString(key: String): String? = get(key) as? String
@@ -192,6 +205,8 @@ private fun Map<String, Any?>.optionalLong(key: String): Long? = when (val value
     is BigDecimal -> value.longValueExact()
     else -> error("$key 必须是整数。")
 }
+
+private fun Map<String, Any?>.optionalLongOrNull(key: String): Long? = runCatching { optionalLong(key) }.getOrNull()
 
 private fun Map<String, Any?>.optionalDecimal(key: String): BigDecimal? = when (val value = get(key)) {
     null -> null

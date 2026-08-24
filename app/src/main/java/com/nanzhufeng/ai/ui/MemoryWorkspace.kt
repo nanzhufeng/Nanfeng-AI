@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -80,7 +79,7 @@ fun MemoryWorkspaceDialog(state: MemoryUiState, viewModel: MemoryViewModel, proj
     confirmingDelete?.let { id -> ConfirmDeleteDialog("删除这条 Memory？", "删除采用本地软删除；普通列表不会再显示正文，历史仍可审计。", { viewModel.delete(id); confirmingDelete = null }, { confirmingDelete = null }) }
     if (confirmingBatch) ConfirmDeleteDialog("删除选中的 ${state.selectedForBatch.size} 条？", "这是本地批量软删除确认；不会影响 Project 或 Conversation 生命周期。", { viewModel.deleteSelected(); confirmingBatch = false }, { confirmingBatch = false })
     state.pendingConflict?.let { conflict -> AlertDialog(
-        onDismissRequest = {}, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("同概念内容冲突") },
+        onDismissRequest = viewModel::dismissDialog, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("同概念内容冲突") },
         text = { Text("“${conflict.candidateTitle}” 在相同范围已有不同正文。请明确选择保留已有、并存，或将候选作为现有记忆的新修订。", color = SecondaryText) },
         confirmButton = { Button(onClick = { viewModel.resolveConflict(MemoryConflictResolution.CREATE_PARALLEL) }, shape = RoundedCornerShape(14.dp)) { Text("并存保存") } },
         dismissButton = { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { TextButton(onClick = { viewModel.resolveConflict(MemoryConflictResolution.KEEP_EXISTING) }) { Text("保留已有") }; TextButton(onClick = { viewModel.resolveConflict(MemoryConflictResolution.REVISE_EXISTING) }) { Text("作为新修订") } } },

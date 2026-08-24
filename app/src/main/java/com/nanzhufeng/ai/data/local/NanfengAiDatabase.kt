@@ -581,6 +581,67 @@ data class ConversationRuntimeStateEntity(
     val schemaVersion: Int,
 )
 
+/** Content-free ordinary-chat request truth; payload, Key bytes and responses are never stored. */
+@Entity(
+    tableName = "normal_chat_send_attempts",
+    indices = [Index(value = ["idempotencyKey"], unique = true), Index("conversationId"), Index("messageId"), Index(value = ["status", "updatedAtEpochMs"])],
+)
+data class NormalChatSendAttemptEntity(
+    @androidx.room.PrimaryKey val attemptId: String,
+    val messageId: String,
+    val conversationId: String,
+    val providerId: String,
+    val modelId: String,
+    val idempotencyKey: String,
+    val status: String,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+    val safeErrorCode: String?,
+    val egressProviderId: String?,
+)
+
+/** Immutable UI provenance; assistant content itself remains solely in message_nodes/blocks. */
+@Entity(
+    tableName = "assistant_response_model_attributions",
+    primaryKeys = ["assistantMessageId", "attemptId"],
+    indices = [Index("assistantMessageId"), Index("attemptId")],
+)
+data class AssistantResponseModelAttributionEntity(
+    val assistantMessageId: String,
+    val attemptId: String,
+    val providerId: String,
+    val receiverProviderId: String,
+    val modelId: String,
+    val modelDisplayName: String,
+    val recordedAtEpochMs: Long,
+)
+
+/** Content-free resumable upload cursor. The capable URL/token remains outside Room. */
+@Entity(
+    tableName = "resumable_attachment_uploads",
+    indices = [
+        Index(value = ["normalChatAttemptId", "attachmentId"], unique = true),
+        Index(value = ["status", "updatedAtEpochMs"]),
+        Index("gatewaySessionId"),
+    ],
+)
+data class ResumableAttachmentUploadEntity(
+    @androidx.room.PrimaryKey val uploadId: String,
+    val normalChatAttemptId: String,
+    val attachmentId: String,
+    val providerId: String,
+    val modelId: String,
+    val gatewayId: String,
+    val sha256: String,
+    val byteCount: Long,
+    val gatewaySessionId: String?,
+    val acknowledgedBytes: Long,
+    val status: String,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+    val safeErrorCode: String?,
+)
+
 /** MM-O4-C session metadata. Assistant content remains exclusively in message_nodes/blocks. */
 @Entity(
     tableName = "compare_conversation_sessions",
@@ -783,6 +844,25 @@ data class ConversationManagementIntentEntity(
     val expectedRevision: Long,
     val resultRevision: Long,
     val createdAtEpochMs: Long,
+)
+
+/** Seven-day local diagnostics only; no credential, prompt, reply, attachment, or raw payload. */
+@Entity(
+    tableName = "debug_call_log",
+    indices = [Index(value = ["createdAtEpochMs"]), Index(value = ["providerId", "createdAtEpochMs"])],
+)
+data class ProviderDiagnosticEntity(
+    @androidx.room.PrimaryKey val id: String,
+    val createdAtEpochMs: Long,
+    val providerId: String,
+    val endpointHost: String,
+    val apiModelId: String,
+    val httpStatus: Int?,
+    val errorClass: String,
+    val redactedBody: String?,
+    val requestShape: String,
+    val latencyMs: Long?,
+    val timeToFirstByteMs: Long?,
 )
 
 /** P4-A project metadata; launcher assets and external paths deliberately do not belong here. */
@@ -2026,6 +2106,47 @@ interface WorkspaceExchangeV2RestoreDao {
     @Query("SELECT COUNT(*) FROM workspace_exchange_v2_restore_settings") fun settingsCount(): Int
 }
 
+@Dao
+interface ProviderDiagnosticDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insert(record: ProviderDiagnosticEntity)
+
+    @Query("DELETE FROM debug_call_log WHERE createdAtEpochMs < :cutoffEpochMs")
+    fun deleteBefore(cutoffEpochMs: Long): Int
+
+    @Query("SELECT * FROM debug_call_log ORDER BY createdAtEpochMs DESC, id DESC LIMIT :limit")
+    fun recent(limit: Int): List<ProviderDiagnosticEntity>
+
+    /** Keep the newest rows without ever reading a body outside this isolated DAO. */
+    @Query("DELETE FROM debug_call_log WHERE id IN (SELECT id FROM debug_call_log ORDER BY createdAtEpochMs DESC, id DESC LIMIT -1 OFFSET :keep)")
+    fun trimTo(keep: Int): Int
+}
+
+@Dao
+interface NormalChatSendAttemptDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: NormalChatSendAttemptEntity)
+    @Query("SELECT * FROM normal_chat_send_attempts WHERE attemptId=:attemptId") fun find(attemptId: String): NormalChatSendAttemptEntity?
+    @Query("SELECT * FROM normal_chat_send_attempts WHERE conversationId=:conversationId ORDER BY createdAtEpochMs DESC LIMIT 1") fun latestForConversation(conversationId: String): NormalChatSendAttemptEntity?
+    @Query("UPDATE normal_chat_send_attempts SET status=:next, updatedAtEpochMs=:updatedAtEpochMs, safeErrorCode=:safeErrorCode WHERE attemptId=:attemptId AND status IN (:expected)") fun transition(attemptId: String, expected: List<String>, next: String, updatedAtEpochMs: Long, safeErrorCode: String?): Int
+    @Query("UPDATE normal_chat_send_attempts SET status='UNKNOWN', updatedAtEpochMs=:updatedAtEpochMs, safeErrorCode='PROCESS_INTERRUPTED' WHERE status IN ('PENDING','SENDING','ACCEPTED','STREAMING')") fun markInterruptedAsUnknown(updatedAtEpochMs: Long): Int
+}
+
+@Dao
+interface AssistantResponseModelAttributionDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: AssistantResponseModelAttributionEntity)
+    @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun find(assistantMessageId: String, attemptId: String): AssistantResponseModelAttributionEntity?
+    @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId IN (:assistantMessageIds) ORDER BY recordedAtEpochMs ASC, attemptId ASC") fun forMessages(assistantMessageIds: List<String>): List<AssistantResponseModelAttributionEntity>
+}
+
+@Dao
+interface ResumableAttachmentUploadDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: ResumableAttachmentUploadEntity)
+    @Query("SELECT * FROM resumable_attachment_uploads WHERE uploadId=:uploadId") fun find(uploadId: String): ResumableAttachmentUploadEntity?
+    @Query("SELECT * FROM resumable_attachment_uploads WHERE normalChatAttemptId=:attemptId AND attachmentId=:attachmentId") fun findForAttemptAndAttachment(attemptId: String, attachmentId: String): ResumableAttachmentUploadEntity?
+    @Query("UPDATE resumable_attachment_uploads SET status=:next, gatewaySessionId=:gatewaySessionId, acknowledgedBytes=:acknowledgedBytes, updatedAtEpochMs=:updatedAtEpochMs, safeErrorCode=:safeErrorCode WHERE uploadId=:uploadId AND status IN (:expected)") fun transition(uploadId: String, expected: List<String>, next: String, gatewaySessionId: String?, acknowledgedBytes: Long, updatedAtEpochMs: Long, safeErrorCode: String?): Int
+    @Query("UPDATE resumable_attachment_uploads SET status='UNKNOWN', updatedAtEpochMs=:updatedAtEpochMs, safeErrorCode='PROCESS_INTERRUPTED' WHERE status IN ('PENDING','UPLOADING')") fun markInterruptedAsUnknown(updatedAtEpochMs: Long): Int
+}
+
 @Database(
     entities = [
         CaptureDraftEntity::class,
@@ -2060,6 +2181,9 @@ interface WorkspaceExchangeV2RestoreDao {
         ConversationMemorySourceEntity::class,
         AiRuntimeEventEntity::class,
         ConversationRuntimeStateEntity::class,
+        NormalChatSendAttemptEntity::class,
+        ResumableAttachmentUploadEntity::class,
+        AssistantResponseModelAttributionEntity::class,
         CompareConversationSessionEntity::class,
         CompareConversationBranchEntity::class,
         CompareBranchExecutionReceiptEntity::class,
@@ -2070,6 +2194,7 @@ interface WorkspaceExchangeV2RestoreDao {
         CompareBranchAdoptionIntentEntity::class,
         CompareSynthesisIntentEntity::class,
         ConversationAttemptLineageEntity::class,
+        ProviderDiagnosticEntity::class,
         ConversationManagementIntentEntity::class,
         ProjectEntity::class,
         ProjectInstructionRevisionEntity::class,
@@ -2138,7 +2263,7 @@ interface WorkspaceExchangeV2RestoreDao {
         WorkspaceExchangeV2RestoreProvenanceEntity::class,
         WorkspaceExchangeV2RestoreSettingsEntity::class,
     ],
-    version = 39,
+    version = 45,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2156,6 +2281,10 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun webTextSnapshotTaskDao(): WebTextSnapshotTaskDao
     abstract fun offlineEvalDao(): OfflineEvalDao
     abstract fun invocationLedgerDao(): InvocationLedgerDao
+    abstract fun providerDiagnosticDao(): ProviderDiagnosticDao
+    abstract fun normalChatSendAttemptDao(): NormalChatSendAttemptDao
+    abstract fun assistantResponseModelAttributionDao(): AssistantResponseModelAttributionDao
+    abstract fun resumableAttachmentUploadDao(): ResumableAttachmentUploadDao
     abstract fun conversationRealTextExecutionDao(): ConversationRealTextExecutionDao
     abstract fun usageLedgerDao(): UsageLedgerDao
     abstract fun localExactReuseEntryDao(): LocalExactReuseEntryDao
@@ -2644,6 +2773,50 @@ abstract class NanfengAiDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `workspace_exchange_v2_restore_receipts` (`intentId` TEXT NOT NULL, `packageHash` TEXT NOT NULL, `semanticHash` TEXT NOT NULL, `origin` TEXT NOT NULL, `sensitivity` TEXT NOT NULL, `projectCount` INTEGER NOT NULL, `conversationCount` INTEGER NOT NULL, `knowledgeCount` INTEGER NOT NULL, `memoryCount` INTEGER NOT NULL, `relationCount` INTEGER NOT NULL, `assetCount` INTEGER NOT NULL, `assetBytes` INTEGER NOT NULL, `importedAtEpochMs` INTEGER NOT NULL, `importerVersion` INTEGER NOT NULL, PRIMARY KEY(`intentId`))")
                 db.execSQL("CREATE TABLE IF NOT EXISTS `workspace_exchange_v2_restore_provenance` (`ownerKind` TEXT NOT NULL, `ownerId` TEXT NOT NULL, `packageHash` TEXT NOT NULL, `semanticHash` TEXT NOT NULL, `ownerFieldHash` TEXT NOT NULL, `importedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`ownerKind`, `ownerId`))")
                 db.execSQL("CREATE TABLE IF NOT EXISTS `workspace_exchange_v2_restore_settings` (`id` TEXT NOT NULL, `uiLanguage` TEXT NOT NULL, `theme` TEXT NOT NULL, `packageHash` TEXT NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            }
+        }
+        /** Independent, bounded diagnostic lane; normal invocation/audit tables stay content-free. */
+        val MIGRATION_39_40 = object : Migration(39, 40) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `debug_call_log` (`id` TEXT NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `providerId` TEXT NOT NULL, `endpointHost` TEXT NOT NULL, `apiModelId` TEXT NOT NULL, `httpStatus` INTEGER, `errorClass` TEXT NOT NULL, `redactedBody` TEXT, `requestShape` TEXT NOT NULL, `latencyMs` INTEGER, `timeToFirstByteMs` INTEGER, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_debug_call_log_createdAtEpochMs` ON `debug_call_log` (`createdAtEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_debug_call_log_providerId_createdAtEpochMs` ON `debug_call_log` (`providerId`, `createdAtEpochMs`)")
+            }
+        }
+        /** Durable ordinary-chat request facts for manual retry/recovery; no content columns. */
+        val MIGRATION_40_41 = object : Migration(40, 41) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `normal_chat_send_attempts` (`attemptId` TEXT NOT NULL, `messageId` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `providerId` TEXT NOT NULL, `modelId` TEXT NOT NULL, `idempotencyKey` TEXT NOT NULL, `status` TEXT NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, `safeErrorCode` TEXT, PRIMARY KEY(`attemptId`))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_normal_chat_send_attempts_idempotencyKey` ON `normal_chat_send_attempts` (`idempotencyKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_normal_chat_send_attempts_conversationId` ON `normal_chat_send_attempts` (`conversationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_normal_chat_send_attempts_messageId` ON `normal_chat_send_attempts` (`messageId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_normal_chat_send_attempts_status_updatedAtEpochMs` ON `normal_chat_send_attempts` (`status`, `updatedAtEpochMs`)")
+            }
+        }
+        /** FTS5 is a rebuildable local acceleration structure, maintained by base-table triggers. */
+        val MIGRATION_41_42 = object : Migration(41, 42) {
+            override fun migrate(db: SupportSQLiteDatabase) { ContextIndexSchema.ensure(db) }
+        }
+        /** Rebuild the derived index to add CJK two-character terms; business tables are untouched. */
+        val MIGRATION_42_43 = object : Migration(42, 43) {
+            override fun migrate(db: SupportSQLiteDatabase) { ContextIndexSchema.rebuild(db) }
+        }
+        /** Attachment resumability persists only opaque session/cursor facts, never a capability URL or bytes. */
+        val MIGRATION_43_44 = object : Migration(43, 44) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `resumable_attachment_uploads` (`uploadId` TEXT NOT NULL, `normalChatAttemptId` TEXT NOT NULL, `attachmentId` TEXT NOT NULL, `providerId` TEXT NOT NULL, `modelId` TEXT NOT NULL, `gatewayId` TEXT NOT NULL, `sha256` TEXT NOT NULL, `byteCount` INTEGER NOT NULL, `gatewaySessionId` TEXT, `acknowledgedBytes` INTEGER NOT NULL, `status` TEXT NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, `safeErrorCode` TEXT, PRIMARY KEY(`uploadId`))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_resumable_attachment_uploads_normalChatAttemptId_attachmentId` ON `resumable_attachment_uploads` (`normalChatAttemptId`, `attachmentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_resumable_attachment_uploads_status_updatedAtEpochMs` ON `resumable_attachment_uploads` (`status`, `updatedAtEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_resumable_attachment_uploads_gatewaySessionId` ON `resumable_attachment_uploads` (`gatewaySessionId`)")
+            }
+        }
+        /** Visible model labels use the exact saved Attempt route, never the current Composer choice. */
+        val MIGRATION_44_45 = object : Migration(44, 45) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `egressProviderId` TEXT")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `assistant_response_model_attributions` (`assistantMessageId` TEXT NOT NULL, `attemptId` TEXT NOT NULL, `providerId` TEXT NOT NULL, `receiverProviderId` TEXT NOT NULL, `modelId` TEXT NOT NULL, `modelDisplayName` TEXT NOT NULL, `recordedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`assistantMessageId`, `attemptId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_response_model_attributions_assistantMessageId` ON `assistant_response_model_attributions` (`assistantMessageId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_response_model_attributions_attemptId` ON `assistant_response_model_attributions` (`attemptId`)")
             }
         }
     }

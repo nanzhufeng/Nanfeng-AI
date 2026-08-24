@@ -56,6 +56,10 @@ import java.util.concurrent.Callable
 
 /** Room owns only atomic persistence/rebuild. It never chooses a branch or rewrites a message. */
 class RoomConversationRepository(private val database: NanfengAiDatabase) : ConversationRepository, ConversationDraftRepository, ConversationRuntimeRepository, ConversationActionRepository, ConversationManagementRepository, ConversationSearchRepository, LocalSearchIndexRepository, ConversationListRepository, ConversationSurfaceRepository, ImportedConversationProvenanceReader {
+    private companion object {
+        const val RECENT_MESSAGES_EXCLUDED_FROM_SUMMARY = 8
+        const val ROLLING_SUMMARY_MAX_CHARS = 1_800
+    }
     override fun save(snapshot: ConversationSnapshot): ConversationSnapshot = database.inConversationTransaction {
         persistSnapshot(database.conversationDao(), snapshot)
     }
@@ -143,12 +147,13 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
     private fun replaceSafeSearchIndex(dao: ConversationDao, snapshot: ConversationSnapshot) {
         val conversation = snapshot.conversation
         val rows = mutableListOf<LocalSearchIndexEntity>()
-        fun add(id: String, messageId: String?, kind: String, raw: String, timestamp: Long) {
+        fun add(id: String, messageId: String?, kind: String, raw: String, timestamp: Long, snippetLimit: Int = 240) {
             val normalized = raw.trim().replace(Regex("\\s+"), " ").lowercase(java.util.Locale.ROOT)
-            if (normalized.isNotBlank()) rows += LocalSearchIndexEntity(id, conversation.id.value, messageId, kind, conversation.title, normalized, raw.trim().replace(Regex("\\s+"), " ").take(240), timestamp, conversation.archivedAt?.toEpochMilli(), conversation.deletedAt?.toEpochMilli())
+            if (normalized.isNotBlank()) rows += LocalSearchIndexEntity(id, conversation.id.value, messageId, kind, conversation.title, normalized, raw.trim().replace(Regex("\\s+"), " ").take(snippetLimit), timestamp, conversation.archivedAt?.toEpochMilli(), conversation.deletedAt?.toEpochMilli())
         }
         add("${conversation.id.value}:title", null, "TEXT", conversation.title, conversation.updatedAt.toEpochMilli())
-        MessageTree(conversation, snapshot.nodes).contextPath().forEach { node ->
+        val contextPath = MessageTree(conversation, snapshot.nodes).contextPath()
+        contextPath.forEach { node ->
             if (node.role == MessageRole.USER || node.role == MessageRole.ASSISTANT) {
                 node.content.filterIsInstance<ContentBlock.Text>().forEachIndexed { index, text -> add("${conversation.id.value}:${node.id.value}:text:$index", node.id.value, "TEXT", text.text, node.createdAt.toEpochMilli()) }
                 node.content.filterIsInstance<ContentBlock.Attachment>().forEachIndexed { index, attachment ->
@@ -157,8 +162,31 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
                 }
             }
         }
+        val rollingSummary = contextPath
+            .filter { it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT }
+            .dropLast(RECENT_MESSAGES_EXCLUDED_FROM_SUMMARY)
+            .flatMap { node ->
+                node.content.filterIsInstance<ContentBlock.Text>().map { text ->
+                    "${if (node.role == MessageRole.USER) "用户" else "助手"}：${text.text.trim().replace(Regex("\\s+"), " ")}"
+                }
+            }
+            .takeCompleteFragments(ROLLING_SUMMARY_MAX_CHARS)
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n", prefix = "历史摘要（本地抽取）：\n")
+        rollingSummary?.let { summary ->
+            add("${conversation.id.value}:rolling-summary", null, "HISTORY_SUMMARY", summary, conversation.updatedAt.toEpochMilli(), ROLLING_SUMMARY_MAX_CHARS)
+        }
         dao.deleteSearchIndexForConversation(conversation.id.value)
         if (rows.isNotEmpty()) dao.upsertSearchIndex(rows)
+    }
+
+    /** Keeps old turns searchable as a bounded, local extractive digest without sending them all. */
+    private fun List<String>.takeCompleteFragments(limit: Int): List<String> {
+        var used = 0
+        return mapNotNull { fragment ->
+            val normalized = fragment.trim()
+            if (normalized.isBlank() || used + normalized.length > limit) null else normalized.also { used += it.length }
+        }
     }
 
     override fun findById(id: ConversationId): ConversationSnapshot? = database.conversationDao().loadSnapshot(id)
@@ -285,27 +313,57 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
 
     /** Event fact, state projection and MessageNode checkpoint commit in one Room transaction. */
     override fun apply(projection: ConversationRuntimeProjection, event: AiRuntimeEvent): ConversationRuntimePersistenceResult = database.inConversationTransaction {
+        applyRuntimeProjection(database.conversationDao(), projection, event)
+    }
+
+    /** A normal send may never leave a committed user message without its durable assistant run. */
+    override fun submitDraftAndStart(
+        snapshotWithClearedDraft: ConversationSnapshot,
+        expectedDraft: ConversationDraft,
+        projection: ConversationRuntimeProjection,
+        event: RuntimeRunStarted,
+    ): ConversationRuntimePersistenceResult = database.inConversationTransaction {
         val dao = database.conversationDao()
+        val stored = dao.loadSnapshot(snapshotWithClearedDraft.conversation.id)
+            ?: return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("会话不存在，草稿仍保留。")
+        if (stored.draft != expectedDraft) {
+            return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("草稿已变化，未发送且当前草稿已保留。")
+        }
+        if (snapshotWithClearedDraft.draft.text.isNotEmpty() || snapshotWithClearedDraft.draft.attachments.isNotEmpty()) {
+            return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("提交快照未清空草稿，未发送。")
+        }
+        if (projection.snapshot.conversation.id != snapshotWithClearedDraft.conversation.id || event.conversationId != snapshotWithClearedDraft.conversation.id) {
+            return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("助手运行投影与已提交会话不一致。")
+        }
+        persistSnapshot(dao, snapshotWithClearedDraft)
+        applyRuntimeProjection(dao, projection, event)
+    }
+
+    private fun applyRuntimeProjection(
+        dao: ConversationDao,
+        projection: ConversationRuntimeProjection,
+        event: AiRuntimeEvent,
+    ): ConversationRuntimePersistenceResult {
         val fingerprint = event.payloadFingerprint()
         val byId = dao.runtimeEventById(event.eventId.value)
         val bySequence = dao.runtimeEventAt(event.invocationId.value, event.sequence)
         val replay = byId ?: bySequence
         if (replay != null) {
-            if (replay.payloadFingerprint != fingerprint) return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("重复序号或事件 ID 的内容不一致。")
+            if (replay.payloadFingerprint != fingerprint) return ConversationRuntimePersistenceResult.Rejected("重复序号或事件 ID 的内容不一致。")
             val snapshot = dao.loadSnapshot(event.conversationId)
-                ?: return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("重放事件缺少会话投影。")
+                ?: return ConversationRuntimePersistenceResult.Rejected("重放事件缺少会话投影。")
             val state = dao.runtimeStateForConversation(event.conversationId.value)?.toDomain()
-                ?: return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("重放事件缺少运行状态。")
-            return@inConversationTransaction ConversationRuntimePersistenceResult.Replayed(ConversationRuntimeProjection(snapshot, state))
+                ?: return ConversationRuntimePersistenceResult.Rejected("重放事件缺少运行状态。")
+            return ConversationRuntimePersistenceResult.Replayed(ConversationRuntimeProjection(snapshot, state))
         }
         val stored = dao.loadSnapshot(event.conversationId)
-            ?: return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("会话不存在，无法写入运行事件。")
+            ?: return ConversationRuntimePersistenceResult.Rejected("会话不存在，无法写入运行事件。")
         if (stored.conversation.id != projection.snapshot.conversation.id || projection.state.conversationId != event.conversationId) {
-            return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("运行投影与会话不一致。")
+            return ConversationRuntimePersistenceResult.Rejected("运行投影与会话不一致。")
         }
         dao.update(projection.snapshot.conversation.toEntity())
         val node = projection.snapshot.nodes.firstOrNull { it.id == projection.state.messageId }
-            ?: return@inConversationTransaction ConversationRuntimePersistenceResult.Rejected("运行投影缺少 assistant 消息。")
+            ?: return ConversationRuntimePersistenceResult.Rejected("运行投影缺少 assistant 消息。")
         val existingNode = dao.findNode(node.id.value)
         if (existingNode == null) {
             dao.insertNode(node.toEntity())
@@ -316,7 +374,7 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
         if (node.content.isNotEmpty()) dao.insertBlocks(node.content.mapIndexed { position, block -> block.toEntity(node.id, position) })
         dao.insertRuntimeEvent(event.toEntity(fingerprint))
         dao.upsertRuntimeState(projection.state.toEntity())
-        ConversationRuntimePersistenceResult.Applied(ConversationRuntimeProjection(
+        return ConversationRuntimePersistenceResult.Applied(ConversationRuntimeProjection(
             dao.loadSnapshot(event.conversationId) ?: error("运行投影写入后无法回读。"),
             dao.runtimeStateForConversation(event.conversationId.value)?.toDomain() ?: error("运行状态写入后无法回读。"),
         ))

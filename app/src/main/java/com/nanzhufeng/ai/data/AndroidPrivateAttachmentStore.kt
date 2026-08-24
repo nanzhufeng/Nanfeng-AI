@@ -11,6 +11,7 @@ import com.nanzhufeng.ai.domain.AttachmentId
 import com.nanzhufeng.ai.domain.AttachmentImportRequest
 import com.nanzhufeng.ai.domain.AttachmentImportResult
 import com.nanzhufeng.ai.domain.AttachmentReadResult
+import com.nanzhufeng.ai.domain.AttachmentOpenResult
 import com.nanzhufeng.ai.domain.AttachmentReference
 import com.nanzhufeng.ai.domain.AttachmentThumbnail
 import com.nanzhufeng.ai.domain.AttachmentThumbnailResult
@@ -98,6 +99,16 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
         } catch (_: Exception) {
             AttachmentReadResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         }
+    }
+
+    /** Recheck the immutable private copy before handing an opaque stream to the egress owner. */
+    override fun openVerified(attachment: AttachmentReference): AttachmentOpenResult {
+        if (!attachment.isReadyPrivateCopy()) return AttachmentOpenResult.Rejected(AiTaskError.AttachmentNotReady)
+        val file = safeFileFor(attachment.reference) ?: return AttachmentOpenResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        if (!file.isFile || file.length() != attachment.byteCount || file.sha256() != attachment.sha256) {
+            return AttachmentOpenResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        }
+        return AttachmentOpenResult.Opened(attachment.byteCount) { FileInputStream(file) }
     }
 
     /** Decode a bounded thumbnail directly from the private file; full originals never enter Compose. */

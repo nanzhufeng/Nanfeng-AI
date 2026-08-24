@@ -366,6 +366,7 @@ data class AppendMessageRequest(
     val deliveryState: MessageDeliveryState = MessageDeliveryState.COMPLETE,
     val invocation: MessageInvocationReference? = null,
     val checkpoint: MessageCheckpoint? = null,
+    val messageId: MessageNodeId = MessageNodeId.new(),
 )
 
 class ConversationTreeService(private val clock: Clock) {
@@ -392,7 +393,7 @@ class ConversationTreeService(private val clock: Clock) {
         val tree = MessageTree(snapshot.conversation, snapshot.nodes)
         val parentId = snapshot.conversation.currentLeafMessageId
         val node = MessageNode(
-            id = MessageNodeId.new(), conversationId = snapshot.conversation.id, parentMessageId = parentId,
+            id = request.messageId, conversationId = snapshot.conversation.id, parentMessageId = parentId,
             siblingPosition = tree.nextSiblingPosition(parentId), role = request.role, content = request.content,
             createdAt = clock.instant(), deliveryState = request.deliveryState, invocation = request.invocation,
             checkpoint = request.checkpoint,

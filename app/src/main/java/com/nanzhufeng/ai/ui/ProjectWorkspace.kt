@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -18,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,24 +31,29 @@ import com.nanzhufeng.ai.domain.ProjectListScope
 
 @Composable
 fun ProjectWorkspaceDialog(state: ProjectUiState, viewModel: ProjectViewModel) {
-    var creating by rememberSaveable { mutableStateOf(false) }
     var editingInstruction by rememberSaveable { mutableStateOf(false) }
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     var instruction by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(state.createDialogVisible) {
+        if (state.createDialogVisible) {
+            title = ""
+            description = ""
+        }
+    }
     val selected = state.projects.firstOrNull { it.project.id == state.selectedProjectId }
     AlertDialog(
         onDismissRequest = viewModel::dismissDialog,
         containerColor = Color.White,
         shape = RoundedCornerShape(24.dp),
-        title = { Text("Projects", fontWeight = FontWeight.SemiBold) },
+        title = { Text("项目", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("项目、项目指令和知识范围只保存在本机；不会构造 Prompt、读取 Key 或连接 Provider。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { viewModel.setScope(ProjectListScope.ACTIVE) }, shape = RoundedCornerShape(14.dp)) { Text("活动") }
                     OutlinedButton(onClick = { viewModel.setScope(ProjectListScope.ARCHIVED) }, shape = RoundedCornerShape(14.dp)) { Text("归档") }
-                    Button(onClick = { creating = true; title = ""; description = "" }, shape = RoundedCornerShape(14.dp)) { Text("新建") }
+                    Button(onClick = viewModel::showCreateDialog, shape = RoundedCornerShape(14.dp)) { Text("新建") }
                 }
                 if (state.projects.isEmpty()) Text("暂无${if (state.scope == ProjectListScope.ACTIVE) "活动" else "归档"}项目。", color = SecondaryText)
                 state.projects.forEach { snapshot ->
@@ -77,10 +82,10 @@ fun ProjectWorkspaceDialog(state: ProjectUiState, viewModel: ProjectViewModel) {
         },
         confirmButton = { TextButton(onClick = viewModel::dismissDialog, shape = RoundedCornerShape(14.dp)) { Text("完成") } },
     )
-    if (creating) AlertDialog(
-        onDismissRequest = { creating = false }, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("新建项目") },
+    if (state.createDialogVisible) AlertDialog(
+        onDismissRequest = viewModel::dismissCreateDialog, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("新建项目") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(title, { title = it }, label = { Text("项目标题") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(description, { description = it }, label = { Text("项目说明（可选）") }, modifier = Modifier.fillMaxWidth()) } },
-        confirmButton = { Button(onClick = { viewModel.create(title, description); creating = false }, shape = RoundedCornerShape(14.dp)) { Text("创建") } }, dismissButton = { TextButton(onClick = { creating = false }, shape = RoundedCornerShape(14.dp)) { Text("取消") } },
+        confirmButton = { Button(onClick = { viewModel.create(title, description); viewModel.dismissCreateDialog() }, shape = RoundedCornerShape(14.dp)) { Text("创建") } }, dismissButton = { TextButton(onClick = viewModel::dismissCreateDialog, shape = RoundedCornerShape(14.dp)) { Text("取消") } },
     )
     selected?.let { snapshot -> if (editingInstruction) AlertDialog(
         onDismissRequest = { editingInstruction = false }, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("项目指令") },

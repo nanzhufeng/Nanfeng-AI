@@ -1,7 +1,7 @@
 # 南枫 AI P3-G 对话附件本地引用与生命周期合同
 
 日期：2026-08-13  
-状态：P3 的第七个本地增量；无 Provider、Key、Authorization、RunSpec、HTTP、图片外发或费用
+状态：P3 的第七个本地增量；D2（2026-08-23）已将普通聊天的“点击发送”接入为受限附件外发边界
 
 ## 目标、所有权与固定能力
 
@@ -20,7 +20,7 @@ Android Photo Picker
 | 当前会话草稿附件引用 | Conversation Draft Domain | `AddConversationImageAttachmentUseCase` / `RemoveConversationAttachmentUseCase` | Picker/UI/DAO 直接写草稿或把 Capture 草稿当 Conversation 草稿 |
 | 已发送附件块 | Conversation Domain | `SubmitConversationDraftUseCase` | 外发层、fixture 或展示层改写/补发附件 |
 | 缩略图 | `ConversationAttachmentPreviewProjection` | 私有 Repository → 有界解码 | Compose 从 URI/path/full bitmap 读取或持久化预览 |
-| 外发范围 | `ConversationAttachmentEgressScope.LOCAL_ONLY_NO_EGRESS` | 固定能力门 | “加入对话”被解释为图片外发授权 |
+| 外发范围 | `ConversationAttachmentEgressScope.ON_USER_SEND_TO_SELECTED_PROVIDER` | `NormalChatOpenRouterExecutor` 的已提交草稿读取与模型能力门 | 选择、预览、草稿保存、日志或服务商切换被解释为附件外发授权 |
 
 ## 本地语义与边界
 
@@ -29,6 +29,8 @@ Android Photo Picker
 - Capture 图片草稿与 Conversation 草稿是两条独立业务状态；可复用同一 `AttachmentId`，但一方的取消/更新/移除不清理另一方。
 - Conversation Draft 与 `ContentBlock.Attachment` 只保存稳定 ID、MIME、显示名、大小、SHA-256；无 storage key、绝对路径、content URI、URI grant、EXIF、字节或缩略图。Export 只输出同一安全元数据，搜索不索引图片内容/路径，Ledger/lineage/runtime 不含附件字段。
 - 发送以一个 Room 事务写有序 Text/Attachment user 内容块并清同一 Conversation Draft；失败或冲突保留草稿。草稿移除只移除引用：P3-G 不删除/GC 私有二进制。
+- 附件选择、缩略图、PDF 首页和视频封面只服务于本地 UI；它们绝不是出站替身。用户点击发送后，只读取该已提交消息仍引用的私有附件，并仅发送至这一次当前显示的服务商/模型：图片为完整图片、PDF 为完整文件、视频为完整视频。删除的、历史的、资料库的附件，以及 Key、日志/统计数据均不得出站。
+- 普通聊天不弹出逐次附件确认。当前 Android 只实现并核验 OpenRouter 的 `image_url`、`file.file_data`、`video_url` 请求合同；视频要求当前经核验模型目录声明 `input_modalities=video`。不满足能力或官方直连合同的服务商必须拒绝，绝不可将 PDF 首页或视频封面报告为“完整解析”。
 - P3-F 保持：含附件 user 消息没有编辑分支入口。P3-C continue/retry/change-model 本地 fixture 不隐式读取或外发附件；展示仅说明“本地附件引用”。
 
 ## Schema 7→8 唯一迁移理由
@@ -39,4 +41,4 @@ Schema 7 的对话草稿与消息块曾复用 `storageKey` 列。P3-G 新增 `pr
 
 - 本地对话输入区提供“添加图片（本地）”、紧凑缩略图、移除及限制/local-only 提示；消息显示缩略图与 MIME/大小，不声称 AI 已读图。所有自有浅色 Dialog/Popup 保持 `#FFFFFFFF`。
 - 合同测试覆盖选择/取消/重复、MIME/像素/数量/体积、草稿原子保存/移除/发送/重建、消息顺序、Schema 7→8 路径剥离、P3-F 附件编辑隔离和敏感字段排除；全量 P1/P2/P3-A–F 回归必须通过。
-- API 35 仅验证本地 Picker、草稿重建、发送、缩略图、分支切换/冷启动和附件消息无编辑入口。真实服务、图片外发、Token/费用、OPPO、图标视觉与发布仍是独立未验证门。
+- API 35 仅验证本地 Picker、草稿重建、发送、缩略图、分支切换/冷启动和附件消息无编辑入口。D2 的 JVM 合同已验证请求不会调用 PDF 首页/视频封面路径；真实账号的完整文件解析、Token/费用、OPPO、图标视觉与发布仍是独立未验证门。

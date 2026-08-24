@@ -20,9 +20,9 @@ class P6F2BImagePreviewUiContractsTest {
     }
 
     @Test fun `new or removed draft assets reload projections before the UI can open a preview`() {
-        for (notice in listOf("图片已加入本地会话草稿", "文件已私有复制到本地草稿", "已从当前会话草稿移除图片")) {
-            assertTrue(notice, viewModel.contains("reload(\"$notice"))
-        }
+        assertTrue(viewModel.contains("reload(attachmentBatchNotice(outcome, \"当前会话\"))"))
+        assertTrue(viewModel.contains("相机原图已私有复制到本地草稿"))
+        assertTrue(viewModel.contains("reload(\"已从当前会话草稿移除图片"))
         assertTrue(viewModel.contains("currentAttachmentReferences"))
         assertFalse(viewModel.contains("selectedPath"))
     }

@@ -96,7 +96,7 @@ class TemporaryConversationDomain(
 }
 
 sealed interface TemporaryAttachmentResult {
-    data class Added(val recovery: TemporaryConversationRecovery) : TemporaryAttachmentResult
+    data class Added(val recovery: TemporaryConversationRecovery, val wasAlreadyAttached: Boolean = false) : TemporaryAttachmentResult
     data object Cancelled : TemporaryAttachmentResult
     data class Rejected(val reason: String) : TemporaryAttachmentResult
 }
@@ -116,7 +116,7 @@ class AddTemporaryConversationAttachmentUseCase(
             ?: return TemporaryAttachmentResult.Rejected("附件未能复制到本机私有空间，临时草稿未改变。")
         val stable = runCatching { assets.save(asset) }.getOrElse { return TemporaryAttachmentResult.Rejected("附件目录写入失败，临时草稿未改变。") }
         val ids = (current.draftAttachmentIds + stable.id).distinct()
-        return runCatching { TemporaryAttachmentResult.Added(temporary.updateDraft(current.draftText, ids)) }
+        return runCatching { TemporaryAttachmentResult.Added(temporary.updateDraft(current.draftText, ids), wasAlreadyAttached = ids.size == current.draftAttachmentIds.size) }
             .getOrElse { TemporaryAttachmentResult.Rejected("临时附件引用未保存，草稿仍保留。") }
     }
 }

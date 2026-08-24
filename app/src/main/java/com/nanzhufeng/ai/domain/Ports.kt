@@ -99,6 +99,13 @@ interface ConversationDraftRepository {
 /** P3-B owns atomic runtime-event fact, message projection and recovery checkpoint persistence. */
 interface ConversationRuntimeRepository {
     fun apply(projection: ConversationRuntimeProjection, event: AiRuntimeEvent): ConversationRuntimePersistenceResult
+    /** Atomically commits the user submission, cleared draft, and the initial assistant placeholder. */
+    fun submitDraftAndStart(
+        snapshotWithClearedDraft: ConversationSnapshot,
+        expectedDraft: ConversationDraft,
+        projection: ConversationRuntimeProjection,
+        event: RuntimeRunStarted,
+    ): ConversationRuntimePersistenceResult
     fun stateFor(conversationId: ConversationId): ConversationRuntimeState?
 }
 
@@ -163,6 +170,7 @@ data class OpenRouterCatalogModel(
     val id: String,
     val displayName: String,
     val contextWindowTokens: Long?,
+    val maxOutputTokens: Long? = null,
     val inputModalities: Set<String>,
     val outputModalities: Set<String>,
     val supportedParameters: Set<String>,
@@ -227,9 +235,20 @@ sealed interface AttachmentReadResult {
     data class Rejected(val error: AiTaskError) : AttachmentReadResult
 }
 
+/**
+ * Opaque verified byte source for outbound transport.  It deliberately exposes no path or URI;
+ * callers can only open a fresh stream after the private store has rechecked size and hash.
+ */
+sealed interface AttachmentOpenResult {
+    data class Opened(val byteCount: Long, val open: () -> InputStream) : AttachmentOpenResult
+    data class Rejected(val error: AiTaskError) : AttachmentOpenResult
+}
+
 interface PrivateAttachmentStore {
     fun import(request: AttachmentImportRequest): AttachmentImportResult
     fun read(attachment: AttachmentReference): AttachmentReadResult
+    /** Default keeps legacy/test stores fail-closed until they implement verified streaming. */
+    fun openVerified(attachment: AttachmentReference): AttachmentOpenResult = AttachmentOpenResult.Rejected(AiTaskError.AttachmentNotReady)
     fun thumbnail(attachment: AttachmentReference): AttachmentThumbnailResult
     /** Renders one inert PDF page from the verified private copy; no path ever reaches UI. */
     fun pdfPage(attachment: AttachmentReference, pageNumber: Int): AttachmentPdfPageResult = AttachmentPdfPageResult.Rejected(AiTaskError.AttachmentUnsupportedType)

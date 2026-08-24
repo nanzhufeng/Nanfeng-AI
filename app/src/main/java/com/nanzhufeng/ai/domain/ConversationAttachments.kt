@@ -1,10 +1,14 @@
 package com.nanzhufeng.ai.domain
 
-/** P3-G's fixed local-only capability. It is intentionally not an egress consent. */
-enum class ConversationAttachmentEgressScope { LOCAL_ONLY_NO_EGRESS }
+/**
+ * Selecting, copying and previewing an attachment are local-only operations.  The one permitted
+ * egress boundary is the visible Send action: it authorizes only the draft attachments still
+ * present in that exact message, to the provider selected for that request.
+ */
+enum class ConversationAttachmentEgressScope { ON_USER_SEND_TO_SELECTED_PROVIDER }
 
 sealed interface AddConversationAttachmentResult {
-    data class Added(val draft: ConversationDraft) : AddConversationAttachmentResult
+    data class Added(val draft: ConversationDraft, val wasAlreadyAttached: Boolean = false) : AddConversationAttachmentResult
     data object Cancelled : AddConversationAttachmentResult
     data class Rejected(val reason: String) : AddConversationAttachmentResult
 }
@@ -33,7 +37,7 @@ class AddConversationImageAttachmentUseCase(
             }
         }
         val current = drafts.loadDraft(conversationId) ?: return reject("会话草稿未能从本机回读。")
-        if (current.attachments.size >= CONVERSATION_ATTACHMENT_MAX_COUNT) return reject("每个会话最多添加 $CONVERSATION_ATTACHMENT_MAX_COUNT 张图片。")
+        if (current.attachments.size >= CONVERSATION_ATTACHMENT_MAX_COUNT) return reject("每个会话最多添加 $CONVERSATION_ATTACHMENT_MAX_COUNT 项附件。")
         val imported = privateStore.import(AttachmentImportRequest(selection.input, selection.mimeType, selection.displayName))
         val importedAsset = when (imported) {
             is AttachmentImportResult.Imported -> imported.attachment
@@ -44,13 +48,13 @@ class AddConversationImageAttachmentUseCase(
         val safeReference = runCatching { stableAsset.toConversationReference() }
             .getOrElse { return reject("附件元数据不完整，当前草稿未改变。") }
         if (current.attachments.any { it.id == safeReference.id || it.sha256 == safeReference.sha256 }) {
-            return AddConversationAttachmentResult.Added(current)
+            return AddConversationAttachmentResult.Added(current, wasAlreadyAttached = true)
         }
         val next = runCatching {
             ConversationDraftPolicy.normalize(current.text, current.attachments + safeReference, clock.instant())
-        }.getOrElse { return reject(it.message ?: "图片不符合当前会话限制。") }
+        }.getOrElse { return reject(it.message ?: "附件不符合当前会话限制。") }
         return runCatching { AddConversationAttachmentResult.Added(drafts.saveDraft(conversationId, next)) }
-            .getOrElse { reject("图片草稿未保存，原有文字和附件仍保留。") }
+            .getOrElse { reject("附件草稿未保存，原有文字和附件仍保留。") }
     }
 
     private fun reject(reason: String) = AddConversationAttachmentResult.Rejected(reason)

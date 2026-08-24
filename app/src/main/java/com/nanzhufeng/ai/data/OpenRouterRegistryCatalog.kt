@@ -92,6 +92,7 @@ internal object OpenRouterCatalogJsonParser {
                     id = item.optString("id").trim(),
                     displayName = item.optString("name").trim(),
                     contextWindowTokens = item.optLongOrNull("context_length"),
+                    maxOutputTokens = item.optJSONObject("top_provider")?.optLongOrNull("max_completion_tokens"),
                     inputModalities = architecture.stringSet("input_modalities"),
                     outputModalities = architecture.stringSet("output_modalities"),
                     supportedParameters = item.stringSet("supported_parameters"),
@@ -164,7 +165,7 @@ class AndroidModelRegistrySnapshotStore internal constructor(private val root: F
         put("sourceUrl", sourceUrl); put("sourceEtag", sourceEtag); put("catalogSha256", catalogSha256)
         put("mappingUsesFallback", mappingUsesFallback)
         put("models", JSONArray(models.map { model -> JSONObject().apply {
-            put("id", model.id); put("displayName", model.displayName); put("contextWindowTokens", model.contextWindowTokens)
+            put("id", model.id); put("displayName", model.displayName); put("contextWindowTokens", model.contextWindowTokens); put("maxOutputTokens", model.maxOutputTokens)
             put("text", model.capabilities.supportsText); put("vision", model.capabilities.supportsVision)
             put("streaming", model.capabilities.supportsStreaming); put("structured", model.capabilities.supportsStructuredOutput)
             put("inputModalities", JSONArray(model.inputModalities.sorted()))
@@ -188,6 +189,7 @@ class AndroidModelRegistrySnapshotStore internal constructor(private val root: F
                 id = model.getString("id"), displayName = model.getString("displayName"),
                 capabilities = ModelCapabilities(model.getBoolean("text"), model.getBoolean("vision"), model.getBoolean("streaming"), model.getBoolean("structured")),
                 contextWindowTokens = model.longOrNull("contextWindowTokens"),
+                maxOutputTokens = model.longOrNull("maxOutputTokens"),
                 pricing = ModelPricing(model.stringOrNull("priceVersion"), model.stringOrNull("currencyCode"), model.longOrNull("inputMicros"), model.longOrNull("outputMicros"), model.longOrNull("cacheReadMicros")),
                 inputModalities = model.stringSet("inputModalities"), outputModalities = model.stringSet("outputModalities"),
                 supportedParameters = model.stringSet("supportedParameters"),

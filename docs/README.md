@@ -1,10 +1,12 @@
 # 南枫 AI Final Codex Package v3.0
 
 > 当前总控入口：[南枫 AI 总控开发蓝图](MASTER_DEVELOPMENT_BLUEPRINT.md)  
+> 架构重整交接：[南枫AI完整开发档案](南枫AI完整开发档案.md)
+> 当前 Android 会话界面规则：[Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)
 > GitHub 经验研究：[南枫 AI GitHub 成熟项目参考研究](GITHUB_MATURE_PROJECT_REFERENCE_RESEARCH.md)  
 > 启动图标交付：[南枫 AI Android 启动图标交付](LAUNCHER_ICON_DELIVERY.md)  
 > 本地数据合同：[南枫 AI P2-A 本地数据与附件合同](P2A_LOCAL_DATA_AND_ATTACHMENT_CONTRACT.md)  
-> 当前状态：总方案已确认并完成 GitHub 成熟经验重整；P1 已通过本地工程验证，Android adaptive 启动图标已接入并通过构建审计，P2-A 本地数据与附件底座已完成，P2-B 尚未开始。
+> 当前状态：项目现行版本为 `66 / 0.3.0-p10j`、Room Schema 45；当前增量、设备覆盖与未闭环风险以 [CURRENT_HANDOFF.md](CURRENT_HANDOFF.md) 为准。旧阶段状态仅作历史索引，不能覆盖当前源码与合同。
 
 项目名称：南枫 AI
 

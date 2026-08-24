@@ -34,6 +34,7 @@ import com.nanzhufeng.ai.domain.ConversationSurface
 import com.nanzhufeng.ai.domain.ConversationSurfaceRepository
 import com.nanzhufeng.ai.domain.ImportedConversationProvenanceReader
 import com.nanzhufeng.ai.domain.InvocationRepository
+import com.nanzhufeng.ai.domain.AssistantResponseModelAttributionStore
 import com.nanzhufeng.ai.domain.ConversationManagementAction
 import com.nanzhufeng.ai.domain.ConversationManagementIntent
 import com.nanzhufeng.ai.domain.ConversationManagementIntentId
@@ -46,7 +47,6 @@ import com.nanzhufeng.ai.domain.ConversationAttachmentSearchHit
 import com.nanzhufeng.ai.domain.ConversationSearchCategory
 import com.nanzhufeng.ai.domain.LocalSearchHistoryStore
 import com.nanzhufeng.ai.domain.ExportConversationPackageUseCase
-import com.nanzhufeng.ai.domain.GalleryImageSelection
 import com.nanzhufeng.ai.domain.ConversationExportResult
 import com.nanzhufeng.ai.domain.ConversationRuntimePersistenceResult
 import com.nanzhufeng.ai.domain.ConversationRuntimeRepository
@@ -85,6 +85,7 @@ import com.nanzhufeng.ai.domain.PdfPreviewPositionStore
 import com.nanzhufeng.ai.domain.VideoPreviewPositionStore
 import com.nanzhufeng.ai.domain.AudioPreviewPositionStore
 import com.nanzhufeng.ai.domain.ConversationAttachmentReference
+import com.nanzhufeng.ai.domain.ConversationAttachmentSelection
 import com.nanzhufeng.ai.domain.AttachmentId
 import com.nanzhufeng.ai.domain.TemporaryConversationDomain
 import com.nanzhufeng.ai.domain.TemporaryConversationRecovery
@@ -100,33 +101,39 @@ import com.nanzhufeng.ai.domain.P6GModelTier
 import com.nanzhufeng.ai.domain.P6GProviderFamily
 import com.nanzhufeng.ai.domain.P6GRouteRequest
 import com.nanzhufeng.ai.domain.P6GSelectionMutationResult
-import com.nanzhufeng.ai.domain.NormalChatExternalSendConfirmation
-import com.nanzhufeng.ai.domain.NormalChatExternalSendIntent
-import com.nanzhufeng.ai.domain.NormalChatRealTextExecutionOwner
 import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
-import com.nanzhufeng.ai.app.CompareVisibleExecutionOwner
-import com.nanzhufeng.ai.app.CompareVisibleExecutionResult
 import com.nanzhufeng.ai.domain.TemporaryAttachmentResult
 import com.nanzhufeng.ai.data.AndroidGalleryOpenResult
+import com.nanzhufeng.ai.data.AndroidVisualAttachmentOpenResult
 import com.nanzhufeng.ai.data.AndroidGallerySelectionReader
 import com.nanzhufeng.ai.data.AndroidDocumentSelectionReader
 import com.nanzhufeng.ai.data.AndroidDocumentOpenResult
 import android.net.Uri
-import android.graphics.Bitmap
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import com.nanzhufeng.ai.domain.SwitchConversationBranchUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+
+private sealed interface PickedConversationAttachment {
+    data class Opened(val selection: ConversationAttachmentSelection) : PickedConversationAttachment
+    data class Rejected(val reason: String) : PickedConversationAttachment
+}
+
+private data class AttachmentBatchOutcome(
+    val addedCount: Int,
+    val duplicateCount: Int,
+    val rejectionReasons: List<String>,
+    val temporaryRecovery: TemporaryConversationRecovery? = null,
+)
 
 data class ConversationFoundationUiState(
     val isLoading: Boolean = true,
     val isCreating: Boolean = false,
     val isSending: Boolean = false,
-    val isCompareDispatching: Boolean = false,
     val conversations: List<Conversation> = emptyList(),
     val listScope: ConversationListScope = ConversationListScope.ACTIVE,
     val searchQuery: String = "",
@@ -147,6 +154,8 @@ data class ConversationFoundationUiState(
     val recovery: ConversationRecoveryPresentation? = null,
     val currentLeafId: MessageNodeId? = null,
     val branchLeaves: List<ConversationBranchUi> = emptyList(),
+    /** Ephemeral screen feedback after a newly created local branch has been opened. */
+    val branchCreation: ConversationBranchCreationUi? = null,
     val editableUserMessages: List<EditableConversationUserMessage> = emptyList(),
     val lineage: ConversationAttemptLineage? = null,
     val attemptHistory: List<ConversationAttemptHistoryItem> = emptyList(),
@@ -161,9 +170,12 @@ data class ConversationFoundationUiState(
     val p6gCatalog: P6GLocalCatalogSnapshot? = null,
     val p6gGlobalDefault: P6GGlobalDefault = P6GGlobalDefault(0, null),
     val p6gConversationOverride: P6GConversationOverride? = null,
-    val externalSendConfirmation: NormalChatExternalSendConfirmation? = null,
     val importedFromChatGptExport: Boolean = false,
     val importedFromClaudeExport: Boolean = false,
+    /** Inline feedback only for a submitted chat message that did not get a reply. */
+    val sendError: String? = null,
+    /** Durable, content-free decision point for a prior ordinary Provider attempt. */
+    val normalSendRecovery: NormalChatOpenRouterExecutor.Recovery? = null,
     val notice: String? = null,
 )
 
@@ -192,6 +204,10 @@ data class ConversationBranchUi(
     val label: String,
     val revision: Int,
     val isCurrent: Boolean,
+)
+
+data class ConversationBranchCreationUi(
+    val branchConversationId: com.nanzhufeng.ai.domain.ConversationId,
 )
 
 private data class LoadedConversation(
@@ -238,14 +254,15 @@ class ConversationFoundationViewModel(
     private val clearTemporary: ClearTemporaryConversationUseCase,
     private val p6gModelSelection: P6GModelSelectionOwner,
     private val invocations: InvocationRepository,
-    private val normalChatRealTextExecutionOwner: NormalChatRealTextExecutionOwner,
+    private val responseModelAttributions: AssistantResponseModelAttributionStore,
     private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
-    private val compareVisibleExecutionOwner: CompareVisibleExecutionOwner,
 ) : ViewModel() {
     private var streamJob: Job? = null
     private var currentAttachmentReferences: Map<AttachmentId, ConversationAttachmentReference> = emptyMap()
     private var temporaryAttachmentReferences: Map<AttachmentId, ConversationAttachmentReference> = emptyMap()
     private var draftSaveGeneration = 0L
+    /** Serializes draft writes and send so the text under the send button is the text committed. */
+    private val draftMutationMutex = Mutex()
     private var reloadGeneration = 0L
     private var surfaceRequestGeneration = 0L
     private var selectedChatConversationId: com.nanzhufeng.ai.domain.ConversationId? = null
@@ -266,6 +283,7 @@ class ConversationFoundationViewModel(
 
     fun reload(
         notice: String? = null,
+        keepSending: Boolean = false,
         targetSurface: ConversationSurface = state.surface,
         selectedBefore: com.nanzhufeng.ai.domain.ConversationId? = when (targetSurface) {
             ConversationSurface.CHAT -> selectedChatConversationId ?: state.selectedConversationId
@@ -300,7 +318,10 @@ class ConversationFoundationViewModel(
                 val provenance = repository as? ImportedConversationProvenanceReader
                 val chatGptImported = snapshot?.conversation?.id?.let { id -> provenance?.isChatGptExportImported(id) ?: false } ?: false
                 val claudeImported = snapshot?.conversation?.id?.let { id -> provenance?.isClaudeExportImported(id) ?: false } ?: false
-                LoadedConversation(conversations, snapshot, runtime, lineage, lineages, attemptHistory, chatGptImported, claudeImported)
+                // The drawer, canvas and selection must consume the same surface projection.
+                // Returning the broad CHAT list here used to make the WORK drawer display normal
+                // conversations even though the selected transcript itself was correctly WORK.
+                LoadedConversation(surfaceConversations, snapshot, runtime, lineage, lineages, attemptHistory, chatGptImported, claudeImported)
             }
             val conversations = loaded.conversations
             val snapshot = loaded.snapshot
@@ -316,6 +337,9 @@ class ConversationFoundationViewModel(
                     }
                 }.toMap()
             }
+            val responseAttributions = withContext(Dispatchers.IO) {
+                responseModelAttributions.forMessages(path.map(MessageNode::id))
+            }
             val runtimeByMessage = runtime
                 ?.let { persisted -> mapOf(persisted.messageId to persisted) }
                 .orEmpty()
@@ -324,6 +348,7 @@ class ConversationFoundationViewModel(
                 lineages,
                 invocationById,
                 runtimeByMessage,
+                responseAttributions,
             )
             val attachmentReferences = snapshot?.draft?.attachments.orEmpty() + path.flatMap { node ->
                 node.content.filterIsInstance<ContentBlock.Attachment>().map { it.attachment }
@@ -344,13 +369,16 @@ class ConversationFoundationViewModel(
             val p6gConversationOverride = snapshot?.conversation?.id?.let { id ->
                 withContext(Dispatchers.IO) { p6gModelSelection.readConversationOverride(id) }
             }
+            val normalSendRecovery = snapshot?.conversation?.id?.let { id ->
+                withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.recoveryForConversation(id) }
+            }
             when (surface) {
                 ConversationSurface.CHAT -> selectedChatConversationId = snapshot?.conversation?.id
                 ConversationSurface.WORK -> selectedWorkConversationId = snapshot?.conversation?.id
             }
             state = state.copy(
                 surface = surface,
-                isLoading = false, isCreating = false, isSending = false,
+                isLoading = false, isCreating = false, isSending = keepSending,
                 conversations = conversations, selectedConversationId = snapshot?.conversation?.id,
                 currentProjectId = snapshot?.conversation?.projectId,
                 runtime = runtime, messages = messages, draft = snapshot?.draft,
@@ -366,6 +394,7 @@ class ConversationFoundationViewModel(
                 p6gConversationOverride = p6gConversationOverride,
                 importedFromChatGptExport = loaded.importedFromChatGptExport,
                 importedFromClaudeExport = loaded.importedFromClaudeExport,
+                normalSendRecovery = normalSendRecovery,
             )
         }
     }
@@ -421,13 +450,19 @@ class ConversationFoundationViewModel(
         if (state.attachmentTransfer?.id == id) state = state.copy(attachmentTransfer = null)
     }
 
-    /** P6-G only persists a current normal-conversation override and safe route metadata. */
+    /** One picker action fixes this conversation and persists the next-conversation default. */
     fun selectP6GModel(modelId: String?) {
         val conversationId = state.selectedConversationId ?: return
-        val current = state.p6gConversationOverride ?: return
+        val currentConversation = state.p6gConversationOverride ?: return
+        val currentGlobal = state.p6gGlobalDefault
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                p6gModelSelection.setConversationManualOverride(conversationId, modelId, current.revision).also { applied ->
+                p6gModelSelection.setComposerModelSelection(
+                    conversationId = conversationId,
+                    modelId = modelId,
+                    expectedConversationRevision = currentConversation.revision,
+                    expectedGlobalRevision = currentGlobal.revision,
+                ).also { applied ->
                     if (applied is P6GSelectionMutationResult.Applied) p6gModelSelection.evaluate(
                         conversationId,
                         P6GRouteRequest(P6GModelTier.BALANCED, exactHistoricalCacheHit = false, localSafeRequired = false, unknownCostConfirmed = false, contextTokens = null, budgetMicros = null),
@@ -435,7 +470,10 @@ class ConversationFoundationViewModel(
                 }
             }
             when (result) {
-                is P6GSelectionMutationResult.Applied -> reload(if (modelId == null) "已切回自动；当前会话恢复本地策略。" else "已保存当前会话的本地手动模型选择；未读取 Key、未调用 Provider。")
+                is P6GSelectionMutationResult.Applied -> reload(
+                    if (modelId == null) "已选择自动；当前内容可参与路由，后续新会话也沿用自动。"
+                    else "已固定当前模型；后续新会话也沿用此选择，未读取 Key、未调用 Provider。",
+                )
                 P6GSelectionMutationResult.Conflict -> reload("模型选择已更新；请按最新本地版本重试。")
                 P6GSelectionMutationResult.InvalidModel -> reload("该模型不在本地 catalog 中，未保存。")
                 P6GSelectionMutationResult.PersistenceFailed -> reload("模型选择未保存；本地数据保持不变。")
@@ -625,49 +663,118 @@ class ConversationFoundationViewModel(
         )
     }
 
-    fun onTemporaryPhotoPickerResult(uri: Uri?) {
+    fun onTemporaryVisualPickerResults(uris: List<Uri>) {
+        onTemporaryAttachmentPickerResults(uris) { uri ->
+            when (val opened = galleryReader.openConversationVisual(uri)) {
+                is AndroidVisualAttachmentOpenResult.Opened -> PickedConversationAttachment.Opened(opened.selection)
+                is AndroidVisualAttachmentOpenResult.Rejected -> PickedConversationAttachment.Rejected("图片或视频不可读取，临时草稿未改变。")
+            }
+        }
+    }
+
+    fun onTemporaryDocumentPickerResults(uris: List<Uri>) {
+        onTemporaryAttachmentPickerResults(uris) { uri ->
+            when (val opened = documentReader.open(uri)) {
+                is AndroidDocumentOpenResult.Opened -> PickedConversationAttachment.Opened(opened.selection)
+                AndroidDocumentOpenResult.Cancelled -> PickedConversationAttachment.Rejected("文件选择已取消，临时草稿未改变。")
+                is AndroidDocumentOpenResult.Rejected -> PickedConversationAttachment.Rejected(opened.reason)
+            }
+        }
+    }
+
+    private fun onTemporaryAttachmentPickerResults(uris: List<Uri>, open: (Uri) -> PickedConversationAttachment) {
+        viewModelScope.launch {
+            if (uris.isEmpty()) {
+                state = state.copy(notice = "已取消选择，临时草稿未改变。")
+                return@launch
+            }
+            val outcome = withContext(Dispatchers.IO) {
+                var added = 0
+                var duplicates = 0
+                var recovery: TemporaryConversationRecovery? = null
+                val rejected = mutableListOf<String>()
+                uris.forEach { uri ->
+                    when (val picked = open(uri)) {
+                        is PickedConversationAttachment.Rejected -> rejected += picked.reason
+                        is PickedConversationAttachment.Opened -> when (val result = addTemporaryAttachment.add(picked.selection)) {
+                            is TemporaryAttachmentResult.Added -> {
+                                recovery = result.recovery
+                                if (result.wasAlreadyAttached) duplicates += 1 else added += 1
+                            }
+                            TemporaryAttachmentResult.Cancelled -> Unit
+                            is TemporaryAttachmentResult.Rejected -> rejected += result.reason
+                        }
+                    }
+                }
+                AttachmentBatchOutcome(added, duplicates, rejected, recovery)
+            }
+            val notice = attachmentBatchNotice(outcome, "临时会话")
+            outcome.temporaryRecovery?.let { applyTemporaryRecovery(it, notice) } ?: run { state = state.copy(notice = notice) }
+        }
+    }
+
+    private fun attachmentBatchNotice(outcome: AttachmentBatchOutcome, destination: String): String = when {
+        outcome.addedCount > 0 -> buildString {
+            append("已加入 ${outcome.addedCount} 项附件到${destination}，仅本地保存。")
+            if (outcome.duplicateCount > 0) append(" ${outcome.duplicateCount} 项已存在。")
+            if (outcome.rejectionReasons.isNotEmpty()) append(" 另有 ${outcome.rejectionReasons.size} 项未加入：${outcome.rejectionReasons.first()}")
+        }
+        outcome.duplicateCount > 0 -> "所选附件已在${destination}草稿中，未重复添加。"
+        else -> outcome.rejectionReasons.firstOrNull() ?: "已取消选择，草稿未改变。"
+    }
+
+    fun onConversationVisualPickerResults(uris: List<Uri>) {
+        onConversationAttachmentPickerResults(uris) { uri ->
+            when (val opened = galleryReader.openConversationVisual(uri)) {
+                is AndroidVisualAttachmentOpenResult.Opened -> PickedConversationAttachment.Opened(opened.selection)
+                is AndroidVisualAttachmentOpenResult.Rejected -> PickedConversationAttachment.Rejected("图片或视频不可读取；当前会话草稿未改变。")
+            }
+        }
+    }
+
+    fun onConversationDocumentPickerResults(uris: List<Uri>) {
+        onConversationAttachmentPickerResults(uris) { uri ->
+            when (val opened = documentReader.open(uri)) {
+                is AndroidDocumentOpenResult.Opened -> PickedConversationAttachment.Opened(opened.selection)
+                AndroidDocumentOpenResult.Cancelled -> PickedConversationAttachment.Rejected("文件选择已取消，当前会话草稿未改变。")
+                is AndroidDocumentOpenResult.Rejected -> PickedConversationAttachment.Rejected(opened.reason)
+            }
+        }
+    }
+
+    /** TEMP camera imports the original TakePicture bytes before deleting the app-private capture source. */
+    fun onTemporaryCameraResult(uri: Uri?, captured: Boolean) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                val selection = when (val opened = uri?.let(galleryReader::open)) {
-                    null -> null
-                    is AndroidGalleryOpenResult.Opened -> opened.selection
-                    is AndroidGalleryOpenResult.Rejected -> return@withContext TemporaryAttachmentResult.Rejected("图片不可读取，临时草稿未改变。")
+                if (!captured || uri == null) {
+                    galleryReader.discardAppPrivateCapture(uri)
+                    return@withContext TemporaryAttachmentResult.Cancelled
                 }
-                addTemporaryAttachment.add(selection?.let { com.nanzhufeng.ai.domain.ConversationAttachmentSelection(it.input, it.mimeType, it.displayName, it.width, it.height) })
+                try {
+                    when (val opened = galleryReader.openConversationVisual(uri)) {
+                        is AndroidVisualAttachmentOpenResult.Opened -> addTemporaryAttachment.add(opened.selection)
+                        is AndroidVisualAttachmentOpenResult.Rejected -> TemporaryAttachmentResult.Rejected("相机原图不可读取，临时草稿未改变。")
+                    }
+                } finally {
+                    galleryReader.discardAppPrivateCapture(uri)
+                }
             }
             when (result) {
-                is TemporaryAttachmentResult.Added -> applyTemporaryRecovery(result.recovery, "附件已加入临时会话，仅本地引用。")
-                TemporaryAttachmentResult.Cancelled -> state = state.copy(notice = "已取消选择，临时草稿未改变。")
+                is TemporaryAttachmentResult.Added -> applyTemporaryRecovery(result.recovery, "相机原图已加入临时会话，仅本地引用。")
+                TemporaryAttachmentResult.Cancelled -> state = state.copy(notice = "已取消拍照，临时草稿没有改变。")
                 is TemporaryAttachmentResult.Rejected -> state = state.copy(notice = result.reason)
             }
         }
     }
 
-    /** TEMP camera follows the same bounded private-copy owner as TEMP picker attachments. */
-    fun onTemporaryCameraResult(bitmap: Bitmap?) {
-        viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                if (bitmap == null) return@withContext TemporaryAttachmentResult.Cancelled
-                val bytes = ByteArrayOutputStream().use { output ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
-                    output.toByteArray()
-                }
-                addTemporaryAttachment.add(
-                    com.nanzhufeng.ai.domain.ConversationAttachmentSelection(
-                        input = ByteArrayInputStream(bytes),
-                        mimeType = "image/jpeg",
-                        displayName = "camera-${System.currentTimeMillis()}.jpg",
-                        width = bitmap.width,
-                        height = bitmap.height,
-                    ),
-                )
-            }
-            when (result) {
-                is TemporaryAttachmentResult.Added -> applyTemporaryRecovery(result.recovery, "相机图片已加入临时会话，仅本地引用。")
-                TemporaryAttachmentResult.Cancelled -> state = state.copy(notice = "已取消拍照，临时草稿没有改变。")
-                is TemporaryAttachmentResult.Rejected -> state = state.copy(notice = result.reason)
-            }
-        }
+    fun reportCameraCaptureUnavailable(temporary: Boolean) {
+        state = state.copy(
+            notice = if (temporary) {
+                "无法创建本机相机临时文件，临时草稿没有改变。"
+            } else {
+                "无法创建本机相机临时文件，当前会话草稿没有改变。"
+            },
+        )
     }
 
     fun onTemporaryDocumentPickerResult(uri: Uri?) {
@@ -688,10 +795,37 @@ class ConversationFoundationViewModel(
     }
 
     fun selectConversation(id: com.nanzhufeng.ai.domain.ConversationId) {
-        if (state.surface == ConversationSurface.CHAT && id == state.selectedConversationId) return
-        selectedChatConversationId = id
-        state = state.copy(surface = ConversationSurface.CHAT, selectedConversationId = id)
-        reload()
+        if (id == state.selectedConversationId) return
+        when (state.surface) {
+            ConversationSurface.CHAT -> selectedChatConversationId = id
+            ConversationSurface.WORK -> selectedWorkConversationId = id
+        }
+        state = state.copy(selectedConversationId = id)
+        reload(targetSurface = state.surface, selectedBefore = id)
+    }
+
+    /** A launcher shortcut may reopen only an existing, active local conversation. */
+    fun openConversationShortcut(id: com.nanzhufeng.ai.domain.ConversationId) {
+        viewModelScope.launch {
+            val conversation = withContext(Dispatchers.IO) { repository.findById(id)?.conversation }
+            when {
+                conversation == null -> state = state.copy(notice = "该对话已不存在，未打开。")
+                conversation.deletedAt != null -> state = state.copy(notice = "该对话已在回收站，未从桌面快捷方式打开。")
+                conversation.archivedAt != null -> state = state.copy(notice = "该对话已归档，请先在对话管理中恢复。")
+                else -> {
+                    when (conversation.surface) {
+                        ConversationSurface.CHAT -> selectedChatConversationId = conversation.id
+                        ConversationSurface.WORK -> selectedWorkConversationId = conversation.id
+                    }
+                    state = state.copy(
+                        surface = conversation.surface,
+                        selectedConversationId = conversation.id,
+                        listScope = ConversationListScope.ACTIVE,
+                    )
+                    reload(targetSurface = conversation.surface, selectedBefore = conversation.id)
+                }
+            }
+        }
     }
 
     /**
@@ -724,19 +858,10 @@ class ConversationFoundationViewModel(
                     state = state.copy(isCreating = false)
                     reload(targetSurface = ConversationSurface.WORK, selectedBefore = existing.id, requestedSurfaceGeneration = request)
                 } else {
-                    when (val result = withContext(Dispatchers.IO) {
-                        createConversation.execute(title = "工作", surface = ConversationSurface.WORK)
-                    }) {
-                        is ConversationMutationResult.Saved -> {
-                            if (request != surfaceRequestGeneration) return@launch
-                            selectedWorkConversationId = result.snapshot.conversation.id
-                            state = state.copy(isCreating = false)
-                            reload(targetSurface = ConversationSurface.WORK, selectedBefore = selectedWorkConversationId, requestedSurfaceGeneration = request)
-                        }
-                        is ConversationMutationResult.Rejected -> if (request == surfaceRequestGeneration) {
-                            state = state.copy(isCreating = false, notice = result.reason)
-                        }
-                    }
+                    // WORK belongs to a user-created Project. Do not silently create an
+                    // unassigned generic "工作" conversation merely by opening the surface.
+                    state = state.copy(isCreating = false)
+                    reload(targetSurface = ConversationSurface.WORK, selectedBefore = null, requestedSurfaceGeneration = request)
                 }
             }
         } else {
@@ -818,6 +943,44 @@ class ConversationFoundationViewModel(
         }
     }
 
+    /**
+     * The drawer's batch editor never bypasses the existing soft-delete owner.  Every
+     * selected local conversation gets its own idempotent management intent so a
+     * concurrent revision can be reported as a partial result instead of being hidden.
+     */
+    fun softDeleteConversations(conversations: List<Conversation>) {
+        val targets = conversations.distinctBy { it.id.value }
+        if (targets.isEmpty()) return
+        viewModelScope.launch {
+            val outcomes = withContext(Dispatchers.IO) {
+                targets.map { conversation ->
+                    manageConversation.execute(
+                        ConversationManagementIntent(
+                            id = ConversationManagementIntentId.new(),
+                            conversationId = conversation.id,
+                            action = ConversationManagementAction.SOFT_DELETE,
+                            expectedRevision = conversation.revision,
+                        ),
+                    )
+                }
+            }
+            val completed = outcomes.count {
+                it is ConversationManagementResult.Applied || it is ConversationManagementResult.Replayed
+            }
+            val rejected = outcomes.filterIsInstance<ConversationManagementResult.Rejected>()
+            if (completed > 0) {
+                val notice = if (rejected.isEmpty()) {
+                    "已将 $completed 个会话移入回收站。"
+                } else {
+                    "已将 $completed 个会话移入回收站；${rejected.size} 个未完成：${rejected.first().reason}"
+                }
+                reload(notice)
+            } else {
+                state = state.copy(notice = "所选会话未移入回收站：${rejected.firstOrNull()?.reason ?: "本机操作未完成。"}")
+            }
+        }
+    }
+
     fun assignProject(conversation: Conversation, projectId: com.nanzhufeng.ai.domain.ProjectId?) =
         manage(conversation, if (projectId == null) ConversationManagementAction.REMOVE_PROJECT else ConversationManagementAction.ASSIGN_PROJECT, projectId = projectId?.value)
 
@@ -837,6 +1000,16 @@ class ConversationFoundationViewModel(
         if (state.isCreating) return
         state = state.copy(isCreating = true, notice = null)
         viewModelScope.launch {
+            val reusableEmpty = withContext(Dispatchers.IO) {
+                state.conversations
+                    .filter { it.surface == state.surface }
+                    .sortedByDescending { it.updatedAt }
+                    .firstOrNull { conversation -> repository.findById(conversation.id)?.nodes?.isEmpty() == true }
+            }
+            if (reusableEmpty != null) {
+                reload(targetSurface = state.surface, selectedBefore = reusableEmpty.id)
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
                 // A normal conversation starts empty.  Deterministic fixtures remain explicit
                 // task actions and are never silently written into a user-visible transcript.
@@ -856,17 +1029,42 @@ class ConversationFoundationViewModel(
         }
     }
 
+    /** A work conversation is born inside the explicitly selected local Project. */
+    fun createWorkConversation(projectId: com.nanzhufeng.ai.domain.ProjectId) {
+        if (state.isCreating) return
+        state = state.copy(isCreating = true, notice = null)
+        viewModelScope.launch {
+            when (val result = withContext(Dispatchers.IO) {
+                createConversation.execute(projectId = projectId.value, surface = ConversationSurface.WORK)
+            }) {
+                is ConversationMutationResult.Saved -> {
+                    selectedWorkConversationId = result.snapshot.conversation.id
+                    state = state.copy(isCreating = false, selectedConversationId = result.snapshot.conversation.id)
+                    reload(
+                        notice = "已在当前项目创建工作对话。",
+                        targetSurface = ConversationSurface.WORK,
+                        selectedBefore = result.snapshot.conversation.id,
+                    )
+                }
+                is ConversationMutationResult.Rejected -> state = state.copy(isCreating = false, notice = result.reason)
+            }
+        }
+    }
+
     fun updateDraft(text: String) {
         val id = state.selectedConversationId ?: return
         val current = state.draft ?: return
+        if (state.isSending) return
         state = state.copy(
             draft = current.copy(text = text),
+            sendError = null,
             notice = null,
-            externalSendConfirmation = state.externalSendConfirmation?.let(normalChatRealTextExecutionOwner::expire),
         )
         val generation = ++draftSaveGeneration
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { saveDraft.execute(id, text, current.attachments) }
+            val result = draftMutationMutex.withLock {
+                withContext(Dispatchers.IO) { saveDraft.execute(id, text, current.attachments) }
+            }
             if (generation != draftSaveGeneration) return@launch
             when (result) {
                 is ConversationDraftResult.Saved -> state = state.copy(draft = result.draft)
@@ -877,159 +1075,144 @@ class ConversationFoundationViewModel(
 
     fun submitCurrentDraft() {
         val id = state.selectedConversationId ?: return
+        val draft = state.draft ?: return
         if (state.isSending) return
-        state = state.copy(isSending = true, notice = null)
+        // Older text-save jobs may already be running. The mutex makes them finish before this
+        // exact visible draft is persisted, so clicking send cannot submit an older empty draft.
+        ++draftSaveGeneration
+        state = state.copy(isSending = true, sendError = null, notice = null)
         viewModelScope.launch {
             if (state.surface == ConversationSurface.CHAT) {
-                val result = withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.execute(id) }
+                val result = draftMutationMutex.withLock {
+                    val saved = withContext(Dispatchers.IO) { saveDraft.execute(id, draft.text, draft.attachments) }
+                    if (saved !is ConversationDraftResult.Saved) {
+                        NormalChatOpenRouterExecutor.Result.Blocked(NormalChatOpenRouterExecutor.Code.DRAFT_UNAVAILABLE)
+                    } else {
+                        withContext(Dispatchers.IO) {
+                            normalChatOpenRouterExecutor.execute(
+                                id,
+                                onLocalSubmission = {
+                                    // User and assistant placeholder are durable before the first
+                                    // SSE chunk, so a failed send has a stable in-place target.
+                                    viewModelScope.launch {
+                                        if (state.isSending && state.selectedConversationId == id) reload(keepSending = true)
+                                    }
+                                },
+                                onStreamProgress = {
+                                    viewModelScope.launch {
+                                        if (state.isSending && state.selectedConversationId == id) reload(keepSending = true)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
                 when (result) {
-                    NormalChatOpenRouterExecutor.Result.Sent -> reload("已收到模型回复；只发送了当前这条文字。")
+                    NormalChatOpenRouterExecutor.Result.Sent -> reload()
                     is NormalChatOpenRouterExecutor.Result.Blocked -> {
-                        state = state.copy(isSending = false, notice = normalChatResultLabel(result.code, sent = false))
+                        state = state.copy(isSending = false, sendError = normalChatResultLabel(result.code, sent = false))
                         reload()
                     }
                     is NormalChatOpenRouterExecutor.Result.Failed -> {
-                        state = state.copy(isSending = false, notice = normalChatResultLabel(result.code, sent = true))
+                        state = state.copy(isSending = false, sendError = normalChatResultLabel(result.code, sent = true))
                         reload()
                     }
                 }
                 return@launch
             }
-            when (val result = withContext(Dispatchers.IO) { submitDraft.execute(id) }) {
-                is ConversationDraftSubmissionResult.Submitted -> reload("已本地发送；草稿已在同一事务清理，未连接 Provider。")
-                is ConversationDraftSubmissionResult.Rejected -> state = state.copy(isSending = false, notice = result.reason)
+            when (val result = draftMutationMutex.withLock {
+                val saved = withContext(Dispatchers.IO) { saveDraft.execute(id, draft.text, draft.attachments) }
+                if (saved !is ConversationDraftResult.Saved) ConversationDraftSubmissionResult.Rejected("草稿未能安全保存，本次没有发送。")
+                else withContext(Dispatchers.IO) { submitDraft.execute(id) }
+            }) {
+                is ConversationDraftSubmissionResult.Submitted -> reload()
+                is ConversationDraftSubmissionResult.Rejected -> state = state.copy(isSending = false, sendError = result.reason)
             }
         }
     }
 
-    /**
-     * This is a UI-only, fail-closed intent.  The existing local submit path is
-     * deliberately independent and remains the only action performed by the composer.
-     */
-    fun requestNormalChatExternalSendConfirmation() {
-        // Kept only for older deep links. Ordinary composer sends directly via submitCurrentDraft().
-        submitCurrentDraft()
-    }
-
-    fun setNormalChatExternalSendAcknowledgement(checked: Boolean) {
-        val confirmation = state.externalSendConfirmation ?: return
-        state = state.copy(
-            externalSendConfirmation = normalChatRealTextExecutionOwner.setAcknowledgement(confirmation, checked),
-        )
-    }
-
-    fun confirmNormalChatExternalSend() {
-        val confirmation = state.externalSendConfirmation ?: return
-        val conversationId = state.selectedConversationId ?: return
-        if (!confirmation.acknowledgementChecked || !confirmation.isConfirmable || normalChatRealTextExecutionOwner.isExpired(confirmation)) return
-        state = state.copy(isSending = true, externalSendConfirmation = null, notice = null)
+    /** Explicitly replays the latest durable ordinary-chat attempt with its original key. */
+    fun retryLatestNormalSend() {
+        val id = state.selectedConversationId ?: return
+        if (state.isSending || state.normalSendRecovery?.canRetry != true) return
+        state = state.copy(isSending = true, sendError = null, notice = null)
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.execute(conversationId) }
+            val result = withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.retryLatestAttempt(id) }
             when (result) {
-                NormalChatOpenRouterExecutor.Result.Sent -> reload("已收到模型回复；仅本条文字已发送给 OpenRouter。")
+                NormalChatOpenRouterExecutor.Result.Sent -> reload("已按原发送编号重试；未更换服务商或模型。")
                 is NormalChatOpenRouterExecutor.Result.Blocked -> {
-                    state = state.copy(isSending = false, notice = normalChatResultLabel(result.code, sent = false))
+                    state = state.copy(isSending = false, sendError = normalChatResultLabel(result.code, sent = false))
                     reload()
                 }
                 is NormalChatOpenRouterExecutor.Result.Failed -> {
-                    state = state.copy(isSending = false, notice = normalChatResultLabel(result.code, sent = true))
+                    state = state.copy(isSending = false, sendError = normalChatResultLabel(result.code, sent = true))
                     reload()
                 }
             }
         }
     }
 
-    fun expireNormalChatExternalSendConfirmation() {
-        val confirmation = state.externalSendConfirmation ?: return
-        state = state.copy(externalSendConfirmation = normalChatRealTextExecutionOwner.expire(confirmation))
-    }
-
-    fun dismissNormalChatExternalSendConfirmation() {
-        state = state.copy(externalSendConfirmation = null)
-    }
-
-    /** Explicit Compare is separate from the ordinary local-only submit action and executes directly. */
-    fun requestCompareChatGptAndClaude() {
-        val conversationId = state.selectedConversationId ?: return
-        val draft = state.draft ?: return
-        if (state.surface != ConversationSurface.CHAT || draft.text.isBlank()) return
-        if (state.isCompareDispatching) return
-        state = state.copy(isCompareDispatching = true, notice = null)
+    fun markLatestNormalSendFailed() {
+        val id = state.selectedConversationId ?: return
         viewModelScope.launch {
-            when (val result = withContext(Dispatchers.IO) { compareVisibleExecutionOwner.execute(conversationId, draft) }) {
-                is CompareVisibleExecutionResult.Accepted -> {
-                    state = state.copy(isCompareDispatching = false)
-                    reload("已直接提交一次 ChatGPT + Claude Compare 批次；两支独立记录安全 receipt 与用量。")
-                }
-                is CompareVisibleExecutionResult.Blocked -> state = state.copy(
-                    isCompareDispatching = false,
-                    notice = "Compare 未发送或未完整接收：${result.blocker.name}。",
-                )
-            }
+            val marked = withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.markLatestAttemptFailed(id) }
+            reload(if (marked) "已标记该次发送失败；历史记录和幂等编号仍保留在本机。" else "没有可标记的发送记录。")
         }
     }
 
-    fun onConversationPhotoPickerResult(uri: Uri?) {
+    private fun onConversationAttachmentPickerResults(uris: List<Uri>, open: (Uri) -> PickedConversationAttachment) {
         val conversationId = state.selectedConversationId ?: return
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                val selection = when (val opened = uri?.let(galleryReader::open)) {
-                    null -> null
-                    is AndroidGalleryOpenResult.Opened -> opened.selection
-                    is AndroidGalleryOpenResult.Rejected -> return@withContext AddConversationAttachmentResult.Rejected("图片不可读取；当前会话草稿未改变。")
+            if (uris.isEmpty()) {
+                state = state.copy(notice = "已取消选择，当前会话草稿没有改变。")
+                return@launch
+            }
+            val outcome = withContext(Dispatchers.IO) {
+                var added = 0
+                var duplicates = 0
+                val rejected = mutableListOf<String>()
+                uris.forEach { uri ->
+                    when (val picked = open(uri)) {
+                        is PickedConversationAttachment.Rejected -> rejected += picked.reason
+                        is PickedConversationAttachment.Opened -> when (val result = addAttachment.add(conversationId, picked.selection)) {
+                            is AddConversationAttachmentResult.Added -> if (result.wasAlreadyAttached) duplicates += 1 else added += 1
+                            AddConversationAttachmentResult.Cancelled -> Unit
+                            is AddConversationAttachmentResult.Rejected -> rejected += result.reason
+                        }
+                    }
                 }
-                addAttachment.execute(conversationId, selection)
+                AttachmentBatchOutcome(added, duplicates, rejected)
             }
-            when (result) {
-                is AddConversationAttachmentResult.Added -> reload("图片已加入本地会话草稿；不会发送给 AI 或第三方。")
-                AddConversationAttachmentResult.Cancelled -> state = state.copy(notice = "已取消选择，当前会话草稿没有改变。")
-                is AddConversationAttachmentResult.Rejected -> state = state.copy(notice = result.reason)
-            }
+            if (outcome.addedCount > 0 || outcome.duplicateCount > 0) reload(attachmentBatchNotice(outcome, "当前会话"))
+            else state = state.copy(notice = attachmentBatchNotice(outcome, "当前会话"))
         }
     }
 
-    /** Camera receives only a system-provided preview Bitmap, then follows the same bounded private-copy path as gallery images. */
-    fun onConversationCameraResult(bitmap: Bitmap?) {
-        val conversationId = state.selectedConversationId ?: return
+    /** Camera imports the full TakePicture output; the preview-bitmap path is deliberately never used. */
+    fun onConversationCameraResult(uri: Uri?, captured: Boolean) {
+        val conversationId = state.selectedConversationId ?: run {
+            galleryReader.discardAppPrivateCapture(uri)
+            state = state.copy(notice = "当前会话不可用，相机原图未加入草稿。")
+            return
+        }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                if (bitmap == null) return@withContext AddConversationAttachmentResult.Cancelled
-                val bytes = ByteArrayOutputStream().use { output ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
-                    output.toByteArray()
+                if (!captured || uri == null) {
+                    galleryReader.discardAppPrivateCapture(uri)
+                    return@withContext AddConversationAttachmentResult.Cancelled
                 }
-                addAttachment.execute(
-                    conversationId,
-                    GalleryImageSelection(
-                        input = ByteArrayInputStream(bytes),
-                        mimeType = "image/jpeg",
-                        displayName = "camera-${System.currentTimeMillis()}.jpg",
-                        width = bitmap.width,
-                        height = bitmap.height,
-                    ),
-                )
+                try {
+                    when (val opened = galleryReader.openConversationVisual(uri)) {
+                        is AndroidVisualAttachmentOpenResult.Opened -> addAttachment.add(conversationId, opened.selection)
+                        is AndroidVisualAttachmentOpenResult.Rejected -> AddConversationAttachmentResult.Rejected("相机原图不可读取，当前会话草稿未改变。")
+                    }
+                } finally {
+                    galleryReader.discardAppPrivateCapture(uri)
+                }
             }
             when (result) {
-                is AddConversationAttachmentResult.Added -> reload("相机图片已私有复制到本地草稿；不会发送给 AI 或第三方。")
+                is AddConversationAttachmentResult.Added -> reload("相机原图已私有复制到本地草稿；不会发送给 AI 或第三方。")
                 AddConversationAttachmentResult.Cancelled -> state = state.copy(notice = "已取消拍照，当前会话草稿没有改变。")
-                is AddConversationAttachmentResult.Rejected -> state = state.copy(notice = result.reason)
-            }
-        }
-    }
-
-    fun onConversationDocumentPickerResult(uri: Uri?) {
-        val conversationId = state.selectedConversationId ?: return
-        viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                when (val opened = documentReader.open(uri)) {
-                    AndroidDocumentOpenResult.Cancelled -> return@withContext AddConversationAttachmentResult.Cancelled
-                    is AndroidDocumentOpenResult.Rejected -> return@withContext AddConversationAttachmentResult.Rejected(opened.reason)
-                    is AndroidDocumentOpenResult.Opened -> addAttachment.add(conversationId, opened.selection)
-                }
-            }
-            when (result) {
-                is AddConversationAttachmentResult.Added -> reload("文件已私有复制到本地草稿；不会发送给 AI 或第三方。")
-                AddConversationAttachmentResult.Cancelled -> state = state.copy(notice = "已取消选择，当前会话草稿没有改变。")
                 is AddConversationAttachmentResult.Rejected -> state = state.copy(notice = result.reason)
             }
         }
@@ -1060,6 +1243,7 @@ class ConversationFoundationViewModel(
     fun stopLocalStream() {
         val visibleRuntime = state.runtime ?: return
         if (visibleRuntime.isTerminal) return
+        normalChatOpenRouterExecutor.cancelActive(visibleRuntime.conversationId)
         streamJob?.cancel()
         viewModelScope.launch {
             val runtime = withContext(Dispatchers.IO) { (repository as? ConversationRuntimeRepository)?.stateFor(visibleRuntime.conversationId) ?: visibleRuntime }
@@ -1136,8 +1320,17 @@ class ConversationFoundationViewModel(
             when {
                 result == null -> state = state.copy(notice = "消息未能从本机回读，未创建分支。")
                 result.conversation.id == conversationId -> state = state.copy(notice = "只有 assistant 消息可以创建分支。")
-                else -> { selectConversation(result.conversation.id); state = state.copy(notice = "已从该 assistant 消息创建本地分支；未连接 Provider。") }
+                else -> {
+                    selectConversation(result.conversation.id)
+                    state = state.copy(branchCreation = ConversationBranchCreationUi(result.conversation.id))
+                }
             }
+        }
+    }
+
+    fun dismissBranchCreation(branchConversationId: com.nanzhufeng.ai.domain.ConversationId) {
+        if (state.branchCreation?.branchConversationId == branchConversationId) {
+            state = state.copy(branchCreation = null)
         }
     }
 
@@ -1224,24 +1417,25 @@ class ConversationFoundationViewModel(
         private val clearTemporary: ClearTemporaryConversationUseCase,
         private val p6gModelSelection: P6GModelSelectionOwner,
         private val invocations: InvocationRepository,
-        private val normalChatRealTextExecutionOwner: NormalChatRealTextExecutionOwner,
+        private val responseModelAttributions: AssistantResponseModelAttributionStore,
         private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
-        private val compareVisibleExecutionOwner: CompareVisibleExecutionOwner,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ConversationFoundationViewModel::class.java))
-            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, searchHistory, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, invocations, normalChatRealTextExecutionOwner, normalChatOpenRouterExecutor, compareVisibleExecutionOwner) as T
+            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, searchHistory, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, invocations, responseModelAttributions, normalChatOpenRouterExecutor) as T
         }
     }
 }
 
 private fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent: Boolean): String = when (code) {
-    NormalChatOpenRouterExecutor.Code.SERVICE_DISABLED -> "模型服务未启用：请在设置中启用 OpenRouter。"
-    NormalChatOpenRouterExecutor.Code.CREDENTIAL_MISSING -> "未保存 API Key：请在设置中保存后再发送。"
+    NormalChatOpenRouterExecutor.Code.SERVICE_DISABLED -> "本次实际接收服务商未启用：请在设置中启用后再发送。"
+    NormalChatOpenRouterExecutor.Code.CREDENTIAL_MISSING -> "本次实际接收服务商未保存 API Key：请在设置中保存后再发送。"
     NormalChatOpenRouterExecutor.Code.REGISTRY_UNVERIFIED -> "模型目录尚未核验：请在设置中先核验公开目录。"
     NormalChatOpenRouterExecutor.Code.MODEL_UNAVAILABLE -> "当前预设模型不可用：请在设置中重新选择并核验。"
-    NormalChatOpenRouterExecutor.Code.ATTACHMENTS_UNSUPPORTED -> "本次真实调用只支持纯文字；请移除附件后重新发送。"
+    NormalChatOpenRouterExecutor.Code.ATTACHMENTS_UNSUPPORTED -> "当前选择不支持本次附件类型；请改用“图像 / 视频 / PDF”或自动模型。"
+    NormalChatOpenRouterExecutor.Code.ATTACHMENT_MODEL_UNSUPPORTED -> "当前服务商或模型不能完整解析本次附件，未发送任何封面或首页；请换用支持该类型的模型。"
+    NormalChatOpenRouterExecutor.Code.CONTEXT_LIMIT -> "当前消息与完整附件超过所选模型的上下文容量，本次没有外发；请改用更大上下文模型或减少本次附件。"
     NormalChatOpenRouterExecutor.Code.DRAFT_UNAVAILABLE -> "草稿未能安全提交，本次没有外发。"
     NormalChatOpenRouterExecutor.Code.AUTHENTICATION -> "服务商拒绝鉴权：请检查本机保存的 API Key。"
     NormalChatOpenRouterExecutor.Code.BALANCE -> "服务商余额或额度不足，未自动重试。"
@@ -1249,6 +1443,12 @@ private fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent:
     NormalChatOpenRouterExecutor.Code.TIMEOUT -> "服务响应超时，未自动重试。"
     NormalChatOpenRouterExecutor.Code.NETWORK -> "网络不可用或连接失败，未自动重试。"
     NormalChatOpenRouterExecutor.Code.SERVICE -> "服务商未完成本次请求，未自动重试。"
+    NormalChatOpenRouterExecutor.Code.MODEL_NOT_FOUND -> "服务商未找到该模型：请在模型设置中刷新目录或改选模型。"
+    NormalChatOpenRouterExecutor.Code.STREAM_REQUIRED -> "该模型要求流式输出；流式发送升级正在启用，请稍后重试。"
+    NormalChatOpenRouterExecutor.Code.INVALID_REQUEST -> "服务商拒绝了本次请求格式；可在模型设置的本机诊断中查看脱敏原因。"
     NormalChatOpenRouterExecutor.Code.RESPONSE_FORMAT -> "服务返回内容无法安全读取，未自动重试。"
+    NormalChatOpenRouterExecutor.Code.TOOL_CALL_UNSUPPORTED -> "服务要求执行工具调用；普通聊天未执行该工具，也没有伪造回答。"
     NormalChatOpenRouterExecutor.Code.LOCAL_SAVE -> if (sent) "服务已返回，但本机未能保存回复；请先不要重复发送。" else "本机保存失败。"
+    NormalChatOpenRouterExecutor.Code.RECOVERY_UNAVAILABLE -> "这次发送无法从本机恢复；不会擅自新建请求。"
+    NormalChatOpenRouterExecutor.Code.RECOVERY_MODEL_CHANGED -> "原模型档案已变化，不能安全地把旧请求改发给新模型。"
 }

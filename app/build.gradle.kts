@@ -81,8 +81,8 @@ android {
         applicationId = "com.nanzhufeng.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 57
-        versionName = "0.3.0-p10a"
+        versionCode = 66
+        versionName = "0.3.0-p10j"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -216,6 +216,7 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     ksp("androidx.room:room-compiler:$roomVersion")
@@ -227,4 +228,6 @@ dependencies {
     testImplementation("androidx.room:room-testing:$roomVersion")
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("org.robolectric:robolectric:4.16.1")
+    // Executes the same FTS5 DDL and triggers on host SQLite; Robolectric's SQLite omits FTS5.
+    testImplementation("org.xerial:sqlite-jdbc:3.41.2.2")
 }

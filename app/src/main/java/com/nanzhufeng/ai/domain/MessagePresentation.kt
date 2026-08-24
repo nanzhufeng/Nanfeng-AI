@@ -7,7 +7,7 @@ import java.security.MessageDigest
  * P3-D's in-memory-only projection boundary. It never accepts provider chunks and it never
  * writes parsed content back into Conversation/Room. Text is untrusted presentation input.
  */
-const val MESSAGE_PRESENTATION_PARSER_VERSION = 2
+const val MESSAGE_PRESENTATION_PARSER_VERSION = 3
 
 data class PresentationBlockIdentity(
     val messageId: MessageNodeId,
@@ -17,6 +17,10 @@ data class PresentationBlockIdentity(
 
 sealed interface InlinePresentation {
     data class Text(val value: String) : InlinePresentation
+    /** Markdown `**strong**`: display emphasis only; no stored message content is rewritten. */
+    data class Strong(val value: String) : InlinePresentation
+    /** Markdown `*emphasis*`: kept distinct from Strong for an accessible visual hierarchy. */
+    data class Emphasis(val value: String) : InlinePresentation
     data class Code(val value: String) : InlinePresentation
     /** A strictly http(s) URL rendered as a real Compose link action. */
     data class Link(val label: String, val url: String) : InlinePresentation
@@ -188,17 +192,35 @@ private object SafeMarkdownParser {
         return result.ifEmpty { listOf(PresentationBlock.PlainText(identity, source)) }
     }
 
-    /** Recognizes only explicitly closed code/link forms; all other bytes stay visible as text. */
+    /** Recognizes only explicitly closed inline forms; all other bytes stay visible as text. */
     private fun inline(source: String): List<InlinePresentation> {
         val result = mutableListOf<InlinePresentation>()
         var cursor = 0
         fun appendText(until: Int) { if (until > cursor) result += InlinePresentation.Text(source.substring(cursor, until)) }
+        fun nextStrong(from: Int): Int {
+            var candidate = source.indexOf("**", from)
+            while (candidate >= 0) {
+                if (source.getOrNull(candidate - 1) != '*' && source.getOrNull(candidate + 2) != '*') return candidate
+                candidate = source.indexOf("**", candidate + 2)
+            }
+            return -1
+        }
+        fun nextEmphasis(from: Int): Int {
+            var candidate = source.indexOf('*', from)
+            while (candidate >= 0) {
+                if (source.getOrNull(candidate - 1) != '*' && source.getOrNull(candidate + 1) != '*') return candidate
+                candidate = source.indexOf('*', candidate + 1)
+            }
+            return -1
+        }
         while (cursor < source.length) {
             val codeStart = source.indexOf('`', cursor)
             val linkStart = source.indexOf('[', cursor)
             val rawUrlMatch = rawHttpUrl.find(source, cursor)
             val rawUrlStart = rawUrlMatch?.range?.first ?: -1
-            val start = listOf(codeStart, linkStart, rawUrlStart).filter { it >= 0 }.minOrNull() ?: break
+            val strongStart = nextStrong(cursor)
+            val emphasisStart = nextEmphasis(cursor)
+            val start = listOf(codeStart, linkStart, rawUrlStart, strongStart, emphasisStart).filter { it >= 0 }.minOrNull() ?: break
             if (start == codeStart) {
                 val end = source.indexOf('`', start + 1)
                 if (end > start + 1) {
@@ -211,6 +233,22 @@ private object SafeMarkdownParser {
                     appendText(start)
                     result += InlinePresentation.Link(source.substring(start + 1, labelEnd), source.substring(labelEnd + 2, urlEnd))
                     cursor = urlEnd + 1
+                    continue
+                }
+            } else if (start == strongStart) {
+                val end = source.indexOf("**", start + 2)
+                if (end > start + 2 && source.getOrNull(end - 1) != '*' && source.getOrNull(end + 2) != '*') {
+                    appendText(start)
+                    result += InlinePresentation.Strong(source.substring(start + 2, end))
+                    cursor = end + 2
+                    continue
+                }
+            } else if (start == emphasisStart) {
+                val end = source.indexOf('*', start + 1)
+                if (end > start + 1 && source.getOrNull(end - 1) != '*' && source.getOrNull(end + 1) != '*') {
+                    appendText(start)
+                    result += InlinePresentation.Emphasis(source.substring(start + 1, end))
+                    cursor = end + 1
                     continue
                 }
             } else if (rawUrlMatch != null) {
@@ -241,11 +279,14 @@ const val CONVERSATION_DRAFT_MAX_LENGTH = 12_000
 
 object ConversationDraftPolicy {
     fun normalize(text: String, attachments: List<ConversationAttachmentReference>, updatedAt: java.time.Instant): ConversationDraft {
-        val normalizedText = text.trim()
+        // A draft is an in-progress editor value, not final message prose. An IME inserts a
+        // trailing newline before the user starts the next line; trimming it here races the
+        // asynchronous draft write and makes the return key appear to do nothing.
+        val normalizedText = text
         require(normalizedText.length <= CONVERSATION_DRAFT_MAX_LENGTH) { "草稿不能超过 $CONVERSATION_DRAFT_MAX_LENGTH 个字符。" }
         val deduplicated = attachments.distinctBy { it.id }
-        require(deduplicated.size <= CONVERSATION_ATTACHMENT_MAX_COUNT) { "每个会话最多添加 $CONVERSATION_ATTACHMENT_MAX_COUNT 张图片。" }
-        require(deduplicated.sumOf { it.byteCount } <= CONVERSATION_ATTACHMENT_MAX_TOTAL_BYTES) { "会话图片总大小不能超过 40 MB。" }
+        require(deduplicated.size <= CONVERSATION_ATTACHMENT_MAX_COUNT) { "每个会话最多添加 $CONVERSATION_ATTACHMENT_MAX_COUNT 项附件。" }
+        require(deduplicated.sumOf { it.byteCount } <= CONVERSATION_ATTACHMENT_MAX_TOTAL_BYTES) { "会话附件总大小不能超过 40 MB。" }
         return ConversationDraft(normalizedText, deduplicated, updatedAt)
     }
 

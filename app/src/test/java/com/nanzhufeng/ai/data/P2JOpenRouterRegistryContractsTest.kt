@@ -9,6 +9,7 @@ import com.nanzhufeng.ai.domain.ModelPricing
 import com.nanzhufeng.ai.domain.ModelRegistrySnapshot
 import com.nanzhufeng.ai.domain.ModelRegistrySnapshotId
 import com.nanzhufeng.ai.domain.ModelRegistrySnapshotStore
+import com.nanzhufeng.ai.domain.ModelRegistryResolution
 import com.nanzhufeng.ai.domain.OpenRouterCatalogFailure
 import com.nanzhufeng.ai.domain.OpenRouterCatalogFetchResult
 import com.nanzhufeng.ai.domain.OpenRouterCatalogModel
@@ -65,8 +66,36 @@ class P2JOpenRouterRegistryContractsTest {
         assertEquals(snapshot.catalogSha256!!.take(16), snapshot.catalogVersion)
         assertEquals(3L, snapshot.models.first { it.id.contains("opus") }.pricing.inputMicrosPerToken)
         assertEquals(0L, snapshot.models.first { it.id.contains("opus") }.pricing.cachedInputMicrosPerToken)
-        assertTrue(snapshot.presetMappings.map(ModelPresetMapping::presetId).containsAll(ModelPresetId.entries))
+        assertTrue(snapshot.presetMappings.map(ModelPresetMapping::presetId).containsAll(setOf(
+            ModelPresetId.CLAUDE_OPUS_5,
+            ModelPresetId.GPT_5_6_SOL,
+            ModelPresetId.GPT_5_6_TERRA,
+            ModelPresetId.GEMINI_3_7_FLASH,
+        )))
+        assertFalse(snapshot.mappingUsesFallback)
         assertTrue(snapshot.sourceUrl!!.startsWith("https://openrouter.ai/"))
+    }
+
+    @Test
+    fun `fast provider variants never map or resolve as a normal preset`() {
+        val snapshot = OpenRouterRegistrySnapshotVerifier().verify(
+            OpenRouterCatalogResponse(
+                claudeCatalog() + catalogModel("anthropic/claude-opus-5:fast", "Claude Opus (Fast)", "0.000001", "0.000005"),
+                null,
+            ),
+            now,
+        )!!
+
+        assertEquals(
+            "anthropic/claude-opus-5-test",
+            snapshot.modelFor(ModelPresetId.CLAUDE_OPUS_5)?.id,
+        )
+        val staleFastSnapshot = snapshot.copy(
+            models = listOf(catalogModel("anthropic/claude-opus-5:fast", "Claude Opus (Fast)", "0.000001", "0.000005").toDescriptor()),
+            presetMappings = listOf(ModelPresetMapping(ModelPresetId.CLAUDE_OPUS_5, "anthropic/claude-opus-5:fast")),
+        )
+        val registry = InMemoryVersionedModelRegistry(initialSnapshots = listOf(staleFastSnapshot))
+        assertTrue(registry.resolve(ProviderId.OPENROUTER, ModelPresetId.CLAUDE_OPUS_5) is ModelRegistryResolution.Rejected)
     }
 
     @Test
@@ -117,9 +146,12 @@ class P2JOpenRouterRegistryContractsTest {
     }
 
     private fun claudeCatalog(): List<OpenRouterCatalogModel> = listOf(
-        catalogModel("anthropic/claude-opus-test", "Claude Opus", "0.000003", "0.000015"),
+        catalogModel("anthropic/claude-opus-5-test", "Claude Opus", "0.000003", "0.000015"),
         catalogModel("anthropic/claude-sonnet-test", "Claude Sonnet", "0.000002", "0.00001"),
         catalogModel("anthropic/claude-haiku-test", "Claude Haiku", null, null),
+        catalogModel("openai/gpt-5.6-sol", "GPT Sol", "0.000003", "0.000015"),
+        catalogModel("openai/gpt-5.6-terra", "GPT Terra", "0.000002", "0.00001"),
+        catalogModel("google/gemini-3.7-flash", "Gemini Flash", "0.000001", "0.000005"),
     )
 
     private fun catalogModel(id: String, name: String, prompt: String?, completion: String?) = OpenRouterCatalogModel(
@@ -127,6 +159,12 @@ class P2JOpenRouterRegistryContractsTest {
         inputModalities = setOf("text"), outputModalities = setOf("text"),
         supportedParameters = setOf("response_format"), promptUsdPerToken = prompt,
         completionUsdPerToken = completion, cacheReadUsdPerToken = if (prompt == null) null else "0",
+    )
+
+    private fun OpenRouterCatalogModel.toDescriptor() = ModelDescriptor(
+        id = id,
+        displayName = displayName,
+        capabilities = ModelCapabilities(supportsText = true, supportsVision = false, supportsPdf = false, supportsStreaming = true),
     )
 
     private fun stableSnapshot(version: String) = ModelRegistrySnapshot(

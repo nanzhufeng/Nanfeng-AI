@@ -50,6 +50,7 @@ class OpenRouterRegistrySnapshotVerifier {
                     supportsStructuredOutput = "response_format" in model.supportedParameters,
                 ),
                 contextWindowTokens = model.contextWindowTokens,
+                maxOutputTokens = model.maxOutputTokens,
                 pricing = if (knownPricing) ModelPricing(
                     priceVersion = "registry-pending",
                     currencyCode = "USD",
@@ -80,44 +81,37 @@ class OpenRouterRegistrySnapshotVerifier {
 
     private fun mapClaudePresets(models: List<ModelDescriptor>): Mapping? {
         val candidates = models.filter { model ->
-            !model.id.contains(":batch") && model.capabilities.supportsText
+            !model.id.contains(":batch", ignoreCase = true) &&
+                !model.id.contains(":fast", ignoreCase = true) &&
+                !model.displayName.contains("(Fast)", ignoreCase = true) &&
+                model.capabilities.supportsText
         }.sortedWith(compareByDescending<ModelDescriptor> { it.contextWindowTokens ?: 0L }.thenByDescending { it.id })
         if (candidates.isEmpty()) return null
 
-        fun preferred(tokens: List<String>, fallback: ModelDescriptor): ModelDescriptor =
-            candidates.firstOrNull { candidate -> tokens.any { token -> token in candidate.id } } ?: fallback
+        fun exact(tokens: List<String>): ModelDescriptor? =
+            candidates.firstOrNull { candidate -> tokens.any { token -> token in candidate.id } }
 
-        val anthropic = candidates.filter { it.id.startsWith("anthropic/claude-") }
-        val openAi = candidates.filter { it.id.startsWith("openai/gpt-") }
-        val first = candidates.first()
-        val anthropicFallback = anthropic.firstOrNull() ?: first
-        val openAiFallback = openAi.firstOrNull() ?: anthropicFallback
-        val fable = preferred(listOf("fable-5", "fable_5"), anthropicFallback)
-        val opus = preferred(listOf("opus-5", "opus_5"), anthropicFallback)
-        val sonnet = preferred(listOf("sonnet-5", "sonnet_5"), anthropicFallback)
-        val haiku = preferred(listOf("haiku-4-5", "haiku_4_5", "haiku"), anthropicFallback)
-        val sol = preferred(listOf("gpt-5.6-sol", "gpt-5-6-sol"), openAiFallback)
-        val terra = preferred(listOf("gpt-5.6-terra", "gpt-5-6-terra"), openAiFallback)
-        val luna = preferred(listOf("gpt-5.6-luna", "gpt-5-6-luna"), openAiFallback)
-        val mappings = listOf(
-            ModelPresetMapping(ModelPresetId.CLAUDE_FABLE_5, fable.id),
-            ModelPresetMapping(ModelPresetId.CLAUDE_OPUS_5, opus.id),
-            ModelPresetMapping(ModelPresetId.CLAUDE_SONNET_5, sonnet.id),
-            ModelPresetMapping(ModelPresetId.CLAUDE_HAIKU_4_5, haiku.id),
-            ModelPresetMapping(ModelPresetId.GPT_5_6_SOL, sol.id),
-            ModelPresetMapping(ModelPresetId.GPT_5_6_TERRA, terra.id),
-            ModelPresetMapping(ModelPresetId.GPT_5_6_LUNA, luna.id),
-        )
-        val exactNames = listOf(
-            "fable-5" to fable.id,
-            "opus-5" to opus.id,
-            "sonnet-5" to sonnet.id,
-            "haiku-4-5" to haiku.id,
-            "gpt-5.6-sol" to sol.id,
-            "gpt-5.6-terra" to terra.id,
-            "gpt-5.6-luna" to luna.id,
-        )
-        return Mapping(mappings, usesFallback = exactNames.any { (token, id) -> token !in id })
+        // Do not guess.  Catalog names change, but a logical product label may only become
+        // selectable when the public catalog contains its explicit mapping.
+        val fable = exact(listOf("fable-5", "fable_5"))
+        val opus = exact(listOf("opus-5", "opus_5")) ?: return null
+        val sonnet = exact(listOf("sonnet-5", "sonnet_5"))
+        val haiku = exact(listOf("haiku-4-5", "haiku_4_5", "haiku"))
+        val sol = exact(listOf("gpt-5.6-sol", "gpt-5-6-sol")) ?: return null
+        val terra = exact(listOf("gpt-5.6-terra", "gpt-5-6-terra")) ?: return null
+        val luna = exact(listOf("gpt-5.6-luna", "gpt-5-6-luna"))
+        val gemini = exact(listOf("gemini-3.7-flash", "gemini-3-7-flash")) ?: return null
+        val mappings = buildList {
+            fable?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_FABLE_5, it.id)) }
+            add(ModelPresetMapping(ModelPresetId.CLAUDE_OPUS_5, opus.id))
+            sonnet?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_SONNET_5, it.id)) }
+            haiku?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_HAIKU_4_5, it.id)) }
+            add(ModelPresetMapping(ModelPresetId.GPT_5_6_SOL, sol.id))
+            add(ModelPresetMapping(ModelPresetId.GPT_5_6_TERRA, terra.id))
+            luna?.let { add(ModelPresetMapping(ModelPresetId.GPT_5_6_LUNA, it.id)) }
+            add(ModelPresetMapping(ModelPresetId.GEMINI_3_7_FLASH, gemini.id))
+        }
+        return Mapping(mappings, usesFallback = false)
     }
 
     private fun String.toMicrosOrNull(): Long? = runCatching {
@@ -132,7 +126,7 @@ object ModelRegistrySnapshotHasher {
     fun sha256(models: List<ModelDescriptor>, mappings: List<ModelPresetMapping>): String {
         val canonical = models.sortedBy { it.id }.joinToString("\n") { model ->
             listOf(
-                model.id, model.displayName, model.contextWindowTokens?.toString().orEmpty(),
+                model.id, model.displayName, model.contextWindowTokens?.toString().orEmpty(), model.maxOutputTokens?.toString().orEmpty(),
                 model.inputModalities.sorted().joinToString(","), model.outputModalities.sorted().joinToString(","),
                 model.supportedParameters.sorted().joinToString(","), model.pricing.inputMicrosPerToken?.toString().orEmpty(),
                 model.pricing.outputMicrosPerToken?.toString().orEmpty(), model.pricing.cachedInputMicrosPerToken?.toString().orEmpty(),

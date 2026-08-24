@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.NavigateNext
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -299,7 +298,7 @@ fun KnowledgeLibraryDialog(
 ) {
     val detail = state.detail
     AlertDialog(
-        onDismissRequest = { if (!state.isLoading) onDismiss() },
+        onDismissRequest = onDismiss,
         containerColor = Color.White,
         shape = RoundedCornerShape(24.dp),
         title = {
@@ -499,6 +498,8 @@ private fun CandidateReviewStatus.toChineseLabel(): String = when (this) {
 private fun com.nanzhufeng.ai.domain.ProviderId.toDisplayLabel(): String = when (this) {
     com.nanzhufeng.ai.domain.ProviderId.MOCK -> "本地 Mock（非真实服务）"
     com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter（未验证真实连接）"
+    com.nanzhufeng.ai.domain.ProviderId.QWEN -> "Qwen 官方直连（未验证真实连接）"
+    com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> "DeepSeek 官方直连（未验证真实连接）"
 }
 
 private fun formatKnowledgeTime(instant: Instant): String = instant.atZone(ZoneId.systemDefault()).format(KNOWLEDGE_TIME_FORMAT)

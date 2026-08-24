@@ -7,6 +7,18 @@ object NanfengModelServiceCatalog {
         fixedEndpoint = "https://openrouter.ai/api/v1",
     )
 
+    val qwen = ProviderDescriptor(
+        id = ProviderId.QWEN,
+        displayName = "Qwen 官方直连",
+        fixedEndpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+
+    val deepSeek = ProviderDescriptor(
+        id = ProviderId.DEEPSEEK,
+        displayName = "DeepSeek 官方直连",
+        fixedEndpoint = "https://api.deepseek.com/v1",
+    )
+
     val presets = listOf(
         ModelPresetDescriptor(
             id = ModelPresetId.CLAUDE_FABLE_5,
@@ -37,12 +49,14 @@ object NanfengModelServiceCatalog {
             displayName = "GPT-5.6 Sol",
             description = "前沿能力，适合专业复杂任务。",
             modelFamilyHint = "OpenAI",
+            autoRoutingRoles = setOf(AutoRoutingRole.COMPLEX_DEBUG),
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.GPT_5_6_TERRA,
             displayName = "GPT-5.6 Terra",
             description = "能力与成本更均衡。",
             modelFamilyHint = "OpenAI",
+            autoRoutingRoles = setOf(AutoRoutingRole.DEFAULT),
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.GPT_5_6_LUNA,
@@ -50,15 +64,76 @@ object NanfengModelServiceCatalog {
             description = "适合高频、轻量任务。",
             modelFamilyHint = "OpenAI",
         ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.GEMINI_3_7_FLASH,
+            displayName = "Gemini 3.7 Flash",
+            description = "快速处理文字、图片和文件任务。",
+            modelFamilyHint = "Google · OpenRouter",
+            autoRoutingRoles = setOf(AutoRoutingRole.MULTIMODAL),
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.QWEN_3_7_PLUS,
+            displayName = "Qwen3.7-Plus",
+            description = "日常问答与轻量多媒体任务。",
+            modelFamilyHint = "Qwen · 官方直连",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.QWEN_3_8_MAX,
+            displayName = "Qwen3.8-Max",
+            description = "适合深度分析与复杂任务。",
+            modelFamilyHint = "Qwen · 官方直连",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.QWEN_3_6_FLASH,
+            displayName = "Qwen3.6 Flash",
+            description = "适合大批量知识整理与快速检索。",
+            modelFamilyHint = "Qwen · 官方直连",
+            autoRoutingRoles = setOf(AutoRoutingRole.LARGE_KNOWLEDGE),
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.DEEPSEEK_V4_PRO,
+            displayName = "DeepSeek V4 Pro",
+            description = "适合深度推理与专业分析。",
+            modelFamilyHint = "DeepSeek · 官方直连",
+        ),
     )
 
     fun provider(providerId: ProviderId): ProviderDescriptor? = when (providerId) {
         ProviderId.OPENROUTER -> openRouter
+        ProviderId.QWEN -> qwen
+        ProviderId.DEEPSEEK -> deepSeek
         ProviderId.MOCK -> null
+    }
+
+    fun providerFor(presetId: ModelPresetId): ProviderId = when (presetId) {
+        ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH -> ProviderId.QWEN
+        ModelPresetId.DEEPSEEK_V4_PRO -> ProviderId.DEEPSEEK
+        else -> ProviderId.OPENROUTER
+    }
+
+    fun defaultPreset(providerId: ProviderId): ModelPresetId = when (providerId) {
+        ProviderId.OPENROUTER -> ModelPresetId.GPT_5_6_TERRA
+        ProviderId.QWEN -> ModelPresetId.QWEN_3_7_PLUS
+        ProviderId.DEEPSEEK -> ModelPresetId.DEEPSEEK_V4_PRO
+        ProviderId.MOCK -> ModelPresetId.GPT_5_6_TERRA
     }
 
     fun preset(presetId: ModelPresetId): ModelPresetDescriptor =
         presets.firstOrNull { it.id == presetId } ?: presets.first()
+
+    /**
+     * Auto has product priorities, but concrete models are declared only by the central catalog.
+     * The executor still resolves every candidate and gates it on live availability/capabilities.
+     */
+    fun autoRoutingCandidates(facts: AutoRoutingFacts): List<ModelPresetId> {
+        val orderedRoles = buildList {
+            if (facts.hasImageVideoOrPdf) add(AutoRoutingRole.MULTIMODAL)
+            if (facts.knowledgeItemCount >= 500) add(AutoRoutingRole.LARGE_KNOWLEDGE)
+            if (facts.isComplexProjectDebug) add(AutoRoutingRole.COMPLEX_DEBUG)
+            add(AutoRoutingRole.DEFAULT)
+        }
+        return (orderedRoles.flatMap { role -> presets.filter { role in it.autoRoutingRoles }.map(ModelPresetDescriptor::id) } + presets.map(ModelPresetDescriptor::id)).distinct()
+    }
 }
 
 sealed interface SaveModelServiceConfigurationResult {
@@ -72,12 +147,18 @@ class LoadModelServiceConfigurationUseCase(
 ) {
     fun execute(providerId: ProviderId = ProviderId.OPENROUTER): ModelServiceConfiguration? {
         val provider = NanfengModelServiceCatalog.provider(providerId) ?: return null
-        val settings = settingsRepository.load(providerId)
+        val storedCredential = credentialStore.hasCredential(providerId)
+        val persistedSettings = settingsRepository.load(providerId)
+        // Older releases could leave an already encrypted local credential beside a false
+        // `.enabled` flag. A direct-send app must not claim "已连接" in settings yet reject the
+        // same credential in the composer. Credential presence is therefore the migration-safe
+        // effective enablement; the next explicit settings save persists that truth as well.
+        val settings = persistedSettings.copy(enabled = persistedSettings.enabled || storedCredential)
         return ModelServiceConfiguration(
             provider = provider,
             settings = settings,
             preset = NanfengModelServiceCatalog.preset(settings.presetId),
-            credentialState = if (credentialStore.hasCredential(providerId)) CredentialState.STORED else CredentialState.MISSING,
+            credentialState = if (storedCredential) CredentialState.STORED else CredentialState.MISSING,
         )
     }
 

@@ -16,6 +16,7 @@ import com.nanzhufeng.ai.domain.AiTaskRunResult
 import com.nanzhufeng.ai.domain.AttachmentImportRequest
 import com.nanzhufeng.ai.domain.AttachmentImportResult
 import com.nanzhufeng.ai.domain.AttachmentReadResult
+import com.nanzhufeng.ai.domain.AttachmentOpenResult
 import com.nanzhufeng.ai.domain.CaptureDraftFactory
 import com.nanzhufeng.ai.domain.CaptureGalleryImageResult
 import com.nanzhufeng.ai.domain.CaptureGalleryImageUseCase
@@ -92,6 +93,22 @@ class P2LocalDataContractsTest {
         assertEquals(sourceBytes.size.toLong(), imported.attachment.byteCount)
         assertNotNull(imported.attachment.sha256)
         assertArrayEquals(sourceBytes, restored.bytes)
+    }
+
+    @Test
+    fun `verified egress stream rechecks the private copy and exposes no file path`() {
+        val sourceBytes = validPngBytes()
+        val imported = attachments.import(AttachmentImportRequest(
+            input = ByteArrayInputStream(sourceBytes), mimeType = "image/png", displayName = "fixture.png",
+        )) as AttachmentImportResult.Imported
+
+        val opened = attachments.openVerified(imported.attachment) as AttachmentOpenResult.Opened
+        val streamed = opened.open().use { it.readBytes() }
+        assertEquals(sourceBytes.size.toLong(), opened.byteCount)
+        assertArrayEquals(sourceBytes, streamed)
+
+        assertTrue(attachments.deletePrivateCopy(imported.attachment))
+        assertTrue(attachments.openVerified(imported.attachment) is AttachmentOpenResult.Rejected)
     }
 
     @Test

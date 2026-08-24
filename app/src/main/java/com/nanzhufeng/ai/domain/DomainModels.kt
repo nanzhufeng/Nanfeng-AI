@@ -111,7 +111,12 @@ data class CaptureDraft(
     }
 }
 
-enum class ProviderId { MOCK, OPENROUTER }
+/**
+ * Provider identities are transport boundaries, not the names shown in the composer.
+ * OpenRouter is intentionally shared by the ChatGPT, Claude and Gemini logical models;
+ * Qwen and DeepSeek always have their own official endpoints and credentials.
+ */
+enum class ProviderId { MOCK, OPENROUTER, QWEN, DEEPSEEK }
 
 enum class ModelPresetId {
     CLAUDE_FABLE_5,
@@ -121,6 +126,11 @@ enum class ModelPresetId {
     GPT_5_6_SOL,
     GPT_5_6_TERRA,
     GPT_5_6_LUNA,
+    GEMINI_3_7_FLASH,
+    QWEN_3_7_PLUS,
+    QWEN_3_8_MAX,
+    QWEN_3_6_FLASH,
+    DEEPSEEK_V4_PRO,
 }
 
 data class ProviderDescriptor(
@@ -134,7 +144,11 @@ data class ModelPresetDescriptor(
     val displayName: String,
     val description: String,
     val modelFamilyHint: String,
+    /** Product routing intent, kept in the one model catalog rather than chat execution code. */
+    val autoRoutingRoles: Set<AutoRoutingRole> = emptySet(),
 )
+
+enum class AutoRoutingRole { DEFAULT, MULTIMODAL, LARGE_KNOWLEDGE, COMPLEX_DEBUG }
 
 data class ProviderSettings(
     val providerId: ProviderId,
@@ -156,6 +170,11 @@ data class ModelCapabilities(
     val supportsVision: Boolean,
     val supportsStreaming: Boolean,
     val supportsStructuredOutput: Boolean = false,
+    val supportsPdf: Boolean = false,
+    val supportsVideo: Boolean = false,
+    val supportsAudio: Boolean = false,
+    val supportsTools: Boolean = false,
+    val supportsReasoning: Boolean = false,
 )
 
 /**
@@ -186,6 +205,7 @@ data class ModelDescriptor(
     val displayName: String,
     val capabilities: ModelCapabilities,
     val contextWindowTokens: Long? = null,
+    val maxOutputTokens: Long? = null,
     val pricing: ModelPricing = ModelPricing(),
     val inputModalities: Set<String> = emptySet(),
     val outputModalities: Set<String> = emptySet(),
@@ -194,6 +214,7 @@ data class ModelDescriptor(
     init {
         require(id.isNotBlank()) { "模型 ID 不能为空。" }
         require(contextWindowTokens == null || contextWindowTokens > 0) { "上下文窗口必须为正数。" }
+        require(maxOutputTokens == null || maxOutputTokens > 0) { "最大输出必须为正数。" }
     }
 }
 

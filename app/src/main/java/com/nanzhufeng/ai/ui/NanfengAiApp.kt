@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -53,7 +54,6 @@ import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -94,6 +94,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.nio.ByteBuffer
+import java.io.File
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -113,7 +114,8 @@ import com.nanzhufeng.ai.domain.NanfengKnowledgeImportTaskId
 internal const val WORKSPACE_EXCHANGE_V2_DOCUMENT_MIME = "application/zip"
 internal const val WORKSPACE_EXCHANGE_V2_SUGGESTED_DISPLAY_NAME = "nanfeng-ai-workspace-v2.nfai-exchange"
 
-internal val PageBackground = Color(0xFFE6EAE7)
+/** Neutral canvas behind bright cards and floating controls; deliberately contains no color cast. */
+internal val PageBackground = Color(0xFFF7F7F7)
 /** Semantic success only; it must not be reused as the interactive brand accent. */
 internal val BrandGreen = Color(0xFF167A61)
 /** Shared with the already-updated Desktop chat shell: bright, warm CTA orange. */
@@ -159,6 +161,12 @@ private enum class SettingsDestination(val label: String) {
     FEATURE_REVIEW("功能审阅"),
     PRIVACY("隐私与安全"),
 }
+
+/** One entry per visible settings level; this is navigation state only, never business state. */
+private data class SettingsNavigationEntry(
+    val route: P5ARoute,
+    val destination: SettingsDestination,
+)
 
 /**
  * Leaves the physical screen edge to Android system back. A drag which starts just inside either
@@ -448,6 +456,8 @@ internal fun NanfengAiApp(
                     onSave = modelSettingsViewModel::save,
                     onRevealStoredCredential = modelSettingsViewModel::revealStoredCredential,
                     onVerifyRegistry = modelSettingsViewModel::verifyRegistry,
+                    onSaveRoutingPolicy = modelSettingsViewModel::saveRoutingPolicy,
+                    onTestConnection = modelSettingsViewModel::testConnection,
                 )
             }
             workspaceExchangeV2ExportViewModel.state.scope?.let { scope ->
@@ -644,14 +654,38 @@ private fun CaptureScreen(
 ) {
     val expanded = windowLayout == P5AWindowLayout.EXPANDED
     var settingsDestination by remember { mutableStateOf(SettingsDestination.HOME) }
-    val returnFromSettings = {
-        if (settingsDestination == SettingsDestination.HOME) {
-            // Management's archived/recycle-bin projection is settings-only. Never let it
-            // leak back into the drawer and make ordinary conversations look missing.
-            conversationViewModel.setListScope(com.nanzhufeng.ai.domain.ConversationListScope.ACTIVE)
-            onReturnToConversationDrawer()
+    val settingsRoot = SettingsNavigationEntry(P5ARoute.SETTINGS, SettingsDestination.HOME)
+    var settingsNavigationStack by remember { mutableStateOf(listOf(settingsRoot)) }
+    fun openSettingsLevel(route: P5ARoute, destination: SettingsDestination) {
+        val next = SettingsNavigationEntry(route, destination)
+        if (settingsNavigationStack.lastOrNull() == next) return
+        settingsNavigationStack = settingsNavigationStack + next
+        settingsDestination = destination
+        onRouteSelected(route)
+    }
+    val settingsOwnsCurrentRoute = settingsNavigationStack.lastOrNull()?.route == route
+    val returnFromSettings: () -> Unit = {
+        when {
+            // A selected import task is a level below the import centre. It must close first,
+            // before the settings route itself can move back to its parent.
+            route == P5ARoute.ADAPTERS && chatGptImportState.selected != null -> onBackChatGptImportTask()
+            route == P5ARoute.ADAPTERS && claudeImportState.selected != null -> onBackClaudeImportTask()
+            route == P5ARoute.ADAPTERS && nanfengKnowledgeImportState.selected != null -> onBackNanfengKnowledgeImportTask()
+            settingsOwnsCurrentRoute && settingsNavigationStack.size > 1 -> {
+                settingsNavigationStack = settingsNavigationStack.dropLast(1)
+                val parent = settingsNavigationStack.last()
+                settingsDestination = parent.destination
+                onRouteSelected(parent.route)
+            }
+            else -> {
+                // Management's archived/recycle-bin projection is settings-only. Never let it
+                // leak back into the drawer and make ordinary conversations look missing.
+                settingsNavigationStack = listOf(settingsRoot)
+                settingsDestination = SettingsDestination.HOME
+                conversationViewModel.setListScope(com.nanzhufeng.ai.domain.ConversationListScope.ACTIVE)
+                onReturnToConversationDrawer()
+            }
         }
-        else settingsDestination = SettingsDestination.HOME
     }
     // The chat root owns its own LazyColumn. It must not inherit the settings/workspace
     // verticalScroll container, otherwise Compose measures the transcript at infinity.
@@ -672,24 +706,31 @@ private fun CaptureScreen(
         modifier = Modifier
             .widthIn(max = 1280.dp)
             .fillMaxSize()
-            .then(if (route == P5ARoute.SETTINGS) Modifier.systemGestureExclusion() else Modifier)
-            .then(if (route == P5ARoute.SETTINGS) Modifier.settingsEdgeExit(returnFromSettings) else Modifier)
+            .then(if (settingsOwnsCurrentRoute) Modifier.systemGestureExclusion() else Modifier)
+            .then(if (settingsOwnsCurrentRoute) Modifier.settingsEdgeExit(returnFromSettings) else Modifier)
             .verticalScroll(rememberScrollState())
             .padding(start = if (expanded) 32.dp else 20.dp, end = if (expanded) 32.dp else 20.dp, top = 24.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        if (route == P5ARoute.SETTINGS) {
-            // Every settings return shares the same hierarchy: detail → settings home → drawer.
-            // The bottom system gesture remains untouched because no bottom exclusion is set.
+        if (settingsOwnsCurrentRoute) {
+            // Every settings return shares one stack: detail → parent route/category → settings
+            // home → drawer. The bottom system gesture remains untouched because no bottom
+            // exclusion is set.
             BackHandler(onBack = returnFromSettings)
+        }
+        if (route == P5ARoute.SETTINGS) {
             SettingsPageHeader(
                 destination = settingsDestination,
                 onBack = returnFromSettings,
             )
         } else if (route != P5ARoute.CAPTURE && route != P5ARoute.CONVERSATION) {
+            val returnToSettingsParent = settingsOwnsCurrentRoute && settingsNavigationStack.size > 1
             val returnRoute = if (route == P5ARoute.CONTROL) P5ARoute.SETTINGS else P5ARoute.CONVERSATION
-            TextButton(onClick = { onRouteSelected(returnRoute) }, shape = RoundedCornerShape(12.dp)) {
-                Text(if (route == P5ARoute.CONTROL) "返回设置" else "返回对话")
+            TextButton(
+                onClick = { if (returnToSettingsParent) returnFromSettings() else onRouteSelected(returnRoute) },
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text(if (returnToSettingsParent) "返回上一级" else if (route == P5ARoute.CONTROL) "返回设置" else "返回对话")
             }
             Header(route)
         }
@@ -712,12 +753,12 @@ private fun CaptureScreen(
                 conversationViewModel = conversationViewModel,
                 privacyDataState = privacyDataState,
                 onOpenPrivacyData = onOpenPrivacyData,
-                onOpenImport = { onRouteSelected(P5ARoute.ADAPTERS) },
+                onOpenImport = { openSettingsLevel(P5ARoute.ADAPTERS, SettingsDestination.IMPORT) },
                 onOpenBackup = onOpenLocalBackup,
-                onOpenLocalControl = { onRouteSelected(P5ARoute.CONTROL) },
+                onOpenLocalControl = { openSettingsLevel(P5ARoute.CONTROL, SettingsDestination.LOCAL_CONTROL) },
                 conversationExchangeExportState = conversationExchangeExportState,
                 onExportConversationExchange = onExportConversationExchange,
-                onSelect = { settingsDestination = it },
+                onSelect = { destination -> openSettingsLevel(P5ARoute.SETTINGS, destination) },
             )
             P5ARoute.ADAPTERS -> WorkbenchRoute(expanded) {
                 Text("数据导入", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
@@ -771,7 +812,9 @@ private fun CaptureScreen(
                     onCancel = onCancelNanfengKnowledgeImport,
                 )
             }
-            P5ARoute.CONTROL -> ControlHub(onRouteSelected)
+            P5ARoute.CONTROL -> ControlHub { destination ->
+                openSettingsLevel(destination, SettingsDestination.LOCAL_CONTROL)
+            }
         }
     }
 }
@@ -1096,6 +1139,15 @@ private fun ControlHub(onRouteSelected: (P5ARoute) -> Unit) = WhiteCard {
     }
 }
 
+/** Full-resolution camera output is temporary app-private data until the attachment owner copies it. */
+private fun createCameraCaptureUri(context: Context, prefix: String): Uri? = runCatching {
+    val directory = File(context.cacheDir, "camera_capture")
+    if (!directory.exists() && !directory.mkdirs()) return@runCatching null
+    if (!directory.isDirectory) return@runCatching null
+    val file = File.createTempFile("$prefix-", ".jpg", directory)
+    FileProvider.getUriForFile(context, "${context.packageName}.attachment-share", file)
+}.getOrNull()
+
 @Composable
 private fun ConversationFoundationCard(
     state: ConversationFoundationUiState,
@@ -1108,23 +1160,34 @@ private fun ConversationFoundationCard(
     onDrawerOpenChanged: (Boolean) -> Unit,
 ) {
     var workspaceVisible by rememberSaveable { mutableStateOf(true) }
-    val conversationPhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        viewModel.onConversationPhotoPickerResult(uri)
+    val context = LocalContext.current
+    val conversationVisualPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(com.nanzhufeng.ai.domain.CONVERSATION_ATTACHMENT_MAX_COUNT),
+    ) { uris ->
+        viewModel.onConversationVisualPickerResults(uris)
     }
-    val conversationCamera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        viewModel.onConversationCameraResult(bitmap)
+    var conversationCameraUri by rememberSaveable { mutableStateOf<String?>(null) }
+    val conversationCamera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val uri = conversationCameraUri?.let(Uri::parse)
+        conversationCameraUri = null
+        viewModel.onConversationCameraResult(uri, captured)
     }
-    val conversationDocumentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        viewModel.onConversationDocumentPickerResult(uri)
+    val conversationDocumentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        viewModel.onConversationDocumentPickerResults(uris)
     }
-    val temporaryPhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        viewModel.onTemporaryPhotoPickerResult(uri)
+    val temporaryVisualPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(com.nanzhufeng.ai.domain.TemporaryConversationRecovery.MAX_ATTACHMENTS),
+    ) { uris ->
+        viewModel.onTemporaryVisualPickerResults(uris)
     }
-    val temporaryCamera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        viewModel.onTemporaryCameraResult(bitmap)
+    var temporaryCameraUri by rememberSaveable { mutableStateOf<String?>(null) }
+    val temporaryCamera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val uri = temporaryCameraUri?.let(Uri::parse)
+        temporaryCameraUri = null
+        viewModel.onTemporaryCameraResult(uri, captured)
     }
-    val temporaryDocumentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        viewModel.onTemporaryDocumentPickerResult(uri)
+    val temporaryDocumentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        viewModel.onTemporaryDocumentPickerResults(uris)
     }
     WhiteCard {
         Text("对话", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -1141,19 +1204,19 @@ private fun ConversationFoundationCard(
     if (workspaceVisible) ConversationWorkspaceDialog(
         state = state, onDismiss = { /* Root chat has no dismiss-to-workbench escape hatch. */ }, onCreate = viewModel::createDevelopmentConversation,
         onSelect = viewModel::selectConversation, onSurfaceChanged = viewModel::selectSurface, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
-        onRequestNormalChatExternalSendConfirmation = viewModel::requestNormalChatExternalSendConfirmation,
-        onSetNormalChatExternalSendAcknowledgement = viewModel::setNormalChatExternalSendAcknowledgement,
-        onConfirmNormalChatExternalSend = viewModel::confirmNormalChatExternalSend,
-        onExpireNormalChatExternalSendConfirmation = viewModel::expireNormalChatExternalSendConfirmation,
-        onDismissNormalChatExternalSendConfirmation = viewModel::dismissNormalChatExternalSendConfirmation,
-        onRequestCompare = viewModel::requestCompareChatGptAndClaude,
+        onRetryNormalSend = viewModel::retryLatestNormalSend, onMarkNormalSendFailed = viewModel::markLatestNormalSendFailed,
         onStartFixture = { viewModel.startDeterministicLocalStream() }, onStartFailureFixture = { viewModel.startDeterministicLocalStream(fail = true) },
-        onStop = viewModel::stopLocalStream, onAction = viewModel::performAction, onSwitchBranch = viewModel::switchToBranch, onBranchFromMessage = viewModel::branchFromMessage,
+        onStop = viewModel::stopLocalStream, onAction = viewModel::performAction, onSwitchBranch = viewModel::switchToBranch, onBranchFromMessage = viewModel::branchFromMessage, onDismissBranchCreation = viewModel::dismissBranchCreation,
         onEditUserMessage = viewModel::editCurrentPathUserMessage,
         onListScope = viewModel::setListScope, onSearchChanged = viewModel::updateSearchQuery, onSearchCategoryChanged = viewModel::selectSearchCategory, onSearchRequested = viewModel::submitSearch, onSearchFocus = viewModel::openSearchHistory, onCloseSearchHistory = viewModel::closeSearchHistory, onFillSearchHistory = viewModel::fillSearchHistory, onClearSearchHistory = viewModel::clearSearchHistory, onCloseSearch = viewModel::closeSearchPanel, onOpenSearchHit = viewModel::openSearchHit,
-        onManage = viewModel::manage, onExport = viewModel::exportCurrentConversation,
-        onAddCamera = { conversationCamera.launch(null) },
-        onAddImage = { conversationPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        onManage = viewModel::manage, onBatchSoftDelete = viewModel::softDeleteConversations, onExport = viewModel::exportCurrentConversation,
+        onAddCamera = {
+            createCameraCaptureUri(context, "conversation")?.let { uri ->
+                conversationCameraUri = uri.toString()
+                conversationCamera.launch(uri)
+            } ?: viewModel.reportCameraCaptureUnavailable(temporary = false)
+        },
+        onAddImage = { conversationVisualPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
         onAddFile = { conversationDocumentPicker.launch(arrayOf("video/mp4", "audio/*", "application/pdf", "text/plain", "text/markdown", "application/json", "text/csv")) },
         onRemoveAttachment = viewModel::removeDraftAttachment,
         onOpenImagePreview = viewModel::openImagePreview,
@@ -1176,13 +1239,24 @@ private fun ConversationFoundationCard(
         onSubmitTemporaryDraft = viewModel::submitTemporaryDraft,
         onExitTemporary = viewModel::leaveTemporaryConversation,
         onSelectP6GModel = viewModel::selectP6GModel,
-        onAddTemporaryCamera = { temporaryCamera.launch(null) },
-        onAddTemporaryImage = { temporaryPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        onAddTemporaryFile = { temporaryDocumentPicker.launch(arrayOf("application/pdf", "text/plain", "text/markdown", "application/json", "text/csv")) },
+        onAddTemporaryCamera = {
+            createCameraCaptureUri(context, "temporary")?.let { uri ->
+                temporaryCameraUri = uri.toString()
+                temporaryCamera.launch(uri)
+            } ?: viewModel.reportCameraCaptureUnavailable(temporary = true)
+        },
+        onAddTemporaryImage = { temporaryVisualPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+        onAddTemporaryFile = { temporaryDocumentPicker.launch(arrayOf("video/mp4", "audio/*", "application/pdf", "text/plain", "text/markdown", "application/json", "text/csv")) },
         onRemoveTemporaryDraftAttachment = viewModel::removeTemporaryDraftAttachment,
         projects = projectState.activeProjects,
         currentProjectId = state.currentProjectId?.let { com.nanzhufeng.ai.domain.ProjectId(it) },
         onAssignProject = viewModel::assignProject,
+        onCreateProject = projectViewModel::showCreateDialog,
+        onManageProjects = { projectViewModel.showDialog() },
+        onManageProject = { projectId -> projectViewModel.showDialog(projectId) },
+        onPinProject = projectViewModel::pin,
+        onArchiveProject = projectViewModel::archive,
+        onCreateWorkConversation = viewModel::createWorkConversation,
         onOpenRoute = onRouteSelected,
         drawerOpen = drawerOpen,
         onDrawerOpenChanged = onDrawerOpenChanged,
@@ -1211,7 +1285,7 @@ private fun MemoryCard(state: MemoryUiState, viewModel: MemoryViewModel) = White
 private fun PrivacyDataCard(state: PrivacyDataUiState, onOpen: () -> Unit) = WhiteCard {
     Text("隐私与数据", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(6.dp))
-    Text("本地优先；当前 Provider 推理外发已禁用。查看清单、范围删除或手动导出不上传的安全诊断。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    Text("本地优先；可查看各类数据占用、范围删除或手动导出不含正文的安全诊断。模型外发遵循当前模型设置。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(10.dp))
     Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(46.dp), shape = P5AInteractiveShape) { Text("打开隐私与数据") }
     state.notice?.let { Text(it, color = BrandGreen, style = MaterialTheme.typography.bodySmall) }

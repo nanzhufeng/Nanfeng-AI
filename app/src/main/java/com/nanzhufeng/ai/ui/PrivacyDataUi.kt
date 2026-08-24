@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -43,6 +42,11 @@ internal fun PrivacyDataDialog(state: PrivacyDataUiState, onDismiss: () -> Unit,
                 Text("数据默认保存在本机。")
                 state.inventory?.let { inventory ->
                     Text(if (inventory.credentialReferencePresent) "API Key 已保存在本机。" else "尚未保存 API Key。", color = SecondaryText)
+                    val totalBytes = inventory.aggregates.sumOf { it.byteCount }
+                    Text("本机数据占用 ${formatStorageBytes(totalBytes)}", color = SecondaryText)
+                    inventory.aggregates.filter { it.count > 0 || it.byteCount > 0 }.sortedBy { it.key }.forEach { aggregate ->
+                        Text("${aggregate.key} · ${aggregate.count} 项 · ${formatStorageBytes(aggregate.byteCount)}", color = SecondaryText, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    }
                 }
                 OutlinedButton(onClick = onOpenBackup, enabled = !state.working, modifier = Modifier.fillMaxWidth(), shape = P5AInteractiveShape) { Text("打开备份与恢复") }
                 var cleanupExpanded by remember { mutableStateOf(false) }
@@ -99,6 +103,12 @@ internal fun PrivacyDataDialog(state: PrivacyDataUiState, onDismiss: () -> Unit,
         },
         confirmButton = { OutlinedButton(onClick = onDismiss, enabled = !state.working, shape = P5AInteractiveShape) { Text("关闭") } },
     )
+}
+
+private fun formatStorageBytes(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    else -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
 }
 
 private fun PrivacyDeleteScope.label(): String = when (this) {

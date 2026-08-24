@@ -8,25 +8,20 @@ import org.junit.Test
 class P2MVisibleConfirmationContractsTest {
     private val ui = File("src/main/java/com/nanzhufeng/ai/ui/ModelSettingsUi.kt").readText()
     private val owner = File("src/main/java/com/nanzhufeng/ai/ui/ModelSettingsViewModel.kt").readText()
-    private val activity = File("src/main/java/com/nanzhufeng/ai/NanfengAiActivity.kt").readText()
     private val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
 
-    @Test fun `normal model settings hide registry verification and one-time real-service actions`() {
-        for (token in listOf("P2MRealServiceConfirmationDialog", "P2MRealServiceStatusCard", "公开模型目录", "真实服务状态", "核验公开模型目录", "确认一次真实文本请求")) {
-            assertFalse(token, ui.contains(token))
-            assertFalse(token, app.contains(token))
+    @Test fun `model settings expose real provider and routing state without a per-send confirmation`() {
+        for (token in listOf("OpenAI、Claude 与 Gemini 共用 OpenRouter", "路由", "自动路由", "自动兜底", "质量升级", "允许跨服务商兜底", "核验模型目录")) {
+            assertTrue("missing $token", ui.contains(token))
         }
-        assertFalse(app.contains("onVerifyRegistry"))
-        assertFalse(app.contains("onOpenRealServiceConfirmation"))
+        assertTrue(app.contains("onVerifyRegistry"))
+        assertTrue(app.contains("onSaveRoutingPolicy"))
+        assertFalse(ui.contains("确认发送给第三方服务"))
     }
 
-    @Test fun `controlled owner remains outside the normal settings rendering path`() {
-        assertTrue(owner.contains("realServiceReadiness.execute()"))
-        assertTrue(owner.contains("realServiceExecutor.execute(ready.spec.fingerprint())"))
-        assertTrue(owner.contains("realServiceConfirmationChecked = false"))
-        assertTrue(owner.contains("未创建 Provider Attempt"))
-        assertFalse(activity.contains("ACTION_P2M_REAL_SERVICE_ACCEPTANCE"))
-        assertFalse(app.contains("showRealServiceConfirmation"))
-        assertFalse(app.contains("verifyRegistry"))
+    @Test fun `settings state and save path share the same persisted routing owner`() {
+        assertTrue(owner.contains("loadRoutingPolicy.execute()"))
+        assertTrue(owner.contains("saveRoutingPolicy.execute(policy)"))
+        assertTrue(owner.contains("routingPolicy = routingPolicy"))
     }
 }

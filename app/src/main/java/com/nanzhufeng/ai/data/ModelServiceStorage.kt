@@ -27,7 +27,7 @@ class AndroidModelServiceSettingsRepository(context: Context) : ModelServiceSett
         enabled = preferences.getBoolean("${providerId.name}.enabled", false),
         presetId = preferences.getString("${providerId.name}.preset", null)
             ?.let(::migratePreset)
-            ?: ModelPresetId.CLAUDE_FABLE_5,
+            ?: defaultPreset(providerId),
     )
 
     override fun save(settings: ProviderSettings): ProviderSettings {
@@ -49,6 +49,13 @@ class AndroidModelServiceSettingsRepository(context: Context) : ModelServiceSett
             "GPT_5_MINI" -> ModelPresetId.GPT_5_6_TERRA
             "GPT_5_NANO" -> ModelPresetId.GPT_5_6_LUNA
             else -> runCatching { ModelPresetId.valueOf(saved) }.getOrNull()
+        }
+
+        fun defaultPreset(providerId: ProviderId): ModelPresetId = when (providerId) {
+            ProviderId.OPENROUTER -> ModelPresetId.GPT_5_6_TERRA
+            ProviderId.QWEN -> ModelPresetId.QWEN_3_7_PLUS
+            ProviderId.DEEPSEEK -> ModelPresetId.DEEPSEEK_V4_PRO
+            ProviderId.MOCK -> ModelPresetId.GPT_5_6_TERRA
         }
     }
 }

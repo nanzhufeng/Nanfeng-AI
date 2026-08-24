@@ -19,6 +19,15 @@ import com.nanzhufeng.ai.domain.RegistryVerificationDisplayStatus
 import com.nanzhufeng.ai.domain.RegistryVerificationStatusView
 import com.nanzhufeng.ai.domain.VerifyOpenRouterRegistryResult
 import com.nanzhufeng.ai.domain.VerifyOpenRouterRegistryUseCase
+import com.nanzhufeng.ai.domain.DirectChatCallAuditStore
+import com.nanzhufeng.ai.domain.DirectChatCallAuditSummary
+import com.nanzhufeng.ai.domain.ProviderDiagnosticRecord
+import com.nanzhufeng.ai.domain.ProviderDiagnosticStore
+import com.nanzhufeng.ai.domain.ContextSelectionAuditRecord
+import com.nanzhufeng.ai.domain.ContextSelectionAuditStore
+import com.nanzhufeng.ai.domain.ChatRoutingPolicy
+import com.nanzhufeng.ai.domain.LoadChatRoutingPolicyUseCase
+import com.nanzhufeng.ai.domain.SaveChatRoutingPolicyUseCase
 import com.nanzhufeng.ai.ai.LoadRealServiceAcceptanceUiStatusUseCase
 import com.nanzhufeng.ai.ai.RealServiceAcceptanceUiStatus
 import com.nanzhufeng.ai.ai.P2MRealServiceExecutor
@@ -26,6 +35,8 @@ import com.nanzhufeng.ai.ai.P2MRealServiceExecutionResult
 import com.nanzhufeng.ai.ai.P2MRealServiceReadiness
 import com.nanzhufeng.ai.ai.P2MRealServiceReadinessUseCase
 import com.nanzhufeng.ai.ai.P2MRealServiceRunSummary
+import com.nanzhufeng.ai.ai.ProviderConnectionProbe
+import com.nanzhufeng.ai.ai.ProviderConnectionProbeResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -34,6 +45,7 @@ data class ModelSettingsUiState(
     val loading: Boolean = true,
     val saving: Boolean = false,
     val verifyingRegistry: Boolean = false,
+    val probingConnection: Boolean = false,
     val dialogVisible: Boolean = false,
     val realServiceConfirmationVisible: Boolean = false,
     val realServiceConfirmationChecked: Boolean = false,
@@ -41,6 +53,13 @@ data class ModelSettingsUiState(
     val realServiceReadiness: P2MRealServiceReadiness = P2MRealServiceReadiness.Blocked("正在检查本机配置。"),
     val realServiceSummary: P2MRealServiceRunSummary? = null,
     val configuration: ModelServiceConfiguration? = null,
+    /** One local configuration per transport boundary; OpenRouter backs OpenAI/Claude/Gemini. */
+    val providerConfigurations: Map<ProviderId, ModelServiceConfiguration> = emptyMap(),
+    val callAuditSummary: DirectChatCallAuditSummary = DirectChatCallAuditSummary(),
+    /** Redacted failures only; this is intentionally separate from the normal audit ledger. */
+    val recentDiagnostics: List<ProviderDiagnosticRecord> = emptyList(),
+    val recentContextSelections: List<ContextSelectionAuditRecord> = emptyList(),
+    val routingPolicy: ChatRoutingPolicy = ChatRoutingPolicy(),
     /** Ephemeral screen-only value, cleared when this dialog closes or saves. */
     val revealedCredential: String? = null,
     val notice: String? = null,
@@ -59,6 +78,12 @@ class ModelSettingsViewModel(
     private val loadRealServiceAcceptanceStatus: LoadRealServiceAcceptanceUiStatusUseCase,
     private val realServiceReadiness: P2MRealServiceReadinessUseCase,
     private val realServiceExecutor: P2MRealServiceExecutor,
+    private val directChatCallAudit: DirectChatCallAuditStore,
+    private val providerDiagnostics: ProviderDiagnosticStore,
+    private val contextSelectionAudits: ContextSelectionAuditStore,
+    private val loadRoutingPolicy: LoadChatRoutingPolicyUseCase,
+    private val saveRoutingPolicy: SaveChatRoutingPolicyUseCase,
+    private val providerConnectionProbe: ProviderConnectionProbe,
 ) : ViewModel() {
     var state by mutableStateOf(ModelSettingsUiState())
         private set
@@ -69,17 +94,18 @@ class ModelSettingsViewModel(
 
     fun showDialog() {
         state = state.copy(dialogVisible = true, revealedCredential = null, notice = null, error = null)
+        refresh()
     }
 
     fun dismissDialog() {
         if (!state.saving && !state.verifyingRegistry && !state.realServiceExecuting) state = state.copy(dialogVisible = false, revealedCredential = null, error = null)
     }
 
-    fun revealStoredCredential() {
-        if (state.saving || state.configuration?.credentialState != com.nanzhufeng.ai.domain.CredentialState.STORED) return
+    fun revealStoredCredential(providerId: ProviderId) {
+        if (state.saving || state.providerConfigurations[providerId]?.credentialState != com.nanzhufeng.ai.domain.CredentialState.STORED) return
         viewModelScope.launch {
             val revealed = withContext(Dispatchers.IO) {
-                loadConfiguration.revealStoredCredential()?.let { chars ->
+                loadConfiguration.revealStoredCredential(providerId)?.let { chars ->
                     try { chars.concatToString() } finally { chars.fill('\u0000') }
                 }
             }
@@ -191,19 +217,44 @@ class ModelSettingsViewModel(
         }
     }
 
-    fun save(enabled: Boolean, presetId: ModelPresetId, replacementCredential: String?) {
+    /** User-initiated fixed "hi" probe; no conversation text or attachment is used. */
+    fun testConnection(providerId: ProviderId) {
+        if (state.probingConnection || state.saving || state.verifyingRegistry) return
+        state = state.copy(probingConnection = true, notice = null, error = null)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { providerConnectionProbe.execute(providerId) }
+            val diagnostics = withContext(Dispatchers.IO) { providerDiagnostics.recent(8) }
+            state = when (result) {
+                is ProviderConnectionProbeResult.Connected -> state.copy(
+                    probingConnection = false, recentDiagnostics = diagnostics,
+                    notice = "连接成功：${result.endpointHost} · ${result.apiModelId} · ${result.latencyMs} ms。",
+                )
+                is ProviderConnectionProbeResult.Failed -> state.copy(
+                    probingConnection = false, recentDiagnostics = diagnostics,
+                    error = CaptureUiError("连接测试失败：${result.errorClass.name}", "HTTP ${result.httpStatus ?: "未建立连接"}；可查看下方本机脱敏诊断。"),
+                )
+                is ProviderConnectionProbeResult.Blocked -> state.copy(
+                    probingConnection = false, recentDiagnostics = diagnostics,
+                    error = CaptureUiError("连接测试未发送", result.reason),
+                )
+            }
+        }
+    }
+
+    fun save(providerId: ProviderId, enabled: Boolean, presetId: ModelPresetId, replacementCredential: String?) {
         if (state.saving) return
         state = state.copy(saving = true, notice = null, error = null)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                saveConfiguration.execute(ProviderId.OPENROUTER, enabled, presetId, replacementCredential)
+                saveConfiguration.execute(providerId, enabled, presetId, replacementCredential)
             }
             state = when (result) {
                 is SaveModelServiceConfigurationResult.Saved -> state.copy(
                     saving = false,
                     dialogVisible = false,
                     revealedCredential = null,
-                    configuration = result.configuration,
+                    configuration = if (providerId == ProviderId.OPENROUTER) result.configuration else state.configuration,
+                    providerConfigurations = state.providerConfigurations + (providerId to result.configuration),
                     notice = "模型服务设置已安全保存在本机。",
                 )
                 is SaveModelServiceConfigurationResult.Rejected -> state.copy(
@@ -214,17 +265,42 @@ class ModelSettingsViewModel(
         }
     }
 
+    fun saveRoutingPolicy(policy: ChatRoutingPolicy) {
+        if (state.saving) return
+        state = state.copy(saving = true, notice = null, error = null)
+        viewModelScope.launch {
+            val saved = runCatching { withContext(Dispatchers.IO) { saveRoutingPolicy.execute(policy) } }
+            state = saved.fold(
+                onSuccess = { state.copy(saving = false, routingPolicy = it, notice = "自动路由与兜底策略已保存在本机。") },
+                onFailure = { state.copy(saving = false, error = CaptureUiError("路由设置保存失败", "已有策略保持不变，请稍后重试。")) },
+            )
+        }
+    }
+
     private fun refresh() {
         viewModelScope.launch {
-            val configuration = withContext(Dispatchers.IO) { loadConfiguration.execute() }
+            val dialogVisible = state.dialogVisible
+            val providerConfigurations = withContext(Dispatchers.IO) {
+                listOf(ProviderId.OPENROUTER, ProviderId.QWEN, ProviderId.DEEPSEEK)
+                    .mapNotNull { provider -> loadConfiguration.execute(provider)?.let { provider to it } }
+                    .toMap()
+            }
+            val configuration = providerConfigurations[ProviderId.OPENROUTER]
             val registryStatus = withContext(Dispatchers.IO) { loadRegistryStatus.execute() }
             val acceptance = withContext(Dispatchers.IO) { loadRealServiceAcceptanceStatus.execute() }
             val readiness = withContext(Dispatchers.IO) { realServiceReadiness.execute() }
+            val callAuditSummary = withContext(Dispatchers.IO) { directChatCallAudit.summary() }
+            val recentDiagnostics = withContext(Dispatchers.IO) { providerDiagnostics.recent(8) }
+            val recentContextSelections = withContext(Dispatchers.IO) { contextSelectionAudits.recent(3) }
+            val routingPolicy = withContext(Dispatchers.IO) { loadRoutingPolicy.execute() }
             withContext(Dispatchers.IO) { realServiceExecutor.ensureSuccessfulTranscriptBinding() }
             val summary = withContext(Dispatchers.IO) { realServiceExecutor.readPersistedSummary() }
             state = ModelSettingsUiState(
-                loading = false, configuration = configuration, registryStatus = registryStatus,
+                loading = false, dialogVisible = dialogVisible, configuration = configuration, providerConfigurations = providerConfigurations, callAuditSummary = callAuditSummary, registryStatus = registryStatus,
+                recentDiagnostics = recentDiagnostics,
+                recentContextSelections = recentContextSelections,
                 realServiceAcceptance = acceptance, realServiceReadiness = readiness, realServiceSummary = summary,
+                routingPolicy = routingPolicy,
             )
         }
     }
@@ -237,13 +313,20 @@ class ModelSettingsViewModel(
         private val loadRealServiceAcceptanceStatus: LoadRealServiceAcceptanceUiStatusUseCase,
         private val realServiceReadiness: P2MRealServiceReadinessUseCase,
         private val realServiceExecutor: P2MRealServiceExecutor,
+        private val directChatCallAudit: DirectChatCallAuditStore,
+        private val providerDiagnostics: ProviderDiagnosticStore,
+        private val contextSelectionAudits: ContextSelectionAuditStore,
+        private val loadRoutingPolicy: LoadChatRoutingPolicyUseCase,
+        private val saveRoutingPolicy: SaveChatRoutingPolicyUseCase,
+        private val providerConnectionProbe: ProviderConnectionProbe,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ModelSettingsViewModel::class.java))
             return ModelSettingsViewModel(
                 loadConfiguration, saveConfiguration, loadRegistryStatus, verifyOpenRouterRegistry,
-                loadRealServiceAcceptanceStatus, realServiceReadiness, realServiceExecutor,
+                loadRealServiceAcceptanceStatus, realServiceReadiness, realServiceExecutor, directChatCallAudit, providerDiagnostics, contextSelectionAudits,
+                loadRoutingPolicy, saveRoutingPolicy, providerConnectionProbe,
             ) as T
         }
     }
