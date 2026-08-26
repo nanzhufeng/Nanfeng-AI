@@ -55,6 +55,34 @@ class InMemoryVersionedModelRegistry(
         if (model.id.contains(":fast", ignoreCase = true) || model.displayName.contains("(Fast)", ignoreCase = true)) {
             return ModelRegistryResolution.Rejected(AiTaskError.ModelRegistryModelUnavailable)
         }
-        return ModelRegistryResolution.Resolved(snapshot, model)
+        // Earlier snapshots persisted the Pro routing mode as if it were the logical Terra/Sol
+        // model.  Refusing the whole cached registry here made every ordinary message wait for
+        // a catalog refresh before it could leave the device.  Keep the metadata, but normalize
+        // only that known legacy spelling to the exact standard model ID requested by the user.
+        // Unknown look-alikes remain unavailable rather than being guessed.
+        val normalized = model.normalizedStandardGptPreset(presetId)
+            ?: return ModelRegistryResolution.Rejected(AiTaskError.ModelRegistryModelUnavailable)
+        return ModelRegistryResolution.Resolved(snapshot, normalized)
+    }
+
+    private fun ModelDescriptor.normalizedStandardGptPreset(presetId: ModelPresetId): ModelDescriptor? {
+        val canonicalTerminalId = when (presetId) {
+            ModelPresetId.GPT_5_6_TERRA -> "gpt-5.6-terra"
+            ModelPresetId.GPT_5_6_SOL -> "gpt-5.6-sol"
+            ModelPresetId.GPT_5_6_LUNA -> "gpt-5.6-luna"
+            else -> return this
+        }
+        val terminalId = id.substringAfterLast('/').lowercase()
+        return when (terminalId) {
+            canonicalTerminalId -> this
+            canonicalTerminalId.replace('.', '-') -> copy(
+                id = "${id.substringBeforeLast('/')}/$canonicalTerminalId",
+            )
+            "$canonicalTerminalId-pro", "${canonicalTerminalId.replace('.', '-')}-pro" -> copy(
+                id = "${id.substringBeforeLast('/')}/$canonicalTerminalId",
+                displayName = displayName.removeSuffix(" Pro"),
+            )
+            else -> null
+        }
     }
 }

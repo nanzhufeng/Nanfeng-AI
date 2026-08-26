@@ -86,7 +86,7 @@ internal fun DualPathConnectionDialog(
     if (!state.detailVisible) return
     val snapshot = state.snapshot ?: return
     Dialog(onDismissRequest = onDismiss) {
-        Surface(modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 640.dp), shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 10.dp) {
+        Surface(modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 640.dp), shape = RoundedCornerShape(24.dp), color = ForegroundSurface, shadowElevation = 10.dp) {
             Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("本地与联网双路径", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 Text("本地离线", fontWeight = FontWeight.SemiBold)

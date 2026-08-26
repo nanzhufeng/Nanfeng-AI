@@ -1,5 +1,7 @@
 # P5-A Android 自适应布局与无障碍产品化基线合同
 
+> **当前 Android 会话 UI 路由（2026-08-24）：** 本文保留历史自适应/无障碍基线和非会话页面边界。Android `ConversationWorkspace` 的导航、抽屉、顶栏、Composer、表面层级、文字和手势统一以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为准；本文早期 NavigationBar/NavigationRail 壳层不能反向覆盖当前会话 UI。
+
 ## 目标与边界
 
 本合同只为既有 Android 本地优先产品建立可测试的紧凑/展开 UI 壳层、可访问性与窗口连续性基线。它不改变任何 Domain、Room Schema（保持 17）、Repository、Provider、RunSpec、egress、导入导出语义或 launcher icon。

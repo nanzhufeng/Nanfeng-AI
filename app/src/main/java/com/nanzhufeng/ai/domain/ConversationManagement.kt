@@ -118,6 +118,8 @@ data class ConversationAttachmentSearchHit(
     val messageNodeId: MessageNodeId,
     val title: String,
     val attachment: ConversationAttachmentReference,
+    /** Message-owned local timestamp; used only for month grouping in the search catalogue. */
+    val timestampEpochMs: Long,
 )
 
 /** A safe, local-only search row. It deliberately has no storage key, URI, path or provider fact. */
@@ -133,16 +135,35 @@ data class LocalSearchIndexRecord(
 
 /** Read-only projection: it deliberately receives only repository snapshots. */
 class ConversationSearchProjection(private val management: ConversationManagementDomain) {
+    /** Opening a search range browses the same local conversation catalogue that keyword search filters. */
+    fun browse(snapshots: List<ConversationSnapshot>, scope: ConversationListScope): List<ConversationSearchHit> = snapshots.asSequence()
+        .filter { snapshotMatchesScope(it, scope) }
+        .sortedWith { left, right -> management.listOrder(scope).compare(left.conversation, right.conversation) }
+        .map { snapshot ->
+            val latestText = MessageTree(snapshot.conversation, snapshot.nodes).contextPath()
+                .asReversed()
+                .asSequence()
+                .filter { it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT }
+                .flatMap { node -> node.content.filterIsInstance<ContentBlock.Text>().asReversed().asSequence().map { it.text } }
+                .firstOrNull()
+                ?.trim()
+                .orEmpty()
+            ConversationSearchHit(
+                conversationId = snapshot.conversation.id,
+                messageNodeId = null,
+                title = snapshot.conversation.title,
+                snippet = latestText.take(120).ifBlank { "本地对话" },
+                titleMatch = true,
+            )
+        }
+        .take(MAX_RESULTS)
+        .toList()
+
     fun search(snapshots: List<ConversationSnapshot>, query: String, scope: ConversationListScope): List<ConversationSearchHit> {
         val normalized = query.trim().lowercase(Locale.ROOT)
         if (normalized.isEmpty()) return emptyList()
         return snapshots.asSequence()
-            .filter { snapshot -> when (scope) {
-                ConversationListScope.ACTIVE -> snapshot.conversation.archivedAt == null
-                ConversationListScope.ARCHIVED -> snapshot.conversation.archivedAt != null
-                ConversationListScope.DELETED -> snapshot.conversation.deletedAt != null
-                ConversationListScope.ALL -> true
-            } }
+            .filter { snapshotMatchesScope(it, scope) }
             .flatMap { snapshot -> hitsFor(snapshot, normalized).asSequence() }
             .sortedWith(compareByDescending<ConversationSearchHit> { it.titleMatch }
                 .thenComparator { a, b -> management.listOrder(scope).compare(
@@ -171,6 +192,12 @@ class ConversationSearchProjection(private val management: ConversationManagemen
         val start = (index - 36).coerceAtLeast(0)
         return text.substring(start, (index + query.length + 84).coerceAtMost(text.length)).replace('\n', ' ')
     }
+    private fun snapshotMatchesScope(snapshot: ConversationSnapshot, scope: ConversationListScope) = when (scope) {
+        ConversationListScope.ACTIVE -> snapshot.conversation.archivedAt == null
+        ConversationListScope.ARCHIVED -> snapshot.conversation.archivedAt != null
+        ConversationListScope.DELETED -> snapshot.conversation.deletedAt != null
+        ConversationListScope.ALL -> true
+    }
     companion object { const val MAX_RESULTS = 50 }
 }
 
@@ -179,17 +206,26 @@ class ManageConversationUseCase(private val domain: ConversationManagementDomain
 }
 
 class SearchConversationsUseCase(private val repository: ConversationSearchRepository, private val projection: ConversationSearchProjection) {
+    fun browse(scope: ConversationListScope): List<ConversationSearchHit> =
+        projection.browse(repository.snapshotsForSearch(), scope)
+
     fun execute(query: String, scope: ConversationListScope): List<ConversationSearchHit> {
         val normalized = query.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
         if (normalized.isBlank()) return emptyList()
         val indexed = (repository as? LocalSearchIndexRepository)?.searchLocalIndex(normalized, scope)
-        if (indexed != null) return indexed.sortedWith(
+        val indexedHits = indexed.orEmpty().sortedWith(
             compareByDescending<LocalSearchIndexRecord> { it.titleMatch }
                 .thenByDescending { it.timestampEpochMs }
                 .thenBy { it.conversationId.value }
                 .thenBy { it.messageNodeId?.value.orEmpty() },
         ).take(50).map { ConversationSearchHit(it.conversationId, it.messageNodeId, it.title, it.snippet, it.titleMatch) }
-        return projection.search(repository.snapshotsForSearch(), query, scope)
+        // Older app versions may leave a non-empty but partial acceleration index. Merge the
+        // current persisted path so a valid hit never disappears merely because another row
+        // still exists in that index.
+        val currentPathHits = projection.search(repository.snapshotsForSearch(), query, scope)
+        return (indexedHits + currentPathHits)
+            .distinctBy { "${it.conversationId.value}:${it.messageNodeId?.value.orEmpty()}" }
+            .take(50)
     }
 }
 
@@ -198,6 +234,22 @@ class SearchConversationsUseCase(private val repository: ConversationSearchRepos
  * It walks the visible branch of each local snapshot and never exposes a path, URI or bytes.
  */
 class SearchConversationAttachmentsUseCase(private val repository: ConversationSearchRepository) {
+    /** Category tabs are browsable immediately; keywords only narrow this complete local catalogue. */
+    fun browse(
+        category: ConversationSearchCategory,
+        scope: ConversationListScope,
+    ): List<ConversationAttachmentSearchHit> = repository.snapshotsForSearch().asSequence()
+        .filter { snapshot -> snapshotMatchesScope(snapshot, scope) }
+        .flatMap { snapshot ->
+            MessageTree(snapshot.conversation, snapshot.nodes).contextPath().asSequence()
+                .flatMap { node -> node.content.filterIsInstance<ContentBlock.Attachment>().asSequence().map { node to it.attachment } }
+                .filter { (_, attachment) -> category == ConversationSearchCategory.ALL || categoryFor(attachment) == category }
+                .map { (node, attachment) -> ConversationAttachmentSearchHit(snapshot.conversation.id, node.id, snapshot.conversation.title, attachment, node.createdAt.toEpochMilli()) }
+        }
+        .distinctBy { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }
+        .take(MAX_RESULTS)
+        .toList()
+
     fun execute(
         query: String,
         category: ConversationSearchCategory,
@@ -216,7 +268,7 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
                         snapshot.conversation.title.lowercase(Locale.ROOT).contains(normalized) ||
                             attachment.displayName.orEmpty().lowercase(Locale.ROOT).contains(normalized)
                     }
-                    .map { (node, attachment) -> ConversationAttachmentSearchHit(snapshot.conversation.id, node.id, snapshot.conversation.title, attachment) }
+                    .map { (node, attachment) -> ConversationAttachmentSearchHit(snapshot.conversation.id, node.id, snapshot.conversation.title, attachment, node.createdAt.toEpochMilli()) }
             }
             .distinctBy { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }
             .take(MAX_RESULTS)

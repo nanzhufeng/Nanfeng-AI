@@ -4,6 +4,8 @@
 > 上位总图：`MASTER_DEVELOPMENT_BLUEPRINT.md`。  
 > 总图门槛：已于 2026-08-12 通过用户确认；P2-L 已完成真实推理前的离线验收合同、DryRun 与单次 nonce 准备，P2-M 已执行一次授权文本动作但在 HTTP 前因占位凭据阻止。用户已明确把真实推理成功与目标真机改列后期独立验收门，不阻塞 P3 主体开发；这些证据仍未通过，不能由 Mock/loopback/模拟器替代。
 
+> **当前普通聊天覆盖说明（2026-08-26）：** 本计划的 P4 条目是历史阶段实施记录。任何“Memory／Knowledge 不自动进入 Context、Prompt／egress 未实现”的 P4 描述，都不能覆盖当前普通聊天已接通的本机相关性检索；现行行为与开关边界只见 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。
+
 ## 目标
 
 先交付 Android 上可验证的“文本/分享/图片捕获 → OpenRouter Claude 整理 → 用户核对 → 本地保存 → 再次读取”闭环；达到后停止扩充捕获类型，转入 Claude 级多模型对话。

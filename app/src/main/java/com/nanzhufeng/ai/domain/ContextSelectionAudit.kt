@@ -6,6 +6,8 @@ data class ContextSelectionSource(val kind: String, val stableId: String, val ti
 
 data class ContextSelectionAuditRecord(
     val createdAt: Instant,
+    /** The local conversation that produced this selection; legacy records may not have it. */
+    val conversationId: String? = null,
     val providerId: ProviderId,
     val modelId: String,
     val tokenizerId: String,

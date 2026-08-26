@@ -12,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -93,7 +93,7 @@ fun KnowledgeExportCard(onOpen: () -> Unit) {
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
         ) {
-            androidx.compose.material3.Icon(Icons.Outlined.FileDownload, contentDescription = null)
+            androidx.compose.material3.Icon(Icons.Rounded.FileDownload, contentDescription = null)
             Spacer(Modifier.size(8.dp))
             Text("导出本地知识包")
         }
@@ -108,7 +108,7 @@ fun KnowledgeExportDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color.White,
+        containerColor = ForegroundSurface,
         shape = RoundedCornerShape(24.dp),
         title = { Text("本地知识导出", fontWeight = FontWeight.SemiBold) },
         text = {

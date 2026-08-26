@@ -182,7 +182,21 @@ class ConversationRuntimeStateMachine(private val clock: Clock) {
             is RuntimeCancelled -> node.copy(deliveryState = MessageDeliveryState.CANCELLED, checkpoint = MessageCheckpoint(event.sequence, event.sequence + 1)) to prior.copy(nextExpectedSequence = event.sequence + 1, status = ConversationRuntimeStatus.CANCELLED, updatedAt = event.emittedAt, lastCheckpointSequence = event.sequence, resumableFromSequence = event.sequence + 1)
             is RuntimeRunStarted -> error("运行开始事件不能重复进入状态机。")
         }
-        return ConversationRuntimeProjection(snapshot.copy(conversation = snapshot.conversation.copy(updatedAt = clock.instant()), nodes = snapshot.nodes.map { if (it.id == changedNode.id) changedNode else it }), nextState)
+        val updatedSnapshot = snapshot.copy(
+            conversation = snapshot.conversation.copy(updatedAt = clock.instant()),
+            nodes = snapshot.nodes.map { if (it.id == changedNode.id) changedNode else it },
+        )
+        val title = if (event is RuntimeCompleted) {
+            ConversationAutoTitle.titleForFirstCompletedAssistantReply(updatedSnapshot, changedNode.id)
+        } else null
+        val titledSnapshot = title?.let {
+            updatedSnapshot.copy(conversation = updatedSnapshot.conversation.copy(
+                title = it,
+                autoTitlePending = false,
+                revision = updatedSnapshot.conversation.revision + 1,
+            ))
+        } ?: updatedSnapshot
+        return ConversationRuntimeProjection(titledSnapshot, nextState)
     }
 }
 
@@ -268,14 +282,7 @@ class SubmitConversationDraftAndStartProviderRuntimeUseCase(
             draft.attachments.forEach { add(ContentBlock.Attachment(it)) }
         }
         val appended = tree.append(snapshot, AppendMessageRequest(MessageRole.USER, content))
-        val titled = ConversationAutoTitle.titleForFirstMessage(snapshot, draft)?.let { title ->
-            appended.copy(conversation = appended.conversation.copy(
-                title = title,
-                autoTitlePending = false,
-                revision = appended.conversation.revision + 1,
-            ))
-        } ?: appended
-        val cleared = tree.saveDraft(titled, "", emptyList())
+        val cleared = tree.saveDraft(appended, "", emptyList())
         val event = RuntimeRunStarted(
             AiRuntimeEventId.new(), InvocationId.new(), conversationId, MessageNodeId.new(), 0, clock.instant(),
             AiRuntimeSecurityMetadata(source = "DIRECT_PROVIDER_SSE"),

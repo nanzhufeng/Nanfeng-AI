@@ -48,6 +48,14 @@ interface ConversationRepository {
     fun save(snapshot: ConversationSnapshot): ConversationSnapshot
     fun findById(id: ConversationId): ConversationSnapshot?
     fun listActive(): List<Conversation>
+    /** A recycle-bin purge is explicit and irreversible; implementations must remove the local conversation tree atomically. */
+    fun permanentlyDelete(conversationId: ConversationId, expectedRevision: Long): ConversationPurgeResult =
+        ConversationPurgeResult.Rejected("当前会话存储不支持永久删除。")
+}
+
+sealed interface ConversationPurgeResult {
+    data object Deleted : ConversationPurgeResult
+    data class Rejected(val reason: String) : ConversationPurgeResult
 }
 
 interface ConversationManagementRepository {
@@ -72,6 +80,14 @@ interface LocalSearchHistoryStore {
     fun record(query: String, scope: ConversationListScope)
     fun remove(query: String, scope: ConversationListScope)
     fun clear(scope: ConversationListScope)
+}
+
+/** Content-free local watermark for conversation rows that have new content since last opening. */
+interface ConversationReadMarkerStore {
+    fun isInitialized(): Boolean
+    fun markInitialized()
+    fun lastReadAtEpochMs(conversationId: ConversationId): Long?
+    fun markRead(conversationId: ConversationId, updatedAtEpochMs: Long)
 }
 
 interface ConversationListRepository {

@@ -45,7 +45,7 @@ class JsonKnowledgeExportViewModel(private val knowledge: ManageKnowledgeUseCase
     val selected = state.selected
     AlertDialog(
         onDismissRequest = dismiss,
-        containerColor = Color.White,
+        containerColor = ForegroundSurface,
         shape = RoundedCornerShape(24.dp),
         title = { Text(if (selected == null) "JSON 导入任务" else "JSON 任务详情", fontWeight = FontWeight.SemiBold) },
         text = {
@@ -78,5 +78,5 @@ class JsonKnowledgeExportViewModel(private val knowledge: ManageKnowledgeUseCase
     )
 }
 @Composable fun JsonKnowledgeExportDialog(state: JsonKnowledgeExportUiState, dismiss: () -> Unit, toggle: (KnowledgeItemId) -> Unit, export: () -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("导出 JSON Knowledge") }, text = { Column(Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState())) { Text("只导出明确选择的 ACTIVE 正式 Knowledge；原 ID 仅作为导入来源，导入时会重映射。不会输出 URI、路径、Key、Prompt、Provider payload、附件、关系或临时 Context。", color = SecondaryText, style = MaterialTheme.typography.bodySmall); state.entries.forEach { item -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(item.id in state.selected, { toggle(item.id) }); Column { Text(item.title); Text(item.tags.joinToString(" · ").ifBlank { "无标签" }, color = SecondaryText, style = MaterialTheme.typography.bodySmall) } } }; state.result?.let { Text("已原子写入、回读并校验 SHA-256：${it.fileName} · ${it.sha256}", color = BrandGreen) }; state.message?.let { Text(it, color = ErrorRed) } } }, dismissButton = { TextButton(onClick = dismiss) { Text("关闭") } }, confirmButton = { Button(onClick = export, enabled = !state.working && state.selected.isNotEmpty()) { Text("导出 ${state.selected.size} 项") } })
+    AlertDialog(onDismissRequest = dismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text("导出 JSON Knowledge") }, text = { Column(Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState())) { Text("只导出明确选择的 ACTIVE 正式 Knowledge；原 ID 仅作为导入来源，导入时会重映射。不会输出 URI、路径、Key、Prompt、Provider payload、附件、关系或临时 Context。", color = SecondaryText, style = MaterialTheme.typography.bodySmall); state.entries.forEach { item -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(item.id in state.selected, { toggle(item.id) }); Column { Text(item.title); Text(item.tags.joinToString(" · ").ifBlank { "无标签" }, color = SecondaryText, style = MaterialTheme.typography.bodySmall) } } }; state.result?.let { Text("已原子写入、回读并校验 SHA-256：${it.fileName} · ${it.sha256}", color = BrandGreen) }; state.message?.let { Text(it, color = ErrorRed) } } }, dismissButton = { TextButton(onClick = dismiss) { Text("关闭") } }, confirmButton = { Button(onClick = export, enabled = !state.working && state.selected.isNotEmpty()) { Text("导出 ${state.selected.size} 项") } })
 }

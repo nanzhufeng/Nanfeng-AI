@@ -14,7 +14,7 @@ class FBP6042TopBarOwnershipContractsTest {
         // The shell header is now a sibling overlay rather than a fixed layout row, so the
         // transcript remains the canvas underneath all three independent controls.
         assertTrue(source.contains("ConversationShellHeader("))
-        assertTrue(source.contains("modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 18.dp, vertical = 18.dp)"))
+        assertTrue(source.contains("modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 18.dp, vertical = 18.dp)"))
         val shell = source.substring(source.indexOf("private fun ConversationShellHeader"), source.indexOf("private fun ConversationModeSwitch"))
         for (token in listOf("ConversationModeSwitch(", "contentDescription = \"临时聊天\"")) assertTrue("missing $token", shell.contains(token))
         val modeSwitch = source.substring(source.indexOf("private fun ConversationModeSwitch"), source.indexOf("private fun ConversationWorkScope"))

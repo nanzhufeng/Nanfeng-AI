@@ -12,7 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -65,11 +65,11 @@ class MarkdownKnowledgeImportViewModel(private val imports: ManageMarkdownImport
 @Composable fun MarkdownKnowledgeImportCard(onOpen: () -> Unit) = WhiteCard {
     Text("Markdown 知识导入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(6.dp)); Text("仅支持 UTF-8 .md/.markdown。仅在前台处理；系统中断后保留私有副本并可手动重试，逐项确认才写入正式 Knowledge。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-    Spacer(Modifier.height(12.dp)); Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { androidx.compose.material3.Icon(Icons.Outlined.UploadFile, null); Spacer(Modifier.padding(4.dp)); Text("选择 Markdown 文件") }
+    Spacer(Modifier.height(12.dp)); Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { androidx.compose.material3.Icon(Icons.Rounded.UploadFile, null); Spacer(Modifier.padding(4.dp)); Text("选择 Markdown 文件") }
 }
 
 @Composable fun MarkdownKnowledgeImportDialog(state: MarkdownImportUiState, onDismiss: () -> Unit, onBack: () -> Unit, onOpen: (MarkdownImportTask) -> Unit, onRetry: (ImportTaskId) -> Unit, onEdit: (ImportItemId) -> Unit, onTitle: (String) -> Unit, onBody: (String) -> Unit, onTags: (String) -> Unit, onConfirm: (ImportItemId) -> Unit, onSkip: (ImportItemId) -> Unit, onCancel: () -> Unit) = AlertDialog(
-    onDismissRequest = onDismiss, containerColor = Color.White, shape = RoundedCornerShape(24.dp),
+    onDismissRequest = onDismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp),
     title = { Text(if (state.selectedTask == null) "Markdown 导入任务" else "导入任务详情", fontWeight = FontWeight.SemiBold) },
     text = {
         Column(Modifier.p5aKeyboardTraversal().heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {

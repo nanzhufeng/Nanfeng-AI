@@ -4,6 +4,8 @@
 
 > 本文只记录南枫 AI 的项目事实、概念所有权和明确边界。通用 App 架构原则由用户级治理基线维护。
 
+> **当前普通聊天覆盖说明（2026-08-26）：** 下文 P4 的显式本机 IR／未接 Provider 描述是历史分层证据，不是普通聊天上下文 owner。当前普通发送的用户资料注入、Memory／资料库相关性检索和最小外发边界，统一以 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md) 与当前源码为准。
+
 ## 依赖方向
 
 ```text
@@ -71,6 +73,7 @@ Local Persistence / Provider Adapters / Platform Services
 | Generated Candidate | AI 返回但尚未成为正式事实的候选 | Candidate Domain | `GeneratedCandidate` | 核对 UI、保存用例 | AI 响应直接落正式表 | 未确认不可产生 Knowledge Item | 文档合同 |
 | Knowledge Item | 用户确认保存的本地知识资产 | Knowledge Domain | `SaveKnowledgeItem` / `ReadKnowledgeLibraryUseCase` → `KnowledgeRepository` | 列表、详情、搜索、导出 | 保存时丢失来源或覆盖原输入；用候选或 fixture 填充正式列表 | Room 保存、最新优先读取与安全溯源详情一致 | P2-I 已由同一 Repository 生成真实导出；搜索待后续 |
 | Conversation | 用户拥有的对话、消息树、当前分支、草稿与管理状态 | Conversation Domain / Draft Repository / `ConversationManagementDomain` / `ConversationBranchHistory` | `ConversationTreeService`、附件草稿用例、编辑/切分支/管理 → `ConversationRepository` | P3-H 本地工作区、搜索、导出与未来历史 | UI/DAO 自行排序、原地改写消息、把 Capture 草稿当 Conversation 草稿、保存路径/URI/二进制或隐式外发 | 当前路径、附件 ID/元数据、修订谱系、所有 leaf 与草稿均可重建；导出只读安全快照 | P3-H Schema 8 本地 Room/分支/附件/尝试历史重建验证；真实 Provider 待后续 |
+| Scheduled Monitor | 用户明确创建的周期公开信息监控及其最近结果 | `ScheduledMonitorRepository` + `ScheduledMonitorExecutor` + `AndroidScheduledMonitorScheduler` | 左栏“已计划”/完成助手回答尾部 → 任务表单 → Room | WorkManager、已配置模型服务官方网页检索、可授权系统通知 | 从对话正文/附件隐式构造任务或外发；UI 直接排程；后台任务绕过 provider/credential/model 校验；暂停/删除后继续运行 | Room task/run 级联、唯一联网任务、仅 title/instruction egress、失败安全码/下次运行可回读 | Schema 46；Android 已注册实际 executor，Desktop 无 owner 不展示伪入口 |
 | Project | 项目生命周期、项目指令、会话集合和知识可见范围 | `ProjectDomain` | `ManageProjectUseCase` → `ProjectRepository` | Projects UI、Conversation 工作区、未来 Context/Knowledge | Conversation/UI/DAO 复制项目指令、由标题或搜索隐式迁移、项目归档级联资产 | stable intent/fingerprint、revision/hash、单会话归属、Room 重建与 Schema 8→9 保留 | P4-A Schema 9 本地合同；工作抽屉只消费活动项目与持久化 `projectId`，不是外部文件夹；Memory/检索/导出/同步/协作未实现 |
 | Project Context IR | 指令版本与优先级的本地审计快照 | `ProjectInstructionResolution` | `ProjectContextSnapshot` / `InstructionResolution` | 未来 Context Builder | UI/附件/网页把不可信内容升格为项目指令、构造 Prompt/RunSpec | `SYSTEM > SAFETY > PROJECT > CONVERSATION > CURRENT_USER`、revision/hash 可追溯 | P4-A 本地 IR；不调用模型、不写 Invocation 历史 |
 | Context Selection IR | 当前会话路径与项目 revision 的 metadata-only 候选选择 | `ContextSelectionDomain` | `ReadContextSelectionUseCase` → `ContextSelectionSnapshot` | 未来 Context Builder | UI/Harness/DAO 拼 Prompt、混入草稿/兄弟分支/Memory/Knowledge 或读取附件正文 | 当前根→叶路径、Project revision/hash、来源排除矩阵可审计；无正文/Prompt/Token/RunSpec | P4-B Schema 9 不变的本地合同；Memory、检索、摘要/压缩与真实 Context 均未实现 |

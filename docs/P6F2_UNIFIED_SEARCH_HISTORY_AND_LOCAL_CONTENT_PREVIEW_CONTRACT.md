@@ -2,6 +2,8 @@
 
 状态：P6-F2-A Search Index Adapter、P6-F2-B Image Preview Adapter、P6-F2-C PDF Preview Adapter 与 P6-F2-D Video Preview Adapter 已完成（D 的证据：`P6F2D_VIDEO_PREVIEW_ADAPTER_EVIDENCE.md`）。P6-F2-E、P6-G 仍未实施，须独立启动。平台：Desktop + Android 同阶段。
 
+> **当前 Android UI 路由（2026-08-26）：** 本文保留搜索索引、资料类型、安全预览与本地数据边界。Android 搜索首屏目录、月份分组、卡片视觉、状态栏避让、音频播放器、正文来源入口、主题／暗色皮肤和会话内 UI 均以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为唯一正文；本文历史浮层或媒体展示数值不得成为第二套 Android UI。
+
 ## 目标与参考边界
 
 本合同把南枫知识库中已经证明有价值的“分类搜索、搜索历史、列表日期、对话附件原位呈现与统一预览”迁移为南枫 AI 的 chat-first 能力。源码参考为私有仓库 `nanzhufeng/NanfengKnowledgeBase-Windows` 的 `main@cc56a3d13375eeb9a7d4e772de1a59388a66e050`（2026-08-13），重点事实包括：

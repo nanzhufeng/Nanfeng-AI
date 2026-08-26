@@ -89,6 +89,32 @@ class P6GModelRouterContractsTest {
         )
     }
 
+    @Test fun `composer picker preserves the approved daily and deep ordering`() {
+        assertEquals(
+            listOf("Claude Sonnet 5", "GPT-5.6 Terra", "Qwen3.7-Plus", "Gemini 3.7 Flash"),
+            ComposerModelRoutingCatalog.daily.map { it.label },
+        )
+        assertEquals(
+            listOf("Claude Opus 5", "GPT-5.6 Sol", "Qwen3.8-Max", "DeepSeek V4 Pro"),
+            ComposerModelRoutingCatalog.deep.map { it.label },
+        )
+    }
+
+    @Test fun `composer uses compact labels while picker retains complete catalog names`() {
+        assertEquals("GPT-5.6 Sol", ComposerModelRoutingCatalog.deep[1].label)
+        assertEquals("Claude Sonnet 5", ComposerModelRoutingCatalog.daily[0].label)
+        assertEquals("5.6 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[1].label))
+        assertEquals("Sonnet 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.daily[0].label))
+        assertEquals("3.7 Flash", composerModelShortNameForUser("Gemini 3.7 Flash"))
+        assertEquals("V4 Pro", composerModelShortNameForUser("DeepSeek V4 Pro"))
+    }
+
+    @Test fun `legacy provider and route decorations normalize to the curated model name`() {
+        assertEquals("GPT-5.6 Terra", modelDisplayNameForUser("模型：GPT-5.6 Terra · OpenRouter"))
+        assertEquals("Gemini 3.7 Flash", modelDisplayNameForUser("Google: Gemini 3.7 Flash · OpenRouter"))
+        assertEquals("DeepSeek V4 Pro", modelDisplayNameForUser("模型：DeepSeek V4 Pro · 通义千问官方实时检索"))
+    }
+
     @Test fun `automatic routing follows media knowledge and complex-debug priorities`() {
         assertEquals(ModelPresetId.GPT_5_6_TERRA, AutoModelRouter.resolve(AutoRoutingFacts()))
         assertEquals(ModelPresetId.GEMINI_3_7_FLASH, AutoModelRouter.resolve(AutoRoutingFacts(hasImageVideoOrPdf = true, knowledgeItemCount = 900, isComplexProjectDebug = true)))

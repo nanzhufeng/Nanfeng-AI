@@ -2,9 +2,11 @@ package com.nanzhufeng.ai.data.local
 
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttribution
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttributionStore
+import com.nanzhufeng.ai.domain.ConversationCostSource
 import com.nanzhufeng.ai.domain.MessageNodeId
 import com.nanzhufeng.ai.domain.NormalChatSendAttemptId
 import com.nanzhufeng.ai.domain.ProviderId
+import com.nanzhufeng.ai.domain.withAvailableLocalCostEstimate
 import java.time.Instant
 import java.util.concurrent.Callable
 
@@ -23,6 +25,20 @@ class RoomAssistantResponseModelAttributionStore(
                 existing.modelId == attribution.modelId &&
                 existing.modelDisplayName == attribution.modelDisplayName
             ) { "助手回复已有冲突的模型归属。" }
+            val existingCost = existing.costTotalMicros
+            val incomingCost = attribution.cost.totalMicros
+            require(existingCost == null || incomingCost == null ||
+                (existingCost == incomingCost && existing.costSource == attribution.costSource?.name)
+            ) { "助手回复已有冲突的费用事实。" }
+            // Model provenance is written before transport for streaming visibility. A completed
+            // response may enrich that exact row once; an unknown retry can never erase it.
+            if (existingCost == null && (incomingCost != null || attribution.usage != com.nanzhufeng.ai.domain.ProviderUsage())) {
+                dao.enrichAccounting(
+                    attribution.assistantMessageId.value, attribution.attemptId.value,
+                    attribution.usage.inputTokens, attribution.usage.outputTokens, attribution.usage.totalTokens, attribution.usage.cachedInputTokens,
+                    attribution.cost.priceVersion, attribution.cost.currencyCode, incomingCost, attribution.costSource?.name,
+                )
+            }
         }
     })
 
@@ -31,8 +47,14 @@ class RoomAssistantResponseModelAttributionStore(
         return database.assistantResponseModelAttributionDao()
             .forMessages(messageIds.map(MessageNodeId::value))
             .map(AssistantResponseModelAttributionEntity::toDomain)
+            .map(AssistantResponseModelAttribution::withAvailableLocalCostEstimate)
             .groupBy(AssistantResponseModelAttribution::assistantMessageId)
     }
+
+    override fun listCostedNewestFirst(): List<AssistantResponseModelAttribution> = database.assistantResponseModelAttributionDao()
+        .listCostedNewestFirst()
+        .map(AssistantResponseModelAttributionEntity::toDomain)
+        .map(AssistantResponseModelAttribution::withAvailableLocalCostEstimate)
 }
 
 private fun AssistantResponseModelAttribution.toEntity() = AssistantResponseModelAttributionEntity(
@@ -43,6 +65,14 @@ private fun AssistantResponseModelAttribution.toEntity() = AssistantResponseMode
     modelId = modelId,
     modelDisplayName = modelDisplayName,
     recordedAtEpochMs = recordedAt.toEpochMilli(),
+    inputTokens = usage.inputTokens,
+    outputTokens = usage.outputTokens,
+    totalTokens = usage.totalTokens,
+    cachedInputTokens = usage.cachedInputTokens,
+    costPriceVersion = cost.priceVersion,
+    costCurrencyCode = cost.currencyCode,
+    costTotalMicros = cost.totalMicros,
+    costSource = costSource?.name,
 )
 
 private fun AssistantResponseModelAttributionEntity.toDomain() = AssistantResponseModelAttribution(
@@ -53,4 +83,7 @@ private fun AssistantResponseModelAttributionEntity.toDomain() = AssistantRespon
     modelId = modelId,
     modelDisplayName = modelDisplayName,
     recordedAt = Instant.ofEpochMilli(recordedAtEpochMs),
+    usage = com.nanzhufeng.ai.domain.ProviderUsage(inputTokens, outputTokens, totalTokens, cachedInputTokens),
+    cost = com.nanzhufeng.ai.domain.ProviderCost(costPriceVersion, costCurrencyCode, costTotalMicros),
+    costSource = costSource?.let(ConversationCostSource::valueOf),
 )

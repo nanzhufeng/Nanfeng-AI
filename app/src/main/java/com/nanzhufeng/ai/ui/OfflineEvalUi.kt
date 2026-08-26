@@ -43,10 +43,7 @@ class OfflineEvalViewModel(private val eval: RunOfflineEvalUseCase, private val 
     Spacer(Modifier.height(12.dp)); Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { Text("打开本地 Eval") }
 }
 
-@Composable fun OfflineEvalDialog(state: OfflineEvalUiState, onDismiss: () -> Unit, onStart: () -> Unit, onSelect: (EvalRun) -> Unit, onExport: () -> Unit, onAlias: (String) -> Unit, onCase: (EvalCaseId) -> Unit, onScore: (String) -> Unit, onDimension: () -> Unit, onSaveScore: () -> Unit, comparison: EvalComparison?) = AlertDialog(
-    onDismissRequest = onDismiss, containerColor = Color.White, shape = RoundedCornerShape(24.dp),
-    title = { Text("本地离线 Eval", fontWeight = FontWeight.SemiBold) },
-    text = { Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+@Composable fun OfflineEvalPage(state: OfflineEvalUiState, onStart: () -> Unit, onSelect: (EvalRun) -> Unit, onExport: () -> Unit, onAlias: (String) -> Unit, onCase: (EvalCaseId) -> Unit, onScore: (String) -> Unit, onDimension: () -> Unit, onSaveScore: () -> Unit, comparison: EvalComparison?) = Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("证据等级：OFFLINE_LOCAL。夹具是打包只读版本；运行结果不含生产正文、Prompt、Provider payload、URI/路径或附件字节。真实服务与成本尚未验证。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         Button(onClick = onStart, enabled = !state.working, modifier = Modifier.fillMaxWidth()) { Text(if (state.working) "正在运行本地回归…" else "开始本地回归") }
         state.runs.forEach { run -> TextButton(onClick = { onSelect(run) }, modifier = Modifier.fillMaxWidth()) { Column(Modifier.fillMaxWidth()) { Text("${run.datasetVersion} · ${run.results.count { it.verdict == EvalVerdict.PASS }}/${run.results.size} 通过", fontWeight = FontWeight.Medium); Text("${run.completedAt} · ${run.id.value.take(8)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall) } } }
@@ -61,8 +58,6 @@ class OfflineEvalViewModel(private val eval: RunOfflineEvalUseCase, private val 
             TextButton(onClick = onExport) { Text("导出此运行的 JSON + Manifest + SHA-256") }
             comparison?.let { Text("与另一运行比较：${if (it.changed.isEmpty()) "无确定性差异" else "变化 ${it.changed.joinToString { c -> c.value }}"}", color = SecondaryText, style = MaterialTheme.typography.bodySmall) }
         }
-        state.report?.let { Text("已原子写入、回读并校验：${it.fileName} · ${it.sha256}", color = BrandGreen, style = MaterialTheme.typography.bodySmall) }
-        state.message?.let { Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
-    } },
-    dismissButton = { TextButton(onClick = onDismiss, enabled = !state.working) { Text("关闭") } }, confirmButton = {},
-)
+    state.report?.let { Text("已原子写入、回读并校验：${it.fileName} · ${it.sha256}", color = BrandGreen, style = MaterialTheme.typography.bodySmall) }
+    state.message?.let { Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
+}

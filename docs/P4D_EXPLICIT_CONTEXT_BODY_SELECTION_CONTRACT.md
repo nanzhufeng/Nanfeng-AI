@@ -3,6 +3,8 @@
 日期：2026-08-13  
 状态：P4 的第四个本地增量；Schema 保持 10。只生成瞬时、本机的正文选择 IR，不构造 Prompt、RunSpec、Authorization 或 Provider 请求；不读取 Key、不发 HTTP、不产生费用或图片外发。
 
+> **历史阶段定位（2026-08-26）：** 本文只保留 P4-D“用户逐项勾选后的本机预览 IR”合同，仍不构造 Prompt 或 Provider 请求。它不是当前普通聊天的 `LocalContextBroker`，不能以“默认关闭／不会发送给 Provider”否定已启用开关后的普通聊天相关性检索；现行规则只见 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。
+
 ## 目标、所有权与入口
 
 ```text

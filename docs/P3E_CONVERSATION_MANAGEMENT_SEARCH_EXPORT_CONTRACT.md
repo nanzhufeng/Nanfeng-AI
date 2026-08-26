@@ -3,6 +3,8 @@
 日期：2026-08-13  
 状态：P3 的第五个本地增量；不含删除、导入、分享、真实 Provider、Key、HTTP、图片外发、Projects、Memory 或 Knowledge 扩展
 
+> **当前 Android UI 路由（2026-08-24）：** 本文保留会话管理、排序、搜索投影与导出的领域 owner。Android 会话列表、抽屉、搜索目录、卡片、预览、日期、颜色、边距和交互均以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为唯一正文；本文的早期 UI 描述不得单独执行。
+
 ## 目标、所有权与入口矩阵
 
 ```text

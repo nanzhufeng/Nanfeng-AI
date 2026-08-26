@@ -1,6 +1,378 @@
 # 南枫 AI 当前交接
 
+> **当前合同读取门（2026-08-26，优先于全文）：** 本文下方是按时间累积的实现、设备与验收记录。它们只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
+
+## 2026-08-27：增量正式 checkpoint（优先于下方历史记录）
+
+- **确认的侧栏根因与实现：** 左侧栏顶部横跨全宽的白／灰硬边不是独立灰层，而是 `verticalScroll` 在 `statusBarsPadding` 与顶部 padding 之后才建立、导致视口被提前裁小并露出父级基底。普通抽屉固定采用 `fillMaxSize → conversationEdgeGrayFade(ConversationDrawerBaseSurface) → verticalScroll → statusBarsPadding → content padding`；渐变只绑定滚动视口，固定品牌行无白／灰底，搜索和“已计划”恢复自身中性灰表面。用户已在 OPPO 上确认该视觉效果正确。
+- **自动回归：** `ConversationDrawerEdgeFadeContractsTest`、`ProviderAdapterContractsTest`、`ProviderSseDecoderContractsTest`、`AutomaticWebSearchPolicyTest`、`EvidenceFirstAnalysisPolicyTest`、`P3JNormalChatExplicitEgressContractsTest` 均通过。未运行 `connected*AndroidTest`，也未把 OPPO 当作测试设备。
+- **产物与设备：** Release 候选为 [南枫AI.apk](../app/build/outputs/apk/release/南枫AI.apk)，SHA-256 `208cfcd5b4bdfe43240710019a5c6c5ec1e41e3a3698c99cb7e4302d6159e377`，包为非 Debug `66 / 0.3.0-p10j`、签名证书 `6d1d56ec…e198d8661f8`。已成功同签名覆盖 OPPO，覆盖后即时读到版本仍为 `66 / 0.3.0-p10j`、首次安装时间保持 `2026-08-20 15:15:31`、更新时间为 `2026-08-27 01:40:23`。随后设备断开，故本次 checkpoint 不声称已重新拉回设备 `base.apk` 与候选逐字节比对；设备重连后如需再次正式交付，先做只读哈希核对。
+- **边界：** 侧栏视觉已有用户真机确认；图片、文档、视频、音频的 Provider 实际理解效果仍依赖用户真实模型、Key 与网络，自动测试只证明请求序列化、解析与错误边界正确。
+
+## 2026-08-26：最新有效交接（优先于下方所有记录）
+
+- **当前正文与同步规则：** `ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md`、`ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md`、`ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md` 分别是会话／搜索、设置／个性化、普通聊天上下文的唯一正文。任何后续改动先更新其对应当前合同；涉及多个域或覆盖安装时，再同步本节和 `MASTER_PLAN_COMPLETION_AUDIT_20260816.md` 的顶部当前门。下方历史 P4、视觉、安装哈希和旧阶段“未实现”描述仅作可追溯证据。
+- **已收口的 Android 体验：** 会话／搜索、侧栏、暗色皮肤、附件全屏预览与长按定位、弹窗点外关闭、Composer 紧凑输入区、浮层阴影及一键到底层级、个性化和记忆摘要页面、设置字体／白卡／开关／主题色均以当前 UI 合同为准。冻结阴影为顶部浮层 `54dp / 0x1B000000 / 下偏 3dp`、Composer `84dp / 1dp / 0x22000000 / 对称`；不得从历史记录恢复旧参数。
+- **普通聊天真实上下文：** 非空且已保存的自定义指令独立参与每次普通调用；个性化开启时，昵称、职业／角色和关注方向额外参与，新对话首个成功回复自然称呼昵称。已开启的 Memory 与资料库在设备本机按当前问题、scope、去重和 token 预算选取完整相关条目后发送；不整库外发、不读取附件字节／凭据／运行日志／同级分支。Memory 仍必须显式创建，自动行为仅指已开启后的相关性检索。
+- **记忆摘要操作已拆分：** “删除记忆”只软删除已保存摘要，且删除记录阻止冷启动自动回填初始摘要；“关闭记忆摘要生成和应用”只关闭后续摘要生成和普通聊天的 Memory 检索／发送，保留已存摘要与直接填写的个性化资料。两项各自确认，不能再用一个操作同时删除并关闭。
+- **实时网页搜索：** Android 在“设置 → 模型与联网”将“实时网页搜索”放在“模型设置”上方；开关立即持久化，开启时仅在当前信息请求中自动选择当前 Provider 的已实现官方搜索路线并保留来源，关闭则所有普通聊天（含深度与材料分析）不发送网页工具。主界面 Composer 左侧“添加”浮层底部另有“当前对话联网”开关：首次继承全局值，随后按会话 ID 本机持久覆盖并供普通发送实际选路，只影响当前会话、不修改设置默认或其他会话。Desktop 尚无同等普通聊天联网 owner，登记为待实现，不展示伪开关。
+- **2026-08-27 联网误触发修复：** 深度模型选择、附件分析及“查找附件文档／找原因”等本地任务均不再隐式附带网页工具；仅明确的当前信息或联网／网页请求才走官方检索路线。服务端已经 2xx 但未给出可展示正文时，只保存 HTTP 状态、模型、请求形状和安全 `RESPONSE_FORMAT` 分类，不保存原始回包、提示、附件或 Key。
+- **2026-08-27 附件外发合同修复：** OpenRouter 混合附件统一为图片 `image_url`、PDF `file.file_data`、视频 `video_url`、音频 `input_audio` 与安全文本文件（Markdown/TXT/JSON/CSV）完整 UTF-8 文本；文本文件不得再伪装为 PDF `file_data`，未知二进制文件必须在本机明确拒绝，不能将其与有效图片／媒体一起交给 Provider 后伪称已发送。
+- **验证与正式覆盖：** `ProviderAdapterContractsTest` 覆盖图片 + Markdown 及图片、PDF、视频、音频、Markdown 五类混合请求，连同流式解析、联网选路与普通发送链路测试通过，Release 构建通过。OPPO Find N5 已以 `pm install -r --user 0` 保数据覆盖；候选与设备实际 `base.apk` SHA-256 均为 `af2d6aba257cf75e0a9ac7aae15ff52b2ec24f4ee68fcf9cdedae41abb9287b2`，包仍为非 Debug `66 / 0.3.0-p10j`、v2/v3 证书 `6d1d56ec…e198d8661f8`，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-27 01:19:07`。未卸载、未清数据、未运行仪器测试，设备临时 APK 已删除；真实 Provider 对每种媒体的理解能力仍需用户在 App 内按实际模型手工确认。
+- **验证与正式覆盖：** `AutomaticWebSearchPolicyTest`、`EvidenceFirstAnalysisPolicyTest`、`ProviderAdapterContractsTest`、`ProviderSseDecoderContractsTest`、`P3JNormalChatExplicitEgressContractsTest` 通过，Release 构建通过。候选与 OPPO Find N5 实际 `base.apk` 的 SHA-256 均为 `5a8ef722284e4220ee330a71dae054cf02e410421246a489cd26a97eb05e1838`；仍为非 Debug 的 `66 / 0.3.0-p10j`，v2/v3 证书 `6d1d56ec…e198d8661f8`，已用 `pm install -r --user 0` 保数据覆盖，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-27 01:09:45`。未卸载、未清数据、未运行仪器测试，设备临时 APK 已删除；真实 Opus／附件发送仍需用户在 App 内手工确认。
+- **设置开关几何：** 所有设置开关统一从 `62×22dp` 调整为 `74.4×15.4dp`：长度增加 20%，高度压缩 30%。个性化、提醒、资料库搜索、实时网页搜索和模型服务启用均复用同一尺寸令牌；业务状态、主题色、胶囊轮廓和命中反馈不变。
+- **全局字体大小：** Android 的“设置 → 外观”提供“小／标准／大”三档；标准为原始字级，小／大按全局 `Typography` 的 `90%／110%` 即时且本机持久化，所有正文、设置与全屏页同步变化，而控件几何和触控热区不变。Desktop 尚无同一外观 owner，明确待实现且不展示伪设置。
+- **关于页信息层级：** 品牌说明、版本信息、数据与隐私提示均使用各自独立的前景白卡（暗色皮肤为同层级深卡）置于灰白／深色 canvas 上；不改变只读文本、版本／构建号事实或入口范围，也不合成大白板。
+- **费用与用量完整估算：** OpenRouter 的回包 `usage.cost` 继续作为唯一“实际金额”。服务商未回传金额时，当前目录的全部模型（含千问三档和 DeepSeek V4 Pro）以版本化、按 token 的本地价目表显示 `≈ …（估算）`；旧的 token-only 归属记录读取时也即时补算，因此不会继续显示“金额未返回”。DeepSeek 的响应若带回缓存命中 token，会按其单独的缓存输入价计入估算。估算不包含响应未披露的联网工具、优惠或缓存写入费用，不能作为服务商账单对账结果。
+- **提醒草案重构：** 已废弃从关键词命中“智能汽车／政策／简报”等类别模板直接生成提醒的逻辑。只有开头用户消息明确要求未来提醒／持续跟踪时才显示尾部入口；点击后以 Qwen3.7-Plus 仅整理开头一问一答为严格 JSON 的可编辑草案。失败或不适合监控不降级为模板。调用费用、Token、状态和 opaque 会话 ID 在费用页“提醒草案整理”分组单独记录；不保存发送的正文或附件。Desktop 不显示等效伪入口。
+- **会话标题重构：** 新建普通会话完成开头一问一答后，废弃回答 Markdown／编号小节和首句的本机标题规则；仅向已配置的 Qwen3.7-Plus 发送该两段文本，严格返回“讨论对象 + 任务／结论方向”的 6–32 字概述。后续对话、附件、个性化资料和历史记录均不发送；失败保留“新对话”，不写残句。手动重命名会取消自动资格，返回期间的人工标题同样优先。调用的 Token、估算费用、模型、状态与安全错误在费用页“会话标题整理”独立记录，不保存来源正文、提示词、回复或生成标题；既有标题不批量改写，因无法安全区分历史自动标题与人工标题。
+- **网络调用恢复：** 已撤销今晚 18:00 后引入的持续生成网关、双模式、网关任务补拉和后台恢复方案；普通聊天恢复原有“本机前台服务持有一次设备直连 Provider 请求”的调用链。服务只保留用户停止、短时 WakeLock 和本机安全状态回传，不再注册网络恢复回调或 `RESUME` 命令。没有网关端点、网关 token、服务端任务或隐式重试；真实网络调用仍须以用户在 App 内配置的 Provider Key 和实际发送验证。
+- **最新正式覆盖：** 2026-08-26 已构建 Release `66 / 0.3.0-p10j`，候选 [南枫AI.apk](../app/build/outputs/apk/release/南枫AI.apk) SHA-256 为 `4644d753ea0634a72e152476115a8138d3c0112561f0fd622947422547877dda`，非 Debug，v2/v3 证书为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。OPPO Find N5 安装前的 `base.apk` 为 `27d51cbfde3d46f93de71fd47c8c4ce2e7b68466b7b4872c0fa723bae8a0233d`，同一证书；已通过 `adb shell pm install -r --user 0` 覆盖成功。安装后设备 `base.apk` 回读哈希与候选完全一致，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-26 22:05:07`；未卸载、未清数据、未运行 Debug／仪器测试，设备临时 APK 已删除。Android shell 无权读取 CE/DE 数据目录，故不能主张 inode／数据库指纹已回读；包级保数据覆盖证据已完整，应用内真实发送与页面视觉仍待手工验证。
+- **Composer IME 收起回折与正式覆盖：** 键盘收起时 Composer 现在立即从多行编辑态回到紧凑单行，草稿文字保留；`ComposerImeCollapseContractsTest` 与 Release 构建通过。OPPO Find N5 已用同签名 `pm install -r --user 0` 覆盖本次正式包 `66 / 0.3.0-p10j`；候选与设备实际 `base.apk` 的 SHA-256 均为 `3fd80020a965dd5ff8acc17028f3506372b07c7c2ee50205ad6f55703372447e`，v2/v3 证书仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-26 22:29:39`。未卸载、未清数据、未运行 Debug／仪器测试，设备临时 APK 已删除；Android shell 仍无权回读 CE/DE 数据目录，页面行为待用户在 OPPO 手工确认。
+- **抽屉软边渐变恢复与正式覆盖：** 普通左侧栏的滚动列表恢复上下同画布色软渐变，固定应用标题和底部控件位于渐变之上；硬边遮挡白／灰卡继续禁止。OPPO Find N5 已用同签名 `pm install -r --user 0` 覆盖正式包 `66 / 0.3.0-p10j`；候选与设备实际 `base.apk` 的 SHA-256 均为 `2fc8b939c2b28f817e43559220eb9c05650c55cf58136f223ec0770f7d935e60`，v2/v3 证书仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-26 22:44:22`。未卸载、未清数据、未运行 Debug／仪器测试，设备临时 APK 已删除；Android shell 仍无权回读 CE/DE 数据目录，渐变实际观感待用户在 OPPO 手工确认。
+- **设置组合卡与顶部渐变加强的正式覆盖：** 设置首页、数据与存储、工作区和关于页的合并卡统一为全宽正常圆角矩形，并以 `4dp` 页面底色横条分隔；抽屉只将顶部软渐变增强为完整端 `1.00`、中段 `0.90 / 0.62 / 0.22`，范围仍为 `128dp`，底部 `112dp` 曲线不变，硬边灰底继续禁止。OPPO Find N5 已用同签名 `pm install -r --user 0` 覆盖正式包 `66 / 0.3.0-p10j`；候选与设备实际 `base.apk` 的 SHA-256 均为 `7085e0e0ab1a192a407faff634e3a578ea14b68d43cea83e555a3e5a859acb69`，候选非 Debug，v2/v3 证书仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-26 23:16:41`。未卸载、未清数据、未运行 Debug／仪器测试，设备临时 APK 已删除；Android shell 仍无权回读 CE/DE 数据目录，页面实际观感待用户在 OPPO 手工确认。
+- **资料库搜索说明外置与抽屉字体统一的正式覆盖：** “资料库搜索”的固定说明移至开关白卡下方的页面 canvas；左侧栏会话标题、顶部“搜索”与“已计划”统一使用随全局字体缩放的 `16sp / 20sp` 基线。OPPO Find N5 已用同签名 `pm install -r --user 0` 覆盖正式包 `66 / 0.3.0-p10j`；候选与设备实际 `base.apk` 的 SHA-256 均为 `2b2a8d2ce467b7a6215131ca4abc2c97dffad3cc20798c4940f1672b911b6935`，候选非 Debug，v2/v3 证书仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-26 23:57:18`。未卸载、未清数据、未运行 Debug／仪器测试，设备临时 APK 已删除；Android shell 仍无权回读 CE/DE 数据目录，页面实际观感待用户在 OPPO 手工确认。
+- **抽屉会话标题改为常规字重的正式覆盖：** 左侧栏会话标题保持 `16sp / 20sp`，仅将字重由 `Medium` 改为与主界面正文一致的 `Normal`；搜索、“已计划”、会话行几何、触控和缩放规则均不改。OPPO Find N5 已用同签名 `pm install -r --user 0` 覆盖正式包 `66 / 0.3.0-p10j`；候选与设备实际 `base.apk` 的 SHA-256 均为 `b66e323541b07c227a39311312def453531dd2eb1db139db21eccd84e8266aaa`，候选非 Debug，v2/v3 证书仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-27 00:07:28`。未卸载、未清数据、未运行 Debug／仪器测试，设备临时 APK 已删除；Android shell 仍无权回读 CE/DE 数据目录，页面实际观感待用户在 OPPO 手工确认。
+- **抽屉固定上下渐变视口的正式覆盖：** 顶部 `128dp` 与底部 `112dp` 渐变均保留，但改为固定在 App 图标／名称下方的列表可视窗口中，不再跟随列表内容滑走；该无命中绘制层不延伸到标题上方，因此不再以不透明灰色在标题区域形成直线硬边。OPPO Find N5 已用同签名 `pm install -r --user 0` 覆盖正式包 `66 / 0.3.0-p10j`；候选与设备实际 `base.apk` 的 SHA-256 均为 `3270ffe8c3d815cf56457589c89b0b64a56903cd8a52187e04846fd90e000d3f`，候选非 Debug，v2/v3 证书仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-27 00:17:49`。未卸载、未清数据、未运行 Debug／仪器测试，设备临时 APK 已删除；Android shell 仍无权回读 CE/DE 数据目录，抽屉实际观感待用户在 OPPO 手工确认。
+- **删除抽屉独立硬边灰层的正式覆盖：** 已删除普通左侧栏中独立于滚动内容的全屏 `Box` 灰色绘制层；它此前从应用图标下方开始覆盖搜索、已计划和会话列表，形成硬边并冲白内容。当前包不再包含该独立 `Box`；侧栏真实视觉待后续按主界面列表自身渐变结构继续收口。OPPO Find N5 已用同签名 `pm install -r --user 0` 覆盖正式包 `66 / 0.3.0-p10j`；候选与设备实际 `base.apk` 的 SHA-256 均为 `85acc1ebf294d3b57b1a5dce99ed54157b092fcbf94259ac674ab8082fcaa31f`，候选非 Debug，v2/v3 证书仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，首次安装时间保持 `2026-08-20 15:15:31`，更新时间为 `2026-08-27 00:34:01`。未卸载、未清数据、未运行 Debug／仪器测试，设备临时 APK 已删除；Android shell 仍无权回读 CE/DE 数据目录。
+- **仍需如实保留：** 覆盖与自动合同不等于所有页面的真机视觉验收，也不等于用户真实账号／Provider 调用成功。后续只在用户实际操作时确认当前目标界面的视觉、系统文件预览／浏览器／媒体行为和真实模型结果；不得以旧截图、旧 hash、JVM 测试或安装成功替代。
+
+## 2026-08-26：顶部与 Composer 强阴影对比版（JVM 已验证）
+
+- **修正：** 顶部浮动圆钮／操作胶囊使用 `34dp` 的中性扩散阴影；底部 Composer 采用更重的 `48dp` 阴影。环境／聚光透明度分别提升到 `0x2E`／`0x42`，作为刻意明显的视觉对比版；白色表面、圆角、触控面、按压／水波纹、布局锚点和无描边规则不变。
+- **自动验证：** 阴影专属 JVM 合同断言与 Debug Kotlin 编译通过，`git diff --check` 通过。完整 UI 合同类中另有 35 项既有失败，均在本次四个阴影令牌之外；未运行仪器测试、未安装模拟器或 OPPO。当前没有可用隔离 AVD，实际视觉效果待在目标设备手工确认。
+- **OPPO 覆盖：** 已用正式 Release `南枫AI.apk` 同签名执行 `pm install -r --user 0`；候选与设备实际 `base.apk` 的 SHA-256 均为 `134953c8060c78ddcd593df7577963bd18285627063d8a4c924d70152b131d49`，签名证书均为 `6d1d…8661f8`。包版本仍为 `66 / 0.3.0-p10j`，首次安装时间仍为 `2026-08-20 15:15:31`；未运行仪器测试、未卸载或清数据。请在 OPPO 上手工打开会话主页确认阴影观感。
+- **二次修正与 OPPO 覆盖：** 真机截图确认上述 elevation 阴影不可见后，改用可控 `dropShadow`：顶部为 `8dp` 半径／`3dp` 下偏移／`0x40` 黑色，Composer 为 `12dp` 半径、`1dp` 扩散、`5dp` 下偏移／`0x52` 黑色；圆形、胶囊与无托底规则不变。新的正式包和设备实际 `base.apk` SHA-256 均为 `819ae580cbec745418dd3e02e54690ab3445ac386f671674f4c81678df52bd5a`，签名仍为 `6d1d…8661f8`，版本仍为 `66 / 0.3.0-p10j`，首次安装时间仍为 `2026-08-20 15:15:31`。定向 JVM 阴影断言、Debug Kotlin 编译和 Release 构建通过；未运行仪器测试、未卸载或清数据。待用户在 OPPO 会话主页手工确认实际视觉效果。
+- **半径加大与 OPPO 覆盖：** 按用户反馈，顶部 `dropShadow` 半径由 `8dp` 扩至 `18dp`（2.25 倍），Composer 由 `12dp` 扩至 `28dp`（约 2.33 倍）；其余颜色、扩散、下偏移、形状和无托底规则不变。正式包与设备实际 `base.apk` SHA-256 均为 `07f66d0f93eefca9c5536fb24462961d27d819694f3a6fbbfe93bc0aeee3c09d`，签名仍为 `6d1d…8661f8`，版本仍为 `66 / 0.3.0-p10j`，首次安装时间仍为 `2026-08-20 15:15:31`。定向 JVM 阴影断言、Debug Kotlin 编译和 Release 构建通过；未运行仪器测试、未卸载或清数据。待用户在 OPPO 会话主页手工确认实际视觉效果。
+- **半径再次翻倍与 OPPO 覆盖：** 按用户明确要求，顶部 `dropShadow` 半径由 `18dp` 翻倍至 `36dp`，Composer 由 `28dp` 翻倍至 `56dp`；颜色、扩散、下偏移、形状和无托底规则不变。正式包与设备实际 `base.apk` SHA-256 均为 `0c5afffb3c988e99298aec1cd1da0a3675027584d9f4037951b61c1c3e7f094e`，签名仍为 `6d1d…8661f8`，版本仍为 `66 / 0.3.0-p10j`，首次安装时间仍为 `2026-08-20 15:15:31`。定向 JVM 阴影断言、Debug Kotlin 编译和 Release 构建通过；未运行仪器测试、未卸载或清数据。待用户在 OPPO 会话主页手工确认实际视觉效果。
+- **半径扩大 1.5 倍、阴影降强与最终层级修正：** 顶部半径 `36dp → 54dp`，Composer `56dp → 84dp`；随后先将阴影 alpha 调至原来的 60%，再按用户要求整体再降 30%，最终为顶部 `0x1B`、Composer `0x22`。按钮自身一直是 `ForegroundSurface` 白底；压暗的根因是它在正文内层，无法凭子层 `zIndex` 跨过随后绘制的 Composer 阴影。现将一键到底提升为与 Composer 同一外层、在 Composer 后绘制的覆盖层，并保留 `zIndex(1f)`。Composer 阴影保持 `84dp`／`1dp`／`0x22`，去除 `5dp` 向下偏移，改为上下对称；顶部阴影半径和向下偏移不变。正式包与设备实际 `base.apk` SHA-256 均为 `e7cb5c1626f93a9cd92b35abc575aaf573a27d89537cdc46532256fb93c96b8f`，签名仍为 `6d1d…8661f8`，版本仍为 `66 / 0.3.0-p10j`，首次安装时间仍为 `2026-08-20 15:15:31`；定向 JVM 阴影断言、Debug Kotlin 编译和 Release 构建通过，未运行仪器测试、未卸载或清数据。
+- **焦点态输入区下缘收紧：** 截图确认空草稿焦点态在文字下方有多余留白。仅将该全宽文本区的最小高度由 `36dp` 收为 `28dp`，上方 `10dp` 间距不变；发送／停止、模型和附件继续使用独立 `60dp` 操作行，因此文字不会挤占右侧发送按钮或其触控面。正式包与设备实际 `base.apk` SHA-256 均为 `ec28bbf07e2f64f418ca48a24b739b4a97c852ae1e46b7d947a300870bd6e365`，签名仍为 `6d1d…8661f8`，版本仍为 `66 / 0.3.0-p10j`，首次安装时间仍为 `2026-08-20 15:15:31`；焦点态 Composer JVM 合同、Release 构建通过，未运行仪器测试、未卸载或清数据。
+- **左侧栏底部操作复用冻结阴影：** 普通、工作和临时侧栏的设置圆钮，以及普通侧栏的新对话胶囊，均复用顶部浮层的 `dropShadow`（`54dp`／`0x1B000000`／向下 `3dp`）。按钮尺寸、颜色、圆形／胶囊形状、按压和业务行为不变，不增加托底。正式包与设备实际 `base.apk` SHA-256 均为 `19bc8763ef3dc09f0943a67645c8aa3fa1726cf9ec480d5702429ed0462446a4`，签名仍为 `6d1d…8661f8`，版本仍为 `66 / 0.3.0-p10j`，首次安装时间仍为 `2026-08-20 15:15:31`；阴影 JVM 合同、Release 构建通过，未运行仪器测试、未卸载或清数据。
+
+## 2026-08-25：附件菜单文字与图标改为纯黑（OPPO 已覆盖）
+
+- **修正：** Composer 左侧加号打开的附件菜单中，“相机”“添加图片和视频”“添加文件”三项的图标和文字统一为纯黑 `#000000`；白色面板、圆角、阴影、行高、命中面和模型选择弹层均不改。
+- **验证与设备：** `P6DConversationRowAccessibilityContractsTest`、Debug Kotlin 编译与目标文件 `git diff --check` 通过；正式 Release SHA-256 为 `49f43e25084a8a39b73a915825bbd2e1aec273336eeaafccbcb3fdd2928ef6ec`，已同签名覆盖 OPPO Find N5。安装后回读 `base.apk` 与证书 `6d1d…8661f8` 一致，版本仍为 `66 / 0.3.0-p10j`，首次安装时间不变；未运行仪器测试、未清数据或卸载。
+
+## 2026-08-25：Composer 左侧加号缩短三分之一（OPPO 已覆盖）
+
+- **修正：** 左侧“添加附件”加号的横、竖可见线由 vector 的 `24` 单位收回到 `16` 单位；在原有 `30dp` 承载内，实际可见长度由 `22.5dp` 收为 `15dp`。圆端、圆角、`2.4` 线宽、`48dp` 圆形触控面、布局和阴影均保持不变。
+- **验证与设备：** `FBP6041ComposerGlyphContractsTest`、`P6DConversationRowAccessibilityContractsTest` 与 Debug Kotlin 编译通过；Release 完成后 APK SHA-256 为 `fc4f78951278686ae83cd707b7d9e30191468f305a82cda2cab32b342110dd2c`，已同签名覆盖 OPPO Find N5。回读 `base.apk` 哈希和证书 `6d1d…8661f8` 匹配，版本仍为 `66 / 0.3.0-p10j`，首次安装时间不变；未运行仪器测试、未清数据或卸载。
+
+## 2026-08-25：Composer 模型名恢复短名（OPPO 已覆盖）
+
+- **规则：** 底部 Composer 是唯一使用短模型名的入口：`Claude Sonnet 5 → Sonnet 5`、`Claude Opus 5 → Opus 5`、`GPT-5.6 Sol / Terra / Luna → 5.6 Sol / Terra / Luna`，其余已收录模型也移除厂商／家族前缀。普通与临时对话共用这一规则。
+- **不变：** 打开 Composer 后的模型选择弹层、设置、调用记录与助手消息归因继续使用完整目录名，例如 `Claude Sonnet 5`、`GPT-5.6 Terra`；真实模型 ID、Provider、路由和存储均不改写。
+- **验证与设备：** `P6GModelRouterContractsTest`、`P6DConversationRowAccessibilityContractsTest`、Debug Kotlin 编译与目标文件 `git diff --check` 通过；干净目录正式 Release 的 SHA-256 为 `11b24ec26c93bb507e3ccc851533db99e09fbfbbd1ef2581c9cc950efe0f65e1`，已同签名覆盖 OPPO Find N5。安装后回读 `base.apk` 哈希与证书 `6d1d…8661f8` 均匹配，版本仍为 `66 / 0.3.0-p10j`，首次安装时间未改变；未运行仪器测试、未清数据或卸载。
+
+## 2026-08-25：正式覆盖后的冷启动崩溃恢复（OPPO 已验证）
+
+- **根因与修正：** 费用 Schema 46→47 已创建 `costTotalMicros + recordedAtEpochMs` 索引，但实体声明遗漏该索引，Room 校验将已升级的本机库判为不一致；补齐实体索引声明及新库／迁移回归断言。随后发现空会话在“对话提醒建议”开启时，`indexOfLast` 返回 `-1` 仍被作为消息下标读取；现明确将“没有已完成助手消息”返回为无建议，避免可选尾部控件阻断整个聊天页 Compose。
+- **自动验证：** `AssistantResponseModelAttributionRoomContractsTest`、`AndroidUserEntryAuditContractsTest` 与 Debug Kotlin 编译通过；随后从干净目录完成正式 `:app:assembleRelease`。候选 APK SHA-256 为 `7888aca58dfdbab71a7c9e82662a72cab1167bfa2b8bf38465d5e056bb78d463`，签名证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **OPPO 覆盖与冷启动：** 已使用同签名 `pm install -r --user 0` 覆盖 OPPO Find N5；安装后回读 `base.apk` 哈希和证书均匹配，版本仍为 `66 / 0.3.0-p10j`，首次安装时间仍为 `2026-08-20 15:15:31`。一次真实启动后 `com.nanzhufeng.ai` 进程 PID `21554` 保持存活，Activity 记录的 `base.apk` 指向上述新包；未运行仪器测试、未清数据、未卸载。
+
+## 2026-08-25：全档位材料证据优先分析（JVM 已验证，真实服务待验）
+
+- **修正：** `EvidenceFirstAnalysisPolicy` 成为普通聊天共享 owner：附件消息只要用户明确要求分析、解读、核实、判断或评估，就要求所有已接入模型按“直接结论 → 已核验事实/材料观点/推理 → 反例或条件 → 风险与下一步”输出，不再让 Claude Sonnet 5 等普通档退化成截图逐段整理。OpenRouter 的任意模型（含 Claude Sonnet 5、Claude Opus 5）统一启用 `openrouter:web_search`；千问所有档位统一使用可携带材料的 Chat Completions 联网检索；原有深度联网路由不降级。
+- **边界：** 普通看图、转写、翻译或未明确要求分析的附件消息不自动联网。DeepSeek 尚无“材料 + Responses 网页检索”序列化 owner，因此不会伪造联网；该组合如仍可走普通材料路由，系统指令会明确未取得实时来源。共享规则提高任务标准，但不虚构不同模型完全相同的推理能力。调用记录继续如实写入实际检索路由，公开来源只接受 Provider 结构化返回。
+- **自动验证与设备：** `EvidenceFirstAnalysisPolicyTest`、`ProviderAdapterContractsTest`、`P3JNormalChatExplicitEgressContractsTest`、`AndroidUserEntryAuditContractsTest`、Debug Kotlin 编译、`git diff --check` 与正式 `:app:assembleRelease` 已通过。候选 Release（SHA-256 `ab819411…46aac6da`）于 2026-08-25 17:23 以同签名 `pm install -r --user 0` 覆盖到 OPPO Find N5；安装后实际 `base.apk` 哈希、v2/v3 证书 `6d1d…8661f8` 与候选一致，版本仍为 `66 / 0.3.0-p10j`，首次安装时间保持 `2026-08-20 15:15:31`。未调用用户 Key，未运行仪器测试；仍需用户手动以 Claude Sonnet 5 和一张含可核验市场/数据主张的截图确认真实检索、来源 chip 与回答质量。
+
+## 2026-08-25：Composer 添加附件圆润加号加长（JVM 已验证）
+
+- **修正：** Composer 左侧“添加附件”保留现有 `48dp` 圆形触控面和行为，但将可见加号替换为专用圆端／圆角 vector；横、竖线各为旧 Material glyph 可见长度的约两倍，`30dp` 承载中的可见线长为 `22.5dp`。不增加外圈、托盘、硬边或额外阴影。
+- **自动验证：** `FBP6041ComposerGlyphContractsTest`、`P6DConversationRowAccessibilityContractsTest`、Debug Kotlin 编译与 `git diff --check` 已通过。未运行仪器测试、未安装模拟器或 OPPO；外屏／内屏观感待手工确认。
+
+## 2026-08-25：普通聊天 OpenRouter 费用与用量（JVM 已验证，真实服务待验）
+
+- **实现：** 普通聊天现将回包 `usage.cost` 以 USD micro 写入对应助手消息的本地归属记录；非流式完整回包与流式最后 SSE 事件都经同一 decoder 收集。OpenRouter 真实金额优先，合法 `$0` 保留为零金额；服务未给金额时，仅对用户方案中有校准价目的模型以 `≈ $…（估算）` 显示，未知不伪造为零。每条助手消息底部在具体模型名后显示同一金额；设置 → AI 模型服务新增“费用与用量”，按消息列出 Token、实际/估算来源及本机累计。
+- **数据与边界：** Schema 46→47 仅为 `assistant_response_model_attributions` 增加 Token、费用、版本与来源字段/索引，迁移不改写历史消息、模型归属或费用。所有金额使用整数 microUSD；不保存 Prompt、回复、附件、Key、原始 Provider JSON 或 generation ID。本期没有调用用户 Key 的额外账单、generation 补查、在线 `/models` 价目表、人民币换算或对账接口。
+- **自动验证：** Debug Kotlin 编译、`ProviderAdapterContractsTest`、`AssistantResponseModelAttributionRoomContractsTest`、`P5DLocalBackupRestoreContractsTest`、`P6FTranscriptPresentationContractsTest`、`P6DConversationRowAccessibilityContractsTest`、`ModelSettingsUiContractsTest`、`AndroidUserEntryAuditContractsTest`、`SettingsUiSimplificationContractsTest` 与 `git diff --check` 已通过。未运行仪器测试、未安装到模拟器或 OPPO；真实 OpenRouter 实际金额必须在用户自行发起一条真实对话后确认。
+
+## 2026-08-25：对话底部模型名与选择面统一（JVM 已验证）
+
+- **修正：** Composer、普通／临时对话的模型入口和助手消息页脚统一使用中心模型目录的具体显示名；例如固定显示 `GPT-5.6 Terra`，不再缩写为 `5.6 Terra`，比较模式显示真实的两项模型名而非“对比”。助手归因页脚不再拼接 `模型：`、`OpenRouter`、千问、DeepSeek 或“官方实时检索”等路由说明。旧消息中已有的 `模型：… · OpenRouter`、`Google:` 或接收方尾缀也会实时规范为同一目录名，持久化的原始 model ID、Provider 与接收方事实不改写。
+- **边界：** 附件发送前的“发送至：服务商 · 模型”说明、调用记录、诊断与外发确认仍保留服务商／接收方，这是隐私、费用和可追溯事实，不属于底部模型名称。
+- **自动验证：** `P6GModelRouterContractsTest`、`P6FTranscriptPresentationContractsTest`、`P6DConversationRowAccessibilityContractsTest`、Debug Kotlin 编译与目标文件 `git diff --check` 通过。未重建 Release、未安装或操作 OPPO；已安装设备上的实际模型标签仍需经下一次用户授权的保留数据正式覆盖后确认。
+
+## 2026-08-25：Android 系统长截图恢复正文候选（JVM 已验证）
+
+- **根因与修正：** `ModalNavigationDrawer` 在关闭时只是移出画布，其内部侧栏仍保有纵向滚动语义；Compose 的 Scroll Capture 候选选择不会可靠排除该屏外节点，ColorOS 可能因此把侧栏而非正文 `LazyColumn` 作为捕获对象，导致聊天区长截图直接不可用。现将关闭侧栏明确标记为不可访问语义，从系统捕获发现树排除；捕获开始后仍暂停聊天／工作区自动跟随最新消息，并临时去除仅供屏幕观感的正文边缘遮罩，避免它覆盖每个拼接片段。侧栏打开、普通阅读、辅助功能可访问状态及截图结束后的既有视觉过渡不变。
+- **自动验证：** 离线 `P6GUnifiedChatFirstUiContractsTest`、Debug Kotlin 编译与目标文件 `git diff --check` 通过。未运行仪器测试、未安装到模拟器或 OPPO；ColorOS 实机仍需在一条超过一屏的真实对话中手动确认截图工具出现“长截图”、从正文而非侧栏开始并可拼接到末尾。
+
+## 2026-08-25：对话管理拆分已归档与回收站（JVM 已验证）
+
+- **实现：** 设置 → 对话管理改为清晰的管理主页：已归档与回收站各自为独立白卡入口，并进入各自独立的二级页面。两页只读取对应 lifecycle projection，分别提供标题、语义说明、空态、会话列表和“恢复”操作；当前对话导出也另成一组，不再与生命周期列表混排。
+- **语义边界：** 归档仍不删除消息或附件；回收站仍不物理删除消息树。恢复归档调用既有 `UNARCHIVE`，恢复回收站调用既有 `RESTORE_DELETED`；离开设置时依旧回到普通活动列表，不改变 Room、搜索或导出事实。
+- **自动验证：** 离线 `SettingsUiSimplificationContractsTest`、`P6DConversationRowAccessibilityContractsTest` 与 Debug Kotlin 编译通过。未运行仪器测试、未安装到模拟器或 OPPO；目标设备的窄屏、内屏和大字体实际排版仍待手工确认。
+
+## 2026-08-25：Android 启动器图标枫叶改为白色实心（Release 已验证）
+
+- **实现：** Android 新增 `nanfeng_ai_launcher_q_rounded_scale90_leaf_filled_source.png` 母版；枫叶由白色描边改为白色实心，AI 字样同步改为橙色，以保持白叶上的可读性。`drawable-nodpi` 前景和 mdpi—xxxhdpi 的普通／圆形 legacy 图标均从同一母版导出；Manifest、adaptive 层、圆角、比例和透明角不变，Desktop 不受影响。
+- **自动验证：** `audit_launcher_icon.py` 已确认新母版与前景哈希一致、adaptive 双层、普通／圆形 launcher 引用及所有 legacy 密度资源完整；正式 `:app:assembleRelease` 成功，APK SHA-256 为 `f30c0201c19f50d6a7466a1d85b1cbb8da5d6a16d73e50b1e777f1a4c7033377`，v2/v3 证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未安装到 OPPO；真实 ColorOS Launcher 截图仍待用户授权的保留数据正式覆盖后取得，不能以预览或资源尺寸替代。
+
+## 2026-08-25：设置新增通知与提醒独立控制（JVM 已验证）
+
+- **实现：** 设置首页新增“通知与提醒”二级入口，并将三个既有提醒 surface 分别接到本机持久化开关：关闭“计划监控结果通知”后，WorkManager 仍执行计划并落库结果，但不会发送系统通知；关闭“对话提醒建议”后，不再显示高价值完成对话尾部的“添加提醒 / 监控”；关闭“对话未读提醒”后，不再显示左侧对话列表的橙色标记。默认全开以保持升级前既有行为，未读项明确只是列表标记，并非伪造系统推送。
+- **功能审阅：** 已按本轮要求从设置 → 功能审阅移除通知与提醒、计划监控与对话提醒两段重复文字提示；可操作的“通知与提醒”页是唯一用户入口。跨端 owner 状态仍保留在 `ANDROID_DESKTOP_USER_ENTRY_AUDIT_20260816.md`，Desktop 未实现故不显示伪开关。
+- **自动验证：** 离线 `NotificationReminderSettingsContractsTest`、`SettingsUiSimplificationContractsTest`、`AndroidUserEntryAuditContractsTest`、Debug Kotlin 编译与目标文件 `git diff --check` 通过。未运行仪器测试、未重建 Release、未安装到模拟器或 OPPO；系统通知权限、后台实际到点执行与折叠屏实际触控仍待目标设备手工确认。
+
+## 2026-08-25：聊天日期分隔线与灰底统一（JVM 已验证）
+
+- **修正：** `TranscriptDateDivider` 的左右线继续共用同一 `SubtleDivider`，其颜色从近白 `#FAFBFA` 收敛为现有中性细边 `NeutralBorder = #D8DEDA`；首条日期和后续跨日期分隔线不再在加深灰底上显白。
+- **边界：** 只改变日期分隔线颜色，不改日期文本、行高、间距、消息排序、滚动或顶部/底部渐变。
+- **自动验证：** 离线 `P6DConversationRowAccessibilityContractsTest`、Debug Kotlin 编译与目标文件 `git diff --check` 通过；未重建 Release、未安装或操作 OPPO，日期线的目标视口视觉仍待手工确认。
+
+## 2026-08-25：顶部与 Composer 阴影分级加强（JVM 已验证）
+
+- **修正：** 顶部悬浮圆钮和右上操作胶囊的宽幅中性阴影由 `10dp` 提升至 `30dp`；底部 Composer 继续使用相同圆角与低透明度中性灰，但单独提升至 `42dp`，获得更稳的悬浮层级。
+- **边界：** 没有改动白色表面、圆角、触控面、按压/水波纹、布局锚点或静态 Material 阴影；不新增黑边、托底或硬阴影。
+- **自动验证：** 离线 `P6DConversationRowAccessibilityContractsTest`、Debug Kotlin 编译与目标文件 `git diff --check` 通过；未重建 Release、未安装或操作 OPPO，阴影强度和内外屏视觉仍待目标设备手工确认。
+
+## 2026-08-25：Composer 与模型选择面分离 GPT 名称（JVM 已验证）
+
+- **修正：** Composer 的窄模型位继续显示 `5.6 Terra / Sol / Luna`；打开后的模型选择二级菜单、模型目录和设置列表恢复完整 `GPT-5.6 Terra / Sol / Luna`。两处不再共用一条会导致弹窗缩写的展示名规则。
+- **边界：** 请求 ID、路由、Provider、持久化归因和当前选择的逻辑 ID 不变；消息页脚仍使用紧凑元信息，不扩大其阅读噪音。
+- **自动验证：** 离线 `P6GModelRouterContractsTest`、`OpenRouterColdStartResolverContractsTest`、`P6FTranscriptPresentationContractsTest`、`P6DConversationRowAccessibilityContractsTest` 与 Debug Kotlin 编译通过；未重建 Release、未安装或操作 OPPO，弹窗的最终视觉仍待目标设备手工确认。
+
+## 2026-08-25：会话自动标题改为完整概述（JVM 已验证）
+
+- **修正：** 自动标题不再按 30 显示宽度截断并存储省略号；优先取完成回答中的完整主题标题，缺失时将首条用户任务整理为“对象 + 任务”。悬空转折、省略语句和纯首句复制均被拒绝；例如“图里的数据是真的，但有几个重要…”会归为“图表数据真实性与关键问题核对”。
+- **历史边界：** 已有标题不批量重写，避免误覆盖用户手动重命名；抽屉单行若因物理宽度裁剪，仅属于渲染，不污染 Room 标题。
+- **自动验证：** 离线 `P6IConversationAutoTitleContractsTest`、Debug Kotlin 编译与目标文件 `git diff --check` 通过；未操作 OPPO，尚未覆盖安装。
+
+## 2026-08-25：来源网站弹窗扩展为全宽阅读面（JVM 已验证）
+
+- **修正：** “来源网站”不再使用 Material 默认窄宽 `AlertDialog`；改为共享的全宽 Dialog 壳，左右只留 `16dp` 安全边距，来源卡获得完整可用宽度。
+- **边界：** 纯白表面、24dp 圆角、最多 420dp 的内部来源滚动、点外关闭、内侧边缘关闭、系统返回、关闭按钮和 `ACTION_VIEW`／`CATEGORY_BROWSABLE` 外部浏览器打开路径不变。
+- **自动验证：** 离线 `P6DConversationRowAccessibilityContractsTest` 与 Debug Kotlin 编译通过；尚未在 OPPO 目标视口进行视觉确认，未安装新包。
+
+## 2026-08-25：Composer 停止生成图标改为白色实心方块（JVM 已验证）
+
+- **修正：** 右下角橙色发送圆面在存在可停止的本地生成时，由空心 `Outlined.Stop` 改为同尺寸白色实心 `Filled.Stop`；避免橙色透过方框中心而误读成加载中的空心标记。
+- **边界：** 只改变停止状态的 glyph 绘制；`ConversationRuntimeState` 的非终态判断、停止生成点击、48dp 命中面、36dp 橙色圆面、普通提交时的加载环及无障碍描述均不变。
+- **自动验证：** 离线 `P6DConversationRowAccessibilityContractsTest`、`FBP6041ComposerGlyphContractsTest` 与 Debug Kotlin 编译通过；尚未安装或在 OPPO 真机触发真实生成状态。
+
+## 2026-08-25：Android 对话右侧滚动位置条恢复为可见（JVM 已验证）
+
+- **根因与修正：** 右侧 `TranscriptScrollIndicator` 本身没有被删除，但被 `offset(x = 4dp)` 推出会话画布的右缘；在当前系统安全边距下，细滑块可能被裁掉。现收回 `LazyColumn` 专属的 `6dp` 右侧轨道，并将轨道／滑块透明度由 `5%／28%` 调整为 `8%／38%`，保持细、低对比但持续可辨。
+- **边界：** 仍只由既有 `LazyListState` 驱动；无可滚动内容时隐藏，正文、附件、操作目标、左右 `24dp` 视觉留白、Composer 和滚动手势均不改变。
+- **自动验证：** 离线 `P6DConversationRowAccessibilityContractsTest` 与 Debug Kotlin 编译通过；尚未在 OPPO 实机确认长对话中的可见性，也未安装新包。
+
+## 2026-08-25：DeepSeek V4 Pro 恢复官方实时网页检索（待真实 Key 验证）
+
+- **根因与修正：** 旧实现停留在 DeepSeek `/chat/completions`，并沿用当时“不支持”的菜单与计划任务规则。DeepSeek 官方现已将 `deepseek-v4-pro` 纳入 `/responses`，且支持服务端 `web_search`；DeepSeek 深度选择现在直连其自身 `/responses`，声明并强制 `web_search`，不再把 DeepSeek 的模型 ID 转发到千问。
+- **可见与持久化：** 深度模型菜单改为“DeepSeek · 官方实时联网检索”；普通会话、调用归属、诊断和已计划监控都记录 DeepSeek 作为实际接收方。Provider 返回的公开来源仍只从结构化响应写入现有来源卡；不从模型正文猜测 URL。
+- **协议边界：** DeepSeek Responses 的 SSE 是语义事件协议，当前 transport 仅消费 Chat Completions SSE；本次联网请求因此明确使用非流式 `/responses`，待全量语义 SSE 解码实现前不会假装流式。未使用用户 Key 发起真实请求，需由用户手工以已配置 DeepSeek Key 核验一次联网回答与来源。
+
+## 2026-08-25：Composer 模型入口收窄为 88dp（JVM/Release 已验证）
+
+- **修正：** 底部 Composer 的模型选择入口由 `120dp` 收窄为固定 `88dp`；短名如 `3.7 Flash` 不再占据输入栏右侧过大的胶囊区域，按钮仍保留 `48dp` 高触控面与完整模型选择逻辑。
+- **自动验证：** 离线 `P6DConversationRowAccessibilityContractsTest`、Debug Kotlin 编译、`git diff --check` 与正式 `:app:assembleRelease` 通过。未运行仪器测试、未安装到 OPPO；实际外屏/内屏的文字余量与点按观感仍待手工确认。
+
+## 2026-08-25：模型显示名移除冗余 GPT 前缀（JVM/Release 已验证）
+
+- **修正：** 用户界面中的 `GPT-5.6 Terra / Sol / Luna` 统一显示为 `5.6 Terra / Sol / Luna`；覆盖模型选择、Composer、Auto/临时兜底、助手页脚、历史尝试和计划说明。旧消息的已保存归因在渲染时同样去除前缀。
+- **边界：** `openai/gpt-5.6-*` 的精确请求 ID、预设 ID 与持久化原始归因不改，确保此显示修复不会影响联网请求或历史事实。
+- **自动验证：** 离线 `OpenRouterColdStartResolverContractsTest`、`P6GModelRouterContractsTest`、`P6FTranscriptPresentationContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，覆盖目录显示、选择顺序、旧页脚归因与 Composer 规则；Debug Kotlin 编译、`git diff --check` 与正式 `:app:assembleRelease` 成功。未运行仪器测试、未安装到 OPPO；目标设备实际页面仍待手工确认。
+
+## 2026-08-25：个性化自定义指令扩展为 8,000 字符（JVM/Release 已验证）
+
+- **修正：** 直接在“设置 → 个性化”编辑的“回答偏好与自定义指令”上限由 `2,000` 提升为 `8,000` Unicode 字符，输入框显示实时计数。完整保存内容只在用户开启个性化后拼入普通模型调用的系统指令；不会被本机摘要、静默截断，也不会进入调用审计或诊断。
+- **范围：** 本机直接编辑字段与第三方 ZIP 的严格版本化资料导入是两条独立路径；后者的格式/读取边界不因本次本机设置调整而放宽。
+- **自动验证：** 离线 `AssistantExperienceSettingsContractsTest` 与 `SettingsUiSimplificationContractsTest` 通过，覆盖 8,000 字符完整模型指令和界面额度提示；Debug Kotlin 编译、`git diff --check` 与正式 `:app:assembleRelease` 成功。未运行仪器测试、未安装到 OPPO；实际长文本输入、保存后重开与真实模型响应仍待用户在目标设备手工确认。
+
 > 面向下一位架构负责人的完整现状、联网配置、导入/导出边界与重构顺序见：[南枫AI完整开发档案](南枫AI完整开发档案.md)。它不含任何凭据、对话正文或设备私有数据。
+
+> **当前 UI 读取门（2026-08-26）：** 下方按时间保留历史实现与验收记录，旧段落中的颜色、行高、顶栏、抽屉、搜索、Markdown、来源、表格、Composer、设置、弹窗、卡片和图标数值不能当作当前规则重用。所有 Android `ConversationWorkspace` 的可见规则只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；所有 Android 设置及其二级至四级页面的可见规则只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；领域 owner 继续按对应合同执行。
+
+## 2026-08-25：普通聊天后台继续生成改为真实前台服务 owner（JVM/Release 已验证）
+
+- **根因：** 旧 `NormalChatGenerationForegroundService` 只展示通知；普通聊天的 `execute/retry` 仍由 `ConversationFoundationViewModel.viewModelScope` 执行，后台通知不等于请求由服务持有。
+- **修复：** 草稿先安全落库，服务随后作为实际网络、取消和流式持久化 owner；仅传递会话 opaque ID 与 SEND/RETRY。服务结束只广播安全状态，Activity 回前台或收到状态后从 Room 重投影。停止在 socket 建立前也会被记录并应用；同进程 Activity 重建不会把服务仍在执行的 Attempt 错标为 PROCESS_INTERRUPTED。
+- **失败边界：** 系统杀进程、强制停止和真实网络中断仍不会伪造“继续完成”或自动重发；不确定结果保留 UNKNOWN，用户才能以原 idempotency key 明确重试。通知、Intent、广播、调用日志均不含正文、附件、回复或 Key。
+- **UI：** 发送失败卡的标题、说明与重试按钮已统一以同一中轴居中。
+- **自动验证：** 离线 `NormalChatBackgroundExecutionContractsTest`、`P3JNormalChatExplicitEgressContractsTest`、`P5BAndroidExecutionManifestContractsTest`、正式 `:app:assembleRelease` 与变更文件 `git diff --check` 通过；候选 APK v2/v3 签名证书为 `6d1d56ec…e198d8661f8`。未运行仪器测试、未操作 OPPO，未使用用户 Key 进行真实 Provider 或后台切换验证。
+
+## 2026-08-25：会话／工作／临时会话共用灰底与 Composer 锚点（JVM/Release 已验证）
+
+- **统一画布：** `ConversationWorkspaceCanvas = #F2F2F2` 是普通对话、工作区和临时对话唯一的中性灰画布；不再让普通对话单独显示白底，也不修改白色输入框、顶栏按钮或弹层。
+- **临时对话 Composer：** 临时会话底部输入框现与正式对话使用同一 `navigationBarsPadding + imePadding + 18dp 水平／6dp 底部` 锚点；键盘打开时会随 IME 一起上移，不再固定在手势区。
+- **自动验证：** 离线 `P6DConversationRowAccessibilityContractsTest`、`P6GUnifiedChatFirstUiContractsTest` 与 Debug Kotlin 编译通过；正式 `:app:assembleRelease` 已完成。未进行新的设备覆盖或真机视觉验收，需由用户确认灰度和键盘状态的实际观感。
+
+## 2026-08-25：Android 音频正文短条与稳定拖动（JVM/Release 已验证）
+
+- **几何：** 正文音频预览恢复为固定 `176×42dp` 紧凑短条；完整本地播放器继续使用横向 `20dp` 留白的固定居中窗口，并压缩播放核心的垂直占用。正文预览不得因完整播放器的尺寸要求而拉长。
+- **拖动与稳定性：** 音频进度轨可点按或拖动；拖动期间只保存临时位置，播放轮询不覆盖它，松手才对本地 `MediaPlayer` 提交一次 seek。音频弹层的下载、分享、关闭操作关闭自动隐藏，正文拖动不再切换顶栏 chrome。
+- **复查收口：** 旧版同时叠加点击与拖动识别器，短拖可能产生竞争；现改为单一 pointer owner，在抬手才提交 seek、取消则恢复真实位置。自动播放文案已与实际 `MediaPlayer` 准备完成后的行为一致；右上三个动作改为单一 `44/68/44dp` 固定操作组，标题保留独立间隔。
+- **自动验证：** 离线 `P6F2EAudioAndTextPreviewUiContractsTest`、`P6DConversationRowAccessibilityContractsTest` 与 `P6F2DVideoPreviewUiContractsTest` 通过，包含 Debug Kotlin 编译和变更文件 `git diff --check`。正式 `:app:assembleRelease` 成功，候选包 v2/v3 签名已核验。未运行仪器测试、未操作模拟器或 OPPO；拖动手感、窄屏动作命中与实际播放器解码仍待目标设备手工确认。
+
+## 2026-08-25：Android 正文文本附件可读封面（JVM/Release 已验证）
+
+- **修正：** `text/plain`、Markdown、JSON 与 CSV 的正文附件卡复用已校验、受限的 UTF-8 首段投影，以 TXT／MD／JSON／CSV 标识和至多四行真实内容呈现；不再把文本走入通用空白缩略图。
+- **失败状态：** 无法读取、缺失或校验不一致时仍保留格式标识并显示具体本地原因；不读取路径、不执行任何文本内容，也不把全文放进卡片。
+- **自动验证：** 离线 `P6F2EAudioAndTextPreviewContractsTest`、`P6F2EAudioAndTextPreviewUiContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Debug Kotlin 编译和变更文件 `git diff --check`。正式 `:app:assembleRelease` 成功；候选包 v2/v3 签名已核验。未运行仪器测试、未操作模拟器或 OPPO，正文卡实际视觉仍待目标设备手工确认。
+
+## 2026-08-25：普通聊天联网回归与多模态附件直传（JVM 已验证）
+
+- **根因与恢复：** “禁用 Pro”改动曾把旧的 OpenRouter Terra/Sol 缓存映射整体拒绝；普通文本因此会在发请求前触发目录重校验，网络或目录暂不可达时看起来像所有模型失效。现在只对该已知旧 `-pro` 缓存拼写规范化为精确的标准 `openai/gpt-5.6-terra` / `openai/gpt-5.6-sol` 请求 ID，未知近似名称继续拒绝；不再让显示/迁移规则阻断现有普通聊天联网链路。
+- **附件外发：** 当前私有副本、大小、数量和 MIME 安全门保持不变；普通聊天将已接受的图片、PDF、视频、MP3/WAV/M4A 音频及安全文本文件统一带到适配层。OpenRouter 音频使用真实 `input_audio`（原始 Base64 与格式）负载，图片/PDF/视频/文件也不再被本地 capability 布尔值提前拒绝。DeepSeek 的官方直连仍没有已实现的多模态请求合同，不能伪装为已支持；Qwen 仍由其兼容 Chat Completions 适配器实际接收并由服务端给出模型级结果。
+- **失败可见性：** Provider 失败后，Composer 下方继续保留明确错误；若本机存在可安全重试的发送记录，恢复卡仍是唯一重试入口，不再只留下空白 Assistant 占位。
+- **自动验证：** 离线 `ProviderAdapterContractsTest`、`AttachmentReferenceInstructionTest`、`P2JOpenRouterRegistryContractsTest`、`P3JNormalChatExplicitEgressContractsTest`、`P6GModelRouterContractsTest` 与 `P6GUnifiedChatFirstUiContractsTest` 通过，包含 Debug Kotlin 编译和定向 `git diff --check`。未运行仪器测试、未操作模拟器或 OPPO，未以用户 Key 发起真实 Provider 请求；重新安装正式包后需用一条纯文本和一条 MP3 由用户手工确认真实服务响应。
+
+## 2026-08-25：模型联网路由、来源与附件能力收口（JVM 已验证）
+
+- **DeepSeek 路由真值（已被本页顶部 2026-08-25 更新）：** DeepSeek V4 Pro 仍绝不携带到千问 `/responses`，但已改用 DeepSeek 自身 `/responses` 的官方 `web_search`；深度菜单和已计划监控均走该直接路线并记录 DeepSeek 为接收方。
+- **可核验来源：** OpenRouter 联网请求改为读取带 `url_citation` 的最终响应；千问深度联网统一使用 Responses 并声明 `web_search` 工具，不向默认思考的 Qwen3.8-Max 发送不兼容的 `tool_choice=required`。Provider 返回的公开来源被规范成 Markdown 链接写入会话回答与计划简报，复用现有会话来源 chip，不保存 Provider 原始 JSON。
+- **Qwen 文本附件：** Markdown、TXT、JSON、CSV 不再错误编码为 Qwen Chat Completions 不接受的 `file` content part；其完整 UTF-8 正文以单独 user text message 发给 Qwen。图片/视频仍走各自的原始多模态 part；不能被 Qwen 官方端点接收的类型继续返回可见 Provider/能力错误，不伪造成功。
+- **附件路由：** 自动选择补充音频/普通文件事实：有已知能力匹配模型时优先选择；没有已知能力时不做本地假性限制，仍完整发送并将 Provider 拒绝转成可见错误。图片、PDF、视频原有完整原件发送规则不变。
+- **目录可用性：** OpenRouter 没有任何本机目录快照且公开目录 GET 暂时失败时，已固定的标准文本预设使用精确的冷启动 ID 发出；不猜测 Pro/Fast/近似模型、不用于附件、不覆盖已有目录映射。目录一旦存在但无法解析，仍保持 fail-closed，避免把过期模型静默改发。
+- **验证边界：** 离线 `ProviderAdapterContractsTest`、`CapabilityAwareAutoModelRouterTest`、`OpenRouterColdStartResolverContractsTest`、`P3JNormalChatExplicitEgressContractsTest`、`P2JOpenRouterRegistryContractsTest`、`ModelProfileRefreshContractsTest` 与 `ScheduledMonitorRoomContractsTest` 通过。未以用户 Key 发起真实 Provider 请求，尚需用已授权测试 Key 分别复验 OpenRouter、千问与 DeepSeek 的真实文字、联网来源和失败提示。
+
+## 2026-08-25：Android 对话本地视频可拖动进度（JVM 已验证）
+
+- **根因与修正：** 视频底部时间轴此前只是绘制进度，顶层单一手势 owner 只处理单击跳转；持续拖动没有被识别。现拖动时间轴时只维护临时 `scrubPositionMillis` 与时间预览，手指松开时才对现有 `VideoView` 提交一次 seek，播放轮询在拖动中不会覆盖该预览位置；取消拖动不跳转。
+- **边界：** 继续仅播放既有私有副本的本地视频。中央播放/暂停、双击切换、顶栏、边缘退出、下载/分享和关闭位置保存不变；不增加入口、不上传、不外发、不后台播放。视频实际拖动手感、解码表现与折叠屏状态连续性仍需在目标设备人工验证。
+- **自动验证：** 离线 `P6F2DVideoPreviewUiContractsTest` 与 `AttachmentTransferCompatibilityContractsTest` 通过，包含 Debug Kotlin 编译。未运行仪器测试、未操作模拟器或 OPPO。
+
+## 2026-08-25：Android 已计划真实新闻监控与对话尾部提醒（JVM/Release 已验证）
+
+- **真实 owner：** Schema 46 新增 `scheduled_monitor_tasks` / `scheduled_monitor_runs`；`ScheduledMonitorRepository` 是唯一持久化 owner，`ScheduledMonitorExecutor` 是唯一后台模型外发 owner，`AndroidScheduledMonitorScheduler` 为每个 ACTIVE 任务维持一条联网受限的唯一 WorkManager 请求。创建、完成、失败、暂停、删除都经同一 repository/scheduler；Worker 在下一次排程和通知前重新回读任务，避免用户运行中暂停/删除仍被旧活跃快照继续排程。
+- **外发与成本边界：** 用户只可从左栏搜索下的“已计划”手动添加，或从最后一条完成 Assistant 回答后的“添加提醒 / 监控”进入表单。后者只保留会话 opaque ID/标题作本机来源，绝不读取或发送消息、附件、Memory 或 Context。每次只发送用户在表单确认的任务名称/监控要求，使用 GPT-5.6 Terra 标准档与实际服务商官方网页检索；服务、凭据、模型或响应失败均写入本机安全错误码，不能伪造简报。结果通知需要 Android 通知权限，通知正文不含监控结果。
+- **用户界面与跨端：** “已计划”打开独立全屏计划页，可查看结果、暂停、恢复、删除与手动添加；Desktop 尚没有同等后台/网络/通知 owner，因此只在功能审阅登记为待实现，不展示伪入口。Android 当前会话合同、功能审阅、架构所有权表、领域规则和决策日志已同步。
+- **自动验证：** 离线 `:app:compileDebugKotlin`、`AndroidUserEntryAuditContractsTest`、`ScheduledMonitorRoomContractsTest` 与正式 `:app:assembleRelease --rerun-tasks` 通过；未运行仪器测试、未操作模拟器或 OPPO，未验证真实 Provider、WorkManager 触发、系统通知授权或真机视觉。Release 产物位于 `app/build/outputs/apk/release/南枫AI.apk`，尚未安装。
+
+## 2026-08-25：Android 计划监控建议收紧与要求自动整理（JVM 已验证）
+
+- **行为：** `ScheduledMonitorSuggestionPolicy` 只在当前完整的一问一答具备明确跟踪信号且命中高价值主题时，才允许会话尾部显示“添加提醒 / 监控”。普通开发、闲聊、一次性解释和未给出价格/估值阈值的个股讨论均不显示。已命中时仅在设备本地把当前问答整理成 20 字内的概括名称、具体可执行的监控要求和小时/每日频率；用户仍可编辑、取消或手动创建。
+- **模板：** 内建每日重点简报、具体股票/指数阈值、Codex 额度与官方更新、AI 需求/电力/Agent、中美科技政策、海外账号、宁苏居住、智能汽车与 AI 影视/VFX 模板。每日简报的中美科技政策要求写明官方/媒体/生效三类时间、法律状态、合规期、适用对象和分层产业影响，优先美国官方一手来源。
+- **隐私与外发：** 建议阶段不调用模型、不落库对话正文、不读取附件、Memory 或 Context；创建后仍只有用户保存确认的任务名称和监控要求可进入 `ScheduledMonitorExecutor`。没有真实 Provider/Key 测试，本次未验证实际网页检索、WorkManager 触发、系统通知或真机视觉。
+- **自动验证：** `ScheduledMonitorSuggestionPolicyTest`（4 tests）和 `ScheduledMonitorRoomContractsTest` 离线通过；未运行仪器测试，未操作模拟器或 OPPO。
+
+## 2026-08-25：Android 模型设置拆分运行信息入口（JVM 已验证）
+
+- **界面：** `ModelSettingsDialog` 的配置页继续保留自动路由、三服务商、预设、开关、目录核验、用户主动连接测试和本机 Key，不删除任何配置能力；调用记录、上下文选材、连接诊断从长表单中移出，分别以明确入口进入。调用记录复用已有 `InvocationLedger` 的独立 owner；上下文选材显示最近 50 条去内容化审计，标题改为简洁的“上下文选材”。
+- **隐私：** 调用记录、上下文选材和诊断均只读取现有本机安全元数据；Key、对话正文、附件、提示词、完整响应和原始请求不会进入任一页面。调用记录入口先关闭设置页再打开既有记录页，避免双层弹窗与不稳定布局。
+- **自动验证：** Debug Kotlin 编译和 `AndroidUserEntryAuditContractsTest` 离线通过；尚未做目标设备视觉验收，未操作模拟器或 OPPO。
+
+## 2026-08-24：Android 对话正文四边渐隐磨砂（已覆盖并以长对话真机画面确认）
+
+- **视觉规则：** 会话正文仅在物理屏幕的**顶部横向区域**与**底部横向区域**使用独立的 `108dp` 模糊图层：顶部 `76dp`、底部 `64dp`（收在 Composer／手势区），以互补的 `DstOut`／`DstIn` 渐隐蒙版连续交接，清晰正文退场、模糊正文接替。左右从顶部到底部都属于中间阅读区，必须完整清晰，禁止任何纵向侧边雾带；顶栏按钮、滚动指示、跳至最新、Composer 和空白画布不受影响。
+- **根因与收口：** 最初只是向完整清晰正文叠加模糊副本，因此锐利字形会遮住模糊；随后又在同一绘制帧将图层效果复位，RenderThread 实际提交成了清晰层。现清晰层和模糊层分离，模糊层不在绘制帧中复位；且绝不绘制全宽／全高灰色底，避免空白页灰幕、静态底条和硬矩形裁切边。
+- **自动验证：** 离线 `P6DConversationRowAccessibilityContractsTest` 与 `SystemBarsAppearanceContractsTest` 通过；正式 `:app:assembleRelease` 和 `git diff --check` 通过。未运行仪器测试。
+- **正式覆盖与实机核验：** OPPO Find N5（`PKH120`，Android 16）预检确认候选与现装包同为 `66 / 0.3.0-p10j`、非 Debug，v2/v3 证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。候选及安装后实际 `base.apk` SHA-256 均为 `c869ad72ea2a480c5c284feb1b9b89a8f48a251d6a4444c3ce168b7a8a772346`；`pm install -r --user 0` 返回 `Success`，`firstInstallTime` 保持 `2026-08-20 15:15:31`，仅 `lastUpdateTime` 更新为 `2026-08-24 22:28:43`。未卸载、未清数据、未部署 Debug／仪器包，设备临时 APK 已清理。设备已有长对话截图 [`/tmp/nanfeng-ai-edge-frost-verified.png`](/tmp/nanfeng-ai-edge-frost-verified.png) 已确认四边正文实际进入强模糊、中心清晰，且空白画布没有灰色承托面。
+
+## 2026-08-24：Android 会话系统栏与沉浸式正文边界（已完成）
+
+- **系统栏：** `NanfengAiActivity` 明确采用透明浅色系统栏，并在窗口重新获得焦点时再次请求浅色外观标志；ColorOS 不再把顶部状态栏和底部导航手势图标自动恢复为白色。会话浅灰画布上的时间、网络、电量和手势条均以深色（纯黑）显示。
+- **会话画布：** 仅会话路由不再在根布局消费顶部／底部安全区，移除了顶部和底部多余的灰白承托带；顶栏、正文和 Composer 均为独立层。Transcript 使用 `LazyColumn` 的可滚动 `104dp` 起始 inset，因此首段内容完整落在顶栏按钮下方，而非被按钮遮住或通过固定白条下推。末尾 `96dp` 也属于可滚动内容清空区；Composer 自己消费导航手势区，最后一行可完整越过输入框显示。
+- **自动验证：** 离线 `SystemBarsAppearanceContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过；正式 `:app:assembleRelease` 成功，`git diff --check` 通过。未运行仪器测试。
+- **正式覆盖与真机画面：** OPPO Find N5（`PKH120`，Android 16）安装前回读的正式包与候选均为 `66 / 0.3.0-p10j`、非 Debug，v2/v3 证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。候选及安装后实际 `base.apk` SHA-256 均为 `72e4a45bdc8539f99565ad40e207dfed54eed9cff41cb2a3cfb0fdbf12d4dea5`；`pm install -r --user 0` 返回 `Success`，`firstInstallTime` 保持 `2026-08-20 15:15:31`，仅 `lastUpdateTime` 更新为 `2026-08-24 21:55:41`。未卸载、未清数据、未部署 Debug／仪器包，设备临时 APK 已清理。真机截图 [`/tmp/nanfeng-ai-conversation-system-bars.png`](/tmp/nanfeng-ai-conversation-system-bars.png) 显示纯黑状态栏图标、无整条顶／底底板及首段避开顶栏。
+
+## 2026-08-24：Android 南枫 AI 启动器图标替换与 OPPO 覆盖（已完成）
+
+- **图标资产与修正：** 最初用户 JPEG 原件保留于 `app/src/main/icon-source/nanfeng_ai_launcher_source.jpg`（SHA-256 `9d81a42b59d18c8517beb88943649cc554c8305d7c3c7b518479b21ca169336e`）。当前 Android 母版 `nanfeng_ai_launcher_q_rounded_scale90_tuned_source.png`（SHA-256 `1e7aff38fce15afdd39df431402b78765330be8afd5a24bb9e81a993b665bf3f`）在 Q 版粗圆标记基础上将白色主体约缩小 10%，并把橙底从 `#D87652` 轻调为 `#E1764E`；已用 `retone_nanfeng_ai_launcher_background.swift` 校准色彩空间，确保是轻微而非过度提亮。`prepare_nanfeng_ai_launcher_foreground.swift` 只去除外缘连通白色画布，`13.5dp` inset 继续保留已验证的 ColorOS 安全留白；Desktop 未触及。
+- **静态与构建验证：** `audit_android_launcher_icon.py app` 通过（Manifest 图标／圆形图标、两个自适应 XML 和所有图层均存在）。离线 `:app:assembleRelease` 成功；候选 `app/build/outputs/apk/release/南枫AI.apk` 为 `com.nanzhufeng.ai / 66 / 0.3.0-p10j`，非 Debug，v2/v3 正式签名证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，候选 SHA-256 为 `a32abe4eb0a8320d5ea4c604a5e7e5df16d6bb6a301c8faade0e23f6ed1ef66e`。
+- **正式覆盖与真机视觉：** OPPO Find N5（`PKH120`，Android 16）安装前回读的现装包与候选证书一致；使用 `pm install -r --user 0` 返回 `Success`，设备实际 `base.apk` 回读亦为 `a32abe4eb0a8320d5ea4c604a5e7e5df16d6bb6a301c8faade0e23f6ed1ef66e`，`firstInstallTime` 保持 `2026-08-20 15:15:31`，仅 `lastUpdateTime` 更新为 `2026-08-24 21:44:05`。未卸载、未清数据、未部署 Debug／仪器包，设备临时 APK 已清理。稳定的 ColorOS Launcher 截图 `/tmp/nanfeng-ai-launcher-q-scale90.png` 显示主体尺寸缩小、橙黄底轻微提亮且图案四边完整；用户仍可据此决定是否继续调节视觉尺寸。
+
+## 2026-08-24：Android 设置二次规划与真实个性化/记忆调用（JVM 已验证）
+
+- **信息架构：** 设置首页现在只保留八个直达二级入口：个性化、记忆与上下文、模型与联网、对话管理、项目与知识、数据与存储、隐私与安全、功能审阅与关于。导入任务、系统文件选择器以及既有 Projects／知识／Memory 管理弹层仍是必要的操作终点，不再额外套设置层级；旧紧凑路由回退时统一归属“项目与知识”。
+- **真实调用边界：** 个性化资料默认关闭，只有保存且用户开启后才作为本次普通模型调用的系统指令；不写入调用审计或诊断。相关长期 Memory 默认保持升级前的召回行为，但用户关闭后普通聊天不检索也不发送长期 Memory；当前问题、知识库和会话历史的既有预算规则不被该开关误伤。
+- **视觉边界：** 参考截图只用于菜单层级，不改变当前 Android 的 `PageBackground = #F7F7F7` 灰色页面画布、`ForegroundSurface = #FFFFFF` 白色前景卡片／输入面／弹层约束。
+- **跨端登记：** Desktop 的功能审阅已如实登记两项 Android 已完成而 Desktop 待实现的能力，且将“更多本地控制面”改名为“项目、知识与记忆”；Desktop 没有新增伪开关，也没有被写成已接入普通模型调用。
+- **自动验证：** 离线 `:app:testDebugUnitTest` 定向执行 `AssistantExperienceSettingsContractsTest`、`SettingsUiSimplificationContractsTest` 与 `AndroidUserEntryAuditContractsTest` 通过；Desktop `chat-first-ui` 65 项通过；`git diff --check` 通过。未运行仪器测试。
+- **正式覆盖：** OPPO Find N5（`PKH120`，Android 16）已将新正式候选 `app/build/outputs/apk/release/南枫AI.apk` 覆盖安装。候选与安装前原包均为 `66 / 0.3.0-p10j`、非 Debug，v2/v3 签名证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。候选 SHA-256 为 `2798954ffeb3c3b19579f3fc1384aa29b2e1b2cb07c74452327542d6e8426a63`；`pm install -r --user 0` 返回 `Success`，设备新 `base.apk` 回读同 hash。`firstInstallTime` 保持 `2026-08-20 15:15:31`，仅 `lastUpdateTime` 更新为 `2026-08-24 20:06:05`；未卸载、未清数据、未部署 Debug/仪器包，设备临时 APK 已清理。
+- **剩余验收：** 覆盖安装和字节核验不替代设置页实际视觉/触控验收；需在 OPPO 手工检查灰色画布、白色卡片/弹层、二级返回，以及个性化和记忆开关的可理解性。
+
+## 2026-08-24：会话 UI 合同、未读提示与正式覆盖（已完成）
+
+- **合同收口：** `ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md` 是 Android 会话可见规则唯一正文；会话管理、搜索/预览、历史自适应与附件合同均已加单向路由，历史交接数值不能反向覆盖当前 UI。
+- **未读提示：** 本机 `conversation_read_markers_v1` 仅保存不透明会话 ID 与已读更新时间水位。首次升级建立既有历史水位；之后未打开会话收到新 Assistant 内容时，日期右侧显示主题色小圆点，打开即清除。未保存标题、正文、附件、Provider 或凭据；Android 设置 → 功能审阅已登记，Desktop 没有同等 owner 前不展示伪提醒。
+- **自动验证：** `P6DConversationRowAccessibilityContractsTest` 通过，含 Android Debug Kotlin 编译和 `git diff --check`。
+- **正式覆盖：** OPPO Find N5（`PKH120`，Android 16）只读预检确认现装与候选均为 `66 / 0.3.0-p10j`，非 Debug；候选与原包 v2/v3 证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。正式候选 `app/build/outputs/apk/release/南枫AI.apk` SHA-256 为 `b7bde7aed225dde50e74a279ca28cd4e4b6b5b5d85dec2524334d9a6304be72a`；`pm install -r --user 0` 返回 `Success`，设备实际 `base.apk` 回读同 hash。未卸载、未清数据、未运行 Debug/仪器测试；`firstInstallTime` 保持 `2026-08-20 15:15:31`，仅 `lastUpdateTime` 更新为 `2026-08-24 18:18:36`。设备临时 APK 已清理。
+- **剩余验收：** 同签名覆盖和字节核验不代替人工视觉/交互验收；需在设备确认来源 chip、表格复制、未读点出现/打开消失、长截图、搜索目录和音频播放。
+
+## 2026-08-24：抽屉轻灰、圆润 24dp 发送标记与正式覆盖（已完成）
+
+- **视觉实现：** 左侧抽屉底层保持专属的轻灰 `#F4F4F4`，不再误用白色前景令牌，也不回到此前偏暗的底色。Composer 的橙色发送圆面保留；白色发送标记改为本地 `ic_nanfeng_send_rounded`，使用圆角端点／连接和 `1.6` 宽度描边，去除旋转 Material 纸飞机的尖锐折角；图标本体按确认值由 `18dp` 放大到 `24dp`。发送、停止与加载状态的实际行为、尺寸和可访问描述不变。
+- **自动验证：** `FBP6041ComposerGlyphContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译和 `git diff --check`。
+- **正式覆盖：** OPPO Find N5（`PKH120`，Android 16）只读预检确认现装包与候选均为 `66 / 0.3.0-p10j`、非 Debug，v2/v3 正式签名证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。候选 `app/build/outputs/apk/release/南枫AI.apk` SHA-256 为 `2b28f2743ad09dbf8c26f2782fbef55b1976d09026a3ccd37ec0c3d1e1a28174`；以 `pm install -r --user 0` 返回 `Success`，设备实际 `base.apk` 哈希一致。未卸载、未清数据、未运行 Debug／仪器测试；`firstInstallTime` 保持 `2026-08-20 15:15:31`，数据目录仍为 `/data/user/0/com.nanzhufeng.ai`。设备临时 APK 已移除。
+- **剩余验收：** 覆盖安装与字节核验不代替视觉验收；需在外屏／内屏人工确认轻灰抽屉与圆润发送图标的实际观感，以及长截图是否确实到正文末尾。
+
+## 2026-08-24：Android 左侧抽屉画布与前景表面分离（JVM 已验证）
+
+- **根因与修正：** 前一轮为了恢复前景白卡与按钮，新增的共享 `ForegroundSurface` 被错误用于 `ModalDrawerSheet`；抽屉本应是导航画布，却被归类为一整张白色前景卡，因此任何白卡提亮都会连带提亮整块左栏。现新增专属 `ConversationDrawerCanvas = #F4F4F4` 并只供抽屉最底层使用；它只比主页面底略深，避免回到此前过暗的左栏。搜索框、选中对话行、设置圆钮和“新对话”仍各自保持原有亮面/强调色。
+- **防回归：** 视觉合同改为同时锁定“灰色抽屉画布”和“纯白前景控件”，删除旧的“抽屉容器必须为 `ForegroundSurface`”断言，避免后续白卡修复再次污染导航底层。
+- **验证边界：** `P6DConversationRowAccessibilityContractsTest` 与 `P6GUnifiedChatFirstUiContractsTest` 通过，包含 Android Debug Kotlin 编译与 `git diff --check`。尚未重建 Release、覆盖安装或操作 OPPO，实际外屏/内屏对比仍待正式候选包人工确认。
+
+## 2026-08-24：Android 对话系统长截图滚动所有权（JVM 已验证）
+
+- **根因与修正：** 系统长截图通过 Compose 的 `LazyColumn` 滚动语义逐段取图；对话页原有“跟随最新消息”协程同时可能执行 `scrollToItem(last)`。两条滚动控制并发时，系统捕获会被拉回最新位置，造成长截图在正文中途结束。现通过 `LocalScrollCaptureInProgress` 在系统捕获期间暂停普通聊天和工作区的所有自动回到最新消息逻辑；用户主动发送、普通阅读和截图结束后的既有跟随行为不变。
+- **依赖判断：** 当前 Compose UI `1.11.4` 已内建 Android 12+ Scroll Capture，旧的 `ComposeFeatureFlag_LongScreenshotsEnabled` 已从该版本移除，不能再添加已失效的开关。没有因这一个问题升级整个 Compose/compileSdk 工具链。
+- **验证边界：** `P6GUnifiedChatFirstUiContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译与 `git diff --check`。未运行仪器测试、未重建 Release、未覆盖安装或操作 OPPO；ColorOS 实际长截图仍需在正式候选包上手动从同一长对话验证，确认能拉至真实末尾。
+
+## 2026-08-24：Android 本地搜索目录默认展示（JVM 已验证）
+
+- **根因与修正：** 搜索页此前只在手动输入并提交关键词后运行查询，分类 Tab 在空关键词时也只是清空结果，因此“全部／图片／视频／音频／文件”首次打开都没有内容。现在打开搜索即浏览当前本机对话目录；“全部”显示最近对话与附件，媒体和文件 Tab 直接显示对应的附件卡片网格，并按消息所属月份分组；关键词输入约 `180ms` 后直接过滤，不必另按提交。
+- **完整性：** 关键词索引无命中时会回退到当前可见消息树的本地投影，避免旧设备的非空但不完整索引让已有正文变成“找不到”。三点菜单中的当前聊天查找改为 NFKC、忽略换行/连续空格及大小写的文本匹配；命中仍只在当前会话内跳转。
+- **布局与参考：** 全屏搜索标题栏加入状态栏避让。实现参考南枫知识库“空关键词直接消费完整目录、分类仅改变筛选与呈现”的搜索/附件目录逻辑；Android 仅复用该关系，不复制桌面端来源业务、文件恢复或 WebView 实现。
+- **目录预览：** 卡片不再使用空白文件占位：图片与视频使用已校验缩略图，PDF 用同一受校验 `PdfRenderer` 路径渲染首页，TXT／Markdown／JSON／CSV 展示惰性、受限且不执行的真实开头片段；无可用预览时会明确显示本地原因。列表行和网格卡使用同一规则。
+- **音频播放器：** 搜索目录和正文附件统一显示音频格式、播放按钮、进度轨和时长；点击音频即打开完整播放器并开始本机播放，播放器可暂停、实时刷新进度，关闭时保存位置并释放临时副本。旧“开始本地播放／继续播放／安全说明”等附加小字已移除。
+- **启动落点：** 正常冷启动或后台超过 `15` 分钟后回到 App 时，默认进入可复用的空白“新对话”；短时切后台会保持当前历史、草稿和阅读位置。后台时间同时写入轻量本地偏好，因此系统回收进程后短时重开也不切走；对话桌面快捷方式、分享、深链等显式入口保持原目标。
+- **正文层级：** 对话阅读区整体由旧的 `1.10x` 调整为 `0.99x`，即相对截图中的当前视觉缩小约 `10%`；一级／二级／三级标题改为 `26/22/18sp` 的 ExtraBold／Bold 层级，正文保持约 `16sp`，列表和表格正文降为约 `15sp`，强调内容用 `ExtraBold`，链接升级为 `SemiBold`。顶栏、输入栏、图标和触控面积不参与缩放。
+- **验证边界：** `P3EConversationManagementExportContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译与 `git diff --check`。未重建 Release、覆盖安装、操作模拟器或 OPPO；真实设备上的目录数量、缩略图、PDF 首页与状态栏视觉仍待人工确认。
+
+## 2026-08-24：Android Markdown 表格完整网格（JVM 已验证）
+
+- **布局修正：** 表格不再由内容宽度决定表头灰底。整张表以当前阅读宽度均分列宽；可用宽度不足最低列宽时才横向滚动。表头灰底现铺满全部列，表格具备完整的横向行分隔与纵向列分隔，外框保持细灰蓝边线。
+- **单元格对齐：** 表头和正文均在各自单元格内水平、垂直居中；多行内容随本行最高单元格居中，不再沿左边或顶部散开。
+- **验证边界：** `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译。没有重建 Release、覆盖安装、操作模拟器或 OPPO；实际窄屏横向滚动与视觉效果仍待人工确认。
+
+## 2026-08-24：Android 前景白面恢复（JVM 已验证）
+
+- **分层修正：** `PageBackground` 继续仅作为最底层的 `#F7F7F7` 页面画布；新增统一 `ForegroundSurface = #FFFFFF`，并用于 Material surface-container、左侧抽屉、设置分类卡和共享 `WhiteCard`。此前设置分类卡硬编码的 `#F3F4F3` 已移除，避免白卡/按钮被误染成底层灰。
+- **边界与验证：** 中性系统 scrim 仍只在模态打开时压暗其背后的页面；不改变用户右侧橙色气泡、文本、按钮行为或顶栏覆盖规则。`P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译与 `git diff --check`。未操作模拟器或 OPPO，目标视口亮度仍待人工确认。
+- **正式覆盖：** 已将当前正式候选 `app/build/outputs/apk/release/南枫AI.apk`（`66 / 0.3.0-p10j`，SHA-256 `878fb5b592da2382d9a552bbc261faedf857359128f0eb32c7571aeaed6dade0`）同签名覆盖至 OPPO Find N5（`PKH120`，Android 16）。候选与原包证书 SHA-256 均为 `6d1d56ec…d8661f8`；`pm install -r --user 0` 返回 `Success`，首次安装时间保持 `2026-08-20 15:15:31`，设备实际 `base.apk` 同 hash。未卸载、未清数据、未运行仪器测试；已清理设备和本机的临时核验文件。安装不替代设置页与对话页的人工视觉确认。
+
+## 2026-08-24：Android 列表标记首行基线与层级缩进（JVM 已验证）
+
+## 2026-08-24：Android 来源入口归属正文（JVM 已验证）
+
+- **根因与修正：** 纯 URL 行与只含 URL 的列表项此前会成为独立 Markdown 内容块；渲染时 URL 文字隐藏、仅留下来源图标，于是形成连续的空图标行。现在解析层会将这些来源附着到此前对应的段落、标题、引用或最近列表项；正文只保留一个行尾来源图标，点击后仍打开白色来源网站弹窗，站点卡继续以 `ACTION_VIEW` 交给系统浏览器。
+- **边界：** 没有可读前文可归属的孤立 URL 会保留，避免静默丢失来源；`P3DMessagePresentationContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译。尚未重建 Release 或覆盖 OPPO。
+
+- **根因与修正：** 无序点及有序数字原先由 `Row(Alignment.Top)` 顶端对齐，且使用较小的默认文字规格，和正文 `16sp / 26sp` 的第一行基线脱节；解析也丢弃了 Markdown 的前置缩进。两类标记现均使用正文同一字号/行高，并通过 `alignByBaseline()` 与本项正文第一行对齐。顶层列表先缩进 `12dp`，每个实际嵌套层级再推进 `16dp`；两空格与四空格的 Markdown 缩进都会归一为逐级层次。窄列 `14–22dp` 和正文间距 `4dp` 保持不变。
+- **验收边界：** `P3DMessagePresentationContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译。仅修改 Markdown 列表项的层级与垂直排版，不改段落、标题、右侧用户气泡或顶栏覆盖规则；实际阅读页视觉仍待确认，尚未重建 Release 或覆盖 OPPO。
+
+## 2026-08-24：Android 首段生成等待态（JVM 已验证）
+
+- **可见状态：** 空白的 PARTIAL 助手消息不再只有一行“正在生成”。根据已持久化的用户输入，在左侧开放正文列显示固定、可替换的前情概括和明确准备阶段：PDF、图片、音视频、文件、链接、代码问题、分析问题与普通提问各有本地文案；首个正式字符到达后概括立即消失，仅保留紧凑继续生成提示。
+- **真实性边界：** 文案只表达“梳理/准备”，不伪称已搜索、已读取附件或已经得出结论；不存入助手正文、不进入导出/复制、不读取附件字节、不触发 Provider/模型请求。
+- **验证边界：** `P6FTranscriptPresentationContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译。未重建 APK、未操作模拟器或 OPPO；等待态目标视口视觉仍需后续人工确认。
+
+## 2026-08-24：Android 对话延后本地概括标题（JVM 已验证）
+
+- **时机与来源：** 新会话继续以“新对话”占位并保留 `autoTitlePending`。首条 USER 消息不再截取开头改名；首条 ASSISTANT 完整回复落库后，优先提取回复中的 Markdown 标题或中文章节标题，再回退到用户文本概括或附件类型加文件名。默认显示宽度约 13 个汉字，必要时最多约 15 个汉字。
+- **边界：** 全过程仅消费已持久化的对话文本和安全附件显示名；不读取附件字节、不发出额外 Provider/模型请求、不增加 token 消耗。流式回复仅在 `RuntimeCompleted` 后改名；失败、取消、手动重命名、导入历史与升级前既有会话都不会被覆盖。
+- **验证边界：** `P6IConversationAutoTitleContractsTest`、`P6IConversationAutoTitleRoomContractsTest` 与 `P3BConversationRuntimeContractsTest` 通过，包含 Android Debug Kotlin 编译。未重建 APK、未操作模拟器或 OPPO；首次真实回复后的左栏标题仍待自然使用时视觉确认。
+
+## 2026-08-24：Android 对话来源图标与系统浏览器（JVM 已验证）
+
+- **正文收口：** `InlinePresentation.Link` 不再把域名、完整 URL 或箭头写入段落、列表项或表格单元的正文流；每个含来源的对应内容末尾只嵌入一个 `24dp` 外部来源图标。来源图标是可访问的交互控件，内容描述准确给出可打开的站点数量。
+- **真实操作：** 点击图标打开只包含该处去重来源的白色“来源网站”弹窗，站点卡显示标签和完整 URL；点击站点卡用 `Intent.ACTION_VIEW` + `CATEGORY_BROWSABLE` 交给系统浏览器，系统没有处理器时显示中文失败提示并保留弹窗。没有把外部网站内容拉入 App、没有请求 Provider、没有读取 Key 或写入历史消息。
+- **验证边界：** 离线 `P3DMessagePresentationContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译。未重建 APK、未操作模拟器或 OPPO；系统浏览器实际选择与视觉需后续目标设备人工确认。
+
+## 2026-08-24：Android 对话正文 Markdown 排版与信息完整性（JVM 已验证）
+
+- **明确保留：** 左侧菜单圆钮及右侧新对话／更多胶囊的悬浮覆盖关系是既定视觉规则；长正文从控件下方经过属于正常表现，本轮没有调整顶栏、可滚动 viewport 或安全留白。
+- **正文格式：** Markdown parser 升至版本 4：`---` 解析为分隔线而不再显示原始字符；列表中的空行不会把同一列表拆为多块；反引号内的普通文本保留等宽显示但不再显示反引号，完整 HTTP 地址仍是可点击链接。标题改为稳定的阅读级层级；相邻列表项缩至 `4dp`。
+- **列表与气泡：** 有序/无序符号共用 `14–22dp` 的窄列和 `4dp` 正文间隔，直接服务本项正文的悬挂缩进，不能与段落或标题正文强行对齐。长 USER 消息气泡由 50% 圆角改为固定 `24dp`，避免高内容时曲线裁切首尾文字；内容宽度、右对齐、浅橙色与长按边界保持。
+- **验证边界：** 离线 `P3DMessagePresentationContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译；`git diff --check` 待本轮最终汇总复核。未重建 APK、未操作模拟器或 OPPO，目标视口视觉仍需后续人工确认。
+
+## 2026-08-24：左栏会话行适度恢复与间距放宽（JVM 已验证）
+
+- **布局：** 用户确认此前普通会话行过紧后，行高从 `36dp` 恢复约 `1/5` 至 `44dp`；标题、日期、单行截断、左右 `5dp` 内容边距、批量编辑 `52dp` 和右滑操作带的同高联动均保持。可滚动列表的组内行间距从 `4dp` 放宽到 `8dp`，搜索、分区标题、设置和新对话的独立布局不变。
+- **验证边界：** 离线 `P6DConversationRowAccessibilityContractsTest` 通过，包含 Android Debug Kotlin 编译；`git diff --check` 通过。未重建 APK、未操作模拟器或 OPPO，实际目标视口观感仍需后续视觉验收。
 
 ## 2026-08-24：最终回归、文档固化与本地 checkpoint（已完成）
 

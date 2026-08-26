@@ -41,6 +41,18 @@ class P6F2DVideoPreviewUiContractsTest {
         assertTrue(viewer.contains("Color.Black.copy(alpha = 0.44f)"))
     }
 
+    @Test fun `video timeline previews during drag and seeks only once on release`() {
+        val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val viewer = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
+        for (token in listOf("scrubPositionMillis", "previewTimelineSeek", "commitTimelineSeek", "timelineScrubbing", "ACTION_MOVE", "ACTION_UP", "视频播放进度，可左右拖动调整位置", "松手跳转")) {
+            assertTrue("missing draggable timeline rule: $token", viewer.contains(token))
+        }
+        assertTrue(viewer.contains("scrubPositionMillis?.let(::seekTo)"))
+        val move = viewer.substring(viewer.indexOf("android.view.MotionEvent.ACTION_MOVE"), viewer.indexOf("android.view.MotionEvent.ACTION_UP"))
+        assertTrue(move.contains("previewTimelineSeek(timelinePosition(event))"))
+        org.junit.Assert.assertFalse(move.contains("seekTo("))
+    }
+
     @Test fun `opening a prepared local video starts playback without a second tap`() {
         val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val viewer = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
@@ -59,7 +71,12 @@ class P6F2DVideoPreviewUiContractsTest {
             val start = source.indexOf("private fun $functionName")
             val next = source.indexOf("\n@Composable\nprivate fun", start + 1).let { if (it < 0) source.length else it }
             val viewer = source.substring(start, next)
-            assertTrue("$functionName must use shared chrome", viewer.contains("rememberFilePreviewChromeState(preview.id.value)"))
+            val sharedChrome = if (functionName == "AudioPreviewDialog") {
+                "rememberFilePreviewChromeState(preview.id.value, autoHide = false)"
+            } else {
+                "rememberFilePreviewChromeState(preview.id.value)"
+            }
+            assertTrue("$functionName must use shared chrome", viewer.contains(sharedChrome))
         }
         val video = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
         assertTrue(video.contains("if (controlsVisible) {\n                    PreviewCloseButton"))

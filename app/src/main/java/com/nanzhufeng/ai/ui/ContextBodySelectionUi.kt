@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -39,14 +39,14 @@ import com.nanzhufeng.ai.domain.MemoryDomain
 @Composable
 fun ContextBodySelectionDialog(state: ContextBodySelectionUiState, viewModel: ContextBodySelectionViewModel) {
     Dialog(onDismissRequest = viewModel::dismissDialog, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(color = Color.White, shape = CardShape, modifier = Modifier.fillMaxSize().padding(12.dp)) {
+        Surface(color = ForegroundSurface, shape = CardShape, modifier = Modifier.fillMaxSize().padding(12.dp)) {
             Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
                         Text("本次 Context 正文选择", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         Text("所有项默认关闭；只作本机瞬时预览，不会发送给 Provider。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                     }
-                    IconButton(onClick = viewModel::dismissDialog) { Icon(Icons.Outlined.Close, contentDescription = "关闭 Context 选择") }
+                    IconButton(onClick = viewModel::dismissDialog) { Icon(Icons.Rounded.Close, contentDescription = "关闭 Context 选择") }
                 }
                 if (state.isLoading) Text("正在从本机核对当前会话范围…", color = SecondaryText)
                 else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -94,7 +94,7 @@ fun ContextBodySelectionDialog(state: ContextBodySelectionUiState, viewModel: Co
                         state.localActionTracePreview?.let { preview ->
                             Text("LOCAL_L3_METADATA · ${preview.format} · ${preview.entries.size} 条", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                             preview.entries.forEach { entry ->
-                                Surface(color = Color(0xFFF5F8F6), shape = CardShape, modifier = Modifier.fillMaxWidth()) {
+                                Surface(color = NeutralAssistantSurface, shape = CardShape, modifier = Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text("${actionLabel(entry.actionKind)} · ${entry.terminalState.name}", style = MaterialTheme.typography.labelLarge)
                                         Text("安全 ID：${shortHash(entry.stableIdSafeSummary)} · ${entry.occurredAt}", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
@@ -118,7 +118,7 @@ fun ContextBodySelectionDialog(state: ContextBodySelectionUiState, viewModel: Co
                         Text("这是确定性前后原文抽取，不是语义摘要；不会构造 Prompt 或发送给 Provider。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                         if (preview.compression.entries.isEmpty()) Text("尚未选择来源，因此零条压缩结果。", color = SecondaryText)
                         preview.compression.entries.forEach { entry ->
-                            Surface(color = Color(0xFFF5F8F6), shape = CardShape, modifier = Modifier.fillMaxWidth()) {
+                            Surface(color = NeutralAssistantSurface, shape = CardShape, modifier = Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text("${layerLabel(entry.layer)} · ${entry.kind.name}", style = MaterialTheme.typography.labelLarge)
                                     Text("来源 ID 安全摘要：${safeSummary(entry.sourceId)} · ${if (entry.omittedCodePointCount > 0) "已截断" else "未截断"}", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
@@ -148,7 +148,7 @@ fun ContextBodySelectionDialog(state: ContextBodySelectionUiState, viewModel: Co
 
 @Composable
 private fun SelectionRow(title: String, detail: String, checked: Boolean, enabled: Boolean, onToggle: () -> Unit) {
-    Surface(color = Color(0xFFF5F8F6), shape = CardShape, modifier = Modifier.fillMaxWidth()) {
+    Surface(color = NeutralAssistantSurface, shape = CardShape, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = checked, onCheckedChange = if (enabled) { { _: Boolean -> onToggle() } } else null)
             Column(Modifier.weight(1f)) { Text(title); Text(detail, style = MaterialTheme.typography.bodySmall, color = SecondaryText) }

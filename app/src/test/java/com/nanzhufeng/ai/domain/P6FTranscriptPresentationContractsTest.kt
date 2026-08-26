@@ -71,10 +71,31 @@ class P6FTranscriptPresentationContractsTest {
             .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(attribution)))
             .single()
 
-        assertEquals("模型：Claude Opus 5 · OpenRouter", projected.metadata.modelSnapshotLabel)
+        assertEquals("Claude Opus 5", projected.metadata.modelSnapshotLabel)
     }
 
-    @Test fun `hosted DeepSeek search footer names Qwen as the real web receiver`() {
+    @Test fun `provider response amount is shown after the model while fallback keeps its estimate label`() {
+        val node = message("provider-cost", MessageRole.ASSISTANT)
+        val exact = AssistantResponseModelAttribution(
+            assistantMessageId = node.id, attemptId = NormalChatSendAttemptId("p6f-cost-exact"),
+            providerId = ProviderId.OPENROUTER, receiverProviderId = ProviderId.OPENROUTER,
+            modelId = "openai/gpt-5.6-sol", modelDisplayName = "GPT-5.6 Sol", recordedAt = Instant.EPOCH,
+            cost = ProviderCost("openrouter-provider-response", "USD", 5_210L), costSource = ConversationCostSource.PROVIDER_RESPONSE,
+        )
+        val estimated = exact.copy(
+            attemptId = NormalChatSendAttemptId("p6f-cost-estimate"),
+            cost = ProviderCost("local-calibrated-openrouter-v1", "USD", 5_340L), costSource = ConversationCostSource.LOCAL_ESTIMATE,
+        )
+
+        assertEquals("\$0.00521", exact.footerCostLabel())
+        assertEquals("≈ \$0.00534（估算）", estimated.footerCostLabel())
+        val projected = ConversationTranscriptPresentation(MessagePresentationRenderer())
+            .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(exact)))
+            .single()
+        assertEquals("\$0.00521", projected.metadata.costLabel)
+    }
+
+    @Test fun `hosted DeepSeek search footer stays a model name while route remains persisted`() {
         val node = message("deepseek-qwen-search", MessageRole.ASSISTANT)
         val attribution = AssistantResponseModelAttribution(
             assistantMessageId = node.id,
@@ -90,7 +111,48 @@ class P6FTranscriptPresentationContractsTest {
             .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(attribution)))
             .single()
 
-        assertEquals("模型：DeepSeek V4 Pro · 通义千问官方实时检索", projected.metadata.modelSnapshotLabel)
+        assertEquals("DeepSeek V4 Pro", projected.metadata.modelSnapshotLabel)
+    }
+
+    @Test fun `provider answer footer removes redundant Google family prefix without altering the recorded route`() {
+        val node = message("provider-gemini", MessageRole.ASSISTANT)
+        val attribution = AssistantResponseModelAttribution(
+            assistantMessageId = node.id,
+            attemptId = NormalChatSendAttemptId("p6f-gemini-attempt"),
+            providerId = ProviderId.OPENROUTER,
+            receiverProviderId = ProviderId.OPENROUTER,
+            modelId = "google/gemini-3.7-flash",
+            modelDisplayName = "Google: Gemini 3.7 Flash",
+            recordedAt = Instant.EPOCH,
+        )
+
+        val projected = ConversationTranscriptPresentation(MessagePresentationRenderer())
+            .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(attribution)))
+            .single()
+
+        assertEquals("Gemini 3.7 Flash", projected.metadata.modelSnapshotLabel)
+        assertEquals("Google: Gemini 3.7 Flash", attribution.modelDisplayName)
+    }
+
+    @Test fun `provider answer footer keeps the canonical GPT model name without changing its exact id`() {
+        val node = message("provider-gpt", MessageRole.ASSISTANT)
+        val attribution = AssistantResponseModelAttribution(
+            assistantMessageId = node.id,
+            attemptId = NormalChatSendAttemptId("p6f-gpt-attempt"),
+            providerId = ProviderId.OPENROUTER,
+            receiverProviderId = ProviderId.OPENROUTER,
+            modelId = "openai/gpt-5.6-terra",
+            modelDisplayName = "GPT-5.6 Terra",
+            recordedAt = Instant.EPOCH,
+        )
+
+        val projected = ConversationTranscriptPresentation(MessagePresentationRenderer())
+            .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(attribution)))
+            .single()
+
+        assertEquals("GPT-5.6 Terra", projected.metadata.modelSnapshotLabel)
+        assertEquals("openai/gpt-5.6-terra", attribution.modelId)
+        assertEquals("GPT-5.6 Terra", attribution.modelDisplayName)
     }
 
     @Test fun `assistant duration comes only from its matching persisted invocation run`() {
@@ -146,6 +208,23 @@ class P6FTranscriptPresentationContractsTest {
         assertEquals(first.createdAt, projected[0].metadata.createdAt)
         assertEquals(second.createdAt, projected[1].metadata.createdAt)
         assertTrue(projected[0].metadata.createdAt != projected[1].metadata.createdAt)
+    }
+
+    @Test fun `empty partial assistant shows local input-aware preparation copy until the first real chunk`() {
+        val user = MessageNode(
+            id = MessageNodeId("waiting-user"), conversationId = conversationId, parentMessageId = null, siblingPosition = 0,
+            role = MessageRole.USER, content = listOf(ContentBlock.Text("请帮我排查 Android 报错")), createdAt = Instant.EPOCH,
+        )
+        val waiting = MessageNode(
+            id = MessageNodeId("waiting-assistant"), conversationId = conversationId, parentMessageId = user.id, siblingPosition = 0,
+            role = MessageRole.ASSISTANT, content = emptyList(), createdAt = Instant.EPOCH, deliveryState = MessageDeliveryState.PARTIAL,
+        )
+        val firstChunk = waiting.copy(content = listOf(ContentBlock.Text("正式正文")))
+        val presenter = ConversationTranscriptPresentation(MessagePresentationRenderer())
+        val preview = presenter.render(listOf(user, waiting), emptyList()).last().metadata.waitingPreview
+        assertEquals("我先梳理实现目标和现有约束，再给你可执行的答复。", preview?.preface)
+        assertEquals("正在准备问题分析", preview?.phase)
+        assertNull(presenter.render(listOf(user, firstChunk), emptyList()).last().metadata.waitingPreview)
     }
 
     private fun message(id: String, role: MessageRole, invocation: InvocationId? = null) = MessageNode(

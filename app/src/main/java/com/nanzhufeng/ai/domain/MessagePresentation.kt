@@ -7,7 +7,7 @@ import java.security.MessageDigest
  * P3-D's in-memory-only projection boundary. It never accepts provider chunks and it never
  * writes parsed content back into Conversation/Room. Text is untrusted presentation input.
  */
-const val MESSAGE_PRESENTATION_PARSER_VERSION = 3
+const val MESSAGE_PRESENTATION_PARSER_VERSION = 9
 
 data class PresentationBlockIdentity(
     val messageId: MessageNodeId,
@@ -29,9 +29,13 @@ sealed interface InlinePresentation {
 sealed interface PresentationBlock {
     val identity: PresentationBlockIdentity
     data class Paragraph(override val identity: PresentationBlockIdentity, val spans: List<InlinePresentation>) : PresentationBlock
+    /** Parenthetical note metadata is auxiliary reading content, not italic prose emphasis. */
+    data class Note(override val identity: PresentationBlockIdentity, val spans: List<InlinePresentation>) : PresentationBlock
     data class Heading(override val identity: PresentationBlockIdentity, val level: Int, val spans: List<InlinePresentation>) : PresentationBlock
-    data class UnorderedList(override val identity: PresentationBlockIdentity, val items: List<List<InlinePresentation>>) : PresentationBlock
+    data class UnorderedList(override val identity: PresentationBlockIdentity, val items: List<UnorderedPresentationItem>) : PresentationBlock
     data class OrderedList(override val identity: PresentationBlockIdentity, val items: List<OrderedPresentationItem>) : PresentationBlock
+    /** Markdown thematic break such as `---`; it is structure, never literal prose. */
+    data class HorizontalRule(override val identity: PresentationBlockIdentity) : PresentationBlock
     data class Quote(override val identity: PresentationBlockIdentity, val spans: List<InlinePresentation>) : PresentationBlock
     data class CodeFence(override val identity: PresentationBlockIdentity, val language: String?, val code: String) : PresentationBlock
     /** A bounded Markdown pipe table; cells reuse the same safe inline projection as prose. */
@@ -49,7 +53,8 @@ sealed interface PresentationBlock {
     data class SafeToolSummary(override val identity: PresentationBlockIdentity, val toolName: String, val summary: String) : PresentationBlock
 }
 
-data class OrderedPresentationItem(val ordinal: Int, val spans: List<InlinePresentation>)
+data class UnorderedPresentationItem(val spans: List<InlinePresentation>, val depth: Int = 0)
+data class OrderedPresentationItem(val ordinal: Int, val spans: List<InlinePresentation>, val depth: Int = 0)
 
 data class PresentedMessage(
     val messageId: MessageNodeId,
@@ -109,14 +114,30 @@ class MessagePresentationRenderer(private val parserVersion: Int = MESSAGE_PRESE
 private object SafeMarkdownParser {
     private val fence = Regex("^\\s*```([A-Za-z0-9_+.-]{0,32})\\s*$")
     private val heading = Regex("^(#{1,6})\\s+(.+)$")
-    private val unordered = Regex("^\\s*[-*+]\\s+(.+)$")
-    private val ordered = Regex("^\\s*(\\d+)\\.\\s+(.+)$")
+    private val unordered = Regex("^(\\s*)[-*+]\\s+(.+)$")
+    private val ordered = Regex("^(\\s*)(\\d+)\\.\\s+(.+)$")
+    private val horizontalRule = Regex("^\\s*(?:-{3,}|\\*{3,}|_{3,})\\s*$")
     private val quote = Regex("^\\s*>\\s?(.*)$")
     private val tableDivider = Regex("^\\s*\\|?\\s*:?-{3,}:?\\s*(?:\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$")
     private val rawHttpUrl = Regex("https?://[^\\s<>()]+")
+    private val parentheticalNote = Regex("^[（(]\\s*(?:注|备注|说明|note)\\s*[：:].*[）)]$", RegexOption.IGNORE_CASE)
+    private val looseFenceOpen = Regex("^\\s*(`{2,3})(?:\\s*(bash|sh|shell|zsh|json|kotlin|java|python|javascript|js|xml|html|sql|text|plaintext))?(.*)$", RegexOption.IGNORE_CASE)
+    private val inlineHeading = Regex("^(.*?[：:])\\s*(#{1,6})\\s*(\\S.*)$")
+    private val compactHeading = Regex("^(\\s*)(#{1,6})(\\S.*)$")
+    private val compactUnordered = Regex("^(\\s*)([-+*])([\\p{IsHan}A-Za-z（(\"“].*)$")
+    private val sourcePreambleOnly = Regex("^(?:(?:主要|核心)?)?(?:参考资料|参考|资料来源|来源|sources?|references?)[：:、,，;；·\\s]*$", RegexOption.IGNORE_CASE)
+    private val sourceSeparatorNoise = Regex("^[、,，;；·\\s]+$")
+    // Models often write Chinese section labels without Markdown hashes. Treat only familiar,
+    // unambiguous section forms as hierarchy; ordinary short prose remains ordinary prose.
+    private val chineseNumberedHeading = Regex("^(?:第[一二三四五六七八九十百]+(?:层|部分|章|节)?[：:]|[一二三四五六七八九十百]+[、.．])\\s*.+$")
+    private val shortStandaloneHeading = Regex("^.{2,28}[：:]?$")
 
     fun parse(identity: PresentationBlockIdentity, source: String): List<PresentationBlock> {
-        val lines = source.split("\n")
+        val lines = normalizeLooseMarkdown(source).split("\n")
+        // Markdown generators use either two or four spaces for a nested list. Map the
+        // distinct indentation columns present in this document to semantic list depths, so
+        // both conventions render as one visual level at a time.
+        val listIndentColumns = lines.mapNotNull(::listIndentation).distinct().sorted()
         val result = mutableListOf<PresentationBlock>()
         var index = 0
         while (index < lines.size) {
@@ -145,6 +166,21 @@ private object SafeMarkdownParser {
                 result += PresentationBlock.Table(identity, headers.map(::inline), rows)
                 continue
             }
+            if (horizontalRule.matches(line)) {
+                result += PresentationBlock.HorizontalRule(identity)
+                index++
+                continue
+            }
+            noteSpans(line)?.let { spans ->
+                result += PresentationBlock.Note(identity, spans)
+                index++
+                continue
+            }
+            inferredHeadingLevel(lines, index)?.let { level ->
+                result += PresentationBlock.Heading(identity, level, inline(line.trim()))
+                index++
+                return@let
+            } ?:
             heading.matchEntire(line)?.let { match ->
                 result += PresentationBlock.Heading(identity, match.groupValues[1].length, inline(match.groupValues[2]))
                 index++
@@ -155,20 +191,37 @@ private object SafeMarkdownParser {
                 val quoteFirst = quote.matchEntire(line)
                 when {
                     unorderedFirst != null -> {
-                        val items = mutableListOf<List<InlinePresentation>>()
+                        val items = mutableListOf<UnorderedPresentationItem>()
                         while (index < lines.size) {
-                            val item = unordered.matchEntire(lines[index]) ?: break
-                            items += inline(item.groupValues[1]); index++
+                            val item = unordered.matchEntire(lines[index])
+                            if (item != null) {
+                                items += UnorderedPresentationItem(
+                                    spans = inline(item.groupValues[2]),
+                                    depth = listDepth(item.groupValues[1], listIndentColumns),
+                                )
+                                index++
+                            } else if (lines[index].isBlank() && unordered.matchEntire(lines.getOrNull(index + 1).orEmpty()) != null) {
+                                index++
+                            } else break
                         }
-                        result += PresentationBlock.UnorderedList(identity, items)
+                        result += PresentationBlock.UnorderedList(identity, attachUnorderedListOnlySources(items))
                     }
                     orderedFirst != null -> {
                         val items = mutableListOf<OrderedPresentationItem>()
                         while (index < lines.size) {
-                            val item = ordered.matchEntire(lines[index]) ?: break
-                            items += OrderedPresentationItem(item.groupValues[1].toInt(), inline(item.groupValues[2])); index++
+                            val item = ordered.matchEntire(lines[index])
+                            if (item != null) {
+                                items += OrderedPresentationItem(
+                                    ordinal = item.groupValues[2].toInt(),
+                                    spans = inline(item.groupValues[3]),
+                                    depth = listDepth(item.groupValues[1], listIndentColumns),
+                                )
+                                index++
+                            } else if (lines[index].isBlank() && ordered.matchEntire(lines.getOrNull(index + 1).orEmpty()) != null) {
+                                index++
+                            } else break
                         }
-                        result += PresentationBlock.OrderedList(identity, items)
+                        result += PresentationBlock.OrderedList(identity, attachOrderedListOnlySources(items))
                     }
                     quoteFirst != null -> {
                         val quoted = mutableListOf<String>()
@@ -182,14 +235,263 @@ private object SafeMarkdownParser {
                         val paragraph = mutableListOf<String>()
                         while (index < lines.size && lines[index].isNotBlank() &&
                             fence.matchEntire(lines[index]) == null && heading.matchEntire(lines[index]) == null &&
-                            unordered.matchEntire(lines[index]) == null && ordered.matchEntire(lines[index]) == null && quote.matchEntire(lines[index]) == null
+                            inferredHeadingLevel(lines, index) == null &&
+                            unordered.matchEntire(lines[index]) == null && ordered.matchEntire(lines[index]) == null &&
+                            horizontalRule.matches(lines[index]).not() && quote.matchEntire(lines[index]) == null
                         ) { paragraph += lines[index]; index++ }
                         result += PresentationBlock.Paragraph(identity, inline(paragraph.joinToString("\n")))
                     }
                 }
             }
         }
-        return result.ifEmpty { listOf(PresentationBlock.PlainText(identity, source)) }
+        return collapseDedicatedSourceSections(attachStandaloneSourceBlocks(result).filterNot { block -> block.isSourceSeparatorNoise() })
+            .ifEmpty { listOf(PresentationBlock.PlainText(identity, source)) }
+    }
+
+    /** Repairs only unambiguous near-Markdown syntax in the in-memory reading projection. */
+    private fun normalizeLooseMarkdown(source: String): String {
+        val normalized = mutableListOf<String>()
+        var openFence: Pair<Int, Boolean>? = null
+        source.replace("\r\n", "\n").replace('\r', '\n').split("\n").forEach { originalLine ->
+            val activeFence = openFence
+            if (activeFence != null) {
+                val ticks = activeFence.first
+                val closeOnly = Regex("^\\s*`{$ticks}\\s*$")
+                val closingSuffix = Regex("^(.*?)`{$ticks}\\s*$")
+                when {
+                    closeOnly.matches(originalLine) -> {
+                        normalized += "```"
+                        openFence = null
+                    }
+                    closingSuffix.matches(originalLine) -> {
+                        val code = closingSuffix.matchEntire(originalLine)!!.groupValues[1]
+                        if (code.isNotBlank()) normalized += code
+                        normalized += "```"
+                        openFence = null
+                    }
+                    else -> normalized += originalLine
+                }
+                return@forEach
+            }
+
+            val opening = looseFenceOpen.matchEntire(originalLine)
+            if (opening != null) {
+                val ticks = opening.groupValues[1]
+                val language = opening.groupValues[2]
+                val remainder = opening.groupValues[3]
+                if (language.isNotBlank() || remainder.isBlank()) {
+                    normalized += "```$language"
+                    remainder.trimStart().takeIf(String::isNotBlank)?.let(normalized::add)
+                    openFence = ticks.length to (ticks.length == 2)
+                    return@forEach
+                }
+            }
+
+            val headingSplit = inlineHeading.matchEntire(originalLine)
+            val candidates = if (headingSplit != null) {
+                listOf(headingSplit.groupValues[1].trimEnd(), "${headingSplit.groupValues[2]} ${headingSplit.groupValues[3].trimStart()}")
+            } else listOf(originalLine)
+            candidates.forEach { candidate ->
+                val withHeadingSpacing = if (heading.matches(candidate)) candidate else compactHeading.matchEntire(candidate)?.let { match ->
+                    "${match.groupValues[1]}${match.groupValues[2]} ${match.groupValues[3].trimStart()}"
+                } ?: candidate
+                val withCompactListSpacing = compactUnordered.matchEntire(withHeadingSpacing)?.let { match ->
+                    "${match.groupValues[1]}${match.groupValues[2]} ${match.groupValues[3]}"
+                } ?: withHeadingSpacing
+                normalized += withCompactListSpacing.replace(Regex("([。！？；：])\\s*\\*\\s+(?=\\S)"), "$1\n- ")
+            }
+        }
+        if (openFence?.second == true) normalized += "```"
+        return normalized.joinToString("\n")
+    }
+
+    /**
+     * A raw URL on its own line is source metadata, never a paragraph. Attach it to the closest
+     * readable preceding block so the transcript has one inline source affordance at that text's
+     * end instead of an empty icon row.
+     */
+    private fun attachStandaloneSourceBlocks(blocks: List<PresentationBlock>): List<PresentationBlock> {
+        val attached = mutableListOf<PresentationBlock>()
+        blocks.forEach { block ->
+            val sources = ((block as? PresentationBlock.Paragraph)?.spans)?.sourceOnlyLinks()
+            if (sources.isNullOrEmpty()) {
+                attached += block
+            } else {
+                val ownerIndex = attached.indexOfLast { it is PresentationBlock.Paragraph || it is PresentationBlock.Note || it is PresentationBlock.Heading || it is PresentationBlock.Quote || it is PresentationBlock.UnorderedList || it is PresentationBlock.OrderedList }
+                if (ownerIndex < 0) {
+                    // No readable owner exists; retain the data rather than silently discarding it.
+                    attached += block
+                } else {
+                    attached[ownerIndex] = attached[ownerIndex].appendSources(sources)
+                }
+            }
+        }
+        return attached
+    }
+
+    /**
+     * Models sometimes append a bibliography-like “可查资料入口” section after an answer. That
+     * section is navigation metadata, not a second piece of prose: hide its heading and labels,
+     * then put the verified website shortcuts at the end of the preceding actual conclusion.
+     * We only collapse it when it contains at least one URL, so a user-authored section named
+     * “来源” without source links remains fully visible.
+     */
+    private fun collapseDedicatedSourceSections(blocks: List<PresentationBlock>): List<PresentationBlock> {
+        val visible = mutableListOf<PresentationBlock>()
+        var index = 0
+        while (index < blocks.size) {
+            val header = blocks[index]
+            if (!header.isDedicatedSourceSectionHeader()) {
+                visible += header
+                index++
+                continue
+            }
+            val section = mutableListOf<PresentationBlock>()
+            var cursor = index + 1
+            while (cursor < blocks.size && blocks[cursor].isDedicatedSourceSectionItem()) {
+                section += blocks[cursor]
+                cursor++
+            }
+            val sources = (header.sourceLinks() + section.flatMap { block -> block.sourceLinks() }).distinctBy(InlinePresentation.Link::url)
+            val ownerIndex = visible.indexOfLast { it.isReadableSourceOwner() }
+            if (sources.isEmpty()) {
+                // A source heading without a valid http(s) target is provider formatting debris,
+                // never reader-facing "来源：、 、 、" prose.
+            } else if (ownerIndex < 0) {
+                visible += header
+                visible += section
+            } else {
+                visible[ownerIndex] = visible[ownerIndex].appendSources(sources)
+            }
+            index = cursor
+        }
+        return visible
+    }
+
+    private fun PresentationBlock.isDedicatedSourceSectionHeader(): Boolean {
+        val label = when (this) {
+            is PresentationBlock.Heading -> spans.visibleLabel()
+            is PresentationBlock.Paragraph -> spans.visibleLabel()
+            else -> return false
+        }.lowercase()
+            .replace(Regex("[\\s：:：、,，;；·]"), "")
+        return label in setOf("可查资料入口", "可查的资料入口", "参考资料", "资料来源", "来源", "主要参考", "主要来源", "参考", "sources", "references")
+    }
+
+    private fun PresentationBlock.isDedicatedSourceSectionItem(): Boolean =
+        this is PresentationBlock.UnorderedList || this is PresentationBlock.OrderedList
+
+    private fun PresentationBlock.isReadableSourceOwner(): Boolean = when (this) {
+        is PresentationBlock.Paragraph,
+        is PresentationBlock.Note,
+        is PresentationBlock.Heading,
+        is PresentationBlock.Quote,
+        is PresentationBlock.UnorderedList,
+        is PresentationBlock.OrderedList,
+        -> true
+        else -> false
+    }
+
+    private fun PresentationBlock.isSourceSeparatorNoise(): Boolean =
+        this is PresentationBlock.Paragraph && sourceSeparatorNoise.matches(spans.visibleLabel())
+
+    private fun PresentationBlock.sourceLinks(): List<InlinePresentation.Link> = when (this) {
+        is PresentationBlock.UnorderedList -> items.flatMap { it.spans.filterIsInstance<InlinePresentation.Link>() }
+        is PresentationBlock.OrderedList -> items.flatMap { it.spans.filterIsInstance<InlinePresentation.Link>() }
+        is PresentationBlock.Paragraph -> spans.filterIsInstance<InlinePresentation.Link>()
+        is PresentationBlock.Note -> spans.filterIsInstance<InlinePresentation.Link>()
+        is PresentationBlock.Heading -> spans.filterIsInstance<InlinePresentation.Link>()
+        is PresentationBlock.Quote -> spans.filterIsInstance<InlinePresentation.Link>()
+        else -> emptyList()
+    }
+
+    private fun List<InlinePresentation>.visibleLabel(): String = joinToString("") { span -> when (span) {
+        is InlinePresentation.Text -> span.value
+        is InlinePresentation.Strong -> span.value
+        is InlinePresentation.Emphasis -> span.value
+        is InlinePresentation.Code -> span.value
+        is InlinePresentation.Link -> span.label
+    } }
+
+    private fun attachUnorderedListOnlySources(items: List<UnorderedPresentationItem>): List<UnorderedPresentationItem> {
+        val attached = mutableListOf<UnorderedPresentationItem>()
+        items.forEach { item ->
+            val sources = item.spans.sourceOnlyLinks()
+            val ownerIndex = attached.indexOfLast { it.depth <= item.depth }
+            if (sources.isNullOrEmpty() || ownerIndex < 0) attached += item
+            else attached[ownerIndex] = attached[ownerIndex].copy(spans = attached[ownerIndex].spans + sources)
+        }
+        return attached
+    }
+
+    private fun attachOrderedListOnlySources(items: List<OrderedPresentationItem>): List<OrderedPresentationItem> {
+        val attached = mutableListOf<OrderedPresentationItem>()
+        items.forEach { item ->
+            val sources = item.spans.sourceOnlyLinks()
+            val ownerIndex = attached.indexOfLast { it.depth <= item.depth }
+            if (sources.isNullOrEmpty() || ownerIndex < 0) attached += item
+            else attached[ownerIndex] = attached[ownerIndex].copy(spans = attached[ownerIndex].spans + sources)
+        }
+        return attached
+    }
+
+    private fun List<InlinePresentation>.sourceOnlyLinks(): List<InlinePresentation.Link>? {
+        val links = filterIsInstance<InlinePresentation.Link>()
+        return links.takeIf { it.isNotEmpty() && all { span -> span is InlinePresentation.Link || (span is InlinePresentation.Text && span.value.isBlank()) } }
+    }
+
+    private fun PresentationBlock.appendSources(sources: List<InlinePresentation.Link>): PresentationBlock = when (this) {
+        is PresentationBlock.Paragraph -> copy(spans = spans + sources)
+        is PresentationBlock.Note -> copy(spans = spans + sources)
+        is PresentationBlock.Heading -> copy(spans = spans + sources)
+        is PresentationBlock.Quote -> copy(spans = spans + sources)
+        is PresentationBlock.UnorderedList -> if (items.isEmpty()) this else copy(items = items.toMutableList().also { rows ->
+            val last = rows.lastIndex
+            rows[last] = rows[last].copy(spans = rows[last].spans + sources)
+        })
+        is PresentationBlock.OrderedList -> if (items.isEmpty()) this else copy(items = items.toMutableList().also { rows ->
+            val last = rows.lastIndex
+            rows[last] = rows[last].copy(spans = rows[last].spans + sources)
+        })
+        else -> this
+    }
+
+    private fun noteSpans(line: String): List<InlinePresentation>? {
+        val trimmed = line.trim()
+        val unwrapped = if (trimmed.length >= 3 && trimmed.startsWith('*') && trimmed.endsWith('*') && !trimmed.startsWith("**") && !trimmed.endsWith("**")) {
+            trimmed.substring(1, trimmed.length - 1).trim()
+        } else trimmed
+        return unwrapped.takeIf(parentheticalNote::matches)?.let(::inline)
+    }
+
+    private fun listIndentation(line: String): Int? {
+        val indentation = unordered.matchEntire(line)?.groupValues?.get(1)
+            ?: ordered.matchEntire(line)?.groupValues?.get(1)
+            ?: return null
+        return indentation.fold(0) { columns, character -> columns + if (character == '\t') 4 else 1 }
+    }
+
+    private fun listDepth(indentation: String, indentationColumns: List<Int>): Int {
+        val columns = indentation.fold(0) { total, character -> total + if (character == '\t') 4 else 1 }
+        return indentationColumns.indexOf(columns).coerceAtLeast(0)
+    }
+
+    /**
+     * A Chinese numbered section is as explicit as a Markdown heading. A short standalone line
+     * gets the smallest heading tier only when it introduces a blank-separated block; this
+     * preserves normal wrapped paragraphs and never rewrites the persisted content.
+     */
+    private fun inferredHeadingLevel(lines: List<String>, index: Int): Int? {
+        val line = lines[index].trim()
+        if (heading.matches(line) || unordered.matches(line) || ordered.matches(line) ||
+            quote.matches(line) || horizontalRule.matches(line)
+        ) return null
+        if (chineseNumberedHeading.matches(line)) return 2
+        val next = lines.getOrNull(index + 1) ?: return null
+        return if (next.isBlank() && shortStandaloneHeading.matches(line) &&
+            !line.endsWith('。') && !line.endsWith('！') && !line.endsWith('？') &&
+            !line.startsWith("http://") && !line.startsWith("https://")
+        ) 3 else null
     }
 
     /** Recognizes only explicitly closed inline forms; all other bytes stay visible as text. */
@@ -224,7 +526,11 @@ private object SafeMarkdownParser {
             if (start == codeStart) {
                 val end = source.indexOf('`', start + 1)
                 if (end > start + 1) {
-                    appendText(start); result += InlinePresentation.Code(source.substring(start + 1, end)); cursor = end + 1; continue
+                    val value = source.substring(start + 1, end)
+                    appendText(start)
+                    result += if (rawHttpUrl.matchEntire(value) != null) InlinePresentation.Link(value, value) else InlinePresentation.Code(value)
+                    cursor = end + 1
+                    continue
                 }
             } else if (start == linkStart) {
                 val labelEnd = source.indexOf("](", start + 1)
@@ -264,8 +570,13 @@ private object SafeMarkdownParser {
             appendText(start + 1); cursor = start + 1
         }
         appendText(source.length)
-        return result.ifEmpty { listOf(InlinePresentation.Text(source)) }
+        val withoutSourcePreamble = result.filterNot { span ->
+            span is InlinePresentation.Text && span.value.isSourcePreambleWithoutUrls()
+        }
+        return withoutSourcePreamble.ifEmpty { listOf(InlinePresentation.Text(source)) }
     }
+
+    private fun String.isSourcePreambleWithoutUrls(): Boolean = sourcePreambleOnly.matches(trim())
 
     private fun tableCells(line: String): List<String>? {
         if (!line.contains('|')) return null
@@ -326,14 +637,7 @@ class SubmitConversationDraftUseCase(
             draft.attachments.forEach { add(ContentBlock.Attachment(it)) }
         }
         val appended = tree.append(snapshot, AppendMessageRequest(MessageRole.USER, content))
-        val titled = ConversationAutoTitle.titleForFirstMessage(snapshot, draft)?.let { title ->
-            appended.copy(conversation = appended.conversation.copy(
-                title = title,
-                autoTitlePending = false,
-                revision = appended.conversation.revision + 1,
-            ))
-        } ?: appended
-        val cleared = tree.saveDraft(titled, "", emptyList())
+        val cleared = tree.saveDraft(appended, "", emptyList())
         return drafts.submitDraft(cleared, draft)
     }
 }

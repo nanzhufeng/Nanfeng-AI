@@ -83,6 +83,15 @@ class LocalContextBrokerContractsTest {
         assertTrue(result.selectedSources.size == 1)
     }
 
+    @Test fun `library switch prevents local knowledge from entering ordinary chat context`() {
+        val current = tree.append(tree.create("当前"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("迁移"))))
+        val result = LocalContextBroker(FakeIndex(knowledge = listOf(hit("k", "知识库", "迁移手册", "资料库内容不得在关闭后发送"))))
+            .assemble(current, "迁移", policy = LocalContextBroker.RetrievalPolicy(includeRelevantKnowledge = false))
+
+        assertFalse(result.messages.joinToString("\n") { it.text }.contains("资料库内容不得在关闭后发送"))
+        assertTrue(result.selectedKnowledgeCount == 0)
+    }
+
     private fun hit(id: String, kind: String, title: String, body: String) = LocalContextIndexHit(id, kind, title, body, clock.instant().toEpochMilli(), -1.0)
 
     private class FakeIndex(

@@ -231,7 +231,10 @@ class ModelSettingsViewModel(
                 )
                 is ProviderConnectionProbeResult.Failed -> state.copy(
                     probingConnection = false, recentDiagnostics = diagnostics,
-                    error = CaptureUiError("连接测试失败：${result.errorClass.name}", "HTTP ${result.httpStatus ?: "未建立连接"}；可查看下方本机脱敏诊断。"),
+                    error = CaptureUiError(
+                        "连接测试失败：${result.errorClass.connectionTestLabel()}",
+                        "${result.httpStatus?.let { "HTTP $it；" } ?: "未建立连接；"}${result.errorClass.connectionTestNextStep()} 可到“运行诊断”查看本机脱敏记录。",
+                    ),
                 )
                 is ProviderConnectionProbeResult.Blocked -> state.copy(
                     probingConnection = false, recentDiagnostics = diagnostics,
@@ -291,7 +294,7 @@ class ModelSettingsViewModel(
             val readiness = withContext(Dispatchers.IO) { realServiceReadiness.execute() }
             val callAuditSummary = withContext(Dispatchers.IO) { directChatCallAudit.summary() }
             val recentDiagnostics = withContext(Dispatchers.IO) { providerDiagnostics.recent(8) }
-            val recentContextSelections = withContext(Dispatchers.IO) { contextSelectionAudits.recent(3) }
+            val recentContextSelections = withContext(Dispatchers.IO) { contextSelectionAudits.recent(50) }
             val routingPolicy = withContext(Dispatchers.IO) { loadRoutingPolicy.execute() }
             withContext(Dispatchers.IO) { realServiceExecutor.ensureSuccessfulTranscriptBinding() }
             val summary = withContext(Dispatchers.IO) { realServiceExecutor.readPersistedSummary() }
@@ -330,6 +333,36 @@ class ModelSettingsViewModel(
             ) as T
         }
     }
+}
+
+private fun com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.connectionTestLabel(): String = when (this) {
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.AUTHENTICATION -> "API Key 无效"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.BALANCE -> "额度不足"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.RATE_LIMIT -> "请求过于频繁"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.MODEL_NOT_FOUND -> "模型不可用"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.INVALID_REQUEST,
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.STREAM_REQUIRED -> "服务参数不兼容"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.TIMEOUT -> "连接超时"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.NETWORK -> "网络连接失败"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.RESPONSE_TOO_LARGE,
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.RESPONSE_FORMAT -> "服务返回异常"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.SERVER -> "服务暂时不可用"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.UNKNOWN -> "原因未识别"
+}
+
+private fun com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.connectionTestNextStep(): String = when (this) {
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.AUTHENTICATION -> "请检查并重新保存 API Key。"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.BALANCE -> "请检查服务商额度。"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.RATE_LIMIT -> "请稍后再试。"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.MODEL_NOT_FOUND -> "请更换模型后保存。"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.INVALID_REQUEST,
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.STREAM_REQUIRED -> "请更换模型或服务商后重试。"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.TIMEOUT,
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.NETWORK -> "请检查网络后重试。"
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.RESPONSE_TOO_LARGE,
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.RESPONSE_FORMAT,
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.SERVER,
+    com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass.UNKNOWN -> "请稍后重试或更换服务商。"
 }
 
 private fun AiTaskError.toModelSettingsUiError(): CaptureUiError = when (this) {

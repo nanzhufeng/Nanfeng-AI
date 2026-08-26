@@ -9,14 +9,20 @@ import java.io.File
 class P5CAndroidPrivacyManifestContractsTest {
     private val manifest = File("src/main/AndroidManifest.xml").readText()
 
-    @Test fun `manifest keeps only scoped internet permission and no broad storage or sensitive hardware permission`() {
+    @Test fun `manifest keeps only declared network notification and user initiated foreground service permissions`() {
         val permissions = Regex("<uses-permission android:name=\\\"([^\\\"]+)\\\"").findAll(manifest).map { it.groupValues[1] }.toList()
-        assertEquals(listOf("android.permission.INTERNET"), permissions)
+        assertEquals(listOf(
+            "android.permission.INTERNET",
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+            // Held only by GenerationForegroundService during a short active sync interval.
+            "android.permission.WAKE_LOCK",
+        ), permissions)
         assertFalse(manifest.contains("MANAGE_EXTERNAL_STORAGE"))
         assertFalse(manifest.contains("READ_MEDIA"))
         assertFalse(manifest.contains("CAMERA"))
         assertFalse(manifest.contains("RECORD_AUDIO"))
-        assertFalse(manifest.contains("POST_NOTIFICATIONS"))
     }
 
     @Test fun `manifest documents disabled provider boundary`() = assertTrue(manifest.contains("OpenRouterEgressPolicy.Disabled"))

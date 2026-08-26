@@ -7,6 +7,10 @@ import com.nanzhufeng.ai.ai.MockAiTaskRunner
 import com.nanzhufeng.ai.ai.OpenRouterOfflineAdapterContract
 import com.nanzhufeng.ai.ai.OfficialOpenRouterInferenceTransport
 import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
+import com.nanzhufeng.ai.ai.ScheduledMonitorExecutor
+import com.nanzhufeng.ai.ai.QwenReminderDraftRefiner
+import com.nanzhufeng.ai.ai.QwenConversationTitleRefiner
+import com.nanzhufeng.ai.background.AndroidNormalChatBackgroundExecution
 import com.nanzhufeng.ai.ai.ChatProviderAdapters
 import com.nanzhufeng.ai.domain.UnifiedModelResolver
 import com.nanzhufeng.ai.ai.OfficialProviderChatTransport
@@ -14,6 +18,9 @@ import com.nanzhufeng.ai.ai.ProviderConnectionProbe
 import com.nanzhufeng.ai.data.AndroidDirectChatCallAuditStore
 import com.nanzhufeng.ai.data.local.RoomProviderDiagnosticStore
 import com.nanzhufeng.ai.data.local.RoomNormalChatSendAttemptStore
+import com.nanzhufeng.ai.data.local.RoomScheduledMonitorRepository
+import com.nanzhufeng.ai.data.local.RoomReminderDraftGenerationRecordStore
+import com.nanzhufeng.ai.data.local.RoomConversationTitleGenerationRecordStore
 import com.nanzhufeng.ai.data.local.RoomAssistantResponseModelAttributionStore
 import com.nanzhufeng.ai.ai.OpenRouterEgressPolicy
 import com.nanzhufeng.ai.ai.OpenRouterInferenceAdapter
@@ -42,6 +49,7 @@ import com.nanzhufeng.ai.data.AndroidWebTextSnapshotPrivateAssetStore
 import com.nanzhufeng.ai.data.AndroidJsonKnowledgeExportStore
 import com.nanzhufeng.ai.data.AndroidOfflineEvalReportStore
 import com.nanzhufeng.ai.data.AndroidConversationExportStore
+import com.nanzhufeng.ai.data.AndroidConversationReadMarkerStore
 import com.nanzhufeng.ai.data.AndroidConversationExchangeExportPort
 import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2ExportPort
 import com.nanzhufeng.ai.data.AndroidWorkspaceExchangeV2AtomicRestoreStore
@@ -60,12 +68,16 @@ import com.nanzhufeng.ai.data.AndroidPrivacyDataManager
 import com.nanzhufeng.ai.data.AndroidLocalBackupRestoreManager
 import com.nanzhufeng.ai.data.AndroidModelServiceSettingsRepository
 import com.nanzhufeng.ai.data.AndroidChatRoutingPolicyRepository
+import com.nanzhufeng.ai.data.AndroidAssistantExperienceSettingsRepository
+import com.nanzhufeng.ai.data.AndroidNotificationReminderSettingsRepository
+import com.nanzhufeng.ai.data.AndroidAppearanceSettingsRepository
 import com.nanzhufeng.ai.data.AndroidModelRegistrySnapshotStore
 import com.nanzhufeng.ai.data.AndroidModelProfileDirectory
 import com.nanzhufeng.ai.data.AndroidModelHealthStore
 import com.nanzhufeng.ai.data.AndroidProviderModelListClient
 import com.nanzhufeng.ai.data.AndroidContextSelectionAuditStore
 import com.nanzhufeng.ai.data.AndroidP6GModelSelectionStore
+import com.nanzhufeng.ai.data.AndroidConversationWebSearchOverrideStore
 import com.nanzhufeng.ai.data.local.RoomCompareBranchExecutionPorts
 import com.nanzhufeng.ai.data.local.RoomCompareConversationSessionStore
 import com.nanzhufeng.ai.data.AndroidOpenRouterRegistryCatalogClient
@@ -102,6 +114,7 @@ import com.nanzhufeng.ai.data.local.RoomNanfengKnowledgeImportCommitStore
 import com.nanzhufeng.ai.data.local.RoomPdfTextImportTaskRepository
 import com.nanzhufeng.ai.data.local.RoomWebTextSnapshotTaskRepository
 import com.nanzhufeng.ai.domain.CaptureDraftFactory
+import com.nanzhufeng.ai.domain.InitialMemorySummary
 import com.nanzhufeng.ai.domain.CaptureGalleryImageUseCase
 import com.nanzhufeng.ai.domain.CaptureTextDraftUseCase
 import com.nanzhufeng.ai.domain.ExportKnowledgeSnapshotUseCase
@@ -112,6 +125,8 @@ import com.nanzhufeng.ai.domain.RestoreLatestCaptureDraftUseCase
 import com.nanzhufeng.ai.domain.LoadModelServiceConfigurationUseCase
 import com.nanzhufeng.ai.domain.LoadChatRoutingPolicyUseCase
 import com.nanzhufeng.ai.domain.SaveChatRoutingPolicyUseCase
+import com.nanzhufeng.ai.domain.LoadAssistantExperienceSettingsUseCase
+import com.nanzhufeng.ai.domain.SaveAssistantExperienceSettingsUseCase
 import com.nanzhufeng.ai.domain.LocalContextBroker
 import com.nanzhufeng.ai.domain.ReadConnectionCapabilityUseCase
 import com.nanzhufeng.ai.domain.SaveModelServiceConfigurationUseCase
@@ -129,6 +144,7 @@ import com.nanzhufeng.ai.domain.LoadRegistryVerificationStatusUseCase
 import com.nanzhufeng.ai.domain.OpenRouterRegistrySnapshotVerifier
 import com.nanzhufeng.ai.domain.P6GModelRouter
 import com.nanzhufeng.ai.domain.P6GModelSelectionOwner
+import com.nanzhufeng.ai.domain.ConversationWebSearchOverrideOwner
 import com.nanzhufeng.ai.domain.ConversationTreeService
 import com.nanzhufeng.ai.domain.ConversationManagementDomain
 import com.nanzhufeng.ai.domain.ConversationSearchProjection
@@ -170,6 +186,13 @@ import com.nanzhufeng.ai.domain.ReadLocalContextPreviewUseCase
 import com.nanzhufeng.ai.domain.ReadExplicitLocalActionTraceUseCase
 import com.nanzhufeng.ai.domain.MemoryDomain
 import com.nanzhufeng.ai.domain.ManageMemoryUseCase
+import com.nanzhufeng.ai.domain.MemoryId
+import com.nanzhufeng.ai.domain.MemoryIntent
+import com.nanzhufeng.ai.domain.MemoryIntentAction
+import com.nanzhufeng.ai.domain.MemoryIntentId
+import com.nanzhufeng.ai.domain.MemoryScope
+import com.nanzhufeng.ai.domain.MemoryScopeKind
+import com.nanzhufeng.ai.domain.MemorySource
 import com.nanzhufeng.ai.domain.KnowledgeDomain
 import com.nanzhufeng.ai.domain.ManageKnowledgeUseCase
 import com.nanzhufeng.ai.domain.ChatGptExportJsonAdapter
@@ -198,6 +221,10 @@ import com.nanzhufeng.ai.domain.ManagePdfTextKnowledgeImportUseCase
 import com.nanzhufeng.ai.domain.ManageWebTextSnapshotUseCase
 import com.nanzhufeng.ai.domain.RunOfflineEvalUseCase
 import com.nanzhufeng.ai.domain.TaskRecoveryAudit
+import com.nanzhufeng.ai.domain.LoadNotificationReminderSettingsUseCase
+import com.nanzhufeng.ai.domain.SaveNotificationReminderSettingsUseCase
+import com.nanzhufeng.ai.domain.LoadAppearanceSettingsUseCase
+import com.nanzhufeng.ai.domain.SaveAppearanceSettingsUseCase
 import com.nanzhufeng.ai.domain.P7BAccountStateMachine
 import com.nanzhufeng.ai.domain.P7EGuardedRestoreOwner
 import com.nanzhufeng.ai.domain.P7ERestorePlanCoordinator
@@ -209,6 +236,9 @@ import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
 class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC()) {
     init { PDFBoxResourceLoader.init(context.applicationContext) }
+    // The established direct-provider path keeps its Android request owner.  It does not create
+    // a gateway task or select a second execution mode.
+    val normalChatBackgroundExecution = AndroidNormalChatBackgroundExecution(context.applicationContext)
     val captureDraftFactory = CaptureDraftFactory(clock)
     private val mockAiTaskRunner = MockAiTaskRunner(clock)
     private val database = Room.databaseBuilder(
@@ -260,6 +290,14 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_42_43,
         NanfengAiDatabase.MIGRATION_43_44,
         NanfengAiDatabase.MIGRATION_44_45,
+        NanfengAiDatabase.MIGRATION_45_46,
+        NanfengAiDatabase.MIGRATION_46_47,
+        NanfengAiDatabase.MIGRATION_47_48,
+        NanfengAiDatabase.MIGRATION_48_49,
+        NanfengAiDatabase.MIGRATION_49_50,
+        NanfengAiDatabase.MIGRATION_50_51,
+        NanfengAiDatabase.MIGRATION_51_52,
+        NanfengAiDatabase.MIGRATION_52_53,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
@@ -410,6 +448,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     val searchConversations = SearchConversationsUseCase(conversationRepository, ConversationSearchProjection(conversationManagementDomain))
     val searchConversationAttachments = SearchConversationAttachmentsUseCase(conversationRepository)
     val localSearchHistory = AndroidLocalSearchHistoryStore(context)
+    val conversationReadMarkerStore = AndroidConversationReadMarkerStore(context)
     private val conversationExportStore = AndroidConversationExportStore(context)
     val exportConversationPackage = ExportConversationPackageUseCase(conversationRepository, conversationExportStore, clock)
     val createConversation = CreateConversationUseCase(conversationTreeService, conversationRepository)
@@ -428,6 +467,8 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     val audioPreviewPositionStore = AndroidAudioPreviewPositionStore(context)
     /** P6-G local-only owner; its store contains no Key, endpoint, prompt or Provider invocation. */
     val p6gModelSelection = P6GModelSelectionOwner(AndroidP6GModelSelectionStore(context), P6GModelRouter())
+    /** Per-conversation web-search overrides are local, content-free, and do not alter the global default. */
+    val conversationWebSearchOverrides = ConversationWebSearchOverrideOwner(AndroidConversationWebSearchOverrideStore(context))
     val readConversationAttemptHistory = ReadConversationAttemptHistoryUseCase(conversationRepository, conversationRepository)
     val messagePresentationRenderer = MessagePresentationRenderer()
     private val conversationRuntimeStateMachine = ConversationRuntimeStateMachine(clock)
@@ -461,11 +502,17 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     val localBackupRestoreManager = AndroidLocalBackupRestoreManager(context, database, BuildConfig.VERSION_NAME)
     private val modelServiceSettingsRepository = AndroidModelServiceSettingsRepository(context)
     private val chatRoutingPolicyRepository = AndroidChatRoutingPolicyRepository(context)
+    private val assistantExperienceSettingsRepository = AndroidAssistantExperienceSettingsRepository(context)
+    private val notificationReminderSettingsRepository = AndroidNotificationReminderSettingsRepository(context)
+    private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository(context)
     private val providerCredentialStore = createAndroidProviderCredentialStore(context)
     val directChatCallAudit = AndroidDirectChatCallAuditStore(context)
     val contextSelectionAudits = AndroidContextSelectionAuditStore(context)
     val providerDiagnostics = RoomProviderDiagnosticStore(database)
     private val normalChatSendAttempts = RoomNormalChatSendAttemptStore(database)
+    val scheduledMonitorRepository = RoomScheduledMonitorRepository(database)
+    val reminderDraftGenerationRecords = RoomReminderDraftGenerationRecordStore(database)
+    val conversationTitleGenerationRecords = RoomConversationTitleGenerationRecordStore(database)
     val assistantResponseModelAttributions = RoomAssistantResponseModelAttributionStore(database)
     private val localContextBroker = LocalContextBroker(RoomLocalContextIndex(database))
     private val modelRegistrySnapshotStore = AndroidModelRegistrySnapshotStore(context)
@@ -541,6 +588,12 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     )
     val loadChatRoutingPolicy = LoadChatRoutingPolicyUseCase(chatRoutingPolicyRepository)
     val saveChatRoutingPolicy = SaveChatRoutingPolicyUseCase(chatRoutingPolicyRepository)
+    val loadAssistantExperienceSettings = LoadAssistantExperienceSettingsUseCase(assistantExperienceSettingsRepository)
+    val saveAssistantExperienceSettings = SaveAssistantExperienceSettingsUseCase(assistantExperienceSettingsRepository)
+    val loadNotificationReminderSettings = LoadNotificationReminderSettingsUseCase(notificationReminderSettingsRepository)
+    val saveNotificationReminderSettings = SaveNotificationReminderSettingsUseCase(notificationReminderSettingsRepository)
+    val loadAppearanceSettings = LoadAppearanceSettingsUseCase(appearanceSettingsRepository)
+    val saveAppearanceSettings = SaveAppearanceSettingsUseCase(appearanceSettingsRepository)
     val loadRegistryVerificationStatus = LoadRegistryVerificationStatusUseCase(modelRegistry)
     /** Status-only dual-path owner. It sees encrypted-entry presence, never the Key value. */
     val readConnectionCapability = ReadConnectionCapabilityUseCase(
@@ -601,12 +654,79 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         attachmentRepository = privateAttachmentRepository,
         attachmentStore = privateAttachmentStore,
         submitDraftAndStartProviderRuntime = submitDraftAndStartProviderConversationRuntime,
+        loadAssistantExperienceSettings = loadAssistantExperienceSettings::execute,
+        resolveConversationWebSearchEnabled = conversationWebSearchOverrides::effectiveEnabled,
         applyRuntimeEvent = applyConversationRuntimeEvent,
+        runtimeRepository = conversationRepository,
+        saveMemorySummary = { conversationId, draft ->
+            manageMemory.execute(
+                MemoryIntent(
+                    id = MemoryIntentId.new(),
+                    action = MemoryIntentAction.CREATE,
+                    memoryId = MemoryId.new(),
+                    title = draft.title,
+                    body = draft.body,
+                    scope = MemoryScope(MemoryScopeKind.GLOBAL),
+                    source = MemorySource.USER_CONFIRMED,
+                    sourceStableId = "conversation:${conversationId.value}",
+                    sourceSummary = "用户在对话中明确要求记住后生成的本机记忆摘要",
+                ),
+            )
+        },
+        conversationTitleRefiner = QwenConversationTitleRefiner(
+            records = conversationTitleGenerationRecords,
+            configuration = loadModelServiceConfiguration,
+            credentials = providerCredentialStore,
+            modelResolver = modelResolver,
+            transport = OfficialProviderChatTransport(),
+            clock = clock,
+        ),
+    )
+    val scheduledMonitorExecutor = ScheduledMonitorExecutor(
+        tasks = scheduledMonitorRepository,
+        configuration = loadModelServiceConfiguration,
+        credentials = providerCredentialStore,
+        modelResolver = modelResolver,
+        transport = OfficialProviderChatTransport(),
+        clock = clock,
+    )
+    val qwenReminderDraftRefiner = QwenReminderDraftRefiner(
+        records = reminderDraftGenerationRecords,
+        configuration = loadModelServiceConfiguration,
+        credentials = providerCredentialStore,
+        modelResolver = modelResolver,
+        transport = OfficialProviderChatTransport(),
+        clock = clock,
     )
 
-    /** Must be called from lifecycle IO after construction; Room forbids startup writes on main. */
-    fun recoverInterruptedNormalChatAttemptsAfterProcessStart(): Int =
-        normalChatSendAttempts.markInterruptedAsUnknown(clock.instant())
+    /** Seeds the user-confirmed baseline only before any global summary has ever existed. */
+    fun ensureInitialMemorySummary(): Int {
+        // A soft-deleted summary is an explicit user decision. It must prevent a cold start from
+        // silently recreating the baseline after the user chose "删除记忆".
+        if (!InitialMemorySummary.shouldSeed(
+                manageMemory.list(com.nanzhufeng.ai.domain.MemoryScopeKind.GLOBAL, null, "").size,
+            )) return 0
+        return InitialMemorySummary.entries.count { draft ->
+            when (manageMemory.execute(
+                com.nanzhufeng.ai.domain.MemoryIntent(
+                    id = com.nanzhufeng.ai.domain.MemoryIntentId.new(),
+                    action = com.nanzhufeng.ai.domain.MemoryIntentAction.CREATE,
+                    memoryId = com.nanzhufeng.ai.domain.MemoryId.new(),
+                    title = draft.title,
+                    body = draft.body,
+                    scope = com.nanzhufeng.ai.domain.MemoryScope(com.nanzhufeng.ai.domain.MemoryScopeKind.GLOBAL),
+                    source = com.nanzhufeng.ai.domain.MemorySource.USER_CONFIRMED,
+                    sourceStableId = "initial-memory-summary-v1:${draft.title}",
+                    sourceSummary = "南烛枫确认的记忆摘要初始版本",
+                ),
+            )) {
+                is com.nanzhufeng.ai.domain.MemoryMutationResult.Applied,
+                is com.nanzhufeng.ai.domain.MemoryMutationResult.Replayed,
+                is com.nanzhufeng.ai.domain.MemoryMutationResult.Duplicate -> true
+                else -> false
+            }
+        }
+    }
     // P2-M is reachable only from the Android Model Settings confirmation owner. It binds one
     // fixed synthetic text fixture to the currently saved provider/preset and persists one nonce.
     val p2mRealServiceReadiness = P2MRealServiceReadinessUseCase(loadModelServiceConfiguration, modelRegistry)

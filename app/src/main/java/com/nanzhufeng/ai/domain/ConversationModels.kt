@@ -398,10 +398,16 @@ class ConversationTreeService(private val clock: Clock) {
             createdAt = clock.instant(), deliveryState = request.deliveryState, invocation = request.invocation,
             checkpoint = request.checkpoint,
         )
-        return snapshot.copy(
+        val appended = snapshot.copy(
             conversation = snapshot.conversation.copy(currentLeafMessageId = node.id, updatedAt = clock.instant()),
             nodes = snapshot.nodes + node,
         )
+        val title = ConversationAutoTitle.titleForFirstCompletedAssistantReply(appended, node.id) ?: return appended
+        return appended.copy(conversation = appended.conversation.copy(
+            title = title,
+            autoTitlePending = false,
+            revision = appended.conversation.revision + 1,
+        ))
     }
 
     /** Editing a historical user message forks a sibling and makes it the selected leaf. */

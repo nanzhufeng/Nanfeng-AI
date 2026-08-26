@@ -14,10 +14,12 @@ class FBP6043ScrollToLatestContractsTest {
             "val showJumpToLatest by remember",
             "lastVisible < layout.totalItemsCount - 1",
             "val jumpToLatestBottomPadding = floatingComposerHeight + 4.dp",
-            "Modifier.align(Alignment.BottomCenter).padding(bottom = jumpToLatestBottomPadding)",
+            ".align(Alignment.BottomCenter)",
+            "padding(bottom = jumpToLatestBottomPadding + 28.dp)",
             "listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)",
             "JumpToLatestButton(",
-            "Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = \"到最新消息\")",
+            "Icons.Outlined.KeyboardArrowDown",
+            "modifier = Modifier.size(30.dp)",
             "DraftComposer(",
         )) assertTrue("missing $token", source.contains(token))
         assertFalse(source.contains("Modifier.align(Alignment.BottomEnd).padding(12.dp)"))

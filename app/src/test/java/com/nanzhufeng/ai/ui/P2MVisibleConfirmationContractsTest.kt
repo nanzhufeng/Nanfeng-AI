@@ -10,18 +10,19 @@ class P2MVisibleConfirmationContractsTest {
     private val owner = File("src/main/java/com/nanzhufeng/ai/ui/ModelSettingsViewModel.kt").readText()
     private val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
 
-    @Test fun `model settings expose real provider and routing state without a per-send confirmation`() {
-        for (token in listOf("OpenAI、Claude 与 Gemini 共用 OpenRouter", "路由", "自动路由", "自动兜底", "质量升级", "允许跨服务商兜底", "核验模型目录")) {
+    @Test fun `model settings keep only provider configuration and the second page keeps operational records`() {
+        for (token in listOf("OpenRouter、Qwen、DeepSeek", "费用与用量", "上下文记录", "运行诊断", "测试连接")) {
             assertTrue("missing $token", ui.contains(token))
         }
-        assertTrue(app.contains("onVerifyRegistry"))
-        assertTrue(app.contains("onSaveRoutingPolicy"))
+        for (token in listOf("质量升级", "跨模型复核", "保存路由策略", "核验模型目录")) {
+            assertFalse("unexpected $token", ui.contains(token))
+        }
         assertFalse(ui.contains("确认发送给第三方服务"))
     }
 
-    @Test fun `settings state and save path share the same persisted routing owner`() {
-        assertTrue(owner.contains("loadRoutingPolicy.execute()"))
-        assertTrue(owner.contains("saveRoutingPolicy.execute(policy)"))
-        assertTrue(owner.contains("routingPolicy = routingPolicy"))
+    @Test fun `quality escalation and cross model review are disabled by default`() {
+        val policy = File("src/main/java/com/nanzhufeng/ai/domain/ChatRoutingPolicy.kt").readText()
+        assertTrue(policy.contains("qualityEscalationEnabled: Boolean = false"))
+        assertTrue(policy.contains("crossModelReviewPolicy: CrossModelReviewPolicy = CrossModelReviewPolicy.NEVER"))
     }
 }

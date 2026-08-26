@@ -7,8 +7,8 @@ package com.nanzhufeng.ai.domain
 data class ChatRoutingPolicy(
     val autoRoutingEnabled: Boolean = true,
     val automaticFallbackEnabled: Boolean = true,
-    val qualityEscalationEnabled: Boolean = true,
-    val crossModelReviewPolicy: CrossModelReviewPolicy = CrossModelReviewPolicy.IMPORTANT_ONLY,
+    val qualityEscalationEnabled: Boolean = false,
+    val crossModelReviewPolicy: CrossModelReviewPolicy = CrossModelReviewPolicy.NEVER,
     /** Cross-provider fallback is opt-in.  Auto may fall back inside OpenRouter by default. */
     val crossProviderFallbackEnabled: Boolean = false,
 )

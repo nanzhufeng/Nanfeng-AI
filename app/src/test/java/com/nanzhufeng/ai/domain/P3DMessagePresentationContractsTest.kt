@@ -60,6 +60,123 @@ class P3DMessagePresentationContractsTest {
         assertTrue(paragraph.spans.any { it is InlinePresentation.Text && it.value.endsWith(".") })
     }
 
+    @Test fun `blank lines within a list and thematic breaks retain their Markdown structure`() {
+        val source = """
+            要点：
+
+            - 第一项
+
+            - 第二项
+
+            ---
+
+            ## 后续
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("structure", source))).single().blocks
+        assertEquals(2, blocks.filterIsInstance<PresentationBlock.UnorderedList>().single().items.size)
+        assertEquals(1, blocks.filterIsInstance<PresentationBlock.HorizontalRule>().size)
+        assertTrue(blocks.last() is PresentationBlock.Heading)
+    }
+
+    @Test fun `nested ordered and unordered lists retain semantic progressive depths`() {
+        val source = """
+            - 一级
+              - 二级
+                - 三级
+            - 同级
+
+            1. 第一项
+                1. 子项
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("nested-lists", source))).single().blocks
+        val unordered = blocks.filterIsInstance<PresentationBlock.UnorderedList>().single()
+        val ordered = blocks.filterIsInstance<PresentationBlock.OrderedList>().single()
+        assertEquals(listOf(0, 1, 2, 0), unordered.items.map { it.depth })
+        assertEquals(listOf(0, 2), ordered.items.map { it.depth })
+    }
+
+    @Test fun `Chinese section labels and standalone summaries receive document hierarchy without rewriting prose`() {
+        val source = """
+            第二层：FSD订阅——已经产生真实商业价值
+
+            截至Q2：
+
+            订阅规模仍在上升。
+
+            我的最终判断
+
+            **重点**不应被整段加粗。
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("chinese-headings", source))).single().blocks
+        val headings = blocks.filterIsInstance<PresentationBlock.Heading>()
+        assertEquals(listOf(2, 3, 3), headings.map { it.level })
+        assertEquals("第二层：FSD订阅——已经产生真实商业价值", headings.first().spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value })
+        val paragraph = blocks.filterIsInstance<PresentationBlock.Paragraph>().last()
+        assertEquals(listOf("重点"), paragraph.spans.filterIsInstance<InlinePresentation.Strong>().map { it.value })
+    }
+
+    @Test fun `code wrapped HTTP addresses remain directly usable links while ordinary code stays code`() {
+        val blocks = MessagePresentationRenderer().render(listOf(message("code-url", "`https://example.test/guide` 与 `搜索关键词`"))).single().blocks
+        val spans = (blocks.single() as PresentationBlock.Paragraph).spans
+        assertTrue(spans.any { it is InlinePresentation.Link && it.label == "https://example.test/guide" && it.url == "https://example.test/guide" })
+        assertTrue(spans.any { it is InlinePresentation.Code && it.value == "搜索关键词" })
+    }
+
+    @Test fun `parenthetical notes become dedicated auxiliary blocks even when markdown emphasizes them`() {
+        val blocks = MessagePresentationRenderer().render(
+            listOf(message("note", "*（注：该快讯标注日期为未来的 2026-08-22，来源标注为 NVIDIA / AI FRONTIER）*")),
+        ).single().blocks
+        val note = blocks.single() as PresentationBlock.Note
+        assertEquals("（注：该快讯标注日期为未来的 2026-08-22，来源标注为 NVIDIA / AI FRONTIER）", note.spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value })
+        assertTrue(note.spans.none { it is InlinePresentation.Emphasis })
+    }
+
+    @Test fun `standalone source URLs attach to their preceding readable list item`() {
+        val source = """
+            - 支持地区：
+            https://www.anthropic.com/supported-countries
+            - 服务条款：
+            - https://www.anthropic.com/legal
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("sources", source))).single().blocks
+        assertTrue(blocks.none { it is PresentationBlock.Paragraph && it.spans.filterIsInstance<InlinePresentation.Link>().isNotEmpty() })
+        val lists = blocks.filterIsInstance<PresentationBlock.UnorderedList>()
+        assertEquals(2, lists.size)
+        assertEquals("https://www.anthropic.com/supported-countries", lists[0].items.single().spans.filterIsInstance<InlinePresentation.Link>().single().url)
+        assertEquals("https://www.anthropic.com/legal", lists[1].items.single().spans.filterIsInstance<InlinePresentation.Link>().single().url)
+    }
+
+    @Test fun `dedicated source entry sections collapse into shortcuts on the preceding conclusion`() {
+        val source = """
+            这项判断仍需要结合公开资料核对。
+
+            可查的资料入口：
+
+            - Anthropic Supported Countries / 支持地区：
+            https://www.anthropic.com/supported-countries
+            - Anthropic Terms of Service：
+            https://www.anthropic.com/legal
+            - 可搜索关键词：
+              - `Anthropic Chinese companies Claude access restriction`
+
+            ---
+
+            ## 后续判断
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("source-section", source))).single().blocks
+        assertTrue(blocks.none { block ->
+            block is PresentationBlock.Heading && block.spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value }.contains("可查")
+        })
+        assertTrue(blocks.none { it is PresentationBlock.UnorderedList })
+        val conclusion = blocks.filterIsInstance<PresentationBlock.Paragraph>().single()
+        assertEquals(
+            listOf("https://www.anthropic.com/supported-countries", "https://www.anthropic.com/legal"),
+            conclusion.spans.filterIsInstance<InlinePresentation.Link>().map { it.url },
+        )
+        assertTrue(blocks.any { it is PresentationBlock.HorizontalRule })
+        assertTrue(blocks.any { it is PresentationBlock.Heading && it.spans.filterIsInstance<InlinePresentation.Text>().any { span -> span.value.contains("后续判断") } })
+    }
+
     @Test fun `closed double asterisks render as strong while malformed markers remain visible`() {
         val strong = MessagePresentationRenderer().render(listOf(message("strong", "**降**不是**涨**：*仅作强调*"))).single()
             .blocks.single() as PresentationBlock.Paragraph
@@ -74,6 +191,40 @@ class P3DMessagePresentationContractsTest {
         val laterValid = MessagePresentationRenderer().render(listOf(message("later", "未闭合 **标记，后面仍可 *强调*。"))).single()
             .blocks.single() as PresentationBlock.Paragraph
         assertEquals(listOf("强调"), laterValid.spans.filterIsInstance<InlinePresentation.Emphasis>().map { it.value })
+    }
+
+    @Test fun `near Markdown formatting is projected as reader structure without raw control glyphs`() {
+        val source = """
+            帮你查一下最新情况：## 简短结论
+            ####方案三：使用国内 API 中转
+
+            ``bashcurl -I
+            https://openrouter.ai/api/v1/models``
+
+            -长时间卡住 - Connection timed out
+            已核对。 * 聚会前再确认一次。
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("near-markdown", source))).single().blocks
+
+        val headings = blocks.filterIsInstance<PresentationBlock.Heading>()
+        assertEquals(listOf("简短结论", "方案三：使用国内 API 中转"), headings.map { heading -> heading.spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value } })
+        val code = blocks.filterIsInstance<PresentationBlock.CodeFence>().single()
+        assertEquals("bash", code.language)
+        assertEquals("curl -I\nhttps://openrouter.ai/api/v1/models", code.code)
+        assertTrue(blocks.filterIsInstance<PresentationBlock.UnorderedList>().flatMap { it.items }.any { item -> item.spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value } == "长时间卡住 - Connection timed out" })
+        assertTrue(blocks.filterIsInstance<PresentationBlock.Paragraph>().none { paragraph -> paragraph.spans.filterIsInstance<InlinePresentation.Text>().any { it.value.contains("#") || it.value.contains("``") || it.value.contains("* 聚会") } })
+    }
+
+    @Test fun `source label and separator debris collapse to verified shortcuts only`() {
+        val source = """
+            结论仍需要以公开资料核对。
+
+            主要参考：、 、 、https://example.com/a
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("source-debris", source))).single().blocks
+        val conclusion = blocks.filterIsInstance<PresentationBlock.Paragraph>().single()
+        assertTrue(conclusion.spans.filterIsInstance<InlinePresentation.Text>().none { it.value.contains("主要参考") || it.value.contains("、") })
+        assertEquals(listOf("https://example.com/a"), conclusion.spans.filterIsInstance<InlinePresentation.Link>().map { it.url })
     }
 
     @Test fun `deterministic long fixture has stable identities and current path remains isolated`() {

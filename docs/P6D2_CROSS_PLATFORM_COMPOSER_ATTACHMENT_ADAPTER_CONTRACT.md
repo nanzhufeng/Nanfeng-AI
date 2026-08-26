@@ -2,6 +2,8 @@
 
 状态：完成；P6-E 临时聊天的前置已满足，不改变 Conversation role、Provider 或图标边界。
 
+> **当前 Android UI 路由（2026-08-24）：** 本文保留附件 private-copy、类型校验、容量与角色领域语义。Android 会话中的 Assistant/USER 表面、附件预览几何、Composer、来源、字体和图标视觉规则统一以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为准；本文早期视觉措辞不形成并列 UI 合同。
+
 ## 唯一所有者与路径
 
 - Android：`DocumentsUI / Photo Picker -> Android*SelectionReader -> AddConversationImageAttachmentUseCase -> AndroidPrivateAttachmentStore -> RoomPrivateAttachmentRepository -> ConversationDraftRepository`。

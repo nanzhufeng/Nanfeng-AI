@@ -1,9 +1,13 @@
 package com.nanzhufeng.ai.ui
 
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -11,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -39,13 +44,20 @@ class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewM
     class Factory(private val store: AndroidP6KZipIntakeStore) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>) = P6KZipImportViewModel(store) as T }
 }
 
-@androidx.compose.runtime.Composable fun P6KZipImportSettingsCard(state: P6KZipImportUiState, onChatGpt: () -> Unit, onClaude: () -> Unit, onClear: (String) -> Unit, onView: (String) -> Unit, onSelectAsset: (String) -> Unit, onSelectTarget: (P6KZipManualLinkTarget) -> Unit, onLink: () -> Unit) = WhiteCard {
-    Text("ChatGPT / Claude ZIP 预检", style = MaterialTheme.typography.titleMedium)
-    Text("选择 ZIP 后会直接导入已验证的文本对话；只会识别版本化的低风险个性化资料，账户与安全资料不会导入。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-    Spacer(Modifier.height(10.dp)); Button(onClick = onChatGpt, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text("导入 ChatGPT ZIP") }
-    Spacer(Modifier.height(8.dp)); OutlinedButton(onClick = onClaude, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text("导入 Claude ZIP") }
+@androidx.compose.runtime.Composable fun P6KZipImportSettingsCard(state: P6KZipImportUiState, onChatGpt: () -> Unit, onClaude: () -> Unit, onClear: (String) -> Unit, onView: (String) -> Unit, onSelectAsset: (String) -> Unit, onSelectTarget: (P6KZipManualLinkTarget) -> Unit, onLink: () -> Unit, grouped: Boolean = false) = Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+    if (grouped) {
+        DataStorageGroupedActionRow(label = "导入 ChatGPT ZIP", onClick = onChatGpt, enabled = !state.working, working = state.working)
+        DataStorageGroupedDivider()
+        DataStorageGroupedActionRow(label = "导入 Claude ZIP", onClick = onClaude, enabled = !state.working, working = state.working)
+    } else {
+        Text("ZIP 导入", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(10.dp)); Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onChatGpt, enabled = !state.working, modifier = Modifier.weight(1f).height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("ChatGPT") }
+            OutlinedButton(onClick = onClaude, enabled = !state.working, modifier = Modifier.weight(1f).height(48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("Claude") }
+        }
+    }
     if (state.revokeFailure) Text("导入批次尚未完全撤销，已保留任务与私有副本；请重试删除。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-    state.tasks.take(3).forEachIndexed { index, task -> Spacer(Modifier.height(10.dp)); Text("${task.provider.name} 导入批次 ${index + 1} · ${task.status}", style = MaterialTheme.typography.bodyMedium); Text(task.failure?.name ?: "${task.items.count { it.candidate != null }} 个对话结果 · ${task.assets.size} 个未关联媒体候选 · 个性化 ${task.profile.status}（${task.profile.mappedFieldCount}）", color = SecondaryText, style = MaterialTheme.typography.bodySmall); if (task.items.any { it.candidate != null }) OutlinedButton(onClick = { onView(task.id.value) }, enabled = !state.working) { Text("查看导入结果") }; OutlinedButton(onClick = { onClear(task.id.value) }, enabled = !state.working) { Text("删除导入批次") } }
+    state.tasks.take(3).forEachIndexed { index, task -> Spacer(Modifier.height(10.dp)); Text("${task.provider.name} 导入批次 ${index + 1} · ${task.status}", style = MaterialTheme.typography.bodyMedium); Text(task.failure?.name ?: "${task.items.count { it.candidate != null }} 个对话结果 · ${task.assets.size} 个未关联媒体候选 · 个性化 ${task.profile.status}（${task.profile.mappedFieldCount}）", color = SecondaryText, style = MaterialTheme.typography.bodySmall); if (task.items.any { it.candidate != null }) OutlinedButton(onClick = { onView(task.id.value) }, enabled = !state.working, shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("查看导入结果") }; OutlinedButton(onClick = { onClear(task.id.value) }, enabled = !state.working, shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("删除导入批次") } }
     state.tasks.firstOrNull { it.id.value == state.viewedTaskId }?.let { task ->
         Spacer(Modifier.height(12.dp)); Text("${task.provider.name} 对话导入结果", style = MaterialTheme.typography.titleSmall)
         Text("仅导入严格文本；未关联媒体和账户资料未导入。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
@@ -56,9 +68,9 @@ class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewM
         if (candidates.isNotEmpty()) {
             Spacer(Modifier.height(12.dp)); Text("人工关联未关联媒体", style = MaterialTheme.typography.titleSmall)
             Text("先选择一项媒体，再选择该 ZIP 已导入会话中的一条消息；不会显示文件名或内容。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            candidates.forEachIndexed { index, asset -> OutlinedButton(onClick = { onSelectAsset(asset.entryName) }, enabled = !state.working && state.manualTargets.isNotEmpty()) { Text("媒体 ${index + 1} · ${asset.mimeType} · ${asset.byteCount} B${if (asset.role == P6KZipAssetRole.MANUAL_LINK_FAILED) " · 可重试" else ""}") } }
-            state.manualTargets.forEachIndexed { index, target -> OutlinedButton(onClick = { onSelectTarget(target) }, enabled = !state.working) { Text("对话 ${index + 1} · ${target.role.name} · 第 ${target.messageOrdinal} 条") } }
-            Button(onClick = onLink, enabled = !state.working && state.selectedAssetEntryName != null && state.selectedTarget != null, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text("关联到所选消息") }
+            candidates.forEachIndexed { index, asset -> OutlinedButton(onClick = { onSelectAsset(asset.entryName) }, enabled = !state.working && state.manualTargets.isNotEmpty(), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("媒体 ${index + 1} · ${asset.mimeType} · ${asset.byteCount} B${if (asset.role == P6KZipAssetRole.MANUAL_LINK_FAILED) " · 可重试" else ""}") } }
+            state.manualTargets.forEachIndexed { index, target -> OutlinedButton(onClick = { onSelectTarget(target) }, enabled = !state.working, shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("对话 ${index + 1} · ${target.role.name} · 第 ${target.messageOrdinal} 条") } }
+            Button(onClick = onLink, enabled = !state.working && state.selectedAssetEntryName != null && state.selectedTarget != null, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("关联到所选消息") }
         }
     }
 }

@@ -91,15 +91,23 @@ class OpenRouterRegistrySnapshotVerifier {
         fun exact(tokens: List<String>): ModelDescriptor? =
             candidates.firstOrNull { candidate -> tokens.any { token -> token in candidate.id } }
 
+        // GPT standard and Pro variants are separate billable models.  A logical standard
+        // preset must never select a similarly named Pro model merely because its ID contains
+        // the standard token; absence of the exact standard ID is a fail-closed condition.
+        fun standardGpt(tokens: List<String>): ModelDescriptor? = candidates.firstOrNull { candidate ->
+            val terminalId = candidate.id.substringAfterLast('/').lowercase()
+            tokens.any { token -> terminalId == token }
+        }
+
         // Do not guess.  Catalog names change, but a logical product label may only become
         // selectable when the public catalog contains its explicit mapping.
         val fable = exact(listOf("fable-5", "fable_5"))
         val opus = exact(listOf("opus-5", "opus_5")) ?: return null
         val sonnet = exact(listOf("sonnet-5", "sonnet_5"))
         val haiku = exact(listOf("haiku-4-5", "haiku_4_5", "haiku"))
-        val sol = exact(listOf("gpt-5.6-sol", "gpt-5-6-sol")) ?: return null
-        val terra = exact(listOf("gpt-5.6-terra", "gpt-5-6-terra")) ?: return null
-        val luna = exact(listOf("gpt-5.6-luna", "gpt-5-6-luna"))
+        val sol = standardGpt(listOf("gpt-5.6-sol", "gpt-5-6-sol")) ?: return null
+        val terra = standardGpt(listOf("gpt-5.6-terra", "gpt-5-6-terra")) ?: return null
+        val luna = standardGpt(listOf("gpt-5.6-luna", "gpt-5-6-luna"))
         val gemini = exact(listOf("gemini-3.7-flash", "gemini-3-7-flash")) ?: return null
         val mappings = buildList {
             fable?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_FABLE_5, it.id)) }

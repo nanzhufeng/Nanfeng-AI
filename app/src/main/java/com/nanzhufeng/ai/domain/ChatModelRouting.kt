@@ -28,15 +28,16 @@ object ComposerModelRoutingCatalog {
     val compareGptClaude = ComposerModelChoice("${PREFIX}compare:gpt-claude", ComposerModelSlot.COMPARE, "GPT-5.6 Sol / Claude Opus 5", listOf(ModelPresetId.GPT_5_6_SOL, ModelPresetId.CLAUDE_OPUS_5))
     val compareClaudeQwen = ComposerModelChoice("${PREFIX}compare:claude-qwen", ComposerModelSlot.COMPARE, "Claude Opus 5 / Qwen3.8-Max", listOf(ModelPresetId.CLAUDE_OPUS_5, ModelPresetId.QWEN_3_8_MAX))
     val daily = listOf(
+        ComposerModelChoice("${PREFIX}daily:claude-sonnet", ComposerModelSlot.DAILY, "Claude Sonnet 5", listOf(ModelPresetId.CLAUDE_SONNET_5)),
         ComposerModelChoice("${PREFIX}daily:gpt-terra", ComposerModelSlot.DAILY, "GPT-5.6 Terra", listOf(ModelPresetId.GPT_5_6_TERRA)),
         ComposerModelChoice("${PREFIX}daily:qwen-plus", ComposerModelSlot.DAILY, "Qwen3.7-Plus", listOf(ModelPresetId.QWEN_3_7_PLUS)),
         ComposerModelChoice("${PREFIX}daily:gemini-flash", ComposerModelSlot.DAILY, "Gemini 3.7 Flash", listOf(ModelPresetId.GEMINI_3_7_FLASH)),
     )
     val deep = listOf(
-        ComposerModelChoice("${PREFIX}deep:gpt-sol", ComposerModelSlot.DEEP, "GPT-5.6 Sol", listOf(ModelPresetId.GPT_5_6_SOL)),
         ComposerModelChoice("${PREFIX}deep:claude-opus", ComposerModelSlot.DEEP, "Claude Opus 5", listOf(ModelPresetId.CLAUDE_OPUS_5)),
-        ComposerModelChoice("${PREFIX}deep:deepseek-pro", ComposerModelSlot.DEEP, "DeepSeek V4 Pro", listOf(ModelPresetId.DEEPSEEK_V4_PRO)),
+        ComposerModelChoice("${PREFIX}deep:gpt-sol", ComposerModelSlot.DEEP, "GPT-5.6 Sol", listOf(ModelPresetId.GPT_5_6_SOL)),
         ComposerModelChoice("${PREFIX}deep:qwen-max", ComposerModelSlot.DEEP, "Qwen3.8-Max", listOf(ModelPresetId.QWEN_3_8_MAX)),
+        ComposerModelChoice("${PREFIX}deep:deepseek-pro", ComposerModelSlot.DEEP, "DeepSeek V4 Pro", listOf(ModelPresetId.DEEPSEEK_V4_PRO)),
     )
     val multimodal = listOf(
         ComposerModelChoice("${PREFIX}media:gemini-flash", ComposerModelSlot.MULTIMODAL, "Gemini 3.7 Flash", listOf(ModelPresetId.GEMINI_3_7_FLASH)),
@@ -64,6 +65,9 @@ data class AutoRoutingFacts(
     val requiresImage: Boolean = false,
     val requiresPdf: Boolean = false,
     val requiresVideo: Boolean = false,
+    val requiresAudio: Boolean = false,
+    /** Generic files use the provider's file/PDF capability family for preference only. */
+    val requiresFile: Boolean = false,
     val knowledgeItemCount: Int = 0,
     val isComplexProjectDebug: Boolean = false,
 )
@@ -84,13 +88,22 @@ class CapabilityAwareAutoModelRouter(private val resolver: ModelResolver) {
     fun resolve(facts: AutoRoutingFacts, isUsable: (ModelPresetId) -> Boolean): ModelPresetId {
         val candidates = AutoModelRouter.candidates(facts)
         val preferred = candidates.first()
-        return candidates.firstOrNull { preset ->
+        val usable = candidates.filter { preset ->
             isUsable(preset) && (resolver.resolve(preset) as? ResolvedModelResult.Resolved)?.model?.let { model ->
-                model.health != ModelHealth.UNAVAILABLE && model.capabilities.supportsText &&
-                    (!facts.requiresImage || model.capabilities.supportsVision) &&
-                    (!facts.requiresPdf || model.capabilities.supportsPdf) &&
-                    (!facts.requiresVideo || model.capabilities.supportsVideo)
+                model.health != ModelHealth.UNAVAILABLE && model.capabilities.supportsText
             } == true
-        } ?: preferred
+        }
+        // Prefer verified attachment capabilities, but never turn an unknown provider capability
+        // into a local rejection. The selected model still receives the complete original file and
+        // any provider-level incompatibility remains an explicit, visible send result.
+        return usable.firstOrNull { preset ->
+            (resolver.resolve(preset) as? ResolvedModelResult.Resolved)?.model?.capabilities?.let { capabilities ->
+                (!facts.requiresImage || capabilities.supportsVision) &&
+                    (!facts.requiresPdf || capabilities.supportsPdf) &&
+                    (!facts.requiresVideo || capabilities.supportsVideo) &&
+                    (!facts.requiresAudio || capabilities.supportsAudio) &&
+                    (!facts.requiresFile || capabilities.supportsPdf)
+            } == true
+        } ?: usable.firstOrNull() ?: preferred
     }
 }

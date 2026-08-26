@@ -83,6 +83,29 @@ class P3EConversationManagementExportContractsTest {
         assertEquals(listOf(image.id), search.execute("路线图", ConversationSearchCategory.ALL, ConversationListScope.ACTIVE).map { it.attachment.id })
     }
 
+    @Test fun `opening search browses local conversations and category attachments before a keyword is entered`() {
+        val image = ConversationAttachmentReference(AttachmentId("browse-image"), "image/png", "diagram.png", 3, "c".repeat(64))
+        val saved = repository.save(tree.append(tree.create("搜索可浏览会话"), AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("可直接浏览的正文"), ContentBlock.Attachment(image)))))
+        val textSearch = SearchConversationsUseCase(repository, ConversationSearchProjection(ConversationManagementDomain(clock)))
+        val attachmentSearch = SearchConversationAttachmentsUseCase(repository)
+
+        assertEquals(listOf(saved.conversation.id), textSearch.browse(ConversationListScope.ACTIVE).map { it.conversationId })
+        assertEquals(listOf(image.id), attachmentSearch.browse(ConversationSearchCategory.IMAGE, ConversationListScope.ACTIVE).map { it.attachment.id })
+        assertEquals(saved.nodes.last().createdAt.toEpochMilli(), attachmentSearch.browse(ConversationSearchCategory.IMAGE, ConversationListScope.ACTIVE).single().timestampEpochMs)
+    }
+
+    @Test fun `nonempty but stale local index never hides another current message match`() {
+        val first = repository.save(tree.append(tree.create("第一条"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("共同关键词")))))
+        val second = repository.save(tree.append(tree.create("第二条"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("共同关键词")))))
+        database.conversationDao().deleteSearchIndexForConversation(second.conversation.id.value)
+        val search = SearchConversationsUseCase(repository, ConversationSearchProjection(ConversationManagementDomain(clock)))
+
+        assertEquals(
+            setOf(first.conversation.id, second.conversation.id),
+            search.execute("共同关键词", ConversationListScope.ACTIVE).map { it.conversationId }.toSet(),
+        )
+    }
+
     @Test fun `sidebar lifecycle clears pin rejects archived pin and survives room reopen`() {
         val saved = repository.save(tree.create("侧栏可恢复会话"))
         val pinned = management.execute(

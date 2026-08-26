@@ -25,6 +25,17 @@ class P6F2EAudioAndTextPreviewContractsTest {
         assertNotNull(ConversationAttachmentPreviewProjection(FakeAssets(text), FakeStore(byteArrayOf(0xC3.toByte()))).text(text.toConversationReference()).unavailableReason)
     }
 
+    @Test fun `text projection supplies the same bounded excerpt to the inline cover`() {
+        val preview = ConversationAttachmentPreviewProjection(
+            FakeAssets(text),
+            FakeStore("标题\n第二行".toByteArray()),
+        ).project(text.toConversationReference())
+
+        assertNull(preview.thumbnail)
+        assertEquals("标题\n第二行", preview.textPreview?.text)
+        assertNull(preview.textPreview?.unavailableReason)
+    }
+
     @Test fun `text is capped and rejects missing or tampered owner facts`() {
         val oversized = "x".repeat(128 * 1024 + 9).toByteArray()
         val preview = ConversationAttachmentPreviewProjection(FakeAssets(text), FakeStore(oversized)).text(text.toConversationReference())

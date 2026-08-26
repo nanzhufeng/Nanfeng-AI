@@ -1,4 +1,6 @@
-# 南枫 AI Settings Center 合同
+# 南枫 AI Settings Center 历史与领域边界合同
+
+> **当前 Android 设置 UI 读取门（2026-08-26）：** 本文保留 Desktop Settings、Registry、导入路径及历史验收边界。Android 设置首页、二级至四级页面、文案、层级、皮肤、卡片、按钮、图标、弹窗和手势只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)。本文及其关闭证据不得反向覆盖当前 Android UI。
 
 日期：2026-08-14  
 状态：FB-P6-026 CLOSED；P6-H Settings UI 退出门已由双端真实路径关闭。

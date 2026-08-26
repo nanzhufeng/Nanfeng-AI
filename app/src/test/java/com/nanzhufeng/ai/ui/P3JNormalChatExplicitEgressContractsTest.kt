@@ -10,6 +10,7 @@ class P3JNormalChatExplicitEgressContractsTest {
     private val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
     private val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
     private val executor = File("src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt").readText()
+    private val adapters = File("src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt").readText()
     private val appContainer = File("src/main/java/com/nanzhufeng/ai/app/AppContainer.kt").readText()
     private val activity = File("src/main/java/com/nanzhufeng/ai/NanfengAiActivity.kt").readText()
 
@@ -30,6 +31,9 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertTrue(executor.contains("Only attachments still referenced by the exact submitted draft"))
         assertTrue(executor.contains("file_data"))
         assertTrue(executor.contains("video_url"))
+        assertTrue(executor.contains("asset.mimeType.startsWith(\"audio/\") -> ChatAttachmentKind.AUDIO"))
+        assertTrue(executor.contains("else -> ChatAttachmentKind.FILE"))
+        assertTrue(adapters.contains("input_audio"))
         assertTrue(executor.contains("attachmentStore.openVerified(asset)"))
         assertFalse(executor.contains("attachmentStore.read(asset)"))
         assertFalse(executor.contains("attachmentStore.pdfPage(asset, 1)"))
@@ -52,16 +56,21 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertFalse(workspace.contains("ComposerCompareEntry("))
     }
 
-    @Test fun `unknown provider result has an explicit original key retry or mark failed decision`() {
+    @Test fun `unknown provider result keeps the original key internally while showing one plain retry action`() {
         assertTrue(executor.contains("fun retryLatestAttempt(conversationId: ConversationId)"))
         assertTrue(executor.contains("existingAttempt = attempt"))
         assertTrue(executor.contains("attempt.idempotencyKey"))
-        assertTrue(executor.contains("fun markLatestAttemptFailed"))
-        assertTrue(workspace.contains("按原编号重试"))
-        assertTrue(workspace.contains("标记失败"))
-        assertTrue(workspace.contains("可能重复调用或扣费"))
+        assertTrue(executor.contains("failureReason = recoveryFailureReason"))
+        assertTrue(workspace.contains("Text(\"重试\")"))
+        assertTrue(workspace.contains("recovery.failureReason"))
+        assertFalse(workspace.contains("按原编号重试"))
+        assertFalse(workspace.contains("标记失败"))
+        assertFalse(workspace.contains("原接收方："))
+        assertFalse(workspace.contains("可能重复调用或扣费"))
         val retry = executor.substringAfter("fun retryLatestAttempt(conversationId: ConversationId)").substringBefore("fun markLatestAttemptFailed")
-        assertTrue(retry.contains("ProviderChatCancellation().also { activeCalls[conversationId] = it }"))
+        assertTrue(retry.contains("ProviderChatCancellation().also { call ->"))
+        assertTrue(retry.contains("activeCalls[conversationId] = call"))
+        assertTrue(retry.contains("if (cancellationRequested.remove(conversationId)) call.cancel()"))
         assertTrue(retry.contains("activeCalls.remove(conversationId, cancellation)"))
     }
 
@@ -74,24 +83,30 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertFalse(executor.contains(".take(12_000)"))
     }
 
-    @Test fun `deep OpenRouter requests distinguish a live web tool from mere provider connectivity`() {
-        assertTrue(executor.contains("val requestedOptions = adapter.requestOptions(resolvedModel, choice)"))
-        assertTrue(executor.contains("ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)"))
-        assertTrue(executor.contains("val systemFact = systemFactForRequest(requestOptions)"))
+    @Test fun `current-information OpenRouter requests distinguish a live web tool from model selection`() {
+        assertTrue(executor.contains("val requestedOptions = ChatRequestOptions.Standard"))
+        assertTrue(executor.contains("appendProviderWebSources(reply.text, reply.webSources)"))
+        assertTrue(executor.contains("is VerifyOpenRouterRegistryResult.Unavailable -> Unit"))
+        assertTrue(executor.contains("val attachmentFact = attachmentReferenceInstruction(attachments)"))
+        assertTrue(executor.contains("EvidenceFirstAnalysisPolicy.modeFor(userMessage, attachments)"))
+        assertTrue(executor.contains("val isFirstAssistantReply = snapshot.nodes.none"))
+        assertTrue(executor.contains("systemFactForRequest(requestOptions, experience, fulfilledAnalysisMode, userMessage, isFirstAssistantReply)"))
+        assertTrue(executor.contains("experience.modelInstruction(isFirstAssistantReply)"))
         assertTrue(executor.contains("当前本机日期为 \$date"))
         assertTrue(executor.contains("OpenRouter 官方实时网页检索"))
-        assertTrue(executor.contains("千问官方 Responses 实时网页检索（回答模型为 DeepSeek V4 Pro）"))
+        assertTrue(executor.contains("千问官方 Responses 实时网页检索"))
+        assertTrue(executor.contains("DeepSeek 官方 Responses 实时网页检索"))
         assertTrue(executor.contains("不得把训练数据截止时间说成当前日期"))
         assertTrue(executor.contains("webSearchRoute=\${options.webSearchRoute.name}"))
+        assertTrue(executor.contains("recordResponseFormatDiagnostic"))
         assertTrue(workspace.contains("OpenRouter · 官方实时联网检索"))
-        assertTrue(workspace.contains("DeepSeek 回答 · 千问官方实时检索"))
+        assertTrue(workspace.contains("DeepSeek · 官方实时联网检索"))
     }
 
-    @Test fun `interrupted attempt recovery never writes Room during AppContainer construction and refreshes its owner`() {
+    @Test fun `process recovery is service owned and Activity never changes an in flight task`() {
         assertFalse(appContainer.contains("RoomNormalChatSendAttemptStore(database).also"))
-        assertTrue(appContainer.contains("fun recoverInterruptedNormalChatAttemptsAfterProcessStart"))
-        assertTrue(activity.contains("val recoveredAttempts = withContext(Dispatchers.IO)"))
-        assertTrue(activity.contains("recoverInterruptedNormalChatAttemptsAfterProcessStart()"))
-        assertTrue(activity.contains("if (recoveredAttempts > 0) conversationFoundationViewModel.reload()"))
+        assertFalse(appContainer.contains("fun recoverInterruptedNormalChatAttemptsAfterProcessStart"))
+        assertFalse(activity.contains("recoverInterruptedNormalChatAttemptsAfterProcessStart()"))
+        assertTrue(activity.contains("GenerationForegroundService.  This Activity"))
     }
 }

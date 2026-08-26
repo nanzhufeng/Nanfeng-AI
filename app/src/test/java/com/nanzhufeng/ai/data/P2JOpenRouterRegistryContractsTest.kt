@@ -99,6 +99,48 @@ class P2JOpenRouterRegistryContractsTest {
     }
 
     @Test
+    fun `standard GPT presets never select similarly named Pro variants`() {
+        val snapshot = OpenRouterRegistrySnapshotVerifier().verify(
+            OpenRouterCatalogResponse(
+                claudeCatalog() + listOf(
+                    catalogModel("openai/gpt-5.6-sol-pro", "GPT Sol Pro", "0.000004", "0.00002"),
+                    catalogModel("openai/gpt-5.6-terra-pro", "GPT Terra Pro", "0.000003", "0.000015"),
+                ),
+                null,
+            ),
+            now,
+        )!!
+
+        assertEquals("openai/gpt-5.6-sol", snapshot.modelFor(ModelPresetId.GPT_5_6_SOL)?.id)
+        assertEquals("openai/gpt-5.6-terra", snapshot.modelFor(ModelPresetId.GPT_5_6_TERRA)?.id)
+    }
+
+    @Test
+    fun `stale Pro mappings are normalized to the explicit standard GPT request ID`() {
+        val proSol = catalogModel("openai/gpt-5.6-sol-pro", "GPT Sol Pro", "0.000004", "0.00002").toDescriptor()
+        val proTerra = catalogModel("openai/gpt-5.6-terra-pro", "GPT Terra Pro", "0.000003", "0.000015").toDescriptor()
+        val snapshot = ModelRegistrySnapshot(
+            id = ModelRegistrySnapshotId("pro-stale"), schemaVersion = 1, providerId = ProviderId.OPENROUTER,
+            catalogVersion = "pro-stale", source = RegistrySnapshotSource.OPENROUTER_CATALOG, capturedAt = now,
+            verificationStatus = RegistryVerificationStatus.VERIFIED, lastVerifiedAt = now,
+            models = listOf(proSol, proTerra),
+            presetMappings = listOf(
+                ModelPresetMapping(ModelPresetId.GPT_5_6_SOL, proSol.id),
+                ModelPresetMapping(ModelPresetId.GPT_5_6_TERRA, proTerra.id),
+            ),
+        )
+        val registry = InMemoryVersionedModelRegistry(initialSnapshots = listOf(snapshot))
+
+        val sol = registry.resolve(ProviderId.OPENROUTER, ModelPresetId.GPT_5_6_SOL) as ModelRegistryResolution.Resolved
+        val terra = registry.resolve(ProviderId.OPENROUTER, ModelPresetId.GPT_5_6_TERRA) as ModelRegistryResolution.Resolved
+
+        assertEquals("openai/gpt-5.6-sol", sol.model.id)
+        assertEquals("openai/gpt-5.6-terra", terra.model.id)
+        assertFalse(sol.model.displayName.contains("Pro"))
+        assertFalse(terra.model.displayName.contains("Pro"))
+    }
+
+    @Test
     fun `negative or fractional provider prices become unknown instead of crashing verification`() {
         val models = claudeCatalog().toMutableList().apply {
             this[0] = this[0].copy(promptUsdPerToken = "-1", completionUsdPerToken = "0.0000003")

@@ -99,7 +99,7 @@ internal fun P8ControlledAgentCard(onOpen: () -> Unit) = WhiteCard {
 
 @androidx.compose.runtime.Composable
 internal fun P8ControlledAgentDialog(state: P8ControlledAgentUiState, dismiss: () -> Unit, begin: () -> Unit, confirm: () -> Unit, pause: (String) -> Unit, resume: (String) -> Unit, cancel: (String) -> Unit) = AlertDialog(
-    onDismissRequest = dismiss, containerColor = Color.White,
+    onDismissRequest = dismiss, containerColor = ForegroundSurface,
     title = { Text("本地受控运行", fontWeight = FontWeight.SemiBold) },
     text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("本地受控运行 / 未连接模型与外部工具。不会读取 Key、Provider、网络、系统文件、其他应用或业务正文。", color = SecondaryText)

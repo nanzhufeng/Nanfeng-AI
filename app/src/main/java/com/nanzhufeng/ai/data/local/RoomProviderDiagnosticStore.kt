@@ -25,12 +25,12 @@ class RoomProviderDiagnosticStore(private val database: NanfengAiDatabase) : Pro
 }
 
 private fun ProviderDiagnosticRecord.toEntity() = ProviderDiagnosticEntity(
-    id, createdAt.toEpochMilli(), providerId.name, endpointHost, apiModelId, httpStatus,
+    id, createdAt.toEpochMilli(), conversationId, providerId.name, endpointHost, apiModelId, httpStatus,
     errorClass.name, redactedBody, requestShape, latencyMs, timeToFirstByteMs,
 )
 
 private fun ProviderDiagnosticEntity.toDomain() = ProviderDiagnosticRecord(
-    id, Instant.ofEpochMilli(createdAtEpochMs), ProviderId.valueOf(providerId), endpointHost,
+    id, Instant.ofEpochMilli(createdAtEpochMs), conversationId, ProviderId.valueOf(providerId), endpointHost,
     apiModelId, httpStatus, ProviderDiagnosticErrorClass.valueOf(errorClass), redactedBody,
     requestShape, latencyMs, timeToFirstByteMs,
 )

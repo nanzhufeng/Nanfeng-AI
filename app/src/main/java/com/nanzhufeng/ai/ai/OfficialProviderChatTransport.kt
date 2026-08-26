@@ -130,8 +130,12 @@ data class ProviderSseEvent(
     val reasoning: String? = null,
     val inputTokens: Long? = null,
     val outputTokens: Long? = null,
+    /** The final OpenRouter SSE event carries this authoritative amount when available. */
+    val reportedCostUsdMicros: Long? = null,
     /** Normal chat never runs tools; retaining this fact prevents a false empty-answer success. */
     val toolCallEncountered: Boolean = false,
+    /** Provider-reported cache hits used by the transparent local estimate fallback. */
+    val cachedInputTokens: Long? = null,
 )
 
 /** Cancels one in-flight request without retaining headers, body, or response content. */
@@ -160,7 +164,13 @@ sealed interface ProviderChatOutcome {
         val reasoning: String?,
         val inputTokens: Long?,
         val outputTokens: Long?,
+        val reportedCostUsdMicros: Long?,
         val toolCallEncountered: Boolean,
+        val cachedInputTokens: Long? = null,
+        /** Present only when an execution adapter owns encrypted remote events. */
+        val durableTaskId: String? = null,
+        val durableTerminalSequence: Long? = null,
+        val finishReason: String? = null,
     ) : ProviderChatOutcome
     data object TimedOut : ProviderChatOutcome
     data object NetworkFailure : ProviderChatOutcome
@@ -201,7 +211,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
                     ProviderSseDecoder.read(stream, request.onTextDelta, request.streamEventDecoder)
                 }
                 return ProviderChatOutcome.StreamedResponse(
-                    status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.toolCallEncountered,
+                    status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedCostUsdMicros, streamed.toolCallEncountered, streamed.cachedInputTokens,
                 )
             }
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
@@ -230,11 +240,13 @@ class OfficialProviderChatTransport : ProviderChatTransport {
  * prior visible text. The raw event JSON never escapes this method.
  */
 internal object ProviderSseDecoder {
-    data class Result(val text: String, val reasoning: String?, val inputTokens: Long?, val outputTokens: Long?, val toolCallEncountered: Boolean)
+    data class Result(val text: String, val reasoning: String?, val inputTokens: Long?, val outputTokens: Long?, val reportedCostUsdMicros: Long?, val toolCallEncountered: Boolean, val cachedInputTokens: Long? = null)
 
     fun read(input: java.io.InputStream, onDelta: (String) -> Unit, decodeEvent: (String) -> ProviderSseEvent?): Result {
         var inputTokens: Long? = null
         var outputTokens: Long? = null
+        var cachedInputTokens: Long? = null
+        var reportedCostUsdMicros: Long? = null
         var toolCallEncountered = false
         val output = StringBuilder()
         val reasoning = StringBuilder()
@@ -249,6 +261,8 @@ internal object ProviderSseDecoder {
                     event.reasoning?.let(reasoning::append)
                     event.inputTokens?.let { inputTokens = it }
                     event.outputTokens?.let { outputTokens = it }
+                    event.cachedInputTokens?.let { cachedInputTokens = it }
+                    event.reportedCostUsdMicros?.let { reportedCostUsdMicros = it }
                     toolCallEncountered = toolCallEncountered || event.toolCallEncountered
                 }
             }
@@ -265,7 +279,7 @@ internal object ProviderSseDecoder {
             }
             consumeEvent()
         }
-        return Result(output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens, toolCallEncountered)
+        return Result(output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens, reportedCostUsdMicros, toolCallEncountered, cachedInputTokens)
     }
 }
 

@@ -19,13 +19,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Book
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Book
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,7 +61,8 @@ internal const val P5A_EXPANDED_MIN_WIDTH_DP = 840
 internal const val P5A_COMPACT_FONT_SCALE = 1.5f
 internal val P5ASelectionSurfaceColor = Color(0xFFFFFFFF)
 /** The shared component owns visible shape, pressed indication, focus and hover contour together. */
-internal val P5AInteractiveShape = RoundedCornerShape(16.dp)
+/** Single-line foreground controls use one pill contour for surface, press and focus feedback. */
+internal val P5AInteractiveShape = RoundedCornerShape(999.dp)
 
 /** Stable UI routes only; business facts stay in their existing ViewModels and Room owners. */
 internal enum class P5ARoute(val wireValue: String, val label: String) {
@@ -74,7 +75,7 @@ internal enum class P5ARoute(val wireValue: String, val label: String) {
     EVAL("eval", "评测"),
     SETTINGS("settings", "设置"),
     ADAPTERS("adapters", "导入与适配"),
-    CONTROL("control", "更多");
+    CONTROL("control", "工作区");
 
     companion object {
         fun fromWireValue(value: String?): P5ARoute? = entries.firstOrNull { it.wireValue == value }
@@ -186,6 +187,14 @@ internal fun P5AAdaptiveScaffold(
             .onPreviewKeyEvent(focusManager::handleP5AKeyboardFocus),
     ) {
         val layout = classifyP5AWindow(maxWidth.value.toInt(), fontScale)
+        // Conversation is edge-to-edge under both system bars. Its own floating header and
+        // composer consume their real insets, so the transcript has no duplicate grey/white
+        // bands at either edge and can scroll fully behind the transient controls.
+        val contentInsets = if (route == P5ARoute.CONVERSATION) {
+            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+        } else {
+            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top + WindowInsetsSides.Bottom)
+        }
         // FB-P6-023: one chat-first root; drawer/settings own navigation at every width.
         Box(
             modifier = Modifier
@@ -193,7 +202,7 @@ internal fun P5AAdaptiveScaffold(
                 // The activity owns IME geometry through adjustResize. Applying imePadding here
                 // would subtract the same keyboard height a second time and lift the composer far
                 // above the real IME top.
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top + WindowInsetsSides.Bottom)),
+                .windowInsetsPadding(contentInsets),
         ) { content(layout) }
         Text(
             text = "当前工作区：${route.label}",
@@ -210,15 +219,15 @@ internal fun P5AAdaptiveScaffold(
 @Composable
 private fun P5ARouteIcon(route: P5ARoute) {
     val image = when (route) {
-        P5ARoute.CAPTURE -> Icons.Outlined.AutoAwesome
-        P5ARoute.CONVERSATION -> Icons.Outlined.ChatBubbleOutline
-        P5ARoute.KNOWLEDGE -> Icons.Outlined.Book
-        P5ARoute.PROJECTS -> Icons.Outlined.FolderOpen
-        P5ARoute.MEMORY -> Icons.Outlined.Memory
-        P5ARoute.CONTEXT -> Icons.Outlined.Tune
-        P5ARoute.EVAL -> Icons.Outlined.AutoAwesome
-        P5ARoute.SETTINGS, P5ARoute.ADAPTERS -> Icons.Outlined.Settings
-        P5ARoute.CONTROL -> Icons.Outlined.Tune
+        P5ARoute.CAPTURE -> Icons.Rounded.AutoAwesome
+        P5ARoute.CONVERSATION -> Icons.Rounded.ChatBubbleOutline
+        P5ARoute.KNOWLEDGE -> Icons.Rounded.Book
+        P5ARoute.PROJECTS -> Icons.Rounded.FolderOpen
+        P5ARoute.MEMORY -> Icons.Rounded.Memory
+        P5ARoute.CONTEXT -> Icons.Rounded.Tune
+        P5ARoute.EVAL -> Icons.Rounded.AutoAwesome
+        P5ARoute.SETTINGS, P5ARoute.ADAPTERS -> Icons.Rounded.Settings
+        P5ARoute.CONTROL -> Icons.Rounded.Tune
     }
     Icon(imageVector = image, contentDescription = null, modifier = Modifier.size(24.dp))
 }

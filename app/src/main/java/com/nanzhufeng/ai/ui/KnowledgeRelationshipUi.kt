@@ -27,7 +27,7 @@ import com.nanzhufeng.ai.domain.KnowledgeRelationshipType
 fun KnowledgeRelationshipBuilderDialog(state: KnowledgeRelationshipUiState, onDismiss: () -> Unit, onType: (KnowledgeRelationshipType) -> Unit, onTarget: (com.nanzhufeng.ai.domain.KnowledgeSearchResult) -> Unit, onConfirm: () -> Unit) {
     val anchor = state.anchor ?: return
     AlertDialog(
-        onDismissRequest = onDismiss, containerColor = Color.White,
+        onDismissRequest = onDismiss, containerColor = ForegroundSurface,
         title = { Text("建立本地 Knowledge 关系", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -56,7 +56,7 @@ fun KnowledgeRelationshipBuilderDialog(state: KnowledgeRelationshipUiState, onDi
 @Composable
 fun KnowledgeRelationshipListDialog(state: KnowledgeRelationshipUiState, onDismiss: () -> Unit, onStatus: (KnowledgeRelationshipStatus?) -> Unit, onRevoke: (KnowledgeRelationshipId) -> Unit) {
     AlertDialog(
-        onDismissRequest = onDismiss, containerColor = Color.White,
+        onDismissRequest = onDismiss, containerColor = ForegroundSurface,
         title = { Text("本地关系与审计", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {

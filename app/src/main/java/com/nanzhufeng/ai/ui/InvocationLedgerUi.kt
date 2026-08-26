@@ -64,6 +64,14 @@ class InvocationLedgerViewModel(private val repository: InvocationRepository) : 
         }
     }
 
+    fun load() {
+        state = state.copy(isLoading = true)
+        viewModelScope.launch {
+            val records = withContext(Dispatchers.IO) { repository.listNewestFirst() }
+            state = state.copy(isLoading = false, records = records)
+        }
+    }
+
     fun dismissDialog() {
         state = state.copy(dialogVisible = false)
     }
@@ -101,7 +109,7 @@ fun InvocationLedgerCard(state: InvocationLedgerUiState, onOpen: () -> Unit) {
 fun InvocationLedgerDialog(state: InvocationLedgerUiState, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color.White,
+        containerColor = ForegroundSurface,
         shape = RoundedCornerShape(24.dp),
         title = { Text("调用记录", fontWeight = FontWeight.SemiBold) },
         text = {
@@ -129,6 +137,29 @@ fun InvocationLedgerDialog(state: InvocationLedgerUiState, onDismiss: () -> Unit
         },
         confirmButton = { TextButton(onClick = onDismiss, enabled = !state.isLoading) { Text("关闭") } },
     )
+}
+
+/** Settings → 模型与联网 → 调用记录. This page deliberately has no modal owner. */
+@Composable
+fun InvocationLedgerPage(state: InvocationLedgerUiState) {
+    when {
+        state.isLoading -> Column(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator(color = BrandGreen, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.height(12.dp))
+            Text("正在读取本地记录…", color = SecondaryText)
+        }
+        state.records.isEmpty() -> EmptyInvocationLedger()
+        else -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            state.records.forEachIndexed { index, record ->
+                if (index > 0) HorizontalDivider(color = NeutralBorder)
+                InvocationLedgerRow(record)
+            }
+        }
+    }
 }
 
 @Composable

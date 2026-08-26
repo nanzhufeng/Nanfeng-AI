@@ -31,6 +31,7 @@ import com.nanzhufeng.ai.domain.ProviderRuntimeDraftSubmissionResult
 import com.nanzhufeng.ai.domain.LoadModelServiceConfigurationUseCase
 import com.nanzhufeng.ai.domain.LocalContextBroker
 import com.nanzhufeng.ai.domain.MessageRole
+import com.nanzhufeng.ai.domain.MessageDeliveryState
 import com.nanzhufeng.ai.domain.ModelPresetId
 import com.nanzhufeng.ai.domain.ModelRegistryResolution
 import com.nanzhufeng.ai.domain.AiTaskError
@@ -60,6 +61,18 @@ import com.nanzhufeng.ai.domain.ContextSelectionAuditStore
 import com.nanzhufeng.ai.domain.LocalContextBroker.AssemblyStatus
 import com.nanzhufeng.ai.domain.ModelProfileRefresher
 import com.nanzhufeng.ai.domain.ModelProfileRefreshResult
+import com.nanzhufeng.ai.domain.AssistantExperienceSettings
+import com.nanzhufeng.ai.domain.ConversationCostEstimator
+import com.nanzhufeng.ai.domain.ConversationCostSource
+import com.nanzhufeng.ai.domain.ProviderCost
+import com.nanzhufeng.ai.domain.ProviderUsage
+import com.nanzhufeng.ai.domain.MemorySummaryDraft
+import com.nanzhufeng.ai.domain.MemorySummaryPolicy
+import com.nanzhufeng.ai.domain.MemoryMutationResult
+import com.nanzhufeng.ai.domain.ConversationTitleRefiner
+import com.nanzhufeng.ai.domain.ConversationTitleRefinementResult
+import com.nanzhufeng.ai.domain.ConversationTitleSource
+import com.nanzhufeng.ai.domain.ConversationAutoTitle
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 
@@ -90,8 +103,16 @@ class NormalChatOpenRouterExecutor(
     private val attachmentStore: PrivateAttachmentStore,
     private val submitDraftAndStartProviderRuntime: SubmitConversationDraftAndStartProviderRuntimeUseCase,
     private val applyRuntimeEvent: ApplyConversationRuntimeEventUseCase,
+    private val runtimeRepository: com.nanzhufeng.ai.domain.ConversationRuntimeRepository,
+    private val loadAssistantExperienceSettings: () -> AssistantExperienceSettings = { AssistantExperienceSettings() },
+    private val resolveConversationWebSearchEnabled: (ConversationId, Boolean) -> Boolean = { _, globalEnabled -> globalEnabled },
+    private val saveMemorySummary: (ConversationId, MemorySummaryDraft) -> MemoryMutationResult = { _, _ ->
+        MemoryMutationResult.Rejected(com.nanzhufeng.ai.domain.MemoryRejectionCode.INVALID_ACTION)
+    },
+    private val conversationTitleRefiner: ConversationTitleRefiner,
 ) {
     private val activeCalls = ConcurrentHashMap<ConversationId, ProviderChatCancellation>()
+    private val cancellationRequested = ConcurrentHashMap.newKeySet<ConversationId>()
 
     sealed interface Result {
         data object Sent : Result
@@ -116,11 +137,16 @@ class NormalChatOpenRouterExecutor(
         val modelId: String,
         val canRetry: Boolean,
         val duplicateChargePossible: Boolean,
+        val failureReason: String,
     )
 
     /** Called only by the visible stop action; disconnects the active socket before state cleanup. */
-    fun cancelActive(conversationId: ConversationId): Boolean =
-        activeCalls.remove(conversationId)?.let { call -> call.cancel(); true } ?: false
+    fun cancelActive(conversationId: ConversationId): Boolean {
+        // A foreground service can receive Stop immediately after it starts, before the executor
+        // has built its socket. Keep that intent and apply it as soon as the call is registered.
+        cancellationRequested += conversationId
+        return activeCalls.remove(conversationId)?.let { call -> call.cancel(); true } ?: false
+    }
 
     fun recoveryForConversation(conversationId: ConversationId): Recovery? =
         sendAttempts.findLatestForConversation(conversationId)?.let { attempt ->
@@ -133,15 +159,18 @@ class NormalChatOpenRouterExecutor(
                     canRetry = true,
                     // The direct Provider APIs are not treated as proving server-side de-duplication.
                     duplicateChargePossible = true,
+                    failureReason = recoveryFailureReason(attempt.status, attempt.safeErrorCode),
                 )
                 else -> null
             }
         }
 
-    /** Explicit user action only.  It replays the exact durable attempt with its original key. */
+    /** Explicit user action only. It retries the original direct request. */
     fun retryLatestAttempt(conversationId: ConversationId): Result {
+        cancellationRequested -= conversationId
         val attempt = sendAttempts.findLatestForConversation(conversationId) ?: return Result.Blocked(Code.RECOVERY_UNAVAILABLE)
-        if (attempt.status !in setOf(NormalChatSendAttemptStatus.UNKNOWN, NormalChatSendAttemptStatus.FAILED)) {
+        val resumableStatuses = setOf(NormalChatSendAttemptStatus.UNKNOWN, NormalChatSendAttemptStatus.FAILED)
+        if (attempt.status !in resumableStatuses) {
             return Result.Blocked(Code.RECOVERY_UNAVAILABLE)
         }
         val snapshot = conversations.findById(conversationId) ?: return Result.Blocked(Code.RECOVERY_UNAVAILABLE)
@@ -157,7 +186,11 @@ class NormalChatOpenRouterExecutor(
             } ?: return Result.Blocked(Code.RECOVERY_MODEL_CHANGED)
         // A recovered request has no live assistant-runtime row to own its socket, but it must
         // remain just as cancellable as a first send.  It still uses the original Attempt/key.
-        val cancellation = ProviderChatCancellation().also { activeCalls[conversationId] = it }
+        val cancellation = ProviderChatCancellation().also { call ->
+            activeCalls[conversationId] = call
+            if (cancellationRequested.remove(conversationId)) call.cancel()
+        }
+        val resumedRuntime: ActiveProviderRuntime? = null
         val retried = try {
             requestOne(
                 preset = preset,
@@ -167,7 +200,7 @@ class NormalChatOpenRouterExecutor(
                 userMessage = text,
                 attachments = attachments,
                 choice = ComposerModelRoutingCatalog.auto,
-                runtime = null,
+                runtime = resumedRuntime,
                 onStreamProgress = {},
                 cancellation = cancellation,
                 existingAttempt = attempt,
@@ -177,10 +210,14 @@ class NormalChatOpenRouterExecutor(
         }
         return when (retried) {
             is OneResult.Reply -> {
+                if (resumedRuntime != null) {
+                    if (!recordResponseAttribution(resumedRuntime.state.messageId, retried)) return Result.Failed(Code.LOCAL_SAVE)
+                    return Result.Sent.also { maybeRefineOpeningTitle(conversationId, resumedRuntime.state.messageId) }
+                }
                 val messageId = com.nanzhufeng.ai.domain.MessageNodeId.new()
                 if (!recordResponseAttribution(messageId, retried)) return Result.Failed(Code.LOCAL_SAVE)
                 when (appendMessage.execute(snapshot, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text(retried.text)), messageId = messageId))) {
-                is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent
+                is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent.also { maybeRefineOpeningTitle(conversationId, messageId) }
                 is com.nanzhufeng.ai.domain.ConversationMutationResult.Rejected -> Result.Failed(Code.LOCAL_SAVE)
                 }
             }
@@ -202,6 +239,7 @@ class NormalChatOpenRouterExecutor(
         onLocalSubmission: () -> Unit = {},
         onStreamProgress: () -> Unit = {},
     ): Result {
+        cancellationRequested -= conversationId
         val selectedChoice = choiceForConversation(conversationId)
         var providerRuntime: ConversationRuntimeState? = null
         val submitted = if (selectedChoice.isCompare) {
@@ -237,12 +275,15 @@ class NormalChatOpenRouterExecutor(
             requiresImage = attachmentPayloads.any { it.kind == ChatAttachmentKind.IMAGE },
             requiresPdf = attachmentPayloads.any { it.kind == ChatAttachmentKind.PDF },
             requiresVideo = attachmentPayloads.any { it.kind == ChatAttachmentKind.VIDEO },
+            requiresAudio = attachmentPayloads.any { it.kind == ChatAttachmentKind.AUDIO },
+            requiresFile = attachmentPayloads.any { it.kind == ChatAttachmentKind.FILE },
             knowledgeItemCount = contextBroker.activeKnowledgeCount(),
             isComplexProjectDebug = routingPolicy.qualityEscalationEnabled && userMessage.contains(Regex("(?i)\\b(debug|bug|stacktrace|exception|compile)\\b|调试|复杂项目|报错")),
         )
         val autoPreset = CapabilityAwareAutoModelRouter(modelResolver).resolve(autoFacts) { candidate ->
             val candidateProvider = NanfengModelServiceCatalog.providerFor(candidate)
-            configuration.execute(candidateProvider)?.settings?.enabled == true && credentials.hasCredential(candidateProvider)
+            configuration.execute(candidateProvider)?.settings?.enabled == true &&
+                credentials.hasCredential(candidateProvider)
         }
         // Ordinary chat has one explicit egress attempt.  A failed request is surfaced with its
         // selected model and never silently replayed to another model or Provider.
@@ -260,13 +301,17 @@ class NormalChatOpenRouterExecutor(
             }
         ) {
             when (verifyOpenRouterRegistry.execute()) {
-                is VerifyOpenRouterRegistryResult.Unavailable -> return Result.Blocked(Code.REGISTRY_UNVERIFIED)
-                    .also { runtime?.fail(Code.REGISTRY_UNVERIFIED.name) }
+                // A cold start may use the resolver's exact text-only standard-ID fallback.
+                // A stale/malformed existing snapshot still remains fail-closed in the resolver.
+                is VerifyOpenRouterRegistryResult.Unavailable -> Unit
                 else -> Unit
             }
         }
         val cancellation = runtime?.let { active ->
-            ProviderChatCancellation().also { call -> activeCalls[active.state.conversationId] = call }
+            ProviderChatCancellation().also { call ->
+                activeCalls[active.state.conversationId] = call
+                if (cancellationRequested.remove(active.state.conversationId)) call.cancel()
+            }
         }
         onLocalSubmission()
         val replies = mutableListOf<Pair<ModelPresetId, OneResult.Reply>>()
@@ -276,7 +321,15 @@ class NormalChatOpenRouterExecutor(
             val request = requestOne(preset, conversationId, latest.id, submitted.snapshot, userMessage, attachmentPayloads, choice, runtime, onStreamProgress, cancellation)
             if (cancellation != null) activeCalls.remove(conversationId, cancellation)
             when (request) {
-                is OneResult.Reply -> replies += preset to request
+                is OneResult.Reply -> {
+                    // The streaming path creates its assistant node before the HTTP response
+                    // finishes. Enrich the same message-owned attribution after final usage is
+                    // known, rather than manufacturing a second accounting record.
+                    if (runtime != null && !recordResponseAttribution(runtime.state.messageId, request)) {
+                        return Result.Failed(Code.LOCAL_SAVE)
+                    }
+                    replies += preset to request
+                }
                 is OneResult.Blocked -> {
                     lastBlocked = request.code
                     if (!automatic) return Result.Blocked(request.code).also { runtime?.fail(request.code.name) }
@@ -298,7 +351,7 @@ class NormalChatOpenRouterExecutor(
         val messageId = com.nanzhufeng.ai.domain.MessageNodeId.new()
         if (!replies.all { (_, reply) -> recordResponseAttribution(messageId, reply) }) return Result.Failed(Code.LOCAL_SAVE)
         return when (appendMessage.execute(submitted.snapshot, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text(rendered)), messageId = messageId))) {
-            is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent
+            is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent.also { maybeRefineOpeningTitle(conversationId, messageId) }
             is com.nanzhufeng.ai.domain.ConversationMutationResult.Rejected -> Result.Failed(Code.LOCAL_SAVE)
         }
     }
@@ -314,6 +367,9 @@ class NormalChatOpenRouterExecutor(
             val receiverProviderId: ProviderId,
             val modelId: String,
             val modelDisplayName: String,
+            val usage: ProviderUsage,
+            val cost: ProviderCost,
+            val costSource: ConversationCostSource?,
         ) : OneResult
         data class Blocked(val code: Code) : OneResult
         data class Failed(val code: Code) : OneResult
@@ -327,11 +383,24 @@ class NormalChatOpenRouterExecutor(
             ?: return OneResult.Blocked(Code.MODEL_UNAVAILABLE)
         if (!resolvedModel.capabilities.supportsText) return OneResult.Blocked(Code.MODEL_UNAVAILABLE)
         val adapter = adapters.adapter(providerId) ?: return OneResult.Blocked(Code.MODEL_UNAVAILABLE)
-        val requestedOptions = adapter.requestOptions(resolvedModel, choice)
-        // Recovery replays its persisted third-party receiver, not today's Composer Auto choice.
-        val requestOptions = if (existingAttempt?.egressProviderId != null &&
-            existingAttempt.egressProviderId != providerId
-        ) ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES) else requestedOptions
+        val experience = loadAssistantExperienceSettings()
+        val webSearchEnabled = resolveConversationWebSearchEnabled(conversationId, experience.webSearchEnabled)
+        val analysisMode = EvidenceFirstAnalysisPolicy.modeFor(userMessage, attachments)
+        val requestedOptions = ChatRequestOptions.Standard
+        // Historical DeepSeek-to-Qwen attempts used a model ID that Qwen Responses does not
+        // accept. Do not replay the known-invalid egress merely because it was persisted.
+        if (existingAttempt?.providerId == ProviderId.DEEPSEEK &&
+            existingAttempt.egressProviderId == ProviderId.QWEN
+        ) return OneResult.Blocked(Code.RECOVERY_MODEL_CHANGED)
+        val automaticOptions = AutomaticWebSearchPolicy.requestOptions(
+            providerId = providerId,
+            current = requestedOptions,
+            enabled = webSearchEnabled,
+            userMessage = userMessage,
+            attachments = attachments,
+        )
+        val requestOptions = automaticOptions
+        val fulfilledAnalysisMode = analysisMode.copy(liveEvidence = requestOptions.liveWebSearch)
         val executionProviderId = adapter.executionProviderId(requestOptions)
         val config = configuration.execute(executionProviderId) ?: return OneResult.Blocked(Code.SERVICE_DISABLED)
         if (!config.settings.enabled) return OneResult.Blocked(Code.SERVICE_DISABLED)
@@ -348,20 +417,34 @@ class NormalChatOpenRouterExecutor(
             ProviderId.OPENROUTER, ProviderId.QWEN, ProviderId.DEEPSEEK -> resolvedModel.modelId
             ProviderId.MOCK -> return OneResult.Blocked(Code.MODEL_UNAVAILABLE)
         }
+        // Streaming creates the current assistant placeholder before the request is assembled.
+        // Only a completed earlier assistant message means this conversation has already had its
+        // opening reply; failed/partial placeholders must not suppress the first real greeting.
+        val isFirstAssistantReply = snapshot.nodes.none { node ->
+            node.role == MessageRole.ASSISTANT && node.deliveryState == MessageDeliveryState.COMPLETE
+        }
         // A model that does not stream still keeps its ordinary-chat capability: use its
         // Adapter's non-SSE decoder instead of treating streaming as a product requirement.
-        val stream = adapter.supportsStreaming(resolvedModel, requestOptions)
-        val systemFact = systemFactForRequest(requestOptions)
+        val explicitMemoryCommand = MemorySummaryPolicy.isExplicitSaveCommand(userMessage) && experience.memoryEnabled
+        // The whole answer must be available before parsing a user-authorized summary; streaming
+        // chunks are never treated as a durable memory candidate.
+        val stream = !explicitMemoryCommand && adapter.supportsStreaming(resolvedModel, requestOptions)
+        val attachmentFact = attachmentReferenceInstruction(attachments)
+        val systemFact = listOfNotNull(
+            systemFactForRequest(requestOptions, experience, fulfilledAnalysisMode, userMessage, isFirstAssistantReply),
+            attachmentFact.takeIf { attachments.isNotEmpty() },
+        ).joinToString("\n\n")
         val budget = ContextBudget.forModel(resolvedModel)
         val attachmentInputTokens = attachments.sumOf { attachment -> attachment.estimatedInputTokens(resolvedModel.attachmentInputTokenEstimate) }
         val context = contextBroker.assemble(
             snapshot, userMessage, budget, attachmentInputTokens,
             fixedInstructionTokens = com.nanzhufeng.ai.domain.ModelTokenEstimators.estimate(
                 resolvedModel.tokenizerId,
-                buildString {
-                    append(systemFact)
-                    if (attachments.isNotEmpty()) append("\n请结合本条消息附件回答。")
-                },
+                systemFact,
+            ),
+            policy = LocalContextBroker.RetrievalPolicy(
+                includeRelevantMemory = experience.memoryEnabled,
+                includeRelevantKnowledge = experience.librarySearchEnabled,
             ),
         )
         if (context.status == AssemblyStatus.INPUT_TOO_LARGE) return OneResult.Blocked(Code.CONTEXT_LIMIT)
@@ -398,8 +481,8 @@ class NormalChatOpenRouterExecutor(
         }
         contextSelectionAudits.append(
             ContextSelectionAuditRecord(
-                clock.instant(), executionProviderId, modelId, resolvedModel.tokenizerId,
-                context.effectiveBudget, context.selectedSources, context.status,
+                createdAt = clock.instant(), conversationId = conversationId.value, providerId = executionProviderId, modelId = modelId, tokenizerId = resolvedModel.tokenizerId,
+                budget = context.effectiveBudget, selectedSources = context.selectedSources, indexStatus = context.status,
             ),
         )
         val requestedAt = clock.instant()
@@ -407,7 +490,8 @@ class NormalChatOpenRouterExecutor(
         val outcome = try {
             transport.execute(
                 ProviderChatRequest(
-                    endpoint, prepared.jsonBody, expectsStream = stream,
+                    endpoint, prepared.jsonBody,
+                    expectsStream = stream,
                     body = prepared.body,
                     onAccepted = {
                         sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.SENDING), NormalChatSendAttemptStatus.ACCEPTED, clock.instant())
@@ -442,7 +526,7 @@ class NormalChatOpenRouterExecutor(
                 modelHealthReporter.recordFailure(preset, classification)
                 diagnostics.append(
                     ProviderDiagnosticRecord(
-                        createdAt = clock.instant(), providerId = executionProviderId,
+                        createdAt = clock.instant(), conversationId = conversationId.value, providerId = executionProviderId,
                         endpointHost = ProviderDiagnosticRecord.endpointHost(endpoint), apiModelId = modelId,
                         httpStatus = outcome.statusCode, errorClass = classification,
                         redactedBody = redacted.takeIf { it.isNotBlank() },
@@ -464,12 +548,22 @@ class NormalChatOpenRouterExecutor(
                 if (toolCallEncountered) {
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "TOOL_CALL_UNSUPPORTED")
                     OneResult.Failed(Code.TOOL_CALL_UNSUPPORTED)
-                } else if (reply == null) OneResult.Failed(Code.RESPONSE_FORMAT) else {
+                } else if (reply == null) {
+                    recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, outcome.statusCode)
+                    OneResult.Failed(Code.RESPONSE_FORMAT)
+                } else {
                     modelHealthReporter.recordSuccess(preset)
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.COMPLETED, clock.instant())
-                    runtime?.append(reply.text)
+                    val visibleReply = if (explicitMemoryCommand) {
+                        completedMemoryCommandReply(conversationId, reply.text)
+                    } else appendProviderWebSources(reply.text, reply.webSources)
+                    runtime?.append(visibleReply)
                     runtime?.complete()
-                    if (runtime?.persistenceRejected == true) OneResult.Failed(Code.LOCAL_SAVE) else OneResult.Reply(reply.text, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName)
+                    if (runtime?.persistenceRejected == true) OneResult.Failed(Code.LOCAL_SAVE) else {
+                        val usage = ProviderUsage(reply.inputTokens, reply.outputTokens, cachedInputTokens = reply.cachedInputTokens)
+                        val (cost, source) = resolvedConversationCost(executionProviderId, modelId, usage, reply.reportedCostUsdMicros)
+                        OneResult.Reply(visibleReply, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName, usage, cost, source)
+                    }
                 }
             }
             is ProviderChatOutcome.StreamedResponse -> {
@@ -482,27 +576,31 @@ class NormalChatOpenRouterExecutor(
                     OneResult.Failed(Code.TOOL_CALL_UNSUPPORTED)
                 } else if (reply == null) {
                     runtime?.fail(Code.RESPONSE_FORMAT.name)
+                    recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, outcome.statusCode)
                     OneResult.Failed(Code.RESPONSE_FORMAT)
                 } else {
                     modelHealthReporter.recordSuccess(preset)
-                    sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.COMPLETED, clock.instant())
                     runtime?.complete()
-                    OneResult.Reply(reply, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName)
+                    if (runtime?.persistenceRejected == true) return OneResult.Failed(Code.LOCAL_SAVE)
+                    sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.COMPLETED, clock.instant())
+                    val usage = ProviderUsage(outcome.inputTokens, outcome.outputTokens, cachedInputTokens = outcome.cachedInputTokens)
+                    val (cost, source) = resolvedConversationCost(executionProviderId, modelId, usage, outcome.reportedCostUsdMicros)
+                    OneResult.Reply(reply, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName, usage, cost, source)
                 }
             }
             ProviderChatOutcome.TimedOut -> OneResult.Failed(Code.TIMEOUT).also {
                 sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), "TIMEOUT")
-                recordTransportDiagnostic(executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.TIMEOUT)
+                recordTransportDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.TIMEOUT)
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, null, null, "TIMEOUT"))
             }
             ProviderChatOutcome.NetworkFailure -> OneResult.Failed(Code.NETWORK).also {
                 sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), "NETWORK")
-                recordTransportDiagnostic(executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.NETWORK)
+                recordTransportDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.NETWORK)
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, null, null, "NETWORK"))
             }
             ProviderChatOutcome.ResponseTooLarge -> OneResult.Failed(Code.RESPONSE_FORMAT).also {
                 sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), "RESPONSE_TOO_LARGE")
-                recordTransportDiagnostic(executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.RESPONSE_TOO_LARGE)
+                recordTransportDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.RESPONSE_TOO_LARGE)
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, null, null, "RESPONSE_TOO_LARGE"))
             }
             ProviderChatOutcome.Cancelled -> OneResult.Cancelled.also {
@@ -517,6 +615,7 @@ class NormalChatOpenRouterExecutor(
         reply: OneResult.Reply,
     ): Boolean = recordResponseAttribution(
         assistantMessageId, reply.attempt, reply.providerId, reply.receiverProviderId, reply.modelId, reply.modelDisplayName,
+        reply.usage, reply.cost, reply.costSource,
     )
 
     private fun recordResponseAttribution(
@@ -526,6 +625,9 @@ class NormalChatOpenRouterExecutor(
         receiverProviderId: ProviderId,
         modelId: String,
         modelDisplayName: String,
+        usage: ProviderUsage = ProviderUsage(),
+        cost: ProviderCost = ProviderCost(),
+        costSource: ConversationCostSource? = null,
     ): Boolean = runCatching {
         responseModelAttributions.record(
             AssistantResponseModelAttribution(
@@ -536,21 +638,65 @@ class NormalChatOpenRouterExecutor(
                 modelId = modelId,
                 modelDisplayName = modelDisplayName,
                 recordedAt = clock.instant(),
+                usage = usage,
+                cost = cost,
+                costSource = costSource,
             ),
         )
     }.isSuccess
 
+    /** OpenRouter's response amount settles the request; the calibrated table is fallback only. */
+    private fun resolvedConversationCost(
+        receiverProviderId: ProviderId,
+        modelId: String,
+        usage: ProviderUsage,
+        reportedCostUsdMicros: Long?,
+    ): Pair<ProviderCost, ConversationCostSource?> {
+        if (receiverProviderId == ProviderId.OPENROUTER && reportedCostUsdMicros != null) {
+            return ProviderCost("openrouter-provider-response", "USD", reportedCostUsdMicros) to ConversationCostSource.PROVIDER_RESPONSE
+        }
+        return ConversationCostEstimator.estimate(modelId, usage)?.let { it to ConversationCostSource.LOCAL_ESTIMATE }
+            ?: (ProviderCost() to null)
+    }
+
     private fun recordTransportDiagnostic(
-        providerId: ProviderId, endpoint: String, modelId: String, messages: List<Pair<String, String>>,
+        conversationId: ConversationId, providerId: ProviderId, endpoint: String, modelId: String, messages: List<Pair<String, String>>,
         attachments: List<ChatAttachment>, options: ChatRequestOptions, requestedAt: java.time.Instant,
         errorClass: ProviderDiagnosticErrorClass,
     ) {
         diagnostics.append(
             ProviderDiagnosticRecord(
-                createdAt = clock.instant(), providerId = providerId,
+                createdAt = clock.instant(), conversationId = conversationId.value, providerId = providerId,
                 endpointHost = ProviderDiagnosticRecord.endpointHost(endpoint), apiModelId = modelId,
                 httpStatus = null, errorClass = errorClass, redactedBody = null,
                 requestShape = requestShape(messages, attachments, options),
+                latencyMs = java.time.Duration.between(requestedAt, clock.instant()).toMillis().coerceAtLeast(0),
+            ),
+        )
+    }
+
+    /**
+     * Keep a safe fact when a successful HTTP exchange has no displayable final answer.  The
+     * transport body is deliberately not retained: it can contain the user's material or an
+     * upstream tool payload.  This distinguishes protocol drift from network/auth failures.
+     */
+    private fun recordResponseFormatDiagnostic(
+        conversationId: ConversationId,
+        providerId: ProviderId,
+        endpoint: String,
+        modelId: String,
+        messages: List<Pair<String, String>>,
+        attachments: List<ChatAttachment>,
+        options: ChatRequestOptions,
+        requestedAt: java.time.Instant,
+        httpStatus: Int,
+    ) {
+        diagnostics.append(
+            ProviderDiagnosticRecord(
+                createdAt = clock.instant(), conversationId = conversationId.value, providerId = providerId,
+                endpointHost = ProviderDiagnosticRecord.endpointHost(endpoint), apiModelId = modelId,
+                httpStatus = httpStatus, errorClass = ProviderDiagnosticErrorClass.RESPONSE_FORMAT,
+                redactedBody = null, requestShape = requestShape(messages, attachments, options),
                 latencyMs = java.time.Duration.between(requestedAt, clock.instant()).toMillis().coerceAtLeast(0),
             ),
         )
@@ -560,20 +706,53 @@ class NormalChatOpenRouterExecutor(
         "fields=model,messages,stream${if (options.liveWebSearch) ",webSearch" else ""};messageCount=${messages.size};attachmentCount=${attachments.size};attachmentBytes=${attachments.sumOf { it.byteCount }};webSearchRoute=${options.webSearchRoute.name}"
 
     /** The provider receives an explicit date fact; a model's training cut-off is never the current date. */
-    private fun systemFactForRequest(options: ChatRequestOptions): String {
+    private fun systemFactForRequest(
+        options: ChatRequestOptions,
+        experience: AssistantExperienceSettings,
+        analysisMode: EvidenceFirstAnalysisPolicy.Mode,
+        userMessage: String,
+        isFirstAssistantReply: Boolean,
+    ): String {
         val date = clock.instant().atZone(clock.zone).toLocalDate()
-        return if (options.liveWebSearch) {
+        val runtimeFact = if (options.liveWebSearch) {
             "系统事实：当前本机日期为 $date。本轮已启用${options.webSearchRoute.userLabel()}。用户询问最新、近期、价格、新闻、财报或要求查找时，必须先使用网页检索并以 Markdown 链接标注来源；不得声称没有联网搜索能力。"
         } else {
             "系统事实：当前本机日期为 $date。本轮已连接模型服务，但没有附带可验证的实时网页检索结果。不得把训练数据截止时间说成当前日期，也不得编造已联网检索；若问题依赖实时资料，应明确说明本轮未取得实时来源。"
+        }
+        return listOfNotNull(
+            runtimeFact,
+            EvidenceFirstAnalysisPolicy.instruction(analysisMode),
+            MemorySummaryPolicy.commandInstruction().takeIf { MemorySummaryPolicy.isExplicitSaveCommand(userMessage) },
+            experience.modelInstruction(isFirstAssistantReply),
+        ).joinToString("\n\n")
+    }
+
+    private fun completedMemoryCommandReply(conversationId: ConversationId, providerText: String): String {
+        val draft = MemorySummaryPolicy.parseModelSummary(providerText)
+            ?: return "这次没有生成可安全保存的记忆摘要，因此未写入。你可以更明确地说出需要长期记住的内容后再试一次。"
+        return when (saveMemorySummary(conversationId, draft)) {
+            is MemoryMutationResult.Applied, is MemoryMutationResult.Replayed -> "已更新记忆摘要：\n${draft.body}"
+            is MemoryMutationResult.Duplicate -> "这条内容已在记忆摘要中，无需重复保存。"
+            is MemoryMutationResult.Conflict -> "检测到相近但不同的已有记忆，为避免覆盖，尚未自动写入。"
+            is MemoryMutationResult.Rejected -> "这条内容未通过本机记忆安全校验，因此没有保存。"
         }
     }
 
     private fun OfficialWebSearchRoute.userLabel(): String = when (this) {
         OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL -> " OpenRouter 官方实时网页检索"
         OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS -> " 千问官方实时网页检索"
-        OfficialWebSearchRoute.QWEN_RESPONSES -> " 千问官方 Responses 实时网页检索（回答模型为 DeepSeek V4 Pro）"
+        OfficialWebSearchRoute.QWEN_RESPONSES -> " 千问官方 Responses 实时网页检索"
+        OfficialWebSearchRoute.DEEPSEEK_RESPONSES -> " DeepSeek 官方 Responses 实时网页检索"
         OfficialWebSearchRoute.NONE -> ""
+    }
+
+    private fun recoveryFailureReason(status: NormalChatSendAttemptStatus, safeErrorCode: String?): String = when (safeErrorCode) {
+        "NETWORK" -> "网络连接已中断，未收到服务返回结果。"
+        "TIMEOUT" -> "等待服务响应超时，本次未收到完整结果。"
+        "PROCESS_INTERRUPTED" -> "应用或系统在生成期间中断，未能确认本次结果。"
+        "RESPONSE_TOO_LARGE" -> "服务返回内容过大，未能完整接收。"
+        "USER_CANCELLED" -> "你已停止本次生成。"
+        else -> if (status == NormalChatSendAttemptStatus.UNKNOWN) "生成连接已中断，未能确认本次结果。" else "服务未完成本次生成。"
     }
 
     private inner class ActiveProviderRuntime(var state: ConversationRuntimeState) {
@@ -589,6 +768,7 @@ class NormalChatOpenRouterExecutor(
         fun complete() {
             if (state.isTerminal) return
             apply(RuntimeCompleted(AiRuntimeEventId.new(), state.invocationId, state.conversationId, state.messageId, state.nextExpectedSequence, clock.instant(), security))
+            if (!persistenceRejected) maybeRefineOpeningTitle(state.conversationId, state.messageId)
         }
 
         fun fail(code: String) {
@@ -603,6 +783,45 @@ class NormalChatOpenRouterExecutor(
                 is ConversationRuntimePersistenceResult.Rejected -> persistenceRejected = true
             }
         }
+    }
+
+    /**
+     * The regular reply has already been stored before this secondary request begins.  Re-read
+     * immediately before committing so a manual rename wins even if it happened during Qwen work.
+     */
+    private fun maybeRefineOpeningTitle(conversationId: ConversationId, assistantMessageId: com.nanzhufeng.ai.domain.MessageNodeId) {
+        val snapshot = conversations.findById(conversationId) ?: return
+        if (!snapshot.conversation.autoTitlePending) return
+        val assistant = snapshot.nodes.firstOrNull { it.id == assistantMessageId }
+            ?.takeIf { it.role == MessageRole.ASSISTANT && it.deliveryState == MessageDeliveryState.COMPLETE }
+            ?: return
+        val user = assistant.parentMessageId?.let { parentId -> snapshot.nodes.firstOrNull { it.id == parentId } }
+            ?.takeIf { it.role == MessageRole.USER && it.parentMessageId == null }
+            ?: return
+        val userText = user.content.filterIsInstance<ContentBlock.Text>().joinToString(" ") { it.text }.trim()
+        val assistantText = assistant.content.filterIsInstance<ContentBlock.Text>().joinToString("\n") { it.text }.trim()
+        if (userText.isBlank() || assistantText.isBlank()) {
+            completeAutomaticTitleWithoutGeneratedText(conversationId)
+            return
+        }
+        val result = conversationTitleRefiner.refine(conversationId, ConversationTitleSource(userText, assistantText))
+        val generated = (result as? ConversationTitleRefinementResult.Title)?.value
+        completeAutomaticTitle(conversationId, generated)
+    }
+
+    private fun completeAutomaticTitleWithoutGeneratedText(conversationId: ConversationId) =
+        completeAutomaticTitle(conversationId, null)
+
+    private fun completeAutomaticTitle(conversationId: ConversationId, generated: String?) {
+        val latest = conversations.findById(conversationId) ?: return
+        if (!latest.conversation.autoTitlePending) return
+        val conversation = latest.conversation.copy(
+            title = generated ?: ConversationAutoTitle.NEW_CONVERSATION_TITLE,
+            autoTitlePending = false,
+            updatedAt = clock.instant(),
+            revision = latest.conversation.revision + 1,
+        )
+        conversations.save(latest.copy(conversation = conversation))
     }
 
     private fun auditRecord(provider: ProviderId, endpoint: String, modelId: String, preset: ModelPresetId, choice: com.nanzhufeng.ai.domain.ComposerModelChoice, requestedAt: java.time.Instant, inputTokens: Long?, outputTokens: Long?, status: String) =
@@ -623,7 +842,8 @@ class NormalChatOpenRouterExecutor(
                 asset.mimeType.startsWith("image/") -> ChatAttachmentKind.IMAGE
                 asset.mimeType == "application/pdf" -> ChatAttachmentKind.PDF
                 asset.mimeType.startsWith("video/") -> ChatAttachmentKind.VIDEO
-                else -> return null
+                asset.mimeType.startsWith("audio/") -> ChatAttachmentKind.AUDIO
+                else -> ChatAttachmentKind.FILE
             }
             (attachmentStore.openVerified(asset) as? com.nanzhufeng.ai.domain.AttachmentOpenResult.Opened)
                 ?.takeIf { it.byteCount <= CONVERSATION_ATTACHMENT_MAX_BYTES }
@@ -635,6 +855,8 @@ class NormalChatOpenRouterExecutor(
         ChatAttachmentKind.IMAGE -> "image"
         ChatAttachmentKind.PDF -> "document.pdf"
         ChatAttachmentKind.VIDEO -> "video.mp4"
+        ChatAttachmentKind.AUDIO -> "audio"
+        ChatAttachmentKind.FILE -> "document"
     }
 
 

@@ -1,5 +1,7 @@
 # 南枫 AI P2-D 模型设置与本机凭据合同
 
+> **当前 Android UI 路由（2026-08-26）：** 本文保留配置、Keystore、Provider Registry 与错误的领域边界。Android 模型与联网、模型设置、调用／费用／上下文／诊断的页面层级、控件、文案、主题、暗色皮肤、测试反馈和弹层只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)。本文早期 Dialog、预设和只读状态文案不得成为当前 UI 规则。
+
 日期：2026-08-12  
 状态：已实现本地配置、Keystore 凭据、最小可见设置 UI 与结构化错误合同；真实目录和 Provider 调用不在本增量
 

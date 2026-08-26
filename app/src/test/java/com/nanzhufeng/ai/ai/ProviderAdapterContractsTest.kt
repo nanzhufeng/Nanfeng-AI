@@ -22,6 +22,27 @@ class ProviderAdapterContractsTest {
         assertEquals(4L, decoded?.outputTokens)
     }
 
+    @Test fun `OpenRouter usage cost is converted to persisted USD micro units without losing a valid zero`() {
+        val charged = OpenRouterChatAdapter().decodeNonStreaming(
+            """{"choices":[{"message":{"content":"完成"}}],"usage":{"prompt_tokens":12,"completion_tokens":4,"cost":0.00521}}""",
+        ) as? ChatAdapterDecodedResult.Text
+        val free = OpenRouterChatAdapter().decodeNonStreaming(
+            """{"choices":[{"message":{"content":"免费"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"cost":0}}""",
+        ) as? ChatAdapterDecodedResult.Text
+
+        assertEquals(5_210L, charged?.reportedCostUsdMicros)
+        assertEquals(0L, free?.reportedCostUsdMicros)
+    }
+
+    @Test fun `OpenRouter citations are retained as provider sources and become source chips later`() {
+        val decoded = OpenAiCompatibleProbe().decodeNonStreaming(
+            """{"choices":[{"message":{"content":"已核验","annotations":[{"type":"url_citation","url_citation":{"url":"https://example.com/news","title":"官方公告"}}]}}]}""",
+        ) as? ChatAdapterDecodedResult.Text
+
+        assertEquals(listOf(ProviderWebSource("https://example.com/news", "官方公告")), decoded?.webSources)
+        assertTrue(appendProviderWebSources(decoded!!.text, decoded.webSources).contains("[官方公告](https://example.com/news)"))
+    }
+
     @Test fun `accepted long reply is not silently clipped by the adapter`() {
         val content = "答".repeat(12_001)
         val decoded = OpenAiCompatibleProbe().decodeNonStreaming(
@@ -37,7 +58,7 @@ class ProviderAdapterContractsTest {
         assertFalse(declaration.contains(": OpenRouterChatAdapter"))
         assertTrue(declaration.contains("override fun prepare"))
         val qwenSerializer = source.substringAfter("private fun qwenMultimodalBody").substringBefore("/** OpenAI-compatible JSON projection")
-        assertTrue(qwenSerializer.contains("file_data"))
+        assertTrue(qwenSerializer.contains("inlineUtf8TextFiles"))
         assertTrue(qwenSerializer.contains("video_url"))
         assertTrue(qwenSerializer.contains("Base64File"))
     }
@@ -63,6 +84,89 @@ class ProviderAdapterContractsTest {
         assertTrue(body.contains("\"filename\":\"report.pdf\""))
     }
 
+    @Test fun `Qwen standard model can combine image analysis with its official chat-completions search`() {
+        val attachment = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "chart.png", byteArrayOf(1, 2, 3))
+        val model = model().copy(
+            providerId = com.nanzhufeng.ai.domain.ProviderId.QWEN,
+            capabilities = com.nanzhufeng.ai.domain.ModelCapabilities(true, true, true, false),
+        )
+        val options = ChatRequestOptions(OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS)
+        val ready = QwenChatAdapter().prepare(model, listOf("user" to "分析这张图"), listOf(attachment), stream = true, options = options) as ChatAdapterPrepareResult.Ready
+        val output = java.io.ByteArrayOutputStream()
+        ready.body.writeTo(output)
+        val body = output.toString(Charsets.UTF_8)
+
+        assertTrue(body.contains("\"enable_search\":true"))
+        assertTrue(body.contains("\"forced_search\":true"))
+        assertTrue(body.contains("\"image_url\":{\"url\":\"data:image/png;base64,AQID\"}"))
+    }
+
+    @Test fun `Qwen textual attachment uses a string message instead of an unsupported file part`() {
+        val attachment = ChatAttachment(ChatAttachmentKind.FILE, "text/markdown", "notes.md", "# 标题\n正文".toByteArray())
+        val model = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.QWEN)
+        val ready = QwenChatAdapter().prepare(model, listOf("user" to "整理这份笔记"), listOf(attachment), stream = false) as ChatAdapterPrepareResult.Ready
+
+        assertTrue(ready.jsonBody.contains("以下是文件 notes.md 的完整 UTF-8 文本"))
+        assertTrue(ready.jsonBody.contains("# 标题\\n正文"))
+        assertFalse(ready.jsonBody.contains("\"type\":\"file\""))
+        assertFalse(ready.jsonBody.contains("\"content\":["))
+    }
+
+    @Test fun `OpenRouter image and markdown request keeps both materials model visible`() {
+        val image = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "marked.png", byteArrayOf(1, 2, 3))
+        val markdown = ChatAttachment(ChatAttachmentKind.FILE, "text/markdown", "design.md", "# 顶栏\n去掉硬边".toByteArray())
+        val ready = OpenRouterChatAdapter().prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER),
+            listOf("user" to "请同时检查图片和开发文档"), listOf(image, markdown), stream = true,
+        ) as ChatAdapterPrepareResult.Ready
+        val output = java.io.ByteArrayOutputStream()
+        ready.body.writeTo(output)
+        val body = output.toString(Charsets.UTF_8)
+
+        assertEquals(ready.body.contentLength, body.toByteArray().size.toLong())
+        assertTrue(body.contains("以下是文件 design.md 的完整 UTF-8 文本"))
+        assertTrue(body.contains("# 顶栏\\n去掉硬边"))
+        assertTrue(body.contains("\"image_url\":{\"url\":\"data:image/png;base64,AQID\"}"))
+        assertFalse(body.contains("\"filename\":\"design.md\""))
+        assertFalse(body.contains("\"file_data\":\"data:text/markdown"))
+    }
+
+    @Test fun `OpenRouter rejects unknown binary file instead of pretending it was sent`() {
+        val archive = ChatAttachment(ChatAttachmentKind.FILE, "application/zip", "source.zip", byteArrayOf(1, 2, 3))
+
+        assertTrue(
+            OpenRouterChatAdapter().prepare(
+                model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER),
+                emptyList(), listOf(archive), stream = true,
+            ) is ChatAdapterPrepareResult.AttachmentUnsupported,
+        )
+    }
+
+    @Test fun `OpenRouter keeps every supported attachment modality in one request`() {
+        val attachments = listOf(
+            ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "screen.png", byteArrayOf(1, 2, 3)),
+            ChatAttachment(ChatAttachmentKind.PDF, "application/pdf", "brief.pdf", "%PDF".toByteArray()),
+            ChatAttachment(ChatAttachmentKind.VIDEO, "video/mp4", "clip.mp4", byteArrayOf(4, 5, 6)),
+            ChatAttachment(ChatAttachmentKind.AUDIO, "audio/mpeg", "memo.mp3", byteArrayOf(7, 8, 9)),
+            ChatAttachment(ChatAttachmentKind.FILE, "text/markdown", "notes.md", "# 说明".toByteArray()),
+        )
+        val ready = OpenRouterChatAdapter().prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER),
+            listOf("user" to "逐项检查这些材料"), attachments, stream = true,
+        ) as ChatAdapterPrepareResult.Ready
+        val output = java.io.ByteArrayOutputStream()
+        ready.body.writeTo(output)
+        val body = output.toString(Charsets.UTF_8)
+
+        assertEquals(ready.body.contentLength, body.toByteArray().size.toLong())
+        assertTrue(body.contains("\"image_url\":{\"url\":\"data:image/png;base64,AQID\"}"))
+        assertTrue(body.contains("\"file_data\":\"data:application/pdf;base64,JVBERg==\""))
+        assertTrue(body.contains("\"video_url\":{\"url\":\"data:video/mp4;base64,BAUG\"}"))
+        assertTrue(body.contains("\"input_audio\":{\"data\":\"BwgJ\",\"format\":\"mp3\"}"))
+        assertTrue(body.contains("以下是文件 notes.md 的完整 UTF-8 文本"))
+        assertFalse(body.contains("\"file_data\":\"data:text/markdown"))
+    }
+
     @Test fun `OpenRouter image request streams source bytes instead of materializing a base64 string`() {
         val attachment = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "image.png", byteArrayOf(1, 2, 3))
         val model = model().copy(
@@ -76,7 +180,7 @@ class ProviderAdapterContractsTest {
 
         assertEquals(ready.body.contentLength, body.toByteArray().size.toLong())
         assertTrue(body.contains("\"image_url\":{\"url\":\"data:image/png;base64,AQID\"}"))
-        assertTrue(body.contains("\"stream_options\":{\"include_usage\":true}"))
+        assertFalse(body.contains("stream_options"))
     }
 
     @Test fun `OpenRouter gateway reference stays a URL and is never reencoded as base64`() {
@@ -94,6 +198,21 @@ class ProviderAdapterContractsTest {
         assertTrue(body.contains("\"file_data\":\"https://gateway.example.test/v1/attachments/a/content?expires=1&signature=x\""))
         assertFalse(body.contains("data:application/pdf;base64"))
         assertTrue(QwenChatAdapter().prepare(model.copy(providerId = com.nanzhufeng.ai.domain.ProviderId.QWEN), emptyList(), listOf(attachment), stream = false) is ChatAdapterPrepareResult.AttachmentUnsupported)
+    }
+
+    @Test fun `OpenRouter audio request uses input audio with raw base64 and format`() {
+        val attachment = ChatAttachment(ChatAttachmentKind.AUDIO, "audio/mpeg", "memo.mp3", byteArrayOf(1, 2, 3))
+        val ready = OpenRouterChatAdapter().prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER),
+            listOf("user" to "请转写"), listOf(attachment), stream = false,
+        ) as ChatAdapterPrepareResult.Ready
+        val output = java.io.ByteArrayOutputStream()
+        ready.body.writeTo(output)
+        val body = output.toString(Charsets.UTF_8)
+
+        assertTrue(body.contains("\"type\":\"input_audio\""))
+        assertTrue(body.contains("\"data\":\"AQID\",\"format\":\"mp3\""))
+        assertFalse(body.contains("data:audio/mpeg;base64"))
     }
 
     @Test fun `tool only non streaming response is explicit instead of a fake empty answer`() {
@@ -131,39 +250,66 @@ class ProviderAdapterContractsTest {
         assertFalse(ready.jsonBody.contains("stream_options"))
     }
 
-    @Test fun `each deep route uses its own documented official web-search protocol`() {
+    @Test fun `each explicit web route uses its own documented protocol without relaying a model`() {
         val openRouter = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER)
-        val deepChoice = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.deep.first { it.label == "Claude Opus 5" }
-        val options = OpenRouterChatAdapter().requestOptions(openRouter, deepChoice)
+        val options = ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)
         val grounded = OpenRouterChatAdapter().prepare(openRouter, listOf("user" to "查一下最新财报"), emptyList(), stream = false, options = options) as ChatAdapterPrepareResult.Ready
 
         assertTrue(options.liveWebSearch)
         assertEquals(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL, options.webSearchRoute)
         assertTrue(grounded.jsonBody.contains("\"type\":\"openrouter:web_search\""))
+        assertFalse(OpenRouterChatAdapter().supportsStreaming(openRouter, options))
         val qwen = QwenChatAdapter()
-        val qwenOptions = qwen.requestOptions(model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.QWEN), deepChoice)
+        val qwenOptions = ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
         val qwenGrounded = qwen.prepare(model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.QWEN), listOf("user" to "查一下最新财报"), emptyList(), stream = false, options = qwenOptions) as ChatAdapterPrepareResult.Ready
-        assertEquals(OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS, qwenOptions.webSearchRoute)
-        assertTrue(qwenGrounded.jsonBody.contains("\"enable_search\":true"))
+        assertEquals(OfficialWebSearchRoute.QWEN_RESPONSES, qwenOptions.webSearchRoute)
+        assertEquals("/responses", qwen.endpointPath(qwenOptions))
+        assertFalse(qwen.supportsStreaming(openRouter, qwenOptions))
+        assertTrue(qwenGrounded.jsonBody.contains("\"tools\":[{\"type\":\"web_search\"}]"))
+        assertFalse(qwenGrounded.jsonBody.contains("\"tool_choice\""))
 
         val deepSeek = DeepSeekChatAdapter()
-        val deepSeekChoice = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.deep.first { it.label == "DeepSeek V4 Pro" }
-        val deepSeekOptions = deepSeek.requestOptions(model(), deepSeekChoice)
-        val deepSeekGrounded = deepSeek.prepare(model(), listOf("user" to "查一下最新财报"), emptyList(), stream = false, options = deepSeekOptions) as ChatAdapterPrepareResult.Ready
-        assertEquals(OfficialWebSearchRoute.QWEN_RESPONSES, deepSeekOptions.webSearchRoute)
-        assertEquals(com.nanzhufeng.ai.domain.ProviderId.QWEN, deepSeek.executionProviderId(deepSeekOptions))
+        val deepSeekOptions = ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
+        val deepSeekDirect = deepSeek.prepare(model(), listOf("user" to "复杂推理"), emptyList(), stream = false, options = deepSeekOptions) as ChatAdapterPrepareResult.Ready
+        assertEquals(OfficialWebSearchRoute.DEEPSEEK_RESPONSES, deepSeekOptions.webSearchRoute)
+        assertEquals(com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, deepSeek.executionProviderId(deepSeekOptions))
         assertEquals("/responses", deepSeek.endpointPath(deepSeekOptions))
-        assertFalse(deepSeek.supportsStreaming(model(), deepSeekOptions))
-        assertTrue(deepSeekGrounded.jsonBody.contains("\"tools\":[{\"type\":\"web_search\"}]"))
+        assertFalse(deepSeek.supportsStreaming(openRouter, deepSeekOptions))
+        assertTrue(deepSeekDirect.jsonBody.contains("\"tools\":[{\"type\":\"web_search\"}]"))
+        assertTrue(deepSeekDirect.jsonBody.contains("\"tool_choice\":{\"type\":\"web_search\"}"))
+        assertTrue(deepSeekDirect.jsonBody.contains("\"input\":[{\"role\":\"user\""))
+        assertFalse(deepSeekDirect.jsonBody.contains("\"messages\":"))
     }
 
-    @Test fun `Qwen Responses deepseek result has a dedicated non chat-completions projection`() {
+    @Test fun `a deep model selection alone never adds a web tool`() {
+        val openRouter = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER)
+        val deepChoice = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.deep.first { it.label == "Claude Opus 5" }
+
+        assertEquals(ChatRequestOptions.Standard, OpenRouterChatAdapter().requestOptions(openRouter, deepChoice))
+        assertEquals(ChatRequestOptions.Standard, QwenChatAdapter().requestOptions(model(), deepChoice))
+        assertEquals(ChatRequestOptions.Standard, DeepSeekChatAdapter().requestOptions(model(), deepChoice))
+    }
+
+    @Test fun `DeepSeek Responses result keeps final text and structured public search sources`() {
         val decoded = DeepSeekChatAdapter().decodeNonStreaming(
-            """{"output_text":"已根据实时来源完成检索。","usage":{"input_tokens":9,"output_tokens":3}}""",
+            """{"output_text":"已完成检索。","output":[{"type":"web_search_call","action":{"sources":[{"url":"https://example.test/notice","title":"官方公告"}]}},{"type":"message","content":[{"type":"output_text","text":"已完成检索。"}]}],"usage":{"input_tokens":8,"input_tokens_details":{"cached_tokens":3},"output_tokens":5}}""",
+        ) as? ChatAdapterDecodedResult.Text
+
+        assertEquals("已完成检索。", decoded?.text)
+        assertEquals(8L, decoded?.inputTokens)
+        assertEquals(3L, decoded?.cachedInputTokens)
+        assertEquals(5L, decoded?.outputTokens)
+        assertEquals(listOf(ProviderWebSource("https://example.test/notice", "官方公告")), decoded?.webSources)
+    }
+
+    @Test fun `Qwen Responses result keeps its public web-search source separately from model prose`() {
+        val decoded = QwenChatAdapter().decodeNonStreaming(
+            """{"output_text":"已根据实时来源完成检索。","output":[{"type":"web_search_call","action":{"sources":[{"url":"https://news.example.test/item","title":"公告"}]}}],"usage":{"input_tokens":9,"output_tokens":3}}""",
         ) as? ChatAdapterDecodedResult.Text
         assertEquals("已根据实时来源完成检索。", decoded?.text)
         assertEquals(9L, decoded?.inputTokens)
         assertEquals(3L, decoded?.outputTokens)
+        assertEquals(listOf(ProviderWebSource("https://news.example.test/item", "公告")), decoded?.webSources)
     }
 
     @Test fun `attachment budget comes from model profile metadata rather than adapter constants`() {
@@ -171,6 +317,8 @@ class ProviderAdapterContractsTest {
         assertEquals(10, ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "a.png", ByteArray(1)).estimatedInputTokens(profile))
         assertEquals(20, ChatAttachment(ChatAttachmentKind.PDF, "application/pdf", "a.pdf", ByteArray(1)).estimatedInputTokens(profile))
         assertEquals(30, ChatAttachment(ChatAttachmentKind.VIDEO, "video/mp4", "a.mp4", ByteArray(1)).estimatedInputTokens(profile))
+        assertEquals(30, ChatAttachment(ChatAttachmentKind.AUDIO, "audio/mpeg", "a.mp3", ByteArray(1)).estimatedInputTokens(profile))
+        assertEquals(20, ChatAttachment(ChatAttachmentKind.FILE, "text/plain", "a.txt", ByteArray(1)).estimatedInputTokens(profile))
     }
 
     @Test fun `Qwen native PDF keeps the official long first token deadline without slowing other requests`() {

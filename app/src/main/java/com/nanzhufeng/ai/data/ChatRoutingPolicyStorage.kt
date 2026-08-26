@@ -12,10 +12,10 @@ class AndroidChatRoutingPolicyRepository(context: Context) : ChatRoutingPolicyRe
     override fun load(): ChatRoutingPolicy = ChatRoutingPolicy(
         autoRoutingEnabled = preferences.getBoolean(AUTO_ROUTING, true),
         automaticFallbackEnabled = preferences.getBoolean(AUTOMATIC_FALLBACK, true),
-        qualityEscalationEnabled = preferences.getBoolean(QUALITY_ESCALATION, true),
-        crossModelReviewPolicy = preferences.getString(CROSS_MODEL_REVIEW, CrossModelReviewPolicy.IMPORTANT_ONLY.name)
+        qualityEscalationEnabled = preferences.getBoolean(QUALITY_ESCALATION, false),
+        crossModelReviewPolicy = preferences.getString(CROSS_MODEL_REVIEW, CrossModelReviewPolicy.NEVER.name)
             ?.let { runCatching { CrossModelReviewPolicy.valueOf(it) }.getOrNull() }
-            ?: CrossModelReviewPolicy.IMPORTANT_ONLY,
+            ?: CrossModelReviewPolicy.NEVER,
         crossProviderFallbackEnabled = preferences.getBoolean(CROSS_PROVIDER_FALLBACK, false),
     )
 

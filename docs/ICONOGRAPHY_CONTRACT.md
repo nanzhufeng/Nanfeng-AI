@@ -1,5 +1,7 @@
 # 图标语汇合同
 
+> **当前 Android UI 路由（2026-08-26）：** 本文保留图标资产来源、语义映射、可访问名称与 launcher 资产边界。圆润／Q 版外观、暗浅色颜色、设置入口图标区分和实际尺寸以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 与 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md) 为准；本文不得反向指定尖锐轮廓或过黑外观。
+
 状态：FB-P6-029 CLOSED；FB-P6-033 PASSED（非 OPPO）。常用动作沿用成熟资产，launcher/Dock 仅可由 FB-P6-033 的不可变用户 master 派生。
 
 ## 唯一来源
@@ -7,7 +9,7 @@
 - Desktop：`desktop/src/icon-source.mjs` 只承载 Lucide（MIT）官方 SVG 节点的受控映射；不得新画 path、CSS art、emoji 或裁切截图。
 - Android：只使用 AndroidX Material Symbols / Material Icons 的已发布资产；`ic_lucide_ghost.xml` 是既有 Lucide 官方资产，不是手绘替代。
 - 每个图标都有可访问名称；Desktop 使用 `title`/`aria-label`，Android 使用 `contentDescription`。视觉 size 与 hit target 可按平台调整，语义不得漂移。
-- Launcher/Dock 不属于动作图标映射：唯一输入为 `artwork/source/nanfeng_ai_launcher_icon_master_20260814.png`（SHA-256 `a0335d3c581fbfe155c02a6d7cbcfb6509606604e9136e705c79311441eb27f4`）。完整 master 等比适配平台方形画布，禁止裁切、拉伸、重画、调色、托盘、外框或伪阴影；原图白色连续背景及原生阴影必须保留。
+- Launcher/Dock 不属于动作图标映射。Desktop 仍只由 `artwork/source/nanfeng_ai_launcher_icon_master_20260814.png`（SHA-256 `a0335d3c581fbfe155c02a6d7cbcfb6509606604e9136e705c79311441eb27f4`）派生。Android 当前来源是用户明确授权的 `app/src/main/icon-source/nanfeng_ai_launcher_q_rounded_scale90_leaf_filled_source.png`（SHA-256 `442cf528f54abf16ef8bfd7922cfd408b104c2f233e487692bbd291a94b95ef2`）：仅把枫叶内部填为白色实心，并将其上的 AI 字样改回同一橙色以保持可读；不得再裁切、拉伸、改变其余比例、添加托盘、外框或伪阴影。
 
 ## P6-H 映射
 

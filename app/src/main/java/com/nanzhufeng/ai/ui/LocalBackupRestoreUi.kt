@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,19 +50,21 @@ class LocalBackupRestoreViewModel(private val manager: LocalBackupRestoreManager
     class Factory(private val manager: LocalBackupRestoreManager) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = LocalBackupRestoreViewModel(manager) as T }
 }
 
-@Composable internal fun LocalBackupRestoreDialog(state: LocalBackupUiState, onDismiss: () -> Unit, onExport: () -> Unit, onImport: () -> Unit, onReplace: (Boolean) -> Unit, onRestore: () -> Unit, onCancel: () -> Unit) = AlertDialog(
-    onDismissRequest = onDismiss, containerColor = Color.White, title = { Text("备份与恢复") },
-    text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("手工本地备份，不等于云同步。包含一致性数据库快照与必要私有资产；不会包含 Provider 凭据、路由偏好、诊断、导出或签名信息。", color = SecondaryText)
-        OutlinedButton(onClick = onExport, enabled = !state.working, modifier = Modifier.fillMaxWidth(), shape = P5AInteractiveShape) { Text("选择位置导出完整备份") }
-        OutlinedButton(onClick = onImport, enabled = !state.working, modifier = Modifier.fillMaxWidth(), shape = P5AInteractiveShape) { Text("选择备份包并严格预检") }
+@Composable internal fun LocalBackupRestorePage(state: LocalBackupUiState, onExport: () -> Unit, onImport: () -> Unit, onReplace: (Boolean) -> Unit, onRestore: () -> Unit, onCancel: () -> Unit, grouped: Boolean = false) = Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (grouped) 0.dp else 10.dp)) {
+        if (grouped) {
+            DataStorageGroupedActionRow(label = "备份", onClick = onExport, enabled = !state.working, working = state.working)
+            DataStorageGroupedDivider()
+            DataStorageGroupedActionRow(label = "恢复", onClick = onImport, enabled = !state.working, working = state.working)
+        } else {
+            OutlinedButton(onClick = onExport, enabled = !state.working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("备份") }
+            OutlinedButton(onClick = onImport, enabled = !state.working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("恢复") }
+        }
         state.preflight?.let { p ->
             Text("预检：格式 ${p.format} v${p.version} · Schema ${p.schemaVersion} · 资产 ${p.assetBytes} B")
             Text("数据：" + p.tableCounts.entries.sortedBy { it.key }.joinToString(" · ") { "${it.key} ${it.value}" }, color = SecondaryText)
-            if (p.conflicts.isNotEmpty()) { Text(p.conflicts.joinToString("\n"), color = ErrorRed); OutlinedButton(onClick = { onReplace(false) }, enabled = !state.working, modifier = Modifier.fillMaxWidth(), shape = P5AInteractiveShape) { Text("取消，不替换本地") }; Button(onClick = { onReplace(true) }, enabled = !state.working, modifier = Modifier.fillMaxWidth(), shape = P5AInteractiveShape) { Text(if (state.replaceLocal) "已选择：替换本地" else "选择替换本地（强确认）") } }
-            Button(onClick = onRestore, enabled = !state.working && (p.conflicts.isEmpty() || state.replaceLocal), modifier = Modifier.fillMaxWidth(), shape = P5AInteractiveShape) { Text("恢复并要求重启") }
-            OutlinedButton(onClick = onCancel, enabled = !state.working, modifier = Modifier.fillMaxWidth(), shape = P5AInteractiveShape) { Text("取消此次恢复") }
+            if (p.conflicts.isNotEmpty()) { Text(p.conflicts.joinToString("\n"), color = ErrorRed); OutlinedButton(onClick = { onReplace(false) }, enabled = !state.working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("取消，不替换本地") }; Button(onClick = { onReplace(true) }, enabled = !state.working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text(if (state.replaceLocal) "已选择：替换本地" else "选择替换本地（强确认）") } }
+            Button(onClick = onRestore, enabled = !state.working && (p.conflicts.isEmpty() || state.replaceLocal), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("恢复并要求重启") }
+            OutlinedButton(onClick = onCancel, enabled = !state.working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("取消此次恢复") }
         }
-        state.notice?.let { Text(it, color = BrandGreen) }; state.error?.let { Text(it, color = ErrorRed) }
-    } }, confirmButton = { OutlinedButton(onClick = onDismiss, enabled = !state.working, shape = P5AInteractiveShape) { Text("关闭") } },
-)
+    state.notice?.let { Text(it, color = BrandGreen) }; state.error?.let { Text(it, color = ErrorRed) }
+}

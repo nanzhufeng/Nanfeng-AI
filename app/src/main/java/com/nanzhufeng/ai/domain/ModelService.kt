@@ -136,6 +136,45 @@ object NanfengModelServiceCatalog {
     }
 }
 
+/**
+ * The curated model catalog is the single user-facing naming source for Composer and transcript
+ * metadata. Transport/vendor information remains in attribution and consent facts, never in a
+ * model-name slot.
+ */
+fun modelDisplayNameForUser(displayName: String): String {
+    val raw = displayName.trim().removePrefix("模型：").trim()
+    NanfengModelServiceCatalog.presets
+        .sortedByDescending { it.displayName.length }
+        .firstOrNull { preset -> raw.contains(preset.displayName, ignoreCase = true) }
+        ?.let { return it.displayName }
+    return raw
+        .replaceFirst(Regex("^(?:OpenRouter|Google|通义千问|Qwen 官方直连|DeepSeek 官方直连)\\s*(?:[·:：]\\s*)"), "")
+        .substringBefore(" · ")
+        .trim()
+        .ifBlank { raw }
+}
+
+/**
+ * Composer is intentionally the sole compact-name surface: its narrow 88dp control needs the
+ * meaningful model suffix, while pickers, settings and persisted message attribution keep the
+ * catalog's full display name.
+ */
+fun composerModelShortNameForUser(displayName: String): String = when (modelDisplayNameForUser(displayName)) {
+    "Claude Fable 5" -> "Fable 5"
+    "Claude Opus 5" -> "Opus 5"
+    "Claude Sonnet 5" -> "Sonnet 5"
+    "Claude Haiku 4.5" -> "Haiku 4.5"
+    "GPT-5.6 Sol" -> "5.6 Sol"
+    "GPT-5.6 Terra" -> "5.6 Terra"
+    "GPT-5.6 Luna" -> "5.6 Luna"
+    "Gemini 3.7 Flash" -> "3.7 Flash"
+    "Qwen3.7-Plus" -> "3.7-Plus"
+    "Qwen3.8-Max" -> "3.8-Max"
+    "Qwen3.6 Flash" -> "3.6 Flash"
+    "DeepSeek V4 Pro" -> "V4 Pro"
+    else -> modelDisplayNameForUser(displayName)
+}
+
 sealed interface SaveModelServiceConfigurationResult {
     data class Saved(val configuration: ModelServiceConfiguration) : SaveModelServiceConfigurationResult
     data class Rejected(val error: AiTaskError) : SaveModelServiceConfigurationResult

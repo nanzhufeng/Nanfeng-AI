@@ -1,8 +1,21 @@
 # 南枫 AI Android / macOS 图标交付
 
-> 日期：2026-08-15（FB-P6-033；FB-P6-035；FB-P6-076 Android 额外缩小 25%）  
-> 状态：Desktop 保持已验 0.85 光学资源；Android 已按用户 OPPO 截图改为不可变 master 的 0.6375 直接派生，并通过静态链、正式签名包与 OPPO ColorOS Launcher 实际复核。  
-> 系统 Dock AX 通道不可用已如实记录；OPPO/ColorOS OEM Launcher 仍是后续另行授权硬件门，不阻断本次 P6-H 非 OPPO 退出。
+> 当前 Android 图标来源与规则以“2026-08-24 当前 Android 替换”为准；下方 2026-08-15 条目仅保留历史交付证据，不能再作为资源输入、颜色、缩放或验收结论。
+
+## 2026-08-25 Android 枫叶白色实心填充
+
+- **母版：** 在保留 `nanfeng_ai_launcher_source.jpg` 原件不变的前提下，新增 Android 专用母版 `app/src/main/icon-source/nanfeng_ai_launcher_q_rounded_scale90_leaf_filled_source.png`（1254 × 1254、RGBA、SHA-256 `442cf528f54abf16ef8bfd7922cfd408b104c2f233e487692bbd291a94b95ef2`）。按用户明确指示，枫叶内部改为纯白实心；为使白叶上的 AI 保持可读，AI 字样改为同一橙色。圆角、原有比例、边距、透明角与 Android 适配层不变。
+- **Android 包装：** `drawable-nodpi` 前景与 mdpi—xxxhdpi 的 `ic_launcher`／`ic_launcher_round` 全部从这份母版一次导出；Manifest 的 `icon`／`roundIcon` 与两份 adaptive XML 没有改动。Desktop 资源未触及。
+- **验证边界：** 静态资源审计与正式构建只能证明资源链，尚未重新在 OPPO Launcher 以保留数据的正式覆盖包验收。
+
+## 2026-08-24 当前 Android 替换
+
+- **母版：** 用户提供的最初原件 `app/src/main/icon-source/nanfeng_ai_launcher_source.jpg`（1254 × 1254、RGB JPEG、SHA-256 `9d81a42b59d18c8517beb88943649cc554c8305d7c3c7b518479b21ca169336e`）完整保留，不被覆盖。当前 Android 母版为 `app/src/main/icon-source/nanfeng_ai_launcher_q_rounded_scale90_tuned_source.png`（1254 × 1254、RGBA PNG、SHA-256 `1e7aff38fce15afdd39df431402b78765330be8afd5a24bb9e81a993b665bf3f`）：在获授权的 Q 版粗圆白色标记基础上，以图标中心缩小主体约 10%；只把橙色背景从上一版的 `#D87652` 轻调为 `#E1764E`，提高亮度和饱和度而不改变圆角、构图、外缘留白或识别结构。
+- **Android 包装：** Manifest 的 `android:icon` 与 `android:roundIcon` 仍共同指向 `@mipmap/ic_launcher` / `@mipmap/ic_launcher_round`；API 26+ 两套 adaptive XML 共享同一组背景/前景。背景是与当前母版一致的连续不透明 `#E1764E`；`scripts/prepare_nanfeng_ai_launcher_foreground.swift` 只将与画布外缘连通的白色画布转为透明，绝不触碰独立的白色标记。前景层以对称 `13.5dp` inset 交给 ColorOS 的 adaptive mask，作为可测量的 OEM 归一化补偿，避免裁到图案边缘且不改变其内部比例。
+- **兼容资源：** mdpi 至 xxxhdpi 的 `ic_launcher` 与 `ic_launcher_round` 都直接从新版母版一次性等比导出；Desktop 图标资源不随本次 Android 替换改动。
+- **真机验收：** 静态资源链、构建和签名只能证明包装正确；已在 OPPO Find N5 以保留数据的同签名覆盖方式回到真实 Launcher。稳定截图 `/tmp/nanfeng-ai-launcher-q-scale90.png` 显示主体缩小后仍清晰、白色标记四边完整，橙黄底轻微提亮且无 ColorOS 裁切或新增托盘；仍需用户按个人审美确认最终视觉大小。
+
+## 历史记录：2026-08-15（不再作为当前输入）
 
 ## 不可变原件与保真边界
 

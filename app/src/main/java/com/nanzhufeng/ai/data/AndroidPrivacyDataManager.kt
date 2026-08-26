@@ -266,7 +266,7 @@ class AndroidPrivacyDataManager(
     private fun clearBusinessPreferences() {
         listOf(
             "model_service_settings_v1", "provider_credentials_v1", "p5a_ui",
-            "direct_chat_call_audit_v1", "model-health-v1",
+            "direct_chat_call_audit_v1", "model-health-v1", "conversation_read_markers_v1",
         ).forEach { context.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit() }
     }
     private fun deleteStaged(pending: File): Int = pending.walkBottomUp().count { file -> file.exists() && !fileDeleter(file) }

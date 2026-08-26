@@ -30,7 +30,7 @@ import com.nanzhufeng.ai.domain.ProjectId
 import com.nanzhufeng.ai.domain.ProjectListScope
 
 @Composable
-fun ProjectWorkspaceDialog(state: ProjectUiState, viewModel: ProjectViewModel) {
+fun ProjectWorkspacePage(state: ProjectUiState, viewModel: ProjectViewModel) {
     var editingInstruction by rememberSaveable { mutableStateOf(false) }
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
@@ -42,13 +42,7 @@ fun ProjectWorkspaceDialog(state: ProjectUiState, viewModel: ProjectViewModel) {
         }
     }
     val selected = state.projects.firstOrNull { it.project.id == state.selectedProjectId }
-    AlertDialog(
-        onDismissRequest = viewModel::dismissDialog,
-        containerColor = Color.White,
-        shape = RoundedCornerShape(24.dp),
-        title = { Text("项目", fontWeight = FontWeight.SemiBold) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("项目、项目指令和知识范围只保存在本机；不会构造 Prompt、读取 Key 或连接 Provider。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { viewModel.setScope(ProjectListScope.ACTIVE) }, shape = RoundedCornerShape(14.dp)) { Text("活动") }
@@ -77,18 +71,15 @@ fun ProjectWorkspaceDialog(state: ProjectUiState, viewModel: ProjectViewModel) {
                         Text("r${revision.revision} · ${if (revision.isEmptyInstruction) "已清空指令" else "用户指令"} · ${revision.contentHash.take(12)}", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
                     }
                 }
-                state.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SecondaryText) }
-            }
-        },
-        confirmButton = { TextButton(onClick = viewModel::dismissDialog, shape = RoundedCornerShape(14.dp)) { Text("完成") } },
-    )
+        state.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SecondaryText) }
+    }
     if (state.createDialogVisible) AlertDialog(
-        onDismissRequest = viewModel::dismissCreateDialog, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("新建项目") },
+        onDismissRequest = viewModel::dismissCreateDialog, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text("新建项目") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(title, { title = it }, label = { Text("项目标题") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(description, { description = it }, label = { Text("项目说明（可选）") }, modifier = Modifier.fillMaxWidth()) } },
         confirmButton = { Button(onClick = { viewModel.create(title, description); viewModel.dismissCreateDialog() }, shape = RoundedCornerShape(14.dp)) { Text("创建") } }, dismissButton = { TextButton(onClick = viewModel::dismissCreateDialog, shape = RoundedCornerShape(14.dp)) { Text("取消") } },
     )
     selected?.let { snapshot -> if (editingInstruction) AlertDialog(
-        onDismissRequest = { editingInstruction = false }, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("项目指令") },
+        onDismissRequest = { editingInstruction = false }, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text("项目指令") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("空内容会产生一条可审计的“已清空”修订。项目指令不能覆盖系统或安全规则。", style = MaterialTheme.typography.bodySmall, color = SecondaryText); OutlinedTextField(instruction, { instruction = it }, minLines = 5, label = { Text("用户拥有的本地指令") }, modifier = Modifier.fillMaxWidth().p5aKeyboardTraversal()) } },
         confirmButton = { Button(onClick = { viewModel.updateInstruction(snapshot.project.id, instruction); editingInstruction = false }, shape = RoundedCornerShape(14.dp)) { Text("保存新修订") } }, dismissButton = { TextButton(onClick = { editingInstruction = false }, shape = RoundedCornerShape(14.dp)) { Text("取消") } },
     ) }
@@ -100,7 +91,7 @@ fun ProjectAssignmentDialog(
     onAssign: (ProjectId?, Boolean) -> Unit, onDismiss: () -> Unit,
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss, containerColor = Color.White, shape = RoundedCornerShape(24.dp), title = { Text("归入项目") },
+        onDismissRequest = onDismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text("归入项目") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("这是本机显式归属操作；不会改变消息树、调用、附件或导出。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)

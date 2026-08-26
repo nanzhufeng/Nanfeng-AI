@@ -11,6 +11,12 @@ package com.nanzhufeng.ai.domain
 class LocalContextBroker(
     private val index: LocalContextIndex,
 ) {
+    /** Memory and Knowledge retrieval each have an explicit user-owned switch; current-path history remains available. */
+    data class RetrievalPolicy(
+        val includeRelevantMemory: Boolean = true,
+        val includeRelevantKnowledge: Boolean = true,
+    )
+
     data class Package(
         val messages: List<Message>,
         val selectedKnowledgeCount: Int,
@@ -34,6 +40,7 @@ class LocalContextBroker(
         budget: ContextBudget = ContextBudget.safeDefault(),
         attachmentInputTokens: Int = 0,
         fixedInstructionTokens: Int = 0,
+        policy: RetrievalPolicy = RetrievalPolicy(),
     ): Package {
         val tokenizerId = budget.tokenizerId
         val effectiveBudget = budget.reserveFixedInput(
@@ -52,8 +59,16 @@ class LocalContextBroker(
         val currentUserIndex = allCurrentMessages.indexOfLast { it.role == MessageRole.USER && it.text == userMessage }
         val currentPath = allCurrentMessages.filterIndexed { index, _ -> index != currentUserIndex }
 
-        val memory = index.searchActiveMemories(queryTerms, scope, MEMORY_LIMIT).map(::candidate)
-        val library = index.searchActiveKnowledge(queryTerms, scope, KNOWLEDGE_LIMIT).map(::candidate)
+        val memory = if (policy.includeRelevantMemory) {
+            index.searchActiveMemories(queryTerms, scope, MEMORY_LIMIT).map(::candidate)
+        } else {
+            emptyList()
+        }
+        val library = if (policy.includeRelevantKnowledge) {
+            index.searchActiveKnowledge(queryTerms, scope, KNOWLEDGE_LIMIT).map(::candidate)
+        } else {
+            emptyList()
+        }
         val history = index.searchActiveHistory(queryTerms, scope, HISTORY_LIMIT).map(::candidate)
 
         val sourceMessages = (memory + library + history)

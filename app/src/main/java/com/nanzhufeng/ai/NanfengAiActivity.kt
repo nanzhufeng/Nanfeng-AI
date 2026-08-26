@@ -1,24 +1,40 @@
 package com.nanzhufeng.ai
 
 import android.os.Bundle
+import android.os.SystemClock
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
+import android.graphics.Color
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.nanzhufeng.ai.app.AppContainer
+import com.nanzhufeng.ai.background.NormalChatGenerationForegroundService
 import com.nanzhufeng.ai.BuildConfig
 import com.nanzhufeng.ai.data.AndroidTextShareIntentGate
+import com.nanzhufeng.ai.data.AndroidScheduledMonitorScheduler
 import com.nanzhufeng.ai.ui.CaptureViewModel
 import com.nanzhufeng.ai.ui.NanfengAiApp
 import com.nanzhufeng.ai.ui.ModelSettingsViewModel
 import com.nanzhufeng.ai.ui.InvocationLedgerViewModel
+import com.nanzhufeng.ai.ui.ConversationCostLedgerViewModel
 import com.nanzhufeng.ai.ui.KnowledgeLibraryViewModel
 import com.nanzhufeng.ai.ui.KnowledgeExportViewModel
 import com.nanzhufeng.ai.ui.ConversationFoundationViewModel
 import com.nanzhufeng.ai.ui.ProjectViewModel
 import com.nanzhufeng.ai.ui.MemoryViewModel
 import com.nanzhufeng.ai.ui.ContextBodySelectionViewModel
+import com.nanzhufeng.ai.ui.AssistantExperienceSettingsViewModel
+import com.nanzhufeng.ai.ui.NotificationReminderSettingsViewModel
+import com.nanzhufeng.ai.ui.AppearanceSettingsViewModel
 import com.nanzhufeng.ai.ui.MarkdownKnowledgeImportViewModel
 import com.nanzhufeng.ai.ui.MarkdownKnowledgeExportViewModel
 import com.nanzhufeng.ai.ui.OfflineEvalViewModel
@@ -43,6 +59,7 @@ import com.nanzhufeng.ai.ui.WorkspaceExchangeV2RestoreViewModel
 import com.nanzhufeng.ai.ui.P7DAccountSyncViewModel
 import com.nanzhufeng.ai.ui.DualPathConnectionViewModel
 import com.nanzhufeng.ai.ui.P8ControlledAgentViewModel
+import com.nanzhufeng.ai.ui.ScheduledMonitorViewModel
 import com.nanzhufeng.ai.domain.ConversationId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -58,12 +75,16 @@ class NanfengAiActivity : ComponentActivity() {
     private lateinit var captureViewModel: CaptureViewModel
     private lateinit var modelSettingsViewModel: ModelSettingsViewModel
     private lateinit var invocationLedgerViewModel: InvocationLedgerViewModel
+    private lateinit var conversationCostLedgerViewModel: ConversationCostLedgerViewModel
     private lateinit var knowledgeLibraryViewModel: KnowledgeLibraryViewModel
     private lateinit var knowledgeExportViewModel: KnowledgeExportViewModel
     private lateinit var conversationFoundationViewModel: ConversationFoundationViewModel
     private lateinit var projectViewModel: ProjectViewModel
     private lateinit var memoryViewModel: MemoryViewModel
     private lateinit var contextBodySelectionViewModel: ContextBodySelectionViewModel
+    private lateinit var assistantExperienceSettingsViewModel: AssistantExperienceSettingsViewModel
+    private lateinit var notificationReminderSettingsViewModel: NotificationReminderSettingsViewModel
+    private lateinit var appearanceSettingsViewModel: AppearanceSettingsViewModel
     private lateinit var markdownImportViewModel: MarkdownKnowledgeImportViewModel
     private lateinit var markdownExportViewModel: MarkdownKnowledgeExportViewModel
     private lateinit var offlineEvalViewModel: OfflineEvalViewModel
@@ -84,11 +105,36 @@ class NanfengAiActivity : ComponentActivity() {
     private lateinit var accountSyncViewModel: P7DAccountSyncViewModel
     private lateinit var dualPathConnectionViewModel: DualPathConnectionViewModel
     private lateinit var p8ControlledAgentViewModel: P8ControlledAgentViewModel
+    private lateinit var scheduledMonitorViewModel: ScheduledMonitorViewModel
+    private var normalChatExecutionReceiverRegistered = false
+    private val normalChatExecutionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != NormalChatGenerationForegroundService.ACTION_EXECUTION_STATE_CHANGED) return
+            val conversationId = intent.getStringExtra(NormalChatGenerationForegroundService.EXTRA_CONVERSATION_ID)
+                ?.takeIf(String::isNotBlank)
+                ?.let(::ConversationId)
+                ?: return
+            conversationFoundationViewModel.onNormalChatBackgroundExecutionStateChanged(
+                conversationId,
+                intent.getBooleanExtra(NormalChatGenerationForegroundService.EXTRA_RUNNING, false),
+                intent.getStringExtra(NormalChatGenerationForegroundService.EXTRA_SAFE_RESULT),
+            )
+        }
+    }
     private lateinit var routePreferences: android.content.SharedPreferences
+    private lateinit var appEntryPreferences: android.content.SharedPreferences
+    private var hasStartedOnce = false
+    private var startWithFreshChat = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+        )
+        applyLightSystemBars()
+        appEntryPreferences = getSharedPreferences(APP_ENTRY_PREFERENCES, MODE_PRIVATE)
+        startWithFreshChat = shouldStartWithFreshChat(intent)
         container = AppContainer(applicationContext)
         textShareGate = AndroidTextShareIntentGate(savedInstanceState?.getString(TEXT_SHARE_FINGERPRINT))
         captureViewModel = ViewModelProvider(
@@ -129,6 +175,10 @@ class NanfengAiActivity : ComponentActivity() {
             this,
             InvocationLedgerViewModel.Factory(container.invocationRepository),
         )[InvocationLedgerViewModel::class.java]
+        conversationCostLedgerViewModel = ViewModelProvider(
+            this,
+            ConversationCostLedgerViewModel.Factory(container.assistantResponseModelAttributions, container.reminderDraftGenerationRecords, container.conversationTitleGenerationRecords),
+        )[ConversationCostLedgerViewModel::class.java]
         knowledgeLibraryViewModel = ViewModelProvider(
             this,
             KnowledgeLibraryViewModel.Factory(container.readKnowledgeLibrary, container.manageKnowledge, container.manageKnowledgeRelationships),
@@ -156,6 +206,7 @@ class NanfengAiActivity : ComponentActivity() {
                 container.searchConversations,
                 container.searchConversationAttachments,
                 container.localSearchHistory,
+                container.conversationReadMarkerStore,
                 container.exportConversationPackage,
                 container.gallerySelectionReader,
                 container.documentSelectionReader,
@@ -170,26 +221,46 @@ class NanfengAiActivity : ComponentActivity() {
                 container.addTemporaryConversationAttachment,
                 container.clearTemporaryConversation,
                 container.p6gModelSelection,
+                container.conversationWebSearchOverrides,
+                container.loadAssistantExperienceSettings,
                 container.invocationRepository,
                 container.assistantResponseModelAttributions,
                 container.normalChatOpenRouterExecutor,
+                container.normalChatBackgroundExecution,
+                startWithFreshChat,
             ),
         )[ConversationFoundationViewModel::class.java]
-        // P5-B maps only stale persisted work to stable failure. It deliberately cannot resume
-        // it.  This runs after the conversation owner exists, then reloads it on the main
-        // dispatcher so an Attempt changed to UNKNOWN cannot be missed by the first UI load.
-        lifecycleScope.launch {
-            val recoveredAttempts = withContext(Dispatchers.IO) {
-                container.recoverInterruptedNormalChatAttemptsAfterProcessStart()
-            }
-            withContext(Dispatchers.IO) {
-                container.taskRecoveryAudit.recoverAfterProcessStart()
-            }
-            if (recoveredAttempts > 0) conversationFoundationViewModel.reload()
-        }
+        // Normal generation recovery belongs to GenerationForegroundService.  This Activity
+        // observes the persisted conversation state only; it never changes an in-flight task.
+        lifecycleScope.launch { withContext(Dispatchers.IO) { container.taskRecoveryAudit.recoverAfterProcessStart() } }
         projectViewModel = ViewModelProvider(this, ProjectViewModel.Factory(container.projectRepository, container.manageProject))[ProjectViewModel::class.java]
         memoryViewModel = ViewModelProvider(this, MemoryViewModel.Factory(container.manageMemory))[MemoryViewModel::class.java]
+        lifecycleScope.launch {
+            val seeded = withContext(Dispatchers.IO) { container.ensureInitialMemorySummary() }
+            if (seeded > 0) memoryViewModel.reload("已加入你的记忆摘要初始版本。")
+        }
         contextBodySelectionViewModel = ViewModelProvider(this, ContextBodySelectionViewModel.Factory(container.readExplicitContextBody, container.readLocalContextPreview, container.readExplicitLocalActionTrace))[ContextBodySelectionViewModel::class.java]
+        assistantExperienceSettingsViewModel = ViewModelProvider(
+            this,
+            AssistantExperienceSettingsViewModel.Factory(
+                container.loadAssistantExperienceSettings,
+                container.saveAssistantExperienceSettings,
+            ),
+        )[AssistantExperienceSettingsViewModel::class.java]
+        notificationReminderSettingsViewModel = ViewModelProvider(
+            this,
+            NotificationReminderSettingsViewModel.Factory(
+                container.loadNotificationReminderSettings,
+                container.saveNotificationReminderSettings,
+            ),
+        )[NotificationReminderSettingsViewModel::class.java]
+        appearanceSettingsViewModel = ViewModelProvider(
+            this,
+            AppearanceSettingsViewModel.Factory(
+                container.loadAppearanceSettings,
+                container.saveAppearanceSettings,
+            ),
+        )[AppearanceSettingsViewModel::class.java]
         markdownImportViewModel = ViewModelProvider(this, MarkdownKnowledgeImportViewModel.Factory(container.manageMarkdownImport))[MarkdownKnowledgeImportViewModel::class.java]
         markdownExportViewModel = ViewModelProvider(this, MarkdownKnowledgeExportViewModel.Factory(container.manageKnowledge, container.exportMarkdownKnowledge))[MarkdownKnowledgeExportViewModel::class.java]
         offlineEvalViewModel = ViewModelProvider(this, OfflineEvalViewModel.Factory(container.runOfflineEval, container.offlineEvalRepository, container.exportOfflineEvalReport))[OfflineEvalViewModel::class.java]
@@ -209,20 +280,34 @@ class NanfengAiActivity : ComponentActivity() {
         accountSyncViewModel = ViewModelProvider(this)[P7DAccountSyncViewModel::class.java]
         dualPathConnectionViewModel = ViewModelProvider(this, DualPathConnectionViewModel.Factory(container.readConnectionCapability))[DualPathConnectionViewModel::class.java]
         p8ControlledAgentViewModel = ViewModelProvider(this, P8ControlledAgentViewModel.Factory(container.p8CProductionLocalAgent))[P8ControlledAgentViewModel::class.java]
+        scheduledMonitorViewModel = ViewModelProvider(
+            this,
+            ScheduledMonitorViewModel.Factory(
+                container.scheduledMonitorRepository,
+                AndroidScheduledMonitorScheduler(applicationContext),
+                container.qwenReminderDraftRefiner,
+                java.time.Clock.systemUTC(),
+            ),
+        )[ScheduledMonitorViewModel::class.java]
         routePreferences = getSharedPreferences("p5a_ui", MODE_PRIVATE)
         navigationViewModel = ViewModelProvider(this)[P5ANavigationViewModel::class.java]
         restoreP5ARoute(intent)
+        if (startWithFreshChat) selectP5ARoute(P5ARoute.CONVERSATION)
         setContent {
             NanfengAiApp(
                 captureViewModel,
                 modelSettingsViewModel,
                 invocationLedgerViewModel,
+                conversationCostLedgerViewModel,
                 knowledgeLibraryViewModel,
                 knowledgeExportViewModel,
                 conversationFoundationViewModel,
                 projectViewModel,
                 memoryViewModel,
                 contextBodySelectionViewModel,
+                assistantExperienceSettingsViewModel,
+                notificationReminderSettingsViewModel,
+                appearanceSettingsViewModel,
                 markdownImportViewModel,
                 markdownExportViewModel,
                 jsonKnowledgeImportViewModel,
@@ -242,6 +327,7 @@ class NanfengAiActivity : ComponentActivity() {
                 accountSyncViewModel,
                 dualPathConnectionViewModel,
                 p8ControlledAgentViewModel,
+                scheduledMonitorViewModel,
                 navigationViewModel,
                 ::selectP5ARoute,
                 ::setConversationDrawerOpen,
@@ -250,6 +336,32 @@ class NanfengAiActivity : ComponentActivity() {
         }
         consumeTextShareIntent(intent)
         consumeConversationShortcutIntent(intent)
+        consumeScheduledMonitorIntent(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(
+            this,
+            normalChatExecutionReceiver,
+            IntentFilter(NormalChatGenerationForegroundService.ACTION_EXECUTION_STATE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        normalChatExecutionReceiverRegistered = true
+        if (hasStartedOnce && conversationFoundationViewModel.onAppForeground(SystemClock.elapsedRealtime())) {
+            selectP5ARoute(P5ARoute.CONVERSATION)
+        }
+        hasStartedOnce = true
+    }
+
+    override fun onStop() {
+        if (normalChatExecutionReceiverRegistered) {
+            unregisterReceiver(normalChatExecutionReceiver)
+            normalChatExecutionReceiverRegistered = false
+        }
+        conversationFoundationViewModel.onAppBackground(SystemClock.elapsedRealtime())
+        appEntryPreferences.edit().putLong(APP_ENTRY_LAST_BACKGROUND_AT_MILLIS, System.currentTimeMillis()).apply()
+        super.onStop()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -258,6 +370,7 @@ class NanfengAiActivity : ComponentActivity() {
         restoreP5ARoute(intent)
         consumeTextShareIntent(intent)
         consumeConversationShortcutIntent(intent)
+        consumeScheduledMonitorIntent(intent)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -268,6 +381,29 @@ class NanfengAiActivity : ComponentActivity() {
     private fun consumeTextShareIntent(intent: android.content.Intent?) {
         textShareGate.consume(container.androidTextShareAdapter.read(intent))?.let(captureViewModel::onTextInput)
     }
+
+    private fun shouldStartWithFreshChat(intent: android.content.Intent?): Boolean {
+        if (isExplicitAppLaunch(intent)) return false
+        val lastBackgroundAt = appEntryPreferences.getLong(APP_ENTRY_LAST_BACKGROUND_AT_MILLIS, 0L)
+        val elapsed = System.currentTimeMillis() - lastBackgroundAt
+        return lastBackgroundAt <= 0L || elapsed !in 0 until FRESH_CHAT_AFTER_BACKGROUND_MS
+    }
+
+    private fun isExplicitAppLaunch(intent: android.content.Intent?): Boolean = when {
+        intent == null -> false
+        !intent.getStringExtra(CONVERSATION_SHORTCUT_ID_EXTRA).isNullOrBlank() -> true
+        !intent.getStringExtra(P5A_ROUTE_EXTRA).isNullOrBlank() -> true
+        intent.data != null -> true
+        intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE -> true
+        intent.action == ACTION_OPEN_SCHEDULED_MONITOR -> true
+        else -> false
+    }
+
+    private fun consumeScheduledMonitorIntent(intent: Intent?) {
+        if (intent?.action != ACTION_OPEN_SCHEDULED_MONITOR) return
+        scheduledMonitorViewModel.open(intent.getStringExtra(EXTRA_SCHEDULED_MONITOR_TASK_ID)?.let { com.nanzhufeng.ai.domain.ScheduledMonitorTaskId(it) })
+    }
+
 
     /** Opens the exact local conversation behind a user-approved pinned launcher shortcut. */
     private fun consumeConversationShortcutIntent(intent: android.content.Intent?) {
@@ -310,7 +446,26 @@ class NanfengAiActivity : ComponentActivity() {
             .apply()
     }
 
-    private companion object {
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Appearance is owned by the Compose skin. Reapplying a light-only system-bar mode here
+        // would turn the status and navigation glyphs dark again after returning to a deep skin.
+        // The initial light request in onCreate remains a safe fallback until Compose is drawn.
+    }
+
+    private fun applyLightSystemBars() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
+    }
+
+    companion object {
         const val TEXT_SHARE_FINGERPRINT = "handled_text_share_fingerprint"
+        const val APP_ENTRY_PREFERENCES = "conversation_app_entry"
+        const val APP_ENTRY_LAST_BACKGROUND_AT_MILLIS = "last_background_at_millis"
+        const val FRESH_CHAT_AFTER_BACKGROUND_MS = 15L * 60L * 1_000L
+        const val ACTION_OPEN_SCHEDULED_MONITOR = "com.nanzhufeng.ai.action.OPEN_SCHEDULED_MONITOR"
+        const val EXTRA_SCHEDULED_MONITOR_TASK_ID = "com.nanzhufeng.ai.extra.SCHEDULED_MONITOR_TASK_ID"
     }
 }

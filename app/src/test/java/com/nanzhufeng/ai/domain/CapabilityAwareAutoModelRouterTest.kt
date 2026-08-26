@@ -39,6 +39,18 @@ class CapabilityAwareAutoModelRouterTest {
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, result)
     }
 
+    @Test fun `auto prefers a known audio capable model but does not locally reject when no profile knows audio`() {
+        val resolver = fixtureResolver(
+            ModelPresetId.GPT_5_6_TERRA to profile(ModelPresetId.GPT_5_6_TERRA, ProviderId.OPENROUTER, audio = false),
+            ModelPresetId.QWEN_3_7_PLUS to profile(ModelPresetId.QWEN_3_7_PLUS, ProviderId.QWEN, audio = true),
+        )
+
+        val routed = CapabilityAwareAutoModelRouter(resolver).resolve(
+            AutoRoutingFacts(hasImageVideoOrPdf = true, requiresAudio = true),
+        ) { it == ModelPresetId.GPT_5_6_TERRA || it == ModelPresetId.QWEN_3_7_PLUS }
+        assertEquals(ModelPresetId.QWEN_3_7_PLUS, routed)
+    }
+
     private fun fixtureResolver(vararg entries: Pair<ModelPresetId, ResolvedModel>) = ModelResolver { preset ->
         entries.toMap()[preset]?.let(ResolvedModelResult::Resolved)
             ?: ResolvedModelResult.Unavailable("fixture missing")
@@ -49,10 +61,11 @@ class CapabilityAwareAutoModelRouterTest {
         provider: ProviderId,
         pdf: Boolean = false,
         video: Boolean = false,
+        audio: Boolean = false,
         health: ModelHealth = ModelHealth.AVAILABLE,
     ) = ResolvedModel(
         providerId = provider, modelId = preset.name.lowercase(), displayName = preset.name,
-        capabilities = ModelCapabilities(true, true, true, supportsPdf = pdf, supportsVideo = video),
+        capabilities = ModelCapabilities(true, true, true, supportsPdf = pdf, supportsVideo = video, supportsAudio = audio),
         contextWindowTokens = null, health = health, metadataUpdatedAt = Instant.EPOCH, healthCheckedAt = Instant.EPOCH,
     )
 }

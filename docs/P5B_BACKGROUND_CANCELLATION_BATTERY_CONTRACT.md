@@ -19,7 +19,7 @@
 
 ## Android 后台与电量决策
 
-本阶段**不引入 WorkManager**。审计后没有任何同时满足“无用户逐项确认、跨进程后可安全幂等重放、无需网络人工授权、必须由系统延迟调度”的任务：所有导入均需逐项确认，网页需一次性前台确认且不得自动重试，Eval 与 fixture 流不得伪造继续。因而也不得加入 WorkManager/JobScheduler、前台服务、WakeLock、Alarm、BOOT receiver、周期轮询或保活。
+本阶段**不为上述非生成任务引入 WorkManager**。所有导入均需逐项确认，网页需一次性前台确认且不得自动重试，Eval 与 fixture 流不得伪造继续。因而这些任务不得加入 WorkManager/JobScheduler、WakeLock、Alarm、BOOT receiver、周期轮询或保活。普通聊天的用户主动直连请求属于独立的前台服务执行链，不改变本表各任务的禁止项。
 
 Web 只在用户处于前台并明确确认后单次访问；网络变化、后台、冷启动和系统恢复均不自动继续。超时或用户取消必须断开 `HttpsURLConnection` 与输入流。没有 Provider HTTP、Prompt、RunSpec、Key、费用或图片外发；`OpenRouterEgressPolicy.Disabled` 保持。
 

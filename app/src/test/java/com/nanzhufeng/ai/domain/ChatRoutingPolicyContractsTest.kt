@@ -10,10 +10,10 @@ class ChatRoutingPolicyContractsTest {
         assertTrue(policy.autoRoutingEnabled)
         assertTrue(policy.automaticFallbackEnabled)
         assertFalse(policy.crossProviderFallbackEnabled)
-        assertTrue(policy.qualityEscalationEnabled)
+        assertFalse(policy.qualityEscalationEnabled)
     }
 
-    @Test fun `review policy is explicit and defaults to important tasks`() {
-        assertTrue(ChatRoutingPolicy().crossModelReviewPolicy == CrossModelReviewPolicy.IMPORTANT_ONLY)
+    @Test fun `review policy is explicit and disabled by default`() {
+        assertTrue(ChatRoutingPolicy().crossModelReviewPolicy == CrossModelReviewPolicy.NEVER)
     }
 }

@@ -130,8 +130,11 @@ def main() -> int:
         raise ValueError("adaptive launcher and round launcher must use the same two layers")
     foreground = root / "src/main/res/drawable-nodpi/nanfeng_ai_icon_foreground_image.png"
     width, height, _, _ = read_png(foreground)
-    if (width, height) != (432, 432):
-        raise ValueError(f"Android foreground must be 432x432, got {width}x{height}")
+    # The active Android adaptive foreground keeps the 1254px master dimensions. Android
+    # performs the density-independent adaptive composition; legacy fallbacks carry each
+    # platform density separately below.
+    if (width, height) != (1254, 1254):
+        raise ValueError(f"Android foreground must be 1254x1254, got {width}x{height}")
     desktop_root = args.desktop_root
     desktop_rgba = desktop_root / "icons/nanfeng_ai_icon_rgba.png"
     require_file(desktop_root, "icons/nanfeng_ai_icon_rgba.png")
@@ -149,7 +152,7 @@ def main() -> int:
         raise ValueError("Tauri bundle must point to the Desktop ICNS launcher asset")
     print(f"PASS source={args.source.name} sha256={sha256(args.source)} bbox={source[:4]}")
     print(f"PASS candidate={args.candidate.name} sha256={sha256(args.candidate)} bbox={candidate[:4]} scale={ratio_w:.4f}x/{ratio_h:.4f}x")
-    print(f"PASS android_foreground={sha256(foreground)} dimensions=432x432 adaptive=shared")
+    print(f"PASS android_foreground={sha256(foreground)} dimensions=1254x1254 adaptive=shared")
     print(f"PASS desktop_rgba={sha256(desktop_rgba)} dimensions=1024x1024 rgba=master-derived")
     print(f"PASS desktop_runtime_png={sha256(desktop_runtime)} dimensions=1024x1024 rgba=master-derived")
     print(f"PASS desktop_icns={sha256(desktop_root / 'icons/nanfeng_ai_icon.icns')} tauri=linked legacy=all-densities")

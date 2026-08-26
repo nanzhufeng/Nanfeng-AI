@@ -164,16 +164,16 @@ test('P6-K exposes direct ZIP import with recovery controls without changing the
 
 test('new user features have a Settings review entry with a decision state and entry recommendation', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'feature-review', status: '', error: '', connection: {} });
-  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮', '本地精确复用', '暂不增加聊天或 Composer 按键', '避免误解为联网缓存或省费承诺', '跨端文本会话交换', 'Android 现只从设置导出符合条件的文本会话为 .nfai-exchange', '它不是备份、云同步或完整工作区跨端保真承诺', '完整工作区交换（v2）', 'Android 可从设置 → 数据与导入选择单个 v2 包，仅在空本机严格恢复', '只保留双端设置二级入口']) assert.ok(rendered.includes(token));
+  for (const token of ['功能审阅', '新增功能审阅', 'ChatGPT / Claude ZIP 导入', '待您判断保留或删减', '设置 → 数据与导入 → 导入中心', '暂不在对话主页添加快捷按钮', '未关联媒体人工关联', 'Desktop Compare 联网执行', '阶段 1/2 已有 fail-closed owner 与 Security.framework 边界', '复用现有“对比”操作，不新增 Composer 常驻按钮', '本地精确复用', '暂不增加聊天或 Composer 按键', '避免误解为联网缓存或省费承诺', '跨端文本会话交换', 'Android 现只从设置导出符合条件的文本会话为 .nfai-exchange', '它不是备份、云同步或完整工作区跨端保真承诺', '完整工作区交换（v2）', 'Android 可从设置 → 数据与导入选择单个 v2 包，仅在空本机严格恢复', '只保留双端设置二级入口', '个性化模型调用', 'Android 已实现；Desktop 尚未有同一普通模型调用 owner', '相关长期记忆调用', 'Desktop 尚未接入同一发送链路', '关于与版本信息', 'Android 已在设置 → 关于显示运行时版本号与构建号', '不展示静态或伪造版本页', '素材类型标签', 'Android 多模态模型调用会按顺序传入 <图片>、<PDF>、<视频>', '后台继续生成', 'Android 普通模型生成期间使用系统前台持续任务']) assert.ok(rendered.includes(token));
 });
 
 test('local control remains a Settings-only route to existing Desktop workspace owners', () => {
   const control = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'local-control', status: '', error: '', connection: {} });
-  for (const token of ['更多本地控制面', 'data-action="show-projects"', 'data-action="show-knowledge"', 'data-action="show-memory"', '不读凭据', '不调用 Provider', '不发起外部访问']) assert.ok(control.includes(token));
+  for (const token of ['项目、知识与记忆', 'data-action="show-projects"', 'data-action="show-knowledge"', 'data-action="show-memory"', '不读凭据', '不调用 Provider', '不发起外部访问']) assert.ok(control.includes(token));
   for (const forbidden of ['chat-composer', 'data-action="save-local-message"']) assert.ok(!control.includes(forbidden));
 
   const review = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'settings', settingsSection: 'feature-review', status: '', error: '', connection: {} });
-  for (const token of ['更多本地控制面', '待您判断保留或删减', '设置二级入口', '不建议在聊天主页、Composer 或会话详情增加按键']) assert.ok(review.includes(token));
+  for (const token of ['项目、知识与记忆', '待您判断保留或删减', '设置二级入口', '不建议在聊天主页、Composer 或会话详情增加按键']) assert.ok(review.includes(token));
 });
 
 test('FB-P6-039 keeps attachment previews as role-aligned siblings of text surfaces', () => {

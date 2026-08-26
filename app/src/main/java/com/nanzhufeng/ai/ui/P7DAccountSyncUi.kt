@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -50,7 +50,7 @@ class P7DAccountSyncViewModel : ViewModel() {
 @androidx.compose.runtime.Composable
 internal fun AccountSyncStatusCard(state: P7DAccountSyncUiState, onOpen: () -> Unit) = WhiteCard {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.AccountCircle, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(26.dp))
+        Icon(Icons.Rounded.AccountCircle, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(26.dp))
         Spacer(Modifier.size(12.dp))
         Column(Modifier.weight(1f)) {
             Text("Google 账号与同步", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -73,7 +73,7 @@ internal fun P7DAccountSyncScreen(state: P7DAccountSyncUiState, onBack: () -> Un
         }
         WhiteCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.CloudOff, contentDescription = null, tint = SecondaryText, modifier = Modifier.size(36.dp))
+                Icon(Icons.Rounded.CloudOff, contentDescription = null, tint = SecondaryText, modifier = Modifier.size(36.dp))
                 Spacer(Modifier.size(12.dp))
                 Column {
                     Text(if (state.configured) "等待已验证账号" else "尚未配置", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
@@ -92,7 +92,7 @@ internal fun P7DAccountSyncScreen(state: P7DAccountSyncUiState, onBack: () -> Un
             Text("当前未配置，恢复入口保持禁用。只有真实已验证账号、恢复码确认、方向确认和远端 revision 校验同时成立后，受控链才会写入候选库；这里不会伪造登录或云端成功。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(14.dp))
             Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) {
-                Icon(Icons.Outlined.Sync, contentDescription = null); Spacer(Modifier.size(8.dp)); Text("立即同步")
+                Icon(Icons.Rounded.Sync, contentDescription = null); Spacer(Modifier.size(8.dp)); Text("立即同步")
             }
         }
         WhiteCard {

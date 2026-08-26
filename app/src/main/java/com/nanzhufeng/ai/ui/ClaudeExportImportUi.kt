@@ -24,14 +24,16 @@ class ClaudeExportImportViewModel(private val imports: ManageClaudeExportImportU
     class Factory(private val imports: ManageClaudeExportImportUseCase) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>) = ClaudeExportImportViewModel(imports) as T }
 }
 
-@Composable fun ClaudeExportImportSettingsPage(state: ClaudeImportUiState, onChoose: () -> Unit, onOpen: (ClaudeImportTask) -> Unit, onBack: () -> Unit, onRetry: (ClaudeImportTaskId) -> Unit, onCancel: () -> Unit) = WhiteCard {
-    Text("Claude 对话导入", style = MaterialTheme.typography.titleMedium)
-    Spacer(Modifier.height(6.dp))
-    Text("仅选择 Claude data export 的 conversations.json。系统选择后复制到 app-private 并直接导入；不会上传或执行内容。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-    Text("device · local-only · sensitive", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(12.dp))
+@Composable fun ClaudeExportImportSettingsPage(state: ClaudeImportUiState, onChoose: () -> Unit, onOpen: (ClaudeImportTask) -> Unit, onBack: () -> Unit, onRetry: (ClaudeImportTaskId) -> Unit, onCancel: () -> Unit, showHeader: Boolean = true, actionLabel: String = "选择 conversations.json", grouped: Boolean = false, modifier: Modifier = Modifier.fillMaxWidth()) = Column(modifier) {
+    if (showHeader) {
+        Text("Claude 对话导入", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(6.dp))
+        Text("选择 Claude 导出的 conversations.json，只在本机导入。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    }
+    if (!grouped) Spacer(Modifier.height(12.dp))
     if (state.selected == null) {
-        Button(onClick = onChoose, enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { Text("选择 conversations.json") }
+        if (grouped) DataStorageGroupedActionRow(label = actionLabel, onClick = onChoose, enabled = !state.working, working = state.working)
+        else Button(onClick = onChoose, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text(actionLabel) }
         state.tasks.forEach { task -> TextButton(onClick = { onOpen(task) }, modifier = Modifier.fillMaxWidth()) { Text("${task.asset?.displayName ?: "导入任务"} · ${task.status}") } }
     } else {
         val task = state.selected
@@ -41,8 +43,8 @@ class ClaudeExportImportViewModel(private val imports: ManageClaudeExportImportU
             Text(item.failure?.name ?: item.status.name, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.height(10.dp)); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onBack) { Text("返回任务") }
-            if (task.status == ClaudeImportTaskStatus.FAILED) OutlinedButton(onClick = { onRetry(task.id) }, enabled = !state.working) { Text("重试") }
+            OutlinedButton(onClick = onBack, shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("返回任务") }
+            if (task.status == ClaudeImportTaskStatus.FAILED) OutlinedButton(onClick = { onRetry(task.id) }, enabled = !state.working, shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("重试") }
             else if (task.status !in setOf(ClaudeImportTaskStatus.COMPLETED, ClaudeImportTaskStatus.CANCELLED)) TextButton(onClick = onCancel, enabled = !state.working) { Text("取消") }
         }
     }

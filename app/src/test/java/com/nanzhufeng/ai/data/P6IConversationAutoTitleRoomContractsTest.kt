@@ -9,6 +9,10 @@ import com.nanzhufeng.ai.data.local.RoomConversationRepository
 import com.nanzhufeng.ai.domain.ConversationDraftSubmissionResult
 import com.nanzhufeng.ai.domain.ConversationMutationResult
 import com.nanzhufeng.ai.domain.ConversationTreeService
+import com.nanzhufeng.ai.domain.AppendConversationMessageUseCase
+import com.nanzhufeng.ai.domain.AppendMessageRequest
+import com.nanzhufeng.ai.domain.ContentBlock
+import com.nanzhufeng.ai.domain.MessageRole
 import com.nanzhufeng.ai.domain.CreateConversationUseCase
 import com.nanzhufeng.ai.domain.SaveConversationDraftUseCase
 import com.nanzhufeng.ai.domain.SubmitConversationDraftUseCase
@@ -26,7 +30,7 @@ import org.robolectric.RobolectricTestRunner
 class P6IConversationAutoTitleRoomContractsTest {
     private val clock = Clock.fixed(Instant.parse("2026-08-15T00:00:00Z"), ZoneOffset.UTC)
 
-    @Test fun `first message title and eligibility flag survive room readback in the submit transaction`() {
+    @Test fun `pending title eligibility survives room readback after the first reply`() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val database = Room.inMemoryDatabaseBuilder(context, NanfengAiDatabase::class.java).allowMainThreadQueries().build()
         try {
@@ -37,10 +41,15 @@ class P6IConversationAutoTitleRoomContractsTest {
             val submitted = SubmitConversationDraftUseCase(repository, repository, ConversationTreeService(clock)).execute(created.snapshot.conversation.id)
             assertTrue(submitted is ConversationDraftSubmissionResult.Submitted)
             val readback = repository.findById(created.snapshot.conversation.id)!!
-            assertEquals("整理 Android 设置页面层级", readback.conversation.title)
-            assertEquals(false, readback.conversation.autoTitlePending)
-            assertEquals(2L, readback.conversation.revision)
+            assertEquals("新对话", readback.conversation.title)
+            assertEquals(true, readback.conversation.autoTitlePending)
             assertEquals("", readback.draft.text)
+            val replied = AppendConversationMessageUseCase(ConversationTreeService(clock), repository).execute(
+                readback,
+                AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("## Android 设置页面重新规划\n\n正文"))),
+            ) as ConversationMutationResult.Saved
+            assertEquals("新对话", replied.snapshot.conversation.title)
+            assertEquals(true, replied.snapshot.conversation.autoTitlePending)
         } finally {
             database.close()
         }

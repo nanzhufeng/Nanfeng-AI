@@ -3,6 +3,7 @@
 > 当前总控入口：[南枫 AI 总控开发蓝图](MASTER_DEVELOPMENT_BLUEPRINT.md)  
 > 架构重整交接：[南枫AI完整开发档案](南枫AI完整开发档案.md)
 > 当前 Android 会话界面规则：[Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)
+> 当前 Android 设置界面规则：[Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)
 > GitHub 经验研究：[南枫 AI GitHub 成熟项目参考研究](GITHUB_MATURE_PROJECT_REFERENCE_RESEARCH.md)  
 > 启动图标交付：[南枫 AI Android 启动图标交付](LAUNCHER_ICON_DELIVERY.md)  
 > 本地数据合同：[南枫 AI P2-A 本地数据与附件合同](P2A_LOCAL_DATA_AND_ATTACHMENT_CONTRACT.md)  

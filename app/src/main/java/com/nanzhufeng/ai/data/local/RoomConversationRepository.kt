@@ -39,6 +39,7 @@ import com.nanzhufeng.ai.domain.ConversationDraftSubmissionResult
 import com.nanzhufeng.ai.domain.ConversationManagementIntent
 import com.nanzhufeng.ai.domain.ConversationManagementRepository
 import com.nanzhufeng.ai.domain.ConversationManagementResult
+import com.nanzhufeng.ai.domain.ConversationPurgeResult
 import com.nanzhufeng.ai.domain.ConversationSearchRepository
 import com.nanzhufeng.ai.domain.LocalSearchIndexRepository
 import com.nanzhufeng.ai.domain.LocalSearchIndexRecord
@@ -63,6 +64,34 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
     override fun save(snapshot: ConversationSnapshot): ConversationSnapshot = database.inConversationTransaction {
         persistSnapshot(database.conversationDao(), snapshot)
     }
+
+    override fun permanentlyDelete(conversationId: ConversationId, expectedRevision: Long): ConversationPurgeResult =
+        database.inConversationTransaction {
+            val dao = database.conversationDao()
+            val stored = dao.loadSnapshot(conversationId) ?: return@inConversationTransaction ConversationPurgeResult.Rejected("会话不存在，未执行删除。")
+            if (stored.conversation.revision != expectedRevision) {
+                return@inConversationTransaction ConversationPurgeResult.Rejected("会话已更新，请返回列表后重试。")
+            }
+            if (stored.conversation.deletedAt == null) {
+                return@inConversationTransaction ConversationPurgeResult.Rejected("只能永久删除回收站中的会话。")
+            }
+            val id = conversationId.value
+            dao.deleteBlocksForConversation(id)
+            dao.deleteNodesForConversation(id)
+            dao.deleteDraftAttachments(id)
+            dao.deleteDraft(id)
+            dao.deleteMemorySources(id)
+            dao.deleteSearchIndexForConversation(id)
+            dao.deleteRuntimeStatesForConversation(id)
+            dao.deleteRuntimeEventsForConversation(id)
+            dao.deleteAttemptLineagesForConversation(id)
+            dao.deleteNormalChatAttemptsForConversation(id)
+            dao.deleteManagementIntentsForConversation(id)
+            // Saved memories are independent user data. Keep them, but detach their deleted source conversation.
+            dao.detachMemoriesForConversation(id)
+            if (dao.deleteConversation(id) != 1) return@inConversationTransaction ConversationPurgeResult.Rejected("会话删除未完成。")
+            ConversationPurgeResult.Deleted
+        }
 
     /** Adapter-owned commit stores call this only inside the same Room transaction as their receipt. */
     internal fun persistInExistingTransaction(snapshot: ConversationSnapshot): ConversationSnapshot =

@@ -69,6 +69,24 @@ class P6GUnifiedChatFirstUiContractsTest {
     }
 
     @Test
+    fun `system long screenshot owns transcript scrolling until capture completes`() {
+        assertTrue(workspace.contains("LocalScrollCaptureInProgress.current"))
+        assertTrue(workspace.contains("val closedDrawerSemanticsModifier = if (drawerOpen)"))
+        assertTrue(workspace.contains("hideFromAccessibility()"))
+        assertTrue(workspace.contains("val transcriptScrollCaptureVisualModifier = if (systemScrollCaptureInProgress)"))
+        assertTrue(workspace.contains(".then(transcriptScrollCaptureVisualModifier)"))
+        assertTrue(workspace.contains("systemScrollCaptureInProgress = systemScrollCaptureInProgress"))
+        val chatTranscript = workspace.substring(
+            workspace.indexOf("val listState = chatTranscriptListState"),
+            workspace.indexOf("TranscriptScrollIndicator("),
+        )
+        assertTrue(chatTranscript.contains("if (systemScrollCaptureInProgress) return@LaunchedEffect"))
+        val workScope = workspace.substring(workspace.indexOf("private fun ConversationWorkScope"), workspace.indexOf("private fun ConversationAttemptHistory"))
+        assertTrue(workScope.contains("systemScrollCaptureInProgress: Boolean"))
+        assertTrue(workScope.contains("if (systemScrollCaptureInProgress) return@LaunchedEffect"))
+    }
+
+    @Test
     fun `surface swap commits the matching transcript atomically without a local mode mirror`() {
         assertTrue(workspace.contains("val workMode = state.surface == com.nanzhufeng.ai.domain.ConversationSurface.WORK"))
         assertFalse(workspace.contains("var workMode by rememberSaveable"))

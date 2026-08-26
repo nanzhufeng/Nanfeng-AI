@@ -94,7 +94,18 @@ class UnifiedModelResolver(
                 ), descriptor.contextWindowTokens,
                     ModelHealth.UNKNOWN, null, null, descriptor.maxOutputTokens, "openrouter-catalog-v1"), presetId)
             })
-            is ModelRegistryResolution.Rejected -> ResolvedModelResult.Unavailable("OpenRouter 模型目录尚未确认。")
+            is ModelRegistryResolution.Rejected -> {
+                // The public catalog is authoritative once present. On a true cold start only,
+                // a separate catalog GET outage must not prevent the user's fixed standard text
+                // preset from reaching OpenRouter at all. These are exact product-owned IDs,
+                // not guessed relatives; any provider rejection is still shown and health-marked.
+                if (registry.currentSnapshot(ProviderId.OPENROUTER) == null) {
+                    OpenRouterColdStartTextFallback.resolve(presetId)?.let { fallback ->
+                        return ResolvedModelResult.Resolved(withObservedHealth(fallback, presetId))
+                    }
+                }
+                ResolvedModelResult.Unavailable("OpenRouter 模型目录尚未确认。")
+            }
         }
     }
 
@@ -115,5 +126,37 @@ class UnifiedModelResolver(
     private fun withObservedHealth(model: ResolvedModel, presetId: ModelPresetId): ResolvedModel {
         val observation = healthStore.observation(model.providerId, presetId) ?: return model
         return model.copy(health = observation.health, healthCheckedAt = observation.checkedAt)
+    }
+}
+
+/**
+ * Exact, standard (never Pro/Fast) text-only identities used solely while no public registry
+ * snapshot exists. They keep a catalog-host outage from becoming a global chat outage; after the
+ * first verified snapshot, its mapping is the only source of truth again.
+ */
+private object OpenRouterColdStartTextFallback {
+    private val ids = mapOf(
+        ModelPresetId.CLAUDE_FABLE_5 to "anthropic/claude-fable-5",
+        ModelPresetId.CLAUDE_OPUS_5 to "anthropic/claude-opus-5",
+        ModelPresetId.CLAUDE_SONNET_5 to "anthropic/claude-sonnet-5",
+        ModelPresetId.CLAUDE_HAIKU_4_5 to "anthropic/claude-haiku-4.5",
+        ModelPresetId.GPT_5_6_SOL to "openai/gpt-5.6-sol",
+        ModelPresetId.GPT_5_6_TERRA to "openai/gpt-5.6-terra",
+        ModelPresetId.GPT_5_6_LUNA to "openai/gpt-5.6-luna",
+        ModelPresetId.GEMINI_3_7_FLASH to "google/gemini-3.7-flash",
+    )
+
+    fun resolve(presetId: ModelPresetId): ResolvedModel? = ids[presetId]?.let { modelId ->
+        ResolvedModel(
+            providerId = ProviderId.OPENROUTER,
+            modelId = modelId,
+            displayName = NanfengModelServiceCatalog.preset(presetId).displayName,
+            capabilities = ModelCapabilities(supportsText = true, supportsVision = false, supportsStreaming = true),
+            contextWindowTokens = null,
+            health = ModelHealth.UNKNOWN,
+            metadataUpdatedAt = null,
+            healthCheckedAt = null,
+            tokenizerId = "openrouter-cold-start-v1",
+        )
     }
 }

@@ -97,6 +97,8 @@ data class ConversationAttachmentPreview(
     val thumbnail: AttachmentThumbnail?,
     val videoDurationMillis: Long? = null,
     val audioDurationMillis: Long? = null,
+    /** Bounded, inert UTF-8 excerpt for a text attachment's inline cover. */
+    val textPreview: ConversationAttachmentTextPreview? = null,
     val unavailableReason: String? = null,
 )
 
@@ -184,6 +186,40 @@ class ConversationAttachmentPreviewProjection(
         if (reference.mimeType in CONVERSATION_ALLOWED_AUDIO_MIME_TYPES) {
             return ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null, audioDurationMillis = privateStore.audioDurationMillis(asset), unavailableReason = null)
         }
+        if (reference.mimeType in TEXT_ATTACHMENT_MIME_TYPES) {
+            val textPreview = text(reference)
+            return ConversationAttachmentPreview(
+                reference.id,
+                reference.mimeType,
+                reference.displayName,
+                reference.byteCount,
+                null,
+                textPreview = textPreview,
+                unavailableReason = textPreview.unavailableReason,
+            )
+        }
+        // The catalog itself must be useful before an attachment is opened.  A PDF's
+        // BitmapFactory bounds are deliberately empty, so render only its first page
+        // through the same verified PdfRenderer path used by the explicit reader.
+        if (reference.mimeType == "application/pdf") {
+            return when (val result = privateStore.pdfPage(asset, pageNumber = 1)) {
+                is AttachmentPdfPageResult.Ready -> ConversationAttachmentPreview(
+                    reference.id,
+                    reference.mimeType,
+                    reference.displayName,
+                    reference.byteCount,
+                    result.page.image,
+                )
+                is AttachmentPdfPageResult.Rejected -> ConversationAttachmentPreview(
+                    reference.id,
+                    reference.mimeType,
+                    reference.displayName,
+                    reference.byteCount,
+                    null,
+                    unavailableReason = "本地 PDF 首页预览不可用",
+                )
+            }
+        }
         return when (val result = privateStore.thumbnail(asset)) {
             is AttachmentThumbnailResult.Ready -> ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, result.thumbnail)
             is AttachmentThumbnailResult.Rejected -> ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null, unavailableReason = "本地缩略图不可用")
@@ -246,7 +282,7 @@ class ConversationAttachmentPreviewProjection(
     fun text(reference: ConversationAttachmentReference): ConversationAttachmentTextPreview {
         val asset = assets.findById(reference.id)
             ?: return ConversationAttachmentTextPreview(reference.id, reference.displayName, reference.mimeType, reference.byteCount, unavailableReason = "本地文本附件不可用")
-        if (reference.mimeType !in setOf("text/plain", "text/markdown", "application/json", "text/csv") || asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
+        if (reference.mimeType !in TEXT_ATTACHMENT_MIME_TYPES || asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
             return ConversationAttachmentTextPreview(reference.id, reference.displayName, reference.mimeType, reference.byteCount, unavailableReason = "本地文本附件校验不一致")
         }
         val bytes = when (val result = privateStore.read(asset)) {
@@ -266,6 +302,7 @@ class ConversationAttachmentPreviewProjection(
 }
 
 const val MAX_INERT_TEXT_PREVIEW_BYTES = 128 * 1024
+val TEXT_ATTACHMENT_MIME_TYPES = setOf("text/plain", "text/markdown", "application/json", "text/csv")
 
 private fun AiTaskError.toConversationAttachmentReason() = when (this) {
     AiTaskError.AttachmentUnsupportedType -> "文件类型或内容标识不受支持。"

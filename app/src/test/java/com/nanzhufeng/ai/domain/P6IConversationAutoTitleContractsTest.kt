@@ -11,32 +11,79 @@ import org.junit.Test
 class P6IConversationAutoTitleContractsTest {
     private val clock = Clock.fixed(Instant.parse("2026-08-15T00:00:00Z"), ZoneOffset.UTC)
 
-    @Test fun `first local message produces a compact meaningful local title`() {
-        assertEquals("Android 设置页面重新规划", ConversationAutoTitle.fromText("请帮我把 Android 设置页面重新规划一下，重点是层级清晰。"))
-        assertEquals("链接：example.com", ConversationAutoTitle.fromText("https://www.example.com/a/very/long/path"))
-        assertEquals("图片对话", ConversationAutoTitle.titleForFirstMessage(
-            snapshot(autoTitlePending = true),
-            ConversationDraft(attachments = listOf(image()), updatedAt = clock.instant()),
-        ))
+    @Test fun `first completed assistant reply never writes a local heading as the conversation title`() {
+        val tree = ConversationTreeService(clock)
+        val user = tree.append(snapshot(autoTitlePending = true), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Attachment(image()))))
+        val titled = tree.append(user, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("核心结论"))))
+        assertEquals(ConversationAutoTitle.NEW_CONVERSATION_TITLE, titled.conversation.title)
+        assertTrue(titled.conversation.autoTitlePending)
+
+        val responseTitled = tree.append(
+            tree.append(snapshot(autoTitlePending = true), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("请分析 Tesla")))),
+            AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("## 特斯拉价值投资框架\n\n正文"))),
+        )
+        assertEquals(ConversationAutoTitle.NEW_CONVERSATION_TITLE, responseTitled.conversation.title)
+        assertTrue(responseTitled.conversation.autoTitlePending)
     }
 
-    @Test fun `title is written once with the first message and never overwrites a manual or imported title`() {
+    @Test fun `assistant section headings and generic openings are never promoted into a title`() {
+        val tree = ConversationTreeService(clock)
+        val user = tree.append(
+            snapshot(autoTitlePending = true),
+            AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("请核对跨境投资监管变化，并评估美股配置的影响。"))),
+        )
+        val titled = tree.append(
+            user,
+            AppendMessageRequest(
+                MessageRole.ASSISTANT,
+                listOf(ContentBlock.Text("说明（先讲清边界）\n\n这里先核实信息来源。\n\n## 跨境投资监管与美股配置\n\n再给出风险判断。")),
+            ),
+        )
+
+        assertEquals(ConversationAutoTitle.NEW_CONVERSATION_TITLE, titled.conversation.title)
+        assertTrue(titled.conversation.autoTitlePending)
+    }
+
+    @Test fun `title waits for the dedicated refiner and never overwrites a manual or imported title`() {
         val created = ConversationTreeService(clock).create(autoTitlePending = true)
         val drafts = FakeDrafts(ConversationDraft("请帮我整理 Android 设置页面层级", updatedAt = clock.instant()))
         val submitted = SubmitConversationDraftUseCase(FakeConversations(created), drafts, ConversationTreeService(clock))
             .execute(created.conversation.id) as ConversationDraftSubmissionResult.Submitted
-        assertEquals("整理 Android 设置页面层级", submitted.snapshot.conversation.title)
-        assertFalse(submitted.snapshot.conversation.autoTitlePending)
-        assertEquals(2L, submitted.snapshot.conversation.revision)
+        assertEquals(ConversationAutoTitle.NEW_CONVERSATION_TITLE, submitted.snapshot.conversation.title)
+        assertTrue(submitted.snapshot.conversation.autoTitlePending)
+        val titled = ConversationTreeService(clock).append(
+            submitted.snapshot,
+            AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("# Android 设置页面重新规划"))),
+        )
+        assertEquals(ConversationAutoTitle.NEW_CONVERSATION_TITLE, titled.conversation.title)
+        assertTrue(titled.conversation.autoTitlePending)
 
         val manuallyNamed = created.copy(conversation = created.conversation.copy(title = "我的固定标题", autoTitlePending = false))
-        assertEquals(null, ConversationAutoTitle.titleForFirstMessage(manuallyNamed, drafts.loadDraft(created.conversation.id)!!))
+        val manualReply = ConversationTreeService(clock).append(
+            manuallyNamed,
+            AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("# 不应覆盖的自动标题"))),
+        )
+        assertEquals("我的固定标题", manualReply.conversation.title)
         val importedMessage = userMessage(created.conversation.id)
         val importedWithMessages = created.copy(
             conversation = created.conversation.copy(currentLeafMessageId = importedMessage.id),
             nodes = listOf(importedMessage),
         )
-        assertEquals(null, ConversationAutoTitle.titleForFirstMessage(importedWithMessages, drafts.loadDraft(created.conversation.id)!!))
+        assertEquals(null, ConversationAutoTitle.titleForFirstCompletedAssistantReply(importedWithMessages, MessageNodeId("assistant")))
+    }
+
+    @Test fun `stream completion leaves the title pending for the dedicated refiner`() {
+        val tree = ConversationTreeService(clock)
+        val user = tree.append(snapshot(autoTitlePending = true), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("请分析 Tesla"))))
+        val machine = ConversationRuntimeStateMachine(clock)
+        val invocation = InvocationId("title-stream")
+        val assistantId = MessageNodeId("assistant-stream")
+        val security = AiRuntimeSecurityMetadata(source = "LOCAL_TEST")
+        val started = machine.apply(user, null, RuntimeRunStarted(AiRuntimeEventId("start"), invocation, user.conversation.id, assistantId, 0, clock.instant(), security, user.conversation.currentLeafMessageId))
+        val received = machine.apply(started.snapshot, started.state, RuntimeContentDelta(AiRuntimeEventId("delta"), invocation, user.conversation.id, assistantId, 1, clock.instant(), "## 特斯拉投资分析", security))
+        val completed = machine.apply(received.snapshot, received.state, RuntimeCompleted(AiRuntimeEventId("done"), invocation, user.conversation.id, assistantId, 2, clock.instant(), security))
+        assertEquals(ConversationAutoTitle.NEW_CONVERSATION_TITLE, completed.snapshot.conversation.title)
+        assertTrue(completed.snapshot.conversation.autoTitlePending)
     }
 
     @Test fun `new conversation use case marks only locally created empty conversations as eligible`() {

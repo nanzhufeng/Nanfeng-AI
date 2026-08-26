@@ -275,9 +275,8 @@ fun KnowledgeLibraryCard(state: KnowledgeLibraryUiState, onOpen: () -> Unit) {
 }
 
 @Composable
-fun KnowledgeLibraryDialog(
+fun KnowledgeLibraryPage(
     state: KnowledgeLibraryUiState,
-    onDismiss: () -> Unit,
     onOpenDetail: (KnowledgeItemId) -> Unit,
     onBackToList: () -> Unit,
     onSearch: (String) -> Unit,
@@ -297,38 +296,34 @@ fun KnowledgeLibraryDialog(
     onShowRelationshipList: () -> Unit,
 ) {
     val detail = state.detail
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color.White,
-        shape = RoundedCornerShape(24.dp),
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (detail != null) {
-                    TextButton(onClick = onBackToList, enabled = !state.isLoading) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回知识列表")
-                    }
-                }
-                Text(if (detail == null) "本地知识" else "知识详情", fontWeight = FontWeight.SemiBold)
-            }
-        },
-        text = {
-            when {
-                state.isLoading -> KnowledgeLoading()
-                state.editing -> KnowledgeEditor(state, onEditTitle, onEditBody, onEditTags)
-                detail != null -> KnowledgeDetailContent(detail, state.managedDetail, state.duplicateCandidates, state.relationshipUi.records.size, onArchiveRestore, onDeleteRestore, onStartEdit, onFindDuplicateCandidates, onStartRelationshipBuilder, onShowRelationshipList)
-                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(state.query, onSearch, Modifier.fillMaxWidth(), singleLine = true, label = { Text("搜索标题、正文、标签、来源") })
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { KnowledgeStatus.entries.forEach { status -> TextButton(onClick = { onStatus(status) }) { Text(if (state.status == status) "● ${status.label()}" else status.label()) } }; TextButton(onClick = onStartCreate) { Text("新建") } }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf<CaptureSourceType?>(null, CaptureSourceType.MANUAL_TEXT, CaptureSourceType.ANDROID_TEXT_SHARE, CaptureSourceType.IMAGE).forEach { source -> TextButton(onClick = { onSource(source) }) { Text(if (state.sourceType == source) "● ${source.label()}" else source.label()) } } }
-                    if (state.entries.isEmpty()) KnowledgeEmptyState() else KnowledgeList(state.entries, onOpenDetail)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (detail != null) {
+                TextButton(onClick = onBackToList, enabled = !state.isLoading) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回知识列表")
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = if (state.editing) onCancelEdit else onDismiss, enabled = !state.isLoading) { Text(if (state.editing) "取消" else "关闭") }
-        },
-        dismissButton = if (state.editing) ({ TextButton(onClick = onSaveEdit) { Text("保存修订") } }) else null,
-    )
+            Text(if (detail == null) "本地知识" else "知识详情", fontWeight = FontWeight.SemiBold)
+        }
+        when {
+            state.isLoading -> KnowledgeLoading()
+            state.editing -> KnowledgeEditor(state, onEditTitle, onEditBody, onEditTags)
+            detail != null -> KnowledgeDetailContent(detail, state.managedDetail, state.duplicateCandidates, state.relationshipUi.records.size, onArchiveRestore, onDeleteRestore, onStartEdit, onFindDuplicateCandidates, onStartRelationshipBuilder, onShowRelationshipList)
+            else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("搜索", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(state.query, onSearch, Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("搜索标题、正文、标签、来源") })
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { KnowledgeStatus.entries.forEach { status -> TextButton(onClick = { onStatus(status) }) { Text(if (state.status == status) "● ${status.label()}" else status.label()) } }; TextButton(onClick = onStartCreate) { Text("新建") } }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf<CaptureSourceType?>(null, CaptureSourceType.MANUAL_TEXT, CaptureSourceType.ANDROID_TEXT_SHARE, CaptureSourceType.IMAGE).forEach { source -> TextButton(onClick = { onSource(source) }) { Text(if (state.sourceType == source) "● ${source.label()}" else source.label()) } } }
+                if (state.entries.isEmpty()) KnowledgeEmptyState() else KnowledgeList(state.entries, onOpenDetail)
+            }
+        }
+        if (state.editing) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onCancelEdit, enabled = !state.isLoading) { Text("取消") }
+                Button(onClick = onSaveEdit, enabled = !state.isLoading) { Text("保存修订") }
+            }
+        }
+    }
 }
 
 @Composable
@@ -464,7 +459,7 @@ private fun KnowledgeDuplicateCandidatesRejection.label(): String = when (this) 
     OutlinedTextField(state.editTitle, onTitle, Modifier.fillMaxWidth(), label = { Text("标题") })
     OutlinedTextField(state.editBody, onBody, Modifier.fillMaxWidth().heightIn(min = 140.dp), label = { Text("正文") })
     OutlinedTextField(state.editTags, onTags, Modifier.fillMaxWidth(), label = { Text("标签（以逗号分隔）") })
-    Text("仅本地保存；高敏正文会在写入前拒绝，不会自动加入对话 Context。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    Text("仅本地保存；高敏正文会在写入前拒绝。开启资料库搜索后，相关内容会按当前问题自动检索并加入对话上下文。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     state.mutationMessage?.let { Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
 }
 

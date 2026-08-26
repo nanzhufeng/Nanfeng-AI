@@ -44,11 +44,15 @@ class RoomNormalChatSendAttemptStore(private val database: NanfengAiDatabase) : 
 
     override fun markInterruptedAsUnknown(updatedAt: Instant): Int =
         database.normalChatSendAttemptDao().markInterruptedAsUnknown(updatedAt.toEpochMilli())
+
 }
 
 private fun NormalChatSendAttempt.toEntity() = NormalChatSendAttemptEntity(
     attemptId.value, messageId.value, conversationId.value, providerId.name, modelId, idempotencyKey,
-    status.name, createdAt.toEpochMilli(), updatedAt.toEpochMilli(), safeErrorCode, egressProviderId?.name,
+        // Schema-53 gateway columns are intentionally inert. Keep placeholders only to preserve
+        // the user's already-installed Room schema without a destructive downgrade.
+        status.name, createdAt.toEpochMilli(), updatedAt.toEpochMilli(), safeErrorCode, egressProviderId?.name, "LEGACY_UNUSED",
+    null, null, null,
 )
 
 private fun NormalChatSendAttemptEntity.toDomain() = NormalChatSendAttempt(

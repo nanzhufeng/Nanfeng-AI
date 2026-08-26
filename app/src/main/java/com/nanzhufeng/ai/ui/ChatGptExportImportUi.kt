@@ -24,14 +24,16 @@ class ChatGptExportImportViewModel(private val imports: ManageChatGptExportImpor
     class Factory(private val imports: ManageChatGptExportImportUseCase) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>) = ChatGptExportImportViewModel(imports) as T }
 }
 @Composable fun ChatGptExportImportCard(onOpen: () -> Unit) = WhiteCard { Text("ChatGPT 对话导入", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(6.dp)); Text("仅选择 ChatGPT data export 的 conversations.json。内容只作本地不执行文本；选择后直接导入普通历史。", color = SecondaryText, style = MaterialTheme.typography.bodySmall); Spacer(Modifier.height(10.dp)); Button(onClick = onOpen, colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { Text("导入 ChatGPT JSON") } }
-@Composable fun ChatGptExportImportSettingsPage(state: ChatGptImportUiState, onChoose: () -> Unit, onOpen: (ChatGptImportTask) -> Unit, onBack: () -> Unit, onRetry: (ChatGptImportTaskId) -> Unit, onCancel: () -> Unit) = WhiteCard {
-    Text("ChatGPT 对话导入", style = MaterialTheme.typography.titleMedium)
-    Spacer(Modifier.height(6.dp))
-    Text("仅选择 ChatGPT data export 的 conversations.json。系统选择后复制到 app-private 并直接导入；不会上传或执行内容。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-    Text("device · local-only · sensitive", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
-    Spacer(Modifier.height(12.dp))
+@Composable fun ChatGptExportImportSettingsPage(state: ChatGptImportUiState, onChoose: () -> Unit, onOpen: (ChatGptImportTask) -> Unit, onBack: () -> Unit, onRetry: (ChatGptImportTaskId) -> Unit, onCancel: () -> Unit, showHeader: Boolean = true, actionLabel: String = "选择 conversations.json", grouped: Boolean = false, modifier: Modifier = Modifier.fillMaxWidth()) = Column(modifier) {
+    if (showHeader) {
+        Text("ChatGPT 对话导入", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(6.dp))
+        Text("选择 ChatGPT 导出的 conversations.json，只在本机导入。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    }
+    if (!grouped) Spacer(Modifier.height(12.dp))
     if (state.selected == null) {
-        Button(onClick = onChoose, enabled = !state.working, colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { Text("选择 conversations.json") }
+        if (grouped) DataStorageGroupedActionRow(label = actionLabel, onClick = onChoose, enabled = !state.working, working = state.working)
+        else Button(onClick = onChoose, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text(actionLabel) }
         state.tasks.forEach { task -> TextButton(onClick = { onOpen(task) }, modifier = Modifier.fillMaxWidth()) { Text("${task.asset?.displayName ?: "导入任务"} · ${task.status}") } }
     } else {
         val task = state.selected
@@ -43,8 +45,8 @@ class ChatGptExportImportViewModel(private val imports: ManageChatGptExportImpor
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onBack) { Text("返回任务") }
-            if (task.status == ChatGptImportTaskStatus.FAILED) OutlinedButton(onClick = { onRetry(task.id) }, enabled = !state.working) { Text("重试") }
+            OutlinedButton(onClick = onBack, shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("返回任务") }
+            if (task.status == ChatGptImportTaskStatus.FAILED) OutlinedButton(onClick = { onRetry(task.id) }, enabled = !state.working, shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("重试") }
             else if (task.status !in setOf(ChatGptImportTaskStatus.COMPLETED, ChatGptImportTaskStatus.CANCELLED)) TextButton(onClick = onCancel, enabled = !state.working) { Text("取消") }
         }
     }

@@ -598,13 +598,24 @@ data class NormalChatSendAttemptEntity(
     val updatedAtEpochMs: Long,
     val safeErrorCode: String?,
     val egressProviderId: String?,
+    // Schema 53 compatibility only. These columns were introduced by the now-discarded gateway
+    // experiment; normal chat never reads or writes their semantic values. They remain solely so
+    // an already-installed database is not downgraded or destructively rebuilt.
+    val executionMode: String,
+    val gatewayTaskId: String?,
+    val finalGatewaySequence: Long?,
+    val gatewayFinalAcknowledgedAtEpochMs: Long?,
 )
 
 /** Immutable UI provenance; assistant content itself remains solely in message_nodes/blocks. */
 @Entity(
     tableName = "assistant_response_model_attributions",
     primaryKeys = ["assistantMessageId", "attemptId"],
-    indices = [Index("assistantMessageId"), Index("attemptId")],
+    indices = [
+        Index("assistantMessageId"),
+        Index("attemptId"),
+        Index(value = ["costTotalMicros", "recordedAtEpochMs"]),
+    ],
 )
 data class AssistantResponseModelAttributionEntity(
     val assistantMessageId: String,
@@ -614,6 +625,14 @@ data class AssistantResponseModelAttributionEntity(
     val modelId: String,
     val modelDisplayName: String,
     val recordedAtEpochMs: Long,
+    val inputTokens: Long?,
+    val outputTokens: Long?,
+    val totalTokens: Long?,
+    val cachedInputTokens: Long?,
+    val costPriceVersion: String?,
+    val costCurrencyCode: String?,
+    val costTotalMicros: Long?,
+    val costSource: String?,
 )
 
 /** Content-free resumable upload cursor. The capable URL/token remains outside Room. */
@@ -849,11 +868,16 @@ data class ConversationManagementIntentEntity(
 /** Seven-day local diagnostics only; no credential, prompt, reply, attachment, or raw payload. */
 @Entity(
     tableName = "debug_call_log",
-    indices = [Index(value = ["createdAtEpochMs"]), Index(value = ["providerId", "createdAtEpochMs"])],
+    indices = [
+        Index(value = ["createdAtEpochMs"]),
+        Index(value = ["providerId", "createdAtEpochMs"]),
+        Index(value = ["conversationId", "createdAtEpochMs"]),
+    ],
 )
 data class ProviderDiagnosticEntity(
     @androidx.room.PrimaryKey val id: String,
     val createdAtEpochMs: Long,
+    val conversationId: String?,
     val providerId: String,
     val endpointHost: String,
     val apiModelId: String,
@@ -1684,6 +1708,36 @@ interface ConversationDao {
     @Query("DELETE FROM conversation_memory_sources WHERE conversationId = :conversationId")
     fun deleteMemorySources(conversationId: String)
 
+    @Query("DELETE FROM message_content_blocks WHERE messageId IN (SELECT id FROM message_nodes WHERE conversationId = :conversationId)")
+    fun deleteBlocksForConversation(conversationId: String)
+
+    @Query("DELETE FROM message_nodes WHERE conversationId = :conversationId")
+    fun deleteNodesForConversation(conversationId: String)
+
+    @Query("DELETE FROM conversation_drafts WHERE conversationId = :conversationId")
+    fun deleteDraft(conversationId: String)
+
+    @Query("DELETE FROM conversation_management_intents WHERE conversationId = :conversationId")
+    fun deleteManagementIntentsForConversation(conversationId: String)
+
+    @Query("UPDATE memories SET conversationId = NULL WHERE conversationId = :conversationId")
+    fun detachMemoriesForConversation(conversationId: String)
+
+    @Query("DELETE FROM conversation_runtime_states WHERE conversationId = :conversationId")
+    fun deleteRuntimeStatesForConversation(conversationId: String)
+
+    @Query("DELETE FROM ai_runtime_events WHERE conversationId = :conversationId")
+    fun deleteRuntimeEventsForConversation(conversationId: String)
+
+    @Query("DELETE FROM conversation_attempt_lineages WHERE conversationId = :conversationId")
+    fun deleteAttemptLineagesForConversation(conversationId: String)
+
+    @Query("DELETE FROM normal_chat_send_attempts WHERE conversationId = :conversationId")
+    fun deleteNormalChatAttemptsForConversation(conversationId: String)
+
+    @Query("DELETE FROM conversations WHERE id = :conversationId")
+    fun deleteConversation(conversationId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertMemorySources(sources: List<ConversationMemorySourceEntity>)
 
@@ -2136,6 +2190,8 @@ interface AssistantResponseModelAttributionDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: AssistantResponseModelAttributionEntity)
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun find(assistantMessageId: String, attemptId: String): AssistantResponseModelAttributionEntity?
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId IN (:assistantMessageIds) ORDER BY recordedAtEpochMs ASC, attemptId ASC") fun forMessages(assistantMessageIds: List<String>): List<AssistantResponseModelAttributionEntity>
+    @Query("SELECT * FROM assistant_response_model_attributions WHERE inputTokens IS NOT NULL OR outputTokens IS NOT NULL OR costTotalMicros IS NOT NULL ORDER BY recordedAtEpochMs DESC, attemptId DESC") fun listCostedNewestFirst(): List<AssistantResponseModelAttributionEntity>
+    @Query("UPDATE assistant_response_model_attributions SET inputTokens=:inputTokens, outputTokens=:outputTokens, totalTokens=:totalTokens, cachedInputTokens=:cachedInputTokens, costPriceVersion=:costPriceVersion, costCurrencyCode=:costCurrencyCode, costTotalMicros=:costTotalMicros, costSource=:costSource WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichAccounting(assistantMessageId: String, attemptId: String, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?): Int
 }
 
 @Dao
@@ -2262,8 +2318,12 @@ interface ResumableAttachmentUploadDao {
         WorkspaceExchangeV2RestoreReceiptEntity::class,
         WorkspaceExchangeV2RestoreProvenanceEntity::class,
         WorkspaceExchangeV2RestoreSettingsEntity::class,
+        ScheduledMonitorTaskEntity::class,
+        ScheduledMonitorRunEntity::class,
+        ReminderDraftGenerationRecordEntity::class,
+        ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 45,
+    version = 53,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2300,6 +2360,9 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun agentLedgerDao(): AgentLedgerDao
     abstract fun p9bIntegrationLedgerDao(): P9BIntegrationLedgerDao
     abstract fun workspaceExchangeV2RestoreDao(): WorkspaceExchangeV2RestoreDao
+    abstract fun scheduledMonitorDao(): ScheduledMonitorDao
+    abstract fun reminderDraftGenerationRecordDao(): ReminderDraftGenerationRecordDao
+    abstract fun conversationTitleGenerationRecordDao(): ConversationTitleGenerationRecordDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -2817,6 +2880,68 @@ abstract class NanfengAiDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `assistant_response_model_attributions` (`assistantMessageId` TEXT NOT NULL, `attemptId` TEXT NOT NULL, `providerId` TEXT NOT NULL, `receiverProviderId` TEXT NOT NULL, `modelId` TEXT NOT NULL, `modelDisplayName` TEXT NOT NULL, `recordedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`assistantMessageId`, `attemptId`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_response_model_attributions_assistantMessageId` ON `assistant_response_model_attributions` (`assistantMessageId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_response_model_attributions_attemptId` ON `assistant_response_model_attributions` (`attemptId`)")
+            }
+        }
+        /** User-authorized recurring monitoring persists explicit instructions and results only. */
+        val MIGRATION_45_46 = object : Migration(45, 46) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `scheduled_monitor_tasks` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `instruction` TEXT NOT NULL, `sourceConversationId` TEXT, `cadence` TEXT NOT NULL, `modelPresetId` TEXT NOT NULL, `status` TEXT NOT NULL, `nextRunAtEpochMs` INTEGER NOT NULL, `lastRunAtEpochMs` INTEGER, `latestResult` TEXT, `lastProviderId` TEXT, `lastModelId` TEXT, `lastInputTokens` INTEGER, `lastOutputTokens` INTEGER, `lastSafeErrorCode` TEXT, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_scheduled_monitor_tasks_status_nextRunAtEpochMs` ON `scheduled_monitor_tasks` (`status`, `nextRunAtEpochMs`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `scheduled_monitor_runs` (`id` TEXT NOT NULL, `taskId` TEXT NOT NULL, `scheduledAtEpochMs` INTEGER NOT NULL, `startedAtEpochMs` INTEGER NOT NULL, `completedAtEpochMs` INTEGER, `status` TEXT NOT NULL, `safeErrorCode` TEXT, `result` TEXT, `providerId` TEXT, `modelId` TEXT, `inputTokens` INTEGER, `outputTokens` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`taskId`) REFERENCES `scheduled_monitor_tasks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_scheduled_monitor_runs_taskId_startedAtEpochMs` ON `scheduled_monitor_runs` (`taskId`, `startedAtEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_scheduled_monitor_runs_status_startedAtEpochMs` ON `scheduled_monitor_runs` (`status`, `startedAtEpochMs`)")
+            }
+        }
+        /** Response-owned Token and cost facts enrich the existing model attribution without content storage. */
+        val MIGRATION_46_47 = object : Migration(46, 47) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `inputTokens` INTEGER")
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `outputTokens` INTEGER")
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `totalTokens` INTEGER")
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `cachedInputTokens` INTEGER")
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `costPriceVersion` TEXT")
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `costCurrencyCode` TEXT")
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `costTotalMicros` INTEGER")
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `costSource` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_response_model_attributions_costTotalMicros_recordedAtEpochMs` ON `assistant_response_model_attributions` (`costTotalMicros`, `recordedAtEpochMs`)")
+            }
+        }
+        /** Links new chat failures to their local conversation without rewriting retained diagnostics. */
+        val MIGRATION_47_48 = object : Migration(47, 48) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `debug_call_log` ADD COLUMN `conversationId` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_debug_call_log_conversationId_createdAtEpochMs` ON `debug_call_log` (`conversationId`, `createdAtEpochMs`)")
+            }
+        }
+        /** Keeps only Qwen reminder-refinement accounting, never its source conversation text. */
+        val MIGRATION_48_49 = object : Migration(48, 49) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `reminder_draft_generation_records` (`id` TEXT NOT NULL, `sourceConversationId` TEXT NOT NULL, `requestedAtEpochMs` INTEGER NOT NULL, `status` TEXT NOT NULL, `providerId` TEXT, `modelId` TEXT, `inputTokens` INTEGER, `outputTokens` INTEGER, `cachedInputTokens` INTEGER, `costPriceVersion` TEXT, `costCurrencyCode` TEXT, `costTotalMicros` INTEGER, `costSource` TEXT, `safeErrorCode` TEXT, PRIMARY KEY(`id`))")
+            }
+        }
+        /** Keeps Qwen title-refinement accounting separate from ordinary replies and reminders. */
+        val MIGRATION_49_50 = object : Migration(49, 50) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `conversation_title_generation_records` (`id` TEXT NOT NULL, `sourceConversationId` TEXT NOT NULL, `requestedAtEpochMs` INTEGER NOT NULL, `status` TEXT NOT NULL, `providerId` TEXT, `modelId` TEXT, `inputTokens` INTEGER, `outputTokens` INTEGER, `cachedInputTokens` INTEGER, `costPriceVersion` TEXT, `costCurrencyCode` TEXT, `costTotalMicros` INTEGER, `costSource` TEXT, `safeErrorCode` TEXT, PRIMARY KEY(`id`))")
+            }
+        }
+        /** Historical schema bridge only; the execution-mode column is inert after gateway rollback. */
+        val MIGRATION_50_51 = object : Migration(50, 51) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `executionMode` TEXT NOT NULL DEFAULT 'DIRECT_LOCAL'")
+            }
+        }
+        /** Historical schema bridge only; terminal gateway metadata is inert after rollback. */
+        val MIGRATION_51_52 = object : Migration(51, 52) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `finalGatewaySequence` INTEGER")
+                db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `gatewayFinalAcknowledgedAtEpochMs` INTEGER")
+            }
+        }
+        /** Historical schema bridge only; no server task is created or resumed by this app. */
+        val MIGRATION_52_53 = object : Migration(52, 53) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `gatewayTaskId` TEXT")
             }
         }
     }

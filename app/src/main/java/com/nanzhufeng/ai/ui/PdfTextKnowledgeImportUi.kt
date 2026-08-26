@@ -37,7 +37,7 @@ class PdfTextImportViewModel(private val imports: ManagePdfTextKnowledgeImportUs
 @Composable fun PdfTextImportDialog(state: PdfTextImportUiState, dismiss: () -> Unit, back: () -> Unit, open: (PdfTextImportTask) -> Unit, retry: (PdfTextImportTaskId) -> Unit, edit: (PdfTextImportItemId) -> Unit, update: (String, String, String) -> Unit, confirm: (PdfTextImportItemId) -> Unit, skip: (PdfTextImportItemId) -> Unit, cancel: () -> Unit) {
     val selected = state.selected
     AlertDialog(
-        onDismissRequest = dismiss, containerColor = Color.White, shape = RoundedCornerShape(24.dp),
+        onDismissRequest = dismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp),
         title = { Text(if (selected == null) "PDF 导入任务" else "PDF 文本任务详情", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.p5aKeyboardTraversal().heightIn(max = 540.dp).verticalScroll(rememberScrollState())) {

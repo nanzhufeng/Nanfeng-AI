@@ -14,6 +14,8 @@ import java.util.UUID
 data class ProviderDiagnosticRecord(
     val id: String = UUID.randomUUID().toString(),
     val createdAt: Instant,
+    /** Null only for an explicit connection test or a record created before conversation linking. */
+    val conversationId: String? = null,
     val providerId: ProviderId,
     val endpointHost: String,
     val apiModelId: String,

@@ -109,5 +109,18 @@ class P5AAdaptiveNavigationContractsTest {
         assertTrue(manifest.contains("android:windowSoftInputMode=\"adjustResize|stateAlwaysHidden\""))
         assertFalse(scaffold.contains(".imePadding()"))
         assertTrue(scaffold.contains("WindowInsets.safeDrawing.only"))
+        assertTrue(scaffold.contains("route == P5ARoute.CONVERSATION"))
+        assertTrue(scaffold.contains("WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom"))
+    }
+
+    @Test
+    fun `folding between outer and inner displays preserves the live conversation viewport owner`() {
+        val manifest = File("src/main/AndroidManifest.xml").readText()
+        val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+
+        assertTrue(manifest.contains("android:configChanges=\"orientation|screenSize|screenLayout|smallestScreenSize\""))
+        assertTrue(workspace.contains("val chatTranscriptListState = rememberLazyListState()"))
+        assertTrue(workspace.contains("val workTranscriptListState = rememberLazyListState()"))
+        assertTrue(workspace.contains("val activeTranscriptListState = if (workMode) workTranscriptListState else chatTranscriptListState"))
     }
 }
