@@ -27,7 +27,7 @@ class NotificationReminderSettingsViewModel(
         val next = transform(state.settings)
         val saved = runCatching { save.execute(next) }
         state = saved.fold(
-            onSuccess = { NotificationReminderSettingsUiState(settings = it, notice = "通知与提醒设置已保存在本机。") },
+            onSuccess = { NotificationReminderSettingsUiState(settings = it) },
             onFailure = { state.copy(notice = null, error = "保存失败；已有设置保持不变。") },
         )
     }

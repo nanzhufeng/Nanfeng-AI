@@ -27,6 +27,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -36,6 +38,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -83,6 +86,8 @@ import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
@@ -95,6 +100,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Check
@@ -108,6 +115,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Menu
@@ -142,8 +150,8 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
@@ -178,6 +186,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.positionChanged
@@ -196,9 +205,11 @@ import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.buildAnnotatedString
@@ -260,6 +271,7 @@ import com.nanzhufeng.ai.domain.TemporaryConversationRecovery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
@@ -278,6 +290,19 @@ private val ComposerModelPickerRootContentHeight = 424.dp
 // Conversation overlays have an explicit stacking contract. The scroll-to-latest control stays
 // above the composer, but every in-canvas transient surface must cover that control.
 private const val ConversationScrollToLatestZIndex = 1f
+private const val TranscriptJumpControlIdleHideMillis = 3_000L
+
+private enum class TranscriptJumpDirection {
+    TOP,
+    BOTTOM,
+}
+
+private data class TranscriptScrollObservation(
+    val itemIndex: Int,
+    val itemOffset: Int,
+    val userDragging: Boolean,
+    val scrollInProgress: Boolean,
+)
 private const val ConversationModalOverlayZIndex = 2f
 // Show the full concrete model number in the Composer.  The fixed width admits
 // "5.6 Terra" without ellipsis while keeping the input lane usable on phones.
@@ -315,6 +340,9 @@ private val ConversationTranscriptPageGutter = 4.dp
 // 6dp smaller because the LazyColumn owns a separate 6dp passive-scrollbar lane.
 private val ConversationAssistantReadingStartInset = 24.dp
 private val ConversationAssistantReadingEndInset = 18.dp
+// The first 36dp footer hit target centers a 16dp glyph, so return only its visual glyph to the
+// same start edge as the reading text while keeping the full, comfortable hit area.
+private val AssistantFooterLeadingActionVisualOffset = 10.dp
 /** Reserved only for the passive scroll position marker, never for a second blank column. */
 private val ConversationScrollbarContentEndInset = 6.dp
 // This is scrollable LazyColumn content, not a painted header backing. Short transcripts begin
@@ -394,6 +422,11 @@ private fun scaledConversationTextUnit(value: androidx.compose.ui.unit.TextUnit)
 private fun scaledTransientMenuTextUnit(value: androidx.compose.ui.unit.TextUnit) =
     scaledConversationTextUnit(value) * TransientMenuTextScaleFactor
 
+/** Android's bundled rounded sans keeps the drawer identity friendly without shipping a font file. */
+private val DrawerIdentityRoundedFontFamily = FontFamily(
+    android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.NORMAL),
+)
+
 /** Composer alone uses compact names; its picker keeps the catalog's full concrete names. */
 private fun composerModelDisplayLabel(presets: List<ModelPresetId>): String =
     presets.joinToString(" / ") { preset ->
@@ -451,6 +484,9 @@ private val LocalAttachmentTransferRequest = staticCompositionLocalOf<(Attachmen
     { _, _ -> }
 }
 
+/** Find is a visual projection over the current transcript, never a message mutation. */
+private val LocalConversationFindQuery = staticCompositionLocalOf<String?> { null }
+
 /** Real local Room conversations only. This is intentionally a workspace, not a permanent QA card. */
 @OptIn(
     androidx.compose.material3.ExperimentalMaterial3Api::class,
@@ -461,6 +497,7 @@ internal fun ConversationWorkspaceDialog(
     state: ConversationFoundationUiState,
     notificationReminderSettings: com.nanzhufeng.ai.domain.NotificationReminderSettings,
     onDismiss: () -> Unit,
+    interceptsSystemBack: Boolean = false,
     onCreate: () -> Unit,
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onSurfaceChanged: (com.nanzhufeng.ai.domain.ConversationSurface) -> Unit,
@@ -563,11 +600,39 @@ internal fun ConversationWorkspaceDialog(
     var editingMessageId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingText by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
+    val actionScope = rememberCoroutineScope()
     val shareMessage: (PresentedTranscriptMessage) -> Unit = { transcript ->
         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, presentedMessagePlainText(transcript.message))
         }, "分享本地消息"))
+    }
+    val exportAssistantMarkdown: (PresentedTranscriptMessage) -> Unit = { transcript ->
+        val conversationTitle = state.conversations
+            .firstOrNull { it.id == state.selectedConversationId }
+            ?.title
+            ?: "对话"
+        val messageSequence = state.messages.indexOfFirst { it.message.messageId == transcript.message.messageId }
+            .let { index -> if (index < 0) 1 else index + 1 }
+        actionScope.launch {
+            runCatching { shareAssistantMarkdown(context, transcript, conversationTitle, messageSequence) }
+                .onSuccess { Toast.makeText(context, "已准备导出 Markdown", Toast.LENGTH_SHORT).show() }
+                .onFailure { error -> Toast.makeText(context, error.message ?: "Markdown 导出失败，请重试", Toast.LENGTH_SHORT).show() }
+        }
+    }
+    val exportConversationMarkdown: (com.nanzhufeng.ai.domain.Conversation) -> Unit = { conversation ->
+        // A drawer row can be long-pressed before its transcript becomes the visible path.
+        // Never export the previously selected path under this conversation's title.
+        if (conversation.id != state.selectedConversationId || state.isLoading) {
+            onSelect(conversation.id)
+            Toast.makeText(context, "已打开该对话，请再次选择导出 Markdown。", Toast.LENGTH_SHORT).show()
+        } else {
+            actionScope.launch {
+                runCatching { shareConversationMarkdown(context, conversation, state.messages) }
+                    .onSuccess { Toast.makeText(context, "已准备导出对话 Markdown", Toast.LENGTH_SHORT).show() }
+                    .onFailure { error -> Toast.makeText(context, error.message ?: "Markdown 导出失败，请重试", Toast.LENGTH_SHORT).show() }
+            }
+        }
     }
     val shareConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit = { conversation ->
         val text = buildString {
@@ -607,6 +672,8 @@ internal fun ConversationWorkspaceDialog(
     // the empty conversation/work switch.
     val hasConversationContent = state.messages.isNotEmpty()
     var searchPageVisible by rememberSaveable { mutableStateOf(false) }
+    // Search facts remain in the ViewModel while any search result briefly opens its owner chat.
+    var returnToSearchAfterSearchOpen by rememberSaveable { mutableStateOf(false) }
     // Chat and Work have different persisted content owners, so they also keep distinct
     // viewport owners.  Hoisting both states keeps a mode swap from recreating a list at
     // its default (latest) position, while rememberLazyListState retains them on recreation.
@@ -623,6 +690,18 @@ internal fun ConversationWorkspaceDialog(
     val copyText = rememberConversationCopyTextAction()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
+    fun returnToSearchAfterSearchOpen() {
+        if (!returnToSearchAfterSearchOpen) return
+        returnToSearchAfterSearchOpen = false
+        searchPageVisible = true
+        onDrawerOpenChanged(false)
+        drawerScope.launch { drawerState.close() }
+    }
+    val searchReturnSwipeModifier = if (returnToSearchAfterSearchOpen && !searchPageVisible) {
+        Modifier.searchAttachmentReturnSwipe(onReturn = ::returnToSearchAfterSearchOpen)
+    } else {
+        Modifier
+    }
     val activeFindMatches = activeFindQuery?.let { query ->
         conversationFindMessageMatches(state.messages, query)
     }.orEmpty()
@@ -680,7 +759,10 @@ internal fun ConversationWorkspaceDialog(
         if (!searchPageVisible && state.searchHistoryOpen) onCloseSearchHistory()
     }
     if (searchPageVisible && state.searchHistoryOpen) BackHandler(onBack = onCloseSearchHistory)
-    CompositionLocalProvider(LocalAttachmentTransferRequest provides onRequestAttachmentTransfer) {
+    CompositionLocalProvider(
+        LocalAttachmentTransferRequest provides onRequestAttachmentTransfer,
+        LocalConversationFindQuery provides activeFindQuery,
+    ) {
     state.attachmentTransfer?.let { transfer ->
         LaunchedEffect(transfer.id, transfer.action, transfer.bytes) {
             runCatching { performAttachmentTransfer(context, transfer) }
@@ -793,7 +875,8 @@ internal fun ConversationWorkspaceDialog(
             } else Box(
                 Modifier
                     .fillMaxSize()
-                    .background(ConversationWorkspaceCanvas),
+                    .background(ConversationWorkspaceCanvas)
+                    .then(searchReturnSwipeModifier),
             ) {
                 // A first launch must remain an actually empty local truth until the user chooses
                 // “新对话” from the drawer. In particular, OpenDocument v2 restore may safely run
@@ -809,11 +892,60 @@ internal fun ConversationWorkspaceDialog(
                 } else {
                     chatTranscriptListState
                 }
-                val showJumpToLatest by remember(activeTranscriptListState) {
+                var revealedTranscriptJumpDirection by remember(activeTranscriptListState) {
+                    mutableStateOf<TranscriptJumpDirection?>(null)
+                }
+                var transcriptJumpActivityGeneration by remember(activeTranscriptListState) { mutableStateOf(0) }
+                val activeTranscriptUserDragging by activeTranscriptListState.interactionSource.collectIsDraggedAsState()
+                LaunchedEffect(activeTranscriptListState) {
+                    var previousObservation: TranscriptScrollObservation? = null
+                    var manualScrollInProgress = false
+                    snapshotFlow {
+                        TranscriptScrollObservation(
+                            itemIndex = activeTranscriptListState.firstVisibleItemIndex,
+                            itemOffset = activeTranscriptListState.firstVisibleItemScrollOffset,
+                            userDragging = activeTranscriptUserDragging,
+                            scrollInProgress = activeTranscriptListState.isScrollInProgress,
+                        )
+                    }.collect { observation ->
+                        if (observation.userDragging) manualScrollInProgress = true
+                        val direction = previousObservation?.let { previous ->
+                            when {
+                                observation.itemIndex > previous.itemIndex || (
+                                    observation.itemIndex == previous.itemIndex && observation.itemOffset > previous.itemOffset
+                                ) -> TranscriptJumpDirection.BOTTOM
+                                observation.itemIndex < previous.itemIndex || (
+                                    observation.itemIndex == previous.itemIndex && observation.itemOffset < previous.itemOffset
+                                ) -> TranscriptJumpDirection.TOP
+                                else -> null
+                            }
+                        }
+                        if (manualScrollInProgress && direction != null) {
+                            revealedTranscriptJumpDirection = direction
+                            transcriptJumpActivityGeneration += 1
+                        }
+                        if (!observation.scrollInProgress) manualScrollInProgress = false
+                        previousObservation = observation
+                    }
+                }
+                LaunchedEffect(transcriptJumpActivityGeneration) {
+                    if (revealedTranscriptJumpDirection == null) return@LaunchedEffect
+                    delay(TranscriptJumpControlIdleHideMillis)
+                    revealedTranscriptJumpDirection = null
+                }
+                val showJumpToLatest by remember(activeTranscriptListState, revealedTranscriptJumpDirection) {
                     derivedStateOf {
-                        val layout = activeTranscriptListState.layoutInfo
-                        val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
-                        layout.totalItemsCount > 0 && lastVisible < layout.totalItemsCount - 1
+                        // A full Assistant reply is one LazyColumn item. Seeing its top does
+                        // not mean its lower paragraphs are on screen, so item-index equality
+                        // must never make this control disappear before the actual list end.
+                        revealedTranscriptJumpDirection == TranscriptJumpDirection.BOTTOM &&
+                            activeTranscriptListState.canScrollForward
+                    }
+                }
+                val showJumpToTop by remember(activeTranscriptListState, revealedTranscriptJumpDirection) {
+                    derivedStateOf {
+                        revealedTranscriptJumpDirection == TranscriptJumpDirection.TOP &&
+                            activeTranscriptListState.canScrollBackward
                     }
                 }
                 // The header remains an overlay, while the list owns a scrollable initial inset:
@@ -843,6 +975,7 @@ internal fun ConversationWorkspaceDialog(
                             onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
                             onCopyAssistant = { copyText(presentedMessagePlainText(it.message)) },
                             onShareAssistant = shareMessage,
+                            onExportAssistantMarkdown = exportAssistantMarkdown,
                             onBranchAssistant = onBranchFromMessage,
                             onOpenImagePreview = onOpenImagePreview,
                             onOpenPdfPreview = onOpenPdfPreview,
@@ -857,6 +990,12 @@ internal fun ConversationWorkspaceDialog(
                     Spacer(Modifier.fillMaxSize())
                 } else {
                     val listState = chatTranscriptListState
+                    // A direct touch drag is an explicit reading decision. It must win over
+                    // stream updates and any earlier follow-latest state immediately.
+                    val chatUserDragging by listState.interactionSource.collectIsDraggedAsState()
+                    LaunchedEffect(chatUserDragging) {
+                        if (chatUserDragging) chatFollowLatest = false
+                    }
                     // LazyColumn only lays out rows around the viewport.  Retain each row's
                     // real measured height while it is visible, so a multi-line bubble moves
                     // the edge thumb by its own pixels instead of by a single item index.
@@ -870,10 +1009,13 @@ internal fun ConversationWorkspaceDialog(
                     // message append before moving the only transcript scroll owner.
                     LaunchedEffect(listState) {
                         snapshotFlow {
-                            val layout = listState.layoutInfo
-                            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
-                            layout.totalItemsCount == 0 || lastVisible >= layout.totalItemsCount - 1
-                        }.collect { atLatest -> chatFollowLatest = atLatest }
+                            listState.layoutInfo.totalItemsCount == 0 || !listState.canScrollForward
+                        }.collect { atLatest ->
+                            // Reaching the real end may resume following. A streamed row making
+                            // canScrollForward true is not a user reading decision and must not
+                            // disable it or trigger any item-top alignment.
+                            if (atLatest) chatFollowLatest = true
+                        }
                     }
                     LaunchedEffect(state.searchAnchorMessageId, state.messages) {
                         state.searchAnchorMessageId?.let { anchor ->
@@ -889,10 +1031,10 @@ internal fun ConversationWorkspaceDialog(
                         if (systemScrollCaptureInProgress) return@LaunchedEffect
                         val sentCount = chatSentFromMessageCount
                         if (sentCount != null && state.messages.size > sentCount && listState.layoutInfo.totalItemsCount > 0) {
-                            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                            listState.scrollToTrueBottom()
                             chatSentFromMessageCount = null
                         } else if (chatFollowLatest && listState.layoutInfo.totalItemsCount > 0) {
-                            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                            listState.scrollToTrueBottom()
                         }
                     }
                     Box(Modifier.fillMaxSize()) {
@@ -941,9 +1083,13 @@ internal fun ConversationWorkspaceDialog(
                                 MessageBubble(
                                     transcript = message,
                                     attachmentPreviews = state.attachmentPreviews,
+                                    assistantGenerationPhaseOverride = if (
+                                        state.normalSendRetryInProgress && message.message.messageId == state.currentLeafId
+                                    ) "南枫AI 继续生成…" else null,
                                     onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
                                     onCopyAssistant = { copyText(presentedMessagePlainText(it.message)) },
                                     onShareAssistant = shareMessage,
+                                    onExportAssistantMarkdown = exportAssistantMarkdown,
                                     onBranchAssistant = onBranchFromMessage,
                                     onOpenImagePreview = onOpenImagePreview,
                                     onOpenPdfPreview = onOpenPdfPreview,
@@ -1048,7 +1194,7 @@ internal fun ConversationWorkspaceDialog(
                             )
                         }
                     }
-                    state.normalSendRecovery?.let { recovery ->
+                    state.normalSendRecovery?.takeIf { !state.isSending }?.let { recovery ->
                         Surface(
                             color = ForegroundSurface,
                             shape = RoundedCornerShape(14.dp),
@@ -1118,11 +1264,49 @@ internal fun ConversationWorkspaceDialog(
                 // This must be a later sibling of the composer, rather than a child of the
                 // transcript. A child's zIndex cannot escape its parent, so the composer's
                 // deliberately wide dropShadow would otherwise darken the white jump control.
+                if (showJumpToTop && !state.searchPanelOpen) JumpToTopButton(
+                    onClick = {
+                        // This is a reading rewind, not a request to resume auto-follow.
+                        if (workMode) workFollowLatest = false else chatFollowLatest = false
+                        revealedTranscriptJumpDirection = TranscriptJumpDirection.TOP
+                        transcriptJumpActivityGeneration += 1
+                        drawerScope.launch {
+                            activeTranscriptListState.animateBackwardByVisibleViewport(
+                                with(density) { floatingComposerHeight.toPx() },
+                            )
+                        }
+                    },
+                    onLongClick = {
+                        drawerScope.launch {
+                            activeTranscriptListState.scrollToTrueTop()
+                            if (workMode) workFollowLatest = false else chatFollowLatest = false
+                        }
+                    },
+                    modifier = Modifier
+                        .zIndex(ConversationScrollToLatestZIndex)
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        // Header round buttons are 44dp at top 18dp; this is 48dp at top 16dp,
+                        // so their visual centres share exactly the same header row.
+                        .padding(top = 16.dp),
+                )
                 if (showJumpToLatest && !state.searchPanelOpen) JumpToLatestButton(
                     onClick = {
+                        // This is a reading advance, not a request to resume auto-follow.
+                        if (workMode) workFollowLatest = false else chatFollowLatest = false
+                        revealedTranscriptJumpDirection = TranscriptJumpDirection.BOTTOM
+                        transcriptJumpActivityGeneration += 1
                         drawerScope.launch {
-                            val totalItems = activeTranscriptListState.layoutInfo.totalItemsCount
-                            if (totalItems > 0) activeTranscriptListState.animateScrollToItem(totalItems - 1)
+                            activeTranscriptListState.animateForwardByVisibleViewport(
+                                with(density) { floatingComposerHeight.toPx() },
+                            )
+                        }
+                    },
+                    onLongClick = {
+                        // A deliberate long press is the explicit request to rejoin live content.
+                        drawerScope.launch {
+                            activeTranscriptListState.scrollToTrueBottom()
+                            if (workMode) workFollowLatest = true else chatFollowLatest = true
                         }
                     },
                     modifier = Modifier
@@ -1163,6 +1347,7 @@ internal fun ConversationWorkspaceDialog(
             state = state,
             onDismiss = {
                 searchPageVisible = false
+                returnToSearchAfterSearchOpen = false
                 onDrawerOpenChanged(true)
                 drawerScope.launch { drawerState.open() }
             },
@@ -1176,7 +1361,11 @@ internal fun ConversationWorkspaceDialog(
             onCloseHistory = onCloseSearchHistory,
             onFillHistory = onFillSearchHistory,
             onClearHistory = onClearSearchHistory,
-            onOpenTextHit = { hit -> onOpenSearchHit(hit); searchPageVisible = false },
+            onOpenTextHit = { hit ->
+                returnToSearchAfterSearchOpen = true
+                onOpenSearchHit(hit)
+                searchPageVisible = false
+            },
             onOpenAttachmentHit = { hit -> onOpenSearchAttachment(hit.attachment) },
             onLocateAttachment = { hit, anchorBounds ->
                 searchAttachmentActionTarget = SearchAttachmentActionMenuTarget(hit, anchorBounds)
@@ -1185,12 +1374,13 @@ internal fun ConversationWorkspaceDialog(
     }
     searchAttachmentActionTarget?.let { target ->
         SearchAttachmentActionPopup(
-            anchorBounds = target.anchorBounds,
+            displayName = target.hit.attachment.displayName ?: "本地附件",
             onDismiss = { searchAttachmentActionTarget = null },
             onOpenConversation = {
                 val hit = target.hit
                 onOpenSearchHit(com.nanzhufeng.ai.domain.ConversationSearchHit(hit.conversationId, hit.messageNodeId, hit.title, hit.attachment.displayName ?: "本地附件", false))
                 searchAttachmentActionTarget = null
+                returnToSearchAfterSearchOpen = true
                 searchPageVisible = false
             },
         )
@@ -1198,6 +1388,7 @@ internal fun ConversationWorkspaceDialog(
     // Register after ModalNavigationDrawer so this handler wins over the drawer's internal
     // callback: physical left/right Back closes into the current chat canvas, never Activity.
     if (drawerState.isOpen) BackHandler { drawerScope.launch { drawerState.close() } }
+    if (interceptsSystemBack && !drawerState.isOpen) BackHandler(onBack = onDismiss)
     conversationActionTarget?.let { target ->
         val conversation = state.conversations.firstOrNull { it.id.value == target.conversationId }
         if (conversation == null) conversationActionTarget = null else ConversationActionSheet(
@@ -1231,6 +1422,10 @@ internal fun ConversationWorkspaceDialog(
                     onSelect(target.id)
                     Toast.makeText(context, "已打开该对话，请再次选择分享。", Toast.LENGTH_SHORT).show()
                 }
+            },
+            onExportConversationMarkdown = { target ->
+                conversationActionTarget = null
+                exportConversationMarkdown(target)
             },
             onShowUploadedFiles = { target ->
                 conversationActionTarget = null
@@ -1610,6 +1805,7 @@ private fun ConversationWorkScope(
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
     onCopyAssistant: (PresentedTranscriptMessage) -> Unit,
     onShareAssistant: (PresentedTranscriptMessage) -> Unit,
+    onExportAssistantMarkdown: (PresentedTranscriptMessage) -> Unit,
     onBranchAssistant: (MessageNodeId) -> Unit,
     onOpenImagePreview: (AttachmentId) -> Unit,
     onOpenPdfPreview: (AttachmentId) -> Unit,
@@ -1622,10 +1818,14 @@ private fun ConversationWorkScope(
     // a second transcript projection with a different proportion.
     LaunchedEffect(listState) {
         snapshotFlow {
-            val layout = listState.layoutInfo
-            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
-            layout.totalItemsCount == 0 || lastVisible >= layout.totalItemsCount - 1
-        }.collect(onFollowLatestChanged)
+            listState.layoutInfo.totalItemsCount == 0 || !listState.canScrollForward
+        }.collect { atLatest -> if (atLatest) onFollowLatestChanged(true) }
+    }
+    // Manual reading takes precedence over automatic updates. Programmatic scrolls do not
+    // emit this interaction, so an explicit send and a true-bottom state retain their meaning.
+    val workUserDragging by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(workUserDragging) {
+        if (workUserDragging) onFollowLatestChanged(false)
     }
     LaunchedEffect(
         state.messages.size,
@@ -1636,10 +1836,10 @@ private fun ConversationWorkScope(
         if (systemScrollCaptureInProgress) return@LaunchedEffect
         val sentCount = sentFromMessageCount
         if (sentCount != null && state.messages.size > sentCount && listState.layoutInfo.totalItemsCount > 0) {
-            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+            listState.scrollToTrueBottom()
             onSentToLatestConsumed()
         } else if (followLatest && listState.layoutInfo.totalItemsCount > 0) {
-            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+            listState.scrollToTrueBottom()
         }
     }
     Box(Modifier.fillMaxSize()) {
@@ -1669,9 +1869,13 @@ private fun ConversationWorkScope(
                 MessageBubble(
                     transcript = transcript,
                     attachmentPreviews = attachmentPreviews,
+                    assistantGenerationPhaseOverride = if (
+                        state.normalSendRetryInProgress && transcript.message.messageId == state.currentLeafId
+                    ) "南枫AI 继续生成…" else null,
                     onLongPress = onLongPress,
                     onCopyAssistant = onCopyAssistant,
                     onShareAssistant = onShareAssistant,
+                    onExportAssistantMarkdown = onExportAssistantMarkdown,
                     onBranchAssistant = onBranchAssistant,
                     onOpenImagePreview = onOpenImagePreview,
                     onOpenPdfPreview = onOpenPdfPreview,
@@ -1685,12 +1889,116 @@ private fun ConversationWorkScope(
     }
 }
 
+/** Advances exactly one currently visible reading page without targeting any transcript item. */
+private suspend fun LazyListState.animateForwardByVisibleViewport(bottomOverlayHeightPx: Float) {
+    val viewportHeightPx = layoutInfo.viewportSize.height.toFloat()
+    val visibleReadingHeightPx = (viewportHeightPx - bottomOverlayHeightPx).coerceAtLeast(0f)
+    if (!canScrollForward || visibleReadingHeightPx <= 0f) return
+    animateScrollBy(visibleReadingHeightPx)
+}
+
+/** Rewinds exactly one currently visible reading page without targeting any transcript item. */
+private suspend fun LazyListState.animateBackwardByVisibleViewport(bottomOverlayHeightPx: Float) {
+    val viewportHeightPx = layoutInfo.viewportSize.height.toFloat()
+    val visibleReadingHeightPx = (viewportHeightPx - bottomOverlayHeightPx).coerceAtLeast(0f)
+    if (!canScrollBackward || visibleReadingHeightPx <= 0f) return
+    animateScrollBy(-visibleReadingHeightPx)
+}
+
+/** Reaches the true physical end; it must never leave a long final row aligned at its top. */
+private suspend fun LazyListState.scrollToTrueBottom() {
+    if (layoutInfo.totalItemsCount == 0 || !canScrollForward) return
+    scrollToItem(layoutInfo.totalItemsCount - 1)
+    val viewportHeightPx = layoutInfo.viewportSize.height.toFloat().coerceAtLeast(1f)
+    while (canScrollForward) {
+        if (scrollBy(viewportHeightPx) <= 0f) return
+    }
+}
+
+/** Reaches the true physical start, including any scrollable transcript inset. */
+private suspend fun LazyListState.scrollToTrueTop() {
+    if (layoutInfo.totalItemsCount == 0 || !canScrollBackward) return
+    scrollToItem(0)
+    val viewportHeightPx = layoutInfo.viewportSize.height.toFloat().coerceAtLeast(1f)
+    while (canScrollBackward) {
+        if (scrollBy(-viewportHeightPx) >= 0f) return
+    }
+}
+
+/** A search attachment may temporarily open its owner conversation; either horizontal swipe returns. */
+private fun Modifier.searchAttachmentReturnSwipe(onReturn: () -> Unit): Modifier = pointerInput(onReturn) {
+    val returnThresholdPx = with(this) { 48.dp.toPx() }
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        var previousPosition = down.position
+        var horizontalDistancePx = 0f
+        var verticalDistancePx = 0f
+        var returned = false
+        while (!returned) {
+            // Read raw coordinates rather than participating in drag consumption: nested
+            // transcript rows and the drawer may own their own gesture, but this one-shot
+            // source return must still observe either horizontal direction.
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            val delta = change.position - previousPosition
+            previousPosition = change.position
+            horizontalDistancePx += delta.x
+            verticalDistancePx += delta.y
+            if (
+                abs(horizontalDistancePx) >= returnThresholdPx &&
+                abs(horizontalDistancePx) > abs(verticalDistancePx) * 1.3f
+            ) {
+                returned = true
+                onReturn()
+            }
+            if (change.changedToUpIgnoreConsumed()) break
+        }
+    }
+}
+
+@Composable
+private fun JumpToTopButton(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) = TranscriptJumpButton(
+    icon = Icons.Rounded.KeyboardArrowUp,
+    contentDescription = "回到对话开头",
+    onClick = onClick,
+    onLongClick = onLongClick,
+    modifier = modifier,
+)
+
+@Composable
+private fun JumpToLatestButton(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) = TranscriptJumpButton(
+    icon = Icons.Rounded.KeyboardArrowDown,
+    contentDescription = "到最新消息",
+    onClick = onClick,
+    onLongClick = onLongClick,
+    modifier = modifier,
+)
+
 /** A non-tonal pure-white control; Material FAB's elevation tint is intentionally avoided. */
 @Composable
-private fun JumpToLatestButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun TranscriptJumpButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Surface(
-        onClick = onClick,
-        modifier = modifier.size(48.dp),
+        modifier = modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         color = ForegroundSurface,
         contentColor = BodyText,
         shape = CircleShape,
@@ -1699,8 +2007,8 @@ private fun JumpToLatestButton(onClick: () -> Unit, modifier: Modifier = Modifie
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
-                Icons.Rounded.KeyboardArrowDown,
-                contentDescription = "到最新消息",
+                icon,
+                contentDescription = contentDescription,
                 modifier = Modifier.size(30.dp),
             )
         }
@@ -1789,6 +2097,11 @@ private fun ConversationNavigationDrawer(
                 if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN,
                 null,
             )
+            ConversationRowSwipeAction.TOGGLE_FAVORITE -> onManage(
+                conversation,
+                if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE,
+                null,
+            )
             ConversationRowSwipeAction.RENAME -> onRequestRename(conversation)
             ConversationRowSwipeAction.DELETE -> onRequestDelete(conversation)
         }
@@ -1830,7 +2143,12 @@ private fun ConversationNavigationDrawer(
             selectedBatchConversationIds = selectedBatchConversationIds.intersect(currentIds)
         }
         val allBatchSelected = batchCandidates.isNotEmpty() && batchCandidates.all { it.id.value in selectedBatchConversationIds }
-        val drawerIdentityVisualSize = scaledAppIconSize(28.dp)
+        val drawerIdentityVisualSize = scaledAppIconSize(36.dp)
+        val drawerIdentityTitleLineHeight = scaledAppTextUnit(28.sp)
+        val drawerIdentityHeaderReservedHeight = maxOf(
+            drawerIdentityVisualSize,
+            with(LocalDensity.current) { drawerIdentityTitleLineHeight.toDp() },
+        )
         // The settings and new-conversation controls are true overlays, but the final
         // conversation must still be able to scroll completely above them.  This is
         // scrollable end space only: it never creates a fixed drawer tray or a gap in
@@ -1866,7 +2184,9 @@ private fun ConversationNavigationDrawer(
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Spacer(Modifier.height(drawerIdentityVisualSize))
+                // This is scrollable top space for the fixed identity header. It must match the
+                // larger icon/title line so the first quick action never sits underneath it.
+                Spacer(Modifier.height(drawerIdentityHeaderReservedHeight))
                 Surface(
                     color = ConversationDrawerQuickActionSurface,
                     shape = P5AInteractiveShape,
@@ -1997,7 +2317,13 @@ private fun ConversationNavigationDrawer(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.size(drawerIdentityVisualSize).clip(RoundedCornerShape(8.dp)),
                 )
-                Text("南枫 AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "南枫 AI",
+                    fontSize = scaledAppTextUnit(22.sp),
+                    lineHeight = drawerIdentityTitleLineHeight,
+                    fontFamily = DrawerIdentityRoundedFontFamily,
+                    fontWeight = FontWeight.Bold,
+                )
             }
             if (batchEditing) {
                 ConversationBatchEditControls(
@@ -2370,10 +2696,18 @@ private fun TemporaryConversationNavigationDrawer(onExit: () -> Unit, onOpenSett
 @Composable
 internal fun ConversationManagementSettingsCard(
     state: ConversationFoundationUiState,
+    onOpenFavorites: () -> Unit,
     onOpenArchived: () -> Unit,
     onOpenRecycleBin: () -> Unit,
 ) {
     DataStorageGroupedCard {
+        ConversationLifecycleEntry(
+            icon = Icons.Rounded.Bookmark,
+            title = "收藏",
+            summary = "查看并管理已收藏的本地对话。",
+            onClick = onOpenFavorites,
+        )
+        DataStorageGroupedDivider()
         ConversationLifecycleEntry(
             icon = Icons.Rounded.Archive,
             title = "已归档",
@@ -2387,6 +2721,144 @@ internal fun ConversationManagementSettingsCard(
             summary = "查看并恢复已移入回收站的会话；消息树仍保留在本机。",
             onClick = onOpenRecycleBin,
         )
+    }
+}
+
+@Composable
+internal fun FavoriteConversationListSettingsCard(
+    state: ConversationFoundationUiState,
+    onUnfavorite: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onOpenConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+) {
+    var revealedConversationId by remember { mutableStateOf<String?>(null) }
+    val favoriteDismissInteractionSource = remember { MutableInteractionSource() }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = 640.dp)
+            .combinedClickable(
+                enabled = revealedConversationId != null,
+                interactionSource = favoriteDismissInteractionSource,
+                indication = null,
+                onClick = { revealedConversationId = null },
+            ),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("收藏的会话保存在本机；取消收藏不会删除消息或附件。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (state.listScope != ConversationListScope.FAVORITES) {
+            Text("正在读取收藏…", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        } else if (state.conversations.isEmpty()) {
+            Text("暂无收藏会话。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        } else {
+            state.conversations.forEach { conversation ->
+                FavoriteConversationSwipeRow(
+                    conversation = conversation,
+                    revealed = revealedConversationId == conversation.id.value,
+                    onRevealChanged = { opened -> revealedConversationId = conversation.id.value.takeIf { opened } },
+                    onOpenConversation = {
+                        if (revealedConversationId != null) revealedConversationId = null else onOpenConversation(conversation)
+                    },
+                    onUnfavorite = {
+                        revealedConversationId = null
+                        onUnfavorite(conversation)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteConversationSwipeRow(
+    conversation: com.nanzhufeng.ai.domain.Conversation,
+    revealed: Boolean,
+    onRevealChanged: (Boolean) -> Unit,
+    onOpenConversation: () -> Unit,
+    onUnfavorite: () -> Unit,
+) {
+    val rowHeight = 58.dp
+    val revealWidth = 72.dp
+    val density = LocalDensity.current
+    val revealWidthPx = with(density) { revealWidth.toPx() }
+    var dragOffsetPx by remember(conversation.id) { mutableStateOf(0f) }
+    var dragging by remember(conversation.id) { mutableStateOf(false) }
+    val rowInteractionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(revealed, revealWidthPx, dragging) {
+        if (!dragging) dragOffsetPx = if (revealed) -revealWidthPx else 0f
+    }
+    val translatedPx by animateFloatAsState(
+        targetValue = if (dragging) dragOffsetPx else if (revealed) -revealWidthPx else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "favoriteConversationSwipeOffset",
+    )
+    val rowSurfaceShape = if (translatedPx < 0f) {
+        RoundedCornerShape(topStart = 18.dp, topEnd = 0.dp, bottomEnd = 0.dp, bottomStart = 18.dp)
+    } else {
+        RoundedCornerShape(18.dp)
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(rowHeight)
+            .clip(RoundedCornerShape(18.dp))
+            .background(ForegroundSurface),
+    ) {
+        if (translatedPx < 0f) {
+            ConversationLifecycleSwipeAction(
+                icon = Icons.Rounded.Bookmark,
+                label = "取消收藏",
+                color = Color(0xFFFFF3E8),
+                contentColor = AccentOrange,
+                onClick = onUnfavorite,
+                modifier = Modifier.align(Alignment.CenterEnd).width(revealWidth),
+            )
+        }
+        Surface(
+            color = ForegroundSurface,
+            contentColor = BodyText,
+            shape = rowSurfaceShape,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { translationX = translatedPx }
+                .clip(rowSurfaceShape)
+                .draggable(
+                    state = rememberDraggableState { delta ->
+                        dragging = true
+                        dragOffsetPx = (dragOffsetPx + delta).coerceIn(-revealWidthPx, 0f)
+                    },
+                    orientation = Orientation.Horizontal,
+                    startDragImmediately = revealed,
+                    onDragStarted = {
+                        dragging = true
+                        dragOffsetPx = if (revealed) -revealWidthPx else 0f
+                    },
+                    onDragStopped = {
+                        dragging = false
+                        onRevealChanged(dragOffsetPx <= -revealWidthPx * 0.42f)
+                    },
+                )
+                .combinedClickable(
+                    interactionSource = rowInteractionSource,
+                    indication = null,
+                    onClick = {
+                        if (revealed) onRevealChanged(false) else onOpenConversation()
+                    },
+                ),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Rounded.Bookmark, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(20.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(conversation.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("更新于 ${formatLifecycleTime(conversation.updatedAt)}", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                }
+            }
+        }
     }
 }
 
@@ -2429,6 +2901,7 @@ internal fun ConversationLifecycleListSettingsCard(
     onPermanentlyDelete: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onClearArchived: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
     onClearRecycleBin: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
+    onOpenConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
 ) {
     val isRecycleBin = scope == ConversationListScope.DELETED
     val title = if (isRecycleBin) "回收站" else "已归档"
@@ -2487,6 +2960,9 @@ internal fun ConversationLifecycleListSettingsCard(
                     onDelete = {
                         revealedConversationId = null
                         if (isRecycleBin) pendingPermanentDelete = conversation else pendingDelete = conversation
+                    },
+                    onOpenConversation = {
+                        if (revealedConversationId != null) revealedConversationId = null else onOpenConversation(conversation)
                     },
                 )
             }
@@ -2562,6 +3038,7 @@ private fun ConversationLifecycleSwipeRow(
     onRevealChanged: (Boolean) -> Unit,
     onRestore: () -> Unit,
     onDelete: () -> Unit,
+    onOpenConversation: () -> Unit,
 ) {
     val rowHeight = 58.dp
     val revealWidth = 124.dp
@@ -2621,13 +3098,12 @@ private fun ConversationLifecycleSwipeRow(
                         onRevealChanged(dragOffsetPx <= -revealWidthPx * 0.42f)
                     },
                 )
-                // A lifecycle row has no ordinary click action.  Its visible surface
-                // is therefore a safe dismissal target for this row or for another
-                // open row; the action ribbon below remains independently clickable.
                 .combinedClickable(
                     interactionSource = closeActionsInteractionSource,
                     indication = null,
-                    onClick = { onRevealChanged(false) },
+                    onClick = {
+                        if (revealed) onRevealChanged(false) else onOpenConversation()
+                    },
                 ),
         ) {
             Column(
@@ -2807,8 +3283,8 @@ private fun ConversationSearchPage(
                     Text(
                         "搜索",
                         modifier = Modifier.align(Alignment.Center).semantics { heading() },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -2834,8 +3310,8 @@ private fun ConversationSearchPage(
                                 Text(
                                     category.label,
                                     modifier = if (expandedSearchCategories) Modifier.padding(horizontal = 14.dp, vertical = 9.dp) else Modifier.fillMaxWidth().padding(vertical = 9.dp),
-                                    color = if (selected) BodyText else SecondaryText,
-                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (selected) MaterialTheme.colorScheme.primary else SecondaryText,
+                                    fontWeight = FontWeight.SemiBold,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 )
                             }
@@ -3441,9 +3917,9 @@ private fun ConversationNavigationRow(
     // from reducing each row's vertical text breathing room, not by making card gaps merge.
     val rowHeight = if (batchEditing) 44.dp else 36.dp
     val density = LocalDensity.current
-    // The three shortcuts are one compact part of the row: they only exist visually while
+    // The four shortcuts are one compact part of the row: they only exist visually while
     // the row moves right, and remain at the exact row height when the gesture settles open.
-    val revealWidth = 132.dp
+    val revealWidth = 176.dp
     val revealWidthPx = with(density) { revealWidth.toPx() }
     var dragOffsetPx by remember(conversation.id) { mutableStateOf(0f) }
     var dragging by remember(conversation.id) { mutableStateOf(false) }
@@ -3488,6 +3964,7 @@ private fun ConversationNavigationRow(
         if (swipeAction != null && translatedPx > 0f) {
             ConversationRowSwipeActions(
                 pinned = conversation.pinnedAt != null,
+                favorited = conversation.favoritedAt != null,
                 rowHeight = rowHeight,
                 onAction = { action ->
                     onRevealChanged(false)
@@ -3534,7 +4011,7 @@ private fun ConversationNavigationRow(
                         tint = SecondaryText,
                     )
                 }
-                Text(conversation.title, modifier = Modifier.weight(1f), fontSize = scaledConversationTextUnit(16.sp), lineHeight = scaledConversationTextUnit(20.sp), fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(conversation.title, modifier = Modifier.weight(1f), fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(conversationListLocalDate(conversation.updatedAt), modifier = Modifier.wrapContentWidth(Alignment.End), style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
                 if (unread) {
                     Box(
@@ -3598,22 +4075,23 @@ private fun CompactConversationSelectionCheckbox(
     }
 }
 
-private enum class ConversationRowSwipeAction { TOGGLE_PIN, RENAME, DELETE }
+private enum class ConversationRowSwipeAction { TOGGLE_PIN, TOGGLE_FAVORITE, RENAME, DELETE }
 
 @Composable
 private fun ConversationRowSwipeActions(
     pinned: Boolean,
+    favorited: Boolean,
     rowHeight: androidx.compose.ui.unit.Dp,
     onAction: (ConversationRowSwipeAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // This is one contextual action ribbon belonging to the revealed conversation row,
-    // not three competing primary buttons. The shared surface keeps the actions visually
+    // not four competing primary buttons. The shared surface keeps the actions visually
     // grouped while low-chroma icon colors retain their distinct meanings.
     Surface(
         color = Color(0xFFF2F4F1),
         shape = RectangleShape,
-        modifier = modifier.width(132.dp).height(rowHeight),
+        modifier = modifier.width(176.dp).height(rowHeight),
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -3625,6 +4103,14 @@ private fun ConversationRowSwipeActions(
                     contentColor = Color(0xFF397A6B),
                     shape = RectangleShape,
                     onClick = { onAction(ConversationRowSwipeAction.TOGGLE_PIN) },
+                    modifier = Modifier.weight(1f),
+                )
+                ConversationRowSwipeActionButton(
+                    icon = if (favorited) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                    label = if (favorited) "取消收藏" else "收藏",
+                    contentColor = Color(0xFF9B751D),
+                    shape = RectangleShape,
+                    onClick = { onAction(ConversationRowSwipeAction.TOGGLE_FAVORITE) },
                     modifier = Modifier.weight(1f),
                 )
                 ConversationRowSwipeActionButton(
@@ -3682,7 +4168,7 @@ private data class MessageActionMenuTarget(
     val pressPosition: androidx.compose.ui.geometry.Offset,
 )
 
-/** The search attachment long-press has exactly one destination, so it needs no dialog chrome. */
+/** Long-press actions are transient; the actual file identity stays in the search hit. */
 private data class SearchAttachmentActionMenuTarget(
     val hit: ConversationAttachmentSearchHit,
     val anchorBounds: androidx.compose.ui.geometry.Rect,
@@ -3690,48 +4176,57 @@ private data class SearchAttachmentActionMenuTarget(
 
 @Composable
 private fun SearchAttachmentActionPopup(
-    anchorBounds: androidx.compose.ui.geometry.Rect,
+    displayName: String,
     onOpenConversation: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val density = LocalDensity.current
-    val containerSize = LocalWindowInfo.current.containerSize
-    val popupWidth = 184.dp
-    val popupHeight = 48.dp
-    val horizontalMargin = with(density) { 16.dp.roundToPx() }
-    val verticalGap = with(density) { 6.dp.roundToPx() }
-    val popupWidthPx = with(density) { popupWidth.roundToPx() }
-    val popupHeightPx = with(density) { popupHeight.roundToPx() }
-    val x = (anchorBounds.center.x.toInt() - popupWidthPx / 2)
-        .coerceIn(horizontalMargin, (containerSize.width - popupWidthPx - horizontalMargin).coerceAtLeast(horizontalMargin))
-    val above = anchorBounds.top.toInt() - popupHeightPx - verticalGap
-    val y = (if (above >= horizontalMargin) above else anchorBounds.bottom.toInt() + verticalGap)
-        .coerceIn(horizontalMargin, (containerSize.height - popupHeightPx - horizontalMargin).coerceAtLeast(horizontalMargin))
-    val cardShape = RoundedCornerShape(20.dp)
-    Popup(
-        alignment = Alignment.TopStart,
-        offset = IntOffset(x, y),
+    Dialog(
         onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = true),
     ) {
-        Surface(
-            color = ForegroundSurface,
-            contentColor = BodyText,
-            shape = cardShape,
-            shadowElevation = 6.dp,
-            modifier = Modifier
-                .width(popupWidth)
-                .height(popupHeight)
-                .clip(cardShape)
-                .combinedClickable(onClick = { onDismiss(); onOpenConversation() }),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            DismissibleDialogBackdrop(onDismiss)
+            Surface(
+                color = ForegroundSurface,
+                contentColor = BodyText,
+                shape = RoundedCornerShape(28.dp),
+                shadowElevation = 8.dp,
+                modifier = Modifier
+                    .padding(horizontal = 22.dp)
+                    .widthIn(max = 360.dp)
+                    .fillMaxWidth(),
             ) {
-                Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp), tint = SecondaryText)
-                Text("跳转到对应对话", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Text(
+                        displayName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val actionShape = RoundedCornerShape(18.dp)
+                    Surface(
+                        onClick = { onDismiss(); onOpenConversation() },
+                        color = NeutralSystemSurface,
+                        contentColor = BodyText,
+                        shape = actionShape,
+                        modifier = Modifier.fillMaxWidth().clip(actionShape),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 19.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = BodyText,
+                            )
+                            Text("快速定位到对应对话", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
             }
         }
     }
@@ -3748,6 +4243,7 @@ private fun ConversationActionSheet(
     onRequestProject: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestDelete: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onShareConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onExportConversationMarkdown: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onShowUploadedFiles: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onFindInConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onAddToHomeScreen: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
@@ -3760,8 +4256,8 @@ private fun ConversationActionSheet(
         conversation.deletedAt != null -> 1
         // The ordinary conversation menu stays focused on reading and managing the chat.
         // Workspace keeps its existing project, attachment and launcher actions.
-        workMode -> 8 + if (includeRename) 1 else 0
-        else -> 5 + if (includeRename) 1 else 0
+        workMode -> 10 + if (includeRename) 1 else 0
+        else -> 7 + if (includeRename) 1 else 0
     }
     val horizontalMargin = with(density) { 16.dp.roundToPx() }
     val verticalGap = with(density) { 6.dp.roundToPx() }
@@ -3799,8 +4295,10 @@ private fun ConversationActionSheet(
                     ConversationMenuAction(Icons.Rounded.RestoreFromTrash, "从回收站恢复", onClick = { onDismiss(); onManage(conversation, ConversationManagementAction.RESTORE_DELETED, null) })
                 } else {
                     if (workMode) {
-                        ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
                         ConversationMenuAction(Icons.Rounded.PushPin, if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
+                        ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
+                        ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
+                        ConversationMenuAction(Icons.Rounded.FileDownload, "导出 Markdown", onClick = { onExportConversationMarkdown(conversation) })
                         if (includeRename) ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove, if (conversation.projectId == null) "添加到项目" else "移动或移出项目", trailing = Icons.Rounded.ChevronRight, onClick = { onRequestProject(conversation) })
                         ConversationMenuAction(Icons.Rounded.AttachFile, "已上传文件", onClick = { onShowUploadedFiles(conversation) })
@@ -3810,8 +4308,10 @@ private fun ConversationActionSheet(
                         ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
                     } else {
                         ConversationMenuAction(Icons.Rounded.PushPin, if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
+                        ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
                         if (includeRename) ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
+                        ConversationMenuAction(Icons.Rounded.FileDownload, "导出 Markdown", onClick = { onExportConversationMarkdown(conversation) })
                         ConversationMenuAction(Icons.Rounded.Search, "在聊天中查找", onClick = { onFindInConversation(conversation) })
                         ConversationMenuAction(if (conversation.archivedAt == null) Icons.Rounded.Archive else Icons.Rounded.Unarchive, if (conversation.archivedAt == null) "归档" else "恢复", onClick = { onDismiss(); onManage(conversation, if (conversation.archivedAt == null) ConversationManagementAction.ARCHIVE else ConversationManagementAction.UNARCHIVE, null) })
                         ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
@@ -3922,19 +4422,33 @@ private fun ConversationFindInChatDialog(
         title = { Text("在聊天中查找") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("输入关键词") },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { submitFind() }),
-                )
-                when {
-                    query.isBlank() -> Text("仅在当前本地对话中查找，不会搜索其它会话或发送内容。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                    matches.isEmpty() -> Text("当前对话没有匹配内容。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                    else -> Text("找到 ${matches.size} 条匹配消息；点“查找”后可用上一个、下一个逐条定位。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("输入关键词", color = BodyText, style = MaterialTheme.typography.bodyMedium)
+                Surface(color = NeutralSystemSurface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth().padding(6.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = ForegroundSurface,
+                            unfocusedContainerColor = ForegroundSurface,
+                            disabledContainerColor = ForegroundSurface,
+                            focusedTextColor = BodyText,
+                            unfocusedTextColor = BodyText,
+                            cursorColor = AccentOrange,
+                            focusedBorderColor = AccentOrange,
+                            unfocusedBorderColor = Color.Transparent,
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { submitFind() }),
+                    )
+                }
+                if (query.isNotBlank()) {
+                    when {
+                        matches.isEmpty() -> Text("当前对话没有匹配内容。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                        else -> Text("找到 ${matches.size} 条匹配消息；点“查找”后可用上一个、下一个逐条定位。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         },
@@ -4040,9 +4554,11 @@ private fun ConversationManagementBar(
 private fun MessageBubble(
     transcript: PresentedTranscriptMessage,
     attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>,
+    assistantGenerationPhaseOverride: String? = null,
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
     onCopyAssistant: (PresentedTranscriptMessage) -> Unit,
     onShareAssistant: (PresentedTranscriptMessage) -> Unit,
+    onExportAssistantMarkdown: (PresentedTranscriptMessage) -> Unit,
     onBranchAssistant: (MessageNodeId) -> Unit,
     onOpenImagePreview: (AttachmentId) -> Unit,
     onOpenPdfPreview: (AttachmentId) -> Unit,
@@ -4131,11 +4647,16 @@ private fun MessageBubble(
             // first chunk arrives. Render it explicitly instead of leaving a blank transcript
             // gap, and keep the small indicator while streamed text continues to arrive.
             if (message.deliveryState == com.nanzhufeng.ai.domain.MessageDeliveryState.PARTIAL) {
-                AssistantGenerationStatus(transcript.metadata.waitingPreview, hasPartialText = textBlocks.isNotEmpty())
+                AssistantGenerationStatus(
+                    transcript.metadata.waitingPreview?.let { preview ->
+                        assistantGenerationPhaseOverride?.let { preview.copy(phase = it) } ?: preview
+                    },
+                    hasPartialText = textBlocks.isNotEmpty(),
+                )
             }
             if (textBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth()) { textContent() }
             if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { attachmentContent() }
-            AssistantMessageActionRow(transcript, onCopyAssistant, onShareAssistant, onBranchAssistant)
+            AssistantMessageActionRow(transcript, onCopyAssistant, onShareAssistant, onExportAssistantMarkdown, onBranchAssistant)
         }
         else -> Surface(color = roleVisual.surface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { textContent(); attachmentContent() }
@@ -4278,10 +4799,12 @@ private fun AssistantMessageActionRow(
     transcript: PresentedTranscriptMessage,
     onCopy: (PresentedTranscriptMessage) -> Unit,
     onShare: (PresentedTranscriptMessage) -> Unit,
+    onExportMarkdown: (PresentedTranscriptMessage) -> Unit,
     onBranch: (MessageNodeId) -> Unit,
 ) {
     val time = formatTranscriptTimeOrNull(transcript.metadata.createdAt)
     val model = assistantFooterModelName(transcript.metadata.modelSnapshotLabel)
+    var moreActionsExpanded by remember(transcript.message.messageId) { mutableStateOf(false) }
     // The conversation footer is a compact reading surface. It projects the persisted cost
     // label without estimate provenance and rounds only this rendered amount; settings and the
     // cost ledger keep their full source-qualified accounting label.
@@ -4307,6 +4830,7 @@ private fun AssistantMessageActionRow(
                 contentDescription = "复制",
                 onClick = { onCopy(transcript) },
                 iconSize = 16.dp,
+                modifier = Modifier.offset(x = -AssistantFooterLeadingActionVisualOffset),
             )
             AssistantMessageAction(
                 icon = Icons.Rounded.Share,
@@ -4314,11 +4838,36 @@ private fun AssistantMessageActionRow(
                 onClick = { onShare(transcript) },
                 iconSize = 16.dp,
             )
-            AssistantMessageAction(
-                icon = Icons.AutoMirrored.Outlined.CallSplit,
-                contentDescription = "从此处创建分支",
-                onClick = { onBranch(transcript.message.messageId) },
-            )
+            Box {
+                AssistantMessageAction(
+                    icon = Icons.Rounded.MoreVert,
+                    contentDescription = "更多操作",
+                    onClick = { moreActionsExpanded = true },
+                )
+                DropdownMenu(
+                    expanded = moreActionsExpanded,
+                    onDismissRequest = { moreActionsExpanded = false },
+                    containerColor = ForegroundSurface,
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("导出 Markdown") },
+                        leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
+                        onClick = {
+                            moreActionsExpanded = false
+                            onExportMarkdown(transcript)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("创建分支") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, contentDescription = null) },
+                        onClick = {
+                            moreActionsExpanded = false
+                            onBranch(transcript.message.messageId)
+                        },
+                    )
+                }
+            }
             BoxWithConstraints(Modifier.weight(1f)) {
                 val inlineMetadata = listOfNotNull(time, model, cost).joinToString(" · ")
                 val primaryMetadata = listOfNotNull(time, model).joinToString(" · ")
@@ -4357,7 +4906,7 @@ private fun AssistantMessageActionRow(
 
 /** The footer is a reading aid, not a technical route ledger. */
 private fun assistantFooterModelName(label: String?): String? = label
-    ?.let { com.nanzhufeng.ai.domain.modelDisplayNameForUser(it) }
+    ?.let { com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
     ?.trim()
     ?.takeIf { it.isNotBlank() }
 
@@ -4377,10 +4926,11 @@ private fun AssistantMessageAction(
     contentDescription: String,
     onClick: () -> Unit,
     iconSize: androidx.compose.ui.unit.Dp = 20.dp,
+    modifier: Modifier = Modifier,
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(36.dp),
+        modifier = modifier.size(36.dp),
     ) {
         Icon(
             imageVector = icon,
@@ -4593,20 +5143,26 @@ private fun CompactConversationRenameDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    var fieldValue by remember { mutableStateOf(TextFieldValue(value, selection = TextRange(0, value.length))) }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = true),
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+            val drawerWidth = if (maxWidth >= 600.dp) maxWidth * (2f / 3f) else maxWidth.coerceAtMost(320.dp)
             // A full-width Compose Dialog owns the entire window, so its dimmed area is
             // not technically "outside" the Dialog. Keep one shared backdrop target above
             // the window but below the card so every background tap remains a cancel action.
             DismissibleDialogBackdrop(onDismiss)
             Surface(
                 modifier = Modifier
-                    .padding(horizontal = 12.dp)
-                    .widthIn(max = 336.dp)
-                    .fillMaxWidth(),
+                    .width(drawerWidth),
                 color = ForegroundSurface,
                 shape = RoundedCornerShape(20.dp),
                 shadowElevation = 8.dp,
@@ -4615,7 +5171,14 @@ private fun CompactConversationRenameDialog(
                     modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    CompactConversationRenameField(value = value, onValueChange = onValueChange)
+                    CompactConversationRenameField(
+                        value = fieldValue,
+                        onValueChange = { updated ->
+                            fieldValue = updated
+                            onValueChange(updated.text)
+                        },
+                        focusRequester = focusRequester,
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
@@ -4643,7 +5206,11 @@ private fun DismissibleDialogBackdrop(onDismiss: () -> Unit) {
 
 /** A full-height editable line; the label decorates the border without consuming input space. */
 @Composable
-private fun CompactConversationRenameField(value: String, onValueChange: (String) -> Unit) {
+private fun CompactConversationRenameField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    focusRequester: FocusRequester,
+) {
     val shape = RoundedCornerShape(12.dp)
     Box(Modifier.fillMaxWidth().height(48.dp)) {
         BasicTextField(
@@ -4651,6 +5218,7 @@ private fun CompactConversationRenameField(value: String, onValueChange: (String
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxSize()
+                .focusRequester(focusRequester)
                 .clip(shape)
                 .border(1.dp, Color(0xFF79747E), shape)
                 .padding(horizontal = 12.dp),
@@ -4842,14 +5410,149 @@ private fun presentedMessagePlainText(message: PresentedMessage): String = messa
     is PresentationBlock.SafeToolSummary -> "工具结果（安全摘要）：${block.toolName} · ${block.summary}"
 } }
 
+/**
+ * A title-first name stays recognizable in Android's file picker; the short sequence
+ * differentiates a single reply from a full conversation without exposing timestamps.
+ */
+private fun conversationMarkdownExportFileName(title: String, sequence: Int): String {
+    val safeTitle = title
+        .replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .take(48)
+        .ifBlank { "对话" }
+    return safeTitle + "-" + sequence.coerceIn(1, 99).toString().padStart(2, '0') + ".md"
+}
+
+/** Exports the already-visible assistant response as portable Markdown, never a Provider payload. */
+private suspend fun shareAssistantMarkdown(
+    context: android.content.Context,
+    transcript: PresentedTranscriptMessage,
+    conversationTitle: String,
+    messageSequence: Int,
+) {
+    val file = withContext(Dispatchers.IO) {
+        val directory = java.io.File(context.cacheDir, "shared_attachments")
+        if (!directory.exists() && !directory.mkdirs()) error("无法创建 Markdown 导出文件。")
+        val target = java.io.File(directory, conversationMarkdownExportFileName(conversationTitle, messageSequence))
+        target.writeText(presentedMessageMarkdown(transcript.message), Charsets.UTF_8)
+        target
+    }
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.attachment-share", file)
+    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+        type = "text/markdown"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_TITLE, file.name)
+        clipData = android.content.ClipData.newRawUri("南枫 AI Markdown", uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }, "导出 Markdown"))
+}
+
+/** Exports one current-path conversation as readable Markdown, never as a raw provider archive. */
+private suspend fun shareConversationMarkdown(
+    context: android.content.Context,
+    conversation: com.nanzhufeng.ai.domain.Conversation,
+    messages: List<PresentedTranscriptMessage>,
+) {
+    val file = withContext(Dispatchers.IO) {
+        val directory = java.io.File(context.cacheDir, "shared_attachments")
+        if (!directory.exists() && !directory.mkdirs()) error("无法创建 Markdown 导出文件。")
+        val target = java.io.File(directory, conversationMarkdownExportFileName(conversation.title, sequence = 1))
+        target.writeText(buildString {
+            append("# ")
+            append(conversation.title.replace('\n', ' ').trim())
+            messages.forEach { transcript ->
+                append("\n\n## ")
+                append(if (transcript.message.role == com.nanzhufeng.ai.domain.MessageRole.USER) "我" else "南枫 AI")
+                formatTranscriptTimeOrNull(transcript.metadata.createdAt)?.let { time -> append(" · ").append(time) }
+                val body = presentedMessageMarkdown(transcript.message)
+                if (body.isNotBlank()) append("\n\n").append(body)
+            }
+            append('\n')
+        }, Charsets.UTF_8)
+        target
+    }
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.attachment-share", file)
+    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+        type = "text/markdown"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_TITLE, file.name)
+        clipData = android.content.ClipData.newRawUri("南枫 AI 对话 Markdown", uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }, "导出 Markdown"))
+}
+
+/** The user sees a semantic Markdown reconstruction; raw Provider bodies never enter this path. */
+private fun presentedMessageMarkdown(message: PresentedMessage): String = message.blocks.joinToString("\n\n") { block -> when (block) {
+    is PresentationBlock.Heading -> "${"#".repeat(block.level)} ${markdownInlineText(block.spans)}"
+    is PresentationBlock.Paragraph -> markdownInlineText(block.spans)
+    is PresentationBlock.Note -> markdownInlineText(block.spans)
+    is PresentationBlock.Quote -> markdownInlineText(block.spans).lineSequence().joinToString("\n") { line -> "> $line" }
+    is PresentationBlock.UnorderedList -> block.items.joinToString("\n") { item -> "${"  ".repeat(item.depth)}- ${markdownInlineText(item.spans)}" }
+    is PresentationBlock.OrderedList -> block.items.joinToString("\n") { item -> "${"  ".repeat(item.depth)}${item.ordinal}. ${markdownInlineText(item.spans)}" }
+    is PresentationBlock.HorizontalRule -> "---"
+    is PresentationBlock.CodeFence -> "```" + (block.language ?: "") + "\n${block.code}\n```"
+    is PresentationBlock.Table -> tableMarkdownText(block)
+    is PresentationBlock.PlainText -> block.raw
+    is PresentationBlock.AttachmentReference -> "<${attachmentKindLabel(block.attachment.mimeType)}>"
+    is PresentationBlock.SafeToolSummary -> "工具结果（安全摘要）：${block.toolName} · ${block.summary}"
+} }.trim()
+
+/**
+ * USER keeps authored Markdown semantics, but its visual hierarchy intentionally stays tighter
+ * than the open, document-like 南枫AI reading column. This prevents one pasted Markdown heading
+ * from turning a compact user bubble into a competing page headline.
+ */
+private data class ConversationMessageTypography(
+    val headingOne: androidx.compose.ui.unit.TextUnit,
+    val headingTwo: androidx.compose.ui.unit.TextUnit,
+    val headingMinor: androidx.compose.ui.unit.TextUnit,
+    val headingOneLineHeight: androidx.compose.ui.unit.TextUnit,
+    val headingTwoLineHeight: androidx.compose.ui.unit.TextUnit,
+    val headingMinorLineHeight: androidx.compose.ui.unit.TextUnit,
+    val headingOneWeight: FontWeight,
+    val headingTwoWeight: FontWeight,
+    val headingMinorWeight: FontWeight,
+    val body: androidx.compose.ui.unit.TextUnit,
+    val bodyLineHeight: androidx.compose.ui.unit.TextUnit,
+    val note: androidx.compose.ui.unit.TextUnit,
+    val noteLineHeight: androidx.compose.ui.unit.TextUnit,
+    val list: androidx.compose.ui.unit.TextUnit,
+    val listLineHeight: androidx.compose.ui.unit.TextUnit,
+)
+
+private val AssistantDocumentTypography = ConversationMessageTypography(
+    headingOne = 26.sp, headingTwo = 22.sp, headingMinor = 18.sp,
+    headingOneLineHeight = 35.sp, headingTwoLineHeight = 31.sp, headingMinorLineHeight = 26.sp,
+    headingOneWeight = FontWeight.ExtraBold, headingTwoWeight = FontWeight.Bold, headingMinorWeight = FontWeight.Bold,
+    body = 16.sp, bodyLineHeight = 25.sp, note = 13.sp, noteLineHeight = 21.sp, list = 15.sp, listLineHeight = 24.sp,
+)
+
+/** User bubble scale: 15sp body, only 1–3sp between heading levels, and never ExtraBold. */
+private val UserBubbleTypography = ConversationMessageTypography(
+    headingOne = 18.sp, headingTwo = 17.sp, headingMinor = 16.sp,
+    headingOneLineHeight = 26.sp, headingTwoLineHeight = 24.sp, headingMinorLineHeight = 23.sp,
+    headingOneWeight = FontWeight.SemiBold, headingTwoWeight = FontWeight.Medium, headingMinorWeight = FontWeight.Medium,
+    body = 15.sp, bodyLineHeight = 23.sp, note = 13.sp, noteLineHeight = 19.sp, list = 15.sp, listLineHeight = 23.sp,
+)
+
+private fun markdownInlineText(spans: List<InlinePresentation>): String = spans.joinToString("") { span -> when (span) {
+    is InlinePresentation.Text -> span.value
+    is InlinePresentation.Strong -> "**${span.value}**"
+    is InlinePresentation.Emphasis -> "*${span.value}*"
+    is InlinePresentation.Code -> "`${span.value}`"
+    is InlinePresentation.Link -> "[${span.label}](${span.url})"
+} }
+
 @Composable
 private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>, bodyColor: Color, sentAt: java.time.Instant?, assistantDocument: Boolean, onOpenImagePreview: (AttachmentId) -> Unit, onOpenPdfPreview: (AttachmentId) -> Unit, onOpenVideoPreview: (AttachmentId) -> Unit, onOpenAudioPreview: (AttachmentId) -> Unit, onOpenTextPreview: (AttachmentId) -> Unit) {
+    val typography = if (assistantDocument) AssistantDocumentTypography else UserBubbleTypography
     when (block) {
         is PresentationBlock.Heading -> {
             val (fontSize, lineHeight, weight) = when (block.level) {
-                1 -> Triple(26.sp, 35.sp, FontWeight.ExtraBold)
-                2 -> Triple(22.sp, 31.sp, FontWeight.Bold)
-                else -> Triple(18.sp, 26.sp, FontWeight.Bold)
+                1 -> Triple(typography.headingOne, typography.headingOneLineHeight, typography.headingOneWeight)
+                2 -> Triple(typography.headingTwo, typography.headingTwoLineHeight, typography.headingTwoWeight)
+                else -> Triple(typography.headingMinor, typography.headingMinorLineHeight, typography.headingMinorWeight)
             }
             InlinePresentationText(
                 spans = block.spans,
@@ -4865,16 +5568,16 @@ private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: 
             spans = block.spans,
             color = bodyColor,
             style = MaterialTheme.typography.bodyMedium,
-            fontSize = scaledConversationTextUnit(16.sp),
-            lineHeight = scaledConversationTextUnit(25.sp),
+            fontSize = scaledConversationTextUnit(typography.body),
+            lineHeight = scaledConversationTextUnit(typography.bodyLineHeight),
         )
         is PresentationBlock.Note -> InlinePresentationText(
             spans = block.spans,
             modifier = Modifier.padding(vertical = 2.dp),
             color = SecondaryText,
             style = MaterialTheme.typography.bodySmall,
-            fontSize = scaledConversationTextUnit(13.sp),
-            lineHeight = scaledConversationTextUnit(21.sp),
+            fontSize = scaledConversationTextUnit(typography.note),
+            lineHeight = scaledConversationTextUnit(typography.noteLineHeight),
             suppressEmphasis = true,
         )
         is PresentationBlock.Quote -> Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 4.dp)) {
@@ -4884,12 +5587,12 @@ private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: 
                 modifier = Modifier.padding(start = 12.dp),
                 color = bodyColor,
                 style = MaterialTheme.typography.bodyMedium,
-                fontSize = scaledConversationTextUnit(16.sp),
-                lineHeight = scaledConversationTextUnit(25.sp),
+                fontSize = scaledConversationTextUnit(typography.body),
+                lineHeight = scaledConversationTextUnit(typography.bodyLineHeight),
             )
         }
-        is PresentationBlock.UnorderedList -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { block.items.forEach { ListItem("•", it.spans, bodyColor, it.depth) } }
-        is PresentationBlock.OrderedList -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { block.items.forEach { ListItem("${it.ordinal}.", it.spans, bodyColor, it.depth) } }
+        is PresentationBlock.UnorderedList -> Column(verticalArrangement = Arrangement.spacedBy(if (assistantDocument) 8.dp else 6.dp)) { block.items.forEach { ListItem("•", it.spans, bodyColor, it.depth, typography) } }
+        is PresentationBlock.OrderedList -> Column(verticalArrangement = Arrangement.spacedBy(if (assistantDocument) 8.dp else 6.dp)) { block.items.forEach { ListItem("${it.ordinal}.", it.spans, bodyColor, it.depth, typography) } }
         is PresentationBlock.HorizontalRule -> Box(
             Modifier.fillMaxWidth().padding(vertical = 12.dp).height(1.dp).background(SecondaryText.copy(alpha = 0.18f)),
         )
@@ -4897,16 +5600,16 @@ private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: 
             Text(block.code, color = BodyText, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, lineHeight = scaledConversationTextUnit(20.sp))
         }
         is PresentationBlock.Table -> MarkdownTable(block)
-        is PresentationBlock.PlainText -> Text(block.raw, style = MaterialTheme.typography.bodyMedium, fontSize = scaledConversationTextUnit(16.sp), lineHeight = scaledConversationTextUnit(26.sp))
+        is PresentationBlock.PlainText -> Text(block.raw, style = MaterialTheme.typography.bodyMedium, fontSize = scaledConversationTextUnit(typography.body), lineHeight = scaledConversationTextUnit(typography.bodyLineHeight))
         is PresentationBlock.AttachmentReference -> AttachmentPreviewChip(attachmentPreviews[block.attachment.id], block.attachment.displayName, block.attachment.mimeType, block.attachment.byteCount, sentAt, onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview)
         is PresentationBlock.SafeToolSummary -> Text("工具结果（安全摘要）：${block.toolName} · ${block.summary}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     }
 }
 
 @Composable
-private fun ListItem(marker: String, spans: List<InlinePresentation>, bodyColor: Color, depth: Int) {
-    val listFontSize = scaledConversationTextUnit(15.sp)
-    val listLineHeight = scaledConversationTextUnit(24.sp)
+private fun ListItem(marker: String, spans: List<InlinePresentation>, bodyColor: Color, depth: Int, typography: ConversationMessageTypography) {
+    val listFontSize = scaledConversationTextUnit(typography.list)
+    val listLineHeight = scaledConversationTextUnit(typography.listLineHeight)
     val listStartIndent = 12.dp + (depth.coerceIn(0, 6) * 16).dp
     Row(modifier = Modifier.fillMaxWidth().padding(start = listStartIndent)) {
         // Markers belong to their own list item, not to the paragraph/title alignment grid.
@@ -5113,14 +5816,15 @@ private fun inlineText(
     spans: List<InlinePresentation>,
     appendSourceShortcut: Boolean = false,
     suppressEmphasis: Boolean = false,
+    highlightQuery: String? = null,
 ) = buildAnnotatedString {
     spans.forEach { span -> when (span) {
-        is InlinePresentation.Text -> append(span.value)
-        is InlinePresentation.Strong -> withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) { append(span.value) }
-        is InlinePresentation.Emphasis -> if (suppressEmphasis) append(span.value) else withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) { append(span.value) }
+        is InlinePresentation.Text -> appendConversationFindText(span.value, highlightQuery)
+        is InlinePresentation.Strong -> withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) { appendConversationFindText(span.value, highlightQuery) }
+        is InlinePresentation.Emphasis -> if (suppressEmphasis) appendConversationFindText(span.value, highlightQuery) else withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) { appendConversationFindText(span.value, highlightQuery) }
         is InlinePresentation.Code -> {
             pushStringAnnotation(InlineCodeChipAnnotationTag, span.value)
-            withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)) { append(span.value) }
+            withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)) { appendConversationFindText(span.value, highlightQuery) }
             pop()
         }
         is InlinePresentation.Link -> if (!appendSourceShortcut) withLink(
@@ -5128,11 +5832,38 @@ private fun inlineText(
                 url = span.url,
             styles = TextLinkStyles(style = SpanStyle(color = BrandGreen, fontWeight = FontWeight.SemiBold)),
             ),
-        ) { append("${span.label} ↗") }
+        ) { appendConversationFindText("${span.label} ↗", highlightQuery) }
     } }
     if (appendSourceShortcut && spans.any { it is InlinePresentation.Link }) {
         append(" ")
         appendInlineContent(SourceShortcutInlineContentId, "来源")
+    }
+}
+
+private const val ConversationFindHighlightAnnotationTag = "conversation-find-highlight"
+
+/** Keeps exact visible text intact while marking every case-insensitive query occurrence. */
+private fun AnnotatedString.Builder.appendConversationFindText(value: String, query: String?) {
+    val needle = query?.trim().orEmpty()
+    if (needle.isEmpty()) {
+        append(value)
+        return
+    }
+    var cursor = 0
+    while (cursor < value.length) {
+        val matchStart = value.indexOf(needle, startIndex = cursor, ignoreCase = true)
+        if (matchStart < 0) {
+            append(value.substring(cursor))
+            return
+        }
+        if (matchStart > cursor) append(value.substring(cursor, matchStart))
+        val matchEnd = matchStart + needle.length
+        pushStringAnnotation(ConversationFindHighlightAnnotationTag, needle)
+        withStyle(SpanStyle(color = AccentOrange, fontWeight = FontWeight.SemiBold)) {
+            append(value.substring(matchStart, matchEnd))
+        }
+        pop()
+        cursor = matchEnd
     }
 }
 
@@ -5150,7 +5881,13 @@ private fun InlinePresentationText(
     suppressEmphasis: Boolean = false,
 ) {
     val sources = spans.filterIsInstance<InlinePresentation.Link>().distinctBy { it.url }
-    val text = inlineText(spans, appendSourceShortcut = sources.isNotEmpty(), suppressEmphasis = suppressEmphasis)
+    val findQuery = LocalConversationFindQuery.current
+    val text = inlineText(
+        spans,
+        appendSourceShortcut = sources.isNotEmpty(),
+        suppressEmphasis = suppressEmphasis,
+        highlightQuery = findQuery,
+    )
     var textLayoutResult by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
     val inlineContent = if (sources.isEmpty()) emptyMap() else mapOf(
         SourceShortcutInlineContentId to InlineTextContent(
@@ -5163,7 +5900,9 @@ private fun InlinePresentationText(
     )
     Text(
         text = text,
-        modifier = modifier.inlineCodeChipBackgrounds(text, textLayoutResult),
+        modifier = modifier
+            .inlineCodeChipBackgrounds(text, textLayoutResult)
+            .conversationFindHighlightBackgrounds(text, textLayoutResult),
         color = color,
         style = style,
         fontWeight = fontWeight,
@@ -5202,6 +5941,38 @@ private fun Modifier.inlineCodeChipBackgrounds(
                 topLeft = Offset(left, top),
                 size = Size((right - left).coerceAtLeast(0f), (bottom - top).coerceAtLeast(0f)),
                 cornerRadius = CornerRadius(8.dp.toPx()),
+            )
+        }
+    }
+}
+
+/** Search text gets a small neutral pill behind each rendered line segment, not a rectangular band. */
+private fun Modifier.conversationFindHighlightBackgrounds(
+    text: androidx.compose.ui.text.AnnotatedString,
+    layoutResult: TextLayoutResult?,
+): Modifier = drawBehind {
+    val layout = layoutResult ?: return@drawBehind
+    text.getStringAnnotations(ConversationFindHighlightAnnotationTag, 0, text.length).forEach { matchRange ->
+        if (matchRange.start >= matchRange.end) return@forEach
+        val firstLine = layout.getLineForOffset(matchRange.start)
+        val lastLine = layout.getLineForOffset(matchRange.end - 1)
+        for (line in firstLine..lastLine) {
+            val segmentStart = maxOf(matchRange.start, layout.getLineStart(line))
+            val segmentEnd = minOf(matchRange.end, layout.getLineEnd(line))
+            if (segmentStart >= segmentEnd) continue
+            val firstGlyph = layout.getBoundingBox(segmentStart)
+            val lastGlyph = layout.getBoundingBox(segmentEnd - 1)
+            val horizontalInset = 4.dp.toPx()
+            val verticalInset = 2.dp.toPx()
+            val left = minOf(firstGlyph.left, lastGlyph.left) - horizontalInset
+            val right = maxOf(firstGlyph.right, lastGlyph.right) + horizontalInset
+            val top = layout.getLineTop(line) + verticalInset
+            val bottom = layout.getLineBottom(line) - verticalInset
+            drawRoundRect(
+                color = NeutralSystemSurface,
+                topLeft = Offset(left, top),
+                size = Size((right - left).coerceAtLeast(0f), (bottom - top).coerceAtLeast(0f)),
+                cornerRadius = CornerRadius(9.dp.toPx()),
             )
         }
     }
@@ -5968,10 +6739,9 @@ private fun ComposerConversationWebSearchAction(
             Icon(Icons.Rounded.Public, contentDescription = null, modifier = Modifier.size(22.dp), tint = AccentOrange)
             Spacer(Modifier.width(14.dp))
             Text("实时网页搜索", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Switch(
+            SettingsSwitch(
                 checked = enabled,
                 onCheckedChange = onEnabledChange,
-                modifier = Modifier.width(SettingsSwitchTrackWidth).height(SettingsSwitchTrackHeight),
             )
         }
     }

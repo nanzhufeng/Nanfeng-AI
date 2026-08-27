@@ -28,6 +28,8 @@ import com.nanzhufeng.ai.domain.RuntimeContentDelta
 import com.nanzhufeng.ai.domain.RuntimeFailed
 import com.nanzhufeng.ai.domain.SubmitConversationDraftAndStartProviderRuntimeUseCase
 import com.nanzhufeng.ai.domain.ProviderRuntimeDraftSubmissionResult
+import com.nanzhufeng.ai.domain.StartProviderRuntimeForExistingUserUseCase
+import com.nanzhufeng.ai.domain.ProviderRuntimeRetryResult
 import com.nanzhufeng.ai.domain.LoadModelServiceConfigurationUseCase
 import com.nanzhufeng.ai.domain.LocalContextBroker
 import com.nanzhufeng.ai.domain.MessageRole
@@ -71,8 +73,8 @@ import com.nanzhufeng.ai.domain.MemorySummaryPolicy
 import com.nanzhufeng.ai.domain.MemoryMutationResult
 import com.nanzhufeng.ai.domain.ConversationTitleRefiner
 import com.nanzhufeng.ai.domain.ConversationTitleRefinementResult
-import com.nanzhufeng.ai.domain.ConversationTitleSource
 import com.nanzhufeng.ai.domain.ConversationAutoTitle
+import com.nanzhufeng.ai.domain.openingTitleSource
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 
@@ -102,6 +104,7 @@ class NormalChatOpenRouterExecutor(
     private val attachmentRepository: PrivateAttachmentRepository,
     private val attachmentStore: PrivateAttachmentStore,
     private val submitDraftAndStartProviderRuntime: SubmitConversationDraftAndStartProviderRuntimeUseCase,
+    private val startProviderRuntimeForExistingUser: StartProviderRuntimeForExistingUserUseCase,
     private val applyRuntimeEvent: ApplyConversationRuntimeEventUseCase,
     private val runtimeRepository: com.nanzhufeng.ai.domain.ConversationRuntimeRepository,
     private val loadAssistantExperienceSettings: () -> AssistantExperienceSettings = { AssistantExperienceSettings() },
@@ -184,19 +187,23 @@ class NormalChatOpenRouterExecutor(
                 NanfengModelServiceCatalog.providerFor(presetId) == attempt.providerId &&
                     (modelResolver.resolve(presetId) as? ResolvedModelResult.Resolved)?.model?.modelId == attempt.modelId
             } ?: return Result.Blocked(Code.RECOVERY_MODEL_CHANGED)
-        // A recovered request has no live assistant-runtime row to own its socket, but it must
-        // remain just as cancellable as a first send.  It still uses the original Attempt/key.
+        // A recovered request keeps the original attempt/key, but owns a fresh persisted
+        // assistant placeholder so the retry is visible before its first provider chunk.
+        val restarted = when (val result = startProviderRuntimeForExistingUser.execute(conversationId, user.id)) {
+            is ProviderRuntimeRetryResult.Started -> result
+            is ProviderRuntimeRetryResult.Rejected -> return Result.Failed(Code.LOCAL_SAVE)
+        }
         val cancellation = ProviderChatCancellation().also { call ->
             activeCalls[conversationId] = call
             if (cancellationRequested.remove(conversationId)) call.cancel()
         }
-        val resumedRuntime: ActiveProviderRuntime? = null
+        val resumedRuntime = ActiveProviderRuntime(restarted.runtime)
         val retried = try {
             requestOne(
                 preset = preset,
                 conversationId = conversationId,
                 userMessageId = user.id,
-                snapshot = snapshot,
+                snapshot = restarted.snapshot,
                 userMessage = text,
                 attachments = attachments,
                 choice = ComposerModelRoutingCatalog.auto,
@@ -210,20 +217,12 @@ class NormalChatOpenRouterExecutor(
         }
         return when (retried) {
             is OneResult.Reply -> {
-                if (resumedRuntime != null) {
-                    if (!recordResponseAttribution(resumedRuntime.state.messageId, retried)) return Result.Failed(Code.LOCAL_SAVE)
-                    return Result.Sent.also { maybeRefineOpeningTitle(conversationId, resumedRuntime.state.messageId) }
-                }
-                val messageId = com.nanzhufeng.ai.domain.MessageNodeId.new()
-                if (!recordResponseAttribution(messageId, retried)) return Result.Failed(Code.LOCAL_SAVE)
-                when (appendMessage.execute(snapshot, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text(retried.text)), messageId = messageId))) {
-                is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent.also { maybeRefineOpeningTitle(conversationId, messageId) }
-                is com.nanzhufeng.ai.domain.ConversationMutationResult.Rejected -> Result.Failed(Code.LOCAL_SAVE)
-                }
+                if (!recordResponseAttribution(resumedRuntime.state.messageId, retried)) return Result.Failed(Code.LOCAL_SAVE)
+                Result.Sent.also { maybeRefineOpeningTitle(conversationId) }
             }
-            is OneResult.Blocked -> Result.Blocked(retried.code)
-            is OneResult.Failed -> Result.Failed(retried.code)
-            OneResult.Cancelled -> Result.Sent
+            is OneResult.Blocked -> Result.Blocked(retried.code).also { resumedRuntime.fail(retried.code.name) }
+            is OneResult.Failed -> Result.Failed(retried.code).also { resumedRuntime.fail(retried.code.name) }
+            OneResult.Cancelled -> Result.Sent.also { resumedRuntime.cancel() }
         }
     }
 
@@ -351,7 +350,7 @@ class NormalChatOpenRouterExecutor(
         val messageId = com.nanzhufeng.ai.domain.MessageNodeId.new()
         if (!replies.all { (_, reply) -> recordResponseAttribution(messageId, reply) }) return Result.Failed(Code.LOCAL_SAVE)
         return when (appendMessage.execute(submitted.snapshot, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text(rendered)), messageId = messageId))) {
-            is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent.also { maybeRefineOpeningTitle(conversationId, messageId) }
+            is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent.also { maybeRefineOpeningTitle(conversationId) }
             is com.nanzhufeng.ai.domain.ConversationMutationResult.Rejected -> Result.Failed(Code.LOCAL_SAVE)
         }
     }
@@ -549,6 +548,13 @@ class NormalChatOpenRouterExecutor(
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "TOOL_CALL_UNSUPPORTED")
                     OneResult.Failed(Code.TOOL_CALL_UNSUPPORTED)
                 } else if (reply == null) {
+                    sendAttempts.transition(
+                        attempt.attemptId,
+                        setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING),
+                        NormalChatSendAttemptStatus.FAILED,
+                        clock.instant(),
+                        "RESPONSE_FORMAT",
+                    )
                     recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, outcome.statusCode)
                     OneResult.Failed(Code.RESPONSE_FORMAT)
                 } else {
@@ -575,6 +581,13 @@ class NormalChatOpenRouterExecutor(
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "TOOL_CALL_UNSUPPORTED")
                     OneResult.Failed(Code.TOOL_CALL_UNSUPPORTED)
                 } else if (reply == null) {
+                    sendAttempts.transition(
+                        attempt.attemptId,
+                        setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING),
+                        NormalChatSendAttemptStatus.FAILED,
+                        clock.instant(),
+                        "RESPONSE_FORMAT",
+                    )
                     runtime?.fail(Code.RESPONSE_FORMAT.name)
                     recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, attachments, requestOptions, requestedAt, outcome.statusCode)
                     OneResult.Failed(Code.RESPONSE_FORMAT)
@@ -768,12 +781,17 @@ class NormalChatOpenRouterExecutor(
         fun complete() {
             if (state.isTerminal) return
             apply(RuntimeCompleted(AiRuntimeEventId.new(), state.invocationId, state.conversationId, state.messageId, state.nextExpectedSequence, clock.instant(), security))
-            if (!persistenceRejected) maybeRefineOpeningTitle(state.conversationId, state.messageId)
+            if (!persistenceRejected) maybeRefineOpeningTitle(state.conversationId)
         }
 
         fun fail(code: String) {
             if (state.isTerminal) return
             apply(RuntimeFailed(AiRuntimeEventId.new(), state.invocationId, state.conversationId, state.messageId, state.nextExpectedSequence, clock.instant(), code, security))
+        }
+
+        fun cancel() {
+            if (state.isTerminal) return
+            apply(com.nanzhufeng.ai.domain.RuntimeCancelled(AiRuntimeEventId.new(), state.invocationId, state.conversationId, state.messageId, state.nextExpectedSequence, clock.instant(), security))
         }
 
         private fun apply(event: com.nanzhufeng.ai.domain.AiRuntimeEvent) {
@@ -787,30 +805,17 @@ class NormalChatOpenRouterExecutor(
 
     /**
      * The regular reply has already been stored before this secondary request begins.  Re-read
-     * immediately before committing so a manual rename wins even if it happened during Qwen work.
+     * immediately before committing so a manual rename wins even if it happened during title work.
      */
-    private fun maybeRefineOpeningTitle(conversationId: ConversationId, assistantMessageId: com.nanzhufeng.ai.domain.MessageNodeId) {
+    private fun maybeRefineOpeningTitle(conversationId: ConversationId) {
         val snapshot = conversations.findById(conversationId) ?: return
         if (!snapshot.conversation.autoTitlePending) return
-        val assistant = snapshot.nodes.firstOrNull { it.id == assistantMessageId }
-            ?.takeIf { it.role == MessageRole.ASSISTANT && it.deliveryState == MessageDeliveryState.COMPLETE }
-            ?: return
-        val user = assistant.parentMessageId?.let { parentId -> snapshot.nodes.firstOrNull { it.id == parentId } }
-            ?.takeIf { it.role == MessageRole.USER && it.parentMessageId == null }
-            ?: return
-        val userText = user.content.filterIsInstance<ContentBlock.Text>().joinToString(" ") { it.text }.trim()
-        val assistantText = assistant.content.filterIsInstance<ContentBlock.Text>().joinToString("\n") { it.text }.trim()
-        if (userText.isBlank() || assistantText.isBlank()) {
-            completeAutomaticTitleWithoutGeneratedText(conversationId)
-            return
+        val source = snapshot.openingTitleSource() ?: return
+        when (val result = conversationTitleRefiner.refine(conversationId, source)) {
+            is ConversationTitleRefinementResult.Title -> completeAutomaticTitle(conversationId, result.value)
+            is ConversationTitleRefinementResult.Failed -> Unit // Keep pending: later completed replies retry a transient service failure.
         }
-        val result = conversationTitleRefiner.refine(conversationId, ConversationTitleSource(userText, assistantText))
-        val generated = (result as? ConversationTitleRefinementResult.Title)?.value
-        completeAutomaticTitle(conversationId, generated)
     }
-
-    private fun completeAutomaticTitleWithoutGeneratedText(conversationId: ConversationId) =
-        completeAutomaticTitle(conversationId, null)
 
     private fun completeAutomaticTitle(conversationId: ConversationId, generated: String?) {
         val latest = conversations.findById(conversationId) ?: return

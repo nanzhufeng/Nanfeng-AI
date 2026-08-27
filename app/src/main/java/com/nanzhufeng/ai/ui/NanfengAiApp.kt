@@ -83,7 +83,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
@@ -299,6 +298,7 @@ private enum class SettingsDestination(val label: String) {
     CONTEXT_SELECTIONS("上下文记录"),
     RUN_DIAGNOSTICS("运行诊断"),
     CONVERSATIONS("对话管理"),
+    FAVORITE_CONVERSATIONS("收藏"),
     ARCHIVED_CONVERSATIONS("已归档"),
     RECYCLE_BIN("回收站"),
     WORKSPACE("工作区"),
@@ -759,10 +759,11 @@ internal fun NanfengAiApp(
                 onRetryClaudeImportTask = claudeExportImportViewModel::retry,
                 onCancelClaudeImport = claudeExportImportViewModel::cancel,
                 p6kZipImportState = p6kZipImportViewModel.state,
-                // DocumentsUI often classifies a valid ZIP as generic binary.  Let the picker show it,
-                // then enforce the filename, app-private copy and strict central-directory checks in P6-K.
-                onOpenP6KChatGptZip = { p6kZipImportViewModel.show(); p6kChatGptZipPicker.launch(arrayOf("*/*")) },
-                onOpenP6KClaudeZip = { p6kZipImportViewModel.show(); p6kClaudeZipPicker.launch(arrayOf("*/*")) },
+                // Keep the system chooser honest: this import accepts ZIP archives only. The
+                // staged file still passes the filename, app-private-copy and strict
+                // central-directory checks in P6-K after the user selects it.
+                onOpenP6KChatGptZip = { p6kZipImportViewModel.show(); p6kChatGptZipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed")) },
+                onOpenP6KClaudeZip = { p6kZipImportViewModel.show(); p6kClaudeZipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed")) },
                 onClearP6KZip = p6kZipImportViewModel::clear,
                 onViewP6KZip = p6kZipImportViewModel::view,
                 onSelectP6KAsset = p6kZipImportViewModel::selectAsset,
@@ -1011,6 +1012,15 @@ private fun CaptureScreen(
     var personalizationDirty by remember { mutableStateOf(false) }
     val settingsRoot = SettingsNavigationEntry(P5ARoute.SETTINGS, SettingsDestination.HOME)
     var settingsNavigationStack by remember { mutableStateOf(listOf(settingsRoot)) }
+    // A lifecycle row opens its real conversation without discarding the list that supplied it.
+    // The destination remains the explicit return owner until the user backs out of that chat.
+    var lifecycleConversationReturnDestination by rememberSaveable { mutableStateOf<SettingsDestination?>(null) }
+    // Settings child routes can leave the shared scroll container entirely. Keep one viewport
+    // per settings level above that branch, so returning to the home menu restores its position.
+    val settingsScrollStates = remember { mutableMapOf<SettingsDestination, androidx.compose.foundation.ScrollState>() }
+    val settingsScrollState = settingsScrollStates.getOrPut(settingsDestination) {
+        androidx.compose.foundation.ScrollState(initial = 0)
+    }
     fun openSettingsLevel(route: P5ARoute, destination: SettingsDestination) {
         val next = SettingsNavigationEntry(route, destination)
         if (settingsNavigationStack.lastOrNull() == next) return
@@ -1028,6 +1038,20 @@ private fun CaptureScreen(
         personalizationDirty = false
     }
     val settingsOwnsCurrentRoute = settingsNavigationStack.lastOrNull()?.route == route
+    fun lifecycleScope(destination: SettingsDestination): com.nanzhufeng.ai.domain.ConversationListScope = when (destination) {
+        SettingsDestination.FAVORITE_CONVERSATIONS -> com.nanzhufeng.ai.domain.ConversationListScope.FAVORITES
+        SettingsDestination.ARCHIVED_CONVERSATIONS -> com.nanzhufeng.ai.domain.ConversationListScope.ARCHIVED
+        SettingsDestination.RECYCLE_BIN -> com.nanzhufeng.ai.domain.ConversationListScope.DELETED
+        else -> com.nanzhufeng.ai.domain.ConversationListScope.ACTIVE
+    }
+    val returnToLifecycleList: (() -> Unit)? = lifecycleConversationReturnDestination?.let { destination ->
+        {
+            lifecycleConversationReturnDestination = null
+            conversationViewModel.setListScope(lifecycleScope(destination))
+            settingsDestination = destination
+            onRouteSelected(P5ARoute.SETTINGS)
+        }
+    }
     val returnFromSettings: () -> Unit = {
         when {
             // A selected import task is a level below the import centre. It must close first,
@@ -1046,6 +1070,7 @@ private fun CaptureScreen(
                 // leak back into the drawer and make ordinary conversations look missing.
                 settingsNavigationStack = listOf(settingsRoot)
                 settingsDestination = SettingsDestination.HOME
+                lifecycleConversationReturnDestination = null
                 conversationViewModel.setListScope(com.nanzhufeng.ai.domain.ConversationListScope.ACTIVE)
                 onReturnToConversationDrawer()
             }
@@ -1067,6 +1092,7 @@ private fun CaptureScreen(
             onRouteSelected,
             conversationDrawerOpen,
             onConversationDrawerChanged,
+            onReturnToLifecycleList = returnToLifecycleList,
         )
         return
     }
@@ -1100,7 +1126,7 @@ private fun CaptureScreen(
             .fillMaxSize()
             .then(if (settingsOwnsCurrentRoute) Modifier.systemGestureExclusion() else Modifier)
             .then(if (settingsOwnsCurrentRoute) Modifier.settingsEdgeExit(returnFromSettings) else Modifier)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(settingsScrollState)
             .padding(start = if (expanded) 32.dp else 20.dp, end = if (expanded) 32.dp else 20.dp, top = 24.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -1254,6 +1280,11 @@ private fun CaptureScreen(
                 onExportLocalBackup = onExportLocalBackup,
                 onImportLocalBackup = onImportLocalBackup,
                 onSelect = { destination -> openSettingsLevel(P5ARoute.SETTINGS, destination) },
+                onOpenLifecycleConversation = { destination, conversation ->
+                    lifecycleConversationReturnDestination = destination
+                    conversationViewModel.selectConversation(conversation.id)
+                    onRouteSelected(P5ARoute.CONVERSATION)
+                },
             )
             P5ARoute.ADAPTERS -> WorkbenchRoute(expanded) {
                 Text("数据导入", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
@@ -1518,7 +1549,7 @@ private fun SettingsPageHeader(
     onSave: (() -> Unit)? = null,
     saveEnabled: Boolean = false,
 ) {
-    val titleStyle = if (destination == SettingsDestination.ARCHIVED_CONVERSATIONS || destination == SettingsDestination.RECYCLE_BIN) {
+    val titleStyle = if (destination == SettingsDestination.FAVORITE_CONVERSATIONS || destination == SettingsDestination.ARCHIVED_CONVERSATIONS || destination == SettingsDestination.RECYCLE_BIN) {
         MaterialTheme.typography.titleLarge
     } else {
         MaterialTheme.typography.headlineSmall
@@ -1606,6 +1637,7 @@ private fun SettingsHierarchy(
     onExportLocalBackup: () -> Unit,
     onImportLocalBackup: () -> Unit,
     onSelect: (SettingsDestination) -> Unit,
+    onOpenLifecycleConversation: (SettingsDestination, com.nanzhufeng.ai.domain.Conversation) -> Unit,
 ) {
     // Entering either lifecycle list used to change the repository projection and push the
     // next settings page in the same frame. That made the new page briefly render the previous
@@ -1615,6 +1647,7 @@ private fun SettingsHierarchy(
     LaunchedEffect(pendingLifecycleDestination, conversationState.listScope, conversationState.isLoading) {
         val target = pendingLifecycleDestination ?: return@LaunchedEffect
         val targetScope = when (target) {
+            SettingsDestination.FAVORITE_CONVERSATIONS -> com.nanzhufeng.ai.domain.ConversationListScope.FAVORITES
             SettingsDestination.ARCHIVED_CONVERSATIONS -> com.nanzhufeng.ai.domain.ConversationListScope.ARCHIVED
             SettingsDestination.RECYCLE_BIN -> com.nanzhufeng.ai.domain.ConversationListScope.DELETED
             else -> return@LaunchedEffect
@@ -1679,6 +1712,10 @@ private fun SettingsHierarchy(
             SettingsDestination.RUN_DIAGNOSTICS -> RuntimeDiagnosticsPage(modelSettingsState, invocationLedgerState, conversationState.conversations)
             SettingsDestination.CONVERSATIONS -> ConversationManagementSettingsCard(
                 state = conversationState,
+                onOpenFavorites = {
+                    pendingLifecycleDestination = SettingsDestination.FAVORITE_CONVERSATIONS
+                    conversationViewModel.setListScope(com.nanzhufeng.ai.domain.ConversationListScope.FAVORITES)
+                },
                 onOpenArchived = {
                     pendingLifecycleDestination = SettingsDestination.ARCHIVED_CONVERSATIONS
                     conversationViewModel.setListScope(com.nanzhufeng.ai.domain.ConversationListScope.ARCHIVED)
@@ -1688,6 +1725,11 @@ private fun SettingsHierarchy(
                     conversationViewModel.setListScope(com.nanzhufeng.ai.domain.ConversationListScope.DELETED)
                 },
             )
+            SettingsDestination.FAVORITE_CONVERSATIONS -> FavoriteConversationListSettingsCard(
+                state = conversationState,
+                onUnfavorite = { conversation -> conversationViewModel.manage(conversation, com.nanzhufeng.ai.domain.ConversationManagementAction.UNFAVORITE, null) },
+                onOpenConversation = { conversation -> onOpenLifecycleConversation(SettingsDestination.FAVORITE_CONVERSATIONS, conversation) },
+            )
             SettingsDestination.ARCHIVED_CONVERSATIONS -> ConversationLifecycleListSettingsCard(
                 state = conversationState,
                 scope = com.nanzhufeng.ai.domain.ConversationListScope.ARCHIVED,
@@ -1695,6 +1737,7 @@ private fun SettingsHierarchy(
                 onPermanentlyDelete = conversationViewModel::permanentlyDelete,
                 onClearArchived = conversationViewModel::softDeleteConversations,
                 onClearRecycleBin = conversationViewModel::permanentlyDeleteConversations,
+                onOpenConversation = { conversation -> onOpenLifecycleConversation(SettingsDestination.ARCHIVED_CONVERSATIONS, conversation) },
             )
             SettingsDestination.RECYCLE_BIN -> ConversationLifecycleListSettingsCard(
                 state = conversationState,
@@ -1703,6 +1746,7 @@ private fun SettingsHierarchy(
                 onPermanentlyDelete = conversationViewModel::permanentlyDelete,
                 onClearArchived = conversationViewModel::softDeleteConversations,
                 onClearRecycleBin = conversationViewModel::permanentlyDeleteConversations,
+                onOpenConversation = { conversation -> onOpenLifecycleConversation(SettingsDestination.RECYCLE_BIN, conversation) },
             )
             SettingsDestination.WORKSPACE -> WorkspaceSettingsCard(
                 projectState = projectState,
@@ -1894,7 +1938,6 @@ private fun AssistantPersonalizationSettingsCard(
     onOpenMemoryManager: () -> Unit,
 ) = Column(modifier = Modifier.fillMaxWidth()) {
     var stylePickerVisible by rememberSaveable { mutableStateOf(false) }
-    var advancedExpanded by rememberSaveable { mutableStateOf(true) }
     var customInstructionsFullscreen by rememberSaveable { mutableStateOf(false) }
     val foregroundInputColors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = ForegroundSurface,
@@ -1922,6 +1965,21 @@ private fun AssistantPersonalizationSettingsCard(
         style = MaterialTheme.typography.bodySmall,
     )
     Spacer(Modifier.height(12.dp))
+    SettingsSwitchRow(
+        title = "资料库搜索",
+        summary = "",
+        checked = settings.librarySearchEnabled,
+        onCheckedChange = { enabled -> onUpdate { current -> current.copy(librarySearchEnabled = enabled) } },
+        surface = true,
+    )
+    Spacer(Modifier.height(6.dp))
+    Text(
+        "允许 南枫AI 自动搜索资料库中的文件以查找答案。",
+        modifier = Modifier.padding(horizontal = 4.dp),
+        color = SecondaryText,
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Spacer(Modifier.height(16.dp))
     ConversationStylePreferenceRow(
         style = settings.conversationStyle,
         onClick = { stylePickerVisible = true },
@@ -2038,37 +2096,6 @@ private fun AssistantPersonalizationSettingsCard(
         color = SecondaryText,
         style = MaterialTheme.typography.bodySmall,
     )
-    Spacer(Modifier.height(16.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable { advancedExpanded = !advancedExpanded }.padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("高级", modifier = Modifier.weight(1f), color = SecondaryText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-        Icon(
-            imageVector = if (advancedExpanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
-            contentDescription = if (advancedExpanded) "收起高级设置" else "展开高级设置",
-            tint = SecondaryText,
-        )
-    }
-    if (advancedExpanded) {
-        Spacer(Modifier.height(8.dp))
-        Column(modifier = Modifier.fillMaxWidth()) {
-            SettingsSwitchRow(
-                title = "资料库搜索",
-                summary = "",
-                checked = settings.librarySearchEnabled,
-                onCheckedChange = { enabled -> onUpdate { current -> current.copy(librarySearchEnabled = enabled) } },
-                surface = true,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "允许 南枫AI 自动搜索资料库中的文件以查找答案。",
-                modifier = Modifier.padding(horizontal = 18.dp),
-                color = SecondaryText,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
     error?.let { Spacer(Modifier.height(8.dp)); Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
     if (customInstructionsFullscreen) {
         CustomInstructionsFullscreenEditor(
@@ -2360,7 +2387,7 @@ private fun AppearancePreferenceRow(
             modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(28.dp)), tint = BodyText)
+            Icon(icon, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(17.dp)), tint = BodyText)
             Spacer(Modifier.width(18.dp))
             Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2434,26 +2461,41 @@ private fun NotificationReminderSettingsCard(
     onUpdate: ((com.nanzhufeng.ai.domain.NotificationReminderSettings) -> com.nanzhufeng.ai.domain.NotificationReminderSettings) -> Unit,
 ) = Column(modifier = Modifier.fillMaxWidth()) {
     val settings = state.settings
-    SettingsSwitchRow(
-        title = "计划监控结果通知",
-        summary = if (settings.monitorResultsNotificationEnabled) "监控完成后可发送系统通知；仍需在系统中允许通知" else "已关闭：监控仍会执行，结果只保存在本机任务列表",
-        checked = settings.monitorResultsNotificationEnabled,
-        onCheckedChange = { onUpdate { current -> current.copy(monitorResultsNotificationEnabled = it) } },
-    )
-    Spacer(Modifier.height(12.dp))
-    SettingsSwitchRow(
-        title = "对话提醒建议",
-        summary = if (settings.conversationReminderSuggestionsEnabled) "仅少量高价值对话末尾显示“添加提醒 / 监控”" else "已关闭：不再显示对话尾部的提醒建议",
-        checked = settings.conversationReminderSuggestionsEnabled,
-        onCheckedChange = { onUpdate { current -> current.copy(conversationReminderSuggestionsEnabled = it) } },
-    )
-    Spacer(Modifier.height(12.dp))
-    SettingsSwitchRow(
-        title = "对话未读提醒",
-        summary = if (settings.unreadConversationIndicatorsEnabled) "在左侧对话列表显示橙色未读标记，不发送系统通知" else "已关闭：不显示左侧对话列表的未读标记",
-        checked = settings.unreadConversationIndicatorsEnabled,
-        onCheckedChange = { onUpdate { current -> current.copy(unreadConversationIndicatorsEnabled = it) } },
-    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = ForegroundSurface,
+        shape = CardShape,
+        shadowElevation = 1.dp,
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+                SettingsSwitchRow(
+                    title = "计划监控结果通知",
+                    summary = if (settings.monitorResultsNotificationEnabled) "监控完成后可发送系统通知；仍需在系统中允许通知" else "已关闭：监控仍会执行，结果只保存在本机任务列表",
+                    checked = settings.monitorResultsNotificationEnabled,
+                    onCheckedChange = { onUpdate { current -> current.copy(monitorResultsNotificationEnabled = it) } },
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SubtleDivider)
+            Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+                SettingsSwitchRow(
+                    title = "对话提醒建议",
+                    summary = if (settings.conversationReminderSuggestionsEnabled) "仅少量高价值对话末尾显示“添加提醒 / 监控”" else "已关闭：不再显示对话尾部的提醒建议",
+                    checked = settings.conversationReminderSuggestionsEnabled,
+                    onCheckedChange = { onUpdate { current -> current.copy(conversationReminderSuggestionsEnabled = it) } },
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SubtleDivider)
+            Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+                SettingsSwitchRow(
+                    title = "对话未读提醒",
+                    summary = if (settings.unreadConversationIndicatorsEnabled) "在左侧对话列表显示橙色未读标记，不发送系统通知" else "已关闭：不显示左侧对话列表的未读标记",
+                    checked = settings.unreadConversationIndicatorsEnabled,
+                    onCheckedChange = { onUpdate { current -> current.copy(unreadConversationIndicatorsEnabled = it) } },
+                )
+            }
+        }
+    }
     state.notice?.let { Spacer(Modifier.height(10.dp)); Text(it, color = BrandGreen, style = MaterialTheme.typography.bodySmall) }
     state.error?.let { Spacer(Modifier.height(10.dp)); Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
 }
@@ -2475,10 +2517,9 @@ private fun SettingsSwitchRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        Switch(
+        SettingsSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.width(SettingsSwitchTrackWidth).height(SettingsSwitchTrackHeight),
         )
     } }
     if (surface) {
@@ -2803,6 +2844,7 @@ private fun ConversationFoundationCard(
     onRouteSelected: (P5ARoute) -> Unit,
     drawerOpen: Boolean,
     onDrawerOpenChanged: (Boolean) -> Unit,
+    onReturnToLifecycleList: (() -> Unit)? = null,
 ) {
     var workspaceVisible by rememberSaveable { mutableStateOf(true) }
     val context = LocalContext.current
@@ -2847,7 +2889,11 @@ private fun ConversationFoundationCard(
         OutlinedButton(onClick = { contextBodySelectionViewModel.showDialog(state.selectedConversationId) }, enabled = state.selectedConversationId != null, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(16.dp)) { Text("选择本次 Context 正文") }
     }
     if (workspaceVisible) ConversationWorkspaceDialog(
-        state = state, notificationReminderSettings = notificationReminderSettings, onDismiss = { /* Root chat has no dismiss-to-workbench escape hatch. */ }, onCreate = viewModel::createDevelopmentConversation,
+        state = state,
+        notificationReminderSettings = notificationReminderSettings,
+        onDismiss = onReturnToLifecycleList ?: { /* Root chat has no dismiss-to-workbench escape hatch. */ },
+        interceptsSystemBack = onReturnToLifecycleList != null,
+        onCreate = viewModel::createDevelopmentConversation,
         onSelect = viewModel::selectConversation, onSurfaceChanged = viewModel::selectSurface, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
         onRetryNormalSend = viewModel::retryLatestNormalSend, onMarkNormalSendFailed = viewModel::markLatestNormalSendFailed,
         onStartFixture = { viewModel.startDeterministicLocalStream() }, onStartFailureFixture = { viewModel.startDeterministicLocalStream(fail = true) },

@@ -96,4 +96,19 @@ class AndroidUserEntryAuditContractsTest {
         assertTrue(scheduler.contains("container.loadNotificationReminderSettings.execute().monitorResultsNotificationEnabled"))
         for (token in listOf("通知与提醒设置", "Desktop：** 待实现", "不显示无效开关或伪通知")) assertTrue("missing cross-platform audit: $token", audit.contains(token))
     }
+
+    @Test
+    fun favoriteUsesTheExistingConversationMenuAndManagementRoute() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val audit = File("../docs/ANDROID_DESKTOP_USER_ENTRY_AUDIT_20260816.md").readText()
+        val menu = workspace.substring(workspace.indexOf("private fun ConversationActionSheet"), workspace.indexOf("private fun requestPinConversationShortcut"))
+
+        assertTrue(app.contains("FAVORITE_CONVERSATIONS(\"收藏\")"))
+        assertTrue(app.contains("ConversationListScope.FAVORITES"))
+        assertTrue(workspace.contains("FavoriteConversationListSettingsCard"))
+        assertTrue(menu.indexOf("ConversationManagementAction.PIN") < menu.indexOf("ConversationManagementAction.FAVORITE"))
+        assertTrue(audit.contains("2026-08-27 本地会话收藏"))
+        assertTrue(audit.contains("Desktop：** 待实现"))
+    }
 }

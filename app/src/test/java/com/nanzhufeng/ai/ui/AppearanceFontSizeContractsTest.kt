@@ -67,9 +67,9 @@ class AppearanceFontSizeContractsTest {
         assertTrue(app.contains("internal fun scaledAppIconSize(base: Dp): Dp"))
         assertTrue(app.contains("internal fun scaledAppTextUnit(base: androidx.compose.ui.unit.TextUnit)"))
         assertTrue(conversation.contains("scaledAppTextUnit(value * ConversationTextScaleFactor)"))
-        assertTrue(conversation.contains("val drawerIdentityVisualSize = scaledAppIconSize(28.dp)"))
-        assertTrue(conversation.contains("Modifier.height(drawerIdentityVisualSize)"))
-        assertTrue(conversation.contains("Text(\"南枫 AI\", style = MaterialTheme.typography.titleMedium"))
+        assertTrue(conversation.contains("val drawerIdentityVisualSize = scaledAppIconSize(36.dp)"))
+        assertTrue(conversation.contains("Modifier.height(drawerIdentityHeaderReservedHeight)"))
+        assertTrue(conversation.contains("fontSize = scaledAppTextUnit(22.sp)"))
         assertTrue(conversation.contains("\"搜索\",\n                            color = BodyText,\n                            fontSize = scaledConversationTextUnit(16.sp)"))
     }
 }

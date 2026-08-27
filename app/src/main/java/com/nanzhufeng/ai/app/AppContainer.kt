@@ -9,7 +9,7 @@ import com.nanzhufeng.ai.ai.OfficialOpenRouterInferenceTransport
 import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
 import com.nanzhufeng.ai.ai.ScheduledMonitorExecutor
 import com.nanzhufeng.ai.ai.QwenReminderDraftRefiner
-import com.nanzhufeng.ai.ai.QwenConversationTitleRefiner
+import com.nanzhufeng.ai.ai.ConfiguredConversationTitleRefiner
 import com.nanzhufeng.ai.background.AndroidNormalChatBackgroundExecution
 import com.nanzhufeng.ai.ai.ChatProviderAdapters
 import com.nanzhufeng.ai.domain.UnifiedModelResolver
@@ -163,6 +163,7 @@ import com.nanzhufeng.ai.domain.ApplyConversationRuntimeEventUseCase
 import com.nanzhufeng.ai.domain.ConversationRuntimeStateMachine
 import com.nanzhufeng.ai.domain.DeterministicFixtureStreamingAdapter
 import com.nanzhufeng.ai.domain.StartLocalConversationRuntimeUseCase
+import com.nanzhufeng.ai.domain.StartProviderRuntimeForExistingUserUseCase
 import com.nanzhufeng.ai.domain.SubmitConversationDraftAndStartProviderRuntimeUseCase
 import com.nanzhufeng.ai.domain.CompareConversationSessionOwner
 import com.nanzhufeng.ai.domain.CompareExecutionApplicationOwner
@@ -298,6 +299,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_50_51,
         NanfengAiDatabase.MIGRATION_51_52,
         NanfengAiDatabase.MIGRATION_52_53,
+        NanfengAiDatabase.MIGRATION_53_54,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
@@ -482,6 +484,9 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         conversationRepository, conversationRepository, conversationRepository,
         conversationRuntimeStateMachine, conversationTreeService, clock,
     )
+    val startProviderRuntimeForExistingUser = StartProviderRuntimeForExistingUserUseCase(
+        conversationRepository, conversationRepository, conversationRuntimeStateMachine, clock,
+    )
     val deterministicFixtureStreamingAdapter = DeterministicFixtureStreamingAdapter(clock)
     /** The confirmation owner remains content-free; the executor receives text only after confirmation. */
     /** P5-B only finalizes interrupted facts at process start; it never schedules or resumes work. */
@@ -654,6 +659,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         attachmentRepository = privateAttachmentRepository,
         attachmentStore = privateAttachmentStore,
         submitDraftAndStartProviderRuntime = submitDraftAndStartProviderConversationRuntime,
+        startProviderRuntimeForExistingUser = startProviderRuntimeForExistingUser,
         loadAssistantExperienceSettings = loadAssistantExperienceSettings::execute,
         resolveConversationWebSearchEnabled = conversationWebSearchOverrides::effectiveEnabled,
         applyRuntimeEvent = applyConversationRuntimeEvent,
@@ -673,7 +679,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
                 ),
             )
         },
-        conversationTitleRefiner = QwenConversationTitleRefiner(
+        conversationTitleRefiner = ConfiguredConversationTitleRefiner(
             records = conversationTitleGenerationRecords,
             configuration = loadModelServiceConfiguration,
             credentials = providerCredentialStore,

@@ -221,6 +221,8 @@ data class Conversation(
     /** Reserved soft-state only: P3-A exposes no archive/pin/delete mutation UI. */
     val archivedAt: Instant? = null,
     val pinnedAt: Instant? = null,
+    /** Local collection marker; it never changes the ordinary conversation ordering. */
+    val favoritedAt: Instant? = null,
     val deletedAt: Instant? = null,
     /** Monotonic local management revision; stale pin/archive commands must not overwrite. */
     val revision: Long = 1L,

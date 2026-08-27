@@ -74,6 +74,16 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertTrue(retry.contains("activeCalls.remove(conversationId, cancellation)"))
     }
 
+    @Test fun `retry immediately closes the failure decision and restores a durable generation placeholder`() {
+        val retry = executor.substringAfter("fun retryLatestAttempt(conversationId: ConversationId)").substringBefore("fun markLatestAttemptFailed")
+        assertTrue(viewModel.contains("normalSendRecovery = null"))
+        assertTrue(viewModel.contains("normalSendRetryInProgress = true"))
+        assertTrue(workspace.contains("state.normalSendRecovery?.takeIf { !state.isSending }"))
+        assertTrue(retry.contains("startProviderRuntimeForExistingUser.execute(conversationId, user.id)"))
+        assertTrue(retry.contains("val resumedRuntime = ActiveProviderRuntime(restarted.runtime)"))
+        assertTrue(workspace.contains("南枫AI 继续生成…"))
+    }
+
     @Test fun `mixed non streaming text and tool call never claims a completed answer`() {
         assertTrue(executor.contains("val toolCallEncountered = !requestOptions.liveWebSearch && (toolOnly != null || reply?.toolCallEncountered == true)"))
         assertTrue(executor.contains("when { toolCallEncountered -> \"TOOL_CALL_UNSUPPORTED\""))

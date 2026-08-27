@@ -16,4 +16,12 @@ class ConversationCostLedgerSummaryContractsTest {
         assertTrue(amount.contains("color = AccentOrange"))
         assertTrue(amount.contains("fontWeight = FontWeight.Bold"))
     }
+
+    @Test fun costRowsShowACompletedModelDurationWithoutInventingMissingHistory() {
+        val ui = File("src/main/java/com/nanzhufeng/ai/ui/ConversationCostLedgerUi.kt").readText()
+        val row = ui.substringAfter("private fun ConversationCostLedgerRow").substringBefore("private fun ReminderDraftCostRow")
+        assertTrue(row.contains("record.modelDurationLabel()"))
+        assertTrue(ui.contains("模型耗时未记录"))
+        assertTrue(ui.contains("模型耗时 \${duration / 100L / 10.0} 秒"))
+    }
 }

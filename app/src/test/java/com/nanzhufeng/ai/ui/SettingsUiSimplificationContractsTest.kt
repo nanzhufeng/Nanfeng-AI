@@ -117,6 +117,7 @@ class SettingsUiSimplificationContractsTest {
         }
         assertTrue(styleRow.contains("height(52.dp)"))
         assertTrue(appearanceRow.contains("height(58.dp)"))
+        assertTrue(appearanceRow.contains("Modifier.size(scaledAppIconSize(17.dp))"))
     }
 
     @Test
@@ -151,9 +152,13 @@ class SettingsUiSimplificationContractsTest {
         assertTrue(personalization.contains("这是 南枫AI 在与你对话时使用的主要语气。这不会影响 南枫AI 的功能。"))
         assertTrue(personalization.contains("资料库搜索"))
         assertTrue(personalization.contains("允许 南枫AI 自动搜索资料库中的文件以查找答案。"))
-        assertTrue(personalization.contains("title = \"资料库搜索\",\n                summary = \"\""))
+        assertTrue(personalization.contains("title = \"资料库搜索\""))
+        assertTrue(personalization.contains("summary = \"\""))
         assertTrue(personalization.contains("Spacer(Modifier.height(6.dp))"))
-        assertTrue(personalization.contains("modifier = Modifier.padding(horizontal = 18.dp)"))
+        assertTrue(personalization.contains("modifier = Modifier.padding(horizontal = 4.dp)"))
+        assertTrue(personalization.indexOf("title = \"资料库搜索\"") < personalization.indexOf("ConversationStylePreferenceRow("))
+        assertFalse(personalization.contains("advancedExpanded"))
+        assertFalse(personalization.contains("Text(\"高级\""))
         assertTrue(personalization.contains("Text(\"记忆摘要\", color = BodyText"))
         assertTrue(personalization.contains("查看 南枫AI 对你的了解概览。如果你希望它持续记住某些信息，可以使用下方 自定义指令。"))
         for (token in listOf("color = ForegroundSurface", "shape = P5AInteractiveShape", "heightIn(min = 52.dp)")) {
@@ -168,10 +173,27 @@ class SettingsUiSimplificationContractsTest {
         val dimensions = File("src/main/java/com/nanzhufeng/ai/ui/SettingsControlDimensions.kt").readText()
 
         for (screen in listOf(app, model)) {
-            assertTrue("settings switch must use the shared geometry", screen.contains("Modifier.width(SettingsSwitchTrackWidth).height(SettingsSwitchTrackHeight)"))
+            assertTrue("settings switch must use the shared component", screen.contains("SettingsSwitch("))
         }
-        assertTrue(dimensions.contains("SettingsSwitchTrackWidth = 74.4.dp"))
-        assertTrue(dimensions.contains("SettingsSwitchTrackHeight = 15.4.dp"))
+        assertTrue(dimensions.contains("SettingsSwitchTrackWidth = 58.dp"))
+        assertTrue(dimensions.contains("SettingsSwitchTrackHeight = 28.dp"))
+        assertTrue(dimensions.contains("requiredSize(SettingsSwitchTrackWidth, SettingsSwitchTouchTargetHeight)"))
+    }
+
+    @Test
+    fun `reminder switches share one white card with inset dividers`() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val reminders = app.substring(
+            app.indexOf("private fun NotificationReminderSettingsCard"),
+            app.indexOf("private fun SettingsSwitchRow"),
+        )
+
+        assertTrue(reminders.contains("color = ForegroundSurface"))
+        assertTrue(reminders.contains("shape = CardShape"))
+        assertTrue(reminders.contains("shadowElevation = 1.dp"))
+        assertTrue(reminders.contains("HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SubtleDivider)"))
+        assertTrue(reminders.contains("Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)"))
+        assertFalse(reminders.contains("Spacer(Modifier.height(12.dp))"))
     }
 
     @Test

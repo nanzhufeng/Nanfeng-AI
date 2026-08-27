@@ -15,11 +15,16 @@ class ConversationDrawerFloatingHeaderContractsTest {
         val headerStart = drawer.indexOf(".align(Alignment.TopStart)")
         val header = drawer.substring(headerStart, drawer.lastIndexOf("if (batchEditing)"))
 
-        assertTrue(drawer.contains("val drawerIdentityVisualSize = scaledAppIconSize(28.dp)"))
-        assertTrue(drawer.contains("Spacer(Modifier.height(drawerIdentityVisualSize))"))
+        assertTrue(drawer.contains("val drawerIdentityVisualSize = scaledAppIconSize(36.dp)"))
+        assertTrue(drawer.contains("val drawerIdentityTitleLineHeight = scaledAppTextUnit(28.sp)"))
+        assertTrue(drawer.contains("val drawerIdentityHeaderReservedHeight = maxOf("))
+        assertTrue(drawer.contains("Spacer(Modifier.height(drawerIdentityHeaderReservedHeight))"))
         assertTrue(header.contains(".zIndex(1f)"))
         assertTrue(header.contains(".statusBarsPadding()"))
         assertTrue(header.contains("R.drawable.nanfeng_ai_icon_foreground_image"))
-        assertTrue(header.contains("Text(\"南枫 AI\""))
+        assertTrue(header.contains("Text(\n                    \"南枫 AI\","))
+        assertTrue(header.contains("fontSize = scaledAppTextUnit(22.sp)"))
+        assertTrue(header.contains("fontFamily = DrawerIdentityRoundedFontFamily"))
+        assertTrue(header.contains("fontWeight = FontWeight.Bold"))
     }
 }

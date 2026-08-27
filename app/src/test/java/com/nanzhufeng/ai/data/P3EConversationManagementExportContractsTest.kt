@@ -69,6 +69,37 @@ class P3EConversationManagementExportContractsTest {
         assertTrue(search.execute("alpha", ConversationListScope.ARCHIVED).any { it.conversationId == a.conversation.id })
     }
 
+    @Test fun `favorite is durable independent of pin and is cleared by archive`() {
+        val saved = repository.save(tree.create("收藏会话"))
+        val favorited = management.execute(
+            ConversationManagementIntent(ConversationManagementIntentId("favorite"), saved.conversation.id, ConversationManagementAction.FAVORITE, saved.conversation.revision),
+        ) as ConversationManagementResult.Applied
+        assertTrue(favorited.snapshot.conversation.favoritedAt != null)
+        assertEquals(listOf(saved.conversation.id), repository.list(ConversationListScope.FAVORITES).map { it.id })
+
+        val archived = management.execute(
+            ConversationManagementIntent(ConversationManagementIntentId("favorite-archive"), saved.conversation.id, ConversationManagementAction.ARCHIVE, favorited.snapshot.conversation.revision),
+        ) as ConversationManagementResult.Applied
+        assertEquals(null, archived.snapshot.conversation.favoritedAt)
+        assertTrue(repository.list(ConversationListScope.FAVORITES).isEmpty())
+    }
+
+    @Test fun `schema fifty three to fifty four adds a nullable local favorite timestamp`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "favorite-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(53) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE conversations (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL)")
+            }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase
+        NanfengAiDatabase.MIGRATION_53_54.migrate(sqlite)
+        sqlite.query("PRAGMA table_info(conversations)").use { columns ->
+            assertTrue(generateSequence { if (columns.moveToNext()) columns.getString(1) else null }.contains("favoritedAtEpochMs"))
+        }
+        helper.close(); context.deleteDatabase(name)
+    }
+
     @Test fun `six range attachment search stays local and returns only current path attachments`() {
         val image = ConversationAttachmentReference(AttachmentId("image"), "image/png", "roadmap.png", 3, "a".repeat(64))
         val audio = ConversationAttachmentReference(AttachmentId("audio"), "audio/mpeg", "review.mp3", 3, "b".repeat(64))

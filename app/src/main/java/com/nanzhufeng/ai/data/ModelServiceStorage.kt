@@ -24,7 +24,13 @@ class AndroidModelServiceSettingsRepository(context: Context) : ModelServiceSett
 
     override fun load(providerId: ProviderId): ProviderSettings = ProviderSettings(
         providerId = providerId,
-        enabled = preferences.getBoolean("${providerId.name}.enabled", false),
+        // Qwen is the app's preferred lightweight title service. A newly installed app should
+        // expose it as ready to configure; an explicit user disable remains authoritative.
+        enabled = if (preferences.contains("${providerId.name}.enabled")) {
+            preferences.getBoolean("${providerId.name}.enabled", false)
+        } else {
+            defaultEnabled(providerId)
+        },
         presetId = preferences.getString("${providerId.name}.preset", null)
             ?.let(::migratePreset)
             ?: defaultPreset(providerId),
@@ -40,6 +46,8 @@ class AndroidModelServiceSettingsRepository(context: Context) : ModelServiceSett
 
     private companion object {
         const val SETTINGS_FILE = "model_service_settings_v1"
+
+        fun defaultEnabled(providerId: ProviderId): Boolean = providerId == ProviderId.QWEN
 
         fun migratePreset(saved: String): ModelPresetId? = when (saved) {
             "FLAGSHIP", "CLAUDE_OPUS_4_1" -> ModelPresetId.CLAUDE_FABLE_5

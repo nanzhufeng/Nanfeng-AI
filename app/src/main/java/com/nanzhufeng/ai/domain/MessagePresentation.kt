@@ -7,7 +7,7 @@ import java.security.MessageDigest
  * P3-D's in-memory-only projection boundary. It never accepts provider chunks and it never
  * writes parsed content back into Conversation/Room. Text is untrusted presentation input.
  */
-const val MESSAGE_PRESENTATION_PARSER_VERSION = 9
+const val MESSAGE_PRESENTATION_PARSER_VERSION = 11
 
 data class PresentationBlockIdentity(
     val messageId: MessageNodeId,
@@ -124,9 +124,15 @@ private object SafeMarkdownParser {
     private val looseFenceOpen = Regex("^\\s*(`{2,3})(?:\\s*(bash|sh|shell|zsh|json|kotlin|java|python|javascript|js|xml|html|sql|text|plaintext))?(.*)$", RegexOption.IGNORE_CASE)
     private val inlineHeading = Regex("^(.*?[：:])\\s*(#{1,6})\\s*(\\S.*)$")
     private val compactHeading = Regex("^(\\s*)(#{1,6})(\\S.*)$")
+    // A CSS colour token such as #fff is prose/code content, never a Markdown heading whose
+    // author merely omitted the conventional space after #.
+    private val cssHexLiteral = Regex("^\\s*#[0-9A-Fa-f]{3,8}(?=\\s|/|,|;|$).*$")
+    private val escapedMarkdownControl = Regex("\\\\([`*_#])")
     private val compactUnordered = Regex("^(\\s*)([-+*])([\\p{IsHan}A-Za-z（(\"“].*)$")
     private val sourcePreambleOnly = Regex("^(?:(?:主要|核心)?)?(?:参考资料|参考|资料来源|来源|sources?|references?)[：:、,，;；·\\s]*$", RegexOption.IGNORE_CASE)
     private val sourceSeparatorNoise = Regex("^[、,，;；·\\s]+$")
+    /** Model-visible material markers remain a stable bold reading label without Markdown. */
+    private val standaloneMaterialMarker = Regex("^\\s*<(?:图片|PDF|视频|音频|文件)>\\s*$")
     // Models often write Chinese section labels without Markdown hashes. Treat only familiar,
     // unambiguous section forms as hierarchy; ordinary short prose remains ordinary prose.
     private val chineseNumberedHeading = Regex("^(?:第[一二三四五六七八九十百]+(?:层|部分|章|节)?[：:]|[一二三四五六七八九十百]+[、.．])\\s*.+$")
@@ -146,23 +152,23 @@ private object SafeMarkdownParser {
             val fenceMatch = fence.matchEntire(line)
             if (fenceMatch != null) {
                 val close = (index + 1 until lines.size).firstOrNull { fence.matchEntire(lines[it]) != null }
-                if (close == null) return listOf(PresentationBlock.PlainText(identity, source))
+                if (close == null) return listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris()))
                 val language = fenceMatch.groupValues[1].ifBlank { null }
                 result += PresentationBlock.CodeFence(identity, language, lines.subList(index + 1, close).joinToString("\n"))
                 index = close + 1
                 continue
             }
             if (index + 1 < lines.size && tableDivider.matches(lines[index + 1])) {
-                val headers = tableCells(lines[index]) ?: return listOf(PresentationBlock.PlainText(identity, source))
+                val headers = tableCells(lines[index]) ?: return listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris()))
                 val rows = mutableListOf<List<List<InlinePresentation>>>()
                 index += 2
                 while (index < lines.size) {
                     val cells = tableCells(lines[index]) ?: break
-                    if (cells.size != headers.size) return listOf(PresentationBlock.PlainText(identity, source))
+                    if (cells.size != headers.size) return listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris()))
                     rows += cells.map(::inline)
                     index++
                 }
-                if (rows.isEmpty()) return listOf(PresentationBlock.PlainText(identity, source))
+                if (rows.isEmpty()) return listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris()))
                 result += PresentationBlock.Table(identity, headers.map(::inline), rows)
                 continue
             }
@@ -173,6 +179,11 @@ private object SafeMarkdownParser {
             }
             noteSpans(line)?.let { spans ->
                 result += PresentationBlock.Note(identity, spans)
+                index++
+                continue
+            }
+            if (standaloneMaterialMarker.matches(line)) {
+                result += PresentationBlock.Paragraph(identity, listOf(InlinePresentation.Strong(line.trim())))
                 index++
                 continue
             }
@@ -245,7 +256,7 @@ private object SafeMarkdownParser {
             }
         }
         return collapseDedicatedSourceSections(attachStandaloneSourceBlocks(result).filterNot { block -> block.isSourceSeparatorNoise() })
-            .ifEmpty { listOf(PresentationBlock.PlainText(identity, source)) }
+            .ifEmpty { listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris())) }
     }
 
     /** Repairs only unambiguous near-Markdown syntax in the in-memory reading projection. */
@@ -274,7 +285,11 @@ private object SafeMarkdownParser {
                 return@forEach
             }
 
-            val opening = looseFenceOpen.matchEntire(originalLine)
+            // Provider output frequently escapes Markdown controls (\\# / \\* / \\`).  This
+            // projection accepts those explicit escapes as normal markup, while persisted text
+            // remains byte-for-byte untouched.
+            val displayLine = originalLine.replace(escapedMarkdownControl, "$1")
+            val opening = looseFenceOpen.matchEntire(displayLine)
             if (opening != null) {
                 val ticks = opening.groupValues[1]
                 val language = opening.groupValues[2]
@@ -287,13 +302,14 @@ private object SafeMarkdownParser {
                 }
             }
 
-            val headingSplit = inlineHeading.matchEntire(originalLine)
+            val headingSplit = inlineHeading.matchEntire(displayLine)
             val candidates = if (headingSplit != null) {
                 listOf(headingSplit.groupValues[1].trimEnd(), "${headingSplit.groupValues[2]} ${headingSplit.groupValues[3].trimStart()}")
-            } else listOf(originalLine)
+            } else listOf(displayLine)
             candidates.forEach { candidate ->
                 val withHeadingSpacing = if (heading.matches(candidate)) candidate else compactHeading.matchEntire(candidate)?.let { match ->
-                    "${match.groupValues[1]}${match.groupValues[2]} ${match.groupValues[3].trimStart()}"
+                    if (cssHexLiteral.matches(candidate)) candidate else
+                        "${match.groupValues[1]}${match.groupValues[2]} ${match.groupValues[3].trimStart()}"
                 } ?: candidate
                 val withCompactListSpacing = compactUnordered.matchEntire(withHeadingSpacing)?.let { match ->
                     "${match.groupValues[1]}${match.groupValues[2]} ${match.groupValues[3]}"
@@ -486,6 +502,7 @@ private object SafeMarkdownParser {
         if (heading.matches(line) || unordered.matches(line) || ordered.matches(line) ||
             quote.matches(line) || horizontalRule.matches(line)
         ) return null
+        if (cssHexLiteral.matches(line)) return null
         if (chineseNumberedHeading.matches(line)) return 2
         val next = lines.getOrNull(index + 1) ?: return null
         return if (next.isBlank() && shortStandaloneHeading.matches(line) &&
@@ -573,8 +590,35 @@ private object SafeMarkdownParser {
         val withoutSourcePreamble = result.filterNot { span ->
             span is InlinePresentation.Text && span.value.isSourcePreambleWithoutUrls()
         }
-        return withoutSourcePreamble.ifEmpty { listOf(InlinePresentation.Text(source)) }
+        // A failed opener is consumed one character at a time by the defensive scanner. Join
+        // adjacent text before removing its control debris, otherwise ** can arrive as two
+        // separately harmless-looking * spans and leak into the reader surface.
+        val mergedText = buildList<InlinePresentation> {
+            withoutSourcePreamble.forEach { span ->
+                val previous = lastOrNull()
+                if (span is InlinePresentation.Text && previous is InlinePresentation.Text) {
+                    this[lastIndex] = previous.copy(value = previous.value + span.value)
+                } else add(span)
+            }
+        }
+        return mergedText.map { span ->
+            if (span is InlinePresentation.Text) span.copy(value = span.value.withoutMarkdownControlDebris()) else span
+        }.ifEmpty { listOf(InlinePresentation.Text(source.withoutMarkdownControlDebris())) }
     }
+
+    /**
+     * Unclosed or escaped Markdown punctuation is formatting debris, not reader-facing prose.
+     * Keep operators and real code spans intact: successful inline syntax is already represented
+     * by a typed span before this cleanup runs.
+     */
+    private fun String.withoutMarkdownControlDebris(): String = this
+        .replace("`", "")
+        .replace(Regex("(?m)^(\\s*)#+\\s*"), "$1")
+        .replace(Regex("(?m)^(\\s*)#(?=[0-9A-Fa-f]{3,8}(?:\\b|\\s|/|,|;|$))"), "$1")
+        .replace(Regex("\\*{2,3}(?=[\\p{L}\\p{N}])"), "")
+        .replace(Regex("(?<=[\\p{L}\\p{N}])\\*{2,3}"), "")
+        .replace(Regex("(?m)(^|\\s)\\*(?=\\s)"), "$1")
+        .replace(Regex(" {2,}"), " ")
 
     private fun String.isSourcePreambleWithoutUrls(): Boolean = sourcePreambleOnly.matches(trim())
 

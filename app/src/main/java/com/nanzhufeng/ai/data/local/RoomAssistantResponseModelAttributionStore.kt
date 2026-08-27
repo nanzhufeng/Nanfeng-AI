@@ -51,11 +51,22 @@ class RoomAssistantResponseModelAttributionStore(
             .groupBy(AssistantResponseModelAttribution::assistantMessageId)
     }
 
-    override fun listCostedNewestFirst(): List<AssistantResponseModelAttribution> = database.assistantResponseModelAttributionDao()
-        .listCostedNewestFirst()
-        .map(AssistantResponseModelAttributionEntity::toDomain)
-        .map(AssistantResponseModelAttribution::withAvailableLocalCostEstimate)
+    override fun listCostedNewestFirst(): List<AssistantResponseModelAttribution> {
+        val entities = database.assistantResponseModelAttributionDao().listCostedNewestFirst()
+        if (entities.isEmpty()) return emptyList()
+        val durations = database.normalChatSendAttemptDao().completedDurations(entities.map { it.attemptId })
+            .associate { it.attemptId to it.modelDurationMillis() }
+        return entities.map { entity ->
+            entity.toDomain().withAvailableLocalCostEstimate()
+                .copy(modelDurationMillis = durations[entity.attemptId])
+        }
+    }
 }
+
+/** The completed Attempt is the sole timestamp owner; absent/interrupted attempts stay unknown. */
+private fun CompletedNormalChatAttemptDuration.modelDurationMillis(): Long? =
+    (updatedAtEpochMs - createdAtEpochMs)
+        .takeIf { it > 0L }
 
 private fun AssistantResponseModelAttribution.toEntity() = AssistantResponseModelAttributionEntity(
     assistantMessageId = assistantMessageId.value,

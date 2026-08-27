@@ -37,9 +37,9 @@ internal fun Modifier.conversationEdgeGrayFade(
                 brush = Brush.verticalGradient(
                     colorStops = arrayOf(
                         0f to topOpaqueEdge,
-                        0.25f to edgeColor.copy(alpha = 0.90f),
-                        0.5f to edgeColor.copy(alpha = 0.62f),
-                        0.75f to edgeColor.copy(alpha = 0.22f),
+                        0.25f to edgeColor.copy(alpha = 0.96f),
+                        0.5f to edgeColor.copy(alpha = 0.76f),
+                        0.75f to edgeColor.copy(alpha = 0.36f),
                         1f to Color.Transparent,
                     ),
                     startY = 0f,

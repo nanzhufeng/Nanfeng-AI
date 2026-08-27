@@ -198,7 +198,7 @@ fun ConversationCostLedgerPage(state: ConversationCostLedgerUiState) {
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         HorizontalDivider(color = NeutralBorder)
         Text("会话标题整理", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-        Text("千问整理调用：${records.size} 次 · 本地估算：≈ \$${estimated.usdText()}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        Text("已配置模型整理：${records.size} 次 · 本地估算：≈ \$${estimated.usdText()}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -215,6 +215,7 @@ fun ConversationCostLedgerPage(state: ConversationCostLedgerUiState) {
         "输入 ${record.usage.inputTokens ?: "未知"} · 输出 ${record.usage.outputTokens ?: "未知"} · ${when (record.costSource) { ConversationCostSource.PROVIDER_RESPONSE -> "OpenRouter 实际金额"; ConversationCostSource.LOCAL_ESTIMATE -> "本地价目表估算"; null -> "缺少可用估算价目表" }}",
         color = SecondaryText, style = MaterialTheme.typography.bodySmall,
     )
+    Text(record.modelDurationLabel(), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable private fun ReminderDraftCostRow(record: ReminderDraftGenerationRecord) = Column(
@@ -234,7 +235,7 @@ fun ConversationCostLedgerPage(state: ConversationCostLedgerUiState) {
     Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("会话标题 · ${record.modelId ?: "千问"}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+        Text("会话标题 · ${record.modelId ?: record.providerId?.titleProviderLabel() ?: "未配置服务"}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
         Text(record.requestedAt.costTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
     }
@@ -245,3 +246,17 @@ fun ConversationCostLedgerPage(state: ConversationCostLedgerUiState) {
 
 private fun Long.usdText(): String = BigDecimal.valueOf(this).movePointLeft(6).setScale(6, RoundingMode.UNNECESSARY).stripTrailingZeros().toPlainString()
 private fun java.time.Instant.costTimestamp(): String = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(this)
+private fun com.nanzhufeng.ai.domain.ProviderId.titleProviderLabel(): String = when (this) {
+    com.nanzhufeng.ai.domain.ProviderId.QWEN -> "千问"
+    com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter"
+    com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> "DeepSeek"
+    com.nanzhufeng.ai.domain.ProviderId.MOCK -> "本地模拟"
+}
+
+private fun AssistantResponseModelAttribution.modelDurationLabel(): String = modelDurationMillis?.let { duration ->
+    val seconds = duration / 1_000
+    when {
+        seconds < 60L -> "模型耗时 ${duration / 100L / 10.0} 秒"
+        else -> "模型耗时 ${seconds / 60} 分 ${seconds % 60} 秒"
+    }
+} ?: "模型耗时未记录"

@@ -16,9 +16,9 @@ class ConversationDrawerEdgeFadeContractsTest {
         assertTrue(edgeFadeSource.contains("topBand: Dp = 128.dp"))
         assertTrue(edgeFadeSource.contains("bottomBand: Dp = 112.dp"))
         assertTrue(edgeFadeSource.contains("TopEdgeFadeOpaqueAlpha = 1f"))
-        assertTrue(edgeFadeSource.contains("0.25f to edgeColor.copy(alpha = 0.90f)"))
-        assertTrue(edgeFadeSource.contains("0.5f to edgeColor.copy(alpha = 0.62f)"))
-        assertTrue(edgeFadeSource.contains("0.75f to edgeColor.copy(alpha = 0.22f)"))
+        assertTrue(edgeFadeSource.contains("0.25f to edgeColor.copy(alpha = 0.96f)"))
+        assertTrue(edgeFadeSource.contains("0.5f to edgeColor.copy(alpha = 0.76f)"))
+        assertTrue(edgeFadeSource.contains("0.75f to edgeColor.copy(alpha = 0.36f)"))
         assertTrue(edgeFadeSource.contains("BottomEdgeFadeOpaqueAlpha = 0.98f"))
         assertTrue(workspaceSource.contains("Modifier.conversationEdgeGrayFade()"))
         assertFalse(workspaceSource.contains("DrawerContentEdgeGrayFade"))
@@ -64,6 +64,6 @@ class ConversationDrawerEdgeFadeContractsTest {
         assertTrue(drawer.contains("Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(17.dp)), tint = BodyText"))
         assertTrue(drawer.contains("\"搜索\",\n                            color = BodyText,\n                            fontSize = scaledConversationTextUnit(16.sp)"))
         assertTrue(drawer.contains("\"已计划\",\n                            color = BodyText,\n                            fontSize = scaledConversationTextUnit(16.sp)"))
-        assertTrue(conversationRow.contains("Text(conversation.title, modifier = Modifier.weight(1f), fontSize = scaledConversationTextUnit(16.sp), lineHeight = scaledConversationTextUnit(20.sp), fontWeight = FontWeight.Normal"))
+        assertTrue(conversationRow.contains("Text(conversation.title, modifier = Modifier.weight(1f), fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal"))
     }
 }

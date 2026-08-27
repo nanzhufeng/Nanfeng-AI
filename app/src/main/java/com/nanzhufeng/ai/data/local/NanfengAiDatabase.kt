@@ -419,6 +419,7 @@ data class ConversationEntity(
     val autoTitlePending: Boolean = false,
     @androidx.room.ColumnInfo(defaultValue = "'CHAT'")
     val surface: String = "CHAT",
+    val favoritedAtEpochMs: Long? = null,
 )
 
 @Entity(
@@ -605,6 +606,13 @@ data class NormalChatSendAttemptEntity(
     val gatewayTaskId: String?,
     val finalGatewaySequence: Long?,
     val gatewayFinalAcknowledgedAtEpochMs: Long?,
+)
+
+/** Content-free read projection for a completed normal-chat request boundary. */
+data class CompletedNormalChatAttemptDuration(
+    val attemptId: String,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
 )
 
 /** Immutable UI provenance; assistant content itself remains solely in message_nodes/blocks. */
@@ -1666,7 +1674,7 @@ interface ConversationDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertConversation(conversation: ConversationEntity)
 
-    @Query("UPDATE conversations SET title = :title, surface = :surface, projectId = :projectId, currentLeafMessageId = :currentLeafMessageId, updatedAtEpochMs = :updatedAtEpochMs, defaultProviderId = :defaultProviderId, defaultModelId = :defaultModelId, harnessId = :harnessId, harnessVersion = :harnessVersion, contextPolicyVersion = :contextPolicyVersion, archivedAtEpochMs = :archivedAtEpochMs, pinnedAtEpochMs = :pinnedAtEpochMs, deletedAtEpochMs = :deletedAtEpochMs, revision = :revision, autoTitlePending = :autoTitlePending, schemaVersion = :schemaVersion WHERE id = :id")
+    @Query("UPDATE conversations SET title = :title, surface = :surface, projectId = :projectId, currentLeafMessageId = :currentLeafMessageId, updatedAtEpochMs = :updatedAtEpochMs, defaultProviderId = :defaultProviderId, defaultModelId = :defaultModelId, harnessId = :harnessId, harnessVersion = :harnessVersion, contextPolicyVersion = :contextPolicyVersion, archivedAtEpochMs = :archivedAtEpochMs, pinnedAtEpochMs = :pinnedAtEpochMs, deletedAtEpochMs = :deletedAtEpochMs, favoritedAtEpochMs = :favoritedAtEpochMs, revision = :revision, autoTitlePending = :autoTitlePending, schemaVersion = :schemaVersion WHERE id = :id")
     fun updateConversation(
         id: String,
         title: String,
@@ -1682,6 +1690,7 @@ interface ConversationDao {
         archivedAtEpochMs: Long?,
         pinnedAtEpochMs: Long?,
         deletedAtEpochMs: Long?,
+        favoritedAtEpochMs: Long?,
         revision: Long,
         autoTitlePending: Boolean,
         schemaVersion: Int,
@@ -1794,6 +1803,9 @@ interface ConversationDao {
 
     @Query("SELECT * FROM conversations WHERE surface = 'CHAT' AND deletedAtEpochMs IS NULL AND archivedAtEpochMs IS NOT NULL ORDER BY updatedAtEpochMs DESC, id ASC")
     fun listArchivedConversations(): List<ConversationEntity>
+
+    @Query("SELECT * FROM conversations WHERE surface = 'CHAT' AND deletedAtEpochMs IS NULL AND archivedAtEpochMs IS NULL AND favoritedAtEpochMs IS NOT NULL ORDER BY favoritedAtEpochMs DESC, id ASC")
+    fun listFavoriteConversations(): List<ConversationEntity>
 
     @Query("SELECT * FROM conversations WHERE surface = 'CHAT' AND deletedAtEpochMs IS NOT NULL ORDER BY updatedAtEpochMs DESC, id ASC")
     fun listDeletedConversations(): List<ConversationEntity>
@@ -2181,6 +2193,7 @@ interface NormalChatSendAttemptDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: NormalChatSendAttemptEntity)
     @Query("SELECT * FROM normal_chat_send_attempts WHERE attemptId=:attemptId") fun find(attemptId: String): NormalChatSendAttemptEntity?
     @Query("SELECT * FROM normal_chat_send_attempts WHERE conversationId=:conversationId ORDER BY createdAtEpochMs DESC LIMIT 1") fun latestForConversation(conversationId: String): NormalChatSendAttemptEntity?
+    @Query("SELECT attemptId, createdAtEpochMs, updatedAtEpochMs FROM normal_chat_send_attempts WHERE status='COMPLETED' AND attemptId IN (:attemptIds)") fun completedDurations(attemptIds: List<String>): List<CompletedNormalChatAttemptDuration>
     @Query("UPDATE normal_chat_send_attempts SET status=:next, updatedAtEpochMs=:updatedAtEpochMs, safeErrorCode=:safeErrorCode WHERE attemptId=:attemptId AND status IN (:expected)") fun transition(attemptId: String, expected: List<String>, next: String, updatedAtEpochMs: Long, safeErrorCode: String?): Int
     @Query("UPDATE normal_chat_send_attempts SET status='UNKNOWN', updatedAtEpochMs=:updatedAtEpochMs, safeErrorCode='PROCESS_INTERRUPTED' WHERE status IN ('PENDING','SENDING','ACCEPTED','STREAMING')") fun markInterruptedAsUnknown(updatedAtEpochMs: Long): Int
 }
@@ -2323,7 +2336,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 53,
+    version = 54,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2942,6 +2955,12 @@ abstract class NanfengAiDatabase : RoomDatabase() {
         val MIGRATION_52_53 = object : Migration(52, 53) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `gatewayTaskId` TEXT")
+            }
+        }
+        /** Favorites are a local, reversible conversation-management marker. */
+        val MIGRATION_53_54 = object : Migration(53, 54) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `conversations` ADD COLUMN `favoritedAtEpochMs` INTEGER")
             }
         }
     }

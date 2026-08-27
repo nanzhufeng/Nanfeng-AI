@@ -86,6 +86,20 @@ class P6IConversationAutoTitleContractsTest {
         assertTrue(completed.snapshot.conversation.autoTitlePending)
     }
 
+    @Test fun `attachment opening uses only the original AI reply and later completion keeps the title source retryable`() {
+        val tree = ConversationTreeService(clock)
+        val openingUser = tree.append(snapshot(autoTitlePending = true), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Attachment(image()))))
+        val openingAssistant = tree.append(openingUser, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("我会先分析图片中的主要内容。"))))
+        val laterUser = tree.append(openingAssistant, AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("请继续说明。"))))
+        val laterAssistant = tree.append(laterUser, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("补充了更详细的判断。"))))
+
+        assertEquals(
+            ConversationTitleSource("", "我会先分析图片中的主要内容。"),
+            laterAssistant.openingTitleSource(),
+        )
+        assertTrue(laterAssistant.conversation.autoTitlePending)
+    }
+
     @Test fun `new conversation use case marks only locally created empty conversations as eligible`() {
         val result = CreateConversationUseCase(ConversationTreeService(clock), FakeConversations()).execute()
             as ConversationMutationResult.Saved

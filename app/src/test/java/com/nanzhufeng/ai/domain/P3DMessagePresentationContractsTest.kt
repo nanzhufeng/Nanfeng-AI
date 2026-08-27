@@ -10,7 +10,7 @@ import org.junit.Test
 class P3DMessagePresentationContractsTest {
     private val conversationId = ConversationId("p3d-presentation")
 
-    @Test fun `safe markdown supports required blocks and malformed input falls back without loss`() {
+    @Test fun `safe markdown supports required blocks and malformed input falls back without raw control glyphs`() {
         val renderer = MessagePresentationRenderer()
         val source = "# 标题\n\n- 一\n- 二\n\n> 引用\n\n`内联` [链接](https://example.test)\n\n```kotlin\nval x = 1\n```"
         val rendered = renderer.render(listOf(message("a", source))).single().blocks
@@ -24,7 +24,18 @@ class P3DMessagePresentationContractsTest {
 
         val malformed = "<script>alert(1)</script>\n```kotlin\n未闭合"
         val fallback = renderer.render(listOf(message("b", malformed))).single().blocks.single() as PresentationBlock.PlainText
-        assertEquals(malformed, fallback.raw)
+        assertEquals("<script>alert(1)</script>\nkotlin\n未闭合", fallback.raw)
+    }
+
+    @Test fun `standalone material markers share the same bold projection`() {
+        val blocks = MessagePresentationRenderer().render(
+            listOf(message("material-markers", "<图片>\n\n<文件>")),
+        ).single().blocks.filterIsInstance<PresentationBlock.Paragraph>()
+
+        assertEquals(
+            listOf("<图片>", "<文件>"),
+            blocks.map { block -> (block.spans.single() as InlinePresentation.Strong).value },
+        )
     }
 
     @Test fun `stable block identity and cache only change for changed persisted content`() {
@@ -177,7 +188,7 @@ class P3DMessagePresentationContractsTest {
         assertTrue(blocks.any { it is PresentationBlock.Heading && it.spans.filterIsInstance<InlinePresentation.Text>().any { span -> span.value.contains("后续判断") } })
     }
 
-    @Test fun `closed double asterisks render as strong while malformed markers remain visible`() {
+    @Test fun `closed double asterisks render as strong while malformed markers stay out of reader text`() {
         val strong = MessagePresentationRenderer().render(listOf(message("strong", "**降**不是**涨**：*仅作强调*"))).single()
             .blocks.single() as PresentationBlock.Paragraph
         assertEquals(listOf("降", "涨"), strong.spans.filterIsInstance<InlinePresentation.Strong>().map { it.value })
@@ -185,12 +196,38 @@ class P3DMessagePresentationContractsTest {
 
         val malformed = MessagePresentationRenderer().render(listOf(message("malformed", "未闭合 **强调 或普通 * 星号"))).single()
             .blocks.single() as PresentationBlock.Paragraph
-        assertEquals("未闭合 **强调 或普通 * 星号", malformed.spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value })
+        assertEquals("未闭合 强调 或普通 星号", malformed.spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value })
         assertTrue(malformed.spans.none { it is InlinePresentation.Strong || it is InlinePresentation.Emphasis })
 
         val laterValid = MessagePresentationRenderer().render(listOf(message("later", "未闭合 **标记，后面仍可 *强调*。"))).single()
             .blocks.single() as PresentationBlock.Paragraph
         assertEquals(listOf("强调"), laterValid.spans.filterIsInstance<InlinePresentation.Emphasis>().map { it.value })
+    }
+
+    @Test fun `css colours and escaped markdown remain restrained reader prose`() {
+        val source = """
+            `background:
+            \#fff / white / rgba(255,255,255,1)
+
+            白 = \*\*没有背景色时透出的下层底色\*\*
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("css-colour", source))).single().blocks
+        assertTrue("CSS colour must not become a heading", blocks.none { it is PresentationBlock.Heading })
+        val visible = blocks.joinToString("\n") { block -> when (block) {
+            is PresentationBlock.Paragraph -> block.spans.joinToString("") { span -> when (span) {
+                is InlinePresentation.Text -> span.value
+                is InlinePresentation.Strong -> span.value
+                is InlinePresentation.Emphasis -> span.value
+                is InlinePresentation.Code -> span.value
+                is InlinePresentation.Link -> span.label
+            } }
+            else -> block.toString()
+        } }
+        assertTrue(visible.contains("fff / white / rgba(255,255,255,1)"))
+        assertTrue(visible.contains("没有背景色时透出的下层底色"))
+        assertFalse(visible.contains("#"))
+        assertFalse(visible.contains("*"))
+        assertFalse(visible.contains("`"))
     }
 
     @Test fun `near Markdown formatting is projected as reader structure without raw control glyphs`() {

@@ -262,6 +262,54 @@ sealed interface ProviderRuntimeDraftSubmissionResult {
     data class Rejected(val reason: String) : ProviderRuntimeDraftSubmissionResult
 }
 
+/** A retry keeps the original user message but owns a new assistant runtime and placeholder. */
+sealed interface ProviderRuntimeRetryResult {
+    data class Started(
+        val snapshot: ConversationSnapshot,
+        val runtime: ConversationRuntimeState,
+    ) : ProviderRuntimeRetryResult
+
+    data class Rejected(val reason: String) : ProviderRuntimeRetryResult
+}
+
+/**
+ * Creates the same durable assistant placeholder used by a fresh send, but beneath an already
+ * committed user message. This makes an explicit retry visible before the first provider chunk
+ * and keeps the failed sibling off the active transcript path.
+ */
+class StartProviderRuntimeForExistingUserUseCase(
+    private val conversations: ConversationRepository,
+    private val runtime: ConversationRuntimeRepository,
+    private val stateMachine: ConversationRuntimeStateMachine,
+    private val clock: Clock,
+) {
+    fun execute(conversationId: ConversationId, userMessageId: MessageNodeId): ProviderRuntimeRetryResult {
+        val prior = runtime.stateFor(conversationId)
+        if (prior != null && !prior.isTerminal) return ProviderRuntimeRetryResult.Rejected("当前回复仍在生成。")
+        val snapshot = conversations.findById(conversationId)
+            ?: return ProviderRuntimeRetryResult.Rejected("会话不存在。")
+        val user = snapshot.nodes.firstOrNull { it.id == userMessageId && it.role == MessageRole.USER }
+            ?: return ProviderRuntimeRetryResult.Rejected("原发送消息不存在。")
+        val started = RuntimeRunStarted(
+            eventId = AiRuntimeEventId.new(),
+            invocationId = InvocationId.new(),
+            conversationId = conversationId,
+            messageId = MessageNodeId.new(),
+            sequence = 0,
+            emittedAt = clock.instant(),
+            security = AiRuntimeSecurityMetadata(source = "DIRECT_PROVIDER_RETRY"),
+            parentMessageId = user.id,
+        )
+        val projection = runCatching { stateMachine.apply(snapshot, null, started) }
+            .getOrElse { return ProviderRuntimeRetryResult.Rejected(it.message ?: "助手占位消息未能创建。") }
+        return when (val persisted = runtime.apply(projection, started)) {
+            is ConversationRuntimePersistenceResult.Applied -> ProviderRuntimeRetryResult.Started(persisted.projection.snapshot, persisted.projection.state)
+            is ConversationRuntimePersistenceResult.Replayed -> ProviderRuntimeRetryResult.Started(persisted.projection.snapshot, persisted.projection.state)
+            is ConversationRuntimePersistenceResult.Rejected -> ProviderRuntimeRetryResult.Rejected(persisted.reason)
+        }
+    }
+}
+
 /** Starts one ordinary Provider stream without a crash window between user and assistant facts. */
 class SubmitConversationDraftAndStartProviderRuntimeUseCase(
     private val conversations: ConversationRepository,

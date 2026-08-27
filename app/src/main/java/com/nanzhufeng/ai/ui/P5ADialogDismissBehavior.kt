@@ -2,6 +2,7 @@ package com.nanzhufeng.ai.ui
 
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowManager
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.AlertDialog as MaterialAlertDialog
@@ -19,7 +20,23 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog as ComposeDialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import kotlin.math.abs
+
+/** A centered in-app dialog should separate the task without visually blacking out the app. */
+private const val P5ACenteredDialogScrimAlpha = 0.12f
+
+@Composable
+private fun P5ALightDialogScrimEffect() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        (view.parent as? DialogWindowProvider)?.window?.apply {
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(P5ACenteredDialogScrimAlpha)
+        }
+        onDispose { }
+    }
+}
 
 /** Use on a full-screen in-app overlay/backdrop that is not backed by a Dialog window. */
 internal fun Modifier.p5aDismissOnInwardEdgeSwipe(onDismissRequest: () -> Unit): Modifier = pointerInput(onDismissRequest) {
@@ -120,6 +137,7 @@ internal fun AlertDialog(
     MaterialAlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
+            P5ALightDialogScrimEffect()
             P5ADialogEdgeDismissEffect(onDismissRequest)
             confirmButton()
         },
@@ -146,6 +164,7 @@ internal fun Dialog(
     content: @Composable () -> Unit,
 ) {
     ComposeDialog(onDismissRequest = onDismissRequest, properties = properties) {
+        P5ALightDialogScrimEffect()
         P5ADialogEdgeDismissEffect(onDismissRequest)
         content()
     }

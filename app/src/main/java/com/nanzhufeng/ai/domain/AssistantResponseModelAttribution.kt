@@ -28,12 +28,18 @@ data class AssistantResponseModelAttribution(
     val usage: ProviderUsage = ProviderUsage(),
     val cost: ProviderCost = ProviderCost(),
     val costSource: ConversationCostSource? = null,
+    /**
+     * List-only projection of the matching completed local send Attempt. It is intentionally
+     * not persisted here: the Attempt remains the one owner of its start/end boundary.
+     */
+    val modelDurationMillis: Long? = null,
 ) {
     init {
         require(modelId.isNotBlank() && modelDisplayName.isNotBlank())
         require((cost.totalMicros == null) == (costSource == null)) {
             "已知对话费用必须说明来源；未知费用不得伪造来源。"
         }
+        require(modelDurationMillis == null || modelDurationMillis > 0L) { "模型耗时必须为正数或未知。" }
     }
 
     /** The footer is a model-name surface, not a Provider route ledger. */

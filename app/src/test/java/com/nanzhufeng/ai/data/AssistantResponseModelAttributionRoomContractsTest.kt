@@ -8,9 +8,13 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
 import com.nanzhufeng.ai.data.local.RoomAssistantResponseModelAttributionStore
+import com.nanzhufeng.ai.data.local.RoomNormalChatSendAttemptStore
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttribution
+import com.nanzhufeng.ai.domain.ConversationId
 import com.nanzhufeng.ai.domain.MessageNodeId
+import com.nanzhufeng.ai.domain.NormalChatSendAttempt
 import com.nanzhufeng.ai.domain.NormalChatSendAttemptId
+import com.nanzhufeng.ai.domain.NormalChatSendAttemptStatus
 import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.ProviderUsage
 import com.nanzhufeng.ai.domain.ProviderCost
@@ -24,6 +28,30 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class AssistantResponseModelAttributionRoomContractsTest {
+    @Test fun `cost list projects only the matching completed model attempt duration`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "assistant-model-duration-${UUID.randomUUID()}.db"
+        context.deleteDatabase(name)
+        val messageId = MessageNodeId("assistant-model-duration-message")
+        val attemptId = NormalChatSendAttemptId("assistant-model-duration-attempt")
+        val database = open(context, name)
+        val attempts = RoomNormalChatSendAttemptStore(database)
+        attempts.create(NormalChatSendAttempt(
+            attemptId = attemptId, messageId = messageId, conversationId = ConversationId("assistant-model-duration-conversation"),
+            providerId = ProviderId.OPENROUTER, modelId = "openai/gpt-5.6", idempotencyKey = "assistant-model-duration-key",
+            status = NormalChatSendAttemptStatus.PENDING, createdAt = Instant.ofEpochMilli(1_000L), updatedAt = Instant.ofEpochMilli(1_000L),
+        ))
+        attempts.transition(attemptId, setOf(NormalChatSendAttemptStatus.PENDING), NormalChatSendAttemptStatus.COMPLETED, Instant.ofEpochMilli(13_540L))
+        RoomAssistantResponseModelAttributionStore(database).record(AssistantResponseModelAttribution(
+            assistantMessageId = messageId, attemptId = attemptId, providerId = ProviderId.OPENROUTER, receiverProviderId = ProviderId.OPENROUTER,
+            modelId = "openai/gpt-5.6", modelDisplayName = "GPT-5.6", recordedAt = Instant.EPOCH, usage = ProviderUsage(inputTokens = 12, outputTokens = 4),
+            cost = ProviderCost("openrouter-provider-response", "USD", 5_210L), costSource = ConversationCostSource.PROVIDER_RESPONSE,
+        ))
+
+        assertEquals(12_540L, RoomAssistantResponseModelAttributionStore(database).listCostedNewestFirst().single().modelDurationMillis)
+        database.close(); context.deleteDatabase(name)
+    }
+
     @Test fun `assistant result keeps its exact route after reopen without retaining content`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val name = "assistant-model-attribution-${UUID.randomUUID()}.db"

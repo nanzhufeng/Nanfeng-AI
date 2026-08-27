@@ -258,7 +258,11 @@ class ModelSettingsViewModel(
                     revealedCredential = null,
                     configuration = if (providerId == ProviderId.OPENROUTER) result.configuration else state.configuration,
                     providerConfigurations = state.providerConfigurations + (providerId to result.configuration),
-                    notice = "模型服务设置已安全保存在本机。",
+                    notice = if (replacementCredential != null) {
+                        "API Key 已安全保存在本机。"
+                    } else {
+                        "模型服务设置已安全保存在本机。"
+                    },
                 )
                 is SaveModelServiceConfigurationResult.Rejected -> state.copy(
                     saving = false,

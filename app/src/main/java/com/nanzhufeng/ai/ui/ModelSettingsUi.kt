@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -36,7 +35,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -130,7 +128,7 @@ private fun WebSearchSettingsRow(
             shadowElevation = 0.dp,
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 13.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -147,10 +145,9 @@ private fun WebSearchSettingsRow(
                     fontWeight = FontWeight.Medium,
                 )
                 Spacer(Modifier.width(12.dp))
-                Switch(
+                SettingsSwitch(
                     checked = enabled,
                     onCheckedChange = onEnabledChange,
-                    modifier = Modifier.width(SettingsSwitchTrackWidth).height(SettingsSwitchTrackHeight),
                 )
             }
         }
@@ -236,11 +233,10 @@ internal fun ModelSettingsConfigurationPage(
         ) {
             Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(configuration.provider.displayName, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = BodyText)
-                Switch(
+                SettingsSwitch(
                     checked = enabled,
                     onCheckedChange = { enabled = it },
                     enabled = !state.saving,
-                    modifier = Modifier.width(SettingsSwitchTrackWidth).height(SettingsSwitchTrackHeight),
                 )
             }
         }
@@ -267,6 +263,7 @@ internal fun ModelSettingsConfigurationPage(
             } else Text("测试连接")
         }
         ConnectionTestFeedback(state)
+        ModelSettingsSaveFeedback(state)
 
         Text("API Key", color = BodyText, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
         OutlinedTextField(
@@ -308,11 +305,6 @@ internal fun ModelSettingsConfigurationPage(
                         }
                     },
         )
-        state.error?.takeUnless { it.title.startsWith("连接测试") }?.let { error ->
-            Text(error.title, color = ErrorRed, fontWeight = FontWeight.SemiBold)
-            Text(error.suggestion, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        }
-
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Button(
                         onClick = { onSave(selectedProvider, enabled, presetId, keyInput.takeIf { keyEdited && it.isNotBlank() }) },
@@ -372,6 +364,48 @@ private fun ConnectionTestFeedback(state: ModelSettingsUiState) {
 }
 
 @Composable
+private fun ModelSettingsSaveFeedback(state: ModelSettingsUiState) {
+    val saveError = state.error?.takeUnless { it.title.startsWith("连接测试") }
+    when {
+        state.notice == "API Key 已安全保存在本机。" -> Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = NeutralAssistantSurface,
+        ) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(state.notice, color = AccentOrange, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                Text("尚未测试连接；请点击“测试连接”确认 API Key 是否可用。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        state.notice == "模型服务设置已安全保存在本机。" -> Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = NeutralAssistantSurface,
+        ) {
+            Text(
+                state.notice,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                color = AccentOrange,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        saveError != null -> {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = SemanticErrorSurface,
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(saveError.title, color = ErrorRed, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text(saveError.suggestion, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ModelSettingsPrimaryEntry(onClick: () -> Unit) {
     val cardShape = RoundedCornerShape(20.dp)
     Surface(
@@ -379,7 +413,6 @@ private fun ModelSettingsPrimaryEntry(onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = cardShape,
         color = ForegroundSurface,
-        border = BorderStroke(1.dp, AccentOrange.copy(alpha = 0.42f)),
         shadowElevation = 0.dp,
     ) {
         Row(

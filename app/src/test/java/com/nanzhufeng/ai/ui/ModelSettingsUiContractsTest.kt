@@ -1,6 +1,7 @@
 package com.nanzhufeng.ai.ui
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -17,12 +18,18 @@ class ModelSettingsUiContractsTest {
         assertTrue(ui.contains("ModelSettingsContextSelectionsPage"))
         assertTrue(ui.contains("ModelSettingsDiagnosticsPage"))
         assertTrue(ui.contains("ModelSettingsConfigurationPage"))
+        assertTrue(ui.contains("ModelSettingsSaveFeedback(state)"))
+        assertTrue(ui.contains("API Key 已安全保存在本机。"))
+        assertTrue(ui.contains("尚未测试连接；请点击“测试连接”确认 API Key 是否可用。"))
         val webSearch = ui.substringAfter("private fun WebSearchSettingsRow(").substringBefore("@Composable\ninternal fun ModelSettingsConfigurationPage")
         assertTrue(webSearch.contains("val supportingText"))
         assertTrue(webSearch.indexOf("Surface(") < webSearch.indexOf("Text(\n            supportingText"))
+        assertTrue(webSearch.contains("padding(horizontal = 18.dp, vertical = 4.dp)"))
+        assertFalse(webSearch.contains("padding(horizontal = 18.dp, vertical = 13.dp)"))
         assertTrue(!ui.contains("ModelSettingsDialog("))
         assertTrue(!ui.contains("点击后，只发送一句“hi”测试连接"))
         assertTrue(viewModel.contains("contextSelectionAudits.recent(50)"))
+        assertTrue(viewModel.contains("notice = if (replacementCredential != null)"))
         assertTrue(app.contains("onLoadInvocationLedger"))
         assertTrue(app.contains("onOpenConversationCostLedger"))
         assertTrue(app.contains("onWebSearchEnabledChange"))
@@ -36,7 +43,7 @@ class ModelSettingsUiContractsTest {
         val records = ui.substringAfter("private fun ModelSettingsRecordsCard").substringBefore("private fun ModelSettingsGroupedEntry")
 
         assertTrue(home.indexOf("ModelSettingsPrimaryEntry(onOpen)") < home.indexOf("ModelSettingsRecordsCard("))
-        assertTrue(primary.contains("BorderStroke(1.dp, AccentOrange.copy(alpha = 0.42f))"))
+        assertFalse(primary.contains("BorderStroke("))
         assertTrue(primary.contains("shadowElevation = 0.dp"))
         assertTrue(primary.contains("Icons.Rounded.Key"))
         assertTrue(records.contains("Text(\n                \"调用记录\""))

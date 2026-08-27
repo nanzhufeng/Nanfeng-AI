@@ -200,6 +200,8 @@ data class ConversationFoundationUiState(
     val sendError: String? = null,
     /** Durable, content-free decision point for a prior ordinary Provider attempt. */
     val normalSendRecovery: NormalChatOpenRouterExecutor.Recovery? = null,
+    /** True only while an explicit retry owns a new assistant placeholder. */
+    val normalSendRetryInProgress: Boolean = false,
     val notice: String? = null,
 )
 
@@ -521,7 +523,11 @@ class ConversationFoundationViewModel(
     ) {
         if (conversationId != state.selectedConversationId) return
         val error = safeResult?.toNormalChatBackgroundErrorLabel()
-        state = state.copy(isSending = running, sendError = error ?: state.sendError)
+        state = state.copy(
+            isSending = running,
+            sendError = error ?: state.sendError,
+            normalSendRetryInProgress = if (running) state.normalSendRetryInProgress else false,
+        )
         reload(keepSending = running)
     }
 
@@ -650,10 +656,10 @@ class ConversationFoundationViewModel(
             when (withContext(Dispatchers.IO) {
                 conversationWebSearchOverrides.setEnabled(conversationId, enabled, current.revision)
             }) {
-                is ConversationWebSearchOverrideMutationResult.Applied -> reload(
-                    if (enabled) "已为当前对话开启联网检索；设置中的默认值未改变。"
-                    else "已为当前对话关闭联网检索；设置中的默认值未改变。",
-                )
+                is ConversationWebSearchOverrideMutationResult.Applied -> {
+                    state = state.copy(notice = null)
+                    reload()
+                }
                 ConversationWebSearchOverrideMutationResult.Conflict -> reload("当前对话联网状态已更新；请按最新状态重试。")
                 ConversationWebSearchOverrideMutationResult.PersistenceFailed -> reload("当前对话联网状态未保存；本机设置保持不变。")
             }
@@ -1222,31 +1228,29 @@ class ConversationFoundationViewModel(
 
     fun createDevelopmentConversation() {
         if (state.isCreating) return
-        state = state.copy(isCreating = true, notice = null)
+        val surface = state.surface
+        // “新对话” is an explicit user request for a fresh conversation, not a request to
+        // reopen an older empty draft.  Reset to the active list before loading so its new
+        // updatedAt is projected as the first row under “最近”.
+        state = state.copy(isCreating = true, notice = null, listScope = ConversationListScope.ACTIVE)
         viewModelScope.launch {
-            val reusableEmpty = withContext(Dispatchers.IO) {
-                state.conversations
-                    .filter { it.surface == state.surface }
-                    .sortedByDescending { it.updatedAt }
-                    .firstOrNull { conversation -> repository.findById(conversation.id)?.nodes?.isEmpty() == true }
-            }
-            if (reusableEmpty != null) {
-                reload(targetSurface = state.surface, selectedBefore = reusableEmpty.id)
-                return@launch
-            }
             val result = withContext(Dispatchers.IO) {
                 // A normal conversation starts empty.  Deterministic fixtures remain explicit
                 // task actions and are never silently written into a user-visible transcript.
-                createConversation.execute(surface = state.surface)
+                createConversation.execute(surface = surface)
             }
             when (result) {
                 is ConversationMutationResult.Saved -> {
-                    when (state.surface) {
+                    when (surface) {
                         ConversationSurface.CHAT -> selectedChatConversationId = result.snapshot.conversation.id
                         ConversationSurface.WORK -> selectedWorkConversationId = result.snapshot.conversation.id
                     }
                     state = state.copy(selectedConversationId = result.snapshot.conversation.id, isCreating = false)
-                    reload(if (state.surface == ConversationSurface.CHAT) "已创建新对话；首条消息会在本机生成标题。" else "已创建独立工作内容。")
+                    reload(
+                        notice = if (surface == ConversationSurface.CHAT) "已创建新对话；首条消息会在本机生成标题。" else "已创建独立工作内容。",
+                        targetSurface = surface,
+                        selectedBefore = result.snapshot.conversation.id,
+                    )
                 }
                 is ConversationMutationResult.Rejected -> state = state.copy(isCreating = false, notice = result.reason)
             }
@@ -1304,7 +1308,13 @@ class ConversationFoundationViewModel(
         // Older text-save jobs may already be running. The mutex makes them finish before this
         // exact visible draft is persisted, so clicking send cannot submit an older empty draft.
         ++draftSaveGeneration
-        state = state.copy(isSending = true, sendError = null, notice = null)
+        state = state.copy(
+            isSending = true,
+            sendError = null,
+            notice = null,
+            normalSendRecovery = null,
+            normalSendRetryInProgress = true,
+        )
         viewModelScope.launch {
             if (state.surface == ConversationSurface.CHAT) {
                 val saved = draftMutationMutex.withLock {
@@ -1375,7 +1385,11 @@ class ConversationFoundationViewModel(
         state = state.copy(isSending = true, sendError = null, notice = null)
         if (normalChatBackgroundExecution.ownsExecution()) {
             if (!normalChatBackgroundExecution.begin(id, NormalChatBackgroundOperation.RETRY)) {
-                state = state.copy(isSending = false, sendError = "系统未能启动后台重试；本次没有向服务商发送内容。")
+                state = state.copy(
+                    isSending = false,
+                    sendError = "系统未能启动后台重试；本次没有向服务商发送内容。",
+                    normalSendRetryInProgress = false,
+                )
             } else {
                 reload(keepSending = true)
             }
@@ -1384,13 +1398,24 @@ class ConversationFoundationViewModel(
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.retryLatestAttempt(id) }
             when (result) {
-                NormalChatOpenRouterExecutor.Result.Sent -> reload("已按原发送编号重试；未更换服务商或模型。")
+                NormalChatOpenRouterExecutor.Result.Sent -> {
+                    state = state.copy(normalSendRetryInProgress = false)
+                    reload("已按原发送编号重试；未更换服务商或模型。")
+                }
                 is NormalChatOpenRouterExecutor.Result.Blocked -> {
-                    state = state.copy(isSending = false, sendError = normalChatResultLabel(result.code, sent = false))
+                    state = state.copy(
+                        isSending = false,
+                        sendError = normalChatResultLabel(result.code, sent = false),
+                        normalSendRetryInProgress = false,
+                    )
                     reload()
                 }
                 is NormalChatOpenRouterExecutor.Result.Failed -> {
-                    state = state.copy(isSending = false, sendError = normalChatResultLabel(result.code, sent = true))
+                    state = state.copy(
+                        isSending = false,
+                        sendError = normalChatResultLabel(result.code, sent = true),
+                        normalSendRetryInProgress = false,
+                    )
                     reload()
                 }
             }
@@ -1623,6 +1648,8 @@ class ConversationFoundationViewModel(
         ConversationManagementAction.RENAME -> "已重命名为“$title”。"
         ConversationManagementAction.PIN -> "已置顶本地会话。"
         ConversationManagementAction.UNPIN -> "已取消置顶本地会话。"
+        ConversationManagementAction.FAVORITE -> "已收藏本地会话。"
+        ConversationManagementAction.UNFAVORITE -> "已取消收藏本地会话。"
         ConversationManagementAction.ARCHIVE -> "已归档；消息、附件和调用关联未改变。"
         ConversationManagementAction.UNARCHIVE -> "已恢复到本地会话列表。"
         ConversationManagementAction.ASSIGN_PROJECT -> "已移动到所选项目。"

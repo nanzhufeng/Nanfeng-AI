@@ -42,7 +42,7 @@ class P6DConversationRowAccessibilityContractsTest {
         for (token in listOf(
             "gesturesEnabled = true",
             "val rowHeight = if (batchEditing) 44.dp else 36.dp",
-            "modifier = modifier.width(132.dp).height(rowHeight)",
+            "modifier = modifier.width(176.dp).height(rowHeight)",
             "fun dismissRevealedConversation(): Boolean",
             "private val ComposerModelDisplayWidth = 88.dp",
             "onOverlayBack",
@@ -54,6 +54,10 @@ class P6DConversationRowAccessibilityContractsTest {
         for (token in listOf(
             "internal fun AlertDialog(",
             "internal fun Dialog(",
+            "P5ACenteredDialogScrimAlpha = 0.12f",
+            "private fun P5ALightDialogScrimEffect()",
+            "setDimAmount(P5ACenteredDialogScrimAlpha)",
+            "WindowManager.LayoutParams.FLAG_DIM_BEHIND",
             "P5ADialogEdgeDismissEffect(onDismissRequest)",
             "activationEdge = with(density) { 56.dp.toPx() }",
             "completionDistance = with(density) { 72.dp.toPx() }",
@@ -111,6 +115,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "dragOffsetPx >= revealWidthPx * 0.42f",
             "ConversationRowSwipeActions(",
             "ConversationRowSwipeAction.TOGGLE_PIN",
+            "ConversationRowSwipeAction.TOGGLE_FAVORITE",
             "ConversationRowSwipeAction.RENAME",
             "ConversationRowSwipeAction.DELETE",
             "contentDescription = label",
@@ -118,11 +123,12 @@ class P6DConversationRowAccessibilityContractsTest {
             "swipeAction != null && translatedPx > 0f",
             "val rowHeight = if (batchEditing) 44.dp else 36.dp",
             "rowHeight = rowHeight",
-            "modifier = modifier.width(132.dp).height(rowHeight)",
+            "modifier = modifier.width(176.dp).height(rowHeight)",
             "modifier = Modifier.fillMaxSize()",
             "shape = RectangleShape",
             "RoundedCornerShape(topStart = 0.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 0.dp)",
             "contentColor = Color(0xFF397A6B)",
+            "contentColor = Color(0xFF9B751D)",
             "contentColor = Color(0xFF8B684C)",
             "contentColor = Color(0xFF935651)",
         )) assertTrue("missing right-swipe shortcut token $token", row.contains(token))
@@ -134,6 +140,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(drawer.contains("verticalArrangement = Arrangement.spacedBy(8.dp)"))
         assertTrue(row.contains("else if (revealed) onRevealChanged(false)"))
         assertTrue(drawer.contains("ConversationManagementAction.PIN else ConversationManagementAction.UNPIN"))
+        assertTrue(drawer.contains("ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE"))
         assertTrue(drawer.contains("ConversationRowSwipeAction.RENAME -> onRequestRename(conversation)"))
         assertTrue(drawer.contains("ConversationRowSwipeAction.DELETE -> onRequestDelete(conversation)"))
         assertFalse(row.contains("ConversationManagementAction.SOFT_DELETE"))
@@ -354,7 +361,7 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `FB-P6-034 keeps USER actions long press only while assistant has a visible external action row`() {
         val messageBubble = source.substring(source.indexOf("private fun MessageBubble"), source.indexOf("private fun MessageContextAction"))
-        for (token in listOf("AssistantMessageActionRow", "onCopyAssistant", "onShareAssistant", "onBranchAssistant", "Icons.Outlined.ContentCopy", "Icons.Outlined.Share", "Icons.AutoMirrored.Outlined.CallSplit", "从此处创建分支", "formatTranscriptTimeOrNull")) assertTrue("missing $token", messageBubble.contains(token))
+        for (token in listOf("AssistantMessageActionRow", "onCopyAssistant", "onShareAssistant", "onBranchAssistant", "Icons.Rounded.ContentCopy", "Icons.Rounded.Share", "Icons.Rounded.MoreVert", "更多操作", "formatTranscriptTimeOrNull")) assertTrue("missing $token", messageBubble.contains(token))
         val assistantBranch = messageBubble.substring(messageBubble.indexOf("MessageRole.ASSISTANT"), messageBubble.indexOf("else -> Surface"))
         assertFalse(assistantBranch.contains("combinedClickable"))
         assertTrue(messageBubble.contains("MessageRole.USER -> Column"))
@@ -362,6 +369,37 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(messageBubble.contains("SelectionContainer {"))
         val userBranch = messageBubble.substring(messageBubble.indexOf("MessageRole.USER"), messageBubble.indexOf("MessageRole.ASSISTANT"))
         assertTrue(userBranch.contains("onLongPress = { pressPosition -> messageBounds?.let"))
+    }
+
+    @Test
+    fun `assistant footer keeps export and branch together in more menu with export first`() {
+        val actionRow = source.substring(source.indexOf("private fun AssistantMessageActionRow"), source.indexOf("private fun MessageActionPopup"))
+        for (token in listOf("var moreActionsExpanded", "Icons.Rounded.MoreVert", "contentDescription = \"更多操作\"", "DropdownMenu(", "Text(\"导出 Markdown\")", "Text(\"创建分支\")", "onExportMarkdown(transcript)", "onBranch(transcript.message.messageId)")) {
+            assertTrue("missing Markdown export action $token", actionRow.contains(token))
+        }
+        assertTrue(actionRow.indexOf("Text(\"导出 Markdown\")") < actionRow.indexOf("Text(\"创建分支\")"))
+        assertFalse(actionRow.contains("contentDescription = \"导出 Markdown\""))
+        assertFalse(actionRow.contains("contentDescription = \"从此处创建分支\""))
+        for (token in listOf("private suspend fun shareAssistantMarkdown", "presentedMessageMarkdown", "type = \"text/markdown\"", "FileProvider.getUriForFile", "shared_attachments")) {
+            assertTrue("missing safe Markdown export owner $token", source.contains(token))
+        }
+        for (token in listOf(
+            "private fun conversationMarkdownExportFileName",
+            "conversationMarkdownExportFileName(conversationTitle, messageSequence)",
+            "sequence.coerceIn(1, 99).toString().padStart(2, '0')",
+        )) assertTrue("missing title-first Markdown filename token $token", source.contains(token))
+    }
+
+    @Test
+    fun `conversation long press menu exports its current path as a Markdown file`() {
+        val conversationMenu = source.substring(source.indexOf("private fun ConversationActionSheet"), source.indexOf("private fun ConversationMenuAction"))
+        for (token in listOf("onExportConversationMarkdown", "Icons.Rounded.FileDownload", "\"导出 Markdown\"", "else -> 7 + if (includeRename) 1 else 0")) {
+            assertTrue("missing conversation Markdown action $token", conversationMenu.contains(token))
+        }
+        for (token in listOf("private suspend fun shareConversationMarkdown", "# ", "presentedMessageMarkdown", "type = \"text/markdown\"", "南枫 AI 对话 Markdown")) {
+            assertTrue("missing conversation Markdown export owner $token", source.contains(token))
+        }
+        assertTrue(source.contains("conversationMarkdownExportFileName(conversation.title, sequence = 1)"))
     }
 
     @Test
@@ -386,10 +424,10 @@ class P6DConversationRowAccessibilityContractsTest {
             assertTrue("missing $token", generation.contains(token))
         }
         assertFalse(generation.contains("正式回答生成后将自动替换此提示"))
-        for (token in listOf("horizontalAlignment = Alignment.Start", "Arrangement.spacedBy(1.dp)", "assistantFooterModelName", "costLabel", "BoxWithConstraints(Modifier.weight(1f))", "rememberTextMeasurer().measure", "costOnOwnLine", "textAlign = TextAlign.End", "modelDisplayNameForUser(it)")) {
+        for (token in listOf("horizontalAlignment = Alignment.Start", "Arrangement.spacedBy(1.dp)", "assistantFooterModelName", "costLabel", "BoxWithConstraints(Modifier.weight(1f))", "rememberTextMeasurer().measure", "costOnOwnLine", "textAlign = TextAlign.End", "composerModelShortNameForUser(it)")) {
             assertTrue("missing concise left-aligned assistant footer token $token", actionRow.contains(token) || source.contains(token))
         }
-        for (token in listOf("AssistantMessageAction(", "modifier = Modifier.size(36.dp)", "iconSize = 16.dp", "iconSize: androidx.compose.ui.unit.Dp = 20.dp", "modifier = Modifier.size(iconSize)", "tint = SecondaryText.copy(alpha = 0.72f)")) {
+        for (token in listOf("AssistantFooterLeadingActionVisualOffset = 10.dp", "modifier = Modifier.offset(x = -AssistantFooterLeadingActionVisualOffset)", "AssistantMessageAction(", "modifier = modifier.size(36.dp)", "iconSize = 16.dp", "iconSize: androidx.compose.ui.unit.Dp = 20.dp", "modifier = Modifier.size(iconSize)", "tint = SecondaryText.copy(alpha = 0.72f)")) {
             assertTrue("missing compact unified assistant action token $token", actionRow.contains(token) || source.contains(token))
         }
         assertFalse(actionRow.contains("tint = BrandGreen"))
@@ -802,8 +840,8 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `drawer heading uses the packaged app icon at compact title scale`() {
         val drawer = source.substring(source.indexOf("private fun ConversationNavigationDrawer"), source.indexOf("private fun ConversationNavigationRow"))
         assertTrue(drawer.contains("painterResource(R.drawable.nanfeng_ai_icon_foreground_image)"))
-        assertTrue(drawer.contains("Modifier.size(28.dp).clip(RoundedCornerShape(8.dp))"))
-        assertTrue(drawer.contains("Text(\"南枫 AI\""))
+        assertTrue(drawer.contains("Modifier.size(drawerIdentityVisualSize).clip(RoundedCornerShape(8.dp))"))
+        assertTrue(drawer.contains("\"南枫 AI\","))
     }
 
     @Test
@@ -1098,6 +1136,45 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
+    fun `favorite archive and recycle rows open their conversation and return to the originating lifecycle list`() {
+        val appSource = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val favorites = source.substring(
+            source.indexOf("internal fun FavoriteConversationListSettingsCard"),
+            source.indexOf("private fun ConversationLifecycleEntry"),
+        )
+        val lifecycle = source.substring(
+            source.indexOf("internal fun ConversationLifecycleListSettingsCard"),
+            source.indexOf("private fun formatLifecycleTime"),
+        )
+        val workspace = source.substring(
+            source.indexOf("internal fun ConversationWorkspaceDialog"),
+            source.indexOf("private fun ConversationNavigationDrawer"),
+        )
+        for (token in listOf(
+            "FavoriteConversationSwipeRow(",
+            "label = \"取消收藏\"",
+            "if (revealed) onRevealChanged(false) else onOpenConversation()",
+            "if (revealedConversationId != null) revealedConversationId = null else onOpenConversation(conversation)",
+            "onOpenConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit",
+            "ConversationLifecycleSwipeRow(",
+        )) assertTrue("missing lifecycle opening token $token", favorites.contains(token) || lifecycle.contains(token))
+        assertFalse("favorite cancellation must not remain a permanent row button", favorites.contains("TextButton(onClick = { onUnfavorite(conversation) }"))
+        assertTrue(workspace.contains("if (interceptsSystemBack && !drawerState.isOpen) BackHandler(onBack = onDismiss)"))
+        for (token in listOf(
+            "var lifecycleConversationReturnDestination by rememberSaveable",
+            "conversationViewModel.setListScope(lifecycleScope(destination))",
+            "onReturnToLifecycleList = returnToLifecycleList",
+            "onOpenLifecycleConversation = { destination, conversation ->",
+            "conversationViewModel.selectConversation(conversation.id)",
+            "onRouteSelected(P5ARoute.CONVERSATION)",
+            "onRouteSelected(P5ARoute.SETTINGS)",
+            "onOpenConversation = { conversation -> onOpenLifecycleConversation(SettingsDestination.FAVORITE_CONVERSATIONS, conversation) }",
+            "onOpenConversation = { conversation -> onOpenLifecycleConversation(SettingsDestination.ARCHIVED_CONVERSATIONS, conversation) }",
+            "onOpenConversation = { conversation -> onOpenLifecycleConversation(SettingsDestination.RECYCLE_BIN, conversation) }",
+        )) assertTrue("missing lifecycle return token $token", appSource.contains(token))
+    }
+
+    @Test
     fun `settings route starts with categories and opens dense controls only in a detail page`() {
         val appSource = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val hierarchy = appSource.substring(appSource.indexOf("private fun SettingsHierarchy"), appSource.indexOf("private fun WorkbenchRoute"))
@@ -1146,8 +1223,8 @@ class P6DConversationRowAccessibilityContractsTest {
         for (token in listOf("is PresentationBlock.Quote -> Row", "height(IntrinsicSize.Min)", "Box(Modifier.width(3.dp).fillMaxHeight()", "SecondaryText.copy(alpha = 0.42f)")) assertTrue("missing quote format token $token", presentation.contains(token))
         assertFalse(presentation.contains("fontStyle = androidx.compose.ui.text.font.FontStyle.Italic"))
         assertTrue(presentation.contains("is PresentationBlock.Note -> InlinePresentationText("))
-        assertTrue(presentation.contains("fontSize = scaledConversationTextUnit(13.sp)"))
-        assertTrue(presentation.contains("lineHeight = scaledConversationTextUnit(21.sp)"))
+        assertTrue(presentation.contains("fontSize = scaledConversationTextUnit(typography.note)"))
+        assertTrue(presentation.contains("lineHeight = scaledConversationTextUnit(typography.noteLineHeight)"))
         assertTrue(presentation.contains("suppressEmphasis = true"))
         assertFalse(presentation.contains("background(Color(0xFFE8ECE9))"))
         MessageRole.entries.forEach { role -> assertTrue("${role.name} body contrast", contrast(chatRoleVisual(role).surface, chatRoleVisual(role).body) >= 4.5) }

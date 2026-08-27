@@ -226,6 +226,7 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
 
     override fun list(scope: ConversationListScope): List<Conversation> = when (scope) {
         ConversationListScope.ACTIVE -> database.conversationDao().listVisibleActiveConversations()
+        ConversationListScope.FAVORITES -> database.conversationDao().listFavoriteConversations()
         ConversationListScope.ARCHIVED -> database.conversationDao().listArchivedConversations()
         ConversationListScope.DELETED -> database.conversationDao().listDeletedConversations()
         ConversationListScope.ALL -> database.conversationDao().listAllNonDeletedConversations()
@@ -487,6 +488,7 @@ private fun ConversationDao.update(entity: ConversationEntity): Int = updateConv
     archivedAtEpochMs = entity.archivedAtEpochMs,
     pinnedAtEpochMs = entity.pinnedAtEpochMs,
     deletedAtEpochMs = entity.deletedAtEpochMs,
+    favoritedAtEpochMs = entity.favoritedAtEpochMs,
     revision = entity.revision,
     autoTitlePending = entity.autoTitlePending,
     schemaVersion = entity.schemaVersion,
@@ -541,6 +543,7 @@ private fun Conversation.toEntity() = ConversationEntity(
     archivedAtEpochMs = archivedAt?.toEpochMilli(),
     pinnedAtEpochMs = pinnedAt?.toEpochMilli(),
     deletedAtEpochMs = deletedAt?.toEpochMilli(),
+    favoritedAtEpochMs = favoritedAt?.toEpochMilli(),
     revision = revision,
     autoTitlePending = autoTitlePending,
     schemaVersion = schemaVersion,
@@ -565,6 +568,7 @@ private fun ConversationEntity.toDomain(memorySources: List<ConversationMemorySo
     archivedAt = archivedAtEpochMs?.let(Instant::ofEpochMilli),
     pinnedAt = pinnedAtEpochMs?.let(Instant::ofEpochMilli),
     deletedAt = deletedAtEpochMs?.let(Instant::ofEpochMilli),
+    favoritedAt = favoritedAtEpochMs?.let(Instant::ofEpochMilli),
     revision = revision,
     autoTitlePending = autoTitlePending,
     schemaVersion = schemaVersion,

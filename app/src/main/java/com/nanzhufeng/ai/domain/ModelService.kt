@@ -155,9 +155,8 @@ fun modelDisplayNameForUser(displayName: String): String {
 }
 
 /**
- * Composer is intentionally the sole compact-name surface: its narrow 88dp control needs the
- * meaningful model suffix, while pickers, settings and persisted message attribution keep the
- * catalog's full display name.
+ * Composer and Assistant message footers use compact names for visual consistency. Pickers,
+ * settings and persisted message attribution keep the catalog's full display name.
  */
 fun composerModelShortNameForUser(displayName: String): String = when (modelDisplayNameForUser(displayName)) {
     "Claude Fable 5" -> "Fable 5"

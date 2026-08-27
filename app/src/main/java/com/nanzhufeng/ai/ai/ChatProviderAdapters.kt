@@ -463,7 +463,10 @@ private object ResponsesWebSearchJsonCodec {
                 ?.mapNotNull { it.objectValue()?.stringValue("text") }
                 ?.joinToString("")
                 ?.takeIf(String::isNotBlank)
-            ?: return ChatAdapterDecodedResult.EmptyOrMalformed
+            // A normal Qwen/DeepSeek Chat Completions reply has `choices`, not `output_text`.
+            // This is an unsupported Responses shape, not a malformed ordinary chat response;
+            // return null so the provider adapter can fall back to its normal decoder.
+            ?: return null
         val usage = root.objectValue("usage")
         ChatAdapterDecodedResult.Text(
             text.cleanChatReply() ?: return ChatAdapterDecodedResult.EmptyOrMalformed,

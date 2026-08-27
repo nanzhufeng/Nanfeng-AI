@@ -14,7 +14,8 @@ class P6GUnifiedChatFirstUiContractsTest {
             assertTrue("missing $token", workspace.contains(token))
         }
         val workScope = workspace.substring(workspace.indexOf("private fun ConversationWorkScope"), workspace.indexOf("private fun ConversationAttemptHistory"))
-        for (token in listOf("listState: LazyListState", "followLatest: Boolean", "showJumpToLatest", "contentDescription = \"到最新消息\"", "onSentToLatestConsumed()")) assertTrue("missing $token", workScope.contains(token))
+        for (token in listOf("listState: LazyListState", "followLatest: Boolean", "onSentToLatestConsumed()")) assertTrue("missing $token", workScope.contains(token))
+        for (token in listOf("showJumpToLatest", "contentDescription = \"到最新消息\"")) assertTrue("missing $token", workspace.contains(token))
         assertFalse(workScope.contains("widthIn(max = 680.dp)"))
         assertFalse(workScope.contains("work-project-context"))
         assertFalse(workspace.contains("Text(\"项目\")\n                    Text(\"知识\")\n                    Text(\"记忆\")"))
@@ -62,7 +63,7 @@ class P6GUnifiedChatFirstUiContractsTest {
             "followLatest = workFollowLatest",
             "onFollowLatestChanged = { workFollowLatest = it }",
             "val listState = chatTranscriptListState",
-            "collect { atLatest -> chatFollowLatest = atLatest }",
+            "if (atLatest) chatFollowLatest = true",
         )) assertTrue("missing $token", workspace.contains(token))
         val workScope = workspace.substring(workspace.indexOf("private fun ConversationWorkScope"), workspace.indexOf("private fun ConversationAttemptHistory"))
         assertFalse(workScope.contains("rememberLazyListState()"))

@@ -20,4 +20,14 @@ class P6KZipImportUiContractsTest {
         assertFalse(source.contains("item.candidate!!.title"))
         assertFalse(source.contains("target.conversationTitle"))
     }
+
+    @Test fun `conversation ZIP pickers request only ZIP document MIME types`() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val pickerActions = app.substring(app.indexOf("onOpenP6KChatGptZip ="), app.indexOf("onClearP6KZip ="))
+
+        for (token in listOf("p6kChatGptZipPicker.launch(arrayOf(\"application/zip\", \"application/x-zip-compressed\"))", "p6kClaudeZipPicker.launch(arrayOf(\"application/zip\", \"application/x-zip-compressed\"))")) {
+            assertTrue("missing ZIP-only picker request $token", pickerActions.contains(token))
+        }
+        assertFalse(pickerActions.contains("arrayOf(\"*/*\")"))
+    }
 }

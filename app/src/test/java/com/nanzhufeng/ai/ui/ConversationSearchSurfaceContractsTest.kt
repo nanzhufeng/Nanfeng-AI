@@ -17,6 +17,10 @@ class ConversationSearchSurfaceContractsTest {
         assertTrue(page.split("color = SearchControlSurface").size - 1 == 2)
         assertTrue(page.contains("conversationEdgeGrayFade(\n                                topBand = 0.dp,\n                                bottomBand = 112.dp,\n                                edgeColor = SearchPageCanvas,"))
         assertTrue(page.contains("modifier = Modifier.align(Alignment.Center).semantics { heading() }"))
+        assertTrue(page.contains("style = MaterialTheme.typography.titleLarge"))
+        assertTrue(page.contains("fontWeight = FontWeight.Bold"))
+        assertTrue(page.contains("color = if (selected) MaterialTheme.colorScheme.primary else SecondaryText"))
+        assertTrue(page.contains("fontWeight = FontWeight.SemiBold"))
         assertTrue(source.contains("onOpenHit(hit) },\n                    color = ForegroundSurface"))
     }
 }

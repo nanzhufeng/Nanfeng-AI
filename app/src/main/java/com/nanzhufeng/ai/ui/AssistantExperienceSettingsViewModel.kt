@@ -28,9 +28,10 @@ class AssistantExperienceSettingsViewModel(
             state = state.copy(notice = null, error = "个性化内容超过可保存范围。")
             return
         }
+        val onlyWebSearchToggle = next.copy(webSearchEnabled = state.settings.webSearchEnabled) == state.settings
         val saved = runCatching { save.execute(next) }
         state = saved.fold(
-            onSuccess = { state.copy(settings = it, notice = "已保存在本机。", error = null) },
+            onSuccess = { state.copy(settings = it, notice = if (onlyWebSearchToggle) null else "已保存在本机。", error = null) },
             onFailure = { state.copy(notice = null, error = "保存失败；已有设置保持不变。") },
         )
     }

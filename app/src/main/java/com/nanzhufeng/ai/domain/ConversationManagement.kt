@@ -11,8 +11,8 @@ value class ConversationManagementIntentId(val value: String) {
     companion object { fun new() = ConversationManagementIntentId(UUID.randomUUID().toString()) }
 }
 
-enum class ConversationManagementAction { RENAME, PIN, UNPIN, ARCHIVE, UNARCHIVE, ASSIGN_PROJECT, REMOVE_PROJECT, SOFT_DELETE, RESTORE_DELETED }
-enum class ConversationListScope { ACTIVE, ARCHIVED, DELETED, ALL }
+enum class ConversationManagementAction { RENAME, PIN, UNPIN, FAVORITE, UNFAVORITE, ARCHIVE, UNARCHIVE, ASSIGN_PROJECT, REMOVE_PROJECT, SOFT_DELETE, RESTORE_DELETED }
+enum class ConversationListScope { ACTIVE, FAVORITES, ARCHIVED, DELETED, ALL }
 
 /** One owner for the full-screen local search ranges.  These are content kinds, not routes. */
 enum class ConversationSearchCategory(val label: String) {
@@ -56,11 +56,16 @@ class ConversationManagementDomain(private val clock: Clock) {
                 before.copy(pinnedAt = before.pinnedAt ?: now)
             }
             ConversationManagementAction.UNPIN -> before.copy(pinnedAt = null)
-            ConversationManagementAction.ARCHIVE -> before.copy(archivedAt = before.archivedAt ?: now, pinnedAt = null)
+            ConversationManagementAction.FAVORITE -> {
+                require(before.archivedAt == null && before.deletedAt == null) { "INACTIVE_CONVERSATION_CANNOT_FAVORITE" }
+                before.copy(favoritedAt = before.favoritedAt ?: now)
+            }
+            ConversationManagementAction.UNFAVORITE -> before.copy(favoritedAt = null)
+            ConversationManagementAction.ARCHIVE -> before.copy(archivedAt = before.archivedAt ?: now, pinnedAt = null, favoritedAt = null)
             ConversationManagementAction.UNARCHIVE -> before.copy(archivedAt = null, pinnedAt = null)
             ConversationManagementAction.ASSIGN_PROJECT -> before.copy(projectId = requireNotNull(intent.projectId))
             ConversationManagementAction.REMOVE_PROJECT -> before.copy(projectId = null)
-            ConversationManagementAction.SOFT_DELETE -> before.copy(deletedAt = before.deletedAt ?: now, archivedAt = now, pinnedAt = null)
+            ConversationManagementAction.SOFT_DELETE -> before.copy(deletedAt = before.deletedAt ?: now, archivedAt = now, pinnedAt = null, favoritedAt = null)
             ConversationManagementAction.RESTORE_DELETED -> before.copy(deletedAt = null, archivedAt = null, pinnedAt = null)
         }
         // Exact repeated intent is handled before this point. A fresh, semantically idempotent
@@ -83,7 +88,7 @@ class ConversationManagementDomain(private val clock: Clock) {
                     else -> left.id.value.compareTo(right.id.value)
                 }
             }
-            ConversationListScope.ARCHIVED, ConversationListScope.DELETED, ConversationListScope.ALL -> when {
+            ConversationListScope.FAVORITES, ConversationListScope.ARCHIVED, ConversationListScope.DELETED, ConversationListScope.ALL -> when {
                 left.updatedAt != right.updatedAt -> right.updatedAt.compareTo(left.updatedAt)
                 else -> left.id.value.compareTo(right.id.value)
             }
@@ -194,6 +199,7 @@ class ConversationSearchProjection(private val management: ConversationManagemen
     }
     private fun snapshotMatchesScope(snapshot: ConversationSnapshot, scope: ConversationListScope) = when (scope) {
         ConversationListScope.ACTIVE -> snapshot.conversation.archivedAt == null
+        ConversationListScope.FAVORITES -> snapshot.conversation.archivedAt == null && snapshot.conversation.deletedAt == null && snapshot.conversation.favoritedAt != null
         ConversationListScope.ARCHIVED -> snapshot.conversation.archivedAt != null
         ConversationListScope.DELETED -> snapshot.conversation.deletedAt != null
         ConversationListScope.ALL -> true
@@ -277,6 +283,7 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
 
     private fun snapshotMatchesScope(snapshot: ConversationSnapshot, scope: ConversationListScope) = when (scope) {
         ConversationListScope.ACTIVE -> snapshot.conversation.archivedAt == null
+        ConversationListScope.FAVORITES -> snapshot.conversation.archivedAt == null && snapshot.conversation.deletedAt == null && snapshot.conversation.favoritedAt != null
         ConversationListScope.ARCHIVED -> snapshot.conversation.archivedAt != null
         ConversationListScope.DELETED -> snapshot.conversation.deletedAt != null
         ConversationListScope.ALL -> true

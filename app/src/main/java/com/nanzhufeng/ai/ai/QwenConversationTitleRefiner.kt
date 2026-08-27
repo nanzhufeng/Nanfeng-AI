@@ -13,6 +13,7 @@ import com.nanzhufeng.ai.domain.ConversationTitleSource
 import com.nanzhufeng.ai.domain.LoadModelServiceConfigurationUseCase
 import com.nanzhufeng.ai.domain.ModelPresetId
 import com.nanzhufeng.ai.domain.ModelResolver
+import com.nanzhufeng.ai.domain.NanfengModelServiceCatalog
 import com.nanzhufeng.ai.domain.ProviderCost
 import com.nanzhufeng.ai.domain.ProviderCredentialStore
 import com.nanzhufeng.ai.domain.ProviderId
@@ -22,10 +23,14 @@ import java.time.Clock
 import org.json.JSONObject
 
 /**
- * Sends only the opening user message and its first completed assistant reply to Qwen.  It never
- * receives profile data, later turns or attachments, and it never leaves a local fallback title.
+ * Sends only the opening user message and its first completed assistant reply to a configured,
+ * ordinary daily model. It never receives profile data, later turns or attachments.
+ *
+ * Title work must not consume a premium reasoning model. The fixed candidate order deliberately
+ * excludes 5.6 Sol, Fable 5 and Opus 5, while allowing a configured provider to fail over to a
+ * lower-cost alternative that is already available to the user.
  */
-class QwenConversationTitleRefiner(
+class ConfiguredConversationTitleRefiner(
     private val records: ConversationTitleGenerationRecordStore,
     private val configuration: LoadModelServiceConfigurationUseCase,
     private val credentials: ProviderCredentialStore,
@@ -35,52 +40,102 @@ class QwenConversationTitleRefiner(
 ) : ConversationTitleRefiner {
     override fun refine(sourceConversationId: ConversationId, source: ConversationTitleSource): ConversationTitleRefinementResult {
         val requestedAt = clock.instant()
-        val preset = ModelPresetId.QWEN_3_7_PLUS
-        val providerId = ProviderId.QWEN
-        fun record(status: ConversationTitleGenerationStatus, usage: ProviderUsage = ProviderUsage(), safeCode: String? = null) {
-            val cost = ConversationCostEstimator.estimate("qwen3.7-plus", usage) ?: ProviderCost()
+        fun record(
+            status: ConversationTitleGenerationStatus,
+            providerId: ProviderId? = null,
+            modelId: String? = null,
+            usage: ProviderUsage = ProviderUsage(),
+            safeCode: String? = null,
+        ) {
+            val cost = modelId?.let { ConversationCostEstimator.estimate(it, usage) } ?: ProviderCost()
             records.record(ConversationTitleGenerationRecord(
-                ConversationTitleGenerationId.new(), sourceConversationId, requestedAt, status, providerId, "qwen3.7-plus",
+                ConversationTitleGenerationId.new(), sourceConversationId, requestedAt, status, providerId, modelId,
                 usage, cost, cost.totalMicros?.let { ConversationCostSource.LOCAL_ESTIMATE }, safeCode,
             ))
         }
-        val resolved = modelResolver.resolve(preset) as? ResolvedModelResult.Resolved
-            ?: return ConversationTitleRefinementResult.Failed("MODEL_UNAVAILABLE")
-        val config = configuration.execute(providerId)
-            ?: return ConversationTitleRefinementResult.Failed("SERVICE_DISABLED")
-        if (!config.settings.enabled || !credentials.hasCredential(providerId)) {
-            return ConversationTitleRefinementResult.Failed(if (!config.settings.enabled) "SERVICE_DISABLED" else "CREDENTIAL_MISSING")
+        val preflightFailures = mutableListOf<Pair<ProviderId, String>>()
+        val configuredProviders = listOf(ProviderId.QWEN, ProviderId.OPENROUTER, ProviderId.DEEPSEEK)
+            .mapNotNull { providerId ->
+                val config = configuration.execute(providerId)
+                when {
+                    config == null -> {
+                        preflightFailures += providerId to "SERVICE_DISABLED"
+                        null
+                    }
+                    !config.settings.enabled -> {
+                        preflightFailures += providerId to "SERVICE_DISABLED"
+                        null
+                    }
+                    !credentials.hasCredential(providerId) -> {
+                        preflightFailures += providerId to "CREDENTIAL_MISSING"
+                        null
+                    }
+                    else -> providerId to config
+                }
+            }
+            .toMap()
+        if (configuredProviders.isEmpty()) {
+            preflightFailures.forEach { (providerId, safeCode) ->
+                record(ConversationTitleGenerationStatus.FAILED, providerId, safeCode = safeCode)
+            }
+            return ConversationTitleRefinementResult.Failed("NO_CONFIGURED_TITLE_MODEL")
         }
-        val adapter = QwenChatAdapter()
-        val prepared = adapter.prepare(
-            model = resolved.model,
-            messages = listOf(
-                "system" to TITLE_CONTRACT,
-                "user" to "用户开头发言：\n${source.userText.take(MAX_SOURCE_CHARS)}\n\n南枫AI开头回答：\n${source.assistantText.take(MAX_SOURCE_CHARS)}",
-            ),
-            attachments = emptyList(), stream = false,
-        ) as? ChatAdapterPrepareResult.Ready
-            ?: return ConversationTitleRefinementResult.Failed("REQUEST_UNSUPPORTED")
-        val credential = credentials.loadCredential(providerId)
-            ?: return ConversationTitleRefinementResult.Failed("CREDENTIAL_MISSING")
-        val outcome = try {
-            transport.execute(ProviderChatRequest(
-                endpoint = "${config.provider.fixedEndpoint}${adapter.endpointPath(ChatRequestOptions.Standard)}",
-                jsonBody = prepared.jsonBody, body = prepared.body, expectsStream = false,
-                idempotencyKey = "conversation-title-${requestedAt.toEpochMilli()}-${sourceConversationId.value}",
-                readTimeoutMillis = adapter.readTimeoutMillis(resolved.model, emptyList(), false),
-                maxResponseBytes = ProviderResponseByteBudget.forMaxOutputTokens(256),
-            ), credential)
-        } finally { credential.fill('\u0000') }
-        val reply = when (outcome) {
-            is ProviderChatOutcome.HttpResponse -> if (outcome.statusCode in 200..299) adapter.decodeNonStreaming(outcome.responseBody) as? ChatAdapterDecodedResult.Text else null
-            else -> null
-        } ?: return ConversationTitleRefinementResult.Failed(outcome.safeCode()).also { record(ConversationTitleGenerationStatus.FAILED, safeCode = outcome.safeCode()) }
-        val usage = ProviderUsage(reply.inputTokens, reply.outputTokens, cachedInputTokens = reply.cachedInputTokens)
-        val title = reply.text.toTitle()
-            ?: return ConversationTitleRefinementResult.Failed("RESPONSE_FORMAT").also { record(ConversationTitleGenerationStatus.FAILED, usage, "RESPONSE_FORMAT") }
-        record(ConversationTitleGenerationStatus.SUCCEEDED, usage)
-        return ConversationTitleRefinementResult.Title(title)
+        titleCandidates.filter { it.providerId in configuredProviders }.forEach { candidate ->
+            val config = checkNotNull(configuredProviders[candidate.providerId])
+            val resolved = modelResolver.resolve(candidate.preset) as? ResolvedModelResult.Resolved
+            if (resolved == null || resolved.model.providerId != candidate.providerId) {
+                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, NanfengModelServiceCatalog.preset(candidate.preset).displayName, safeCode = "MODEL_UNAVAILABLE")
+                return@forEach
+            }
+            val adapter = ChatProviderAdapters().adapter(candidate.providerId)
+            if (adapter == null) {
+                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "ADAPTER_UNAVAILABLE")
+                return@forEach
+            }
+            val prepared = adapter.prepare(
+                model = resolved.model,
+                messages = listOf(
+                    "system" to TITLE_CONTRACT,
+                    "user" to source.promptInput(),
+                ),
+                attachments = emptyList(), stream = false,
+            ) as? ChatAdapterPrepareResult.Ready
+            if (prepared == null) {
+                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "REQUEST_UNSUPPORTED")
+                return@forEach
+            }
+            val credential = credentials.loadCredential(candidate.providerId)
+            if (credential == null) {
+                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "CREDENTIAL_MISSING")
+                return@forEach
+            }
+            val outcome = try {
+                transport.execute(ProviderChatRequest(
+                    endpoint = "${config.provider.fixedEndpoint}${adapter.endpointPath(ChatRequestOptions.Standard)}",
+                    jsonBody = prepared.jsonBody, body = prepared.body, expectsStream = false,
+                    idempotencyKey = "conversation-title-${requestedAt.toEpochMilli()}-${sourceConversationId.value}-${candidate.preset.name}",
+                    readTimeoutMillis = adapter.readTimeoutMillis(resolved.model, emptyList(), false),
+                    maxResponseBytes = ProviderResponseByteBudget.forMaxOutputTokens(256),
+                ), credential)
+            } finally { credential.fill('\u0000') }
+            val reply = when (outcome) {
+                is ProviderChatOutcome.HttpResponse -> if (outcome.statusCode in 200..299) adapter.decodeNonStreaming(outcome.responseBody) as? ChatAdapterDecodedResult.Text else null
+                else -> null
+            }
+            if (reply == null) {
+                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = outcome.safeCode())
+                return@forEach
+            }
+            val usage = ProviderUsage(reply.inputTokens, reply.outputTokens, cachedInputTokens = reply.cachedInputTokens)
+            val title = parseConversationTitleResponse(reply.text)
+            if (title == null) {
+                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, usage, "RESPONSE_FORMAT")
+                return@forEach
+            }
+            record(ConversationTitleGenerationStatus.SUCCEEDED, candidate.providerId, resolved.model.modelId, usage)
+            return ConversationTitleRefinementResult.Title(title)
+        }
+        return ConversationTitleRefinementResult.Failed("ALL_CONFIGURED_TITLE_MODELS_FAILED")
     }
 
     private fun ProviderChatOutcome.safeCode() = when (this) {
@@ -92,19 +147,50 @@ class QwenConversationTitleRefiner(
         is ProviderChatOutcome.StreamedResponse -> "UNEXPECTED_STREAM"
     }
 
-    private fun String.toTitle(): String? = runCatching {
-        val raw = trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-        val value = JSONObject(raw).optString("title").replace(Regex("\\s+"), " ").trim()
-        value.takeIf { it.length in 6..32 && it.none { character -> character in "\n\r。！？!?" } }
-    }.getOrNull()
+    private fun ConversationTitleSource.promptInput(): String = if (userText.isBlank()) {
+        "首条用户消息仅含附件。不要读取或推断附件内容；只根据下方南枫AI开头回答生成标题：\n${assistantText.take(MAX_SOURCE_CHARS)}"
+    } else {
+        "用户开头发言：\n${userText.take(MAX_SOURCE_CHARS)}\n\n南枫AI开头回答：\n${assistantText.take(MAX_SOURCE_CHARS)}"
+    }
 
     private companion object {
         const val MAX_SOURCE_CHARS = 4_000
+        /** These are daily / economical candidates, never the premium user-facing tiers. */
+        val titleCandidates = listOf(
+            TitleCandidate(ProviderId.QWEN, ModelPresetId.QWEN_3_6_FLASH),
+            TitleCandidate(ProviderId.QWEN, ModelPresetId.QWEN_3_7_PLUS),
+            TitleCandidate(ProviderId.OPENROUTER, ModelPresetId.GPT_5_6_LUNA),
+            TitleCandidate(ProviderId.OPENROUTER, ModelPresetId.GPT_5_6_TERRA),
+            TitleCandidate(ProviderId.DEEPSEEK, ModelPresetId.DEEPSEEK_V4_PRO),
+        )
         val TITLE_CONTRACT = """
             你只负责为下方同一对话的开头用户发言与南枫AI开头回答生成一个会话标题。
-            标题必须概述“讨论对象 + 用户要解决的任务或结论方向”，让未打开会话的用户也能知道本次讨论主题。
-            不得拿回答里的 Markdown 小节、论证步骤、抽象方法词或一句结论片段当标题；不得引入两段文字未明确支持的人名、事实或偏好。
-            标题用简体中文，6到32个字符，不要引号、句号、Markdown、编号或省略号。只返回严格 JSON：{"title":"..."}。
+            标题必须是“明确对象 + 具体意图、问题或任务”的紧凑短语，让未打开会话的用户立即知道讨论什么、要做什么。
+            优先复用原文明确出现的主体、产品、组织或术语，并用准确动作收束，例如“模型差异与费用分析”“产品设计范式冲突”“视频内容分析”“API Key与模型选择”。
+            不得把回答里的 Markdown 小节、论证步骤、抽象方法词或一句结论片段当标题；不得引入两段文字未明确支持的人名、事实或偏好。
+            禁止只写“继续说”“分析”“总结”“问题”“请求”“聊天”“对话”“更新文档”等没有讨论对象的空泛标题；无法同时确认对象和意图时返回空 title，不得猜测。
+            标题必须是 6 到 24 个字符的一句话总结。只能使用汉字或英文字母；英文短语的单词之间允许一个普通空格。严禁数字、标点、引号、Markdown、编号、emoji、括号、斜杠、下划线、连字符和任何其他符号。只返回严格 JSON：{"title":"..."}。
         """.trimIndent()
     }
+
+    private data class TitleCandidate(val providerId: ProviderId, val preset: ModelPresetId)
 }
+
+/**
+ * The generated title is a plain-language drawer label. Keep the acceptance rule local and
+ * deterministic so provider formatting cannot leak symbols, code, or identifiers into it.
+ */
+internal fun parseConversationTitleResponse(rawResponse: String): String? = runCatching {
+    val raw = rawResponse.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+    val title = JSONObject(raw).optString("title").replace(Regex("\\s+"), " ").trim()
+    title.takeIf {
+        it.length in 6..24 &&
+            it !in GENERIC_TITLES &&
+            it.split(' ').all { word -> word.isNotEmpty() && word.all(Char::isConversationTitleLetter) }
+    }
+}.getOrNull()
+
+private val GENERIC_TITLES = setOf("继续说", "分析", "总结", "问题", "请求", "聊天", "对话", "更新文档", "事实核验", "工程观点")
+
+private fun Char.isConversationTitleLetter(): Boolean =
+    this in 'A'..'Z' || this in 'a'..'z' || code in 0x4E00..0x9FFF
