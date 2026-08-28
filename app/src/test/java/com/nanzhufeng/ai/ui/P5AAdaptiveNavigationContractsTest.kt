@@ -110,7 +110,8 @@ class P5AAdaptiveNavigationContractsTest {
         assertFalse(scaffold.contains(".imePadding()"))
         assertTrue(scaffold.contains("WindowInsets.safeDrawing.only"))
         assertTrue(scaffold.contains("route == P5ARoute.CONVERSATION"))
-        assertTrue(scaffold.contains("WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom"))
+        assertTrue(scaffold.contains("WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)"))
+        assertFalse(scaffold.contains("route == P5ARoute.CONVERSATION) {\n            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)"))
     }
 
     @Test

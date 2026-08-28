@@ -238,7 +238,6 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import java.math.RoundingMode
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.window.DialogProperties
@@ -4981,15 +4980,6 @@ private fun assistantFooterModelName(label: String?): String? = label
     ?.let { com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
     ?.trim()
     ?.takeIf { it.isNotBlank() }
-
-internal fun assistantFooterCostDisplay(label: String?): String? = label?.split(" / ")
-    ?.joinToString(" / ") { entry ->
-        val amount = Regex("\\$([+-]?\\d+(?:\\.\\d+)?)").find(entry)?.groupValues?.getOrNull(1)
-            ?.toBigDecimalOrNull()
-            ?.setScale(4, RoundingMode.HALF_UP)
-            ?.toPlainString()
-        amount?.let { "${'$'}$it" } ?: entry
-    }
 
 /** A visually quiet but still comfortably tappable action used by every assistant footer command. */
 @Composable

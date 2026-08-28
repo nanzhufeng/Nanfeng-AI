@@ -18,7 +18,7 @@ class RealTextExecutionPreflightContractsTest {
 
         assertTrue(credentials.loadWasCalled.not())
         assertEquals("openrouter", result.plan.providerHandle.value)
-        assertEquals("openrouter/test-v1", result.plan.modelId.value)
+        assertEquals("openrouter/gpt-5.6-terra", result.plan.modelId.value)
         assertEquals(27, result.plan.usageReservation.conservativeInputTokenUpperBound)
         assertEquals(770, result.plan.usageReservation.budgetMicros)
         assertEquals(0, result.plan.attachments.size)
@@ -35,7 +35,14 @@ class RealTextExecutionPreflightContractsTest {
         val disabled = orchestrator(PresenceOnlyCredentialStore(CredentialPresence.PRESENT), enabled = false).preflight(request())
         assertBlocked(disabled, RealTextPreflightBlocker.PROVIDER_DISABLED)
 
-        val mismatch = orchestrator(PresenceOnlyCredentialStore(CredentialPresence.PRESENT), modelId = "openrouter/other-v1").preflight(request())
+        val mismatchRequest = request().let { value ->
+            value.copy(
+                transportRequest = value.transportRequest.copy(
+                    route = value.transportRequest.route.copy(modelId = ProviderTransportModelId("openrouter/other-v1")),
+                ),
+            )
+        }
+        val mismatch = orchestrator(PresenceOnlyCredentialStore(CredentialPresence.PRESENT)).preflight(mismatchRequest)
         assertBlocked(mismatch, RealTextPreflightBlocker.MODEL_ROUTE_MISMATCH)
     }
 
@@ -101,14 +108,13 @@ class RealTextExecutionPreflightContractsTest {
     private fun orchestrator(
         credentials: PresenceOnlyCredentialStore,
         enabled: Boolean = true,
-        modelId: String = "openrouter/test-v1",
         knownPrice: Boolean = true,
     ): RealTextExecutionPreflightOrchestrator {
         val pricing = if (knownPrice) ModelPricing("catalog-v1", "USD", 10, 5) else ModelPricing()
-        val model = ModelDescriptor(modelId, "Test", ModelCapabilities(supportsText = true, supportsVision = false, supportsStreaming = true), pricing = pricing)
+        val model = ModelDescriptor("openrouter/gpt-5.6-terra", "Test", ModelCapabilities(supportsText = true, supportsVision = false, supportsStreaming = true), pricing = pricing)
         val snapshot = ModelRegistrySnapshot(
             ModelRegistrySnapshotId("snapshot"), 1, ProviderId.OPENROUTER, "catalog-v1", RegistrySnapshotSource.LOCAL_FIXTURE,
-            now, RegistryVerificationStatus.VERIFIED, now, listOf(model), listOf(ModelPresetMapping(ModelPresetId.GPT_5_6_TERRA, modelId)), catalogSha256 = "a".repeat(64),
+            now, RegistryVerificationStatus.VERIFIED, now, listOf(model), listOf(ModelPresetMapping(ModelPresetId.GPT_5_6_TERRA, model.id)), catalogSha256 = "a".repeat(64),
         )
         val settings = object : ModelServiceSettingsRepository {
             override fun load(providerId: ProviderId) = ProviderSettings(ProviderId.OPENROUTER, enabled, ModelPresetId.GPT_5_6_TERRA)
@@ -128,7 +134,7 @@ class RealTextExecutionPreflightContractsTest {
         )
         val transport = ProviderTransportRequest(
             ConversationRealTextExecutionTransportHandle(execution.executionId, execution.invocationId, execution.attemptId, execution.requestFingerprint),
-            ProviderTransportRoute(ProviderTransportProviderHandle("openrouter"), ProviderTransportModelId("openrouter/test-v1")),
+            ProviderTransportRoute(ProviderTransportProviderHandle("openrouter"), ProviderTransportModelId("openrouter/gpt-5.6-terra")),
             ProviderTransportEphemeralTextInput(text),
         )
         return RealTextExecutionPreflightRequest(
@@ -140,7 +146,7 @@ class RealTextExecutionPreflightContractsTest {
 
     private fun attachmentIntent(): AttachmentEgressIntent = AttachmentEgressIntent(
         AttachmentId("attachment"), "d".repeat(64), "image/png", 100, ConversationId("conversation"), ConversationRealTextExecutionId("execution"),
-        AttachmentEgressCapability("openrouter", "openrouter/test-v1", 1, setOf("image/png"), setOf(AttachmentEgressContentType.IMAGE), 1_000),
+        AttachmentEgressCapability("openrouter", "openrouter/gpt-5.6-terra", 1, setOf("image/png"), setOf(AttachmentEgressContentType.IMAGE), 1_000),
     )
 
     private fun assertBlocked(result: RealTextExecutionPreflightResult, expected: RealTextPreflightBlocker) {

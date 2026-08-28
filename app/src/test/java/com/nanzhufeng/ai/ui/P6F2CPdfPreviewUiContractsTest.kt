@@ -14,8 +14,8 @@ class P6F2CPdfPreviewUiContractsTest {
         for (token in listOf("PdfPreviewDialog", "上一页", "下一页", "FilePreviewTopActions", "关闭文件预览", "contentScale = ContentScale.Fit", "onOpenPdfPreview", "onOpenPdfPage")) assertTrue(token, workspace.contains(token))
         assertFalse(viewer.contains("本地 PDF 阅读"))
         assertFalse(viewer.contains("PDF 脚本、表单动作、外部资源和自动链接均不执行"))
-        assertFalse(workspace.contains("http://"))
-        assertFalse(workspace.contains("https://"))
+        assertFalse(viewer.contains("http://"))
+        assertFalse(viewer.contains("https://"))
     }
 
     @Test fun `PDF viewer reads only current attachment ID and persists only page position`() {

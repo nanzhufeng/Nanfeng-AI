@@ -10,9 +10,10 @@ class SettingsScrollAndFooterModelContractsTest {
 
     @Test
     fun `assistant footer reuses the composer compact model label`() {
+        val footerStart = workspace.indexOf("private fun assistantFooterModelName")
         val footer = workspace.substring(
-            workspace.indexOf("private fun assistantFooterModelName"),
-            workspace.indexOf("internal fun assistantFooterCostDisplay"),
+            footerStart,
+            workspace.indexOf("private fun AssistantMessageAction", footerStart),
         )
 
         assertTrue(footer.contains("composerModelShortNameForUser(it)"))

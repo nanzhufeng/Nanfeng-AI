@@ -16,17 +16,16 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `FB-P6-111 current Android conversation UI contract has one precedence route and executable anchors`() {
         for (clause in listOf(
-            "当前 Android 会话 UI 的唯一视觉与交互规则正文",
-            "普通会话行高度固定 `44dp`",
-            "标准右滑开启侧栏",
-            "固定宽度",
-            "点击任意遮罩空白处始终直接关闭整套模型选择面",
-            "Fast 变体必须被拒绝",
-            "ConversationDrawerCanvas = #F8F8F8",
-            "正文从其下方经过是既定效果",
-            "日期右侧显示主题橙色小圆点",
-            "首次升级仅建立旧历史水位",
-            "不得显示“可查的资料入口”",
+            "Android 会话、抽屉、Composer、搜索与暗色皮肤的唯一视觉／交互正文",
+            "普通与批量行分别以 `36dp`／`44dp`",
+            "会话右滑带依次为置顶／取消置顶、收藏／取消收藏、重命名、删除",
+            "窄屏为 `min(320dp, 可用宽度)`",
+            "点击遮罩关闭",
+            "禁止遗留橙色常量",
+            "会话标题使用 `14sp / 18sp / Normal`",
+            "日期分隔线在同一会话内始终使用统一的低对比中性分隔色",
+            "新 Assistant 内容到达而该会话未打开时",
+            "来源只有有效 http(s) 链接时才显示入口",
         )) assertTrue("missing current UI contract clause $clause", currentUiContract.contains(clause))
         for (legacyContract in listOf(
             "../docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md",
@@ -80,10 +79,10 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
-    fun `FB-P6-079 keeps Android app popup surfaces pure white`() {
+    fun `FB-P6-079 keeps Android app popup surfaces on the live foreground token`() {
         val selectionDialog = source.substring(source.indexOf("private fun WideTextSelectionDialog"), source.indexOf("private fun MessageContextAction"))
-        for (token in listOf("DialogProperties(usePlatformDefaultWidth = false", "padding(horizontal = 16.dp)", "fillMaxWidth()", "heightIn(max = 580.dp)", "verticalScroll(rememberScrollState())", "color = Color.White", "shape = RoundedCornerShape(24.dp)")) assertTrue("missing selected-text white surface token $token", selectionDialog.contains(token))
-        for (token in listOf("internal val ForegroundSurface = Color.White", "surfaceTint = Color.Transparent", "surfaceVariant = ForegroundSurface", "surfaceContainerLow = ForegroundSurface", "surfaceContainer = ForegroundSurface", "surfaceContainerHigh = ForegroundSurface", "surfaceContainerHighest = ForegroundSurface")) assertTrue("missing global white popup token $token", appSource.contains(token))
+        for (token in listOf("DialogProperties(usePlatformDefaultWidth = false", "padding(horizontal = 16.dp)", "fillMaxWidth()", "heightIn(max = 580.dp)", "verticalScroll(rememberScrollState())", "color = ForegroundSurface", "shape = RoundedCornerShape(24.dp)")) assertTrue("missing selected-text foreground surface token $token", selectionDialog.contains(token))
+        for (token in listOf("internal var ForegroundSurface by mutableStateOf(Color.White)", "surfaceTint = Color.Transparent", "surfaceVariant = ForegroundSurface", "surfaceContainerLow = ForegroundSurface", "surfaceContainer = ForegroundSurface", "surfaceContainerHigh = ForegroundSurface", "surfaceContainerHighest = ForegroundSurface")) assertTrue("missing live popup surface token $token", appSource.contains(token))
     }
 
     @Test
@@ -166,11 +165,13 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(source.contains("private fun Typography.scaledForConversationText()"))
         assertTrue(drawerHost.contains("ConversationTextScale {"))
         assertTrue(messageBubble.contains("val textContent: @Composable () -> Unit = {\n        ConversationTextScale {"))
-        assertTrue(row.contains("fontSize = scaledConversationTextUnit(12.sp)"))
+        assertTrue(row.contains("fontSize = scaledConversationTextUnit(14.sp)"))
         assertTrue(row.contains("Icon(icon, contentDescription = label, modifier = Modifier.size(17.dp))"))
-        for (token in listOf("scaledConversationTextUnit(25.sp)", "scaledConversationTextUnit(20.sp)", "scaledConversationTextUnit(24.sp)")) {
-            assertTrue("missing scaled message line-height $token", presentation.contains(token))
+        for (token in listOf("scaledConversationTextUnit(typography.bodyLineHeight)", "scaledConversationTextUnit(typography.noteLineHeight)", "scaledConversationTextUnit(typography.listLineHeight)")) {
+            assertTrue("missing typography-owned scaled message line-height $token", presentation.contains(token))
         }
+        assertTrue(source.contains("body = 16.sp, bodyLineHeight = 25.sp"))
+        assertTrue(source.contains("list = 15.sp, listLineHeight = 24.sp"))
     }
 
     @Test
@@ -213,7 +214,7 @@ class P6DConversationRowAccessibilityContractsTest {
 
     @Test
     fun `compact conversation menu keeps icon actions and isolates delete without headers`() {
-        for (token in listOf("ConversationMenuAction(Icons.Outlined.PushPin", "Icons.Outlined.Archive", "Icons.Outlined.Unarchive", "ConversationMenuAction(Icons.Outlined.DeleteOutline", "Icons.Outlined.ChevronRight", "Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))", "onRequestDelete(conversation)")) {
+        for (token in listOf("ConversationMenuAction(Icons.Rounded.PushPin", "Icons.Rounded.Archive", "Icons.Rounded.Unarchive", "ConversationMenuAction(Icons.Rounded.DeleteOutline", "Icons.Rounded.ChevronRight", "Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))", "onRequestDelete(conversation)")) {
             assertTrue("missing $token", source.contains(token))
         }
         assertFalse(source.contains("if (workMode) ConversationMenuAction"))
@@ -227,7 +228,7 @@ class P6DConversationRowAccessibilityContractsTest {
         for (token in listOf("val menuWidth = 224.dp", "(rowCount * 48).dp + 60.dp", "RoundedCornerShape(20.dp)", "shadowElevation = 6.dp", "Column(Modifier.padding(vertical = 6.dp))", "conversation.title")) {
             assertTrue("missing compact menu token $token", actionSheet.contains(token))
         }
-        for (token in listOf("height(48.dp)", "Modifier.size(22.dp)", "Spacer(Modifier.width(16.dp))", "fontSize = 15.sp", "Modifier.size(18.dp)")) {
+        for (token in listOf("height(48.dp)", "Modifier.size(22.dp)", "Spacer(Modifier.width(16.dp))", "fontSize = scaledTransientMenuTextUnit(15.sp)", "Modifier.size(18.dp)")) {
             assertTrue("missing compact row token $token", actionRow.contains(token))
         }
         assertFalse(actionSheet.contains("shadowElevation = 12.dp"))
@@ -241,7 +242,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(actionSheet.contains("Popup("))
         assertTrue(actionSheet.contains("PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true)"))
         assertTrue(actionSheet.contains("offset = IntOffset(x, y)"))
-        assertTrue(actionSheet.contains("ConversationMenuAction(Icons.Outlined.DeleteOutline"))
+        assertTrue(actionSheet.contains("ConversationMenuAction(Icons.Rounded.DeleteOutline"))
     }
 
     @Test
@@ -250,7 +251,8 @@ class P6DConversationRowAccessibilityContractsTest {
         val renameDialog = source.substring(source.indexOf("private fun CompactConversationRenameDialog"), source.indexOf("private fun TranscriptDateDivider"))
         assertTrue(renameInvocation.contains("onDismiss = { renameVisible = false }"))
         assertTrue(renameInvocation.contains("ConversationManagementAction.RENAME"))
-        assertTrue(renameDialog.contains("CompactConversationRenameField(value = value, onValueChange = onValueChange)"))
+        assertTrue(renameDialog.contains("CompactConversationRenameField("))
+        assertTrue(renameDialog.contains("focusRequester = focusRequester"))
         assertFalse(renameInvocation.contains("Text(\"重命名会话\")"))
         assertFalse(renameInvocation.contains("1–120 个 Unicode 字符；空白不会保存。"))
     }
@@ -258,7 +260,7 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `FB-P6-069 rename dialog fills the available sidebar width while compressing vertical space`() {
         val renameDialog = source.substring(source.indexOf("private fun CompactConversationRenameDialog"), source.indexOf("private fun TranscriptDateDivider"))
-        for (token in listOf("DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = true)", "Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart)", "DismissibleDialogBackdrop(onDismiss)", "padding(horizontal = 12.dp)", "widthIn(max = 336.dp)", "RoundedCornerShape(20.dp)", "padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 10.dp)", "CompactConversationRenameField(value = value, onValueChange = onValueChange)", "height(34.dp)", "RoundedCornerShape(17.dp)", "height(32.dp)", "RoundedCornerShape(16.dp)", "Arrangement.spacedBy(8.dp, Alignment.End)")) {
+        for (token in listOf("DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = true)", "BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart)", "DismissibleDialogBackdrop(onDismiss)", "val drawerWidth = if (maxWidth >= 600.dp) maxWidth * (2f / 3f) else maxWidth.coerceAtMost(320.dp)", ".width(drawerWidth)", "RoundedCornerShape(20.dp)", "padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 10.dp)", "CompactConversationRenameField(", "focusRequester = focusRequester", "height(34.dp)", "RoundedCornerShape(17.dp)", "height(32.dp)", "RoundedCornerShape(16.dp)", "Arrangement.spacedBy(8.dp, Alignment.End)")) {
             assertTrue("missing compact rename token $token", renameDialog.contains(token))
         }
         val field = source.substring(source.indexOf("private fun CompactConversationRenameField"), source.indexOf("private fun TranscriptDateDivider"))
@@ -271,16 +273,18 @@ class P6DConversationRowAccessibilityContractsTest {
         val dateDivider = source.substring(source.indexOf("private fun TranscriptDateDivider"), source.indexOf("private data class TranscriptScrollMetrics"))
         assertTrue(Regex("HorizontalDivider\\(modifier = Modifier\\.weight\\(1f\\), color = SubtleDivider\\)").findAll(dateDivider).count() == 2)
         val theme = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
-        assertTrue(theme.contains("internal val SubtleDivider = NeutralBorder"))
-        assertTrue(theme.contains("internal val NeutralBorder = Color(0xFFD8DEDA)"))
+        assertTrue(theme.contains("internal var SubtleDivider by mutableStateOf(NeutralBorder)"))
+        assertTrue(theme.contains("internal var NeutralBorder by mutableStateOf(Color(0xFFD8DEDA))"))
+        assertTrue(theme.contains("SubtleDivider = NeutralBorder"))
     }
 
     @Test
     fun `FB-P6-068 submitted drafts always return the normal and temporary transcript to latest`() {
-        val normalTranscript = source.substring(source.indexOf("val listState = chatTranscriptListState"), source.indexOf("val showJumpToLatest"))
+        val normalTranscriptStart = source.indexOf("val listState = chatTranscriptListState")
+        val normalTranscript = source.substring(normalTranscriptStart, source.indexOf("if (showJumpToLatest", normalTranscriptStart))
         assertTrue(source.contains("var chatSentFromMessageCount by remember(state.selectedConversationId)"))
         assertTrue(normalTranscript.contains("sentCount != null && state.messages.size > sentCount"))
-        assertTrue(normalTranscript.contains("listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)"))
+        assertTrue(normalTranscript.contains("listState.scrollToTrueBottom()"))
         assertTrue(source.contains("chatSentFromMessageCount = state.messages.size"))
         assertTrue(source.contains("workSentFromMessageCount = state.messages.size"))
 
@@ -295,18 +299,18 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `conversation menu is compact while workspace retains its complete local action set`() {
         val actionSheet = source.substring(source.indexOf("private fun ConversationActionSheet"), source.indexOf("private fun ConversationMenuAction"))
         for (token in listOf(
-            "workMode -> 8 + if (includeRename) 1 else 0",
-            "else -> 5 + if (includeRename) 1 else 0",
+            "workMode -> 10 + if (includeRename) 1 else 0",
+            "else -> 7 + if (includeRename) 1 else 0",
             "if (workMode) {",
-            "ConversationMenuAction(Icons.Outlined.PushPin",
+            "ConversationMenuAction(Icons.Rounded.PushPin",
             "ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove",
-            "ConversationMenuAction(Icons.Outlined.AttachFile, \"已上传文件\"",
-            "ConversationMenuAction(Icons.Outlined.Search, \"在聊天中查找\"",
-            "ConversationMenuAction(Icons.Outlined.Home, \"添加到主屏幕\"",
+            "ConversationMenuAction(Icons.Rounded.AttachFile, \"已上传文件\"",
+            "ConversationMenuAction(Icons.Rounded.Search, \"在聊天中查找\"",
+            "ConversationMenuAction(Icons.Rounded.Home, \"添加到主屏幕\"",
             "ConversationManagementAction.ARCHIVE",
-            "ConversationMenuAction(Icons.Outlined.DeleteOutline",
+            "ConversationMenuAction(Icons.Rounded.DeleteOutline",
         )) assertTrue("missing action owner $token", actionSheet.contains(token))
-        val compact = actionSheet.substringAfter("} else {\n                        ConversationMenuAction(Icons.Outlined.PushPin").substringBefore("\n                    }\n                }")
+        val compact = actionSheet.substringAfter("} else {\n                        ConversationMenuAction(Icons.Rounded.PushPin").substringBefore("\n                    }\n                }")
         for (removedFromChat in listOf("DriveFileMove", "已上传文件", "添加到主屏幕")) assertFalse("chat menu retained $removedFromChat", compact.contains(removedFromChat))
         assertTrue(compact.indexOf("\"重命名\"") < compact.indexOf("\"分享\""))
         for (alwaysAvailable in listOf("ConversationManagementAction.RENAME", "ConversationManagementAction.SOFT_DELETE")) {
@@ -328,7 +332,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "ConversationHeaderContentActions(",
             "if (!showContentActions) ConversationModeSwitch(",
         )) assertTrue("missing content-header token $token", source.contains(token))
-        for (token in listOf("RoundedCornerShape(50)", "painterResource(R.drawable.ic_lucide_file_pen)", "contentDescription = \"新对话\"", "modifier = Modifier.size(22.dp)", "Icon(Icons.Outlined.MoreVert, contentDescription = \"对话更多操作\", tint = ConversationControlGlyph)", "onGloballyPositioned { moreBounds = it.boundsInRoot() }")) {
+        for (token in listOf("RoundedCornerShape(50)", "painterResource(R.drawable.ic_lucide_file_pen)", "contentDescription = \"新对话\"", "modifier = Modifier.size(22.dp)", "Icon(Icons.Rounded.MoreVert, contentDescription = \"对话更多操作\", tint = ConversationControlGlyph)", "onGloballyPositioned { moreBounds = it.boundsInRoot() }")) {
             assertTrue("missing header capsule token $token", actionCapsule.contains(token))
         }
         assertTrue(shell.contains("ConversationHeaderFloatingIconButton(onClick = onTemporaryAction)"))
@@ -350,7 +354,7 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `FB-P6-078 uses a compact black message popup anchored to the long pressed message`() {
         val messagePopup = source.substring(source.indexOf("private fun MessageActionPopup"), source.indexOf("private fun MessageContextAction"))
         val messageAction = source.substring(source.indexOf("private fun MessageContextAction"), source.indexOf("private val transcriptTimeFormatter"))
-        for (token in listOf("messageActionTarget", "MessageActionMenuTarget", "MessageActionPopup(", "Icons.Outlined.ContentCopy", "Icons.Outlined.SelectAll", "Icons.Outlined.Share", "\"编辑消息\"", "Intent.ACTION_SEND", "formatTranscriptTimeOrNull")) assertTrue("missing $token", source.contains(token))
+        for (token in listOf("messageActionTarget", "MessageActionMenuTarget", "MessageActionPopup(", "Icons.Rounded.ContentCopy", "Icons.Rounded.SelectAll", "Icons.Rounded.Share", "\"编辑消息\"", "Intent.ACTION_SEND", "formatTranscriptTimeOrNull")) assertTrue("missing $token", source.contains(token))
         for (token in listOf("val menuWidth = 224.dp", "(rowCount * 46).dp", "RoundedCornerShape(20.dp)", "shadowElevation = 6.dp", "PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true)", "offset = IntOffset(x, y)")) assertTrue("missing compact popup token $token", messagePopup.contains(token))
         for (token in listOf("height(46.dp)", "Modifier.size(22.dp)", "fontSize = 15.sp", "contentColor = BodyText")) assertTrue("missing black action token $token", messageAction.contains(token))
         assertFalse(messagePopup.contains("ModalBottomSheet"))
@@ -419,7 +423,8 @@ class P6DConversationRowAccessibilityContractsTest {
         val generation = source.substring(source.indexOf("private fun AssistantGenerationStatus"), source.indexOf("private fun AssistantMessageActionRow"))
 
         assertTrue(assistantBranch.contains("message.deliveryState == com.nanzhufeng.ai.domain.MessageDeliveryState.PARTIAL"))
-        assertTrue(assistantBranch.contains("AssistantGenerationStatus(transcript.metadata.waitingPreview, hasPartialText = textBlocks.isNotEmpty())"))
+        assertTrue(assistantBranch.contains("AssistantGenerationStatus("))
+        assertTrue(assistantBranch.contains("hasPartialText = textBlocks.isNotEmpty()"))
         for (token in listOf("CircularProgressIndicator", "南枫 AI 正在继续生成…", "waitingPreview", "rememberInfiniteTransition", "RepeatMode.Reverse")) {
             assertTrue("missing $token", generation.contains(token))
         }
@@ -459,7 +464,8 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `new normal conversation never injects an acceptance fixture into the user transcript`() {
         val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
         val create = viewModel.substring(viewModel.indexOf("fun createDevelopmentConversation"), viewModel.indexOf("fun updateDraft"))
-        assertTrue(create.contains("createConversation.execute(surface = state.surface)"))
+        assertTrue(create.contains("val surface = state.surface"))
+        assertTrue(create.contains("createConversation.execute(surface = surface)"))
         assertFalse(create.contains("appendMessage.execute"))
         assertFalse(create.contains("确定性 fixture"))
     }
@@ -468,7 +474,7 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `FB-P6-091 Android drawer search opens a compact full screen search destination`() {
         val drawer = source.substring(source.indexOf("private fun ConversationNavigationDrawer"), source.indexOf("internal fun ConversationManagementSettingsCard"))
         val page = source.substring(source.indexOf("private fun ConversationSearchPage"), source.indexOf("private fun SearchAllOrTextResults"))
-        assertTrue(drawer.contains(".height(38.dp)"))
+        assertTrue(drawer.contains(".height(42.dp)"))
         assertTrue(drawer.contains("onOpenSearchPage"))
         assertFalse(drawer.contains("最近搜索"))
         assertTrue(page.contains("DialogProperties(usePlatformDefaultWidth = false"))
@@ -485,10 +491,10 @@ class P6DConversationRowAccessibilityContractsTest {
         assertFalse(page.contains("horizontalScroll(rememberScrollState())"))
         assertTrue(page.contains("Modifier.weight(1f).height(42.dp)"))
         assertTrue(page.contains("BasicTextField("))
-        assertTrue(page.contains("Icons.Outlined.Search"))
+        assertTrue(page.contains("Icons.Rounded.Search"))
         assertTrue(page.contains("Modifier.fillMaxSize().padding(start = 10.dp, end = 8.dp)"))
         assertTrue(page.contains("horizontalArrangement = Arrangement.spacedBy(7.dp)"))
-        assertTrue(page.contains("Modifier.width(76.dp).height(42.dp).combinedClickable(onClick = onOpenHistory)"))
+        assertTrue(page.contains("Modifier.width(76.dp).height(42.dp).clip(RoundedCornerShape(21.dp)).combinedClickable(onClick = onOpenHistory)"))
         assertTrue(page.contains("BodyText.copy(alpha = 0.80f)"))
         assertTrue(page.contains("shape = RoundedCornerShape(21.dp)"))
         assertTrue(page.contains("ConversationSearchCategory.ALL -> \"搜索全部内容\""))
@@ -576,17 +582,17 @@ class P6DConversationRowAccessibilityContractsTest {
 
     @Test
     fun `FB-P6-052 Android conversation and work use one selected segmented pill`() {
-        assertTrue(source.contains("private val ConversationControlGlyph = Color(0xFF3F3F3F)"))
+        assertTrue(source.contains("private val ConversationControlGlyph: Color get() = BodyText"))
         assertTrue(source.contains("ConversationModeSwitch("))
         assertTrue(source.contains("val workMode = state.surface == com.nanzhufeng.ai.domain.ConversationSurface.WORK"))
         assertTrue(source.contains("onModeChanged = { enabled -> onSurfaceChanged"))
         val modeSwitch = source.substring(source.indexOf("private fun ConversationModeSwitch"), source.indexOf("private fun ConversationModeSegment"))
-        assertTrue(modeSwitch.contains("color = Color(0xFFF0F0F0)"))
+        assertTrue(modeSwitch.contains("color = NeutralSystemSurface"))
         assertTrue(modeSwitch.contains("shape = RoundedCornerShape(50)"))
         assertFalse(modeSwitch.contains("shadowElevation"))
         assertTrue(modeSwitch.contains("Modifier.height(44.dp).padding(3.dp)"))
-        assertTrue(source.contains("containerColor = if (selected) Color.White else Color.Transparent"))
-        assertTrue(source.contains("contentColor = if (selected) Color(0xFF3F3F3F) else ConversationControlGlyph"))
+        assertTrue(source.contains("containerColor = if (selected) ForegroundSurface else Color.Transparent"))
+        assertTrue(source.contains("if (ForegroundSurface.red < 0.5f) Color.White else Color(0xFF3F3F3F)"))
         assertTrue(source.contains("ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp)"))
     }
 
@@ -596,7 +602,7 @@ class P6DConversationRowAccessibilityContractsTest {
         val floatingButton = source.substring(source.indexOf("private fun ConversationHeaderFloatingIconButton"), source.indexOf("private fun ConversationModeSwitch"))
         assertTrue(shell.contains("ConversationHeaderFloatingIconButton(onClick = onLeftAction)"))
         assertTrue(shell.contains("ConversationHeaderFloatingIconButton(onClick = onTemporaryAction)"))
-        assertTrue(floatingButton.contains("color = Color.White"))
+        assertTrue(floatingButton.contains("color = ForegroundSurface"))
         assertTrue(floatingButton.contains("conversationForegroundShadow(CircleShape)"))
         assertTrue(floatingButton.contains("shadowElevation = 0.dp"))
         assertFalse(floatingButton.contains("border = BorderStroke"))
@@ -614,7 +620,7 @@ class P6DConversationRowAccessibilityContractsTest {
         )) assertFalse("conversation transcript must not retain the removed frost effect: $token", source.contains(token))
         assertFalse(source.contains(".conversationEdgeFrost()"))
         assertTrue(source.contains(".conversationEdgeGrayFade()"))
-        assertTrue(source.contains("private val ConversationWorkspaceCanvas = Color(0xFFF2F2F2)"))
+        assertTrue(source.contains("private val ConversationWorkspaceCanvas: Color get() = PageBackground"))
         assertTrue(source.contains("background(ConversationWorkspaceCanvas)"))
     }
 
@@ -665,13 +671,13 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(source.contains("Lifecycle.Event.ON_STOP"))
         assertTrue(source.contains("LocalLifecycleOwner.current"))
         val overlay = source.substring(source.indexOf("private fun ComposerMenuOverlay"), source.indexOf("private fun ComposerDraftTextField"))
-        assertTrue(overlay.contains("color = Color.White"))
+        assertTrue(overlay.contains("color = ForegroundSurface"))
     }
 
     @Test
     fun `assistant branch creation gives a brief accessible success confirmation without a new permanent control`() {
         val feedback = source.substring(source.indexOf("private fun BranchCreationFeedback"), source.indexOf("private fun AssistantMessageActionRow"))
-        for (token in listOf("已创建分支", "已打开新的本地对话", "Icons.Outlined.CheckCircle", "LiveRegionMode.Polite", "delay(2_800)", "onDismiss(branchCreation.branchConversationId)")) {
+        for (token in listOf("已创建分支", "已打开新的本地对话", "Icons.Rounded.CheckCircle", "LiveRegionMode.Polite", "delay(2_800)", "onDismiss(branchCreation.branchConversationId)")) {
             assertTrue("missing branch feedback $token", feedback.contains(token))
         }
         assertFalse(feedback.contains("Button("))
@@ -737,7 +743,7 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `search history is never retained on the normal conversation canvas`() {
         assertTrue(source.contains("if (!searchPageVisible && state.searchHistoryOpen) onCloseSearchHistory()"))
         assertTrue(source.contains("if (searchPageVisible && state.searchHistoryOpen) BackHandler"))
-        assertTrue(source.contains("onDismiss = {\n                searchPageVisible = false\n                onDrawerOpenChanged(true)\n                drawerScope.launch { drawerState.open() }"))
+        assertTrue(source.contains("onDismiss = {\n                searchPageVisible = false\n                returnToSearchAfterSearchOpen = false\n                onDrawerOpenChanged(true)\n                drawerScope.launch { drawerState.open() }"))
         assertFalse(source.contains("transcriptRailPreviewIndex"))
     }
 
@@ -813,7 +819,7 @@ class P6DConversationRowAccessibilityContractsTest {
 
     @Test
     fun `navigation titles use the shared reading scale while section labels remain visually secondary`() {
-        for (token in listOf("fontSize = scaledConversationTextUnit(12.sp)", "lineHeight = scaledConversationTextUnit(16.sp)", "fontWeight = FontWeight.Medium", "overflow = TextOverflow.Ellipsis", "Text(\"已置顶\", style = MaterialTheme.typography.labelSmall", "Text(\"最近\", style = MaterialTheme.typography.labelSmall", "conversation.pinnedAt != null", "Icons.Outlined.ChatBubbleOutline", "Modifier.size(18.dp)")) {
+        for (token in listOf("fontSize = scaledConversationTextUnit(14.sp)", "lineHeight = scaledConversationTextUnit(18.sp)", "fontWeight = FontWeight.Normal", "overflow = TextOverflow.Ellipsis", "Text(\"已置顶\", style = MaterialTheme.typography.labelSmall", "Text(\"最近\", style = MaterialTheme.typography.labelSmall", "conversation.pinnedAt != null", "R.drawable.ic_nanfeng_conversation_bubble", "Modifier.size(18.dp)")) {
             assertTrue("missing $token", source.contains(token))
         }
         assertFalse(source.contains("conversation.title, modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge"))
@@ -846,7 +852,7 @@ class P6DConversationRowAccessibilityContractsTest {
 
     @Test
     fun `composer uses typed local runtime stop only and keeps send icon accessible`() {
-        for (token in listOf("val canStopRuntime = state.runtime?.isTerminal == false", "ComposerSendButton(onClick = if (canStopRuntime) onStop else onSubmit", "private val ComposerSendSurfaceSize = 36.dp", "private val ComposerSendGlyphSize = 24.dp", "private val ComposerStopGlyphSize = 22.5.dp", "colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, disabledContainerColor = Color.Transparent)", "Modifier.size(ComposerSendSurfaceSize)", "Icon(Icons.Filled.Stop, contentDescription = \"停止生成\", tint = glyphColor, modifier = Modifier.size(ComposerStopGlyphSize))", "painterResource(R.drawable.ic_nanfeng_send_rounded)", "CircularProgressIndicator")) {
+        for (token in listOf("val canStopRuntime = state.runtime?.isTerminal == false", "ComposerSendButton(onClick = if (canStopRuntime) onStop else onSubmit", "private val ComposerSendSurfaceSize = 36.dp", "private val ComposerSendGlyphSize = 24.dp", "private val ComposerStopGlyphSize = 22.5.dp", "colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, disabledContainerColor = Color.Transparent)", "Modifier.size(ComposerSendSurfaceSize)", "Icon(Icons.Rounded.Stop, contentDescription = \"停止生成\", tint = glyphColor, modifier = Modifier.size(ComposerStopGlyphSize))", "painterResource(R.drawable.ic_nanfeng_send_rounded)", "CircularProgressIndicator")) {
             assertTrue("missing $token", source.contains(token))
         }
         assertFalse(source.contains("Text(\"本地发送\")"))
@@ -857,7 +863,7 @@ class P6DConversationRowAccessibilityContractsTest {
         val composerSource = source.substring(source.indexOf("private fun ComposerDraftTextField"), source.indexOf("private fun AttachmentPreviewChip"))
         val composer = source.substring(source.indexOf("private fun DraftComposer"), source.indexOf("private fun ComposerMenuOverlay"))
         val composerDock = source.substring(source.indexOf("private fun ConversationComposerDock"), source.indexOf("private fun ComposerAttachmentPreview"))
-        for (token in listOf("Surface(", "shape = RoundedCornerShape(28.dp)", "var inputFocused", "if (inputFocused)", "expanded = true", "expanded = false", "height(ComposerDockMinimumHeight)", "IconButton(", "ComposerDraftTextField", "ComposerSendButton")) {
+        for (token in listOf("Surface(", "shape = RoundedCornerShape(28.dp)", "var inputFocused", "val inputExpanded = inputFocused && imeVisible", "if (inputExpanded)", "expanded = true", "expanded = false", "height(ComposerDockMinimumHeight)", "IconButton(", "ComposerDraftTextField", "ComposerSendButton")) {
             assertTrue("missing $token", composer.contains(token))
         }
         assertTrue(composerDock.contains("conversationForegroundShadow("))
@@ -889,7 +895,8 @@ class P6DConversationRowAccessibilityContractsTest {
             "editor.setTextSelectHandleRight(",
             "copyAndTintForComposer",
         )) assertTrue("missing native selection-theme bridge $token", composer.contains(token))
-        assertTrue(appSource.contains("CompositionLocalProvider(LocalTextSelectionColors provides selectionColors)"))
+        assertTrue(appSource.contains("CompositionLocalProvider("))
+        assertTrue(appSource.contains("LocalTextSelectionColors provides selectionColors"))
         assertTrue(appSource.contains("handleColor = appearanceAccent"))
         assertTrue(appSource.contains("backgroundColor = appearanceAccent.copy"))
     }
@@ -937,7 +944,8 @@ class P6DConversationRowAccessibilityContractsTest {
             source.indexOf("// This sibling is outside the transcript and floating composer measurement."),
         )
         assertTrue(jumpOverlay.contains("if (showJumpToLatest && !state.searchPanelOpen) JumpToLatestButton("))
-        assertTrue(jumpOverlay.contains("activeTranscriptListState.animateScrollToItem"))
+        assertTrue(jumpOverlay.contains("activeTranscriptListState.animateForwardByVisibleViewport"))
+        assertTrue(source.contains("activeTranscriptListState.scrollToTrueBottom()"))
     }
 
     @Test
@@ -1001,16 +1009,16 @@ class P6DConversationRowAccessibilityContractsTest {
         for (token in listOf(
             "Box(Modifier.fillMaxSize().zIndex(ConversationModalOverlayZIndex))", "BackHandler(onBack = onOverlayBack)", "pointerInput(menu, onDismiss)", "detectTapGestures(onTap = { onDismiss() })",
             "anchor.top - heightPx - verticalGap", "attachmentActions.forEach", "ComposerOverlayAction",
-            "contentColor = Color.Black", "menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 248.dp",
+            "contentColor = BodyText", "menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 248.dp",
             "Modifier.background(Color.Black.copy(alpha = 0.16f))", "RoundedCornerShape(if (menu == ComposerMenu.MODEL) 28.dp else 22.dp)",
             "shadowElevation = if (menu == ComposerMenu.MODEL) 14.dp else 10.dp", "ComposerModelPickerHeader(",
-            "ComposerModelPickerSectionLabel(", "heightIn(max = modelPickerContentHeight)", "Icons.Outlined.Check", "Icons.Outlined.ChevronRight",
+            "ComposerModelPickerSectionLabel(", "heightIn(max = modelPickerContentHeight)", "Icons.Rounded.Check", "Icons.Rounded.ChevronRight",
             "viewportWidthPx - widthPx - horizontalPadding", "zIndex(ConversationModalOverlayZIndex)",
         )) assertTrue("missing $token", overlay.contains(token))
         for (forbidden in listOf("Popup(", "PopupProperties", "addSheetVisible", "modelPickerVisible", "当前会话模型", "手动选择只影响当前普通会话", "最近路由")) assertFalse("unexpected $forbidden", overlay.contains(forbidden))
-        for (token in listOf("Icons.Outlined.PhotoCamera", "\"相机\"", "Icons.Outlined.AddPhotoAlternate", "\"添加图片和视频\"", "Icons.Outlined.AttachFile", "\"添加文件\"")) assertTrue("missing $token", source.contains(token))
+        for (token in listOf("Icons.Rounded.PhotoCamera", "\"相机\"", "Icons.Rounded.AddPhotoAlternate", "\"添加图片和视频\"", "Icons.Rounded.AttachFile", "\"添加文件\"")) assertTrue("missing $token", source.contains(token))
         val attachmentAction = source.substring(source.indexOf("private fun ComposerOverlayAction"), source.indexOf("/** The mobile composer"))
-        assertTrue(attachmentAction.contains("ButtonDefaults.textButtonColors(contentColor = Color.Black)"))
+        assertTrue(attachmentAction.contains("ButtonDefaults.textButtonColors(contentColor = BodyText)"))
     }
 
     @Test
@@ -1025,7 +1033,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "viewportWidthPx - widthPx - horizontalPadding",
         )) assertTrue("missing layered model picker token $token", overlay.contains(token))
         for (token in listOf("width(36.dp)", "height(4.dp)", "ComposerModelPickerHeaderHeight", "关闭模型选择", "返回模型分类", "Icons.AutoMirrored.Outlined.ArrowBack")) assertTrue("missing sheet header token $token", header.contains(token))
-        for (token in listOf("AccentOrangeSoft", "Color(0xFFF5F6F5)", "RoundedCornerShape(16.dp)", "heightIn(min = 64.dp)", "Icons.Outlined.ChevronRight", "Icons.Outlined.Check")) assertTrue("missing layered model row token $token", row.contains(token))
+        for (token in listOf("AccentOrangeSoft", "NeutralAssistantSurface", "RoundedCornerShape(16.dp)", "heightIn(min = 64.dp)", "Icons.Rounded.ChevronRight", "Icons.Rounded.Check")) assertTrue("missing layered model row token $token", row.contains(token))
         assertTrue(overlay.indexOf("ComposerModelSlot.DAILY") < overlay.indexOf("ComposerModelSlot.DEEP"))
         assertTrue(overlay.indexOf("ComposerModelSlot.DEEP") < overlay.indexOf("ComposerModelSlot.MULTIMODAL"))
         assertTrue(overlay.indexOf("ComposerModelSlot.MULTIMODAL") < overlay.indexOf("ComposerModelSlot.COMPARE"))
@@ -1044,7 +1052,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(normalHeader.contains("temporaryTint = ConversationControlGlyph"))
         assertTrue(temporaryPane.contains("temporaryTint = AccentOrange"))
         assertTrue(temporaryPane.contains("onLeftAction = onOpenNavigation"))
-        assertTrue(temporaryPane.contains("leftIcon = Icons.Outlined.Menu"))
+        assertTrue(temporaryPane.contains("leftIcon = Icons.Rounded.Menu"))
         assertTrue(temporaryPane.contains("leftDescription = \"打开对话导航\""))
         assertTrue(source.contains("onOpenNavigation = { drawerScope.launch { drawerState.open() } }"))
         assertTrue(source.contains("onExit = onExitTemporary"))
@@ -1068,7 +1076,7 @@ class P6DConversationRowAccessibilityContractsTest {
 
     @Test fun `temporary transcript keeps user ownership and never renders attachment counts or internal model labels`() {
         val temporary = source.substring(source.indexOf("private fun TemporaryConversationPane"))
-        for (token in listOf("RightAlignedUserBubble {", "Icons.Outlined.PhotoCamera", "\"相机\"", "Icons.Outlined.AttachFile", "contentDescription = \"附件\"", "modelOptions: List<Pair<String?, String>>")) assertTrue("missing $token", temporary.contains(token))
+        for (token in listOf("RightAlignedUserBubble {", "Icons.Rounded.PhotoCamera", "\"相机\"", "Icons.Rounded.AttachFile", "contentDescription = \"附件\"", "modelOptions: List<Pair<String?, String>>")) assertTrue("missing $token", temporary.contains(token))
         for (forbidden in listOf("个临时本地附件", "草稿含", "recovery.modelOverrideId ?: \"临时\"", "开始临时对话", "临时草稿", "发送临时消息")) assertFalse("unexpected $forbidden", temporary.contains(forbidden))
     }
 
@@ -1118,14 +1126,15 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(source.contains("The drawer owns navigation and management"))
         assertTrue(source.contains("ConversationNavigationDrawer("))
         assertTrue(source.contains("onExport = { drawerScope.launch { drawerState.close() }; onExport() }"))
-        assertTrue(source.contains("Text(\"导出当前对话\")"))
+        assertTrue(source.contains("Text(\"导出 Markdown\")"))
+        assertFalse(source.contains("Text(\"导出当前对话\")"))
     }
 
     @Test
     fun `archive and recycle are settings lifecycle projections rather than drawer scopes`() {
         val appSource = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val management = source.substring(source.indexOf("internal fun ConversationManagementSettingsCard"), source.indexOf("private fun ConversationSelector"))
-        for (token in listOf("internal fun ConversationManagementSettingsCard", "Text(\"管理对话\"", "ConversationLifecycleEntry(", "title = \"已归档\"", "title = \"回收站\"", "ConversationLifecycleListSettingsCard", "ConversationManagementAction.RESTORE_DELETED", "ConversationManagementAction.UNARCHIVE")) {
+        for (token in listOf("internal fun ConversationManagementSettingsCard", "DataStorageGroupedCard", "ConversationLifecycleEntry(", "title = \"收藏\"", "title = \"已归档\"", "title = \"回收站\"", "ConversationLifecycleListSettingsCard", "ConversationManagementAction.RESTORE_DELETED", "ConversationManagementAction.UNARCHIVE")) {
             assertTrue("missing $token", management.contains(token))
         }
         assertTrue(appSource.contains("ConversationManagementSettingsCard("))
@@ -1179,7 +1188,7 @@ class P6DConversationRowAccessibilityContractsTest {
         val appSource = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val hierarchy = appSource.substring(appSource.indexOf("private fun SettingsHierarchy"), appSource.indexOf("private fun WorkbenchRoute"))
         val categoryList = appSource.substring(appSource.indexOf("private fun SettingsCategoryList"), appSource.indexOf("private fun SettingsCategoryRow"))
-        for (title in listOf("AI 模型", "对话", "数据与导入", "功能审阅", "隐私")) assertTrue("missing category $title", categoryList.contains(title))
+        for (title in listOf("对话", "外观", "应用与数据", "工作区", "个性化", "模型与联网", "对话管理", "数据与存储", "隐私与安全")) assertTrue("missing current settings category $title", categoryList.contains(title))
         assertTrue(appSource.contains("val returnFromSettings: () -> Unit = {"))
         assertTrue(appSource.contains("conversationViewModel.setListScope(com.nanzhufeng.ai.domain.ConversationListScope.ACTIVE)"))
         assertTrue(appSource.contains("onReturnToConversationDrawer()"))
@@ -1191,20 +1200,19 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(appSource.contains("BackHandler(onBack = returnFromSettings)"))
         assertTrue(appSource.contains("Modifier.systemGestureExclusion()"))
         assertTrue(appSource.contains("Modifier.settingsEdgeExit(returnFromSettings)"))
-        assertTrue(appSource.contains("contentDescription = if (destination == SettingsDestination.HOME) \"返回侧栏\" else \"返回设置\""))
+        assertTrue(appSource.contains("contentDescription = \"返回侧栏\""))
+        assertTrue(appSource.contains("contentDescription = \"返回设置\""))
         assertTrue(hierarchy.contains("if (destination == SettingsDestination.HOME)"))
-        for (token in listOf("ModelServiceStatusCard", "ConversationManagementSettingsCard", "FeatureReviewSettingsCard", "PrivacyDataCard", "onOpenImport")) assertTrue("missing detail owner $token", hierarchy.contains(token))
-        for (token in listOf("ChatGPT / Claude ZIP 导入", "设置 → 数据与导入 → 导入中心", "暂不在对话主页添加快捷按钮", "未关联媒体人工关联", "Desktop Compare 联网执行", "阶段 1/2 已有 fail-closed owner 与 Security.framework 边界", "复用现有“对比”操作，不新增 Composer 常驻按钮", "本地精确复用", "暂不增加聊天或 Composer 按键", "避免误解为联网缓存或省费承诺", "跨端文本会话交换", "不是本机备份、云同步，也不代表完整工作区跨端保真", "完整工作区交换（v2）", "只保留双端设置二级入口")) assertTrue("missing feature review detail $token", appSource.contains(token))
-        assertTrue(source.contains("Text(\"导出当前文本会话到 Desktop\")"))
+        for (token in listOf("ModelServiceStatusCard", "ConversationManagementSettingsCard", "WorkspaceSettingsCard", "DevelopmentDiagnosticsSettingsCard", "dataStorageImportContent", "PrivacyDataPage")) assertTrue("missing current detail owner $token", hierarchy.contains(token))
         assertFalse(categoryList.contains("ConversationManagementSettingsCard"))
         assertFalse(categoryList.contains("P6GModelSelectionSettingsCard"))
         for (token in listOf("InvocationLedgerCard", "P6GModelSelectionSettingsCard", "P6ETemporaryMaintenanceAcceptanceCard", "installP6GLocalFixtureCatalog")) assertFalse("normal settings must hide $token", hierarchy.contains(token))
     }
 
     @Test
-    fun `conversation surfaces consume the shared orange accent token`() {
+    fun `conversation surfaces consume the shared live appearance accent token`() {
         val appSource = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
-        for (token in listOf("internal val AccentOrange = Color(0xFFE97128)", "internal val AccentOrangeHover = Color(0xFFD86520)", "internal val AccentOrangePressed = Color(0xFFC2581A)", "internal val AccentOrangeSoft = Color(0xFFFFF1E5)", "internal val ComposerFocusBorder = Color(0xFFEFBD94)", "internal val AccentDisabled = Color(0xFFF4C8AA)", "primary = AccentOrange", "onPrimary = AccentOnPrimary", "primaryContainer = AccentOrangeSoft", "internal val BrandGreen = Color(0xFF167A61)")) assertTrue("missing $token", appSource.contains(token))
+        for (token in listOf("internal val DefaultAccentOrange = Color(0xFFE97128)", "internal var AccentOrange by mutableStateOf(DefaultAccentOrange)", "internal var AccentOrangeHover by mutableStateOf", "internal var AccentOrangePressed by mutableStateOf", "internal var AccentOrangeSoft by mutableStateOf", "internal var ComposerFocusBorder by mutableStateOf", "internal var AccentDisabled by mutableStateOf", "primary = appearanceAccent", "onPrimary = AccentOnPrimary", "primaryContainer = appearance.accentColor.userBubbleColor(false)", "internal var BrandGreen by mutableStateOf")) assertTrue("missing $token", appSource.contains(token))
         assertTrue(source.contains("if (selected) AccentOrangeSoft else ConversationDrawerRowSurface"))
         val row = source.substring(source.indexOf("private fun ConversationNavigationRow"), source.indexOf("private data class ConversationActionMenuTarget"))
         assertTrue(row.contains("contentColor = BodyText"))
@@ -1216,10 +1224,10 @@ class P6DConversationRowAccessibilityContractsTest {
         val attachment = source.substring(source.indexOf("private fun AttachmentPreviewChip"), source.indexOf("private fun PdfPreviewDialog"))
         val composerAttachment = source.substring(source.indexOf("private fun ComposerAttachmentPreview"), source.indexOf("private fun ComposerMenuOverlay"))
         val presentation = source.substring(source.indexOf("private fun PresentationBlockView"), source.indexOf("private fun inlineText"))
-        for (token in listOf("internal fun chatRoleVisual", "MessageRole.USER -> ChatRoleVisual(AccentOrangeSoft", "MessageRole.ASSISTANT -> ChatRoleVisual(NeutralAssistantSurface", "MessageRole.SYSTEM -> ChatRoleVisual(NeutralSystemSurface", "MessageRole.TOOL -> ChatRoleVisual(ToolSurface")) assertTrue("missing $token", appSource.contains(token))
+        for (token in listOf("internal fun chatRoleVisual", "MessageRole.USER -> ChatRoleVisual(", "ActiveUserBubbleSurface", "ActiveUserBubbleAccent", "MessageRole.ASSISTANT -> ChatRoleVisual(NeutralAssistantSurface", "MessageRole.SYSTEM -> ChatRoleVisual(NeutralSystemSurface", "MessageRole.TOOL -> ChatRoleVisual(ToolSurface")) assertTrue("missing $token", appSource.contains(token))
         assertFalse(attachment.contains("AccentOrangeSoft"))
         assertFalse(composerAttachment.contains("AccentOrangeSoft"))
-        assertTrue(composerAttachment.contains("background(Color.White)"))
+        assertTrue(composerAttachment.contains("background(ForegroundSurface)"))
         for (token in listOf("is PresentationBlock.Quote -> Row", "height(IntrinsicSize.Min)", "Box(Modifier.width(3.dp).fillMaxHeight()", "SecondaryText.copy(alpha = 0.42f)")) assertTrue("missing quote format token $token", presentation.contains(token))
         assertFalse(presentation.contains("fontStyle = androidx.compose.ui.text.font.FontStyle.Italic"))
         assertTrue(presentation.contains("is PresentationBlock.Note -> InlinePresentationText("))
@@ -1240,9 +1248,9 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `FB-P6-089 gives assistant information blocks local hierarchy tables and individual copy actions`() {
         val presentation = source.substring(source.indexOf("private fun PresentationBlockView"), source.indexOf("private fun inlineText"))
-        for (token in listOf("is PresentationBlock.Table -> MarkdownTable(block)", "CopyableInformationSurface", "MarkdownTable(block)", "Icon(Icons.Outlined.ContentCopy", "contentDescription = \"复制\$label\"", "Color(0xFFF5F6F5)", "horizontalScroll(scrollState)", "adaptiveTableColumnWeights(block)", "cellWidths = columnWeights.map", "trailingHeaderInset = 38.dp", "复制表格（保留 Markdown 格式）", "tableMarkdownText(block)", "VerticalDivider(", "contentAlignment = Alignment.Center", "textAlign = androidx.compose.ui.text.style.TextAlign.Center")) assertTrue("missing formatted assistant content token $token", presentation.contains(token))
+        for (token in listOf("is PresentationBlock.Table -> MarkdownTable(block)", "CopyableInformationSurface", "MarkdownTable(block)", "Icon(Icons.Rounded.ContentCopy", "contentDescription = \"复制\$label\"", "NeutralAssistantSurface", "horizontalScroll(scrollState)", "adaptiveTableColumnWeights(block)", "cellWidths = columnWeights.map", "trailingHeaderInset = 38.dp", "复制表格（保留 Markdown 格式）", "tableMarkdownText(block)", "VerticalDivider(", "contentAlignment = Alignment.Center", "textAlign = androidx.compose.ui.text.style.TextAlign.Center")) assertTrue("missing formatted assistant content token $token", presentation.contains(token))
         val inline = source.substring(source.indexOf("private fun inlineText"), source.indexOf("private fun ConversationActions"))
-        assertTrue(inline.contains("append(\"\${span.label} ↗\")"))
+        assertTrue(inline.contains("appendConversationFindText(\"\${span.label} ↗\", highlightQuery)"))
     }
 
     @Test
@@ -1250,12 +1258,13 @@ class P6DConversationRowAccessibilityContractsTest {
         val presentation = source.substring(source.indexOf("private fun PresentationBlockView"), source.indexOf("private fun inlineText"))
         val inline = source.substring(source.indexOf("private fun inlineText"), source.indexOf("private fun ConversationActions"))
         assertTrue(presentation.contains("is PresentationBlock.HorizontalRule -> Box("))
-        assertTrue(presentation.contains("Arrangement.spacedBy(8.dp)"))
-        assertTrue(presentation.contains("Triple(26.sp, 35.sp, FontWeight.ExtraBold)"))
+        assertTrue(presentation.contains("Arrangement.spacedBy(if (assistantDocument) 8.dp else 6.dp)"))
+        assertTrue(presentation.contains("val typography = if (assistantDocument) AssistantDocumentTypography else UserBubbleTypography"))
+        assertTrue(source.contains("headingOne = 26.sp, headingTwo = 22.sp, headingMinor = 18.sp"))
         assertTrue(presentation.contains("Modifier.widthIn(min = 14.dp, max = 22.dp)"))
         assertTrue(presentation.contains("Spacer(Modifier.width(4.dp))"))
-        assertTrue(presentation.contains("val listFontSize = scaledConversationTextUnit(15.sp)"))
-        assertTrue(presentation.contains("val listLineHeight = scaledConversationTextUnit(24.sp)"))
+        assertTrue(presentation.contains("val listFontSize = scaledConversationTextUnit(typography.list)"))
+        assertTrue(presentation.contains("val listLineHeight = scaledConversationTextUnit(typography.listLineHeight)"))
         assertTrue(presentation.contains("Modifier.widthIn(min = 14.dp, max = 22.dp).alignByBaseline()"))
         assertTrue(presentation.contains("Modifier.weight(1f).alignByBaseline()"))
         assertTrue(presentation.contains("val listStartIndent = 12.dp + (depth.coerceIn(0, 6) * 16).dp"))
@@ -1263,9 +1272,9 @@ class P6DConversationRowAccessibilityContractsTest {
         assertFalse(presentation.contains("Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth())"))
         assertFalse(presentation.contains("modifier = Modifier.width(28.dp)"))
         assertTrue(inline.contains("is InlinePresentation.Code -> {"))
-        assertTrue(inline.contains("append(span.value)"))
+        assertTrue(inline.contains("appendConversationFindText(span.value, highlightQuery)"))
         assertFalse(inline.contains("append(\"`${'$'}{span.value}`\")"))
-        assertTrue(source.contains("InlineCodeChipBackground = Color(0xFFE6E6E6)"))
+        assertTrue(source.contains("InlineCodeChipBackground: Color get() = NeutralSystemSurface"))
         assertTrue(inline.contains("pushStringAnnotation(InlineCodeChipAnnotationTag, span.value)"))
         assertTrue(inline.contains("drawRoundRect("))
         assertTrue(inline.contains("cornerRadius = CornerRadius(8.dp.toPx())"))
@@ -1284,7 +1293,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(source.contains("glyphOffset = 11.dp"))
         assertTrue(source.contains("if (sources.size > 1) OverlappingSourceWebsiteGlyphs(sources) else SourceWebsiteGlyph(primary)"))
         assertTrue(source.contains("sourceShortcutLabel(sources)"))
-        assertTrue(source.contains("Icons.Outlined.Language"))
+        assertTrue(source.contains("Icons.Rounded.Language"))
         assertTrue(source.contains("RoundedCornerShape(16.dp)"))
         assertFalse(source.contains("shape = CircleShape,\n        modifier = Modifier.size(24.dp).semantics { contentDescription = \"打开 ${'$'}{sources.size} 个来源网站\" }"))
         assertTrue(source.contains("private fun SourceLinksDialog"))
@@ -1302,7 +1311,7 @@ class P6DConversationRowAccessibilityContractsTest {
         val editDialog = source.substring(source.indexOf("editingMessageId?.let"), source.indexOf("state.imagePreview?.let"))
         for (token in listOf("EditUserMessageDialog(", "value = editingText", "onCreateBranch", "onEditUserMessage(com.nanzhufeng.ai.domain.MessageNodeId(rawId), editingText)")) assertTrue("missing edit branch route token $token", editDialog.contains(token))
         val editSurface = source.substring(source.indexOf("private fun EditUserMessageDialog"), source.indexOf("private fun MessageContextAction"))
-        for (token in listOf("DialogProperties(usePlatformDefaultWidth = false", "padding(horizontal = 12.dp)", "fillMaxWidth()", "color = Color.White", "shape = RoundedCornerShape(24.dp)", "OutlinedTextField(", "minLines = 3", "heightIn(min = 132.dp, max = 580.dp)", "Modifier.width(76.dp).height(32.dp)", "Modifier.width(44.dp).height(30.dp)", "Text(\"创建分支\", fontSize = 13.sp)", "Text(\"取消\", fontSize = 13.sp)")) assertTrue("missing wide edit surface token $token", editSurface.contains(token))
+        for (token in listOf("DialogProperties(usePlatformDefaultWidth = false", "padding(horizontal = 12.dp)", "fillMaxWidth()", "color = ForegroundSurface", "shape = RoundedCornerShape(24.dp)", "OutlinedTextField(", "minLines = 3", "heightIn(min = 132.dp, max = 580.dp)", "Modifier.width(76.dp).height(32.dp)", "Modifier.width(44.dp).height(30.dp)", "Text(\"创建分支\", fontSize = 13.sp)", "Text(\"取消\", fontSize = 13.sp)")) assertTrue("missing wide edit surface token $token", editSurface.contains(token))
         for (removed in listOf("编辑消息并创建分支", "确认后只在本机创建修订分支", "用户消息", "仅纯文本消息可编辑")) assertFalse("unexpected edit-dialog detail $removed", editDialog.contains(removed))
     }
 
@@ -1330,7 +1339,7 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `FB-P6-090 launches the platform share sheet immediately without an in-app confirmation dialog`() {
         assertTrue(source.contains("val shareMessage: (PresentedTranscriptMessage) -> Unit"))
         assertTrue(source.contains("context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND)"))
-        assertTrue(source.contains("MessageContextAction(Icons.Outlined.Share, \"分享\")"))
+        assertTrue(source.contains("MessageContextAction(Icons.Rounded.Share, \"分享\")"))
         assertFalse(source.contains("通过系统分享？"))
         assertFalse(source.contains("打开系统分享"))
         assertFalse(source.contains("sharingMessageId"))

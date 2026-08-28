@@ -15,8 +15,8 @@ class P6F2BImagePreviewUiContractsTest {
         assertFalse(viewer.contains("本地图片预览"))
         assertFalse(viewer.contains("仅本地原图"))
         assertFalse(viewer.contains("双指缩放或拖动只改变当前视口"))
-        assertFalse(workspace.contains("http://"))
-        assertFalse(workspace.contains("https://"))
+        assertFalse(viewer.contains("http://"))
+        assertFalse(viewer.contains("https://"))
     }
 
     @Test fun `new or removed draft assets reload projections before the UI can open a preview`() {

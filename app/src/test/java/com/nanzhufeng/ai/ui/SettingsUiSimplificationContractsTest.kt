@@ -221,7 +221,7 @@ class SettingsUiSimplificationContractsTest {
 
         val settingsGroups = app.substring(app.indexOf("private fun SettingsCategoryGroup"), app.indexOf("private fun SettingsCategoryDivider"))
         val dataCard = app.substring(app.indexOf("internal fun DataStorageGroupedCard"), app.indexOf("internal fun DataStorageGroupedDivider"))
-        val conversationImports = app.substring(app.indexOf("private fun ConversationImportSection"), app.indexOf("private fun WorkspaceExchangeV2ExportCard"))
+        val conversationImports = app.substring(app.indexOf("private fun DataImportCenterContent"), app.indexOf("private fun WorkspaceExchangeV2ExportCard"))
 
         assertTrue(settingsGroups.contains("shape = CardShape"))
         assertFalse(settingsGroups.contains("shape = P5AInteractiveShape"))

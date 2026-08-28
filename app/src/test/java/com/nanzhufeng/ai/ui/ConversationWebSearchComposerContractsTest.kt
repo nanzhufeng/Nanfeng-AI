@@ -17,9 +17,10 @@ class ConversationWebSearchComposerContractsTest {
             "ComposerConversationWebSearchAction(",
             "Icons.Rounded.Public",
             "实时网页搜索",
-            "SettingsSwitchTrackWidth",
+            "SettingsSwitch(",
             "onSetCurrentConversationWebSearchEnabled(enabled)",
         )) assertTrue("missing composer web-search control token $token", workspace.contains(token))
+        assertTrue("Composer must reuse the shared switch instead of owning its dimensions", !workspace.contains("SettingsSwitchTrackWidth"))
         val action = workspace.substringAfter("private fun ComposerConversationWebSearchAction(").substringBefore("/** The mobile composer")
         assertTrue("composer control must not add a duplicate supporting label", !action.contains("仅影响本对话"))
         assertTrue("composer control must use the settings title", !action.contains("当前对话联网"))

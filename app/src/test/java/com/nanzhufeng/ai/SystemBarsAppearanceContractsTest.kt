@@ -9,14 +9,15 @@ class SystemBarsAppearanceContractsTest {
     private val style = File("src/main/res/values/styles.xml").readText()
 
     @Test
-    fun `app always requests dark system glyphs on its light edge to edge canvas`() {
+    fun `launch has a light fallback while Compose owns glyph contrast for the active skin`() {
         for (token in listOf(
             "SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)",
             "isAppearanceLightStatusBars = true",
             "isAppearanceLightNavigationBars = true",
             "override fun onWindowFocusChanged(hasFocus: Boolean)",
-            "if (hasFocus) applyLightSystemBars()",
+            "Appearance is owned by the Compose skin",
         )) assertTrue("missing explicit light-system-bar token: $token", activity.contains(token))
+        assertTrue("focus regain must not overwrite the active dark skin", !activity.contains("if (hasFocus) applyLightSystemBars()"))
         for (token in listOf(
             "<item name=\"android:windowLightStatusBar\">true</item>",
             "<item name=\"android:windowLightNavigationBar\">true</item>",

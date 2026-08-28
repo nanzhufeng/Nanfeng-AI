@@ -19,6 +19,7 @@ class SettingsCategoryCardContractsTest {
         assertTrue(group.contains("Card("))
         assertTrue(group.contains("containerColor = ForegroundSurface"))
         assertTrue(app.contains("private fun SettingsCategoryDivider() = Spacer("))
-        assertTrue(app.contains("height(8.dp).background(SettingsPageBackground)"))
+        assertTrue(app.contains("SettingsGroupedCardDividerHeight = 4.dp"))
+        assertTrue(app.contains("height(SettingsGroupedCardDividerHeight).background(SettingsPageBackground)"))
     }
 }

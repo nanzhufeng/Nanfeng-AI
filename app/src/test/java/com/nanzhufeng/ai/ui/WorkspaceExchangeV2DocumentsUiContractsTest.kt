@@ -24,7 +24,7 @@ class WorkspaceExchangeV2DocumentsUiContractsTest {
 
     @Test
     fun `v2 OpenDocument restore sends only bounded selected bytes to the atomic owner`() {
-        val picker = appSource.substring(appSource.indexOf("val workspaceExchangeV2RestorePicker"), appSource.indexOf("MaterialTheme("))
+        val picker = appSource.substring(appSource.indexOf("val workspaceExchangeV2RestorePicker"), appSource.indexOf("val appearance ="))
         assertTrue(picker.contains("ActivityResultContracts.OpenDocument()"))
         assertTrue(picker.contains("workspaceExchangeV2RestoreViewModel::selectedDocument"))
         for (forbidden in listOf("openInputStream", "NfaiExchangeV2PackageReader", "JSONObject", "ZipInputStream")) assertFalse("UI must not parse selected v2 package: $forbidden", picker.contains(forbidden))

@@ -23,7 +23,7 @@ class FBP6041ComposerGlyphContractsTest {
             "attachmentDescription = \"添加附件\"",
             "painterResource(R.drawable.ic_nanfeng_send_rounded)",
             "modifier = Modifier.size(ComposerSendGlyphSize)",
-            "Icon(Icons.Filled.Stop, contentDescription = \"停止生成\", tint = glyphColor, modifier = Modifier.size(ComposerStopGlyphSize))",
+            "Icon(Icons.Rounded.Stop, contentDescription = \"停止生成\", tint = glyphColor, modifier = Modifier.size(ComposerStopGlyphSize))",
             "modifier = Modifier.size(48.dp)",
             "shape = CircleShape",
             "Modifier.size(ComposerSendSurfaceSize)",

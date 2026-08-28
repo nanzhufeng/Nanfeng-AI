@@ -13,7 +13,7 @@ class DirectExecutionApplicationOwnerContractsTest {
     private val provider = ProviderRegistryEntry(ProviderHandle("openrouter"), "OpenRouter", ProviderAdapterIdentity.OPENROUTER_OPENAI_COMPATIBLE, "https://openrouter.ai/api/v1")
     private val logical = LogicalModelDescriptor(LogicalModelId("logical.fixture"), "Fixture logical model")
     private val deployment = ModelDeploymentDescriptor(
-        ModelDeploymentId("openrouter.fixture"), logical.id, provider.handle, "openrouter/test-v1", ModelDeploymentState.ACTIVE,
+        ModelDeploymentId("openrouter.fixture"), logical.id, provider.handle, "openrouter/gpt-5.6-terra", ModelDeploymentState.ACTIVE,
         ModelPricing("catalog-v1", "USD", 10, 5),
     )
 
@@ -30,7 +30,7 @@ class DirectExecutionApplicationOwnerContractsTest {
         assertEquals(logical.id, result.value.logicalModelId)
         assertEquals(deployment.id, result.value.deploymentId)
         assertEquals(provider.handle, result.value.provider)
-        assertEquals("openrouter/test-v1", result.value.providerModelId)
+        assertEquals("openrouter/gpt-5.6-terra", result.value.providerModelId)
         assertEquals("b".repeat(64), result.value.requestFingerprint)
         assertEquals("a".repeat(64), result.value.contextHash)
         assertEquals(DirectExecutionTextCategory.CURRENT_DRAFT_TEXT_ONLY, result.value.textCategory)
