@@ -82,6 +82,7 @@ class P6KZipImportUiContractsTest {
         val intake = File("src/main/java/com/nanzhufeng/ai/data/AndroidP6KZipIntakeStore.kt").readText()
         val scheduling = File("src/main/java/com/nanzhufeng/ai/data/P6KZipAssetRecoveryScheduling.kt").readText()
         val ui = File("src/main/java/com/nanzhufeng/ai/ui/P6KZipImportUi.kt").readText()
+        val manifest = File("src/main/AndroidManifest.xml").readText()
         val listOwner = intake.substring(intake.indexOf("override fun list()"), intake.indexOf("override fun recoveryJobs()"))
 
         assertFalse(listOwner.contains("ZipFile("))
@@ -90,6 +91,8 @@ class P6KZipImportUiContractsTest {
         assertTrue(scheduling.contains("OneTimeWorkRequestBuilder<P6KZipAssetRecoveryWorker>()"))
         assertTrue(scheduling.contains("setForeground(recoveryForegroundInfo(applicationContext))"))
         assertTrue(scheduling.contains("FOREGROUND_SERVICE_TYPE_DATA_SYNC"))
+        assertTrue(manifest.contains("androidx.work.impl.foreground.SystemForegroundService"))
+        assertTrue(manifest.contains("android:foregroundServiceType=\"dataSync\""))
         assertFalse(scheduling.contains("setExpedited"))
         assertTrue(ui.contains("正在恢复 ${'$'}{job.linkedOccurrences}/${'$'}{job.uniqueAssets}"))
         assertTrue(ui.contains("ChatGPT 导出包中缺少文件；不是本地恢复丢失"))
