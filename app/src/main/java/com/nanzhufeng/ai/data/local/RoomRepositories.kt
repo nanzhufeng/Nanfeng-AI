@@ -289,7 +289,8 @@ class RoomP6KZipAssetRecoveryJobRepository(
 internal fun com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob.toEntity() = P6KZipAssetRecoveryJobEntity(
     taskId.value, state.name, totalOccurrences, linkedOccurrences, totalConversations,
     processedConversations, failedConversations, uniqueAssets, missingEntries,
-    unattributedCandidates, sourceReferenceRecords, fallbackNamedAssets,
+    unattributedCandidates, sourceReferenceRecords, fallbackNamedAssets, inferredGeneratedImages,
+    originLinkedLibraryImages, inferredLibraryImages,
     lastFailureKind?.name, lastFailureAtMs, indexVersion, updatedAtMs,
 )
 
@@ -298,7 +299,8 @@ internal fun P6KZipAssetRecoveryJobEntity.toDomain() = com.nanzhufeng.ai.domain.
     com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState.valueOf(state),
     totalOccurrences, linkedOccurrences, totalConversations, processedConversations,
     failedConversations, uniqueAssets, missingEntries, unattributedCandidates,
-    sourceReferenceRecords, fallbackNamedAssets,
+    sourceReferenceRecords, fallbackNamedAssets, inferredGeneratedImages,
+    originLinkedLibraryImages, inferredLibraryImages,
     lastFailureKind?.let(com.nanzhufeng.ai.domain.P6KZipAssetRecoveryFailureKind::valueOf),
     lastFailureAtMs, indexVersion, updatedAtMs,
 )

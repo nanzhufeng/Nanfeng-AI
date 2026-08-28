@@ -15,6 +15,7 @@ import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob
 import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJobRepository
 import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryScheduler
 import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState
+import com.nanzhufeng.ai.domain.P6K_ZIP_ASSET_MAPPING_INDEX_VERSION
 import com.nanzhufeng.ai.domain.P6KZipMappedAssetLinkOwner
 import com.nanzhufeng.ai.domain.P6KZipManualAssetLinkOwner
 import com.nanzhufeng.ai.domain.P6KZipManualAssetLinkResult
@@ -210,6 +211,10 @@ class AndroidP6KZipIntakeStore(
                 conversation.currentPath.sumOf { it.sourceReferenceRecords }
             },
             fallbackNamedAssets = mapping.fallbackNamedEntries.size,
+            inferredGeneratedImages = mapping.inferredGeneratedImageEntries.size,
+            originLinkedLibraryImages = mapping.originLinkedLibraryImageEntries.size,
+            inferredLibraryImages = mapping.inferredLibraryImageEntries.size,
+            indexVersion = P6K_ZIP_ASSET_MAPPING_INDEX_VERSION,
             updatedAtMs = clock.millis(),
         ))
         val prepared = mapping.assets.mapValues { (entryName, mapped) ->

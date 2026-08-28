@@ -1110,6 +1110,9 @@ data class P6KZipAssetRecoveryJobEntity(
     val unattributedCandidates: Int,
     val sourceReferenceRecords: Int,
     val fallbackNamedAssets: Int,
+    val inferredGeneratedImages: Int,
+    val originLinkedLibraryImages: Int,
+    val inferredLibraryImages: Int,
     val lastFailureKind: String?,
     val lastFailureAtMs: Long?,
     val indexVersion: Int,
@@ -2379,7 +2382,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 57,
+    version = 59,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -3026,6 +3029,19 @@ abstract class NanfengAiDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `sourceReferenceRecords` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `fallbackNamedAssets` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        /** Records image-gen originals recovered from OpenAI's library manifest by bounded time. */
+        val MIGRATION_57_58 = object : Migration(57, 58) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `inferredGeneratedImages` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        /** Distinguishes exact library-origin recovery from bounded anonymous image inference. */
+        val MIGRATION_58_59 = object : Migration(58, 59) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `originLinkedLibraryImages` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `inferredLibraryImages` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

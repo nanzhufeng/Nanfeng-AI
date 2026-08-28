@@ -306,6 +306,8 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_54_55,
         NanfengAiDatabase.MIGRATION_55_56,
         NanfengAiDatabase.MIGRATION_56_57,
+        NanfengAiDatabase.MIGRATION_57_58,
+        NanfengAiDatabase.MIGRATION_58_59,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)

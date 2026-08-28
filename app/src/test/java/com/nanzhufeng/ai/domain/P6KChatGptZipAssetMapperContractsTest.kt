@@ -86,6 +86,116 @@ class P6KChatGptZipAssetMapperContractsTest {
         }
     }
 
+    @Test
+    fun `library image-gen original is restored to the bounded current-path assistant record`() {
+        val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
+        val candidate = P6KZipAssetCandidate("file_generated.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")
+        val archive = File.createTempFile("p6k-generated-asset-map-", ".zip")
+        try {
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                zip.entry(
+                    "library_files.json",
+                    """[{"file_id":"file_generated","file_name":"generated.png","created_at":"1970-01-01T00:01:45Z","image_gen_generation_id":"generation"}]""".toByteArray(),
+                )
+                zip.entry(
+                    "conversations-000.json",
+                    """[{"id":"conversation","create_time":1,"current_node":"assistant","mapping":{"user":{"parent":null,"message":{"author":{"role":"user"},"create_time":90,"content":{"content_type":"text","parts":["画一张图"]},"metadata":{}}},"assistant":{"parent":"user","message":{"author":{"role":"assistant"},"create_time":100,"content":{"content_type":"reasoning_recap","parts":["已生成"]},"metadata":{}}}}}]""".toByteArray(),
+                )
+                zip.entry("file_generated.dat", image)
+            }
+
+            val mapping = (P6KChatGptZipAssetMapper().map(archive, listOf(candidate)) as P6KZipAssetMappingResult.Mapped).value
+            assertEquals(setOf("file_generated.dat"), mapping.inferredGeneratedImageEntries)
+            assertEquals("generated.png", mapping.assets.getValue("file_generated.dat").displayName)
+            assertEquals("assistant", mapping.assets.getValue("file_generated.dat").candidate.sourceMessageId)
+            val assistant = mapping.conversations.single().currentPath.last()
+            assertEquals(listOf("file_generated.dat"), assistant.entryNames)
+            assertEquals(1, assistant.sourceReferenceRecords)
+        } finally {
+            archive.delete()
+        }
+    }
+
+    @Test
+    fun `library image-gen original outside bounded message windows stays unattributed`() {
+        val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
+        val candidate = P6KZipAssetCandidate("file_unbounded.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")
+        val archive = File.createTempFile("p6k-unbounded-asset-map-", ".zip")
+        try {
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                zip.entry(
+                    "library_files.json",
+                    """[{"file_id":"file_unbounded","file_name":"unbounded.png","created_at":"1970-01-01T00:10:00Z","image_gen_generation_id":"generation"}]""".toByteArray(),
+                )
+                zip.entry(
+                    "conversations-000.json",
+                    """[{"id":"conversation","create_time":1,"current_node":"assistant","mapping":{"assistant":{"parent":null,"message":{"author":{"role":"assistant"},"create_time":100,"content":{"content_type":"reasoning_recap","parts":["较早消息"]},"metadata":{}}}}}]""".toByteArray(),
+                )
+                zip.entry("file_unbounded.dat", image)
+            }
+
+            val mapping = (P6KChatGptZipAssetMapper().map(archive, listOf(candidate)) as P6KZipAssetMappingResult.Mapped).value
+            assertTrue(mapping.inferredGeneratedImageEntries.isEmpty())
+            assertTrue(mapping.assets.isEmpty())
+            assertTrue(mapping.conversations.single().currentPath.single().entryNames.isEmpty())
+        } finally {
+            archive.delete()
+        }
+    }
+
+    @Test
+    fun `library image with official origin thread and message restores by exact ids`() {
+        val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
+        val candidate = P6KZipAssetCandidate("file_origin.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")
+        val archive = File.createTempFile("p6k-origin-image-map-", ".zip")
+        try {
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                zip.entry(
+                    "library_files.json",
+                    """[{"file_id":"file_origin","file_name":"origin.png","mime_type":"image/png","created_at":"1970-01-01T00:10:00Z","origination_thread_id":"conversation","origination_message_id":"assistant"}]""".toByteArray(),
+                )
+                zip.entry(
+                    "conversations-000.json",
+                    """[{"id":"conversation","create_time":1,"current_node":"assistant","mapping":{"assistant":{"parent":null,"message":{"author":{"role":"assistant"},"create_time":100,"content":{"content_type":"text","parts":["可见消息"]},"metadata":{}}}}}]""".toByteArray(),
+                )
+                zip.entry("file_origin.dat", image)
+            }
+
+            val mapping = (P6KChatGptZipAssetMapper().map(archive, listOf(candidate)) as P6KZipAssetMappingResult.Mapped).value
+            assertEquals(setOf("file_origin.dat"), mapping.originLinkedLibraryImageEntries)
+            assertTrue(mapping.inferredLibraryImageEntries.isEmpty())
+            assertEquals("assistant", mapping.assets.getValue("file_origin.dat").candidate.sourceMessageId)
+        } finally {
+            archive.delete()
+        }
+    }
+
+    @Test
+    fun `anonymous library image stays unattributed when two conversations are similarly near`() {
+        val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
+        val candidate = P6KZipAssetCandidate("file_ambiguous.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")
+        val archive = File.createTempFile("p6k-ambiguous-image-map-", ".zip")
+        try {
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                zip.entry(
+                    "library_files.json",
+                    """[{"file_id":"file_ambiguous","file_name":"ambiguous.png","mime_type":"image/png","created_at":"1970-01-01T00:10:00Z"}]""".toByteArray(),
+                )
+                zip.entry(
+                    "conversations-000.json",
+                    """[{"id":"first","create_time":1,"current_node":"one","mapping":{"one":{"parent":null,"message":{"author":{"role":"assistant"},"create_time":500,"content":{"content_type":"text","parts":["一"]},"metadata":{}}}}},{"id":"second","create_time":1,"current_node":"two","mapping":{"two":{"parent":null,"message":{"author":{"role":"assistant"},"create_time":750,"content":{"content_type":"text","parts":["二"]},"metadata":{}}}}}]""".toByteArray(),
+                )
+                zip.entry("file_ambiguous.dat", image)
+            }
+
+            val mapping = (P6KChatGptZipAssetMapper().map(archive, listOf(candidate)) as P6KZipAssetMappingResult.Mapped).value
+            assertTrue(mapping.inferredLibraryImageEntries.isEmpty())
+            assertTrue(mapping.assets.isEmpty())
+        } finally {
+            archive.delete()
+        }
+    }
+
     private fun ZipOutputStream.entry(name: String, bytes: ByteArray) {
         putNextEntry(ZipEntry(name)); write(bytes); closeEntry()
     }

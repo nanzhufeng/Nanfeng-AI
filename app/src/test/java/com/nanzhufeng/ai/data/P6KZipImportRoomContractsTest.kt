@@ -14,6 +14,38 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P6KZipImportRoomContractsTest {
+    @Test fun `schema fifty eight to fifty nine adds exact and inferred library image counters`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-library-image-counters-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(58) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE p6k_zip_asset_recovery_jobs (taskId TEXT NOT NULL PRIMARY KEY, inferredGeneratedImages INTEGER NOT NULL)")
+                db.execSQL("INSERT INTO p6k_zip_asset_recovery_jobs VALUES ('preserved',686)")
+            }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase; NanfengAiDatabase.MIGRATION_58_59.migrate(sqlite)
+        sqlite.query("SELECT inferredGeneratedImages,originLinkedLibraryImages,inferredLibraryImages FROM p6k_zip_asset_recovery_jobs WHERE taskId='preserved'").use {
+            assertTrue(it.moveToFirst()); assertEquals(686, it.getInt(0)); assertEquals(0, it.getInt(1)); assertEquals(0, it.getInt(2))
+        }
+        helper.close(); context.deleteDatabase(name)
+    }
+
+    @Test fun `schema fifty seven to fifty eight preserves jobs and adds inferred image counter`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-generated-image-counter-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(57) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE p6k_zip_asset_recovery_jobs (taskId TEXT NOT NULL PRIMARY KEY, state TEXT NOT NULL, totalOccurrences INTEGER NOT NULL, linkedOccurrences INTEGER NOT NULL, totalConversations INTEGER NOT NULL, processedConversations INTEGER NOT NULL, failedConversations INTEGER NOT NULL, uniqueAssets INTEGER NOT NULL, missingEntries INTEGER NOT NULL, unattributedCandidates INTEGER NOT NULL, sourceReferenceRecords INTEGER NOT NULL, fallbackNamedAssets INTEGER NOT NULL, lastFailureKind TEXT, lastFailureAtMs INTEGER, indexVersion INTEGER NOT NULL, updatedAtMs INTEGER NOT NULL)")
+                db.execSQL("INSERT INTO p6k_zip_asset_recovery_jobs VALUES ('preserved','COMPLETED',1541,1540,1,1,0,1539,1,136,1541,2,NULL,NULL,2,1)")
+            }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase; NanfengAiDatabase.MIGRATION_57_58.migrate(sqlite)
+        sqlite.query("SELECT uniqueAssets,inferredGeneratedImages FROM p6k_zip_asset_recovery_jobs WHERE taskId='preserved'").use {
+            assertTrue(it.moveToFirst()); assertEquals(1539, it.getInt(0)); assertEquals(0, it.getInt(1))
+        }
+        helper.close(); context.deleteDatabase(name)
+    }
+
     @Test fun `schema fifty six to fifty seven preserves jobs and adds honest source counters`() {
         val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-recovery-counters-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
         val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(56) {

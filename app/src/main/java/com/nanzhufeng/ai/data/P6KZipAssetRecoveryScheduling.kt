@@ -25,6 +25,7 @@ import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob
 import com.nanzhufeng.ai.domain.P6KZipImportTaskRepository
 import com.nanzhufeng.ai.domain.P6KZipTaskStatus
 import com.nanzhufeng.ai.domain.P6KZipTaskId
+import com.nanzhufeng.ai.domain.P6K_ZIP_ASSET_MAPPING_INDEX_VERSION
 import com.nanzhufeng.ai.domain.ThirdPartyZipProvider
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -67,7 +68,26 @@ class AndroidP6KZipAssetRecoveryScheduler(
         val root = File(appContext.filesDir, "p6k-zip-import/v1")
         val archives = File(root, "archives")
         tasks.list().forEach { task ->
-            if (jobs.find(task.id) != null || task.provider != ThirdPartyZipProvider.CHATGPT) return@forEach
+            val existing = jobs.find(task.id)
+            if (existing != null) {
+                if (task.provider == ThirdPartyZipProvider.CHATGPT &&
+                    existing.indexVersion < P6K_ZIP_ASSET_MAPPING_INDEX_VERSION &&
+                    File(archives, "${task.id.value}.zip").isFile
+                ) {
+                    jobs.save(existing.copy(
+                        state = P6KZipAssetRecoveryState.PENDING,
+                        linkedOccurrences = 0,
+                        processedConversations = 0,
+                        failedConversations = 0,
+                        lastFailureKind = null,
+                        lastFailureAtMs = null,
+                        indexVersion = P6K_ZIP_ASSET_MAPPING_INDEX_VERSION,
+                        updatedAtMs = System.currentTimeMillis(),
+                    ))
+                }
+                return@forEach
+            }
+            if (task.provider != ThirdPartyZipProvider.CHATGPT) return@forEach
             if (task.status !in setOf(P6KZipTaskStatus.COMPLETED, P6KZipTaskStatus.PARTIALLY_COMPLETED)) return@forEach
             val completedMarker = File(root, "${task.id.value}.assets-v2.done")
             val linked = task.assets.count { it.attachmentId != null }

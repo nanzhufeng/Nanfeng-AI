@@ -100,10 +100,10 @@ class P6KUserSelectedChatGptZipAttachmentChainAcceptanceTest {
                     else -> "file"
                 }
             }.eachCount()
-            assertEquals(854, currentPathReferences.size)
-            assertEquals(mapOf("image" to 655, "file" to 118, "video" to 75, "audio" to 6), currentPathClassCounts)
+            assertEquals(1616, currentPathReferences.size)
+            assertEquals(mapOf("image" to 1417, "file" to 118, "video" to 75, "audio" to 6), currentPathClassCounts)
             val catalogue = SearchConversationAttachmentsUseCase(conversations)
-            assertEquals(655, catalogue.browse(ConversationSearchCategory.IMAGE, ConversationListScope.ALL).size)
+            assertEquals(1417, catalogue.browse(ConversationSearchCategory.IMAGE, ConversationListScope.ALL).size)
             assertEquals(75, catalogue.browse(ConversationSearchCategory.VIDEO, ConversationListScope.ALL).size)
             assertEquals(6, catalogue.browse(ConversationSearchCategory.AUDIO, ConversationListScope.ALL).size)
             assertEquals(118, catalogue.browse(ConversationSearchCategory.FILE, ConversationListScope.ALL).size)

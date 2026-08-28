@@ -56,7 +56,8 @@ class P6KZipImportUiContractsTest {
         assertTrue(importCenter.contains("showTaskList = false"))
         assertTrue(app.contains("个附件已恢复"))
         assertTrue(zipUi.contains("个附件已恢复到原对话"))
-        assertTrue(zipUi.contains("缺少官方对话归属，未自动关联"))
+        assertTrue(zipUi.contains("缺少可确认的对话归属，未自动关联"))
+        assertTrue(zipUi.contains("张 ChatGPT 生成图已依据官方图片清单和有界时间关系恢复"))
         assertTrue("JSON result entry must remain visible even before a task exists", !importCenter.contains("if (chatGptImportState.tasks.isNotEmpty() || claudeImportState.tasks.isNotEmpty())"))
         assertTrue("ZIP result entry must remain visible even before a task exists", !importCenter.contains("if (p6kZipImportState.tasks.isNotEmpty())"))
     }
@@ -94,6 +95,8 @@ class P6KZipImportUiContractsTest {
         assertTrue(scheduling.contains("resumeScope.launch {"))
         assertTrue(scheduling.contains("jobs.resumable().forEach"))
         assertTrue(scheduling.contains("migrateLegacyJobs()"))
+        assertTrue(scheduling.contains("existing.indexVersion < P6K_ZIP_ASSET_MAPPING_INDEX_VERSION"))
+        assertTrue(scheduling.contains("processedConversations = 0"))
         assertTrue(scheduling.contains("P6KZipAssetRecoveryState.PENDING"))
         assertTrue(manifest.contains("androidx.work.impl.foreground.SystemForegroundService"))
         assertTrue(manifest.contains("android:foregroundServiceType=\"dataSync\""))

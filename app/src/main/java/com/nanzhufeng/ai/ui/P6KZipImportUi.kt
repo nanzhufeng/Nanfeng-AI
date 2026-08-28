@@ -126,6 +126,9 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
                 unresolvedAssetCount = recovery?.unattributedCandidates ?: 0,
                 missingSourceAssetCount = recovery?.missingEntries ?: 0,
                 fallbackNamedAssetCount = recovery?.fallbackNamedAssets ?: 0,
+                inferredGeneratedImageCount = recovery?.inferredGeneratedImages ?: 0,
+                originLinkedLibraryImageCount = recovery?.originLinkedLibraryImages ?: 0,
+                inferredLibraryImageCount = recovery?.inferredLibraryImages ?: 0,
                 sourceReferenceRecords = recovery?.sourceReferenceRecords ?: 0,
                 uniqueReferencedAssetCount = recovery?.let { it.uniqueAssets + it.missingEntries } ?: 0,
                 recoveryLabel = recovery?.let { job ->
@@ -172,6 +175,9 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
     unresolvedAssetCount: Int = 0,
     missingSourceAssetCount: Int = 0,
     fallbackNamedAssetCount: Int = 0,
+    inferredGeneratedImageCount: Int = 0,
+    originLinkedLibraryImageCount: Int = 0,
+    inferredLibraryImageCount: Int = 0,
     sourceReferenceRecords: Int = 0,
     uniqueReferencedAssetCount: Int = 0,
     recoveryLabel: String? = null,
@@ -190,9 +196,12 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
         if (skippedCount > 0) Text("$skippedCount 条已跳过", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         if (restoredAssetCount > 0) Text("$restoredAssetCount 个附件已恢复到原对话。", style = MaterialTheme.typography.bodySmall, color = BodyText)
         if (missingSourceAssetCount > 0) Text("$missingSourceAssetCount 个附件有官方引用，但 ChatGPT 导出包中缺少文件；不是本地恢复丢失。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
-        if (unresolvedAssetCount > 0) Text("$unresolvedAssetCount 个文件缺少官方对话归属，未自动关联。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (unresolvedAssetCount > 0) Text("$unresolvedAssetCount 个文件缺少可确认的对话归属，未自动关联。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         if (fallbackNamedAssetCount > 0) Text("$fallbackNamedAssetCount 个已恢复附件缺少官方显示名，已使用文件 ID 回退命名。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
-        if (sourceReferenceRecords > uniqueReferencedAssetCount && uniqueReferencedAssetCount > 0) Text("$sourceReferenceRecords 条官方引用记录涉及 $uniqueReferencedAssetCount 个唯一附件 ID。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (inferredGeneratedImageCount > 0) Text("$inferredGeneratedImageCount 张 ChatGPT 生成图已依据官方图片清单和有界时间关系恢复；导出包未提供直接消息 ID。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (originLinkedLibraryImageCount > 0) Text("$originLinkedLibraryImageCount 张图片已依据官方原始线程与消息字段恢复。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (inferredLibraryImageCount > 0) Text("$inferredLibraryImageCount 张图片缺少来源 ID，已仅在单一会话满足 15 分钟有界关系时恢复。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (sourceReferenceRecords > uniqueReferencedAssetCount && uniqueReferencedAssetCount > 0) Text("$sourceReferenceRecords 条附件关联记录涉及 $uniqueReferencedAssetCount 个唯一附件 ID。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         recoveryLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BodyText) }
         onRetryRecovery?.let { retry -> OutlinedButton(onClick = retry, shape = P5AInteractiveShape, border = null) { Text("重试附件恢复") } }
         profileSummary?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SecondaryText) }

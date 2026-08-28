@@ -90,11 +90,16 @@ data class P6KZipAssetRecoveryJob(
     val unattributedCandidates: Int = 0,
     val sourceReferenceRecords: Int = 0,
     val fallbackNamedAssets: Int = 0,
+    val inferredGeneratedImages: Int = 0,
+    val originLinkedLibraryImages: Int = 0,
+    val inferredLibraryImages: Int = 0,
     val lastFailureKind: P6KZipAssetRecoveryFailureKind? = null,
     val lastFailureAtMs: Long? = null,
-    val indexVersion: Int = 1,
+    val indexVersion: Int = P6K_ZIP_ASSET_MAPPING_INDEX_VERSION,
     val updatedAtMs: Long,
 )
+
+const val P6K_ZIP_ASSET_MAPPING_INDEX_VERSION = 3
 
 interface P6KZipAssetRecoveryJobRepository {
     fun save(job: P6KZipAssetRecoveryJob): P6KZipAssetRecoveryJob
@@ -155,6 +160,13 @@ data class P6KZipAssetMapping(
     val conversations: List<P6KZipSourceConversationAssets>,
     val assets: Map<String, P6KZipMappedAsset>,
     val fallbackNamedEntries: Set<String> = emptySet(),
+    /** library_files has no direct message IDs for these image-gen originals. Each entry is
+     * attached by the bounded, deterministic timestamp rule documented by the mapper. */
+    val inferredGeneratedImageEntries: Set<String> = emptySet(),
+    /** Non-generation library images carrying OpenAI's exact origin thread metadata. */
+    val originLinkedLibraryImageEntries: Set<String> = emptySet(),
+    /** Library images without origin IDs, linked only when one conversation wins a bounded window. */
+    val inferredLibraryImageEntries: Set<String> = emptySet(),
 )
 
 data class P6KZipMappedAssetLinkSummary(
@@ -298,8 +310,10 @@ sealed interface P6KChatGptZipMappingResult {
 }
 
 /**
- * Reads only OpenAI's explicit attachment ownership fields. A ZIP entry that is merely present
- * remains unmapped; filenames, timestamps and neighbouring messages are never used to guess it.
+ * Reads OpenAI's explicit attachment ownership fields first. Historical image-gen originals are
+ * additionally recoverable only when library_files supplies generation provenance and the bounded,
+ * deterministic timestamp rule below resolves one exported message; all other loose entries stay
+ * unmapped.
  */
 class P6KChatGptZipAssetMapper {
     fun map(archive: File, candidates: List<P6KZipAssetCandidate>): P6KZipAssetMappingResult = try {
@@ -310,16 +324,58 @@ class P6KChatGptZipAssetMapper {
 
     fun map(zip: ZipFile, candidates: List<P6KZipAssetCandidate>): P6KZipAssetMappingResult = try {
         val candidateByEntry = candidates.associateBy(P6KZipAssetCandidate::entryName)
-        val names = readDisplayNames(zip)
+        val libraryImages = readLibraryImages(zip, candidateByEntry)
+        val names = readDisplayNames(zip) + libraryImages.associate { it.entryName to it.displayName }
         val ownership = linkedMapOf<String, Pair<String, String>>()
-        val conversations = zip.entries().asSequence()
+        val parsed = zip.entries().asSequence()
             .filter { !it.isDirectory && P6K_CHATGPT_NUMBERED_CONVERSATIONS.matches(it.name) }
             .sortedBy { it.name }
-            .flatMap { entry ->
+            .map { entry ->
                 val bytes = zip.getInputStream(entry).use { it.readBounded(CHATGPT_EXPORT_MAX_BYTES) }
-                parseConversationAssets(bytes, candidateByEntry, ownership).asSequence()
+                parseConversationAssets(bytes, candidateByEntry, ownership)
             }
             .toList()
+        val sourceMessages = parsed.flatMap(ParsedConversationAssets::sourceMessages)
+        val visibleCurrentMessageKeys = parsed
+            .flatMap(ParsedConversationAssets::conversations)
+            .flatMap { conversation ->
+                conversation.currentPath.map { message -> conversation.sourceConversationId to message.sourceMessageId }
+            }
+            .toSet()
+        val visibleCurrentMessages = sourceMessages.filter { message ->
+            message.onCurrentPath && message.conversationId to message.messageId in visibleCurrentMessageKeys
+        }
+        val unownedLibraryImages = libraryImages.filter { it.entryName !in ownership }
+        val originTargets = unownedLibraryImages.filterNot { it.isGenerated }.mapNotNull { image ->
+            originLibraryImageTarget(image, sourceMessages, visibleCurrentMessages)?.let { target -> image.entryName to target }
+        }.toMap()
+        val generatedTargets = unownedLibraryImages
+            .filter { it.isGenerated }
+            .mapNotNull { image ->
+            generatedImageTarget(image, sourceMessages, visibleCurrentMessageKeys)?.let { target -> image.entryName to target }
+        }.toMap()
+        val anonymousTargets = unownedLibraryImages
+            .filter { !it.isGenerated && it.originConversationId == null && it.entryName !in originTargets }
+            .mapNotNull { image ->
+                anonymousLibraryImageTarget(image, visibleCurrentMessages)?.let { target -> image.entryName to target }
+            }.toMap()
+        val libraryTargets = originTargets + generatedTargets + anonymousTargets
+        val generatedByMessage = libraryTargets.entries.groupBy(
+            keySelector = { (_, target) -> target.conversationId to target.messageId },
+            valueTransform = Map.Entry<String, SourceMessageIndex>::key,
+        )
+        val conversations = parsed.flatMap(ParsedConversationAssets::conversations).map { conversation ->
+            conversation.copy(currentPath = conversation.currentPath.map { message ->
+                val generated = generatedByMessage[conversation.sourceConversationId to message.sourceMessageId].orEmpty()
+                if (generated.isEmpty()) message else message.copy(
+                    entryNames = (message.entryNames + generated).distinct(),
+                    sourceReferenceRecords = message.sourceReferenceRecords + generated.distinct().size,
+                )
+            })
+        }
+        libraryTargets.forEach { (entryName, target) ->
+            ownership.putIfAbsent(entryName, target.conversationId to target.messageId)
+        }
         val fallbackNamedEntries = ownership.keys.filterTo(linkedSetOf()) { entryName ->
             normalizedDisplayName(names[entryName]) == null
         }
@@ -334,7 +390,12 @@ class P6KChatGptZipAssetMapper {
                 displayName,
             )
         }
-        P6KZipAssetMappingResult.Mapped(P6KZipAssetMapping(conversations, assets, fallbackNamedEntries))
+        P6KZipAssetMappingResult.Mapped(
+            P6KZipAssetMapping(
+                conversations, assets, fallbackNamedEntries, generatedTargets.keys,
+                originTargets.keys, anonymousTargets.keys,
+            ),
+        )
     } catch (_: Exception) {
         P6KZipAssetMappingResult.Rejected
     }
@@ -352,14 +413,146 @@ class P6KChatGptZipAssetMapper {
         }.toMap()
     }
 
+    private data class LibraryImageFile(
+        val entryName: String,
+        val displayName: String,
+        val createdAt: Instant,
+        val isGenerated: Boolean,
+        val originConversationId: String?,
+        val originMessageId: String?,
+    )
+
+    private data class SourceMessageIndex(
+        val conversationId: String,
+        val messageId: String,
+        val createdAt: Instant,
+        val role: MessageRole,
+        val contentType: String?,
+        val onCurrentPath: Boolean,
+    )
+
+    private data class ParsedConversationAssets(
+        val conversations: List<P6KZipSourceConversationAssets>,
+        val sourceMessages: List<SourceMessageIndex>,
+    )
+
+    /** OpenAI exports image-gen originals in library_files with generation provenance but leaves
+     * initiating_conversation_id/origination_message_id empty. The file creation time follows the
+     * current-path assistant reasoning record in this registered export. We therefore use only a
+     * bounded 60-second preceding assistant match; otherwise the nearest current message within
+     * 30 seconds, and finally the current-path counterpart of the nearest branch message. */
+    private fun readLibraryImages(
+        zip: ZipFile,
+        candidates: Map<String, P6KZipAssetCandidate>,
+    ): List<LibraryImageFile> {
+        val entry = zip.getEntry(LIBRARY_FILES_ENTRY) ?: return emptyList()
+        val root = StrictJsonDocument.parseUtf8(
+            zip.getInputStream(entry).use { it.readBounded(LIBRARY_FILES_MAX_BYTES) },
+            maxDepth = 12,
+            maxStringCodePoints = 512,
+        ) as? StrictJsonValue.Arr ?: return emptyList()
+        return root.values.mapNotNull { value ->
+            val row = value as? StrictJsonValue.Obj ?: return@mapNotNull null
+            val fileId = row.string("file_id") ?: return@mapNotNull null
+            val entryName = listOf(fileId, "$fileId.dat").firstOrNull(candidates::containsKey) ?: return@mapNotNull null
+            val displayName = normalizedDisplayName(row.string("file_name")) ?: return@mapNotNull null
+            val createdAt = row.isoInstant("created_at") ?: return@mapNotNull null
+            val declaredMime = row.string("mime_type").orEmpty()
+            val isGenerated = !row.string("image_gen_generation_id").isNullOrBlank()
+            val isImage = isGenerated || declaredMime.startsWith("image/") || zip.getInputStream(
+                requireNotNull(zip.getEntry(entryName)),
+            ).use { input ->
+                val prefix = input.readPrefix(8)
+                prefix.hasPrefix(byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47)) ||
+                    prefix.hasPrefix(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte()))
+            }
+            if (!isImage) return@mapNotNull null
+            LibraryImageFile(
+                entryName = entryName,
+                displayName = displayName,
+                createdAt = createdAt,
+                isGenerated = isGenerated,
+                originConversationId = row.string("origination_thread_id")?.takeIf(::safeSourceId),
+                originMessageId = row.string("origination_message_id")?.takeIf(::safeSourceId),
+            )
+        }.distinctBy(LibraryImageFile::entryName)
+    }
+
+    private fun originLibraryImageTarget(
+        image: LibraryImageFile,
+        messages: List<SourceMessageIndex>,
+        visibleCurrentMessages: List<SourceMessageIndex>,
+    ): SourceMessageIndex? {
+        val conversationId = image.originConversationId ?: return null
+        val visibleInConversation = visibleCurrentMessages.filter { it.conversationId == conversationId }
+        if (visibleInConversation.isEmpty()) return null
+        image.originMessageId?.let { messageId ->
+            visibleInConversation.firstOrNull { it.messageId == messageId }?.let { return it }
+        }
+        val exactSourceTime = image.originMessageId?.let { messageId ->
+            messages.firstOrNull { it.conversationId == conversationId && it.messageId == messageId }?.createdAt
+        }
+        val targetTime = exactSourceTime ?: image.createdAt
+        return visibleInConversation.minByOrNull { message ->
+            kotlin.math.abs(message.createdAt.toEpochMilli() - targetTime.toEpochMilli())
+        }
+    }
+
+    private fun anonymousLibraryImageTarget(
+        image: LibraryImageFile,
+        visibleCurrentMessages: List<SourceMessageIndex>,
+    ): SourceMessageIndex? {
+        val nearestByConversation = visibleCurrentMessages.groupBy(SourceMessageIndex::conversationId)
+            .mapNotNull { (_, messages) ->
+                messages.minByOrNull { message ->
+                    kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli())
+                }
+            }
+            .sortedBy { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
+        val best = nearestByConversation.firstOrNull() ?: return null
+        val bestDistance = kotlin.math.abs(best.createdAt.toEpochMilli() - image.createdAt.toEpochMilli())
+        if (bestDistance > LIBRARY_IMAGE_NEAREST_WINDOW_MS) return null
+        val secondDistance = nearestByConversation.getOrNull(1)?.let { message ->
+            kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli())
+        }
+        if (secondDistance != null && secondDistance < bestDistance * LIBRARY_IMAGE_MIN_CONFIDENCE_RATIO) return null
+        return best
+    }
+
+    private fun generatedImageTarget(
+        image: LibraryImageFile,
+        messages: List<SourceMessageIndex>,
+        visibleCurrentMessageKeys: Set<Pair<String, String>>,
+    ): SourceMessageIndex? {
+        val current = messages.filter { message ->
+            message.onCurrentPath && message.conversationId to message.messageId in visibleCurrentMessageKeys
+        }
+        fun preceding(role: MessageRole, contentType: String? = null): SourceMessageIndex? = current
+            .asSequence()
+            .filter { it.role == role && (contentType == null || it.contentType == contentType) }
+            .filter { message -> java.time.Duration.between(message.createdAt, image.createdAt).toMillis() in 0..GENERATED_IMAGE_PRECEDING_WINDOW_MS }
+            .maxByOrNull(SourceMessageIndex::createdAt)
+        preceding(MessageRole.ASSISTANT, "reasoning_recap")?.let { return it }
+        preceding(MessageRole.ASSISTANT)?.let { return it }
+        current.minByOrNull { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
+            ?.takeIf { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) <= GENERATED_IMAGE_NEAREST_WINDOW_MS }
+            ?.let { return it }
+        val nearestBranch = messages.minByOrNull { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
+            ?.takeIf { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) <= GENERATED_IMAGE_NEAREST_WINDOW_MS }
+            ?: return null
+        return current.filter { it.conversationId == nearestBranch.conversationId }
+            .minByOrNull { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
+    }
+
     private fun parseConversationAssets(
         bytes: ByteArray,
         candidates: Map<String, P6KZipAssetCandidate>,
         ownership: MutableMap<String, Pair<String, String>>,
-    ): List<P6KZipSourceConversationAssets> {
+    ): ParsedConversationAssets {
         val root = StrictJsonDocument.parseUtf8(bytes, CHATGPT_EXPORT_MAX_DEPTH, CHATGPT_EXPORT_MAX_TEXT_CODE_POINTS) as? StrictJsonValue.Arr
-            ?: return emptyList()
-        return root.values.mapNotNull { raw ->
+            ?: return ParsedConversationAssets(emptyList(), emptyList())
+        val indexedMessages = mutableListOf<SourceMessageIndex>()
+        val conversations = root.values.mapNotNull { raw ->
             val conversation = raw as? StrictJsonValue.Obj ?: return@mapNotNull null
             val conversationId = conversation.string("id") ?: conversation.string("conversation_id") ?: return@mapNotNull null
             if (!safeSourceId(conversationId)) return@mapNotNull null
@@ -372,6 +565,18 @@ class P6KChatGptZipAssetMapper {
                 val node = mapping.fields[sourceId] as? StrictJsonValue.Obj ?: break
                 path += sourceId to node
                 sourceId = node.string("parent")
+            }
+            val currentPathIds = path.mapTo(mutableSetOf(), Pair<String, StrictJsonValue.Obj>::first)
+            mapping.fields.forEach { (messageId, rawNode) ->
+                if (!safeSourceId(messageId)) return@forEach
+                val message = (rawNode as? StrictJsonValue.Obj)?.obj("message") ?: return@forEach
+                val role = when (message.obj("author")?.string("role")) {
+                    "user" -> MessageRole.USER; "assistant" -> MessageRole.ASSISTANT; "tool" -> MessageRole.TOOL; else -> return@forEach
+                }
+                indexedMessages += SourceMessageIndex(
+                    conversationId, messageId, message.timestamp("create_time") ?: fallbackTime,
+                    role, message.obj("content")?.string("content_type"), messageId in currentPathIds,
+                )
             }
             val messages = path.asReversed().mapNotNull { (messageId, node) ->
                 if (!safeSourceId(messageId)) return@mapNotNull null
@@ -416,6 +621,7 @@ class P6KChatGptZipAssetMapper {
             }
             P6KZipSourceConversationAssets(conversationId, messages)
         }
+        return ParsedConversationAssets(conversations, indexedMessages)
     }
 
     private fun entryNameForPointer(pointer: String): String? {
@@ -431,6 +637,10 @@ class P6KChatGptZipAssetMapper {
         is StrictJsonValue.Str -> value.value.toDoubleOrNull()
         else -> null
     }?.takeIf { it.isFinite() && it >= 0.0 }?.let { Instant.ofEpochMilli((it * 1000.0).toLong()) }
+
+    private fun StrictJsonValue.Obj.isoInstant(key: String): Instant? = string(key)?.let { value ->
+        runCatching { Instant.parse(value) }.getOrNull()
+    }
 
     private fun safeDisplayName(value: String?, entryName: String, mimeType: String): String {
         val safe = normalizedDisplayName(value).orEmpty()
@@ -472,6 +682,12 @@ class P6KChatGptZipAssetMapper {
     private companion object {
         const val ASSET_NAMES_ENTRY = "conversation_asset_file_names.json"
         const val ASSET_NAMES_MAX_BYTES = 2L * 1024L * 1024L
+        const val LIBRARY_FILES_ENTRY = "library_files.json"
+        const val LIBRARY_FILES_MAX_BYTES = 16L * 1024L * 1024L
+        const val GENERATED_IMAGE_PRECEDING_WINDOW_MS = 60_000L
+        const val GENERATED_IMAGE_NEAREST_WINDOW_MS = 30_000L
+        const val LIBRARY_IMAGE_NEAREST_WINDOW_MS = 15L * 60L * 1000L
+        const val LIBRARY_IMAGE_MIN_CONFIDENCE_RATIO = 2L
         const val DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     }
 }
