@@ -22,6 +22,10 @@ import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJobRepository
 import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryScheduler
 import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState
 import com.nanzhufeng.ai.domain.P6KZipTaskId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /** One durable, non-expedited long-running recovery request per ZIP task. */
 class AndroidP6KZipAssetRecoveryScheduler(
@@ -30,6 +34,7 @@ class AndroidP6KZipAssetRecoveryScheduler(
 ) : P6KZipAssetRecoveryScheduler {
     private val appContext = context.applicationContext
     private val manager: WorkManager by lazy { configuredWorkManager(appContext) }
+    private val resumeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun enqueue(taskId: P6KZipTaskId) {
         val request = OneTimeWorkRequestBuilder<P6KZipAssetRecoveryWorker>()
@@ -39,7 +44,7 @@ class AndroidP6KZipAssetRecoveryScheduler(
     }
 
     override fun resumePending() {
-        jobs.resumable().forEach { enqueue(it.taskId) }
+        resumeScope.launch { jobs.resumable().forEach { enqueue(it.taskId) } }
     }
 
     override fun cancel(taskId: P6KZipTaskId) {

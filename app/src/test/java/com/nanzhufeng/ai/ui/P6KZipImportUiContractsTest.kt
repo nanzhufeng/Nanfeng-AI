@@ -91,6 +91,7 @@ class P6KZipImportUiContractsTest {
         assertTrue(scheduling.contains("OneTimeWorkRequestBuilder<P6KZipAssetRecoveryWorker>()"))
         assertTrue(scheduling.contains("setForeground(recoveryForegroundInfo(applicationContext))"))
         assertTrue(scheduling.contains("FOREGROUND_SERVICE_TYPE_DATA_SYNC"))
+        assertTrue(scheduling.contains("resumeScope.launch { jobs.resumable()"))
         assertTrue(manifest.contains("androidx.work.impl.foreground.SystemForegroundService"))
         assertTrue(manifest.contains("android:foregroundServiceType=\"dataSync\""))
         assertFalse(scheduling.contains("setExpedited"))
