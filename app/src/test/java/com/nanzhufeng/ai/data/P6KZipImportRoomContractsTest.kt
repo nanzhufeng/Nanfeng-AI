@@ -14,6 +14,22 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P6KZipImportRoomContractsTest {
+    @Test fun `schema fifty five to fifty six appends durable content free ZIP recovery jobs`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-recovery-job-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(55) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) { db.execSQL("CREATE TABLE p6k_zip_import_tasks (id TEXT NOT NULL PRIMARY KEY)"); db.execSQL("INSERT INTO p6k_zip_import_tasks VALUES ('preserved')") }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase; NanfengAiDatabase.MIGRATION_55_56.migrate(sqlite)
+        sqlite.query("SELECT id FROM p6k_zip_import_tasks").use { assertTrue(it.moveToFirst()); assertEquals("preserved", it.getString(0)) }
+        sqlite.query("PRAGMA table_info(p6k_zip_asset_recovery_jobs)").use { columns ->
+            val names = generateSequence { if (columns.moveToNext()) columns.getString(1) else null }.toSet()
+            assertTrue(setOf("taskId", "state", "totalOccurrences", "linkedOccurrences", "processedConversations", "lastFailureKind", "indexVersion").all(names::contains))
+            assertTrue("messageText" !in names && "entryName" !in names)
+        }
+        helper.close(); context.deleteDatabase(name)
+    }
+
     @Test fun `schema thirty three to thirty four preserves existing facts and appends only private ZIP candidate tables`() {
         val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
         val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(33) {

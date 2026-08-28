@@ -1096,6 +1096,23 @@ data class P6KZipImportTaskEntity(
     val provider: String, val displayName: String, val byteCount: Long, val packageHash: String, val status: String, val failure: String?, val formatVersion: String?,
     val createdAtEpochMs: Long, val updatedAtEpochMs: Long,
 )
+@Entity(tableName = "p6k_zip_asset_recovery_jobs", indices = [Index(value = ["state", "updatedAtMs"])])
+data class P6KZipAssetRecoveryJobEntity(
+    @androidx.room.PrimaryKey val taskId: String,
+    val state: String,
+    val totalOccurrences: Int,
+    val linkedOccurrences: Int,
+    val totalConversations: Int,
+    val processedConversations: Int,
+    val failedConversations: Int,
+    val uniqueAssets: Int,
+    val missingEntries: Int,
+    val unattributedCandidates: Int,
+    val lastFailureKind: String?,
+    val lastFailureAtMs: Long?,
+    val indexVersion: Int,
+    val updatedAtMs: Long,
+)
 @Entity(tableName = "p6k_zip_import_items", primaryKeys = ["taskId", "id"], indices = [Index("taskId")])
 data class P6KZipImportItemEntity(
     val taskId: String, val id: String, val ordinal: Int, val sourceConversationId: String?, val title: String?, val createdAtEpochMs: Long?, val updatedAtEpochMs: Long?, val contentHash: String?, val status: String, val failure: String?, val conversationId: String?,
@@ -1492,6 +1509,11 @@ interface P6KZipImportTaskDao {
     @Query("DELETE FROM p6k_zip_asset_link_provenance WHERE taskId=:taskId") fun deleteAssetLinkProvenanceForTask(taskId: String)
     @Query("UPDATE p6k_zip_import_items SET status=:status, conversationId=:conversationId, failure=:failure WHERE taskId=:taskId AND id=:itemId") fun decideItem(taskId: String, itemId: String, status: String, conversationId: String?, failure: String?): Int
     @Query("UPDATE p6k_zip_import_tasks SET status=:status, updatedAtEpochMs=:updatedAtEpochMs WHERE id=:taskId") fun updateTaskStatus(taskId: String, status: String, updatedAtEpochMs: Long): Int
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun upsertAssetRecoveryJob(job: P6KZipAssetRecoveryJobEntity)
+    @Query("SELECT * FROM p6k_zip_asset_recovery_jobs WHERE taskId=:taskId") fun assetRecoveryJob(taskId: String): P6KZipAssetRecoveryJobEntity?
+    @Query("SELECT * FROM p6k_zip_asset_recovery_jobs ORDER BY updatedAtMs DESC, taskId ASC") fun assetRecoveryJobs(): List<P6KZipAssetRecoveryJobEntity>
+    @Query("SELECT * FROM p6k_zip_asset_recovery_jobs WHERE state IN ('PENDING','INDEXING','MAPPING','LINKING','PARTIAL') ORDER BY updatedAtMs ASC, taskId ASC") fun resumableAssetRecoveryJobs(): List<P6KZipAssetRecoveryJobEntity>
+    @Query("DELETE FROM p6k_zip_asset_recovery_jobs WHERE taskId=:taskId") fun deleteAssetRecoveryJob(taskId: String): Int
 }
 
 @Dao
@@ -2309,6 +2331,7 @@ interface ResumableAttachmentUploadDao {
         NanfengKnowledgeImportProvenanceEntity::class,
         NanfengKnowledgeImportReceiptEntity::class,
         P6KZipImportTaskEntity::class,
+        P6KZipAssetRecoveryJobEntity::class,
         P6KZipImportItemEntity::class,
         P6KZipImportMessageEntity::class,
         P6KZipAssetCandidateEntity::class,
@@ -2354,7 +2377,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 55,
+    version = 56,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2987,6 +3010,13 @@ abstract class NanfengAiDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_zip_import_message_provenance` (`conversationId` TEXT NOT NULL, `sourceMessageId` TEXT NOT NULL, `messageId` TEXT NOT NULL, `contentHash` TEXT NOT NULL, PRIMARY KEY(`conversationId`, `sourceMessageId`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_import_message_provenance_conversationId` ON `p6k_zip_import_message_provenance` (`conversationId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_import_message_provenance_messageId` ON `p6k_zip_import_message_provenance` (`messageId`)")
+            }
+        }
+        /** Durable, content-free checkpoints for resumable ChatGPT ZIP attachment restoration. */
+        val MIGRATION_55_56 = object : Migration(55, 56) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_zip_asset_recovery_jobs` (`taskId` TEXT NOT NULL, `state` TEXT NOT NULL, `totalOccurrences` INTEGER NOT NULL, `linkedOccurrences` INTEGER NOT NULL, `totalConversations` INTEGER NOT NULL, `processedConversations` INTEGER NOT NULL, `failedConversations` INTEGER NOT NULL, `uniqueAssets` INTEGER NOT NULL, `missingEntries` INTEGER NOT NULL, `unattributedCandidates` INTEGER NOT NULL, `lastFailureKind` TEXT, `lastFailureAtMs` INTEGER, `indexVersion` INTEGER NOT NULL, `updatedAtMs` INTEGER NOT NULL, PRIMARY KEY(`taskId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_asset_recovery_jobs_state_updatedAtMs` ON `p6k_zip_asset_recovery_jobs` (`state`, `updatedAtMs`)")
             }
         }
     }

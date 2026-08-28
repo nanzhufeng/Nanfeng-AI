@@ -30,7 +30,7 @@ class P6KThirdPartyZipInventoryContractsTest {
             assertEquals("c-1", result.items.single().candidate!!.sourceConversationId)
             assertEquals(P6KZipAssetRole.UNMAPPED_REJECTED, result.assets.single().role)
             assertEquals(null, result.assets.single().sourceConversationId)
-            assertTrue(result.assets.single().sha256.matches(Regex("[0-9a-f]{64}")))
+            assertEquals("", result.assets.single().sha256)
         } finally { file.delete() }
     }
     @Test fun `official numbered ChatGPT conversation JSON files aggregate only through the same strict parser`() {

@@ -260,7 +260,7 @@ class RoomP6KZipImportTaskRepository(private val database: NanfengAiDatabase) : 
     override fun find(id: com.nanzhufeng.ai.domain.P6KZipTaskId): com.nanzhufeng.ai.domain.P6KZipImportTask? = database.p6kZipImportTaskDao().task(id.value)?.toP6KZipDomain(database.p6kZipImportTaskDao())
     override fun list(): List<com.nanzhufeng.ai.domain.P6KZipImportTask> = database.p6kZipImportTaskDao().all().map { it.toP6KZipDomain(database.p6kZipImportTaskDao()) }
     override fun delete(id: com.nanzhufeng.ai.domain.P6KZipTaskId) = database.inTransaction {
-        val dao = database.p6kZipImportTaskDao(); dao.clearMessages(id.value); dao.clearItems(id.value); dao.clearAssets(id.value); dao.clearProfile(id.value); dao.deleteTask(id.value)
+        val dao = database.p6kZipImportTaskDao(); dao.deleteAssetRecoveryJob(id.value); dao.clearMessages(id.value); dao.clearItems(id.value); dao.clearAssets(id.value); dao.clearProfile(id.value); dao.deleteTask(id.value)
     }
 }
 private fun P6KZipImportTaskEntity.toP6KZipDomain(dao: P6KZipImportTaskDao): com.nanzhufeng.ai.domain.P6KZipImportTask {
@@ -271,6 +271,35 @@ private fun P6KZipImportTaskEntity.toP6KZipDomain(dao: P6KZipImportTaskDao): com
     }
     return com.nanzhufeng.ai.domain.P6KZipImportTask(taskId, com.nanzhufeng.ai.domain.ThirdPartyZipProvider.valueOf(provider), displayName, byteCount, packageHash, com.nanzhufeng.ai.domain.P6KZipTaskStatus.valueOf(status), failure?.let(com.nanzhufeng.ai.domain.P6KZipCandidateFailure::valueOf), formatVersion, Instant.ofEpochMilli(createdAtEpochMs), Instant.ofEpochMilli(updatedAtEpochMs), items, dao.assets(id).map { asset -> com.nanzhufeng.ai.domain.P6KZipAssetCandidate(asset.entryName, asset.sha256, asset.byteCount, asset.mimeType, com.nanzhufeng.ai.domain.P6KZipAssetRole.valueOf(asset.role), asset.sourceConversationId, asset.sourceMessageId, asset.linkedConversationId, asset.linkedMessageId, asset.attachmentId, asset.failure) }, dao.profile(id)?.let { com.nanzhufeng.ai.domain.P6KImportedProfileCandidate(it.status, it.mappedFieldCount) } ?: com.nanzhufeng.ai.domain.P6KImportedProfileCandidate())
 }
+
+class RoomP6KZipAssetRecoveryJobRepository(
+    private val database: NanfengAiDatabase,
+) : com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJobRepository {
+    private val dao get() = database.p6kZipImportTaskDao()
+    override fun save(job: com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob): com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob {
+        dao.upsertAssetRecoveryJob(job.toEntity())
+        return job
+    }
+    override fun find(taskId: com.nanzhufeng.ai.domain.P6KZipTaskId) = dao.assetRecoveryJob(taskId.value)?.toDomain()
+    override fun list() = dao.assetRecoveryJobs().map(P6KZipAssetRecoveryJobEntity::toDomain)
+    override fun resumable() = dao.resumableAssetRecoveryJobs().map(P6KZipAssetRecoveryJobEntity::toDomain)
+    override fun delete(taskId: com.nanzhufeng.ai.domain.P6KZipTaskId) { dao.deleteAssetRecoveryJob(taskId.value) }
+}
+
+internal fun com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob.toEntity() = P6KZipAssetRecoveryJobEntity(
+    taskId.value, state.name, totalOccurrences, linkedOccurrences, totalConversations,
+    processedConversations, failedConversations, uniqueAssets, missingEntries,
+    unattributedCandidates, lastFailureKind?.name, lastFailureAtMs, indexVersion, updatedAtMs,
+)
+
+internal fun P6KZipAssetRecoveryJobEntity.toDomain() = com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob(
+    com.nanzhufeng.ai.domain.P6KZipTaskId(taskId),
+    com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState.valueOf(state),
+    totalOccurrences, linkedOccurrences, totalConversations, processedConversations,
+    failedConversations, uniqueAssets, missingEntries, unattributedCandidates,
+    lastFailureKind?.let(com.nanzhufeng.ai.domain.P6KZipAssetRecoveryFailureKind::valueOf),
+    lastFailureAtMs, indexVersion, updatedAtMs,
+)
 
 /**
  * The only Android owner for K6's safe personalization projection.  It deliberately stores no

@@ -43,6 +43,7 @@ import com.nanzhufeng.ai.data.AndroidChatGptExportPrivateAssetStore
 import com.nanzhufeng.ai.data.AndroidClaudeExportPrivateAssetStore
 import com.nanzhufeng.ai.data.AndroidNanfengKnowledgeExportPrivateAssetStore
 import com.nanzhufeng.ai.data.AndroidP6KZipIntakeStore
+import com.nanzhufeng.ai.data.AndroidP6KZipAssetRecoveryScheduler
 import com.nanzhufeng.ai.data.AndroidPdfTextKnowledgePrivateAssetStore
 import com.nanzhufeng.ai.data.AndroidPublicWebFetcher
 import com.nanzhufeng.ai.data.AndroidWebTextSnapshotPrivateAssetStore
@@ -87,6 +88,7 @@ import com.nanzhufeng.ai.data.AndroidGallerySelectionReader
 import com.nanzhufeng.ai.data.AndroidDocumentSelectionReader
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportTaskRepository
+import com.nanzhufeng.ai.data.local.RoomP6KZipAssetRecoveryJobRepository
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportCommitStore
 import com.nanzhufeng.ai.data.local.RoomP6KZipManualAssetLinkOwner
 import com.nanzhufeng.ai.data.local.RoomP6KZipMappedAssetLinkOwner
@@ -302,6 +304,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_52_53,
         NanfengAiDatabase.MIGRATION_53_54,
         NanfengAiDatabase.MIGRATION_54_55,
+        NanfengAiDatabase.MIGRATION_55_56,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
@@ -332,6 +335,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     private val nanfengKnowledgeExportTasks = RoomNanfengKnowledgeImportTaskRepository(database)
     private val nanfengKnowledgeExportPrivateAssets = AndroidNanfengKnowledgeExportPrivateAssetStore(context)
     private val p6kZipImportTasks = RoomP6KZipImportTaskRepository(database)
+    private val p6kZipAssetRecoveryJobs = RoomP6KZipAssetRecoveryJobRepository(database)
     private val p6kProfilePersonalizationSettings = RoomP6KProfilePersonalizationSettingsOwner(database)
     private val pdfTextImportTasks = RoomPdfTextImportTaskRepository(database)
     private val pdfTextPrivateAssets = AndroidPdfTextKnowledgePrivateAssetStore(context)
@@ -348,7 +352,14 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     private val p6kZipManualAssetLinkOwner = RoomP6KZipManualAssetLinkOwner(database, conversationRepository)
     private val p6kZipMappedAssetLinkOwner = RoomP6KZipMappedAssetLinkOwner(database, conversationRepository)
     private val manageP6KChatGptZipImport = com.nanzhufeng.ai.domain.ManageP6KChatGptZipImportUseCase(p6kZipImportTasks, p6kZipCommitStore, clock)
-    val p6kZipIntakeStore = AndroidP6KZipIntakeStore(context, p6kZipImportTasks, manageP6KChatGptZipImport, p6kProfilePersonalizationSettings, p6kZipManualAssetLinkOwner, p6kZipMappedAssetLinkOwner, privateAttachmentStore, conversationRepository, clock)
+    val p6kZipAssetRecoveryScheduler = AndroidP6KZipAssetRecoveryScheduler(context, p6kZipAssetRecoveryJobs)
+    val p6kZipIntakeStore = AndroidP6KZipIntakeStore(
+        context, p6kZipImportTasks, manageP6KChatGptZipImport, p6kProfilePersonalizationSettings,
+        p6kZipManualAssetLinkOwner, p6kZipMappedAssetLinkOwner, privateAttachmentStore,
+        conversationRepository, clock, assetRecoveryJobs = p6kZipAssetRecoveryJobs,
+        assetRecoveryScheduler = p6kZipAssetRecoveryScheduler,
+    )
+    init { p6kZipAssetRecoveryScheduler.resumePending() }
     private val chatGptConversationCommitStore = RoomChatGptImportCommitStore(database, conversationRepository)
     private val claudeConversationCommitStore = RoomClaudeImportCommitStore(database, conversationRepository)
     private val nanfengKnowledgeConversationCommitStore = RoomNanfengKnowledgeImportCommitStore(database, conversationRepository)

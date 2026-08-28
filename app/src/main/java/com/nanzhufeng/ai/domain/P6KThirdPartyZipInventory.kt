@@ -73,6 +73,40 @@ enum class P6KZipItemStatus { PENDING_CONFIRMATION, CONFIRMED, SKIPPED, FAILED }
 enum class P6KZipCandidateFailure { UNKNOWN_MANIFEST_SCHEMA, MISSING_CONVERSATIONS_JSON, CHATGPT_CONVERSATIONS_NOT_STRICT, CLAUDE_CONVERSATIONS_NOT_STRICT, MISSING_PRIVATE_ARCHIVE, INTERRUPTED, NOT_ZIP, TOO_LARGE, PRIVATE_COPY_FAILED, INVENTORY_REJECTED, CONFLICT_REIMPORT, COMMIT_FAILED }
 /** A ZIP asset remains rejected until the user explicitly associates this exact candidate with one imported message. */
 enum class P6KZipAssetRole { UNMAPPED_REJECTED, SOURCE_MAPPED, MANUAL_LINKED, MANUAL_LINK_FAILED }
+enum class P6KZipAssetRecoveryState { PENDING, INDEXING, MAPPING, LINKING, COMPLETED, PARTIAL, FAILED }
+enum class P6KZipAssetRecoveryFailureKind { MISSING_PRIVATE_ARCHIVE, INDEX_REJECTED, MAPPING_REJECTED, LINKING_FAILED, INTERRUPTED }
+
+/** Content-free durable progress for one ZIP task's attachment recovery. */
+data class P6KZipAssetRecoveryJob(
+    val taskId: P6KZipTaskId,
+    val state: P6KZipAssetRecoveryState,
+    val totalOccurrences: Int = 0,
+    val linkedOccurrences: Int = 0,
+    val totalConversations: Int = 0,
+    val processedConversations: Int = 0,
+    val failedConversations: Int = 0,
+    val uniqueAssets: Int = 0,
+    val missingEntries: Int = 0,
+    val unattributedCandidates: Int = 0,
+    val lastFailureKind: P6KZipAssetRecoveryFailureKind? = null,
+    val lastFailureAtMs: Long? = null,
+    val indexVersion: Int = 1,
+    val updatedAtMs: Long,
+)
+
+interface P6KZipAssetRecoveryJobRepository {
+    fun save(job: P6KZipAssetRecoveryJob): P6KZipAssetRecoveryJob
+    fun find(taskId: P6KZipTaskId): P6KZipAssetRecoveryJob?
+    fun list(): List<P6KZipAssetRecoveryJob>
+    fun resumable(): List<P6KZipAssetRecoveryJob>
+    fun delete(taskId: P6KZipTaskId)
+}
+
+interface P6KZipAssetRecoveryScheduler {
+    fun enqueue(taskId: P6KZipTaskId)
+    fun resumePending()
+    fun cancel(taskId: P6KZipTaskId)
+}
 
 @JvmInline value class P6KZipTaskId(val value: String) { companion object { fun new() = P6KZipTaskId(UUID.randomUUID().toString()) } }
 @JvmInline value class P6KZipItemId(val value: String) { companion object { fun new() = P6KZipItemId(UUID.randomUUID().toString()) } }
@@ -134,6 +168,15 @@ interface P6KZipMappedAssetLinkOwner {
         privateAssets: Map<String, AttachmentReference>,
         at: Instant,
     ): P6KZipMappedAssetLinkSummary
+
+    /** The Room implementation checkpoints each completed conversation in the same transaction. */
+    fun reconcileResumable(
+        task: P6KZipImportTask,
+        mapping: P6KZipAssetMapping,
+        privateAssets: Map<String, AttachmentReference>,
+        job: P6KZipAssetRecoveryJob,
+        at: Instant,
+    ): P6KZipMappedAssetLinkSummary = reconcile(task, mapping, privateAssets, at)
 }
 
 sealed interface P6KZipAssetMappingResult {
@@ -256,31 +299,35 @@ sealed interface P6KChatGptZipMappingResult {
  */
 class P6KChatGptZipAssetMapper {
     fun map(archive: File, candidates: List<P6KZipAssetCandidate>): P6KZipAssetMappingResult = try {
+        ZipFile(archive).use { zip -> map(zip, candidates) }
+    } catch (_: Exception) {
+        P6KZipAssetMappingResult.Rejected
+    }
+
+    fun map(zip: ZipFile, candidates: List<P6KZipAssetCandidate>): P6KZipAssetMappingResult = try {
         val candidateByEntry = candidates.associateBy(P6KZipAssetCandidate::entryName)
-        ZipFile(archive).use { zip ->
-            val names = readDisplayNames(zip)
-            val ownership = linkedMapOf<String, Pair<String, String>>()
-            val conversations = zip.entries().asSequence()
-                .filter { !it.isDirectory && P6K_CHATGPT_NUMBERED_CONVERSATIONS.matches(it.name) }
-                .sortedBy { it.name }
-                .flatMap { entry ->
-                    val bytes = zip.getInputStream(entry).use { it.readBounded(CHATGPT_EXPORT_MAX_BYTES) }
-                    parseConversationAssets(bytes, candidateByEntry, ownership).asSequence()
-                }
-                .toList()
-            val assets = ownership.mapValues { (entryName, owner) ->
-                val candidate = requireNotNull(candidateByEntry[entryName])
-                val displayName = safeDisplayName(names[entryName], entryName, candidate.mimeType)
-                val mimeType = inferMime(displayName, candidate.mimeType) {
-                    zip.getInputStream(requireNotNull(zip.getEntry(entryName))).use { it.readPrefix(64) }
-                }
-                P6KZipMappedAsset(
-                    candidate.copy(mimeType = mimeType, sourceConversationId = owner.first, sourceMessageId = owner.second),
-                    displayName,
-                )
+        val names = readDisplayNames(zip)
+        val ownership = linkedMapOf<String, Pair<String, String>>()
+        val conversations = zip.entries().asSequence()
+            .filter { !it.isDirectory && P6K_CHATGPT_NUMBERED_CONVERSATIONS.matches(it.name) }
+            .sortedBy { it.name }
+            .flatMap { entry ->
+                val bytes = zip.getInputStream(entry).use { it.readBounded(CHATGPT_EXPORT_MAX_BYTES) }
+                parseConversationAssets(bytes, candidateByEntry, ownership).asSequence()
             }
-            P6KZipAssetMappingResult.Mapped(P6KZipAssetMapping(conversations, assets))
+            .toList()
+        val assets = ownership.mapValues { (entryName, owner) ->
+            val candidate = requireNotNull(candidateByEntry[entryName])
+            val displayName = safeDisplayName(names[entryName], entryName, candidate.mimeType)
+            val mimeType = inferMime(displayName, candidate.mimeType) {
+                zip.getInputStream(requireNotNull(zip.getEntry(entryName))).use { it.readPrefix(64) }
+            }
+            P6KZipMappedAsset(
+                candidate.copy(mimeType = mimeType, sourceConversationId = owner.first, sourceMessageId = owner.second),
+                displayName,
+            )
         }
+        P6KZipAssetMappingResult.Mapped(P6KZipAssetMapping(conversations, assets))
     } catch (_: Exception) {
         P6KZipAssetMappingResult.Rejected
     }
@@ -433,9 +480,10 @@ class P6KChatGptZipCandidateMapper(
                 }.mapIndexed { ordinal, item -> P6KZipImportItem(P6KZipItemId.new(), ordinal, item.candidate, if (item.candidate == null) P6KZipItemStatus.FAILED else P6KZipItemStatus.PENDING_CONFIRMATION, item.failure?.name) }
                 if (items.none { it.candidate != null } || items.size > P6K_CHATGPT_ZIP_MAX_CONVERSATIONS || items.mapNotNull { it.candidate?.sourceConversationId }.distinct().size != items.count { it.candidate != null }) return P6KChatGptZipMappingResult.Rejected(P6KZipCandidateFailure.CHATGPT_CONVERSATIONS_NOT_STRICT)
                 val jsonEntryNames = jsonEntries.mapTo(mutableSetOf()) { it.name }
+                // Persist central-directory metadata only. Content hashing belongs to the durable
+                // recovery worker after official ownership has narrowed the set of entries.
                 val assets = inventory.filter { it.name !in jsonEntryNames && it.mimeType != "application/json" }.map { entry ->
-                    val hash = zip.getInputStream(requireNotNull(zip.getEntry(entry.name))).use { it.sha256Bounded(entry.uncompressedBytes) }
-                    P6KZipAssetCandidate(entry.name, hash, entry.uncompressedBytes, entry.mimeType)
+                    P6KZipAssetCandidate(entry.name, "", entry.uncompressedBytes, entry.mimeType)
                 }
                 P6KChatGptZipMappingResult.Mapped(if (jsonEntries.singleOrNull()?.name == P6K_CHATGPT_ROOT_CONVERSATIONS_ENTRY) P6K_CHATGPT_ZIP_FORMAT_VERSION else P6K_CHATGPT_NUMBERED_ZIP_FORMAT_VERSION, items, assets, mapProfile(zip))
             }

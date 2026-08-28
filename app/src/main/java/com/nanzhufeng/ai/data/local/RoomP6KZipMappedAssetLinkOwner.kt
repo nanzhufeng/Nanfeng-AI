@@ -9,6 +9,9 @@ import com.nanzhufeng.ai.domain.ConversationSnapshot
 import com.nanzhufeng.ai.domain.MessageNode
 import com.nanzhufeng.ai.domain.MessageNodeId
 import com.nanzhufeng.ai.domain.P6KZipAssetMapping
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryFailureKind
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState
 import com.nanzhufeng.ai.domain.P6KZipAssetRole
 import com.nanzhufeng.ai.domain.P6KZipImportTask
 import com.nanzhufeng.ai.domain.P6KZipMappedAssetLinkOwner
@@ -26,25 +29,46 @@ class RoomP6KZipMappedAssetLinkOwner(
     private val database: NanfengAiDatabase,
     private val conversations: RoomConversationRepository,
     private val onConversationFailure: (Throwable) -> Unit = {},
+    private val beforeConversationCommit: (conversationNumber: Int, sourceConversationId: String) -> Unit = { _, _ -> },
 ) : P6KZipMappedAssetLinkOwner {
     override fun reconcile(
         task: P6KZipImportTask,
         mapping: P6KZipAssetMapping,
         privateAssets: Map<String, AttachmentReference>,
         at: Instant,
+    ): P6KZipMappedAssetLinkSummary = reconcileInternal(task, mapping, privateAssets, null, at)
+
+    override fun reconcileResumable(
+        task: P6KZipImportTask,
+        mapping: P6KZipAssetMapping,
+        privateAssets: Map<String, AttachmentReference>,
+        job: P6KZipAssetRecoveryJob,
+        at: Instant,
+    ): P6KZipMappedAssetLinkSummary = reconcileInternal(task, mapping, privateAssets, job, at)
+
+    private fun reconcileInternal(
+        task: P6KZipImportTask,
+        mapping: P6KZipAssetMapping,
+        privateAssets: Map<String, AttachmentReference>,
+        initialJob: P6KZipAssetRecoveryJob?,
+        at: Instant,
     ): P6KZipMappedAssetLinkSummary {
         var linked = 0
         var createdMessages = 0
         var failedConversations = 0
-        mapping.conversations.filter { conversation -> conversation.currentPath.any { it.entryNames.isNotEmpty() } }
-            .forEach { sourceConversation ->
+        var checkpoint = initialJob
+        val recoveryConversations = mapping.conversations
+            .filter { conversation -> conversation.currentPath.any { it.entryNames.isNotEmpty() } }
+        val processedBeforeRun = initialJob?.processedConversations ?: 0
+        for ((offset, sourceConversation) in recoveryConversations.drop(processedBeforeRun).withIndex()) {
                 val outcome = runCatching {
+                    beforeConversationCommit(processedBeforeRun + offset + 1, sourceConversation.sourceConversationId)
                     database.runInTransaction(Callable {
                         val zipDao = database.p6kZipImportTaskDao()
                         val provenance = zipDao.provenanceForSource(sourceConversation.sourceConversationId).singleOrNull()
-                            ?: return@Callable Outcome()
+                            ?: error("ZIP_RECOVERY_PROVENANCE_MISSING")
                         val conversationId = ConversationId(provenance.conversationId)
-                        val snapshot = conversations.findById(conversationId) ?: return@Callable Outcome()
+                        val snapshot = conversations.findById(conversationId) ?: error("ZIP_RECOVERY_CONVERSATION_MISSING")
                         val storedCandidates = zipDao.assets(task.id.value).associateBy { it.entryName }
                         val attachmentDao = database.privateAttachmentAssetDao()
                         val effectiveByEntry = linkedMapOf<String, ConversationAttachmentReference>()
@@ -97,7 +121,10 @@ class RoomP6KZipMappedAssetLinkOwner(
                             } else {
                                 existing.content + attachmentBlocks.filter { block ->
                                     existing.content.filterIsInstance<ContentBlock.Attachment>()
-                                        .none { it.attachment.sha256 == block.attachment.sha256 }
+                                        .none {
+                                            it.attachment.id == block.attachment.id ||
+                                                it.attachment.sha256 == block.attachment.sha256
+                                        }
                                 }
                             }
                             if (content.isEmpty()) return@forEach
@@ -108,7 +135,7 @@ class RoomP6KZipMappedAssetLinkOwner(
                             nodes[localId] = next
                             previousLocalId = localId
                         }
-                        val leaf = selectLeaf(nodes.values, previousLocalId ?: return@Callable Outcome(), snapshot.conversation.currentLeafMessageId)
+                        val leaf = selectLeaf(nodes.values, previousLocalId ?: error("ZIP_RECOVERY_PATH_MISSING"), snapshot.conversation.currentLeafMessageId)
                         val nextSnapshot = ConversationSnapshot(
                             snapshot.conversation.copy(currentLeafMessageId = leaf, revision = snapshot.conversation.revision + 1),
                             nodes.values.toList(),
@@ -154,16 +181,53 @@ class RoomP6KZipMappedAssetLinkOwner(
                                 )
                             }
                         }
+                        checkpoint?.let { current ->
+                            val next = current.copy(
+                                state = P6KZipAssetRecoveryState.LINKING,
+                                linkedOccurrences = current.linkedOccurrences + newlyLinked,
+                                processedConversations = current.processedConversations + 1,
+                                failedConversations = 0,
+                                lastFailureKind = null,
+                                lastFailureAtMs = null,
+                                updatedAtMs = at.toEpochMilli(),
+                            )
+                            zipDao.upsertAssetRecoveryJob(next.toEntity())
+                            checkpoint = next
+                        }
                         Outcome(newlyLinked, newlyCreated)
                     })
                 }.getOrElse { error ->
                     failedConversations += 1
                     onConversationFailure(error)
+                    checkpoint?.let { current ->
+                        val failed = current.copy(
+                            state = P6KZipAssetRecoveryState.PARTIAL,
+                            failedConversations = current.failedConversations + 1,
+                            lastFailureKind = P6KZipAssetRecoveryFailureKind.LINKING_FAILED,
+                            lastFailureAtMs = at.toEpochMilli(),
+                            updatedAtMs = at.toEpochMilli(),
+                        )
+                        database.p6kZipImportTaskDao().upsertAssetRecoveryJob(failed.toEntity())
+                        checkpoint = failed
+                    }
                     Outcome()
                 }
                 linked += outcome.linked
                 createdMessages += outcome.createdMessages
+                if (failedConversations > 0 && checkpoint != null) break
             }
+        checkpoint?.takeIf { current ->
+            failedConversations == 0 && current.processedConversations >= current.totalConversations
+        }?.let { current ->
+            val completed = current.copy(
+                state = P6KZipAssetRecoveryState.COMPLETED,
+                failedConversations = 0,
+                lastFailureKind = null,
+                lastFailureAtMs = null,
+                updatedAtMs = at.toEpochMilli(),
+            )
+            database.p6kZipImportTaskDao().upsertAssetRecoveryJob(completed.toEntity())
+        }
         val unresolved = database.p6kZipImportTaskDao().assets(task.id.value).count { it.attachmentId == null }
         return P6KZipMappedAssetLinkSummary(linked, createdMessages, unresolved, failedConversations)
     }

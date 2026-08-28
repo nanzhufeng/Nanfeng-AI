@@ -1,7 +1,6 @@
 package com.nanzhufeng.ai.domain
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Clock
@@ -11,12 +10,13 @@ import java.time.ZoneOffset
 class P5BTaskExecutionPolicyContractsTest {
     private val clock = Clock.fixed(Instant.parse("2026-08-13T00:00:00Z"), ZoneOffset.UTC)
 
-    @Test fun `policy has no system scheduled or automatic network execution`() {
-        assertFalse(TaskExecutionPolicy.workManagerIntroduced)
+    @Test fun `policy permits only checkpointed ZIP recovery to use system background execution`() {
+        assertTrue(TaskExecutionPolicy.workManagerIntroduced)
         assertEquals(LocalTaskKind.entries.toSet(), TaskExecutionPolicy.rules.map { it.kind }.toSet())
-        assertTrue(TaskExecutionPolicy.rules.none { it.permitsSystemBackgroundScheduling })
+        assertEquals(setOf(LocalTaskKind.ZIP_ASSET_RECOVERY), TaskExecutionPolicy.rules.filter { it.permitsSystemBackgroundScheduling }.map { it.kind }.toSet())
         assertTrue(TaskExecutionPolicy.rule(LocalTaskKind.WEB_TEXT_SNAPSHOT).networkAllowedOnlyInForeground)
-        assertTrue(TaskExecutionPolicy.rules.filter { it.kind != LocalTaskKind.OFFLINE_EVAL }.all { it.processDeath == ProcessDeathDisposition.FAIL_INTERRUPTED })
+        assertEquals(ProcessDeathDisposition.RESUME_FROM_CHECKPOINT, TaskExecutionPolicy.rule(LocalTaskKind.ZIP_ASSET_RECOVERY).processDeath)
+        assertTrue(TaskExecutionPolicy.rules.filter { it.kind !in setOf(LocalTaskKind.OFFLINE_EVAL, LocalTaskKind.ZIP_ASSET_RECOVERY) }.all { it.processDeath == ProcessDeathDisposition.FAIL_INTERRUPTED })
     }
 
     @Test fun `persisted import work maps to interrupted and completed cancel is stable`() {

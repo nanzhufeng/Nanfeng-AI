@@ -6,10 +6,10 @@ import java.time.Clock
  * P5-B's app-level execution inventory. It governs lifecycle and recovery only;
  * each adapter keeps its own task table, identity and domain meaning.
  */
-enum class LocalTaskKind { MARKDOWN_IMPORT, JSON_IMPORT, PDF_TEXT_IMPORT, WEB_TEXT_SNAPSHOT, OFFLINE_EVAL, CONVERSATION_LOCAL_FIXTURE }
-enum class LocalTaskOwner { MARKDOWN_ADAPTER, JSON_ADAPTER, PDF_TEXT_ADAPTER, WEB_TEXT_ADAPTER, OFFLINE_EVAL, CONVERSATION_RUNTIME }
+enum class LocalTaskKind { MARKDOWN_IMPORT, JSON_IMPORT, PDF_TEXT_IMPORT, WEB_TEXT_SNAPSHOT, OFFLINE_EVAL, CONVERSATION_LOCAL_FIXTURE, ZIP_ASSET_RECOVERY }
+enum class LocalTaskOwner { MARKDOWN_ADAPTER, JSON_ADAPTER, PDF_TEXT_ADAPTER, WEB_TEXT_ADAPTER, OFFLINE_EVAL, CONVERSATION_RUNTIME, ZIP_IMPORT }
 enum class LocalTaskDispatcher { IO, DEFAULT }
-enum class ProcessDeathDisposition { FAIL_INTERRUPTED, NO_RUNNING_RECORD }
+enum class ProcessDeathDisposition { FAIL_INTERRUPTED, NO_RUNNING_RECORD, RESUME_FROM_CHECKPOINT }
 
 data class LocalTaskExecutionRule(
     val kind: LocalTaskKind,
@@ -29,10 +29,11 @@ object TaskExecutionPolicy {
         LocalTaskExecutionRule(LocalTaskKind.WEB_TEXT_SNAPSHOT, LocalTaskOwner.WEB_TEXT_ADAPTER, LocalTaskDispatcher.IO, ProcessDeathDisposition.FAIL_INTERRUPTED, true, true),
         LocalTaskExecutionRule(LocalTaskKind.OFFLINE_EVAL, LocalTaskOwner.OFFLINE_EVAL, LocalTaskDispatcher.DEFAULT, ProcessDeathDisposition.NO_RUNNING_RECORD, true, false),
         LocalTaskExecutionRule(LocalTaskKind.CONVERSATION_LOCAL_FIXTURE, LocalTaskOwner.CONVERSATION_RUNTIME, LocalTaskDispatcher.DEFAULT, ProcessDeathDisposition.FAIL_INTERRUPTED, true, false),
+        LocalTaskExecutionRule(LocalTaskKind.ZIP_ASSET_RECOVERY, LocalTaskOwner.ZIP_IMPORT, LocalTaskDispatcher.IO, ProcessDeathDisposition.RESUME_FROM_CHECKPOINT, true, false, permitsSystemBackgroundScheduling = true),
     )
 
-    /** WorkManager is intentionally absent: every potentially long task needs user confirmation or cannot be replayed safely. */
-    const val workManagerIntroduced = false
+    /** Only ZIP asset recovery is durable and replay-safe; other tasks keep their existing policy. */
+    const val workManagerIntroduced = true
     fun rule(kind: LocalTaskKind): LocalTaskExecutionRule = requireNotNull(rules.firstOrNull { it.kind == kind })
 }
 

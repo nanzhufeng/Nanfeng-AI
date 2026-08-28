@@ -77,4 +77,21 @@ class P6KZipImportUiContractsTest {
         assertTrue(intake.contains("assets-v2.done"))
         assertTrue(intake.contains("legacyAssetMarker(task.id.value).delete()"))
     }
+
+    @Test fun `ZIP attachment recovery is durable foreground work and UI reads Room only`() {
+        val intake = File("src/main/java/com/nanzhufeng/ai/data/AndroidP6KZipIntakeStore.kt").readText()
+        val scheduling = File("src/main/java/com/nanzhufeng/ai/data/P6KZipAssetRecoveryScheduling.kt").readText()
+        val ui = File("src/main/java/com/nanzhufeng/ai/ui/P6KZipImportUi.kt").readText()
+        val listOwner = intake.substring(intake.indexOf("override fun list()"), intake.indexOf("override fun recoveryJobs()"))
+
+        assertFalse(listOwner.contains("ZipFile("))
+        assertFalse(listOwner.contains("assetMapper.map"))
+        assertFalse(listOwner.contains("reconcileMappedAssets"))
+        assertTrue(scheduling.contains("OneTimeWorkRequestBuilder<P6KZipAssetRecoveryWorker>()"))
+        assertTrue(scheduling.contains("setForeground(recoveryForegroundInfo(applicationContext))"))
+        assertTrue(scheduling.contains("FOREGROUND_SERVICE_TYPE_DATA_SYNC"))
+        assertFalse(scheduling.contains("setExpedited"))
+        assertTrue(ui.contains("正在恢复 ${'$'}{job.linkedOccurrences}/${'$'}{job.totalOccurrences}"))
+        assertTrue(ui.contains("重试附件恢复"))
+    }
 }

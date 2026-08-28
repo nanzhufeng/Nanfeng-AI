@@ -24,28 +24,44 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.nanzhufeng.ai.data.AndroidP6KZipIntakeStore
+import com.nanzhufeng.ai.data.P6KZipImportUiStore
 import com.nanzhufeng.ai.domain.P6KZipImportTask
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState
 import com.nanzhufeng.ai.domain.P6KZipAssetRole
 import com.nanzhufeng.ai.domain.P6KZipManualLinkTarget
 import com.nanzhufeng.ai.domain.ThirdPartyZipProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 
-data class P6KZipImportUiState(val working: Boolean = false, val workingProvider: ThirdPartyZipProvider? = null, val tasks: List<P6KZipImportTask> = emptyList(), val viewedTaskId: String? = null, val manualTargets: List<P6KZipManualLinkTarget> = emptyList(), val selectedAssetEntryName: String? = null, val selectedTarget: P6KZipManualLinkTarget? = null, val revokeFailure: Boolean = false)
-class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewModel() {
+data class P6KZipImportUiState(val working: Boolean = false, val workingProvider: ThirdPartyZipProvider? = null, val tasks: List<P6KZipImportTask> = emptyList(), val recoveryJobs: Map<String, P6KZipAssetRecoveryJob> = emptyMap(), val viewedTaskId: String? = null, val manualTargets: List<P6KZipManualLinkTarget> = emptyList(), val selectedAssetEntryName: String? = null, val selectedTarget: P6KZipManualLinkTarget? = null, val revokeFailure: Boolean = false)
+class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel() {
     var state by mutableStateOf(P6KZipImportUiState()); private set
+    private var projectionRefresh: Job? = null
     init { show() }
-    fun show() { viewModelScope.launch { state = state.copy(tasks = withContext(Dispatchers.IO) { store.list() }) } }
-    fun selected(provider: ThirdPartyZipProvider, name: String, mime: String, input: InputStream) { state = state.copy(working = true, workingProvider = provider, revokeFailure = false); viewModelScope.launch { val tasks = withContext(Dispatchers.IO) { val task = store.stage(provider, name, mime, input); listOf(task) + store.list().filterNot { it.id == task.id } }; state = state.copy(working = false, workingProvider = null, tasks = tasks) } }
-    fun clear(id: String) { viewModelScope.launch { val result = withContext(Dispatchers.IO) { store.cancel(id) to store.list() }; state = state.copy(tasks = result.second, revokeFailure = !result.first) } }
+    fun show() {
+        projectionRefresh?.cancel()
+        projectionRefresh = viewModelScope.launch {
+            do {
+                val snapshot = withContext(Dispatchers.IO) { store.list() to store.recoveryJobs() }
+                state = state.copy(tasks = snapshot.first, recoveryJobs = snapshot.second.associateBy { it.taskId.value })
+                val active = snapshot.second.any { it.state in setOf(P6KZipAssetRecoveryState.PENDING, P6KZipAssetRecoveryState.INDEXING, P6KZipAssetRecoveryState.MAPPING, P6KZipAssetRecoveryState.LINKING) }
+                if (active) delay(750) else break
+            } while (true)
+        }
+    }
+    fun selected(provider: ThirdPartyZipProvider, name: String, mime: String, input: InputStream) { state = state.copy(working = true, workingProvider = provider, revokeFailure = false); viewModelScope.launch { val snapshot = withContext(Dispatchers.IO) { val task = store.stage(provider, name, mime, input); Triple(task, store.list(), store.recoveryJobs()) }; state = state.copy(working = false, workingProvider = null, tasks = listOf(snapshot.first) + snapshot.second.filterNot { it.id == snapshot.first.id }, recoveryJobs = snapshot.third.associateBy { it.taskId.value }); show() } }
+    fun clear(id: String) { viewModelScope.launch { val result = withContext(Dispatchers.IO) { Triple(store.cancel(id), store.list(), store.recoveryJobs()) }; state = state.copy(tasks = result.second, recoveryJobs = result.third.associateBy { it.taskId.value }, revokeFailure = !result.first) } }
+    fun retry(id: String) { viewModelScope.launch { val jobs = withContext(Dispatchers.IO) { store.retryAssetRecovery(id); store.recoveryJobs() }; state = state.copy(recoveryJobs = jobs.associateBy { it.taskId.value }); show() } }
     fun view(id: String) { viewModelScope.launch { state = state.copy(viewedTaskId = id, manualTargets = withContext(Dispatchers.IO) { store.manualLinkTargets(id) }, selectedAssetEntryName = null, selectedTarget = null) } }
     fun selectAsset(entryName: String) { state = state.copy(selectedAssetEntryName = entryName) }
     fun selectTarget(target: P6KZipManualLinkTarget) { state = state.copy(selectedTarget = target) }
     fun link() { val taskId = state.viewedTaskId ?: return; val entry = state.selectedAssetEntryName ?: return; val target = state.selectedTarget ?: return; state = state.copy(working = true); viewModelScope.launch { val updated = withContext(Dispatchers.IO) { store.linkUnmappedAsset(taskId, entry, target.conversationId.value, target.messageId.value) }; state = state.copy(working = false, tasks = listOf(updated) + store.list().filterNot { it.id == updated.id }, manualTargets = store.manualLinkTargets(taskId), selectedAssetEntryName = null, selectedTarget = null) } }
-    class Factory(private val store: AndroidP6KZipIntakeStore) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>) = P6KZipImportViewModel(store) as T }
+    class Factory(private val store: P6KZipImportUiStore) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>) = P6KZipImportViewModel(store) as T }
 }
 
 @androidx.compose.runtime.Composable fun P6KZipImportSettingsCard(state: P6KZipImportUiState, onChatGpt: () -> Unit, onClaude: () -> Unit, grouped: Boolean = false) = Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
@@ -68,6 +84,7 @@ class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewM
     claudeState: ClaudeImportUiState,
     zipState: P6KZipImportUiState,
     onClearZipBatch: (String) -> Unit,
+    onRetryZipRecovery: (String) -> Unit,
     showJson: Boolean,
     showZip: Boolean,
 ) {
@@ -97,6 +114,7 @@ class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewM
             )
         }
         if (showZip) zipState.tasks.forEachIndexed { index, task ->
+            val recovery = zipState.recoveryJobs[task.id.value]
             ImportResultDetailCard(
                 title = "${task.provider.name} ZIP · 批次 ${index + 1}",
                 status = chatGptStatusLabel(task.status.name),
@@ -105,6 +123,18 @@ class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewM
                 skippedCount = task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.SKIPPED },
                 restoredAssetCount = task.assets.count { it.attachmentId != null },
                 unresolvedAssetCount = task.assets.count { it.attachmentId == null },
+                recoveryLabel = recovery?.let { job ->
+                    when (job.state) {
+                        P6KZipAssetRecoveryState.PENDING -> "附件恢复已排队"
+                        P6KZipAssetRecoveryState.INDEXING -> "正在索引导出包"
+                        P6KZipAssetRecoveryState.MAPPING -> "正在确认官方归属"
+                        P6KZipAssetRecoveryState.LINKING -> "正在恢复 ${job.linkedOccurrences}/${job.totalOccurrences}"
+                        P6KZipAssetRecoveryState.COMPLETED -> "附件恢复已完成"
+                        P6KZipAssetRecoveryState.PARTIAL -> "恢复已中断，可从 ${job.processedConversations}/${job.totalConversations} 续跑"
+                        P6KZipAssetRecoveryState.FAILED -> "附件恢复未完成"
+                    }
+                },
+                onRetryRecovery = recovery?.takeIf { it.state in setOf(P6KZipAssetRecoveryState.PARTIAL, P6KZipAssetRecoveryState.FAILED) }?.let { { onRetryZipRecovery(task.id.value) } },
                 profileSummary = when {
                     task.profile.mappedFieldCount > 0 -> "${task.profile.mappedFieldCount} 项个性化资料已按安全规则处理"
                     else -> "未导入个性化资料"
@@ -135,6 +165,8 @@ class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewM
     skippedCount: Int,
     restoredAssetCount: Int = 0,
     unresolvedAssetCount: Int = 0,
+    recoveryLabel: String? = null,
+    onRetryRecovery: (() -> Unit)? = null,
     profileSummary: String? = null,
     onDelete: (() -> Unit)? = null,
     deleteEnabled: Boolean = true,
@@ -149,6 +181,8 @@ class P6KZipImportViewModel(private val store: AndroidP6KZipIntakeStore) : ViewM
         if (skippedCount > 0) Text("$skippedCount 条已跳过", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         if (restoredAssetCount > 0) Text("$restoredAssetCount 个附件已恢复到原对话。", style = MaterialTheme.typography.bodySmall, color = BodyText)
         if (unresolvedAssetCount > 0) Text("$unresolvedAssetCount 个文件缺少官方对话归属，未自动关联。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        recoveryLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BodyText) }
+        onRetryRecovery?.let { retry -> OutlinedButton(onClick = retry, shape = P5AInteractiveShape, border = null) { Text("重试附件恢复") } }
         profileSummary?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SecondaryText) }
         onDelete?.let { action ->
             OutlinedButton(onClick = action, enabled = deleteEnabled, shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText)) { Text("删除本批次") }

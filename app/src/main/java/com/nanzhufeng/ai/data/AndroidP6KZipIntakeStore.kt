@@ -9,6 +9,12 @@ import com.nanzhufeng.ai.domain.P6KProfilePersonalizationSettingsOwner
 import com.nanzhufeng.ai.domain.P6KZipAssetRole
 import com.nanzhufeng.ai.domain.P6KChatGptZipAssetMapper
 import com.nanzhufeng.ai.domain.P6KZipAssetMappingResult
+import com.nanzhufeng.ai.domain.P6KZipAssetMapping
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryFailureKind
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJobRepository
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryScheduler
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState
 import com.nanzhufeng.ai.domain.P6KZipMappedAssetLinkOwner
 import com.nanzhufeng.ai.domain.P6KZipManualAssetLinkOwner
 import com.nanzhufeng.ai.domain.P6KZipManualAssetLinkResult
@@ -38,6 +44,16 @@ import java.util.zip.ZipFile
  * K1's Android envelope owner: picker handles are discarded after one private copy.
  * Room persists only recovery-safe task/candidate facts; neither this store nor the mapper can commit a Conversation.
  */
+interface P6KZipImportUiStore {
+    fun stage(provider: ThirdPartyZipProvider, displayName: String, mimeType: String, input: InputStream): P6KZipImportTask
+    fun list(): List<P6KZipImportTask>
+    fun recoveryJobs(): List<P6KZipAssetRecoveryJob>
+    fun retryAssetRecovery(taskId: String)
+    fun cancel(id: String): Boolean
+    fun manualLinkTargets(taskId: String): List<P6KZipManualLinkTarget>
+    fun linkUnmappedAsset(taskId: String, entryName: String, conversationId: String, messageId: String): P6KZipImportTask
+}
+
 class AndroidP6KZipIntakeStore(
     context: Context,
     private val tasks: P6KZipImportTaskRepository,
@@ -50,13 +66,15 @@ class AndroidP6KZipIntakeStore(
     private val clock: Clock = Clock.systemUTC(),
     private val mapper: P6KChatGptZipCandidateMapper = P6KChatGptZipCandidateMapper(),
     private val assetMapper: P6KChatGptZipAssetMapper = P6KChatGptZipAssetMapper(),
-) {
+    private val assetRecoveryJobs: P6KZipAssetRecoveryJobRepository? = null,
+    private val assetRecoveryScheduler: P6KZipAssetRecoveryScheduler? = null,
+) : P6KZipImportUiStore {
     private val root = File(context.filesDir, "p6k-zip-import/v1").also { it.mkdirs() }
     private val archives = File(root, "archives").also { it.mkdirs() }
     private val legacyTasks = File(root, "tasks").also { it.mkdirs() }
     private val legacyEntries = File(root, "entries").also { it.mkdirs() }
 
-    fun stage(provider: ThirdPartyZipProvider, displayName: String, mimeType: String, input: InputStream): P6KZipImportTask {
+    override fun stage(provider: ThirdPartyZipProvider, displayName: String, mimeType: String, input: InputStream): P6KZipImportTask {
         migrateLegacyJournal()
         val id = P6KZipTaskId.new(); val now = clock.instant(); val safeName = safeName(displayName)
         // Android document providers may label a ZIP as generic binary.  Filename is only a routing
@@ -81,7 +99,19 @@ class AndroidP6KZipIntakeStore(
                     is com.nanzhufeng.ai.domain.P6KChatGptZipMappingResult.Mapped -> {
                         val staged = tasks.save(base.copy(status = P6KZipTaskStatus.AWAITING_CONFIRMATION, formatVersion = mapped.formatVersion, items = mapped.items, assets = mapped.assets, profile = mapped.profile, updatedAt = clock.instant()))
                         mapped.profile.personalization?.let { profileSettings.commit(staged, it, clock.instant()) }
-                        reconcileMappedAssets(imports.importAll(staged.id))
+                        val imported = imports.importAll(staged.id)
+                        if (assetRecoveryJobs != null && assetRecoveryScheduler != null) {
+                            val job = assetRecoveryJobs.find(imported.id) ?: P6KZipAssetRecoveryJob(
+                                taskId = imported.id,
+                                state = P6KZipAssetRecoveryState.PENDING,
+                                updatedAtMs = clock.millis(),
+                            )
+                            assetRecoveryJobs.save(job)
+                            assetRecoveryScheduler.enqueue(imported.id)
+                            imported
+                        } else {
+                            reconcileMappedAssets(imported)
+                        }
                     }
                 }
             }
@@ -89,13 +119,119 @@ class AndroidP6KZipIntakeStore(
         catch (_: Exception) { temporary.delete(); return tasks.save(P6KZipImportTask(id, provider, safeName, bytes, "", P6KZipTaskStatus.FAILED, P6KZipCandidateFailure.PRIVATE_COPY_FAILED, createdAt = now, updatedAt = clock.instant())) }
     }
 
-    fun list(): List<P6KZipImportTask> {
+    override fun list(): List<P6KZipImportTask> {
         migrateLegacyJournal()
-        tasks.list().forEach(::reconcileMappedAssets)
         return tasks.list()
     }
+    override fun recoveryJobs(): List<P6KZipAssetRecoveryJob> = assetRecoveryJobs?.list().orEmpty()
+    override fun retryAssetRecovery(taskId: String) {
+        val id = P6KZipTaskId(taskId)
+        val repository = assetRecoveryJobs ?: return
+        val current = repository.find(id) ?: return
+        repository.save(current.copy(state = P6KZipAssetRecoveryState.PENDING, lastFailureKind = null, lastFailureAtMs = null, updatedAtMs = clock.millis()))
+        assetRecoveryScheduler?.enqueue(id)
+    }
+    fun recordAssetRecoveryInterruption(taskId: String) {
+        val repository = assetRecoveryJobs ?: return
+        val id = P6KZipTaskId(taskId)
+        val current = repository.find(id) ?: return
+        repository.save(current.copy(
+            state = P6KZipAssetRecoveryState.PARTIAL,
+            lastFailureKind = P6KZipAssetRecoveryFailureKind.INTERRUPTED,
+            lastFailureAtMs = clock.millis(),
+            updatedAtMs = clock.millis(),
+        ))
+    }
+
+    /** Worker-only owner. UI reads the persisted job and never invokes this method. */
+    fun runAssetRecovery(taskId: String): P6KZipAssetRecoveryJob? {
+        val repository = assetRecoveryJobs ?: return null
+        val id = P6KZipTaskId(taskId)
+        var task = tasks.find(id) ?: return null
+        var job = repository.find(id) ?: repository.save(P6KZipAssetRecoveryJob(id, P6KZipAssetRecoveryState.PENDING, updatedAtMs = clock.millis()))
+        if (assetMarker(taskId).isFile) {
+            val linked = task.assets.count { it.attachmentId != null }
+            job = repository.save(job.copy(
+                state = P6KZipAssetRecoveryState.COMPLETED,
+                totalOccurrences = linked,
+                linkedOccurrences = linked,
+                processedConversations = job.totalConversations,
+                uniqueAssets = linked,
+                failedConversations = 0,
+                lastFailureKind = null,
+                lastFailureAtMs = null,
+                updatedAtMs = clock.millis(),
+            ))
+            assetMarker(taskId).delete()
+            legacyAssetMarker(taskId).delete()
+            return job
+        }
+        val archive = File(archives, "$taskId.zip")
+        if (!archive.isFile) return repository.save(job.failed(P6KZipAssetRecoveryFailureKind.MISSING_PRIVATE_ARCHIVE))
+        job = repository.save(job.copy(
+            state = P6KZipAssetRecoveryState.INDEXING,
+            failedConversations = 0,
+            lastFailureKind = null,
+            lastFailureAtMs = null,
+            updatedAtMs = clock.millis(),
+        ))
+        val mapping = try {
+            ZipFile(archive).use { zip ->
+                val mapped = (assetMapper.map(zip, task.assets) as? P6KZipAssetMappingResult.Mapped)?.value
+                    ?: return repository.save(job.failed(P6KZipAssetRecoveryFailureKind.MAPPING_REJECTED))
+                verifyMappedAssetHashes(zip, mapped)
+            }
+        } catch (_: Exception) {
+            return repository.save(job.failed(P6KZipAssetRecoveryFailureKind.INDEX_REJECTED))
+        }
+        val verifiedByEntry = mapping.assets.mapValues { it.value.candidate }
+        task = tasks.save(task.copy(
+            assets = task.assets.map { verifiedByEntry[it.entryName] ?: it },
+            updatedAt = clock.instant(),
+        ))
+        val recoveryConversations = mapping.conversations.filter { conversation -> conversation.currentPath.any { it.entryNames.isNotEmpty() } }
+        val totalOccurrences = recoveryConversations.sumOf { conversation ->
+            conversation.currentPath.sumOf { message -> message.entryNames.distinct().size }
+        }
+        job = repository.save(job.copy(
+            state = P6KZipAssetRecoveryState.MAPPING,
+            totalOccurrences = totalOccurrences,
+            totalConversations = recoveryConversations.size,
+            uniqueAssets = mapping.assets.size,
+            unattributedCandidates = (task.assets.size - mapping.assets.size).coerceAtLeast(0),
+            updatedAtMs = clock.millis(),
+        ))
+        val prepared = mapping.assets.mapValues { (entryName, mapped) ->
+            val candidate = mapped.candidate
+            AttachmentReference(
+                reference = P6KZipArchiveAssetStorage.key(task.id.value, entryName),
+                mimeType = candidate.mimeType,
+                displayName = mapped.displayName,
+                id = AttachmentId.new(),
+                byteCount = candidate.byteCount,
+                sha256 = candidate.sha256,
+            )
+        }
+        job = repository.save(job.copy(state = P6KZipAssetRecoveryState.LINKING, updatedAtMs = clock.millis()))
+        val summary = mappedAssetLinks.reconcileResumable(task, mapping, prepared, job, clock.instant())
+        job = repository.find(id) ?: job
+        if (summary.failedConversationCount > 0) return job
+        val refreshedTask = tasks.find(id) ?: task
+        val linked = refreshedTask.assets.count { it.attachmentId != null }
+        job = repository.save(job.copy(
+            state = P6KZipAssetRecoveryState.COMPLETED,
+            linkedOccurrences = linked,
+            processedConversations = recoveryConversations.size,
+            failedConversations = 0,
+            lastFailureKind = null,
+            lastFailureAtMs = null,
+            updatedAtMs = clock.millis(),
+        ))
+        legacyAssetMarker(taskId).delete()
+        return job
+    }
     /** Only messages in this ZIP task's already committed conversations can be chosen.  No body or source ID leaves this store. */
-    fun manualLinkTargets(taskId: String): List<P6KZipManualLinkTarget> {
+    override fun manualLinkTargets(taskId: String): List<P6KZipManualLinkTarget> {
         val task = tasks.find(P6KZipTaskId(taskId)) ?: return emptyList()
         return task.items.mapNotNull { it.conversationId }.distinct().flatMap { conversationId ->
             val snapshot = conversations.findById(conversationId) ?: return@flatMap emptyList()
@@ -106,7 +242,7 @@ class AndroidP6KZipIntakeStore(
     }
     /** The user has already selected one candidate and one target message.  This performs no picker
      * work and never reads another ZIP entry. */
-    fun linkUnmappedAsset(taskId: String, entryName: String, conversationId: String, messageId: String): P6KZipImportTask {
+    override fun linkUnmappedAsset(taskId: String, entryName: String, conversationId: String, messageId: String): P6KZipImportTask {
         val id = P6KZipTaskId(taskId); val task = tasks.find(id) ?: return failed(taskId, entryName)
         val asset = task.assets.firstOrNull { it.entryName == entryName } ?: return task
         if (asset.role in setOf(P6KZipAssetRole.SOURCE_MAPPED, P6KZipAssetRole.MANUAL_LINKED)) return task
@@ -116,14 +252,14 @@ class AndroidP6KZipIntakeStore(
             ZipFile(archive).use { zip ->
                 val entry = zip.getEntry(asset.entryName) ?: return failed(taskId, entryName)
                 if (entry.isDirectory || entry.name.replace('\\', '/') != asset.entryName || entry.size != asset.byteCount) return failed(taskId, entryName)
-                val digest = MessageDigest.getInstance("SHA-256")
-                zip.getInputStream(entry).use { source ->
-                    val buffer = ByteArray(64 * 1024); while (true) { val count = source.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
-                }
-                if (digest.digest().hex() != asset.sha256) return failed(taskId, entryName)
+                val verifiedAsset = asset.copy(sha256 = verifiedSha256(zip, asset))
+                val verifiedTask = tasks.save(task.copy(
+                    assets = task.assets.map { if (it.entryName == entryName) verifiedAsset else it },
+                    updatedAt = clock.instant(),
+                ))
                 val imported = zip.getInputStream(entry).use { source -> privateAttachments.import(AttachmentImportRequest(source, asset.mimeType, null)) }
                 val attachment = (imported as? AttachmentImportResult.Imported)?.attachment ?: return failed(taskId, entryName)
-                when (manualAssetLinks.link(task, asset, target, attachment, clock.instant())) {
+                when (manualAssetLinks.link(verifiedTask, verifiedAsset, target, attachment, clock.instant())) {
                     P6KZipManualAssetLinkResult.Linked, P6KZipManualAssetLinkResult.Replayed -> requireNotNull(tasks.find(id))
                     P6KZipManualAssetLinkResult.Conflict, P6KZipManualAssetLinkResult.Failed -> failed(taskId, entryName)
                 }
@@ -135,10 +271,11 @@ class AndroidP6KZipIntakeStore(
      * batch.  Otherwise a failed conversation revoke would orphan imported conversations after
      * Settings had already removed the only retry/delete entry point.
      */
-    fun cancel(id: String): Boolean {
+    override fun cancel(id: String): Boolean {
         migrateLegacyJournal()
         val taskId = P6KZipTaskId(id); val task = tasks.find(taskId)
         if (task != null) {
+            assetRecoveryScheduler?.cancel(taskId)
             if (!imports.deleteBatch(taskId)) return false
             if (!manualAssetLinks.revokeBatch(task, clock.instant())) return false
             if (!profileSettings.revokeBatch(task, clock.instant())) return false
@@ -168,12 +305,22 @@ class AndroidP6KZipIntakeStore(
         if (assetMarker(task.id.value).isFile) return task
         val archive = File(archives, "${task.id.value}.zip")
         if (!archive.isFile) return task
-        val mapping = (assetMapper.map(archive, task.assets) as? P6KZipAssetMappingResult.Mapped)?.value
-            ?: return task
+        val mapping = try {
+            ZipFile(archive).use { zip ->
+                val mapped = (assetMapper.map(zip, task.assets) as? P6KZipAssetMappingResult.Mapped)?.value
+                    ?: return task
+                verifyMappedAssetHashes(zip, mapped)
+            }
+        } catch (_: Exception) { return task }
+        val verifiedByEntry = mapping.assets.mapValues { it.value.candidate }
+        val verifiedTask = tasks.save(task.copy(
+            assets = task.assets.map { verifiedByEntry[it.entryName] ?: it },
+            updatedAt = clock.instant(),
+        ))
         val prepared = mapping.assets.mapValues { (entryName, mapped) ->
             val candidate = mapped.candidate
             AttachmentReference(
-                reference = P6KZipArchiveAssetStorage.key(task.id.value, entryName),
+                reference = P6KZipArchiveAssetStorage.key(verifiedTask.id.value, entryName),
                 mimeType = candidate.mimeType,
                 displayName = mapped.displayName,
                 id = AttachmentId.new(),
@@ -181,8 +328,8 @@ class AndroidP6KZipIntakeStore(
                 sha256 = candidate.sha256,
             )
         }
-        val summary = mappedAssetLinks.reconcile(task, mapping, prepared, clock.instant())
-        val refreshed = tasks.find(task.id) ?: return task
+        val summary = mappedAssetLinks.reconcile(verifiedTask, mapping, prepared, clock.instant())
+        val refreshed = tasks.find(verifiedTask.id) ?: return verifiedTask
         val byEntry = refreshed.assets.associateBy { it.entryName }
         if (summary.failedConversationCount == 0 && mapping.assets.isNotEmpty() && mapping.assets.keys.all { byEntry[it]?.attachmentId != null }) {
             runCatching {
@@ -211,6 +358,38 @@ class AndroidP6KZipIntakeStore(
         } }
     }
     private fun safeName(value: String) = value.substringAfterLast('/').substringAfterLast('\\').take(120).ifBlank { "selected.zip" }
+    private fun P6KZipAssetRecoveryJob.failed(kind: P6KZipAssetRecoveryFailureKind): P6KZipAssetRecoveryJob = copy(
+        state = P6KZipAssetRecoveryState.FAILED,
+        lastFailureKind = kind,
+        lastFailureAtMs = clock.millis(),
+        updatedAtMs = clock.millis(),
+    )
+    private fun verifyMappedAssetHashes(zip: ZipFile, mapping: P6KZipAssetMapping): P6KZipAssetMapping = mapping.copy(
+        assets = mapping.assets.mapValues { (_, mapped) ->
+            mapped.copy(candidate = mapped.candidate.copy(sha256 = verifiedSha256(zip, mapped.candidate)))
+        },
+    )
+    private fun verifiedSha256(zip: ZipFile, candidate: com.nanzhufeng.ai.domain.P6KZipAssetCandidate): String {
+        val entry = requireNotNull(zip.getEntry(candidate.entryName))
+        require(!entry.isDirectory && entry.name.replace('\\', '/') == candidate.entryName)
+        require(entry.size == candidate.byteCount)
+        val digest = MessageDigest.getInstance("SHA-256")
+        var total = 0L
+        zip.getInputStream(entry).use { source ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = source.read(buffer)
+                if (count < 0) break
+                total += count
+                require(total <= candidate.byteCount)
+                digest.update(buffer, 0, count)
+            }
+        }
+        require(total == candidate.byteCount)
+        val actual = digest.digest().hex()
+        require(candidate.sha256.isBlank() || candidate.sha256 == actual)
+        return actual
+    }
     private data object LimitExceeded : Throwable()
     private companion object { val ZIP_MIME_TYPES = setOf("application/zip", "application/x-zip-compressed") }
 }
