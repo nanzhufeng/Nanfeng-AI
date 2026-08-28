@@ -65,6 +65,14 @@ class RoomP6KZipMappedAssetLinkOwner(
                     beforeConversationCommit(processedBeforeRun + offset + 1, sourceConversation.sourceConversationId)
                     database.runInTransaction(Callable {
                         val zipDao = database.p6kZipImportTaskDao()
+                        if (processedBeforeRun == 0 && offset == 0) {
+                            // A newer mapping index is a complete ownership rebuild. Remove the
+                            // previous index rows atomically with the first rebuilt conversation;
+                            // attachment bytes remain protected by their normal message links.
+                            zipDao.deleteAssetOccurrenceReceiptsForTask(task.id.value)
+                            zipDao.deleteAssetOccurrencesForTask(task.id.value)
+                            zipDao.deleteAssetCatalogForTask(task.id.value)
+                        }
                         val provenance = zipDao.provenanceForSource(sourceConversation.sourceConversationId).singleOrNull()
                             ?: error("ZIP_RECOVERY_PROVENANCE_MISSING")
                         val conversationId = ConversationId(provenance.conversationId)
@@ -110,24 +118,49 @@ class RoomP6KZipMappedAssetLinkOwner(
                             )
                         }
 
+                        val nodes = snapshot.nodes.associateBy(MessageNode::id).toMutableMap()
+                        val desiredRoleBySource = sourceConversation.currentPath.associate { it.sourceMessageId to it.role }
                         val localBySource = zipDao.messageProvenanceForConversation(conversationId.value)
                             .associate { it.sourceMessageId to MessageNodeId(it.messageId) }
                             .toMutableMap()
                         storedCandidates.values.filter { it.sourceConversationId == sourceConversation.sourceConversationId && it.linkedMessageId != null }
-                            .forEach { candidate -> candidate.sourceMessageId?.let { localBySource.putIfAbsent(it, MessageNodeId(requireNotNull(candidate.linkedMessageId))) } }
+                            .forEach { candidate -> candidate.sourceMessageId?.let { sourceMessageId ->
+                                val linkedId = MessageNodeId(requireNotNull(candidate.linkedMessageId))
+                                val linked = nodes[linkedId]
+                                val desiredRole = desiredRoleBySource[sourceMessageId]
+                                if (linked != null && desiredRole != null &&
+                                    (linked.role == desiredRole || linked.content.all { it is ContentBlock.Attachment })
+                                ) localBySource.putIfAbsent(sourceMessageId, linkedId)
+                            } }
 
-                        val nodes = snapshot.nodes.associateBy(MessageNode::id).toMutableMap()
                         var previousLocalId: MessageNodeId? = null
                         var newlyCreated = 0
                         sourceConversation.currentPath.forEach { sourceMessage ->
                             val availableEntries = sourceMessage.entryNames.filter(effectiveByEntry::containsKey)
                             var localId = localBySource[sourceMessage.sourceMessageId]
+                            val linkedNode = localId?.let(nodes::get)
+                            if (linkedNode != null && linkedNode.role != sourceMessage.role &&
+                                linkedNode.content.any { it !is ContentBlock.Attachment }
+                            ) localId = null
                             if (localId == null && availableEntries.isNotEmpty()) {
                                 localId = MessageNodeId.new()
                                 localBySource[sourceMessage.sourceMessageId] = localId
                             }
                             if (localId == null) return@forEach
+                            availableEntries.forEach entryLoop@ { entryName ->
+                                val staleId = storedCandidates[entryName]?.linkedMessageId?.let(::MessageNodeId)
+                                if (staleId == null || staleId == localId) return@entryLoop
+                                val stale = nodes[staleId] ?: return@entryLoop
+                                val reference = requireNotNull(effectiveByEntry[entryName])
+                                val pruned = stale.content.filterNot { block ->
+                                    block is ContentBlock.Attachment &&
+                                        (block.attachment.id == reference.id || block.attachment.sha256 == reference.sha256)
+                                }
+                                if (pruned.isNotEmpty()) nodes[staleId] = stale.copy(content = pruned)
+                            }
                             val existing = nodes[localId]
+                            val reclassifyAttachmentOnly = existing != null && existing.role != sourceMessage.role &&
+                                existing.content.all { it is ContentBlock.Attachment }
                             val attachmentBlocks = availableEntries.map { ContentBlock.Attachment(requireNotNull(effectiveByEntry[it])) }
                             val content = if (existing == null) {
                                 attachmentBlocks
@@ -143,7 +176,13 @@ class RoomP6KZipMappedAssetLinkOwner(
                             if (content.isEmpty()) return@forEach
                             val parent = previousLocalId
                             val position = if (existing != null && existing.parentMessageId == parent) existing.siblingPosition else nextSiblingPosition(nodes.values, parent, localId)
-                            val next = existing?.copy(parentMessageId = parent, siblingPosition = position, content = content)
+                            val next = existing?.copy(
+                                parentMessageId = parent,
+                                siblingPosition = position,
+                                role = if (reclassifyAttachmentOnly) sourceMessage.role else existing.role,
+                                content = content,
+                                createdAt = if (reclassifyAttachmentOnly) sourceMessage.createdAt else existing.createdAt,
+                            )
                                 ?: MessageNode(localId, conversationId, parent, position, sourceMessage.role, content, sourceMessage.createdAt).also { newlyCreated += 1 }
                             nodes[localId] = next
                             previousLocalId = localId

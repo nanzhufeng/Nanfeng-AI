@@ -13,7 +13,9 @@ class AnswerContextDisclosureUiContractsTest {
         val store = File("src/main/java/com/nanzhufeng/ai/data/AndroidContextSelectionAuditStore.kt").readText()
 
         assertTrue(workspace.contains("text = { Text(\"本次上下文来源\") }"))
-        assertTrue(workspace.contains("leadingIcon = { Icon(Icons.Rounded.AccountTree, contentDescription = null) }"))
+        assertTrue(workspace.contains("leadingIcon = { Icon(Icons.Rounded.AccountTree, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) }"))
+        assertTrue(workspace.contains("leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) }"))
+        assertTrue(workspace.contains("leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) }"))
         assertFalse(workspace.contains("contentDescription = \"查看本次上下文来源\""))
         assertTrue(workspace.contains("AnswerContextDisclosureDialog"))
         assertTrue(workspace.contains("以下仅显示本次回答实际加入的本地来源，不显示来源正文。"))

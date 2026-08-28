@@ -118,6 +118,108 @@ class P6KZipAssetRecoveryJobContractsTest {
         }
     }
 
+    @Test
+    fun `new mapping index moves a generated image from a user message to an assistant output`() {
+        val database = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext<Context>(),
+            NanfengAiDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val at = Instant.parse("2026-08-28T08:00:00Z")
+            val generatedAt = at.plusSeconds(8)
+            val tasks = RoomP6KZipImportTaskRepository(database)
+            val jobs = RoomP6KZipAssetRecoveryJobRepository(database)
+            val conversations = RoomConversationRepository(database)
+            val commit = RoomP6KZipImportCommitStore(database, conversations)
+            val sourceConversationId = "generated-conversation"
+            val userSourceId = "user-prompt"
+            val assistantSourceId = "nanfeng-generated:fixture"
+            val importedMessages = listOf(
+                ChatGptImportMessage(userSourceId, null, 0, MessageRole.USER, "draw", at, null),
+            )
+            val candidate = ChatGptImportCandidate(
+                sourceConversationId, "generated", at, generatedAt, importedMessages,
+                chatGptImportContentHash(sourceConversationId, importedMessages),
+            )
+            val asset = P6KZipAssetCandidate(
+                "generated.dat", "a".repeat(64), 8, "image/png",
+                sourceConversationId = sourceConversationId,
+                sourceMessageId = userSourceId,
+            )
+            var task = tasks.save(
+                P6KZipImportTask(
+                    id = P6KZipTaskId.new(), provider = ThirdPartyZipProvider.CHATGPT,
+                    displayName = "selected.zip", byteCount = 100, packageHash = "package",
+                    status = P6KZipTaskStatus.AWAITING_CONFIRMATION,
+                    createdAt = at, updatedAt = at,
+                    items = listOf(P6KZipImportItem(P6KZipItemId.new(), 0, candidate)),
+                    assets = listOf(asset),
+                ),
+            )
+            commit.confirm(task, task.items.single(), at)
+            task = requireNotNull(tasks.find(task.id))
+            val reference = AttachmentReference(
+                P6KZipArchiveAssetStorage.key(task.id.value, asset.entryName),
+                asset.mimeType, "generated.png", AttachmentId.new(), asset.byteCount, asset.sha256,
+            )
+            val firstMapping = P6KZipAssetMapping(
+                listOf(
+                    P6KZipSourceConversationAssets(
+                        sourceConversationId,
+                        listOf(P6KZipSourceMessageAssets(userSourceId, null, MessageRole.USER, at, true, listOf(asset.entryName))),
+                    ),
+                ),
+                mapOf(asset.entryName to P6KZipMappedAsset(asset, "generated.png")),
+            )
+            val firstJob = jobs.save(
+                P6KZipAssetRecoveryJob(
+                    task.id, P6KZipAssetRecoveryState.LINKING,
+                    totalOccurrences = 1, totalConversations = 1, uniqueAssets = 1,
+                    updatedAtMs = at.toEpochMilli(),
+                ),
+            )
+            RoomP6KZipMappedAssetLinkOwner(database, conversations)
+                .reconcileResumable(task, firstMapping, mapOf(asset.entryName to reference), firstJob, at.plusSeconds(1))
+
+            val previouslyLinked = requireNotNull(tasks.find(task.id)).assets.single()
+            val assistantOwned = previouslyLinked.copy(sourceMessageId = assistantSourceId)
+            task = tasks.save(requireNotNull(tasks.find(task.id)).copy(assets = listOf(assistantOwned)))
+            val rebuiltMapping = P6KZipAssetMapping(
+                listOf(
+                    P6KZipSourceConversationAssets(
+                        sourceConversationId,
+                        listOf(
+                            P6KZipSourceMessageAssets(userSourceId, null, MessageRole.USER, at, true, emptyList()),
+                            P6KZipSourceMessageAssets(assistantSourceId, userSourceId, MessageRole.ASSISTANT, generatedAt, false, listOf(asset.entryName)),
+                        ),
+                    ),
+                ),
+                mapOf(asset.entryName to P6KZipMappedAsset(assistantOwned, "generated.png")),
+            )
+            val rebuildJob = jobs.save(
+                P6KZipAssetRecoveryJob(
+                    task.id, P6KZipAssetRecoveryState.LINKING,
+                    totalOccurrences = 1, totalConversations = 1, uniqueAssets = 1,
+                    updatedAtMs = generatedAt.toEpochMilli(),
+                ),
+            )
+            val rebuilt = RoomP6KZipMappedAssetLinkOwner(database, conversations)
+                .reconcileResumable(task, rebuiltMapping, mapOf(asset.entryName to reference), rebuildJob, generatedAt.plusSeconds(1))
+
+            assertEquals(0, rebuilt.failedConversationCount)
+            val snapshot = requireNotNull(conversations.findById(requireNotNull(task.items.single().conversationId)))
+            val user = snapshot.nodes.single { it.role == MessageRole.USER }
+            val assistant = snapshot.nodes.single { it.role == MessageRole.ASSISTANT }
+            assertEquals(0, user.content.filterIsInstance<ContentBlock.Attachment>().size)
+            assertEquals(1, assistant.content.filterIsInstance<ContentBlock.Attachment>().size)
+            assertEquals(generatedAt, assistant.createdAt)
+            assertEquals(1, database.p6kZipImportTaskDao().assetOccurrenceCount(task.id.value))
+            assertEquals(1, database.p6kZipImportTaskDao().assetOccurrenceReceiptCount(task.id.value))
+        } finally {
+            database.close()
+        }
+    }
+
     private fun fixture(number: Int, at: Instant): Fixture {
         val sourceConversationId = "source-$number"
         val sourceMessageId = "message-$number"

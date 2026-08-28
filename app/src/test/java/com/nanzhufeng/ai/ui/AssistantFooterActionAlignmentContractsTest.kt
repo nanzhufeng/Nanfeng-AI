@@ -20,7 +20,9 @@ class AssistantFooterActionAlignmentContractsTest {
 
         assertTrue(source.contains("private val ConversationAssistantReadingStartInset = 24.dp"))
         assertTrue(source.contains("private val AssistantFooterActionSpacing = 4.dp"))
+        assertTrue(actionRow.contains("start = 0.dp"))
         assertTrue(actionRow.contains("horizontalArrangement = Arrangement.spacedBy(AssistantFooterActionSpacing)"))
+        assertTrue(actionRow.contains("BoxWithConstraints(Modifier.weight(1f))"))
         assertFalse(firstAction.contains("offset("))
         assertTrue(source.contains("modifier = modifier.size(36.dp)"))
     }

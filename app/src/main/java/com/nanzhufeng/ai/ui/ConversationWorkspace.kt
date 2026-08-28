@@ -712,10 +712,14 @@ internal fun ConversationWorkspaceDialog(
     } else {
         Modifier
     }
-    val drawerEdgeOpenModifier = if (!returnToSearchAfterSearchOpen && !searchPageVisible && !drawerState.isOpen) {
-        Modifier.openConversationDrawerOnStrictEdgeSwipe {
-            onDrawerOpenChanged(true)
-            drawerScope.launch { drawerState.open() }
+    val quickDrawerOpenModifier = if (!returnToSearchAfterSearchOpen && !searchPageVisible) {
+        Modifier.quickConversationDrawerOpen {
+            drawerScope.launch {
+                // Let ModalNavigationDrawer finish dispatching the same pointer-up first, then
+                // win the settle decision with the requested open state.
+                kotlinx.coroutines.yield()
+                drawerState.open()
+            }
         }
     } else {
         Modifier
@@ -801,10 +805,10 @@ internal fun ConversationWorkspaceDialog(
     }
     ModalNavigationDrawer(
             drawerState = drawerState,
-            // Material's default closed-drawer drag starts anywhere on the canvas and conflicts
-            // with media/content gestures. Opening is handled by the strict left-edge observer;
-            // once open, Material retains its normal drag-to-close behavior.
-            gesturesEnabled = drawerState.isOpen,
+            // Keep the established Material drawer gesture: a deliberate right swipe on the
+            // conversation canvas opens the left drawer. Search-result return is a separate,
+            // edge-only observer and must not weaken this normal navigation gesture.
+            gesturesEnabled = true,
             drawerContent = {
                 ModalDrawerSheet(
                     drawerShape = RectangleShape,
@@ -895,7 +899,7 @@ internal fun ConversationWorkspaceDialog(
                 Modifier
                     .fillMaxSize()
                     .background(ConversationWorkspaceCanvas)
-                    .then(drawerEdgeOpenModifier)
+                    .then(quickDrawerOpenModifier)
                     .then(searchReturnSwipeModifier),
             ) {
                 // A first launch must remain an actually empty local truth until the user chooses
@@ -1946,6 +1950,47 @@ private suspend fun LazyListState.scrollToTrueTop() {
 private val ScreenEdgeGestureWidth = 24.dp
 private val ScreenEdgeGestureTravel = 48.dp
 private const val ScreenEdgeGestureHorizontalRatio = 1.3f
+private val QuickDrawerOpenTravel = 36.dp
+private const val QuickDrawerOpenHorizontalRatio = 1.35f
+
+/**
+ * Keeps Material's full-canvas drawer gesture, then finishes a clearly horizontal right swipe
+ * promptly instead of making the user drag the sheet across most of a wide screen.
+ */
+private fun Modifier.quickConversationDrawerOpen(onOpen: () -> Unit): Modifier = pointerInput(onOpen) {
+    val openThresholdPx = QuickDrawerOpenTravel.toPx()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        var previousPosition = down.position
+        var horizontalDistancePx = 0f
+        var verticalDistancePx = 0f
+        var openRequested = false
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            val delta = change.position - previousPosition
+            previousPosition = change.position
+            horizontalDistancePx += delta.x
+            verticalDistancePx += delta.y
+            if (!openRequested &&
+                horizontalDistancePx >= openThresholdPx &&
+                horizontalDistancePx > abs(verticalDistancePx) * QuickDrawerOpenHorizontalRatio
+            ) {
+                openRequested = true
+            }
+            if (openRequested) {
+                // After intent is established, own the remainder of this swipe so Material does
+                // not settle the same partial drag closed. Taps, vertical scroll and left swipes
+                // never reach this branch and remain free.
+                change.consume()
+            }
+            if (change.changedToUpIgnoreConsumed()) {
+                if (openRequested) onOpen()
+                break
+            }
+        }
+    }
+}
 
 /** A search result may temporarily open its owner conversation; only an inward edge swipe returns. */
 private fun Modifier.searchAttachmentReturnSwipe(onReturn: () -> Unit): Modifier = pointerInput(onReturn) {
@@ -1979,35 +2024,6 @@ private fun Modifier.searchAttachmentReturnSwipe(onReturn: () -> Unit): Modifier
             ) {
                 returned = true
                 onReturn()
-            }
-            if (change.changedToUpIgnoreConsumed()) break
-        }
-    }
-}
-
-/** The closed conversation drawer may open only from a deliberate inward swipe at the left edge. */
-private fun Modifier.openConversationDrawerOnStrictEdgeSwipe(onOpen: () -> Unit): Modifier = pointerInput(onOpen) {
-    val edgeWidthPx = ScreenEdgeGestureWidth.toPx()
-    val openThresholdPx = ScreenEdgeGestureTravel.toPx()
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
-        if (down.position.x > edgeWidthPx) return@awaitEachGesture
-        var previousPosition = down.position
-        var horizontalDistancePx = 0f
-        var verticalDistancePx = 0f
-        while (true) {
-            val event = awaitPointerEvent()
-            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-            val delta = change.position - previousPosition
-            previousPosition = change.position
-            horizontalDistancePx += delta.x
-            verticalDistancePx += delta.y
-            if (
-                horizontalDistancePx >= openThresholdPx &&
-                horizontalDistancePx > abs(verticalDistancePx) * ScreenEdgeGestureHorizontalRatio
-            ) {
-                onOpen()
-                break
             }
             if (change.changedToUpIgnoreConsumed()) break
         }
@@ -4933,7 +4949,9 @@ private fun AssistantMessageActionRow(
     val metadataStyle = MaterialTheme.typography.labelSmall
     Column(
         modifier = Modifier.fillMaxWidth().padding(
-            start = ConversationAssistantReadingStartInset,
+            // Keep the established internal order and spacing; only align the complete footer
+            // group with the transcript canvas's left edge.
+            start = 0.dp,
             end = ConversationAssistantReadingEndInset,
         ),
         // Assistant provenance belongs to the assistant side. Keep concise facts inline when
@@ -4973,7 +4991,7 @@ private fun AssistantMessageActionRow(
                     if (contextDisclosure != null) {
                         DropdownMenuItem(
                             text = { Text("本次上下文来源") },
-                            leadingIcon = { Icon(Icons.Rounded.AccountTree, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Rounded.AccountTree, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
                             onClick = {
                                 moreActionsExpanded = false
                                 contextDisclosureVisible = true
@@ -4982,7 +5000,7 @@ private fun AssistantMessageActionRow(
                     }
                     DropdownMenuItem(
                         text = { Text("导出 Markdown") },
-                        leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
                         onClick = {
                             moreActionsExpanded = false
                             onExportMarkdown(transcript)
@@ -4990,7 +5008,7 @@ private fun AssistantMessageActionRow(
                     )
                     DropdownMenuItem(
                         text = { Text("创建分支") },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
                         onClick = {
                             moreActionsExpanded = false
                             onBranch(transcript.message.messageId)

@@ -99,7 +99,7 @@ data class P6KZipAssetRecoveryJob(
     val updatedAtMs: Long,
 )
 
-const val P6K_ZIP_ASSET_MAPPING_INDEX_VERSION = 4
+const val P6K_ZIP_ASSET_MAPPING_INDEX_VERSION = 5
 
 interface P6KZipAssetRecoveryJobRepository {
     fun save(job: P6KZipAssetRecoveryJob): P6KZipAssetRecoveryJob

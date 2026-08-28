@@ -39,13 +39,25 @@ class P6DConversationRowAccessibilityContractsTest {
             assertTrue("legacy contract must route Android UI to the current contract", File(legacyContract).readText().contains("ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md"))
         }
         for (token in listOf(
-            "gesturesEnabled = drawerState.isOpen",
+            "gesturesEnabled = true",
             "val rowHeight = if (batchEditing) 44.dp else 36.dp",
             "modifier = modifier.width(176.dp).height(rowHeight)",
             "fun dismissRevealedConversation(): Boolean",
             "private val ComposerModelDisplayWidth = 88.dp",
             "onOverlayBack",
         )) assertTrue("current UI implementation drifted from its contract anchor $token", source.contains(token))
+    }
+
+    @Test
+    fun `conversation drawer keeps full canvas swipe and completes opening quickly`() {
+        for (token in listOf(
+            "gesturesEnabled = true",
+            "Modifier.quickConversationDrawerOpen",
+            "QuickDrawerOpenTravel = 36.dp",
+            "kotlinx.coroutines.yield()",
+            "if (openRequested) onOpen()",
+            ".then(quickDrawerOpenModifier)",
+        )) assertTrue("quick drawer gesture must retain $token", source.contains(token))
     }
 
     @Test
@@ -726,12 +738,9 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
-    fun `drawer opens only from the strict left screen edge`() {
-        assertTrue(source.contains("gesturesEnabled = drawerState.isOpen"))
-        assertTrue(source.contains("openConversationDrawerOnStrictEdgeSwipe"))
-        assertTrue(source.contains("if (down.position.x > edgeWidthPx) return@awaitEachGesture"))
-        assertTrue(source.contains("val ScreenEdgeGestureWidth = 24.dp"))
-        assertTrue(source.contains("horizontalDistancePx >= openThresholdPx"))
+    fun `drawer keeps Material standard right-swipe opening available from the chat canvas`() {
+        assertTrue(source.contains("gesturesEnabled = true"))
+        assertFalse(source.contains("openConversationDrawerOnStrictEdgeSwipe"))
     }
 
 
