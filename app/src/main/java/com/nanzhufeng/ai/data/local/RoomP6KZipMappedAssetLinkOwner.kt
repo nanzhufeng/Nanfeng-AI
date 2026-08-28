@@ -95,6 +95,19 @@ class RoomP6KZipMappedAssetLinkOwner(
                                 mimeType = mapped.candidate.mimeType,
                                 displayName = mapped.displayName,
                             )
+                            zipDao.upsertAssetCatalog(
+                                P6KZipAssetCatalogEntity(
+                                    taskId = task.id.value,
+                                    entryName = entryName,
+                                    sha256 = stored.sha256,
+                                    byteCount = stored.byteCount,
+                                    mimeType = mapped.candidate.mimeType,
+                                    displayName = mapped.displayName,
+                                    attachmentId = effective.id.value,
+                                    missingInArchive = false,
+                                    verificationState = "VERIFIED",
+                                ),
+                            )
                         }
 
                         val localBySource = zipDao.messageProvenanceForConversation(conversationId.value)
@@ -150,16 +163,30 @@ class RoomP6KZipMappedAssetLinkOwner(
                                 val reference = effectiveByEntry[entryName] ?: return@forEach
                                 val mapped = mapping.assets[entryName] ?: return@forEach
                                 val stored = zipDao.asset(task.id.value, entryName) ?: return@forEach
-                                val prior = zipDao.assetLinkReceipt(task.id.value, entryName)
+                                zipDao.insertAssetOccurrence(
+                                    P6KZipAssetOccurrenceEntity(
+                                        task.id.value,
+                                        entryName,
+                                        sourceConversation.sourceConversationId,
+                                        sourceMessage.sourceMessageId,
+                                    ),
+                                )
+                                val prior = zipDao.assetOccurrenceReceipt(
+                                    task.id.value,
+                                    entryName,
+                                    sourceConversation.sourceConversationId,
+                                    sourceMessage.sourceMessageId,
+                                )
                                 if (prior == null) {
-                                    zipDao.insertAssetLinkReceipt(
-                                        P6KZipAssetLinkReceiptEntity(
+                                    zipDao.insertAssetOccurrenceReceipt(
+                                        P6KZipAssetOccurrenceReceiptEntity(
                                             task.id.value,
                                             entryName,
-                                            stored.sha256,
-                                            reference.id.value,
+                                            sourceConversation.sourceConversationId,
+                                            sourceMessage.sourceMessageId,
                                             conversationId.value,
                                             localId.value,
+                                            reference.id.value,
                                             at.toEpochMilli(),
                                         ),
                                     )
@@ -182,9 +209,10 @@ class RoomP6KZipMappedAssetLinkOwner(
                             }
                         }
                         checkpoint?.let { current ->
+                            val receiptCount = zipDao.assetOccurrenceReceiptCount(task.id.value)
                             val next = current.copy(
                                 state = P6KZipAssetRecoveryState.LINKING,
-                                linkedOccurrences = current.linkedOccurrences + newlyLinked,
+                                linkedOccurrences = receiptCount,
                                 processedConversations = current.processedConversations + 1,
                                 failedConversations = 0,
                                 lastFailureKind = null,
@@ -216,17 +244,23 @@ class RoomP6KZipMappedAssetLinkOwner(
                 createdMessages += outcome.createdMessages
                 if (failedConversations > 0 && checkpoint != null) break
             }
-        checkpoint?.takeIf { current ->
-            failedConversations == 0 && current.processedConversations >= current.totalConversations
-        }?.let { current ->
-            val completed = current.copy(
-                state = P6KZipAssetRecoveryState.COMPLETED,
-                failedConversations = 0,
-                lastFailureKind = null,
-                lastFailureAtMs = null,
+        checkpoint?.let { current ->
+            val dao = database.p6kZipImportTaskDao()
+            val occurrenceCount = dao.assetOccurrenceCount(task.id.value)
+            val receiptCount = dao.assetOccurrenceReceiptCount(task.id.value)
+            val complete = failedConversations == 0 &&
+                current.processedConversations >= current.totalConversations &&
+                occurrenceCount > 0 && receiptCount == occurrenceCount
+            val terminal = current.copy(
+                state = if (complete) P6KZipAssetRecoveryState.COMPLETED else P6KZipAssetRecoveryState.PARTIAL,
+                totalOccurrences = occurrenceCount,
+                linkedOccurrences = receiptCount,
+                failedConversations = if (complete) 0 else current.failedConversations,
+                lastFailureKind = if (complete) null else current.lastFailureKind,
+                lastFailureAtMs = if (complete) null else current.lastFailureAtMs,
                 updatedAtMs = at.toEpochMilli(),
             )
-            database.p6kZipImportTaskDao().upsertAssetRecoveryJob(completed.toEntity())
+            dao.upsertAssetRecoveryJob(terminal.toEntity())
         }
         val unresolved = database.p6kZipImportTaskDao().assets(task.id.value).count { it.attachmentId == null }
         return P6KZipMappedAssetLinkSummary(linked, createdMessages, unresolved, failedConversations)

@@ -15,6 +15,7 @@ import android.media.MediaPlayer
 import androidx.core.content.FileProvider
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -75,6 +76,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.RectangleShape
@@ -98,6 +101,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.AccountTree
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Bookmark
@@ -174,6 +178,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.geometry.CornerRadius
@@ -343,9 +348,9 @@ private val ConversationTranscriptPageGutter = 4.dp
 // 6dp smaller because the LazyColumn owns a separate 6dp passive-scrollbar lane.
 private val ConversationAssistantReadingStartInset = 24.dp
 private val ConversationAssistantReadingEndInset = 18.dp
-// The first 36dp footer hit target centers a 16dp glyph, so return only its visual glyph to the
-// same start edge as the reading text while keeping the full, comfortable hit area.
-private val AssistantFooterLeadingActionVisualOffset = 10.dp
+// Every footer command owns the same hit box and the same gap. The row itself starts at the
+// assistant reading inset, so copy/share/more stay left-aligned without per-icon nudges.
+private val AssistantFooterActionSpacing = 4.dp
 /** Reserved only for the passive scroll position marker, never for a second blank column. */
 private val ConversationScrollbarContentEndInset = 6.dp
 // This is scrollable LazyColumn content, not a painted header backing. Short transcripts begin
@@ -527,6 +532,7 @@ internal fun ConversationWorkspaceDialog(
     onCloseSearch: () -> Unit,
     onOpenSearchHit: (com.nanzhufeng.ai.domain.ConversationSearchHit) -> Unit,
     onOpenSearchAttachment: (com.nanzhufeng.ai.domain.ConversationAttachmentReference) -> Unit,
+    onLocateSearchAttachment: (ConversationAttachmentSearchHit) -> Unit,
     onEnsureSearchAttachmentPreview: (com.nanzhufeng.ai.domain.ConversationAttachmentReference) -> Unit,
     onManage: (com.nanzhufeng.ai.domain.Conversation, ConversationManagementAction, String?) -> Unit,
     onBatchSoftDelete: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
@@ -706,6 +712,14 @@ internal fun ConversationWorkspaceDialog(
     } else {
         Modifier
     }
+    val drawerEdgeOpenModifier = if (!returnToSearchAfterSearchOpen && !searchPageVisible && !drawerState.isOpen) {
+        Modifier.openConversationDrawerOnStrictEdgeSwipe {
+            onDrawerOpenChanged(true)
+            drawerScope.launch { drawerState.open() }
+        }
+    } else {
+        Modifier
+    }
     val activeFindMatches = activeFindQuery?.let { query ->
         conversationFindMessageMatches(state.messages, query)
     }.orEmpty()
@@ -787,9 +801,10 @@ internal fun ConversationWorkspaceDialog(
     }
     ModalNavigationDrawer(
             drawerState = drawerState,
-            // Use Material's standard drawer drag so a normal right swipe from the chat canvas
-            // remains reachable; nested vertical message scrolling keeps its native arbitration.
-            gesturesEnabled = true,
+            // Material's default closed-drawer drag starts anywhere on the canvas and conflicts
+            // with media/content gestures. Opening is handled by the strict left-edge observer;
+            // once open, Material retains its normal drag-to-close behavior.
+            gesturesEnabled = drawerState.isOpen,
             drawerContent = {
                 ModalDrawerSheet(
                     drawerShape = RectangleShape,
@@ -880,6 +895,7 @@ internal fun ConversationWorkspaceDialog(
                 Modifier
                     .fillMaxSize()
                     .background(ConversationWorkspaceCanvas)
+                    .then(drawerEdgeOpenModifier)
                     .then(searchReturnSwipeModifier),
             ) {
                 // A first launch must remain an actually empty local truth until the user chooses
@@ -1021,7 +1037,7 @@ internal fun ConversationWorkspaceDialog(
                             if (atLatest) chatFollowLatest = true
                         }
                     }
-                    LaunchedEffect(state.searchAnchorMessageId, state.messages) {
+                    LaunchedEffect(state.searchAnchorRequestId, state.messages) {
                         state.searchAnchorMessageId?.let { anchor ->
                             state.messages.indexOfFirst { it.message.messageId == anchor }.takeIf { it >= 0 }?.let { index -> listState.scrollToItem(index) }
                         }
@@ -1055,28 +1071,13 @@ internal fun ConversationWorkspaceDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                         if (state.importedFromChatGptExport) item(key = "chatgpt-imported-provenance", contentType = "chatgpt-imported-provenance") {
-                            Surface(
-                                color = Color(0xFFF1F8F4),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    "从 ChatGPT 导入 · 本地静态文本，不关联模型、Provider、费用或调用记录。",
-                                    modifier = Modifier.padding(12.dp),
-                                    color = SecondaryText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
+                            ImportedConversationProvenance("从 ChatGPT 导入")
                         }
                         if (state.importedFromClaudeExport) item(key = "claude-imported-provenance", contentType = "claude-imported-provenance") {
-                            Surface(color = Color(0xFFF1F8F4), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                                Text("从 Claude 导入 · 本地静态文本，不关联模型、Provider、费用或调用记录。", modifier = Modifier.padding(12.dp), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                            }
+                            ImportedConversationProvenance("从 Claude 导入")
                         }
                         if (state.importedFromChatGptZip) item(key = "chatgpt-zip-imported-provenance", contentType = "chatgpt-zip-imported-provenance") {
-                            Surface(color = Color(0xFFF1F8F4), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                                Text("从 ChatGPT ZIP 导入 · 本地静态文本，不关联模型、Provider、费用或调用记录。", modifier = Modifier.padding(12.dp), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                            }
+                            ImportedConversationProvenance("从 ChatGPT ZIP 导入")
                         }
                         val editableById = state.editableUserMessages.associateBy { it.messageId }
                         itemsIndexed(
@@ -1096,6 +1097,8 @@ internal fun ConversationWorkspaceDialog(
                                     assistantGenerationPhaseOverride = if (
                                         state.normalSendRetryInProgress && message.message.messageId == state.currentLeafId
                                     ) "南枫AI 继续生成…" else null,
+                                    searchAnchorAttachmentId = state.searchAnchorAttachmentId,
+                                    searchAnchorRequestId = state.searchAnchorRequestId,
                                     onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
                                     onCopyAssistant = { copyText(presentedMessagePlainText(it.message)) },
                                     onShareAssistant = shareMessage,
@@ -1389,7 +1392,7 @@ internal fun ConversationWorkspaceDialog(
             onDismiss = { searchAttachmentActionTarget = null },
             onOpenConversation = {
                 val hit = target.hit
-                onOpenSearchHit(com.nanzhufeng.ai.domain.ConversationSearchHit(hit.conversationId, hit.messageNodeId, hit.title, hit.attachment.displayName ?: "本地附件", false))
+                onLocateSearchAttachment(hit)
                 searchAttachmentActionTarget = null
                 returnToSearchAfterSearchOpen = true
                 searchPageVisible = false
@@ -1400,6 +1403,9 @@ internal fun ConversationWorkspaceDialog(
     // callback: physical left/right Back closes into the current chat canvas, never Activity.
     if (drawerState.isOpen) BackHandler { drawerScope.launch { drawerState.close() } }
     if (interceptsSystemBack && !drawerState.isOpen) BackHandler(onBack = onDismiss)
+    if (returnToSearchAfterSearchOpen && !drawerState.isOpen) {
+        BackHandler(onBack = ::returnToSearchAfterSearchOpen)
+    }
     conversationActionTarget?.let { target ->
         val conversation = state.conversations.firstOrNull { it.id.value == target.conversationId }
         if (conversation == null) conversationActionTarget = null else ConversationActionSheet(
@@ -1937,11 +1943,22 @@ private suspend fun LazyListState.scrollToTrueTop() {
     }
 }
 
-/** A search attachment may temporarily open its owner conversation; either horizontal swipe returns. */
+private val ScreenEdgeGestureWidth = 24.dp
+private val ScreenEdgeGestureTravel = 48.dp
+private const val ScreenEdgeGestureHorizontalRatio = 1.3f
+
+/** A search result may temporarily open its owner conversation; only an inward edge swipe returns. */
 private fun Modifier.searchAttachmentReturnSwipe(onReturn: () -> Unit): Modifier = pointerInput(onReturn) {
-    val returnThresholdPx = with(this) { 48.dp.toPx() }
+    val edgeWidthPx = ScreenEdgeGestureWidth.toPx()
+    val returnThresholdPx = ScreenEdgeGestureTravel.toPx()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
+        val direction = when {
+            down.position.x <= edgeWidthPx -> 1
+            down.position.x >= size.width - edgeWidthPx -> -1
+            else -> 0
+        }
+        if (direction == 0) return@awaitEachGesture
         var previousPosition = down.position
         var horizontalDistancePx = 0f
         var verticalDistancePx = 0f
@@ -1957,11 +1974,40 @@ private fun Modifier.searchAttachmentReturnSwipe(onReturn: () -> Unit): Modifier
             horizontalDistancePx += delta.x
             verticalDistancePx += delta.y
             if (
-                abs(horizontalDistancePx) >= returnThresholdPx &&
-                abs(horizontalDistancePx) > abs(verticalDistancePx) * 1.3f
+                horizontalDistancePx * direction >= returnThresholdPx &&
+                abs(horizontalDistancePx) > abs(verticalDistancePx) * ScreenEdgeGestureHorizontalRatio
             ) {
                 returned = true
                 onReturn()
+            }
+            if (change.changedToUpIgnoreConsumed()) break
+        }
+    }
+}
+
+/** The closed conversation drawer may open only from a deliberate inward swipe at the left edge. */
+private fun Modifier.openConversationDrawerOnStrictEdgeSwipe(onOpen: () -> Unit): Modifier = pointerInput(onOpen) {
+    val edgeWidthPx = ScreenEdgeGestureWidth.toPx()
+    val openThresholdPx = ScreenEdgeGestureTravel.toPx()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (down.position.x > edgeWidthPx) return@awaitEachGesture
+        var previousPosition = down.position
+        var horizontalDistancePx = 0f
+        var verticalDistancePx = 0f
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            val delta = change.position - previousPosition
+            previousPosition = change.position
+            horizontalDistancePx += delta.x
+            verticalDistancePx += delta.y
+            if (
+                horizontalDistancePx >= openThresholdPx &&
+                horizontalDistancePx > abs(verticalDistancePx) * ScreenEdgeGestureHorizontalRatio
+            ) {
+                onOpen()
+                break
             }
             if (change.changedToUpIgnoreConsumed()) break
         }
@@ -3609,12 +3655,12 @@ private fun SearchAttachmentCard(
         shape = cardShape,
         modifier = Modifier
             .fillMaxWidth()
-            .height(218.dp)
+            .height(204.dp)
             .onGloballyPositioned { anchorBounds = it.boundsInRoot() }
             .clip(cardShape)
             .combinedClickable(onClick = { onOpen(hit) }, onLongClick = { anchorBounds?.let { onLocate(hit, it) } }),
     ) {
-        Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(
                 Modifier.fillMaxWidth().height(104.dp).clip(thumbnailShape)
                     .background(if (isAudio) audioCatalogSurface else NeutralSystemSurface)
@@ -3645,7 +3691,8 @@ private fun SearchAttachmentCard(
             }
             Text(hit.attachment.displayName ?: "本地附件", minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
             Text(hit.title, minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-            Box(Modifier.fillMaxWidth().height(16.dp)) {
+            // One quiet label line is enough to keep cards aligned when no extra status exists.
+            Box(Modifier.fillMaxWidth().height(14.dp)) {
                 if (textPreview?.truncated == true) Text("仅显示开头片段", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
             }
         }
@@ -4588,6 +4635,8 @@ private fun MessageBubble(
     attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>,
     contextSelections: List<ContextSelectionAuditRecord>,
     assistantGenerationPhaseOverride: String? = null,
+    searchAnchorAttachmentId: AttachmentId? = null,
+    searchAnchorRequestId: Long = 0L,
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
     onCopyAssistant: (PresentedTranscriptMessage) -> Unit,
     onShareAssistant: (PresentedTranscriptMessage) -> Unit,
@@ -4604,6 +4653,8 @@ private fun MessageBubble(
     var messageBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val textBlocks = message.blocks.filterNot { it is PresentationBlock.AttachmentReference }
     val attachmentBlocks = message.blocks.filterIsInstance<PresentationBlock.AttachmentReference>()
+    val assistantImageBlocks = attachmentBlocks.filter { it.attachment.mimeType.startsWith("image/") }
+    val assistantOtherAttachmentBlocks = attachmentBlocks.filterNot { it.attachment.mimeType.startsWith("image/") }
     // USER is the only bubble role. The remaining transcript roles may use their own surface,
     // but share the document-sized text metrics instead of the bubble's compact inset.
     val isAssistantDocument = message.role != com.nanzhufeng.ai.domain.MessageRole.USER
@@ -4635,7 +4686,41 @@ private fun MessageBubble(
     val attachmentContent: @Composable () -> Unit = {
         if (attachmentBlocks.isNotEmpty()) DisableSelection {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                attachmentBlocks.forEach { block -> PresentationBlockView(block, attachmentPreviews, roleVisual.body, transcript.metadata.createdAt, isAssistantDocument, onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview) }
+                attachmentBlocks.forEach { block -> PresentationBlockView(
+                    block, attachmentPreviews, roleVisual.body, transcript.metadata.createdAt, isAssistantDocument,
+                    onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview,
+                    searchAnchorAttachmentId, searchAnchorRequestId,
+                ) }
+            }
+        }
+    }
+    val assistantAttachmentContent: @Composable () -> Unit = {
+        if (attachmentBlocks.isNotEmpty()) DisableSelection {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(
+                    start = ConversationAssistantReadingStartInset,
+                    end = ConversationAssistantReadingEndInset,
+                ),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (assistantImageBlocks.isNotEmpty()) {
+                    AssistantGeneratedImageGroup(
+                        messageId = message.messageId,
+                        images = assistantImageBlocks,
+                        attachmentPreviews = attachmentPreviews,
+                        onOpenImagePreview = onOpenImagePreview,
+                        searchAnchorAttachmentId = searchAnchorAttachmentId,
+                        searchAnchorRequestId = searchAnchorRequestId,
+                    )
+                }
+                assistantOtherAttachmentBlocks.forEach { block ->
+                    PresentationBlockView(
+                        block, attachmentPreviews, roleVisual.body, transcript.metadata.createdAt, true,
+                        onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview,
+                        searchAnchorAttachmentId, searchAnchorRequestId,
+                    )
+                }
             }
         }
     }
@@ -4688,7 +4773,7 @@ private fun MessageBubble(
                 )
             }
             if (textBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth()) { textContent() }
-            if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { attachmentContent() }
+            if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { assistantAttachmentContent() }
             AssistantMessageActionRow(transcript, contextSelections, onCopyAssistant, onShareAssistant, onExportAssistantMarkdown, onBranchAssistant)
         }
         else -> Surface(color = roleVisual.surface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -4858,7 +4943,7 @@ private fun AssistantMessageActionRow(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            horizontalArrangement = Arrangement.spacedBy(AssistantFooterActionSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AssistantMessageAction(
@@ -4866,7 +4951,6 @@ private fun AssistantMessageActionRow(
                 contentDescription = "复制",
                 onClick = { onCopy(transcript) },
                 iconSize = 16.dp,
-                modifier = Modifier.offset(x = -AssistantFooterLeadingActionVisualOffset),
             )
             AssistantMessageAction(
                 icon = Icons.Rounded.Share,
@@ -4874,14 +4958,6 @@ private fun AssistantMessageActionRow(
                 onClick = { onShare(transcript) },
                 iconSize = 16.dp,
             )
-            if (contextDisclosure != null) {
-                AssistantMessageAction(
-                    icon = Icons.Rounded.History,
-                    contentDescription = "查看本次上下文来源",
-                    onClick = { contextDisclosureVisible = true },
-                    iconSize = 16.dp,
-                )
-            }
             Box {
                 AssistantMessageAction(
                     icon = Icons.Rounded.MoreVert,
@@ -4894,6 +4970,16 @@ private fun AssistantMessageActionRow(
                     containerColor = ForegroundSurface,
                     shape = RoundedCornerShape(16.dp),
                 ) {
+                    if (contextDisclosure != null) {
+                        DropdownMenuItem(
+                            text = { Text("本次上下文来源") },
+                            leadingIcon = { Icon(Icons.Rounded.AccountTree, contentDescription = null) },
+                            onClick = {
+                                moreActionsExpanded = false
+                                contextDisclosureVisible = true
+                            },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("导出 Markdown") },
                         leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
@@ -5330,6 +5416,24 @@ private fun TranscriptDateDivider(label: String) = Row(verticalAlignment = Align
     HorizontalDivider(modifier = Modifier.weight(1f), color = SubtleDivider)
 }
 
+/** Import provenance is only a source label. It must never imply that the live conversation is locked. */
+@Composable
+private fun ImportedConversationProvenance(label: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        contentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.78f),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.wrapContentWidth(Alignment.Start),
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
 private data class TranscriptScrollMetrics(
     val progress: Float,
     val thumbFraction: Float,
@@ -5627,7 +5731,7 @@ private fun markdownInlineText(spans: List<InlinePresentation>): String = spans.
 } }
 
 @Composable
-private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>, bodyColor: Color, sentAt: java.time.Instant?, assistantDocument: Boolean, onOpenImagePreview: (AttachmentId) -> Unit, onOpenPdfPreview: (AttachmentId) -> Unit, onOpenVideoPreview: (AttachmentId) -> Unit, onOpenAudioPreview: (AttachmentId) -> Unit, onOpenTextPreview: (AttachmentId) -> Unit) {
+private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>, bodyColor: Color, sentAt: java.time.Instant?, assistantDocument: Boolean, onOpenImagePreview: (AttachmentId) -> Unit, onOpenPdfPreview: (AttachmentId) -> Unit, onOpenVideoPreview: (AttachmentId) -> Unit, onOpenAudioPreview: (AttachmentId) -> Unit, onOpenTextPreview: (AttachmentId) -> Unit, searchAnchorAttachmentId: AttachmentId? = null, searchAnchorRequestId: Long = 0L) {
     val typography = if (assistantDocument) AssistantDocumentTypography else UserBubbleTypography
     when (block) {
         is PresentationBlock.Heading -> {
@@ -5683,7 +5787,7 @@ private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: 
         }
         is PresentationBlock.Table -> MarkdownTable(block)
         is PresentationBlock.PlainText -> Text(block.raw, style = MaterialTheme.typography.bodyMedium, fontSize = scaledConversationTextUnit(typography.body), lineHeight = scaledConversationTextUnit(typography.bodyLineHeight))
-        is PresentationBlock.AttachmentReference -> AttachmentPreviewChip(attachmentPreviews[block.attachment.id], block.attachment.displayName, block.attachment.mimeType, block.attachment.byteCount, sentAt, onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview)
+        is PresentationBlock.AttachmentReference -> AttachmentPreviewChip(attachmentPreviews[block.attachment.id], block.attachment.displayName, block.attachment.mimeType, block.attachment.byteCount, sentAt, onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview, searchAnchorAttachmentId, searchAnchorRequestId)
         is PresentationBlock.SafeToolSummary -> Text("工具结果（安全摘要）：${block.toolName} · ${block.summary}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     }
 }
@@ -6968,8 +7072,170 @@ private fun originalAspectPreviewModifier(
     return Modifier.size(naturalWidth * scale, naturalHeight * scale)
 }
 
+/** Exact search navigation briefly washes the real attachment with the active theme color. */
 @Composable
-private fun AttachmentPreviewChip(preview: ConversationAttachmentPreview?, displayName: String?, mimeType: String, byteCount: Long, sentAt: java.time.Instant?, onOpenImagePreview: (AttachmentId) -> Unit, onOpenPdfPreview: (AttachmentId) -> Unit, onOpenVideoPreview: (AttachmentId) -> Unit, onOpenAudioPreview: (AttachmentId) -> Unit, onOpenTextPreview: (AttachmentId) -> Unit) {
+private fun Modifier.searchAttachmentAnchorHighlight(
+    targeted: Boolean,
+    requestId: Long,
+    cornerRadius: androidx.compose.ui.unit.Dp,
+): Modifier {
+    val requester = remember { BringIntoViewRequester() }
+    val intensity = remember { Animatable(0f) }
+    val accent = MaterialTheme.colorScheme.primary
+    LaunchedEffect(targeted, requestId) {
+        if (targeted && requestId > 0L) {
+            delay(90)
+            requester.bringIntoView()
+            intensity.snapTo(0f)
+            intensity.animateTo(1f, tween(durationMillis = 160, easing = LinearOutSlowInEasing))
+            intensity.animateTo(0f, tween(durationMillis = 1_100, easing = LinearOutSlowInEasing))
+        }
+    }
+    return this.bringIntoViewRequester(requester).drawWithContent {
+        drawContent()
+        if (intensity.value > 0f) {
+            drawRoundRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        accent.copy(alpha = 0.30f * intensity.value),
+                        accent.copy(alpha = 0.10f * intensity.value),
+                        Color.Transparent,
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height),
+                ),
+                cornerRadius = CornerRadius(cornerRadius.toPx(), cornerRadius.toPx()),
+            )
+        }
+    }
+}
+
+/**
+ * One assistant-owned image result, whether imported or generated locally, uses the same gallery.
+ * The selected image is the only large surface; fixed thumbnail slots switch it without changing
+ * the row geometry, and opening the large surface always routes to the verified original viewer.
+ */
+@Composable
+private fun AssistantGeneratedImageGroup(
+    messageId: MessageNodeId,
+    images: List<PresentationBlock.AttachmentReference>,
+    attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>,
+    onOpenImagePreview: (AttachmentId) -> Unit,
+    searchAnchorAttachmentId: AttachmentId?,
+    searchAnchorRequestId: Long,
+) {
+    val imageIds = images.map { it.attachment.id }
+    var selectedIdValue by rememberSaveable(messageId.value, imageIds.map { it.value }) {
+        mutableStateOf(imageIds.first().value)
+    }
+    LaunchedEffect(imageIds) {
+        if (imageIds.none { it.value == selectedIdValue }) selectedIdValue = imageIds.first().value
+    }
+    LaunchedEffect(searchAnchorAttachmentId, searchAnchorRequestId, imageIds) {
+        searchAnchorAttachmentId?.takeIf(imageIds::contains)?.let { selectedIdValue = it.value }
+    }
+    val selected = images.firstOrNull { it.attachment.id.value == selectedIdValue } ?: images.first()
+    val selectedPreview = attachmentPreviews[selected.attachment.id]
+    val selectedBitmap = remember(selectedPreview?.id, selectedPreview?.thumbnail?.bytes) {
+        selectedPreview?.thumbnail?.bytes?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
+    }
+    Column(
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .searchAttachmentAnchorHighlight(
+                targeted = searchAnchorAttachmentId in imageIds,
+                requestId = searchAnchorRequestId,
+                cornerRadius = 18.dp,
+            ),
+    ) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val maximumWidth = maxWidth.coerceAtMost(340.dp)
+            val maximumHeight = 260.dp
+            val aspectRatio = selectedBitmap
+                ?.let { bitmap -> bitmap.width.toFloat() / bitmap.height.toFloat().coerceAtLeast(1f) }
+                ?.coerceIn(0.12f, 8f)
+                ?: (4f / 3f)
+            val previewWidth: androidx.compose.ui.unit.Dp
+            val previewHeight: androidx.compose.ui.unit.Dp
+            if (aspectRatio >= maximumWidth.value / maximumHeight.value) {
+                previewWidth = maximumWidth
+                previewHeight = (maximumWidth / aspectRatio).coerceAtLeast(72.dp)
+            } else {
+                previewHeight = maximumHeight
+                previewWidth = (maximumHeight * aspectRatio).coerceAtLeast(72.dp)
+            }
+            Surface(
+                onClick = { onOpenImagePreview(selected.attachment.id) },
+                color = ForegroundSurface,
+                contentColor = BodyText,
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, NeutralBorder.copy(alpha = 0.72f)),
+                modifier = Modifier
+                    .size(previewWidth, previewHeight)
+                    .semantics { contentDescription = "AI 生成图片，点击全屏查看" },
+            ) {
+                if (selectedBitmap != null) {
+                    Image(
+                        bitmap = selectedBitmap.asImageBitmap(),
+                        contentDescription = selected.attachment.displayName ?: "AI 生成图片",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            selectedPreview?.unavailableReason ?: "图片预览暂不可用",
+                            color = SecondaryText,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+        if (images.size > 1) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                images.forEachIndexed { index, image ->
+                    val preview = attachmentPreviews[image.attachment.id]
+                    val bitmap = remember(preview?.id, preview?.thumbnail?.bytes) {
+                        preview?.thumbnail?.bytes?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
+                    }
+                    val selectedThumbnail = image.attachment.id.value == selectedIdValue
+                    Surface(
+                        onClick = { selectedIdValue = image.attachment.id.value },
+                        color = ForegroundSurface,
+                        contentColor = BodyText,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(
+                            if (selectedThumbnail) 2.dp else 1.dp,
+                            if (selectedThumbnail) MaterialTheme.colorScheme.primary else NeutralBorder.copy(alpha = 0.72f),
+                        ),
+                        modifier = Modifier
+                            .size(width = 58.dp, height = 48.dp)
+                            .semantics {
+                                contentDescription = "切换到第 ${index + 1} 张 AI 生成图片"
+                            },
+                    ) {
+                        if (bitmap != null) Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize().padding(3.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentPreviewChip(preview: ConversationAttachmentPreview?, displayName: String?, mimeType: String, byteCount: Long, sentAt: java.time.Instant?, onOpenImagePreview: (AttachmentId) -> Unit, onOpenPdfPreview: (AttachmentId) -> Unit, onOpenVideoPreview: (AttachmentId) -> Unit, onOpenAudioPreview: (AttachmentId) -> Unit, onOpenTextPreview: (AttachmentId) -> Unit, searchAnchorAttachmentId: AttachmentId? = null, searchAnchorRequestId: Long = 0L) {
     val isImage = mimeType.startsWith("image/")
     val isPdf = mimeType == "application/pdf"
     val isVideo = mimeType == "video/mp4"
@@ -7007,6 +7273,11 @@ private fun AttachmentPreviewChip(preview: ConversationAttachmentPreview?, displ
     Box(
         modifier = Modifier
             .onGloballyPositioned { attachmentBounds = it.boundsInRoot() }
+            .searchAttachmentAnchorHighlight(
+                targeted = preview?.id == searchAnchorAttachmentId,
+                requestId = searchAnchorRequestId,
+                cornerRadius = previewCorner,
+            )
             .pointerInput(preview?.id, mimeType) {
                 detectTapGestures(
                     onTap = { openAttachment() },

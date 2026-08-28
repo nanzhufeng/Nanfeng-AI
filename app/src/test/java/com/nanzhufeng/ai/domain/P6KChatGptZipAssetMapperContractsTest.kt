@@ -117,6 +117,62 @@ class P6KChatGptZipAssetMapperContractsTest {
     }
 
     @Test
+    fun `generated library image remains assistant owned when the user prompt is temporally closer`() {
+        val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
+        val candidate = P6KZipAssetCandidate("file_generated.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")
+        val archive = File.createTempFile("p6k-generated-assistant-owner-", ".zip")
+        try {
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                zip.entry(
+                    "library_files.json",
+                    """[{"file_id":"file_generated","file_name":"generated.png","created_at":"1970-01-01T00:01:46Z","image_gen_generation_id":"generation"}]""".toByteArray(),
+                )
+                zip.entry(
+                    "conversations-000.json",
+                    """[{"id":"conversation","create_time":1,"current_node":"assistant","mapping":{"user":{"parent":null,"message":{"author":{"role":"user"},"create_time":105,"content":{"content_type":"text","parts":["画一张图"]},"metadata":{}}},"assistant":{"parent":"user","message":{"author":{"role":"assistant"},"create_time":140,"content":{"content_type":"text","parts":["已生成"]},"metadata":{}}}}}]""".toByteArray(),
+                )
+                zip.entry("file_generated.dat", image)
+            }
+
+            val mapping = (P6KChatGptZipAssetMapper().map(archive, listOf(candidate)) as P6KZipAssetMappingResult.Mapped).value
+            val imageOwner = mapping.conversations.single().currentPath.single { "file_generated.dat" in it.entryNames }
+            assertEquals(MessageRole.ASSISTANT, imageOwner.role)
+            assertEquals("assistant", mapping.assets.getValue("file_generated.dat").candidate.sourceMessageId)
+        } finally {
+            archive.delete()
+        }
+    }
+
+    @Test
+    fun `generated library image creates an assistant output record when export has no assistant text node`() {
+        val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
+        val candidate = P6KZipAssetCandidate("file_generated.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")
+        val archive = File.createTempFile("p6k-generated-synthetic-assistant-", ".zip")
+        try {
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                zip.entry(
+                    "library_files.json",
+                    """[{"file_id":"file_generated","file_name":"generated.png","created_at":"1970-01-01T00:01:46Z","image_gen_generation_id":"generation"}]""".toByteArray(),
+                )
+                zip.entry(
+                    "conversations-000.json",
+                    """[{"id":"conversation","create_time":1,"current_node":"user","mapping":{"user":{"parent":null,"message":{"author":{"role":"user"},"create_time":105,"content":{"content_type":"text","parts":["draw"]},"metadata":{}}}}}]""".toByteArray(),
+                )
+                zip.entry("file_generated.dat", image)
+            }
+
+            val mapping = (P6KChatGptZipAssetMapper().map(archive, listOf(candidate)) as P6KZipAssetMappingResult.Mapped).value
+            val path = mapping.conversations.single().currentPath
+            assertEquals(listOf(MessageRole.USER, MessageRole.ASSISTANT), path.map(P6KZipSourceMessageAssets::role))
+            assertTrue(path.first().entryNames.isEmpty())
+            assertEquals(listOf("file_generated.dat"), path.last().entryNames)
+            assertEquals(path.last().sourceMessageId, mapping.assets.getValue("file_generated.dat").candidate.sourceMessageId)
+        } finally {
+            archive.delete()
+        }
+    }
+
+    @Test
     fun `library image-gen original outside bounded message windows stays unattributed`() {
         val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
         val candidate = P6KZipAssetCandidate("file_unbounded.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")

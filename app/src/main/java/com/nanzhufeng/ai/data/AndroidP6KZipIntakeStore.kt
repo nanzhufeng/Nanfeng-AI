@@ -190,13 +190,14 @@ class AndroidP6KZipIntakeStore(
             assets = task.assets.map { verifiedByEntry[it.entryName] ?: it },
             updatedAt = clock.instant(),
         ))
-        val occurrenceKeys = mapping.conversations.flatMap { conversation ->
+        val sourceOccurrenceKeys = mapping.conversations.flatMap { conversation ->
             conversation.currentPath.flatMap { message ->
                 message.entryNames.map { entryName -> Triple(conversation.sourceConversationId, message.sourceMessageId, entryName) }
             }
         }.toSet()
-        val missingEntryNames = occurrenceKeys.map(Triple<String, String, String>::third)
+        val missingEntryNames = sourceOccurrenceKeys.map(Triple<String, String, String>::third)
             .filterNot(mapping.assets::containsKey).toSet()
+        val occurrenceKeys = sourceOccurrenceKeys.filterTo(linkedSetOf()) { key -> mapping.assets.containsKey(key.third) }
         val recoveryConversations = mapping.conversations.filter { conversation ->
             conversation.currentPath.any { message -> message.entryNames.any(mapping.assets::containsKey) }
         }

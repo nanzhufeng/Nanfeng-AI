@@ -164,6 +164,10 @@ data class ConversationFoundationUiState(
     val searchHistory: List<String> = emptyList(),
     val searchHistoryOpen: Boolean = false,
     val searchAnchorMessageId: MessageNodeId? = null,
+    /** A quick-locate request owns the exact attachment, not merely its containing message. */
+    val searchAnchorAttachmentId: AttachmentId? = null,
+    /** Monotonic identity lets locating the same attachment twice replay its visible cue. */
+    val searchAnchorRequestId: Long = 0L,
     val selectedConversationId: com.nanzhufeng.ai.domain.ConversationId? = null,
     val surface: ConversationSurface = ConversationSurface.CHAT,
     val currentProjectId: String? = null,
@@ -1148,7 +1152,27 @@ class ConversationFoundationViewModel(
 
     fun openSearchHit(hit: ConversationSearchHit) {
         selectedChatConversationId = hit.conversationId
-        state = state.copy(surface = ConversationSurface.CHAT, selectedConversationId = hit.conversationId, searchPanelOpen = false, searchAnchorMessageId = hit.messageNodeId)
+        state = state.copy(
+            surface = ConversationSurface.CHAT,
+            selectedConversationId = hit.conversationId,
+            searchPanelOpen = false,
+            searchAnchorMessageId = hit.messageNodeId,
+            searchAnchorAttachmentId = null,
+            searchAnchorRequestId = state.searchAnchorRequestId + 1L,
+        )
+        reload()
+    }
+
+    fun locateSearchAttachment(hit: ConversationAttachmentSearchHit) {
+        selectedChatConversationId = hit.conversationId
+        state = state.copy(
+            surface = ConversationSurface.CHAT,
+            selectedConversationId = hit.conversationId,
+            searchPanelOpen = false,
+            searchAnchorMessageId = hit.messageNodeId,
+            searchAnchorAttachmentId = hit.attachment.id,
+            searchAnchorRequestId = state.searchAnchorRequestId + 1L,
+        )
         reload()
     }
 

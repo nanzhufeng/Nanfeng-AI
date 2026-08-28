@@ -101,6 +101,9 @@ class RoomP6KZipImportCommitStore(
             }
             dao.deleteReceiptsForTask(task.id.value)
             dao.deleteProvenanceForTask(task.id.value)
+            dao.deleteAssetOccurrenceReceiptsForTask(task.id.value)
+            dao.deleteAssetOccurrencesForTask(task.id.value)
+            dao.deleteAssetCatalogForTask(task.id.value)
             true
         })
     }.getOrDefault(false)

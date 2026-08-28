@@ -35,10 +35,11 @@ class P6F2BImagePreviewUiContractsTest {
     }
 
     @Test fun `search image cards keep one white-card height and reserve missing content as whitespace`() {
-        assertTrue(workspace.contains(".height(218.dp)"))
+        assertTrue(workspace.contains(".height(204.dp)"))
         assertTrue(workspace.contains("Modifier.fillMaxSize().padding(10.dp)"))
+        assertTrue(workspace.contains("verticalArrangement = Arrangement.spacedBy(6.dp)"))
         assertTrue(workspace.contains("minLines = 2, maxLines = 2"))
-        assertTrue(workspace.contains("Box(Modifier.fillMaxWidth().height(16.dp))"))
+        assertTrue(workspace.contains("Box(Modifier.fillMaxWidth().height(14.dp))"))
         assertTrue(workspace.contains("contentScale = ContentScale.Fit"))
     }
 

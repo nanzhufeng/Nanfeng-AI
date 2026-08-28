@@ -24,6 +24,7 @@ class P6IClaudeExportImportUiContractsTest {
 
     @Test fun `claude provenance is message-owned local text rather than provider metadata`() {
         val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
-        assertTrue(workspace.contains("从 Claude 导入 · 本地静态文本，不关联模型、Provider、费用或调用记录。"))
+        assertTrue(workspace.contains("ImportedConversationProvenance(\"从 Claude 导入\")"))
+        assertFalse(workspace.contains("本地静态文本，不关联模型、Provider、费用或调用记录"))
     }
 }

@@ -40,7 +40,11 @@ class RoomPrivateAttachmentRepository(private val database: NanfengAiDatabase) :
         database.runInTransaction {
             val dao = database.privateAttachmentAssetDao()
             val asset = dao.findById(id.value) ?: return@runInTransaction
-            if (dao.normalDraftReferences(id.value) > 0 || dao.normalMessageReferences(id.value) > 0) return@runInTransaction
+            if (
+                dao.normalDraftReferences(id.value) > 0 ||
+                dao.normalMessageReferences(id.value) > 0 ||
+                dao.zipOccurrenceReceiptReferences(id.value) > 0
+            ) return@runInTransaction
             dao.deleteById(id.value)
             removed = asset.toDomain()
         }

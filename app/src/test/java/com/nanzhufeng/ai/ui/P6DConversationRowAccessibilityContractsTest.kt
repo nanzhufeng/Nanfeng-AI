@@ -39,7 +39,7 @@ class P6DConversationRowAccessibilityContractsTest {
             assertTrue("legacy contract must route Android UI to the current contract", File(legacyContract).readText().contains("ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md"))
         }
         for (token in listOf(
-            "gesturesEnabled = true",
+            "gesturesEnabled = drawerState.isOpen",
             "val rowHeight = if (batchEditing) 44.dp else 36.dp",
             "modifier = modifier.width(176.dp).height(rowHeight)",
             "fun dismissRevealedConversation(): Boolean",
@@ -429,12 +429,13 @@ class P6DConversationRowAccessibilityContractsTest {
             assertTrue("missing $token", generation.contains(token))
         }
         assertFalse(generation.contains("正式回答生成后将自动替换此提示"))
-        for (token in listOf("horizontalAlignment = Alignment.Start", "Arrangement.spacedBy(1.dp)", "assistantFooterModelName", "costLabel", "BoxWithConstraints(Modifier.weight(1f))", "rememberTextMeasurer().measure", "costOnOwnLine", "textAlign = TextAlign.End", "composerModelShortNameForUser(it)")) {
+        for (token in listOf("horizontalAlignment = Alignment.Start", "Arrangement.spacedBy(AssistantFooterActionSpacing)", "assistantFooterModelName", "costLabel", "BoxWithConstraints(Modifier.weight(1f))", "rememberTextMeasurer().measure", "costOnOwnLine", "textAlign = TextAlign.End", "composerModelShortNameForUser(it)")) {
             assertTrue("missing concise left-aligned assistant footer token $token", actionRow.contains(token) || source.contains(token))
         }
-        for (token in listOf("AssistantFooterLeadingActionVisualOffset = 10.dp", "modifier = Modifier.offset(x = -AssistantFooterLeadingActionVisualOffset)", "AssistantMessageAction(", "modifier = modifier.size(36.dp)", "iconSize = 16.dp", "iconSize: androidx.compose.ui.unit.Dp = 20.dp", "modifier = Modifier.size(iconSize)", "tint = SecondaryText.copy(alpha = 0.72f)")) {
+        for (token in listOf("AssistantFooterActionSpacing = 4.dp", "AssistantMessageAction(", "modifier = modifier.size(36.dp)", "iconSize = 16.dp", "iconSize: androidx.compose.ui.unit.Dp = 20.dp", "modifier = Modifier.size(iconSize)", "tint = SecondaryText.copy(alpha = 0.72f)")) {
             assertTrue("missing compact unified assistant action token $token", actionRow.contains(token) || source.contains(token))
         }
+        assertFalse(actionRow.contains("AssistantFooterLeadingActionVisualOffset"))
         assertFalse(actionRow.contains("tint = BrandGreen"))
     }
 
@@ -725,10 +726,12 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
-    fun `drawer keeps Material standard right-swipe opening available from the chat canvas`() {
-        assertTrue(source.contains("gesturesEnabled = true"))
-        assertFalse(source.contains("openConversationDrawerOnStrictHorizontalGesture("))
-        assertFalse(source.contains("DrawerOpenMaxVerticalToHorizontalRatio"))
+    fun `drawer opens only from the strict left screen edge`() {
+        assertTrue(source.contains("gesturesEnabled = drawerState.isOpen"))
+        assertTrue(source.contains("openConversationDrawerOnStrictEdgeSwipe"))
+        assertTrue(source.contains("if (down.position.x > edgeWidthPx) return@awaitEachGesture"))
+        assertTrue(source.contains("val ScreenEdgeGestureWidth = 24.dp"))
+        assertTrue(source.contains("horizontalDistancePx >= openThresholdPx"))
     }
 
 

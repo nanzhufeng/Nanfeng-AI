@@ -1,6 +1,7 @@
 package com.nanzhufeng.ai.ui
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -8,7 +9,7 @@ class AssistantFooterActionAlignmentContractsTest {
     private val source = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
 
     @Test
-    fun `first assistant footer action visually aligns with reading text without shrinking its hit target`() {
+    fun `assistant footer actions share one left aligned hit box and equal spacing`() {
         val actionRow = source.substring(
             source.indexOf("private fun AssistantMessageActionRow"),
             source.indexOf("private fun MessageActionPopup"),
@@ -18,8 +19,9 @@ class AssistantFooterActionAlignmentContractsTest {
         val firstAction = actionRow.substring(firstActionStart, secondActionStart)
 
         assertTrue(source.contains("private val ConversationAssistantReadingStartInset = 24.dp"))
-        assertTrue(source.contains("private val AssistantFooterLeadingActionVisualOffset = 10.dp"))
-        assertTrue(firstAction.contains("modifier = Modifier.offset(x = -AssistantFooterLeadingActionVisualOffset)"))
+        assertTrue(source.contains("private val AssistantFooterActionSpacing = 4.dp"))
+        assertTrue(actionRow.contains("horizontalArrangement = Arrangement.spacedBy(AssistantFooterActionSpacing)"))
+        assertFalse(firstAction.contains("offset("))
         assertTrue(source.contains("modifier = modifier.size(36.dp)"))
     }
 }

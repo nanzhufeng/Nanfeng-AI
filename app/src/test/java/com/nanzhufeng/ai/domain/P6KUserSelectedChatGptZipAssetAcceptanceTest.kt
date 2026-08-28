@@ -67,6 +67,11 @@ class P6KUserSelectedChatGptZipAssetAcceptanceTest {
         assertEquals(686, mapping.inferredGeneratedImageEntries.size)
         assertEquals(64, mapping.originLinkedLibraryImageEntries.size)
         assertEquals(12, mapping.inferredLibraryImageEntries.size)
+        assertTrue(mapping.inferredGeneratedImageEntries.all { entryName ->
+            mapping.conversations.flatMap { it.currentPath }
+                .filter { entryName in it.entryNames }
+                .all { it.role == MessageRole.ASSISTANT }
+        })
         assertEquals(0, mapping.assets.keys.minus(referencedByImportedConversations).size)
         assertTrue(mapping.assets.values.any { it.candidate.mimeType.startsWith("image/") })
         assertTrue(mapping.assets.values.any { it.candidate.mimeType.startsWith("video/") })

@@ -99,7 +99,7 @@ data class P6KZipAssetRecoveryJob(
     val updatedAtMs: Long,
 )
 
-const val P6K_ZIP_ASSET_MAPPING_INDEX_VERSION = 3
+const val P6K_ZIP_ASSET_MAPPING_INDEX_VERSION = 4
 
 interface P6KZipAssetRecoveryJobRepository {
     fun save(job: P6KZipAssetRecoveryJob): P6KZipAssetRecoveryJob
@@ -161,7 +161,7 @@ data class P6KZipAssetMapping(
     val assets: Map<String, P6KZipMappedAsset>,
     val fallbackNamedEntries: Set<String> = emptySet(),
     /** library_files has no direct message IDs for these image-gen originals. Each entry is
-     * attached by the bounded, deterministic timestamp rule documented by the mapper. */
+     * attached to a bounded assistant record by the deterministic rule documented by the mapper. */
     val inferredGeneratedImageEntries: Set<String> = emptySet(),
     /** Non-generation library images carrying OpenAI's exact origin thread metadata. */
     val originLinkedLibraryImageEntries: Set<String> = emptySet(),
@@ -364,13 +364,31 @@ class P6KChatGptZipAssetMapper {
             keySelector = { (_, target) -> target.conversationId to target.messageId },
             valueTransform = Map.Entry<String, SourceMessageIndex>::key,
         )
+        val syntheticGeneratedByConversation = generatedTargets.values
+            .filter { it.syntheticParentMessageId != null }
+            .groupBy(SourceMessageIndex::conversationId)
         val conversations = parsed.flatMap(ParsedConversationAssets::conversations).map { conversation ->
-            conversation.copy(currentPath = conversation.currentPath.map { message ->
+            val syntheticByParent = syntheticGeneratedByConversation[conversation.sourceConversationId].orEmpty()
+                .distinctBy(SourceMessageIndex::messageId)
+                .groupBy { requireNotNull(it.syntheticParentMessageId) }
+            conversation.copy(currentPath = conversation.currentPath.flatMap { message ->
                 val generated = generatedByMessage[conversation.sourceConversationId to message.sourceMessageId].orEmpty()
-                if (generated.isEmpty()) message else message.copy(
+                val restored = if (generated.isEmpty()) message else message.copy(
                     entryNames = (message.entryNames + generated).distinct(),
                     sourceReferenceRecords = message.sourceReferenceRecords + generated.distinct().size,
                 )
+                listOf(restored) + syntheticByParent[message.sourceMessageId].orEmpty().map { synthetic ->
+                    val syntheticEntries = generatedByMessage[synthetic.conversationId to synthetic.messageId].orEmpty().distinct()
+                    P6KZipSourceMessageAssets(
+                        sourceMessageId = synthetic.messageId,
+                        parentSourceMessageId = message.sourceMessageId,
+                        role = MessageRole.ASSISTANT,
+                        createdAt = synthetic.createdAt,
+                        hasSafeText = false,
+                        entryNames = syntheticEntries,
+                        sourceReferenceRecords = syntheticEntries.size,
+                    )
+                }
             })
         }
         libraryTargets.forEach { (entryName, target) ->
@@ -429,6 +447,7 @@ class P6KChatGptZipAssetMapper {
         val role: MessageRole,
         val contentType: String?,
         val onCurrentPath: Boolean,
+        val syntheticParentMessageId: String? = null,
     )
 
     private data class ParsedConversationAssets(
@@ -438,9 +457,8 @@ class P6KChatGptZipAssetMapper {
 
     /** OpenAI exports image-gen originals in library_files with generation provenance but leaves
      * initiating_conversation_id/origination_message_id empty. The file creation time follows the
-     * current-path assistant reasoning record in this registered export. We therefore use only a
-     * bounded 60-second preceding assistant match; otherwise the nearest current message within
-     * 30 seconds, and finally the current-path counterpart of the nearest branch message. */
+     * current-path assistant reasoning record in this registered export. Every fallback remains
+     * assistant-owned: a nearby user prompt can identify timing, but can never own generated output. */
     private fun readLibraryImages(
         zip: ZipFile,
         candidates: Map<String, P6KZipAssetCandidate>,
@@ -527,6 +545,23 @@ class P6KChatGptZipAssetMapper {
         val current = messages.filter { message ->
             message.onCurrentPath && message.conversationId to message.messageId in visibleCurrentMessageKeys
         }
+        val currentAssistants = current.filter { it.role == MessageRole.ASSISTANT }
+        fun assistantOwned(anchor: SourceMessageIndex): SourceMessageIndex {
+            if (anchor.role == MessageRole.ASSISTANT) return anchor
+            currentAssistants.filter { it.conversationId == anchor.conversationId }
+                .minByOrNull { assistant -> kotlin.math.abs(assistant.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
+                ?.let { return it }
+            val stableId = "nanfeng-generated:${("${anchor.conversationId}|${anchor.messageId}").toByteArray().sha256().take(40)}"
+            return SourceMessageIndex(
+                anchor.conversationId,
+                stableId,
+                image.createdAt,
+                MessageRole.ASSISTANT,
+                "generated_image_group",
+                true,
+                anchor.messageId,
+            )
+        }
         fun preceding(role: MessageRole, contentType: String? = null): SourceMessageIndex? = current
             .asSequence()
             .filter { it.role == role && (contentType == null || it.contentType == contentType) }
@@ -536,12 +571,14 @@ class P6KChatGptZipAssetMapper {
         preceding(MessageRole.ASSISTANT)?.let { return it }
         current.minByOrNull { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
             ?.takeIf { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) <= GENERATED_IMAGE_NEAREST_WINDOW_MS }
-            ?.let { return it }
+            ?.let { nearest -> return assistantOwned(nearest) }
         val nearestBranch = messages.minByOrNull { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
             ?.takeIf { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) <= GENERATED_IMAGE_NEAREST_WINDOW_MS }
             ?: return null
-        return current.filter { it.conversationId == nearestBranch.conversationId }
+        val currentCounterpart = current.filter { it.conversationId == nearestBranch.conversationId }
             .minByOrNull { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
+            ?: return null
+        return assistantOwned(currentCounterpart)
     }
 
     private fun parseConversationAssets(

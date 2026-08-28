@@ -14,6 +14,31 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P6KZipImportRoomContractsTest {
+    @Test fun `schema fifty nine to sixty backfills one safe occurrence and flags unverifiable legacy rows`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-occurrence-migration-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(59) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE p6k_zip_asset_candidates (taskId TEXT NOT NULL, entryName TEXT NOT NULL, sha256 TEXT NOT NULL, byteCount INTEGER NOT NULL, mimeType TEXT NOT NULL, role TEXT NOT NULL, sourceConversationId TEXT, sourceMessageId TEXT, linkedConversationId TEXT, linkedMessageId TEXT, attachmentId TEXT, failure TEXT, PRIMARY KEY(taskId,entryName))")
+                db.execSQL("CREATE TABLE p6k_zip_asset_link_receipts (taskId TEXT NOT NULL, entryName TEXT NOT NULL, sha256 TEXT NOT NULL, attachmentId TEXT NOT NULL, conversationId TEXT NOT NULL, messageId TEXT NOT NULL, committedAtEpochMs INTEGER NOT NULL, PRIMARY KEY(taskId,entryName))")
+                db.execSQL("CREATE TABLE private_attachment_assets (attachmentId TEXT NOT NULL PRIMARY KEY, storageKey TEXT NOT NULL, mimeType TEXT NOT NULL, displayName TEXT, byteCount INTEGER NOT NULL, sha256 TEXT NOT NULL, schemaVersion INTEGER NOT NULL)")
+                db.execSQL("INSERT INTO private_attachment_assets VALUES ('attachment-a','attachments/v1/a','image/png','a.png',3,'aaa',1)")
+                db.execSQL("INSERT INTO p6k_zip_asset_candidates VALUES ('task','a.dat','aaa',3,'image/png','SOURCE_MAPPED','source-conversation','source-message','conversation','message','attachment-a',NULL)")
+                db.execSQL("INSERT INTO p6k_zip_asset_candidates VALUES ('task','b.dat','bbb',4,'image/png','SOURCE_MAPPED',NULL,NULL,'conversation','message','attachment-b',NULL)")
+                db.execSQL("INSERT INTO p6k_zip_asset_link_receipts VALUES ('task','a.dat','aaa','attachment-a','conversation','message',10)")
+                db.execSQL("INSERT INTO p6k_zip_asset_link_receipts VALUES ('task','b.dat','bbb','attachment-b','conversation','message',11)")
+            }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase; NanfengAiDatabase.MIGRATION_59_60.migrate(sqlite)
+        sqlite.query("SELECT entryName,verificationState FROM p6k_zip_asset_catalog ORDER BY entryName").use {
+            assertTrue(it.moveToFirst()); assertEquals("a.dat", it.getString(0)); assertEquals("LEGACY_BACKFILLED", it.getString(1))
+            assertTrue(it.moveToNext()); assertEquals("b.dat", it.getString(0)); assertEquals("NEEDS_REVERIFY", it.getString(1))
+        }
+        sqlite.query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence").use { assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0)) }
+        sqlite.query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt").use { assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0)) }
+        helper.close(); context.deleteDatabase(name)
+    }
+
     @Test fun `schema fifty eight to fifty nine adds exact and inferred library image counters`() {
         val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-library-image-counters-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
         val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(58) {

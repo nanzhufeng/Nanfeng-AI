@@ -98,12 +98,21 @@ class P6KZipAssetRecoveryJobContractsTest {
             assertEquals(0, resumed.failedConversationCount)
             assertEquals(P6KZipAssetRecoveryState.COMPLETED, completed.state)
             assertEquals(3, completed.processedConversations)
+            assertEquals(3, completed.totalOccurrences)
             assertEquals(3, completed.linkedOccurrences)
+            assertEquals(3, database.p6kZipImportTaskDao().assetOccurrenceCount(task.id.value))
+            assertEquals(3, database.p6kZipImportTaskDao().assetOccurrenceReceiptCount(task.id.value))
             assertEquals(3, database.p6kZipImportTaskDao().assets(task.id.value).count { it.attachmentId != null })
             assertEquals(3, task.items.sumOf { item ->
                 val conversationId = requireNotNull(requireNotNull(tasks.find(task.id)).items.single { it.id == item.id }.conversationId)
                 requireNotNull(conversations.findById(conversationId)).nodes.flatMap { it.content }.filterIsInstance<ContentBlock.Attachment>().size
             })
+
+            val replayed = RoomP6KZipMappedAssetLinkOwner(database, conversations)
+                .reconcileResumable(requireNotNull(tasks.find(task.id)), mapping, prepared, completed, at.plusSeconds(3))
+            assertEquals(0, replayed.linkedAssetCount)
+            assertEquals(3, database.p6kZipImportTaskDao().assetOccurrenceCount(task.id.value))
+            assertEquals(3, database.p6kZipImportTaskDao().assetOccurrenceReceiptCount(task.id.value))
         } finally {
             database.close()
         }

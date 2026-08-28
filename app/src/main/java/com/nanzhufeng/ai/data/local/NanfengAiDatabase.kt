@@ -1132,6 +1132,44 @@ data class P6KZipAssetCandidateEntity(
 )
 @Entity(tableName = "p6k_zip_asset_link_receipts", primaryKeys = ["taskId", "entryName"], indices = [Index("attachmentId"), Index("conversationId")])
 data class P6KZipAssetLinkReceiptEntity(val taskId: String, val entryName: String, val sha256: String, val attachmentId: String, val conversationId: String, val messageId: String, val committedAtEpochMs: Long)
+@Entity(tableName = "p6k_zip_asset_catalog", primaryKeys = ["taskId", "entryName"], indices = [Index("attachmentId")])
+data class P6KZipAssetCatalogEntity(
+    val taskId: String,
+    val entryName: String,
+    val sha256: String?,
+    val byteCount: Long?,
+    val mimeType: String?,
+    val displayName: String?,
+    val attachmentId: String?,
+    val missingInArchive: Boolean,
+    val verificationState: String,
+)
+@Entity(
+    tableName = "p6k_zip_asset_occurrence",
+    primaryKeys = ["taskId", "entryName", "sourceConversationId", "sourceMessageId"],
+    indices = [Index(value = ["taskId", "sourceConversationId"]), Index(value = ["taskId", "entryName"])],
+)
+data class P6KZipAssetOccurrenceEntity(
+    val taskId: String,
+    val entryName: String,
+    val sourceConversationId: String,
+    val sourceMessageId: String,
+)
+@Entity(
+    tableName = "p6k_zip_asset_occurrence_receipt",
+    primaryKeys = ["taskId", "entryName", "sourceConversationId", "sourceMessageId"],
+    indices = [Index("attachmentId"), Index("conversationId"), Index("messageId")],
+)
+data class P6KZipAssetOccurrenceReceiptEntity(
+    val taskId: String,
+    val entryName: String,
+    val sourceConversationId: String,
+    val sourceMessageId: String,
+    val conversationId: String,
+    val messageId: String,
+    val attachmentId: String,
+    val linkedAtMs: Long,
+)
 @Entity(tableName = "p6k_zip_asset_link_provenance", primaryKeys = ["attachmentId"], indices = [Index("taskId")])
 data class P6KZipAssetLinkProvenanceEntity(val attachmentId: String, val taskId: String, val entryName: String, val sha256: String, val conversationId: String, val messageId: String, val importedAtEpochMs: Long)
 @Entity(tableName = "p6k_zip_profile_candidates")
@@ -1508,8 +1546,20 @@ interface P6KZipImportTaskDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertMessageProvenance(values: List<P6KZipImportMessageProvenanceEntity>)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertReceipt(value: P6KZipImportReceiptEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertAssetLinkReceipt(value: P6KZipAssetLinkReceiptEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun upsertAssetCatalog(value: P6KZipAssetCatalogEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) fun insertAssetOccurrence(value: P6KZipAssetOccurrenceEntity): Long
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertAssetOccurrenceReceipt(value: P6KZipAssetOccurrenceReceiptEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertAssetLinkProvenance(value: P6KZipAssetLinkProvenanceEntity)
     @Query("SELECT * FROM p6k_zip_asset_link_receipts WHERE taskId=:taskId AND entryName=:entryName") fun assetLinkReceipt(taskId: String, entryName: String): P6KZipAssetLinkReceiptEntity?
+    @Query("SELECT * FROM p6k_zip_asset_occurrence_receipt WHERE taskId=:taskId AND entryName=:entryName AND sourceConversationId=:sourceConversationId AND sourceMessageId=:sourceMessageId")
+    fun assetOccurrenceReceipt(taskId: String, entryName: String, sourceConversationId: String, sourceMessageId: String): P6KZipAssetOccurrenceReceiptEntity?
+    @Query("SELECT COUNT(*) FROM p6k_zip_asset_catalog WHERE taskId=:taskId") fun assetCatalogCount(taskId: String): Int
+    @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence WHERE taskId=:taskId") fun assetOccurrenceCount(taskId: String): Int
+    @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt WHERE taskId=:taskId") fun assetOccurrenceReceiptCount(taskId: String): Int
+    @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt WHERE attachmentId=:attachmentId") fun assetOccurrenceReceiptCountForAttachment(attachmentId: String): Int
+    @Query("DELETE FROM p6k_zip_asset_occurrence_receipt WHERE taskId=:taskId") fun deleteAssetOccurrenceReceiptsForTask(taskId: String)
+    @Query("DELETE FROM p6k_zip_asset_occurrence WHERE taskId=:taskId") fun deleteAssetOccurrencesForTask(taskId: String)
+    @Query("DELETE FROM p6k_zip_asset_catalog WHERE taskId=:taskId") fun deleteAssetCatalogForTask(taskId: String)
     @Query("DELETE FROM p6k_zip_asset_link_receipts WHERE taskId=:taskId") fun deleteAssetLinkReceiptsForTask(taskId: String)
     @Query("DELETE FROM p6k_zip_asset_link_provenance WHERE taskId=:taskId") fun deleteAssetLinkProvenanceForTask(taskId: String)
     @Query("UPDATE p6k_zip_import_items SET status=:status, conversationId=:conversationId, failure=:failure WHERE taskId=:taskId AND id=:itemId") fun decideItem(taskId: String, itemId: String, status: String, conversationId: String?, failure: String?): Int
@@ -1949,6 +1999,9 @@ interface PrivateAttachmentAssetDao {
 
     @Query("SELECT COUNT(*) FROM message_content_blocks WHERE attachmentId = :attachmentId")
     fun normalMessageReferences(attachmentId: String): Int
+
+    @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt WHERE attachmentId = :attachmentId")
+    fun zipOccurrenceReceiptReferences(attachmentId: String): Int
 }
 
 @Dao
@@ -2341,6 +2394,9 @@ interface ResumableAttachmentUploadDao {
         P6KZipImportMessageEntity::class,
         P6KZipAssetCandidateEntity::class,
         P6KZipAssetLinkReceiptEntity::class,
+        P6KZipAssetCatalogEntity::class,
+        P6KZipAssetOccurrenceEntity::class,
+        P6KZipAssetOccurrenceReceiptEntity::class,
         P6KZipAssetLinkProvenanceEntity::class,
         P6KZipProfileCandidateEntity::class,
         P6KZipImportProvenanceEntity::class,
@@ -2382,7 +2438,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 59,
+    version = 60,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -3042,6 +3098,23 @@ abstract class NanfengAiDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `originLinkedLibraryImages` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `inferredLibraryImages` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        /** Splits unique ZIP bytes from message occurrences and one-to-one link receipts. */
+        val MIGRATION_59_60 = object : Migration(59, 60) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_zip_asset_catalog` (`taskId` TEXT NOT NULL, `entryName` TEXT NOT NULL, `sha256` TEXT, `byteCount` INTEGER, `mimeType` TEXT, `displayName` TEXT, `attachmentId` TEXT, `missingInArchive` INTEGER NOT NULL, `verificationState` TEXT NOT NULL, PRIMARY KEY(`taskId`, `entryName`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_asset_catalog_attachmentId` ON `p6k_zip_asset_catalog` (`attachmentId`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_zip_asset_occurrence` (`taskId` TEXT NOT NULL, `entryName` TEXT NOT NULL, `sourceConversationId` TEXT NOT NULL, `sourceMessageId` TEXT NOT NULL, PRIMARY KEY(`taskId`, `entryName`, `sourceConversationId`, `sourceMessageId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_asset_occurrence_taskId_sourceConversationId` ON `p6k_zip_asset_occurrence` (`taskId`, `sourceConversationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_asset_occurrence_taskId_entryName` ON `p6k_zip_asset_occurrence` (`taskId`, `entryName`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_zip_asset_occurrence_receipt` (`taskId` TEXT NOT NULL, `entryName` TEXT NOT NULL, `sourceConversationId` TEXT NOT NULL, `sourceMessageId` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `messageId` TEXT NOT NULL, `attachmentId` TEXT NOT NULL, `linkedAtMs` INTEGER NOT NULL, PRIMARY KEY(`taskId`, `entryName`, `sourceConversationId`, `sourceMessageId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_asset_occurrence_receipt_attachmentId` ON `p6k_zip_asset_occurrence_receipt` (`attachmentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_asset_occurrence_receipt_conversationId` ON `p6k_zip_asset_occurrence_receipt` (`conversationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_asset_occurrence_receipt_messageId` ON `p6k_zip_asset_occurrence_receipt` (`messageId`)")
+                db.execSQL("INSERT OR IGNORE INTO p6k_zip_asset_catalog (taskId,entryName,sha256,byteCount,mimeType,displayName,attachmentId,missingInArchive,verificationState) SELECT c.taskId,c.entryName,NULLIF(c.sha256,''),c.byteCount,c.mimeType,p.displayName,c.attachmentId,0,CASE WHEN c.sourceConversationId IS NOT NULL AND c.sourceMessageId IS NOT NULL THEN 'LEGACY_BACKFILLED' ELSE 'NEEDS_REVERIFY' END FROM p6k_zip_asset_candidates c LEFT JOIN private_attachment_assets p ON p.attachmentId=c.attachmentId")
+                db.execSQL("INSERT OR IGNORE INTO p6k_zip_asset_occurrence (taskId,entryName,sourceConversationId,sourceMessageId) SELECT r.taskId,r.entryName,c.sourceConversationId,c.sourceMessageId FROM p6k_zip_asset_link_receipts r JOIN p6k_zip_asset_candidates c ON c.taskId=r.taskId AND c.entryName=r.entryName WHERE c.sourceConversationId IS NOT NULL AND c.sourceMessageId IS NOT NULL")
+                db.execSQL("INSERT OR IGNORE INTO p6k_zip_asset_occurrence_receipt (taskId,entryName,sourceConversationId,sourceMessageId,conversationId,messageId,attachmentId,linkedAtMs) SELECT r.taskId,r.entryName,c.sourceConversationId,c.sourceMessageId,r.conversationId,r.messageId,r.attachmentId,r.committedAtEpochMs FROM p6k_zip_asset_link_receipts r JOIN p6k_zip_asset_candidates c ON c.taskId=r.taskId AND c.entryName=r.entryName WHERE c.sourceConversationId IS NOT NULL AND c.sourceMessageId IS NOT NULL")
             }
         }
     }

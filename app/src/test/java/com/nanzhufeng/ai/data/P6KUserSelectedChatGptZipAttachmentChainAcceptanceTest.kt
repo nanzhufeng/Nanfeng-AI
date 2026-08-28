@@ -8,6 +8,7 @@ import com.nanzhufeng.ai.data.local.RoomConversationRepository
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportCommitStore
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportTaskRepository
 import com.nanzhufeng.ai.data.local.RoomP6KZipMappedAssetLinkOwner
+import com.nanzhufeng.ai.data.local.RoomP6KZipAssetRecoveryJobRepository
 import com.nanzhufeng.ai.domain.AttachmentId
 import com.nanzhufeng.ai.domain.AttachmentReference
 import com.nanzhufeng.ai.domain.ContentBlock
@@ -19,6 +20,8 @@ import com.nanzhufeng.ai.domain.P6KChatGptZipCandidateMapper
 import com.nanzhufeng.ai.domain.P6KChatGptZipMappingResult
 import com.nanzhufeng.ai.domain.P6KZipAssetCandidate
 import com.nanzhufeng.ai.domain.P6KZipAssetMappingResult
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState
 import com.nanzhufeng.ai.domain.P6KZipImportTask
 import com.nanzhufeng.ai.domain.P6KZipTaskId
 import com.nanzhufeng.ai.domain.P6KZipTaskStatus
@@ -79,15 +82,37 @@ class P6KUserSelectedChatGptZipAttachmentChainAcceptanceTest {
                 )
             }
             val failures = mutableListOf<Throwable>()
+            val recoveryConversationCount = sourceMapping.conversations.count { conversation ->
+                conversation.currentPath.any { message -> message.entryNames.any(sourceMapping.assets::containsKey) }
+            }
+            val jobs = RoomP6KZipAssetRecoveryJobRepository(database)
+            val initialJob = jobs.save(
+                P6KZipAssetRecoveryJob(
+                    taskId = staged.id,
+                    state = P6KZipAssetRecoveryState.LINKING,
+                    totalOccurrences = 1616,
+                    totalConversations = recoveryConversationCount,
+                    uniqueAssets = 1615,
+                    updatedAtMs = at.toEpochMilli(),
+                ),
+            )
             val summary = RoomP6KZipMappedAssetLinkOwner(database, conversations, failures::add)
-                .reconcile(imported, sourceMapping, prepared, at.plusSeconds(1))
+                .reconcileResumable(imported, sourceMapping, prepared, initialJob, at.plusSeconds(1))
             assertTrue(
                 failures.joinToString(separator = "\n") { error ->
                     "${error.javaClass.name}: ${error.message.orEmpty()}\n${error.stackTraceToString()}"
                 },
                 failures.isEmpty(),
             )
-            assertEquals(sourceMapping.assets.size, summary.linkedAssetCount)
+            assertEquals(1616, summary.linkedAssetCount)
+            val completedJob = requireNotNull(jobs.find(staged.id))
+            assertEquals(P6KZipAssetRecoveryState.COMPLETED, completedJob.state)
+            assertEquals(1616, completedJob.totalOccurrences)
+            assertEquals(1616, completedJob.linkedOccurrences)
+            assertEquals(0, completedJob.failedConversations)
+            assertEquals(1615, database.p6kZipImportTaskDao().assetCatalogCount(staged.id.value))
+            assertEquals(1616, database.p6kZipImportTaskDao().assetOccurrenceCount(staged.id.value))
+            assertEquals(1616, database.p6kZipImportTaskDao().assetOccurrenceReceiptCount(staged.id.value))
             val currentPathReferences = conversations.snapshotsForSearch().flatMap { snapshot ->
                 MessageTree(snapshot.conversation, snapshot.nodes).contextPath()
                     .flatMap { node -> node.content.filterIsInstance<ContentBlock.Attachment>().map { it.attachment } }
