@@ -39,7 +39,7 @@ class P6KZipImportViewModelRecoveryContractsTest {
         P6KZipImportViewModel(store)
 
         assertTrue("show did not read its persisted projection", listed.await(2, TimeUnit.SECONDS))
-        assertEquals(1, listReads.get())
+        assertTrue(listReads.get() >= 1)
         assertEquals(0, zipReads.get())
     }
 }

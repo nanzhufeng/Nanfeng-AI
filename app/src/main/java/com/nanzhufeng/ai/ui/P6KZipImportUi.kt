@@ -46,11 +46,12 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
     fun show() {
         projectionRefresh?.cancel()
         projectionRefresh = viewModelScope.launch {
+            var discoveryPollsRemaining = 4
             do {
                 val snapshot = withContext(Dispatchers.IO) { store.list() to store.recoveryJobs() }
                 state = state.copy(tasks = snapshot.first, recoveryJobs = snapshot.second.associateBy { it.taskId.value })
                 val active = snapshot.second.any { it.state in setOf(P6KZipAssetRecoveryState.PENDING, P6KZipAssetRecoveryState.INDEXING, P6KZipAssetRecoveryState.MAPPING, P6KZipAssetRecoveryState.LINKING) }
-                if (active) delay(750) else break
+                if (active || discoveryPollsRemaining-- > 0) delay(750) else break
             } while (true)
         }
     }

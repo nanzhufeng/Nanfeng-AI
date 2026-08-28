@@ -21,7 +21,12 @@ import com.nanzhufeng.ai.R
 import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJobRepository
 import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryScheduler
 import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryState
+import com.nanzhufeng.ai.domain.P6KZipAssetRecoveryJob
+import com.nanzhufeng.ai.domain.P6KZipImportTaskRepository
+import com.nanzhufeng.ai.domain.P6KZipTaskStatus
 import com.nanzhufeng.ai.domain.P6KZipTaskId
+import com.nanzhufeng.ai.domain.ThirdPartyZipProvider
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +36,7 @@ import kotlinx.coroutines.launch
 class AndroidP6KZipAssetRecoveryScheduler(
     context: Context,
     private val jobs: P6KZipAssetRecoveryJobRepository,
+    private val tasks: P6KZipImportTaskRepository,
 ) : P6KZipAssetRecoveryScheduler {
     private val appContext = context.applicationContext
     private val manager: WorkManager by lazy { configuredWorkManager(appContext) }
@@ -44,7 +50,10 @@ class AndroidP6KZipAssetRecoveryScheduler(
     }
 
     override fun resumePending() {
-        resumeScope.launch { jobs.resumable().forEach { enqueue(it.taskId) } }
+        resumeScope.launch {
+            migrateLegacyJobs()
+            jobs.resumable().forEach { enqueue(it.taskId) }
+        }
     }
 
     override fun cancel(taskId: P6KZipTaskId) {
@@ -52,6 +61,37 @@ class AndroidP6KZipAssetRecoveryScheduler(
     }
 
     private fun workName(taskId: P6KZipTaskId) = "nfai.p6k-asset-recovery.${taskId.value}"
+
+    /** One-time bridge for imports created before the Room recovery job existed. */
+    private fun migrateLegacyJobs() {
+        val root = File(appContext.filesDir, "p6k-zip-import/v1")
+        val archives = File(root, "archives")
+        tasks.list().forEach { task ->
+            if (jobs.find(task.id) != null || task.provider != ThirdPartyZipProvider.CHATGPT) return@forEach
+            if (task.status !in setOf(P6KZipTaskStatus.COMPLETED, P6KZipTaskStatus.PARTIALLY_COMPLETED)) return@forEach
+            val completedMarker = File(root, "${task.id.value}.assets-v2.done")
+            val linked = task.assets.count { it.attachmentId != null }
+            val job = when {
+                completedMarker.isFile -> P6KZipAssetRecoveryJob(
+                    taskId = task.id,
+                    state = P6KZipAssetRecoveryState.COMPLETED,
+                    totalOccurrences = linked,
+                    linkedOccurrences = linked,
+                    processedConversations = task.items.mapNotNull { it.conversationId }.distinct().size,
+                    uniqueAssets = linked,
+                    updatedAtMs = System.currentTimeMillis(),
+                )
+                File(archives, "${task.id.value}.zip").isFile -> P6KZipAssetRecoveryJob(
+                    taskId = task.id,
+                    state = P6KZipAssetRecoveryState.PENDING,
+                    updatedAtMs = System.currentTimeMillis(),
+                )
+                else -> null
+            }
+            job?.let(jobs::save)
+            if (job?.state == P6KZipAssetRecoveryState.COMPLETED) completedMarker.delete()
+        }
+    }
 
     private fun configuredWorkManager(context: Context): WorkManager {
         runCatching {

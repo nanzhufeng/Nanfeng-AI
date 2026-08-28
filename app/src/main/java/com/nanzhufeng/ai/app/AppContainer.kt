@@ -353,7 +353,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     private val p6kZipManualAssetLinkOwner = RoomP6KZipManualAssetLinkOwner(database, conversationRepository)
     private val p6kZipMappedAssetLinkOwner = RoomP6KZipMappedAssetLinkOwner(database, conversationRepository)
     private val manageP6KChatGptZipImport = com.nanzhufeng.ai.domain.ManageP6KChatGptZipImportUseCase(p6kZipImportTasks, p6kZipCommitStore, clock)
-    val p6kZipAssetRecoveryScheduler = AndroidP6KZipAssetRecoveryScheduler(context, p6kZipAssetRecoveryJobs)
+    val p6kZipAssetRecoveryScheduler = AndroidP6KZipAssetRecoveryScheduler(context, p6kZipAssetRecoveryJobs, p6kZipImportTasks)
     val p6kZipIntakeStore = AndroidP6KZipIntakeStore(
         context, p6kZipImportTasks, manageP6KChatGptZipImport, p6kProfilePersonalizationSettings,
         p6kZipManualAssetLinkOwner, p6kZipMappedAssetLinkOwner, privateAttachmentStore,
