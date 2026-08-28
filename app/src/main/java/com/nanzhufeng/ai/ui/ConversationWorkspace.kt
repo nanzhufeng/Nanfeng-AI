@@ -3609,11 +3609,12 @@ private fun SearchAttachmentCard(
         shape = cardShape,
         modifier = Modifier
             .fillMaxWidth()
+            .height(218.dp)
             .onGloballyPositioned { anchorBounds = it.boundsInRoot() }
             .clip(cardShape)
             .combinedClickable(onClick = { onOpen(hit) }, onLongClick = { anchorBounds?.let { onLocate(hit, it) } }),
     ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Box(
                 Modifier.fillMaxWidth().height(104.dp).clip(thumbnailShape)
                     .background(if (isAudio) audioCatalogSurface else NeutralSystemSurface)
@@ -3642,9 +3643,11 @@ private fun SearchAttachmentCard(
                 }
                 if (isVideo) Icon(Icons.Rounded.PlayArrow, contentDescription = "视频", tint = Color.White, modifier = Modifier.align(Alignment.Center).background(BodyText, CircleShape).padding(5.dp))
             }
-            Text(hit.attachment.displayName ?: "本地附件", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-            Text(hit.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-            if (textPreview?.truncated == true) Text("仅显示开头片段", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+            Text(hit.attachment.displayName ?: "本地附件", minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            Text(hit.title, minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+            Box(Modifier.fillMaxWidth().height(16.dp)) {
+                if (textPreview?.truncated == true) Text("仅显示开头片段", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+            }
         }
     }
 }
@@ -7901,9 +7904,14 @@ private fun ImagePreviewDialog(
                     ) {
                         val viewportWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
                         val viewportHeightPx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-                        val sourceRatio = bitmap.height.toFloat() / bitmap.width.toFloat().coerceAtLeast(1f)
-                        val renderedWidthPx = viewportWidthPx * zoom
-                        val renderedHeightPx = renderedWidthPx * sourceRatio
+                        val sourceWidthPx = bitmap.width.toFloat().coerceAtLeast(1f)
+                        val sourceHeightPx = bitmap.height.toFloat().coerceAtLeast(1f)
+                        val initialScale = initialOriginalImageScale(sourceWidthPx, sourceHeightPx, viewportWidthPx, viewportHeightPx)
+                        val fittedWidthPx = sourceWidthPx * initialScale
+                        val fittedHeightPx = sourceHeightPx * initialScale
+                        val maximumZoom = maximumOriginalImageZoom(initialScale)
+                        val renderedWidthPx = fittedWidthPx * zoom
+                        val renderedHeightPx = fittedHeightPx * zoom
                         val placedX = if (renderedWidthPx <= viewportWidthPx) (viewportWidthPx - renderedWidthPx) / 2f else offsetX.coerceIn(viewportWidthPx - renderedWidthPx, 0f)
                         val placedY = if (renderedHeightPx <= viewportHeightPx) (viewportHeightPx - renderedHeightPx) / 2f else offsetY.coerceIn(viewportHeightPx - renderedHeightPx, 0f)
                         val density = LocalDensity.current
@@ -7913,10 +7921,10 @@ private fun ImagePreviewDialog(
                             Modifier.fillMaxSize().pointerInput(preview.id, viewportWidthPx, viewportHeightPx) {
                                 detectTransformGestures { centroid, pan, zoomChange, _ ->
                                     val oldZoom = zoom
-                                    val nextZoom = (oldZoom * zoomChange).coerceIn(1f, 6f)
+                                    val nextZoom = (oldZoom * zoomChange).coerceIn(1f, maximumZoom)
                                     val ratio = nextZoom / oldZoom
-                                    val nextWidth = viewportWidthPx * nextZoom
-                                    val nextHeight = nextWidth * sourceRatio
+                                    val nextWidth = fittedWidthPx * nextZoom
+                                    val nextHeight = fittedHeightPx * nextZoom
                                     val nextX = centroid.x - (centroid.x - placedX) * ratio + pan.x
                                     val nextY = centroid.y - (centroid.y - placedY) * ratio + pan.y
                                     zoom = nextZoom
@@ -7925,13 +7933,13 @@ private fun ImagePreviewDialog(
                                 }
                             },
                         ) {
-                            // Remeasure at the requested zoom instead of magnifying a screen-sized
-                            // graphics layer. Skia therefore samples the original pixels at every
-                            // zoom level, and a long screenshot opens width-fit from its top edge.
+                            // Remeasure from the original bitmap at every zoom. Tall screenshots
+                            // open width-filled and top-aligned, then pan vertically; ordinary
+                            // images open wholly visible. Zoom is not capped before native pixels.
                             Image(
                                 bitmap = bitmap.asImageBitmap(),
                                 contentDescription = "${preview.displayName ?: "本地图片"} 原图预览",
-                                contentScale = ContentScale.FillBounds,
+                                contentScale = ContentScale.Fit,
                                 modifier = Modifier
                                     .size(renderedWidth, renderedHeight)
                                     .offset { IntOffset(placedX.toInt(), placedY.toInt()) },
