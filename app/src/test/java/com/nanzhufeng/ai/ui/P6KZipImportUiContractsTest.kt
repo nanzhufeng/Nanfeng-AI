@@ -102,5 +102,9 @@ class P6KZipImportUiContractsTest {
         assertTrue(ui.contains("ChatGPT 导出包中缺少文件；不是本地恢复丢失"))
         assertTrue(ui.contains("缺少官方显示名，已使用文件 ID 回退命名"))
         assertTrue(ui.contains("重试附件恢复"))
+        val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        assertTrue(workspace.contains("val ownedPlaybackFile = localFile"))
+        assertTrue(workspace.contains("onDispose { ownedPlaybackFile?.delete() }"))
+        assertFalse(workspace.contains("DisposableEffect(localFile) { onDispose { localFile?.delete() } }"))
     }
 }

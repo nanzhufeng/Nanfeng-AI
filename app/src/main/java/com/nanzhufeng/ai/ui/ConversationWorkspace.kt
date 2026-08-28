@@ -7388,7 +7388,13 @@ private fun rememberLocalPlaybackFile(
             }.getOrNull()
         }
     }
-    DisposableEffect(localFile) { onDispose { localFile?.delete() } }
+    DisposableEffect(localFile) {
+        // Capture the file owned by this exact effect. Reading delegated localFile from
+        // onDispose observes the newly assigned file when the key changes and deletes it
+        // before MediaPlayer/VideoView can open it.
+        val ownedPlaybackFile = localFile
+        onDispose { ownedPlaybackFile?.delete() }
+    }
     return localFile
 }
 
@@ -7712,10 +7718,9 @@ private fun AudioPreviewDialog(preview: ConversationAttachmentAudioPreview, onCl
         }
         scrubPositionMillis = null
     }
-    DisposableEffect(preview.id, localFile) {
+    DisposableEffect(preview.id) {
         onDispose {
             player?.release()
-            localFile?.delete()
         }
     }
     LaunchedEffect(localFile) {
