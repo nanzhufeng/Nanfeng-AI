@@ -1108,6 +1108,8 @@ data class P6KZipAssetRecoveryJobEntity(
     val uniqueAssets: Int,
     val missingEntries: Int,
     val unattributedCandidates: Int,
+    val sourceReferenceRecords: Int,
+    val fallbackNamedAssets: Int,
     val lastFailureKind: String?,
     val lastFailureAtMs: Long?,
     val indexVersion: Int,
@@ -2377,7 +2379,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 56,
+    version = 57,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -3017,6 +3019,13 @@ abstract class NanfengAiDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_zip_asset_recovery_jobs` (`taskId` TEXT NOT NULL, `state` TEXT NOT NULL, `totalOccurrences` INTEGER NOT NULL, `linkedOccurrences` INTEGER NOT NULL, `totalConversations` INTEGER NOT NULL, `processedConversations` INTEGER NOT NULL, `failedConversations` INTEGER NOT NULL, `uniqueAssets` INTEGER NOT NULL, `missingEntries` INTEGER NOT NULL, `unattributedCandidates` INTEGER NOT NULL, `lastFailureKind` TEXT, `lastFailureAtMs` INTEGER, `indexVersion` INTEGER NOT NULL, `updatedAtMs` INTEGER NOT NULL, PRIMARY KEY(`taskId`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_asset_recovery_jobs_state_updatedAtMs` ON `p6k_zip_asset_recovery_jobs` (`state`, `updatedAtMs`)")
+            }
+        }
+        /** Adds explicit source-record and fallback-name counters for honest ZIP result reporting. */
+        val MIGRATION_56_57 = object : Migration(56, 57) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `sourceReferenceRecords` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `p6k_zip_asset_recovery_jobs` ADD COLUMN `fallbackNamedAssets` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

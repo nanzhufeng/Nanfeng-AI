@@ -14,6 +14,22 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P6KZipImportRoomContractsTest {
+    @Test fun `schema fifty six to fifty seven preserves jobs and adds honest source counters`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-recovery-counters-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(56) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE p6k_zip_asset_recovery_jobs (taskId TEXT NOT NULL PRIMARY KEY, state TEXT NOT NULL, totalOccurrences INTEGER NOT NULL, linkedOccurrences INTEGER NOT NULL, totalConversations INTEGER NOT NULL, processedConversations INTEGER NOT NULL, failedConversations INTEGER NOT NULL, uniqueAssets INTEGER NOT NULL, missingEntries INTEGER NOT NULL, unattributedCandidates INTEGER NOT NULL, lastFailureKind TEXT, lastFailureAtMs INTEGER, indexVersion INTEGER NOT NULL, updatedAtMs INTEGER NOT NULL)")
+                db.execSQL("INSERT INTO p6k_zip_asset_recovery_jobs VALUES ('preserved','COMPLETED',854,853,1,1,0,853,1,822,NULL,NULL,1,1)")
+            }
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase; NanfengAiDatabase.MIGRATION_56_57.migrate(sqlite)
+        sqlite.query("SELECT totalOccurrences,sourceReferenceRecords,fallbackNamedAssets FROM p6k_zip_asset_recovery_jobs WHERE taskId='preserved'").use {
+            assertTrue(it.moveToFirst()); assertEquals(854, it.getInt(0)); assertEquals(0, it.getInt(1)); assertEquals(0, it.getInt(2))
+        }
+        helper.close(); context.deleteDatabase(name)
+    }
+
     @Test fun `schema fifty five to fifty six appends durable content free ZIP recovery jobs`() {
         val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-recovery-job-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
         val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(55) {

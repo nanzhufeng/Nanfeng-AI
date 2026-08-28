@@ -91,7 +91,9 @@ class P6KZipImportUiContractsTest {
         assertTrue(scheduling.contains("setForeground(recoveryForegroundInfo(applicationContext))"))
         assertTrue(scheduling.contains("FOREGROUND_SERVICE_TYPE_DATA_SYNC"))
         assertFalse(scheduling.contains("setExpedited"))
-        assertTrue(ui.contains("正在恢复 ${'$'}{job.linkedOccurrences}/${'$'}{job.totalOccurrences}"))
+        assertTrue(ui.contains("正在恢复 ${'$'}{job.linkedOccurrences}/${'$'}{job.uniqueAssets}"))
+        assertTrue(ui.contains("ChatGPT 导出包中缺少文件；不是本地恢复丢失"))
+        assertTrue(ui.contains("缺少官方显示名，已使用文件 ID 回退命名"))
         assertTrue(ui.contains("重试附件恢复"))
     }
 }

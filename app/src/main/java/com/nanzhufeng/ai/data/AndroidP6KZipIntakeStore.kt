@@ -189,16 +189,27 @@ class AndroidP6KZipIntakeStore(
             assets = task.assets.map { verifiedByEntry[it.entryName] ?: it },
             updatedAt = clock.instant(),
         ))
-        val recoveryConversations = mapping.conversations.filter { conversation -> conversation.currentPath.any { it.entryNames.isNotEmpty() } }
-        val totalOccurrences = recoveryConversations.sumOf { conversation ->
-            conversation.currentPath.sumOf { message -> message.entryNames.distinct().size }
+        val occurrenceKeys = mapping.conversations.flatMap { conversation ->
+            conversation.currentPath.flatMap { message ->
+                message.entryNames.map { entryName -> Triple(conversation.sourceConversationId, message.sourceMessageId, entryName) }
+            }
+        }.toSet()
+        val missingEntryNames = occurrenceKeys.map(Triple<String, String, String>::third)
+            .filterNot(mapping.assets::containsKey).toSet()
+        val recoveryConversations = mapping.conversations.filter { conversation ->
+            conversation.currentPath.any { message -> message.entryNames.any(mapping.assets::containsKey) }
         }
         job = repository.save(job.copy(
             state = P6KZipAssetRecoveryState.MAPPING,
-            totalOccurrences = totalOccurrences,
+            totalOccurrences = occurrenceKeys.size,
             totalConversations = recoveryConversations.size,
             uniqueAssets = mapping.assets.size,
+            missingEntries = missingEntryNames.size,
             unattributedCandidates = (task.assets.size - mapping.assets.size).coerceAtLeast(0),
+            sourceReferenceRecords = mapping.conversations.sumOf { conversation ->
+                conversation.currentPath.sumOf { it.sourceReferenceRecords }
+            },
+            fallbackNamedAssets = mapping.fallbackNamedEntries.size,
             updatedAtMs = clock.millis(),
         ))
         val prepared = mapping.assets.mapValues { (entryName, mapped) ->

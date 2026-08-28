@@ -31,6 +31,34 @@ class P6KChatGptZipAssetMapperContractsTest {
             assertEquals("user", mapped.candidate.sourceMessageId)
             assertEquals(listOf("user", "assistant"), result.value.conversations.single().currentPath.map { it.sourceMessageId })
             assertTrue(!result.value.conversations.single().currentPath.first().hasSafeText)
+            assertEquals(1, result.value.conversations.single().currentPath.first().sourceReferenceRecords)
+            assertEquals(listOf("file_fixture.dat"), result.value.conversations.single().currentPath.first().entryNames)
+            assertTrue(result.value.fallbackNamedEntries.isEmpty())
+        } finally {
+            archive.delete()
+        }
+    }
+
+    @Test
+    fun `official reference missing from archive remains visible without becoming a mapped asset`() {
+        val bytes = byteArrayOf(1, 2, 3)
+        val candidate = P6KZipAssetCandidate("file_present.dat", bytes.sha256ForTest(), bytes.size.toLong(), "application/octet-stream")
+        val archive = File.createTempFile("p6k-missing-asset-map-", ".zip")
+        try {
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                zip.entry(
+                    "conversations-000.json",
+                    """[{"id":"conversation","create_time":1,"current_node":"message","mapping":{"message":{"parent":null,"message":{"author":{"role":"user"},"create_time":1,"content":{"parts":[]},"metadata":{"attachments":[{"id":"file_present"},{"id":"file_missing"}]}}}}}]""".toByteArray(),
+                )
+                zip.entry("file_present.dat", bytes)
+            }
+
+            val mapping = (P6KChatGptZipAssetMapper().map(archive, listOf(candidate)) as P6KZipAssetMappingResult.Mapped).value
+            val message = mapping.conversations.single().currentPath.single()
+            assertEquals(listOf("file_present.dat", "file_missing.dat"), message.entryNames)
+            assertEquals(2, message.sourceReferenceRecords)
+            assertEquals(setOf("file_present.dat"), mapping.assets.keys)
+            assertEquals(setOf("file_present.dat"), mapping.fallbackNamedEntries)
         } finally {
             archive.delete()
         }

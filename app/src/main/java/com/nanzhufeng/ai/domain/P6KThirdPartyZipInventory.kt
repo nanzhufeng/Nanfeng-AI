@@ -88,6 +88,8 @@ data class P6KZipAssetRecoveryJob(
     val uniqueAssets: Int = 0,
     val missingEntries: Int = 0,
     val unattributedCandidates: Int = 0,
+    val sourceReferenceRecords: Int = 0,
+    val fallbackNamedAssets: Int = 0,
     val lastFailureKind: P6KZipAssetRecoveryFailureKind? = null,
     val lastFailureAtMs: Long? = null,
     val indexVersion: Int = 1,
@@ -136,6 +138,7 @@ data class P6KZipSourceMessageAssets(
     val createdAt: Instant,
     val hasSafeText: Boolean,
     val entryNames: List<String>,
+    val sourceReferenceRecords: Int = entryNames.size,
 )
 
 data class P6KZipSourceConversationAssets(
@@ -151,6 +154,7 @@ data class P6KZipMappedAsset(
 data class P6KZipAssetMapping(
     val conversations: List<P6KZipSourceConversationAssets>,
     val assets: Map<String, P6KZipMappedAsset>,
+    val fallbackNamedEntries: Set<String> = emptySet(),
 )
 
 data class P6KZipMappedAssetLinkSummary(
@@ -316,6 +320,9 @@ class P6KChatGptZipAssetMapper {
                 parseConversationAssets(bytes, candidateByEntry, ownership).asSequence()
             }
             .toList()
+        val fallbackNamedEntries = ownership.keys.filterTo(linkedSetOf()) { entryName ->
+            normalizedDisplayName(names[entryName]) == null
+        }
         val assets = ownership.mapValues { (entryName, owner) ->
             val candidate = requireNotNull(candidateByEntry[entryName])
             val displayName = safeDisplayName(names[entryName], entryName, candidate.mimeType)
@@ -327,7 +334,7 @@ class P6KChatGptZipAssetMapper {
                 displayName,
             )
         }
-        P6KZipAssetMappingResult.Mapped(P6KZipAssetMapping(conversations, assets))
+        P6KZipAssetMappingResult.Mapped(P6KZipAssetMapping(conversations, assets, fallbackNamedEntries))
     } catch (_: Exception) {
         P6KZipAssetMappingResult.Rejected
     }
@@ -384,9 +391,15 @@ class P6KChatGptZipAssetMapper {
                 val contentPointers = parts.filterIsInstance<StrictJsonValue.Obj>().flatMap { part ->
                     listOfNotNull(part.string("asset_pointer"), part.obj("audio_asset_pointer")?.string("asset_pointer"))
                 }
-                val entryNames = (metadataPointers + contentPointers).mapNotNull(::entryNameForPointer)
-                    .filter(candidates::containsKey).distinct()
-                entryNames.forEach { entryName ->
+                val metadataEntries = metadataPointers.mapNotNull(::entryNameForPointer)
+                val contentEntries = contentPointers.mapNotNull(::entryNameForPointer)
+                // metadata.attachments is the export's attachment inventory. A content pointer
+                // can corroborate it or add an entry that is actually present, but a dangling
+                // content-only pointer is not promoted into a fabricated missing attachment.
+                val contentOnlyPresent = contentEntries.filter { it !in metadataEntries && candidates.containsKey(it) }
+                val entryNames = (metadataEntries + contentOnlyPresent).distinct()
+                val sourceReferenceRecords = metadataEntries.size + contentOnlyPresent.distinct().size
+                entryNames.filter(candidates::containsKey).forEach { entryName ->
                     val owner = conversationId to messageId
                     // Official exports can reference the same file ID from more than one message.
                     // Keep one deterministic metadata owner while currentPath retains every exact
@@ -395,7 +408,11 @@ class P6KChatGptZipAssetMapper {
                     ownership.putIfAbsent(entryName, owner)
                 }
                 if (!hasText && entryNames.isEmpty()) return@mapNotNull null
-                P6KZipSourceMessageAssets(messageId, node.string("parent"), role, message.timestamp("create_time") ?: fallbackTime, hasText, entryNames)
+                P6KZipSourceMessageAssets(
+                    messageId, node.string("parent"), role,
+                    message.timestamp("create_time") ?: fallbackTime,
+                    hasText, entryNames, sourceReferenceRecords,
+                )
             }
             P6KZipSourceConversationAssets(conversationId, messages)
         }
@@ -416,9 +433,13 @@ class P6KChatGptZipAssetMapper {
     }?.takeIf { it.isFinite() && it >= 0.0 }?.let { Instant.ofEpochMilli((it * 1000.0).toLong()) }
 
     private fun safeDisplayName(value: String?, entryName: String, mimeType: String): String {
-        val safe = value.orEmpty().substringAfterLast('/').substringAfterLast('\\').filterNot(Char::isISOControl).trim().take(160)
+        val safe = normalizedDisplayName(value).orEmpty()
         return safe.ifBlank { "ChatGPT 导入附件-${entryName.removeSuffix(".dat").takeLast(12)}${extensionFor(mimeType)}" }
     }
+
+    private fun normalizedDisplayName(value: String?): String? = value.orEmpty()
+        .substringAfterLast('/').substringAfterLast('\\')
+        .filterNot(Char::isISOControl).trim().take(160).takeIf(String::isNotBlank)
 
     private fun inferMime(displayName: String, candidateMimeType: String, header: () -> ByteArray): String {
         val named = when (displayName.substringAfterLast('.', "").lowercase()) {

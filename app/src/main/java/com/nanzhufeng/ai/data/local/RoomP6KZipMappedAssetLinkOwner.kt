@@ -58,7 +58,7 @@ class RoomP6KZipMappedAssetLinkOwner(
         var failedConversations = 0
         var checkpoint = initialJob
         val recoveryConversations = mapping.conversations
-            .filter { conversation -> conversation.currentPath.any { it.entryNames.isNotEmpty() } }
+            .filter { conversation -> conversation.currentPath.any { message -> message.entryNames.any(mapping.assets::containsKey) } }
         val processedBeforeRun = initialJob?.processedConversations ?: 0
         for ((offset, sourceConversation) in recoveryConversations.drop(processedBeforeRun).withIndex()) {
                 val outcome = runCatching {

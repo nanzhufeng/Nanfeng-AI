@@ -121,14 +121,18 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
                 importedCount = task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.CONFIRMED },
                 failedCount = task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.FAILED },
                 skippedCount = task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.SKIPPED },
-                restoredAssetCount = task.assets.count { it.attachmentId != null },
-                unresolvedAssetCount = task.assets.count { it.attachmentId == null },
+                restoredAssetCount = recovery?.linkedOccurrences ?: task.assets.count { it.attachmentId != null },
+                unresolvedAssetCount = recovery?.unattributedCandidates ?: 0,
+                missingSourceAssetCount = recovery?.missingEntries ?: 0,
+                fallbackNamedAssetCount = recovery?.fallbackNamedAssets ?: 0,
+                sourceReferenceRecords = recovery?.sourceReferenceRecords ?: 0,
+                uniqueReferencedAssetCount = recovery?.let { it.uniqueAssets + it.missingEntries } ?: 0,
                 recoveryLabel = recovery?.let { job ->
                     when (job.state) {
                         P6KZipAssetRecoveryState.PENDING -> "附件恢复已排队"
                         P6KZipAssetRecoveryState.INDEXING -> "正在索引导出包"
                         P6KZipAssetRecoveryState.MAPPING -> "正在确认官方归属"
-                        P6KZipAssetRecoveryState.LINKING -> "正在恢复 ${job.linkedOccurrences}/${job.totalOccurrences}"
+                        P6KZipAssetRecoveryState.LINKING -> "正在恢复 ${job.linkedOccurrences}/${job.uniqueAssets}"
                         P6KZipAssetRecoveryState.COMPLETED -> "附件恢复已完成"
                         P6KZipAssetRecoveryState.PARTIAL -> "恢复已中断，可从 ${job.processedConversations}/${job.totalConversations} 续跑"
                         P6KZipAssetRecoveryState.FAILED -> "附件恢复未完成"
@@ -165,6 +169,10 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
     skippedCount: Int,
     restoredAssetCount: Int = 0,
     unresolvedAssetCount: Int = 0,
+    missingSourceAssetCount: Int = 0,
+    fallbackNamedAssetCount: Int = 0,
+    sourceReferenceRecords: Int = 0,
+    uniqueReferencedAssetCount: Int = 0,
     recoveryLabel: String? = null,
     onRetryRecovery: (() -> Unit)? = null,
     profileSummary: String? = null,
@@ -180,7 +188,10 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
         if (failedCount > 0) Text("$failedCount 条无可显示正文", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         if (skippedCount > 0) Text("$skippedCount 条已跳过", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         if (restoredAssetCount > 0) Text("$restoredAssetCount 个附件已恢复到原对话。", style = MaterialTheme.typography.bodySmall, color = BodyText)
+        if (missingSourceAssetCount > 0) Text("$missingSourceAssetCount 个附件有官方引用，但 ChatGPT 导出包中缺少文件；不是本地恢复丢失。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         if (unresolvedAssetCount > 0) Text("$unresolvedAssetCount 个文件缺少官方对话归属，未自动关联。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (fallbackNamedAssetCount > 0) Text("$fallbackNamedAssetCount 个已恢复附件缺少官方显示名，已使用文件 ID 回退命名。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (sourceReferenceRecords > uniqueReferencedAssetCount && uniqueReferencedAssetCount > 0) Text("$sourceReferenceRecords 条官方引用记录涉及 $uniqueReferencedAssetCount 个唯一附件 ID。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         recoveryLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BodyText) }
         onRetryRecovery?.let { retry -> OutlinedButton(onClick = retry, shape = P5AInteractiveShape, border = null) { Text("重试附件恢复") } }
         profileSummary?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SecondaryText) }

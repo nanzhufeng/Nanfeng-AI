@@ -23,14 +23,24 @@ class P6KUserSelectedChatGptZipAssetAcceptanceTest {
             .map { entry -> P6KZipAssetCandidate(entry.name, "0".repeat(64), entry.uncompressedBytes, entry.mimeType) }
         val mapping = (P6KChatGptZipAssetMapper().map(archive, candidates) as P6KZipAssetMappingResult.Mapped).value
         val referenced = mapping.conversations.flatMap { conversation -> conversation.currentPath.flatMap(P6KZipSourceMessageAssets::entryNames) }.toSet()
+        val occurrences = mapping.conversations.flatMap { conversation ->
+            conversation.currentPath.flatMap { message ->
+                message.entryNames.map { entryName -> Triple(conversation.sourceConversationId, message.sourceMessageId, entryName) }
+            }
+        }.toSet()
+        val sourceReferenceRecords = mapping.conversations.sumOf { conversation -> conversation.currentPath.sumOf { it.sourceReferenceRecords } }
         val importedSourceIds = textMapping.items.mapNotNull { item -> item.candidate?.sourceConversationId }.toSet()
         val referencedByImportedConversations = mapping.conversations
             .filter { conversation -> conversation.sourceConversationId in importedSourceIds }
             .flatMap { conversation -> conversation.currentPath.flatMap(P6KZipSourceMessageAssets::entryNames) }
             .toSet()
 
-        assertEquals(referenced, mapping.assets.keys)
+        assertEquals(855, sourceReferenceRecords)
+        assertEquals(855, occurrences.size)
+        assertEquals(1, referenced.minus(mapping.assets.keys).size)
         assertEquals(853, mapping.assets.size)
+        assertEquals(822, candidates.size - mapping.assets.size)
+        assertEquals(2, mapping.fallbackNamedEntries.size)
         assertEquals(0, mapping.assets.keys.minus(referencedByImportedConversations).size)
         assertTrue(mapping.assets.values.any { it.candidate.mimeType.startsWith("image/") })
         assertTrue(mapping.assets.values.any { it.candidate.mimeType.startsWith("video/") })
