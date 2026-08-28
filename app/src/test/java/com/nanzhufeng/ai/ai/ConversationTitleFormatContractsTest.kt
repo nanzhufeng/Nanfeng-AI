@@ -10,8 +10,8 @@ import org.robolectric.RobolectricTestRunner
 class ConversationTitleFormatContractsTest {
     @Test
     fun `title accepts only Chinese or English summary phrases`() {
-        assertEquals("分析南枫AI标题生成问题", parseConversationTitleResponse("{\"title\":\"分析南枫AI标题生成问题\"}"))
-        assertEquals("Model Naming Review", parseConversationTitleResponse("{\"title\":\"Model Naming Review\"}"))
+        assertEquals("南枫AI标题问题", parseConversationTitleResponse("{\"title\":\"南枫AI标题问题\"}"))
+        assertEquals("Model Review", parseConversationTitleResponse("{\"title\":\"Model Review\"}"))
     }
 
     @Test
@@ -26,5 +26,11 @@ class ConversationTitleFormatContractsTest {
         assertNull(parseConversationTitleResponse("{\"title\":\"继续说\"}"))
         assertNull(parseConversationTitleResponse("{\"title\":\"更新文档\"}"))
         assertEquals("模型差异与费用分析", parseConversationTitleResponse("{\"title\":\"模型差异与费用分析\"}"))
+    }
+
+    @Test
+    fun `automatic drawer title has a hard thirteen character ceiling`() {
+        assertEquals("南枫AI标题问题", parseConversationTitleResponse("{\"title\":\"南枫AI标题问题\"}"))
+        assertNull(parseConversationTitleResponse("{\"title\":\"这是一个明显超过十三个字的自动标题\"}"))
     }
 }

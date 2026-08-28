@@ -71,7 +71,7 @@ class P6F2DVideoPreviewUiContractsTest {
             val start = source.indexOf("private fun $functionName")
             val next = source.indexOf("\n@Composable\nprivate fun", start + 1).let { if (it < 0) source.length else it }
             val viewer = source.substring(start, next)
-            val sharedChrome = if (functionName == "AudioPreviewDialog") {
+            val sharedChrome = if (functionName == "AudioPreviewDialog" || functionName == "TextPreviewDialog") {
                 "rememberFilePreviewChromeState(preview.id.value, autoHide = false)"
             } else {
                 "rememberFilePreviewChromeState(preview.id.value)"
@@ -89,5 +89,9 @@ class P6F2DVideoPreviewUiContractsTest {
         val searchCard = source.substring(start, source.indexOf("private fun SearchAttachmentRow", start))
         assertTrue(searchCard.contains("RoundedCornerShape(if (isVideo) 20.dp else 10.dp)"))
         assertTrue(searchCard.contains("SubtleDivider.copy(alpha = if (isVideo) 0.72f else 0.45f)"))
+        assertTrue(searchCard.contains("val darkCatalogSurface = ForegroundSurface.red < 0.5f"))
+        assertTrue(searchCard.contains("Color.Black.copy(alpha = 0.62f)"))
+        assertTrue(searchCard.contains("Color.White.copy(alpha = 0.94f)"))
+        assertTrue(searchCard.contains("modifier = Modifier.align(Alignment.Center).size(40.dp)"))
     }
 }

@@ -548,7 +548,11 @@ class P6KChatGptZipAssetMapper {
         val currentAssistants = current.filter { it.role == MessageRole.ASSISTANT }
         fun assistantOwned(anchor: SourceMessageIndex): SourceMessageIndex {
             if (anchor.role == MessageRole.ASSISTANT) return anchor
-            currentAssistants.filter { it.conversationId == anchor.conversationId }
+            currentAssistants
+                .filter { assistant ->
+                    assistant.conversationId == anchor.conversationId &&
+                        !assistant.createdAt.isBefore(anchor.createdAt)
+                }
                 .minByOrNull { assistant -> kotlin.math.abs(assistant.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
                 ?.let { return it }
             val stableId = "nanfeng-generated:${("${anchor.conversationId}|${anchor.messageId}").toByteArray().sha256().take(40)}"
@@ -567,8 +571,13 @@ class P6KChatGptZipAssetMapper {
             .filter { it.role == role && (contentType == null || it.contentType == contentType) }
             .filter { message -> java.time.Duration.between(message.createdAt, image.createdAt).toMillis() in 0..GENERATED_IMAGE_PRECEDING_WINDOW_MS }
             .maxByOrNull(SourceMessageIndex::createdAt)
-        preceding(MessageRole.ASSISTANT, "reasoning_recap")?.let { return it }
-        preceding(MessageRole.ASSISTANT)?.let { return it }
+        val precedingUser = preceding(MessageRole.USER)
+        val precedingReasoning = preceding(MessageRole.ASSISTANT, "reasoning_recap")
+        val precedingAssistant = precedingReasoning ?: preceding(MessageRole.ASSISTANT)
+        if (precedingUser != null && (precedingAssistant == null || precedingUser.createdAt.isAfter(precedingAssistant.createdAt))) {
+            return assistantOwned(precedingUser)
+        }
+        precedingAssistant?.let { return it }
         current.minByOrNull { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) }
             ?.takeIf { message -> kotlin.math.abs(message.createdAt.toEpochMilli() - image.createdAt.toEpochMilli()) <= GENERATED_IMAGE_NEAREST_WINDOW_MS }
             ?.let { nearest -> return assistantOwned(nearest) }

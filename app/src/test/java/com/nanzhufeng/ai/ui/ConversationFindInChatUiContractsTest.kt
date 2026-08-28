@@ -19,7 +19,7 @@ class ConversationFindInChatUiContractsTest {
         assertFalse(dialog.contains("仅在当前本地对话中查找，不会搜索其它会话或发送内容。"))
         assertTrue(dialog.contains("if (query.isNotBlank())"))
         assertTrue(dialog.contains("当前对话没有匹配内容。"))
-        assertTrue(dialog.contains("找到 \${matches.size} 条匹配消息"))
+        assertTrue(dialog.contains("找到 \${matches.size} 处匹配"))
     }
 
     @Test fun `active chat find query is rendered as themed text on neutral rounded pills without mutating messages`() {
@@ -27,12 +27,23 @@ class ConversationFindInChatUiContractsTest {
         val inlineText = source.substringAfter("private fun inlineText(").substringBefore("private fun InlinePresentationText")
         val highlight = source.substringAfter("private fun Modifier.conversationFindHighlightBackgrounds").substringBefore("private fun sourceShortcutWidth")
 
-        for (token in listOf("LocalConversationFindQuery provides activeFindQuery", "highlightQuery: String? = null", "appendConversationFindText", "ConversationFindHighlightAnnotationTag", "SpanStyle(color = AccentOrange")) {
+        for (token in listOf("LocalConversationFindQuery provides activeFindQuery", "LocalConversationFindTarget provides", "highlightQuery: String? = null", "conversationFindOccurrenceStarts", "ConversationFindHighlightAnnotationTag", "SpanStyle(color = AccentOrange, fontWeight = FontWeight.Bold)")) {
             assertTrue("missing find-highlight projection $token", source.contains(token) || inlineText.contains(token))
         }
-        for (token in listOf("drawRoundRect", "color = NeutralSystemSurface", "CornerRadius(9.dp.toPx())", "getStringAnnotations(ConversationFindHighlightAnnotationTag")) {
+        for (token in listOf("drawRoundRect", "SecondaryText.copy(alpha = 0.26f)", "Brush.horizontalGradient", "AccentOrange.copy", "BrandGreen.copy", "CornerRadius(9.dp.toPx())", "getStringAnnotations(ConversationFindHighlightAnnotationTag")) {
             assertTrue("missing rounded neutral find highlight $token", highlight.contains(token))
         }
+        assertTrue(source.contains("bringIntoViewRequester.bringIntoView(matchRect)"))
+        assertTrue(source.contains("activeTranscriptListState.scrollToItem(itemIndex)"))
         assertFalse(highlight.contains("state.messages ="))
+    }
+
+    @Test fun `find occurrence counter keeps repeated words in one long message distinct`() {
+        val value = "值得盯的几个具体信号，这也是重要信号。"
+
+        val starts = conversationFindOccurrenceStarts(value, "信号")
+
+        assertTrue(starts.size == 2)
+        assertTrue(starts.zipWithNext().all { (first, second) -> second > first })
     }
 }

@@ -1092,7 +1092,11 @@ class ConversationFoundationViewModel(
 
     fun openSearchHistory() { state = state.copy(searchHistory = searchHistory.recent(state.listScope), searchHistoryOpen = true) }
     fun closeSearchHistory() { state = state.copy(searchHistoryOpen = false) }
-    fun fillSearchHistory(query: String) { state = state.copy(searchQuery = query, searchHistoryOpen = false) }
+    fun fillSearchHistory(query: String) {
+        searchInputGeneration += 1
+        state = state.copy(searchQuery = query, searchHistoryOpen = false)
+        submitSearch()
+    }
     fun clearSearchHistory() { searchHistory.clear(state.listScope); state = state.copy(searchHistory = emptyList()) }
 
     /** Opening and category changes browse local records; typing debounces the same local filter. */

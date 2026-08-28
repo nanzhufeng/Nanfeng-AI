@@ -576,6 +576,8 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(composer.contains("val modelLabel = composerModelDisplayLabel(selectedPresets)"))
         assertFalse(composer.contains("Auto · 发送时按能力选择"))
         val modelEntry = source.substring(source.indexOf("private fun ComposerModelEntry"), source.indexOf("private fun ConversationComposerDock"))
+        assertTrue(modelEntry.contains("fontFamily = DrawerIdentityRoundedFontFamily"))
+        assertTrue(modelEntry.contains("fontWeight = FontWeight.SemiBold"))
         assertTrue(source.contains("private val ComposerModelDisplayWidth = 88.dp"))
         assertTrue(source.contains("private fun composerModelDisplayLabel(presets: List<ModelPresetId>)"))
         assertTrue(source.contains("presets.joinToString(\" / \")"))
@@ -588,7 +590,8 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(modelEntry.contains("modifier = Modifier.fillMaxWidth().height(36.dp)"))
         assertFalse(source.contains("if (presets.size > 1) \"对比\""))
         assertTrue(modelEntry.contains("interactionSource.collectIsPressedAsState()"))
-        assertTrue(modelEntry.contains("Text(label, fontSize = 13.sp"))
+        assertTrue(modelEntry.contains("label,"))
+        assertTrue(modelEntry.contains("fontSize = 13.sp"))
         assertTrue(composer.contains("ConversationComposerDock("))
         assertTrue(composer.indexOf("ComposerModelEntry(") < composer.indexOf("ComposerSendButton"))
     }
@@ -760,19 +763,20 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
-    fun `chat find normalizes readable wrapping instead of requiring an exact raw line`() {
+    fun `chat find counts every visible occurrence and relocates the selected glyph range`() {
         val find = source.substring(source.indexOf("private fun ConversationFindInChatDialog"), source.indexOf("private fun ConversationMenuAction"))
-        assertTrue(find.contains("normalizeConversationSearchText(query)"))
-        assertTrue(find.contains("conversationFindMessageMatches(messages, query)"))
+        assertTrue(find.contains("conversationFindMatches(messages, query)"))
+        assertTrue(find.contains("conversationFindOccurrenceStarts"))
         assertTrue(find.contains("KeyboardOptions(imeAction = ImeAction.Search)"))
         assertTrue(find.contains("Text(\"查找\")"))
         assertTrue(find.contains("Text(\"上一个\")"))
         assertTrue(find.contains("Text(\"下一个\")"))
         assertTrue(source.contains("activeFindQuery = query"))
-        assertTrue(source.contains("activeTranscriptListState.animateScrollToItem(itemIndex)"))
+        assertTrue(source.contains("activeTranscriptListState.scrollToItem(itemIndex)"))
+        assertTrue(source.contains("bringIntoViewRequester.bringIntoView(matchRect)"))
         assertFalse(find.contains("Text(\"完成\")"))
-        assertTrue(source.contains("normalizeConversationSearchText(presentedMessagePlainText(transcript.message)).contains(needle)"))
-        assertTrue(find.contains("java.text.Normalizer.Form.NFKC"))
+        assertTrue(source.contains("val occurrenceIndex: Int"))
+        assertFalse(find.contains("conversationFindMessageMatches"))
     }
 
     @Test
@@ -858,7 +862,8 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `drawer heading uses the packaged app icon at compact title scale`() {
         val drawer = source.substring(source.indexOf("private fun ConversationNavigationDrawer"), source.indexOf("private fun ConversationNavigationRow"))
         assertTrue(drawer.contains("painterResource(R.drawable.nanfeng_ai_icon_foreground_image)"))
-        assertTrue(drawer.contains("Modifier.size(drawerIdentityVisualSize).clip(RoundedCornerShape(8.dp))"))
+        assertTrue(drawer.contains("modifier = Modifier.size(drawerIdentityVisualSize).clip(RoundedCornerShape(8.dp))"))
+        assertTrue(drawer.contains("Modifier.fillMaxSize().graphicsLayer(scaleX = 1.24f, scaleY = 1.24f)"))
         assertTrue(drawer.contains("\"南枫 AI\","))
     }
 
@@ -1028,9 +1033,12 @@ class P6DConversationRowAccessibilityContractsTest {
             "viewportWidthPx - widthPx - horizontalPadding", "zIndex(ConversationModalOverlayZIndex)",
         )) assertTrue("missing $token", overlay.contains(token))
         for (forbidden in listOf("Popup(", "PopupProperties", "addSheetVisible", "modelPickerVisible", "当前会话模型", "手动选择只影响当前普通会话", "最近路由")) assertFalse("unexpected $forbidden", overlay.contains(forbidden))
-        for (token in listOf("Icons.Rounded.PhotoCamera", "\"相机\"", "Icons.Rounded.AddPhotoAlternate", "\"添加图片和视频\"", "Icons.Rounded.AttachFile", "\"添加文件\"")) assertTrue("missing $token", source.contains(token))
+        for (token in listOf("Icons.Rounded.PhotoCamera", "\"相机\"", "Icons.Rounded.AddPhotoAlternate", "\"图片\"", "Icons.Rounded.AttachFile", "\"文件\"")) assertTrue("missing $token", source.contains(token))
         val attachmentAction = source.substring(source.indexOf("private fun ComposerOverlayAction"), source.indexOf("/** The mobile composer"))
         assertTrue(attachmentAction.contains("ButtonDefaults.textButtonColors(contentColor = BodyText)"))
+        assertTrue(attachmentAction.contains("private fun ComposerMenuIconSurface"))
+        assertTrue(attachmentAction.contains("Surface(color = NeutralSystemSurface, shape = CircleShape, modifier = Modifier.size(32.dp))"))
+        assertTrue(attachmentAction.contains("Modifier.size(18.dp)"))
     }
 
     @Test
@@ -1260,9 +1268,9 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `FB-P6-089 gives assistant information blocks local hierarchy tables and individual copy actions`() {
         val presentation = source.substring(source.indexOf("private fun PresentationBlockView"), source.indexOf("private fun inlineText"))
-        for (token in listOf("is PresentationBlock.Table -> MarkdownTable(block)", "CopyableInformationSurface", "MarkdownTable(block)", "Icon(Icons.Rounded.ContentCopy", "contentDescription = \"复制\$label\"", "NeutralAssistantSurface", "horizontalScroll(scrollState)", "adaptiveTableColumnWeights(block)", "cellWidths = columnWeights.map", "trailingHeaderInset = 38.dp", "复制表格（保留 Markdown 格式）", "tableMarkdownText(block)", "VerticalDivider(", "contentAlignment = Alignment.Center", "textAlign = androidx.compose.ui.text.style.TextAlign.Center")) assertTrue("missing formatted assistant content token $token", presentation.contains(token))
+        for (token in listOf("is PresentationBlock.Table -> MarkdownTable(block, findBlockIndex)", "CopyableInformationSurface", "MarkdownTable(block", "Icon(Icons.Rounded.ContentCopy", "contentDescription = \"复制\$label\"", "NeutralAssistantSurface", "horizontalScroll(scrollState)", "adaptiveTableColumnWeights(block)", "cellWidths = columnWeights.map", "trailingHeaderInset = 38.dp", "复制表格（保留 Markdown 格式）", "tableMarkdownText(block)", "VerticalDivider(", "contentAlignment = Alignment.Center", "textAlign = androidx.compose.ui.text.style.TextAlign.Center")) assertTrue("missing formatted assistant content token $token", presentation.contains(token))
         val inline = source.substring(source.indexOf("private fun inlineText"), source.indexOf("private fun ConversationActions"))
-        assertTrue(inline.contains("appendConversationFindText(\"\${span.label} ↗\", highlightQuery)"))
+        assertTrue(inline.contains("appendChatGptImportedText(\"\${span.label} ↗\")"))
     }
 
     @Test
@@ -1284,7 +1292,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertFalse(presentation.contains("Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth())"))
         assertFalse(presentation.contains("modifier = Modifier.width(28.dp)"))
         assertTrue(inline.contains("is InlinePresentation.Code -> {"))
-        assertTrue(inline.contains("appendConversationFindText(span.value, highlightQuery)"))
+        assertTrue(inline.contains("withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)) { appendChatGptImportedText(span.value) }"))
         assertFalse(inline.contains("append(\"`${'$'}{span.value}`\")"))
         assertTrue(source.contains("InlineCodeChipBackground: Color get() = NeutralSystemSurface"))
         assertTrue(inline.contains("pushStringAnnotation(InlineCodeChipAnnotationTag, span.value)"))
@@ -1386,6 +1394,13 @@ class P6DConversationRowAccessibilityContractsTest {
             "\"下载当前图片\"",
             "\"同时下载 \${generatedImageIds.size} 张\"",
             "onRequestAttachmentTransfers(generatedImageIds, AttachmentTransferAction.DOWNLOAD)",
+            "val currentPreviewZoom = rememberUpdatedState(zoom)",
+            "awaitFirstDown(requireUnconsumed = false)",
+            "!usedMultiplePointers",
+            "abs(horizontalDistancePx) > abs(verticalDistancePx) * 1.25f",
+            ".takeIf { target -> target != preview.id }",
+            "onClick = { batchDownloadVisible = false }",
+            "val popupSurfaceInteraction = remember { MutableInteractionSource() }",
         )) assertTrue("missing generated-image download token $token", imagePreview.contains(token))
         assertTrue(source.contains("request.batch.forEachIndexed { index, item ->"))
         assertTrue(source.contains("saveAttachmentToUserCollection(context, item, transferStartedAtMillis + index)"))

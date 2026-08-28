@@ -35,11 +35,11 @@ class ConfiguredConversationTitleRefinerContractsTest {
     private val source = ConversationTitleSource("请整理 Android 设置页面层级", "可以按入口和使用频率重新组织设置页面。")
 
     @Test fun `ordinary OpenRouter models generate a title without invoking premium tiers`() {
-        val transport = RecordingTransport(listOf(success("Android 设置页面规划")))
+        val transport = RecordingTransport(listOf(success("Android设置规划")))
         val records = Records()
         val result = refiner(setOf(ProviderId.OPENROUTER), records, transport).refine(ConversationId("conversation"), source)
 
-        assertEquals(ConversationTitleRefinementResult.Title("Android 设置页面规划"), result)
+        assertEquals(ConversationTitleRefinementResult.Title("Android设置规划"), result)
         assertEquals(listOf("openai/gpt-5.6-luna"), transport.modelIds())
         assertFalse(transport.requestBodies.single().contains("gpt-5.6-sol"))
         assertFalse(transport.requestBodies.single().contains("claude-opus-5"))
@@ -60,11 +60,11 @@ class ConfiguredConversationTitleRefinerContractsTest {
     }
 
     @Test fun `a failed lightweight model falls back to the next configured ordinary model`() {
-        val transport = RecordingTransport(listOf(ProviderChatOutcome.HttpResponse(503, "temporarily unavailable"), success("Android 设置页面规划")))
+        val transport = RecordingTransport(listOf(ProviderChatOutcome.HttpResponse(503, "temporarily unavailable"), success("Android设置规划")))
         val records = Records()
         val result = refiner(setOf(ProviderId.OPENROUTER), records, transport).refine(ConversationId("conversation"), source)
 
-        assertEquals(ConversationTitleRefinementResult.Title("Android 设置页面规划"), result)
+        assertEquals(ConversationTitleRefinementResult.Title("Android设置规划"), result)
         assertEquals(listOf("openai/gpt-5.6-luna", "openai/gpt-5.6-terra"), transport.modelIds())
         assertEquals(listOf(ConversationTitleGenerationStatus.FAILED, ConversationTitleGenerationStatus.SUCCEEDED), records.values.map { it.status })
         assertEquals("HTTP_503", records.values.first().safeErrorCode)

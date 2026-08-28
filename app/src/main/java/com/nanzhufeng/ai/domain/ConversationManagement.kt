@@ -133,6 +133,8 @@ data class ConversationAttachmentSearchHit(
     val attachment: ConversationAttachmentReference,
     /** Message-owned local timestamp; used only for month grouping in the search catalogue. */
     val timestampEpochMs: Long,
+    /** Safe visible context when the keyword matched the attachment-owning message text. */
+    val matchSnippet: String? = null,
 )
 
 /** A safe, local-only search row. It deliberately has no storage key, URI, path or provider fact. */
@@ -277,16 +279,36 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
             .filter { snapshot -> snapshotMatchesScope(snapshot, scope) }
             .flatMap { snapshot ->
                 MessageTree(snapshot.conversation, snapshot.nodes).contextPath().asSequence()
-                    .flatMap { node -> node.content.filterIsInstance<ContentBlock.Attachment>().asSequence().map { node to it.attachment } }
-                    .filter { (_, attachment) -> category == ConversationSearchCategory.ALL || categoryFor(attachment) == category }
-                    .filter { (_, attachment) ->
-                        snapshot.conversation.title.lowercase(Locale.ROOT).contains(normalized) ||
-                            attachment.displayName.orEmpty().lowercase(Locale.ROOT).contains(normalized)
+                    .flatMap { node ->
+                        val messageText = node.content.filterIsInstance<ContentBlock.Text>().joinToString("\n") { it.text }
+                        node.content.filterIsInstance<ContentBlock.Attachment>().asSequence().map { Triple(node, it.attachment, messageText) }
                     }
-                    .map { (node, attachment) -> ConversationAttachmentSearchHit(snapshot.conversation.id, node.id, snapshot.conversation.title, attachment, node.createdAt.toEpochMilli()) }
+                    .filter { (_, attachment, _) -> category == ConversationSearchCategory.ALL || categoryFor(attachment) == category }
+                    .filter { (_, attachment, messageText) ->
+                        snapshot.conversation.title.lowercase(Locale.ROOT).contains(normalized) ||
+                            attachment.displayName.orEmpty().lowercase(Locale.ROOT).contains(normalized) ||
+                            messageText.lowercase(Locale.ROOT).contains(normalized)
+                    }
+                    .map { (node, attachment, messageText) ->
+                        ConversationAttachmentSearchHit(
+                            conversationId = snapshot.conversation.id,
+                            messageNodeId = node.id,
+                            title = snapshot.conversation.title,
+                            attachment = attachment,
+                            timestampEpochMs = node.createdAt.toEpochMilli(),
+                            matchSnippet = messageText.takeIf { it.lowercase(Locale.ROOT).contains(normalized) }
+                                ?.let { snippet(it, normalized) },
+                        )
+                    }
             }
             .distinctBy { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }
             .toList()
+    }
+
+    private fun snippet(text: String, query: String): String {
+        val index = text.lowercase(Locale.ROOT).indexOf(query).coerceAtLeast(0)
+        val start = (index - 36).coerceAtLeast(0)
+        return text.substring(start, (index + query.length + 84).coerceAtMost(text.length)).replace('\n', ' ')
     }
 
     private fun snapshotMatchesScope(snapshot: ConversationSnapshot, scope: ConversationListScope) = when (scope) {

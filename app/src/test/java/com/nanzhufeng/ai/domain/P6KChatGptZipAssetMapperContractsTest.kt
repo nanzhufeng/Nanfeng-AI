@@ -144,6 +144,40 @@ class P6KChatGptZipAssetMapperContractsTest {
     }
 
     @Test
+    fun `generated library image belongs below the latest user image prompt instead of the previous assistant turn`() {
+        val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
+        val candidate = P6KZipAssetCandidate("file_generated.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")
+        val archive = File.createTempFile("p6k-generated-after-prompt-", ".zip")
+        try {
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                zip.entry(
+                    "library_files.json",
+                    """[{"file_id":"file_generated","file_name":"generated.png","created_at":"1970-01-01T00:01:46Z","image_gen_generation_id":"generation"}]""".toByteArray(),
+                )
+                zip.entry(
+                    "conversations-000.json",
+                    """[{"id":"conversation","create_time":1,"current_node":"user-image-prompt","mapping":{"user-old":{"parent":null,"message":{"author":{"role":"user"},"create_time":90,"content":{"content_type":"text","parts":["先前问题"]},"metadata":{}}},"assistant-old":{"parent":"user-old","message":{"author":{"role":"assistant"},"create_time":100,"content":{"content_type":"text","parts":["先前回答"]},"metadata":{}}},"user-image-prompt":{"parent":"assistant-old","message":{"author":{"role":"user"},"create_time":105,"content":{"content_type":"text","parts":["出图"]},"metadata":{}}}}}]""".toByteArray(),
+                )
+                zip.entry("file_generated.dat", image)
+            }
+
+            val mapping = (P6KChatGptZipAssetMapper().map(archive, listOf(candidate)) as P6KZipAssetMappingResult.Mapped).value
+            val path = mapping.conversations.single().currentPath
+            assertEquals(
+                listOf("user-old", "assistant-old", "user-image-prompt"),
+                path.take(3).map(P6KZipSourceMessageAssets::sourceMessageId),
+            )
+            val generated = path.last()
+            assertEquals(MessageRole.ASSISTANT, generated.role)
+            assertEquals("user-image-prompt", generated.parentSourceMessageId)
+            assertEquals(listOf("file_generated.dat"), generated.entryNames)
+            assertEquals(generated.sourceMessageId, mapping.assets.getValue("file_generated.dat").candidate.sourceMessageId)
+        } finally {
+            archive.delete()
+        }
+    }
+
+    @Test
     fun `generated library image creates an assistant output record when export has no assistant text node`() {
         val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1)
         val candidate = P6KZipAssetCandidate("file_generated.dat", image.sha256ForTest(), image.size.toLong(), "application/octet-stream")

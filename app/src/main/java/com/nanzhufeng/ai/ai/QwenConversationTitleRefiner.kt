@@ -169,7 +169,7 @@ class ConfiguredConversationTitleRefiner(
             优先复用原文明确出现的主体、产品、组织或术语，并用准确动作收束，例如“模型差异与费用分析”“产品设计范式冲突”“视频内容分析”“API Key与模型选择”。
             不得把回答里的 Markdown 小节、论证步骤、抽象方法词或一句结论片段当标题；不得引入两段文字未明确支持的人名、事实或偏好。
             禁止只写“继续说”“分析”“总结”“问题”“请求”“聊天”“对话”“更新文档”等没有讨论对象的空泛标题；无法同时确认对象和意图时返回空 title，不得猜测。
-            标题必须是 6 到 24 个字符的一句话总结。只能使用汉字或英文字母；英文短语的单词之间允许一个普通空格。严禁数字、标点、引号、Markdown、编号、emoji、括号、斜杠、下划线、连字符和任何其他符号。只返回严格 JSON：{"title":"..."}。
+            标题必须是 6 到 13 个字符的一句话总结，优先约 8 个字符，在不丢失明确对象和意图的前提下越精炼越好。只能使用汉字或英文字母；英文短语的单词之间允许一个普通空格。严禁数字、标点、引号、Markdown、编号、emoji、括号、斜杠、下划线、连字符和任何其他符号。只返回严格 JSON：{"title":"..."}。
         """.trimIndent()
     }
 
@@ -184,7 +184,7 @@ internal fun parseConversationTitleResponse(rawResponse: String): String? = runC
     val raw = rawResponse.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
     val title = JSONObject(raw).optString("title").replace(Regex("\\s+"), " ").trim()
     title.takeIf {
-        it.length in 6..24 &&
+        it.length in 6..13 &&
             it !in GENERIC_TITLES &&
             it.split(' ').all { word -> word.isNotEmpty() && word.all(Char::isConversationTitleLetter) }
     }

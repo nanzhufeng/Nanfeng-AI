@@ -36,8 +36,9 @@ class P6MAttachmentMultiSelectUiContractsTest {
         assertTrue(reader.contains("CONVERSATION_ALLOWED_VIDEO_MIME_TYPES"))
     }
 
-    @Test fun `composer describes the visual picker as images and videos`() {
+    @Test fun `composer keeps attachment menu labels concise`() {
         val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
-        assertTrue(workspace.contains("添加图片和视频"))
+        assertTrue(workspace.contains("ComposerAttachmentAction(Icons.Rounded.AddPhotoAlternate, \"图片\")"))
+        assertTrue(workspace.contains("ComposerAttachmentAction(Icons.Rounded.AttachFile, \"文件\")"))
     }
 }

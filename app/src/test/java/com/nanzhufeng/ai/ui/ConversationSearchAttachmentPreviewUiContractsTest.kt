@@ -11,6 +11,13 @@ class ConversationSearchAttachmentPreviewUiContractsTest {
         val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
 
         assertTrue(workspace.contains("onOpenAttachmentHit = { hit -> onOpenSearchAttachment(hit.attachment) }"))
+        assertTrue(workspace.contains("query = state.searchQuery"))
+        assertTrue(workspace.contains("private fun searchHighlightedText("))
+        assertTrue(workspace.contains("background = highlightColor.copy(alpha = 0.18f)"))
+        assertTrue(workspace.contains("fontWeight = FontWeight.Bold"))
+        assertTrue(workspace.contains("hit.matchSnippet ?: textPreview?.text?.replace"))
+        assertTrue(viewModel.contains("fun fillSearchHistory(query: String) {"))
+        assertTrue(viewModel.contains("state = state.copy(searchQuery = query, searchHistoryOpen = false)\n        submitSearch()"))
         assertTrue(workspace.contains("SearchAttachmentActionMenuTarget(hit, anchorBounds)"))
         assertTrue(workspace.contains("Text(\"快速定位到对应对话\", style"))
         assertTrue(workspace.contains("private fun SearchAttachmentActionPopup("))

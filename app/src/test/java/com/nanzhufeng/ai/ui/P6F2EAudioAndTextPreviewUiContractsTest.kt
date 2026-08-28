@@ -35,10 +35,20 @@ class P6F2EAudioAndTextPreviewUiContractsTest {
         for (viewer in listOf(pdf, text)) {
             assertTrue(viewer.contains("isDarkFilePreviewSurface()"))
             assertTrue(viewer.contains("localFilePreviewCanvas("))
-            assertTrue(viewer.contains("PreviewCloseButton(dark = dark"))
         }
-        assertTrue(text.contains("FilePreviewTopActions(\n                            dark = darkTextPreview"))
+        assertTrue(pdf.contains("PreviewCloseButton(dark = dark"))
+        assertTrue(text.contains("TextPreviewTopActions("))
+        assertTrue(text.contains("rememberFilePreviewChromeState(preview.id.value, autoHide = false)"))
+        assertTrue(text.contains("Surface(color = ForegroundSurface, shape = RectangleShape, modifier = Modifier.fillMaxSize())"))
+        assertTrue(text.contains(".statusBarsPadding()"))
+        assertTrue(text.contains(".navigationBarsPadding()"))
+        assertTrue(!text.contains("if (chrome.visible)"))
+        assertTrue(!text.contains("toggleFilePreviewChrome"))
         assertTrue(!text.contains("dark = false"))
         assertTrue(!text.contains("background(Color(0xFFF1F4F2))"))
+        val actions = source.substring(source.indexOf("private fun TextPreviewTopActions"), source.indexOf("private fun PdfPreviewDialog"))
+        assertTrue(actions.contains("Modifier.size(40.dp)"))
+        assertTrue(actions.contains("Modifier.width(62.dp).height(40.dp)"))
+        assertTrue(actions.contains("Arrangement.spacedBy(6.dp)"))
     }
 }

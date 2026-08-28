@@ -114,6 +114,39 @@ class P3EConversationManagementExportContractsTest {
         assertEquals(listOf(image.id), search.execute("路线图", ConversationSearchCategory.ALL, ConversationListScope.ACTIVE).map { it.attachment.id })
     }
 
+    @Test fun `every attachment category matches the owning message context without crossing category boundaries`() {
+        val attachments = listOf(
+            ConversationAttachmentReference(AttachmentId("context-image"), "image/png", "chart.png", 3, "1".repeat(64)),
+            ConversationAttachmentReference(AttachmentId("context-video"), "video/mp4", "clip.mp4", 3, "2".repeat(64)),
+            ConversationAttachmentReference(AttachmentId("context-audio"), "audio/mpeg", "voice.mp3", 3, "3".repeat(64)),
+            ConversationAttachmentReference(AttachmentId("context-file"), "application/pdf", "brief.pdf", 3, "4".repeat(64)),
+        )
+        repository.save(
+            tree.append(
+                tree.create("分组搜索"),
+                AppendMessageRequest(
+                    MessageRole.USER,
+                    listOf(ContentBlock.Text("这是统一关键词的上下文")) + attachments.map { ContentBlock.Attachment(it) },
+                ),
+            ),
+        )
+        val search = SearchConversationAttachmentsUseCase(repository)
+
+        val expectedByCategory = mapOf(
+            ConversationSearchCategory.IMAGE to attachments[0].id,
+            ConversationSearchCategory.VIDEO to attachments[1].id,
+            ConversationSearchCategory.AUDIO to attachments[2].id,
+            ConversationSearchCategory.FILE to attachments[3].id,
+        )
+        expectedByCategory.forEach { (category, expectedId) ->
+            val hit = search.execute("统一关键词", category, ConversationListScope.ACTIVE).single()
+            assertEquals(expectedId, hit.attachment.id)
+            assertTrue(hit.matchSnippet.orEmpty().contains("统一关键词"))
+        }
+        assertEquals(attachments.map { it.id }.toSet(), search.execute("统一关键词", ConversationSearchCategory.ALL, ConversationListScope.ACTIVE).map { it.attachment.id }.toSet())
+        assertTrue(search.execute("统一关键词", ConversationSearchCategory.TEXT, ConversationListScope.ACTIVE).isEmpty())
+    }
+
     @Test fun `opening search browses local conversations and category attachments before a keyword is entered`() {
         val image = ConversationAttachmentReference(AttachmentId("browse-image"), "image/png", "diagram.png", 3, "c".repeat(64))
         val saved = repository.save(tree.append(tree.create("搜索可浏览会话"), AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("可直接浏览的正文"), ContentBlock.Attachment(image)))))

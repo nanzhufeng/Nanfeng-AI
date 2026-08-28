@@ -31,11 +31,12 @@ class AssistantGeneratedImageGroupUiContractsTest {
             "onClick = { onOpenImagePreview(selected.attachment.id) }",
             "horizontalScroll(rememberScrollState())",
             "Arrangement.spacedBy(8.dp)",
-            "size(width = 58.dp, height = 48.dp)",
+            "size(48.dp)",
+            "contentScale = ContentScale.Crop",
             "MaterialTheme.colorScheme.primary",
             "AI 生成图片，点击全屏查看",
         )) assertTrue("missing generated image gallery token $token", gallery.contains(token))
-        assertFalse(gallery.contains("ContentScale.Crop"))
+        assertTrue(gallery.contains("contentScale = ContentScale.Fit"))
     }
 
     @Test
