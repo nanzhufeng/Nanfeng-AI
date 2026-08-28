@@ -348,9 +348,13 @@ private val ConversationTranscriptPageGutter = 4.dp
 // 6dp smaller because the LazyColumn owns a separate 6dp passive-scrollbar lane.
 private val ConversationAssistantReadingStartInset = 24.dp
 private val ConversationAssistantReadingEndInset = 18.dp
-// Every footer command owns the same hit box and the same gap. The row itself starts at the
-// assistant reading inset, so copy/share/more stay left-aligned without per-icon nudges.
+// Every footer command owns the same hit box and the same gap. The row uses one shared optical
+// inset so copy/share/more stay related without per-icon nudges.
 private val AssistantFooterActionSpacing = 4.dp
+// The first 16dp glyph sits optically 12dp inside its 36dp hit target. Moving the complete row
+// by the same amount makes the visible copy glyph—not the invisible hit box—share the 24dp
+// reading line with assistant prose while preserving every internal relationship in the row.
+private val AssistantFooterGroupStartInset = 12.dp
 /** Reserved only for the passive scroll position marker, never for a second blank column. */
 private val ConversationScrollbarContentEndInset = 6.dp
 // This is scrollable LazyColumn content, not a painted header backing. Short transcripts begin
@@ -4950,8 +4954,8 @@ private fun AssistantMessageActionRow(
     Column(
         modifier = Modifier.fillMaxWidth().padding(
             // Keep the established internal order and spacing; only align the complete footer
-            // group with the transcript canvas's left edge.
-            start = 0.dp,
+            // group's first visible glyph with the assistant prose above it.
+            start = AssistantFooterGroupStartInset,
             end = ConversationAssistantReadingEndInset,
         ),
         // Assistant provenance belongs to the assistant side. Keep concise facts inline when
