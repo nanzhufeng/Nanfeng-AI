@@ -125,6 +125,19 @@ class P3EConversationManagementExportContractsTest {
         assertEquals(saved.nodes.last().createdAt.toEpochMilli(), attachmentSearch.browse(ConversationSearchCategory.IMAGE, ConversationListScope.ACTIVE).single().timestampEpochMs)
     }
 
+    @Test fun `attachment catalogue never truncates valid local occurrences at fifty`() {
+        var snapshot = tree.create("全量附件目录")
+        repeat(75) { index ->
+            val image = ConversationAttachmentReference(
+                AttachmentId("catalog-$index"), "image/png", "image-$index.png", 3, index.toString().padStart(64, 'a').takeLast(64),
+            )
+            snapshot = tree.append(snapshot, AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Attachment(image))))
+        }
+        repository.save(snapshot)
+
+        assertEquals(75, SearchConversationAttachmentsUseCase(repository).browse(ConversationSearchCategory.IMAGE, ConversationListScope.ACTIVE).size)
+    }
+
     @Test fun `nonempty but stale local index never hides another current message match`() {
         val first = repository.save(tree.append(tree.create("第一条"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("共同关键词")))))
         val second = repository.save(tree.append(tree.create("第二条"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("共同关键词")))))

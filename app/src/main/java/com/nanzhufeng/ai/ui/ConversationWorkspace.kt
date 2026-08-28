@@ -527,6 +527,7 @@ internal fun ConversationWorkspaceDialog(
     onCloseSearch: () -> Unit,
     onOpenSearchHit: (com.nanzhufeng.ai.domain.ConversationSearchHit) -> Unit,
     onOpenSearchAttachment: (com.nanzhufeng.ai.domain.ConversationAttachmentReference) -> Unit,
+    onEnsureSearchAttachmentPreview: (com.nanzhufeng.ai.domain.ConversationAttachmentReference) -> Unit,
     onManage: (com.nanzhufeng.ai.domain.Conversation, ConversationManagementAction, String?) -> Unit,
     onBatchSoftDelete: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
     onExport: () -> Unit,
@@ -1376,6 +1377,7 @@ internal fun ConversationWorkspaceDialog(
                 searchPageVisible = false
             },
             onOpenAttachmentHit = { hit -> onOpenSearchAttachment(hit.attachment) },
+            onEnsureAttachmentPreview = onEnsureSearchAttachmentPreview,
             onLocateAttachment = { hit, anchorBounds ->
                 searchAttachmentActionTarget = SearchAttachmentActionMenuTarget(hit, anchorBounds)
             },
@@ -3268,6 +3270,7 @@ private fun ConversationSearchPage(
     onClearHistory: () -> Unit,
     onOpenTextHit: (com.nanzhufeng.ai.domain.ConversationSearchHit) -> Unit,
     onOpenAttachmentHit: (ConversationAttachmentSearchHit) -> Unit,
+    onEnsureAttachmentPreview: (ConversationAttachmentReference) -> Unit,
     onLocateAttachment: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
     val searchPlaceholder = when (state.searchCategory) {
@@ -3342,6 +3345,7 @@ private fun ConversationSearchPage(
                             previews = state.searchAttachmentPreviews,
                             textPreviews = state.searchAttachmentTextPreviews,
                             onOpen = onOpenAttachmentHit,
+                            onEnsurePreview = onEnsureAttachmentPreview,
                             onLocate = onLocateAttachment,
                             bottomContentPadding = 78.dp,
                         )
@@ -3349,6 +3353,7 @@ private fun ConversationSearchPage(
                             state = state,
                             onOpenText = onOpenTextHit,
                             onOpenAttachment = onOpenAttachmentHit,
+                            onEnsureAttachmentPreview = onEnsureAttachmentPreview,
                             onLocateAttachment = onLocateAttachment,
                             bottomContentPadding = 78.dp,
                         )
@@ -3453,6 +3458,7 @@ private fun SearchAllOrTextResults(
     state: ConversationFoundationUiState,
     onOpenText: (com.nanzhufeng.ai.domain.ConversationSearchHit) -> Unit,
     onOpenAttachment: (ConversationAttachmentSearchHit) -> Unit,
+    onEnsureAttachmentPreview: (ConversationAttachmentReference) -> Unit,
     onLocateAttachment: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
     bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
@@ -3472,7 +3478,7 @@ private fun SearchAllOrTextResults(
                 }
             }
         }
-        if (state.attachmentSearchResults.isNotEmpty()) item { Text(if (state.searchQuery.isBlank()) "本地附件" else "附件", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
+        if (state.attachmentSearchResults.isNotEmpty()) item { Text((if (state.searchQuery.isBlank()) "本地附件" else "附件") + " · ${state.attachmentSearchResults.size} 项", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
         attachmentSearchMonthGroups(state.attachmentSearchResults).forEach { group ->
             item(key = "all-month:${group.key}") { SearchAttachmentMonthHeading(group.label, group.hits.size) }
             items(group.hits, key = { "attachment:${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }) { hit ->
@@ -3481,6 +3487,7 @@ private fun SearchAllOrTextResults(
                     preview = state.searchAttachmentPreviews[hit.attachment.id],
                     textPreview = state.searchAttachmentTextPreviews[hit.attachment.id],
                     onOpen = onOpenAttachment,
+                    onEnsurePreview = onEnsureAttachmentPreview,
                     onLocate = onLocateAttachment,
                 )
             }
@@ -3494,6 +3501,7 @@ private fun SearchAttachmentGrid(
     previews: Map<AttachmentId, ConversationAttachmentPreview>,
     textPreviews: Map<AttachmentId, ConversationAttachmentTextPreview>,
     onOpen: (ConversationAttachmentSearchHit) -> Unit,
+    onEnsurePreview: (ConversationAttachmentReference) -> Unit,
     onLocate: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
     bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
@@ -3504,13 +3512,17 @@ private fun SearchAttachmentGrid(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomContentPadding),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        item(
+            key = "attachment-total",
+            span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
+        ) { Text("共 ${hits.size} 项", style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
         attachmentSearchMonthGroups(hits).forEach { group ->
             item(
                 key = "month:${group.key}",
                 span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
             ) { SearchAttachmentMonthHeading(group.label, group.hits.size) }
             gridItems(group.hits, key = { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }) { hit ->
-                SearchAttachmentCard(hit, previews[hit.attachment.id], textPreviews[hit.attachment.id], onOpen, onLocate)
+                SearchAttachmentCard(hit, previews[hit.attachment.id], textPreviews[hit.attachment.id], onOpen, onEnsurePreview, onLocate)
             }
         }
     }
@@ -3554,13 +3566,14 @@ private fun SearchAttachmentRows(
     previews: Map<AttachmentId, ConversationAttachmentPreview>,
     textPreviews: Map<AttachmentId, ConversationAttachmentTextPreview>,
     onOpen: (ConversationAttachmentSearchHit) -> Unit,
+    onEnsurePreview: (ConversationAttachmentReference) -> Unit,
     onLocate: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
     bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     if (hits.isEmpty()) { SearchHint("没有匹配的本地附件"); return }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomContentPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(hits, key = { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }) { hit ->
-            SearchAttachmentRow(hit, previews[hit.attachment.id], textPreviews[hit.attachment.id], onOpen, onLocate)
+            SearchAttachmentRow(hit, previews[hit.attachment.id], textPreviews[hit.attachment.id], onOpen, onEnsurePreview, onLocate)
         }
     }
 }
@@ -3571,8 +3584,10 @@ private fun SearchAttachmentCard(
     preview: ConversationAttachmentPreview?,
     textPreview: ConversationAttachmentTextPreview?,
     onOpen: (ConversationAttachmentSearchHit) -> Unit,
+    onEnsurePreview: (ConversationAttachmentReference) -> Unit,
     onLocate: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
+    LaunchedEffect(hit.attachment.id) { onEnsurePreview(hit.attachment) }
     val bitmap = preview?.thumbnail?.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
     val isVideo = hit.attachment.mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_VIDEO_MIME_TYPES
     val isAudio = hit.attachment.mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_AUDIO_MIME_TYPES
@@ -3640,8 +3655,10 @@ private fun SearchAttachmentRow(
     preview: ConversationAttachmentPreview?,
     textPreview: ConversationAttachmentTextPreview?,
     onOpen: (ConversationAttachmentSearchHit) -> Unit,
+    onEnsurePreview: (ConversationAttachmentReference) -> Unit,
     onLocate: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
+    LaunchedEffect(hit.attachment.id) { onEnsurePreview(hit.attachment) }
     val bitmap = preview?.thumbnail?.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
     val isAudio = hit.attachment.mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_AUDIO_MIME_TYPES
     val audioCatalogSurface = catalogAudioPreviewSurface(dark = ForegroundSurface.red < 0.5f)
@@ -7862,7 +7879,10 @@ private fun ImagePreviewDialog(
     onRequestAttachmentTransfers: (List<AttachmentId>, AttachmentTransferAction) -> Unit,
 ) {
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
-    val bitmap = preview.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    // Decode the verified original once per opened attachment. Zoom recompositions must never
+    // repeatedly decode a long screenshot or silently fall back to its catalogue thumbnail.
+    val bitmap = remember(preview.id) { preview.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+    DisposableEffect(bitmap) { onDispose { bitmap?.recycle() } }
     val generatedImageIds = relatedImageIds.distinct().ifEmpty { listOf(preview.id) }
     val hasMultipleGeneratedImages = generatedImageIds.size > 1
     val chrome = rememberFilePreviewChromeState(preview.id.value)
@@ -7875,21 +7895,48 @@ private fun ImagePreviewDialog(
             Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().toggleFilePreviewChrome(preview.id.value, chrome.toggle), contentAlignment = Alignment.Center) {
                     if (bitmap == null) Text(preview.unavailableReason ?: "本地原图已损坏，无法预览。", color = Color.White)
-                    else Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize().pointerInput(preview.id) {
-                                detectTransformGestures { _, pan, zoomChange, _ ->
-                                    zoom = (zoom * zoomChange).coerceIn(1f, 4f)
-                                    if (zoom <= 1f) { offsetX = 0f; offsetY = 0f } else { offsetX += pan.x; offsetY += pan.y }
+                    else BoxWithConstraints(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.TopStart,
+                    ) {
+                        val viewportWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+                        val viewportHeightPx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+                        val sourceRatio = bitmap.height.toFloat() / bitmap.width.toFloat().coerceAtLeast(1f)
+                        val renderedWidthPx = viewportWidthPx * zoom
+                        val renderedHeightPx = renderedWidthPx * sourceRatio
+                        val placedX = if (renderedWidthPx <= viewportWidthPx) (viewportWidthPx - renderedWidthPx) / 2f else offsetX.coerceIn(viewportWidthPx - renderedWidthPx, 0f)
+                        val placedY = if (renderedHeightPx <= viewportHeightPx) (viewportHeightPx - renderedHeightPx) / 2f else offsetY.coerceIn(viewportHeightPx - renderedHeightPx, 0f)
+                        val density = LocalDensity.current
+                        val renderedWidth = with(density) { renderedWidthPx.toDp() }
+                        val renderedHeight = with(density) { renderedHeightPx.toDp() }
+                        Box(
+                            Modifier.fillMaxSize().pointerInput(preview.id, viewportWidthPx, viewportHeightPx) {
+                                detectTransformGestures { centroid, pan, zoomChange, _ ->
+                                    val oldZoom = zoom
+                                    val nextZoom = (oldZoom * zoomChange).coerceIn(1f, 6f)
+                                    val ratio = nextZoom / oldZoom
+                                    val nextWidth = viewportWidthPx * nextZoom
+                                    val nextHeight = nextWidth * sourceRatio
+                                    val nextX = centroid.x - (centroid.x - placedX) * ratio + pan.x
+                                    val nextY = centroid.y - (centroid.y - placedY) * ratio + pan.y
+                                    zoom = nextZoom
+                                    offsetX = if (nextWidth <= viewportWidthPx) 0f else nextX.coerceIn(viewportWidthPx - nextWidth, 0f)
+                                    offsetY = if (nextHeight <= viewportHeightPx) 0f else nextY.coerceIn(viewportHeightPx - nextHeight, 0f)
                                 }
                             },
-                    ) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "${preview.displayName ?: "本地图片"} 原图预览",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = zoom, scaleY = zoom, translationX = offsetX, translationY = offsetY),
-                        )
+                        ) {
+                            // Remeasure at the requested zoom instead of magnifying a screen-sized
+                            // graphics layer. Skia therefore samples the original pixels at every
+                            // zoom level, and a long screenshot opens width-fit from its top edge.
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "${preview.displayName ?: "本地图片"} 原图预览",
+                                contentScale = ContentScale.FillBounds,
+                                modifier = Modifier
+                                    .size(renderedWidth, renderedHeight)
+                                    .offset { IntOffset(placedX.toInt(), placedY.toInt()) },
+                            )
+                        }
                     }
                 }
                 if (chrome.visible) {

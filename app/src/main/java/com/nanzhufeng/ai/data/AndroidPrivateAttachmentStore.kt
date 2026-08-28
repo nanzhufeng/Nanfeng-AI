@@ -124,12 +124,14 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
             BitmapFactory.decodeFile(file.absolutePath, bounds)
             val width = bounds.outWidth
             val height = bounds.outHeight
-            if (width <= 0 || height <= 0 || width.toLong() * height.toLong() > MAX_SOURCE_PIXELS) {
+            if (width <= 0 || height <= 0 || width > MAX_PREVIEW_SOURCE_EDGE || height > MAX_PREVIEW_SOURCE_EDGE) {
                 return AttachmentThumbnailResult.Rejected(AiTaskError.AttachmentUnsupportedType)
             }
             val options = BitmapFactory.Options().apply {
                 inSampleSize = sampleSizeFor(width, height)
-                inPreferredConfig = Bitmap.Config.RGB_565
+                // Catalogue thumbnails are already bounded by inSampleSize. ARGB_8888 avoids
+                // the visible colour banding/blocking that RGB_565 produced on long screenshots.
+                inPreferredConfig = Bitmap.Config.ARGB_8888
             }
             val bitmap = BitmapFactory.decodeFile(file.absolutePath, options)
                 ?: return AttachmentThumbnailResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
@@ -369,7 +371,7 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
         const val P6K_PREVIEW_CACHE_ROOT = "p6k-zip-attachment-previews/v1"
         const val MAX_ATTACHMENT_BYTES = 20L * 1024L * 1024L
         const val MAGIC_PREFIX_BYTES = 4096
-        const val MAX_SOURCE_PIXELS = 40_000_000L
+        const val MAX_PREVIEW_SOURCE_EDGE = 200_000
         const val MAX_THUMBNAIL_EDGE = 512
         const val MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024
         const val MAX_PDF_PREVIEW_EDGE = 1440

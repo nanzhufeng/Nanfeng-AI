@@ -29,6 +29,29 @@ class P6KUserSelectedChatGptZipAssetAcceptanceTest {
             }
         }.toSet()
         val sourceReferenceRecords = mapping.conversations.sumOf { conversation -> conversation.currentPath.sumOf { it.sourceReferenceRecords } }
+        val uniqueAssetClassCounts = mapping.assets.values.groupingBy { mapped ->
+            when {
+                mapped.candidate.mimeType.startsWith("image/") -> "image"
+                mapped.candidate.mimeType.startsWith("video/") -> "video"
+                mapped.candidate.mimeType.startsWith("audio/") -> "audio"
+                else -> "file"
+            }
+        }.eachCount()
+        val occurrenceClassCounts = mapping.conversations
+            .flatMap { conversation -> conversation.currentPath.flatMap(P6KZipSourceMessageAssets::entryNames) }
+            .mapNotNull(mapping.assets::get)
+            .groupingBy { mapped ->
+                when {
+                    mapped.candidate.mimeType.startsWith("image/") -> "image"
+                    mapped.candidate.mimeType.startsWith("video/") -> "video"
+                    mapped.candidate.mimeType.startsWith("audio/") -> "audio"
+                    else -> "file"
+                }
+            }.eachCount()
+        println("P6K_UNIQUE_ASSET_CLASS_COUNTS=$uniqueAssetClassCounts")
+        println("P6K_OCCURRENCE_CLASS_COUNTS=$occurrenceClassCounts")
+        assertEquals(mapOf("image" to 654, "file" to 118, "video" to 75, "audio" to 6), uniqueAssetClassCounts)
+        assertEquals(mapOf("image" to 655, "file" to 118, "video" to 75, "audio" to 6), occurrenceClassCounts)
         val importedSourceIds = textMapping.items.mapNotNull { item -> item.candidate?.sourceConversationId }.toSet()
         val referencedByImportedConversations = mapping.conversations
             .filter { conversation -> conversation.sourceConversationId in importedSourceIds }

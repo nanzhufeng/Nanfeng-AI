@@ -11,7 +11,8 @@ class P6F2BImagePreviewUiContractsTest {
 
     @Test fun `image chips open a direct original canvas with viewport-only gesture state`() {
         val viewer = workspace.substring(workspace.indexOf("private fun ImagePreviewDialog"), workspace.indexOf("private fun ComposerSendButton"))
-        for (token in listOf("AttachmentPreviewChip", "onOpenImagePreview", "ImagePreviewDialog", "detectTransformGestures", "graphicsLayer", "Surface(color = Color.Black", "FilePreviewTopActions", "关闭文件预览")) assertTrue(token, workspace.contains(token))
+        for (token in listOf("AttachmentPreviewChip", "onOpenImagePreview", "ImagePreviewDialog", "detectTransformGestures", "remember(preview.id)", "size(renderedWidth, renderedHeight)", "ContentScale.FillBounds", "Surface(color = Color.Black", "FilePreviewTopActions", "关闭文件预览")) assertTrue(token, workspace.contains(token))
+        assertFalse("original pixels must be remeasured, not magnified from a screen-sized layer", viewer.contains("graphicsLayer(scaleX = zoom"))
         assertFalse(viewer.contains("本地图片预览"))
         assertFalse(viewer.contains("仅本地原图"))
         assertFalse(viewer.contains("双指缩放或拖动只改变当前视口"))

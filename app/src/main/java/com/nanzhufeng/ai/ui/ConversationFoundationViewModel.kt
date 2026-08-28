@@ -131,13 +131,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-private val SEARCH_PREVIEWABLE_TEXT_MIME_TYPES = setOf(
-    "text/plain",
-    "text/markdown",
-    "application/json",
-    "text/csv",
-)
-
 /** Returning after this gap is treated like a fresh chat entry, never a resume of old prose. */
 private const val FRESH_CHAT_AFTER_BACKGROUND_MS = 15L * 60L * 1_000L
 
@@ -302,6 +295,8 @@ class ConversationFoundationViewModel(
 ) : ViewModel() {
     private var streamJob: Job? = null
     private var searchInputGeneration = 0L
+    /** Search keeps the full lightweight catalogue; only composed rows request local bytes. */
+    private val searchPreviewRequests = mutableSetOf<AttachmentId>()
     private var currentAttachmentReferences: Map<AttachmentId, ConversationAttachmentReference> = emptyMap()
     private var temporaryAttachmentReferences: Map<AttachmentId, ConversationAttachmentReference> = emptyMap()
     private var draftSaveGeneration = 0L
@@ -1068,6 +1063,7 @@ class ConversationFoundationViewModel(
 
     fun updateSearchQuery(query: String) {
         val generation = ++searchInputGeneration
+        searchPreviewRequests.clear()
         state = state.copy(
             searchQuery = query,
             searchResults = emptyList(),
@@ -1085,6 +1081,7 @@ class ConversationFoundationViewModel(
     fun selectSearchCategory(category: ConversationSearchCategory) {
         if (state.searchCategory == category) return
         searchInputGeneration += 1
+        searchPreviewRequests.clear()
         state = state.copy(searchCategory = category, searchResults = emptyList(), attachmentSearchResults = emptyList(), searchAttachmentPreviews = emptyMap(), searchAttachmentTextPreviews = emptyMap(), searchPanelOpen = false)
         submitSearch()
     }
@@ -1110,26 +1107,39 @@ class ConversationFoundationViewModel(
                 if (browsing) searchConversationAttachments.browse(category, scope)
                 else searchConversationAttachments.execute(query, category, scope)
             }
-            val previews = withContext(Dispatchers.IO) {
-                attachments.map { it.attachment }.distinctBy { it.id }.associate { reference -> reference.id to attachmentPreview.project(reference) }
-            }
-            val textPreviews = withContext(Dispatchers.IO) {
-                attachments.map { it.attachment }
-                    .distinctBy { it.id }
-                    .filter { it.mimeType in SEARCH_PREVIEWABLE_TEXT_MIME_TYPES }
-                    .associate { reference -> reference.id to attachmentPreview.text(reference) }
-            }
             if (state.searchQuery == query && state.searchCategory == category) {
                 if (!browsing) searchHistory.record(query, scope)
+                searchPreviewRequests.clear()
                 state = state.copy(
                     searchResults = results,
                     attachmentSearchResults = attachments,
-                    searchAttachmentPreviews = previews,
-                    searchAttachmentTextPreviews = textPreviews,
+                    searchAttachmentPreviews = emptyMap(),
+                    searchAttachmentTextPreviews = emptyMap(),
                     searchPanelOpen = false,
                     searchHistoryOpen = false,
                     searchHistory = searchHistory.recent(scope),
                 )
+            }
+        }
+    }
+
+    /** A Lazy list/grid calls this only for composed attachment rows. Full catalogue discovery
+     * remains metadata-only, while visible images, video posters and file excerpts become useful. */
+    fun ensureSearchAttachmentPreview(reference: ConversationAttachmentReference) {
+        if (state.searchAttachmentPreviews.containsKey(reference.id) || !searchPreviewRequests.add(reference.id)) return
+        viewModelScope.launch {
+            try {
+                val preview = withContext(Dispatchers.IO) { attachmentPreview.project(reference) }
+                if (state.attachmentSearchResults.any { it.attachment.id == reference.id }) {
+                    state = state.copy(
+                        searchAttachmentPreviews = state.searchAttachmentPreviews + (reference.id to preview),
+                        searchAttachmentTextPreviews = preview.textPreview?.let { text ->
+                            state.searchAttachmentTextPreviews + (reference.id to text)
+                        } ?: state.searchAttachmentTextPreviews,
+                    )
+                }
+            } finally {
+                searchPreviewRequests.remove(reference.id)
             }
         }
     }

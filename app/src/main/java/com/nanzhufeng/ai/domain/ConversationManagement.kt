@@ -263,7 +263,6 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
                 .map { (node, attachment) -> ConversationAttachmentSearchHit(snapshot.conversation.id, node.id, snapshot.conversation.title, attachment, node.createdAt.toEpochMilli()) }
         }
         .distinctBy { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }
-        .take(MAX_RESULTS)
         .toList()
 
     fun execute(
@@ -287,7 +286,6 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
                     .map { (node, attachment) -> ConversationAttachmentSearchHit(snapshot.conversation.id, node.id, snapshot.conversation.title, attachment, node.createdAt.toEpochMilli()) }
             }
             .distinctBy { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }
-            .take(MAX_RESULTS)
             .toList()
     }
 
@@ -305,8 +303,6 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
         attachment.mimeType in CONVERSATION_ALLOWED_AUDIO_MIME_TYPES -> ConversationSearchCategory.AUDIO
         else -> ConversationSearchCategory.FILE
     }
-
-    private companion object { const val MAX_RESULTS = 50 }
 }
 
 private fun ConversationManagementIntent.fingerprint(): String = MessageDigest.getInstance("SHA-256")

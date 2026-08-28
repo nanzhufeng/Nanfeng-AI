@@ -184,14 +184,6 @@ class ConversationAttachmentPreviewProjection(
         if (asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
             return ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null, unavailableReason = "本地附件校验不一致")
         }
-        // Search may request dozens of cards at once. A retained ZIP video/audio must not be
-        // expanded into cache merely to paint the catalogue; explicit open still uses the normal
-        // verified player path below.
-        if (asset.reference.startsWith("p6k-zip-assets/v1/") &&
-            (reference.mimeType == "video/mp4" || reference.mimeType in CONVERSATION_ALLOWED_AUDIO_MIME_TYPES)
-        ) {
-            return ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null)
-        }
         if (reference.mimeType == "video/mp4") {
             return when (val result = privateStore.videoMetadata(asset)) {
                 is AttachmentVideoMetadataResult.Ready -> ConversationAttachmentPreview(

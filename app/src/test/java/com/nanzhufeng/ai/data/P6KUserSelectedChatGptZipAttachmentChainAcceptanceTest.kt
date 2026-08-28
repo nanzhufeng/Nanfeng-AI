@@ -10,6 +10,9 @@ import com.nanzhufeng.ai.data.local.RoomP6KZipImportTaskRepository
 import com.nanzhufeng.ai.data.local.RoomP6KZipMappedAssetLinkOwner
 import com.nanzhufeng.ai.domain.AttachmentId
 import com.nanzhufeng.ai.domain.AttachmentReference
+import com.nanzhufeng.ai.domain.ContentBlock
+import com.nanzhufeng.ai.domain.ConversationListScope
+import com.nanzhufeng.ai.domain.ConversationSearchCategory
 import com.nanzhufeng.ai.domain.ManageP6KChatGptZipImportUseCase
 import com.nanzhufeng.ai.domain.P6KChatGptZipAssetMapper
 import com.nanzhufeng.ai.domain.P6KChatGptZipCandidateMapper
@@ -19,6 +22,8 @@ import com.nanzhufeng.ai.domain.P6KZipAssetMappingResult
 import com.nanzhufeng.ai.domain.P6KZipImportTask
 import com.nanzhufeng.ai.domain.P6KZipTaskId
 import com.nanzhufeng.ai.domain.P6KZipTaskStatus
+import com.nanzhufeng.ai.domain.SearchConversationAttachmentsUseCase
+import com.nanzhufeng.ai.domain.MessageTree
 import com.nanzhufeng.ai.domain.ThirdPartyZipInventoryPolicy
 import com.nanzhufeng.ai.domain.ThirdPartyZipInventoryResult
 import com.nanzhufeng.ai.domain.ThirdPartyZipProvider
@@ -83,6 +88,25 @@ class P6KUserSelectedChatGptZipAttachmentChainAcceptanceTest {
                 failures.isEmpty(),
             )
             assertEquals(sourceMapping.assets.size, summary.linkedAssetCount)
+            val currentPathReferences = conversations.snapshotsForSearch().flatMap { snapshot ->
+                MessageTree(snapshot.conversation, snapshot.nodes).contextPath()
+                    .flatMap { node -> node.content.filterIsInstance<ContentBlock.Attachment>().map { it.attachment } }
+            }
+            val currentPathClassCounts = currentPathReferences.groupingBy { reference ->
+                when {
+                    reference.mimeType.startsWith("image/") -> "image"
+                    reference.mimeType.startsWith("video/") -> "video"
+                    reference.mimeType.startsWith("audio/") -> "audio"
+                    else -> "file"
+                }
+            }.eachCount()
+            assertEquals(854, currentPathReferences.size)
+            assertEquals(mapOf("image" to 655, "file" to 118, "video" to 75, "audio" to 6), currentPathClassCounts)
+            val catalogue = SearchConversationAttachmentsUseCase(conversations)
+            assertEquals(655, catalogue.browse(ConversationSearchCategory.IMAGE, ConversationListScope.ALL).size)
+            assertEquals(75, catalogue.browse(ConversationSearchCategory.VIDEO, ConversationListScope.ALL).size)
+            assertEquals(6, catalogue.browse(ConversationSearchCategory.AUDIO, ConversationListScope.ALL).size)
+            assertEquals(118, catalogue.browse(ConversationSearchCategory.FILE, ConversationListScope.ALL).size)
         } finally {
             database.close()
         }
