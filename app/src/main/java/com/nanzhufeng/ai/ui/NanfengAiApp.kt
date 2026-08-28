@@ -1,6 +1,5 @@
 package com.nanzhufeng.ai.ui
 
-import android.app.Activity
 import android.graphics.BitmapFactory
 import android.content.Context
 import android.net.Uri
@@ -9,6 +8,7 @@ import android.provider.OpenableColumns
 import android.graphics.ImageDecoder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
@@ -304,6 +304,8 @@ private enum class SettingsDestination(val label: String) {
     WORKSPACE("工作区"),
     DEVELOPMENT("开发与诊断"),
     DATA_STORAGE("数据与存储"),
+    JSON_IMPORT_RESULTS("JSON 导入结果"),
+    ZIP_IMPORT_RESULTS("ZIP 导入结果"),
     LOCAL_BACKUP("备份与恢复"),
     ABOUT("关于"),
     PRIVACY("隐私与安全"),
@@ -582,7 +584,7 @@ internal fun NanfengAiApp(
     val appTypography = remember(appearance.fontSize) {
         Typography().scaledForAppFontSize(appearance.fontSize.scale)
     }
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     LaunchedEffect(darkAppearance, appearance.accentColor) {
         applyAppearancePalette(darkAppearance)
         // One source drives every non-semantic emphasis: selected service pills, primary
@@ -1269,10 +1271,32 @@ private fun CaptureScreen(
                         onSelectP6KAsset = onSelectP6KAsset,
                         onSelectP6KTarget = onSelectP6KTarget,
                         onLinkP6KAsset = onLinkP6KAsset,
+                        onOpenJsonImportResults = { openSettingsLevel(P5ARoute.SETTINGS, SettingsDestination.JSON_IMPORT_RESULTS) },
+                        onOpenZipImportResults = { openSettingsLevel(P5ARoute.SETTINGS, SettingsDestination.ZIP_IMPORT_RESULTS) },
                         workspaceExchangeV2ExportState = workspaceExchangeV2ExportState,
                         onSelectWorkspaceExchangeV2Scope = onSelectWorkspaceExchangeV2Scope,
                         workspaceExchangeV2RestoreState = workspaceExchangeV2RestoreState,
                         onSelectWorkspaceExchangeV2RestoreDocument = onSelectWorkspaceExchangeV2RestoreDocument,
+                    )
+                },
+                jsonImportResultsContent = {
+                    ImportResultsDetailsPage(
+                        chatGptState = chatGptImportState,
+                        claudeState = claudeImportState,
+                        zipState = p6kZipImportState,
+                        onClearZipBatch = onClearP6KZip,
+                        showJson = true,
+                        showZip = false,
+                    )
+                },
+                zipImportResultsContent = {
+                    ImportResultsDetailsPage(
+                        chatGptState = chatGptImportState,
+                        claudeState = claudeImportState,
+                        zipState = p6kZipImportState,
+                        onClearZipBatch = onClearP6KZip,
+                        showJson = false,
+                        showZip = true,
                     )
                 },
                 localBackupState = localBackupState,
@@ -1310,6 +1334,8 @@ private fun CaptureScreen(
                     onSelectP6KAsset = onSelectP6KAsset,
                     onSelectP6KTarget = onSelectP6KTarget,
                     onLinkP6KAsset = onLinkP6KAsset,
+                    onOpenJsonImportResults = { openSettingsLevel(P5ARoute.SETTINGS, SettingsDestination.JSON_IMPORT_RESULTS) },
+                    onOpenZipImportResults = { openSettingsLevel(P5ARoute.SETTINGS, SettingsDestination.ZIP_IMPORT_RESULTS) },
                     workspaceExchangeV2ExportState = workspaceExchangeV2ExportState,
                     onSelectWorkspaceExchangeV2Scope = onSelectWorkspaceExchangeV2Scope,
                     workspaceExchangeV2RestoreState = workspaceExchangeV2RestoreState,
@@ -1348,6 +1374,8 @@ private fun DataImportCenterContent(
     onSelectP6KAsset: (String) -> Unit,
     onSelectP6KTarget: (P6KZipManualLinkTarget) -> Unit,
     onLinkP6KAsset: () -> Unit,
+    onOpenJsonImportResults: () -> Unit,
+    onOpenZipImportResults: () -> Unit,
     workspaceExchangeV2ExportState: WorkspaceExchangeV2ExportUiState,
     onSelectWorkspaceExchangeV2Scope: () -> Unit,
     workspaceExchangeV2RestoreState: WorkspaceExchangeV2RestoreUiState,
@@ -1355,31 +1383,49 @@ private fun DataImportCenterContent(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(26.dp)) {
         DataStorageFunctionalGroup(title = "对话") {
-            ConversationImportSection(
-                chatGptImportState = chatGptImportState,
-                onChooseChatGptImport = onChooseChatGptImport,
-                onOpenChatGptImportTask = onOpenChatGptImportTask,
-                onBackChatGptImportTask = onBackChatGptImportTask,
-                onRetryChatGptImportTask = onRetryChatGptImportTask,
-                onCancelChatGptImport = onCancelChatGptImport,
-                claudeImportState = claudeImportState,
-                onChooseClaudeImport = onChooseClaudeImport,
-                onOpenClaudeImportTask = onOpenClaudeImportTask,
-                onBackClaudeImportTask = onBackClaudeImportTask,
-                onRetryClaudeImportTask = onRetryClaudeImportTask,
-                onCancelClaudeImport = onCancelClaudeImport,
-            )
+            DataStorageGroupedCard {
+                ChatGptExportImportSettingsPage(
+                    state = chatGptImportState,
+                    onChoose = onChooseChatGptImport,
+                    onOpen = onOpenChatGptImportTask,
+                    onBack = onBackChatGptImportTask,
+                    onRetry = onRetryChatGptImportTask,
+                    onCancel = onCancelChatGptImport,
+                    showHeader = false,
+                    actionLabel = "导入 ChatGPT JSON",
+                    grouped = true,
+                    showTaskList = false,
+                )
+                DataStorageGroupedDivider()
+                ClaudeExportImportSettingsPage(
+                    state = claudeImportState,
+                    onChoose = onChooseClaudeImport,
+                    onOpen = onOpenClaudeImportTask,
+                    onBack = onBackClaudeImportTask,
+                    onRetry = onRetryClaudeImportTask,
+                    onCancel = onCancelClaudeImport,
+                    showHeader = false,
+                    actionLabel = "导入 Claude JSON",
+                    grouped = true,
+                    showTaskList = false,
+                )
+                DataStorageGroupedDivider()
+                DataStorageImportResultsRow(
+                    summary = jsonImportResultSummary(chatGptImportState, claudeImportState),
+                    onClick = onOpenJsonImportResults,
+                )
+            }
             DataStorageGroupedCard {
                 P6KZipImportSettingsCard(
                     state = p6kZipImportState,
                     onChatGpt = onOpenP6KChatGptZip,
                     onClaude = onOpenP6KClaudeZip,
-                    onClear = onClearP6KZip,
-                    onView = onViewP6KZip,
-                    onSelectAsset = onSelectP6KAsset,
-                    onSelectTarget = onSelectP6KTarget,
-                    onLink = onLinkP6KAsset,
                     grouped = true,
+                )
+                DataStorageGroupedDivider()
+                DataStorageImportResultsRow(
+                    summary = zipImportResultSummary(p6kZipImportState),
+                    onClick = onOpenZipImportResults,
                 )
             }
         }
@@ -1395,46 +1441,6 @@ private fun DataImportCenterContent(
             }
         }
     }
-}
-
-@Composable
-private fun ConversationImportSection(
-    chatGptImportState: ChatGptImportUiState,
-    onChooseChatGptImport: () -> Unit,
-    onOpenChatGptImportTask: (ChatGptImportTask) -> Unit,
-    onBackChatGptImportTask: () -> Unit,
-    onRetryChatGptImportTask: (ChatGptImportTaskId) -> Unit,
-    onCancelChatGptImport: () -> Unit,
-    claudeImportState: ClaudeImportUiState,
-    onChooseClaudeImport: () -> Unit,
-    onOpenClaudeImportTask: (ClaudeImportTask) -> Unit,
-    onBackClaudeImportTask: () -> Unit,
-    onRetryClaudeImportTask: (ClaudeImportTaskId) -> Unit,
-    onCancelClaudeImport: () -> Unit,
-) = DataStorageGroupedCard {
-        ChatGptExportImportSettingsPage(
-            state = chatGptImportState,
-            onChoose = onChooseChatGptImport,
-            onOpen = onOpenChatGptImportTask,
-            onBack = onBackChatGptImportTask,
-            onRetry = onRetryChatGptImportTask,
-            onCancel = onCancelChatGptImport,
-            showHeader = false,
-            actionLabel = "导入 ChatGPT JSON",
-            grouped = true,
-        )
-        DataStorageGroupedDivider()
-        ClaudeExportImportSettingsPage(
-            state = claudeImportState,
-            onChoose = onChooseClaudeImport,
-            onOpen = onOpenClaudeImportTask,
-            onBack = onBackClaudeImportTask,
-            onRetry = onRetryClaudeImportTask,
-            onCancel = onCancelClaudeImport,
-            showHeader = false,
-            actionLabel = "导入 Claude JSON",
-            grouped = true,
-        )
 }
 
 @Composable
@@ -1632,6 +1638,8 @@ private fun SettingsHierarchy(
     privacyDataViewModel: PrivacyDataViewModel,
     onOpenPrivacyData: () -> Unit,
     dataStorageImportContent: @Composable () -> Unit,
+    jsonImportResultsContent: @Composable () -> Unit,
+    zipImportResultsContent: @Composable () -> Unit,
     localBackupState: LocalBackupUiState,
     localBackupViewModel: LocalBackupRestoreViewModel,
     onExportLocalBackup: () -> Unit,
@@ -1773,6 +1781,8 @@ private fun SettingsHierarchy(
                     }
                 }
             }
+            SettingsDestination.JSON_IMPORT_RESULTS -> jsonImportResultsContent()
+            SettingsDestination.ZIP_IMPORT_RESULTS -> zipImportResultsContent()
             SettingsDestination.LOCAL_BACKUP -> LocalBackupRestorePage(
                 state = localBackupState,
                 onExport = onExportLocalBackup,
@@ -1848,10 +1858,56 @@ internal fun DataStorageGroupedActionRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            if (working) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = AccentOrange)
-            else Text(label, style = MaterialTheme.typography.titleMedium, color = BodyText)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (working) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = AccentOrange)
+                    Spacer(Modifier.width(12.dp))
+                }
+                Text(label, style = MaterialTheme.typography.titleMedium, color = BodyText)
+            }
         }
     }
+}
+
+@Composable
+private fun DataStorageImportResultsRow(
+    summary: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 82.dp),
+        shape = RectangleShape,
+        color = ForegroundSurface,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("导入结果", style = MaterialTheme.typography.titleMedium, color = BodyText)
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+            }
+            Text("查看详情", style = MaterialTheme.typography.labelLarge, color = AccentOrange)
+        }
+    }
+}
+
+private fun jsonImportResultSummary(
+    chatGpt: ChatGptImportUiState,
+    claude: ClaudeImportUiState,
+): String {
+    val batches = chatGpt.tasks.size + claude.tasks.size
+    val imported = chatGpt.tasks.sumOf { task -> task.items.count { it.status == com.nanzhufeng.ai.domain.ChatGptImportItemStatus.CONFIRMED } } +
+        claude.tasks.sumOf { task -> task.items.count { it.status == com.nanzhufeng.ai.domain.ClaudeImportItemStatus.CONFIRMED } }
+    return "$batches 个导入批次 · $imported 个对话已导入"
+}
+
+private fun zipImportResultSummary(zip: P6KZipImportUiState): String {
+    val imported = zip.tasks.sumOf { task -> task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.CONFIRMED } }
+    val restoredAttachments = zip.tasks.sumOf { task -> task.assets.count { it.attachmentId != null } }
+    return "${zip.tasks.size} 个导入批次 · $imported 个对话已导入 · $restoredAttachments 个附件已恢复"
 }
 
 @Composable

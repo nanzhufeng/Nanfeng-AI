@@ -1351,8 +1351,8 @@ class P6DConversationRowAccessibilityContractsTest {
             "FileProvider.getUriForFile",
         )) assertTrue("missing file handoff token $token", source.contains(token))
         val attachmentPopup = source.substring(source.indexOf("private fun AttachmentInfoPopup"), source.indexOf("private fun attachmentKindLabel"))
-        assertTrue(attachmentPopup.contains("AttachmentPopupAction(Icons.Outlined.FileDownload, \"下载\""))
-        assertTrue(attachmentPopup.contains("AttachmentPopupAction(Icons.Outlined.Share, \"分享\""))
+        assertTrue(attachmentPopup.contains("AttachmentPopupAction(Icons.Rounded.FileDownload, \"下载\""))
+        assertTrue(attachmentPopup.contains("AttachmentPopupAction(Icons.Rounded.Share, \"分享\""))
     }
 
     @Test
@@ -1379,7 +1379,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertFalse(source.contains("put(MediaStore.Images.Media.DATE_TAKEN"))
         assertTrue(source.contains("resolver.openOutputStream(uri, \"wt\")"))
         assertTrue(source.contains("if (item.mimeType == \"video/mp4\")"))
-        assertTrue(source.contains("remuxDownloadedMp4(context, resolver, uri, item.bytes)"))
+        assertTrue(source.contains("remuxDownloadedMp4(context, resolver, uri, item.open)"))
         assertTrue(source.contains("android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4"))
         assertFalse(source.contains("runCatching { stampDownloadedImageTakenAt"))
         assertFalse(source.contains("runCatching { remuxDownloadedMp4"))

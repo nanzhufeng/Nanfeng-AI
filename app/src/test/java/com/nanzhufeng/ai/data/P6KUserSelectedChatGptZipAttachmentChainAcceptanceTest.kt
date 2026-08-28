@@ -1,0 +1,96 @@
+package com.nanzhufeng.ai.data
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.nanzhufeng.ai.data.local.NanfengAiDatabase
+import com.nanzhufeng.ai.data.local.RoomConversationRepository
+import com.nanzhufeng.ai.data.local.RoomP6KZipImportCommitStore
+import com.nanzhufeng.ai.data.local.RoomP6KZipImportTaskRepository
+import com.nanzhufeng.ai.data.local.RoomP6KZipMappedAssetLinkOwner
+import com.nanzhufeng.ai.domain.AttachmentId
+import com.nanzhufeng.ai.domain.AttachmentReference
+import com.nanzhufeng.ai.domain.ManageP6KChatGptZipImportUseCase
+import com.nanzhufeng.ai.domain.P6KChatGptZipAssetMapper
+import com.nanzhufeng.ai.domain.P6KChatGptZipCandidateMapper
+import com.nanzhufeng.ai.domain.P6KChatGptZipMappingResult
+import com.nanzhufeng.ai.domain.P6KZipAssetCandidate
+import com.nanzhufeng.ai.domain.P6KZipAssetMappingResult
+import com.nanzhufeng.ai.domain.P6KZipImportTask
+import com.nanzhufeng.ai.domain.P6KZipTaskId
+import com.nanzhufeng.ai.domain.P6KZipTaskStatus
+import com.nanzhufeng.ai.domain.ThirdPartyZipInventoryPolicy
+import com.nanzhufeng.ai.domain.ThirdPartyZipInventoryResult
+import com.nanzhufeng.ai.domain.ThirdPartyZipProvider
+import java.io.File
+import java.security.MessageDigest
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assume.assumeTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+/** Full real selected ZIP, isolated Room, no body or filename output and no device. */
+@RunWith(RobolectricTestRunner::class)
+class P6KUserSelectedChatGptZipAttachmentChainAcceptanceTest {
+    @Test
+    fun `selected real source package restores every officially owned attachment into Room`() {
+        val archive = File(selectedPath("nanfeng.ai.p6k.newZip", "NANFENG_AI_P6K_NEW_ZIP"))
+        assumeTrue("requires an explicitly selected newer ChatGPT ZIP", archive.isFile)
+        val inventory = ThirdPartyZipInventoryPolicy.inspect(archive) as ThirdPartyZipInventoryResult.InventoriedUnsupported
+        val conversationEntries = inventory.entries.filter { it.name.matches(Regex("^conversations(?:[-_]\\d+)?\\.json$")) }
+        val textMapping = P6KChatGptZipCandidateMapper().map(ThirdPartyZipProvider.CHATGPT, archive, conversationEntries) as P6KChatGptZipMappingResult.Mapped
+        val assets = inventory.entries.filter { it.mimeType != "application/json" }.map { entry ->
+            P6KZipAssetCandidate(entry.name, sha256(entry.name), entry.uncompressedBytes, entry.mimeType)
+        }
+        val sourceMapping = (P6KChatGptZipAssetMapper().map(archive, assets) as P6KZipAssetMappingResult.Mapped).value
+        val at = Instant.parse("2026-08-28T00:00:00Z")
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, NanfengAiDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val tasks = RoomP6KZipImportTaskRepository(database)
+            val conversations = RoomConversationRepository(database)
+            val staged = tasks.save(
+                P6KZipImportTask(
+                    P6KZipTaskId.new(), ThirdPartyZipProvider.CHATGPT, "selected.zip", archive.length(),
+                    "selected-real-package", P6KZipTaskStatus.AWAITING_CONFIRMATION,
+                    formatVersion = textMapping.formatVersion, createdAt = at, updatedAt = at,
+                    items = textMapping.items, assets = assets,
+                ),
+            )
+            val imported = ManageP6KChatGptZipImportUseCase(
+                tasks,
+                RoomP6KZipImportCommitStore(database, conversations),
+                Clock.fixed(at, ZoneOffset.UTC),
+            ).importAll(staged.id)
+            val prepared = sourceMapping.assets.mapValues { (entryName, mapped) ->
+                AttachmentReference(
+                    P6KZipArchiveAssetStorage.key(staged.id.value, entryName), mapped.candidate.mimeType,
+                    mapped.displayName, AttachmentId.new(), mapped.candidate.byteCount, mapped.candidate.sha256,
+                )
+            }
+            val failures = mutableListOf<Throwable>()
+            val summary = RoomP6KZipMappedAssetLinkOwner(database, conversations, failures::add)
+                .reconcile(imported, sourceMapping, prepared, at.plusSeconds(1))
+            assertTrue(
+                failures.joinToString(separator = "\n") { error ->
+                    "${error.javaClass.name}: ${error.message.orEmpty()}\n${error.stackTraceToString()}"
+                },
+                failures.isEmpty(),
+            )
+            assertEquals(sourceMapping.assets.size, summary.linkedAssetCount)
+        } finally {
+            database.close()
+        }
+    }
+
+    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+
+    private fun selectedPath(property: String, environment: String): String =
+        System.getProperty(property).orEmpty().ifBlank { System.getenv(environment).orEmpty() }
+}

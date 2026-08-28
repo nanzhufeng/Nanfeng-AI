@@ -9,6 +9,7 @@ import com.nanzhufeng.ai.data.local.RoomP6KProfilePersonalizationSettingsOwner
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportCommitStore
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportTaskRepository
 import com.nanzhufeng.ai.data.local.RoomP6KZipManualAssetLinkOwner
+import com.nanzhufeng.ai.data.local.RoomP6KZipMappedAssetLinkOwner
 import com.nanzhufeng.ai.data.local.RoomPrivateAttachmentRepository
 import com.nanzhufeng.ai.domain.AiTaskError
 import com.nanzhufeng.ai.domain.AttachmentId
@@ -145,7 +146,7 @@ class P6KZipManualAssetLinkRoomContractsTest {
             val intake = AndroidP6KZipIntakeStore(
                 context, tasks, ManageP6KChatGptZipImportUseCase(tasks, rejectingCommits, clock),
                 RoomP6KProfilePersonalizationSettingsOwner(database), RoomP6KZipManualAssetLinkOwner(database, RoomConversationRepository(database)),
-                FixtureAttachmentStore(), RoomConversationRepository(database), clock,
+                RoomP6KZipMappedAssetLinkOwner(database, RoomConversationRepository(database)), FixtureAttachmentStore(), RoomConversationRepository(database), clock,
             )
             assertFalse(intake.cancel(task.id.value))
             assertNotNull(tasks.find(task.id))
@@ -160,7 +161,7 @@ class P6KZipManualAssetLinkRoomContractsTest {
         val conversations = RoomConversationRepository(database)
         return AndroidP6KZipIntakeStore(
             context, tasks, ManageP6KChatGptZipImportUseCase(tasks, RoomP6KZipImportCommitStore(database, conversations), clock),
-            RoomP6KProfilePersonalizationSettingsOwner(database), RoomP6KZipManualAssetLinkOwner(database, conversations), attachments, conversations, clock,
+            RoomP6KProfilePersonalizationSettingsOwner(database), RoomP6KZipManualAssetLinkOwner(database, conversations), RoomP6KZipMappedAssetLinkOwner(database, conversations), attachments, conversations, clock,
         )
     }
 

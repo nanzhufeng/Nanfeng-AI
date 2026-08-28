@@ -7,18 +7,58 @@ import org.junit.Test
 
 /** K9: Settings may expose task state, never the selected ZIP filename. */
 class P6KZipImportUiContractsTest {
-    @Test fun `ZIP Settings uses an anonymous batch label while retaining direct import and revoke actions`() {
+    @Test fun `import detail page remains anonymous while retaining ZIP batch revoke`() {
         val source = File("src/main/java/com/nanzhufeng/ai/ui/P6KZipImportUi.kt").readText()
 
         assertTrue(source.contains("导入 ChatGPT ZIP"))
         assertTrue(source.contains("导入 Claude ZIP"))
-        assertTrue(source.contains("导入批次"))
-        assertTrue(source.contains("删除导入批次"))
+        assertTrue(source.contains("ImportResultsDetailsPage"))
+        assertTrue(source.contains("删除本批次"))
+        assertTrue(source.contains("个对话已导入"))
+        assertTrue(source.contains("条无可显示正文"))
+        assertTrue(source.contains("这里不显示聊天正文、标题或原始文件名"))
         assertTrue(source.contains("init { show() }"))
         assertTrue(source.contains("已保留任务与私有副本；请重试删除"))
+        assertTrue(source.contains("workingProvider: ThirdPartyZipProvider?"))
+        assertTrue(source.contains("workingProvider = provider"))
+        assertTrue(source.contains("state.workingProvider == ThirdPartyZipProvider.CHATGPT"))
+        assertTrue(source.contains("state.workingProvider == ThirdPartyZipProvider.CLAUDE"))
         assertFalse(source.contains("task.displayName"))
         assertFalse(source.contains("item.candidate!!.title"))
         assertFalse(source.contains("target.conversationTitle"))
+    }
+
+    @Test fun `only the selected ZIP provider presents a loading indicator while both rows remain identified`() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val row = app.substring(app.indexOf("internal fun DataStorageGroupedActionRow"), app.indexOf("private fun SettingsCategoryList"))
+
+        assertTrue(row.contains("Row(verticalAlignment = Alignment.CenterVertically)"))
+        assertTrue(row.contains("if (working)"))
+        assertTrue(row.contains("Text(label, style = MaterialTheme.typography.titleMedium, color = BodyText)"))
+    }
+
+    @Test fun `JSON and ZIP retain separate cards and separate results destinations`() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val zipUi = File("src/main/java/com/nanzhufeng/ai/ui/P6KZipImportUi.kt").readText()
+        val importCenter = app.substring(app.indexOf("private fun DataImportCenterContent"), app.indexOf("private fun WorkspaceExchangeV2ExportCard"))
+
+        for (label in listOf("导入 ChatGPT JSON", "导入 Claude JSON")) {
+            assertTrue("missing grouped import action $label", importCenter.contains(label))
+        }
+        for (label in listOf("导入 ChatGPT ZIP", "导入 Claude ZIP")) assertTrue("missing grouped import action $label", zipUi.contains(label))
+        assertTrue(importCenter.contains("DataStorageImportResultsRow"))
+        assertTrue(app.contains("JSON_IMPORT_RESULTS(\"JSON 导入结果\")"))
+        assertTrue(app.contains("ZIP_IMPORT_RESULTS(\"ZIP 导入结果\")"))
+        assertTrue(app.contains("SettingsDestination.JSON_IMPORT_RESULTS -> jsonImportResultsContent()"))
+        assertTrue(app.contains("SettingsDestination.ZIP_IMPORT_RESULTS -> zipImportResultsContent()"))
+        assertTrue(importCenter.contains("onOpenJsonImportResults"))
+        assertTrue(importCenter.contains("onOpenZipImportResults"))
+        assertTrue(importCenter.contains("showTaskList = false"))
+        assertTrue(app.contains("个附件已恢复"))
+        assertTrue(zipUi.contains("个附件已恢复到原对话"))
+        assertTrue(zipUi.contains("缺少官方对话归属，未自动关联"))
+        assertTrue("JSON result entry must remain visible even before a task exists", !importCenter.contains("if (chatGptImportState.tasks.isNotEmpty() || claudeImportState.tasks.isNotEmpty())"))
+        assertTrue("ZIP result entry must remain visible even before a task exists", !importCenter.contains("if (p6kZipImportState.tasks.isNotEmpty())"))
     }
 
     @Test fun `conversation ZIP pickers request only ZIP document MIME types`() {
@@ -29,5 +69,12 @@ class P6KZipImportUiContractsTest {
             assertTrue("missing ZIP-only picker request $token", pickerActions.contains(token))
         }
         assertFalse(pickerActions.contains("arrayOf(\"*/*\")"))
+    }
+
+    @Test fun `legacy empty attachment marker cannot suppress the source mapping retry`() {
+        val intake = File("src/main/java/com/nanzhufeng/ai/data/AndroidP6KZipIntakeStore.kt").readText()
+        assertTrue(intake.contains("mapping.assets.isNotEmpty()"))
+        assertTrue(intake.contains("assets-v2.done"))
+        assertTrue(intake.contains("legacyAssetMarker(task.id.value).delete()"))
     }
 }

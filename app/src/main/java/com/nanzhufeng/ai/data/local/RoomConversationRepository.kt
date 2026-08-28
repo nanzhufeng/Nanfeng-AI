@@ -97,6 +97,50 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
     internal fun persistInExistingTransaction(snapshot: ConversationSnapshot): ConversationSnapshot =
         persistSnapshot(database.conversationDao(), snapshot)
 
+    /**
+     * Restores a source-confirmed imported path without weakening normal message immutability.
+     * This is deliberately internal and is called only in the same transaction as ZIP provenance.
+     */
+    internal fun restoreMappedImportPathInExistingTransaction(snapshot: ConversationSnapshot): ConversationSnapshot {
+        val dao = database.conversationDao()
+        dao.loadSnapshot(snapshot.conversation.id)
+            ?: error("会话不存在，无法恢复导入附件路径。")
+        dao.update(snapshot.conversation.toEntity())
+        snapshot.nodes.forEach { node ->
+            val storedEntity = dao.findNode(node.id.value)
+            if (storedEntity == null) {
+                dao.insertNode(node.toEntity())
+                dao.insertBlocks(node.content.mapIndexed { position, block -> block.toEntity(node.id, position) })
+            } else {
+                val stored = dao.loadNode(storedEntity)
+                require(
+                    stored.copy(
+                        parentMessageId = node.parentMessageId,
+                        siblingPosition = node.siblingPosition,
+                        content = node.content,
+                    ) == node,
+                ) { "导入附件恢复不得改写原消息语义：${node.id.value}" }
+                if (stored.parentMessageId != node.parentMessageId || stored.siblingPosition != node.siblingPosition) {
+                    require(
+                        dao.updateImportedMessageStructure(
+                            node.id.value,
+                            node.conversationId.value,
+                            node.parentMessageId?.value,
+                            node.siblingPosition,
+                        ) == 1,
+                    ) { "导入附件恢复无法调整消息路径：${node.id.value}" }
+                }
+                if (stored.content != node.content) {
+                    dao.deleteBlocks(node.id.value)
+                    dao.insertBlocks(node.content.mapIndexed { position, block -> block.toEntity(node.id, position) })
+                }
+            }
+        }
+        replaceSafeSearchIndex(dao, snapshot)
+        return dao.loadSnapshot(snapshot.conversation.id)
+            ?: error("导入附件路径恢复后无法回读。")
+    }
+
     /** K8 mutates an existing imported message only through the normal Message Tree owner. */
     internal fun attachExistingMessageInTransaction(conversationId: ConversationId, messageId: MessageNodeId, attachment: ConversationAttachmentReference, at: Instant): ExistingMessageAttachmentResult {
         val dao = database.conversationDao(); val snapshot = dao.loadSnapshot(conversationId) ?: return ExistingMessageAttachmentResult.Failed
@@ -114,6 +158,16 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
 
     override fun isClaudeExportImported(conversationId: ConversationId): Boolean =
         database.claudeExportImportTaskDao().hasProvenanceForConversation(conversationId.value)
+
+    override fun isP6KZipImported(conversationId: ConversationId): Boolean =
+        database.p6kZipImportTaskDao().hasProvenanceForConversation(conversationId.value)
+
+    override fun importSource(conversationId: ConversationId): com.nanzhufeng.ai.domain.ConversationImportSource? = when {
+        isChatGptExportImported(conversationId) -> com.nanzhufeng.ai.domain.ConversationImportSource.CHATGPT_JSON
+        isClaudeExportImported(conversationId) -> com.nanzhufeng.ai.domain.ConversationImportSource.CLAUDE_JSON
+        isP6KZipImported(conversationId) -> com.nanzhufeng.ai.domain.ConversationImportSource.CHATGPT_ZIP
+        else -> null
+    }
 
     override fun loadDraft(conversationId: ConversationId): ConversationDraft? =
         database.conversationDao().loadSnapshot(conversationId)?.draft

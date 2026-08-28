@@ -23,6 +23,19 @@ enum class ChatGptImportFailure { NOT_JSON, TOO_LARGE, INVALID_UTF8, MALFORMED_J
 data class ChatGptImportAsset(val storageKey: String, val mimeType: String, val displayName: String, val byteCount: Long, val packageHash: String)
 data class ChatGptImportMessage(val sourceId: String, val parentSourceId: String?, val siblingPosition: Int, val role: MessageRole, val text: String, val createdAt: Instant, val importedModel: String?)
 data class ChatGptImportCandidate(val sourceConversationId: String, val title: String, val createdAt: Instant, val updatedAt: Instant, val messages: List<ChatGptImportMessage>, val contentHash: String)
+
+/** Stable semantic identity for one imported source message.  It deliberately excludes the
+ * transient ZIP entry and keeps content-based incremental import from mistaking a changed reply
+ * for a package replay. */
+fun ChatGptImportMessage.semanticContentHash(): String = listOf(
+    sourceId, parentSourceId.orEmpty(), role.name, text,
+    createdAt.toEpochMilli().toString(), importedModel.orEmpty(),
+).joinToString("\u001f").sha256()
+
+/** Package-level dedup is based on source conversation identity plus every rendered source
+ * message, not on export timestamps, titles, filenames, or package hashes. */
+fun chatGptImportContentHash(sourceConversationId: String, messages: List<ChatGptImportMessage>): String =
+    (sourceConversationId + "\u001e" + messages.joinToString("\u001e") { it.semanticContentHash() }).sha256()
 data class ChatGptImportItem(val id: ChatGptImportItemId, val taskId: ChatGptImportTaskId, val ordinal: Int, val candidate: ChatGptImportCandidate?, val status: ChatGptImportItemStatus = ChatGptImportItemStatus.PENDING_CONFIRMATION, val failure: ChatGptImportFailure? = null, val conversationId: ConversationId? = null)
 data class ChatGptImportTask(val id: ChatGptImportTaskId, val status: ChatGptImportTaskStatus, val asset: ChatGptImportAsset?, val failure: ChatGptImportFailure? = null, val retryCount: Int = 0, val createdAt: Instant, val updatedAt: Instant, val items: List<ChatGptImportItem> = emptyList())
 data class ChatGptPrivateCopyRequest(val taskId: ChatGptImportTaskId, val displayName: String, val mimeType: String, val bytes: ByteArray)
@@ -56,14 +69,39 @@ class ChatGptExportJsonAdapter {
         val roots = normalized.filterValues { it.parent == null }.keys; if (roots.size != 1) reject(ChatGptImportFailure.INVALID_TREE)
         normalized.forEach { (source, node) -> val children = requireNotNull(node.children); if (node.parent != null && node.parent !in normalized) reject(ChatGptImportFailure.INVALID_TREE); if (children.any { it !in normalized } || children.distinct().size != children.size) reject(ChatGptImportFailure.INVALID_TREE); if (children.any { normalized[it]?.parent != source }) reject(ChatGptImportFailure.INVALID_TREE) }
         val ordered = traverse(roots.single(), normalized)
-        val candidate = ChatGptImportCandidate(id, title.take(120), created, updated, ordered.mapIndexedNotNull { position, source -> nodeToMessage(source, normalized.getValue(source), position, created) }, "${id}|${ordered.joinToString("|")}".sha256())
+        val rawMessages = ordered.mapIndexed { position, source -> source to nodeToMessage(source, normalized.getValue(source), position, created) }
+        val importableSourceIds = rawMessages.mapNotNull { (source, message) -> message?.let { source } }.toSet()
+        fun nearestImportableParent(sourceId: String?): String? {
+            var current = sourceId; val seen = mutableSetOf<String>()
+            while (current != null && seen.add(current)) {
+                if (current in importableSourceIds) return current
+                current = normalized[current]?.parent
+            }
+            return null
+        }
+        // Provider trees may contain structural nodes with no role/text.  They are not rendered
+        // messages, so their descendants must attach to the nearest renderable ancestor rather
+        // than becoming accidental second roots at the Room MessageTree boundary.
+        val messages = rawMessages.mapNotNull { (_, message) -> message?.copy(parentSourceId = nearestImportableParent(message.parentSourceId)) }
+        val candidate = ChatGptImportCandidate(id, title.take(120), created, updated, messages, chatGptImportContentHash(id, messages))
         if (candidate.messages.isEmpty()) reject(ChatGptImportFailure.EMPTY_CONTENT)
         return ChatGptImportItem(ChatGptImportItemId.new(), ChatGptImportTaskId("unassigned"), index, candidate)
     }
     private data class Node(val parent: String?, val children: List<String>?, val role: String?, val parts: List<StrictJsonValue>?, val createdAt: Instant?, val model: String?)
     private fun parseNode(sourceId: String, obj: StrictJsonValue.Obj): Node { val parent = obj.optionalString("parent")?.safeId(); val children = when (val raw = obj.fields["children"]) { null -> null; is StrictJsonValue.Arr -> raw.values.map { (it as? StrictJsonValue.Str)?.value?.safeId() ?: reject(ChatGptImportFailure.INVALID_TREE) }; else -> reject(ChatGptImportFailure.INVALID_TREE) }; val message = obj.fields["message"] as? StrictJsonValue.Obj ?: return Node(parent, children, null, null, null, null); val role = ((message.fields["author"] as? StrictJsonValue.Obj)?.fields?.get("role") as? StrictJsonValue.Str)?.value; val parts = ((message.fields["content"] as? StrictJsonValue.Obj)?.fields?.get("parts") as? StrictJsonValue.Arr)?.values; val time = (message.fields["create_time"] as? StrictJsonValue.Num)?.lexical?.toDoubleOrNull()?.let { Instant.ofEpochMilli((it * 1000).toLong()) }; val model = ((message.fields["metadata"] as? StrictJsonValue.Obj)?.fields?.get("model_slug") as? StrictJsonValue.Str)?.value?.take(120); return Node(parent, children, role, parts, time, model) }
     private fun traverse(root: String, nodes: Map<String, Node>): List<String> { val seen = linkedSetOf<String>(); fun visit(id: String) { if (!seen.add(id)) reject(ChatGptImportFailure.INVALID_TREE); requireNotNull(nodes.getValue(id).children).forEach(::visit) }; visit(root); if (seen.size != nodes.size) reject(ChatGptImportFailure.INVALID_TREE); return seen.toList() }
-    private fun nodeToMessage(source: String, node: Node, position: Int, fallbackTime: Instant): ChatGptImportMessage? { val role = when (node.role) { "user" -> MessageRole.USER; "assistant" -> MessageRole.ASSISTANT; "tool" -> MessageRole.TOOL; null -> return null; else -> reject(ChatGptImportFailure.UNSUPPORTED_ROLE) }; val parts = node.parts ?: reject(ChatGptImportFailure.UNSUPPORTED_CONTENT); if (parts.any { it !is StrictJsonValue.Str }) reject(ChatGptImportFailure.UNSUPPORTED_CONTENT); val text = parts.filterIsInstance<StrictJsonValue.Str>().joinToString("\n") { it.value }.trim(); if (text.isEmpty()) return null; return ChatGptImportMessage(source, node.parent, position, role, text, node.createdAt ?: fallbackTime, node.model) }
+    private fun nodeToMessage(source: String, node: Node, position: Int, fallbackTime: Instant): ChatGptImportMessage? {
+        val role = when (node.role) {
+            "user" -> MessageRole.USER; "assistant" -> MessageRole.ASSISTANT; "tool" -> MessageRole.TOOL
+            null -> return null; else -> reject(ChatGptImportFailure.UNSUPPORTED_ROLE)
+        }
+        // Official exports interleave ordinary text with multimodal objects and private
+        // thought/reasoning records.  Keep only explicit string parts; a non-text node is skipped
+        // locally rather than causing its whole conversation to disappear or exposing hidden data.
+        val text = node.parts.orEmpty().filterIsInstance<StrictJsonValue.Str>().joinToString("\n") { it.value }.trim()
+        if (text.isEmpty()) return null
+        return ChatGptImportMessage(source, node.parent, position, role, text, node.createdAt ?: fallbackTime, node.model)
+    }
     private fun StrictJsonValue.Obj.requiredString(key: String) = (fields[key] as? StrictJsonValue.Str)?.value ?: reject(ChatGptImportFailure.INVALID_CONVERSATION)
     private fun StrictJsonValue.Obj.optionalString(key: String) = when (val value = fields[key]) { null, StrictJsonValue.Null -> null; is StrictJsonValue.Str -> value.value; else -> reject(ChatGptImportFailure.INVALID_CONVERSATION) }
     private fun StrictJsonValue.Obj.requiredObj(key: String) = fields[key] as? StrictJsonValue.Obj ?: reject(ChatGptImportFailure.INVALID_CONVERSATION)

@@ -11,6 +11,24 @@ import java.util.UUID
 enum class ConversationKind { NORMAL, TEMPORARY }
 enum class TemporaryAttachmentScope { TEMPORARY_SESSION }
 
+/**
+ * A type-level boundary for the separate temporary recovery chain. Temporary drafts may be
+ * retained locally for at most 24 hours, but they never become normal-conversation context or
+ * automatic product data. Keep these declarations next to the only temporary owner so a future
+ * send path cannot quietly inherit normal-chat behavior.
+ */
+object TemporaryConversationIsolation {
+    const val memoryRetrievalEnabled = false
+    const val knowledgeRetrievalEnabled = false
+    const val normalHistorySearchEnabled = false
+    const val automaticTitleEnabled = false
+    const val automaticMemorySummaryEnabled = false
+    const val providerEgressEnabled = false
+
+    fun entryNotice(): String = "临时聊天仅在本机恢复，最多保留 24 小时；不会读取记忆或资料库、进入搜索、自动生成标题或记忆摘要，也不会连接模型服务。"
+    fun sentNotice(): String = "已在本机临时聊天发送；未连接模型服务，且不会写入记忆、资料库、搜索或自动沉淀。"
+}
+
 data class TemporaryOfflineMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
@@ -45,7 +63,7 @@ interface TemporaryConversationRecoveryStore {
     fun delete(id: TemporaryConversationId): List<AttachmentId>
 }
 
-/** The one public P6-E write chain. It never reaches ConversationRepository or a normal ID. */
+/** The one public P6-E write chain. It never reaches ConversationRepository, a normal ID, or the ordinary context/auto-persistence route. */
 class TemporaryConversationDomain(
     private val recovery: TemporaryConversationRecoveryStore,
     private val clock: Clock,

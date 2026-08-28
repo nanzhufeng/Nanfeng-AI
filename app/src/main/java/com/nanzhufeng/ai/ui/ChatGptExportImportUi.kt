@@ -24,7 +24,7 @@ class ChatGptExportImportViewModel(private val imports: ManageChatGptExportImpor
     class Factory(private val imports: ManageChatGptExportImportUseCase) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>) = ChatGptExportImportViewModel(imports) as T }
 }
 @Composable fun ChatGptExportImportCard(onOpen: () -> Unit) = WhiteCard { Text("ChatGPT 对话导入", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(6.dp)); Text("仅选择 ChatGPT data export 的 conversations.json。内容只作本地不执行文本；选择后直接导入普通历史。", color = SecondaryText, style = MaterialTheme.typography.bodySmall); Spacer(Modifier.height(10.dp)); Button(onClick = onOpen, colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { Text("导入 ChatGPT JSON") } }
-@Composable fun ChatGptExportImportSettingsPage(state: ChatGptImportUiState, onChoose: () -> Unit, onOpen: (ChatGptImportTask) -> Unit, onBack: () -> Unit, onRetry: (ChatGptImportTaskId) -> Unit, onCancel: () -> Unit, showHeader: Boolean = true, actionLabel: String = "选择 conversations.json", grouped: Boolean = false, modifier: Modifier = Modifier.fillMaxWidth()) = Column(modifier) {
+@Composable fun ChatGptExportImportSettingsPage(state: ChatGptImportUiState, onChoose: () -> Unit, onOpen: (ChatGptImportTask) -> Unit, onBack: () -> Unit, onRetry: (ChatGptImportTaskId) -> Unit, onCancel: () -> Unit, showHeader: Boolean = true, actionLabel: String = "选择 conversations.json", grouped: Boolean = false, showTaskList: Boolean = true, modifier: Modifier = Modifier.fillMaxWidth()) = Column(modifier) {
     if (showHeader) {
         Text("ChatGPT 对话导入", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
@@ -34,7 +34,7 @@ class ChatGptExportImportViewModel(private val imports: ManageChatGptExportImpor
     if (state.selected == null) {
         if (grouped) DataStorageGroupedActionRow(label = actionLabel, onClick = onChoose, enabled = !state.working, working = state.working)
         else Button(onClick = onChoose, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text(actionLabel) }
-        state.tasks.forEach { task -> TextButton(onClick = { onOpen(task) }, modifier = Modifier.fillMaxWidth()) { Text("${task.asset?.displayName ?: "导入任务"} · ${task.status}") } }
+        if (showTaskList) state.tasks.forEach { task -> TextButton(onClick = { onOpen(task) }, modifier = Modifier.fillMaxWidth()) { Text("${task.asset?.displayName ?: "导入任务"} · ${task.status}") } }
     } else {
         val task = state.selected
         Text("${task.status} · 本地任务可在重启后恢复", style = MaterialTheme.typography.labelMedium, color = SecondaryText)

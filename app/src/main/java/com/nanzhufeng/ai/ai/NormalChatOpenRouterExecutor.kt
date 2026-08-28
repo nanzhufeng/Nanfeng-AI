@@ -218,6 +218,7 @@ class NormalChatOpenRouterExecutor(
         return when (retried) {
             is OneResult.Reply -> {
                 if (!recordResponseAttribution(resumedRuntime.state.messageId, retried)) return Result.Failed(Code.LOCAL_SAVE)
+                contextSelectionAudits.bindAnswer(retried.attempt.attemptId, resumedRuntime.state.messageId)
                 Result.Sent.also { maybeRefineOpeningTitle(conversationId) }
             }
             is OneResult.Blocked -> Result.Blocked(retried.code).also { resumedRuntime.fail(retried.code.name) }
@@ -327,6 +328,7 @@ class NormalChatOpenRouterExecutor(
                     if (runtime != null && !recordResponseAttribution(runtime.state.messageId, request)) {
                         return Result.Failed(Code.LOCAL_SAVE)
                     }
+                    runtime?.let { active -> contextSelectionAudits.bindAnswer(request.attempt.attemptId, active.state.messageId) }
                     replies += preset to request
                 }
                 is OneResult.Blocked -> {
@@ -350,7 +352,10 @@ class NormalChatOpenRouterExecutor(
         val messageId = com.nanzhufeng.ai.domain.MessageNodeId.new()
         if (!replies.all { (_, reply) -> recordResponseAttribution(messageId, reply) }) return Result.Failed(Code.LOCAL_SAVE)
         return when (appendMessage.execute(submitted.snapshot, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text(rendered)), messageId = messageId))) {
-            is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent.also { maybeRefineOpeningTitle(conversationId) }
+            is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> Result.Sent.also {
+                replies.forEach { (_, reply) -> contextSelectionAudits.bindAnswer(reply.attempt.attemptId, messageId) }
+                maybeRefineOpeningTitle(conversationId)
+            }
             is com.nanzhufeng.ai.domain.ConversationMutationResult.Rejected -> Result.Failed(Code.LOCAL_SAVE)
         }
     }
@@ -480,7 +485,7 @@ class NormalChatOpenRouterExecutor(
         }
         contextSelectionAudits.append(
             ContextSelectionAuditRecord(
-                createdAt = clock.instant(), conversationId = conversationId.value, providerId = executionProviderId, modelId = modelId, tokenizerId = resolvedModel.tokenizerId,
+                createdAt = clock.instant(), conversationId = conversationId.value, attemptId = attempt.attemptId, providerId = executionProviderId, modelId = modelId, tokenizerId = resolvedModel.tokenizerId,
                 budget = context.effectiveBudget, selectedSources = context.selectedSources, indexStatus = context.status,
             ),
         )

@@ -128,6 +128,7 @@ data class ConversationAttachmentVideoPreview(
     val durationMillis: Long? = null,
     val positionMillis: Long = 0L,
     val bytes: ByteArray? = null,
+    val open: (() -> java.io.InputStream)? = null,
     val unavailableReason: String? = null,
 )
 
@@ -140,6 +141,7 @@ data class ConversationAttachmentAudioPreview(
     val positionMillis: Long = 0L,
     /** Present only while the explicit local player is open. */
     val bytes: ByteArray? = null,
+    val open: (() -> java.io.InputStream)? = null,
     val unavailableReason: String? = null,
 )
 
@@ -165,11 +167,30 @@ class ConversationAttachmentPreviewProjection(
     fun project(id: AttachmentId): ConversationAttachmentPreview? =
         referenceFor(id)?.let(::project)
 
+    /** Explicit download/share uses the same verified private asset as native preview, but streams
+     * it so retained ZIP videos and audio never need one giant UI-owned byte array. */
+    fun openVerified(reference: ConversationAttachmentReference): AttachmentOpenResult {
+        val asset = assets.findById(reference.id)
+            ?: return AttachmentOpenResult.Rejected(AiTaskError.AttachmentNotReady)
+        if (asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
+            return AttachmentOpenResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        }
+        return privateStore.openVerified(asset)
+    }
+
     fun project(reference: ConversationAttachmentReference): ConversationAttachmentPreview {
         val asset = assets.findById(reference.id)
             ?: return ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null, unavailableReason = "本地附件不可用")
         if (asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
             return ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null, unavailableReason = "本地附件校验不一致")
+        }
+        // Search may request dozens of cards at once. A retained ZIP video/audio must not be
+        // expanded into cache merely to paint the catalogue; explicit open still uses the normal
+        // verified player path below.
+        if (asset.reference.startsWith("p6k-zip-assets/v1/") &&
+            (reference.mimeType == "video/mp4" || reference.mimeType in CONVERSATION_ALLOWED_AUDIO_MIME_TYPES)
+        ) {
+            return ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null)
         }
         if (reference.mimeType == "video/mp4") {
             return when (val result = privateStore.videoMetadata(asset)) {
@@ -260,7 +281,7 @@ class ConversationAttachmentPreviewProjection(
             return ConversationAttachmentVideoPreview(reference.id, reference.displayName, reference.byteCount, unavailableReason = "本地视频附件校验不一致")
         }
         return when (val result = privateStore.videoPreview(asset)) {
-            is AttachmentVideoPreviewResult.Ready -> ConversationAttachmentVideoPreview(reference.id, reference.displayName, reference.byteCount, poster = result.preview.poster, durationMillis = result.preview.durationMillis, bytes = result.preview.bytes)
+            is AttachmentVideoPreviewResult.Ready -> ConversationAttachmentVideoPreview(reference.id, reference.displayName, reference.byteCount, poster = result.preview.poster, durationMillis = result.preview.durationMillis, bytes = result.preview.bytes, open = result.preview.open)
             is AttachmentVideoPreviewResult.Rejected -> ConversationAttachmentVideoPreview(reference.id, reference.displayName, reference.byteCount, unavailableReason = "本地视频无法安全播放")
         }
     }
@@ -271,6 +292,12 @@ class ConversationAttachmentPreviewProjection(
             ?: return ConversationAttachmentAudioPreview(reference.id, reference.displayName, reference.byteCount, reference.mimeType, unavailableReason = "本地音频附件不可用")
         if (reference.mimeType !in CONVERSATION_ALLOWED_AUDIO_MIME_TYPES || asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
             return ConversationAttachmentAudioPreview(reference.id, reference.displayName, reference.byteCount, reference.mimeType, unavailableReason = "本地音频附件校验不一致")
+        }
+        if (asset.reference.startsWith("p6k-zip-assets/v1/")) {
+            return when (val result = privateStore.openVerified(asset)) {
+                is AttachmentOpenResult.Opened -> ConversationAttachmentAudioPreview(reference.id, reference.displayName, reference.byteCount, reference.mimeType, durationMillis = privateStore.audioDurationMillis(asset), open = result.open)
+                is AttachmentOpenResult.Rejected -> ConversationAttachmentAudioPreview(reference.id, reference.displayName, reference.byteCount, reference.mimeType, unavailableReason = "本地音频无法安全播放")
+            }
         }
         return when (val result = privateStore.read(asset)) {
             is AttachmentReadResult.Content -> ConversationAttachmentAudioPreview(reference.id, reference.displayName, reference.byteCount, reference.mimeType, durationMillis = privateStore.audioDurationMillis(asset), bytes = result.bytes)

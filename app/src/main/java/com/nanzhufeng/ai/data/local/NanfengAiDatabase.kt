@@ -1116,6 +1116,10 @@ data class P6KZipAssetLinkProvenanceEntity(val attachmentId: String, val taskId:
 data class P6KZipProfileCandidateEntity(@androidx.room.PrimaryKey val taskId: String, val status: String, val mappedFieldCount: Int)
 @Entity(tableName = "p6k_zip_import_provenance", indices = [Index(value = ["sourceConversationId", "packageHash"], unique = true)])
 data class P6KZipImportProvenanceEntity(@androidx.room.PrimaryKey val conversationId: String, val taskId: String, val itemId: String, val sourceConversationId: String, val packageHash: String, val contentHash: String, val importedAtEpochMs: Long, val adapterId: String, val adapterVersion: Int)
+/** Stable source-message to local-node binding permits append-only updates from a newer
+ * cumulative ChatGPT export without recreating a conversation or guessing node identity. */
+@Entity(tableName = "p6k_zip_import_message_provenance", primaryKeys = ["conversationId", "sourceMessageId"], indices = [Index("conversationId"), Index("messageId")])
+data class P6KZipImportMessageProvenanceEntity(val conversationId: String, val sourceMessageId: String, val messageId: String, val contentHash: String)
 @Entity(tableName = "p6k_zip_import_receipts", primaryKeys = ["sourceConversationId", "packageHash"])
 data class P6KZipImportReceiptEntity(val sourceConversationId: String, val packageHash: String, val taskId: String, val itemId: String, val conversationId: String, val contentHash: String, val committedAtEpochMs: Long)
 
@@ -1471,10 +1475,15 @@ interface P6KZipImportTaskDao {
     @Query("SELECT * FROM p6k_zip_profile_candidates WHERE taskId=:taskId") fun profile(taskId: String): P6KZipProfileCandidateEntity?
     @Query("UPDATE p6k_zip_profile_candidates SET status=:status WHERE taskId=:taskId") fun updateProfileStatus(taskId: String, status: String): Int
     @Query("SELECT * FROM p6k_zip_import_receipts WHERE sourceConversationId=:sourceConversationId AND packageHash=:packageHash") fun receipt(sourceConversationId: String, packageHash: String): P6KZipImportReceiptEntity?
+    @Query("SELECT * FROM p6k_zip_import_provenance WHERE sourceConversationId=:sourceConversationId ORDER BY importedAtEpochMs DESC, conversationId ASC") fun provenanceForSource(sourceConversationId: String): List<P6KZipImportProvenanceEntity>
+    @Query("SELECT EXISTS(SELECT 1 FROM p6k_zip_import_provenance WHERE conversationId=:conversationId)") fun hasProvenanceForConversation(conversationId: String): Boolean
     @Query("SELECT * FROM p6k_zip_import_provenance WHERE taskId=:taskId ORDER BY conversationId ASC") fun provenanceForTask(taskId: String): List<P6KZipImportProvenanceEntity>
+    @Query("SELECT * FROM p6k_zip_import_message_provenance WHERE conversationId=:conversationId ORDER BY sourceMessageId ASC") fun messageProvenanceForConversation(conversationId: String): List<P6KZipImportMessageProvenanceEntity>
     @Query("DELETE FROM p6k_zip_import_receipts WHERE taskId=:taskId") fun deleteReceiptsForTask(taskId: String)
     @Query("DELETE FROM p6k_zip_import_provenance WHERE taskId=:taskId") fun deleteProvenanceForTask(taskId: String)
-    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertProvenance(value: P6KZipImportProvenanceEntity)
+    @Query("DELETE FROM p6k_zip_import_message_provenance WHERE conversationId=:conversationId") fun deleteMessageProvenanceForConversation(conversationId: String)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun insertProvenance(value: P6KZipImportProvenanceEntity)
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertMessageProvenance(values: List<P6KZipImportMessageProvenanceEntity>)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertReceipt(value: P6KZipImportReceiptEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertAssetLinkReceipt(value: P6KZipAssetLinkReceiptEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertAssetLinkProvenance(value: P6KZipAssetLinkProvenanceEntity)
@@ -1698,6 +1707,14 @@ interface ConversationDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertNode(node: MessageNodeEntity)
+
+    @Query("UPDATE message_nodes SET parentMessageId=:parentMessageId, siblingPosition=:siblingPosition WHERE id=:messageId AND conversationId=:conversationId")
+    fun updateImportedMessageStructure(
+        messageId: String,
+        conversationId: String,
+        parentMessageId: String?,
+        siblingPosition: Int,
+    ): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertBlocks(blocks: List<MessageContentBlockEntity>)
@@ -2299,6 +2316,7 @@ interface ResumableAttachmentUploadDao {
         P6KZipAssetLinkProvenanceEntity::class,
         P6KZipProfileCandidateEntity::class,
         P6KZipImportProvenanceEntity::class,
+        P6KZipImportMessageProvenanceEntity::class,
         P6KZipImportReceiptEntity::class,
         ThirdPartyProfilePersonalizationSettingsEntity::class,
         P6KProfileImportProvenanceEntity::class,
@@ -2336,7 +2354,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 54,
+    version = 55,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2961,6 +2979,14 @@ abstract class NanfengAiDatabase : RoomDatabase() {
         val MIGRATION_53_54 = object : Migration(53, 54) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `conversations` ADD COLUMN `favoritedAtEpochMs` INTEGER")
+            }
+        }
+        /** Preserves source-message identity for safe old-export then newer-export append merges. */
+        val MIGRATION_54_55 = object : Migration(54, 55) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_zip_import_message_provenance` (`conversationId` TEXT NOT NULL, `sourceMessageId` TEXT NOT NULL, `messageId` TEXT NOT NULL, `contentHash` TEXT NOT NULL, PRIMARY KEY(`conversationId`, `sourceMessageId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_import_message_provenance_conversationId` ON `p6k_zip_import_message_provenance` (`conversationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_zip_import_message_provenance_messageId` ON `p6k_zip_import_message_provenance` (`messageId`)")
             }
         }
     }

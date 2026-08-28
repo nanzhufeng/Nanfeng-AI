@@ -7,7 +7,7 @@
 > GitHub 经验研究：[南枫 AI GitHub 成熟项目参考研究](GITHUB_MATURE_PROJECT_REFERENCE_RESEARCH.md)  
 > 启动图标交付：[南枫 AI Android 启动图标交付](LAUNCHER_ICON_DELIVERY.md)  
 > 本地数据合同：[南枫 AI P2-A 本地数据与附件合同](P2A_LOCAL_DATA_AND_ATTACHMENT_CONTRACT.md)  
-> 当前状态：项目现行版本为 `66 / 0.3.0-p10j`、Room Schema 45；当前增量、设备覆盖与未闭环风险以 [CURRENT_HANDOFF.md](CURRENT_HANDOFF.md) 为准。旧阶段状态仅作历史索引，不能覆盖当前源码与合同。
+> 当前状态：版本、Room Schema、测试、产物和设备覆盖以当前源码与 [CURRENT_HANDOFF.md](CURRENT_HANDOFF.md) 顶部为准；当前源码的 Room Schema 为 54。旧阶段状态仅作历史索引，不能覆盖当前源码与合同。
 
 项目名称：南枫 AI
 

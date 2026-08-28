@@ -35,6 +35,8 @@ import com.nanzhufeng.ai.domain.ConversationSurfaceRepository
 import com.nanzhufeng.ai.domain.ImportedConversationProvenanceReader
 import com.nanzhufeng.ai.domain.InvocationRepository
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttributionStore
+import com.nanzhufeng.ai.domain.ContextSelectionAuditRecord
+import com.nanzhufeng.ai.domain.ContextSelectionAuditStore
 import com.nanzhufeng.ai.domain.ConversationManagementAction
 import com.nanzhufeng.ai.domain.ConversationPurgeResult
 import com.nanzhufeng.ai.domain.ConversationManagementIntent
@@ -89,8 +91,10 @@ import com.nanzhufeng.ai.domain.AudioPreviewPositionStore
 import com.nanzhufeng.ai.domain.ConversationAttachmentReference
 import com.nanzhufeng.ai.domain.ConversationAttachmentSelection
 import com.nanzhufeng.ai.domain.AttachmentId
+import com.nanzhufeng.ai.domain.AttachmentOpenResult
 import com.nanzhufeng.ai.domain.TemporaryConversationDomain
 import com.nanzhufeng.ai.domain.TemporaryConversationRecovery
+import com.nanzhufeng.ai.domain.TemporaryConversationIsolation
 import com.nanzhufeng.ai.domain.AddTemporaryConversationAttachmentUseCase
 import com.nanzhufeng.ai.domain.ClearTemporaryConversationUseCase
 import com.nanzhufeng.ai.domain.P6GConversationOverride
@@ -172,6 +176,8 @@ data class ConversationFoundationUiState(
     val currentProjectId: String? = null,
     val runtime: ConversationRuntimeState? = null,
     val messages: List<PresentedTranscriptMessage> = emptyList(),
+    /** Local, content-free source disclosures bound to individual visible assistant answers. */
+    val answerContextSelections: Map<MessageNodeId, List<ContextSelectionAuditRecord>> = emptyMap(),
     val draft: ConversationDraft? = null,
     val recovery: ConversationRecoveryPresentation? = null,
     val currentLeafId: MessageNodeId? = null,
@@ -196,6 +202,7 @@ data class ConversationFoundationUiState(
     val conversationWebSearchOverride: ConversationWebSearchOverride? = null,
     val importedFromChatGptExport: Boolean = false,
     val importedFromClaudeExport: Boolean = false,
+    val importedFromChatGptZip: Boolean = false,
     /** Inline feedback only for a submitted chat message that did not get a reply. */
     val sendError: String? = null,
     /** Durable, content-free decision point for a prior ordinary Provider attempt. */
@@ -207,12 +214,13 @@ data class ConversationFoundationUiState(
 
 enum class AttachmentTransferAction { DOWNLOAD, SHARE }
 
-/** Full bytes exist only for one explicit user-initiated download or system-share handoff. */
+/** An explicit user download/share receives a verified one-shot stream, never a giant UI byte array. */
 data class AttachmentTransferItem(
     val id: AttachmentId,
     val displayName: String?,
     val mimeType: String,
-    val bytes: ByteArray,
+    val byteCount: Long,
+    val open: () -> java.io.InputStream,
 )
 
 data class AttachmentTransferRequest(
@@ -220,8 +228,9 @@ data class AttachmentTransferRequest(
     val action: AttachmentTransferAction,
     val displayName: String?,
     val mimeType: String,
-    val bytes: ByteArray,
-    val batch: List<AttachmentTransferItem> = listOf(AttachmentTransferItem(id, displayName, mimeType, bytes)),
+    val byteCount: Long,
+    val open: () -> java.io.InputStream,
+    val batch: List<AttachmentTransferItem> = listOf(AttachmentTransferItem(id, displayName, mimeType, byteCount, open)),
 )
 
 data class ConversationBranchUi(
@@ -245,6 +254,7 @@ private data class LoadedConversation(
     val attemptHistory: List<ConversationAttemptHistoryItem>,
     val importedFromChatGptExport: Boolean,
     val importedFromClaudeExport: Boolean,
+    val importedFromChatGptZip: Boolean,
     val unreadConversationIds: Set<com.nanzhufeng.ai.domain.ConversationId>,
 )
 
@@ -285,6 +295,7 @@ class ConversationFoundationViewModel(
     private val loadAssistantExperienceSettings: LoadAssistantExperienceSettingsUseCase,
     private val invocations: InvocationRepository,
     private val responseModelAttributions: AssistantResponseModelAttributionStore,
+    private val contextSelectionAudits: ContextSelectionAuditStore,
     private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
     private val normalChatBackgroundExecution: NormalChatBackgroundExecution = NoopNormalChatBackgroundExecution,
     private val startWithFreshChat: Boolean = false,
@@ -405,6 +416,7 @@ class ConversationFoundationViewModel(
                 val provenance = repository as? ImportedConversationProvenanceReader
                 val chatGptImported = snapshot?.conversation?.id?.let { id -> provenance?.isChatGptExportImported(id) ?: false } ?: false
                 val claudeImported = snapshot?.conversation?.id?.let { id -> provenance?.isClaudeExportImported(id) ?: false } ?: false
+                val chatGptZipImported = snapshot?.conversation?.id?.let { id -> provenance?.isP6KZipImported(id) ?: false } ?: false
                 // The drawer, canvas and selection must consume the same surface projection.
                 // Returning the broad CHAT list here used to make the WORK drawer display normal
                 // conversations even though the selected transcript itself was correctly WORK.
@@ -427,7 +439,7 @@ class ConversationFoundationViewModel(
                         .map(Conversation::id)
                         .toSet()
                 }
-                LoadedConversation(surfaceConversations, snapshot, runtime, lineage, lineages, attemptHistory, chatGptImported, claudeImported, unreadConversationIds)
+                LoadedConversation(surfaceConversations, snapshot, runtime, lineage, lineages, attemptHistory, chatGptImported, claudeImported, chatGptZipImported, unreadConversationIds)
             }
             val conversations = loaded.conversations
             val snapshot = loaded.snapshot
@@ -446,6 +458,9 @@ class ConversationFoundationViewModel(
             }
             val responseAttributions = withContext(Dispatchers.IO) {
                 responseModelAttributions.forMessages(path.map(MessageNode::id))
+            }
+            val answerContextSelections = withContext(Dispatchers.IO) {
+                contextSelectionAudits.forAssistantMessages(path.map(MessageNode::id))
             }
             val runtimeByMessage = runtime
                 ?.let { persisted -> mapOf(persisted.messageId to persisted) }
@@ -495,6 +510,7 @@ class ConversationFoundationViewModel(
                 conversations = conversations, unreadConversationIds = unreadConversationIds, selectedConversationId = snapshot?.conversation?.id,
                 currentProjectId = snapshot?.conversation?.projectId,
                 runtime = runtime, messages = messages, draft = snapshot?.draft,
+                answerContextSelections = answerContextSelections,
                 recovery = ConversationRecoveryPresenter.present(runtime, runtimeMessage),
                 currentLeafId = currentLeaf, branchLeaves = leaves, editableUserMessages = editable, lineage = lineage,
                 attemptHistory = attemptHistory,
@@ -509,6 +525,7 @@ class ConversationFoundationViewModel(
                 p6gConversationOverride = p6gConversationOverride,
                 importedFromChatGptExport = loaded.importedFromChatGptExport,
                 importedFromClaudeExport = loaded.importedFromClaudeExport,
+                importedFromChatGptZip = loaded.importedFromChatGptZip,
                 normalSendRecovery = normalSendRecovery,
                 sendError = if (normalSendRecovery == null) state.sendError else null,
             )
@@ -558,11 +575,11 @@ class ConversationFoundationViewModel(
             reference.mimeType == "application/pdf" -> loadPdfPage(reference, pdfPreviewPosition.pageFor(reference.id))
             reference.mimeType == "video/mp4" -> viewModelScope.launch {
                 val preview = withContext(Dispatchers.IO) { attachmentPreview.video(reference) }
-                state = state.copy(videoPreview = preview.copy(positionMillis = videoPreviewPosition.positionFor(reference.id)), notice = if (preview.bytes == null) preview.unavailableReason else "正在打开本地视频并自动播放。")
+                state = state.copy(videoPreview = preview.copy(positionMillis = videoPreviewPosition.positionFor(reference.id)), notice = if (preview.bytes == null && preview.open == null) preview.unavailableReason else "正在打开本地视频并自动播放。")
             }
             reference.mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_AUDIO_MIME_TYPES -> viewModelScope.launch {
                 val preview = withContext(Dispatchers.IO) { attachmentPreview.audio(reference) }
-                state = state.copy(audioPreview = preview.copy(positionMillis = audioPreviewPosition.positionFor(reference.id)), notice = if (preview.bytes == null) preview.unavailableReason else "正在打开本地音频并自动播放。")
+                state = state.copy(audioPreview = preview.copy(positionMillis = audioPreviewPosition.positionFor(reference.id)), notice = if (preview.bytes == null && preview.open == null) preview.unavailableReason else "正在打开本地音频并自动播放。")
             }
             else -> viewModelScope.launch {
                 val preview = withContext(Dispatchers.IO) { attachmentPreview.text(reference) }
@@ -584,8 +601,9 @@ class ConversationFoundationViewModel(
             val items = withContext(Dispatchers.IO) {
                 requestedIds.mapNotNull { id ->
                     val reference = references[id] ?: return@mapNotNull null
-                    attachmentPreview.original(reference).bytes?.let { bytes ->
-                        AttachmentTransferItem(id, reference.displayName, reference.mimeType, bytes)
+                    when (val opened = attachmentPreview.openVerified(reference)) {
+                        is AttachmentOpenResult.Opened -> AttachmentTransferItem(id, reference.displayName, reference.mimeType, opened.byteCount, opened.open)
+                        is AttachmentOpenResult.Rejected -> null
                     }
                 }
             }
@@ -594,7 +612,7 @@ class ConversationFoundationViewModel(
             } else {
                 val first = items.first()
                 state.copy(
-                    attachmentTransfer = AttachmentTransferRequest(first.id, action, first.displayName, first.mimeType, first.bytes, items),
+                    attachmentTransfer = AttachmentTransferRequest(first.id, action, first.displayName, first.mimeType, first.byteCount, first.open, items),
                     notice = null,
                 )
             }
@@ -733,7 +751,7 @@ class ConversationFoundationViewModel(
         if (reference.mimeType != "video/mp4") { state = state.copy(notice = "该本地附件不是受支持的视频。"); return }
         viewModelScope.launch {
             val preview = withContext(Dispatchers.IO) { attachmentPreview.video(reference) }
-            state = state.copy(videoPreview = preview.copy(positionMillis = videoPreviewPosition.positionFor(id)), notice = if (preview.bytes == null) preview.unavailableReason else "正在打开本地视频并自动播放。")
+            state = state.copy(videoPreview = preview.copy(positionMillis = videoPreviewPosition.positionFor(id)), notice = if (preview.bytes == null && preview.open == null) preview.unavailableReason else "正在打开本地视频并自动播放。")
         }
     }
 
@@ -747,7 +765,7 @@ class ConversationFoundationViewModel(
         if (reference.mimeType !in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_AUDIO_MIME_TYPES) { state = state.copy(notice = "该本地附件不是受支持的音频。"); return }
         viewModelScope.launch {
             val preview = withContext(Dispatchers.IO) { attachmentPreview.audio(reference) }
-            state = state.copy(audioPreview = preview.copy(positionMillis = audioPreviewPosition.positionFor(id)), notice = if (preview.bytes == null) preview.unavailableReason else "正在打开本地音频并自动播放。")
+            state = state.copy(audioPreview = preview.copy(positionMillis = audioPreviewPosition.positionFor(id)), notice = if (preview.bytes == null && preview.open == null) preview.unavailableReason else "正在打开本地音频并自动播放。")
         }
     }
 
@@ -787,7 +805,7 @@ class ConversationFoundationViewModel(
     fun enterTemporaryConversation() {
         viewModelScope.launch {
             val recovery = withContext(Dispatchers.IO) { temporary.enterOrRestore() }
-            applyTemporaryRecovery(recovery, "临时聊天仅在本机恢复，最多保留 24 小时。")
+            applyTemporaryRecovery(recovery, TemporaryConversationIsolation.entryNotice())
         }
     }
 
@@ -810,7 +828,7 @@ class ConversationFoundationViewModel(
     fun submitTemporaryDraft() {
         viewModelScope.launch {
             val recovery = withContext(Dispatchers.IO) { temporary.appendOfflineMessage() }
-            applyTemporaryRecovery(recovery, "已在本机临时聊天发送；未连接 Provider。")
+            applyTemporaryRecovery(recovery, TemporaryConversationIsolation.sentNotice())
         }
     }
 
@@ -1694,6 +1712,7 @@ class ConversationFoundationViewModel(
         private val loadAssistantExperienceSettings: LoadAssistantExperienceSettingsUseCase,
         private val invocations: InvocationRepository,
         private val responseModelAttributions: AssistantResponseModelAttributionStore,
+        private val contextSelectionAudits: ContextSelectionAuditStore,
         private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
         private val normalChatBackgroundExecution: NormalChatBackgroundExecution,
         private val startWithFreshChat: Boolean = false,
@@ -1701,7 +1720,7 @@ class ConversationFoundationViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ConversationFoundationViewModel::class.java))
-            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat) as T
+            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat) as T
         }
     }
 }

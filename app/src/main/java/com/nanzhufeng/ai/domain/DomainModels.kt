@@ -78,7 +78,8 @@ data class AttachmentReference(
 )
 
 fun AttachmentReference.isReadyPrivateCopy(): Boolean =
-    reference.startsWith("attachments/v1/") && byteCount != null && byteCount >= 0 && !sha256.isNullOrBlank()
+    (reference.startsWith("attachments/v1/") || reference.startsWith("p6k-zip-assets/v1/")) &&
+        byteCount != null && byteCount >= 0 && !sha256.isNullOrBlank()
 
 data class CaptureDraft(
     val id: CaptureDraftId,

@@ -112,7 +112,15 @@ data class ConversationSearchHit(
     val title: String,
     val snippet: String,
     val titleMatch: Boolean,
+    /** Content-free import label; it never changes searchable text. */
+    val importSource: ConversationImportSource? = null,
 )
+
+enum class ConversationImportSource(val searchLabel: String) {
+    CHATGPT_JSON("从 ChatGPT JSON 导入"),
+    CLAUDE_JSON("从 Claude JSON 导入"),
+    CHATGPT_ZIP("从 ChatGPT ZIP 导入"),
+}
 
 /**
  * A safe attachment hit. It deliberately carries only the conversation/message location and
@@ -229,9 +237,11 @@ class SearchConversationsUseCase(private val repository: ConversationSearchRepos
         // current persisted path so a valid hit never disappears merely because another row
         // still exists in that index.
         val currentPathHits = projection.search(repository.snapshotsForSearch(), query, scope)
+        val sourceReader = repository as? ImportedConversationProvenanceReader
         return (indexedHits + currentPathHits)
             .distinctBy { "${it.conversationId.value}:${it.messageNodeId?.value.orEmpty()}" }
             .take(50)
+            .map { hit -> hit.copy(importSource = sourceReader?.importSource(hit.conversationId)) }
     }
 }
 

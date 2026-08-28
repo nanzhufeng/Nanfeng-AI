@@ -1,0 +1,4 @@
+interface:
+  display_name: "南枫 AI 排错"
+  short_description: "用证据定位 Android、数据与 Provider 问题"
+  default_prompt: "Use $nanfeng-ai-debugging to diagnose this Nanfeng AI failure with reproducible evidence."

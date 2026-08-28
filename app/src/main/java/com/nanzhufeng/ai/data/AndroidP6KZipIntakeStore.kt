@@ -7,6 +7,9 @@ import com.nanzhufeng.ai.domain.P6KZipImportTask
 import com.nanzhufeng.ai.domain.P6KZipImportTaskRepository
 import com.nanzhufeng.ai.domain.P6KProfilePersonalizationSettingsOwner
 import com.nanzhufeng.ai.domain.P6KZipAssetRole
+import com.nanzhufeng.ai.domain.P6KChatGptZipAssetMapper
+import com.nanzhufeng.ai.domain.P6KZipAssetMappingResult
+import com.nanzhufeng.ai.domain.P6KZipMappedAssetLinkOwner
 import com.nanzhufeng.ai.domain.P6KZipManualAssetLinkOwner
 import com.nanzhufeng.ai.domain.P6KZipManualAssetLinkResult
 import com.nanzhufeng.ai.domain.P6KZipManualLinkTarget
@@ -20,6 +23,8 @@ import com.nanzhufeng.ai.domain.ThirdPartyZipProvider
 import com.nanzhufeng.ai.domain.AttachmentImportRequest
 import com.nanzhufeng.ai.domain.AttachmentImportResult
 import com.nanzhufeng.ai.domain.PrivateAttachmentStore
+import com.nanzhufeng.ai.domain.AttachmentId
+import com.nanzhufeng.ai.domain.AttachmentReference
 import com.nanzhufeng.ai.data.local.RoomConversationRepository
 import java.io.File
 import java.io.InputStream
@@ -39,10 +44,12 @@ class AndroidP6KZipIntakeStore(
     private val imports: ManageP6KChatGptZipImportUseCase,
     private val profileSettings: P6KProfilePersonalizationSettingsOwner,
     private val manualAssetLinks: P6KZipManualAssetLinkOwner,
+    private val mappedAssetLinks: P6KZipMappedAssetLinkOwner,
     private val privateAttachments: PrivateAttachmentStore,
     private val conversations: RoomConversationRepository,
     private val clock: Clock = Clock.systemUTC(),
     private val mapper: P6KChatGptZipCandidateMapper = P6KChatGptZipCandidateMapper(),
+    private val assetMapper: P6KChatGptZipAssetMapper = P6KChatGptZipAssetMapper(),
 ) {
     private val root = File(context.filesDir, "p6k-zip-import/v1").also { it.mkdirs() }
     private val archives = File(root, "archives").also { it.mkdirs() }
@@ -74,7 +81,7 @@ class AndroidP6KZipIntakeStore(
                     is com.nanzhufeng.ai.domain.P6KChatGptZipMappingResult.Mapped -> {
                         val staged = tasks.save(base.copy(status = P6KZipTaskStatus.AWAITING_CONFIRMATION, formatVersion = mapped.formatVersion, items = mapped.items, assets = mapped.assets, profile = mapped.profile, updatedAt = clock.instant()))
                         mapped.profile.personalization?.let { profileSettings.commit(staged, it, clock.instant()) }
-                        imports.importAll(staged.id)
+                        reconcileMappedAssets(imports.importAll(staged.id))
                     }
                 }
             }
@@ -82,7 +89,11 @@ class AndroidP6KZipIntakeStore(
         catch (_: Exception) { temporary.delete(); return tasks.save(P6KZipImportTask(id, provider, safeName, bytes, "", P6KZipTaskStatus.FAILED, P6KZipCandidateFailure.PRIVATE_COPY_FAILED, createdAt = now, updatedAt = clock.instant())) }
     }
 
-    fun list(): List<P6KZipImportTask> { migrateLegacyJournal(); return tasks.list() }
+    fun list(): List<P6KZipImportTask> {
+        migrateLegacyJournal()
+        tasks.list().forEach(::reconcileMappedAssets)
+        return tasks.list()
+    }
     /** Only messages in this ZIP task's already committed conversations can be chosen.  No body or source ID leaves this store. */
     fun manualLinkTargets(taskId: String): List<P6KZipManualLinkTarget> {
         val task = tasks.find(P6KZipTaskId(taskId)) ?: return emptyList()
@@ -98,7 +109,7 @@ class AndroidP6KZipIntakeStore(
     fun linkUnmappedAsset(taskId: String, entryName: String, conversationId: String, messageId: String): P6KZipImportTask {
         val id = P6KZipTaskId(taskId); val task = tasks.find(id) ?: return failed(taskId, entryName)
         val asset = task.assets.firstOrNull { it.entryName == entryName } ?: return task
-        if (asset.role == P6KZipAssetRole.MANUAL_LINKED) return task
+        if (asset.role in setOf(P6KZipAssetRole.SOURCE_MAPPED, P6KZipAssetRole.MANUAL_LINKED)) return task
         val target = manualLinkTargets(taskId).firstOrNull { it.conversationId.value == conversationId && it.messageId.value == messageId } ?: return failed(taskId, entryName)
         val archive = File(archives, "$taskId.zip")
         return try {
@@ -134,18 +145,57 @@ class AndroidP6KZipIntakeStore(
             if (!File(archives, "$id.zip").let { !it.exists() || it.delete() }) return false
             if (!File(legacyTasks, "$id.properties").let { !it.exists() || it.delete() }) return false
             if (!File(legacyEntries, "$id.tsv").let { !it.exists() || it.delete() }) return false
+            if (!assetMarker(id).let { !it.exists() || it.delete() }) return false
+            if (!legacyAssetMarker(id).let { !it.exists() || it.delete() }) return false
             tasks.delete(taskId)
             return true
         }
         val archiveDeleted = File(archives, "$id.zip").let { !it.exists() || it.delete() }
         val journalDeleted = File(legacyTasks, "$id.properties").let { !it.exists() || it.delete() } &&
-            File(legacyEntries, "$id.tsv").let { !it.exists() || it.delete() }
+            File(legacyEntries, "$id.tsv").let { !it.exists() || it.delete() } &&
+            assetMarker(id).let { !it.exists() || it.delete() } &&
+            legacyAssetMarker(id).let { !it.exists() || it.delete() }
         return archiveDeleted && journalDeleted
     }
     private fun failed(taskId: String, entryName: String): P6KZipImportTask {
         val id = P6KZipTaskId(taskId); val task = tasks.find(id) ?: return P6KZipImportTask(id, ThirdPartyZipProvider.CHATGPT, "selected.zip", 0, "", P6KZipTaskStatus.FAILED, createdAt = clock.instant(), updatedAt = clock.instant())
-        return tasks.save(task.copy(assets = task.assets.map { asset -> if (asset.entryName == entryName && asset.role != P6KZipAssetRole.MANUAL_LINKED) asset.copy(role = P6KZipAssetRole.MANUAL_LINK_FAILED, failure = "MANUAL_LINK_FAILED") else asset }, updatedAt = clock.instant()))
+        return tasks.save(task.copy(assets = task.assets.map { asset -> if (asset.entryName == entryName && asset.role !in setOf(P6KZipAssetRole.SOURCE_MAPPED, P6KZipAssetRole.MANUAL_LINKED)) asset.copy(role = P6KZipAssetRole.MANUAL_LINK_FAILED, failure = "MANUAL_LINK_FAILED") else asset }, updatedAt = clock.instant()))
     }
+
+    /** Existing completed imports are upgraded once from the retained official ZIP. */
+    private fun reconcileMappedAssets(task: P6KZipImportTask): P6KZipImportTask {
+        if (task.provider != ThirdPartyZipProvider.CHATGPT || task.status !in setOf(P6KZipTaskStatus.COMPLETED, P6KZipTaskStatus.PARTIALLY_COMPLETED)) return task
+        if (assetMarker(task.id.value).isFile) return task
+        val archive = File(archives, "${task.id.value}.zip")
+        if (!archive.isFile) return task
+        val mapping = (assetMapper.map(archive, task.assets) as? P6KZipAssetMappingResult.Mapped)?.value
+            ?: return task
+        val prepared = mapping.assets.mapValues { (entryName, mapped) ->
+            val candidate = mapped.candidate
+            AttachmentReference(
+                reference = P6KZipArchiveAssetStorage.key(task.id.value, entryName),
+                mimeType = candidate.mimeType,
+                displayName = mapped.displayName,
+                id = AttachmentId.new(),
+                byteCount = candidate.byteCount,
+                sha256 = candidate.sha256,
+            )
+        }
+        val summary = mappedAssetLinks.reconcile(task, mapping, prepared, clock.instant())
+        val refreshed = tasks.find(task.id) ?: return task
+        val byEntry = refreshed.assets.associateBy { it.entryName }
+        if (summary.failedConversationCount == 0 && mapping.assets.isNotEmpty() && mapping.assets.keys.all { byEntry[it]?.attachmentId != null }) {
+            runCatching {
+                assetMarker(task.id.value).outputStream().use { it.write("mapped-v2\n".toByteArray()) }
+                legacyAssetMarker(task.id.value).delete()
+            }
+        }
+        return refreshed
+    }
+
+    /** v1 could be written for an empty mapping and permanently suppress a real retry. */
+    private fun assetMarker(taskId: String) = File(root, "$taskId.assets-v2.done")
+    private fun legacyAssetMarker(taskId: String) = File(root, "$taskId.assets-v1.done")
 
     /** One-time K0 properties-to-Room bridge. It keeps the private archive and never fabricates candidates. */
     private fun migrateLegacyJournal() {

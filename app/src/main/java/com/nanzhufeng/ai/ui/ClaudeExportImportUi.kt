@@ -24,7 +24,7 @@ class ClaudeExportImportViewModel(private val imports: ManageClaudeExportImportU
     class Factory(private val imports: ManageClaudeExportImportUseCase) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>) = ClaudeExportImportViewModel(imports) as T }
 }
 
-@Composable fun ClaudeExportImportSettingsPage(state: ClaudeImportUiState, onChoose: () -> Unit, onOpen: (ClaudeImportTask) -> Unit, onBack: () -> Unit, onRetry: (ClaudeImportTaskId) -> Unit, onCancel: () -> Unit, showHeader: Boolean = true, actionLabel: String = "选择 conversations.json", grouped: Boolean = false, modifier: Modifier = Modifier.fillMaxWidth()) = Column(modifier) {
+@Composable fun ClaudeExportImportSettingsPage(state: ClaudeImportUiState, onChoose: () -> Unit, onOpen: (ClaudeImportTask) -> Unit, onBack: () -> Unit, onRetry: (ClaudeImportTaskId) -> Unit, onCancel: () -> Unit, showHeader: Boolean = true, actionLabel: String = "选择 conversations.json", grouped: Boolean = false, showTaskList: Boolean = true, modifier: Modifier = Modifier.fillMaxWidth()) = Column(modifier) {
     if (showHeader) {
         Text("Claude 对话导入", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
@@ -34,7 +34,7 @@ class ClaudeExportImportViewModel(private val imports: ManageClaudeExportImportU
     if (state.selected == null) {
         if (grouped) DataStorageGroupedActionRow(label = actionLabel, onClick = onChoose, enabled = !state.working, working = state.working)
         else Button(onClick = onChoose, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text(actionLabel) }
-        state.tasks.forEach { task -> TextButton(onClick = { onOpen(task) }, modifier = Modifier.fillMaxWidth()) { Text("${task.asset?.displayName ?: "导入任务"} · ${task.status}") } }
+        if (showTaskList) state.tasks.forEach { task -> TextButton(onClick = { onOpen(task) }, modifier = Modifier.fillMaxWidth()) { Text("${task.asset?.displayName ?: "导入任务"} · ${task.status}") } }
     } else {
         val task = state.selected
         Text("${task.status} · 本地任务可在重启后恢复", style = MaterialTheme.typography.labelMedium, color = SecondaryText)

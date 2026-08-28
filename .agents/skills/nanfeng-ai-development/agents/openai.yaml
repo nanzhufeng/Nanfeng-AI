@@ -1,0 +1,4 @@
+interface:
+  display_name: "南枫 AI 开发"
+  short_description: "安全实现 Android 会话、设置与网关功能改动"
+  default_prompt: "Use $nanfeng-ai-development to implement this Nanfeng AI change safely."

@@ -36,7 +36,10 @@ import java.nio.file.StandardCopyOption
 
 class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
     private val appFilesDirectory = context.applicationContext.filesDir
+    private val appCacheDirectory = context.applicationContext.cacheDir
     private val root = File(appFilesDirectory, ATTACHMENTS_ROOT)
+    private val archiveRoot = File(appFilesDirectory, P6K_ARCHIVES_ROOT)
+    private val archivePreviewRoot = File(appCacheDirectory, P6K_PREVIEW_CACHE_ROOT)
 
     override fun import(request: AttachmentImportRequest): AttachmentImportResult {
         if (request.mimeType !in CONVERSATION_ALLOWED_MIME_TYPES) return AttachmentImportResult.Rejected(AiTaskError.AttachmentUnsupportedType)
@@ -86,7 +89,7 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
 
     override fun read(attachment: AttachmentReference): AttachmentReadResult {
         if (!attachment.isReadyPrivateCopy()) return AttachmentReadResult.Rejected(AiTaskError.AttachmentNotReady)
-        val file = safeFileFor(attachment.reference) ?: return AttachmentReadResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        val file = verifiedFileFor(attachment) ?: return AttachmentReadResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         if (!file.isFile || file.length() != attachment.byteCount) return AttachmentReadResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         return try {
             val digest = MessageDigest.getInstance("SHA-256")
@@ -104,7 +107,7 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
     /** Recheck the immutable private copy before handing an opaque stream to the egress owner. */
     override fun openVerified(attachment: AttachmentReference): AttachmentOpenResult {
         if (!attachment.isReadyPrivateCopy()) return AttachmentOpenResult.Rejected(AiTaskError.AttachmentNotReady)
-        val file = safeFileFor(attachment.reference) ?: return AttachmentOpenResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        val file = verifiedFileFor(attachment) ?: return AttachmentOpenResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         if (!file.isFile || file.length() != attachment.byteCount || file.sha256() != attachment.sha256) {
             return AttachmentOpenResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         }
@@ -114,7 +117,7 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
     /** Decode a bounded thumbnail directly from the private file; full originals never enter Compose. */
     override fun thumbnail(attachment: AttachmentReference): AttachmentThumbnailResult {
         if (!attachment.isReadyPrivateCopy()) return AttachmentThumbnailResult.Rejected(AiTaskError.AttachmentNotReady)
-        val file = safeFileFor(attachment.reference) ?: return AttachmentThumbnailResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        val file = verifiedFileFor(attachment) ?: return AttachmentThumbnailResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         if (!file.isFile || file.length() != attachment.byteCount) return AttachmentThumbnailResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         return try {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -152,7 +155,7 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
     /** Android's PDFRenderer has no JavaScript, form action or external-resource execution surface. */
     override fun pdfPage(attachment: AttachmentReference, pageNumber: Int): AttachmentPdfPageResult {
         if (attachment.mimeType != "application/pdf" || !attachment.isReadyPrivateCopy()) return AttachmentPdfPageResult.Rejected(AiTaskError.AttachmentUnsupportedType)
-        val file = safeFileFor(attachment.reference) ?: return AttachmentPdfPageResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        val file = verifiedFileFor(attachment) ?: return AttachmentPdfPageResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         if (!file.isFile || file.length() != attachment.byteCount || file.sha256() != attachment.sha256) return AttachmentPdfPageResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         return try {
             ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
@@ -183,7 +186,7 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
 
     override fun videoMetadata(attachment: AttachmentReference): AttachmentVideoMetadataResult {
         if (attachment.mimeType != "video/mp4" || !attachment.isReadyPrivateCopy()) return AttachmentVideoMetadataResult.Rejected(AiTaskError.AttachmentUnsupportedType)
-        val file = safeFileFor(attachment.reference) ?: return AttachmentVideoMetadataResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        val file = verifiedFileFor(attachment) ?: return AttachmentVideoMetadataResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         if (!file.isFile || file.length() != attachment.byteCount || file.sha256() != attachment.sha256) return AttachmentVideoMetadataResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
         return try {
             val retriever = MediaMetadataRetriever()
@@ -205,18 +208,25 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
 
     override fun videoPreview(attachment: AttachmentReference): AttachmentVideoPreviewResult = when (val metadata = videoMetadata(attachment)) {
         is AttachmentVideoMetadataResult.Ready -> {
-            val file = safeFileFor(attachment.reference)
-                ?: return AttachmentVideoPreviewResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
-            val bytes = runCatching { FileInputStream(file).use { it.readBytes() } }.getOrNull()
-                ?: return AttachmentVideoPreviewResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
-            AttachmentVideoPreviewResult.Ready(AttachmentVideoPreview(metadata.metadata.poster, metadata.metadata.durationMillis, bytes))
+            if (P6KZipArchiveAssetStorage.parse(attachment.reference) != null) {
+                when (val opened = openVerified(attachment)) {
+                    is AttachmentOpenResult.Opened -> AttachmentVideoPreviewResult.Ready(AttachmentVideoPreview(metadata.metadata.poster, metadata.metadata.durationMillis, open = opened.open))
+                    is AttachmentOpenResult.Rejected -> AttachmentVideoPreviewResult.Rejected(opened.error)
+                }
+            } else {
+                val file = verifiedFileFor(attachment)
+                    ?: return AttachmentVideoPreviewResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+                val bytes = runCatching { FileInputStream(file).use { it.readBytes() } }.getOrNull()
+                    ?: return AttachmentVideoPreviewResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+                AttachmentVideoPreviewResult.Ready(AttachmentVideoPreview(metadata.metadata.poster, metadata.metadata.durationMillis, bytes = bytes))
+            }
         }
         is AttachmentVideoMetadataResult.Rejected -> AttachmentVideoPreviewResult.Rejected(metadata.error)
     }
 
     override fun audioDurationMillis(attachment: AttachmentReference): Long? {
         if (attachment.mimeType !in setOf("audio/mpeg", "audio/wav", "audio/mp4") || !attachment.isReadyPrivateCopy()) return null
-        val file = safeFileFor(attachment.reference) ?: return null
+        val file = verifiedFileFor(attachment) ?: return null
         if (!file.isFile || file.length() != attachment.byteCount || file.sha256() != attachment.sha256) return null
         return runCatching {
             val retriever = MediaMetadataRetriever()
@@ -231,6 +241,7 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
     }
 
     override fun deletePrivateCopy(attachment: AttachmentReference): Boolean {
+        if (P6KZipArchiveAssetStorage.parse(attachment.reference) != null) return true
         val file = safeFileFor(attachment.reference) ?: return false
         return !file.exists() || file.delete()
     }
@@ -260,6 +271,40 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
         if (!storageKey.startsWith("$ATTACHMENTS_ROOT/")) return null
         val resolved = File(appFilesDirectory, storageKey)
         return resolved.takeIf { candidate -> candidate.canonicalPath.startsWith(root.canonicalPath + File.separator) }
+    }
+
+    /** Archive entries remain single-copy in the retained import package. Android decoders that
+     * require a seekable file receive a hash-verified cache materialization, never the ZIP path. */
+    private fun verifiedFileFor(attachment: AttachmentReference): File? {
+        safeFileFor(attachment.reference)?.let { return it }
+        val location = P6KZipArchiveAssetStorage.parse(attachment.reference) ?: return null
+        val archive = File(archiveRoot, "${location.taskId}.zip")
+        if (!archive.isFile) return null
+        if (!archivePreviewRoot.exists() && !archivePreviewRoot.mkdirs()) return null
+        val expectedBytes = attachment.byteCount ?: return null
+        val expectedHash = attachment.sha256 ?: return null
+        val cached = File(archivePreviewRoot, "$expectedHash${extensionFor(attachment.mimeType)}")
+        if (cached.isFile && cached.length() == expectedBytes && cached.sha256() == expectedHash) return cached
+        val temporary = runCatching { File.createTempFile("archive-", ".part", archivePreviewRoot) }.getOrNull() ?: return null
+        return try {
+            java.util.zip.ZipFile(archive).use { zip ->
+                val entry = zip.getEntry(location.entryName) ?: return null
+                if (entry.isDirectory || entry.name != location.entryName || entry.size != expectedBytes) return null
+                val digest = MessageDigest.getInstance("SHA-256")
+                val copied = zip.getInputStream(entry).use { input ->
+                    FileOutputStream(temporary).use { output ->
+                        DigestOutputStream(output, digest).use { digestOutput -> input.copyTo(digestOutput) }
+                    }
+                }
+                if (copied != expectedBytes || digest.digest().toHex() != expectedHash) return null
+            }
+            Files.move(temporary.toPath(), cached.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            cached
+        } catch (_: Exception) {
+            null
+        } finally {
+            if (temporary.exists()) temporary.delete()
+        }
     }
 
     private fun File.sha256(): String = FileInputStream(this).use { input ->
@@ -320,6 +365,8 @@ class AndroidPrivateAttachmentStore(context: Context) : PrivateAttachmentStore {
 
     private companion object {
         const val ATTACHMENTS_ROOT = "attachments/v1"
+        const val P6K_ARCHIVES_ROOT = "p6k-zip-import/v1/archives"
+        const val P6K_PREVIEW_CACHE_ROOT = "p6k-zip-attachment-previews/v1"
         const val MAX_ATTACHMENT_BYTES = 20L * 1024L * 1024L
         const val MAGIC_PREFIX_BYTES = 4096
         const val MAX_SOURCE_PIXELS = 40_000_000L

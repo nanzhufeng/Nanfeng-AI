@@ -1,6 +1,6 @@
 # 南枫 AI Android 当前普通聊天运行时上下文合同
 
-日期：2026-08-26
+日期：2026-08-27
 状态：**当前有效；普通聊天向任一已选模型发送前的个性化、Memory、资料库与历史对话上下文唯一正文**
 
 ## 1. 范围与优先级
@@ -44,11 +44,26 @@
 - “关闭记忆摘要生成和应用”只将 `memoryRetrievalEnabled` 关闭：后续“记住了”不会触发摘要生成，聊天尾部不再显示“加入记忆摘要”，普通聊天也不会检索或发送长期 Memory；昵称、职业和自定义指令仍按 `personalizationEnabled` 的独立规则参与。该关闭不删除现有摘要；“删除记忆”只软删除摘要，不反向关闭上述开关。
 - 所有可能与本合同有关的设置、小字、空态和说明不得出现“长期 Memory 必须显式创建，且不会自动加入上下文”或等价断言；应明确“显式创建后，在开关开启时按当前问题自动检索相关内容”。
 
-## 5. 真实所有者与回归门禁
+## 5. 回答级来源说明
+
+- 每条成功落库的普通 Assistant 回复，必须按其**实际发送 Attempt**绑定本次上下文选择；不能按当前设置、当前模型或之后的再次检索倒推来源。
+- 回复页脚的“查看本次上下文来源”只在该回复存在已绑定的本地上下文审计时显示。打开后展示资料类别、标题与“为什么使用”：Memory／资料库／历史对话均明确为“按本次问题和当前范围在本机匹配”；不展示选中条目的正文、Prompt、附件字节、Provider 原始请求或凭据。
+- 已绑定但没有额外检索结果时，说明必须如实写明“未加入记忆、资料库或历史对话；仅使用本轮输入、当前对话路径及固定系统规则”，不能把“没有额外资料”伪装成无上下文或 Provider 成功证明。
+- 审计只在本机保存，且只在真实可见回复落库后绑定；请求失败、取消或未产生 Assistant 回复的上下文诊断不得出现在回答级入口。
+
+## 6. 临时聊天隔离
+
+临时聊天不是普通聊天：它使用 `TemporaryConversationId`、`TemporaryConversationDomain` 与独立临时恢复表，最多仅在本机恢复 24 小时。其“发送”只追加本地临时消息，**不连接模型服务**，因此不读取或外发个性化资料、Memory、资料库、普通历史对话、附件正文或当前普通会话路径；也不进入普通会话搜索、自动标题、记忆摘要、上下文记录、费用／用量或普通会话列表。临时恢复不是自动沉淀：到期或明确清理后，临时记录及关联私有附件引用一并删除。
+
+临时／普通之间只能通过用户显式的“返回普通聊天”切换视图；该切换不复制、导入或转换临时内容。任何未来临时发送能力若要改变“不连接模型服务”的边界，必须先单独定义用户确认、上下文、外发、留存与验证合同，不能复用普通聊天默认值。
+
+## 7. 真实所有者与回归门禁
 
 - 设置与资料注入 owner：`AssistantExperienceSettings.modelInstruction`。
 - 普通发送开关接线 owner：`NormalChatOpenRouterExecutor`，分别传入 `includeRelevantMemory = experience.memoryEnabled` 与 `includeRelevantKnowledge = experience.librarySearchEnabled`。
 - 本机检索、范围、去重、完整条目预算与来源记录 owner：`LocalContextBroker` 与 `RoomLocalContextIndex`。
-- 回归至少覆盖：用户资料在长期 Memory 暂停时仍参与调用；两个检索开关独立生效；当前用户消息不因检索关闭而消失；UI 不再出现反向文案；当前合同、设置合同和会话合同都链接至本合同。
+- 回答级来源 owner：`ContextSelectionAuditStore` 的 Attempt→Assistant 消息绑定与 `ConversationFoundationViewModel` 的答案投影；展示文案由 `ContextSelectionAuditRecord.answerContextDisclosure` 生成。
+- 临时聊天隔离 owner：`TemporaryConversationDomain` 与 `TemporaryConversationIsolation`；它们不持有 `ConversationRepository`、`LocalContextBroker`、普通搜索或自动沉淀 owner。
+- 回归至少覆盖：用户资料在长期 Memory 暂停时仍参与调用；两个检索开关独立生效；当前用户消息不因检索关闭而消失；回答级来源只显示实际绑定的本地记录；临时聊天无法走普通上下文／搜索／自动沉淀链；UI 不再出现反向文案；当前合同、设置合同和会话合同都链接至本合同。
 
 这份合同不证明某次第三方 Provider 已成功调用或用户数据已在真机视觉路径验收；它定义的是普通发送前本机组装边界。真实 Provider、费用和真机可见结果仍按各自验收记录单独报告。

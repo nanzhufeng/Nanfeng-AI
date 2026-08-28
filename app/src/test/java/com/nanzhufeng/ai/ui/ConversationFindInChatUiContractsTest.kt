@@ -11,6 +11,7 @@ class ConversationFindInChatUiContractsTest {
         val dialog = source.substringAfter("private fun ConversationFindInChatDialog").substringBefore("private fun ConversationFindNavigationBar")
 
         assertTrue(dialog.contains("Text(\"输入关键词\", color = BodyText"))
+        assertTrue(dialog.contains("containerColor = NeutralSystemSurface"))
         assertTrue(dialog.contains("Surface(color = NeutralSystemSurface, shape = RoundedCornerShape(16.dp)"))
         assertTrue(dialog.contains("focusedContainerColor = ForegroundSurface"))
         assertTrue(dialog.contains("unfocusedContainerColor = ForegroundSurface"))

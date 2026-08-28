@@ -1,11 +1,58 @@
 # 南枫 AI 当前交接
 
-> **当前合同读取门（2026-08-26，优先于全文）：** 本文下方是按时间累积的实现、设备与验收记录。它们只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
+> **当前合同读取门（2026-08-27，优先于全文）：** 本文下方的**最新有效交接**与按时间累积的实现、设备与验收记录，只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
+
+## 2026-08-28：当前代码 checkpoint 与 ChatGPT ZIP 附件链收口（代码／真实 ZIP／Lint／Release 已验证，OPPO 待授权覆盖）
+
+- **最后 1 个附件的根因已确认并修复：** 部分 ChatGPT 官方当前节点以不可渲染的结构记录收尾，文本 parser 最后保留的可渲染消息仍有后代。旧 owner 把该节点当成 `currentNodeId` 后触发 `IllegalArgumentException: 当前分支必须指向叶消息。`。现在优先保留官方路径下既有合法叶节点，否则确定性选择最新后代叶节点。同一官方 file ID 的多消息引用仍保留，附件字节／catalog 不重复。
+- **真实包闭环：** checkpoint 提交后重跑 `P6KUserSelectedChatGptZipAttachmentChainAcceptanceTest` 读取 `ChatGPT_20260827.zip` 得到 `853/853`，XML 为 `tests=1, skipped=0, failures=0, errors=0`，耗时 `249.963s`。旧包→新包的真实 Room 合并仍为 `784` 个去重对话，XML 同样为 `skipped=0, failures=0`，耗时 `320.925s`；三项真实包验收合并命令耗时 `9m43s`。`822` 个缺少官方对话归属的候选仍不猜配。
+- **诊断已收口：** 产品代码不再用 `getOrDefault(Outcome())` 静默伪装会话事务成功，结果单独统计 `failedConversationCount`；临时 `P6KAssetRecovery` Log、异常堆栈回调和 mapper 诊断构造参数已移除。v2 完成标记只在映射非空、全部官方 entry 已挂载且会话失败数为 `0` 时写入。
+- **最终回归边界：** 完整 JVM 为 `815 tests / 60 failures / 3 skipped / 0 errors`，60 项分布于 16 个历史契约类，其中 40 项为 `P6DConversationRowAccessibilityContractsTest`。3 个 skip 都是未在全量命令传真实 ZIP 环境变量的 opt-in 验收，它们已按真实包分开运行并确认 `skipped=0`。不将当前 checkpoint 声称为全绿基线。
+- **Lint／Release：** `lintDebug` 为 `0 errors, 84 warnings, 13 hints`，`assembleRelease` 通过。产物 [南枫AI.apk](../app/build/outputs/apk/release/南枫AI.apk) 为 `66 / 0.3.0-p10j`，SHA-256 `b0d1008fde0bbbddaaad57d925e09ca067dbbb64407d9783904955a999481929`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，最低 API 26。
+- **设备边界：** 本次没有安装设备、没有运行任何仪器测试。OPPO 仍是 SHA-256 `d86b670e050da976aa07151928059b49a9e0936fd7422dbac5883ec683c7c390` 的旧诊断包，当时 UI 回读仍为 `0 个附件已恢复`。只有用户再次明确授权后，才能同签名保数据覆盖并做真实 UI 回读。
+
+## 2026-08-28：ChatGPT ZIP 附件原生链路恢复与 JSON 结果入口补齐（代码／JVM 已验证，真机待覆盖）
+
+- **实包关系复查：** 2026-08-27 ChatGPT ZIP 的当前导出路径上共有 `855` 条 attachment 记录、`854` 个唯一 ID；`853` 个对应 entry 实际存在，其中 `851` 个有 `conversation_asset_file_names.json` 官方显示名。这与 2026-08-16 K7“实包没有可证明 message↔asset 关系”的旧文档冲突；以新包实际字段、映射测试和回读为准。其余候选仍无官方归属，不从文件名或时间猜配。
+- **原生链路：** `P6KChatGptZipAssetMapper` 只读取官方源 ID；`RoomP6KZipMappedAssetLinkOwner` 在同一 Room 事务内恢复被文本 parser 跳过的“仅附件”用户节点，并写入普通 `ContentBlock.Attachment`。所以导入附件与自带附件共用对话卡、当前消息路径、图片／视频／音频／文件搜索分组、预览、定位、搜索返回、下载和分享。大文件保留在原 app-private ZIP，按需 hash 校验并流式交付，不再复制约 `3.7 GB` 附件本体。
+- **旧批次自动升级：** 应用启动后的 ZIP 任务回读会对保留的旧官方 ZIP 执行一次映射；已成功的 entry 标记 `SOURCE_MAPPED`，未归属项保持未关联。现有 OPPO 数据必须在新正式包同签名覆盖、启动并完成一次回读后，才能宣称已从 `1675` 个原候选中实际恢复 `853` 个；本次尚未进行真机覆盖，不把 JVM 结果冒充设备结果。
+- **导入结果 UI：** JSON 和 ZIP 仍是两张独立大卡，两张卡的“导入结果 / 查看详情”均改为始终可见；任务表为空时如实显示 `0 个导入批次`。先前交接中“均有入口”的结论与用户截图冲突，根因是 JSON 结果行被任务非空条件隐藏，现已删除该条件。ZIP 详情改为分别显示“已恢复附件”和“缺少官方归属”，不再把全部称为待处理媒体。
+- **验证：** 本段的阶段性验收已被上方“当前代码 checkpoint”替代；最新真实 Room 结果为 `853/853`，最新 Release SHA-256 为 `b0d1008fde0bbbddaaad57d925e09ca067dbbb64407d9783904955a999481929`。未运行任何仪器测试，未安装 OPPO。
+
+## 2026-08-28：两个 ChatGPT 累积 ZIP 去重与导入链（真实包 JVM 验收已通过）
+
+- **OPPO 真实导入与可见性（同日历史快照）：** 用户在 OPPO 上以系统 DocumentsUI 选择 `ChatGPT_20260827.zip` 后，ZIP 批次实际完成：`784` 个对话、`12` 条无可显示正文、`1675` 个当时尚未映射的资产候选；来源对话按原 `updatedAt` 排序。数据与存储当时保持 JSON、ZIP 两张独立大卡，但后续用户截图证实 JSON 结果行会因任务表为空而消失；不得再引用本段旧“均有入口”结论，以上方最新交接和设置合同为准。隐私总览当时统计总量为 `4.59 GB`，其中原始 ZIP `4.57 GB`。搜索命中会显示“从 ChatGPT ZIP 导入”来源标签，打开会话也显示相同内容无关说明。当时正式同签名覆盖已回读 APK 哈希与首次安装时间；未卸载、清数据或重复导入。
+
+- **实现：** ChatGPT ZIP archive／total 上限升为 `6 GiB`，仍保持 `256 MiB` 单 entry、路径、重复 entry 与压缩炸弹门禁。候选仅保留可安全呈现的文本 string 部件；多模态对象、thoughts／reasoning recap 不显示也不阻断整段对话，完全没有安全文本的对象如实标记 `EMPTY_CONTENT`。无文本结构节点会折叠到最近的文本祖先。
+- **跨包语义：** 新增 source-message→本地 message provenance。旧包先导入后，新包内同 source conversation 且内容不变时复用现有会话；只新增消息时在原会话追加，既不改变旧节点也不产生重复会话。旧消息被改写／删除、provenance 缺失或树有歧义则安全 `CONFLICT_REIMPORT`，保留旧本地会话。最新累计批次接管 provenance，故删除旧批次不会删除已由新批次引用的会话。
+- **真实包验收：** 两份由用户明确选择的 2026-07／08 ChatGPT ZIP 依次以旧→新顺序导入到隔离内存 Room：旧包 `517` 条中 `506` 条有效文本会话、`11` 条 `EMPTY_CONTENT`；新包 `796` 条中 `784` 条有效文本会话、`12` 条 `EMPTY_CONTENT`。最终为 `784` 个无重复本地会话；共享会话复用本地 ID，新增消息走 append-only 合并；左侧会话列表按 `updatedAt` 降序、搜索索引命中、两条设置导入任务回读均通过。真实包回归耗时约 `5 分 7 秒`，当前逐会话事务与索引重建是性能风险，尚未做进度／批量优化。
+- **该 JVM 阶段的验证边界：** `P6KUserSelectedChatGptZipMergeAcceptanceTest`（真实 ZIP、无正文输出）、`P6KChatGptZipCommitRoomContractsTest`、`P6KThirdPartyZipInventoryContractsTest` 和 Debug Kotlin 编译通过。这条记录是真机导入之前的自动验证边界；同日后续 OPPO 导入事实见上一条历史快照，两者不再互相否定。附件自动恢复仍须以上方最新交接的新正式包覆盖验收为准。
+
+## 2026-08-27：总控方案当前门同步（文档一致性已检查）
+
+- **总控入口：** [总控方案需求—证据完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部已新增 2026-08-27 当前总控门。它把会话、设置、运行时上下文、实现／验证、长期决策和历史蓝图的唯一事实源分开，并将原 2026-08-26 “当前”段显式降级为历史快照。
+- **防冲突边界：** 总控门只汇总当前范围、验证分层、正式 APK 与未发布代码的界限；功能视觉值仍只在三份当前合同，具体测试／包／设备事实仍只在本交接最新条目。不得把 code 66 的历史正式覆盖写成包含后续未发布 UI／上下文增量，也不得以定向 JVM 通过宣称全量 JVM 或真机已通过。
+
+## 2026-08-27：聊天内查找灰卡与白色输入面（JVM／Debug 编译已验证）
+
+- **修正：** 用户截图对应的是“在聊天中查找”弹层，而非本地文件文本预览。该弹层整卡现使用一阶中性灰承托，标题、字段说明和动作直接位于灰卡上；只有关键词输入框内部保留纯白输入面。深色皮肤沿用语义色，呈现深灰弹层与对应前景输入面，不保留突兀的白色残片。
+- **自动验证：** `ConversationFindInChatUiContractsTest`（含灰卡容器契约）与 Debug Kotlin 编译通过，`git diff --check` 通过。未运行仪器测试、未构建 Release、未安装或操作 OPPO；浅色／深色实际视口仍待人工确认。
+
+## 2026-08-27：暗色本地文本／PDF 预览 surface 收口（JVM／Debug 编译已验证）
+
+- **根因与修正：** “本地安全文本预览”把文件顶部操作的 `dark` 硬写为 `false`，正文阅读面也硬编码浅灰，导致暗色皮肤出现白色下载、分享、关闭控件和大块白色文本面。PDF 预览外层与顶部操作存在同一遗漏。现在两者都由当前 `ForegroundSurface` 派生深浅状态；暗色时使用炭灰预览画布、浅灰正文与半透明白色操作胶囊。PDF／图片页面本身的真实白色内容不做反相。
+- **自动验证：** `P6F2EAudioAndTextPreviewUiContractsTest`（含新增文本／PDF 深色 surface 契约）与 Debug Kotlin 编译通过，`git diff --check` 通过。单独运行既有 `P6F2CPdfPreviewUiContractsTest` 仍在它的旧全文件 `http://`／`https://` 静态字符串断言失败；该字符串位于未改动的来源站点显示逻辑，不能归因于本次皮肤修正。未运行仪器测试、未构建 Release、未操作 OPPO；暗色真机视觉仍待人工确认。
+
+## 2026-08-27：回答级上下文来源说明与临时聊天隔离（JVM／Debug 编译已验证）
+
+- **普通回答：** 上下文审计新增 Attempt→实际 Assistant 消息绑定。已成功落库的回答在既有页脚可按需查看“本次上下文来源”：只显示实际加入的本地资料类别、标题和本机匹配原因，不显示来源正文、Prompt、附件、Provider 原始请求或凭据。无额外资料时明确说明仍使用本轮输入、当前对话路径和固定系统规则；失败、取消或未生成回复的请求不会显示为回答来源。
+- **临时聊天：** 明确固化为独立本机离线恢复链，最多 24 小时；发送只追加临时本地消息，不连接模型服务，不读取／外发 Memory、资料库、普通历史或附件正文，不进入普通搜索、自动标题、记忆摘要、上下文记录或费用记录。返回普通聊天只切换视图，不复制临时内容。
+- **自动验证：** `AnswerContextDisclosureContractsTest`、`AnswerContextDisclosureUiContractsTest`、`CurrentRuntimeContextContractTest` 与既有 `P6ETemporaryConversationContractsTest` 共 11 项通过，Debug Kotlin 编译通过，`git diff --check` 通过。未运行仪器测试；没有重建 Release、没有安装或操作 OPPO，不能将此前 APK 覆盖记录当成本次功能验收。完整 JVM 套件仍不是全绿基线，历史失败与 JBR C2 崩溃边界见下一节。
 
 ## 2026-08-27：本轮增量 checkpoint 与最终回归边界
 
 - **冻结范围：** 本地 checkpoint 收纳当前 Android 会话、搜索、设置与数据层的全部增量，以及三份当前合同、入口审计和本交接记录；不推送远端、不创建 Release，也不把历史已完成条目重复沉淀。当前正式签名 APK 仍为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `d7e387593002e6062f7da856d1503cbcf0a6985d388f25e586c973a472e98eca`；已完成的同签名 OPPO 保数据覆盖证据见下一节，文档变更本身不改变 APK。
-- **最终 JVM 回归：** `:app:testDebugUnitTest` 共执行 `796` 项，`60` 项失败，因此本 checkpoint **不是全绿基线**。失败分布于 15 个既有／静态契约类：其中 `P6DConversationRowAccessibilityContractsTest` 含大量旧源码锚点，其余包括 System Bars、直接执行／预检、Composer／导航、媒体预览、设置卡与工作区交换契约；还包括 `ClassCastException`、`ExceptionInInitializerError` 和断言失败。此轮不把这些并行遗留／待分类失败混入已完成的产品改动，须以独立回归修复任务逐项归因。
+- **最终 JVM 回归：** 上一轮完整 `:app:testDebugUnitTest` XML 为 `796` 项、`60` 项失败，因此本 checkpoint **不是全绿基线**。失败分布于 15 个既有／静态契约类：其中 `P6DConversationRowAccessibilityContractsTest` 含大量旧源码锚点，其余包括 System Bars、直接执行／预检、Composer／导航、媒体预览、设置卡与工作区交换契约；还包括 `ClassCastException`、`ExceptionInInitializerError` 和断言失败。2026-08-27 复盘重跑时，Android Studio JBR 21.0.10 的 C2 编译器在 `android.database.sqlite.SQLiteProgram.<init>` 发生 `SIGSEGV`，测试进程在 `245` 项完成、`60` 项失败、`1` 项 skipped 后以 exit `134` 终止，未产生新的完整聚合。两类问题都须独立归因，不能将定向通过写成全量通过。
 - **已通过的针对性验证：** `ConversationSearchAttachmentPreviewUiContractsTest`、`ConversationSearchSurfaceContractsTest`、`SettingsUiSimplificationContractsTest`、`SettingsSwitchGeometryContractsTest`、`ModelSettingsUiContractsTest`、`FBP6043ScrollToLatestContractsTest` 与 `P6GUnifiedChatFirstUiContractsTest` 已通过；Debug Kotlin 与正式 Release 构建已通过，未运行任何仪器测试。真实设备上最新“搜索进入对话后横滑返回”及视觉／手感仍待人工验收，不能由上述 JVM 结果替代。
 
 ## 2026-08-27：搜索文件定位可横滑返回，搜索层级与资料库说明收口（JVM／OPPO 已验证）

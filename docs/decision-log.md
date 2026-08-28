@@ -2,6 +2,19 @@
 
 > **当前 UI 决策读取门（2026-08-26，优先于全文）：** [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 与 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md) 是仅有的 Android 可见规则正文。下方早期决策只保存当时的取舍及领域边界；其中与模型短名、主题色、暗色皮肤、卡片、弹窗、设置层级、归档／回收站、导出或功能审阅有关的旧视觉措辞不得反向覆盖当前合同。
 
+## 决策：ChatGPT 累积 ZIP 按 source tree append-only 合并（2026-08-28）
+
+- 当前选择：ChatGPT 旧导出先进入本地后，更新的累计导出以 provider source conversation ID 去重；完全相同的可见消息树复用原会话，只有新增 source message 才在同一本地树追加。source-message→local node provenance 是这条合并路径的唯一身份桥，最新累计批次接管 provenance。
+- 固定边界：消息的内容 identity 不采纳临时遍历序号；会话 identity 仍涵盖完整可见消息顺序。改写／删除旧 source message、缺失 provenance、歧义 source tree 或树校验失败一律冲突关闭，现有本地对话、草稿、附件、设置、Key、Provider 与用户修改均不覆盖。非文本多模态对象、thoughts／reasoning recap 不进入正文；只有明确字符串文本进入会话。
+- 不采用方案：不以 ZIP 整包 hash 做跨版本去重，不为同一来源另建“新版本”会话，不用标题、时间或文件名猜重，也不把无法安全投影的内容转为空白文本／伪附件。旧批次删除后已由新批次接管的会话不受影响；删除最新 owner 批次才走既有可恢复软删除。
+
+## 决策：ChatGPT 附件的唯一字节身份、多消息引用与合法当前叶分层（2026-08-28）
+
+- 当前选择：同一官方 file ID 可被多个 source message 引用；映射保留官方 `currentPath` 中的精确 occurrence，唯一 asset entry 只保留第一个确定性 owner 作 catalog 元数据 owner，附件字节不重复。恢复 Message Tree 时不把“最后可渲染官方消息”默认视为叶节点；先保留官方恢复路径下已有合法叶，否则确定性选择最新后代叶。
+- 已确认事实与依据：用户 2026-08-27 真实 ChatGPT ZIP 包含 `853` 个官方明确归属且 entry 存在的唯一附件，其中存在共享 file ID。旧 owner 对某个结构尾部会话触发 `当前分支必须指向叶消息`；改为合法后代叶选择后，真实 Room 验收为 `853/853`，XML `skipped=0, failures=0`。
+- 固定边界：不从文件名、时间、相邻消息或内容猜配 `822` 个无官方归属候选；会话事务失败必须进入结构化 summary，不得以空 `Outcome()` 伪装成功；v2 完成标记只在映射非空、全部唯一 entry 已挂载且 `failedConversationCount == 0` 时写入。
+- 重新评估条件：只有未来需要对每个 occurrence 做独立删除、重放或审计，才引入独立 occurrence 表和迁移；不为了表结构完美而重写已经真实包验收的当前链路。
+
 ## 历史决策：对话底部模型名只使用中心目录的具体名称（2026-08-25；已由 2026-08-26 当前合同覆盖）
 
 - 当前选择：Composer、普通／临时对话和助手消息页脚共用 `NanfengModelServiceCatalog` 的具体模型名称；`GPT-5.6 Terra / Sol / Luna` 保持完整，Claude、Gemini、Qwen 与 DeepSeek 名称也不再被截断。比较选择直接显示其中的两项具体名称，不显示泛化的“对比”。

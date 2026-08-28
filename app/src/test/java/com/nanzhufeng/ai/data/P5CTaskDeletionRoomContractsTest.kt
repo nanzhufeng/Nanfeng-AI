@@ -37,7 +37,23 @@ class P5CTaskDeletionRoomContractsTest {
         tasks = RoomMarkdownImportTaskRepository(db)
         imports = ManageMarkdownImportUseCase(tasks, AndroidMarkdownPrivateAssetStore(context), MarkdownKnowledgeAdapter(KnowledgeDomain(clock)), ManageKnowledgeUseCase(KnowledgeDomain(clock), RoomKnowledgeRepository(db, clock)), clock)
     }
-    @After fun close() { db.close(); File(context.filesDir, "p5c-pending-delete").deleteRecursively(); File(context.filesDir, "markdown-import-assets/v1").deleteRecursively() }
+    @After fun close() { db.close(); File(context.filesDir, "p5c-pending-delete").deleteRecursively(); File(context.filesDir, "markdown-import-assets/v1").deleteRecursively(); File(context.filesDir, "p6k-zip-import/v1").deleteRecursively() }
+
+    @Test fun `privacy inventory includes retained ZIP archive and its aggregate import facts`() {
+        val sql = db.openHelper.writableDatabase
+        sql.execSQL("INSERT INTO p6k_zip_import_tasks (id, provider, displayName, byteCount, packageHash, status, failure, formatVersion, createdAtEpochMs, updatedAtEpochMs) VALUES ('p5c-zip', 'CHATGPT', 'archive.zip', 4096, 'hash', 'COMPLETED', NULL, '1', 1, 1)")
+        sql.execSQL("INSERT INTO p6k_zip_import_provenance (conversationId, taskId, itemId, sourceConversationId, packageHash, contentHash, importedAtEpochMs, adapterId, adapterVersion) VALUES ('p5c-conversation', 'p5c-zip', 'p5c-item', 'p5c-source', 'hash', 'content', 1, 'test', 1)")
+        sql.execSQL("INSERT INTO p6k_zip_asset_candidates (taskId, entryName, sha256, byteCount, mimeType, role) VALUES ('p5c-zip', 'asset', 'asset-hash', 12, 'image/png', 'UNMAPPED')")
+        val archive = File(context.filesDir, "p6k-zip-import/v1/archives/p5c-zip.zip").also { it.parentFile!!.mkdirs(); it.writeBytes(ByteArray(4096)) }
+
+        val values = AndroidPrivacyDataManager(context, db, "test").inventory().aggregates.associateBy { it.key }
+
+        assertEquals(1L, values.getValue("zip_import_batches").count)
+        assertEquals(1L, values.getValue("zip_imported_conversations").count)
+        assertEquals(1L, values.getValue("zip_pending_media").count)
+        assertEquals(1L, values.getValue("zip_archives").count)
+        assertEquals(archive.length(), values.getValue("zip_archives").byteCount)
+    }
 
     @Test fun `one selected cancelled fixture deletes without touching another historical task`() {
         val historical = cancelled("history.md")

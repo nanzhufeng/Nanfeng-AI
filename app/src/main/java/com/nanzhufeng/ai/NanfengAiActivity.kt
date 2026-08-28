@@ -225,6 +225,7 @@ class NanfengAiActivity : ComponentActivity() {
                 container.loadAssistantExperienceSettings,
                 container.invocationRepository,
                 container.assistantResponseModelAttributions,
+                container.contextSelectionAudits,
                 container.normalChatOpenRouterExecutor,
                 container.normalChatBackgroundExecution,
                 startWithFreshChat,

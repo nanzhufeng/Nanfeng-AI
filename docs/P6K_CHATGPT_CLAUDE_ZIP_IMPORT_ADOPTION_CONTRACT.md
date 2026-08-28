@@ -1,11 +1,11 @@
 # 南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同
 
 日期：2026-08-16  
-状态：**K2 已实现 Android 直接 ZIP→严格文本→原子 Conversation/Message Tree 提交链；K3/K4 Desktop 已接入相同的“选择即直接导入”恢复链。K6 已完成两端 profile 唯一 owner（Android 35→36 / Desktop 17→18）；真实包仍为 `NO_SAFE_PROFILE_FIELDS / 0`。K7 已证实两份实包没有可证明的 message↔asset 关系，故仍不自动接入媒体。K8 在此拒绝结论上新增双端人工精确关联：Android Room 36→37 / Desktop SQLite 18→19 只记录匿名资产 ordinal/安全 metadata、显式目标消息、receipt/provenance；仅在用户选定两端后才从 private archive 提取到既有 attachment owner，复用原有 image/video/PDF renderer。实包没有自动关联、没有内容展示，仍保持 `UNMAPPED_REJECTED` 直到明确操作。**
+状态：**Android 已实现 ZIP→严格文本→原子 Conversation/Message Tree 提交，并于 2026-08-28 补齐官方源关系附件恢复。新实包复查发现，`message.metadata.attachments[].id` 可与 ZIP entry 精确对应，`conversation_asset_file_names.json` 提供原始显示名；这推翻了 K7“全部无可证明关系”的旧结论。只有当前导出路径上、ID 唯一且 entry/hash/size 一致的附件才恢复为普通 `ContentBlock.Attachment`；无官方归属的 entry 仍不猜测。Desktop 仍保持其现有人工精确关联边界，不得由 Android 结论冒充已同步。**
 
 ## 0. 结论与范围
 
-用户明确选择的 ChatGPT 或 Claude 官方数据导出 ZIP，直接导入为南枫 AI 的真实 `Conversation + Message Tree`。可被安全确认为消息附件的图片、视频、PDF、音频和其他文件才可复制为 app-private 资产，并由既有媒体预览 owner 原位展示；当前两份已验证实包均无可证明的 message ownership，全部保持 `UNMAPPED_REJECTED`，不呈现为消息附件。K7 的最小匿名证据见 `P6K_MEDIA_RELATION_READONLY_AUDIT_20260816.md`。账户资料与偏好默认不导入，不得覆盖帐号、Key、Provider、模型、同步或现有设置。
+用户明确选择的 ChatGPT 或 Claude 官方数据导出 ZIP，直接导入为南枫 AI 的真实 `Conversation + Message Tree`。Android 对 ChatGPT 官方导出中有精确 source-message ID 归属的图片、视频、PDF、音频和文件，写入既有附件目录与消息树，从而复用原生对话渲染、搜索分组、预览、定位、下载与分享链路。附件本体保留在 app-private 导入 ZIP 中，按需 hash 校验后流式打开，不额外常驻复制数 GiB。无官方归属或冲突的 entry 继续保持未关联，不从文件名、时间或相邻消息猜测。账户资料与偏好默认不导入，不得覆盖帐号、Key、Provider、模型、同步或现有设置。
 
 本合同不把“官方数据导出”为“稳定公开 JSON schema”的断言。OpenAI 官方说明确认个人导出是含聊天和其他账户数据的 ZIP；其 Edu 文档还明确大包可为 `conversations.json` 或多个编号会话 JSON，并可含会话资产与账户/会话元数据。Anthropic 官方说明 Claude 导出包含 conversation data 与 user data，但未公开本合同可据以实现的 ZIP 文件表、媒体路径或版本 manifest。因此 v1 不猜测目录、字段或关联关系：只有已登记的 provider+formatVersion+manifest 指纹才可进入解析；未知、缺失、冲突或超限包在清单阶段失败关闭。
 
@@ -20,8 +20,8 @@
 | P6-H `ChatGptExportJsonAdapter` + 专属 task/receipt | `OpenDocument` 仅 `.json` | native dialog 仅 `.json` | 数据导入 | 适合“已解压 conversations.json” | 树、文本、逐项确认、私有 JSON 副本、幂等已存在；ZIP、编号 JSON 汇聚、账户资料、附件及排版 IR 均缺失 | 将官方 ZIP/资产当作已支持，或把其数据执行 | Android/desktop JSON 合同与历史证据；本轮新增 ZIP 拒绝回归 |
 | P6-I `ClaudeExportJsonAdapter` + 专属 task/receipt | `OpenDocument` 仅 `.json` | native dialog 仅 `.json` | 数据导入 | 适合“已解压 conversations.json” | 严格 `chat_messages` 文本树和确认已存在；Claude ZIP manifest、资产、profile/personalization 均无依据且未实现 | 把未公开 schema 猜成稳定格式 | Android parser/任务机与 Desktop JSON owner 已审计；本轮新增 ZIP 拒绝回归 |
 | P6-J `NanfengKnowledgeExportJsonAdapter` | `.json` | native dialog `.json` | 数据导入 | 不适用于第三方 ZIP | 是可复用的独立 adapter/task/receipt 模式；不是 ChatGPT/Claude ZIP owner | 混用来源表、receipt 或 provenance | 仅作为模式参照 |
-| `ConversationRepository` / Desktop workspace exchange mutation | 已确认项写入正常历史 | 已确认项写入 workspace `conversations` | 无直接入口 | 适合 | 真正的 Message Tree、来源标记、搜索/管理可复用；当前块只写 TEXT，缺富文本/附件导入原子接合 | 平行会话真值或覆盖原会话 | 既有 P3/P6 JSON readback |
-| `PrivateAttachmentRepository` / Desktop attachment asset owner | 现有 picker 私有副本 | `import_desktop_conversation_attachment` | 无直接入口 | 适合（内部 owner） | 私有副本、hash、MIME、引用与媒体预览可复用；ZIP entry→资产归属/事务/receipt 尚无 | zip-slip、压缩炸弹、路径/URI 泄漏、孤儿资产 | P3-G/P6-F2 既有合同 |
+| `ConversationRepository` / Desktop workspace exchange mutation | 已确认项写入正常历史；Android 可在导入 provenance 事务内恢复附件消息节点 | 已确认项写入 workspace `conversations` | 无直接入口 | 适合 | 真正的 Message Tree、来源标记、搜索/管理可复用；Android 普通消息不可变规则未放宽，只有已验证导入恢复 owner 可调整 source-confirmed 路径 | 平行会话真值或覆盖原会话 | Android Room 恢复合同测试；既有 P3/P6 JSON readback |
+| `PrivateAttachmentRepository` / Desktop attachment asset owner | 现有 picker 私有副本；Android ZIP 资产使用不透明 archive-backed key | `import_desktop_conversation_attachment` | 无直接入口 | 适合（内部 owner） | Android 已复用 hash、MIME、引用、搜索与媒体预览；大文件按需校验并以 stream 交给播放/下载/分享 | zip-slip、压缩炸弹、路径/URI 泄漏、重复拷贝数 GiB | P6K ZIP archive attachment storage/Room 合同测试 |
 | `ConversationAttachmentPreviewProjection` / Desktop image/pdf/video/audio/text preview | 消息附件预览与长按信息 | 原位 preview dialog/hover | 无直接入口 | 适合 | 图片、PDF、视频、音频、文本已有受控预览；Office/未知 MIME 仅安全文件卡，格式化文本 IR 不足 | 外部路径、HTML/Markdown 执行、全文件进 UI | P6-F2 A–E 合同 |
 | Profile / personalization | 无第三方导入入口 | 无第三方导入入口 | 仅本产品既有设置 | 不适合直接自动导入 | 无跨服务商 profile/preferences 映射 owner；不得新建“同步设置”假象 | 覆盖用户本地偏好、搬入个人资料/安全字段 | 无；必须单独合同 |
 
@@ -47,15 +47,17 @@
 - **P6-K graph normalization：** 一个用户选择 ZIP 是唯一 graph scope。编号 entry/candidate 的跨 parent 只在 source node/message ID 全局唯一、可唯一解析、全路径无环/可达且 parent 时间不晚于 child 时合并；只含结构节点的 parent 可折叠至最近可导入文本祖先。不可解析项单独拒绝，已合并片段标记为跳过，绝不把外部/歧义 parent 猜成 root。
 - **已实现 Claude 变体：** 实包验证的 ZIP 根 `conversations.json` 数组，逐个通过既有 P6-I `ClaudeExportJsonAdapter`；其 38.4 MiB / 282 对话证据使严格边界调整为 64 MiB / 1,000 对话。没有公开媒体 manifest，故不推断附件关联。
 - K1 只持久化 `p6k_zip_import_tasks/items/messages/asset_candidates/profile_candidates`，不复用 P6-H/I/J 表、provenance 或 receipt。
-- ZIP 预检上限以实包证据收窄设定为 2 GiB archive、4 GiB total、256 MiB single entry（ChatGPT 观测到的最大 entry 为约 247 MB）；entry 只流式 hash，不解压到业务资产。
-- 资产先逐 entry 流式计算 path/hash/size/MIME；当前没有官方可证实的 asset-to-message ownership，故每一条只能持久化 `UNMAPPED_REJECTED`、空 source conversation/message ID，既不复制到 `zip-import-assets`，也不能在 K2 后被导入。禁止从文件名猜关联。
+- ZIP 预检上限以实包证据收窄设定为 **6 GiB archive、6 GiB total、256 MiB single entry**。2026-08 用户选择的累积 ChatGPT ZIP 为约 4.91 GB archive／5.17 GB total，最大单 entry 仍约 247 MB；entry 只流式 hash，不解压到业务资产。
+- 资产先逐 entry 流式计算 path/hash/size/MIME。2026-08-27 新包中，当前路径上 `metadata.attachments` 共 `855` 条记录、`854` 个唯一 ID；其中 `853` 个 entry 实际存在，`851` 个还有官方原始显示名。Android 只恢复这 `853` 个 source-confirmed 附件；其余 `822` 个候选与 `1` 个缺失 entry 不自动关联。禁止从文件名、时间或相邻消息猜关联。
 - profile candidate 固定为 `NOT_EVALUATED_NO_REGISTERED_SCHEMA / 0`，不解析/保留 profile 原文。
 - Android Schema 33→34→35 与 `RoomP6KZipImportTaskRepository` 是 K0 journal 的唯一长期恢复路径；旧 app-private properties journal 在 IO 下迁入 Room 后删除，archive 本身保持 private staging。Settings 入口显示导入进度/结果与“删除导入批次”，而非确认按钮。
 
 ### K2：直接、原子、可恢复提交（已实现）
 
 - `RoomP6KZipImportCommitStore` 是唯一 commit owner。选择→私有 staging→预检→候选→直接逐会话事务写 `Conversation + Message Tree + provenance + receipt`；失败项零会话写入，未关联资产/profile 零业务写入。
-- 永不 merge/覆盖现有 conversation、草稿、附件、Key、Provider 或设置。重复包按 source ID+package hash 幂等回读；同源不同 hash 标为 `CONFLICT_REIMPORT`。删除批次会软删除该批会话并移除本批 receipt/provenance，允许日后重新选择。
+- 重复包仍按 source ID+package hash 幂等回读。**累积导出的跨包去重**以 provider source conversation ID 为主键：同源且会话级语义 hash 相同，只复用原本地会话并把最新批次 receipt/provenance 转移为 owner；同源且仅新增消息时，借助 source-message→本地 node provenance 在原会话内追加新节点，绝不新建重复会话。单条消息 identity 不含遍历序号，避免新增节点使后续旧节点的临时序号变化而误冲突；会话 hash 仍包含完整可见消息顺序。
+- 任一旧 source message 被改写／删除、source→node provenance 缺失或歧义、树无法维持，均标为 `CONFLICT_REIMPORT` 并保持现有本地会话不变；不覆盖用户可见历史、草稿、附件、Key、Provider 或设置。删除旧批次不会删除已转移给新累计批次的会话；删除最新 owner 批次才按既有软删除和 receipt/provenance 撤销规则处理。
+- ChatGPT 的 `multimodal_text` 只接纳明确 string 文本部件；非文本对象、`thoughts`／`reasoning_recap` 等不形成消息，也不能因单个非文本节点否决整段对话。结构但无文本的节点折叠到最近可导入文本祖先；完全没有可安全文本的对话保留为 `EMPTY_CONTENT`，不伪造空会话。
 - Desktop Schema 16→17 仅追加 P6-K task/item/message/asset/profile/provenance/receipt journal；其 commit 将安全 title、TEXT blocks、parent/sibling/time 写入既有 `workspace_exchange`，重建既有本地搜索索引。没有新的会话/消息业务表或另一条渲染路径。
 
 ### K3：消息、排版、附件与预览

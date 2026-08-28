@@ -641,6 +641,7 @@ object ConversationDraftPolicy {
         require(normalizedText.length <= CONVERSATION_DRAFT_MAX_LENGTH) { "草稿不能超过 $CONVERSATION_DRAFT_MAX_LENGTH 个字符。" }
         val deduplicated = attachments.distinctBy { it.id }
         require(deduplicated.size <= CONVERSATION_ATTACHMENT_MAX_COUNT) { "每个会话最多添加 $CONVERSATION_ATTACHMENT_MAX_COUNT 项附件。" }
+        require(deduplicated.all { it.byteCount <= CONVERSATION_ATTACHMENT_MAX_BYTES }) { "单个会话附件不能超过 20 MB。" }
         require(deduplicated.sumOf { it.byteCount } <= CONVERSATION_ATTACHMENT_MAX_TOTAL_BYTES) { "会话附件总大小不能超过 40 MB。" }
         return ConversationDraft(normalizedText, deduplicated, updatedAt)
     }

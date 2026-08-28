@@ -105,7 +105,7 @@ private fun PrivacyStorageSummary(inventory: com.nanzhufeng.ai.domain.PrivacyInv
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("本机数据", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("数据默认保存在本机", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text("统计仍保存在 App 内的本机数据", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 }
                 Text(formatStorageBytes(totalBytes), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             }
@@ -113,7 +113,9 @@ private fun PrivacyStorageSummary(inventory: com.nanzhufeng.ai.domain.PrivacyInv
                 Text("API Key", color = SecondaryText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                 Text(if (inventory.credentialReferencePresent) "已保存在本机" else "未保存", color = if (inventory.credentialReferencePresent) AccentOrange else SecondaryText, style = MaterialTheme.typography.bodyMedium)
             }
+            PrivacyImportSummary(inventory)
             inventory.aggregates
+                .filterNot { it.key in privacyImportAggregateKeys }
                 .filter { it.count > 0 || it.byteCount > 0 }
                 .sortedBy { it.key }
                 .forEach { aggregate ->
@@ -129,6 +131,47 @@ private fun PrivacyStorageSummary(inventory: com.nanzhufeng.ai.domain.PrivacyInv
         }
     }
 }
+
+private val privacyImportAggregateKeys = setOf(
+    "chatgpt_json_import_batches",
+    "chatgpt_json_imported_conversations",
+    "claude_json_import_batches",
+    "claude_json_imported_conversations",
+    "zip_import_batches",
+    "zip_imported_conversations",
+    "zip_pending_media",
+    "zip_imported_profile_fields",
+    "zip_archives",
+)
+
+@Composable
+private fun PrivacyImportSummary(inventory: com.nanzhufeng.ai.domain.PrivacyInventory) {
+    val values = inventory.aggregates.associateBy { it.key }
+    if (privacyImportAggregateKeys.none { values[it]?.count.orZero() > 0 || values[it]?.byteCount.orZero() > 0 }) return
+    Text("导入数据", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    listOf(
+        "ChatGPT JSON 批次" to values["chatgpt_json_import_batches"],
+        "ChatGPT JSON 对话" to values["chatgpt_json_imported_conversations"],
+        "Claude JSON 批次" to values["claude_json_import_batches"],
+        "Claude JSON 对话" to values["claude_json_imported_conversations"],
+        "ZIP 导入批次" to values["zip_import_batches"],
+        "ZIP 已导入对话" to values["zip_imported_conversations"],
+        "ZIP 待处理媒体" to values["zip_pending_media"],
+        "已导入个性化资料" to values["zip_imported_profile_fields"],
+        "ZIP 原始包（本机保留）" to values["zip_archives"],
+    ).filter { it.second?.count.orZero() > 0 || it.second?.byteCount.orZero() > 0 }.forEach { (label, aggregate) ->
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, color = SecondaryText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            Text(privacyImportAggregateValue(label, requireNotNull(aggregate)), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+private fun Long?.orZero(): Long = this ?: 0L
+
+private fun privacyImportAggregateValue(label: String, aggregate: com.nanzhufeng.ai.domain.PrivacyAggregate): String =
+    if (aggregate.byteCount > 0) "${aggregate.count} 个 · ${formatStorageBytes(aggregate.byteCount)}"
+    else "${aggregate.count} ${if (label.contains("批次")) "批" else "项"}"
 
 @Composable
 private fun PrivacyCleanupScopeDialog(selected: PrivacyDeleteScope?, onDismiss: () -> Unit, onSelect: (PrivacyDeleteScope) -> Unit) {
@@ -167,7 +210,8 @@ private fun PrivacyCleanupScopeDialog(selected: PrivacyDeleteScope?, onDismiss: 
 private fun formatStorageBytes(bytes: Long): String = when {
     bytes < 1024 -> "$bytes B"
     bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-    else -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+    bytes < 1024 * 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+    else -> String.format(java.util.Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
 }
 
 private fun PrivacyDeleteScope.label(): String = when (this) {

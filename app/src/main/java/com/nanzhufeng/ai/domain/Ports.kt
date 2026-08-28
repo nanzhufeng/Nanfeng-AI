@@ -103,6 +103,8 @@ interface ConversationSurfaceRepository {
 interface ImportedConversationProvenanceReader {
     fun isChatGptExportImported(conversationId: ConversationId): Boolean
     fun isClaudeExportImported(conversationId: ConversationId): Boolean
+    fun isP6KZipImported(conversationId: ConversationId): Boolean
+    fun importSource(conversationId: ConversationId): ConversationImportSource?
 }
 
 /** P3-D owns only saved drafts and atomic draft-to-user-message submission. */
@@ -304,7 +306,9 @@ data class AttachmentVideoPreview(
     val poster: AttachmentThumbnail,
     val durationMillis: Long,
     /** Present only while the explicit player is open; it is not persisted or indexed. */
-    val bytes: ByteArray,
+    val bytes: ByteArray? = null,
+    /** Large retained-ZIP media stays streamed and never becomes one giant heap allocation. */
+    val open: (() -> InputStream)? = null,
 )
 
 sealed interface AttachmentVideoPreviewResult {

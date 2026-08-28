@@ -253,6 +253,10 @@ import com.nanzhufeng.ai.domain.MessageNodeId
 import com.nanzhufeng.ai.domain.PresentationBlock
 import com.nanzhufeng.ai.domain.PresentedMessage
 import com.nanzhufeng.ai.domain.PresentedTranscriptMessage
+import com.nanzhufeng.ai.domain.ContextSelectionAuditRecord
+import com.nanzhufeng.ai.domain.AnswerContextDisclosure
+import com.nanzhufeng.ai.domain.AnswerContextSourceDisclosure
+import com.nanzhufeng.ai.domain.answerContextDisclosure
 import com.nanzhufeng.ai.domain.ConversationListScope
 import com.nanzhufeng.ai.domain.ConversationManagementAction
 import com.nanzhufeng.ai.domain.AttachmentId
@@ -680,7 +684,7 @@ internal fun ConversationWorkspaceDialog(
     val chatTranscriptListState = rememberLazyListState()
     val workTranscriptListState = rememberLazyListState()
     val activeTranscriptListState = if (workMode) workTranscriptListState else chatTranscriptListState
-    val normalTranscriptLeadingItems = listOf(state.importedFromChatGptExport, state.importedFromClaudeExport).count { it }
+    val normalTranscriptLeadingItems = listOf(state.importedFromChatGptExport, state.importedFromClaudeExport, state.importedFromChatGptZip).count { it }
     var chatFollowLatest by rememberSaveable { mutableStateOf(true) }
     var workFollowLatest by rememberSaveable { mutableStateOf(true) }
     var composerMenu by remember { mutableStateOf(ComposerMenu.NONE) }
@@ -764,7 +768,7 @@ internal fun ConversationWorkspaceDialog(
         LocalConversationFindQuery provides activeFindQuery,
     ) {
     state.attachmentTransfer?.let { transfer ->
-        LaunchedEffect(transfer.id, transfer.action, transfer.bytes) {
+        LaunchedEffect(transfer.id, transfer.action, transfer.batch.map { it.id }) {
             runCatching { performAttachmentTransfer(context, transfer) }
                 .onSuccess {
                     val message = when {
@@ -1069,6 +1073,11 @@ internal fun ConversationWorkspaceDialog(
                                 Text("从 Claude 导入 · 本地静态文本，不关联模型、Provider、费用或调用记录。", modifier = Modifier.padding(12.dp), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                             }
                         }
+                        if (state.importedFromChatGptZip) item(key = "chatgpt-zip-imported-provenance", contentType = "chatgpt-zip-imported-provenance") {
+                            Surface(color = Color(0xFFF1F8F4), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                                Text("从 ChatGPT ZIP 导入 · 本地静态文本，不关联模型、Provider、费用或调用记录。", modifier = Modifier.padding(12.dp), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                         val editableById = state.editableUserMessages.associateBy { it.messageId }
                         itemsIndexed(
                             items = state.messages,
@@ -1083,6 +1092,7 @@ internal fun ConversationWorkspaceDialog(
                                 MessageBubble(
                                     transcript = message,
                                     attachmentPreviews = state.attachmentPreviews,
+                                    contextSelections = state.answerContextSelections[message.message.messageId].orEmpty(),
                                     assistantGenerationPhaseOverride = if (
                                         state.normalSendRetryInProgress && message.message.messageId == state.currentLeafId
                                     ) "南枫AI 继续生成…" else null,
@@ -1869,6 +1879,7 @@ private fun ConversationWorkScope(
                 MessageBubble(
                     transcript = transcript,
                     attachmentPreviews = attachmentPreviews,
+                    contextSelections = state.answerContextSelections[transcript.message.messageId].orEmpty(),
                     assistantGenerationPhaseOverride = if (
                         state.normalSendRetryInProgress && transcript.message.messageId == state.currentLeafId
                     ) "南枫AI 继续生成…" else null,
@@ -3457,6 +3468,7 @@ private fun SearchAllOrTextResults(
             Surface(color = ForegroundSurface, shape = resultShape, modifier = Modifier.fillMaxWidth().clip(resultShape).combinedClickable(onClick = { onOpenText(hit) })) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(hit.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    hit.importSource?.let { source -> Text(source.searchLabel, color = AccentOrange, style = MaterialTheme.typography.labelSmall) }
                     Text(hit.snippet, color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -4417,7 +4429,8 @@ private fun ConversationFindInChatDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = ForegroundSurface,
+        // The find dialog is a neutral gray task card; only the editable keyword surface is foreground-white.
+        containerColor = NeutralSystemSurface,
         shape = RoundedCornerShape(24.dp),
         title = { Text("在聊天中查找") },
         text = {
@@ -4554,6 +4567,7 @@ private fun ConversationManagementBar(
 private fun MessageBubble(
     transcript: PresentedTranscriptMessage,
     attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>,
+    contextSelections: List<ContextSelectionAuditRecord>,
     assistantGenerationPhaseOverride: String? = null,
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
     onCopyAssistant: (PresentedTranscriptMessage) -> Unit,
@@ -4656,7 +4670,7 @@ private fun MessageBubble(
             }
             if (textBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth()) { textContent() }
             if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { attachmentContent() }
-            AssistantMessageActionRow(transcript, onCopyAssistant, onShareAssistant, onExportAssistantMarkdown, onBranchAssistant)
+            AssistantMessageActionRow(transcript, contextSelections, onCopyAssistant, onShareAssistant, onExportAssistantMarkdown, onBranchAssistant)
         }
         else -> Surface(color = roleVisual.surface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { textContent(); attachmentContent() }
@@ -4797,6 +4811,7 @@ private fun BranchCreationFeedback(
 @Composable
 private fun AssistantMessageActionRow(
     transcript: PresentedTranscriptMessage,
+    contextSelections: List<ContextSelectionAuditRecord>,
     onCopy: (PresentedTranscriptMessage) -> Unit,
     onShare: (PresentedTranscriptMessage) -> Unit,
     onExportMarkdown: (PresentedTranscriptMessage) -> Unit,
@@ -4809,6 +4824,8 @@ private fun AssistantMessageActionRow(
     // label without estimate provenance and rounds only this rendered amount; settings and the
     // cost ledger keep their full source-qualified accounting label.
     val cost = assistantFooterCostDisplay(transcript.metadata.costLabel)
+    val contextDisclosure = contextSelections.answerContextDisclosureOrNull()
+    var contextDisclosureVisible by remember(transcript.message.messageId) { mutableStateOf(false) }
     val metadataStyle = MaterialTheme.typography.labelSmall
     Column(
         modifier = Modifier.fillMaxWidth().padding(
@@ -4838,6 +4855,14 @@ private fun AssistantMessageActionRow(
                 onClick = { onShare(transcript) },
                 iconSize = 16.dp,
             )
+            if (contextDisclosure != null) {
+                AssistantMessageAction(
+                    icon = Icons.Rounded.History,
+                    contentDescription = "查看本次上下文来源",
+                    onClick = { contextDisclosureVisible = true },
+                    iconSize = 16.dp,
+                )
+            }
             Box {
                 AssistantMessageAction(
                     icon = Icons.Rounded.MoreVert,
@@ -4901,6 +4926,53 @@ private fun AssistantMessageActionRow(
                 }
             }
         }
+    }
+    if (contextDisclosureVisible && contextDisclosure != null) {
+        AnswerContextDisclosureDialog(contextDisclosure) { contextDisclosureVisible = false }
+    }
+}
+
+private fun List<ContextSelectionAuditRecord>.answerContextDisclosureOrNull(): AnswerContextDisclosure? {
+    if (isEmpty()) return null
+    val sourceRows = flatMap { it.answerContextDisclosure().sources }
+        .distinctBy { "${it.kind}\u0000${it.stableId}" }
+    return AnswerContextDisclosure(
+        sources = sourceRows,
+        noAdditionalSourceExplanation = first().answerContextDisclosure().noAdditionalSourceExplanation,
+    )
+}
+
+@Composable
+private fun AnswerContextDisclosureDialog(
+    disclosure: AnswerContextDisclosure,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("本次上下文来源") },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("以下仅显示本次回答实际加入的本地来源，不显示来源正文。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                if (disclosure.sources.isEmpty()) {
+                    Text(disclosure.noAdditionalSourceExplanation, color = BodyText, style = MaterialTheme.typography.bodyMedium)
+                } else disclosure.sources.forEach { source ->
+                    AnswerContextSourceRow(source)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("知道了") } },
+        containerColor = ForegroundSurface,
+    )
+}
+
+@Composable
+private fun AnswerContextSourceRow(source: AnswerContextSourceDisclosure) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text("${source.kind} · ${source.title}", color = BodyText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Text(source.whyUsed, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -7193,6 +7265,13 @@ private fun rememberFilePreviewChromeState(previewId: String, autoHide: Boolean 
 private fun Modifier.toggleFilePreviewChrome(previewId: String, onToggle: () -> Unit): Modifier =
     pointerInput(previewId, onToggle) { detectTapGestures(onTap = { onToggle() }) }
 
+/** File viewer chrome must follow its host surface instead of inheriting a light-preview default. */
+private fun isDarkFilePreviewSurface(surface: Color = ForegroundSurface): Boolean = surface.red < 0.5f
+
+/** A document canvas is neutral in light mode and a distinct readable charcoal in dark mode. */
+private fun localFilePreviewCanvas(dark: Boolean): Color =
+    if (dark) Color(0xFF343837) else Color(0xFFF1F4F2)
+
 /** Preview actions share one compact top-right treatment across every local file format. */
 @Composable
 private fun FilePreviewTopActions(
@@ -7260,10 +7339,11 @@ private fun AudioPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShar
 private fun PdfPreviewDialog(preview: ConversationAttachmentPdfPreview, onOpenPage: (Int) -> Unit, onClose: () -> Unit) {
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
     val chrome = rememberFilePreviewChromeState(preview.id.value)
+    val darkFilePreview = isDarkFilePreviewSurface()
     val page = preview.page
     val bitmap = page?.image?.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(color = Color(0xFFF1F4F2), modifier = Modifier.fillMaxSize()) {
+        Surface(color = localFilePreviewCanvas(darkFilePreview), modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().toggleFilePreviewChrome(preview.id.value, chrome.toggle), contentAlignment = Alignment.Center) {
                     when {
@@ -7273,9 +7353,9 @@ private fun PdfPreviewDialog(preview: ConversationAttachmentPdfPreview, onOpenPa
                     }
                 }
                 if (chrome.visible) {
-                    PreviewCloseButton(dark = false, onClose = onClose, modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
+                    PreviewCloseButton(dark = darkFilePreview, onClose = onClose, modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
                     FilePreviewTopActions(
-                        dark = false,
+                        dark = darkFilePreview,
                         onDownload = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
                         onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
@@ -7295,6 +7375,34 @@ private fun PdfPreviewDialog(preview: ConversationAttachmentPdfPreview, onOpenPa
 
 /** The cache file is created from verified display bytes keyed by the owner ID; no source URI/path enters UI state. */
 @Composable
+private fun rememberLocalPlaybackFile(
+    id: AttachmentId,
+    extension: String,
+    bytes: ByteArray?,
+    open: (() -> java.io.InputStream)?,
+): java.io.File? {
+    val context = LocalContext.current
+    var localFile by remember(id.value) { mutableStateOf<java.io.File?>(null) }
+    LaunchedEffect(id.value, bytes?.size, open != null) {
+        localFile = withContext(Dispatchers.IO) {
+            runCatching {
+                java.io.File(context.cacheDir, "local-playback-${id.value}$extension").apply {
+                    outputStream().use { output ->
+                        when {
+                            bytes != null -> output.write(bytes)
+                            open != null -> open().use { input -> input.copyTo(output) }
+                            else -> error("missing local playback source")
+                        }
+                    }
+                }
+            }.getOrNull()
+        }
+    }
+    DisposableEffect(localFile) { onDispose { localFile?.delete() } }
+    return localFile
+}
+
+@Composable
 private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onClose: (Long) -> Unit) {
     val context = LocalContext.current
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
@@ -7307,9 +7415,7 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
     // Dragging the timeline previews a transient position. The actual VideoView is sought only
     // on release, so a finger move never turns into dozens of decoder seeks and dropped frames.
     var scrubPositionMillis by rememberSaveable(preview.id.value) { mutableStateOf<Long?>(null) }
-    val localFile = remember(preview.id.value, preview.bytes?.size) {
-        preview.bytes?.let { bytes -> java.io.File(context.cacheDir, "local-video-preview-${preview.id.value}.mp4").apply { outputStream().use { it.write(bytes) } } }
-    }
+    val localFile = rememberLocalPlaybackFile(preview.id, ".mp4", preview.bytes, preview.open)
     fun showControls() {
         chrome.show()
     }
@@ -7355,7 +7461,8 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
     Dialog(onDismissRequest = ::closeVideo, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(color = Color.Black, modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (preview.bytes == null || localFile == null) Text(preview.unavailableReason ?: "本地视频已损坏，无法播放。", color = Color.White)
+                if (preview.bytes == null && preview.open == null) Text(preview.unavailableReason ?: "本地视频已损坏，无法播放。", color = Color.White)
+                else if (localFile == null) Text("正在准备本地视频…", color = Color.White)
                 else AndroidView(
                     factory = { androidContext ->
                         VideoView(androidContext).also { view ->
@@ -7377,7 +7484,7 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
-                if (controlsVisible && preview.bytes != null && localFile != null) {
+                if (controlsVisible && localFile != null) {
                     VideoControlOverlay(
                         isPlaying = isPlaying,
                         positionMillis = scrubPositionMillis ?: positionMillis,
@@ -7388,7 +7495,7 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                 }
                 // The central control is part of the same temporary chrome as the timeline in
                 // both playback states: one tap opens/closes both, while this control toggles.
-                if (controlsVisible && preview.bytes != null && localFile != null) {
+                if (controlsVisible && localFile != null) {
                     VideoPlaybackOverlay(
                         isPlaying = isPlaying,
                         onToggle = ::togglePlayback,
@@ -7403,7 +7510,7 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
                     )
                 }
-                if (preview.bytes != null && localFile != null) {
+                if (localFile != null) {
                     AndroidView(
                         factory = { androidContext ->
                             val density = androidContext.resources.displayMetrics.density
@@ -7591,9 +7698,7 @@ private fun AudioPreviewDialog(preview: ConversationAttachmentAudioPreview, onCl
     var positionMillis by remember(preview.id.value) { mutableStateOf(preview.positionMillis) }
     var scrubPositionMillis by remember(preview.id.value) { mutableStateOf<Long?>(null) }
     var playbackError by remember(preview.id.value) { mutableStateOf<String?>(null) }
-    val localFile = remember(preview.id.value, preview.bytes?.size) {
-        preview.bytes?.let { bytes -> java.io.File(context.cacheDir, "local-audio-preview-${preview.id.value}.bin").apply { outputStream().use { it.write(bytes) } } }
-    }
+    val localFile = rememberLocalPlaybackFile(preview.id, ".bin", preview.bytes, preview.open)
     fun position(): Long = scrubPositionMillis ?: player?.currentPosition?.toLong()?.takeIf { it >= 0L } ?: positionMillis
     fun togglePlayback() {
         val active = player ?: return
@@ -7675,8 +7780,10 @@ private fun AudioPreviewDialog(preview: ConversationAttachmentAudioPreview, onCl
                         )
                     }
                 }
-                if (preview.bytes == null || localFile == null) {
+                if (preview.bytes == null && preview.open == null) {
                     Text(preview.unavailableReason ?: "本地音频无法播放。", color = SecondaryText)
+                } else if (localFile == null) {
+                    Text("正在准备本地音频…", color = SecondaryText)
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Surface(color = if (darkAudioPreview) Color(0xFF2A3438) else Color(0xFF183551), contentColor = Color.White, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
@@ -7718,6 +7825,7 @@ private fun AudioPreviewDialog(preview: ConversationAttachmentAudioPreview, onCl
 private fun TextPreviewDialog(preview: ConversationAttachmentTextPreview, onClose: () -> Unit) {
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
     val chrome = rememberFilePreviewChromeState(preview.id.value)
+    val darkTextPreview = isDarkFilePreviewSurface()
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(color = ForegroundSurface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxSize().padding(18.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -7725,11 +7833,11 @@ private fun TextPreviewDialog(preview: ConversationAttachmentTextPreview, onClos
                     Text("本地安全文本预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     if (chrome.visible) {
                         FilePreviewTopActions(
-                            dark = false,
+                            dark = darkTextPreview,
                             onDownload = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
                             onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
                         )
-                        PreviewCloseButton(dark = false, onClose = onClose)
+                        PreviewCloseButton(dark = darkTextPreview, onClose = onClose)
                     }
                 }
                 if (preview.text == null) Text(preview.unavailableReason ?: "本地文本不可用。", color = SecondaryText, modifier = Modifier.toggleFilePreviewChrome(preview.id.value, chrome.toggle))
@@ -7737,7 +7845,7 @@ private fun TextPreviewDialog(preview: ConversationAttachmentTextPreview, onClos
                     Column(Modifier.toggleFilePreviewChrome(preview.id.value, chrome.toggle), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("${preview.displayName ?: "未命名文件"} · ${preview.mimeType} · ${formatAttachmentBytes(preview.byteCount)}", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
                         if (preview.truncated) Text("仅显示前 128 KiB；原文件未执行或外发。", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-                        SelectionContainer { Text(preview.text, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF1F4F2)).padding(12.dp)) }
+                        SelectionContainer { Text(preview.text, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).clip(RoundedCornerShape(12.dp)).background(localFilePreviewCanvas(darkTextPreview)).padding(12.dp)) }
                         Text("内容按 inert UTF-8 纯文本显示；不会渲染 HTML、执行链接、脚本或 Markdown 指令。", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
                     }
                 }
@@ -7885,7 +7993,7 @@ private suspend fun performAttachmentTransfer(context: android.content.Context, 
             val uri = withContext(Dispatchers.IO) {
                 val directory = java.io.File(context.cacheDir, "shared_attachments").apply { mkdirs() }
                 val file = java.io.File(directory, "${request.id.value}-${attachmentTransferFileName(request)}")
-                file.outputStream().use { it.write(request.bytes) }
+                request.open().use { input -> file.outputStream().use(input::copyTo) }
                 FileProvider.getUriForFile(context, "${context.packageName}.attachment-share", file)
             }
             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
@@ -7925,7 +8033,9 @@ private fun saveAttachmentToUserCollection(context: android.content.Context, ite
     val resolver = context.contentResolver
     val uri = resolver.insert(collection, values) ?: error("无法创建保存文件")
     try {
-        resolver.openOutputStream(uri, "wt")?.use { it.write(item.bytes) } ?: error("无法写入下载文件")
+        val written = resolver.openOutputStream(uri, "wt")?.use { output -> item.open().use { input -> input.copyTo(output) } }
+            ?: error("无法写入下载文件")
+        check(written == item.byteCount) { "下载文件长度校验失败" }
         // DATE_TAKEN is read-only: MediaStore extracts it from the downloaded image's EXIF.
         // Stamp the new copy before publishing so gallery timelines sort by this download,
         // not by the original upload/capture date embedded in its bytes.
@@ -7933,7 +8043,7 @@ private fun saveAttachmentToUserCollection(context: android.content.Context, ite
             stampDownloadedImageTakenAt(resolver, uri, downloadedAtMillis)
         }
         if (item.mimeType == "video/mp4") {
-            remuxDownloadedMp4(context, resolver, uri, item.bytes)
+            remuxDownloadedMp4(context, resolver, uri, item.open)
         }
         resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
         return uri
@@ -7974,11 +8084,11 @@ private fun remuxDownloadedMp4(
     context: android.content.Context,
     resolver: android.content.ContentResolver,
     destination: Uri,
-    sourceBytes: ByteArray,
+    sourceOpen: () -> java.io.InputStream,
 ) {
     val source = java.io.File.createTempFile("nanfeng-ai-download-", ".mp4", context.cacheDir)
     try {
-        source.outputStream().use { it.write(sourceBytes) }
+        sourceOpen().use { input -> source.outputStream().use(input::copyTo) }
         resolver.openFileDescriptor(destination, "rw")?.use { output ->
             val extractor = android.media.MediaExtractor()
             val muxer = android.media.MediaMuxer(

@@ -27,4 +27,18 @@ class P6F2EAudioAndTextPreviewUiContractsTest {
         assertTrue("audio opening notice must match autoplay", viewModel.contains("正在打开本地音频并自动播放。"))
         assertTrue("stale tap-to-play notice must be gone", !viewModel.contains("点击播放才会开始。"))
     }
+
+    @Test fun `text and PDF previews derive chrome and canvases from the active dark surface`() {
+        val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val pdf = source.substring(source.indexOf("private fun PdfPreviewDialog"), source.indexOf("private fun VideoPreviewDialog"))
+        val text = source.substring(source.indexOf("private fun TextPreviewDialog"), source.indexOf("private fun formatVideoDuration"))
+        for (viewer in listOf(pdf, text)) {
+            assertTrue(viewer.contains("isDarkFilePreviewSurface()"))
+            assertTrue(viewer.contains("localFilePreviewCanvas("))
+            assertTrue(viewer.contains("PreviewCloseButton(dark = dark"))
+        }
+        assertTrue(text.contains("FilePreviewTopActions(\n                            dark = darkTextPreview"))
+        assertTrue(!text.contains("dark = false"))
+        assertTrue(!text.contains("background(Color(0xFFF1F4F2))"))
+    }
 }

@@ -129,6 +129,18 @@ class AndroidPrivacyDataManager(
         PrivacyAggregate("knowledge_relations", count("knowledge_relationships")), PrivacyAggregate("markdown_tasks", count("markdown_import_tasks")),
         PrivacyAggregate("json_tasks", count("json_knowledge_import_tasks")), PrivacyAggregate("pdf_tasks", count("pdf_text_import_tasks")),
         PrivacyAggregate("web_tasks", count("web_text_snapshot_tasks")), PrivacyAggregate("offline_eval_runs", count("offline_eval_runs")),
+        // Import facts are shown separately from the total conversation count.  They are aggregate
+        // provenance/task facts only: no title, body, filename, source id, or archive size enters
+        // the privacy overview.
+        PrivacyAggregate("chatgpt_json_import_batches", count("chatgpt_export_import_tasks")),
+        PrivacyAggregate("chatgpt_json_imported_conversations", count("chatgpt_import_provenance")),
+        PrivacyAggregate("claude_json_import_batches", count("claude_export_import_tasks")),
+        PrivacyAggregate("claude_json_imported_conversations", count("claude_import_provenance")),
+        PrivacyAggregate("zip_import_batches", count("p6k_zip_import_tasks")),
+        PrivacyAggregate("zip_imported_conversations", count("p6k_zip_import_provenance")),
+        PrivacyAggregate("zip_pending_media", countWhere("p6k_zip_asset_candidates", "attachmentId IS NULL")),
+        PrivacyAggregate("zip_imported_profile_fields", sum("p6k_zip_profile_candidates", "mappedFieldCount")),
+        fileAggregate("zip_archives", "p6k-zip-import/v1/archives"),
         fileAggregate("private_assets", "attachments/v1") + fileAggregate("markdown_assets", "markdown-import-assets/v1") +
             fileAggregate("json_assets", "json-knowledge-import-assets/v1") + fileAggregate("pdf_assets", "pdf-text-import-assets/v1") + fileAggregate("web_assets", "web-text-snapshots/v1"),
     )
@@ -230,6 +242,7 @@ class AndroidPrivacyDataManager(
     private fun failedTaskAggregates() = listOf("markdown_import_tasks", "json_knowledge_import_tasks", "pdf_text_import_tasks", "web_text_snapshot_tasks").map { PrivacyAggregate("failed_$it", countWhere(it, "status IN ('FAILED','CANCELLED')")) }
     private fun count(table: String) = db.query("SELECT COUNT(*) FROM $table").use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
     private fun countWhere(table: String, condition: String) = db.query("SELECT COUNT(*) FROM $table WHERE $condition").use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
+    private fun sum(table: String, column: String) = db.query("SELECT COALESCE(SUM($column), 0) FROM $table").use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
     private fun fileAggregate(key: String, relative: String): PrivacyAggregate {
         val root = safeRoot(relative) ?: return PrivacyAggregate(key, 0, 0)
         val files = root.walkTopDown().filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }.toList()
@@ -273,7 +286,7 @@ class AndroidPrivacyDataManager(
     private fun restoreStaged(moved: List<Pair<File, File>>) = moved.asReversed().forEach { (source, staged) -> if (staged.exists() && !source.exists()) runCatching { source.parentFile?.mkdirs(); Files.move(staged.toPath(), source.toPath(), StandardCopyOption.ATOMIC_MOVE) } }
     private fun safeRoot(relative: String): File? = File(filesRoot, relative).canonicalFile.takeIf { it.path.startsWith(filesRoot.path + File.separator) }
     private fun knownRoots() = listOf(
-        "attachments/v1", "markdown-import-assets/v1", "json-knowledge-import-assets/v1", "pdf-text-import-assets/v1", "web-text-snapshots/v1",
+        "attachments/v1", "markdown-import-assets/v1", "json-knowledge-import-assets/v1", "pdf-text-import-assets/v1", "web-text-snapshots/v1", "p6k-zip-import/v1",
         "exports", "model-registry", "p2m-real-service-tokens", "p2m-real-service-evidence",
         // Bounded diagnostics/metadata are local business data too.  They contain no bodies or
         // credentials, but a full local-data clear must not leave their titles or model choices.

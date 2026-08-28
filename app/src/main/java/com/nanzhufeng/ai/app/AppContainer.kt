@@ -89,6 +89,7 @@ import com.nanzhufeng.ai.data.local.NanfengAiDatabase
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportTaskRepository
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportCommitStore
 import com.nanzhufeng.ai.data.local.RoomP6KZipManualAssetLinkOwner
+import com.nanzhufeng.ai.data.local.RoomP6KZipMappedAssetLinkOwner
 import com.nanzhufeng.ai.data.local.RoomP6KProfilePersonalizationSettingsOwner
 import com.nanzhufeng.ai.data.local.RoomCaptureDraftRepository
 import com.nanzhufeng.ai.data.local.RoomKnowledgeRepository
@@ -300,6 +301,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_51_52,
         NanfengAiDatabase.MIGRATION_52_53,
         NanfengAiDatabase.MIGRATION_53_54,
+        NanfengAiDatabase.MIGRATION_54_55,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
@@ -344,8 +346,9 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     )
     private val p6kZipCommitStore = RoomP6KZipImportCommitStore(database, conversationRepository)
     private val p6kZipManualAssetLinkOwner = RoomP6KZipManualAssetLinkOwner(database, conversationRepository)
+    private val p6kZipMappedAssetLinkOwner = RoomP6KZipMappedAssetLinkOwner(database, conversationRepository)
     private val manageP6KChatGptZipImport = com.nanzhufeng.ai.domain.ManageP6KChatGptZipImportUseCase(p6kZipImportTasks, p6kZipCommitStore, clock)
-    val p6kZipIntakeStore = AndroidP6KZipIntakeStore(context, p6kZipImportTasks, manageP6KChatGptZipImport, p6kProfilePersonalizationSettings, p6kZipManualAssetLinkOwner, privateAttachmentStore, conversationRepository, clock)
+    val p6kZipIntakeStore = AndroidP6KZipIntakeStore(context, p6kZipImportTasks, manageP6KChatGptZipImport, p6kProfilePersonalizationSettings, p6kZipManualAssetLinkOwner, p6kZipMappedAssetLinkOwner, privateAttachmentStore, conversationRepository, clock)
     private val chatGptConversationCommitStore = RoomChatGptImportCommitStore(database, conversationRepository)
     private val claudeConversationCommitStore = RoomClaudeImportCommitStore(database, conversationRepository)
     private val nanfengKnowledgeConversationCommitStore = RoomNanfengKnowledgeImportCommitStore(database, conversationRepository)

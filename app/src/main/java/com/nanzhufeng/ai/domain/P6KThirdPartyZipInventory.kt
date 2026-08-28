@@ -7,12 +7,15 @@ import java.util.UUID
 import java.util.zip.ZipFile
 
 /** K0 only inventories an already private ZIP. It never extracts an entry or parses provider data. */
-const val P6K_ZIP_MAX_ARCHIVE_BYTES = 2L * 1024 * 1024 * 1024
+// The user-provided 2026-08 ChatGPT export is 4,905,893,691 B compressed and
+// 5,174,074,477 B uncompressed.  Six GiB preserves a hard ceiling while admitting
+// that real official cumulative export without relaxing per-entry/bomb guards.
+const val P6K_ZIP_MAX_ARCHIVE_BYTES = 6L * 1024 * 1024 * 1024
 const val P6K_ZIP_MAX_ENTRIES = 5_000
 // Verified ChatGPT export media includes a 246,982,191-byte entry.  The cap is
 // deliberately just above that evidence; entries are still streamed, never extracted.
 const val P6K_ZIP_MAX_ENTRY_BYTES = 256L * 1024 * 1024
-const val P6K_ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES = 4L * 1024 * 1024 * 1024
+const val P6K_ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES = 6L * 1024 * 1024 * 1024
 const val P6K_ZIP_MAX_COMPRESSION_RATIO = 100L
 
 enum class ThirdPartyZipProvider { CHATGPT, CLAUDE }
@@ -69,7 +72,7 @@ enum class P6KZipTaskStatus { WAITING_FORMAT_EVIDENCE, PARSING, AWAITING_CONFIRM
 enum class P6KZipItemStatus { PENDING_CONFIRMATION, CONFIRMED, SKIPPED, FAILED }
 enum class P6KZipCandidateFailure { UNKNOWN_MANIFEST_SCHEMA, MISSING_CONVERSATIONS_JSON, CHATGPT_CONVERSATIONS_NOT_STRICT, CLAUDE_CONVERSATIONS_NOT_STRICT, MISSING_PRIVATE_ARCHIVE, INTERRUPTED, NOT_ZIP, TOO_LARGE, PRIVATE_COPY_FAILED, INVENTORY_REJECTED, CONFLICT_REIMPORT, COMMIT_FAILED }
 /** A ZIP asset remains rejected until the user explicitly associates this exact candidate with one imported message. */
-enum class P6KZipAssetRole { UNMAPPED_REJECTED, MANUAL_LINKED, MANUAL_LINK_FAILED }
+enum class P6KZipAssetRole { UNMAPPED_REJECTED, SOURCE_MAPPED, MANUAL_LINKED, MANUAL_LINK_FAILED }
 
 @JvmInline value class P6KZipTaskId(val value: String) { companion object { fun new() = P6KZipTaskId(UUID.randomUUID().toString()) } }
 @JvmInline value class P6KZipItemId(val value: String) { companion object { fun new() = P6KZipItemId(UUID.randomUUID().toString()) } }
@@ -86,6 +89,57 @@ data class P6KZipAssetCandidate(
     val attachmentId: String? = null,
     val failure: String? = null,
 )
+
+/**
+ * Official ChatGPT ZIP attachment ownership.  Only the current exported path is projected because
+ * it is the same branch that Conversation imports and renders.  The adapter keeps provider IDs and
+ * private entry names behind the import boundary; UI receives only the resulting normal attachment.
+ */
+data class P6KZipSourceMessageAssets(
+    val sourceMessageId: String,
+    val parentSourceMessageId: String?,
+    val role: MessageRole,
+    val createdAt: Instant,
+    val hasSafeText: Boolean,
+    val entryNames: List<String>,
+)
+
+data class P6KZipSourceConversationAssets(
+    val sourceConversationId: String,
+    val currentPath: List<P6KZipSourceMessageAssets>,
+)
+
+data class P6KZipMappedAsset(
+    val candidate: P6KZipAssetCandidate,
+    val displayName: String,
+)
+
+data class P6KZipAssetMapping(
+    val conversations: List<P6KZipSourceConversationAssets>,
+    val assets: Map<String, P6KZipMappedAsset>,
+)
+
+data class P6KZipMappedAssetLinkSummary(
+    val linkedAssetCount: Int,
+    val createdMessageCount: Int,
+    val unresolvedAssetCount: Int,
+    val failedConversationCount: Int = 0,
+)
+
+/** Room is the only owner allowed to make an official source mapping visible in Message Tree. */
+interface P6KZipMappedAssetLinkOwner {
+    fun reconcile(
+        task: P6KZipImportTask,
+        mapping: P6KZipAssetMapping,
+        privateAssets: Map<String, AttachmentReference>,
+        at: Instant,
+    ): P6KZipMappedAssetLinkSummary
+}
+
+sealed interface P6KZipAssetMappingResult {
+    data class Mapped(val value: P6KZipAssetMapping) : P6KZipAssetMappingResult
+    data object Rejected : P6KZipAssetMappingResult
+}
 
 /** Settings receives no message body: only a user-pickable imported-message target. */
 data class P6KZipManualLinkTarget(
@@ -134,7 +188,13 @@ interface P6KZipImportTaskRepository {
     fun delete(id: P6KZipTaskId)
 }
 
-sealed interface P6KZipCommitResult { data class Created(val conversationId: ConversationId) : P6KZipCommitResult; data class Replayed(val conversationId: ConversationId) : P6KZipCommitResult; data object ConflictReimport : P6KZipCommitResult; data object Failed : P6KZipCommitResult }
+sealed interface P6KZipCommitResult {
+    data class Created(val conversationId: ConversationId) : P6KZipCommitResult
+    data class Replayed(val conversationId: ConversationId) : P6KZipCommitResult
+    data class Merged(val conversationId: ConversationId, val appendedMessageCount: Int) : P6KZipCommitResult
+    data object ConflictReimport : P6KZipCommitResult
+    data object Failed : P6KZipCommitResult
+}
 interface P6KZipImportCommitStore {
     fun confirm(task: P6KZipImportTask, item: P6KZipImportItem, importedAt: Instant): P6KZipCommitResult
     fun skip(task: P6KZipImportTask, item: P6KZipImportItem, at: Instant): Boolean
@@ -188,6 +248,164 @@ sealed interface P6KChatGptZipMappingResult {
     data class Mapped(val formatVersion: String, val items: List<P6KZipImportItem>, val assets: List<P6KZipAssetCandidate>, val profile: P6KImportedProfileCandidate = P6KImportedProfileCandidate()) : P6KChatGptZipMappingResult
     data class Waiting(val failure: P6KZipCandidateFailure) : P6KChatGptZipMappingResult
     data class Rejected(val failure: P6KZipCandidateFailure) : P6KChatGptZipMappingResult
+}
+
+/**
+ * Reads only OpenAI's explicit attachment ownership fields. A ZIP entry that is merely present
+ * remains unmapped; filenames, timestamps and neighbouring messages are never used to guess it.
+ */
+class P6KChatGptZipAssetMapper {
+    fun map(archive: File, candidates: List<P6KZipAssetCandidate>): P6KZipAssetMappingResult = try {
+        val candidateByEntry = candidates.associateBy(P6KZipAssetCandidate::entryName)
+        ZipFile(archive).use { zip ->
+            val names = readDisplayNames(zip)
+            val ownership = linkedMapOf<String, Pair<String, String>>()
+            val conversations = zip.entries().asSequence()
+                .filter { !it.isDirectory && P6K_CHATGPT_NUMBERED_CONVERSATIONS.matches(it.name) }
+                .sortedBy { it.name }
+                .flatMap { entry ->
+                    val bytes = zip.getInputStream(entry).use { it.readBounded(CHATGPT_EXPORT_MAX_BYTES) }
+                    parseConversationAssets(bytes, candidateByEntry, ownership).asSequence()
+                }
+                .toList()
+            val assets = ownership.mapValues { (entryName, owner) ->
+                val candidate = requireNotNull(candidateByEntry[entryName])
+                val displayName = safeDisplayName(names[entryName], entryName, candidate.mimeType)
+                val mimeType = inferMime(displayName, candidate.mimeType) {
+                    zip.getInputStream(requireNotNull(zip.getEntry(entryName))).use { it.readPrefix(64) }
+                }
+                P6KZipMappedAsset(
+                    candidate.copy(mimeType = mimeType, sourceConversationId = owner.first, sourceMessageId = owner.second),
+                    displayName,
+                )
+            }
+            P6KZipAssetMappingResult.Mapped(P6KZipAssetMapping(conversations, assets))
+        }
+    } catch (_: Exception) {
+        P6KZipAssetMappingResult.Rejected
+    }
+
+    private fun readDisplayNames(zip: ZipFile): Map<String, String> {
+        val entry = zip.getEntry(ASSET_NAMES_ENTRY) ?: return emptyMap()
+        val root = StrictJsonDocument.parseUtf8(
+            zip.getInputStream(entry).use { it.readBounded(ASSET_NAMES_MAX_BYTES) },
+            maxDepth = 4,
+            maxStringCodePoints = 512,
+        ) as? StrictJsonValue.Obj ?: return emptyMap()
+        return root.fields.mapNotNull { (entryName, value) ->
+            val displayName = (value as? StrictJsonValue.Str)?.value ?: return@mapNotNull null
+            entryName.takeIf(::safeEntryName)?.let { it to displayName }
+        }.toMap()
+    }
+
+    private fun parseConversationAssets(
+        bytes: ByteArray,
+        candidates: Map<String, P6KZipAssetCandidate>,
+        ownership: MutableMap<String, Pair<String, String>>,
+    ): List<P6KZipSourceConversationAssets> {
+        val root = StrictJsonDocument.parseUtf8(bytes, CHATGPT_EXPORT_MAX_DEPTH, CHATGPT_EXPORT_MAX_TEXT_CODE_POINTS) as? StrictJsonValue.Arr
+            ?: return emptyList()
+        return root.values.mapNotNull { raw ->
+            val conversation = raw as? StrictJsonValue.Obj ?: return@mapNotNull null
+            val conversationId = conversation.string("id") ?: conversation.string("conversation_id") ?: return@mapNotNull null
+            if (!safeSourceId(conversationId)) return@mapNotNull null
+            val fallbackTime = conversation.timestamp("create_time") ?: Instant.EPOCH
+            val mapping = conversation.obj("mapping") ?: return@mapNotNull null
+            val path = mutableListOf<Pair<String, StrictJsonValue.Obj>>()
+            val seen = mutableSetOf<String>()
+            var sourceId: String? = conversation.string("current_node") ?: return@mapNotNull null
+            while (sourceId != null && seen.add(sourceId)) {
+                val node = mapping.fields[sourceId] as? StrictJsonValue.Obj ?: break
+                path += sourceId to node
+                sourceId = node.string("parent")
+            }
+            val messages = path.asReversed().mapNotNull { (messageId, node) ->
+                if (!safeSourceId(messageId)) return@mapNotNull null
+                val message = node.obj("message") ?: return@mapNotNull null
+                val role = when (message.obj("author")?.string("role")) {
+                    "user" -> MessageRole.USER
+                    "assistant" -> MessageRole.ASSISTANT
+                    "tool" -> MessageRole.TOOL
+                    else -> return@mapNotNull null
+                }
+                val parts = message.obj("content")?.array("parts").orEmpty()
+                val hasText = parts.filterIsInstance<StrictJsonValue.Str>().any { it.value.isNotBlank() }
+                val metadataPointers = message.obj("metadata")?.array("attachments").orEmpty().mapNotNull { value ->
+                    val attachment = value as? StrictJsonValue.Obj ?: return@mapNotNull null
+                    attachment.string("id") ?: attachment.string("name")
+                }
+                val contentPointers = parts.filterIsInstance<StrictJsonValue.Obj>().flatMap { part ->
+                    listOfNotNull(part.string("asset_pointer"), part.obj("audio_asset_pointer")?.string("asset_pointer"))
+                }
+                val entryNames = (metadataPointers + contentPointers).mapNotNull(::entryNameForPointer)
+                    .filter(candidates::containsKey).distinct()
+                entryNames.forEach { entryName ->
+                    val owner = conversationId to messageId
+                    // Official exports can reference the same file ID from more than one message.
+                    // Keep one deterministic metadata owner while currentPath retains every exact
+                    // source occurrence, allowing the normal renderer to show the shared asset in
+                    // each message without cloning its bytes or guessing ownership.
+                    ownership.putIfAbsent(entryName, owner)
+                }
+                if (!hasText && entryNames.isEmpty()) return@mapNotNull null
+                P6KZipSourceMessageAssets(messageId, node.string("parent"), role, message.timestamp("create_time") ?: fallbackTime, hasText, entryNames)
+            }
+            P6KZipSourceConversationAssets(conversationId, messages)
+        }
+    }
+
+    private fun entryNameForPointer(pointer: String): String? {
+        val id = pointer.removePrefix("file-service://").removePrefix("sediment://").removeSuffix(".dat")
+        return "$id.dat".takeIf(::safeEntryName)
+    }
+
+    private fun StrictJsonValue.Obj.string(key: String) = (fields[key] as? StrictJsonValue.Str)?.value
+    private fun StrictJsonValue.Obj.obj(key: String) = fields[key] as? StrictJsonValue.Obj
+    private fun StrictJsonValue.Obj.array(key: String) = (fields[key] as? StrictJsonValue.Arr)?.values.orEmpty()
+    private fun StrictJsonValue.Obj.timestamp(key: String): Instant? = when (val value = fields[key]) {
+        is StrictJsonValue.Num -> value.lexical.toDoubleOrNull()
+        is StrictJsonValue.Str -> value.value.toDoubleOrNull()
+        else -> null
+    }?.takeIf { it.isFinite() && it >= 0.0 }?.let { Instant.ofEpochMilli((it * 1000.0).toLong()) }
+
+    private fun safeDisplayName(value: String?, entryName: String, mimeType: String): String {
+        val safe = value.orEmpty().substringAfterLast('/').substringAfterLast('\\').filterNot(Char::isISOControl).trim().take(160)
+        return safe.ifBlank { "ChatGPT 导入附件-${entryName.removeSuffix(".dat").takeLast(12)}${extensionFor(mimeType)}" }
+    }
+
+    private fun inferMime(displayName: String, candidateMimeType: String, header: () -> ByteArray): String {
+        val named = when (displayName.substringAfterLast('.', "").lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"; "png" -> "image/png"; "webp" -> "image/webp"
+            "mp4" -> "video/mp4"; "mp3" -> "audio/mpeg"; "wav" -> "audio/wav"; "m4a" -> "audio/mp4"
+            "pdf" -> "application/pdf"; "md", "markdown" -> "text/markdown"; "txt" -> "text/plain"
+            "json" -> "application/json"; "csv" -> "text/csv"; "docx" -> DOCX_MIME; "zip" -> "application/zip"
+            else -> null
+        }
+        if (named != null) return named
+        if (candidateMimeType != "application/octet-stream") return candidateMimeType
+        val bytes = header()
+        return when {
+            bytes.hasPrefix(byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) -> "image/png"
+            bytes.size >= 3 && bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte() && bytes[2] == 0xff.toByte() -> "image/jpeg"
+            bytes.size >= 12 && String(bytes, 4, 4, Charsets.US_ASCII) == "ftyp" -> "video/mp4"
+            bytes.size >= 5 && String(bytes, 0, 5, Charsets.US_ASCII) == "%PDF-" -> "application/pdf"
+            else -> "application/octet-stream"
+        }
+    }
+
+    private fun ByteArray.hasPrefix(prefix: ByteArray) = size >= prefix.size && copyOfRange(0, prefix.size).contentEquals(prefix)
+    private fun extensionFor(mimeType: String) = when (mimeType) {
+        "image/jpeg" -> ".jpg"; "image/png" -> ".png"; "video/mp4" -> ".mp4"
+        "audio/mpeg" -> ".mp3"; "application/pdf" -> ".pdf"; else -> ".dat"
+    }
+    private fun safeEntryName(value: String) = value.matches(Regex("[A-Za-z0-9._-]{1,240}"))
+    private fun safeSourceId(value: String) = value.matches(Regex("[A-Za-z0-9._:-]{1,200}"))
+
+    private companion object {
+        const val ASSET_NAMES_ENTRY = "conversation_asset_file_names.json"
+        const val ASSET_NAMES_MAX_BYTES = 2L * 1024L * 1024L
+        const val DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
 }
 
 /** Streaming-only candidate mapper: it never extracts an entry, writes business data, or parses profile data. */
@@ -259,6 +477,18 @@ private val P6K_CHATGPT_NUMBERED_CONVERSATIONS = Regex("^conversations(?:[-_]\\d
 private fun java.io.InputStream.readBounded(limit: Long): ByteArray {
     val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8 * 1024); var total = 0L
     while (true) { val count = read(buffer); if (count < 0) break; total += count; require(total <= limit); output.write(buffer, 0, count) }
+    return output.toByteArray()
+}
+private fun java.io.InputStream.readPrefix(limit: Int): ByteArray {
+    require(limit >= 0)
+    val output = java.io.ByteArrayOutputStream(limit)
+    val buffer = ByteArray(minOf(8 * 1024, maxOf(limit, 1)))
+    while (output.size() < limit) {
+        val count = read(buffer, 0, minOf(buffer.size, limit - output.size()))
+        if (count < 0) break
+        if (count == 0) continue
+        output.write(buffer, 0, count)
+    }
     return output.toByteArray()
 }
 private fun java.io.InputStream.sha256Bounded(limit: Long): String {

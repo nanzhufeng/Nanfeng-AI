@@ -14,6 +14,20 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P6KZipCommitMigrationContractsTest {
+    @Test fun `schema fifty four to fifty five appends source message provenance without rewriting prior import tables`() {
+        val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-message-provenance-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(54) {
+            override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) = Unit
+            override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build())
+        val sqlite = helper.writableDatabase; NanfengAiDatabase.MIGRATION_54_55.migrate(sqlite)
+        sqlite.execSQL("INSERT INTO p6k_zip_import_message_provenance(conversationId,sourceMessageId,messageId,contentHash) VALUES ('conversation','source','message','hash')")
+        sqlite.query("SELECT conversationId, sourceMessageId, messageId, contentHash FROM p6k_zip_import_message_provenance").use {
+            assertTrue(it.moveToFirst()); assertEquals("conversation", it.getString(0)); assertEquals("source", it.getString(1)); assertEquals("message", it.getString(2)); assertEquals("hash", it.getString(3))
+        }
+        helper.close(); context.deleteDatabase(name)
+    }
+
     @Test fun `schema thirty four to thirty five preserves ZIP candidates and appends only decision ledger fields`() {
         val context = ApplicationProvider.getApplicationContext<Context>(); val name = "p6k-k2-migration-${UUID.randomUUID()}.db"; context.deleteDatabase(name)
         val helper = FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(34) {

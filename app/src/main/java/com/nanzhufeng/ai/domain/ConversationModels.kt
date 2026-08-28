@@ -173,8 +173,8 @@ data class ConversationAttachmentReference(
     val schemaVersion: Int = 1,
 ) {
     init {
-        require(mimeType in CONVERSATION_ALLOWED_MIME_TYPES) { "对话附件类型不受支持。" }
-        require(byteCount in 1..CONVERSATION_ATTACHMENT_MAX_BYTES) { "对话附件大小不受支持。" }
+        require(mimeType in CONVERSATION_PERSISTED_MIME_TYPES) { "对话附件类型不受支持。" }
+        require(byteCount in 1..CONVERSATION_PERSISTED_ATTACHMENT_MAX_BYTES) { "对话附件大小不受支持。" }
         require(sha256.matches(Regex("[0-9a-f]{64}"))) { "对话附件缺少完整性摘要。" }
         require(displayName?.contains("content://") != true && displayName?.startsWith('/') != true) { "附件显示名不能包含路径。" }
     }
@@ -191,6 +191,7 @@ fun AttachmentReference.toConversationReference(): ConversationAttachmentReferen
 const val CONVERSATION_ATTACHMENT_MAX_COUNT = 4
 const val CONVERSATION_ATTACHMENT_MAX_BYTES = 20L * 1024L * 1024L
 const val CONVERSATION_ATTACHMENT_MAX_TOTAL_BYTES = 40L * 1024L * 1024L
+const val CONVERSATION_PERSISTED_ATTACHMENT_MAX_BYTES = 256L * 1024L * 1024L
 const val CONVERSATION_ATTACHMENT_MAX_SOURCE_PIXELS = 40_000_000L
 val CONVERSATION_ALLOWED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/png", "image/webp")
 /** P6-F2-D is deliberately MP4-only: the platform decoders and magic gate stay small and auditable. */
@@ -202,6 +203,11 @@ val CONVERSATION_ALLOWED_DOCUMENT_MIME_TYPES = setOf(
     "application/pdf", "text/plain", "text/markdown", "application/json", "text/csv",
 )
 val CONVERSATION_ALLOWED_MIME_TYPES = CONVERSATION_ALLOWED_IMAGE_MIME_TYPES + CONVERSATION_ALLOWED_VIDEO_MIME_TYPES + CONVERSATION_ALLOWED_AUDIO_MIME_TYPES + CONVERSATION_ALLOWED_DOCUMENT_MIME_TYPES
+val CONVERSATION_PERSISTED_MIME_TYPES = CONVERSATION_ALLOWED_MIME_TYPES + setOf(
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/zip",
+    "application/octet-stream",
+)
 
 data class ConversationDraft(
     val text: String = "",
