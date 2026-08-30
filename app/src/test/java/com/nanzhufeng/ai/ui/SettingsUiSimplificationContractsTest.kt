@@ -141,8 +141,10 @@ class SettingsUiSimplificationContractsTest {
 
         for (screen in listOf(model, costs, privacy)) {
             assertTrue("settings status accent must use the dynamic theme token", screen.contains("AccentOrange"))
-            assertFalse("settings status accent must not retain the fixed green token", screen.contains("BrandGreen"))
         }
+        assertFalse("model status must not retain the fixed green token", model.contains("BrandGreen"))
+        assertFalse("privacy status must not retain the fixed green token", privacy.contains("BrandGreen"))
+        assertTrue("the OCR category may keep its semantic green icon tone", costs.contains("title = \"南枫转写\"") && costs.contains("tone = BrandGreen"))
         assertTrue(model.contains("统计对话、标题、历史与南枫转写的 Token 与金额"))
         assertTrue(costs.contains("会话标题整理"))
     }

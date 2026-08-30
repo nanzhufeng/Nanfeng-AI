@@ -4,6 +4,15 @@
 >
 > 本档案事实读取顺序：`AGENTS.md` → `c1c9ae0` 稳定源码／配置／测试 → [CURRENT_HANDOFF.md](CURRENT_HANDOFF.md) 顶部 → 三份当前合同 → 领域合同与历史证据。会话／搜索、设置、普通聊天上下文分别以 [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md) 为唯一正文；被排除任务完成后须另建增量更新，不能悄悄混入本次结论。
 
+> **2026-08-30 增量读取门：** 上述 `c1c9ae0` 章节仍是 2026-08-28 的冻结复盘，不改写。已完成的后续工作以本档案下方“2026-08-30 当前 checkpoint 增量”、[CURRENT_HANDOFF.md](CURRENT_HANDOFF.md) 顶部和三份当前合同为准；不用增量章节反向改写历史测试数字或设备证据。
+
+## 0A. 2026-08-30 当前 checkpoint 增量
+
+- **当前代码冻结：** 本地 checkpoint 为 `b7e1c2f` (`checkpoint(android): freeze integrated product baseline`)，包含从 `2fec04c` 之后已完成的 Android 主代码、Room Schema 61–63、新增测试与当前合同。该冻结是当前项目事实的新起点；本档案后续不重复展开已在当前合同和专项合同中已确定的页面文案与单次验收数字。
+- **增量范围：** 模型服务已扩展到 OpenRouter、DeepSeek、智谱与 Qwen 的统一设置／路由，附件经统一解析桥交给最终回答模型；南枫转写、导入附件、搜索、预览、调用账本和本机存储收敛到共享 owner；会话“待看”、选中对话云同步、标题／历史资料低成本路由和全模型文件材料组装已进入定向合同。精确行为仍只读取各当前合同与 `GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md`、`P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md` 等专项合同。
+- **最终自动证据：** 8 项随当前行为过期的静态／Room 合同已更新并定向全通过；全量 JVM 为 `1013 tests / 4 failures / 3 skipped`，比首次回归的 12 项失败减少 8 项，新增回归为 0。4 项保留失败是已有未完成基线：PDF renderer cache、统一 Dialog 遮罩、Dialog 内向边缘手势和设置画布；3 项 skip 仍是需要显式真实样本的 opt-in 门，不写为通过。`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过。
+- **产物与真机边界：** 重建候选为 code 66 / `0.3.0-p10j`、`27,984,644` bytes、SHA-256 `0dba16156f36e76a23fe52748ed0416c7126db1e3d6b207b896e24605a7adfe0`，非 Debug、v2/v3 正式证书为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。该重建包没有再次安装；OPPO 当前安装的仍是上一次同签名保数据覆盖并回读的 SHA-256 `4f4344e7f13764e6f1e32e9eeba981fd30174995a42a9dccaf330bda8efdf464`。构建成功不替代未完成的 4 项合同、opt-in 真实样本或新候选的再次真机覆盖。
+
 ## 0. 2026-08-28 稳定 checkpoint 增量
 
 - ChatGPT 累积 ZIP 已形成从严格预检、source-tree 去重合并、官方附件映射、Room Message Tree 挂载到普通搜索／预览链路的单一数据流。旧包→新包真实验收为 `784` 个去重对话；新包官方可归属附件完整 Room 验收为 `853/853`，两项都确认 `skipped=0, failures=0`。

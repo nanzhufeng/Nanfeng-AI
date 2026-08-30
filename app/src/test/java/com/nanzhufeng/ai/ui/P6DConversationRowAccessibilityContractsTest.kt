@@ -163,7 +163,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(drawer.contains("var revealedConversationId by remember"))
         assertTrue(drawer.contains("fun dismissRevealedConversation(): Boolean"))
         assertTrue(drawer.contains("enabled = revealedConversationId != null"))
-        assertTrue(drawer.contains("if (!dismissRevealedConversation()) onSelect(id)"))
+        assertTrue(drawer.contains("if (!dismissRevealedConversation()) { onClearWatchLater(id); onSelect(id) }"))
         assertTrue(drawer.contains("padding(start = 5.dp, end = 5.dp, top = 16.dp"))
         assertTrue(drawer.contains("verticalArrangement = Arrangement.spacedBy(8.dp)"))
         assertTrue(row.contains("else if (revealed) onRevealChanged(false)"))
@@ -334,10 +334,11 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `conversation menu is compact while workspace retains its complete local action set`() {
         val actionSheet = source.substring(source.indexOf("private fun ConversationActionSheet"), source.indexOf("private fun ConversationMenuAction"))
         for (token in listOf(
-            "workMode -> 10 + if (includeRename) 1 else 0",
-            "else -> 7 + if (includeRename) 1 else 0",
+            "workMode -> 11 + if (includeRename) 1 else 0",
+            "else -> 8 + if (includeRename) 1 else 0",
             "if (workMode) {",
             "ConversationMenuAction(Icons.Rounded.PushPin",
+            "ConversationMenuAction(Icons.Rounded.Visibility, \"待看\"",
             "ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove",
             "ConversationMenuAction(Icons.Rounded.AttachFile, \"已上传文件\"",
             "ConversationMenuAction(Icons.Rounded.CloudUpload, \"同步到南枫云\"",
@@ -435,7 +436,7 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `conversation action menu share owns current path Markdown without a duplicate export row`() {
         val conversationMenu = source.substring(source.indexOf("private fun ConversationActionSheet"), source.indexOf("private fun ConversationMenuAction"))
-        for (token in listOf("onShareConversation", "Icons.Rounded.Share", "\"分享\"", "else -> 7 + if (includeRename) 1 else 0")) {
+        for (token in listOf("onShareConversation", "Icons.Rounded.Share", "\"分享\"", "else -> 8 + if (includeRename) 1 else 0")) {
             assertTrue("missing conversation Markdown share action $token", conversationMenu.contains(token))
         }
         assertFalse(conversationMenu.contains("onExportConversationMarkdown"))
@@ -525,8 +526,8 @@ class P6DConversationRowAccessibilityContractsTest {
         assertFalse(drawer.contains("最近搜索"))
         assertTrue(page.contains("DialogProperties(usePlatformDefaultWidth = false"))
         assertTrue(page.contains("statusBarsPadding()"))
-        assertTrue(source.contains("attachmentSearchMonthGroups(hits)"))
-        assertTrue(source.contains("SearchAttachmentMonthHeading(group.label, group.hits.size)"))
+        assertTrue(source.contains("unifiedSearchAttachmentMonthGroups(state.attachmentSearchResults, state.glmOcrSearchResults)"))
+        assertTrue(source.contains("SearchAttachmentMonthHeading(group.label, group.entries.size)"))
         assertTrue(page.contains("ConversationSearchCategory.entries"))
         assertTrue(page.contains("val categoryShape = RoundedCornerShape(50)"))
         assertTrue(page.contains("onClick = { onSelectCategory(category) }"))
@@ -890,7 +891,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "unreadConversationIds = state.unreadConversationIds - id",
         )) assertTrue("missing unread watermark anchor $token", viewModel.contains(token))
         assertTrue("drawer must consume its state unread projection", source.contains("unread = notificationReminderSettings.unreadConversationIndicatorsEnabled && conversation.id in state.unreadConversationIds"))
-        for (token in listOf("if (unread)", "size(7.dp)", "background(AccentOrange)", "contentDescription = \"有未查看的新内容\"")) {
+        for (token in listOf("if (unread || watchLater)", "size(7.dp)", "background(AccentOrange)", "contentDescription = if (watchLater) \"待看对话\" else \"有未查看的新内容\"")) {
             assertTrue("missing unread marker rendering $token", row.contains(token))
         }
     }

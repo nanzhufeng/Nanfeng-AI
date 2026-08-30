@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
 import com.nanzhufeng.ai.data.local.P6KZipAssetOccurrenceEntity
 import com.nanzhufeng.ai.data.local.P6KZipAssetOccurrenceReceiptEntity
+import com.nanzhufeng.ai.data.local.P6KZipImportTaskEntity
 import com.nanzhufeng.ai.data.local.RoomPrivateAttachmentRepository
 import com.nanzhufeng.ai.domain.AttachmentId
 import com.nanzhufeng.ai.domain.AttachmentReference
@@ -33,7 +34,7 @@ class P6KZipSharedAssetCleanupContractsTest {
     fun tearDown() = database.close()
 
     @Test
-    fun `private bytes remain while any ZIP occurrence receipt references the attachment`() {
+    fun `private bytes remain only while an active ZIP task owns the occurrence receipt`() {
         val attachment = AttachmentReference(
             reference = "attachments/v1/${"a".repeat(64)}.png",
             mimeType = "image/png",
@@ -45,6 +46,19 @@ class P6KZipSharedAssetCleanupContractsTest {
         val repository = RoomPrivateAttachmentRepository(database)
         repository.save(attachment)
         val zipDao = database.p6kZipImportTaskDao()
+        val task = P6KZipImportTaskEntity(
+            id = "task",
+            provider = "CHATGPT",
+            displayName = "fixture.zip",
+            byteCount = 3L,
+            packageHash = "b".repeat(64),
+            status = "COMMITTING",
+            failure = null,
+            formatVersion = "fixture",
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 1L,
+        )
+        zipDao.upsertTask(task)
         zipDao.insertAssetOccurrence(P6KZipAssetOccurrenceEntity("task", "shared.dat", "source-conversation", "source-message"))
         zipDao.insertAssetOccurrenceReceipt(
             P6KZipAssetOccurrenceReceiptEntity(
@@ -56,8 +70,7 @@ class P6KZipSharedAssetCleanupContractsTest {
         assertNull(repository.removeIfUnreferenced(attachment.id))
         assertNotNull(repository.findById(attachment.id))
 
-        zipDao.deleteAssetOccurrenceReceiptsForTask("task")
-        zipDao.deleteAssetOccurrencesForTask("task")
+        zipDao.upsertTask(task.copy(status = "COMPLETED", updatedAtEpochMs = 2L))
         assertNotNull(repository.removeIfUnreferenced(attachment.id))
         assertNull(repository.findById(attachment.id))
     }

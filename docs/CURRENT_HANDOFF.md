@@ -2,6 +2,13 @@
 
 > **当前合同读取门（2026-08-27，优先于全文）：** 本文下方的**最新有效交接**与按时间累积的实现、设备与验收记录，只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
 
+## 2026-08-30：当前代码 checkpoint、最终回归与增量档案固化
+
+- **代码冻结：** 从 `2fec04c` 之后累积的 Android 主代码、Room Schema 61–63、模型／附件／转写／搜索／存储／对话交互、定向合同与项目文档共 `216` 个文件冻结为本地 checkpoint `b7e1c2f` (`checkpoint(android): freeze integrated product baseline`)。未夹带构建目录或强特征密钥，暂存前 `git diff --check` 通过。
+- **最终回归：** 首次全量 JVM 为 `1013 tests / 12 failures / 3 skipped`；其中 8 项是仍锁定旧行为的静态／Room 合同（完成 ZIP receipt、待看排序／圆点，菜单行数，统一搜索时间线，费用分类语义色），只更新合同后定向 `8/8` 通过。再次全量严格收敛为 `1013 tests / 4 failures / 3 skipped`，新增回归为 0；保留的 4 项仍是旧基线已记录的 PDF renderer cache、统一 Dialog 遮罩、Dialog 内向边缘手势和设置画布合同，本次按“已完成部分忽略”不扩张修复。
+- **Release 与设备边界：** `:app:lintVitalRelease` 与 `:app:assembleRelease` 通过。重建后的 code 66 / `0.3.0-p10j` 非 Debug 候选为 `app/build/outputs/apk/release/南枫AI.apk`，`27,984,644` bytes，SHA-256 `0dba16156f36e76a23fe52748ed0416c7126db1e3d6b207b896e24605a7adfe0`，v2/v3 证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。该候选因嵌入新 checkpoint 信息而与已安装 APK 字节不同，本次未再获得覆盖授权；OPPO 当前仍是上一次已验证并保数据覆盖的 SHA-256 `4f4344e7f13764e6f1e32e9eeba981fd30174995a42a9dccaf330bda8efdf464`。
+- **正式增量沉淀：** [完整开发档案](%E5%8D%97%E6%9E%ABAI%E5%AE%8C%E6%95%B4%E5%BC%80%E5%8F%91%E6%A1%A3%E6%A1%88.md) 只新增当前 checkpoint 摘要与读取边界，[可迁移开发经验](%E5%8F%AF%E8%BF%81%E7%A7%BB%E5%BC%80%E5%8F%91%E7%BB%8F%E9%AA%8C.md) 只补充三条本轮新结论，[决策日志](decision-log.md) 只固化“活动 owner + 当前物理字节”的存储统计口径；已完成的模块说明不再复制。本轮不直接修改长期记忆生成文件。
+
 ## 2026-08-30：OPPO 保数据覆盖（待看左侧圆点 Release）
 
 - **覆盖门禁：** 唯一在线设备为 OPPO PKH120 / Android 16 `3B157F009E800000`。候选与现装均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。覆盖前现装 APK 为 `27,984,638` bytes，SHA-256 `b19eef17db1efbc11bec2a14e08dbfae648daa294b8c4a2380cd89f5c794e72c`。
