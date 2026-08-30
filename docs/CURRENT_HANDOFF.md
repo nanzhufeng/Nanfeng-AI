@@ -2,6 +2,12 @@
 
 > **当前合同读取门（2026-08-27，优先于全文）：** 本文下方的**最新有效交接**与按时间累积的实现、设备与验收记录，只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
 
+## 2026-08-30：总控方案现行门提升
+
+- [总控开发蓝图](MASTER_DEVELOPMENT_BLUEPRINT.md) 已将唯一当前覆盖层提升到 2026-08-30，代码／文档 checkpoint 固定为 `b7e1c2f` 与 `1f7f356`，并把 2026-08-26 及更早“当前状态／下一入口”明确降为历史证据。
+- [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部已重建当前完成范围、验证边界、独立待验门和后续复查顺序；旧 `c1c9ae0`、Schema 56、819 项 JVM、旧 APK／OPPO 状态继续保留在 2026-08-28 历史门，不得返向覆盖当前 Schema 63 与最终回归。
+- 本次只修正文档权威层和冲突裁决，没有修改运行时代码、Schema、APK 或设备。后续先读 HEAD／工作树，再读总控门、本文顶部和受影响的一份现行合同；已完成范围只做防回退验证，不重复实现。
+
 ## 2026-08-30：当前代码 checkpoint、最终回归与增量档案固化
 
 - **代码冻结：** 从 `2fec04c` 之后累积的 Android 主代码、Room Schema 61–63、模型／附件／转写／搜索／存储／对话交互、定向合同与项目文档共 `216` 个文件冻结为本地 checkpoint `b7e1c2f` (`checkpoint(android): freeze integrated product baseline`)。未夹带构建目录或强特征密钥，暂存前 `git diff --check` 通过。

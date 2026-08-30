@@ -5,15 +5,23 @@
 > 2026-08-23 普通聊天与附件外发修订：用户选择附件、预览及草稿阶段只允许本机处理；用户点击“发送”即授权把该准确已提交草稿中的仍存附件或必要解析结果发送给界面明确显示的当前 Provider/模型。普通聊天不得再弹逐条确认、勾选或二次确认；切换 Provider 不得静默转发，删除的附件不得出站，附件不得进入日志、统计或无关第三方。本文早期“逐次外发确认”仅适用于历史结构化高风险 Task，不得套用到当前普通聊天。
 
 > 文档性质：全生命周期方向与阶段门禁的权威总图  
-> 当前版本：1.1
+> 当前版本：1.2
 > 基线日期：2026-08-12  
-> 最近一次计划收口：2026-08-26
+> 最近一次计划收口：2026-08-30
 
-> **2026-08-26 当前计划覆盖层（优先于本文所有旧阶段叙述）：** Android 的当前可见产品以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 与 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md) 为唯一正文；当前实现、构建、正式包与设备事实只读取 [当前交接](CURRENT_HANDOFF.md) 顶部和 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 的最新“当前总控门”。本文较早的“当前状态”、固定颜色、Dialog、设置入口、模型显示、功能审阅、数据导入或归档／回收站描述均是历史阶段记录，若冲突一律失效。
+> **2026-08-30 唯一当前总控门（优先于本文全部旧阶段与日期记录）：** 当前代码基线为 `b7e1c2f`，测试／文档收口为 `1f7f356`，Android Room 当前为 Schema 63。现行实现、回归、Release 和设备边界只读取 [当前交接](CURRENT_HANDOFF.md) 顶部；跨域完成范围、待验门和复查顺序只读取 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部“2026-08-30 当前总控门”。本蓝图只继续负责长期方向、依赖顺序和停止条件，不再用早期 P 阶段清单判断当前代码是否完成。
 
-> **当前产品收口范围：** 产品主线是“对话／工作双模式 + 连续会话 + 统一 Composer + 左侧会话管理 + 受控模型与联网 + 用户可控个性化／记忆 + 本地数据管理”。设置按“对话、应用与数据、工作区”组织；模型与联网、费用与用量、上下文记录、运行诊断各自分工；已归档与回收站独立管理；数据与存储区分对话导入和工作区导入／导出／备份。可见规则不再在阶段合同、交接或功能审阅入口重复维护。
+> **现行合同路由：** Android 会话／搜索／文件操作／主题读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)，设置读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)，普通聊天上下文读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)，模型选择与 Auto 读取 [P6-G 模型选择合同](P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md)，南枫转写读取 [GLM-OCR 当前合同](GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md)，ChatGPT／Claude ZIP 读取 [P6-K 导入合同](P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md)，费用读取 [AI 用量与费用合同](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)。历史截图、旧 APK、旧 Schema、旧测试数和旧“下一唯一入口”不得覆盖这些现行入口。
 
-> 当前状态：用户已于 2026-08-12 确认总方案；P1 至 P2-M 与 P3-A 至 P3-H 的本地基线已完成，P4-A/P4-B 完成 Projects 与 metadata-only Context 选择，P4-C 完成长时 Memory 的显式本地 CRUD、来源/scope、暂停、软删除、历史和确定性冲突治理（Schema 9→10），P4-D 完成 L0–L2 的逐次显式正文选择与瞬时本机预览（L3 仍未实现）。P4-B metadata snapshot 继续不读取 `memorySources`；P4-D 不构造 Prompt/RunSpec 或 egress。P3 的真实流、Usage/费用、长会话性能与图片外发仍按用户决策并行后置，未通过且不得由 Mock/loopback/模拟器替代；P2-M 的授权动作在 HTTP 前因占位凭据安全阻止；图标已按用户最终确认从连续白底原始母版重做为受控 1.50× 同源资产交付，当前 Finder/Dock 与 Android emulator Launcher 表面已记录，但 OPPO/最终硬件图标结论仍待后续授权。P6 的本地 Desktop 基线持续独立：对话与工作都以真实对话为默认右侧内容，工作区只切换该对话 scope，项目/知识/记忆/记录是显式二级页；work-home/资产仪表盘不得作为工作模式默认。紧凑抽屉的打开、scrim、关闭和重开聊天壳已由最新 macOS `.app` 核验，消息长列表的独立滚动与重绘恢复已有定向合同；真实中段滚动及窄→宽连续 resize 已在本轮最新 bundle 完成。P6-E、P6-F、P6-F2-A~E、P6-G 本地基础与 FB-P6-023/024/025 已于 2026-08-14 完成，下一唯一阶段为 ChatGPT export JSON Adapter。P7-A 的跨端 E2EE 协议与 P7-B 的账号级本机 key/state 基座均已完成，但仍没有真实身份、网络、云端文档或同步。P8 已于 2026-08-13 经 P8-D 完成本地主体退出审计；P9-B 已完成 LOCAL_TEST_ONLY 合同/账本/harness 本地闭环，真实生态接入仍阻塞。最终产品固定为本地离线路径与显式授权的 Provider/账号同步路径并存；当前真实 Key/HTTP 仍待用户后测。
+> **当前收口边界：** 本轮已把模型与 Provider、附件解析、南枫转写、统一搜索、导入媒体、私有文件预览、真实 owner 存储统计、费用与用量、会话“待看”和相应设置／入口纳入同一 Android 产品体系；完成部分后续只做回归，不再重复实现。Desktop 继续保持其既有已验证基线，Android 新增能力不得自动写成 Desktop 已同步。当前仍有 4 项历史 JVM 合同失败、新重建 Release 尚未覆盖到 OPPO、真实 Provider 耗时／Token／账单及若干真机视觉交互未重新验收；这些门分别保留，不能互相替代。
+
+> **历史读取门：** 下方所有 2026-08-26 及更早的“当前状态”“当前计划”“下一唯一入口”和阶段数字都只作历史证据；与上方 2026-08-30 总控门冲突时一律失效。需要追根因时可读取，后续复查和排程不得从中恢复旧行为。
+
+> **2026-08-26 历史计划覆盖层（已被 2026-08-30 总控门取代）：** Android 的当前可见产品以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 与 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md) 为唯一正文；当前实现、构建、正式包与设备事实只读取 [当前交接](CURRENT_HANDOFF.md) 顶部和 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 的最新“当前总控门”。本文较早的“当前状态”、固定颜色、Dialog、设置入口、模型显示、功能审阅、数据导入或归档／回收站描述均是历史阶段记录，若冲突一律失效。
+
+> **2026-08-26 历史产品收口范围：** 产品主线是“对话／工作双模式 + 连续会话 + 统一 Composer + 左侧会话管理 + 受控模型与联网 + 用户可控个性化／记忆 + 本地数据管理”。设置按“对话、应用与数据、工作区”组织；模型与联网、费用与用量、上下文记录、运行诊断各自分工；已归档与回收站独立管理；数据与存储区分对话导入和工作区导入／导出／备份。可见规则不再在阶段合同、交接或功能审阅入口重复维护。
+
+> 2026-08-16 历史状态：用户已于 2026-08-12 确认总方案；P1 至 P2-M 与 P3-A 至 P3-H 的本地基线已完成，P4-A/P4-B 完成 Projects 与 metadata-only Context 选择，P4-C 完成长时 Memory 的显式本地 CRUD、来源/scope、暂停、软删除、历史和确定性冲突治理（Schema 9→10），P4-D 完成 L0–L2 的逐次显式正文选择与瞬时本机预览（L3 仍未实现）。P4-B metadata snapshot 继续不读取 `memorySources`；P4-D 不构造 Prompt/RunSpec 或 egress。P3 的真实流、Usage/费用、长会话性能与图片外发仍按用户决策并行后置，未通过且不得由 Mock/loopback/模拟器替代；P2-M 的授权动作在 HTTP 前因占位凭据安全阻止；图标已按用户最终确认从连续白底原始母版重做为受控 1.50× 同源资产交付，当前 Finder/Dock 与 Android emulator Launcher 表面已记录，但 OPPO/最终硬件图标结论仍待后续授权。P6 的本地 Desktop 基线持续独立：对话与工作都以真实对话为默认右侧内容，工作区只切换该对话 scope，项目/知识/记忆/记录是显式二级页；work-home/资产仪表盘不得作为工作模式默认。紧凑抽屉的打开、scrim、关闭和重开聊天壳已由最新 macOS `.app` 核验，消息长列表的独立滚动与重绘恢复已有定向合同；真实中段滚动及窄→宽连续 resize 已在本轮最新 bundle 完成。P6-E、P6-F、P6-F2-A~E、P6-G 本地基础与 FB-P6-023/024/025 已于 2026-08-14 完成，下一唯一阶段为 ChatGPT export JSON Adapter。P7-A 的跨端 E2EE 协议与 P7-B 的账号级本机 key/state 基座均已完成，但仍没有真实身份、网络、云端文档或同步。P8 已于 2026-08-13 经 P8-D 完成本地主体退出审计；P9-B 已完成 LOCAL_TEST_ONLY 合同/账本/harness 本地闭环，真实生态接入仍阻塞。最终产品固定为本地离线路径与显式授权的 Provider/账号同步路径并存；当前真实 Key/HTTP 仍待用户后测。
 > P6-D 状态修订（2026-08-13）：经用户授权的 app-private 合成 fixture 已完成正式 UI 导入与 macOS 黑箱验证；64 条消息实际中段滚动、重绘恢复、drawer X、窄→宽自动收起与再次紧凑均通过。该本地 UI 阶段到此停止，不代表 P6、Desktop、P10-A 或总项目完成。
 > P6 状态修订（2026-08-14）：双端 transcript 的角色/日期/时区/真实 metadata、plain-text copy、Android 明确确认 `ACTION_SEND`、typed idempotent Message Tree branch 与 restart readback 已按 `P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_EVIDENCE.md` 完成；Android 对既有可删除 fixture 的复制按钮实际点击后，系统 clipboard 回读为安全 `text/plain`，force-stop 后入口仍可读。Desktop 原生 share 没有安全 owner，按用户明确许可保持隐藏，未用伪分享替代。P6-F2-A/B/C/D/E 已分别按最终证据完成；E 已覆盖 Desktop native picker/private-copy/显式音频播放/restart 与 Android DocumentsUI/force-stop restart/最终签名 base hash，详见 `P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_EVIDENCE.md`。P6-G 本地基础及 FB-P6-023/024/025 统一壳层已按 `FB_P6_023_024_025_P6G_UNIFIED_SHELL_EVIDENCE.md` 完成；下一唯一阶段是 ChatGPT export JSON Adapter。FB-P6-033 现已获得用户明确授权替换 launcher/Dock：仅可用不可变 master `a0335d3c…27f4` 直接派生，静态链通过，新的签名、安装/hash、Finder/Dock 表面仍在执行；未读 Key、未发 HTTP、未操作 OPPO 或发布。
 > FB-P6-033 证据更新（2026-08-14）：新 master 的 Android adaptive/round/legacy 与 Desktop ICNS 静态链已通过；Android 新正式 Acceptance 包已 `install -r` 并与设备 `base.apk` 同哈希，AOSP emulator 抽屉只记录近似表面。Desktop 新 `.app` 已 strict-sign，内嵌 ICNS byte-identical 且 Finder 实际表面可见；`Dock`/`com.apple.dock` AX 读取两次超时且无可发现 target，按用户当前授权以 Finder+embedded ICNS 通过本轮非 OPPO Desktop 门。OPPO/ColorOS 仍是后续未授权真机门；FB-P6-026..032 和 P6-H 的全部非 OPPO UI/导入退出门已逐项关闭。
@@ -1233,9 +1241,37 @@ Agent Run 至少保存：目标、范围、Task、模型、Harness、预算、�
 
 ## 23. 当前状态与下一入口
 
-> **2026-08-16 当前状态覆盖。** 本节下方早期“当前未完成/下一唯一入口”保留为历史路线，不再作为执行排程。当前唯一事实源是 `docs/CURRENT_HANDOFF.md` 顶部的 P6-K/K9 记录；本轮需求—证据矩阵为 `MASTER_PLAN_COMPLETION_AUDIT_20260816.md`。P6-K Desktop 的真实 ZIP 导入和安全聚合重开回读已完成，Android 源码/Room/定向合同已完成，但最新正式 APK 无法在既有签名记录的非交互口令读取恢复前生成。不得以旧 APK、卸载、清数据或数据库注入替代 Android 正常 picker、`install -r`、cold-start 和三方一致性验收。Provider/Key/HTTP、真实账号/同步、生态目标及 OPPO 分别仍是独立外部门，不能由本地构建、模拟器或 Desktop 证据关闭。
+> **2026-08-30 当前状态覆盖。** 本节以下早期阶段清单全部降为历史路线，不再直接参与排程。当前代码与文档 checkpoint 为 `b7e1c2f`、`1f7f356`；当前行为按本文件顶部合同路由读取，当前验证、APK、OPPO 和未验门按 [当前交接](CURRENT_HANDOFF.md) 顶部读取，跨域完成范围按 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部读取。
 
-### 当前已完成
+### 当前已完成且后续只回归
+
+- Android 对话／工作壳、Composer、会话管理、搜索与文件操作已经形成共享入口；ChatGPT／Claude 导入内容、南枫转写原文件与 Markdown、普通附件统一进入搜索、预览、打开、复制／下载／分享和 owner 生命周期。
+- 模型服务已形成统一目录、Provider／Adapter、Auto／手动顺序、附件材料桥、标题与历史资料后台路由、调用记录和费用投影；新增模型必须同时经过目录、权限、能力、附件、Auto、设置、账本与回归门，不能只加入选择列表。
+- 本机数据统计按活动 owner、唯一受管文件与当前物理字节计算；无 owner 残留单列并只经显式清理处理，南枫转写和导入文件不能再绕开排序、搜索、统计或引用保护。
+- 当前 Android Room 为 Schema 63；最终全量 JVM 为 `1013 tests / 4 failures / 3 skipped`，本轮新增回归为 0；`lintVitalRelease` 与 `assembleRelease` 通过。具体失败项、APK 和设备哈希不在本蓝图重复维护。
+
+### 当前仍需独立关闭的门
+
+1. 4 项历史 JVM 合同失败必须单独判断“产品代码缺陷还是静态合同过时”，不得为追求全绿放宽 owner、安全或当前产品合同。
+2. 当前重建 Release 尚未覆盖 OPPO；只有再次获得明确授权后，才可按同包名、同证书、非 Debug、保数据流程覆盖并回读。构建成功不等于设备升级。
+3. Qwen、GLM、DeepSeek 等真实 Provider 的时延、推理 Token、账单、搜索终态和附件链仍需用户合法配置下逐项验收；不得用定向 JVM 或估算金额代替。
+4. 搜索完整性、实际存储体积、南枫转写预览、费用排版、待看排序／圆点及暗色入口仍需目标 OPPO 视口回读；真机视觉不替代数据与 Provider 证据。
+5. Desktop 只保留既有已验证能力；Android 近期新增模块若要跨端，须另建明确范围和证据，不因名称相同自动视为已同步。
+
+### 后续复查固定入口
+
+1. 先核对当前 HEAD、工作树与 `AGENTS.md`，发现未提交并行工作时先隔离范围。
+2. 读取本文件顶部 2026-08-30 总控门，只确定长期方向和现行文档路由。
+3. 读取 `CURRENT_HANDOFF.md` 顶部，只取得最新构建、测试、APK、设备和外部服务事实。
+4. 按受影响领域读取一份现行合同；旧 P 阶段文档、截图和历史哈希只用于追根因。
+5. 已完成能力只做防回退验证；只有代码、合同或真实证据证明不一致时才重新实现。
+6. 结论冲突时按“当前用户指令 → 当前代码与可复现证据 → 现行合同 → 总控门 → 历史记录”裁决，并同步纠正唯一现行入口。
+
+### 2026-08-16 历史状态覆盖（已失效）
+
+本节以下清单保留总方案早期推进轨迹；其中 Schema、Provider 状态、附件能力、搜索范围、测试数、APK、设备和“下一唯一入口”均不得视为当前事实。
+
+### 历史已完成（截至 2026-08-16）
 
 - Git 仓库和 `docs/` 需求归档已建立。
 - 原压缩包与新增三份需求已阅读、统一和保留原件。
@@ -1257,13 +1293,13 @@ Agent Run 至少保存：目标、范围、Task、模型、Harness、预算、�
 - P2-L 已完成真实服务前的离线验收层：版本化 `RealServiceRunSpec` 冻结 Snapshot、合成夹具、输入/输出、费用硬上限、Credential handle、超时/重试、Consent 指纹和预期 Ledger/Candidate/Knowledge 状态；DryRun 无 Transport/Authorization/Key loader，报告零网络、无 Key/正文，未知费用不写作零。单次 nonce 精确绑定 Spec 并在 app-private 重建后拒绝重复。模型设置仅显示验收准备/等待授权与未执行事实；没有真实调用按钮或 policy 变更。
 - P2-M 已把用户唯一授权的合成文本 RunSpec 接到专用执行器：DryRun 通过后才原子消费 nonce，并只以 `ExactSingleUseRun` 发起最多一条 Attempt。实际 API 35 执行在 Key 占位检查处 BLOCKED（`ProviderCredentialInvalid`），没有 OpenRouter Attempt、HTTP、Token、费用、Candidate 或 Knowledge；nonce 保持 CONSUMED，不能重试。
 
-### 当前未完成
+### 历史未完成（截至 2026-08-16）
 
 - 已实现但默认禁用 OpenRouter 推理 HTTP Transport；P2-M 的唯一短暂例外已安全阻止。用户已决定把真实 OpenRouter 成功调用、Token/费用与目标真机作为后期独立验收债务，不阻塞 P3 主体开发；Knowledge 搜索/图谱/编辑管理和导入仍未开始。
 - 本机当前凭据为明显占位值，尚未配置或使用可用真实 OpenRouter Key。
 - 真实 OpenRouter、真实 Android 设备与发布验证仍未执行；模拟器本地设置通过不替代任何真实服务结论。
 
-### 下一唯一入口
+### 历史下一入口（截至 2026-08-16）
 
 P3-A 至 P3-H 已完成本地 Conversation 底座、确定性事件状态机、继续/重试/换模型谱系、安全展示/草稿恢复、管理/导出、不可变用户消息修订/完整分支历史、安全附件本地引用与只读尝试历史投影；下一候选仍须继续 P3 的未完成增量（真实流适配、真实 Usage 可见追踪与在明确合同下的对话附件外发等），P3-H 不是项目终点。真实 Provider 保持 `Disabled`，只使用 Mock、fixture 与 loopback。真实文本、图片（另行授权）、Token、费用和目标真机保留为后期独立验收债务；搜索、图谱、系统分享图片、拍照、账号、同步、Hub 与 Agent 仍按蓝图阶段推进，不因本决策提前。
 
