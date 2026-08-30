@@ -214,6 +214,10 @@ private fun String?.toAiTaskError(): AiTaskError? = when (this) {
     "ProviderResponseFormatInvalid" -> AiTaskError.ProviderResponseFormatInvalid
     "ProviderSchemaValidationFailed" -> AiTaskError.ProviderSchemaValidationFailed
     "ProviderContextOverflow" -> AiTaskError.ProviderContextOverflow
+    "ProviderRequestCancelled" -> AiTaskError.ProviderRequestCancelled
+    "ProviderEgressNotAuthorized" -> AiTaskError.ProviderEgressNotAuthorized
+    "ProviderBudgetDisclosureRequired" -> AiTaskError.ProviderBudgetDisclosureRequired
+    "ProviderRequestContentUnsafe" -> AiTaskError.ProviderRequestContentUnsafe
     "ModelRegistrySnapshotInvalid" -> AiTaskError.ModelRegistrySnapshotInvalid
     "ModelRegistrySnapshotUnverified" -> AiTaskError.ModelRegistrySnapshotUnverified
     "ModelRegistryModelUnavailable" -> AiTaskError.ModelRegistryModelUnavailable

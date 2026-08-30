@@ -116,7 +116,7 @@ fun KnowledgeExportDialog(
                 modifier = Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("导出为版本化 .nfai 包，保存到应用私有目录。不会上传、分享或访问系统目录。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("导出到应用私有目录。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 if (state.isWorking) {
                     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = BrandGreen, modifier = Modifier.size(28.dp))

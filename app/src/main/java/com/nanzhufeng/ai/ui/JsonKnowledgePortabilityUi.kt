@@ -51,7 +51,7 @@ class JsonKnowledgeExportViewModel(private val knowledge: ManageKnowledgeUseCase
         text = {
             Column(Modifier.p5aKeyboardTraversal().heightIn(max = 540.dp).verticalScroll(rememberScrollState())) {
                 if (selected == null) {
-                    Text("任务和私有副本会在重建后回读；JSON 字符串不会被执行或解释为指令。", color = SecondaryText)
+                    Text("导入任务会保留，可在重启后继续。", color = SecondaryText)
                     state.tasks.forEach { row -> TextButton(onClick = { open(row) }) { Text("${row.asset?.displayName ?: "未完成选择"} · ${row.status}") } }
                 } else {
                     Text("${selected.asset?.displayName} · ${selected.status}")
@@ -78,5 +78,5 @@ class JsonKnowledgeExportViewModel(private val knowledge: ManageKnowledgeUseCase
     )
 }
 @Composable fun JsonKnowledgeExportDialog(state: JsonKnowledgeExportUiState, dismiss: () -> Unit, toggle: (KnowledgeItemId) -> Unit, export: () -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text("导出 JSON Knowledge") }, text = { Column(Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState())) { Text("只导出明确选择的 ACTIVE 正式 Knowledge；原 ID 仅作为导入来源，导入时会重映射。不会输出 URI、路径、Key、Prompt、Provider payload、附件、关系或临时 Context。", color = SecondaryText, style = MaterialTheme.typography.bodySmall); state.entries.forEach { item -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(item.id in state.selected, { toggle(item.id) }); Column { Text(item.title); Text(item.tags.joinToString(" · ").ifBlank { "无标签" }, color = SecondaryText, style = MaterialTheme.typography.bodySmall) } } }; state.result?.let { Text("已原子写入、回读并校验 SHA-256：${it.fileName} · ${it.sha256}", color = BrandGreen) }; state.message?.let { Text(it, color = ErrorRed) } } }, dismissButton = { TextButton(onClick = dismiss) { Text("关闭") } }, confirmButton = { Button(onClick = export, enabled = !state.working && state.selected.isNotEmpty()) { Text("导出 ${state.selected.size} 项") } })
+    AlertDialog(onDismissRequest = dismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text("导出 JSON Knowledge") }, text = { Column(Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState())) { Text("仅导出所选的活动知识。", color = SecondaryText, style = MaterialTheme.typography.bodySmall); state.entries.forEach { item -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(item.id in state.selected, { toggle(item.id) }); Column { Text(item.title); Text(item.tags.joinToString(" · ").ifBlank { "无标签" }, color = SecondaryText, style = MaterialTheme.typography.bodySmall) } } }; state.result?.let { Text("已导出：${it.fileName}", color = BrandGreen) }; state.message?.let { Text(it, color = ErrorRed) } } }, dismissButton = { TextButton(onClick = dismiss) { Text("关闭") } }, confirmButton = { Button(onClick = export, enabled = !state.working && state.selected.isNotEmpty()) { Text("导出 ${state.selected.size} 项") } })
 }

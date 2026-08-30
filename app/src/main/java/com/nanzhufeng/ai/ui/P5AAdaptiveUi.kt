@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Settings
@@ -59,15 +60,21 @@ private const val P5A_ROUTE_STATE = "p5a_route"
 private const val P5A_CONVERSATION_DRAWER_STATE = "p5a_conversation_drawer_open"
 internal const val P5A_EXPANDED_MIN_WIDTH_DP = 840
 internal const val P5A_COMPACT_FONT_SCALE = 1.5f
+internal const val GLM_OCR_WORKSPACE_TITLE = "南枫转写"
 internal val P5ASelectionSurfaceColor = Color(0xFFFFFFFF)
 /** The shared component owns visible shape, pressed indication, focus and hover contour together. */
-/** Single-line foreground controls use one pill contour for surface, press and focus feedback. */
+/**
+ * Pill contours are reserved for single-line foreground controls only.
+ * Multi-line cards, explanatory surfaces and dialogs use [P5AMultilineSurfaceShape].
+ */
 internal val P5AInteractiveShape = RoundedCornerShape(999.dp)
+internal val P5AMultilineSurfaceShape = RoundedCornerShape(24.dp)
 
 /** Stable UI routes only; business facts stay in their existing ViewModels and Room owners. */
 internal enum class P5ARoute(val wireValue: String, val label: String) {
     CAPTURE("capture", "捕获"),
     CONVERSATION("conversation", "对话"),
+    OCR("document-markdown", GLM_OCR_WORKSPACE_TITLE),
     KNOWLEDGE("knowledge", "知识"),
     PROJECTS("projects", "项目"),
     MEMORY("memory", "记忆"),
@@ -86,6 +93,7 @@ internal enum class P5AWindowLayout { COMPACT, EXPANDED }
 
 internal fun P5ARoute.isCompactOverflowRoute(): Boolean = this in setOf(
     P5ARoute.PROJECTS,
+    P5ARoute.OCR,
     P5ARoute.MEMORY,
     P5ARoute.CONTEXT,
     P5ARoute.EVAL,
@@ -221,6 +229,7 @@ private fun P5ARouteIcon(route: P5ARoute) {
     val image = when (route) {
         P5ARoute.CAPTURE -> Icons.Rounded.AutoAwesome
         P5ARoute.CONVERSATION -> Icons.Rounded.ChatBubbleOutline
+        P5ARoute.OCR -> Icons.Rounded.Description
         P5ARoute.KNOWLEDGE -> Icons.Rounded.Book
         P5ARoute.PROJECTS -> Icons.Rounded.FolderOpen
         P5ARoute.MEMORY -> Icons.Rounded.Memory

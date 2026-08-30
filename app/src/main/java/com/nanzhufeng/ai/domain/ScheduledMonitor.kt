@@ -69,4 +69,6 @@ interface ScheduledMonitorRepository {
     fun startRun(run: ScheduledMonitorRun): Boolean
     fun finishRun(task: ScheduledMonitorTask, run: ScheduledMonitorRun): Boolean
     fun recentRuns(taskId: ScheduledMonitorTaskId, limit: Int = 20): List<ScheduledMonitorRun>
+    /** Content-free, token-bearing history for Settings → 费用与用量. */
+    fun listCostedRunsNewestFirst(): List<ScheduledMonitorRun>
 }

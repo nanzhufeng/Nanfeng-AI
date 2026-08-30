@@ -16,7 +16,10 @@ val userGradleProperties = Properties().apply {
     if (userGradlePropertiesFile.isFile) userGradlePropertiesFile.inputStream().use(::load)
 }
 fun privateClientValue(name: String): String =
-    providers.gradleProperty(name).orNull ?: privateClientProperties.getProperty(name).orEmpty()
+    providers.gradleProperty(name).orNull
+        ?: privateClientProperties.getProperty(name)
+        ?: userGradleProperties.getProperty(name)
+        ?: ""
 fun userGradleValue(name: String): String = userGradleProperties.getProperty(name).orEmpty()
 fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
@@ -93,9 +96,25 @@ android {
     }
 
     defaultConfig {
-        buildConfigField("String", "NANFENG_SUPABASE_URL", buildConfigString(privateClientValue("SUPABASE_URL")))
-        buildConfigField("String", "NANFENG_SUPABASE_PUBLISHABLE_KEY", buildConfigString(privateClientValue("SUPABASE_PUBLISHABLE_KEY").ifBlank { privateClientValue("SUPABASE_ANON_KEY") }))
-        buildConfigField("String", "NANFENG_GOOGLE_WEB_CLIENT_ID", buildConfigString(privateClientValue("GOOGLE_WEB_CLIENT_ID")))
+        buildConfigField(
+            "String",
+            "NANFENG_SUPABASE_URL",
+            buildConfigString(privateClientValue("nanfeng.ai.cloud.url").ifBlank { privateClientValue("SUPABASE_URL") }),
+        )
+        buildConfigField(
+            "String",
+            "NANFENG_SUPABASE_PUBLISHABLE_KEY",
+            buildConfigString(
+                privateClientValue("nanfeng.ai.cloud.publishableKey").ifBlank {
+                    privateClientValue("SUPABASE_PUBLISHABLE_KEY").ifBlank { privateClientValue("SUPABASE_ANON_KEY") }
+                },
+            ),
+        )
+        buildConfigField(
+            "String",
+            "NANFENG_GOOGLE_WEB_CLIENT_ID",
+            buildConfigString(privateClientValue("nanfeng.ai.cloud.googleServerClientId").ifBlank { privateClientValue("GOOGLE_WEB_CLIENT_ID") }),
+        )
     }
 
     signingConfigs {
@@ -172,6 +191,12 @@ android {
             versionNameSuffix = "-p5d-acceptance"
             signingConfig = signingConfigs.findByName("formal")
         }
+        create("searchAttachmentAcceptance") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".searchattachmentacceptance"
+            versionNameSuffix = "-search-attachment-acceptance"
+            signingConfig = signingConfigs.findByName("formal")
+        }
     }
 }
 
@@ -218,6 +243,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     ksp("androidx.room:room-compiler:$roomVersion")
 

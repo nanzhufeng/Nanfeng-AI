@@ -5,6 +5,10 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_MIME_TYPES
 import com.nanzhufeng.ai.domain.ConversationAttachmentSelection
+import com.nanzhufeng.ai.domain.DOCX_MIME_TYPE
+import com.nanzhufeng.ai.domain.PPTX_MIME_TYPE
+import com.nanzhufeng.ai.domain.XLSX_MIME_TYPE
+import com.nanzhufeng.ai.domain.normalizedAttachmentExtension
 
 sealed interface AndroidDocumentOpenResult {
     data class Opened(val selection: ConversationAttachmentSelection) : AndroidDocumentOpenResult
@@ -21,7 +25,7 @@ class AndroidDocumentSelectionReader(context: Context) {
         if (uri.scheme != "content") return AndroidDocumentOpenResult.Rejected("文件来源不可读取，当前草稿未改变。")
         val displayName = displayName(uri)
         val mime = canonicalConversationMime(resolver.getType(uri), displayName)
-            ?: return AndroidDocumentOpenResult.Rejected("只支持 JPG、PNG、WebP、MP4、MP3、WAV、M4A、PDF 或安全文本文件。")
+            ?: return AndroidDocumentOpenResult.Rejected("暂不支持该文件类型。")
         val input = runCatching { resolver.openInputStream(uri) }.getOrNull()
             ?: return AndroidDocumentOpenResult.Rejected("文件不可读取，当前草稿未改变。")
         return AndroidDocumentOpenResult.Opened(ConversationAttachmentSelection(input, mime, displayName))
@@ -38,12 +42,33 @@ class AndroidDocumentSelectionReader(context: Context) {
     private fun canonicalConversationMime(reportedMime: String?, displayName: String?): String? {
         val normalized = reportedMime?.lowercase()
         if (normalized in CONVERSATION_ALLOWED_MIME_TYPES) return normalized
-        val lowerName = displayName?.lowercase()
-        return when {
-            normalized in setOf("audio/x-wav", "audio/wave", "audio/vnd.wave") && lowerName?.endsWith(".wav") == true -> "audio/wav"
-            normalized in setOf("audio/x-m4a", "audio/m4a") && lowerName?.endsWith(".m4a") == true -> "audio/mp4"
-            lowerName?.endsWith(".mp4") == true -> "video/mp4"
-            else -> null
+        val extension = normalizedAttachmentExtension(displayName)
+        return when (extension) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "webp" -> "image/webp"
+            "mp4" -> "video/mp4"
+            "mp3" -> "audio/mpeg"
+            "wav" -> "audio/wav"
+            "m4a" -> "audio/mp4"
+            "pdf" -> "application/pdf"
+            "md", "markdown" -> "text/markdown"
+            "json" -> "application/json"
+            "csv" -> "text/csv"
+            "xml" -> "application/xml"
+            "yaml", "yml" -> "application/x-yaml"
+            "html", "htm" -> "text/html"
+            "txt", "log", "ini", "cfg", "conf", "kt", "kts", "java", "py", "js", "ts", "tsx", "jsx", "css", "sql", "sh" -> "text/plain"
+            "docx" -> DOCX_MIME_TYPE
+            "xlsx" -> XLSX_MIME_TYPE
+            "pptx" -> PPTX_MIME_TYPE
+            "zip" -> "application/zip"
+            else -> when {
+                normalized in setOf("audio/x-wav", "audio/wave", "audio/vnd.wave") -> "audio/wav"
+                normalized in setOf("audio/x-m4a", "audio/m4a") -> "audio/mp4"
+                normalized == "application/x-zip-compressed" -> "application/zip"
+                else -> null
+            }
         }
     }
 }

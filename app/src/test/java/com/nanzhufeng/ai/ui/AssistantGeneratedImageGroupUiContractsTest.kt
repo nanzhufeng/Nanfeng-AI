@@ -1,6 +1,7 @@
 package com.nanzhufeng.ai.ui
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,6 +41,18 @@ class AssistantGeneratedImageGroupUiContractsTest {
     }
 
     @Test
+    fun `assistant image sequence is ascending across gallery viewer swipe and batch download`() {
+        assertEquals(listOf(1, 2, 3, 4, 5, 6, 7), ascendingAssistantImageOrder(listOf(7, 6, 5, 4, 3, 2, 1)))
+
+        val bubble = source.substring(source.indexOf("private fun MessageBubble"), source.indexOf("private fun RightAlignedUserBubble"))
+        val previewOwner = source.substring(source.indexOf("state.imagePreview?.let"), source.indexOf("state.pdfPreview?.let"))
+        assertTrue(bubble.contains("ascendingAssistantImageOrder(attachmentBlocks.filter"))
+        assertTrue(previewOwner.contains("else ascendingAssistantImageOrder(imageBlocks)"))
+        assertTrue(previewOwner.indexOf("else ascendingAssistantImageOrder(imageBlocks)") < previewOwner.indexOf("?.map { it.id }"))
+        assertTrue(previewOwner.contains("MessageRole.USER) imageBlocks"))
+    }
+
+    @Test
     fun `import provenance is a concise theme tinted source label rather than a model lock warning`() {
         val provenance = source.substring(source.indexOf("private fun ImportedConversationProvenance"), source.indexOf("private data class TranscriptScrollMetrics"))
         for (token in listOf(
@@ -48,7 +61,9 @@ class AssistantGeneratedImageGroupUiContractsTest {
             "ImportedConversationProvenance(\"从 ChatGPT ZIP 导入\")",
         )) assertTrue("missing concise provenance label $token", source.contains(token))
         assertTrue(provenance.contains("MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)"))
-        assertTrue(provenance.contains("Modifier.wrapContentWidth(Alignment.Start)"))
+        assertTrue(provenance.contains("modifier = Modifier.fillMaxWidth()"))
+        assertTrue(provenance.contains("Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 8.dp)"))
+        assertTrue(provenance.contains("textAlign = TextAlign.Center"))
         assertFalse(source.contains("本地静态文本，不关联模型、Provider、费用或调用记录"))
     }
 }

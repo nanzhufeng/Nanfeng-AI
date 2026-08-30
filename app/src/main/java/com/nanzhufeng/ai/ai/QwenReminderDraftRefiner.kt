@@ -46,7 +46,7 @@ class QwenReminderDraftRefiner(
             usage: ProviderUsage = ProviderUsage(),
             safeCode: String? = null,
         ) {
-            val cost = ConversationCostEstimator.estimate("qwen3.7-plus", usage) ?: ProviderCost()
+            val cost = ConversationCostEstimator.estimate("qwen3.7-plus", usage, requestedAt) ?: ProviderCost()
             records.record(ReminderDraftGenerationRecord(
                 ReminderDraftGenerationId.new(), sourceConversationId, requestedAt, status, providerId, "qwen3.7-plus",
                 usage, cost, cost.totalMicros?.let { ConversationCostSource.LOCAL_ESTIMATE }, safeCode,

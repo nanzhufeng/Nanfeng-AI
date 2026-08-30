@@ -40,4 +40,12 @@ class P7BAccountSyncContractsTest {
         assertEquals(P7BSyncState.SIGNED_OUT_KEEP_LOCAL, machine.restoreAtColdStart(account)?.state)
         vault.keys.remove(account); assertEquals(P7BSyncState.FAILED, machine.authenticate("re-auth-missing-key", 4, verified("verified-account-c")).state)
     }
+
+    @Test fun `matching local receipt and remote head may resume manual sync after login`() {
+        val store = Store(); val vault = Vault(); val machine = P7BAccountStateMachine(store, vault)
+        val account = machine.authenticate("auth-matched", null, verified("verified-account-matched")).accountRef
+        machine.confirmRecoverySaved("confirm-matched", 1, account)
+        val ready = machine.chooseDirection("direction-matched", 2, account, P7BDirectionFact.LOCAL_PRESENT_REMOTE_MATCHED)
+        assertEquals(P7BSyncState.READY, ready.state)
+    }
 }

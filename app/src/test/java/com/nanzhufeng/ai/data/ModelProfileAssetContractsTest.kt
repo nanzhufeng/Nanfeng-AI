@@ -8,16 +8,18 @@ import java.io.File
 
 /** Keeps the verified Qwen context and per-model output ceilings from silently drifting. */
 class ModelProfileAssetContractsTest {
-    @Test fun `Qwen visual profiles retain verified one million context and model specific output ceilings`() {
+    @Test fun `Qwen profiles retain verified one million context and model specific capability boundaries`() {
         val raw = File("src/main/assets/model_profiles.json").readText()
-        val expected = mapOf("QWEN_3_7_PLUS" to 65_536, "QWEN_3_8_MAX" to 131_072, "QWEN_3_6_FLASH" to 65_536)
-        expected.forEach { (preset, maxOutput) ->
+        val expected = mapOf("QWEN_3_7_PLUS" to (65_536 to true), "QWEN_3_8_MAX" to (131_072 to false), "QWEN_3_6_FLASH" to (65_536 to true))
+        expected.forEach { (preset, limits) ->
+            val (maxOutput, supportsVideo) = limits
             val profile = raw.substringAfter("\"presetId\": \"$preset\"").substringBefore("\n    }")
             assertTrue("missing $preset", profile.isNotBlank())
             assertEquals(1, Regex("\"contextWindowTokens\": 1000000").findAll(profile).count())
             assertEquals(1, Regex("\"maxOutputTokens\": $maxOutput").findAll(profile).count())
-            assertTrue(profile.contains("\"video\": true"))
+            assertEquals(supportsVideo, profile.contains("\"video\": true"))
             assertFalse(profile.contains("\"audio\": true"))
+            if (preset == "QWEN_3_8_MAX") assertTrue(profile.contains("\"reasoning\": true"))
         }
     }
 
@@ -32,5 +34,57 @@ class ModelProfileAssetContractsTest {
         assertFalse(profile.contains("\"image\": true"))
         assertFalse(profile.contains("\"pdf\": true"))
         assertFalse(profile.contains("\"video\": true"))
+    }
+
+    @Test fun `DeepSeek V4 Flash profile retains its official direct identity and text capabilities`() {
+        val raw = File("src/main/assets/model_profiles.json").readText()
+        val profile = raw.substringAfter("\"presetId\": \"DEEPSEEK_V4_FLASH\"").substringBefore("\n    }")
+
+        assertTrue("missing DEEPSEEK_V4_FLASH", profile.isNotBlank())
+        assertTrue(profile.contains("\"providerId\": \"DEEPSEEK\""))
+        assertTrue(profile.contains("\"modelId\": \"deepseek-v4-flash\""))
+        assertTrue(profile.contains("\"contextWindowTokens\": 1000000"))
+        assertTrue(profile.contains("\"maxOutputTokens\": 384000"))
+        assertTrue(profile.contains("\"tools\": true"))
+        assertTrue(profile.contains("\"reasoning\": true"))
+        assertFalse(profile.contains("\"image\": true"))
+        assertFalse(profile.contains("\"pdf\": true"))
+        assertFalse(profile.contains("\"video\": true"))
+    }
+    @Test fun `Zhipu GLM Flash profile exposes only the capabilities this client can transmit`() {
+        val raw = File("src/main/assets/model_profiles.json").readText()
+        val profile = raw.substringAfter("\"presetId\": \"GLM_5_3_FLASH\"").substringBefore("\n    }")
+
+        assertTrue("missing GLM_5_3_FLASH", profile.isNotBlank())
+        assertTrue(profile.contains("\"providerId\": \"ZHIPU\""))
+        assertTrue(profile.contains("\"modelId\": \"glm-5.3-flash\""))
+        assertTrue(profile.contains("\"text\": true"))
+        assertFalse(profile.contains("\"image\": true"))
+        assertFalse(profile.contains("\"pdf\": true"))
+        assertFalse(profile.contains("\"video\": true"))
+        assertFalse(profile.contains("\"tools\": true"))
+        assertTrue(profile.contains("\"reasoning\": true"))
+        assertFalse(profile.contains("\"structuredOutput\": true"))
+        assertTrue(profile.contains("\"contextWindowTokens\": 1000000"))
+        assertTrue(profile.contains("\"maxOutputTokens\": 128000"))
+    }
+
+    @Test fun `Zhipu GLM flagship profile keeps the official identity and deep capabilities`() {
+        val raw = File("src/main/assets/model_profiles.json").readText()
+        val profile = raw.substringAfter("\"presetId\": \"GLM_5_3\"").substringBefore("\n    }")
+
+        assertTrue("missing GLM_5_3", profile.isNotBlank())
+        assertTrue(profile.contains("\"providerId\": \"ZHIPU\""))
+        assertTrue(profile.contains("\"modelId\": \"glm-5.3\""))
+        assertTrue(profile.contains("\"text\": true"))
+        assertTrue(profile.contains("\"streaming\": true"))
+        assertTrue(profile.contains("\"tools\": true"))
+        assertTrue(profile.contains("\"reasoning\": true"))
+        assertTrue(profile.contains("\"structuredOutput\": true"))
+        assertFalse(profile.contains("\"image\": true"))
+        assertFalse(profile.contains("\"pdf\": true"))
+        assertFalse(profile.contains("\"video\": true"))
+        assertTrue(profile.contains("\"contextWindowTokens\": 1000000"))
+        assertTrue(profile.contains("\"maxOutputTokens\": 131072"))
     }
 }

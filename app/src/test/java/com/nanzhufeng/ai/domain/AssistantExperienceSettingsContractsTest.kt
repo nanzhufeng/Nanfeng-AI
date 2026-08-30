@@ -73,8 +73,21 @@ class AssistantExperienceSettingsContractsTest {
     }
 
     @Test
-    fun `library search is enabled by default to preserve existing local retrieval behavior`() {
+    fun `history library requires one explicit consent before either automatic curation or retrieval`() {
         assertTrue(AssistantExperienceSettings().librarySearchEnabled)
+        assertFalse(AssistantExperienceSettings().historyLibraryEnabled)
+        assertTrue(
+            AssistantExperienceSettings(
+                librarySearchEnabled = true,
+                autoHistoryKnowledgeEnabled = true,
+            ).historyLibraryEnabled,
+        )
+        assertFalse(
+            AssistantExperienceSettings(
+                librarySearchEnabled = false,
+                autoHistoryKnowledgeEnabled = true,
+            ).historyLibraryEnabled,
+        )
     }
 
     @Test
@@ -102,6 +115,35 @@ class AssistantExperienceSettingsContractsTest {
         assertTrue(firstReply.contains("职业或角色：开发者"))
         assertTrue(firstReply.contains("回答偏好：先给结论。"))
         assertFalse(laterReply.contains("首个助理回复"))
+    }
+
+    @Test
+    fun `first reply address has a provider independent presentation fallback`() {
+        val settings = AssistantExperienceSettings(personalizationEnabled = true, displayName = "南烛枫")
+
+        val prefix = settings.firstReplyAddressPrefix("请分析这个问题", isFirstAssistantReply = true)
+        assertTrue(prefix == "南烛枫，")
+        assertTrue("结论先说。".withRequiredOpeningAddress(prefix).startsWith("南烛枫，"))
+        assertTrue("南烛枫，结论先说。".withRequiredOpeningAddress(prefix) == "南烛枫，结论先说。")
+        assertTrue(settings.firstReplyAddressPrefix("请叫我阿枫，再分析这个问题", isFirstAssistantReply = true) == null)
+        assertTrue(settings.firstReplyAddressPrefix("继续", isFirstAssistantReply = false) == null)
+    }
+
+    @Test
+    fun `provider reasoning tail cannot appear before the configured opening name`() {
+        val prefix = "南烛枫，"
+        val repaired = "架南烛枫，直接给结论。"
+            .withoutLeakedReasoningTailBeforeOpeningAddress("先比较估值和风险架", prefix)
+            .withRequiredOpeningAddress(prefix)
+        val repairedAfterPunctuation = "架南烛枫，直接给结论。"
+            .withoutLeakedReasoningTailBeforeOpeningAddress("先形成回答框架。", prefix)
+            .withRequiredOpeningAddress(prefix)
+
+        assertTrue(repaired == "南烛枫，直接给结论。")
+        assertTrue(repairedAfterPunctuation == "南烛枫，直接给结论。")
+        assertTrue(
+            "架构调整。".withoutLeakedReasoningTailBeforeOpeningAddress("上一步讨论架", prefix) == "架构调整。",
+        )
     }
 
     @Test

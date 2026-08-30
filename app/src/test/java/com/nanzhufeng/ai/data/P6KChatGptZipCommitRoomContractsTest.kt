@@ -17,6 +17,11 @@ import com.nanzhufeng.ai.domain.P6KZipItemStatus
 import com.nanzhufeng.ai.domain.P6KZipTaskId
 import com.nanzhufeng.ai.domain.P6KZipTaskStatus
 import com.nanzhufeng.ai.domain.ConversationListScope
+import com.nanzhufeng.ai.domain.ConversationImportSource
+import com.nanzhufeng.ai.domain.ConversationManagementDomain
+import com.nanzhufeng.ai.domain.ConversationSearchProjection
+import com.nanzhufeng.ai.domain.SearchConversationsUseCase
+import com.nanzhufeng.ai.domain.conversationSearchLeafForMessage
 import com.nanzhufeng.ai.domain.P6K_CHATGPT_ZIP_FORMAT_VERSION
 import com.nanzhufeng.ai.domain.ThirdPartyZipInventoryPolicy
 import com.nanzhufeng.ai.domain.ThirdPartyZipInventoryResult
@@ -107,6 +112,53 @@ class P6KChatGptZipCommitRoomContractsTest {
             assertEquals(2, tasks.list().count { it.status == P6KZipTaskStatus.COMPLETED })
             assertEquals(4, database.p6kZipImportTaskDao().messageProvenanceForConversation(originalId.value).size)
         } finally { oldFile.delete(); newerFile.delete(); database.close() }
+    }
+
+    @Test fun `ChatGPT ZIP branches are repaired into the complete正文 catalogue with provenance`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, NanfengAiDatabase::class.java).allowMainThreadQueries().build()
+        val branchedJson = """[{
+            "id":"branched","title":"Branched import","create_time":1700000000,"update_time":1700000002,
+            "mapping":{
+                "m-1":{"parent":null,"children":["m-2","m-3"],"message":{"author":{"role":"user"},"content":{"parts":["shared question"]},"create_time":1700000000}},
+                "m-2":{"parent":"m-1","children":[],"message":{"author":{"role":"assistant"},"content":{"parts":["hidden imported branch keyword"]},"create_time":1700000001}},
+                "m-3":{"parent":"m-1","children":[],"message":{"author":{"role":"assistant"},"content":{"parts":["selected imported branch"]},"create_time":1700000002}}
+            }
+        }]""".trimIndent()
+        val file = zip("conversations.json" to branchedJson)
+        try {
+            val tasks = RoomP6KZipImportTaskRepository(database)
+            val conversations = RoomConversationRepository(database)
+            val imports = ManageP6KChatGptZipImportUseCase(tasks, RoomP6KZipImportCommitStore(database, conversations), clock)
+            val task = taskFromZip("branched-package", file)
+            tasks.save(task)
+            val conversationId = requireNotNull(imports.importAll(task.id).items.single().conversationId)
+            val snapshot = requireNotNull(conversations.findById(conversationId))
+            val hiddenNode = snapshot.nodes.single { node -> node.content.filterIsInstance<com.nanzhufeng.ai.domain.ContentBlock.Text>().any { it.text.contains("hidden imported") } }
+            assertTrue(hiddenNode.id != snapshot.conversation.currentLeafMessageId)
+
+            // Simulate the partial acceleration index left by older releases.
+            database.openHelper.writableDatabase.execSQL(
+                "DELETE FROM local_search_index WHERE messageNodeId = ?",
+                arrayOf(hiddenNode.id.value),
+            )
+            val search = SearchConversationsUseCase(
+                conversations,
+                ConversationSearchProjection(ConversationManagementDomain(clock)),
+            )
+            val browsed = search.browse(ConversationListScope.ACTIVE)
+            assertEquals(3, browsed.size)
+            assertTrue(browsed.all { it.importSource == ConversationImportSource.CHATGPT_ZIP })
+            assertTrue(browsed.any { it.messageNodeId == hiddenNode.id && it.snippet.contains("hidden imported") })
+
+            val hiddenHit = search.execute("hidden imported branch keyword", ConversationListScope.ACTIVE).single()
+            assertEquals(ConversationImportSource.CHATGPT_ZIP, hiddenHit.importSource)
+            assertEquals(hiddenNode.id, hiddenHit.messageNodeId)
+            assertEquals(hiddenNode.id, conversationSearchLeafForMessage(snapshot, requireNotNull(hiddenHit.messageNodeId)))
+        } finally {
+            file.delete()
+            database.close()
+        }
     }
 
     private fun task(packageHash: String, candidate: com.nanzhufeng.ai.domain.ChatGptImportCandidate) = P6KZipImportTask(P6KZipTaskId.new(), ThirdPartyZipProvider.CHATGPT, "synthetic.zip", 1, packageHash, P6KZipTaskStatus.AWAITING_CONFIRMATION, createdAt = clock.instant(), updatedAt = clock.instant(), items = listOf(P6KZipImportItem(P6KZipItemId.new(), 0, candidate)))

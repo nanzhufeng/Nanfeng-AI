@@ -19,6 +19,12 @@ object NanfengModelServiceCatalog {
         fixedEndpoint = "https://api.deepseek.com/v1",
     )
 
+    val zhipu = ProviderDescriptor(
+        id = ProviderId.ZHIPU,
+        displayName = "智谱 BigModel 官方直连",
+        fixedEndpoint = "https://open.bigmodel.cn/api/paas/v4",
+    )
+
     val presets = listOf(
         ModelPresetDescriptor(
             id = ModelPresetId.CLAUDE_FABLE_5,
@@ -49,14 +55,12 @@ object NanfengModelServiceCatalog {
             displayName = "GPT-5.6 Sol",
             description = "前沿能力，适合专业复杂任务。",
             modelFamilyHint = "OpenAI",
-            autoRoutingRoles = setOf(AutoRoutingRole.COMPLEX_DEBUG),
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.GPT_5_6_TERRA,
             displayName = "GPT-5.6 Terra",
             description = "能力与成本更均衡。",
             modelFamilyHint = "OpenAI",
-            autoRoutingRoles = setOf(AutoRoutingRole.DEFAULT),
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.GPT_5_6_LUNA,
@@ -69,7 +73,6 @@ object NanfengModelServiceCatalog {
             displayName = "Gemini 3.7 Flash",
             description = "快速处理文字、图片和文件任务。",
             modelFamilyHint = "Google · OpenRouter",
-            autoRoutingRoles = setOf(AutoRoutingRole.MULTIMODAL),
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.QWEN_3_7_PLUS,
@@ -88,7 +91,6 @@ object NanfengModelServiceCatalog {
             displayName = "Qwen3.6 Flash",
             description = "适合大批量知识整理与快速检索。",
             modelFamilyHint = "Qwen · 官方直连",
-            autoRoutingRoles = setOf(AutoRoutingRole.LARGE_KNOWLEDGE),
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.DEEPSEEK_V4_PRO,
@@ -96,18 +98,48 @@ object NanfengModelServiceCatalog {
             description = "适合深度推理与专业分析。",
             modelFamilyHint = "DeepSeek · 官方直连",
         ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.DEEPSEEK_V4_FLASH,
+            displayName = "DeepSeek V4 Flash",
+            description = "适合快速问答与高频文本任务。",
+            modelFamilyHint = "DeepSeek · 官方直连",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.GLM_5_3,
+            displayName = "GLM-5.3",
+            description = "适合深度推理、复杂分析与 Agent 任务。",
+            modelFamilyHint = "智谱 · 官方直连",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.GLM_5_3_FLASH,
+            displayName = "GLM-5.3 Flash",
+            description = "智谱官方直连的快速文本任务。",
+            modelFamilyHint = "智谱 · 官方直连",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.GLM_OCR,
+            displayName = "GLM-OCR",
+            description = "图片与 PDF 转 Markdown；仅在文档转换工作区使用。",
+            modelFamilyHint = "智谱 · 官方直连",
+            usage = ModelPresetUsage.DOCUMENT_OCR,
+        ),
     )
+
+    /** Only these entries may appear in chat routing and composer model selection. */
+    val chatPresets: List<ModelPresetDescriptor> get() = presets.filter { it.usage == ModelPresetUsage.CHAT }
 
     fun provider(providerId: ProviderId): ProviderDescriptor? = when (providerId) {
         ProviderId.OPENROUTER -> openRouter
         ProviderId.QWEN -> qwen
         ProviderId.DEEPSEEK -> deepSeek
+        ProviderId.ZHIPU -> zhipu
         ProviderId.MOCK -> null
     }
 
     fun providerFor(presetId: ModelPresetId): ProviderId = when (presetId) {
         ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH -> ProviderId.QWEN
-        ModelPresetId.DEEPSEEK_V4_PRO -> ProviderId.DEEPSEEK
+        ModelPresetId.DEEPSEEK_V4_PRO, ModelPresetId.DEEPSEEK_V4_FLASH -> ProviderId.DEEPSEEK
+        ModelPresetId.GLM_5_3, ModelPresetId.GLM_5_3_FLASH, ModelPresetId.GLM_OCR -> ProviderId.ZHIPU
         else -> ProviderId.OPENROUTER
     }
 
@@ -115,24 +147,79 @@ object NanfengModelServiceCatalog {
         ProviderId.OPENROUTER -> ModelPresetId.GPT_5_6_TERRA
         ProviderId.QWEN -> ModelPresetId.QWEN_3_7_PLUS
         ProviderId.DEEPSEEK -> ModelPresetId.DEEPSEEK_V4_PRO
+        ProviderId.ZHIPU -> ModelPresetId.GLM_5_3_FLASH
         ProviderId.MOCK -> ModelPresetId.GPT_5_6_TERRA
     }
 
     fun preset(presetId: ModelPresetId): ModelPresetDescriptor =
         presets.firstOrNull { it.id == presetId } ?: presets.first()
 
-    /**
-     * Auto has product priorities, but concrete models are declared only by the central catalog.
-     * The executor still resolves every candidate and gates it on live availability/capabilities.
-     */
+    enum class AutoTask { DEFAULT_TEXT, COMPLEX_REASONING, ATTACHMENT }
+
+    /** Product-owned Auto order. It is independent from picker/catalog display order. */
+    private val autoPlans = mapOf(
+        AutoTask.DEFAULT_TEXT to listOf(
+            ModelPresetId.DEEPSEEK_V4_FLASH,
+            ModelPresetId.GPT_5_6_TERRA,
+            ModelPresetId.CLAUDE_SONNET_5,
+            ModelPresetId.GLM_5_3_FLASH,
+            ModelPresetId.QWEN_3_7_PLUS,
+            ModelPresetId.GEMINI_3_7_FLASH,
+            ModelPresetId.QWEN_3_6_FLASH,
+            ModelPresetId.GPT_5_6_LUNA,
+            ModelPresetId.CLAUDE_HAIKU_4_5,
+            ModelPresetId.DEEPSEEK_V4_PRO,
+            ModelPresetId.GLM_5_3,
+            ModelPresetId.QWEN_3_8_MAX,
+            ModelPresetId.GPT_5_6_SOL,
+            ModelPresetId.CLAUDE_OPUS_5,
+            ModelPresetId.CLAUDE_FABLE_5,
+        ),
+        AutoTask.COMPLEX_REASONING to listOf(
+            ModelPresetId.GPT_5_6_SOL,
+            ModelPresetId.DEEPSEEK_V4_PRO,
+            ModelPresetId.GLM_5_3,
+            ModelPresetId.QWEN_3_8_MAX,
+            ModelPresetId.CLAUDE_OPUS_5,
+            ModelPresetId.CLAUDE_FABLE_5,
+            ModelPresetId.GPT_5_6_TERRA,
+            ModelPresetId.CLAUDE_SONNET_5,
+            ModelPresetId.DEEPSEEK_V4_FLASH,
+            ModelPresetId.QWEN_3_7_PLUS,
+            ModelPresetId.GLM_5_3_FLASH,
+            ModelPresetId.GEMINI_3_7_FLASH,
+            ModelPresetId.QWEN_3_6_FLASH,
+            ModelPresetId.GPT_5_6_LUNA,
+            ModelPresetId.CLAUDE_HAIKU_4_5,
+        ),
+        AutoTask.ATTACHMENT to listOf(
+            ModelPresetId.QWEN_3_7_PLUS,
+            ModelPresetId.QWEN_3_6_FLASH,
+            ModelPresetId.GPT_5_6_TERRA,
+            ModelPresetId.CLAUDE_SONNET_5,
+            ModelPresetId.GPT_5_6_SOL,
+            ModelPresetId.CLAUDE_OPUS_5,
+            ModelPresetId.DEEPSEEK_V4_FLASH,
+            ModelPresetId.GLM_5_3_FLASH,
+            ModelPresetId.DEEPSEEK_V4_PRO,
+            ModelPresetId.GLM_5_3,
+            ModelPresetId.QWEN_3_8_MAX,
+            ModelPresetId.GPT_5_6_LUNA,
+            ModelPresetId.CLAUDE_HAIKU_4_5,
+            ModelPresetId.CLAUDE_FABLE_5,
+            ModelPresetId.GEMINI_3_7_FLASH,
+        ),
+    )
+
+    fun autoTask(facts: AutoRoutingFacts): AutoTask = when {
+        facts.hasAttachment -> AutoTask.ATTACHMENT
+        facts.requiresComplexReasoning -> AutoTask.COMPLEX_REASONING
+        else -> AutoTask.DEFAULT_TEXT
+    }
+
+    /** Every plan is exhaustive; availability and exact capabilities are applied afterwards. */
     fun autoRoutingCandidates(facts: AutoRoutingFacts): List<ModelPresetId> {
-        val orderedRoles = buildList {
-            if (facts.hasImageVideoOrPdf) add(AutoRoutingRole.MULTIMODAL)
-            if (facts.knowledgeItemCount >= 500) add(AutoRoutingRole.LARGE_KNOWLEDGE)
-            if (facts.isComplexProjectDebug) add(AutoRoutingRole.COMPLEX_DEBUG)
-            add(AutoRoutingRole.DEFAULT)
-        }
-        return (orderedRoles.flatMap { role -> presets.filter { role in it.autoRoutingRoles }.map(ModelPresetDescriptor::id) } + presets.map(ModelPresetDescriptor::id)).distinct()
+        return autoPlans.getValue(autoTask(facts))
     }
 }
 
@@ -148,7 +235,7 @@ fun modelDisplayNameForUser(displayName: String): String {
         .firstOrNull { preset -> raw.contains(preset.displayName, ignoreCase = true) }
         ?.let { return it.displayName }
     return raw
-        .replaceFirst(Regex("^(?:OpenRouter|Google|通义千问|Qwen 官方直连|DeepSeek 官方直连)\\s*(?:[·:：]\\s*)"), "")
+        .replaceFirst(Regex("^(?:OpenRouter|Google|通义千问|Qwen 官方直连|DeepSeek 官方直连|智谱 BigModel 官方直连|智谱官方直连)\\s*(?:[·:：]\\s*)"), "")
         .substringBefore(" · ")
         .trim()
         .ifBlank { raw }
@@ -171,6 +258,10 @@ fun composerModelShortNameForUser(displayName: String): String = when (modelDisp
     "Qwen3.8-Max" -> "3.8-Max"
     "Qwen3.6 Flash" -> "3.6 Flash"
     "DeepSeek V4 Pro" -> "V4 Pro"
+    "DeepSeek V4 Flash" -> "V4 Flash"
+    "GLM-5.3" -> "GLM 5.3"
+    "GLM-5.3 Flash" -> "5.3 Flash"
+    "GLM-OCR" -> "GLM-OCR"
     else -> modelDisplayNameForUser(displayName)
 }
 
@@ -217,6 +308,10 @@ class SaveModelServiceConfigurationUseCase(
         replacementCredential: String?,
     ): SaveModelServiceConfigurationResult {
         if (NanfengModelServiceCatalog.provider(providerId) == null) {
+            return SaveModelServiceConfigurationResult.Rejected(AiTaskError.ProviderConfigurationInvalid)
+        }
+        val selectedPreset = NanfengModelServiceCatalog.preset(presetId)
+        if (selectedPreset.usage != ModelPresetUsage.CHAT || NanfengModelServiceCatalog.providerFor(presetId) != providerId) {
             return SaveModelServiceConfigurationResult.Rejected(AiTaskError.ProviderConfigurationInvalid)
         }
         val credential = replacementCredential?.trim()?.takeIf(String::isNotEmpty)

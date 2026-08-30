@@ -131,5 +131,6 @@ private fun MessageNode.toContextMessageReference(): ContextMessageReference = C
 private fun ContentBlock.contextCanonicalValue(): String = when (this) {
     is ContentBlock.Text -> "TEXT|$schemaVersion|$text"
     is ContentBlock.Attachment -> "ATTACHMENT|$schemaVersion|${attachment.id.value}|${attachment.mimeType}|${attachment.displayName.orEmpty()}|${attachment.byteCount}|${attachment.sha256}"
+    is ContentBlock.Reasoning -> "REASONING|$schemaVersion|$text"
     is ContentBlock.ToolResult -> "TOOL|$schemaVersion|$toolName|$safeSummary"
 }

@@ -2,6 +2,7 @@ package com.nanzhufeng.ai.ui
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -35,5 +36,18 @@ class ChatGptImportedRichTextContractsTest {
             "Icons.Rounded.History",
             "Icons.Rounded.Language",
         )) assertTrue("missing imported ChatGPT rich marker owner: $token", source.contains(token))
+    }
+
+    @Test
+    fun `source shortcuts consume the shared appearance palette instead of a fixed light chip`() {
+        val source = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val importedChip = source.substringAfter("private fun ImportedChatGptMarkerChip").substringBefore("private fun InlinePresentation.Link.sourceHost")
+        val sourceChip = source.substringAfter("private fun SourceLinkShortcut").substringBefore("private fun SourceLinksDialog")
+
+        for (chip in listOf(importedChip, sourceChip)) {
+            assertTrue(chip.contains("color = NeutralSystemSurface"))
+            assertTrue(chip.contains("border = BorderStroke(1.dp, NeutralBorder.copy(alpha = 0.58f))"))
+            assertFalse(chip.contains("Color(0xFFEDEDED)"))
+        }
     }
 }

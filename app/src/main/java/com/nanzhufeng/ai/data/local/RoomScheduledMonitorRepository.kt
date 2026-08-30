@@ -96,6 +96,9 @@ interface ScheduledMonitorDao {
 
     @Query("SELECT * FROM scheduled_monitor_runs WHERE taskId = :taskId ORDER BY startedAtEpochMs DESC LIMIT :limit")
     fun recentRuns(taskId: String, limit: Int): List<ScheduledMonitorRunEntity>
+
+    @Query("SELECT * FROM scheduled_monitor_runs WHERE modelId IS NOT NULL AND inputTokens IS NOT NULL AND outputTokens IS NOT NULL ORDER BY startedAtEpochMs DESC, id DESC")
+    fun listCostedRunsNewestFirst(): List<ScheduledMonitorRunEntity>
 }
 
 class RoomScheduledMonitorRepository(private val database: NanfengAiDatabase) : ScheduledMonitorRepository {
@@ -123,6 +126,7 @@ class RoomScheduledMonitorRepository(private val database: NanfengAiDatabase) : 
         }); true
     }.getOrDefault(false)
     override fun recentRuns(taskId: ScheduledMonitorTaskId, limit: Int) = dao.recentRuns(taskId.value, limit).map(ScheduledMonitorRunEntity::toDomain)
+    override fun listCostedRunsNewestFirst() = dao.listCostedRunsNewestFirst().map(ScheduledMonitorRunEntity::toDomain)
 }
 
 private fun ScheduledMonitorTask.toEntity() = ScheduledMonitorTaskEntity(id.value, title, instruction, sourceConversationId?.value, cadence.name, modelPresetId.name, status.name, nextRunAt.toEpochMilli(), lastRunAt?.toEpochMilli(), latestResult, lastProviderId?.name, lastModelId, lastInputTokens, lastOutputTokens, lastSafeErrorCode, createdAt.toEpochMilli(), updatedAt.toEpochMilli())

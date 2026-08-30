@@ -2,6 +2,659 @@
 
 > **当前合同读取门（2026-08-27，优先于全文）：** 本文下方的**最新有效交接**与按时间累积的实现、设备与验收记录，只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
 
+## 2026-08-30：OPPO 保数据覆盖（待看左侧圆点 Release）
+
+- **覆盖门禁：** 唯一在线设备为 OPPO PKH120 / Android 16 `3B157F009E800000`。候选与现装均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。覆盖前现装 APK 为 `27,984,638` bytes，SHA-256 `b19eef17db1efbc11bec2a14e08dbfae648daa294b8c4a2380cd89f5c794e72c`。
+- **覆盖与回读：** 候选 `app/build/outputs/apk/release/南枫AI.apk` 为 `27,984,644` bytes，SHA-256 `4f4344e7f13764e6f1e32e9eeba981fd30174995a42a9dccaf330bda8efdf464`。推送后设备临时包哈希一致，只执行一次 `pm install -r --user 0`，返回 `Success`。安装后重新读取变化后的 `pm path` 并拉回 `base.apk`，与候选逐字节一致，仍为非 Debug、v2/v3 同证书。
+- **数据保留与清理：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变；覆盖后 `lastUpdateTime=2026-08-30 23:14:14`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 已精确删除，本机回读核验目录已移入废纸篓。未卸载、未清数据、未读取私有业务内容、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`；安装闭环不代替用户对左侧圆点与待看排序的真机交互确认。
+
+## 2026-08-30：会话“待看”状态与标题左侧圆点
+
+- **交互与排序：** 会话长按菜单新增“待看”，状态只保存会话 ID 与设置时间，不保存正文。普通列表在“已置顶”与“最近”两组内分别置顶，工作列表在所属项目内置顶，不跨组改变原归属。同一对话可反复设为待看，最新设置优先。
+- **圆点与清除：** 待看与未读共用一个主题色圆点外观，但状态独立；圆点位于标题文字左侧，置顶行固定为“置顶图标 → 圆点 → 标题”，日期右侧不再放点。只有真正点击进入该行时清除待看；长按、滑出操作带、弹出菜单或点其他行不清除。
+- **验证与产物：** 待看持久化、显式清除、普通／置顶／工作列表排序、标题左侧圆点顺序与搜索／存储回归合计 `25 tests / 0 failures / 0 errors / 0 skipped`；`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,984,644` bytes，SHA-256 `4f4344e7f13764e6f1e32e9eeba981fd30174995a42a9dccaf330bda8efdf464`，v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未安装或操作 OPPO，未运行任何 `connected*AndroidTest`；真机列表视觉与触摸交互仍需后续显式验收。
+
+## 2026-08-30：搜索正文补全与本机实际占用去重
+
+- **搜索正文：** 空关键词“正文”不再只取每个对话的一条摘要；本地索引覆盖全部用户／Assistant 文本分支，ChatGPT JSON／ZIP 与 Claude 导入对话沿用正常时间线和来源标签。旧版只建了当前分支的局部索引时按对话就地重建；点击隐藏分支命中会先切换到确定的目标叶再定位消息。
+- **本机数据根因与修复：** 旧概览按附件目录行分类，已永久删除会话遗留的 ZIP ownership receipt 会让已删媒体继续占在视频／图片中，文件当前长度、目录历史大小和来源概况也没有形成一个统一口径。现在分类只统计仍有真实 owner 的唯一文件，实际字节读取当前受管文件；无 owner 但仍在磁盘的历史残留单列并计入总量，用户可从既有清理范围明确删除。永久删除会话同时移除派生导入 receipt，并在最后引用消失时删除私有文件；捕获草稿、知识附件和南枫转写均纳入引用保护，不能被误清。原 ZIP 若仍保留，只按压缩包物理大小计入“其他导入资料”一次。
+- **验证边界：** 搜索完整分支／旧索引修复与本机数据实际长度、残留隔离、显式残留清理、永久会话删除附件回收已纳入本次 `25 tests / 0 failures` 的 Room + App 私有文件定向回归，Release 构建与签名信息同上。未读取或修改 OPPO 私有业务数据，未覆盖安装，未运行任何 `connected*AndroidTest`；真机实际视频体积仅能在后续同签名覆盖后按新口径回读，不把预期的“1 GB 多”伪写为已验证事实。
+
+## 2026-08-30：Qwen3.8-Max 联网时限、费用四宫格与暗色来源入口收口
+
+- **Qwen3.8-Max 联网路线：** 纯文本实时信息请求不再进入曾出现 5 分钟只有工具进度、无终态正文的千问 Responses 链，固定改走官方 Chat Completions 联网，显式发送 `enable_search=true`、强制检索、`reasoning_effort=low` 与 `max_completion_tokens=16384`，整体生命期硬上限为 3 分钟。其他千问纯文本预设继续使用 Responses，附件仍沿用既有 Chat Completions 解析路线；失败不静默换模型或重复计费。
+- **费用摘要与暗色链接：** “本机累计”继续独立显示；`会话、会话标题整理、历史资料整理、南枫转写` 四类摘要合并为一张 24dp 圆角 2×2 组合卡，用横／纵细分隔线和四个语义图标分区，原有模型、调用／Token 次数、实际金额、本地估算及金额精度全部保留。Assistant 来源链接胶囊与 ChatGPT 导入来源标记删除固定 `#EDEDED`，统一消费主题 `NeutralSystemSurface`、正文色和低对比描边，暗色皮肤不再出现亮白入口。
+- **验证与边界：** 千问路由／Adapter、费用摘要、来源入口共 `51 tests / 0 failures`；`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。一次扩大到既有 `P6DConversationRowAccessibilityContractsTest` 的宽回归命中 2 项历史 Dialog／搜索时间线静态合同失败，不在本轮费用或来源胶囊区段；本轮新增定向合同均通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,984,654` bytes，SHA-256 `f37911f200c256e8e18b98f3ddda5caae680f99e54e3fdcfb306437f639d2d00`，v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未使用用户 Key 发起真实千问请求，未安装或操作 OPPO，未运行任何 `connected*AndroidTest`；真实千问耗时、2×2 卡片窄屏排版和暗色来源入口仍需真机显式验收。
+
+## 2026-08-30：OPPO 保数据覆盖（模型／费用／转写统一收口 Release）
+
+- **覆盖门禁：** 目标唯一锁定 OPPO PKH120 / Android 16 `3B157F009E800000`，当时无其他 ADB 设备。候选与现装包均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug、v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；覆盖前现装包为 `27,968,230` bytes、SHA-256 `60298f738ce0d061e51acd0e086538b96044fa4fd1e8e4fbce74c36d0cc7851b`。
+- **覆盖与字节回读：** 候选 `app/build/outputs/apk/release/南枫AI.apk` 为 `27,984,638` bytes、SHA-256 `b19eef17db1efbc11bec2a14e08dbfae648daa294b8c4a2380cd89f5c794e72c`。只推送到 `/data/local/tmp/nanfeng-ai-code66-ui-unification-20260830.apk`，设备端哈希一致；只执行一次 `pm install -r --user 0`，返回 `Success`。安装后重新读取变化后的 `pm path` 并拉回 `base.apk`，与候选逐字节一致，仍为非 Debug、v2/v3 同证书。
+- **数据保留与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变化；覆盖后 `lastUpdateTime=2026-08-30 20:58:42`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 已精确删除，本机前后校验目录已移入废纸篓。未卸载、未清数据、未读取私有业务内容、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`；覆盖与字节闭环不替代用户对最新费用摘要、模型顺序和 PDF 翻页性能的真机交互确认。
+
+## 2026-08-30：模型选择、费用摘要、转写预览与搜索时间线统一收口
+
+- **模型选择：** 根层“自动／日常／深度”和进入子页后的“日常／深度”标题统一使用 `Bold`。DeepSeek 行只将动态“当前高峰／当前低谷”片段保留主题色粗体，“官方实时联网检索”恢复普通辅助色。设置页 Provider 顺序固定为 `OpenRouter → DeepSeek → 智谱 → Qwen`，千问排在最后；智谱不再在模型选择框下方单列 GLM-OCR 卡片，展开同一模型选择浮层后，在聊天预设下方显示保留原说明的 GLM-OCR 信息项，该项不可选为聊天预设，也不进入 Composer。
+- **转写预览与授权：** 南枫转写 PDF 点击后立即进入共享查看器加载壳，不再等待首页栅格化；补齐与对话／搜索相同的 4 页／24 MiB 有界页缓存、相邻页预取、旧请求代际失效和翻页优先。成功打开不遗留“正在阅读本地 PDF；不会外发”信息条，文本预览删除底部重复操作说明。选择文件仍只做本机私有复制，开始卡删除重复勾选，用户明确点击“开始转写”才外发。
+- **搜索时间线：** 南枫转写的原文件和 Markdown 结果不再生成单独“南枫转写”分组；默认排序按各自真实时间与全部普通附件共同进入年月时间线，显式时间／大小排序继续对全部结果全局生效。点击、定位、预览、长按和 owner 边界保持原有统一逻辑。
+- **费用摘要与账号按钮：** “本机累计、会话、会话标题整理、历史资料整理、南枫转写”改为五张同规格全宽前景摘要卡，统一标题、留白、左标签／右数值对齐；次数、Token 和金额不再挤成长句，全部金额值使用主题色粗体，统计事实无删减。Google 账号管理中的“切换 Google 账号／退出登录”改为相同灰色填充底、无描边，尺寸、图标和行为不变。
+- **验证与产物：** 南枫转写 UI、共享 PDF／文本预览、DeepSeek 选择提示、搜索时间线、模型标题粗体、模型设置、费用摘要和账号页共 `44 tests / 0 failures`；`:app:compileReleaseKotlin`、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 / `0.3.0-p10j` Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,984,638` bytes，SHA-256 `b19eef17db1efbc11bec2a14e08dbfae648daa294b8c4a2380cd89f5c794e72c`；v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未请求真实 Provider，未安装或操作 OPPO，未运行任何 `connected*AndroidTest`；真机页面与实际 PDF 翻页性能仍需后续显式验收。
+
+## 2026-08-30：GLM-5.3 聊天模型完整接入
+
+- **模型、设置与权限：** 新增独立 `ModelPresetId.GLM_5_3`，固定智谱官方直连 `glm-5.3` 与 `https://open.bigmodel.cn/api/paas/v4`；设置“智谱”下同时显示 `GLM-5.3`、`GLM-5.3 Flash` 和独立 GLM-OCR 说明，共用既有智谱加密 API Key，默认仍为 Flash。普通聊天只校验实际接收 Provider 的启用与凭据，不把设置页当前 Flash 预设误当作旗舰模型权限门。
+- **路由与调用：** “深度”顺序更新为 `Claude Fable 5 → Claude Opus 5 → DeepSeek V4 Pro → GPT-5.6 Sol → GLM-5.3 → Qwen3.8-Max`。`GLM-5.3` 同步进入普通、复杂、附件三条 Auto 候选，并都位于 `Qwen3.8-Max` 上方；三条 Auto 的契约现在强制覆盖全部聊天预设，防止以后新增模型只出现在设置或手动列表。智谱 Adapter 对旗舰与 Flash 都显式发送 `thinking.type=enabled`、`reasoning_effort=max`，官方网页检索继续使用 Chat Completions `web_search`；思考／正文、Token、耗时、失败诊断和 Assistant 精确模型归因沿用现有统一链。
+- **附件与调用记录：** `MD` 等 UTF-8 文件本机完整转文本；PDF 优先本机文本层，扫描 PDF／图片可走 GLM-OCR，图片／视频等可走 Qwen3.7-Plus Markdown 桥，再交给 `GLM-5.3` 作最终回答，桥接不改变最终模型。调用记录显示 `GLM-5.3`、实际智谱接收方和返回的 Token／耗时／状态。当前智谱中国区公开价目源未可靠提供旗舰直连费率，因此不套用 Flash 或国际渠道价格；未返回官方金额时如实显示未知。
+- **验证与产物：** 模型服务、设置目录、Auto／手动顺序、Profile、智谱请求、联网、共享凭据、MD／PDF／图片／视频桥接、调用归因与费用诚实边界定向 `96 tests / 0 failures`。全量 JVM 为 `1001 tests / 4 failures / 3 skipped`，四项仍是既有 PDF renderer cache、统一 Dialog scrim／边缘手势与设置画布合同，本轮相关测试均通过。`:app:compileReleaseKotlin`、`:app:lintVitalRelease`、`:app:assembleRelease` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,968,266` bytes，SHA-256 `3eb7295597e2dd831d42bf62f081df2402954808602411bd5c98746231949703`，v2/v3 证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未使用用户 Key 发起真实智谱请求，未安装或操作 OPPO，未运行任何 `connected*AndroidTest`；真实账户权限、真实账单与真机选择面仍需后续显式验收。
+
+## 2026-08-30：OPPO 保数据覆盖（DeepSeek 实时峰谷提示 Release）
+
+- **覆盖门禁：** 目标唯一锁定 OPPO PKH120 / Android 16 `3B157F009E800000`。候选与现装包均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug、v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；覆盖前现装包为 `27,935,481` bytes、SHA-256 `4a19a3cff2073badf006910600c5097eacd8ade1068e542b49058b9b3d57635d`。
+- **覆盖与字节回读：** 只推送冻结候选到 `/data/local/tmp/nanfeng-ai-deepseek-pricing-code66.apk`，设备端与本地 SHA-256 均为 `60298f738ce0d061e51acd0e086538b96044fa4fd1e8e4fbce74c36d0cc7851b`；只执行一次 `pm install -r --user 0`，返回 `Success`。安装后按新 `pm path` 拉回 `base.apk`，与候选同为 `27,968,230` bytes、同一 SHA-256，`cmp` 逐字节一致，仍为非 Debug、v2/v3 同证书。
+- **数据保留与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变化；覆盖后 `lastUpdateTime=2026-08-30 20:02:20`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 和本机校验副本均已精确清理。未卸载、未清数据、未读取私有业务内容、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`；安装字节闭环不替代南烛枫在模型选择面回读主题色粗体“当前低谷／当前高峰”。
+
+## 2026-08-30：DeepSeek 模型选择实时峰谷提示与费用口径统一
+
+- **官方规则与唯一 owner：** 依据 DeepSeek 当前官方价目，UTC 每日 `01:00–04:00`、`06:00–10:00` 为高峰，即北京时间 `09:00–12:00`、`14:00–18:00`；其他时段为低谷。新增纯领域 `DeepSeekPricingWindow`，模型选择面与本机费用估算共同消费它，避免 UI 和账本各自判断。
+- **选择面：** “日常”的 V4 Flash 与“深度”的 V4 Pro 小字改为主题色粗体 `当前低谷／当前高峰 · 官方实时联网检索`。打开着的选择面会在下一个精确边界自动刷新；计算只读当前 `Instant` 和 UTC，不受设备时区变化影响。没有新增主页、Composer 或设置常驻入口。
+- **费用与历史：** 2026-08-17 00:00（北京时间）起，DeepSeek V4 Flash／Pro 的 token-only 本机估算按同一峰谷状态选取官方缓存输入、非缓存输入和输出价格；Provider 实际结算继续优先。生效前记录继续使用旧价目版本，避免用新价格改写历史。
+- **验证与边界：** 峰谷边界、下一次刷新、费用版本、UI 主题色粗体与联网入口定向 `25 tests / 0 failures`，既有 `FB-P6-108` 模型选择面合同也单独通过；包含旧全类的宽回归为 `114 tests / 1 failure`，唯一失败是既有 `FB-P6-110` 统一 Dialog 内向边缘手势合同，本次模型选择相关项通过。`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,968,230` bytes，SHA-256 `60298f738ce0d061e51acd0e086538b96044fa4fd1e8e4fbce74c36d0cc7851b`，v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未发起真实 DeepSeek 请求、未安装或操作 OPPO、未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：全模型统一附件解析与对话错误隔离
+
+- **已确认根因：** `MD` 不是不可读；旧 `DeepSeekChatAdapter` 和 `ZhipuChatAdapter` 对任何附件直接返回 `AttachmentUnsupported`，而已有的本机 UTF-8 文本内联只被 OpenRouter／千问使用。同时 UI 只保存一个全局 `sendError`，没有失败会话 ID，因此切换对话后仍会显示前一对话的错误。
+- **统一解析链：** `MD/TXT/JSON/CSV/XML/YAML/HTML` 与 `DOCX/XLSX/PPTX` 在 Provider 之前完整转为本机文本，包含千问 Responses 实时搜索等文本专用协议；PDF 在当前协议支持时发送完整原件，其他路由先读文本层、扫描件调用 GLM-OCR；图片、视频等在目标模型或联网协议不原生支持时，由 Qwen3.7-Plus 生成忠实 Markdown 材料投影，图片在千问未配置时可用 GLM-OCR 兜底。原选模型不变，仍负责最终回答；不将所有 Provider 的原生能力伪改为多模态支持。
+- **告知、账本与失败边界：** Composer 在有二进制材料时预先说明“本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR”。桥接调用独立记录实际 Provider、模型、Token、费用与结果，不保存文件字节、桥接 Prompt 或中间 Markdown。桥接不可用时保留原附件并阻止最终请求，不发首页／封面／缩略图，不静默换最终模型。`sendErrorConversationId` 使 Composer 错误只在失败会话投影，切换对话立即隔离。
+- **验证与产物：** Provider Adapter、Markdown 本机投影、Qwen 图片桥接、GLM-OCR PDF 桥接、联网协议强制投影、对话错误隔离、外发与上下文审计定向 JVM 通过。全量 JVM 为 `986 tests / 4 failures / 3 skipped`，4 项仍是既有 PDF renderer cache、统一 Dialog 遮罩／边缘手势与设置画布合同，本轮链路全部通过。`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,951,857` bytes，SHA-256 `b162f90e4f3fe7be2080e32bb8eef38883c86fe4a3c17528a97d36bd9a5e18a0`，v2/v3 证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未调用真实 Provider，未安装或操作 OPPO，未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：Qwen3.8-Max 长时推理与高费用根因修复
+
+- **已确认根因：** 该次本机归因为输入 `83,273`、输出 `17,242`、耗时 7 分 39 秒，平均约 `37.6 Token/s`。当时的 Qwen3.8-Max 请求未发送 `reasoning_effort`，使服务端采用默认 `xhigh`；Responses 同时允许 `131,072` 组合输出 Token 和 10 分钟生命期。因此这不是单纯的网络等待，而是应用让高推理档位在过宽预算内持续生成。历史归因未存 `reasoning_tokens`，所以无法诚实还原这 `17,242` 中究竟多少是推理，不从总金额伪造精确拆分。
+- **请求收口：** Qwen3.8-Max 的 Chat Completions 与 Responses 两条协议都显式锁定 `reasoning_effort=low`；组合输出上限收至 `16,384`，Responses 整体生命期由 10 分钟收至 5 分钟。其他千问预设不受影响，失败后仍不静默重投或换模型。
+- **可审计费用：** Responses 和 Chat Completions 终态的 `reasoning_tokens` 已贯通 Provider 解码、归因 Room 和费用页；新记录显示“总输出（推理 · 正文）”，旧记录显示“推理明细未返回”。Room 版本由 `62→63`，可空列迁移保留旧输出和已记账金额。北京直连费用版本改为官方人民币输入 `¥12/M`、输出 `¥36/M`、缓存输入 `¥1.5/M`；旧记录的 `¥1.497056` 不改写，若完全无缓存按新官方价目复算则为 `¥1.619988`。
+- **验证与产物：** 千问 Adapter、Responses SSE、推理 Token 传递、费用、模型能力与 `62→63` 迁移定向 JVM 全部通过。干净全量 JVM 为 `980 tests / 4 failures / 3 skipped`，四项是既有 PDF renderer cache、统一 Dialog scrim／边缘手势和设置画布静态合同，本轮新增链路均通过。`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过；code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,951,866` bytes，SHA-256 `4156d6518d7cabf2e7b507e541565c8964fb0dde1a8facea2b4cd9c3af6f0545`，v2/v3 证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未使用用户 Key 发起真实千问请求，未安装或操作 OPPO，未运行任何 `connected*AndroidTest`；真实 Provider 修复后的耗时和账单仍需后续显式验收。
+
+## 2026-08-30：OPPO 保数据覆盖（“深度”模型顺序 Release）
+
+- **覆盖门禁：** 明确锁定 OPPO PKH120 / Android 16 `3B157F009E800000`，同时在线的 `emulator-5554` 未参与。候选与现装包均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug、v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；覆盖前现装 `base.apk` 为 `27,935,477` bytes，SHA-256 `0d4c5fe8fb51225d1304297baeb6cc2ba67cec52a8b87270bccf00c3deefc934`。
+- **覆盖与回读：** 只将冻结候选推送到 `/data/local/tmp/nanfeng-ai-deep-order-20260830.apk`，设备端与本地 SHA-256 均为 `4a19a3cff2073badf006910600c5097eacd8ade1068e542b49058b9b3d57635d`；只执行一次 `pm install -r --user 0`，返回 `Success`。安装后重新读取变化后的 `pm path` 并拉回 `base.apk`，设备与候选均为 `27,935,481` bytes、同一 SHA-256，`cmp` 逐字节一致，仍为非 Debug、v2/v3 同证书。
+- **数据不变与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变；覆盖后 `lastUpdateTime=2026-08-30 18:23:13`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 与本机校验副本已精确清理。未卸载、未清数据、未读取私有业务内容、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`；本次只证明正式包安全覆盖与数据目录指纹不变，不替代“深度”选择面真机视觉和真实 Provider 调用验收。
+
+## 2026-08-30：“深度”手动模型顺序调整
+
+- `ComposerModelRoutingCatalog.deep` 固定调整为 `Claude Fable 5 → Claude Opus 5 → DeepSeek V4 Pro → GPT-5.6 Sol → Qwen3.8-Max`，模型选择面按该单一目录顺序呈现。本次只调整“深度”手动列表，不改变 Auto 路由、日常列表、已有会话 override、Provider 或模型调用参数。`P6GModelRouterContractsTest` 与 `ProviderAdapterContractsTest` 定向通过，`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过；全量 JVM 仍为 `977 tests / 4 failures / 3 skipped`，四项是既有 PDF renderer cache、统一 Dialog scrim／边缘手势和设置画布静态合同，本轮顺序与 Provider 项已通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,935,481` bytes，SHA-256 `4a19a3cff2073badf006910600c5097eacd8ade1068e542b49058b9b3d57635d`，v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未安装或操作 OPPO，未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：南枫转写应用内统一预览与费用分页
+
+- **共享查看 owner：** 删除南枫转写专用的 `AndroidGlmOcrSourceOpener` 及 `ACTION_VIEW + FileProvider` 第三方跳转。转写详情从 `GlmOcrTaskOwner.sourceReference` 回读同一持久附件引用，经 `ConversationAttachmentPreviewProjection` 完整性校验后，直接复用对话／搜索的 `ImagePreviewDialog` 与 `PdfPreviewDialog`；图片双击、双指和拖动、PDF 缩放／翻页与页码恢复均保持同一实现。
+- **相关入口审计：** 对话附件、已上传文件、全屏搜索附件与南枫转写原文件均由同一私有附件预览投影解析图片／PDF；剩余 `ACTION_VIEW` 只用于 App 自身主屏快捷方式和明确的外部网页 URL，不再承载本地文件查看。
+- **费用与用量：** 页面直接读取既有 `InvocationRepository` 中 `glm-ocr:*` 调用，将转写人民币估算纳入本机累计，增加上方“南枫转写”汇总和第四个切换按钮；逐条显示 GLM-OCR、时间、耗时、输入／输出 Token、状态与可用金额，不复制第二份账本。
+- **验证与产物：** GLM-OCR 领域、共享预览 UI、费用分页及受影响的图片／PDF／视频／音频／文本预览合同定向通过；`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过。全量 JVM 为 `977 tests / 4 failures / 3 skipped`，四项仍是既有 PDF renderer cache、统一 Dialog scrim／边缘手势和设置画布静态合同，本轮新增及受影响项已通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,935,480` bytes，SHA-256 `fa338d75b6b0f7c8e6c2e4016218544d7b4ad3acfd6662bda76fb984bba8c7dd`，v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未请求真实智谱、未安装或操作 OPPO、未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：OPPO 保数据覆盖（ZIP 依赖清理修复 Release）
+
+- **覆盖门禁：** 目标为 OPPO PKH120 / Android 16，序列号 `3B157F009E800000`；同时在线的 `emulator-5554` 未被使用。候选与现装包均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug、v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。覆盖前现装 `base.apk` 为 `27,919,096` bytes，SHA-256 `5d5249c5ee295a7ad04618caa875137d50e39505f12e9cd4d44263655c571eac`。
+- **覆盖与回读：** 只将候选包推送到 `/data/local/tmp/nanfeng-ai-code66-zip-cleanup-20260830.apk`，设备端与本地 SHA-256 均为 `0d4c5fe8fb51225d1304297baeb6cc2ba67cec52a8b87270bccf00c3deefc934`；随后只执行一次 `pm install -r --user 0`，返回 `Success`。安装后重新读取实际 `pm path`并拉回 `base.apk`，与候选均为 `27,935,477` bytes、同一 SHA-256，`cmp` 逐字节一致，仍为非 Debug、v2/v3 同证书。
+- **数据不变与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变；覆盖后 `lastUpdateTime=2026-08-30 17:09:35`，用户 0 仍为 `installed=true`。设备与本机校验临时包已精确清理。未卸载、未清数据、未读取私有业务内容、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`。本次只验证安全覆盖和包／数据目录指纹；未替用户点击“整理并删除”，因此真实 10 个 ZIP 依赖的内置与原包删除仍由用户显式确认后执行。
+
+## 2026-08-30：ZIP 原始包“仍有 10 个依赖”清理链修复
+
+- **根因：** “尚未全部内置”的计数会包含已提交归属关系、但历史附件目录行缺失的候选；旧清理器却只遍历仍存在的目录行，这类依赖永远不会减少。另一个分叉是去重附件可能仍指向已不在的旧 ZIP，虽然当前保留 ZIP 内有同哈希、同大小字节，旧实现也不会尝试恢复。
+- **真实修复：** `AndroidImportedZipPackageCleanup` 改为以稳定 `attachmentId` 去重建立全局恢复计划；目录行缺失时用已持久化的候选哈希／大小／MIME 和 ZIP 原字节重建同一 ID，旧来源不在时可从其他保留 ZIP 的完全一致条目恢复。每项仍先流式写入、校验字节数与 SHA-256、`fsync`，再事务切换附件目录；所有候选都重新读回为 `attachments/v1` 后才允许隔离并删除原包。缺少可校验来源、任一哈希／大小不符或全局仍有依赖时，全部原包保留。
+- **验证边界：** 定向合同新增“缺失目录行恢复”、“旧 ZIP 不在时从当前 ZIP 恢复去重附件”、“任一附件无可验证来源就保留所有原包”，并保留原有成功与未完成任务门禁；ZIP 清理、任务删除与压缩包附件存储共 `9 tests / 0 failures / 0 errors / 0 skipped`。Release Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。全量 JVM 为 `975 tests / 4 failures / 3 skipped`，失败仍是既有 PDF renderer cache、统一 Dialog scrim／边缘手势和设置画布静态合同，本轮 ZIP 清理定向项全部通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,935,477` bytes，SHA-256 `0d4c5fe8fb51225d1304297baeb6cc2ba67cec52a8b87270bccf00c3deefc934`，v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未安装或操作 OPPO，未用用户真实 10 个附件执行不可逆清理，也未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：南枫转写统一调用账本与全局搜索贯通
+
+- **调用账本：** GLM-OCR 不再只把 Token／费用留在 `glm_ocr_tasks`。每次真实 Provider 尝试或外发前门禁均由 `GlmOcrTaskOwner` 写入既有 `InvocationRepository`，统一记录智谱／`glm-ocr`、状态、开始／完成时间、Attempt、输入／输出 Token、人民币费用和安全失败类型；设置调用详情再从 OCR 任务 owner 关联显示原文件名、页数、服务商请求 ID 与安全错误码。账本仍不保存文件正文、Prompt、原始请求／响应、Key、URI 或私有路径。
+- **搜索与定位：** 既有全屏搜索新增 OCR 文档投影：原始 JPG／PNG／PDF 与生成 Markdown 进入“全部／图片／文件”及文件类型筛选；Markdown 正文通过已校验私有流逐行匹配，不复制第二份正文索引。结果继续复用现有白色附件卡与预览投影，点击后直接选择对应 OCR 任务并打开“南枫转写”详情，不伪造会话／消息锚点。
+- **验证与产物：** GLM-OCR 领域／UI、会话搜索、统一调用账本与费用显示定向 JVM 通过；Debug／Release Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。全量 JVM 为 `972 tests / 4 failures / 3 skipped`，失败仍位于既有 PDF renderer cache、统一 Dialog scrim／边缘手势和设置画布静态合同，不在本轮 OCR 调用账本或搜索链。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，`27,935,486` bytes，SHA-256 `d27c916d288293df1fc5a2bcbf1783851ec335a5d0ec76939df224e0cbfbb6b9`；v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未安装或操作 OPPO，未请求真实智谱，未运行任何 `connected*AndroidTest`；真实调用记录与设备搜索视觉仍需后续显式授权下验收。
+
+## 2026-08-30：OPPO 保数据覆盖（标题／历史资料统一路由 Release）
+
+- **覆盖门禁：** 明确目标为 OPPO PKH120 `3B157F009E800000`，全程以序列号隔离同时在线的模拟器。候选与现装包均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug、v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。覆盖前现装包为 `27,869,949` bytes，SHA-256 `462baf2ddc182b4acc60f497d4c2d1b687a8285d6cac33276424acecb7586df9`。
+- **覆盖与回读：** 只将候选包推送到 `/data/local/tmp/nanfeng-ai-code66-title-history-route-20260830.apk`，设备端与本地 SHA-256 同为 `5d5249c5ee295a7ad04618caa875137d50e39505f12e9cd4d44263655c571eac`；随后只执行一次 `pm install -r --user 0`，返回 `Success`。安装后拉回的 `base.apk` 与本地候选均为 `27,919,096` bytes、同一 SHA-256，仍为非 Debug、v2/v3 同证书。
+- **数据不变与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变；覆盖后 `lastUpdateTime=2026-08-30 14:05:33`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 与本机校验目录已精确清理。未卸载、未清数据、未读取私有业务数据、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`；本次只验证安全覆盖与数据指纹，未替用户发起真实 Provider 请求。
+
+## 2026-08-30：会话标题与历史资料整理统一模型顺序
+
+- **真正路由 owner：** 新增 `TitleAndHistoryRefinementRouting`，会话自动标题与手动／自动历史资料整理均只读取同一顺序：`DeepSeek V4 Flash → GLM-5.3 Flash → Qwen3.6 Flash`。前一项未启用、无凭据、模型／Adapter 不可用或请求／格式失败才进入后一项；OpenRouter、DeepSeek V4 Pro、Qwen3.7-Plus 不再参与这两个后台任务。普通聊天、`Auto`、提醒草案和定时监控不受影响。
+- **历史资料链路纠正：** 原实现写死 Qwen Provider、Qwen Adapter、Qwen 审计和草稿归因，已改为逐候选解析 Provider、共享 Adapter 选择和实际 Provider／模型归因。GLM 命中时审计明确记录 `max`，DeepSeek／Qwen 记录 `low`。“整理当前对话”确认面也从旧“固定千问”改为显示真实三段顺序。
+- **验证与产物：** 标题、历史资料、Provider Adapter、后台重试与设置／运行时相关定向 JVM 共 `46 tests / 0 failures / 0 errors / 0 skipped`；`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,919,096` bytes，SHA-256 `5d5249c5ee295a7ad04618caa875137d50e39505f12e9cd4d44263655c571eac`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未发起真实 Provider 请求、未安装或操作 OPPO、未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：“本次上下文来源”弹窗文字精简
+
+- 删除弹窗顶部“仅显示本次实际使用的本地来源”说明，并删除每一项下方的“已使用……”理由小字；弹窗只保留“本次上下文来源”主标题、单行来源标题与“知道了”。
+- 个性化来源行从“个性化资料 · 昵称、职业／角色”精简为实际参与字段“昵称、职业／角色”；自定义指令行只显示“自定义指令”，不再追加“已保存的自定义指令”。审计数据、来源参与事实、页脚入口、隐私边界与关闭交互均不变。
+- `AnswerContextDisclosureUiContractsTest` 与 `AnswerContextDisclosureContractsTest` 共 `5 tests / 0 failures / 0 errors / 0 skipped`；Debug Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,902,726` bytes，SHA-256 `d4743ada1cfc251b6ab76f64da088a4f205a2d313ca1ac775eaf919df5faba3b`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未安装或操作 OPPO、未运行 `connected*AndroidTest`；真机视觉仍待后续覆盖后回读。
+
+## 2026-08-30：Qwen3.8-Max 联网超时与工具轨迹泄漏根因修复
+
+- **真正根因：** 投资／当期事实问题会正确路由到千问 `/responses` 内置 `web_search`，但普通聊天把这条长时工具调用强制为非流式，又继承 90 秒 socket 读取上限；因此截图会在精确 `1分30秒` 进入未知超时，即使 Provider 仍在搜索／推理也收不到最终正文。旧 Chat Completions 兼容路径还可能把 `<tool_use>` / `<tool_result>` 当作普通文本，这就是上一次“等很久后出现原始工具内容”的同一协议分层问题。
+- **唯一路径修复：** Qwen Responses 联网现改为官方语义 SSE，只投影 `response.output_text.delta` 为可见正文，`response.reasoning_text.delta` 仍单独保留，搜索／工具状态一律不进正文。只有收到 `response.completed` 才允许进入完成终态；`failed` / `incomplete` / 无终态 EOF 都保留为失败，不把半截文本当成答案。Provider 结构化来源在终态原子并入最终可见回复；请求明确 `store=false`，不使用 Responses 默认服务端保存。
+- **时限与恢复：** 这条 SSE 的单次无数据读取窗口为 180 秒，整体生命期硬上限为 10 分钟；工具状态与正文增量均可持续驱动真实进展，不再等整包结果。超时／断线后仍不自动重投；用户点“重试”时继续复用原 Attempt 与幂等键，不静默换模型。
+- **验证与产物：** Provider Adapter、Responses SSE framing、自动联网路由、完成持久化与普通发送入口定向合同共 `56 tests / 0 failures / 0 errors / 0 skipped`；Debug Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,902,730` bytes，SHA-256 `b3b1b978df913a358205732b489326008dd49e31d6cf49fecaa5545964751043`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未使用用户 Key 发起真实千问请求，未安装或操作 OPPO，未运行 `connected*AndroidTest`；真实 Provider 与真机闭环仍需另行授权后验收。
+
+## 2026-08-30：GLM-OCR 独立文档转 Markdown 工作区
+
+- **产品位置：** 左侧栏在“定时任务”正下方保留“南枫转写”入口，页内同名标题真正居中。主页为铺满画面的亮白内容面，直接列出全部转写，已删除重复的“Markdown 结果”大标题、说明小字和按内容高度生成的独立白卡；“选择图片或 PDF”是底部居中的独立悬浮按钮。GLM-OCR 在智谱模型设置中正常展示并复用同一加密 API Key，但以 `DOCUMENT_OCR` 用途从 Composer、Auto、普通聊天及定时任务候选中硬隔离。
+- **真实 owner：** 新增 Room `glm_ocr_tasks` 与 `61→62` 迁移，来源／结果均引用现有私有附件目录并受引用计数保护。文件选择后只在本机安全复制；用户逐文件确认并点“开始转换”后，WorkManager 才调用固定智谱 `layout_parsing` 接口。JPG/PNG 限 10 MB、PDF 限 50 MB；请求以校验后的文件流分段 Base64 写出，结果只保存完整 Markdown、请求 ID、页数、Token、费用估算和安全状态，不持久化凭据、请求正文、原始响应或布局明细。超限／持久化失败清理本次无引用副本；未知超时／网络状态不自动重试，避免重复计费。
+- **结果与原文件：** 每条列表可点击进入详情；详情固定呈现“原始文件”与“完整文字”。原始图片／PDF 通过私有存储完整性校验后，复用对话／搜索的 App 内图片与 PDF 预览，不再跳转系统查看器；Markdown 按块惰性显示全文，已删除 200,000 字符预览截断与预览弹窗。长按已完成结果仍可创建真实新会话并把对应 `.md` 作为未发送附件加入 Composer 草稿，不自动发送。
+- **验证：** OCR UI／领域定向 JVM 全部通过，`:app:lintVitalRelease` 和 `:app:assembleRelease` 通过。全量 JVM 最近一次为 `969 tests / 3 failures / 3 skipped`，三项均是工作树既有的 PDF 渲染器缓存、统一弹窗遮罩与全局弹窗边缘手势契约失败。隔离 AVD `NanfengAiP5PerfAccessibility` 以同证书 `install -r` 保数据覆盖；实际读回铺满白色主界面、无重复标题的空态、底部悬浮选择、任务列表、待确认详情，并证实原始 JPG 真实打开到 Google Photos。返回层级又以两侧分别实滑验收：详情页从右边缘向内滑回到列表，列表页从左边缘向内滑回到对话上一级。未勾选发送确认，未发真实 Provider 请求，未操作 OPPO，未运行任何 `connected*AndroidTest`。
+- **产物：** code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,919,111` bytes，SHA-256 `36163c17c72b93b8e48b92c80190b40359547be43e4a67e3f6bcdb26df2d75e4`；v2/v3 签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。权威行为读取 [GLM-OCR 南枫转写当前合同](GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md)。
+
+## 2026-08-30：OPPO 保数据覆盖（模型字重与 Auto 路由 Release）
+
+- 唯一连接设备为 OPPO PKH120 `3B157F009E800000`。候选与现装包均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug，v2/v3 正式证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；覆盖前设备 `base.apk` 为 `27,869,942` bytes，SHA-256 `a33db2341a378a799476150b0a9576d97e628be6d295b22abecae6a86d54e43f`。
+- 只推送候选 APK 到 `/data/local/tmp/nanfeng-ai-code66-bold-model.apk`，设备端 SHA-256 与本地候选同为 `462baf2ddc182b4acc60f497d4c2d1b687a8285d6cac33276424acecb7586df9`；随后只执行一次 `pm install -r --user 0`，结果为 `Success`。安装后拉回的设备 `base.apk` 与本地 `app/build/outputs/apk/release/南枫AI.apk` 均为 `27,869,949` bytes、同一 SHA-256，仍为非 Debug、v2/v3 同证书。
+- 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变；安装后 `lastUpdateTime=2026-08-30 12:34:07`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 与本机校验目录已精确清理。未卸载、未清数据、未读取私有业务数据、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`；模型字重的真机实际观感仍需南烛枫打开 App 回读。
+
+## 2026-08-30：Composer 模型短名与选择面主标题统一加粗
+
+- 主界面底部 Composer 右侧的短模型名由 `Normal` 调整为 `Bold`，普通会话与临时聊天继续共用 `ComposerModelEntry`；既有 `13sp`、圆润字体、`88dp × 48dp` 入口、内部 `36dp` 胶囊、按压与模型选择逻辑均不改变。
+- 模型选择根层的“自动／日常／深度”三个主标题与具体模型标题统一为 `Bold`；“Auto · …”“日常问答与轻量任务”“复杂推理与专业分析”等说明文字仍保持辅助层级。删除只为区别具体模型而存在的 `labelIsModelName` 分支，避免相同层级再次分叉。
+- `ModelNameTypographyContractsTest` 与两组模型选择面定向契约共 `5 tests / 0 failures / 0 errors / 0 skipped`；`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,869,949` bytes，SHA-256 `462baf2ddc182b4acc60f497d4c2d1b687a8285d6cac33276424acecb7586df9`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未安装或操作 OPPO、未运行任何 `connected*AndroidTest`；真机实际字重仍待获得覆盖授权后回读。
+
+## 2026-08-30：Auto 路由按新模型重排并显式化
+
+- `Auto` 现由中央模型目录维护普通文本、复杂推理、附件三份穷尽式顺序，不再从模型展示顺序隐式补齐。普通文本首选 `DeepSeek V4 Flash`，复杂推理首选 `GPT-5.6 Sol`，附件首选 `Qwen3.7-Plus`；按用户最后确认，`Gemini 3.7 Flash` 固定放在附件路线最后。完整顺序已写入 Android 当前会话界面合同。
+- 复杂升档使用共用纯函数：输入达到 2400 字符，或明确出现深度分析、完整方案、架构／重构／审计、根因／权衡、复杂调试、多步骤推理、投资／估值／风险传导等信号才升档；普通“分析一下”不升档。旧的资料库总条目数触发与已移除设置对应的隐藏 `qualityEscalationEnabled` 门均不再参与自动选型。
+- 实际发送前只从已启用、有凭据、精确可解析、支持文本且非 `UNAVAILABLE` 的候选中选择；附件继续匹配实际能力，同能力池里 `DEGRADED` 排到健康／未知候选之后。发送后 Provider 失败不会静默改投另一模型，避免重复计费和重复回答；手动选择具体模型仍始终优先。
+- 本轮模型路由及显式外发相关定向 JVM 共 `59 tests / 0 failures / 0 errors / 0 skipped`；按最终 Gemini 顺序再次执行核心路由 `16 tests / 0 failures`。`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,869,951` bytes，SHA-256 `797fbd14ec4c839717c8da5e1dbbb6b95f1744e7c67aa56c52fc025396f7191f`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未请求真实 Provider、未安装或操作 OPPO、未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：删除“对比”与“图像 / 视频 / PDF”模型选择分组
+
+- 模型选择面公开目录只保留 `自动选择 → 日常 / 深度`。`ComposerModelRoutingCatalog.groups/choices` 不再包含 Compare 与 Multimodal 候选，根层高度随四个任务分组缩减为两个任务分组，不留下空白托盘。
+- Compare／Multimodal 枚举仅作为历史持久值和底层能力兼容保留，不再是用户可选项；旧 `logical:compare:*`／`logical:media:*` ID 统一由目录 owner 回退到 `auto`，UI 的选中态也读取规范化后的 choice。底层 Auto 附件能力路由、Provider 能力与既有历史数据不删除。
+- 模型目录、分层选择面、Compare 公开入口移除与旧 ID 回退共 `21 tests / 0 failures / 0 errors / 0 skipped`；相关四类整类初跑共 109 项时只有既有 `FB-P6-110` 全局 Dialog 外点／边缘滑动合同失败，本次精确测试已排除该无关失败。`:app:assembleRelease` 与 `lintVitalRelease` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,869,936` bytes，SHA-256 `2b722145bf04b3ae0021342887a115d3d1d71402e092d885c30dcf03128c583e`，v2/v3 证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未安装或操作 OPPO，未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：“日常”模型手动选择顺序调整
+
+- “日常”选择面按 `Claude Sonnet 5 → DeepSeek V4 Flash → GPT-5.6 Terra → GLM-5.3 Flash → Qwen3.7-Plus → Gemini 3.7 Flash` 展示。唯一顺序 owner 仍为 `ComposerModelRoutingCatalog.daily`，`P6GCuratedModelCatalog` 继续从该目录投影，不新增第二套 UI 排序。
+- 本次只移动既有 `ComposerModelChoice`，稳定 ID、Provider 路由、模型能力、`Auto`、自动标题、当前会话 override、短名与其他模型分组均不改变。
+- `P6GModelRouterContractsTest` 定向 `10 tests / 0 failures / 0 errors / 0 skipped`；`:app:assembleRelease` 与 `lintVitalRelease` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,869,952` bytes，SHA-256 `62d515e7eeb5322727801c771a60ad31c6998e5c959dc61c9ff0e85637b8c838`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未安装或操作 OPPO，未运行任何 `connected*AndroidTest`。
+
+## 2026-08-30：消息／会话“分享”与 Markdown 导出合并（代码／定向 JVM／Lint／Release 已验证）
+
+- **唯一可见语义：** Assistant 页脚第二个操作保留原分享图标、“分享”可访问名与现有位置，但回调统一改为原“导出 Markdown”的完整实现：只把该条当前可见 Assistant 内容重建为 `.md`，通过 `FileProvider` 交给系统分享／保存。三点菜单内的“导出 Markdown”已删除，本次上下文来源与“创建分支”仍保留原有语义。
+- **会话弹窗同步：** 聊天／工作两种会话操作弹窗都只保留一条分享图标与“分享”，其实际回调统一到当前会话路径 Markdown 文件分享；相邻的“导出 Markdown”行已删除，弹窗行数与高度计算同步减一。对话未当前选中时仍先打开目标对话并要求用户再次选择分享，禁止用旧会话内容套新标题导出。附件自身的“分享”仍传递原文件，未被改成 Markdown。
+- **验证与产物：** `P6DConversationRowAccessibilityContractsTest` 定向 `4 tests / 0 failures`，覆盖页脚第二位、重复菜单清理、会话弹窗 owner 和紧凑行数；Debug／Release Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,853,570` bytes，SHA-256 `84db52de30531c522c09382c19af33208701679bfe2cce2baa16f7737246b700`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未安装 OPPO、未运行 `connected*AndroidTest`；当前设备仍是上一个 `a33db234…` 包，不含此 UI／入口整合。因未安装新包，两个弹窗的真机可见尺寸和系统分享面仍待回读。
+
+## 2026-08-30：OPPO 保数据覆盖（“架南烛枫”完整修复 Release）
+
+- **安装前门禁：** 唯一连接设备为 OPPO PKH120 `3B157F009E800000`。候选包与现装包均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug，v2/v3 正式证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。覆盖前设备 `base.apk` SHA-256 为 `d578f7dd80d7f01ea420157f99e60000625a7d9f2919afa037052529460ffa35`。
+- **覆盖与字节回读：** 已将正式包推送到精确临时路径，并且只执行一次 `pm install -r --user 0`，结果为 `Success`。安装后拉回的设备 `base.apk` 与本地 `app/build/outputs/apk/release/南枫AI.apk` 均为 `27,869,942` bytes，SHA-256 均为 `a33db2341a378a799476150b0a9576d97e628be6d295b22abecae6a86d54e43f`；设备回读仍为非 Debug、v2/v3 同证书。`lastUpdateTime=2026-08-30 01:37:50`，临时 APK 与本机校验副本均已精确清理。
+- **数据不变证据：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变，用户 0 仍为 `installed=true`、`stopped=false`。未卸载、未清数据、未读取私有业务数据、未部署 Debug／仪器包，也未运行 `connected*AndroidTest`。
+- **尚未替代的验收：** 本条只证明正式包已安全覆盖且数据指纹未变，没有替南烛枫发起真实 GLM 请求。“架南烛枫”的真机／真实服务闭环仍需南烛枫新建对话发起一条 GLM-5.3 Flash 首条回复并回读。
+
+## 2026-08-30：“架南烛枫”思考尾字泄漏完整修复（纠正旧结论）
+
+- **真正根因：** 2026-08-29 的旧修复有两个漏洞。一是清理只比对 reasoning 的字面最后一段；当思考实际以“…回答框架。”结束、Provider 只把“架”重复到正文时，末尾句号会使严格 suffix 比对失败。二是更关键的状态所有权错误：原始 SSE 增量已把“架南烛枫…”写入运行时消息，旧代码先以该未清理文本执行 `RuntimeCompleted`，再绕过运行时直接修改 Room 消息。当前 UI／自动标题可能已消费旧终态，因而数据后写不能保证当屏纠正。
+- **共享 owner 修复：** `RuntimeCompleted` 现显式携带 Provider 分层、尾字清理和首条称呼兜底后的 `finalVisibleText`，由 `ConversationRuntimeStateMachine` 在同一终态事件中原子替换原始流文本、标记完成并生成标题。终态后的可选操作只保留独立 reasoning 块，不再二次改写可见正文。尾字比对同时允许忽略 reasoning 末尾的 Unicode 标点、Markdown 装饰和空白，但仍只在“确认来自思考尾部的重叠 + 立即紧接已配置昵称”时删除，正常“架构调整”不会被裁剪。
+- **回归证据：** 新增真实失败序列：先投影原始流文本“架南烛枫，直接给结论。”，完成事件必须原子收口为“南烛枫，直接给结论。”；另覆盖 reasoning=“先形成回答框架。”与泄漏“架”的标点边界。`AssistantExperienceSettingsContractsTest`、`P3BConversationRuntimeContractsTest`、`NormalChatCompletionPersistenceContractsTest`、`ProviderSseDecoderContractsTest` 与 `ProviderAdapterContractsTest` 共 `50 tests / 0 failures`；Debug／Release Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。
+- **产物与尚未验证边界：** code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,869,942` bytes，SHA-256 `a33db2341a378a799476150b0a9576d97e628be6d295b22abecae6a86d54e43f`，v2/v3 签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未发起真实 GLM Provider 请求、未安装 OPPO、未运行 `connected*AndroidTest`；只有获得新的覆盖授权并由南烛枫用真实 GLM 首条回复回读后，才能宣称真机／真实服务闭环。本条明确取代 2026-08-29 “流式思考尾字泄漏到昵称前修复”的完成性结论。
+
+## 2026-08-30：图片原图预览真实测量根因修复（隔离模拟器真实触控已验证）
+
+- **纠正上一次误判：** 上一条图片手势记录只解决了手势 owner 和状态累计，没有验证 Compose 的最终测量结果。隔离模拟器上用同一张用户截图复现后确认：旧实现的 `Modifier.size(renderedWidth, renderedHeight)` 仍会被全屏父容器最大约束钳回视口大小，但位移却按 `2.5×` 图片计算；所以双击后只剩一条约 `285px` 宽的图片可见区，视觉上并未真正放大。
+- **完整修复：** 全屏稳定视口继续是唯一手势 owner，图片渲染改为独立 `OriginalImageZoomLayer`；它用 `Constraints.fixed` 按实际放大后的像素尺寸测量图片，再在稳定视口中按计算坐标放置。不再出现“位移按放大尺寸算、图片却被压回原尺寸”的分裂。
+- **真实动态验证：** 新建的 Find N5 外屏基线隔离 AVD（`1140×2616 / 442dpi`）通过应用照片选择器加入用户提供的同一张截图。修复后双击从初始图片区 `[0,1187][1140,1506]` 变为占满视口宽度的放大区 `[0,948][1140,1745]`；第二次双击精确回到初始区域。另用两个 MT slot 注入真实双指展开，随后再单指拖动，截图与边界均确认缩放和位移已生效。这是运行时触控验收，不是源码 token 断言。
+- **自动验证与产物：** `P6F2BImagePreviewUiContractsTest` 为 `6 tests / 0 failures`；Debug Kotlin、Release Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 通过。code 66 / `0.3.0-p10j` 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,869,946` bytes，SHA-256 `43e970c2fc3a89124654bf7b93ecbaa35abf0f2c96e9843125c2624f4391d82b`，v2/v3 签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本条未安装 OPPO，未运行 `connected*AndroidTest`；OPPO 仍是上一个未含此测量修复的版本，必须重新获得覆盖授权才能使用本包。
+
+## 2026-08-30：GLM-5.3 Flash 明确锁定 Max 推理（代码／定向 JVM／Lint／Release 已验证）
+
+- **请求合同：** 智谱 `ZhipuChatAdapter` 在且仅在 `modelId=glm-5.3-flash` 时，为普通文本与官方联网 Chat Completions 请求明确写入 `thinking.type=enabled` 和 `reasoning_effort=max`；不再依赖智谱服务端默认档位。字段由 Provider Adapter 自有扩展点追加，Qwen、DeepSeek 与 OpenRouter 的共享请求体不会收到该参数。模型目录同步标记 GLM reasoning 能力，附件与其他未核验能力边界不变。
+- **自动验证：** `ProviderAdapterContractsTest` 与 `ModelProfileAssetContractsTest` 共 `33 tests / 0 failures`，覆盖普通 GLM 请求、带 `web_search` 的 GLM 请求、DeepSeek 不泄漏 Max 字段以及模型目录能力；Release Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 和定向 `git diff --check` 通过。
+- **产物与边界：** code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，大小 `27,853,563` bytes，SHA-256 `df9bef08e6c77ac543550e05571ab53cb5830a12c662f1a052a7c9f09d60c3d0`，v2/v3 签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未发起真实智谱请求、未安装 OPPO、未读取设备或运行 `connected*AndroidTest`；设备仍是上一版图片手势包，需另获覆盖授权后才能使用明确锁定 Max 的新请求。
+
+## 2026-08-30：OPPO 保数据覆盖安装（图片原图预览手势完整重构 Release）
+
+- **安装与字节回读：** OPPO `3B157F009E800000`（PKH120）已使用 `pm install -r --user 0` 同签名覆盖 code 66／`0.3.0-p10j` 非 Debug Release。候选与安装后设备 `base.apk` 的 SHA-256 均为 `d578f7dd80d7f01ea420157f99e60000625a7d9f2919afa037052529460ffa35`；正式证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，设备 `lastUpdateTime=2026-08-30 00:06:24`。
+- **数据保留与清理：** 安装前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变化，设备仍为 `stopped=false`。没有卸载、清数据、读取私有业务数据、部署 Debug／仪器包或运行 `connected*AndroidTest`；设备临时 APK 与本机证书校验副本均已精确清理。
+- **真实验收边界：** 本次确认的是正式包、安全覆盖、安装字节与数据保留，不冒充图片手势已在真机闭环。仍需南烛枫在图片实际像素区域手工回读：双击放大到 `2.5×`、再次双击复位、双指连续缩放、放大后单指拖动。
+
+## 2026-08-30：图片原图预览手势所有者完整重构（代码／定向 JVM／Lint／Release 已验证）
+
+- **此前卡点：** 前两轮只验证了手势函数和静态源码 token，没有证明真实命中。实际实现把 `detectTransformGestures` 与 `detectTapGestures` 同时挂在会随倍率持续改变尺寸、位置的 `Image` 节点；两个识别器会竞争，节点命中区域也在手势中变化。连续双指事件还从 Compose 重组后的滞后 `zoom` 读取，导致倍率可能反复写回约 `1.x` 而不是逐帧累计。这正是代码“看起来有双击／缩放”但真机没有可用操作的共同根因。
+- **完整修复：** 尺寸稳定的全屏预览视口成为唯一手势所有者；首次按下时用最新图片矩形判定是否命中，统一处理图片双击 `2.5×`／再次双击复位、双指中心缩放、放大后单指拖动，以及原倍率下的多图左右切换。`Image` 只负责按原图重测和绘制，不再持有任何 `pointerInput`。一次手势内用本地 `gestureZoom / gesturePlacedX / gesturePlacedY` 即时累计，再同步到 Compose，避免高频事件等待重组。黑色留白单击仍切换预览控件；顶部操作和批量下载链未改变。
+- **自动验证：** `P6F2BImagePreviewUiContractsTest` 与图片批量下载定向契约通过，覆盖连续两段手动 pinch 从 `1.0× → 1.5× → 2.25×`、放大后拖动、双击触点保持与第二次双击复位；Debug／Release Kotlin、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。更宽的图片／会话回归为 `98 tests / 1 failure`，唯一失败是无关的 `KnowledgeLibraryUi.kt` 旧 Material `AlertDialog` 契约；图片相关项目全部通过。
+- **产物与设备边界：** 最终 code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `d578f7dd80d7f01ea420157f99e60000625a7d9f2919afa037052529460ffa35`，大小 `27,853,556` bytes，v2/v3 签名证书 SHA-256 仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。该实现记录完成时只读核对了 OPPO；随后已按上方独立安装记录完成保数据覆盖。安装不替代南烛枫对图片实际像素区四项手势的手工回读。
+
+## 2026-08-29：流式思考尾字泄漏到昵称前修复（代码／定向 JVM 已验证）
+
+- **根因与修复：** V4 Flash 的个别流式回复会把折叠“思考过程”的末字（截图中的“架”）重复送到正文开头，形成“架南烛枫”。流式阶段现只保存 Provider 正文；完成后与独立 reasoning 一起写入最终消息。仅当正文开头与 reasoning 尾部（最多 16 字）严格重叠且其后立即为已配置昵称时，移除重叠，再补首条昵称。正常正文、非昵称开头和不相等的文本不会被猜测或裁剪；自动标题也在这次最终写入之后启动。
+- **验证边界：** `AssistantExperienceSettingsContractsTest` 与 `NormalChatCompletionPersistenceContractsTest` 共 `15 tests / 0 failures`；Debug Kotlin 与定向 `git diff --check` 通过。未运行 `connected*AndroidTest`、未构建／安装 APK、未发起真实 Provider 请求或操作 OPPO；需在后续正式包上由南烛枫回读一次 V4 Flash 的真实回复。
+
+## 2026-08-29：OPPO 保数据覆盖（流式完成链 Release 已安装）
+
+- **安装与回读：** OPPO `3B157F009E800000`（PKH120）已以 `adb install -r --user 0` 覆盖 code 66／`0.3.0-p10j` 非 Debug Release。候选与设备 `base.apk` SHA-256 均为 `e9174f96383893406b6aaf1eddfad63a0f578e1640787b6f69d24f97fb21564b`；正式证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **数据边界：** 安装前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变化，设备为 `stopped=false`。没有卸载、清数据、读取私有业务数据、部署 Debug／仪器包或运行 `connected*AndroidTest`；本地 APK 校验副本已清理。未替用户发起真实 Provider 请求或回读该修复后的真实流式界面。
+
+## 2026-08-29：流式完成链与本机保存错误分层（代码／定向 JVM／Lint／Release 已验证）
+
+- **根因与修复：** Provider reasoning 之前在流式正文完成前写入；该可选折叠补充一旦本地写入失败，会把正文完成、自动标题和费用归因一起误报为 `LOCAL_SAVE`。现在正文先完成并持久化，标题与费用归因继续作为主完成链执行；reasoning 仅在之后尝试保存，失败只显示非阻塞的“思考过程未能保留”提示，不再撤销正文、标题或费用。
+- **失败边界：** 原有笼统“请先不要重复发送”已删除。主回复保存、费用／Token 归因、发送 Attempt 三类本机失败分别说明真实影响；同题再次发送从不按正文去重，仍是新的模型请求。非流式路径也改为先保存可见 Assistant 正文，再写费用归因，避免生成孤立的费用记录。
+- **验证与产物：** `NormalChatCompletionPersistenceContractsTest`、`P3BConversationRuntimeContractsTest`、`AssistantResponseModelAttributionRoomContractsTest` 通过，Debug Kotlin 编译、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `e9174f96383893406b6aaf1eddfad63a0f578e1640787b6f69d24f97fb21564b`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。全量 JVM 为 `938 tests / 3 failed / 3 skipped`；失败为既有 `AndroidPrivateAttachmentStorePdfRenderSizeTest`、`CenteredDialogScrimContractsTest` 与 `P6DConversationRowAccessibilityContractsTest`，未运行真实 Provider、`connected*AndroidTest` 或操作 OPPO。
+
+## 2026-08-29：Provider 思考过程分层、首条称呼兜底与智谱联网（代码／定向 JVM 已验证）
+
+- **V4 Flash 输出收口：** DeepSeek／Qwen Responses 解码器不再把 `reasoning`／`analysis` 项与 `message.output_text` 扁平拼接。最终答复和思考过程以不同内容块持久化；思考过程在回复顶部以默认收起的“思考过程”中性圆角矩形显示，点击后才展示。已保存的旧 DeepSeek 混合英文规划记录不改写原对话，但在满足“英文计划轨迹 + 明确中文结论开场”的高置信形态时，同样在内存阅读层自动折叠。新链路的过程内容不参与复制、搜索、自动标题、后续上下文、Memory／资料库或普通 Markdown 导出；Room 使用已有文本列的 `REASONING` kind，无新增列或 destructive migration。
+- **称呼统一：** 原有系统提示保留，并在各 Provider 共用的最终展示路径加上首条成功回复的昵称兜底；流式请求只暂存开头极短片段，以避免重复称呼，同时不牺牲后续实时输出。用户本条消息明确要求其他称呼时不覆盖。
+- **智谱联网闭环：** `GLM-5.3 Flash` 普通聊天与定时监控接入智谱官方 Chat Completions `web_search` 工具（`search_std`、返回搜索结果）；Composer 的模型说明同步标注官方实时检索。联网开启但有附件时仍不会伪装为已发送不支持的混合请求。OpenRouter、千问、DeepSeek、智谱四条路由均以对应的官方协议单独序列化，来源仅使用 Provider 返回的结构化 URL。
+- **验证边界：** `ProviderAdapterContractsTest`、`AutomaticWebSearchPolicyTest`、`AssistantExperienceSettingsContractsTest`、`P3DMessagePresentationContractsTest`、`ScheduledMonitorRoomContractsTest` 与比较入口契约通过；`:app:lintVitalRelease`、`:app:assembleRelease`、定向 `git diff --check` 通过。完整 JVM 在既有 `AndroidPrivateAttachmentStorePdfRenderSizeTest` 失败后又被 Android Studio JBR `SIGSEGV` 中断，不能宣称全绿；此前还存在 `KnowledgeLibraryUi.kt` 旧 Material `AlertDialog` 造成的居中弹窗契约失败。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `2a43d1cea560461aeab52107a47ce913d1549e44db462fba82980dc13af9f7b7`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行 `connected*AndroidTest`、未安装设备。
+
+## 2026-08-29：真实 DOCX 读取与搜索快速定位收口（代码／定向 JVM／Lint／Release 已验证）
+
+- **DOCX 根因与修复：** Office 预览器此前把规范 OOXML ZIP 内无内容的目录项（例如 `word/`、`_rels/`）误判为不安全路径，因而会把有效的 DOCX 误显示为“文档内容无法安全读取”。路径门禁现只忽略一个末尾目录分隔符，再继续严格拒绝绝对路径、空中间段、`.`／`..`、冒号和 XML 外部实体；实际文档 XML 仍按原有大小与安全解析上限读取，不执行宏、链接或嵌入内容。
+- **快速定位根因与修复：** 搜索侧已携带 `ConversationId + MessageNodeId + AttachmentId`，但聊天侧把消息索引直接当作 LazyColumn 索引，漏算 ChatGPT／Claude 导入来源提示行，并可能被旧会话的“自动跟随最新”立即覆盖。定位现先关闭该旧跟随，以真实 LazyColumn 索引滚到所属消息，再由精确附件锚点带入可见区并短暂高亮；返回搜索仍保留用户离开前的搜索词、筛选、排序与像素位置。
+- **验证与产物：** `OfficeOpenXmlTextExtractorTest`（包含真实 Office 目录项）、`ConversationSearchAttachmentPreviewUiContractsTest` 与 `ConversationSearchSurfaceContractsTest` 通过，Debug Kotlin 编译、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `bc31aa2975e2e8ade2e09b29832540923b273069a3a9d95455071f94f6a01b5c`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未覆盖安装设备、未运行 `connected*AndroidTest`；真实 OPPO 仍需以此新包回读同一 DOCX 与快速定位动作。
+
+## 2026-08-29：费用明细三段直接切换（代码／定向 JVM／Lint／Release 已验证）
+
+- **交互：** “费用与用量”汇总下方的分类控件改为一个 `56dp` 高的白色分段胶囊：“会话”“会话标题整理”“历史资料整理”横向等宽并列，直接点击即切换列表。当前项为主题橙色白字，其他项为白底深色字；不再出现下拉输入框、箭头或弹出菜单。
+- **范围：** 汇总数值仍在控件上方，三类记录的数据、费用计算和筛选语义不变；只替换错误的控件形式，使固定的三类费用可一眼比较、一次点按切换。
+- **验证与产物：** `ConversationCostLedgerSummaryContractsTest`、Debug Kotlin 编译、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `9c1bb8169a1505cfbeed170510834ab0e4c1cc76ac8d7e10de875666901e4e9a`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未覆盖安装设备、未运行 `connected*AndroidTest`。
+
+## 2026-08-29：移除个性化无效成功提示（代码／定向 JVM／Lint／Release 已验证）
+
+- **交互：** 个性化页右上角确认与全屏“自定义指令”确认仍保存同一份本机设置，但保存成功后不再显示“已保存至本机。”中央提示、Toast 或行内重复文案；开关和已填写字段本身就是即时状态反馈。超限或保存失败继续在原页面显示错误，不静默吞掉失败。
+- **实现：** `AssistantExperienceSettingsViewModel` 不再生成成功 `notice`，应用根部的 `CenteredPersonalizationSaveNotice` 已删除；个性化页面不再传递或等待成功 notice。模型、导入、下载、同步等需要明确结果的其他成功／失败提示没有被本轮移除。
+- **验证与产物：** 设置精简与开关几何定向 JVM 通过，Debug Kotlin 编译、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `00253bf6c3db59617d5a35d96ce2957378a46990d835e4b7038b67849dfb8312`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未覆盖安装设备、未运行 `connected*AndroidTest`。
+
+## 2026-08-29：文件分类控件宽度与独立排序底色修复（代码／定向 JVM／Lint／Release 已验证）
+
+- **根因与修复：** 文件分组左侧“全部类型”没有明确宽度，而其内部内容使用 `fillMaxSize`；Compose 因而把该灰色胶囊测量成整条排序行，视觉上合并了时间／大小／还原的底色，也让左侧文字没有可见宽度。类型触发器现固定为 `128dp × 36dp` 的独立胶囊；右侧时间、大小、还原继续各为独立 `72dp × 36dp` 胶囊，之间保留页面底色间隔。
+- **验证与产物：** 搜索表面与附件预览定向 JVM 共 `8 tests / 0 failures`，Debug Kotlin 编译、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `5a17bd2b53d2314feb64cbb13ca2d68e9dd87018c864d958b40f0ac9002a41ec`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未覆盖安装设备、未运行 `connected*AndroidTest`；真实 OPPO 视觉仍待新包覆盖后回读。
+
+## 2026-08-29：OPPO 保数据覆盖安装（图片预览手势事件隔离 Release）
+
+- **安装与候选：** OPPO `3B157F009E800000`（PKH120）已使用 `pm install -r --user 0` 同签名覆盖 code 66／`0.3.0-p10j` 非 Debug Release。候选与安装后设备 `base.apk` 的 SHA-256 均为 `e968209da0c4c36f0e66816477aa2be8053d7c89afcd39d2abd4aa50cc187b2e`；正式证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **数据保留：** 安装前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均一致；设备仍为 `stopped=false`。未卸载、未清数据、未读取私有业务数据、未部署 Debug／仪器包；设备临时安装文件已清理。
+- **真机边界：** 本次只核验覆盖链与数据不变性，未替用户点按图片预览。仍需在会话图片上实际确认：双击放大、再次双击还原、双指缩放与放大后的单指拖动；未运行 `connected*AndroidTest`。
+
+## 2026-08-29：图片预览手势事件隔离（代码／定向 JVM／Lint／Release 已验证）
+
+- **修复：** 图片原图预览已有缩放、单指位移与触点中心双击放大逻辑，但全屏黑色画布的单击工具栏层被错误挂在图片父节点，可能与子图片的 `detectTransformGestures`／双击 recognizer 竞争并吞掉手势。该单击层现为图片之后的独立黑色背景 sibling：黑色留白单击仍切换顶栏，图片实际像素区域只处理双指缩放、单指拖动和双击。
+- **交互：** 图片区域双击以触点为中心放大至 `2.5×`，已放大时再次双击复位；缩放受原图最大倍率约束，手指拖动仅在放大内容超出视口后移动。关闭、下载、分享、多图切换与其他文件预览均未改变。
+- **验证与产物：** `P6F2BImagePreviewUiContractsTest` 通过，覆盖双击放大／复位、触点保持、双指手势和黑色留白不竞争事件；Debug Kotlin 编译、`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `e968209da0c4c36f0e66816477aa2be8053d7c89afcd39d2abd4aa50cc187b2e`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。OPPO 当前仍是旧 SHA-256 `6bc1c7913bc16aaf478a30fb9544003420732d5b780f85775d5cfe1f2233bf07`，本轮未覆盖安装或执行 `connected*AndroidTest`，因此尚无真实手势回读。
+
+## 2026-08-29：会话附件与搜索附件统一预览／打开能力（代码／定向 JVM／Lint／Release 已验证）
+
+- **根因与修复：** 附件 domain owner 早已能安全提取 DOCX／XLSX／PPTX，但会话消息卡保留了一份只含 TXT／Markdown／JSON／CSV 的旧格式名单；搜索页则会把其余安全格式交给同一个本地文本 owner，造成“搜索可开、会话内不显示且点击无响应”。会话消息卡与 Composer 草稿卡现均直接调用 `isSafeTextAttachment(mimeType, displayName)`：Office 文档、XML／YAML／HTML 与可安全判别的通用二进制扩展名都显示本地惰性文本预览，普通点击进入同一只读预览；图片、PDF、视频、音频、ZIP 和未知／不安全格式仍保留各自的受限处理，不执行文件内容。
+- **同类保证：** 搜索、会话、草稿与 ZIP 内可读条目使用同一 domain MIME／文件名安全判定和同一 `ConversationAttachmentPreviewProjection`。新增 UI 契约覆盖两个会话入口共享该判定，以及搜索与会话打开均归到 `attachmentPreview.text`；Office extractor 单测实际覆盖 DOCX、XLSX、PPTX 的安全文本提取。
+- **验证与产物：** 搜索返回位置、搜索预览、会话附件预览与 Office extractor 共 `19 tests / 0 failures`；`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `6da064d8487b7c826ffe6763c23e570a06355d30f214defcd14802eb87321cb1`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行 `connected*AndroidTest`，未安装或操作设备；构建与定向测试不替代真机对实际 DOCX 的视觉回读。
+
+## 2026-08-29：历史资料库即时开关、费用分类切换与设置标题居中（代码／定向 JVM 已验证）
+
+- **历史资料库：** 开关不再显示“开启历史资料库？”二次确认。拨到开会即时同时持久化资料库调用与低频自动沉淀；拨到关则即时同时关闭两者，不删除既有资料或原对话。页面保留范围与数据发送边界说明，但不再对即时开关追加成功或阻断提示。
+- **搜索筛选：** “全部类型、时间、大小、还原”统一为 `36dp` 高的紧凑组；三个右侧排序控件固定 `72dp` 宽，四项均降为辅助标签字号，文字和图标在完整 surface 内水平、垂直居中。左侧类型和右侧排序的锚点不变。
+- **费用与设置顶部：** 费用页在“会话／会话标题整理／历史资料整理”三个汇总之后加入与模型预设同形的选择面，切换后只显示对应明细；提醒草案、定时监控记录继续保留为其他自动任务。设置首页“设置”以 `headlineMedium` 粗体严格居中，返回按钮不参与标题定位。
+- **同类排查与验证：** 已枚举设置、模型、同步与 Composer 的所有 Switch：仅历史资料库曾弹出开启确认，现已移除；其余均直接更新状态。搜索、开关、费用分类与首页标题共 6 项定向合同通过，`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过。code 66 非 Debug Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `45f7084d8f52791f9f7bc88ef864b8ec997ba8a0d172147e87051c48b9377a79`，v2/v3 签名有效，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行 `connected*AndroidTest`，未安装设备。
+
+## 2026-08-29：OPPO 保数据覆盖安装（个性化开关职责分离 Release）
+
+- **设备与候选：** OPPO `3B157F009E800000`（PKH120）已从 `com.nanzhufeng.ai 0.3.0-p10j / code 66` 同签名覆盖到本轮候选；安装前后均为非 Debug，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **字节与数据保留：** 设备覆盖后的 `base.apk` 已拉回验证，SHA-256 与本地 Release 完全一致：`6bc1c7913bc16aaf478a30fb9544003420732d5b780f85775d5cfe1f2233bf07`。`firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均不变，`stopped=false`。未卸载、清数据、读取私有业务数据或部署 Debug／仪器测试包。
+- **清理与未覆盖范围：** 本次设备临时 APK 和本机校验证副本均已删除。未运行 `connected*AndroidTest`，也未替用户点按记忆开关、历史资料库确认或长摘要键盘状态；保数据安装不替代这些真实交互验收。
+
+## 2026-08-29：个性化开关与右上角保存职责分离（代码／定向 JVM／Lint／Release 已验证）
+
+- **职责：** “启用记忆”与“历史资料库”开关各自点击后立即持久化；历史资料库开启仍保留原有范围说明与一次确认。右上角确认只保存昵称、职业、更多信息、自定义指令与对话风格，不再携带或回写任一开关。
+- **防回写：** 开关变更会同步进页面草稿，但不令顶部确认变为未保存状态；即使用户有未保存的文字编辑，之后确认也会以最新已保存的开关状态为准，避免旧草稿覆盖刚刚选择的开关。
+- **验证与产物：** `SettingsUiSimplificationContractsTest`、`AssistantExperienceSettingsContractsTest`、`:app:lintVitalRelease`、`:app:assembleRelease` 与 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `6bc1c7913bc16aaf478a30fb9544003420732d5b780f85775d5cfe1f2233bf07`，v2/v3 签名有效，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行 `connected*AndroidTest`、未安装设备。
+
+## 2026-08-29：记忆摘要底部输入框遮挡收口（代码／定向 JVM／Lint／Release 已验证）
+
+- **界面：** 记忆摘要的内容区现在按底部输入框的实际测量高度增加可滚动末端 inset；最后一段摘要可完整滚动到输入框上方，不会被覆盖。输入框继续是覆盖在原画布上的单一白色悬浮面，不新增整条承托底或改变记忆摘要信息结构。
+- **键盘：** 输入框加入 IME 避让；键盘出现时，其总高度会重新测量并同步给内容区，底部文字不会在键盘或输入框下被截断。
+- **验证与产物：** `MemorySummaryUiContractsTest`、`:app:lintVitalRelease`、`:app:assembleRelease` 与 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `2c8885e3dd34430c1966f9589195771dea456782839bc837af87c1cd46d02158`，v2/v3 签名有效，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行 `connected*AndroidTest`、未安装设备；构建与合同不替代真实长摘要和键盘状态的屏幕回读。
+
+## 2026-08-29：搜索附件打开复用已验证状态与 Google 头像显示（代码／定向 JVM／Lint／Release 已验证）
+
+- **搜索附件性能：** 搜索可见行的缩略图、文本首屏、PDF／音视频元数据完成首次 SHA-256 校验后，用户点击同一个应用私有附件会复用受 `引用 + 哈希 + 字节数 + 路径 + 修改时间` 约束的进程内验证状态，不再重复完整扫描。文本文件直接复用搜索列表已准备的安全文本预览；ZIP 物化缓存同样受这条状态链约束。修改、替换、大小或修改时间变化会立即失效并重做完整校验，首次访问、大小门禁和不安全文件拒绝规则均未放宽。
+- **Google 头像：** “Google 账号与同步”现在在已登录状态显示 Google 账号实际头像，而非固定账户图标。按南枫记的成熟链路，页面先读取仅限当前账号与头像 URL 的私有缓存，随后优先经带当前 Supabase JWT 的 `google-avatar` 函数刷新；函数不可用时只允许无重定向的 `https://*.googleusercontent.com` 图片直连，8 秒超时、`image/*` 校验、2 MiB 流式上限。没有头像或读取失败时才显示姓名首字母；退出或切换账号会删除该账号缓存。未保存 Google ID Token，也未向同步快照写入头像缓存。
+- **验证与产物：** 搜索附件／私有数据／搜索界面定向 JVM 通过；头像缓存、代理／直连约束与账号 UI 定向 JVM 通过。`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过，`git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `d47963d293b70480e651e7076d16ddc4768adcaf40f35c84f3a3b64a682e3514`，v2/v3 签名有效，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行 `connected*AndroidTest`、未覆盖安装设备、未发起真实 Google 登录、真实头像或云同步调用；真实账号头像仍需在真机登录后确认。
+
+## 2026-08-29：智谱 GLM-5.3 Flash 金额与历史账本补齐（代码／定向 JVM／Lint／Release 已验证）
+
+- **价格与展示：** `GLM-5.3 Flash` 已进入与其他模型同一套版本化本机估算链，官方限时价按输入 ¥0.40／百万 Token、输出 ¥1.40／百万 Token、缓存命中 ¥0.115／百万 Token 估算；限时价截止 8 月 31 日后自动切换为输入 ¥0.80、输出 ¥2.80、缓存命中 ¥0.23 的标准价。智谱人民币金额直接展示为 `≈ ¥…（估算）`，不会错误走美元换算。
+- **历史回填与覆盖面：** 已存在的普通 GLM 回复不迁移、不改写：只要本机留有模型、发生时间及输入／输出 Token，读取页脚与“费用与用量”时会按当日价目即时补算。账本同步纳入已返回 Token 的定时监控和历史资料整理调用；累计金额与明细均不保存 Prompt、回复、附件、Key 或 Provider 原始回包。
+- **能力边界：** 官方模型具备更广的多模态和工具能力，但 Android 当前智谱 Adapter 只会真实发送文本；目录继续只声明当前客户端可传输的能力，不把尚未接通的输入或工具伪装为可用。
+- **验证与产物：** 费用估算、历史回填、模型目录与费用页定向 JVM 合同通过；全量 JVM 为 `921 tests / 2 failures / 3 skipped`，仅存未触及的 `CenteredDialogScrimContractsTest` 和 `P6DConversationRowAccessibilityContractsTest`。`:app:lintVitalRelease`、`:app:assembleRelease`、`git diff --check` 与 v2/v3 签名验证通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `bb299f69af652c0938c316691443b5b774d7f95bb4d3642fb562345973dec42c`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行 `connected*AndroidTest`、未覆盖安装任何设备、未发起真实模型调用。
+
+## 2026-08-29：多行资料库确认弹层改为圆角矩形（代码／定向 JVM／Lint／Release 已验证）
+
+- **界面：** “开启历史资料库？”含多段隐私、模型和 Token 说明，改用共享 `24dp` 多行圆角矩形面，不再复用单行控件的 `999dp` 胶囊。合同同时明确：胶囊只用于单行操作卡／控件；多行卡、说明面、确认弹层和长文本承载面禁止胶囊。
+- **验证与范围：** 新增 `PillShapeScopeContractsTest`，并与资料库开关、设置精简的定向 JVM 契约一同通过；`:app:lintVitalRelease`、`:app:assembleRelease`、`git diff --check` 与 v2/v3 签名验证通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `b4c3dc1f8f147259e6932866e1532223754a28b9d586ad0cdba1207b4381a86e`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。全量 JVM 为 `919 tests / 2 failures / 3 skipped`，既有失败仍仅为未触及的 `CenteredDialogScrimContractsTest` 与 `P6DConversationRowAccessibilityContractsTest`。本轮未改变资料库开关语义、模型外发边界或任何设备安装，未运行 `connected*AndroidTest`。
+
+## 2026-08-29：历史资料库统一写入与调用总开关（代码／定向 JVM／Lint／Release 已验证）
+
+- **统一语义：** 设置只保留“历史资料库”一个可见开关；开启时经一次确认，同时允许低频自动整理历史对话和普通聊天按相关性调用已沉淀资料。关闭时同时取消后续 WorkManager 整理任务和资料库检索，不删除已保存资料、原始对话、Memory 或自定义指令。手动“整理当前对话”仍为独立的一次性、可编辑候选流程。
+- **安全迁移：** 旧版“资料库调用已开、自动整理尚未确认”的两项持久偏好保留为内部迁移证据，但有效状态为两者同时为真；因此升级不会开始任何新的模型外发，用户需通过这个总开关明确确认一次。启动时同步取消遗留后台任务，普通发送、自动整理 owner、完成对话入队和投资来源审计均只读取同一个有效状态。
+- **自动验证与产物：** 设置、运行时上下文、统一总开关共 4 个定向 JVM 类通过；`:app:lintVitalRelease`、`:app:assembleRelease`、定向 `git diff --check` 和 v2/v3 签名验证通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `b5292e8da4dca9074e73dcff1ea5208e375ea77665dcc03c90dc769db869bc8b`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **全量与未覆盖范围：** 全量 JVM 为 `918 tests / 2 failures / 3 skipped`；剩余失败是未触及的 `CenteredDialogScrimContractsTest` 与 `P6DConversationRowAccessibilityContractsTest`，不属于历史资料库链。未运行任何 `connected*AndroidTest`，也未覆盖安装 OPPO 或进行真实模型外发／后台整理验收。
+
+## 2026-08-29：OPPO 保数据覆盖安装（ZIP 目录浏览 Release）
+
+- **安装：** OPPO `3B157F009E800000`（PKH120）已通过 `pm install -r --user 0` 覆盖 code 66 非调试 Release；未卸载、清数据、安装 Debug／仪器包或读取私有业务数据。
+- **门禁与回读：** 安装前后均为 `com.nanzhufeng.ai`、`0.3.0-p10j`／code `66`、非 Debug，设备与本地 APK 的 SHA-256 同为 `294196af20f517dc53ef12db214ec8b0e44adc9a7cc50c5a417f7da393511456`；正式证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。`firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变化。设备临时安装 APK 与本机签名校验副本均已删除。
+- **未覆盖范围：** 未运行任何 `connected*AndroidTest`，也未替用户点击或验收 ZIP 文件夹进入、文件预览、不同皮肤或深层返回；覆盖安装与哈希一致不能替代这些交互验收。
+
+## 2026-08-29：ZIP 压缩包目录可钻取浏览（代码／定向 JVM／Lint／Release 已验证）
+
+- **真实操作：** “压缩包内容”不再只是扁平展示。根目录与各级文件夹只显示当前层直接子项；点击文件夹进入，关闭／返回先回到上级，再回外层 ZIP。没有显式目录记录的 ZIP 也会从安全文件路径推导出可进入的目录；文件条目继续复用图片、PDF、音视频、文本、Office 与内层 ZIP 的既有受限预览。
+- **安全边界：** 普通目录路径和内层 ZIP 路径分开保存；每次只返回当前层的直接子项，不把压缩包整棵解压到磁盘。绝对路径、`..`、控制字符、异常目录段、超过 10000 个扫描项及超过 2000 个当前层条目的情况仍拒绝或明确截断；点击文件前的既有大小、摘要、魔数与压缩比门禁不变。
+- **自动验证与产物：** ZIP 索引与界面合同各 `1 test / 0 failures / 0 errors`，定向 `git diff --check` 通过；`:app:lintVitalRelease` 与 `:app:assembleRelease` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `294196af20f517dc53ef12db214ec8b0e44adc9a7cc50c5a417f7da393511456`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **全量与未覆盖范围：** 本轮全量 JVM 为 `917 tests / 4 failures / 3 skipped`；失败均来自未触及的居中弹层、运行时上下文、会话行无障碍与设置开关源码合同，ZIP 两项定向测试均通过。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO，也未对真实 ZIP 的目录点击、深层返回与不同皮肤做人工回读。
+
+## 2026-08-29：回答上下文来源的未使用文案收口（代码／定向 JVM／Lint／Release 已验证）
+
+- **文案语义：** 没有额外检索结果的“本次上下文来源”改为“本次未调用你的记忆、资料库或历史对话；仅使用本轮输入、当前对话路径及固定系统规则。”它只说明这一次回答实际未使用这些来源；不表示资料未保存、相关功能已关闭或没有固定系统上下文。
+- **自动验证与产物：** `AnswerContextDisclosureContractsTest` 通过；`:app:lintVitalRelease` 报告 `No issues found`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `ebeb12457f11d31ec11fdcb82615d9b6e2e65638a33aeeda1285fc6376c08f8d`，签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** 未安装或操作 OPPO，未运行任何 `connected*AndroidTest`，也未对真实 Provider 请求重放来源审计；定向契约与构建不能替代实际回复的屏幕回读。
+
+## 2026-08-29：ZIP 原始包内置状态与安全删除提示（代码／全量 JVM／Lint／Release 已验证）
+
+- **判断方式：** “本机数据”在 ZIP 清理入口旁读取真实附件引用状态，而不是把“导入完成”等同于可删除：未完成任务显示“请保留 ZIP 原始包”；仍有已归属附件引用 ZIP 时显示“尚未全部内置”及数量；全部资料脱离 ZIP 时显示“可以安全删除 ZIP 原始包”；清理成功后显示“导入资料已内置”。若仍有依赖但原包不见，明确提示重新导入，不伪报已内置。
+- **删除门禁：** “整理并删除”仍先流式复制依赖附件至受管本机目录，逐项核验大小和 SHA-256、切换稳定引用，最后才删除原包；任一环节失败均保留原包。已经完全内置时才提供直接删除原包的确认说明。
+- **自动验证与产物：** 导入清理／设置定向 JVM 合同通过；Android 全量 JVM `910 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintVitalRelease` 报告 `No issues found`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `469ad3613a1a8d0ade2d79a6f3a97d6dc0d8b1d55200f4f9917ce2cb483fe404`，签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** 未安装或操作 OPPO，未运行任何 `connected*AndroidTest`，也未读取用户实际导入状态或删除用户 ZIP；因此“当前这一个 ZIP 能否删除”仍应以更新后页面显示的状态为准。
+
+## 2026-08-29：文件筛选左置与排序右侧固定（代码／全量 JVM／Lint／Release 已验证）
+
+- **布局：** 文件分组的格式触发器固定在左侧，仅显示当前值与下箭头，删除“类型”前缀；时间、大小、还原始终是右侧排序组。全部、图片、视频、音频和文件分组共用这一右侧锚点，因此切换分组不会移动排序组位置。
+- **边界：** 保留胶囊形状、排序／筛选逻辑、滚动复位、预览与文件能力；正文分组仍不显示该操作行。
+- **自动验证与产物：** 搜索布局定向合同通过；Android 全量 JVM `910 tests / 0 failures / 0 errors / 3 skipped`，强制重新执行的 `:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `13307efb69d561a8dca0397a23ccc080ea423b43bd274b4acd8f2ec9c76461c7`，签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** 未安装或操作 OPPO，未运行任何 `connected*AndroidTest`，也未做各分类切换后的目标视口视觉／触控回读。
+
+## 2026-08-29：文件类型低频格式并入其他（代码／全量 JVM／Lint／Release 已验证）
+
+- **筛选层级：** 文件“类型”下拉只保留 MD、PDF、ZIP、DOCX、TXT、JSON 与“其他”。CSV、XML、YAML、HTML、XLSX、PPTX 均从下拉移除并统一归入“其他”，因此选择“其他”会精确筛出这些格式及原有未单列格式。
+- **能力边界：** 仅改变本地搜索筛选投影；各格式的 MIME／后缀识别、受限预览、下载／分享和安全边界均未删除或降级。
+- **自动验证与产物：** 搜索筛选定向合同通过；Android 全量 JVM `910 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `f2c0a084244c4482142f8db8b6e0ddbeb8a7eeaac7258a7a5f8b7a0f8bcb5186`，签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** 未安装或操作 OPPO，未运行任何 `connected*AndroidTest`，也未做目标视口的实际菜单视觉／触控回读。
+
+## 2026-08-29：搜索分类与排序胶囊对齐（代码／全量 JVM／Lint／Release 已验证）
+
+- **布局与形状：** 附件搜索的“时间”“大小”“还原”固定在同一条 `40dp` 高排序行、同一基线和相同间距；“还原”不再上浮为单独一行。搜索类别、时间、大小、还原及文件“类型”触发器统一为胶囊形状，表面与按压命中轮廓一致；下拉菜单本身仍保持列表菜单形态。排序、类型过滤、月份默认分组、滚动复位和定位逻辑不变。
+- **自动验证与产物：** 搜索界面定向合同通过；Android 全量 JVM `910 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `04b0a0c4809a58d220766b65bb3d4c3a3977d81dd2057c119b727fa04a40bc4a`。
+- **未覆盖范围：** 未安装或操作 OPPO，未运行任何 `connected*AndroidTest`，也未在目标视口完成截图后的视觉／触控回读；自动回归与构建不能替代实际屏幕验收。
+
+## 2026-08-29：设置入口图标按功能语义重设（代码／全量 JVM／Lint／Release 已验证）
+
+- **图标语义：** “模型与联网”改为节点连接 `Hub`，表达模型服务与联网能力；“导入与导出”改为双向文件流 `ImportExport`；“本机数据”改为本地存储 `Storage`。三项均保留现有圆端 Material 图形语言、行高、点击面、分组顺序及既有正文／数据管理中性灰色，不新增说明或改变任何路由、数据与联网行为。
+- **自动验证与产物：** 图标语义合同和本机数据导航合同通过；Android 全量 JVM `910 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `29bfe50d46791d1781aaace482ef5496f937f530203af2952dd6581c44c008d3`，签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** 未安装或操作 OPPO，未运行任何 `connected*AndroidTest`，也未完成浅／深皮肤、不同字号和目标视口的真实视觉／触控回读；构建与源码合同不能替代这些验收。
+
+## 2026-08-29：导入结果入口与详情信息精简（代码／全量 JVM／Lint／Release 已验证）
+
+- **入口：** JSON、ZIP 两张导入卡的“导入结果”统一收为单行入口，只保留名称和右箭头；删除批次、对话、附件等重复统计小字及“查看详情”文字。空状态仍保留入口，不影响 JSON／ZIP 各自独立结果页。
+- **详情：** 每个批次只保留来源、状态、已导入对话数，以及非零的未导入／已跳过数；ZIP 额外保留附件恢复状态、已恢复数和非零的源包缺少／未关联数。附件推断、回退命名、来源记录和个性化资料等内部细节不再显示。重试附件恢复与删除本批次仍保留。
+- **数据边界：** 仅改变 UI 投影；导入任务、附件恢复、失败／跳过计数、原始文件隐私、批次删除和重试 owner 均未改变。
+- **自动验证与产物：** 导入 UI 与设置精简定向合同通过；Android 全量 JVM `909 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `ac6be267d22aae01d2ec37012ebb0a5064f0d00d73e07caefd12287a95848e63`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** 未安装或操作 OPPO，未运行任何 `connected*AndroidTest`，也未完成浅／深皮肤、空／完成／异常批次和大字体的目标视口视觉回读。
+
+## 2026-08-29：模型名统一加粗与 Composer 唯一例外（代码／全量 JVM／Lint／Release 已验证）
+
+- **统一字重：** 模型设置的当前预设和下拉候选、Composer 模型选择面与“换模型重答”、Assistant 回复页脚、消息操作信息、附件发送对象、费用／调用／上下文／诊断记录、知识溯源及生成确认中的具体模型名统一使用 `Bold`。复合元数据只加粗模型名片段，Provider、时间、金额、说明和状态保持原层级。
+- **唯一例外：** 主界面底部 Composer 的短模型名（普通与临时聊天共用）明确改为正常字重；既有 `13sp`、圆润字体、宽度、胶囊轮廓和短名规则均不改变。Assistant 回复页脚不属于该例外，短模型名继续加粗。
+- **自动验证与产物：** 新增统一富文本字重与跨入口源码合同，更新旧 Composer 粗体合同；Android 全量 JVM `909 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `a412a8b2726f0b2b62b16765edc20e258f7c00998a05ae85dfca8aa3b132aba8`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** 本轮未安装或操作 OPPO，未运行任何 `connected*AndroidTest`，也未做浅色／深色、不同字号和目标视口的真实视觉回读；自动合同与构建不能替代实际屏幕字重验收。
+
+## 2026-08-29：Google 登录 OAuth 配置与取消误报修正（云端／代码／全量 JVM／Lint／Release 已验证）
+
+- **Google Cloud：** 已在 `nanfeng-cloud` 创建 `南枫 AI Android` OAuth 客户端，绑定包名 `com.nanzhufeng.ai` 与正式签名 SHA-1 `2A:B7:0D:EE:32:BC:61:F0:59:63:80:CD:32:8F:A6:73:C0:C8:61:49`；Data Access 已保存 `openid`、`userinfo.email`、`userinfo.profile` 三项非敏感基础 scope，并在保存后回读。现有 Supabase Web Client ID 与 App 配置一致，Supabase Google Provider 已启用。
+- **App 提示：** Credential Manager 返回取消类异常时不再断言用户主动取消，统一显示“Google 未完成授权，请重试。”；登录 nonce、Google ID Token 换取 Supabase 会话、Keystore 会话保护及同步范围均未改变。
+- **自动验证与产物：** 提示合同定向测试通过；Android 全量 JVM `907 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `58faf0be98e6da6a03a52d31c5cef3d7b565dc31483a599fc61dd6f78850ab77`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** Google Cloud 提示新配置可能需要 5 分钟至数小时生效；本轮没有替用户执行真实 Google 账号登录、Supabase 会话创建、密文同步或跨设备恢复，也未安装或操作 OPPO、未运行任何 `connected*AndroidTest`。真实登录仍需在更新后的正式包中人工重试，不能由云端回读、JVM 或构建冒充。
+
+## 2026-08-29：DeepSeek V4 Flash 官方直连预设（代码／全量 JVM／Lint／Release 已验证）
+
+- **完整入口：** DeepSeek 现有官方直连服务增加 `DeepSeek V4 Flash`／`deepseek-v4-flash` 预设；设置仍只有一个 DeepSeek 服务商入口、同一固定官方端点与独立加密 API Key，默认预设继续是 V4 Pro。Composer“日常”二级选择面增加完整名称，Composer 与 Assistant 页脚短名为 `V4 Flash`；不改变 `Auto`、自动标题、已有会话选择或服务商数量。
+- **模型与费用边界：** 冷启动模型资料按官方当前文档记录 1M 上下文、384K 最大输出、文本、思考、JSON、工具与流式能力，图片、PDF、视频和音频保持不支持。版本化本机估算采用当前公开的缓存命中 `$0.0028`、缓存未命中 `$0.14`、输出 `$0.28`／百万 token；Provider 实际结算优先，峰谷价格、联网工具、优惠和缓存写入未披露时不伪装成实际扣费。
+- **验证与产物：** 模型目录、冷启动资料、Composer 路由、短名、费用与 DeepSeek 官方 Adapter 定向合同通过；Android 全量 JVM `906 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintVitalRelease`、`:app:assembleRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `ec77f98676a2fbe7783aa063e36189b01f3c214d11d250d3cb8d5c15410e6a94`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未覆盖范围：** 未读取或使用 DeepSeek API Key，未发起真实 DeepSeek 请求，未做目标视口视觉／触控验收；未运行任何 `connected*AndroidTest`，未安装或操作 OPPO。Google 登录的后续配置与修正以本文上方更新为准。
+
+## 2026-08-29：OPPO 保数据覆盖安装（最新 Release 已验证）
+
+- **安装：** OPPO `3B157F009E800000`（PKH120）已使用 `pm install -r --user 0` 覆盖 code 66 非调试 Release；没有卸载、清数据、数据库注入或 Debug／仪器包部署。
+- **门禁与回读：** 安装前后包名均为 `com.nanzhufeng.ai`、version `0.3.0-p10j`／code `66`，证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，`firstInstallTime=2026-08-20 15:15:31` 与 `ceDataInode=1459104 / deDataInode=1433378` 不变。设备回读 APK 与本地 `app/build/outputs/apk/release/南枫AI.apk` 的 SHA-256 同为 `19761a512ae3e24cd4ae2302fa340a2d7350e07f4b252c9d41eb9978a8b357e8`；远端临时安装文件及本地只读校验副本已清理。
+- **未覆盖范围：** 未运行任何 `connected*AndroidTest`，也未替用户点击或验收模型设置、来源提示和智谱真实服务；覆盖安装与哈希一致不等同于上述交互或真实 API 链路验收。
+
+## 2026-08-29：会话导入来源整行提示（代码／定向 JVM／Release 已验证）
+
+- **界面：** ChatGPT／Claude／ChatGPT ZIP 的会话来源提示统一改为完整可用宽度的低对比主题色灰底条，文字水平居中；它仍只陈述来源，不是入口或操作按钮。
+- **验证与边界：** `AssistantGeneratedImageGroupUiContractsTest` 通过，Release 编译、`lintVitalRelease`、签名验证与定向 `git diff --check` 通过。最新 code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `19761a512ae3e24cd4ae2302fa340a2d7350e07f4b252c9d41eb9978a8b357e8`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO，尚未做真机视觉回读。
+
+## 2026-08-29：智谱 GLM-5.3 Flash 官方直连与四项紧凑服务商切换（代码／全量 JVM／Release 已验证）
+
+- **完整入口：** 新增独立 `ZHIPU` Provider、固定官方 Base URL `https://open.bigmodel.cn/api/paas/v4`、`GLM-5.3 Flash` 预设、独立加密 API Key、启用／测试连接、状态行、调用记录和 Composer“日常”手动模型选择。解析后的模型路由、冷启动目录资料、失败归因和显示短名均已识别该 Provider；不改变 `Auto`、自动标题或已有会话选项。
+- **能力边界：** 当前采用 OpenAI 兼容文本流式调用。图片、PDF、音视频、工具／网页搜索均明确拒绝或不声明支持，不伪装为已发送；本机没有冻结的智谱价格表，因此金额保持未知，不虚构人民币金额。`glm-5.3-flash` 的真实账户可用性及服务端功能仍需用户填入 API Key 后通过“测试连接”和实际发送确认。
+- **顶部布局：** Provider 切换仍是唯一的灰色胶囊轨道，不做四个独立大按钮；四项均放在同一紧凑分段栏内，轨道内边距 `3dp`、选项视觉高度 `32dp`、标签统一 `labelMedium` 单行省略，选中态继续使用当前主题色和白字。
+- **导入来源条：** ChatGPT／Claude／ChatGPT ZIP 的会话来源提示改为完整可用宽度的低对比灰底条，文字水平居中；它仍只是静态来源事实，不新增操作或改变导入数据链。
+- **验证与交付边界：** 智谱模型、路由、资料资产、OpenAI 兼容请求与设置 UI 定向 JVM `59 tests / 0 failures / 0 errors / 0 skipped`；Android 全量 JVM `903 tests / 0 failures / 0 errors / 3 skipped`，`:app:assembleRelease`、`lintVitalRelease` 和定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `f7d6a8797fe0bb666f004fdb7594a3f73a31bfe7246e90163dba4a2b58b75e20`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO，未以真实智谱凭据发起联网调用；不得将构建与合同测试写成真实服务或视觉／触控验收。
+
+## 2026-08-29：OpenRouter Fable 5 加入主聊天选择（代码／全量 JVM／Release 已验证）
+
+- **可见入口：** `Claude Fable 5` 加入 Composer 模型选择面的“深度”组首项；选择后仍经既有 OpenRouter 预设、目录核验／冷启动回退、实际调用归因与人民币费用展示链，不新增独立入口或视觉风格。
+- **不变边界：** 不改 `Auto` 默认、既有会话的已选模型、OpenRouter API Key 或自动标题的 Fable 5 排除策略；真实服务可用性仍以本机已验证的 OpenRouter 模型目录与发送结果为准。
+- **验证与交付边界：** 定向 `P6GModelRouterContractsTest` `10 tests / 0 failures / 0 errors / 0 skipped`，Android 全量 JVM `900 tests / 0 failures / 0 errors / 3 skipped`，`:app:assembleRelease` 与定向 `git diff --check` 通过。Gradle 仅对本轮进程使用 Android Studio JBR 21 与 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `f63f6b0468287c167329e8145e6d87aff9636eb6a7645974d1688f7b2f93ffe5`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO，未以真实 OpenRouter 凭据调用 Fable 5；因此真实目录可用性、发送和屏幕交互仍待实际授权验收。
+
+## 2026-08-29：搜索附件双列排序与文件类型下拉（代码／全量 JVM／Release 已验证）
+
+- **排序形式：** 删除原单一“默认排序”胶囊，改为同一紧凑栏的“时间”“大小”两列与“还原”。时间、大小首次点击均为倒序，再点切为正序；当前列文字和箭头使用当前主题色，“还原”恢复按月分组及组内时间的默认浏览。显式排序仍是全局稳定顺序，并继续按真实 `timestampEpochMs`／`byteCount` 排序。
+- **类型筛选：** 仅“文件”分组在排序栏右侧显示“类型”下拉，支持全部类型、MD、PDF、ZIP、DOCX、XLSX、PPTX、TXT、JSON、CSV、XML、YAML、HTML 与其他。类型依据持久引用的 MIME 及同一份中文句点／全角句点文件名后缀归一规则识别；未单列扩展名统一为“其他”。图片、视频、音频、全部和正文不显示此下拉。
+- **位置与数据边界：** 切换排序或文件类型均清除旧锚点、滚回当前文件网格顶部；预览返回与精确定位使用当前过滤后的命中集。只改本地 UI 投影，不改搜索索引、附件引用、真实大小、预览、共享文件计数或删除链。
+- **验证与边界：** 定向搜索回归 `11 tests / 0 failures / 0 errors / 0 skipped`；Android 全量 JVM `900 tests / 0 failures / 0 errors / 3 skipped`，`:app:assembleRelease`、`lintVitalRelease` 与定向 `git diff --check` 通过。首次完整测试进程遇到 Android Studio JBR 的 `SIGSEGV`，仅为重试 Gradle 进程使用 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1` 后通过，未写入项目配置。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `7ade58f368bce03faa86de648859be1e8684e4c15ec4135e717ea387a5095a8a`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行任何 `connected*AndroidTest`，本轮未安装或操作 OPPO，尚未完成目标视口的真实点击、长列表、大字体和深色皮肤视觉回读。
+
+## 2026-08-29：金额统一换算人民币与侧栏显示创建时间（代码／全量 JVM／Release 已验证）
+
+- **人民币展示：** Assistant 页脚、“费用与用量”汇总／明细和调用记录全部统一显示 `¥` 人民币金额，不再显示美元符号、ISO 币种微单位或混币种直接相加。底层 Provider 原币金额、ISO 币种、价格版本及实际／估算来源保持不变，只在展示层换算；不支持的未知币种明确显示无法换算，不冒充人民币。
+- **汇率版本：** 使用 ECB 2026-08-27 同日参考价 `1 EUR = 1.1645 USD`、`1 EUR = 7.8258 CNY` 交叉计算，冻结为 `1 USD = 6.7203091455560326320 CNY`。费用页只显示一条简洁基准“美元按 1 美元 ≈ ¥6.7203 换算（2026-08-27）”；实际美元账单换算写“约”，本机估算仍写 `≈` 与“估算”。主界面页脚按合同只保留金额本身，并固定四位小数。
+- **侧栏时间：** 普通左侧栏每条对话标题右侧日期从 `updatedAt` 改读 `createdAt`；新增消息、重命名、置顶等更新不再改变这里显示的日期。最近列表仍沿用既有最新更新时间排序，排序事实与展示字段没有混用。
+- **验证与边界：** 人民币换算、汇总、页脚、调用记录及侧栏创建时间共 `111 tests / 0 failures / 0 errors / 0 skipped`；Android 全量 JVM `899 tests / 0 failures / 0 errors / 3 skipped`，`:app:assembleRelease`、`lintVitalRelease` 与定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `1f17d1957a446886324430f3794dcb579619882df0e5f0598ea050016e5ea45d`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行任何 `connected*AndroidTest`，本轮未安装或操作 OPPO，也未完成真机金额排版与侧栏日期视觉回读。
+
+## 2026-08-29：本机数据归位、子入口返回层级与草稿精简（代码／全量 JVM／Release 已验证）
+
+- **信息架构：** “导入与导出”只保留导入、导出、备份和恢复；原“清理与删除”入口及页面统一更名为“本机数据”，并接回本机数据概览及原有清理、删除和失败重试能力。设置“关于”改用语义正确的 `Info` 图标，未另造视觉样式。
+- **返回层级：** 从“本机数据”进入搜索、记忆、知识库或项目时，现有设置导航栈保留“本机数据”为父级；系统返回及系统左右滑返回先回到“本机数据”，不直接退出到主界面。搜索关闭／返回仅在本机数据来源下消费该父级回退，普通搜索入口行为不变。
+- **信息精简：** 本机数据概览删除没有准确明细入口的“草稿”行；真实草稿数据、会话内容和清理 owner 均未删除或迁移。
+- **验证与边界：** 相关定向回归 `113 tests / 0 failures / 0 errors / 0 skipped`；Android 全量 JVM `894 tests / 0 failures / 0 errors / 3 skipped`，Release 编译、`lintVitalRelease` 与打包通过，定向 `git diff --check` 通过。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `80b09122589e149a74b1e1d6c6f44da470e5d88566a128825ed41c696e030cd2`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。未运行任何 `connected*AndroidTest`，本轮未安装或操作 OPPO，也未完成真机左右滑与页面视觉回读，不得把自动回归写成真机手势闭环。
+
+## 2026-08-29：PDF 快速翻页、压缩包内文件继续打开与常用文档预览（代码／全量 JVM／Lint／Release 已验证）
+
+- **PDF 翻页速度：** 同一阅读会话只在首次打开时完整校验 SHA-256，后续翻页在附件身份、大小、摘要和文件修改时间均未变化时复用已验证的 `PdfRenderer`。界面保留最多 4 页、总计不超过 24 MiB 的压缩页 LRU，延迟 90 ms 预取相邻页；显式点击优先，预取不替换当前可见页。继续使用 `2880px / 600 万像素 / 8 MiB` 单页清晰度门禁，未以降低分辨率换速度。
+- **ZIP 可继续打开：** 压缩包目录行现在可点击，图片、PDF、音视频、文本、Markdown／JSON／CSV／XML／YAML／HTML、DOCX／XLSX／PPTX 与内层 ZIP 分别复用已有预览。返回会回到原压缩包层级；子文件预览不会把外层 ZIP 误当成子文件下载／分享。
+- **安全边界：** 只读取用户点击的一个条目，不展开整棵目录，不执行宏、链接、脚本或嵌入对象。拒绝绝对路径、`..`、重复安全路径映射，限制最多 10000 个扫描条目、5 层内嵌 ZIP、单条 20 MiB 与 200 倍压缩比。OOXML 只有界读取必要 XML，禁用 DOCTYPE、外部实体、DTD 和外部 Schema。旧式二进制 `.doc/.xls/.ppt` 没有伪装成新版格式。
+- **格式入口：** 文件选择与魔数校验新增现代 Office、ZIP、XML、YAML、HTML 及常见日志／配置／代码文本后缀；中文句号或全角句点加空格的历史文件名仍经统一后缀规则识别。预览延用应用现有白卡／中性画布、字体、颜色、圆角和操作栏，没有新造一套文档风格。
+- **验证与交付边界：** Android 全量 JVM `894 tests / 0 failures / 0 errors / 3 skipped`，最终 ZIP 安全收紧后的定向回归与 Release 重建亦通过；`:app:lintDebug` 与 `:app:assembleRelease` 通过，未运行任何 `connected*AndroidTest`。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `4e9b106d3ee1330488da231d271d499d3eec13c2d4a4444fe240ad3724384b87`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未覆盖安装 OPPO，也未完成真机 PDF 连续翻页手感、各格式样本与深层 ZIP 继续打开的人工验收，不得把编译与自动回归写成真机视觉／手势闭环。
+
+## 2026-08-29：搜索输入命中历史后自动打开并定位（代码／全量 JVM／Lint／Release／OPPO 保数据覆盖已验证）
+
+- **输入联动：** 搜索界面底部输入关键词时，按当前列表范围读取本地搜索历史；优先匹配规范化后的完整相等项，其次匹配最近的前缀项，再匹配最近的包含项。存在命中时直接复用既有历史弹窗，并将对应历史词滚动到可见位置、用当前主题色短促突出；输入继续变化且不再命中时，自动打开的弹窗随即收起。
+- **交互边界：** 自动弹窗不抢输入焦点、不收起键盘；手动点击历史按钮打开后仍由用户点外、关闭或返回收起，不会被后续无匹配输入强制关闭。点击历史词继续沿用既有填入和搜索流程。搜索防抖只刷新结果，不再把每个暂停输入片段写入历史；键盘提交和历史选择才记录搜索词，避免联想历史被中间态污染。
+- **UI 统一：** 没有新增浮层样式，继续复用搜索页既有历史弹窗、主题颜色、圆角、字体缩放、点外关闭和键盘避让；最多显示六行并允许内部滚动。
+- **自动验证：** 定向回归覆盖完整相等／空白归一、前缀、包含、自动弹窗定位及防抖不写历史；Android 全量 JVM `888 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintDebug` 与 `:app:assembleRelease` 通过。未运行任何 `connected*AndroidTest`。
+- **Release 与 OPPO：** code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `8fc490c37a7c85a9bba0c1c71d5d48627cf2ed0387bfa13daa6bf6581bc8a77d`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。已对 OPPO `3B157F009E800000` 执行同包名、同签名 `pm install -r --user 0`；安装后设备回读 APK 与 Release 哈希一致，`firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104 / deDataInode=1433378` 均未变化。应用进程存活且 `com.nanzhufeng.ai/.NanfengAiActivity` 位于前台，当前进程日志未发现 `FATAL EXCEPTION`／`AndroidRuntime`。
+- **待人工确认：** 尚未在真机搜索页实际输入多组历史关键词，人工检查弹窗出现时机、滚动定位、主题高亮和输入法连续输入手感；覆盖安装与自动证据不能冒充这部分视觉／手势验收。
+
+## 2026-08-29：PDF 正常阅读、异常句点文件名兼容与 ZIP 内容查看（代码／全量 JVM／Lint／Release 已验证）
+
+- **PDF 阅读器：** 打开后固定本次已验证附件引用，翻页不再依赖可能刷新的会话投影；异步页渲染有代次保护和加载态。底部上一页／下一页与页面手势区分离，避让系统导航栏并保证层级；拟合比例下可左右滑页，支持双指缩放和拖动，但不引入图片专属的双击缩放。
+- **PDF 清晰度：** `PdfRenderer` 的约 72 DPI 原始页不再被禁止放大；改为在 `2880px` 边长、600 万像素和 8 MiB 页缓存上限内高分辨率光栅化，切页时回收旧 Bitmap。A4 `595×842` 样例已证明会放大渲染且不超过像素／边长门禁。
+- **异常文件名：** 历史导入附件即使 MIME 为 `application/octet-stream`，也可结合文件名安全识别 ASCII 句点、中文句号 `。`、全角句点 `．` 以及句点后空格；只允许 Markdown／TXT／JSON／CSV 进入有界 UTF-8 文本查看，其他二进制文件仍失败关闭。截图中 `粘贴的 markdown (1)。 md` 形式已有回归覆盖。
+- **ZIP 内容查看：** 搜索文件卡不再显示“本地缩略图不可用”，点击进入与现有文件查看器统一的本地内容清单，显示安全路径、文件类型、真实大小和总项数，保留下载／分享／关闭。共享导入 ZIP 中的内层 ZIP 会先验证外层引用和内层哈希再列目录；最多显示 2000 项，不自动解压、不执行条目。
+- **自动验证与交付边界：** Android 全量 JVM `886 tests / 0 failures / 0 errors / 3 skipped`，`:app:lintDebug` 与 `:app:assembleRelease` 通过；未运行任何 `connected*AndroidTest`。code 66 非调试 Release 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `6f4e25bc30290a144c32c589b81e883c624f237f1a21d7ccb4b338ca4ad8ba10`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。当前 `adb devices -l` 无设备，因此未对 OPPO 覆盖安装，也未做真机页面点击、清晰度和压缩包视觉回读；不得将构建写成真机验收。
+
+## 2026-08-29：Google 账号与手动选择对话同步（代码／全量 JVM／Release／OPPO 保数据覆盖已验证）
+
+- **直接同步：** 普通与工作对话的长按菜单新增“同步到南枫云”。已登录且恢复保护就绪时，点击后直接同步当前一条对话，没有二次确认弹窗；只有云端提交与回读成功才进入手动选中记录。
+- **定期边界：** 账号页手动开启的 12 小时定期同步只遍历当前账号已手动同步成功的对话，不扫描其他对话，不扩大到记忆、项目、知识、设置或其他本机数据。退出登录取消工作但保留本机对话和选中记录。
+- **安全与 UI：** 只上传一条对话的文本消息树；附件、工具结果和未完成草稿整体拒绝，不做部分同步。恢复码明文不持久化，token 与派生包装材料由 Android Keystore 保护；未知云端版本冲突停止。账号页复用现有白卡、主题色、字体、圆角、图标和共享开关。
+- **验证与边界：** Android 全量 JVM `876 tests / 0 failures / 0 errors / 3 skipped`、`lintDebug`、`assembleDebug` 与 `assembleRelease` 通过。code 66 非调试 Release APK 为 `app/build/outputs/apk/release/南枫AI.apk`，SHA-256 `349ee3ae9edb7d3a1be1ea372dd6482215167f605492a5dbd7be928654f3ed23`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。已对 OPPO `3B157F009E800000` 执行同签名 `install -r`；安装前后 `ceDataInode=1459104 / deDataInode=1433378` 不变，首次安装时间不变，设备内 APK 与 Release 字节哈希一致，Activity 处于前台且进程存活，未发现相关崩溃。当前环境没有本应用专用 Supabase URL、publishable key 和 Google Web Client ID，因此未做真实 OAuth、密文上传／回读、跨设备发现与恢复；未运行任何 `connected*AndroidTest`。详见 [P7-F 手动选择对话同步合同](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)。
+
+## 2026-08-29：左侧栏底部设置图标改为正文色（代码／定向 JVM／Debug 编译已验证）
+
+- **界面：** 普通、工作和临时左侧栏底部的设置齿轮统一从强调色派生色改为正文色；浅色皮肤呈现正常黑色，深色皮肤自动呈现可读白色，不写死黑色。
+- **不变：** 圆形白色／深色前景面、冻结阴影、按压与水波纹轮廓、大小、位置、命中区和设置路由全部不变；删除不再使用的专用强调色令牌，避免后续又被主题色切换覆盖。
+- **验证：** `P6DConversationRowAccessibilityContractsTest` `88 tests / 0 failures / 0 errors / 0 skipped`；Debug Kotlin 编译通过，唯一警告仍为既有 `LocalClipboardManager` 弃用。Gradle 仅对本轮进程使用 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置。尚未做隔离模拟器视觉验收；未运行任何 `connected*AndroidTest`，未安装或操作 OPPO。
+
+## 2026-08-29：设置数据类分组与入口更名（代码／定向 JVM／Debug 编译已验证）
+
+- **名称：** 设置首页分组“应用与数据”改为“数据管理”，原“存储”入口及详情标题改为“导入与导出”。为避免分组和子入口同名，原只承担删除、清理、失败重试和风险确认的“数据管理”子入口及详情标题同步改为“清理与删除”。
+- **边界：** 图标、分组顺序、组合卡几何、路由枚举、导入导出、备份恢复、本机概览、删除与清理数据链全部不变，只收口可见名称。
+- **验证：** `P6DConversationRowAccessibilityContractsTest` 88 项、`SettingsUiSimplificationContractsTest` 14 项与 `SettingsCategoryCardContractsTest` 1 项，共 `103 tests / 0 failures / 0 errors / 0 skipped`；Debug Kotlin 编译通过。Gradle 仅对本轮进程使用 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置。尚未做隔离模拟器视觉验收；未运行任何 `connected*AndroidTest`，未安装或操作 OPPO。
+
+## 2026-08-29：搜索附件时间／大小双向排序（代码／定向 JVM／Debug 编译已验证）
+
+- **默认不变：** “默认排序”继续使用现有按月分组及组内时间顺序，不改旧结果结构。“全部／图片／视频／音频／文件”增加一个紧凑的排序胶囊，“正文”不显示。
+- **双向全局排序：** 可切换“时间从新到旧／时间从旧到新／大小从大到小／大小从小到大”。显式排序跨月份全局生效并隐藏月份标题，分别消费真实 `timestampEpochMs` 和附件 `byteCount`；只是 UI 投影，不修改搜索索引、附件引用或删除链。
+- **位置与统一性：** 切换排序后返回顶部并清除旧锚点；预览返回、搜索快速定位及主界面反向定位的索引都按当前排序计算。胶囊、前景下拉面、字号、圆角和选中主题色全部复用搜索现有 UI 令牌，没有新建彩色卡或独立视觉风格。
+- **自动验证：** `ConversationSearchSurfaceContractsTest` 5 项、`ConversationSearchAttachmentPreviewUiContractsTest` 1 项、`MainAttachmentSearchLocateUiContractsTest` 3 项、`ConversationPopupLayerContractsTest` 1 项与 `P6DConversationRowAccessibilityContractsTest` 88 项，共 `98 tests / 0 failures / 0 errors / 0 skipped`；Debug Kotlin 编译通过。Gradle 仅对本轮进程使用 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置。
+- **边界：** 尚未在隔离模拟器实际点击下拉菜单、切换四种顺序或验收大字与深色皮肤，不得称为视觉／手势验收完成。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO。
+
+## 2026-08-29：搜索文件卡底部大小与时间同排（代码／定向 JVM／Debug 编译已验证）
+
+- **界面：** 搜索图片／视频／音频／文件网格卡及“全部”附件行的底部事实栏统一为真实占用大小靠左、所属消息时间靠右，时间格式为 `M月d日 HH:mm`。网格卡维持既有 `204dp` 高度、白卡、圆角和字体层级，命中摘要不再占用底栏；列表形态的命中摘要仍保留在事实栏上方。
+- **数据：** 大小继续读取持久附件引用的 `byteCount`，时间读取同一搜索命中的 `timestampEpochMs`，不改搜索排序、定位三元组、预览、长按删除或共享文件引用链。
+- **自动验证：** `ConversationSearchAttachmentPreviewUiContractsTest` 1 项、`ConversationSearchSurfaceContractsTest` 3 项、`MainAttachmentSearchLocateUiContractsTest` 3 项、`ConversationPopupLayerContractsTest` 1 项与 `P6DConversationRowAccessibilityContractsTest` 88 项，共 `96 tests / 0 failures / 0 errors / 0 skipped`；Debug Kotlin 编译与定向 `git diff --check` 通过，唯一编译警告仍为既有 `LocalClipboardManager` 弃用。Gradle 仅对本轮进程使用 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置。
+- **边界：** 尚未在隔离模拟器或目标真机实际检查两列窄卡、长文件名和大字体下的底栏对齐，不得称为视觉验收完成。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO。
+
+## 2026-08-29：主界面附件弹窗反向精确定位搜索（代码／定向 JVM／Debug 编译已验证）
+
+- **范围：** 本次只改主界面对话消息中的附件长按弹窗；搜索结果原有“快速定位／删除”长按弹窗未改。主弹窗新增“搜索定位”，与“下载／分享”组成三个同规格胶囊；文件名、一次类型／真实大小和发送时间保留，重复类型行删除，弹窗复用瞬时菜单字号、亮白前景、主题色和既有点外关闭。
+- **精确目标：** 跳转携带 `ConversationId + MessageNodeId + AttachmentId`，分类与搜索索引共享同一 MIME owner。搜索页打开对应图片／视频／音频／文件分组后，按三元组滚到该条确切引用并复用现有短暂主题色渐变；共享文件被多条消息引用时不再只按附件 ID 命中第一条。草稿尚未进入搜索索引，因此不显示无效的“搜索定位”。
+- **自动验证：** `MainAttachmentSearchLocateUiContractsTest` 3 项、`ConversationSearchSurfaceContractsTest` 3 项、`ConversationSearchAttachmentPreviewUiContractsTest` 1 项、`ConversationPopupLayerContractsTest` 1 项与 `P6DConversationRowAccessibilityContractsTest` 88 项，共 `96 tests / 0 failures / 0 errors / 0 skipped`；`:app:compileDebugKotlin` 通过，唯一编译警告仍为既有 `LocalClipboardManager` 弃用。Gradle 仅对本轮进程使用 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置。
+- **边界：** 尚未在隔离模拟器或目标真机实际长按、跳转和回读布局，不得称为视觉／手势验收完成。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO。
+
+## 2026-08-29：返回搜索保留原文件位置（代码／定向 JVM／Debug 编译已验证）
+
+- **位置 owner：** 全部、正文各保留独立 `LazyListState`，图片、视频、音频、文件各保留独立 `LazyGridState`；六份状态提升到搜索全屏页显隐之上，从预览或快速定位返回时复用原索引与像素偏移，不重建为顶部。
+- **文件锚点：** 点击附件时记录稳定 `AttachmentId`。返回后先检查原文件是否仍在可见区；只有结果变化导致它不可见时，才按包含月份标题的真实 Lazy item 索引滚回该文件。更换搜索词、历史词或分类会清除旧锚点，避免误跳。
+- **自动验证：** `ConversationSearchSurfaceContractsTest` 3 项、`ConversationSearchAttachmentPreviewUiContractsTest` 1 项与 `P6DConversationRowAccessibilityContractsTest` 88 项，共 `92 tests / 0 failures / 0 errors / 0 skipped`；新增纯 Kotlin 索引样例真实覆盖正文标题、附件总数与跨月标题的 Lazy item 累计。`:app:compileDebugKotlin` 与定向 `git diff --check` 通过。Android Studio JBR 21 仅对本轮 Gradle 进程使用 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置；唯一编译警告仍是既有 `LocalClipboardManager` 弃用。
+- **边界：** 尚未在隔离模拟器中实际滚动到中段并往返搜索，不得称为视觉／手势验收完成。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO。
+
+## 2026-08-29：存储概览钻取、搜索分组直达与记忆总入口（代码／定向 JVM／Debug 编译已验证）
+
+- **信息架构：** “本机数据”概览从“数据管理”移入“存储”，与导入、备份处于同一个真实存储页；“数据管理”只保留 ZIP 原始包整理、清理范围、确认删除与失败重试，不再重复显示概览。
+- **真实钻取：** 对话／消息分别直达现有搜索“全部／正文”，图片／视频／音频／文件直达同名搜索分组，范围设为所有未删除本地对话；搜索页、卡片、预览、快速定位与引用安全删除链全部复用现有 owner。知识和项目直达原页面；记忆进入新的轻量总入口，再分流到“记忆摘要”和“个性化与资料库搜索”。草稿、其他导入资料与导入概况没有准确明细页，仍为无箭头的静态数据。
+- **界面统一：** 可点与静态数据行共用设置的中性浅色面、`14dp` 圆角、最小 `48dp` 行高及当前字体缩放；只有真实入口显示 `18dp` 右箭头。删除“按类别统计数量与实际内容大小”的重复小字，未新建彩色卡、专用搜索或新弹窗风格。
+- **自动验证：** 新增 `PrivacyStorageNavigationContractsTest` 4 项，并回归设置简化、设置滚动／卡片、搜索页／附件预览和会话可访问性，共 `111 tests / 0 failures / 0 errors / 0 skipped`；`:app:compileDebugKotlin` 与定向 `git diff --check` 通过。使用 Android Studio JBR 21，仅对本轮 Gradle 进程设置 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置；唯一编译警告仍是既有 `LocalClipboardManager` 弃用。
+- **边界：** 未执行目标视口视觉回读、完整 JVM、Lint、Release、隔离模拟器或设备验收；没有运行任何 `connected*AndroidTest`，没有安装或操作 OPPO，不得称为真机视觉或完整业务闭环。
+
+## 2026-08-29：数据概览精简与设置入口更名（代码／定向 JVM／Debug 编译已验证）
+
+- **概览精简：** “本机数据”卡删除“本地记录”整组、“设置与密钥”及 API Key 状态、底部大小／ZIP 说明；总大小同步只汇总仍可见的对话内容、附件与导入资料，避免隐藏分项后总数无法对账。后台模型调用、本地检查、密钥与 ZIP 清理 owner 均保留，未删除任何真实数据。
+- **设置名称：** 设置首页及详情页标题将“数据与存储”统一改为“存储”，“隐私与安全”统一改为“数据管理”；图标、入口顺序、页面内容、路由及数据链不变。
+- **自动验证：** `SettingsUiSimplificationContractsTest` 14 项、`AndroidUserEntryAuditContractsTest` 7 项与 `P6DConversationRowAccessibilityContractsTest` 88 项共 109 项全部通过（0 failure／0 error／0 skipped），覆盖冗余概览隐藏、新旧名称互斥、首页与详情标题统一；`compileDebugKotlin` 与 `git diff --check` 通过。使用 Android Studio JBR 21，并仅对本轮 Gradle 进程设置 `-XX:TieredStopAtLevel=1`，未写入项目配置。
+- **边界：** 尚未执行目标视口视觉回读、完整 JVM、Lint、Release 或设备验收；未运行任何 `connected*AndroidTest`，未安装或操作 OPPO，不得称为真机视觉闭环。
+
+## 2026-08-29：左侧计划入口改为时钟图标“定时任务”（代码／定向 JVM／Debug 编译已验证）
+
+- **入口：** 删除“＋ 已计划”的中性灰胶囊，改为抽屉画布上的无常态背景导航行；左侧使用 Material Rounded `Schedule` 圆形时钟图标，名称改为“定时任务”，整体左对齐。
+- **统一性：** 入口使用正文色、`24dp` 图标、`16sp / 20sp / SemiBold` 文字和 `48dp` 命中高度；搜索胶囊、抽屉背景、上下渐变、入口顺序、打开计划页的 owner 及所有计划任务数据链不变。
+- **自动验证：** `ConversationDrawerEdgeFadeContractsTest` 3 项、`AndroidUserEntryAuditContractsTest` 7 项与 `P6DConversationRowAccessibilityContractsTest` 88 项共 98 项全部通过（0 failure／0 error／0 skipped），覆盖旧入口移除、时钟图标／新名称、透明常态表面、左对齐与既有抽屉交互；`compileDebugKotlin` 与 `git diff --check` 通过。使用 Android Studio JBR 21，并仅对本轮 Gradle 进程设置 `-XX:TieredStopAtLevel=1`，未写入项目配置；唯一编译警告仍是既有 `LocalClipboardManager` 弃用。
+- **边界：** 尚未取得实现后的同视口截图，不能把代码和构建称为与参考图逐像素匹配；完整 JVM、Lint、Release 与设备验收亦未执行。未运行任何 `connected*AndroidTest`，未安装或操作 OPPO。
+
+## 2026-08-29：主界面底部模型名统一加粗（代码／定向 JVM／Debug 编译已验证）
+
+- **界面：** 普通会话与临时聊天共用的 `ComposerModelEntry` 将短模型名字重由 `SemiBold` 统一为 `Bold`；`13sp` 字号、圆润字体、短名称、胶囊、宽度、位置、主题色与 `48dp` 命中面不变。
+- **范围：** 仅调整主界面底部 Composer 模型名，不改变模型选择面、Assistant 回复页脚、模型路由、当前会话 override 或全局默认设置。
+- **自动验证：** `P6DConversationRowAccessibilityContractsTest` 88 项全部通过（0 failure／0 error／0 skipped），覆盖共享模型入口的 `Bold` 字重及既有 Composer 几何；`compileDebugKotlin` 与 `git diff --check` 通过。使用 Android Studio JBR 21，并仅对本轮 Gradle 进程设置 `-XX:TieredStopAtLevel=1`，未写入项目配置；唯一编译警告仍是既有 `LocalClipboardManager` 弃用。
+- **边界：** 尚未执行目标视口视觉回读、完整 JVM、Lint、Release 或设备验收；未运行任何 `connected*AndroidTest`，未安装或操作 OPPO，不得称为真机视觉闭环。
+
+## 2026-08-29：左侧会话标题允许阿拉伯数字并统一选中主题色（代码／定向 JVM／Debug 编译已验证）
+
+- **标题格式：** 自动标题生成提示与本机确定性解析门同时允许 `0–9` 阿拉伯数字，可保留 `GPT5模型选择`、`2026科技趋势` 等原文明确对象；长度、空泛标题拒绝、标点／Markdown／emoji 等安全格式限制不变。
+- **选中态：** 选中会话保留既有主题色浅底，仅标题文字改为当前主题色；日期、置顶图标、未读点、行高、字号、圆角和交互不变，不新增局部配色或组件。
+- **自动验证：** `ConversationTitleFormatContractsTest` 4 项、`ConfiguredConversationTitleRefinerContractsTest` 4 项与 `P6DConversationRowAccessibilityContractsTest` 88 项共 96 项全部通过（0 failure／0 error／0 skipped），覆盖数字解析、标题提示词和选中标题主题色；`compileDebugKotlin` 与 `git diff --check` 通过。使用 Android Studio JBR 21，并仅对本轮 Gradle 进程设置 `-XX:TieredStopAtLevel=1`，未写入项目配置；唯一编译警告仍是既有 `LocalClipboardManager` 弃用。
+- **边界：** 尚未执行目标视口视觉回读、完整 JVM、Lint、Release 或设备验收；未运行任何 `connected*AndroidTest`，未安装或操作 OPPO，不得称为真机视觉闭环。
+
+## 2026-08-29：Composer 输入文字关联全局字体大小（代码／定向 JVM／Debug 编译已验证）
+
+- **根因与修正：** App 的 Compose Typography 已消费 `LocalAppTextScale`，但 Composer 使用原生 Android `EditText` 并写死 `16sp`，因此未随设置变化。当前原生输入框显式读取同一全局倍率，标准档保持 `16sp`，小／大档分别为 `12.8sp / 19.84sp`；factory 与 update 均应用，切换设置后现有输入框即时更新。
+- **范围：** 已输入文字与“回复 南枫AI”占位文字共用原生 textSize 和自然行高；Composer 外层、阴影、单行／展开高度、附件／模型／发送控件及触控面不变。
+- **自动验证：** `AppearanceFontSizeContractsTest` 5 项与 `P6DConversationRowAccessibilityContractsTest` 88 项共 93 项全部通过（0 failure／0 error／0 skipped），`compileDebugKotlin` 与 `git diff --check` 通过。使用 Android Studio JBR 21 并仅对本次 Gradle 进程设置 `-XX:TieredStopAtLevel=1`，未写入项目配置；仍只有既有 `LocalClipboardManager` 弃用警告。
+- **边界：** 尚未完成三档字号的目标视口视觉回读、完整 JVM、Lint、Release 或设备验收；未运行任何 `connected*AndroidTest`，未安装或操作 OPPO，不得称为真机视觉闭环。
+
+## 2026-08-29：Assistant 多图从左到右升序（代码／定向 JVM／Debug 编译已验证）
+
+- **排序 owner：** 当前消息多图块的高序号在前，新增唯一 `ascendingAssistantImageOrder` 将其转换为低序号在前。会话缩略图、默认大图、全屏预览左右滑、当前索引和批量下载均消费这份升序序列，不用反向 `Row` 做表面修补。
+- **视觉：** 缩略图保持既有 `48dp`、间距、圆角、主题色选中边框和横向滚动，只改变从左到右的内容次序；默认选中升序第一张。
+- **自动验证：** `AssistantGeneratedImageGroupUiContractsTest`、`P6F2BImagePreviewUiContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 共 `96 tests / 0 failures / 0 errors / 0 skipped`，覆盖 `7…1 → 1…7`、会话图片组与全屏预览共享排序、用户附件保留原顺序，以及既有缩放／会话交互；`:app:compileDebugKotlin` 与 `git diff --check` 通过。仅使用 Android Studio JBR 21 和本轮进程级 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置；唯一编译警告仍是既有 `LocalClipboardManager` 弃用。
+- **边界：** 尚未执行目标数据视觉回读、完整 JVM、Lint、Release、隔离模拟器或设备覆盖；未触碰 OPPO，也未运行任何 `connected*AndroidTest`，不得称为真实设备顺序已确认。
+
+## 2026-08-29：图片原图预览区域手势与触点双击缩放（代码／定向 JVM／Debug 编译已验证）
+
+- **交互：** 保留图片原图的双指缩放与单指位移，并把这两类手势从整屏黑色画布收回实际图片节点。图片区域双击以触点对应的原图位置为中心放大到 `2.5×`，任何已放大状态再次双击还原初始比例和位置；单击仍控制既有顶部操作显隐。
+- **边界：** 黑色留白、关闭／下载／分享控件和 PDF、视频、音频、文本等其他文件预览不响应图片缩放或双击；图片切换、原图解码、下载与分享链不改。
+- **自动验证：** `P6F2BImagePreviewUiContractsTest` 与 `P6DConversationRowAccessibilityContractsTest` 共 `93 tests / 0 failures / 0 errors / 0 skipped`，覆盖触点中心保持、`2.5×` 放大、再次双击复位、手势节点位于实际 `Image` 之后及既有会话交互；`:app:compileDebugKotlin` 与 `git diff --check` 通过。仅使用 Android Studio JBR 21 和本轮进程级 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置；唯一编译警告仍是既有 `LocalClipboardManager` 弃用。
+- **边界：** 尚未执行隔离模拟器手势、目标视口视觉回读、完整 JVM、Lint、Release 或真机手感；未触碰 OPPO，也未运行任何 `connected*AndroidTest`，不得称为真实设备交互完成。
+
+## 2026-08-29：上下文记录与运行诊断时间统一到右下角（代码／定向 JVM／Debug 编译已验证）
+
+- **界面：** “上下文记录”与“运行诊断”的每张记录卡不再把时间插在标题下方；两页共用同一辅助小字组件，把真实发生时间作为卡片最后一项右对齐。运行诊断展开技术详情时，时间仍处于整张卡片右下角。
+- **统一性：** 保留现有卡片、内边距、信息顺序、字体与辅助色，只统一时间槽位，不增加新图标、背景或说明。
+- **自动验证：** `ModelSettingsUiContractsTest` 为 `3 tests / 0 failures / 0 errors / 0 skipped`，覆盖两个页面消费共享时间组件、时间位于记录内容末尾及 `Alignment.End`；`:app:compileDebugKotlin` 与 `git diff --check` 通过。本轮显式使用 Android Studio JBR 21，并仅对 Gradle 进程设置 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置。
+- **边界：** 尚未执行目标视口视觉回读、完整 JVM、Lint、Release 或设备覆盖；未触碰 OPPO，也未运行任何 `connected*AndroidTest`，不得称为已完成视觉或交付验收。
+
+## 2026-08-29：删除“关于”页重复数据与隐私提示（代码／定向 JVM／Debug 编译已验证）
+
+- **界面：** 删除“关于”大卡底部“数据与隐私”标题、说明及其前置分隔条；大卡只保留品牌说明与真实版本／构建号。“隐私与安全”及“数据与存储”的正式入口、页面和数据能力不变。
+- **统一性：** 沿用现有大卡、章节间距、字体、颜色与唯一分隔条，不增加替代文案或新组件；设置当前合同同步为两模块结构。
+- **自动验证：** `AndroidUserEntryAuditContractsTest` 与 `SettingsUiSimplificationContractsTest` 共 `21 tests / 0 failures / 0 errors / 0 skipped`；`:app:compileDebugKotlin` 与 `git diff --check` 通过。终端首次因未配置 Java 未启动 Gradle，随后显式使用 Android Studio JBR 21，并仅对本轮进程设置 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，未写入项目配置。
+- **边界：** 尚未执行目标视口视觉回读、完整 JVM、Lint、Release 或设备覆盖；未触碰 OPPO，也未运行任何 `connected*AndroidTest`，不得称为已完成视觉或交付验收。
+
+## 2026-08-29：搜索附件真实大小、统一弹窗与引用安全删除（代码／完整 JVM／Lint／Release／隔离模拟器／OPPO 覆盖与 ZIP 回读已验证）
+
+- **入口盘点与显示：** Android 全屏搜索共有三种附件消费者：“全部”页文件行、图片／视频／文件分类的网格卡、音频分类文件行。三者现在统一直接格式化 `ConversationAttachmentReference.byteCount`，显示真实持久大小；不读取缩略图、文本预览或媒体缓冲区来猜大小。普通点击仍打开本地预览；长按复用原文件操作面，在同一弹窗内提供“快速定位／删除”。两枚图标统一为 `20dp`，文字使用既有瞬时菜单缩放，原卡片材质、间距、行高与触控面不变。
+- **统一确认与文案：** 删除确认沿用标准居中弹窗，标题“删除”，正文只保留“仅移除这条消息中的附件。”，按钮为“取消／确认删除”；主按钮跟随当前皮肤主题色并使用共享 `P5AInteractiveShape` 胶囊。同步盘点现有弹窗源码，删除或压缩了回收站、记忆、项目归属、Knowledge 导出／关系、ZIP 清理、计划任务、导入任务、双路径与本地审计中的重复解释和内部实现术语；新增 `DialogCopyBrevityContractsTest` 防止旧长文案回流。真实状态、数量、费用和不可恢复后果仍保留。
+- **消息保留与引用 owner：** `ConversationMessageAttachmentRepository → DeletePersistedConversationAttachmentUseCase → PrivateAttachmentRepository` 是唯一删除链。Room 事务重验当前 conversation/message/attachment/hash，只移除目标 `ContentBlock.Attachment`、对应 ZIP occurrence receipt 并重建既有搜索索引；消息节点和会话都不删除。仅附件消息保留原节点并显示“附件已删除”。过期搜索命中、消息／hash 已变化时整体拒绝。
+- **共享文件清理：** 私有目录按普通草稿、普通消息、临时聊天、ZIP occurrence receipt 与 `PENDING/UPLOADING/FAILED/UNKNOWN` 可重试上传统计引用；任一引用仍在就只移除当前消息引用，最后一个引用消失后才删除受管文件与目录行。物理删除失败不会伪装成功，目录行保持以便后续维护；ZIP archive-backed 附件只清该受管资产，原始 ZIP 仍由独立“删除 ZIP 原始包”链负责。
+- **隔离模拟器验收：** 新增独立 `searchAttachmentAcceptance` build type 与后缀包 `com.nanzhufeng.ai.searchattachmentacceptance`，只通过正式 store/repository owner 写入固定非敏感 fixture。全新临时 AVD `emulator-5588` 为 `1140×2616 / 442dpi / font scale 1.0`；“全部、图片、视频、音频、文件”均回读真实 `12.1 KB / 229.1 KB / 33.8 KB / 1.2 MB / 543 B`。可见取消不改数据；两条消息共享的 `12,345-byte PNG` 第一次删除后附件数 `6→5` 且实体仍在，第二次删除后 `5→4` 且实体消失，其他四个文件仍在。先前同一 fixture 已验证两个“附件已删除”消息节点、所属会话及冷启动回读均保留。最终截图同时确认“快速定位／删除”、两枚 `20dp` 图标、紧凑字体、主题色胶囊、标题“删除”和按钮“确认删除”。
+- **自动回归：** `SearchAttachmentDeletionRoomContractsTest` 覆盖两条消息共享同一资产、精确清 ZIP 回执、消息／会话保留、最后引用才清物理文件、临时聊天与可重试上传保留资产、删除失败保留目录；UI 文案与统一性另由新增合同覆盖。最终完整 JVM 为 `856 tests / 0 failures / 0 errors / 3 skipped`；3 个 skip 仍是需要用户真实 ChatGPT ZIP 环境变量的 opt-in 验收，不冒充执行。Android Studio JBR 21 默认 C2 在测试进程两次原生崩溃于 `Node::uncast`，随后仅对本轮测试进程设置 `JAVA_TOOL_OPTIONS=-XX:TieredStopAtLevel=1`，完整套件真实执行并全绿，未写入项目配置。
+- **Lint／Release：** `lintDebug --rerun-tasks` 成功，`0 Error / 90 Warning / 15 Hint`；`:app:assembleRelease --rerun-tasks` 成功。产物 `app/build/outputs/apk/release/南枫AI.apk` 为 `0.3.0-p10j (66)`、25,906,295 bytes、4 个 DEX，APK SHA-256 `7134c73ccad659846626611d3f42053cd8973f587e38c57e8c602a2034483e4c`；v2/v3 正式签名通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **OPPO 保数据覆盖：** 用户后续明确授权后，唯一连接设备 `3B157F009E800000 / PKH120` 由旧正式包 SHA-256 `9e8d0a6a98c209864d0871c86f472698134df59c5c491827bb2ed9cebf802e7a` 同签名覆盖为当前 `7134c73ccad659846626611d3f42053cd8973f587e38c57e8c602a2034483e4c`。覆盖前后版本均为 `0.3.0-p10j (66)`，证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，`DEBUGGABLE` 未出现；使用 `/data/local/tmp` + `pm install -r --user 0`，未卸载、未清数据。`ceDataInode=1459104`、`deDataInode=1433378`、首次安装时间 `2026-08-20 15:15:31` 均保持，设备回读 `base.apk` 与本地产物逐字节一致。两次正式冷启动为 `255ms / 233ms`，Activity 正常且进程存活。
+- **真实 ZIP 内置完成回读：** OPPO 设置 → 数据与存储显示 `1 个导入批次 · 784 个对话已导入 · 1615 个附件已恢复`；详情页显示 `CHATGPT ZIP · 批次 1 / 已完成 / 784 个对话已导入 / 1615 个附件已恢复到原对话 / 附件恢复已完成`。强制停止并冷启动后重新进入同一路径，以上完成状态再次原样回读，证明已持久化。详情另如实显示 `1` 个官方引用对应源文件缺失、`60` 个文件缺少可确认对话归属；这是导出包／归属证据边界，不是本地恢复未完成，不得猜配或伪装为成功。
+- **边界：** 本轮没有运行任何 `connected*AndroidTest` 或仪器测试，没有 Debug／测试 APK 自动部署，没有读取聊天正文、数据库或附件内容；设备 UI 回读只限定设置与 ZIP 导入状态。没有真实 Provider 调用。
+
+## 2026-08-28：“最近”批量编辑图标与大数据切换流畅度（代码／定向 JVM／Debug 编译已验证，完整回归待续）
+
+- **视觉：** “最近”右侧批量编辑铅笔从 `19dp` 精确缩小 30% 为 `13.3dp`；`36dp` 点击面、分组位置、普通 `36dp` 与批量 `44dp` 行高、底部操作与功能路由全部不变。
+- **性能根因与修正：** 普通抽屉原为 `Column + verticalScroll`，打开抽屉即组合全部历史会话；切换批量编辑时又会使每条会话改变行高和选择控件，数百条数据下产生明显延迟。现改为带稳定 key/content type 的 `LazyColumn`，只组合可见行；置顶、最近、顶部预留、底部可滚动 inset 与悬浮按钮布局保持。批量候选 ID 集合也使用 `remember` 缓存，全选不再每次重建。
+- **当前验证：** `P6DConversationRowAccessibilityContractsTest` 定向 `88 tests / 0 failures`；`:app:compileDebugKotlin` 通过，仅有既有 `LocalClipboardManager` 弃用警告；`git diff --check` 通过。上下文闸门为 `HANDOFF (94.6%)`，未继续完整 JVM、Lint、Release 或真机手感，不得冒充完整闭环。
+
+## 2026-08-28：隐私数据分类统计与 ZIP 原始包安全清理（代码／定向 JVM 已验证，完整回归与真机待完成）
+
+- **统计根因与修正：** 旧隐私概览只扫描 `attachments/v1`，因此 ZIP 内已恢复到普通对话的附件没有进入“附件与导入资料”，截图只显示约 `24.9 MB`。当前统计改读 `private_attachment_assets` 的统一目录表，按图片、视频、音频、文档与其他文件汇总逻辑数量和字节；仍处于 ZIP 整理阶段的已归属附件也正常计入。对话、消息、草稿、记忆、知识、项目、模型调用与本地检查记录同时以中文分组显示数量和内容字节。
+- **ZIP 存储决策：** ZIP 映射只保留为导入阶段的官方归属识别，不再作为用户主动清理后的长期字节后端。概览不展示、也不计入原始 ZIP 大小；导入概况单独显示已导入对话和已导入附件，避免与物理原包混算。
+- **安全清理链：** 新增“删除 ZIP 原始包”。执行时在 `Dispatchers.IO` 上以 `64 KiB` 缓冲逐个流式复制已归属附件，校验 entry、大小和 SHA-256，以哈希命名写入 `attachments/v1`，随后按稳定附件 ID 原子切换目录表；全部引用都变为正常受管附件后，才将原包原子移入隔离区并删除。任务／附件恢复未完成、校验失败或状态变化时原包保留；中断后已完成的逐项目录更新可重放，未归属候选只在原包成功隔离后移除。
+- **当前验证：** `compileDebugKotlin` 通过；`ImportedZipPackageCleanupContractsTest`、`P5CTaskDeletionRoomContractsTest`、`SettingsUiSimplificationContractsTest` 定向 JVM 通过，覆盖归档附件统计、原 ZIP 大小不进入 aggregate、受管附件回读、未归属候选清理及未完成恢复时拒绝删除。尚未完成完整 JVM、Lint、Release 构建或 OPPO 覆盖，不得把本节称为真机闭环。
+
+## 2026-08-28：本地文本预览 Markdown 排版、状态栏与有效提示（代码／JVM／Lint／Release 已验证，真机待授权覆盖）
+
+- **阅读投影：** 本地安全文本预览不再用等宽纯文本直接显示 Markdown 控制字符，而是复用会话的安全 Markdown parser，呈现标题、正文、引用、列表、强调、行内／块级代码和表格；链接只显示标签文字，不可执行。下载、分享和存储原文件不改写。
+- **克制字号：** 预览正文为 `15sp / 23sp`，三级标题为 `19sp / 18sp / 17sp`，保留层次但不复制 Assistant 阅读页的 `26sp` 大标题跳变；现有文件名、下载、分享、关闭、正文卡和整体布局不移动。
+- **系统栏与提示：** 浅色预览以纯白 Surface 延伸到状态栏并显示黑色系统图标；深色皮肤继续使用对应前景面和浅色图标。底部说明改为“长按可选择复制；下载或分享仍使用未修改的原文件。”，删除 UTF-8、HTML、脚本等低价值实现说明。
+- **自动验证：** 聚焦 Markdown／文本预览／暗色 surface 契约 `23 tests / 0 failures / 0 errors / 0 skipped`；完整 JVM `851 / 0 / 0 / 3 skipped`；Debug Kotlin、`lintDebug`、`assembleRelease` 与 `git diff --check` 通过。Lint 报告为 0 Error、90 Warning、15 Hint。
+- **当前 Release：** `app/build/outputs/apk/release/南枫AI.apk`，`0.3.0-p10j (66)`，25,889,921 bytes，4 个 DEX，v2/v3 正式签名通过；APK SHA-256 `3cd3a638f73a2b71f4ccc4068be1fca3960ca3bf6ac58a7f638c603648cb46e5`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **设备边界：** 本轮没有覆盖 OPPO、没有运行仪器测试。OPPO 当前仍安装上一节性能验收包 `9e8d0a6a98c209864d0871c86f472698134df59c5c491827bb2ed9cebf802e7a`；不得把它的冷启动／帧统计冒充为本次文本排版视觉验收。需要用户再次授权后才能同签名保数据覆盖并按截图入口复验。
+
+## 2026-08-28：Android 会话流畅度优化与 OPPO 保数据覆盖（代码／JVM／Lint／Release／系统帧证据已验证）
+
+- **性能实现：** Room 会话快照、列表记忆来源和导入来源已消除逐消息／逐会话 N+1；大目录按 900 条分批规避 SQLite 参数上限。文本／附件搜索改用当前分支数据库投影；`MessageTree`、ViewModel 派生状态和 Compose 可见区附件预览已收敛，媒体解码与文件选择读取移出主线程。功能、入口、布局和视觉合同不变。
+- **自动验证：** 完整 JVM `850 tests / 0 failures / 0 errors / 3 skipped`；`lintDebug` 通过（0 Error、90 Warning、15 Hint）；`assembleRelease` 与 `git diff --check` 通过。性能契约证明 80 条消息回读只执行一次内容块批量查询，30 个会话列表只执行一次记忆来源批量查询，搜索不逐会话重建快照。
+- **最终产物：** `app/build/outputs/apk/release/南枫AI.apk`，`0.3.0-p10j (66)`，25,889,916 bytes，4 个 DEX，v2/v3 正式签名通过；APK SHA-256 `9e8d0a6a98c209864d0871c86f472698134df59c5c491827bb2ed9cebf802e7a`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **OPPO 覆盖与数据保留：** OPPO PKH120 / Android 16 / API 36 使用 `/data/local/tmp` + `pm install -r --user 0` 完成同签名正式包覆盖；未卸载、未清数据、未安装 Debug／仪器包。覆盖前后 `ceDataInode=1459104`、`deDataInode=1433378` 和首次安装时间 `2026-08-20 15:15:31` 均保持不变；设备回读 APK 与本地产物逐字节一致。
+- **运行证据：** 两次正式包冷启动 `229ms / 186ms`，Activity 前台且进程存活；前后台恢复 `19ms`。六次合成纵向滑动产生 291 帧，0 janky frame，50/90/95/99 分位 `5/5/5/6ms`，慢 UI 线程／位图上传／绘制命令均为 0。
+- **未冒充边界：** 合成输入另记录 288 次 high-input-latency，不能替代真实手指触控；为保护私有聊天数据，本轮未抓 UI 文本／截图／数据库，未按内容识别特定长会话、搜索结果或附件。真实内容下的搜索与附件主观手感仍待用户确认。完整证据见 [Android 流畅度优化交付记录](ANDROID_PERFORMANCE_OPTIMIZATION_20260828.md)。
+
+## 2026-08-28：P1 可续跑附件恢复稳定基线与项目复盘（代码／JVM／真实 ZIP／Desktop／协议已验证）
+
+- **稳定基线：** `c1c9ae0 feat: make ZIP asset recovery resumable`，建立在 `6d68ba7` 的标准 JVM 基线上。P1 将 ZIP 附件恢复迁入持久化后台任务，Room Schema 56 保存内容无关状态、进度、失败类型和按会话 checkpoint，支持退出页面后续跑与显式重试；没有放宽模型精确路由、ZIP 归属、安全 MIME、私有复制、迁移或设备门禁。
+- **Android 验证：** P1 标准全量记录为 `819 tests / 0 failures / 0 errors / 3 skipped`。3 个 skip 是需要用户旧／新 ChatGPT ZIP 的 opt-in 测试，不计为已执行；新包附件 Room 链另行运行到 `tests=1, skipped=0, failures=0, errors=0`，耗时 `257.597s`，仍不等于 OPPO 已恢复。
+- **其他本机验证：** Desktop `npm test` 为 `93 passed`，`lint/typecheck/build` 通过；Tauri `cargo test --locked` 为 `97 passed`；v1/v2 exchange 与 sync 三组协议 golden 通过。本机没有 Go 工具链，附件网关未运行 `go test`，也没有生产部署证据。
+- **排除与文档边界：** 用户已明确排除同仓库正在进行的 P2 及后续任务和全部未提交 WIP。本复盘只冻结 [完整开发档案](%E5%8D%97%E6%9E%ABAI%E5%AE%8C%E6%95%B4%E5%BC%80%E5%8F%91%E6%A1%A3%E6%A1%88.md) 与 [可迁移开发经验](%E5%8F%AF%E8%BF%81%E7%A7%BB%E5%BC%80%E5%8F%91%E7%BB%8F%E9%AA%8C.md) 到 `c1c9ae0`、123 个提交；本次没有安装设备、没有运行仪器测试、没有调用真实 Provider 或远端服务。
+
 ## 2026-08-28：当前代码 checkpoint 与 ChatGPT ZIP 附件链收口（代码／真实 ZIP／Lint／Release 已验证，OPPO 待授权覆盖）
 
 - **最后 1 个附件的根因已确认并修复：** 部分 ChatGPT 官方当前节点以不可渲染的结构记录收尾，文本 parser 最后保留的可渲染消息仍有后代。旧 owner 把该节点当成 `currentNodeId` 后触发 `IllegalArgumentException: 当前分支必须指向叶消息。`。现在优先保留官方路径下既有合法叶节点，否则确定性选择最新后代叶节点。同一官方 file ID 的多消息引用仍保留，附件字节／catalog 不重复。
@@ -10,6 +663,7 @@
 - **最终回归边界：** 完整 JVM 为 `815 tests / 60 failures / 3 skipped / 0 errors`，60 项分布于 16 个历史契约类，其中 40 项为 `P6DConversationRowAccessibilityContractsTest`。3 个 skip 都是未在全量命令传真实 ZIP 环境变量的 opt-in 验收，它们已按真实包分开运行并确认 `skipped=0`。不将当前 checkpoint 声称为全绿基线。
 - **Lint／Release：** `lintDebug` 为 `0 errors, 84 warnings, 13 hints`，`assembleRelease` 通过。产物 [南枫AI.apk](../app/build/outputs/apk/release/南枫AI.apk) 为 `66 / 0.3.0-p10j`，SHA-256 `b0d1008fde0bbbddaaad57d925e09ca067dbbb64407d9783904955a999481929`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，最低 API 26。
 - **设备边界：** 本次没有安装设备、没有运行任何仪器测试。OPPO 仍是 SHA-256 `d86b670e050da976aa07151928059b49a9e0936fd7422dbac5883ec683c7c390` 的旧诊断包，当时 UI 回读仍为 `0 个附件已恢复`。只有用户再次明确授权后，才能同签名保数据覆盖并做真实 UI 回读。
+- **历史边界：** 本节的 checkpoint 测试为 `60 / 16`，入口同步阶段为 `59 / 15`；二者先被 `6d68ba7` 的 `815 / 0 / 3 / 0` 取代，再由顶部 P1 的 `819 / 0 / 3 / 0` 增量记录接续，只保留根因与回滚证据。旧 2026-08-27、08-26 总控段也不得使用其 `796 / 60`、旧 APK 或旧“当前”描述覆盖顶部最新交接。
 
 ## 2026-08-28：ChatGPT ZIP 附件原生链路恢复与 JSON 结果入口补齐（代码／JVM 已验证，真机待覆盖）
 
@@ -28,9 +682,9 @@
 - **真实包验收：** 两份由用户明确选择的 2026-07／08 ChatGPT ZIP 依次以旧→新顺序导入到隔离内存 Room：旧包 `517` 条中 `506` 条有效文本会话、`11` 条 `EMPTY_CONTENT`；新包 `796` 条中 `784` 条有效文本会话、`12` 条 `EMPTY_CONTENT`。最终为 `784` 个无重复本地会话；共享会话复用本地 ID，新增消息走 append-only 合并；左侧会话列表按 `updatedAt` 降序、搜索索引命中、两条设置导入任务回读均通过。真实包回归耗时约 `5 分 7 秒`，当前逐会话事务与索引重建是性能风险，尚未做进度／批量优化。
 - **该 JVM 阶段的验证边界：** `P6KUserSelectedChatGptZipMergeAcceptanceTest`（真实 ZIP、无正文输出）、`P6KChatGptZipCommitRoomContractsTest`、`P6KThirdPartyZipInventoryContractsTest` 和 Debug Kotlin 编译通过。这条记录是真机导入之前的自动验证边界；同日后续 OPPO 导入事实见上一条历史快照，两者不再互相否定。附件自动恢复仍须以上方最新交接的新正式包覆盖验收为准。
 
-## 2026-08-27：总控方案当前门同步（文档一致性已检查）
+## 2026-08-27：总控方案历史同步（已被 2026-08-28 当前总控门取代）
 
-- **总控入口：** [总控方案需求—证据完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部已新增 2026-08-27 当前总控门。它把会话、设置、运行时上下文、实现／验证、长期决策和历史蓝图的唯一事实源分开，并将原 2026-08-26 “当前”段显式降级为历史快照。
+- **历史边界：** 该记录只证明 2026-08-27 当时已建立会话、设置、运行时上下文、实现／验证、长期决策和历史蓝图的分层路由。它不再是总控入口，当前只读本文顶部和总控文档顶部 2026-08-28 门。
 - **防冲突边界：** 总控门只汇总当前范围、验证分层、正式 APK 与未发布代码的界限；功能视觉值仍只在三份当前合同，具体测试／包／设备事实仍只在本交接最新条目。不得把 code 66 的历史正式覆盖写成包含后续未发布 UI／上下文增量，也不得以定向 JVM 通过宣称全量 JVM 或真机已通过。
 
 ## 2026-08-27：聊天内查找灰卡与白色输入面（JVM／Debug 编译已验证）
@@ -2281,6 +2935,16 @@
 ```bash
 sed -n '1,180p' /Users/nanzhufeng/.codex/docs/codex-workflow/handoffs/rollout-2026-08-13T06-30-19-019ff819-0cd9-7b23-8f46-68eee3db8359.md
 ```
+
+## 2026-08-30 Qwen3.8-Max 联网工具轨迹与无限生成修复
+
+- **失败样本证据：** 用户导出的 `/Users/nanzhufeng/Downloads/新对话-02.md` 为 1,790 行、257,100 bytes，包含 1,193 个完整 `<tool_use>` / `<tool_result>` 开闭标签；正文从第一行即进入 `web_search` 工具协议，文件末尾仍停在检索循环，没有最终答复。截图同时证明该请求运行 17 分 15 秒仍处于生成态。
+- **根因：** 普通文本聊天原先把 Qwen 实时问题路由到流式 Chat Completions `enable_search`，系统提示又要求模型“先使用网页检索”；Qwen3.8-Max 因而把内部工具协议生成为普通 `content`。应用的 SSE owner 未区分这类 XML 与用户正文，逐块持久化；`HttpsURLConnection.readTimeout` 只是单次静默读期限，持续工具输出会无限刷新它。
+- **主修复：** 无附件的 Qwen 实时请求改走官方 `/responses` 与内建 `web_search`，由 Provider 完成工具闭环并只从 `message/output_text` 投影最终答复。系统事实改为“服务端已启用检索，直接形成最终答复”，明确禁止输出、模拟或重复工具协议。带附件的 Chat Completions 兼容路径保留，但整段缓冲后原子剥离精确 `<tool_use>` / `<tool_result>` 块；只有工具轨迹而无轨迹后最终正文时返回 `RESPONSE_FORMAT`，不会写成成功消息。Responses 的 `output_text` 也应用同一终态过滤。
+- **终止边界：** 通用 SSE 新增总流时限与解码文本字节上限，不能再靠持续垃圾输出绕过静默超时。Qwen Chat Completions 联网兼容路径为 180 秒总时限；PDF 因官方首次理解窗口保留 420 秒总时限、300 秒单次读期限。
+- **验证：** `AutomaticWebSearchPolicyTest` 6 项、`ProviderSseDecoderContractsTest` 4 项、`ProviderAdapterContractsTest` 30 项，共 40 项定向 JVM 测试 0 失败；覆盖文本走 Responses、附件回退、跨 SSE delta 的 XML 隔离、工具轨迹后最终正文、工具轨迹-only 拒绝和活跃输出总时限。`:app:lintDebug` 通过。全量 JVM 共 946 项，4 项失败、3 项跳过；失败分别位于 PDF renderer 复用、答案上下文脚注、居中 Dialog scrim 与对话行无障碍合同，均不在本次 Provider/路由/传输修改范围，不能写作全量通过。
+- **Release 产物：** `0.3.0-p10j` / code 66，`app/build/outputs/apk/release/南枫AI.apk`，27,869,948 bytes，SHA-256 `7f287f4455ce3d4464310bdac6e494702be8ff64f8bf6e97b4113a8883f0701c`；非 debuggable，APK Signature Scheme v2/v3 验证通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **未越界：** 未执行真实 Qwen/Provider 请求，未使用用户 Key，未产生费用；未运行任何 `connected*AndroidTest`，未操作或覆盖安装 OPPO。真实服务闭环与目标设备实看仍需用户明确授权／覆盖安装后单独验收。
 ## 2026-08-23 普通聊天联网修复：D1/D3 与持久助手占位进行中，尚未达到真实 Provider 闭环
 
 - **已写入且已定向 JVM 编译：** 新增独立 Room `debug_call_log`（schema 39→40）；只保存 Provider、host、实际模型 ID、HTTP 状态、错误分类、脱敏错误体、字段形状与延时，不保存 Key、提示词、回复、附件或原始 payload；7 天/500 条上限。模型设置新增最近三条本机诊断和“测试连接（仅发送固定 hi）”，后者只能由用户主动点击，固定为 1-token 探针，不读取对话/附件/上下文。Android/ Desktop 功能审阅已登记 Android 入口与 Desktop 未具备对应 owner 的不展示边界。
@@ -2298,3 +2962,12 @@ sed -n '1,180p' /Users/nanzhufeng/.codex/docs/codex-workflow/handoffs/rollout-20
 - 已删除仅在宽屏显示的 `TranscriptPositionRail` 多段横线导航。它会压在消息区左侧，且与普通对话阅读无关；现在不再创建、渲染或响应这组横线。
 - 右边缘细滚动位置提示保持不变，仍使用同一 `LazyListState`，不占用消息正文或附件的左侧空间。
 - Android Studio JBR、`--offline --no-daemon` 下 `P6DConversationRowAccessibilityContractsTest` 与 `FoldableContainerSizingContractsTest` 通过。未运行 `connected*AndroidTest`，未构建/安装新 APK、未操作 emulator/OPPO。
+
+## 2026-08-30 南枫转写统一附件体系与真实空间统计
+
+- **真实崩溃根因：** OPPO `ApplicationExitInfo`/`AndroidRuntime` 记录证明，详情页点击原始 PDF 时由 Compose Main 直接执行 `GlmOcrTaskOwner.sourceReference → RoomGlmOcrTaskRepository.find`，触发 Room `Cannot access database on the main thread`。现将任务/附件解析放入 `Dispatchers.IO`，并以 generation + selected task 双重校验丢弃过期结果；图片与 PDF 都继续使用应用内共享查看器，没有 `ACTION_VIEW` 或第三方跳转。
+- **结果文件统一：** 详情页不再读取并裸排完整 Markdown；只展示标准 Markdown 文件入口。点击后进入共享安全文本查看器，复用复制全文、下载、分享与系统栏/返回层级；“加入新对话”保留为南枫转写唯一附加能力。原始图片/PDF 同样启用共享附件下载/分享 owner。
+- **搜索统一：** 普通点击南枫转写来源/Markdown 直接走 `openSearchAttachment`，不再默认跳转定位；长按才显示定位与删除。删除先移除 OCR task lineage，再按标准引用计数分别清理来源与结果，其他位置仍引用时保留共享字节。显式时间/大小排序改为普通会话附件 + OCR 文件的同一全局序列，文件类型筛选、预览、返回锚点和传输引用也包含 OCR 文件。
+- **本机数据事实源：** 附件分类不再 `SUM(private_attachment_assets.byteCount)`。现在逐行校验当前受管文件是否真实存在并使用 `File.length()`；缺失文件不计数。ZIP-backed 条目保持可检索计数，但其逻辑解压大小不再逐项累加，实际 ZIP/导入目录只在“其他导入资料”按磁盘文件计一次。新增南枫转写任务/文件汇总，OCR 来源与 Markdown 仍通过同一附件目录计数，不重复加入总额。
+- **验证：** 定向 32 项 JVM 回归通过（OCR domain/UI、统一搜索排序与锚点、真实存储统计、ZIP 清理）。全量 `:app:testDebugUnitTest` 执行 988 项，981 通过、4 失败、3 跳过；4 项仍为既有 PDF renderer 静态合同、全局 Dialog import/scrim、全局 Dialog swipe 与设置 canvas 静态合同，本次定向链全部通过，不能写作全量通过。`:app:assembleRelease` 成功；`0.3.0-p10j` / code 66 APK `app/build/outputs/apk/release/南枫AI.apk`，27,968,235 bytes，SHA-256 `f2e75b8accbae964a6b8914b34d7185e2bf6b35591007b0f94aa6a823c5cc905`，非 Debug 正式签名 v2/v3 通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **边界：** 未运行任何 `connected*AndroidTest`，未安装 APK，未改动 OPPO 数据，未请求 Provider/Key。真机点击、排序视觉与本机数据数值刷新仍需用户明确要求覆盖安装后验收。

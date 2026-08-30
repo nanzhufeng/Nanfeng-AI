@@ -30,6 +30,22 @@ class AndroidDirectChatCallAuditStore(context: Context) : DirectChatCallAuditSto
         return DirectChatCallAuditSummary(read().size, raw.toByteArray(Charsets.UTF_8).size.toLong())
     }
 
+    override fun listNewestFirst(): List<DirectChatCallAuditRecord> = read().asReversed().mapNotNull { raw ->
+        runCatching {
+            DirectChatCallAuditRecord(
+                providerId = ProviderId.valueOf(raw.getString("provider")),
+                endpoint = raw.getString("endpoint"),
+                modelId = raw.getString("modelId"),
+                modelAlias = raw.getString("alias"),
+                reasoningLevel = raw.getString("reasoning"),
+                requestedAt = Instant.ofEpochMilli(raw.getLong("requestedAt")),
+                inputTokens = raw.takeIf { it.has("inputTokens") }?.getLong("inputTokens"),
+                outputTokens = raw.takeIf { it.has("outputTokens") }?.getLong("outputTokens"),
+                status = raw.getString("status"),
+            )
+        }.getOrNull()
+    }
+
     private fun read(): MutableList<JSONObject> = runCatching {
         val array = JSONArray(prefs.getString(RECORDS, "[]") ?: "[]")
         MutableList(array.length()) { array.getJSONObject(it) }

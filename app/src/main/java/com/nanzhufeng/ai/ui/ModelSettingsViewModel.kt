@@ -288,7 +288,7 @@ class ModelSettingsViewModel(
         viewModelScope.launch {
             val dialogVisible = state.dialogVisible
             val providerConfigurations = withContext(Dispatchers.IO) {
-                listOf(ProviderId.OPENROUTER, ProviderId.QWEN, ProviderId.DEEPSEEK)
+                listOf(ProviderId.OPENROUTER, ProviderId.QWEN, ProviderId.DEEPSEEK, ProviderId.ZHIPU)
                     .mapNotNull { provider -> loadConfiguration.execute(provider)?.let { provider to it } }
                     .toMap()
             }

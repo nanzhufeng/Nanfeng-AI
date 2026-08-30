@@ -88,7 +88,7 @@ class ExportWorkspaceExchangeUseCase(
             require(snapshot.draft.text.isBlank() && snapshot.draft.attachments.isEmpty()) { "请先处理所选对话草稿后再交换。" }
             require(conversation.projectId == null || conversation.projectId in objects.projectIds) { "项目对话必须同时明确选择所属项目。" }
             require(conversation.settings.memorySources.isEmpty()) { "带有对话记忆引用的对话尚无 v1 可回导表达。" }
-            require(snapshot.nodes.all { node -> node.content.isNotEmpty() && node.content.none { it is ContentBlock.ToolResult } }) { "工具结果尚无 v1 可回导表达。" }
+            require(snapshot.nodes.all { node -> node.content.isNotEmpty() && node.content.none { it is ContentBlock.ToolResult || it is ContentBlock.Reasoning } }) { "工具结果或模型思考过程尚无 v1 可回导表达。" }
         }
         knowledge.forEach { snapshot ->
             require(snapshot.item.attachments.isEmpty()) { "知识附件尚无 v1 关联位置，不能部分导出。" }
@@ -156,6 +156,7 @@ class ExportWorkspaceExchangeUseCase(
             put("role", node.role.name.lowercase()); put("delivery", node.deliveryState.name); put("revision", node.revision.revision); put("createdAt", node.createdAt.toString())
             put("blocks", JSONArray(node.content.mapIndexed { ordinal, block -> when (block) {
                 is ContentBlock.Text -> JSONObject().put("kind", "TEXT").put("ordinal", ordinal).put("text", block.text)
+                is ContentBlock.Reasoning -> error("模型思考过程尚无 v1 可回导表达。")
                 is ContentBlock.Attachment -> block.attachment.let { attachment -> JSONObject().put("kind", "ASSET_REF").put("ordinal", ordinal).put("asset", JSONObject().apply {
                     put("id", attachment.id.value); put("entry", "assets/${attachment.sha256}"); put("mimeType", attachment.mimeType)
                     put("displayName", attachment.displayName ?: "附件"); put("byteCount", attachment.byteCount); put("sha256", attachment.sha256)

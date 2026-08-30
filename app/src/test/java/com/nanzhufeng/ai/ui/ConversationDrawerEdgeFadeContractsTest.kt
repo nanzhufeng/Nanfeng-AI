@@ -30,13 +30,12 @@ class ConversationDrawerEdgeFadeContractsTest {
         assertTrue(drawer.contains(".conversationEdgeGrayFade(edgeColor = ConversationDrawerBaseSurface)"))
         assertFalse(drawer.contains("conversationEdgeGrayFade(edgeColor = ConversationDrawerCanvas)"))
         assertFalse(drawer.contains("DrawerContentEdgeGrayFade"))
-        val viewportModifier = drawer.substring(
-            drawer.indexOf(".fillMaxSize()"),
-            drawer.indexOf("verticalArrangement = Arrangement.spacedBy(8.dp)"),
-        )
-        assertTrue(viewportModifier.indexOf("conversationEdgeGrayFade(edgeColor = ConversationDrawerBaseSurface)") < viewportModifier.indexOf("verticalScroll(rememberScrollState())"))
-        assertTrue(viewportModifier.indexOf("verticalScroll(rememberScrollState())") < viewportModifier.indexOf("statusBarsPadding()"))
-        assertTrue(viewportModifier.indexOf("statusBarsPadding()") < viewportModifier.indexOf(".padding("))
+        val viewport = drawer.substring(drawer.indexOf("LazyColumn("), drawer.indexOf(") {", drawer.indexOf("LazyColumn(")) + 3)
+        assertTrue(viewport.contains(".conversationEdgeGrayFade(edgeColor = ConversationDrawerBaseSurface)"))
+        assertTrue(viewport.contains("contentPadding = PaddingValues(top = drawerContentTopInset)"))
+        assertFalse(viewport.contains("verticalScroll(rememberScrollState())"))
+        assertTrue(drawer.contains("items(\n                        items = pinned,"))
+        assertTrue(drawer.contains("items(\n                    items = content,"))
     }
 
     @Test
@@ -58,12 +57,21 @@ class ConversationDrawerEdgeFadeContractsTest {
             workspaceSource.indexOf("private fun ConversationNavigationRow"),
             workspaceSource.indexOf("private fun ConversationRowSwipeActions"),
         )
-        assertTrue(drawer.contains("color = ConversationDrawerQuickActionSurface,\n                    shape = P5AInteractiveShape,"))
-        assertTrue(drawer.contains("color = ConversationDrawerQuickActionSurface,\n                    shape = P5AInteractiveShape,\n                    modifier = Modifier.fillMaxWidth().height(42.dp)"))
+        assertTrue(drawer.countOccurrences("color = ConversationDrawerQuickActionSurface") >= 1)
+        assertTrue(drawer.contains("color = Color.Transparent"))
+        assertTrue(drawer.countOccurrences("shape = P5AInteractiveShape") >= 2)
+        assertTrue(drawer.contains(".height(42.dp)"))
+        assertTrue(drawer.contains(".height(48.dp)"))
         assertTrue(drawer.contains("horizontalArrangement = Arrangement.Center,"))
+        assertTrue(drawer.contains("horizontalArrangement = Arrangement.Start,"))
         assertTrue(drawer.contains("Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(17.dp)), tint = BodyText"))
-        assertTrue(drawer.contains("\"搜索\",\n                            color = BodyText,\n                            fontSize = scaledConversationTextUnit(16.sp)"))
-        assertTrue(drawer.contains("\"已计划\",\n                            color = BodyText,\n                            fontSize = scaledConversationTextUnit(16.sp)"))
-        assertTrue(conversationRow.contains("Text(conversation.title, modifier = Modifier.weight(1f), fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal"))
+        assertTrue(drawer.contains("Icons.Rounded.Schedule, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(24.dp)), tint = BodyText"))
+        assertTrue(drawer.contains("\"搜索\","))
+        assertTrue(drawer.contains("\"定时任务\","))
+        assertFalse(drawer.contains("\"已计划\","))
+        assertTrue(drawer.countOccurrences("fontSize = scaledConversationTextUnit(16.sp)") >= 2)
+        assertTrue(conversationRow.contains("Text(conversation.title, modifier = Modifier.weight(1f), color = if (selected) AccentOrange else BodyText, fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal"))
     }
+
+    private fun String.countOccurrences(token: String): Int = split(token).size - 1
 }

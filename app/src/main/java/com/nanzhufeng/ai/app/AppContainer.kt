@@ -13,7 +13,9 @@ import com.nanzhufeng.ai.ai.ConfiguredConversationTitleRefiner
 import com.nanzhufeng.ai.background.AndroidNormalChatBackgroundExecution
 import com.nanzhufeng.ai.ai.ChatProviderAdapters
 import com.nanzhufeng.ai.domain.UnifiedModelResolver
+import com.nanzhufeng.ai.domain.toConversationReference
 import com.nanzhufeng.ai.ai.OfficialProviderChatTransport
+import com.nanzhufeng.ai.ai.QwenHistoryKnowledgeRefiner
 import com.nanzhufeng.ai.ai.ProviderConnectionProbe
 import com.nanzhufeng.ai.data.AndroidDirectChatCallAuditStore
 import com.nanzhufeng.ai.data.local.RoomProviderDiagnosticStore
@@ -70,6 +72,8 @@ import com.nanzhufeng.ai.data.AndroidLocalBackupRestoreManager
 import com.nanzhufeng.ai.data.AndroidModelServiceSettingsRepository
 import com.nanzhufeng.ai.data.AndroidChatRoutingPolicyRepository
 import com.nanzhufeng.ai.data.AndroidAssistantExperienceSettingsRepository
+import com.nanzhufeng.ai.data.AndroidHistoryKnowledgeCurationCheckpointStore
+import com.nanzhufeng.ai.data.AndroidHistoryKnowledgeAutoCurationScheduler
 import com.nanzhufeng.ai.data.AndroidNotificationReminderSettingsRepository
 import com.nanzhufeng.ai.data.AndroidAppearanceSettingsRepository
 import com.nanzhufeng.ai.data.AndroidModelRegistrySnapshotStore
@@ -176,6 +180,7 @@ import com.nanzhufeng.ai.domain.ConversationActionOrchestrator
 import com.nanzhufeng.ai.domain.P3CLocalFixtureRegistry
 import com.nanzhufeng.ai.domain.AddConversationImageAttachmentUseCase
 import com.nanzhufeng.ai.domain.RemoveConversationAttachmentUseCase
+import com.nanzhufeng.ai.domain.DeletePersistedConversationAttachmentUseCase
 import com.nanzhufeng.ai.domain.ConversationAttachmentPreviewProjection
 import com.nanzhufeng.ai.domain.ReadConversationAttemptHistoryUseCase
 import com.nanzhufeng.ai.domain.P6ETemporaryMaintenanceAcceptanceHarness
@@ -230,6 +235,9 @@ import com.nanzhufeng.ai.domain.SaveNotificationReminderSettingsUseCase
 import com.nanzhufeng.ai.domain.LoadAppearanceSettingsUseCase
 import com.nanzhufeng.ai.domain.SaveAppearanceSettingsUseCase
 import com.nanzhufeng.ai.domain.P7BAccountStateMachine
+import com.nanzhufeng.ai.data.P7FGoogleAccountOwner
+import com.nanzhufeng.ai.data.P7FManualConversationSyncOwner
+import com.nanzhufeng.ai.data.P7FSelectedConversationSyncScheduler
 import com.nanzhufeng.ai.domain.P7EGuardedRestoreOwner
 import com.nanzhufeng.ai.domain.P7ERestorePlanCoordinator
 import com.nanzhufeng.ai.domain.P8BProductionReadOnlyAgentLedgerStatus
@@ -309,10 +317,15 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_57_58,
         NanfengAiDatabase.MIGRATION_58_59,
         NanfengAiDatabase.MIGRATION_59_60,
+        NanfengAiDatabase.MIGRATION_60_61,
+        NanfengAiDatabase.MIGRATION_61_62,
+        NanfengAiDatabase.MIGRATION_62_63,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
     val privateAttachmentRepository = RoomPrivateAttachmentRepository(database)
+    private val glmOcrTasks = com.nanzhufeng.ai.data.local.RoomGlmOcrTaskRepository(database)
+    val glmOcrScheduler = com.nanzhufeng.ai.data.AndroidGlmOcrScheduler(context)
     private val temporaryConversationRecoveryStore = RoomTemporaryConversationRecoveryStore(database)
     val temporaryConversationDomain = com.nanzhufeng.ai.domain.TemporaryConversationDomain(temporaryConversationRecoveryStore, clock)
     val addTemporaryConversationAttachment = com.nanzhufeng.ai.domain.AddTemporaryConversationAttachmentUseCase(temporaryConversationDomain, privateAttachmentStore, privateAttachmentRepository)
@@ -346,7 +359,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     private val webTextSnapshotTasks = RoomWebTextSnapshotTaskRepository(database)
     val invocationRepository = RoomInvocationRepository(database)
     val generatedCandidateRepository = RoomGeneratedCandidateRepository(database)
-    val conversationRepository = RoomConversationRepository(database)
+    val conversationRepository = RoomConversationRepository(database, privateAttachmentStore)
     /** P6-A: one active, standalone, text-only conversation can reach the shared exchange gateway via SAF. */
     val conversationExchangeExportPort = AndroidConversationExchangeExportPort(
         context,
@@ -426,6 +439,14 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     // without a future verified-auth handle. It is separate from P5-D's local backup writer.
     private val p7bMetadataStore = RoomP7BMetadataStore(database)
     private val p7bAccountStateMachine = P7BAccountStateMachine(p7bMetadataStore, AndroidP7BAccountVault(context.applicationContext))
+    val p7fGoogleAccountOwner = P7FGoogleAccountOwner(context.applicationContext)
+    val p7fManualConversationSyncOwner = P7FManualConversationSyncOwner(
+        conversations = conversationRepository,
+        database = database,
+        accounts = p7bAccountStateMachine,
+        accountOwner = p7fGoogleAccountOwner,
+    )
+    val p7fSelectedConversationSyncScheduler = P7FSelectedConversationSyncScheduler(context.applicationContext)
     private val p7dStateStore = RoomP7DStateStore(database)
     private val p7eRestoreWriter = AndroidP7ESemanticAtomicRestoreWriter(context.applicationContext, database)
     val p7eGuardedRestoreOwner = P7EGuardedRestoreOwner(
@@ -481,6 +502,12 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         privateAttachmentStore, privateAttachmentRepository, conversationRepository, clock,
     )
     val removeConversationAttachment = RemoveConversationAttachmentUseCase(conversationRepository, clock)
+    val deletePersistedConversationAttachment = DeletePersistedConversationAttachmentUseCase(
+        conversationRepository,
+        privateAttachmentRepository,
+        privateAttachmentStore,
+        clock,
+    )
     val conversationAttachmentPreviewProjection = ConversationAttachmentPreviewProjection(privateAttachmentRepository, privateAttachmentStore)
     val pdfPreviewPositionStore = AndroidPdfPreviewPositionStore(context)
     val videoPreviewPositionStore = AndroidVideoPreviewPositionStore(context)
@@ -526,6 +553,8 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     private val modelServiceSettingsRepository = AndroidModelServiceSettingsRepository(context)
     private val chatRoutingPolicyRepository = AndroidChatRoutingPolicyRepository(context)
     private val assistantExperienceSettingsRepository = AndroidAssistantExperienceSettingsRepository(context)
+    val historyKnowledgeAutoCurationScheduler = AndroidHistoryKnowledgeAutoCurationScheduler(context)
+    private val historyKnowledgeAutoCurationCheckpointStore = AndroidHistoryKnowledgeCurationCheckpointStore(context)
     private val notificationReminderSettingsRepository = AndroidNotificationReminderSettingsRepository(context)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository(context)
     private val providerCredentialStore = createAndroidProviderCredentialStore(context)
@@ -586,6 +615,8 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     val saveKnowledgeItem = SaveKnowledgeItemUseCase(knowledgeRepository, clock)
     val saveCandidateReview = SaveCandidateReviewUseCase(saveKnowledgeItem, generatedCandidateRepository, clock)
     val readKnowledgeLibrary = ReadKnowledgeLibraryUseCase(knowledgeRepository, generatedCandidateRepository)
+    /** User-confirmed historical conversation -> reviewable local-knowledge candidate; it never writes by itself. */
+    val readHistoryKnowledgeCurationSource = com.nanzhufeng.ai.domain.ReadHistoryKnowledgeCurationSourceUseCase(conversationRepository)
     val exportKnowledgeSnapshot = ExportKnowledgeSnapshotUseCase(knowledgeRepository, clock)
     private val knowledgeExportStore = AndroidKnowledgeExportStore(context)
     val exportKnowledgePackage = ExportKnowledgePackageUseCase(knowledgeRepository, knowledgeExportStore, clock)
@@ -608,6 +639,26 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         modelServiceSettingsRepository,
         providerCredentialStore,
         loadModelServiceConfiguration,
+    )
+    val glmOcrTaskOwner = com.nanzhufeng.ai.domain.GlmOcrTaskOwner(
+        tasks = glmOcrTasks,
+        privateStore = privateAttachmentStore,
+        assets = privateAttachmentRepository,
+        loadConfiguration = loadModelServiceConfiguration,
+        credentials = providerCredentialStore,
+        transport = com.nanzhufeng.ai.ai.OfficialGlmOcrTransport(),
+        conversationDraftCreator = com.nanzhufeng.ai.domain.GlmOcrConversationDraftCreator { markdown ->
+            val safe = runCatching { markdown.toConversationReference() }.getOrNull()
+                ?: return@GlmOcrConversationDraftCreator com.nanzhufeng.ai.domain.GlmOcrContinueResult.Rejected("Markdown 文件元数据不完整。")
+            val created = createConversation.execute() as? com.nanzhufeng.ai.domain.ConversationMutationResult.Saved
+                ?: return@GlmOcrConversationDraftCreator com.nanzhufeng.ai.domain.GlmOcrContinueResult.Rejected("新对话创建失败，原结果保持不变。")
+            when (saveConversationDraft.execute(created.snapshot.conversation.id, "", listOf(safe))) {
+                is com.nanzhufeng.ai.domain.ConversationDraftResult.Saved -> com.nanzhufeng.ai.domain.GlmOcrContinueResult.Created(created.snapshot.conversation.id)
+                is com.nanzhufeng.ai.domain.ConversationDraftResult.Rejected -> com.nanzhufeng.ai.domain.GlmOcrContinueResult.Rejected("新对话已创建，但 Markdown 没有加入草稿；原结果保持不变。")
+            }
+        },
+        clock = clock,
+        invocations = invocationRepository,
     )
     val loadChatRoutingPolicy = LoadChatRoutingPolicyUseCase(chatRoutingPolicyRepository)
     val saveChatRoutingPolicy = SaveChatRoutingPolicyUseCase(chatRoutingPolicyRepository)
@@ -682,6 +733,15 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         resolveConversationWebSearchEnabled = conversationWebSearchOverrides::effectiveEnabled,
         applyRuntimeEvent = applyConversationRuntimeEvent,
         runtimeRepository = conversationRepository,
+        attachmentBridge = com.nanzhufeng.ai.ai.UniversalChatAttachmentBridge(
+            configuration = loadModelServiceConfiguration,
+            credentials = providerCredentialStore,
+            modelResolver = modelResolver,
+            providerTransport = com.nanzhufeng.ai.ai.OfficialProviderChatTransport(),
+            glmOcrTransport = com.nanzhufeng.ai.ai.OfficialGlmOcrTransport(),
+            invocations = invocationRepository,
+            clock = clock,
+        ),
         saveMemorySummary = { conversationId, draft ->
             manageMemory.execute(
                 MemoryIntent(
@@ -696,6 +756,11 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
                     sourceSummary = "用户在对话中明确要求记住后生成的本机记忆摘要",
                 ),
             )
+        },
+        onConversationCompleted = { conversationId ->
+            if (loadAssistantExperienceSettings.execute().historyLibraryEnabled) {
+                historyKnowledgeAutoCurationScheduler.enqueueConversation(conversationId)
+            }
         },
         conversationTitleRefiner = ConfiguredConversationTitleRefiner(
             records = conversationTitleGenerationRecords,
@@ -722,6 +787,26 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         transport = OfficialProviderChatTransport(),
         clock = clock,
     )
+    val qwenHistoryKnowledgeRefiner = QwenHistoryKnowledgeRefiner(
+        configuration = loadModelServiceConfiguration,
+        credentials = providerCredentialStore,
+        modelResolver = modelResolver,
+        transport = OfficialProviderChatTransport(),
+        clock = clock,
+        audit = directChatCallAudit,
+    )
+    val automaticHistoryKnowledgeCurationOwner = com.nanzhufeng.ai.domain.AutomaticHistoryKnowledgeCurationOwner(
+        settings = loadAssistantExperienceSettings::execute,
+        conversations = conversationRepository,
+        readSource = readHistoryKnowledgeCurationSource,
+        refiner = qwenHistoryKnowledgeRefiner,
+        checkpoint = historyKnowledgeAutoCurationCheckpointStore,
+        readKnowledge = readKnowledgeLibrary,
+        manageKnowledge = manageKnowledge,
+    )
+
+    /** Reconcile any legacy queued work with the single effective history-library permission. */
+    init { historyKnowledgeAutoCurationScheduler.onSettingChanged(loadAssistantExperienceSettings.execute().historyLibraryEnabled) }
 
     /** Seeds the user-confirmed baseline only before any global summary has ever existed. */
     fun ensureInitialMemorySummary(): Int {

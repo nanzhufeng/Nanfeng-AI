@@ -59,7 +59,7 @@ value class AttachmentId(val value: String) {
     companion object { fun new(): AttachmentId = AttachmentId(UUID.randomUUID().toString()) }
 }
 
-enum class CaptureSourceType { MANUAL_TEXT, ANDROID_TEXT_SHARE, IMAGE }
+enum class CaptureSourceType { MANUAL_TEXT, ANDROID_TEXT_SHARE, IMAGE, HISTORY_CONVERSATION }
 
 data class SourceEvidence(
     val sourceType: CaptureSourceType,
@@ -115,9 +115,9 @@ data class CaptureDraft(
 /**
  * Provider identities are transport boundaries, not the names shown in the composer.
  * OpenRouter is intentionally shared by the ChatGPT, Claude and Gemini logical models;
- * Qwen and DeepSeek always have their own official endpoints and credentials.
+ * Qwen, DeepSeek and Zhipu always have their own official endpoints and credentials.
  */
-enum class ProviderId { MOCK, OPENROUTER, QWEN, DEEPSEEK }
+enum class ProviderId { MOCK, OPENROUTER, QWEN, DEEPSEEK, ZHIPU }
 
 enum class ModelPresetId {
     CLAUDE_FABLE_5,
@@ -132,7 +132,14 @@ enum class ModelPresetId {
     QWEN_3_8_MAX,
     QWEN_3_6_FLASH,
     DEEPSEEK_V4_PRO,
+    DEEPSEEK_V4_FLASH,
+    GLM_5_3,
+    GLM_5_3_FLASH,
+    GLM_OCR,
 }
+
+/** Chat presets may be routed into the composer; utility presets own a dedicated workflow. */
+enum class ModelPresetUsage { CHAT, DOCUMENT_OCR }
 
 data class ProviderDescriptor(
     val id: ProviderId,
@@ -145,11 +152,8 @@ data class ModelPresetDescriptor(
     val displayName: String,
     val description: String,
     val modelFamilyHint: String,
-    /** Product routing intent, kept in the one model catalog rather than chat execution code. */
-    val autoRoutingRoles: Set<AutoRoutingRole> = emptySet(),
+    val usage: ModelPresetUsage = ModelPresetUsage.CHAT,
 )
-
-enum class AutoRoutingRole { DEFAULT, MULTIMODAL, LARGE_KNOWLEDGE, COMPLEX_DEBUG }
 
 data class ProviderSettings(
     val providerId: ProviderId,
@@ -340,10 +344,15 @@ data class ProviderUsage(
     val outputTokens: Long? = null,
     val totalTokens: Long? = null,
     val cachedInputTokens: Long? = null,
+    /** Provider-reported subset of [outputTokens] spent on hidden reasoning. */
+    val reasoningTokens: Long? = null,
 ) {
     init {
-        listOf(inputTokens, outputTokens, totalTokens, cachedInputTokens).forEach { value ->
+        listOf(inputTokens, outputTokens, totalTokens, cachedInputTokens, reasoningTokens).forEach { value ->
             require(value == null || value >= 0) { "Token 用量不能为负数。" }
+        }
+        require(reasoningTokens == null || outputTokens == null || reasoningTokens <= outputTokens) {
+            "推理 Token 不能超过总输出 Token。"
         }
     }
 }

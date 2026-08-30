@@ -50,6 +50,8 @@ sealed interface PresentationBlock {
         override val identity: PresentationBlockIdentity,
         val attachment: ConversationAttachmentReference,
     ) : PresentationBlock
+    /** Kept structurally separate so the UI can default it to a collapsed disclosure. */
+    data class Reasoning(override val identity: PresentationBlockIdentity, val text: String) : PresentationBlock
     data class SafeToolSummary(override val identity: PresentationBlockIdentity, val toolName: String, val summary: String) : PresentationBlock
 }
 
@@ -95,9 +97,16 @@ class MessagePresentationRenderer(private val parserVersion: Int = MESSAGE_PRESE
 
     fun cachedBlockCount(): Int = cache.size
 
+    /** Reuses the conversation-safe Markdown projection for an inert standalone reading surface. */
+    fun renderText(identity: PresentationBlockIdentity, text: String): List<PresentationBlock> =
+        SafeMarkdownParser.parse(identity, text)
+
     private fun parse(identity: PresentationBlockIdentity, block: ContentBlock): List<PresentationBlock> = when (block) {
-        is ContentBlock.Text -> SafeMarkdownParser.parse(identity, block.text)
+        is ContentBlock.Text -> block.text.splitLegacyLeakedProviderTrace()?.let { legacy ->
+            listOf(PresentationBlock.Reasoning(identity, legacy.reasoning)) + SafeMarkdownParser.parse(identity, legacy.answer)
+        } ?: SafeMarkdownParser.parse(identity, block.text)
         is ContentBlock.Attachment -> listOf(PresentationBlock.AttachmentReference(identity, block.attachment))
+        is ContentBlock.Reasoning -> listOf(PresentationBlock.Reasoning(identity, block.text))
         is ContentBlock.ToolResult -> listOf(PresentationBlock.SafeToolSummary(identity, block.toolName, block.safeSummary))
     }
 
@@ -105,11 +114,31 @@ class MessagePresentationRenderer(private val parserVersion: Int = MESSAGE_PRESE
         val raw = when (this) {
             is ContentBlock.Text -> "text|$schemaVersion|$text"
             is ContentBlock.Attachment -> "attachment|$schemaVersion|${attachment.id.value}|${attachment.mimeType}|${attachment.displayName}|${attachment.byteCount}|${attachment.sha256}"
+            is ContentBlock.Reasoning -> "reasoning|$schemaVersion|$text"
             is ContentBlock.ToolResult -> "tool|$schemaVersion|$toolName|$safeSummary"
         }
         return MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 }
+
+private data class LegacyLeakedProviderTrace(val reasoning: String, val answer: String)
+
+/**
+ * Old DeepSeek Responses records were persisted before the adapter distinguished `reasoning`
+ * items from `message.output_text`.  Project only the unmistakable mixed English planning trace
+ * as a disclosure on read; no historical message is rewritten, and ordinary English answers are
+ * never guessed at or moved.
+ */
+private fun String.splitLegacyLeakedProviderTrace(): LegacyLeakedProviderTrace? {
+    if (LEGACY_PROVIDER_TRACE_PREFIXES.none { trimStart().startsWith(it) }) return null
+    val finalStart = LEGACY_PROVIDER_FINAL_OPENING.findAll(this).lastOrNull()?.range?.first ?: return null
+    val reasoning = substring(0, finalStart).trim()
+    val answer = substring(finalStart).trim()
+    return LegacyLeakedProviderTrace(reasoning, answer).takeIf { reasoning.length >= 80 && answer.isNotBlank() }
+}
+
+private val LEGACY_PROVIDER_TRACE_PREFIXES = listOf("The user asks:", "Let me ", "I have ", "Now I have ")
+private val LEGACY_PROVIDER_FINAL_OPENING = Regex("[\\p{IsHan}]{2,4}，(?:直接给结论|如果只能二选一|结论先说|先给结论)")
 
 private object SafeMarkdownParser {
     private val fence = Regex("^\\s*```([A-Za-z0-9_+.-]{0,32})\\s*$")

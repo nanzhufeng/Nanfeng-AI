@@ -36,6 +36,7 @@ class RoomAssistantResponseModelAttributionStore(
                 dao.enrichAccounting(
                     attribution.assistantMessageId.value, attribution.attemptId.value,
                     attribution.usage.inputTokens, attribution.usage.outputTokens, attribution.usage.totalTokens, attribution.usage.cachedInputTokens,
+                    attribution.usage.reasoningTokens,
                     attribution.cost.priceVersion, attribution.cost.currencyCode, incomingCost, attribution.costSource?.name,
                 )
             }
@@ -80,6 +81,7 @@ private fun AssistantResponseModelAttribution.toEntity() = AssistantResponseMode
     outputTokens = usage.outputTokens,
     totalTokens = usage.totalTokens,
     cachedInputTokens = usage.cachedInputTokens,
+    reasoningTokens = usage.reasoningTokens,
     costPriceVersion = cost.priceVersion,
     costCurrencyCode = cost.currencyCode,
     costTotalMicros = cost.totalMicros,
@@ -94,7 +96,7 @@ private fun AssistantResponseModelAttributionEntity.toDomain() = AssistantRespon
     modelId = modelId,
     modelDisplayName = modelDisplayName,
     recordedAt = Instant.ofEpochMilli(recordedAtEpochMs),
-    usage = com.nanzhufeng.ai.domain.ProviderUsage(inputTokens, outputTokens, totalTokens, cachedInputTokens),
+    usage = com.nanzhufeng.ai.domain.ProviderUsage(inputTokens, outputTokens, totalTokens, cachedInputTokens, reasoningTokens),
     cost = com.nanzhufeng.ai.domain.ProviderCost(costPriceVersion, costCurrencyCode, costTotalMicros),
     costSource = costSource?.let(ConversationCostSource::valueOf),
 )

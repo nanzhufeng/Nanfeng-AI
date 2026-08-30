@@ -39,8 +39,8 @@ class SettingsSwitchGeometryContractsTest {
         assertFalse(model.contains("androidx.compose.material3.Switch"))
         assertFalse(workspace.contains("androidx.compose.material3.Switch"))
         assertFalse(allUiSources.contains("import androidx.compose.material3.Switch"))
-        assertTrue(assistantExperienceViewModel.contains("onlyWebSearchToggle"))
-        assertTrue(assistantExperienceViewModel.contains("notice = if (onlyWebSearchToggle) null"))
+        assertFalse(assistantExperienceViewModel.contains("onlyWebSearchToggle"))
+        assertFalse(assistantExperienceViewModel.contains("已保存在本机。"))
         assertFalse(notificationViewModel.contains("通知与提醒设置已保存在本机。"))
         assertTrue(conversationViewModel.contains("is ConversationWebSearchOverrideMutationResult.Applied -> {\n                    state = state.copy(notice = null)\n                    reload()"))
     }

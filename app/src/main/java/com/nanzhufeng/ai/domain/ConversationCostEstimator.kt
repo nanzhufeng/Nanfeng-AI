@@ -2,39 +2,48 @@ package com.nanzhufeng.ai.domain
 
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.Instant
 
 /**
- * Versioned, token-only fallback for every model currently exposed by the product.
+ * Versioned, token-only fallback for models whose current direct or hosted price is verified.
  *
  * A provider settlement always wins.  These rates deliberately exclude metered provider tools,
  * promotions and cache writes because a response without those accounting details cannot support
- * a truthful exact charge.  Pricing is USD per million tokens so decimal prices remain exact
- * until the final micro-USD rounding boundary.
+ * a truthful exact charge. Prices are stored in each provider's billing currency per million
+ * tokens, so decimal prices remain exact until the final micro-currency rounding boundary.
  */
 object ConversationCostEstimator {
     const val OPENROUTER_PRICE_VERSION = "openrouter-public-prices-2026-08-v1"
-    const val QWEN_PRICE_VERSION = "qwen-cn-beijing-standard-2026-08-v1"
-    const val DEEPSEEK_PRICE_VERSION = "deepseek-public-prices-2026-08-v1"
+    const val QWEN_PRICE_VERSION = "qwen-cn-beijing-standard-2026-08-v2"
+    const val DEEPSEEK_LEGACY_PRICE_VERSION = "deepseek-public-prices-before-2026-08-17-v1"
+    const val DEEPSEEK_OFF_PEAK_PRICE_VERSION = "deepseek-off-peak-2026-08-v2"
+    const val DEEPSEEK_PEAK_PRICE_VERSION = "deepseek-peak-2026-08-v2"
+    const val ZHIPU_GLM_5_3_FLASH_PROMOTION_PRICE_VERSION = "zhipu-glm-5.3-flash-promo-2026-08-v1"
+    const val ZHIPU_GLM_5_3_FLASH_STANDARD_PRICE_VERSION = "zhipu-glm-5.3-flash-standard-2026-08-v1"
 
     private data class Price(
         val version: String,
-        val inputPerMillionUsd: BigDecimal,
-        val outputPerMillionUsd: BigDecimal,
-        val cachedInputPerMillionUsd: BigDecimal? = null,
+        val inputPerMillion: BigDecimal,
+        val outputPerMillion: BigDecimal,
+        val cachedInputPerMillion: BigDecimal? = null,
+        val currencyCode: String = "USD",
     )
 
     private data class InputTier(val upperInclusiveInputTokens: Long, val price: Price)
+    private data class ScheduledPrice(val untilExclusive: Instant?, val price: Price)
 
     private fun price(
         version: String,
-        inputPerMillionUsd: String,
-        outputPerMillionUsd: String,
-        cachedInputPerMillionUsd: String? = null,
+        inputPerMillion: String,
+        outputPerMillion: String,
+        cachedInputPerMillion: String? = null,
+        currencyCode: String = "USD",
     ) = Price(
         version = version,
-        inputPerMillionUsd = BigDecimal(inputPerMillionUsd),
-        outputPerMillionUsd = BigDecimal(outputPerMillionUsd),
-        cachedInputPerMillionUsd = cachedInputPerMillionUsd?.let(::BigDecimal),
+        inputPerMillion = BigDecimal(inputPerMillion),
+        outputPerMillion = BigDecimal(outputPerMillion),
+        cachedInputPerMillion = cachedInputPerMillion?.let(::BigDecimal),
+        currencyCode = currencyCode,
     )
 
     private val prices = mapOf(
@@ -44,9 +53,33 @@ object ConversationCostEstimator {
         "anthropic/claude-sonnet-5" to price(OPENROUTER_PRICE_VERSION, "2", "10"),
         "anthropic/claude-haiku-4.5" to price(OPENROUTER_PRICE_VERSION, "1", "5"),
         "google/gemini-3.7-flash" to price(OPENROUTER_PRICE_VERSION, "0.375", "1.875"),
-        "qwen3.8-max" to price(QWEN_PRICE_VERSION, "1.65", "4.951"),
-        "deepseek-v4-pro" to price(DEEPSEEK_PRICE_VERSION, "0.435", "0.87", "0.003625"),
+        "qwen3.8-max" to price(QWEN_PRICE_VERSION, "12", "36", "1.5", "CNY"),
     )
+
+    private val deepSeekPeakPricingEffectiveAt = Instant.parse("2026-08-16T16:00:00Z")
+
+    private fun deepSeekPrice(modelId: String, at: Instant): Price? {
+        if (modelId !in setOf("deepseek-v4-pro", "deepseek-v4-flash")) return null
+        if (at.isBefore(deepSeekPeakPricingEffectiveAt)) {
+            return when (modelId) {
+                "deepseek-v4-pro" -> price(DEEPSEEK_LEGACY_PRICE_VERSION, "0.435", "0.87", "0.003625")
+                else -> price(DEEPSEEK_LEGACY_PRICE_VERSION, "0.14", "0.28", "0.0028")
+            }
+        }
+        val peak = DeepSeekPricingWindow.periodAt(at) == DeepSeekPricingPeriod.PEAK
+        return when (modelId) {
+            "deepseek-v4-pro" -> if (peak) {
+                price(DEEPSEEK_PEAK_PRICE_VERSION, "1.32", "3.96", "0.044")
+            } else {
+                price(DEEPSEEK_OFF_PEAK_PRICE_VERSION, "0.66", "1.98", "0.022")
+            }
+            else -> if (peak) {
+                price(DEEPSEEK_PEAK_PRICE_VERSION, "0.44", "1.32", "0.014")
+            } else {
+                price(DEEPSEEK_OFF_PEAK_PRICE_VERSION, "0.22", "0.66", "0.007")
+            }
+        }
+    }
 
     private val inputTieredPrices = mapOf(
         "openai/gpt-5.6-sol" to listOf(
@@ -71,21 +104,40 @@ object ConversationCostEstimator {
         ),
     )
 
-    fun estimate(modelId: String, usage: ProviderUsage): ProviderCost? {
+    /** Official GLM-5.3 Flash promotion is valid through 2026-08-31 in China; past records
+     * retain the rate that applied at their recorded time, while later records fall back to the
+     * published standard price instead of keeping a stale promotion forever. */
+    private val scheduledPrices = mapOf(
+        "glm-5.3-flash" to listOf(
+            ScheduledPrice(
+                untilExclusive = Instant.parse("2026-08-31T16:00:00Z"),
+                price(ZHIPU_GLM_5_3_FLASH_PROMOTION_PRICE_VERSION, "0.4", "1.4", "0.115", "CNY"),
+            ),
+            ScheduledPrice(
+                untilExclusive = null,
+                price(ZHIPU_GLM_5_3_FLASH_STANDARD_PRICE_VERSION, "0.8", "2.8", "0.23", "CNY"),
+            ),
+        ),
+    )
+
+    fun estimate(modelId: String, usage: ProviderUsage, at: Instant = Instant.now()): ProviderCost? {
         val input = usage.inputTokens ?: return null
         val output = usage.outputTokens ?: return null
-        val price = prices[modelId.lowercase()]
-            ?: inputTieredPrices[modelId.lowercase()]?.firstOrNull { input <= it.upperInclusiveInputTokens }?.price
+        val normalizedModelId = modelId.lowercase()
+        val price = deepSeekPrice(normalizedModelId, at)
+            ?: prices[normalizedModelId]
+            ?: inputTieredPrices[normalizedModelId]?.firstOrNull { input <= it.upperInclusiveInputTokens }?.price
+            ?: scheduledPrices[normalizedModelId]?.firstOrNull { it.untilExclusive == null || at.isBefore(it.untilExclusive) }?.price
             ?: return null
         val cachedInput = usage.cachedInputTokens?.coerceAtMost(input) ?: 0L
         val uncachedInput = input - cachedInput
-        val cachedInputPrice = price.cachedInputPerMillionUsd ?: price.inputPerMillionUsd
-        // USD/M token × token = microUSD, because one USD is one million microUSD.
-        val micros = BigDecimal.valueOf(uncachedInput).multiply(price.inputPerMillionUsd)
+        val cachedInputPrice = price.cachedInputPerMillion ?: price.inputPerMillion
+        // Currency/M token × token = micro-currency, because one currency unit is one million micros.
+        val micros = BigDecimal.valueOf(uncachedInput).multiply(price.inputPerMillion)
             .add(BigDecimal.valueOf(cachedInput).multiply(cachedInputPrice))
-            .add(BigDecimal.valueOf(output).multiply(price.outputPerMillionUsd))
+            .add(BigDecimal.valueOf(output).multiply(price.outputPerMillion))
             .setScale(0, RoundingMode.HALF_UP)
             .longValueExact()
-        return ProviderCost(price.version, "USD", micros)
+        return ProviderCost(price.version, price.currencyCode, micros)
     }
 }

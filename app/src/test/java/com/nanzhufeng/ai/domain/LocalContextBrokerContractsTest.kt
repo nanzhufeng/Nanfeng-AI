@@ -83,6 +83,18 @@ class LocalContextBrokerContractsTest {
         assertTrue(result.selectedSources.size == 1)
     }
 
+    @Test fun `confirmed knowledge is used before raw history when the retrieval budget is tight`() {
+        val current = tree.append(tree.create("当前"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("投资计划"))))
+        val result = LocalContextBroker(FakeIndex(
+            knowledge = listOf(hit("k", "知识库", "投资体系", "安全边际与分批建仓")),
+            history = listOf(hit("h", "历史对话", "旧投资讨论", "沪深300与中证A500的原始讨论".repeat(12))),
+        )).assemble(current, "投资计划", ContextBudget(160, 10, 80, 10, 70))
+
+        val outbound = result.messages.joinToString("\n") { it.text }
+        assertTrue(outbound.contains("安全边际与分批建仓"))
+        assertFalse(outbound.contains("沪深300与中证A500的原始讨论"))
+    }
+
     @Test fun `library switch prevents local knowledge from entering ordinary chat context`() {
         val current = tree.append(tree.create("当前"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("迁移"))))
         val result = LocalContextBroker(FakeIndex(knowledge = listOf(hit("k", "知识库", "迁移手册", "资料库内容不得在关闭后发送"))))
@@ -90,6 +102,25 @@ class LocalContextBrokerContractsTest {
 
         assertFalse(result.messages.joinToString("\n") { it.text }.contains("资料库内容不得在关闭后发送"))
         assertTrue(result.selectedKnowledgeCount == 0)
+    }
+
+    @Test fun `investment decision expands local memory retrieval without bypassing its switch`() {
+        val current = tree.append(tree.create("投资"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("中证A500和沪深300怎么选"))))
+        val index = CapturingIndex(memories = listOf(hit("investment", "记忆", "投资体系", "安全边际、分批建仓和控制仓位")))
+        val broker = LocalContextBroker(index)
+
+        val enabled = broker.assemble(current, "中证A500和沪深300怎么选，如何配置仓位？")
+        assertTrue(enabled.investmentDecisionContext)
+        assertTrue(index.memoryTerms.contains("投资"))
+        assertTrue(enabled.selectedMemoryCount == 1)
+
+        val disabled = broker.assemble(
+            current,
+            "中证A500和沪深300怎么选，如何配置仓位？",
+            policy = LocalContextBroker.RetrievalPolicy(includeRelevantMemory = false),
+        )
+        assertTrue(disabled.investmentDecisionContext)
+        assertTrue(disabled.selectedMemoryCount == 0)
     }
 
     private fun hit(id: String, kind: String, title: String, body: String) = LocalContextIndexHit(id, kind, title, body, clock.instant().toEpochMilli(), -1.0)
@@ -103,6 +134,20 @@ class LocalContextBrokerContractsTest {
         override fun searchActiveKnowledge(queryTerms: Set<String>, scope: ContextRetrievalScope, limit: Int) = knowledge.take(limit)
         override fun searchActiveHistory(queryTerms: Set<String>, scope: ContextRetrievalScope, limit: Int) = history.take(limit)
         override fun activeKnowledgeCount() = knowledge.size
+        override fun status() = LocalContextIndexStatus.AVAILABLE
+    }
+
+    private class CapturingIndex(
+        private val memories: List<LocalContextIndexHit>,
+    ) : LocalContextIndex {
+        var memoryTerms: Set<String> = emptySet()
+        override fun searchActiveMemories(queryTerms: Set<String>, scope: ContextRetrievalScope, limit: Int): List<LocalContextIndexHit> {
+            memoryTerms = queryTerms
+            return memories.take(limit)
+        }
+        override fun searchActiveKnowledge(queryTerms: Set<String>, scope: ContextRetrievalScope, limit: Int) = emptyList<LocalContextIndexHit>()
+        override fun searchActiveHistory(queryTerms: Set<String>, scope: ContextRetrievalScope, limit: Int) = emptyList<LocalContextIndexHit>()
+        override fun activeKnowledgeCount() = 0
         override fun status() = LocalContextIndexStatus.AVAILABLE
     }
 }

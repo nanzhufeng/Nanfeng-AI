@@ -75,7 +75,7 @@ class MarkdownKnowledgeImportViewModel(private val imports: ManageMarkdownImport
         Column(Modifier.p5aKeyboardTraversal().heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val task = state.selectedTask
             if (task == null) {
-                Text("退出页面不会丢失已选择、解析、待确认或失败任务。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("任务会保留，可稍后继续。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 state.tasks.forEach { row ->
                     TextButton(onClick = { onOpen(row) }, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.fillMaxWidth()) {
@@ -86,7 +86,7 @@ class MarkdownKnowledgeImportViewModel(private val imports: ManageMarkdownImport
                 }
             } else {
                 Text("${task.asset?.displayName ?: "无私有资产"} · ${task.status.label()}", fontWeight = FontWeight.Medium)
-                task.failure?.let { Text("失败：${it.name}。可重试或取消；未确认项不会写入。", color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
+                task.failure?.let { Text("失败：${it.name}，可重试或取消。", color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
                 task.items.forEach { item ->
                     HorizontalDivider(color = NeutralBorder)
                     Text("${item.ordinal + 1}. ${item.title} · ${item.status.label()}", fontWeight = FontWeight.Medium)

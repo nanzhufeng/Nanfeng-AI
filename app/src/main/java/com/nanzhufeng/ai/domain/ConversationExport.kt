@@ -76,6 +76,7 @@ object ConversationExportMapper {
 
     private fun block(block: ContentBlock): ConversationExportBlock = when (block) {
         is ContentBlock.Text -> ConversationExportBlock("TEXT", text = block.text, schemaVersion = block.schemaVersion)
+        is ContentBlock.Reasoning -> ConversationExportBlock("REASONING", text = block.text, schemaVersion = block.schemaVersion)
         is ContentBlock.Attachment -> {
             val value = block.attachment
             ConversationExportBlock("ATTACHMENT", attachment = ConversationExportAttachment(value.id.value, value.mimeType, value.byteCount, value.sha256), schemaVersion = block.schemaVersion)

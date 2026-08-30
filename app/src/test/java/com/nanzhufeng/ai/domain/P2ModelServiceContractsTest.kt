@@ -100,6 +100,30 @@ class P2ModelServiceContractsTest {
     }
 
     @Test
+    fun `document utility model cannot become a chat default`() {
+        val result = save.execute(ProviderId.ZHIPU, false, ModelPresetId.GLM_OCR, null)
+
+        assertEquals(SaveModelServiceConfigurationResult.Rejected(AiTaskError.ProviderConfigurationInvalid), result)
+        assertEquals(ModelPresetId.CLAUDE_FABLE_5, settings.load(ProviderId.ZHIPU).presetId)
+    }
+
+    @Test
+    fun `preset cannot be saved under the wrong provider`() {
+        val result = save.execute(ProviderId.DEEPSEEK, false, ModelPresetId.GLM_5_3_FLASH, null)
+
+        assertEquals(SaveModelServiceConfigurationResult.Rejected(AiTaskError.ProviderConfigurationInvalid), result)
+    }
+
+    @Test
+    fun `Zhipu flagship can be selected in settings without changing the Flash default`() {
+        val result = save.execute(ProviderId.ZHIPU, false, ModelPresetId.GLM_5_3, null)
+
+        assertTrue(result is SaveModelServiceConfigurationResult.Saved)
+        assertEquals(ModelPresetId.GLM_5_3, settings.load(ProviderId.ZHIPU).presetId)
+        assertEquals(ModelPresetId.GLM_5_3_FLASH, NanfengModelServiceCatalog.defaultPreset(ProviderId.ZHIPU))
+    }
+
+    @Test
     fun `encrypted credential store round trips without plaintext persistence`() {
         val storage = RecordingPayloadStorage()
         val store = EncryptedProviderCredentialStore(XorCredentialCipher(), storage)
@@ -152,8 +176,8 @@ class P2ModelServiceContractsTest {
     @Test
     fun `catalog contains the approved logical provider models`() {
         assertEquals(
-            listOf("Gemini 3.7 Flash", "Qwen3.7-Plus", "Qwen3.8-Max", "Qwen3.6 Flash", "DeepSeek V4 Pro"),
-            NanfengModelServiceCatalog.presets.filter { it.id in setOf(ModelPresetId.GEMINI_3_7_FLASH, ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH, ModelPresetId.DEEPSEEK_V4_PRO) }.map { it.displayName },
+            listOf("Gemini 3.7 Flash", "Qwen3.7-Plus", "Qwen3.8-Max", "Qwen3.6 Flash", "DeepSeek V4 Pro", "DeepSeek V4 Flash", "GLM-5.3", "GLM-5.3 Flash"),
+            NanfengModelServiceCatalog.presets.filter { it.id in setOf(ModelPresetId.GEMINI_3_7_FLASH, ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH, ModelPresetId.DEEPSEEK_V4_PRO, ModelPresetId.DEEPSEEK_V4_FLASH, ModelPresetId.GLM_5_3, ModelPresetId.GLM_5_3_FLASH) }.map { it.displayName },
         )
     }
 
@@ -161,7 +185,21 @@ class P2ModelServiceContractsTest {
         assertEquals(ProviderId.OPENROUTER, NanfengModelServiceCatalog.providerFor(ModelPresetId.GEMINI_3_7_FLASH))
         assertEquals(ProviderId.QWEN, NanfengModelServiceCatalog.providerFor(ModelPresetId.QWEN_3_7_PLUS))
         assertEquals(ProviderId.DEEPSEEK, NanfengModelServiceCatalog.providerFor(ModelPresetId.DEEPSEEK_V4_PRO))
+        assertEquals(ProviderId.DEEPSEEK, NanfengModelServiceCatalog.providerFor(ModelPresetId.DEEPSEEK_V4_FLASH))
+        assertEquals(ProviderId.ZHIPU, NanfengModelServiceCatalog.providerFor(ModelPresetId.GLM_5_3))
+        assertEquals(ProviderId.ZHIPU, NanfengModelServiceCatalog.providerFor(ModelPresetId.GLM_5_3_FLASH))
         assertEquals("https://dashscope.aliyuncs.com/compatible-mode/v1", NanfengModelServiceCatalog.provider(ProviderId.QWEN)?.fixedEndpoint)
+        assertEquals("https://open.bigmodel.cn/api/paas/v4", NanfengModelServiceCatalog.provider(ProviderId.ZHIPU)?.fixedEndpoint)
+        assertEquals(ModelPresetId.GLM_5_3_FLASH, NanfengModelServiceCatalog.defaultPreset(ProviderId.ZHIPU))
+    }
+
+    @Test fun `Zhipu settings expose both chat presets but keep OCR out of the chat selector`() {
+        assertEquals(
+            listOf("GLM-5.3", "GLM-5.3 Flash"),
+            NanfengModelServiceCatalog.chatPresets
+                .filter { NanfengModelServiceCatalog.providerFor(it.id) == ProviderId.ZHIPU }
+                .map { it.displayName },
+        )
     }
 
     @Test

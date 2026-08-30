@@ -33,7 +33,22 @@ class SettingsUiSimplificationContractsTest {
         assertFalse(model.contains("已安全保存。输入新值可替换。"))
         assertTrue(privacy.contains("val scopes = listOf("))
         assertTrue(privacy.contains("PrivacyCleanupScopeDialog("))
+        assertTrue(privacy.contains("删除 ZIP 原始包"))
+        assertTrue(privacy.contains("尚未全部内置"))
+        assertTrue(privacy.contains("可以安全删除 ZIP 原始包"))
+        assertTrue(privacy.contains("导入资料已内置"))
+        assertTrue(privacy.contains("sourceDependentAttachmentCount"))
+        assertTrue(privacy.contains("已导入附件"))
+        assertTrue(privacy.contains("附件与导入资料"))
+        assertFalse(privacy.contains("ZIP 原始包（本机保留）"))
         assertFalse(privacy.contains("安全诊断 JSON"))
+        val privacySummary = privacy.substring(
+            privacy.indexOf("internal fun PrivacyStorageSummary"),
+            privacy.indexOf("private data class PrivacySummaryRow"),
+        )
+        for (removed in listOf("本地记录", "模型调用记录", "本地检查记录", "设置与密钥", "API Key", "credentialReferencePresent", "大小包含文本与附件实际字节")) {
+            assertFalse("redundant privacy summary remains: $removed", privacySummary.contains(removed))
+        }
         val management = conversations.substring(conversations.indexOf("internal fun ConversationManagementSettingsCard"), conversations.indexOf("private fun ConversationSelector"))
         assertTrue(management.contains("ConversationLifecycleEntry("))
         assertTrue(management.contains("DataStorageGroupedCard {") && management.contains("DataStorageGroupedDivider()"))
@@ -47,7 +62,7 @@ class SettingsUiSimplificationContractsTest {
         val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val normalChat = File("src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt").readText()
 
-        for (token in listOf("个性化", "启用记忆", "记忆摘要", "提醒", "模型与联网", "项目与知识", "数据与存储", "隐私与安全", "关于", "Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}")) {
+        for (token in listOf("个性化", "启用记忆", "记忆摘要", "提醒", "模型与联网", "项目与知识", "导入与导出", "数据管理", "本机数据", "关于", "Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}")) {
             assertTrue("missing reorganized setting $token", app.contains(token))
         }
         assertFalse(app.substring(app.indexOf("private fun SettingsCategoryList"), app.indexOf("private fun SettingsSwitchRow")).contains("更多本地控制面"))
@@ -66,10 +81,8 @@ class SettingsUiSimplificationContractsTest {
         assertTrue(app.contains("onSave = onSavePersonalization"))
         assertTrue(personalization.contains("onSave = {\n                onSave()\n                customInstructionsFullscreen = false"))
         assertFalse(personalization.contains("notice?.let { Spacer(Modifier.height(8.dp)); Text(it, color = BrandGreen"))
-        assertTrue(app.contains("private fun CenteredPersonalizationSaveNotice"))
-        assertTrue(app.contains("Dialog(onDismissRequest = onDismiss)"))
-        assertTrue(app.contains("delay(1_800)"))
-        assertTrue(app.contains("assistantExperienceSettingsViewModel::clearNotice"))
+        assertFalse(app.contains("CenteredPersonalizationSaveNotice"))
+        assertFalse(app.contains("assistantExperienceSettingsViewModel::clearNotice"))
         assertTrue(personalization.contains("contentDescription = \"保存自定义指令\"") && personalization.contains("shape = CircleShape"))
         assertTrue(personalization.contains("modifier = Modifier.align(Alignment.Center).semantics { heading() }"))
         assertTrue(app.contains("contentDescription = \"保存个性化设置\"") && app.contains("color = if (saveEnabled) AccentOrange.copy(alpha = 0.14f) else ForegroundSurface"))
@@ -130,8 +143,20 @@ class SettingsUiSimplificationContractsTest {
             assertTrue("settings status accent must use the dynamic theme token", screen.contains("AccentOrange"))
             assertFalse("settings status accent must not retain the fixed green token", screen.contains("BrandGreen"))
         }
-        assertTrue(model.contains("统计对话、标题与提醒整理的 Token 与金额"))
+        assertTrue(model.contains("统计对话、标题、历史与南枫转写的 Token 与金额"))
         assertTrue(costs.contains("会话标题整理"))
+    }
+
+    @Test
+    fun `settings home title is centered larger and bold`() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val header = app.substringAfter("private fun SettingsPageHeader(").substringBefore("private fun SettingsHierarchy(")
+        val home = header.substringAfter("if (destination == SettingsDestination.HOME)").substringBefore("return")
+
+        assertTrue(home.contains("Box(modifier = Modifier.fillMaxWidth().height(48.dp))"))
+        assertTrue(home.contains("Modifier.align(Alignment.Center).semantics { heading() }"))
+        assertTrue(home.contains("style = MaterialTheme.typography.headlineMedium"))
+        assertTrue(home.contains("fontWeight = FontWeight.Bold"))
     }
 
     @Test
@@ -150,13 +175,19 @@ class SettingsUiSimplificationContractsTest {
         assertTrue(personalization.contains("surface = true"))
         assertTrue(personalization.contains("允许 南枫AI 根据你的聊天、文件和已关联的应用为你提供个性化体验。"))
         assertTrue(personalization.contains("这是 南枫AI 在与你对话时使用的主要语气。这不会影响 南枫AI 的功能。"))
-        assertTrue(personalization.contains("资料库搜索"))
-        assertTrue(personalization.contains("允许 南枫AI 自动搜索资料库中的文件以查找答案。"))
-        assertTrue(personalization.contains("title = \"资料库搜索\""))
+        assertTrue(personalization.contains("历史资料库"))
+        assertTrue(personalization.contains("低频整理有价值的历史对话，并在后续对话优先调用少量相关资料。"))
+        assertTrue(personalization.contains("title = \"历史资料库\""))
+        assertTrue(personalization.contains("checked = settings.historyLibraryEnabled"))
+        assertTrue(personalization.contains("onCheckedChange = { enabled -> onUpdateSwitch"))
+        assertTrue(personalization.contains("librarySearchEnabled = enabled"))
+        assertTrue(personalization.contains("autoHistoryKnowledgeEnabled = enabled"))
+        assertFalse(personalization.contains("autoHistoryCurationConsentVisible"))
+        assertFalse(personalization.contains("title = \"自动沉淀历史资料\""))
         assertTrue(personalization.contains("summary = \"\""))
         assertTrue(personalization.contains("Spacer(Modifier.height(6.dp))"))
         assertTrue(personalization.contains("modifier = Modifier.padding(horizontal = 4.dp)"))
-        assertTrue(personalization.indexOf("title = \"资料库搜索\"") < personalization.indexOf("ConversationStylePreferenceRow("))
+        assertTrue(personalization.indexOf("title = \"历史资料库\"") < personalization.indexOf("ConversationStylePreferenceRow("))
         assertFalse(personalization.contains("advancedExpanded"))
         assertFalse(personalization.contains("Text(\"高级\""))
         assertTrue(personalization.contains("Text(\"记忆摘要\", color = BodyText"))
@@ -164,6 +195,21 @@ class SettingsUiSimplificationContractsTest {
         for (token in listOf("color = ForegroundSurface", "shape = P5AInteractiveShape", "heightIn(min = 52.dp)")) {
             assertTrue("memory switch foreground surface must keep the shared pill geometry: $token", switchRow.contains(token))
         }
+    }
+
+    @Test
+    fun `personalization save only writes editable profile fields and never replays switch state`() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val save = app.substring(
+            app.indexOf("fun savedWithPersonalizationEditorContent"),
+            app.indexOf("val settingsOwnsCurrentRoute"),
+        )
+        assertTrue(save.contains("displayName = draft.displayName"))
+        assertTrue(save.contains("customInstructions = draft.customInstructions"))
+        assertTrue(save.contains("conversationStyle = draft.conversationStyle"))
+        assertFalse(save.contains("memoryRetrievalEnabled ="))
+        assertFalse(save.contains("librarySearchEnabled ="))
+        assertTrue(app.contains("onUpdatePersonalizationSwitch = { transform ->"))
     }
 
     @Test

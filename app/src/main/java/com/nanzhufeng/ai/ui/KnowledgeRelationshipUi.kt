@@ -31,7 +31,7 @@ fun KnowledgeRelationshipBuilderDialog(state: KnowledgeRelationshipUiState, onDi
         title = { Text("建立本地 Knowledge 关系", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("仅对两个现有、活动且同一 GLOBAL/项目范围的 Knowledge 生效。不会合并正文、删除条目或加入 Context。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("仅关联同一范围内的活动知识，不合并或删除内容。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 Text("起点：${anchor.item.title} · 修订 ${anchor.revisions.maxOfOrNull { it.revision } ?: 1}", fontWeight = FontWeight.Medium)
                 Text("先选择关系类型", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { KnowledgeRelationshipType.entries.forEach { type -> TextButton(onClick = { onType(type) }) { Text(if (state.type == type) "● ${type.label()}" else type.label()) } } }
@@ -60,7 +60,6 @@ fun KnowledgeRelationshipListDialog(state: KnowledgeRelationshipUiState, onDismi
         title = { Text("本地关系与审计", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("关系不复制正文、URI、路径或附件，也不会自动进入 Context、Prompt、导出或 Provider。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 Row { listOf(KnowledgeRelationshipStatus.ACTIVE, KnowledgeRelationshipStatus.REVOKED, null).forEach { status -> TextButton(onClick = { onStatus(status) }) { Text(if (state.recordStatus == status) "● ${status.label()}" else status.label()) } } }
                 if (state.records.isEmpty()) Text("此筛选下没有关系记录。", color = SecondaryText)
                 state.records.forEach { snapshot ->

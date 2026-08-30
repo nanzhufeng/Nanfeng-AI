@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -35,12 +36,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nanzhufeng.ai.domain.Conversation
@@ -70,6 +75,8 @@ fun MemorySummaryPage(
     var disableConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     var pendingText by rememberSaveable { mutableStateOf("") }
     var composerText by rememberSaveable { mutableStateOf("") }
+    var composerHeightPx by remember { mutableIntStateOf(0) }
+    val composerHeight = with(LocalDensity.current) { composerHeightPx.toDp() }
     val updated = state.memories.maxByOrNull { it.memory.updatedAt }?.memory?.updatedAt
     val updatedText = updated?.let { "更新于 ${it.atZone(java.time.ZoneId.systemDefault()).toLocalDate()}" } ?: "更新于刚刚"
 
@@ -121,7 +128,12 @@ fun MemorySummaryPage(
         }
 
         Column(
-            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                // The composer remains visually floating, but the final summary must be able to
+                // scroll fully above its measured height instead of ending behind it.
+                .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = composerHeight + 24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             state.notice?.let { Text(it, color = SecondaryText, style = MaterialTheme.typography.bodySmall) }
@@ -143,7 +155,14 @@ fun MemorySummaryPage(
         }
 
         Box(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 12.dp),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .onSizeChanged { composerHeightPx = it.height }
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 12.dp),
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -186,7 +205,7 @@ fun MemorySummaryPage(
             title = { Text("如何处理这条内容") },
             text = {
                 Text(
-                    "“询问摘要”只在本机已保存的记忆中查找；“补充记忆”才会把这条内容写入本机摘要。不会自动请求模型或发送内容。",
+                    "“询问摘要”查找已有记忆；“补充记忆”保存这条内容。",
                     color = SecondaryText,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -215,7 +234,7 @@ fun MemorySummaryPage(
             title = { Text("关于记忆") },
             text = {
                 Text(
-                    "这里显示的是你确认保留在本机的记忆摘要。启用记忆后，南枫AI 才会在对话中使用相关内容；你随时可以删除摘要并关闭记忆。",
+                    "这里显示已保存在本机的记忆摘要。启用后，相关内容可用于回答。",
                     color = SecondaryText,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -226,7 +245,7 @@ fun MemorySummaryPage(
     if (deleteConfirmationVisible) {
         ConfirmDeleteDialog(
             title = "删除记忆？",
-            body = "这会软删除当前记忆摘要。历史记录仍可审计，不会删除聊天或文件，也不会关闭记忆摘要的生成和应用。",
+            body = "删除当前记忆摘要；聊天、文件和记忆开关不受影响。",
             onConfirm = { deleteConfirmationVisible = false; onDeleteMemory() },
             onDismiss = { deleteConfirmationVisible = false },
         )
@@ -234,7 +253,7 @@ fun MemorySummaryPage(
     if (disableConfirmationVisible) {
         ConfirmDeleteDialog(
             title = "关闭记忆摘要生成和应用？",
-            body = "这会停止后续记忆摘要生成，并且普通对话不再检索或发送已保存的记忆。已保存的记忆和个人资料不会删除。",
+            body = "停止生成和使用记忆摘要；已保存内容不会删除。",
             onConfirm = {
                 disableConfirmationVisible = false
                 onDisableMemorySummaryGenerationAndUse()
@@ -270,13 +289,13 @@ fun MemorySummaryPage(
     var conversationId by rememberSaveable { mutableStateOf(existing?.memory?.scope?.conversationId?.value ?: conversations.firstOrNull()?.id?.value.orEmpty()) }
     val scope = when (scopeKind) { MemoryScopeKind.GLOBAL -> MemoryScope(MemoryScopeKind.GLOBAL); MemoryScopeKind.PROJECT -> projectId.takeIf { it.isNotBlank() }?.let { MemoryScope(MemoryScopeKind.PROJECT, ProjectId(it)) }; MemoryScopeKind.CONVERSATION -> conversationId.takeIf { it.isNotBlank() }?.let { MemoryScope(MemoryScopeKind.CONVERSATION, conversationId = ConversationId(it)) } }
     AlertDialog(onDismissRequest = onDismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text(titleText) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("仅保存你明确确认的本地内容。密码、API Key、Authorization、恢复码和完整卡号会被拒绝，且正文不会落库。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        Text("敏感信息不会保存。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
         OutlinedTextField(title, { title = it }, label = { Text("标题") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(body, { body = it }, label = { Text("正文") }, minLines = 4, modifier = Modifier.fillMaxWidth().p5aKeyboardTraversal())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { FilterButton("全局", scopeKind == MemoryScopeKind.GLOBAL) { scopeKind = MemoryScopeKind.GLOBAL }; FilterButton("项目", scopeKind == MemoryScopeKind.PROJECT) { scopeKind = MemoryScopeKind.PROJECT }; FilterButton("会话", scopeKind == MemoryScopeKind.CONVERSATION) { scopeKind = MemoryScopeKind.CONVERSATION } }
-        if (scopeKind == MemoryScopeKind.PROJECT) { if (projects.isEmpty()) Text("暂无可关联的 Project；不能保存为项目范围。", style = MaterialTheme.typography.bodySmall, color = SecondaryText); projects.forEach { item -> FilterButton(item.project.title, item.project.id.value == projectId) { projectId = item.project.id.value } } }
-        if (scopeKind == MemoryScopeKind.CONVERSATION) { if (conversations.isEmpty()) Text("暂无可关联的 Conversation；不能保存为会话范围。", style = MaterialTheme.typography.bodySmall, color = SecondaryText); conversations.forEach { item -> FilterButton(item.title, item.id.value == conversationId) { conversationId = item.id.value } } }
-        Text("启用记忆后，会按当前问题自动检索相关内容加入对话上下文。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        if (scopeKind == MemoryScopeKind.PROJECT) { if (projects.isEmpty()) Text("暂无可关联项目。", style = MaterialTheme.typography.bodySmall, color = SecondaryText); projects.forEach { item -> FilterButton(item.project.title, item.project.id.value == projectId) { projectId = item.project.id.value } } }
+        if (scopeKind == MemoryScopeKind.CONVERSATION) { if (conversations.isEmpty()) Text("暂无可关联对话。", style = MaterialTheme.typography.bodySmall, color = SecondaryText); conversations.forEach { item -> FilterButton(item.title, item.id.value == conversationId) { conversationId = item.id.value } } }
+        Text("启用后，相关记忆可用于回答。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
     } }, confirmButton = { Button(onClick = { scope?.let { onSave(title, body, it) } }, enabled = scope != null, shape = RoundedCornerShape(14.dp)) { Text("确认保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 @Composable private fun ConfirmDeleteDialog(title: String, body: String, onConfirm: () -> Unit, onDismiss: () -> Unit) = AlertDialog(onDismissRequest = onDismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text(title) }, text = { Text(body, color = SecondaryText) }, confirmButton = { Button(onClick = onConfirm, shape = RoundedCornerShape(14.dp)) { Text("确认删除") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })

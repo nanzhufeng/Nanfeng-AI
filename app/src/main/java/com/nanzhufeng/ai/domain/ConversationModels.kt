@@ -41,6 +41,18 @@ sealed interface ContentBlock {
     }
 
     /**
+     * Provider-delivered reasoning is retained separately from the user-facing answer.  It is
+     * deliberately excluded from conversation context, search and title generation so a model's
+     * scratch work can never become a later prompt instruction or searchable conversation prose.
+     */
+    data class Reasoning(
+        val text: String,
+        override val schemaVersion: Int = 1,
+    ) : ContentBlock {
+        init { require(text.isNotBlank()) { "思考过程内容块不能为空。" } }
+    }
+
+    /**
      * Conversation content deliberately stores a safe asset reference only.  The Attachment
      * Domain remains the sole owner of the app-private storage key and binary reader.
      */
@@ -198,14 +210,17 @@ val CONVERSATION_ALLOWED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/png", "im
 val CONVERSATION_ALLOWED_VIDEO_MIME_TYPES = setOf("video/mp4")
 /** P6-F2-E keeps audio small and locally decodable; no streaming or arbitrary codec fallback. */
 val CONVERSATION_ALLOWED_AUDIO_MIME_TYPES = setOf("audio/mpeg", "audio/wav", "audio/mp4")
-/** P6-D2 keeps files local-only and intentionally permits only bounded, inspectable document kinds. */
+/** Local viewers stay inert: OOXML is text-extracted, ZIP is browsed entry-by-entry, and markup is
+ * displayed as source rather than executed. */
 val CONVERSATION_ALLOWED_DOCUMENT_MIME_TYPES = setOf(
-    "application/pdf", "text/plain", "text/markdown", "application/json", "text/csv",
+    "application/pdf",
+    "text/plain", "text/markdown", "application/json", "text/csv",
+    "application/xml", "text/xml", "application/x-yaml", "text/yaml", "text/html",
+    DOCX_MIME_TYPE, XLSX_MIME_TYPE, PPTX_MIME_TYPE,
+    "application/zip",
 )
 val CONVERSATION_ALLOWED_MIME_TYPES = CONVERSATION_ALLOWED_IMAGE_MIME_TYPES + CONVERSATION_ALLOWED_VIDEO_MIME_TYPES + CONVERSATION_ALLOWED_AUDIO_MIME_TYPES + CONVERSATION_ALLOWED_DOCUMENT_MIME_TYPES
 val CONVERSATION_PERSISTED_MIME_TYPES = CONVERSATION_ALLOWED_MIME_TYPES + setOf(
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/zip",
     "application/octet-stream",
 )
 
@@ -276,9 +291,10 @@ data class ConversationSnapshot(
  * this object prevents UI code from inventing a second definition of editable messages or leaves.
  */
 object ConversationBranchHistory {
-    fun leaves(snapshot: ConversationSnapshot): List<ConversationBranchLeaf> {
+    fun project(snapshot: ConversationSnapshot): ConversationBranchProjection {
         val tree = MessageTree(snapshot.conversation, snapshot.nodes)
-        return snapshot.nodes
+        val path = tree.contextPath()
+        val leaves = snapshot.nodes
             .filter { node -> tree.isLeaf(node.id) }
             .sortedWith(compareBy<MessageNode>({ it.createdAt }, { it.id.value }))
             .map { node ->
@@ -290,10 +306,7 @@ object ConversationBranchHistory {
                     isCurrent = node.id == snapshot.conversation.currentLeafMessageId,
                 )
             }
-    }
-
-    fun editableUserMessages(snapshot: ConversationSnapshot): List<EditableConversationUserMessage> =
-        MessageTree(snapshot.conversation, snapshot.nodes).contextPath()
+        val editableUserMessages = path
             .filter { node -> node.role == MessageRole.USER && node.content.all { it is ContentBlock.Text } }
             .map { node ->
                 EditableConversationUserMessage(
@@ -301,7 +314,20 @@ object ConversationBranchHistory {
                     text = node.content.filterIsInstance<ContentBlock.Text>().joinToString("\n") { it.text },
                 )
             }
+        return ConversationBranchProjection(path, leaves, editableUserMessages)
+    }
+
+    fun leaves(snapshot: ConversationSnapshot): List<ConversationBranchLeaf> = project(snapshot).leaves
+
+    fun editableUserMessages(snapshot: ConversationSnapshot): List<EditableConversationUserMessage> =
+        project(snapshot).editableUserMessages
 }
+
+data class ConversationBranchProjection(
+    val path: List<MessageNode>,
+    val leaves: List<ConversationBranchLeaf>,
+    val editableUserMessages: List<EditableConversationUserMessage>,
+)
 
 /** Conversation Domain owns tree validity, selected branch, edit branching, and context-path reads. */
 class MessageTree(
@@ -309,15 +335,16 @@ class MessageTree(
     val nodes: List<MessageNode>,
 ) {
     private val byId = nodes.associateBy(MessageNode::id)
+    private val childrenByParentId = nodes.groupBy(MessageNode::parentMessageId)
 
     init {
         require(byId.size == nodes.size) { "消息 ID 必须稳定且唯一。" }
         require(nodes.all { it.conversationId == conversation.id }) { "消息不能跨会话归属。" }
         require(nodes.all { it.parentMessageId == null || byId.containsKey(it.parentMessageId) }) { "消息父节点不存在。" }
-        require(nodes.groupBy { it.parentMessageId }.values.all { siblings ->
+        require(childrenByParentId.values.all { siblings ->
             siblings.map(MessageNode::siblingPosition).distinct().size == siblings.size
         }) { "同一父节点下的消息排序不能重复。" }
-        require(nodes.none(::hasAncestorCycle)) { "消息树不能形成环。" }
+        require(!hasAncestorCycle()) { "消息树不能形成环。" }
         val leaf = conversation.currentLeafMessageId
         require((nodes.isEmpty() && leaf == null) || (nodes.isNotEmpty() && leaf != null && byId.containsKey(leaf))) {
             "当前分支指针与消息树不一致。"
@@ -342,9 +369,9 @@ class MessageTree(
 
     fun isLeaf(id: MessageNodeId): Boolean = childrenOf(id).isEmpty()
 
-    fun nextSiblingPosition(parentId: MessageNodeId?): Int = nodes
+    fun nextSiblingPosition(parentId: MessageNodeId?): Int = childrenByParentId[parentId]
+        .orEmpty()
         .asSequence()
-        .filter { it.parentMessageId == parentId }
         .map(MessageNode::siblingPosition)
         .maxOrNull()
         ?.plus(1)
@@ -355,17 +382,21 @@ class MessageTree(
         return reversed.asReversed()
     }
 
-    private fun hasAncestorCycle(node: MessageNode): Boolean {
-        val visited = mutableSetOf<MessageNodeId>()
-        var cursor: MessageNodeId? = node.id
-        while (cursor != null) {
-            if (!visited.add(cursor)) return true
-            cursor = byId.getValue(cursor).parentMessageId
+    private fun hasAncestorCycle(): Boolean {
+        val resolved = mutableSetOf<MessageNodeId>()
+        nodes.forEach { node ->
+            val visiting = mutableSetOf<MessageNodeId>()
+            var cursor: MessageNodeId? = node.id
+            while (cursor != null && cursor !in resolved) {
+                if (!visiting.add(cursor)) return true
+                cursor = byId.getValue(cursor).parentMessageId
+            }
+            resolved += visiting
         }
         return false
     }
 
-    private fun childrenOf(id: MessageNodeId): List<MessageNode> = nodes.filter { it.parentMessageId == id }
+    private fun childrenOf(id: MessageNodeId): List<MessageNode> = childrenByParentId[id].orEmpty()
 }
 
 data class AppendMessageRequest(

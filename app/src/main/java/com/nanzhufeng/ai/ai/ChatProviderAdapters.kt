@@ -9,6 +9,8 @@ import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.ComposerModelChoice
 import com.nanzhufeng.ai.domain.ComposerModelSlot
 import com.nanzhufeng.ai.domain.classifyProviderFailure
+import com.nanzhufeng.ai.domain.OFFICE_OPEN_XML_MIME_TYPES
+import com.nanzhufeng.ai.domain.extractOfficeOpenXmlText
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -30,9 +32,17 @@ interface ChatProviderAdapter {
     ): ChatAdapterPrepareResult
     /** Transport deadlines are provider protocol metadata, never executor-specific model guesses. */
     fun readTimeoutMillis(model: ResolvedModel, attachments: List<ChatAttachment>, stream: Boolean): Int = 90_000
+    fun readTimeoutMillis(model: ResolvedModel, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): Int =
+        readTimeoutMillis(model, attachments, stream)
+    /** Active streaming still has a total lifetime; repeated output must not bypass the deadline. */
+    fun maxStreamDurationMillis(model: ResolvedModel, attachments: List<ChatAttachment>, options: ChatRequestOptions): Int = 300_000
+    /** Provider protocol traces are buffered only for routes that have exhibited exact leakage. */
+    fun streamTextMode(options: ChatRequestOptions): ProviderStreamTextMode = ProviderStreamTextMode.IMMEDIATE
     fun decodeNonStreaming(body: String): ChatAdapterDecodedResult
     /** The Adapter, rather than the transport, owns its SSE JSON field names. */
     fun decodeStreamingEvent(body: String): ProviderSseEvent?
+    /** Request options select a provider protocol without making the transport inspect JSON. */
+    fun decodeStreamingEvent(body: String, options: ChatRequestOptions): ProviderSseEvent? = decodeStreamingEvent(body)
     fun classifyHttpFailure(status: Int, responseBody: String): ProviderDiagnosticErrorClass
 }
 
@@ -47,6 +57,7 @@ enum class OfficialWebSearchRoute {
     QWEN_CHAT_COMPLETIONS,
     QWEN_RESPONSES,
     DEEPSEEK_RESPONSES,
+    ZHIPU_CHAT_COMPLETIONS,
 }
 
 data class ChatRequestOptions(
@@ -80,6 +91,8 @@ sealed interface ChatAdapterDecodedResult {
         val reportedCostUsdMicros: Long? = null,
         /** Provider-reported input cache hits; used only by a local estimate when no cost arrives. */
         val cachedInputTokens: Long? = null,
+        /** Provider-reported subset of output tokens spent on hidden reasoning. */
+        val reasoningTokens: Long? = null,
     ) : ChatAdapterDecodedResult
     /** Parsed but deliberately not executed by the ordinary-chat surface. */
     data class ToolCalls(
@@ -186,7 +199,18 @@ abstract class OpenAiCompatibleChatAdapter : ChatProviderAdapter {
     override fun decodeNonStreaming(body: String): ChatAdapterDecodedResult {
         val decoded = OpenAiCompatibleJsonCodec.decode(body) ?: return ChatAdapterDecodedResult.EmptyOrMalformed
         return decoded.text.cleanChatReply()?.let {
-            ChatAdapterDecodedResult.Text(it, decoded.inputTokens, decoded.outputTokens, decoded.reasoning, decoded.toolCalls, decoded.toolCallEncountered, decoded.webSources, decoded.reportedCostUsdMicros, decoded.cachedInputTokens)
+            ChatAdapterDecodedResult.Text(
+                text = it,
+                inputTokens = decoded.inputTokens,
+                outputTokens = decoded.outputTokens,
+                reasoning = decoded.reasoning,
+                toolCalls = decoded.toolCalls,
+                toolCallEncountered = decoded.toolCallEncountered,
+                webSources = decoded.webSources,
+                reportedCostUsdMicros = decoded.reportedCostUsdMicros,
+                cachedInputTokens = decoded.cachedInputTokens,
+                reasoningTokens = decoded.reasoningTokens,
+            )
         } ?: decoded.toolCalls.takeIf(List<ChatToolCall>::isNotEmpty)?.let {
             ChatAdapterDecodedResult.ToolCalls(decoded.reasoning, it, decoded.inputTokens, decoded.outputTokens)
         } ?: ChatAdapterDecodedResult.EmptyOrMalformed
@@ -199,9 +223,18 @@ abstract class OpenAiCompatibleChatAdapter : ChatProviderAdapter {
             append("{\"role\":\""); append(role.escapeJson()); append("\",\"content\":\""); append(text.escapeJson()); append("\"}")
         }
         append("]")
-        model.maxOutputTokens?.let { append(",\"max_tokens\":").append(it) }
+        appendOutputTokenLimit(model)
+        appendProviderOwnedRequestOptions(model)
         appendRequestOptions(options, stream)
     }
+
+    protected open fun StringBuilder.appendOutputTokenLimit(model: ResolvedModel) {
+        model.maxOutputTokens?.let { append(",\"max_tokens\":").append(it) }
+    }
+
+    /** Provider-only request fields stay behind the selected Adapter instead of leaking into
+     * the shared OpenAI-compatible envelope used by unrelated services. */
+    protected open fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel) = Unit
 }
 
 open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
@@ -237,15 +270,32 @@ open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
 class QwenChatAdapter : OpenAiCompatibleChatAdapter() {
     override val providerId = ProviderId.QWEN
 
+    protected override fun StringBuilder.appendOutputTokenLimit(model: ResolvedModel) {
+        if (model.modelId == QWEN_3_8_MAX_MODEL_ID) {
+            append(",\"max_completion_tokens\":").append(qwen38RequestOutputLimit(model))
+        } else {
+            model.maxOutputTokens?.let { append(",\"max_tokens\":").append(it) }
+        }
+    }
+
+    protected override fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel) {
+        if (model.modelId == QWEN_3_8_MAX_MODEL_ID) {
+            // Qwen3.8-Max otherwise defaults to xhigh (131,072 reasoning tokens). Low preserves
+            // deliberate reasoning with a provider-defined 4,096-token budget. Historical
+            // reasoning is never returned as an input message, so make that boundary explicit.
+            append(",\"reasoning_effort\":\"low\",\"preserve_thinking\":false")
+        }
+    }
+
     override fun endpointPath(options: ChatRequestOptions): String =
         if (options.webSearchRoute == OfficialWebSearchRoute.QWEN_RESPONSES) "/responses" else super.endpointPath(options)
 
     override fun supportsStreaming(model: ResolvedModel, options: ChatRequestOptions): Boolean =
-        if (options.webSearchRoute == OfficialWebSearchRoute.QWEN_RESPONSES) false else super.supportsStreaming(model, options)
+        super.supportsStreaming(model, options)
 
     override fun prepare(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): ChatAdapterPrepareResult {
         if (options.webSearchRoute == OfficialWebSearchRoute.QWEN_RESPONSES) {
-            return if (attachments.isEmpty()) ChatAdapterPrepareResult.Ready(qwenResponsesWebSearchBody(model, messages))
+            return if (attachments.isEmpty()) ChatAdapterPrepareResult.Ready(qwenResponsesWebSearchBody(model, messages, stream))
             else ChatAdapterPrepareResult.AttachmentUnsupported
         }
         if (attachments.any { it.remoteUrl != null }) return ChatAdapterPrepareResult.AttachmentUnsupported
@@ -262,7 +312,24 @@ class QwenChatAdapter : OpenAiCompatibleChatAdapter() {
     /** Qwen PDF understanding can take up to five minutes before its first token. */
     override fun readTimeoutMillis(model: ResolvedModel, attachments: List<ChatAttachment>, stream: Boolean): Int =
         if (attachments.any { it.kind == ChatAttachmentKind.PDF }) 300_000 else super.readTimeoutMillis(model, attachments, stream)
+    override fun readTimeoutMillis(model: ResolvedModel, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): Int =
+        if (options.webSearchRoute == OfficialWebSearchRoute.QWEN_RESPONSES) 180_000
+        else readTimeoutMillis(model, attachments, stream)
+    override fun maxStreamDurationMillis(model: ResolvedModel, attachments: List<ChatAttachment>, options: ChatRequestOptions): Int =
+        if (attachments.any { it.kind == ChatAttachmentKind.PDF }) 420_000
+        else if (options.webSearchRoute == OfficialWebSearchRoute.QWEN_RESPONSES) 300_000
+        else if (options.webSearchRoute == OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS) 180_000
+        else super.maxStreamDurationMillis(model, attachments, options)
+    override fun streamTextMode(options: ChatRequestOptions): ProviderStreamTextMode =
+        when (options.webSearchRoute) {
+            OfficialWebSearchRoute.QWEN_RESPONSES -> ProviderStreamTextMode.RESPONSES_API
+            OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS -> ProviderStreamTextMode.BUFFER_QWEN_WEB_SEARCH
+            else -> super.streamTextMode(options)
+        }
     override fun decodeStreamingEvent(body: String) = OpenAiCompatibleJsonCodec.decodeStream(body)
+    override fun decodeStreamingEvent(body: String, options: ChatRequestOptions): ProviderSseEvent? =
+        if (options.webSearchRoute == OfficialWebSearchRoute.QWEN_RESPONSES) ResponsesSseJsonCodec.decode(body)
+        else decodeStreamingEvent(body)
     override fun decodeNonStreaming(body: String): ChatAdapterDecodedResult =
         ResponsesWebSearchJsonCodec.decode(body) ?: super.decodeNonStreaming(body)
 }
@@ -278,18 +345,44 @@ class DeepSeekChatAdapter : OpenAiCompatibleChatAdapter() {
     override fun supportsStreaming(model: ResolvedModel, options: ChatRequestOptions): Boolean =
         if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_RESPONSES) false else super.supportsStreaming(model, options)
 
-    override fun prepare(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions) = when {
-        attachments.isNotEmpty() -> ChatAdapterPrepareResult.AttachmentUnsupported
-        options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_RESPONSES ->
-            ChatAdapterPrepareResult.Ready(deepSeekResponsesWebSearchBody(model, messages))
-        else -> ChatAdapterPrepareResult.Ready(textOnlyBody(model, messages, stream, options))
+    override fun prepare(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): ChatAdapterPrepareResult {
+        val inlineTextFiles = inlineUtf8TextFiles(attachments) ?: return ChatAdapterPrepareResult.AttachmentUnsupported
+        if (attachments.any { it.kind != ChatAttachmentKind.FILE }) return ChatAdapterPrepareResult.AttachmentUnsupported
+        val effectiveMessages = if (inlineTextFiles.isBlank()) messages else messages + ("user" to inlineTextFiles)
+        return if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_RESPONSES) {
+            ChatAdapterPrepareResult.Ready(deepSeekResponsesWebSearchBody(model, effectiveMessages))
+        } else ChatAdapterPrepareResult.Ready(textOnlyBody(model, effectiveMessages, stream, options))
     }
     override fun decodeStreamingEvent(body: String) = OpenAiCompatibleJsonCodec.decodeStream(body)
     override fun decodeNonStreaming(body: String): ChatAdapterDecodedResult =
         ResponsesWebSearchJsonCodec.decode(body) ?: super.decodeNonStreaming(body)
 }
 
-class ChatProviderAdapters(adapters: Set<ChatProviderAdapter> = setOf(OpenRouterChatAdapter(), QwenChatAdapter(), DeepSeekChatAdapter())) {
+/**
+ * Zhipu BigModel uses the standard OpenAI-compatible Chat Completions envelope.  The requested
+ * GLM preset is exposed as text-only until its per-modality API payload is publicly verified;
+ * this prevents an attachment from being silently reshaped or claimed as sent.
+ */
+class ZhipuChatAdapter : OpenAiCompatibleChatAdapter() {
+    override val providerId = ProviderId.ZHIPU
+
+    protected override fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel) {
+        if (model.modelId == "glm-5.3" || model.modelId == "glm-5.3-flash") {
+            append(",\"thinking\":{\"type\":\"enabled\"},\"reasoning_effort\":\"max\"")
+        }
+    }
+
+    override fun prepare(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): ChatAdapterPrepareResult {
+        val inlineTextFiles = inlineUtf8TextFiles(attachments) ?: return ChatAdapterPrepareResult.AttachmentUnsupported
+        if (attachments.any { it.kind != ChatAttachmentKind.FILE }) return ChatAdapterPrepareResult.AttachmentUnsupported
+        val effectiveMessages = if (inlineTextFiles.isBlank()) messages else messages + ("user" to inlineTextFiles)
+        return ChatAdapterPrepareResult.Ready(textOnlyBody(model, effectiveMessages, stream, options))
+    }
+
+    override fun decodeStreamingEvent(body: String) = OpenAiCompatibleJsonCodec.decodeStream(body)
+}
+
+class ChatProviderAdapters(adapters: Set<ChatProviderAdapter> = setOf(OpenRouterChatAdapter(), QwenChatAdapter(), DeepSeekChatAdapter(), ZhipuChatAdapter())) {
     private val byProvider = adapters.associateBy { it.providerId }
     fun adapter(providerId: ProviderId) = byProvider[providerId]
 }
@@ -305,6 +398,7 @@ private fun StringBuilder.appendRequestOptions(options: ChatRequestOptions, stre
     when (options.webSearchRoute) {
         OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL -> append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"max_results\":5,\"max_total_results\":10}}]")
         OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS -> append(",\"enable_search\":true,\"search_options\":{\"forced_search\":true}")
+        OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS -> append(",\"tools\":[{\"type\":\"web_search\",\"web_search\":{\"enable\":true,\"search_engine\":\"search_std\",\"search_result\":true,\"count\":5,\"content_size\":\"medium\"}}],\"tool_choice\":\"auto\"")
         OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.QWEN_RESPONSES, OfficialWebSearchRoute.DEEPSEEK_RESPONSES -> Unit
     }
     append(",\"stream\":").append(stream)
@@ -315,6 +409,7 @@ private fun requestOptionsSuffix(options: ChatRequestOptions, stream: Boolean): 
     when (options.webSearchRoute) {
         OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL -> append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"max_results\":5,\"max_total_results\":10}}]")
         OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS -> append(",\"enable_search\":true,\"search_options\":{\"forced_search\":true}")
+        OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS -> append(",\"tools\":[{\"type\":\"web_search\",\"web_search\":{\"enable\":true,\"search_engine\":\"search_std\",\"search_result\":true,\"count\":5,\"content_size\":\"medium\"}}],\"tool_choice\":\"auto\"")
         OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.QWEN_RESPONSES, OfficialWebSearchRoute.DEEPSEEK_RESPONSES -> Unit
     }
     append(",\"stream\":").append(stream)
@@ -393,17 +488,23 @@ private fun qwenMultimodalBody(model: ResolvedModel, messages: List<Pair<String,
 }
 
 /** Supported text files are serialized as complete UTF-8 message text, never generic file parts. */
-private fun inlineUtf8TextFiles(attachments: List<ChatAttachment>): String? {
+internal fun inlineUtf8TextFiles(attachments: List<ChatAttachment>): String? {
     val textFiles = attachments.filter { it.kind == ChatAttachmentKind.FILE }
     if (textFiles.isEmpty()) return ""
-    if (textFiles.any { it.mimeType !in INLINE_TEXT_FILE_MIME_TYPES }) return null
     return runCatching {
         buildString {
             textFiles.forEach { attachment ->
+                val bytes = attachment.open().use { it.readBytes() }
+                val text = when {
+                    attachment.mimeType in INLINE_TEXT_FILE_MIME_TYPES -> bytes.decodeStrictUtf8()
+                    attachment.mimeType in OFFICE_OPEN_XML_MIME_TYPES ->
+                        extractOfficeOpenXmlText(bytes, attachment.mimeType)?.text
+                    else -> null
+                } ?: return null
                 append("\n\n以下是文件 ")
                 append(attachment.fileName)
-                append(" 的完整 UTF-8 文本：\n---\n")
-                append(attachment.open().bufferedReader(Charsets.UTF_8).use { it.readText() })
+                append(if (attachment.mimeType in INLINE_TEXT_FILE_MIME_TYPES) " 的完整 UTF-8 文本：\n---\n" else " 的完整可读文本：\n---\n")
+                append(text)
                 append("\n---")
             }
         }
@@ -412,7 +513,16 @@ private fun inlineUtf8TextFiles(attachments: List<ChatAttachment>): String? {
 
 private val INLINE_TEXT_FILE_MIME_TYPES = setOf(
     "text/plain", "text/markdown", "application/json", "text/csv",
+    "application/xml", "text/xml", "application/x-yaml", "text/yaml", "text/html",
 )
+
+private fun ByteArray.decodeStrictUtf8(): String? = runCatching {
+    Charsets.UTF_8.newDecoder()
+        .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+        .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+        .decode(java.nio.ByteBuffer.wrap(this))
+        .toString()
+}.getOrNull()
 
 private fun ChatAttachment.audioFormat(): String = when (mimeType) {
     "audio/mpeg" -> "mp3"
@@ -422,21 +532,32 @@ private fun ChatAttachment.audioFormat(): String = when (mimeType) {
 }
 
 /** Qwen Responses uses its own built-in web_search tool and returns sources in output items. */
-private fun qwenResponsesWebSearchBody(model: ResolvedModel, messages: List<Pair<String, String>>): String = buildString {
+private fun qwenResponsesWebSearchBody(model: ResolvedModel, messages: List<Pair<String, String>>, stream: Boolean): String = buildString {
     append("{\"model\":\"").append(model.modelId.escapeJson()).append("\",\"input\":[")
     messages.forEachIndexed { index, (role, content) ->
         if (index > 0) append(',')
         append("{\"role\":\"").append(role.escapeJson()).append("\",\"content\":[{\"type\":\"input_text\",\"text\":\"")
         append(content.escapeJson()).append("\"}]}")
     }
-    // Qwen3.8-Max thinks by default; DashScope rejects tool_choice=required in that mode.
-    // Declaring the built-in tool preserves real web-search access while the provider chooses it.
-    append("],\"tools\":[{\"type\":\"web_search\"}],\"stream\":false")
-    model.maxOutputTokens?.let { append(",\"max_output_tokens\":").append(it) }
+    // DashScope defaults Qwen3.8-Max Responses to xhigh. Explicit low reasoning retains useful
+    // analysis while bounding the provider-defined reasoning budget to 4,096 tokens. The total
+    // completion ceiling covers both hidden reasoning and the final answer. Other Qwen presets
+    // keep their established contract.
+    append(']')
+    if (model.modelId == QWEN_3_8_MAX_MODEL_ID) append(",\"reasoning\":{\"effort\":\"low\"}")
+    append(",\"tools\":[{\"type\":\"web_search\"}],\"store\":false,\"stream\":").append(stream)
+    val outputLimit = if (model.modelId == QWEN_3_8_MAX_MODEL_ID) qwen38RequestOutputLimit(model) else model.maxOutputTokens
+    outputLimit?.let { append(",\"max_output_tokens\":").append(it) }
     append('}')
 }
 
-/** DeepSeek V4 Pro's native Responses web_search is server-executed and must be forced for an
+internal const val QWEN_3_8_MAX_MODEL_ID = "qwen3.8-max"
+private const val QWEN_3_8_MAX_REQUEST_OUTPUT_TOKENS = 16_384L
+private fun qwen38RequestOutputLimit(model: ResolvedModel): Long =
+    (model.maxOutputTokens ?: QWEN_3_8_MAX_REQUEST_OUTPUT_TOKENS)
+        .coerceAtMost(QWEN_3_8_MAX_REQUEST_OUTPUT_TOKENS)
+
+/** DeepSeek V4's native Responses web_search is server-executed and must be forced for an
  * explicit real-time request. This is intentionally a DeepSeek /responses request, never a
  * relay of DeepSeek's model ID through another provider. */
 private fun deepSeekResponsesWebSearchBody(model: ResolvedModel, messages: List<Pair<String, String>>): String = buildString {
@@ -455,24 +576,35 @@ private fun deepSeekResponsesWebSearchBody(model: ResolvedModel, messages: List<
 private object ResponsesWebSearchJsonCodec {
     fun decode(raw: String): ChatAdapterDecodedResult? = runCatching {
         val root = StrictJson.parse(raw).objectValue() ?: return null
+        val outputItems = root.arrayValue("output").orEmpty().mapNotNull { it.objectValue() }
+        // Responses envelopes contain distinct reasoning/search/message items.  Only the
+        // assistant message's output_text is an answer.  Flattening every `content.text` here
+        // previously leaked DeepSeek's English planning trace into the visible reply.
         val text = root.stringValue("output_text")?.takeIf(String::isNotBlank)
-            ?: root.arrayValue("output")
-                ?.asSequence()
-                ?.mapNotNull { it.objectValue() }
-                ?.flatMap { item -> item.arrayValue("content").orEmpty().asSequence() }
-                ?.mapNotNull { it.objectValue()?.stringValue("text") }
-                ?.joinToString("")
-                ?.takeIf(String::isNotBlank)
+            ?: outputItems.asSequence()
+                .filter { it.stringValue("type") == "message" }
+                .flatMap { item -> item.arrayValue("content").orEmpty().asSequence() }
+                .mapNotNull { it.objectValue() }
+                .filter { it.stringValue("type") in setOf("output_text", "text") }
+                .mapNotNull { it.stringValue("text") }
+                .joinToString("")
+                .takeIf(String::isNotBlank)
             // A normal Qwen/DeepSeek Chat Completions reply has `choices`, not `output_text`.
             // This is an unsupported Responses shape, not a malformed ordinary chat response;
             // return null so the provider adapter can fall back to its normal decoder.
             ?: return null
         val usage = root.objectValue("usage")
         ChatAdapterDecodedResult.Text(
-            text.cleanChatReply() ?: return ChatAdapterDecodedResult.EmptyOrMalformed,
-            usage?.long("input_tokens", "prompt_tokens"), usage?.long("output_tokens", "completion_tokens"),
-            webSources = root.arrayValue("output").orEmpty().asSequence()
-                .mapNotNull { it.objectValue() }
+            text = ProviderWebSearchToolTraceText.visibleText(text).cleanChatReply()
+                ?: return ChatAdapterDecodedResult.EmptyOrMalformed,
+            inputTokens = usage?.long("input_tokens", "prompt_tokens"),
+            outputTokens = usage?.long("output_tokens", "completion_tokens"),
+            reasoning = outputItems.asSequence()
+                .filter { it.stringValue("type") in setOf("reasoning", "analysis") }
+                .flatMap { item -> item.reasoningFragments().asSequence() }
+                .joinToString("\n")
+                .cleanChatReply(),
+            webSources = outputItems.asSequence()
                 .filter { it.stringValue("type") == "web_search_call" }
                 .flatMap { item -> item.objectValue("action")?.arrayValue("sources").orEmpty().asSequence() }
                 .mapNotNull { raw -> raw.objectValue()?.let { source ->
@@ -483,8 +615,81 @@ private object ResponsesWebSearchJsonCodec {
                 .toList(),
             cachedInputTokens = usage?.objectValue("input_tokens_details")?.long("cached_tokens")
                 ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens"),
+            reasoningTokens = usage?.reasoningTokens(),
         )
     }.getOrNull()
+
+    @Suppress("UNCHECKED_CAST") private fun Any?.objectValue(): Map<String, Any?>? = this as? Map<String, Any?>
+    private fun Map<String, Any?>.objectValue(key: String): Map<String, Any?>? = this[key].objectValue()
+    @Suppress("UNCHECKED_CAST") private fun Map<String, Any?>.arrayValue(key: String): List<Any?>? = this[key] as? List<Any?>
+    private fun Map<String, Any?>.stringValue(key: String): String? = this[key] as? String
+    private fun Map<String, Any?>.reasoningFragments(): List<String> = buildList {
+        listOfNotNull(stringValue("reasoning"), stringValue("reasoning_content"), stringValue("summary"), stringValue("text"))
+            .filter(String::isNotBlank)
+            .forEach(::add)
+        arrayValue("summary").orEmpty().forEach { item -> item.objectValue()?.stringValue("text")?.takeIf(String::isNotBlank)?.let(::add) }
+        arrayValue("content").orEmpty().forEach { item ->
+            item.objectValue()?.takeIf { it.stringValue("type") in setOf("reasoning", "reasoning_text", "analysis") }
+                ?.stringValue("text")?.takeIf(String::isNotBlank)?.let(::add)
+        }
+    }
+    private fun Map<String, Any?>.long(vararg keys: String): Long? = keys.firstNotNullOfOrNull { key ->
+        when (val value = this[key]) {
+            is java.math.BigDecimal -> runCatching { value.longValueExact() }.getOrNull()
+            is Number -> value.toLong()
+            else -> null
+        }
+    }
+    private fun Map<String, Any?>.reasoningTokens(): Long? =
+        objectValue("output_tokens_details")?.long("reasoning_tokens")
+            ?: objectValue("completion_tokens_details")?.long("reasoning_tokens")
+}
+
+/**
+ * DashScope Responses streams semantic events rather than Chat Completions chunks. Only final
+ * answer deltas and reasoning deltas become message content; search/tool events remain protocol
+ * metadata. A completed envelope contributes usage and provider-owned public source URLs.
+ */
+private object ResponsesSseJsonCodec {
+    fun decode(raw: String): ProviderSseEvent? = runCatching {
+        val root = StrictJson.parse(raw).objectValue() ?: return null
+        when (root.stringValue("type")) {
+            "response.output_text.delta" -> ProviderSseEvent(text = root.stringValue("delta")?.takeIf(String::isNotEmpty))
+            "response.reasoning_text.delta" -> ProviderSseEvent(reasoning = root.stringValue("delta")?.takeIf(String::isNotEmpty))
+            "response.completed" -> root.terminalEvent(ProviderStreamTerminal.COMPLETED)
+            "response.incomplete" -> root.terminalEvent(ProviderStreamTerminal.INCOMPLETE)
+            "response.failed" -> root.terminalEvent(ProviderStreamTerminal.FAILED)
+            else -> null
+        }
+    }.getOrNull()
+
+    private fun Map<String, Any?>.terminalEvent(terminal: ProviderStreamTerminal): ProviderSseEvent {
+        val response = objectValue("response") ?: this
+        val usage = response.objectValue("usage")
+        return ProviderSseEvent(
+            inputTokens = usage?.long("input_tokens", "prompt_tokens"),
+            outputTokens = usage?.long("output_tokens", "completion_tokens"),
+            cachedInputTokens = usage?.objectValue("input_tokens_details")?.long("cached_tokens")
+                ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens"),
+            reasoningTokens = usage?.reasoningTokens(),
+            webSources = response.webSources(),
+            terminal = terminal,
+        )
+    }
+
+    private fun Map<String, Any?>.webSources(): List<ProviderWebSource> =
+        arrayValue("output").orEmpty().asSequence()
+            .mapNotNull { it.objectValue() }
+            .filter { it.stringValue("type") == "web_search_call" }
+            .flatMap { item -> item.objectValue("action")?.arrayValue("sources").orEmpty().asSequence() }
+            .mapNotNull { raw -> raw.objectValue()?.let { source ->
+                source.stringValue("url")
+                    ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+                    ?.let { url -> ProviderWebSource(url, source.stringValue("title") ?: source.stringValue("name")) }
+            } }
+            .distinctBy(ProviderWebSource::url)
+            .take(10)
+            .toList()
 
     @Suppress("UNCHECKED_CAST") private fun Any?.objectValue(): Map<String, Any?>? = this as? Map<String, Any?>
     private fun Map<String, Any?>.objectValue(key: String): Map<String, Any?>? = this[key].objectValue()
@@ -497,11 +702,14 @@ private object ResponsesWebSearchJsonCodec {
             else -> null
         }
     }
+    private fun Map<String, Any?>.reasoningTokens(): Long? =
+        objectValue("output_tokens_details")?.long("reasoning_tokens")
+            ?: objectValue("completion_tokens_details")?.long("reasoning_tokens")
 }
 
 /** OpenAI-compatible JSON projection; it intentionally has no OpenRouter-specific dependency. */
 private object OpenAiCompatibleJsonCodec {
-    data class Decoded(val text: String, val reasoning: String?, val toolCalls: List<ChatToolCall>, val toolCallEncountered: Boolean, val inputTokens: Long?, val outputTokens: Long?, val webSources: List<ProviderWebSource>, val reportedCostUsdMicros: Long?, val cachedInputTokens: Long?)
+    data class Decoded(val text: String, val reasoning: String?, val toolCalls: List<ChatToolCall>, val toolCallEncountered: Boolean, val inputTokens: Long?, val outputTokens: Long?, val webSources: List<ProviderWebSource>, val reportedCostUsdMicros: Long?, val cachedInputTokens: Long?, val reasoningTokens: Long?)
 
     fun decode(raw: String): Decoded? = runCatching {
         val root = StrictJson.parse(raw).objectValue() ?: return null
@@ -516,15 +724,11 @@ private object OpenAiCompatibleJsonCodec {
         Decoded(
             text, reasoning, tools, rawTools?.isNotEmpty() == true,
             usage?.long("prompt_tokens", "input_tokens"), usage?.long("completion_tokens", "output_tokens"),
-            message.arrayValue("annotations").orEmpty().asSequence()
-                .mapNotNull { it.objectValue()?.objectValue("url_citation") }
-                .mapNotNull { citation -> citation.stringValue("url")?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
-                    ?.let { url -> ProviderWebSource(url, citation.stringValue("title")) } }
-                .distinctBy(ProviderWebSource::url)
-                .toList(),
+            root.webSources(message),
             usage?.decimalMicros("cost"),
             usage?.objectValue("input_tokens_details")?.long("cached_tokens")
                 ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens"),
+            usage?.reasoningTokens(),
         )
     }.getOrNull()
 
@@ -543,8 +747,9 @@ private object OpenAiCompatibleJsonCodec {
         val cost = usage?.decimalMicros("cost")
         val cachedInput = usage?.objectValue("input_tokens_details")?.long("cached_tokens")
             ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens")
-        if (text == null && reasoning == null && tools.isEmpty() && input == null && output == null && cost == null) null
-        else ProviderSseEvent(text, reasoning, input, output, reportedCostUsdMicros = cost, toolCallEncountered = rawTools?.isNotEmpty() == true, cachedInputTokens = cachedInput)
+        val reasoningTokens = usage?.reasoningTokens()
+        if (text == null && reasoning == null && tools.isEmpty() && input == null && output == null && cost == null && reasoningTokens == null) null
+        else ProviderSseEvent(text, reasoning, input, output, reportedCostUsdMicros = cost, toolCallEncountered = rawTools?.isNotEmpty() == true, cachedInputTokens = cachedInput, reasoningTokens = reasoningTokens)
     }.getOrNull()
 
     private fun Map<String, Any?>.contentText(): String? = when (val content = this["content"]) {
@@ -556,6 +761,25 @@ private object OpenAiCompatibleJsonCodec {
             }
         }.takeIf(String::isNotBlank)
         else -> null
+    }
+
+    /** Zhipu returns web-search sources at the envelope level; OpenRouter uses annotations. */
+    private fun Map<String, Any?>.webSources(message: Map<String, Any?>): List<ProviderWebSource> = buildList {
+        message.arrayValue("annotations").orEmpty().forEach { raw ->
+            raw.objectValue()?.objectValue("url_citation")?.asProviderWebSource()?.let(::add)
+        }
+        arrayValue("web_search").orEmpty().forEach { raw ->
+            val item = raw.objectValue() ?: return@forEach
+            item.asProviderWebSource()?.let(::add)
+            listOf("search_result", "search_results", "results", "sources").forEach { key ->
+                item.arrayValue(key).orEmpty().forEach { candidate -> candidate.objectValue()?.asProviderWebSource()?.let(::add) }
+            }
+        }
+    }.distinctBy(ProviderWebSource::url).take(10)
+
+    private fun Map<String, Any?>.asProviderWebSource(): ProviderWebSource? {
+        val url = (stringValue("url") ?: stringValue("link"))?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return null
+        return ProviderWebSource(url, stringValue("title") ?: stringValue("name"))
     }
 
     private fun List<Any?>?.toolCalls(): List<ChatToolCall> = buildList {
@@ -585,6 +809,10 @@ private object OpenAiCompatibleJsonCodec {
         }.getOrNull()
         else -> null
     }
+
+    private fun Map<String, Any?>.reasoningTokens(): Long? =
+        objectValue("output_tokens_details")?.long("reasoning_tokens")
+            ?: objectValue("completion_tokens_details")?.long("reasoning_tokens")
 
     @Suppress("UNCHECKED_CAST") private fun Any?.objectValue(): Map<String, Any?>? = this as? Map<String, Any?>
     private fun Map<String, Any?>.objectValue(key: String): Map<String, Any?>? = this[key].objectValue()

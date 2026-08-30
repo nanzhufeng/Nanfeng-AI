@@ -92,6 +92,9 @@ class P5DLocalBackupRestoreContractsTest {
             NanfengAiDatabase.MIGRATION_57_58,
             NanfengAiDatabase.MIGRATION_58_59,
             NanfengAiDatabase.MIGRATION_59_60,
+            NanfengAiDatabase.MIGRATION_60_61,
+            NanfengAiDatabase.MIGRATION_61_62,
+            NanfengAiDatabase.MIGRATION_62_63,
         )
         val context = ApplicationProvider.getApplicationContext<Context>(); context.deleteDatabase("nanfeng-ai.db")
         val database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, "nanfeng-ai.db").build()

@@ -44,7 +44,7 @@ fun ContextBodySelectionDialog(state: ContextBodySelectionUiState, viewModel: Co
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
                         Text("本次 Context 正文选择", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                        Text("所有项默认关闭；只作本机瞬时预览，不会发送给 Provider。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+                        Text("默认不选择，仅在本机预览。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                     }
                     IconButton(onClick = viewModel::dismissDialog) { Icon(Icons.Rounded.Close, contentDescription = "关闭 Context 选择") }
                 }
@@ -90,7 +90,7 @@ fun ContextBodySelectionDialog(state: ContextBodySelectionUiState, viewModel: Co
                                 true,
                             ) { viewModel.toggleLocalActionTrace(candidate.selectionId) }
                         }
-                        Text("编辑用户消息和切分支缺少 append-only 动作谱系，已排除；不显示正文、模型、Provider、Token、费用、附件、URI、路径、命令或日志。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+                        Text("不支持的消息动作已排除。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                         state.localActionTracePreview?.let { preview ->
                             Text("LOCAL_L3_METADATA · ${preview.format} · ${preview.entries.size} 条", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                             preview.entries.forEach { entry ->
@@ -115,7 +115,7 @@ fun ContextBodySelectionDialog(state: ContextBodySelectionUiState, viewModel: Co
                     }
                     state.preview?.let { preview ->
                         Text("EXTRACTIVE_LOCAL · p4j-extractive-v1 · ${preview.compression.entries.size} 条", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text("这是确定性前后原文抽取，不是语义摘要；不会构造 Prompt 或发送给 Provider。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+                        Text("这是本地原文抽取预览。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                         if (preview.compression.entries.isEmpty()) Text("尚未选择来源，因此零条压缩结果。", color = SecondaryText)
                         preview.compression.entries.forEach { entry ->
                             Surface(color = NeutralAssistantSurface, shape = CardShape, modifier = Modifier.fillMaxWidth()) {

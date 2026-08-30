@@ -31,7 +31,7 @@ class CurrentRuntimeContextContractTest {
         assertTrue(conversation.contains("ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md"))
         assertTrue(agents.contains("ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md"))
         assertTrue(router.contains("includeRelevantMemory = experience.memoryEnabled"))
-        assertTrue(router.contains("includeRelevantKnowledge = experience.librarySearchEnabled"))
+        assertTrue(router.contains("includeRelevantKnowledge = experience.historyLibraryEnabled"))
         assertTrue(broker.contains("const val MEMORY_LIMIT = 6"))
         assertTrue(broker.contains("const val KNOWLEDGE_LIMIT = 8"))
         assertTrue(experience.contains("职业或角色："))

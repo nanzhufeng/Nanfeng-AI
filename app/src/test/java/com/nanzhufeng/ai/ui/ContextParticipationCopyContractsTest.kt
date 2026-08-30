@@ -17,7 +17,7 @@ class ContextParticipationCopyContractsTest {
             assertFalse(source.contains("不会自动加入对话上下文"))
         }
         assertTrue(app.contains("启用记忆后会按当前问题自动检索"))
-        assertTrue(memory.contains("启用记忆后，会按当前问题自动检索相关内容加入对话上下文。"))
+        assertTrue(memory.contains("启用后，相关记忆可用于回答。"))
         assertTrue(knowledge.contains("开启资料库搜索后，相关内容会按当前问题自动检索并加入对话上下文。"))
     }
 }

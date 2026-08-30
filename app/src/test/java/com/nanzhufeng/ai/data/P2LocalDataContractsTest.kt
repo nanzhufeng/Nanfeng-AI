@@ -39,6 +39,7 @@ import com.nanzhufeng.ai.domain.SaveKnowledgeItemUseCase
 import com.nanzhufeng.ai.domain.SaveKnowledgeResult
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -104,8 +105,18 @@ class P2LocalDataContractsTest {
 
         val opened = attachments.openVerified(imported.attachment) as AttachmentOpenResult.Opened
         val streamed = opened.open().use { it.readBytes() }
+        val reopened = attachments.openVerified(imported.attachment) as AttachmentOpenResult.Opened
+        val streamedAgain = reopened.open().use { it.readBytes() }
         assertEquals(sourceBytes.size.toLong(), opened.byteCount)
         assertArrayEquals(sourceBytes, streamed)
+        assertArrayEquals(sourceBytes, streamedAgain)
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val privateCopy = File(context.filesDir, imported.attachment.reference)
+        val originalTimestamp = privateCopy.lastModified()
+        privateCopy.writeBytes(sourceBytes.copyOf().also { it[0] = (it[0].toInt() xor 0x01).toByte() })
+        assertTrue(privateCopy.setLastModified(originalTimestamp + 2_000L))
+        assertTrue(attachments.openVerified(imported.attachment) is AttachmentOpenResult.Rejected)
 
         assertTrue(attachments.deletePrivateCopy(imported.attachment))
         assertTrue(attachments.openVerified(imported.attachment) is AttachmentOpenResult.Rejected)

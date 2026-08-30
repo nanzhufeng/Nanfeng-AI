@@ -11,7 +11,14 @@ class VerifiedAccountHandle internal constructor(internal val opaqueId: String) 
 enum class P7BSyncState {
     SIGNED_OUT, AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION, DIRECTION_REQUIRED, READY, SYNCING, CONFLICT, FAILED, SIGNED_OUT_KEEP_LOCAL,
 }
-enum class P7BDirectionFact { EMPTY_LOCAL_EMPTY_REMOTE, EMPTY_LOCAL_REMOTE_PRESENT, LOCAL_PRESENT_EMPTY_REMOTE, LOCAL_PRESENT_REMOTE_PRESENT }
+enum class P7BDirectionFact {
+    EMPTY_LOCAL_EMPTY_REMOTE,
+    EMPTY_LOCAL_REMOTE_PRESENT,
+    LOCAL_PRESENT_EMPTY_REMOTE,
+    LOCAL_PRESENT_REMOTE_PRESENT,
+    /** A prior local receipt exactly matches the remote revision and ciphertext hash. */
+    LOCAL_PRESENT_REMOTE_MATCHED,
+}
 data class P7BAccountMetadata(
     val accountRef: String,
     val state: P7BSyncState,
@@ -39,6 +46,12 @@ interface P7BKeyVault {
 
 /** P7-B has no scheduler or cloud gateway: every transition is local and deliberately guarded. */
 class P7BAccountStateMachine(private val store: P7BMetadataStore, private val keyVault: P7BKeyVault) {
+    /** The caller must have completed Google -> Supabase verification before using this bridge. */
+    fun authenticateVerifiedOpaqueId(intentId: String, expectedRevision: Long?, opaqueId: String): P7BIntentReceipt =
+        authenticate(intentId, expectedRevision, VerifiedAccountHandle.fromVerifiedAuthentication(opaqueId))
+
+    fun metadata(accountRef: String): P7BAccountMetadata? = store.account(accountRef)
+
     fun authenticate(intentId: String, expectedRevision: Long?, verified: VerifiedAccountHandle): P7BIntentReceipt = store.transaction {
         store.receipt(intentId)?.let { return@transaction it }
         val ref = accountRef(verified.opaqueId); val prior = store.account(ref)

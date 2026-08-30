@@ -24,6 +24,14 @@ enum class ConversationSearchCategory(val label: String) {
     FILE("文件"),
 }
 
+/** Shared category owner for search indexing and every exact attachment-to-search route. */
+fun conversationAttachmentSearchCategory(mimeType: String): ConversationSearchCategory = when {
+    mimeType in CONVERSATION_ALLOWED_IMAGE_MIME_TYPES -> ConversationSearchCategory.IMAGE
+    mimeType in CONVERSATION_ALLOWED_VIDEO_MIME_TYPES -> ConversationSearchCategory.VIDEO
+    mimeType in CONVERSATION_ALLOWED_AUDIO_MIME_TYPES -> ConversationSearchCategory.AUDIO
+    else -> ConversationSearchCategory.FILE
+}
+
 data class ConversationManagementIntent(
     val id: ConversationManagementIntentId,
     val conversationId: ConversationId,
@@ -177,13 +185,14 @@ class ConversationSearchProjection(private val management: ConversationManagemen
     fun search(snapshots: List<ConversationSnapshot>, query: String, scope: ConversationListScope): List<ConversationSearchHit> {
         val normalized = query.trim().lowercase(Locale.ROOT)
         if (normalized.isEmpty()) return emptyList()
+        val conversationsById = snapshots.associate { it.conversation.id to it.conversation }
         return snapshots.asSequence()
             .filter { snapshotMatchesScope(it, scope) }
             .flatMap { snapshot -> hitsFor(snapshot, normalized).asSequence() }
             .sortedWith(compareByDescending<ConversationSearchHit> { it.titleMatch }
                 .thenComparator { a, b -> management.listOrder(scope).compare(
-                    snapshots.first { it.conversation.id == a.conversationId }.conversation,
-                    snapshots.first { it.conversation.id == b.conversationId }.conversation,
+                    conversationsById.getValue(a.conversationId),
+                    conversationsById.getValue(b.conversationId),
                 ) }
                 .thenBy { it.messageNodeId?.value ?: "" })
             .take(MAX_RESULTS)
@@ -222,8 +231,13 @@ class ManageConversationUseCase(private val domain: ConversationManagementDomain
 }
 
 class SearchConversationsUseCase(private val repository: ConversationSearchRepository, private val projection: ConversationSearchProjection) {
-    fun browse(scope: ConversationListScope): List<ConversationSearchHit> =
-        projection.browse(repository.snapshotsForSearch(), scope)
+    fun browse(scope: ConversationListScope): List<ConversationSearchHit> {
+        val hits = (repository as? OptimizedConversationSearchRepository)?.browseConversationHits(scope)
+            ?: projection.browse(repository.snapshotsForSearch(), scope)
+        val sourceReader = repository as? ImportedConversationProvenanceReader
+        val importSources = sourceReader?.importSources(hits.map(ConversationSearchHit::conversationId)).orEmpty()
+        return hits.map { hit -> hit.copy(importSource = importSources[hit.conversationId]) }
+    }
 
     fun execute(query: String, scope: ConversationListScope): List<ConversationSearchHit> {
         val normalized = query.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
@@ -238,13 +252,34 @@ class SearchConversationsUseCase(private val repository: ConversationSearchRepos
         // Older app versions may leave a non-empty but partial acceleration index. Merge the
         // current persisted path so a valid hit never disappears merely because another row
         // still exists in that index.
-        val currentPathHits = projection.search(repository.snapshotsForSearch(), query, scope)
+        val currentPathHits = (repository as? OptimizedConversationSearchRepository)?.searchCurrentPathHits(query, scope)
+            ?: projection.search(repository.snapshotsForSearch(), query, scope)
         val sourceReader = repository as? ImportedConversationProvenanceReader
-        return (indexedHits + currentPathHits)
+        val hits = (indexedHits + currentPathHits)
             .distinctBy { "${it.conversationId.value}:${it.messageNodeId?.value.orEmpty()}" }
             .take(50)
-            .map { hit -> hit.copy(importSource = sourceReader?.importSource(hit.conversationId)) }
+        val importSources = sourceReader?.importSources(hits.map(ConversationSearchHit::conversationId)).orEmpty()
+        return hits.map { hit -> hit.copy(importSource = importSources[hit.conversationId]) }
     }
+}
+
+/** Search may match a message outside the selected branch of an imported ChatGPT tree. */
+fun conversationSearchLeafForMessage(snapshot: ConversationSnapshot, messageId: MessageNodeId): MessageNodeId? {
+    val byId = snapshot.nodes.associateBy(MessageNode::id)
+    if (messageId !in byId) return null
+    val parentIds = snapshot.nodes.mapNotNull(MessageNode::parentMessageId).toSet()
+    fun containsMessage(leaf: MessageNode): Boolean {
+        var current: MessageNode? = leaf
+        while (current != null) {
+            if (current.id == messageId) return true
+            current = current.parentMessageId?.let(byId::get)
+        }
+        return false
+    }
+    return snapshot.nodes.asSequence()
+        .filter { it.id !in parentIds && containsMessage(it) }
+        .maxWithOrNull(compareBy<MessageNode> { it.createdAt }.thenBy { it.id.value })
+        ?.id
 }
 
 /**
@@ -256,12 +291,14 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
     fun browse(
         category: ConversationSearchCategory,
         scope: ConversationListScope,
-    ): List<ConversationAttachmentSearchHit> = repository.snapshotsForSearch().asSequence()
+    ): List<ConversationAttachmentSearchHit> = (repository as? OptimizedConversationSearchRepository)
+        ?.browseAttachmentHits(category, scope)
+        ?: repository.snapshotsForSearch().asSequence()
         .filter { snapshot -> snapshotMatchesScope(snapshot, scope) }
         .flatMap { snapshot ->
             MessageTree(snapshot.conversation, snapshot.nodes).contextPath().asSequence()
                 .flatMap { node -> node.content.filterIsInstance<ContentBlock.Attachment>().asSequence().map { node to it.attachment } }
-                .filter { (_, attachment) -> category == ConversationSearchCategory.ALL || categoryFor(attachment) == category }
+                .filter { (_, attachment) -> category == ConversationSearchCategory.ALL || conversationAttachmentSearchCategory(attachment.mimeType) == category }
                 .map { (node, attachment) -> ConversationAttachmentSearchHit(snapshot.conversation.id, node.id, snapshot.conversation.title, attachment, node.createdAt.toEpochMilli()) }
         }
         .distinctBy { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }
@@ -275,6 +312,9 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
         if (category == ConversationSearchCategory.TEXT) return emptyList()
         val normalized = query.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
         if (normalized.isBlank()) return emptyList()
+        (repository as? OptimizedConversationSearchRepository)?.let { optimized ->
+            return optimized.searchAttachmentHits(normalized, category, scope)
+        }
         return repository.snapshotsForSearch().asSequence()
             .filter { snapshot -> snapshotMatchesScope(snapshot, scope) }
             .flatMap { snapshot ->
@@ -283,7 +323,7 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
                         val messageText = node.content.filterIsInstance<ContentBlock.Text>().joinToString("\n") { it.text }
                         node.content.filterIsInstance<ContentBlock.Attachment>().asSequence().map { Triple(node, it.attachment, messageText) }
                     }
-                    .filter { (_, attachment, _) -> category == ConversationSearchCategory.ALL || categoryFor(attachment) == category }
+                    .filter { (_, attachment, _) -> category == ConversationSearchCategory.ALL || conversationAttachmentSearchCategory(attachment.mimeType) == category }
                     .filter { (_, attachment, messageText) ->
                         snapshot.conversation.title.lowercase(Locale.ROOT).contains(normalized) ||
                             attachment.displayName.orEmpty().lowercase(Locale.ROOT).contains(normalized) ||
@@ -319,12 +359,6 @@ class SearchConversationAttachmentsUseCase(private val repository: ConversationS
         ConversationListScope.ALL -> true
     }
 
-    private fun categoryFor(attachment: ConversationAttachmentReference): ConversationSearchCategory = when {
-        attachment.mimeType in CONVERSATION_ALLOWED_IMAGE_MIME_TYPES -> ConversationSearchCategory.IMAGE
-        attachment.mimeType in CONVERSATION_ALLOWED_VIDEO_MIME_TYPES -> ConversationSearchCategory.VIDEO
-        attachment.mimeType in CONVERSATION_ALLOWED_AUDIO_MIME_TYPES -> ConversationSearchCategory.AUDIO
-        else -> ConversationSearchCategory.FILE
-    }
 }
 
 private fun ConversationManagementIntent.fingerprint(): String = MessageDigest.getInstance("SHA-256")

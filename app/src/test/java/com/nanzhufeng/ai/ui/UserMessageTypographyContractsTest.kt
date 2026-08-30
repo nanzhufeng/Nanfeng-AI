@@ -10,7 +10,7 @@ class UserMessageTypographyContractsTest {
 
     @Test fun `user bubbles have a separate restrained Markdown hierarchy`() {
         val userTypography = source.substring(source.indexOf("private val UserBubbleTypography"), source.indexOf("private fun markdownInlineText"))
-        assertTrue(source.contains("val typography = if (assistantDocument) AssistantDocumentTypography else UserBubbleTypography"))
+        assertTrue(source.contains("val typography = typographyOverride ?: if (assistantDocument) AssistantDocumentTypography else UserBubbleTypography"))
         for (token in listOf(
             "headingOne = 18.sp", "headingTwo = 17.sp", "headingMinor = 16.sp",
             "body = 15.sp", "bodyLineHeight = 23.sp", "note = 13.sp", "noteLineHeight = 19.sp",

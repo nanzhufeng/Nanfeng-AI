@@ -50,7 +50,7 @@ class P3EConversationManagementExportContractsTest {
         assertTrue(management.execute(intent.copy(id = ConversationManagementIntentId("long"), title = "😀".repeat(121))) is ConversationManagementResult.Rejected)
     }
 
-    @Test fun `pin archive ordering and search current-path isolation survive rebuild`() {
+    @Test fun `pin archive ordering and complete branch search survive rebuild`() {
         val a = repository.save(tree.append(tree.create("Alpha"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("visible English markdown `code`")))))
         val b = repository.save(tree.create("中文会话"))
         management.execute(ConversationManagementIntent(ConversationManagementIntentId("pin"), b.conversation.id, ConversationManagementAction.PIN, b.conversation.revision))
@@ -65,7 +65,9 @@ class P3EConversationManagementExportContractsTest {
         repository.save(revised)
         val search = SearchConversationsUseCase(repository, ConversationSearchProjection(ConversationManagementDomain(clock)))
         assertTrue(search.execute("当前路径", ConversationListScope.ACTIVE).any { it.conversationId == revised.conversation.id })
-        assertFalse(search.execute("needle", ConversationListScope.ACTIVE).any { it.conversationId == revised.conversation.id })
+        val hiddenBranchHit = search.execute("needle", ConversationListScope.ACTIVE).single { it.conversationId == revised.conversation.id }
+        assertEquals(answered.conversation.currentLeafMessageId, hiddenBranchHit.messageNodeId)
+        assertEquals(answered.conversation.currentLeafMessageId, conversationSearchLeafForMessage(revised, requireNotNull(hiddenBranchHit.messageNodeId)))
         assertTrue(search.execute("alpha", ConversationListScope.ARCHIVED).any { it.conversationId == a.conversation.id })
     }
 

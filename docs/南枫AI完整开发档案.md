@@ -1,24 +1,24 @@
 # 南枫 AI 完整开发档案
 
-> 复盘日期：2026-08-28；上一代码基线：`da20412`，本档案随当前 checkpoint 增量更新，最新 commit 以 `git log -1` 读回为准。本档案只汇总由当前源码、配置、测试产物、当前合同或 Git 记录支撑的事实，不把历史计划、安装记录或单元测试写成真实服务闭环。
+> 复盘日期：2026-08-28；稳定代码基线：`c1c9ae06615f8df4d9c94f01579963f4e2bb45d6`（`feat: make ZIP asset recovery resumable`）。用户已明确要求排除同仓库正在进行的后续任务及其未提交工作树；本档案不把这些 WIP 当成当前完成事实。本档案只汇总由稳定提交、配置、测试记录、当前合同或 Git 记录支撑的事实，不把历史计划、安装记录或单元测试写成真实服务闭环。
 >
-> 当前事实读取顺序：`AGENTS.md` → 当前源码 → [CURRENT_HANDOFF.md](CURRENT_HANDOFF.md) 顶部 → 三份当前合同 → 领域合同与历史证据。会话／搜索、设置、普通聊天上下文分别以 [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md) 为唯一正文。
+> 本档案事实读取顺序：`AGENTS.md` → `c1c9ae0` 稳定源码／配置／测试 → [CURRENT_HANDOFF.md](CURRENT_HANDOFF.md) 顶部 → 三份当前合同 → 领域合同与历史证据。会话／搜索、设置、普通聊天上下文分别以 [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md) 为唯一正文；被排除任务完成后须另建增量更新，不能悄悄混入本次结论。
 
-## 0. 2026-08-28 当前 checkpoint 增量
+## 0. 2026-08-28 稳定 checkpoint 增量
 
 - ChatGPT 累积 ZIP 已形成从严格预检、source-tree 去重合并、官方附件映射、Room Message Tree 挂载到普通搜索／预览链路的单一数据流。旧包→新包真实验收为 `784` 个去重对话；新包官方可归属附件完整 Room 验收为 `853/853`，两项都确认 `skipped=0, failures=0`。
 - 最后一个附件不是字节、catalog 或数据库丢失，而是文本 parser 剪枝后把仍有后代的可渲染消息当成当前叶，触发 `当前分支必须指向叶消息`。owner 现在选择官方路径下的合法后代叶，并显式统计会话失败，不再静默降级。
-- Room Schema 当前为 `55`，`MIGRATION_54_55` 在产品注册与迁移契约中都有证据。导入 JSON 和 ZIP 保持两张独立大卡，各自结果入口始终可见。
-- 当前完整 JVM 是 `815 tests / 60 failures / 3 skipped / 0 errors`，不是全绿。3 个 skip 为需真实 ZIP 环境变量的 opt-in 测试，均已另行真包运行通过；60 个失败依然是后续回归债务。
+- P1 稳定基线把附件恢复从页面生命周期迁到可续跑的后台任务：Room Schema 为 `56`，`MIGRATION_55_56` 新增不含正文的恢复任务表；任务保存状态、进度、失败类型和按会话 checkpoint，退出页面后不再依赖 ViewModel 协程存活。导入 JSON 和 ZIP 仍保持两张独立大卡，各自结果入口始终可见。
+- `af218e1` checkpoint 时完整 JVM 是 `815 / 60 failures / 3 skipped / 0 errors`；入口同步阶段为 `815 / 59 / 3 / 0`。`6d68ba7` 将标准套件恢复为 `815 / 0 / 3 / 0`；P1 `c1c9ae0` 增加恢复任务与测试后，稳定验证记录为 `819 / 0 / 3 / 0`。3 个 skip 是需真实 ZIP 环境变量的 opt-in 测试，不能计为已执行；P1 另行用新包完成附件 Room 链 `tests=1, skipped=0, failures=0, errors=0`，耗时 `257.597s`，仍不能外推为 OPPO 已恢复。
 - `lintDebug` 为 `0 errors, 84 warnings, 13 hints`，`assembleRelease` 通过。最新本地 APK SHA-256 为 `b0d1008fde0bbbddaaad57d925e09ca067dbbb64407d9783904955a999481929`，版本 `66 / 0.3.0-p10j`，正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未安装 OPPO；设备仍是 `d86b...` 旧诊断包且当时附件回读为 `0`。
 
 ## 1. 复盘范围与结论
 
 南枫 AI 是当前以 Android 为可构建客户端的本地优先、多模型 AI 工作台：会话、知识、Memory、项目、附件、导入／导出和调用审计先保存在设备，用户可在本机配置后选择模型直接发起 Provider 调用。
 
-原 2026-08-27 只读盘点覆盖：299 个 Android 主文件、213 个 JVM 测试文件、289 个 `docs/` 文件、根 Gradle 配置、Manifest、Room Schema、`upload-gateway/` Go 服务及截至 `da20412` 的 120 个提交。这些是当时快照，不得用来否定上方 2026-08-28 增量的源码、Schema 55 与测试事实。
+本次按稳定 Git 清单检查了代码、文档、配置、测试和历史，再对入口、数据库、发送、上下文、导入、附件、Desktop、协议、网关与部署边界逐项核对。`c1c9ae0` 共 `1008` 个跟踪文件：Android 主源码 `303` 个、JVM 测试 `223` 个、`docs/` `292` 个；另有 Desktop/Tauri、协议、Supabase 合同与独立 Go 网关。Git 有 `123` 个稳定提交，起点为 `e56d666`。这些数量不包含用户明确排除的后续未提交 WIP；历史档案中的 `299/213/289/120` 只保留为旧快照。
 
-项目不是“完全验收完成”状态：上一轮完整 JVM 聚合为 **796 项、60 项失败**；本轮复跑又在 245 项完成、60 项失败、1 项 skipped 后因 Android Studio JBR C2 `SIGSEGV` 终止，无法生成新的完整聚合。搜索横滑返回、长文本阅读、视觉细节和真实 Provider／费用路径仍待人工闭环。
+项目仍不能称为“全部真实验收完成”：Android 标准 JVM 已无失败，P1 新包附件链也有 `skipped=0` 记录，但旧包→新包、资产清单等其他 opt-in 分层门没有在本复盘任务中对 P1 checkpoint 独立重跑；OPPO 尚未覆盖 P1 Release，真实 Provider／费用、折叠屏浅深色与长文本手势仍需人工闭环。Desktop 的 Node 93 项、Rust 97 项、协议 golden、本地 lint/typecheck/build 本次均通过，但 Desktop 仍标为 spike/dev，不能据此宣称已形成发布产品。
 
 ## 2. 项目目标与范围
 
@@ -32,7 +32,7 @@
 ### 未可声称的范围
 
 - Google／Supabase、真实 Agent 工具、生态接入和 AI Hub 有接口或历史合同，但没有本轮真实远端验收。
-- Android 是 `settings.gradle.kts` 唯一包含模块。仓库没有当前 Android CI 工作流；历史 Desktop 资料不等于当前可构建／可发布 Desktop 产品。
+- Android 是 `settings.gradle.kts` 唯一包含模块。仓库没有当前 Android CI 工作流。`desktop/` 含可独立测试和构建的 JavaScript/Tauri 2 spike，但其版本仍为 `0.0.1`、Tauri 产品版本为 `0.6.0-p6d-dev`，不属于根 Gradle，也没有本次发布或安装证据。
 - `upload-gateway/` 是独立 Go 模块，不由根 Gradle 构建；尚无 Go 测试文件，也无部署、TLS、域名或真实上传验收。
 
 ## 3. 技术栈、配置与目录
@@ -40,10 +40,13 @@
 | 层面 | 当前实现与依据 |
 | --- | --- |
 | Android | Kotlin、AGP 9.3.1、Kotlin/Compose 2.2.10、Compose Material 3、minSdk 26、target/compileSdk 36。 |
-| 本地数据 | Room 2.8.4、Schema 55、`1→55` 连续迁移与 schema 导出。 |
+| 本地数据 | Room 2.8.4、稳定基线 Schema 56、`1→56` 连续迁移与 schema 导出。 |
 | 生命周期 | Activity + Compose + ViewModel；普通发送由数据同步前台服务与持久化运行时状态承接。 |
 | 网络／文件 | Provider transport、Android Keystore、App 私有文件、SAF、FileProvider、WorkManager、PDFBox Android。 |
 | 测试 | JUnit 4、Robolectric、Room testing、host SQLite JDBC；按 ai/data/domain/ui/app 分组。 |
+| Desktop spike | 原生 JavaScript UI + Node `node:test`；Tauri 2、Rust 2021、SQLite（rusqlite bundled）、AES-GCM 与本地文件 owner。 |
+| 交换协议 | `protocol/` 的 v1/v2 exchange、sync schema、golden fixture 与 Node 验证脚本。 |
+| 云端合同 | `supabase/` 保存 Google avatar function、SQL migration 与 P7-C 静态安全合同；没有本次远端部署证据。 |
 | 独立网关 | Go 标准库 HTTP 服务，提供 SHA-256 校验、断点续传与短期签名 URL。 |
 
 ```text
@@ -56,9 +59,13 @@ app/src/main/java/com/nanzhufeng/ai/
 ├── ai/                        Provider adapter、传输、解码与执行器
 └── background/                普通聊天前台服务执行桥
 
+desktop/                       JavaScript/Tauri 2 Desktop spike 与双层测试
+protocol/                      v1/v2 exchange、sync schema、fixture 与 golden 验证
+supabase/                      P7-C 静态合同、函数与数据库迁移
 upload-gateway/                独立 Go 附件服务
 docs/                          当前合同、交接、决策、历史证据
 .agents/skills/                可重复开发流程
+scripts/、delivery/            验证、交付与证据辅助脚本
 ```
 
 ## 4. 核心架构与模块
@@ -85,13 +92,17 @@ Room 保存 Conversation、MessageNode、内容块、草稿、运行时事件、
 
 ### 数据、附件和可移植性
 
-- `NanfengAiDatabase` 为 Schema 54，保存会话、项目、知识、Memory、导入任务／receipt、使用账本、诊断、Attempt、归因与恢复记录；`MIGRATION_53_54` 增加收藏时间。
+- `NanfengAiDatabase` 稳定基线为 Schema 56，保存会话、项目、知识、Memory、导入任务／receipt、使用账本、诊断、Attempt、归因与恢复记录；`MIGRATION_54_55` 增加 ChatGPT ZIP provenance／附件归属结构，`MIGRATION_55_56` 增加内容无关的 `p6k_zip_asset_recovery_jobs`，两段都在 `AppContainer` 注册。
 - `AndroidPrivateAttachmentStore` 保存私有附件；消息保存安全引用。预览、搜索、导入与外发各有独立 owner，不能绕过大小、MIME 与私有副本检查。
 - JSON Knowledge、Markdown、PDF、网页文本、ChatGPT／Claude ZIP、南枫知识、v1 会话交换和 v2 工作区交换使用专属 parser／commit owner。v2 先严格预检再原子恢复，非空本机路径拒绝覆盖。
 
 ### UI 与设置
 
 `ConversationWorkspace` 是会话／搜索主要 surface；设置由 `NanfengAiApp`、相关 ViewModel 与共享 `SettingsControlDimensions` 组成。会话合同约束抽屉、搜索、长按、文本投影、Composer、阅读控制和手势；设置合同约束层级、弹层、主题、开关和保存反馈。UI 数值不得从旧 P 阶段合同复制。
+
+### Desktop、协议、Supabase 与附件网关
+
+`desktop/` 是独立的 chat-first Desktop spike：JavaScript 层负责静态 shell 与本地命令边界，Tauri/Rust 层负责 SQLite、交换包、附件、同步与 Agent 账本等本机 owner。`protocol/` 通过 schema、fixture 与 golden hash 约束 Android／Desktop 交换语义。`supabase/` 当前只有函数、迁移和静态安全合同，不能推断线上项目已部署。`upload-gateway/` 只承担带授权、SHA-256、分片续传和短期签名 URL 的附件字节中转；其 README 明确要求 HTTPS、持久卷和高熵 token，仓库未提供生产基础设施。
 
 ## 5. 关键数据流
 
@@ -117,6 +128,10 @@ Composer / ViewModel
 
 格式不能互相替代 parser；禁止通过文件名、URL、路径或默认值猜测缺失事实。
 
+ChatGPT 累积 ZIP 的稳定链路是：严格 ZIP inventory → provider source tree 解析 → source conversation/message provenance 去重 → `P6KChatGptZipAssetMapper` 只按官方 file ID 建立归属 → `AndroidP6KZipAssetRecoveryScheduler` 排入后台恢复 → `RoomP6KZipMappedAssetLinkOwner` 按会话 checkpoint 续跑并补入普通 Message Tree → 普通会话、搜索分组、预览、下载与分享复用同一附件 owner。无官方归属的 `822` 个候选保持未关联，不按时间、文件名或相邻消息猜配。
+
+Desktop v2 交换通过 `protocol/` 的 schema/golden 与 Tauri 私有 SQLite owner预检、提交、重放和再导出；Android 与 Desktop 的实现可以共享协议语义，但构建、安装和真实文件选择器验收仍是两个独立验证层。
+
 ## 6. 关键决策及原因
 
 | 决策 | 原因与依据 |
@@ -130,46 +145,57 @@ Composer / ViewModel
 
 ## 7. 开发过程与 Git 历史
 
-仓库有 120 个提交，起点为 2026-08-20 的 `e56d666 chore: establish Nanfeng AI baseline`。提交主题以 `docs`（31）、`feat`（14）、`fix`（12）和 P6/P11 专项为主，体现合同／证据先行再实现的节奏。
+稳定基线有 123 个提交，起点为 2026-08-20 的 `e56d666 chore: establish Nanfeng AI baseline`。截至导入 checkpoint 的提交主题以 `docs`（31）、`feat`（14）、`fix`（12）和 P6/P11 专项为主，体现合同／证据先行再实现的节奏；`6d68ba7` 收口测试基线，`c1c9ae0` 收口 P1 可续跑附件恢复。
 
 1. **签名与本地基础（8 月 20 日）**：release v2 签名来源、Android 基础构建、数据与 P6 交换链。
-2. **导入、恢复与治理（8 月 20–23 日）**：严格 ZIP／JSON／工作区交换、Room 升级、生命周期与可访问性；Desktop 资料多为历史证据。
+2. **导入、恢复与治理（8 月 20–23 日）**：严格 ZIP／JSON／工作区交换、Room 升级、生命周期与可访问性；同时形成 Desktop/Tauri spike、跨端 v1/v2 协议与 golden 验证，未形成当前生产发布证据。
 3. **普通聊天执行链（8 月 23–24 日）**：`d61805c` 接入直接 OpenRouter 发送，`1ded3da` 汇总 Provider chat 与会话 shell；后续扩展到 Qwen／DeepSeek、Attempt、前台服务、归因和模型目录。
 4. **体验与设置收口（8 月 25–27 日）**：会话视觉、Markdown、抽屉、搜索、上下阅读、模型设置、Memory／资料库、开关、弹层与生命周期操作持续修正。
-5. **当前 checkpoint（8 月 27 日）**：`da20412` 收纳 58 个 Android 文件与 4 个文档变更；它冻结工作树，不是全绿基线。
+5. **8 月 27 日 checkpoint**：`da20412` 收纳会话、设置与运行时上下文增量；它是历史冻结点，不是全绿基线。
+6. **8 月 28 日导入链 checkpoint**：`a5afcc7`、`da20412` 之后继续完成真实 ChatGPT 累积 ZIP 去重、附件原生 Message Tree 挂载、Schema 55 与导入结果入口，最终由 `af218e1` 固化；正确性有实包测试证据，OPPO 仍未覆盖该包。
+7. **8 月 28 日 JVM 基线恢复**：`6d68ba7` 依据当前合同更新 58 项过时合同／夹具，并把 Assistant 页脚金额格式函数移入独立纯 Kotlin owner，消除 1 项 Android 类初始化耦合；标准全量回到 0 failures，未改变 Provider、ZIP 归属、MIME、迁移或设备安全门。
+8. **8 月 28 日 P1 可续跑恢复**：`c1c9ae0` 引入持久化恢复 job、WorkManager 调度、按会话 checkpoint、失败／重试状态和 Schema 56；标准 JVM 记录为 `819 / 0 / 3 / 0`，新包 `853/853` Room 链为 `skipped=0`。后续数字口径、三表模型与真机阶段属于用户明确排除的正在进行任务。
 
 ## 8. 测试、构建、部署与验证边界
 
 | 层级 | 当前事实 |
 | --- | --- |
-| JVM 测试资产 | 213 个文件：domain 81、data 60、ui 50、ai 18、app 1、根包 3。 |
-| 当前完整 JVM | `:app:testDebugUnitTest` XML：815 项、60 failures、0 errors、3 skipped。失败分布于 16 类，其中 `P6DConversationRowAccessibilityContractsTest` 40 项；其余涉及 System Bars、直接执行／预检、Composer／导航、媒体预览、设置、运行时上下文、Claude 导入和工作区 Documents UI。 |
-| 真实 ZIP opt-in 验收 | 全量命令的 3 个 skip 是未传环境变量的真包测试。它们已另行用用户指定的旧／新 ZIP 运行：附件 `853/853`、对话去重 `784`，XML 均 `skipped=0, failures=0`。 |
-| 已通过的定向门 | 共享 file ID、结构尾部合法叶选择、Schema `54→55` 迁移契约、真实 ZIP 映射／Room 链／旧新包合并通过；不抵消全量 60 项失败。 |
+| Android JVM 测试资产 | 稳定基线 223 个文件；P1 新增恢复 job 和 ViewModel 恢复契约。 |
+| 稳定 Android JVM | P1 `:app:testDebugUnitTest` 验证记录为 `819 tests / 0 failures / 0 errors / 3 skipped`。`docs/P6K_TEST_TRIAGE.md` 的 59 项分类是修复前证据，已在文件顶部标为历史。为避免干扰用户明确排除的后续任务，本复盘没有再清理共享 build 目录独立重跑。 |
+| 真实 ZIP opt-in 验收 | 全量命令的 3 个 skip 是未传环境变量的真包测试。`af218e1` 已留下旧／新包资产、附件 `853/853`、对话去重 `784` 的 `skipped=0, failures=0` 记录；P1 `c1c9ae0` 又单独复跑新包附件 Room 链为 `1/0/0/0`、`257.597s`。旧包合并与资产 inventory 未在 P1 后由本复盘独立重跑。 |
+| 已通过的 Android 定向门 | 共享 file ID、结构尾部合法叶选择、Schema `54→55` 迁移契约、真实 ZIP 映射／Room 链／旧新包合并、当前运行时上下文入口合同通过；标准全量当前也为 0 failures。 |
 | Lint／Release | `lintDebug` 为 `0 errors, 84 warnings, 13 hints`；`assembleRelease` 成功。 |
+| Desktop JavaScript | 本次 `npm test` 为 `93 passed / 0 failed / 0 skipped`；`npm run lint`、`npm run typecheck`、`npm run build` 通过。构建输出是本地 static spike，不是发布包。 |
+| Desktop Rust/Tauri | 本次 `cargo test --locked` 为 `97 passed / 0 failed`，另有 main/doc-tests 0 项；只证明本机 Rust owner 与跨端 fixture，不证明 macOS 安装、签名或 native picker 真机链。 |
+| 协议 golden | `run-golden.mjs`、`run-v2-golden.mjs`、`run-sync-golden.mjs` 均通过并输出稳定 semantic/package hash。 |
+| Go 网关 | 源码和 Dockerfile 已检查；仓库没有 `_test.go`。本机没有 `go` 命令，因此本次不能执行 `go test ./...` 或镜像构建。 |
 | 永久禁区 | 不执行任何 `connected*AndroidTest`。视觉、真实 Provider、费用和账号路径不是 JVM 覆盖面。 |
 
 `app/build.gradle.kts` 只接受完整环境变量或用户级 Gradle 属性提供正式签名；缺失即停止，不回退 Debug 签名。Release 产物为 `app/build/outputs/apk/release/南枫AI.apk`。
 
 当前本地正式 APK 为 `66 / 0.3.0-p10j`，SHA-256 `b0d1008fde0bbbddaaad57d925e09ca067dbbb64407d9783904955a999481929`。本轮没有安装。OPPO 当前仍是 SHA-256 `d86b670e050da976aa07151928059b49a9e0936fd7422dbac5883ec683c7c390` 的旧诊断包，当时业务回读为 `0 个附件已恢复`。本地构建和签名验收不能替代最新真机 UI 与用户数据语义验收。
 
-网关需要受控 HTTPS 域名、持久卷、高熵 token 与独立访问策略；Dockerfile 可构建镜像。没有 Go 测试或部署证据时，它只能视为可部署组件。
+网关需要受控 HTTPS 域名、持久卷、高熵 token 与独立访问策略；Dockerfile 描述了镜像构建方式，但本次未实际构建。没有 Go 测试、当前 Go 工具链或部署证据时，它只能视为待验证的可部署组件。
 
 ## 9. 踩坑、修复与经验
 
-- **静态 UI 契约失配**：大幅 Compose 收口后，旧源码锚点集中产生 41 项失败。静态测试应随 owner 重构同步维护，不能依赖曾经通过。
+- **静态 UI 契约失配**：大幅 Compose 收口后，旧源码锚点曾集中产生 58 项失败，其中 P6D 单类为 40 项。`6d68ba7` 依据当前合同更新夹具与稳定语义 owner 后已清零；教训是不能依赖曾经通过，也不能为测试变绿而恢复旧视觉。
 - **Markdown 色值误判**：`#fff` 和转义符曾造成异常字号及控制符泄漏；展示层修复后不改写持久化正文。
 - **一键到底反跳**：按末项定位会让长消息顶部对齐；现按可见阅读区推进并以物理边界停下，自动跟随和手动滚动分离。
 - **开关尺寸叠加**：百分比多次推导导致失真；应以共享组件固定几何和语义，而不是入口各自计算。
-- **文档漂移**：旧档案和 docs 首页写 Schema 45，旧档案还把 Attempt 列为待做；当前代码是 Schema 54 且已有 Attempt。此次已更新入口和本档案。
+- **ZIP 当前叶误判与静默降级**：文本 parser 的“最后可渲染节点”不一定是 source tree 叶节点；旧实现还会用空 Outcome 吞掉逐会话事务失败。现按官方路径选择合法后代叶，并单列 `failedConversationCount`，避免把失败伪装成成功。
+- **真实包测试被跳过**：Gradle 全量未传旧／新 ZIP 环境变量时，opt-in 测试会合法 skip。必须检查 XML 的 `skipped=0`，不能只看任务成功；实包测试已单独完成。
+- **文档漂移**：旧档案和 docs 首页曾写 Schema 45/54/55，旧档案还把 Attempt 列为待做；稳定基线代码是 Schema 56 且已有 Attempt。此次按稳定提交、schema 与测试记录更新入口。
 
 ## 10. 文档与代码冲突
 
 | 冲突 | 当前结论 | 处理 |
 | --- | --- | --- |
-| docs 首页与旧档案写 Schema 45/54 | `NanfengAiDatabase` 当前为 Schema 55，并有 `MIGRATION_54_55`、产品注册、迁移契约和 `55.json`。 | 以当前代码与导出 schema 为准。 |
+| docs 首页与旧档案写 Schema 45/54/55 | `c1c9ae0` 的 `NanfengAiDatabase` 为 Schema 56，并有 `MIGRATION_54_55`、`MIGRATION_55_56`、产品注册、迁移契约和 `56.json`。 | 以稳定提交与导出 schema 为准；排除后续未提交 Schema WIP。 |
 | 旧档案称发送 Attempt 未实现 | `NormalChatSendAttempt.kt`、Room store、Executor 已实现状态、恢复与显式重试。 | 以当前代码为准；仍不把代码路径写成真实 Provider 成功。 |
-| 旧档案称全量测试／Lint 已绿 | 当前完整 XML 为 815 / 60 failures / 3 skipped / 0 errors；Lint 已是 0 errors。 | 全量 JVM 仍列为未关闭回归；真实 ZIP opt-in 测试以单独 `skipped=0` 的 XML 为准。 |
+| checkpoint 交接写 815 / 60，分类文档写 815 / 59 | 两者分别是 `af218e1` 提交时和入口文档同步后的真实快照；`6d68ba7` 为 815 / 0 / 3 / 0，P1 `c1c9ae0` 为 819 / 0 / 3 / 0。 | 60 与 59 保留为带时间的根因证据；稳定排程采用 P1 的 0 failures，并继续区分 opt-in。 |
+| 旧档案称全量测试／Lint 已绿 | P1 标准 JVM 记录为 819 / 0 failures / 3 skipped / 0 errors；Lint 最近为 0 errors。 | 可以声称 P1 标准 JVM 无失败；不能把 3 个 skip 写成已执行，也不能外推到真机、Provider 或视觉。 |
+| 旧档案把 Desktop 仅称为历史资料 | 当前仓库有 65 个 Desktop 跟踪文件，Node 93 项与 Rust 97 项本次通过。 | 正确描述为可测试的 spike/dev；因无当前安装、签名、发布与真实 native picker 证据，仍不能称为生产 Desktop。 |
 | 早期 P3/P4 说未接发送／不自动进入上下文 | 当前 executor 与运行时上下文合同已有普通发送和相关检索 owner。 | 旧文档只保留历史证据，后续读取当前合同与交接顶部。 |
 | 早期设备记录显示旧 hash 或未回读 | 当前交接顶部记录 code 66 的包级 hash 回读。 | 只采用最新记录；仍不代替视觉／服务验收。 |
 
@@ -177,7 +203,7 @@ Composer / ViewModel
 
 ### 优先处理
 
-1. **全量 JVM 与运行环境**：逐类归因 60 failures（优先 41 项 P6D 和直接执行／预检），并单独复现／规避 JBR C2 `SIGSEGV`；只有完成一轮无崩溃的完整套件后才可声明全绿基线。
+1. **保持 Android JVM 门**：P1 标准全量已达 `failures=0, errors=0`，后续改动必须维持；3 个真实 ZIP opt-in 测试仍要在明确样本下分别确认 `skipped=0`，不能因普通全量成功而省略。
 2. **真机 UI 手工验收**：按当前合同验证搜索横滑返回、长回复上下阅读、设置层级、浅／深色与折叠屏视口。
 3. **真实 Provider 最小闭环**：在用户自有合法配置和非敏感输入下验证成功、认证／余额／限流／断网、取消、未知结果与显式重试，并核对实际接收方、来源和费用。
 
@@ -187,6 +213,8 @@ Composer / ViewModel
 5. 为附件网关补 Go 单元／集成测试、健康检查、删除回收和 TLS 运维证据；此前不默认启用外部附件路径。
 6. P7–P10 云同步、Agent、生态与 Hub scaffolding 各自需要用户授权、真实目标、安全与回滚合同，不能因接口存在而上线。
 7. 压缩历史文档中的“当前”歧义；新变更只进入当前合同、当前交接和决策日志。
+8. 为 Desktop 补真实 macOS bundle／签名／native picker 验收，为 Supabase 补目标项目与远端部署回读；在此之前保持 spike／未部署状态。
+9. **排除项**：本次不审计、不修改、不固化同仓库正在进行的 P2 及后续任务；其未提交代码、Schema、测试与 UI 数字只能在各自 checkpoint 后另行同步。
 
 ## 12. 关键文件索引
 
@@ -199,6 +227,9 @@ Composer / ViewModel
 | 上下文与数据 | `domain/LocalContextBroker.kt`；`data/local/RoomLocalContextIndex.kt`；`data/local/NanfengAiDatabase.kt` |
 | 凭据、附件与备份 | `data/ModelServiceStorage.kt`；`data/AndroidPrivateAttachmentStore.kt`；`data/AndroidLocalBackupRestoreManager.kt` |
 | 当前规则与证据 | 三份当前合同、`CURRENT_HANDOFF.md`、`decision-log.md`、`PRODUCT_FEEDBACK_DECISION_LEDGER.md` |
+| ChatGPT ZIP 导入 | `domain/P6KChatGptZipAssetMapper.kt`；`data/P6KZipAssetRecoveryScheduling.kt`；`data/local/RoomP6KZipMappedAssetLinkOwner.kt`；`docs/P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md` |
+| Desktop 与协议 | `desktop/src/`；`desktop/src-tauri/src/`；`desktop/tests/`；`protocol/` |
+| 云端合同 | `supabase/functions/google-avatar/`；`supabase/migrations/`；`supabase/p7c_static_contract.sql` |
 | 附件网关 | `upload-gateway/main.go`；`upload-gateway/README.md` |
 
-回滚仅需恢复本文件与 `docs/README.md` 的上一个 Git 版本；本次不涉及数据迁移、APK、远端部署或设备写入。
+本次复盘只更新文档与项目级流程文件，不修改业务代码，不涉及数据迁移、APK、远端部署或设备写入。若需撤销，只恢复本次列出的文档／流程文件；不要覆盖用户或并行任务的其他工作树改动。

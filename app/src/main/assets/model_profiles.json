@@ -7,7 +7,7 @@
     },
     {
       "presetId": "QWEN_3_8_MAX", "providerId": "QWEN", "modelId": "qwen3.8-max", "displayName": "Qwen3.8-Max",
-      "capabilities": { "text": true, "image": true, "pdf": true, "video": true, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
+      "capabilities": { "text": true, "image": false, "pdf": false, "video": false, "audio": false, "streaming": true, "tools": false, "reasoning": true, "structuredOutput": false },
       "contextWindowTokens": 1000000, "maxOutputTokens": 131072, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-23T00:00:00Z"
     },
     {
@@ -19,6 +19,21 @@
       "presetId": "DEEPSEEK_V4_PRO", "providerId": "DEEPSEEK", "modelId": "deepseek-v4-pro", "displayName": "DeepSeek V4 Pro",
       "capabilities": { "text": true, "image": false, "pdf": false, "video": false, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
       "contextWindowTokens": 1000000, "maxOutputTokens": 384000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-23T00:00:00Z"
+    },
+    {
+      "presetId": "DEEPSEEK_V4_FLASH", "providerId": "DEEPSEEK", "modelId": "deepseek-v4-flash", "displayName": "DeepSeek V4 Flash",
+      "capabilities": { "text": true, "image": false, "pdf": false, "video": false, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
+      "contextWindowTokens": 1000000, "maxOutputTokens": 384000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-29T00:00:00Z"
+    },
+    {
+      "presetId": "GLM_5_3", "providerId": "ZHIPU", "modelId": "glm-5.3", "displayName": "GLM-5.3",
+      "capabilities": { "text": true, "image": false, "pdf": false, "video": false, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
+      "contextWindowTokens": 1000000, "maxOutputTokens": 131072, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-30T00:00:00Z"
+    },
+    {
+      "presetId": "GLM_5_3_FLASH", "providerId": "ZHIPU", "modelId": "glm-5.3-flash", "displayName": "GLM-5.3 Flash",
+      "capabilities": { "text": true, "image": false, "pdf": false, "video": false, "audio": false, "streaming": true, "tools": false, "reasoning": true, "structuredOutput": false },
+      "contextWindowTokens": 1000000, "maxOutputTokens": 128000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-29T00:00:00Z"
     }
   ]
 }

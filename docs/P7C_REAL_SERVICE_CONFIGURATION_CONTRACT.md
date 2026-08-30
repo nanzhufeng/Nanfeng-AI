@@ -9,13 +9,13 @@ P7-C 让真实服务在技术上可部署、可审计，但不因为本地编译
 
 认证链固定为：Android Credential Manager 随机 nonce → Google ID Token 仅瞬时交给 Supabase Auth → Supabase `auth.uid()` 是唯一应用账号身份。ID/access/refresh token、Google Client Secret、`service_role`、恢复码明文、data key、Provider Key、业务正文、头像缓存不得写入 Room/SQLite、日志、诊断、fixture、migration 或云端表。
 
-P7-B 仍负责本机 32-byte data key 与 Keystore/Keychain 封装；P7-A 仍是唯一 envelope/AAD/KDF/AES-GCM 格式。`nanfeng_account_keys.recovery_wrap_metadata` 只是 P7-A `kdf` + `wrappedDataKey` 的字段严格投影，配合记录的 P7-A AAD header（app/document/revision/hash）；它不是新密码格式，且只含密文封装。
+P7-B 仍负责本机 32-byte data key 与 Keystore/Keychain 封装；P7-A 仍是唯一 envelope/AAD/KDF/AES-GCM 格式。`nfai_account_keys.recovery_wrap_metadata` 只是 P7-A `kdf` + `wrappedDataKey` 的字段严格投影，配合记录的 P7-A AAD header（app/document/revision/hash）；它不是新密码格式，且只含密文封装。
 
 ## 可部署 Supabase 合同
 
 迁移：`supabase/migrations/202608130001_p7c_secure_sync.sql`。
 
-- `nanfeng_account_keys` 和 `nanfeng_sync_documents` 以 `user_id=auth.uid()` 隔离；两表启用并强制 RLS，撤销 anon/authenticated 的直接表权限，因此默认拒绝。
+- `nfai_account_keys` 和 `nfai_sync_documents` 以 `user_id=auth.uid()` 隔离；两表启用并强制 RLS，撤销 anon/authenticated 的直接表权限，因此默认拒绝。
 - 账号 key record 只能通过幂等 `nanfeng_sync_put_account_key` 首次写入；metadata hash 不同即拒绝，避免悄然替换恢复材料。
 - 文档只能通过 `nanfeng_sync_read_document` 和 `nanfeng_sync_commit_document` 存取。提交用 user/app/document advisory transaction lock，再比较 `expectedRevision`，仅接受 `nextRevision` 的 P7-A v1 envelope，写后返回 revision/hash。过期、匿名、跨用户、越限、未知版本、字段错误和哈希错误均拒绝。
 - P7-C 没有删除 RPC：尚无用户可解释的远端删除/墓碑/恢复合同，故不允许远端删除来绕过 revision 语义。P7-D 决定 UX 后再单独立约。

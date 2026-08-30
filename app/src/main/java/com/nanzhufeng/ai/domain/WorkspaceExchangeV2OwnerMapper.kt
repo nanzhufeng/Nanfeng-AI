@@ -53,7 +53,7 @@ class NfaiExchangeV2OwnerMapper(
             require(snapshot.draft.text.isBlank() && snapshot.draft.attachments.isEmpty()) { "请先处理所选对话草稿后再交换。" }
             require(snapshot.nodes.all { node ->
                 node.conversationId == conversation.id && node.deliveryState == MessageDeliveryState.COMPLETE &&
-                    node.invocation == null && node.checkpoint == null && node.content.none { it is ContentBlock.ToolResult }
+                    node.invocation == null && node.checkpoint == null && node.content.none { it is ContentBlock.ToolResult || it is ContentBlock.Reasoning }
             }) { "运行中、调用记录或工具结果不能进入 v2 交换。" }
             conversation.settings.memorySources.forEach { reference ->
                 val memory = memoryById[reference.memoryId] ?: error("会话记忆来源不在选择闭包中。")
@@ -167,6 +167,7 @@ class NfaiExchangeV2OwnerMapper(
             put("id", node.id.value); put("parentId", node.parentMessageId?.value ?: JSONObject.NULL); put("ordinal", node.siblingPosition); put("role", node.role.name.lowercase()); put("delivery", node.deliveryState.name); put("revision", node.revision.revision); put("createdAt", node.createdAt.toString())
             put("blocks", JSONArray(node.content.mapIndexed { ordinal, block -> when (block) {
                 is ContentBlock.Text -> JSONObject().put("kind", "TEXT").put("ordinal", ordinal).put("text", block.text)
+                is ContentBlock.Reasoning -> error("模型思考过程不能进入 v2 交换。")
                 is ContentBlock.Attachment -> JSONObject().put("kind", "ASSET_REF").put("ordinal", ordinal).put("asset", attachments[block.attachment.id.value] ?: error("消息附件缺少 owner 元数据。"))
                 is ContentBlock.ToolResult -> error("工具结果不能进入 v2 交换。")
             } }))

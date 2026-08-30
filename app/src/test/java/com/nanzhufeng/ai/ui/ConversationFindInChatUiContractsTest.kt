@@ -19,7 +19,7 @@ class ConversationFindInChatUiContractsTest {
         assertFalse(dialog.contains("仅在当前本地对话中查找，不会搜索其它会话或发送内容。"))
         assertTrue(dialog.contains("if (query.isNotBlank())"))
         assertTrue(dialog.contains("当前对话没有匹配内容。"))
-        assertTrue(dialog.contains("找到 \${matches.size} 处匹配"))
+        assertTrue(dialog.contains("找到 \${matches.size} 处"))
     }
 
     @Test fun `active chat find query is rendered as themed text on neutral rounded pills without mutating messages`() {

@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -64,6 +65,7 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -73,8 +75,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -99,12 +103,14 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AccountTree
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AttachFile
@@ -112,9 +118,11 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Folder
@@ -128,6 +136,7 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Share
@@ -165,6 +174,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -190,6 +200,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -241,21 +252,26 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.core.view.WindowCompat
 import com.nanzhufeng.ai.domain.ConversationActionKind
 import com.nanzhufeng.ai.domain.ConversationListVirtualizationContract
 import com.nanzhufeng.ai.domain.InlinePresentation
 import com.nanzhufeng.ai.domain.ModelPresetId
 import com.nanzhufeng.ai.domain.NanfengModelServiceCatalog
 import com.nanzhufeng.ai.domain.MessageNodeId
+import com.nanzhufeng.ai.domain.MessagePresentationRenderer
 import com.nanzhufeng.ai.domain.PresentationBlock
+import com.nanzhufeng.ai.domain.PresentationBlockIdentity
 import com.nanzhufeng.ai.domain.PresentedMessage
 import com.nanzhufeng.ai.domain.PresentedTranscriptMessage
 import com.nanzhufeng.ai.domain.ContextSelectionAuditRecord
@@ -274,12 +290,15 @@ import com.nanzhufeng.ai.domain.ConversationAttachmentAudioPreview
 import com.nanzhufeng.ai.domain.ConversationAttachmentTextPreview
 import com.nanzhufeng.ai.domain.ConversationSearchCategory
 import com.nanzhufeng.ai.domain.ConversationAttachmentSearchHit
+import com.nanzhufeng.ai.domain.GlmOcrDocumentSearchHit
+import com.nanzhufeng.ai.domain.conversationAttachmentSearchCategory
 import com.nanzhufeng.ai.domain.ProjectId
 import com.nanzhufeng.ai.domain.ProjectSnapshot
 import com.nanzhufeng.ai.domain.TemporaryConversationRecovery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -295,7 +314,7 @@ private val ComposerSendSurfaceSize = 36.dp
 private val ComposerSendGlyphSize = 24.dp
 private val ComposerStopGlyphSize = 22.5.dp
 private val ComposerModelPickerHeaderHeight = 62.dp
-private val ComposerModelPickerRootContentHeight = 424.dp
+private val ComposerModelPickerRootContentHeight = 280.dp
 // Conversation overlays have an explicit stacking contract. The scroll-to-latest control stays
 // above the composer, but every in-canvas transient surface must cover that control.
 private const val ConversationScrollToLatestZIndex = 1f
@@ -493,8 +512,13 @@ private data class ComposerAttachmentAction(
     val onClick: () -> Unit,
 )
 
-private val LocalAttachmentTransferRequest = staticCompositionLocalOf<(AttachmentId, AttachmentTransferAction) -> Unit> {
+internal val LocalAttachmentTransferRequest = staticCompositionLocalOf<(AttachmentId, AttachmentTransferAction) -> Unit> {
     { _, _ -> }
+}
+
+/** Sent attachment cards can reverse-locate their exact stable ID in the existing search page. */
+private val LocalAttachmentSearchLocateRequest = staticCompositionLocalOf<(MessageNodeId, AttachmentId, String) -> Unit> {
+    { _, _, _ -> }
 }
 
 /** Find is a visual projection over the current transcript, never a message mutation. */
@@ -525,8 +549,10 @@ internal fun ConversationWorkspaceDialog(
     notificationReminderSettings: com.nanzhufeng.ai.domain.NotificationReminderSettings,
     onDismiss: () -> Unit,
     interceptsSystemBack: Boolean = false,
+    searchDismissesToParent: Boolean = false,
     onCreate: () -> Unit,
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
+    onClearWatchLater: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onSurfaceChanged: (com.nanzhufeng.ai.domain.ConversationSurface) -> Unit,
     onDraftChanged: (String) -> Unit,
     onSubmitDraft: () -> Unit,
@@ -551,11 +577,17 @@ internal fun ConversationWorkspaceDialog(
     onCloseSearch: () -> Unit,
     onOpenSearchHit: (com.nanzhufeng.ai.domain.ConversationSearchHit) -> Unit,
     onOpenSearchAttachment: (com.nanzhufeng.ai.domain.ConversationAttachmentReference) -> Unit,
+    onOpenGlmOcrSearchHit: (GlmOcrDocumentSearchHit) -> Unit,
+    onDeleteGlmOcrSearchHit: (GlmOcrDocumentSearchHit) -> Unit,
     onLocateSearchAttachment: (ConversationAttachmentSearchHit) -> Unit,
+    onDeleteSearchAttachment: (ConversationAttachmentSearchHit) -> Unit,
     onEnsureSearchAttachmentPreview: (com.nanzhufeng.ai.domain.ConversationAttachmentReference) -> Unit,
+    onEnsureAttachmentPreview: (com.nanzhufeng.ai.domain.ConversationAttachmentReference) -> Unit,
     onManage: (com.nanzhufeng.ai.domain.Conversation, ConversationManagementAction, String?) -> Unit,
+    onMarkWatchLater: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onBatchSoftDelete: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
     onExport: () -> Unit,
+    onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onAddCamera: () -> Unit,
     onAddImage: () -> Unit,
     onAddFile: () -> Unit,
@@ -571,6 +603,7 @@ internal fun ConversationWorkspaceDialog(
     onCloseAudioPreview: (Long) -> Unit,
     onOpenTextPreview: (AttachmentId) -> Unit,
     onCloseTextPreview: () -> Unit,
+    onOpenArchiveEntry: (com.nanzhufeng.ai.domain.AttachmentArchiveEntry) -> Unit,
     onRequestAttachmentTransfer: (AttachmentId, AttachmentTransferAction) -> Unit,
     onRequestAttachmentTransfers: (List<AttachmentId>, AttachmentTransferAction) -> Unit,
     onConsumeAttachmentTransfer: (AttachmentId) -> Unit,
@@ -601,6 +634,8 @@ internal fun ConversationWorkspaceDialog(
     memorySummaryGenerationEnabled: Boolean,
     drawerOpen: Boolean,
     onDrawerOpenChanged: (Boolean) -> Unit,
+    initialSearchCategory: ConversationSearchCategory? = null,
+    onInitialSearchCategoryConsumed: () -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -645,8 +680,8 @@ internal fun ConversationWorkspaceDialog(
             .let { index -> if (index < 0) 1 else index + 1 }
         actionScope.launch {
             runCatching { shareAssistantMarkdown(context, transcript, conversationTitle, messageSequence) }
-                .onSuccess { Toast.makeText(context, "已准备导出 Markdown", Toast.LENGTH_SHORT).show() }
-                .onFailure { error -> Toast.makeText(context, error.message ?: "Markdown 导出失败，请重试", Toast.LENGTH_SHORT).show() }
+                .onSuccess { Toast.makeText(context, "已准备分享 Markdown", Toast.LENGTH_SHORT).show() }
+                .onFailure { error -> Toast.makeText(context, error.message ?: "Markdown 分享失败，请重试", Toast.LENGTH_SHORT).show() }
         }
     }
     val exportConversationMarkdown: (com.nanzhufeng.ai.domain.Conversation) -> Unit = { conversation ->
@@ -654,29 +689,14 @@ internal fun ConversationWorkspaceDialog(
         // Never export the previously selected path under this conversation's title.
         if (conversation.id != state.selectedConversationId || state.isLoading) {
             onSelect(conversation.id)
-            Toast.makeText(context, "已打开该对话，请再次选择导出 Markdown。", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "已打开该对话，请再次选择分享。", Toast.LENGTH_SHORT).show()
         } else {
             actionScope.launch {
                 runCatching { shareConversationMarkdown(context, conversation, state.messages) }
-                    .onSuccess { Toast.makeText(context, "已准备导出对话 Markdown", Toast.LENGTH_SHORT).show() }
-                    .onFailure { error -> Toast.makeText(context, error.message ?: "Markdown 导出失败，请重试", Toast.LENGTH_SHORT).show() }
+                    .onSuccess { Toast.makeText(context, "已准备分享对话 Markdown", Toast.LENGTH_SHORT).show() }
+                    .onFailure { error -> Toast.makeText(context, error.message ?: "Markdown 分享失败，请重试", Toast.LENGTH_SHORT).show() }
             }
         }
-    }
-    val shareConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit = { conversation ->
-        val text = buildString {
-            append(conversation.title)
-            state.messages.forEach { transcript ->
-                append("\n\n")
-                append(if (transcript.message.role == com.nanzhufeng.ai.domain.MessageRole.USER) "我" else "南枫 AI")
-                append("：\n")
-                append(presentedMessagePlainText(transcript.message))
-            }
-        }
-        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-        }, "分享本地对话"))
     }
     // A message menu is transient and is anchored to the exact long-pressed message.
     // Keeping it out of saveable state also prevents a stale popup after recreation.
@@ -690,6 +710,14 @@ internal fun ConversationWorkspaceDialog(
     var uploadedFilesVisible by rememberSaveable { mutableStateOf(false) }
     var findInConversationVisible by rememberSaveable { mutableStateOf(false) }
     var searchAttachmentActionTarget by remember { mutableStateOf<SearchAttachmentActionMenuTarget?>(null) }
+    var confirmingSearchAttachmentDelete by remember { mutableStateOf<ConversationAttachmentSearchHit?>(null) }
+    var searchGlmOcrActionTarget by remember { mutableStateOf<SearchGlmOcrActionMenuTarget?>(null) }
+    var confirmingSearchGlmOcrDelete by remember { mutableStateOf<GlmOcrDocumentSearchHit?>(null) }
+    var searchReturnAttachmentId by rememberSaveable { mutableStateOf<String?>(null) }
+    var searchLocateConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+    var searchLocateMessageId by rememberSaveable { mutableStateOf<String?>(null) }
+    var searchLocateAttachmentId by rememberSaveable { mutableStateOf<String?>(null) }
+    var searchLocateRequestId by rememberSaveable { mutableStateOf(0L) }
     var activeFindQuery by rememberSaveable { mutableStateOf<String?>(null) }
     var activeFindMatchIndex by rememberSaveable { mutableStateOf(0) }
     var activeFindRequestId by rememberSaveable { mutableStateOf(0L) }
@@ -697,12 +725,16 @@ internal fun ConversationWorkspaceDialog(
     // The committed domain surface owns both the segmented selection and the canvas. Keeping
     // no local mirror prevents the header from moving before the matching transcript is ready.
     val workMode = state.surface == com.nanzhufeng.ai.domain.ConversationSurface.WORK
-    val selectedConversation = state.conversations.firstOrNull { it.id == state.selectedConversationId }
+    val selectedConversation = remember(state.conversations, state.selectedConversationId) {
+        state.conversations.firstOrNull { it.id == state.selectedConversationId }
+    }
     // Header mode is defined by the visible transcript, not by the drawer projection.  A
     // transiently filtered or still-loading drawer row must never make a non-empty chat wear
     // the empty conversation/work switch.
     val hasConversationContent = state.messages.isNotEmpty()
     var searchPageVisible by rememberSaveable { mutableStateOf(false) }
+    var searchAttachmentSortMode by rememberSaveable { mutableStateOf(ConversationAttachmentSortMode.DEFAULT) }
+    var searchAttachmentFileType by rememberSaveable { mutableStateOf(ConversationAttachmentFileType.ALL) }
     // Search facts remain in the ViewModel while any search result briefly opens its owner chat.
     var returnToSearchAfterSearchOpen by rememberSaveable { mutableStateOf(false) }
     // Chat and Work have different persisted content owners, so they also keep distinct
@@ -721,6 +753,94 @@ internal fun ConversationWorkspaceDialog(
     val copyText = rememberConversationCopyTextAction()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
+    // Search can briefly leave the full-screen destination to preview or locate one result.
+    // Keep one viewport owner per category above searchPageVisible so returning restores the
+    // exact result neighbourhood instead of recreating a list at item zero.
+    val searchScrollStates = ConversationSearchScrollStates(
+        all = rememberLazyListState(),
+        text = rememberLazyListState(),
+        image = rememberLazyGridState(),
+        video = rememberLazyGridState(),
+        audio = rememberLazyGridState(),
+        file = rememberLazyGridState(),
+    )
+    LaunchedEffect(initialSearchCategory) {
+        val category = initialSearchCategory ?: return@LaunchedEffect
+        searchReturnAttachmentId = null
+        searchLocateConversationId = null
+        searchLocateMessageId = null
+        searchLocateAttachmentId = null
+        searchAttachmentFileType = ConversationAttachmentFileType.ALL
+        onSearchChanged("")
+        onSearchCategoryChanged(category)
+        searchPageVisible = true
+        onDrawerOpenChanged(false)
+        drawerState.close()
+        onInitialSearchCategoryConsumed()
+    }
+    LaunchedEffect(
+        searchPageVisible,
+        searchReturnAttachmentId,
+        searchLocateConversationId,
+        searchLocateMessageId,
+        searchAttachmentSortMode,
+        searchAttachmentFileType,
+        state.searchCategory,
+        state.searchResults,
+        state.attachmentSearchResults,
+        state.glmOcrSearchResults,
+    ) {
+        if (!searchPageVisible) return@LaunchedEffect
+        val attachmentId = searchReturnAttachmentId ?: return@LaunchedEffect
+        val targetKeySuffix = listOfNotNull(
+            searchLocateConversationId,
+            searchLocateMessageId,
+            attachmentId,
+        ).joinToString(":")
+        when (state.searchCategory) {
+            ConversationSearchCategory.ALL -> {
+                val listState = searchScrollStates.all
+                val isVisible = listState.layoutInfo.visibleItemsInfo.any { item ->
+                    item.key.toString().endsWith(":$targetKeySuffix")
+                }
+                if (!isVisible) searchAllAttachmentItemIndex(
+                    state,
+                    attachmentId,
+                    searchLocateConversationId,
+                    searchLocateMessageId,
+                    searchAttachmentSortMode,
+                )?.let { listState.scrollToItem(it) }
+            }
+            ConversationSearchCategory.IMAGE,
+            ConversationSearchCategory.VIDEO,
+            ConversationSearchCategory.AUDIO,
+            ConversationSearchCategory.FILE -> {
+                val attachmentHits = if (state.searchCategory == ConversationSearchCategory.FILE) {
+                    filterSearchFileType(state.attachmentSearchResults, searchAttachmentFileType)
+                } else {
+                    state.attachmentSearchResults
+                }
+                val glmOcrHits = if (state.searchCategory == ConversationSearchCategory.FILE) {
+                    filterGlmOcrSearchFileType(state.glmOcrSearchResults, searchAttachmentFileType)
+                } else {
+                    state.glmOcrSearchResults
+                }
+                val gridState = searchScrollStates.grid(state.searchCategory)
+                val isVisible = gridState.layoutInfo.visibleItemsInfo.any { item ->
+                    item.key.toString().endsWith(":$targetKeySuffix")
+                }
+                if (!isVisible) searchGridAttachmentItemIndex(
+                    hits = attachmentHits,
+                    glmOcrHits = glmOcrHits,
+                    attachmentId = attachmentId,
+                    conversationId = searchLocateConversationId,
+                    messageNodeId = searchLocateMessageId,
+                    sortMode = searchAttachmentSortMode,
+                )?.let { gridState.scrollToItem(it) }
+            }
+            ConversationSearchCategory.TEXT -> Unit
+        }
+    }
     fun returnToSearchAfterSearchOpen() {
         if (!returnToSearchAfterSearchOpen) return
         returnToSearchAfterSearchOpen = false
@@ -745,9 +865,23 @@ internal fun ConversationWorkspaceDialog(
     } else {
         Modifier
     }
-    val activeFindMatches = activeFindQuery?.let { query ->
-        conversationFindMatches(state.messages, query)
-    }.orEmpty()
+    val activeFindMatches = remember(activeFindQuery, state.messages) {
+        activeFindQuery?.let { query -> conversationFindMatches(state.messages, query) }.orEmpty()
+    }
+    val editableById = remember(state.editableUserMessages) {
+        state.editableUserMessages.associateBy { it.messageId }
+    }
+    val monitorDraftSource = remember(
+        notificationReminderSettings.conversationReminderSuggestionsEnabled,
+        state.messages,
+    ) {
+        if (notificationReminderSettings.conversationReminderSuggestionsEnabled) {
+            scheduledMonitorDraftSourceFor(state.messages)
+        } else null
+    }
+    val memorySuggestion = remember(memorySummaryGenerationEnabled, state.messages) {
+        if (memorySummaryGenerationEnabled) memorySummarySuggestionFor(state.messages) else null
+    }
     fun navigateToFindMatch(requestedIndex: Int) {
         if (activeFindMatches.isEmpty()) return
         val resolvedIndex = ((requestedIndex % activeFindMatches.size) + activeFindMatches.size) % activeFindMatches.size
@@ -815,29 +949,24 @@ internal fun ConversationWorkspaceDialog(
     if (searchPageVisible && state.searchHistoryOpen) BackHandler(onBack = onCloseSearchHistory)
     CompositionLocalProvider(
         LocalAttachmentTransferRequest provides onRequestAttachmentTransfer,
+        LocalAttachmentSearchLocateRequest provides { messageNodeId, attachmentId, mimeType ->
+            searchLocateConversationId = state.selectedConversationId?.value
+            searchLocateMessageId = messageNodeId.value
+            searchReturnAttachmentId = attachmentId.value
+            searchLocateAttachmentId = attachmentId.value
+            searchLocateRequestId += 1L
+            onSearchChanged("")
+            onSearchCategoryChanged(conversationAttachmentSearchCategory(mimeType))
+            searchPageVisible = true
+            onDrawerOpenChanged(false)
+            drawerScope.launch { drawerState.close() }
+        },
         LocalConversationFindQuery provides activeFindQuery,
         LocalConversationFindTarget provides activeFindMatches.getOrNull(activeFindMatchIndex)?.takeIf { activeFindRequestId > 0L }?.let { match ->
             ConversationFindTarget(match = match, requestId = activeFindRequestId)
         },
     ) {
-    state.attachmentTransfer?.let { transfer ->
-        LaunchedEffect(transfer.id, transfer.action, transfer.batch.map { it.id }) {
-            runCatching { performAttachmentTransfer(context, transfer) }
-                .onSuccess {
-                    val message = when {
-                        transfer.action == AttachmentTransferAction.DOWNLOAD && transfer.batch.size > 1 -> "已同时保存 ${transfer.batch.size} 张到图库"
-                        transfer.action == AttachmentTransferAction.DOWNLOAD && isGalleryMediaMime(transfer.mimeType) -> "已保存到图库"
-                        transfer.action == AttachmentTransferAction.DOWNLOAD -> "已保存到下载"
-                        else -> "已准备分享"
-                    }
-                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                }
-                .onFailure { error ->
-                    Toast.makeText(context, error.message ?: "文件操作失败，请重试", Toast.LENGTH_SHORT).show()
-                }
-            onConsumeAttachmentTransfer(transfer.id)
-        }
-    }
+    state.attachmentTransfer?.let { transfer -> AttachmentTransferEffect(transfer, onConsumeAttachmentTransfer) }
     ModalNavigationDrawer(
             drawerState = drawerState,
             // Keep the established Material drawer gesture: a deliberate right swipe on the
@@ -871,8 +1000,13 @@ internal fun ConversationWorkspaceDialog(
                             projects = projects,
                             onCreate = { onCreate(); drawerScope.launch { drawerState.close() } },
                             onSelect = { id -> onSelect(id); drawerScope.launch { drawerState.close() } },
+                            onClearWatchLater = onClearWatchLater,
                             onScope = onListScope,
                             onOpenSearchPage = {
+                                searchReturnAttachmentId = null
+                                searchLocateConversationId = null
+                                searchLocateMessageId = null
+                                searchLocateAttachmentId = null
                                 onSearchChanged("")
                                 onSearchRequested()
                                 searchPageVisible = true
@@ -912,7 +1046,7 @@ internal fun ConversationWorkspaceDialog(
             if (state.temporaryRecovery != null) {
                 TemporaryConversationPane(
                     recovery = state.temporaryRecovery,
-                    modelOptions = listOf(null to "Auto · GPT-5.6 Terra"),
+                    modelOptions = listOf(null to "Auto · DeepSeek V4 Flash"),
                     onDraftChanged = onUpdateTemporaryDraft,
                     onModelOverrideChanged = onUpdateTemporaryModelOverride,
                     onSubmit = onSubmitTemporaryDraft,
@@ -1033,9 +1167,9 @@ internal fun ConversationWorkspaceDialog(
                             onSentToLatestConsumed = { workSentFromMessageCount = null },
                             onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
                             onCopyAssistant = { copyText(presentedMessagePlainText(it.message)) },
-                            onShareAssistant = shareMessage,
-                            onExportAssistantMarkdown = exportAssistantMarkdown,
+                            onShareAssistant = exportAssistantMarkdown,
                             onBranchAssistant = onBranchFromMessage,
+                            onEnsureAttachmentPreview = onEnsureAttachmentPreview,
                             onOpenImagePreview = onOpenImagePreview,
                             onOpenPdfPreview = onOpenPdfPreview,
                             onOpenVideoPreview = onOpenVideoPreview,
@@ -1078,7 +1212,14 @@ internal fun ConversationWorkspaceDialog(
                     }
                     LaunchedEffect(state.searchAnchorRequestId, state.messages) {
                         state.searchAnchorMessageId?.let { anchor ->
-                            state.messages.indexOfFirst { it.message.messageId == anchor }.takeIf { it >= 0 }?.let { index -> listState.scrollToItem(index) }
+                            state.messages.indexOfFirst { it.message.messageId == anchor }.takeIf { it >= 0 }?.let { index ->
+                                // A search locate is an explicit reading destination. It must
+                                // not be overwritten by the old conversation's follow-latest
+                                // state, and imported-conversation provenance rows precede the
+                                // message list in this LazyColumn.
+                                chatFollowLatest = false
+                                listState.scrollToItem(index + normalTranscriptLeadingItems)
+                            }
                         }
                     }
                     LaunchedEffect(
@@ -1118,7 +1259,6 @@ internal fun ConversationWorkspaceDialog(
                         if (state.importedFromChatGptZip) item(key = "chatgpt-zip-imported-provenance", contentType = "chatgpt-zip-imported-provenance") {
                             ImportedConversationProvenance("从 ChatGPT ZIP 导入")
                         }
-                        val editableById = state.editableUserMessages.associateBy { it.messageId }
                         itemsIndexed(
                             items = state.messages,
                             key = { _, transcript -> transcript.message.messageId.value },
@@ -1140,9 +1280,9 @@ internal fun ConversationWorkspaceDialog(
                                     searchAnchorRequestId = state.searchAnchorRequestId,
                                     onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
                                     onCopyAssistant = { copyText(presentedMessagePlainText(it.message)) },
-                                    onShareAssistant = shareMessage,
-                                    onExportAssistantMarkdown = exportAssistantMarkdown,
+                                    onShareAssistant = exportAssistantMarkdown,
                                     onBranchAssistant = onBranchFromMessage,
+                                    onEnsureAttachmentPreview = onEnsureAttachmentPreview,
                                     onOpenImagePreview = onOpenImagePreview,
                                     onOpenPdfPreview = onOpenPdfPreview,
                                     onOpenVideoPreview = onOpenVideoPreview,
@@ -1151,9 +1291,6 @@ internal fun ConversationWorkspaceDialog(
                                 )
                             }
                         }
-                        val monitorDraftSource = if (notificationReminderSettings.conversationReminderSuggestionsEnabled) {
-                            scheduledMonitorDraftSourceFor(state.messages)
-                        } else null
                         if (monitorDraftSource != null) {
                             item(key = "conversation-monitor-tail", contentType = "conversation-monitor-tail") {
                                 ConversationTailMonitorAction(
@@ -1161,9 +1298,6 @@ internal fun ConversationWorkspaceDialog(
                                 )
                             }
                         }
-                        val memorySuggestion = if (memorySummaryGenerationEnabled) {
-                            memorySummarySuggestionFor(state.messages)
-                        } else null
                         if (memorySuggestion != null) {
                             item(key = "conversation-memory-tail", contentType = "conversation-memory-tail") {
                                 ConversationTailMemoryAction(onClick = { onCreateMemorySummary(selectedConversation?.id, memorySuggestion) })
@@ -1229,7 +1363,9 @@ internal fun ConversationWorkspaceDialog(
                     // welcome tip, confirmation dialog, or toast: the user can see why the
                     // already-committed message has no model reply and can continue typing to
                     // dismiss it.
-                    state.sendError?.takeIf { it.isNotBlank() && state.normalSendRecovery == null }?.let { notice ->
+                    state.sendError?.takeIf {
+                        it.isNotBlank() && state.normalSendRecovery == null && state.sendErrorConversationId == state.selectedConversationId
+                    }?.let { notice ->
                         Surface(
                             color = Color(0xFFFFF3F1),
                             shape = RoundedCornerShape(14.dp),
@@ -1380,8 +1516,8 @@ internal fun ConversationWorkspaceDialog(
                     onToggleConversationWebSearch = { enabled -> onSetCurrentConversationWebSearchEnabled(enabled) },
                     modelOptions = listOf(null to com.nanzhufeng.ai.domain.AutoModelRouter.label(
                         com.nanzhufeng.ai.domain.AutoRoutingFacts(
-                            hasImageVideoOrPdf = state.draft?.attachments?.isNotEmpty() == true,
-                            isComplexProjectDebug = state.draft?.text.orEmpty().contains(Regex("(?i)\\b(debug|bug|stacktrace|exception|compile)\\b|调试|复杂项目|报错")),
+                            hasAttachment = state.draft?.attachments?.isNotEmpty() == true,
+                            requiresComplexReasoning = com.nanzhufeng.ai.domain.AutoRoutingTaskClassifier.requiresComplexReasoning(state.draft?.text.orEmpty()),
                         ),
                     )) + com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choices
                         .filterNot { it == com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.auto }
@@ -1389,7 +1525,6 @@ internal fun ConversationWorkspaceDialog(
                     selectedModelId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId,
                     onDismiss = { composerMenu = ComposerMenu.NONE },
                     onSelectModel = { modelId -> composerMenu = ComposerMenu.NONE; onSelectP6GModel(modelId) },
-                    onSelectCompare = null,
                 )
             }
         }
@@ -1397,31 +1532,99 @@ internal fun ConversationWorkspaceDialog(
     if (searchPageVisible) {
         ConversationSearchPage(
             state = state,
+            scrollStates = searchScrollStates,
+            attachmentSortMode = searchAttachmentSortMode,
+            attachmentFileType = searchAttachmentFileType,
+            locateConversationId = searchLocateConversationId,
+            locateMessageId = searchLocateMessageId,
+            locateAttachmentId = searchLocateAttachmentId,
+            locateRequestId = searchLocateRequestId,
+            onSelectAttachmentSortMode = { sortMode ->
+                if (sortMode != searchAttachmentSortMode) {
+                    searchReturnAttachmentId = null
+                    searchLocateConversationId = null
+                    searchLocateMessageId = null
+                    searchLocateAttachmentId = null
+                    searchAttachmentSortMode = sortMode
+                    drawerScope.launch {
+                        when (state.searchCategory) {
+                            ConversationSearchCategory.ALL -> searchScrollStates.all.scrollToItem(0)
+                            ConversationSearchCategory.IMAGE,
+                            ConversationSearchCategory.VIDEO,
+                            ConversationSearchCategory.AUDIO,
+                            ConversationSearchCategory.FILE -> searchScrollStates.grid(state.searchCategory).scrollToItem(0)
+                            ConversationSearchCategory.TEXT -> Unit
+                        }
+                    }
+                }
+            },
+            onSelectAttachmentFileType = { type ->
+                if (type != searchAttachmentFileType) {
+                    searchReturnAttachmentId = null
+                    searchLocateConversationId = null
+                    searchLocateMessageId = null
+                    searchLocateAttachmentId = null
+                    searchAttachmentFileType = type
+                    drawerScope.launch { searchScrollStates.file.scrollToItem(0) }
+                }
+            },
             onDismiss = {
                 searchPageVisible = false
                 returnToSearchAfterSearchOpen = false
-                onDrawerOpenChanged(true)
-                drawerScope.launch { drawerState.open() }
+                if (searchDismissesToParent) {
+                    onDismiss()
+                } else {
+                    onDrawerOpenChanged(true)
+                    drawerScope.launch { drawerState.open() }
+                }
             },
-            onQueryChanged = onSearchChanged,
+            onQueryChanged = { query ->
+                searchReturnAttachmentId = null
+                searchLocateConversationId = null
+                searchLocateMessageId = null
+                searchLocateAttachmentId = null
+                onSearchChanged(query)
+            },
             onSubmit = onSearchRequested,
             onSelectCategory = { category ->
                 // The search owner re-runs an existing query after a category switch.
+                searchReturnAttachmentId = null
+                searchLocateConversationId = null
+                searchLocateMessageId = null
+                searchLocateAttachmentId = null
                 onSearchCategoryChanged(category)
             },
             onOpenHistory = onSearchFocus,
             onCloseHistory = onCloseSearchHistory,
-            onFillHistory = onFillSearchHistory,
+            onFillHistory = { query ->
+                searchReturnAttachmentId = null
+                searchLocateConversationId = null
+                searchLocateMessageId = null
+                searchLocateAttachmentId = null
+                onFillSearchHistory(query)
+            },
             onClearHistory = onClearSearchHistory,
             onOpenTextHit = { hit ->
+                searchReturnAttachmentId = null
+                searchLocateConversationId = null
+                searchLocateMessageId = null
+                searchLocateAttachmentId = null
                 returnToSearchAfterSearchOpen = true
                 onOpenSearchHit(hit)
                 searchPageVisible = false
             },
-            onOpenAttachmentHit = { hit -> onOpenSearchAttachment(hit.attachment) },
+            onOpenAttachmentHit = { hit ->
+                onOpenSearchAttachment(hit.attachment)
+            },
+            onOpenGlmOcrHit = { hit ->
+                onOpenSearchAttachment(hit.attachment)
+            },
             onEnsureAttachmentPreview = onEnsureSearchAttachmentPreview,
             onLocateAttachment = { hit, anchorBounds ->
                 searchAttachmentActionTarget = SearchAttachmentActionMenuTarget(hit, anchorBounds)
+            },
+            onLocateGlmOcr = { hit, anchorBounds ->
+                searchGlmOcrActionTarget = SearchGlmOcrActionMenuTarget(hit, anchorBounds)
             },
         )
     }
@@ -1431,12 +1634,96 @@ internal fun ConversationWorkspaceDialog(
             onDismiss = { searchAttachmentActionTarget = null },
             onOpenConversation = {
                 val hit = target.hit
+                // A quick locate leaves the search canvas only to reveal this attachment in
+                // its owner conversation. The existing category Lazy state is already the
+                // return viewport; carrying the search-target anchor back would force that
+                // grid/list to scroll to this file and lose the user's original position.
+                searchReturnAttachmentId = null
+                searchLocateConversationId = null
+                searchLocateMessageId = null
+                searchLocateAttachmentId = null
                 onLocateSearchAttachment(hit)
                 searchAttachmentActionTarget = null
                 returnToSearchAfterSearchOpen = true
                 searchPageVisible = false
             },
+            onRequestDelete = {
+                confirmingSearchAttachmentDelete = target.hit
+                searchAttachmentActionTarget = null
+            },
         )
+    }
+    confirmingSearchAttachmentDelete?.let { hit ->
+        TransientMenuTextScale {
+            AlertDialog(
+                onDismissRequest = { confirmingSearchAttachmentDelete = null },
+                containerColor = ForegroundSurface,
+                shape = RoundedCornerShape(24.dp),
+                title = { Text("删除", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) },
+                text = { Text("仅移除这条消息中的附件。", style = MaterialTheme.typography.bodyMedium) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            confirmingSearchAttachmentDelete = null
+                            onDeleteSearchAttachment(hit)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                        shape = P5AInteractiveShape,
+                    ) { Text("确认删除", style = MaterialTheme.typography.labelLarge) }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { confirmingSearchAttachmentDelete = null },
+                        shape = RoundedCornerShape(14.dp),
+                    ) { Text("取消", style = MaterialTheme.typography.labelLarge) }
+                },
+            )
+        }
+    }
+    searchGlmOcrActionTarget?.let { target ->
+        SearchAttachmentActionPopup(
+            displayName = target.hit.attachment.displayName ?: "南枫转写文件",
+            onDismiss = { searchGlmOcrActionTarget = null },
+            onOpenConversation = {
+                searchGlmOcrActionTarget = null
+                returnToSearchAfterSearchOpen = true
+                searchPageVisible = false
+                onOpenGlmOcrSearchHit(target.hit)
+            },
+            onRequestDelete = {
+                confirmingSearchGlmOcrDelete = target.hit
+                searchGlmOcrActionTarget = null
+            },
+        )
+    }
+    confirmingSearchGlmOcrDelete?.let { hit ->
+        TransientMenuTextScale {
+            AlertDialog(
+                onDismissRequest = { confirmingSearchGlmOcrDelete = null },
+                containerColor = ForegroundSurface,
+                shape = RoundedCornerShape(24.dp),
+                title = { Text("删除南枫转写", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) },
+                text = { Text("将删除这条转写记录、原始文件和生成的 Markdown；仍被其他位置引用的共享文件会保留。", style = MaterialTheme.typography.bodyMedium) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            confirmingSearchGlmOcrDelete = null
+                            onDeleteGlmOcrSearchHit(hit)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                        shape = P5AInteractiveShape,
+                    ) { Text("确认删除", style = MaterialTheme.typography.labelLarge) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmingSearchGlmOcrDelete = null }, shape = RoundedCornerShape(14.dp)) {
+                        Text("取消", style = MaterialTheme.typography.labelLarge)
+                    }
+                },
+            )
+        }
     }
     // Register after ModalNavigationDrawer so this handler wins over the drawer's internal
     // callback: physical left/right Back closes into the current chat canvas, never Activity.
@@ -1454,6 +1741,7 @@ internal fun ConversationWorkspaceDialog(
             includeRename = target.includeRename,
             onDismiss = { conversationActionTarget = null },
             onManage = onManage,
+            onMarkWatchLater = onMarkWatchLater,
             onRequestRename = { target ->
                 conversationActionTarget = null
                 onSelect(target.id)
@@ -1472,16 +1760,11 @@ internal fun ConversationWorkspaceDialog(
             },
             onShareConversation = { target ->
                 conversationActionTarget = null
-                if (target.id == state.selectedConversationId) {
-                    shareConversation(target)
-                } else {
-                    onSelect(target.id)
-                    Toast.makeText(context, "已打开该对话，请再次选择分享。", Toast.LENGTH_SHORT).show()
-                }
-            },
-            onExportConversationMarkdown = { target ->
-                conversationActionTarget = null
                 exportConversationMarkdown(target)
+            },
+            onSyncConversation = { target ->
+                conversationActionTarget = null
+                onSyncConversation(target)
             },
             onShowUploadedFiles = { target ->
                 conversationActionTarget = null
@@ -1546,9 +1829,8 @@ internal fun ConversationWorkspaceDialog(
             title = { Text("换模型重答") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("仅切换本机模型偏好，不会读取 Key 或联网。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                     NanfengModelServiceCatalog.presets.forEach { preset ->
-                        OutlinedButton(onClick = { choosingModel = false; onAction(ConversationActionKind.CHANGE_MODEL, preset.id) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text(preset.displayName) }
+                        OutlinedButton(onClick = { choosingModel = false; onAction(ConversationActionKind.CHANGE_MODEL, preset.id) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text(preset.displayName, fontWeight = FontWeight.Bold) }
                     }
                 }
             },
@@ -1562,10 +1844,12 @@ internal fun ConversationWorkspaceDialog(
         if (transcript == null) messageActionTarget = null else MessageActionPopup(
             anchorBounds = target.anchorBounds,
             pressPosition = target.pressPosition,
-            headline = listOfNotNull(
-                formatTranscriptTimeOrNull(transcript.metadata.createdAt),
-                transcript.metadata.modelSnapshotLabel?.takeIf { it.isNotBlank() },
-            ).joinToString(" · "),
+            headline = transcript.metadata.modelSnapshotLabel?.takeIf { it.isNotBlank() }?.let { modelName ->
+                modelNameAnnotatedText(
+                    prefix = formatTranscriptTimeOrNull(transcript.metadata.createdAt)?.let { "$it · " }.orEmpty(),
+                    modelName = modelName,
+                )
+            } ?: AnnotatedString(formatTranscriptTimeOrNull(transcript.metadata.createdAt).orEmpty()),
             editable = transcript.message.role == com.nanzhufeng.ai.domain.MessageRole.USER && editableForMenu[transcript.message.messageId] != null,
             onDismiss = { messageActionTarget = null },
         ) {
@@ -1611,7 +1895,7 @@ internal fun ConversationWorkspaceDialog(
     if (confirmingDelete) AlertDialog(
         onDismissRequest = { confirmingDelete = false }, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp),
         title = { Text("移入回收站？") },
-        text = { Text("删除与归档不同：会话消息树不会物理删除，可从回收站恢复。") },
+        text = { Text("可从回收站恢复。") },
         confirmButton = { Button(onClick = {
             state.conversations.firstOrNull { it.id == state.selectedConversationId }?.let { onManage(it, ConversationManagementAction.SOFT_DELETE, null) }
             confirmingDelete = false
@@ -1630,20 +1914,26 @@ internal fun ConversationWorkspaceDialog(
         )
     }
     state.imagePreview?.let { preview ->
-        val generatedImageIds = state.messages.firstOrNull { message ->
+        val relatedImageMessage = state.messages.firstOrNull { message ->
             message.message.blocks.filterIsInstance<PresentationBlock.AttachmentReference>().any { it.attachment.id == preview.id }
-        }?.message?.blocks
+        }
+        val generatedImageIds = relatedImageMessage?.message?.blocks
             ?.filterIsInstance<PresentationBlock.AttachmentReference>()
+            ?.filter { it.attachment.mimeType.startsWith("image/") }
+            ?.let { imageBlocks ->
+                if (relatedImageMessage.message.role == com.nanzhufeng.ai.domain.MessageRole.USER) imageBlocks
+                else ascendingAssistantImageOrder(imageBlocks)
+            }
             ?.map { it.attachment }
-            ?.filter { it.mimeType.startsWith("image/") }
             ?.map { it.id }
             .orEmpty()
         ImagePreviewDialog(preview, generatedImageIds, onOpenImagePreview, onCloseImagePreview, onRequestAttachmentTransfers)
     }
-    state.pdfPreview?.let { preview -> PdfPreviewDialog(preview, onOpenPdfPage, onClosePdfPreview) }
+    state.pdfPreview?.let { preview -> PdfPreviewDialog(preview, state.pdfPreviewLoading, onOpenPdfPage, onClosePdfPreview) }
     state.videoPreview?.let { preview -> VideoPreviewDialog(preview, onCloseVideoPreview) }
     state.audioPreview?.let { preview -> AudioPreviewDialog(preview, onCloseAudioPreview) }
     state.textPreview?.let { preview -> TextPreviewDialog(preview, onCloseTextPreview) }
+    state.archivePreview?.let { preview -> ArchivePreviewDialog(preview, onOpenArchiveEntry, onCloseTextPreview) }
     // P3-J is a root sibling of the workspace.  It is never measured by the transcript,
     // drawer, or composer and therefore cannot move any frozen chat-first geometry.
     }
@@ -1863,8 +2153,8 @@ private fun ConversationWorkScope(
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
     onCopyAssistant: (PresentedTranscriptMessage) -> Unit,
     onShareAssistant: (PresentedTranscriptMessage) -> Unit,
-    onExportAssistantMarkdown: (PresentedTranscriptMessage) -> Unit,
     onBranchAssistant: (MessageNodeId) -> Unit,
+    onEnsureAttachmentPreview: (ConversationAttachmentReference) -> Unit,
     onOpenImagePreview: (AttachmentId) -> Unit,
     onOpenPdfPreview: (AttachmentId) -> Unit,
     onOpenVideoPreview: (AttachmentId) -> Unit,
@@ -1934,8 +2224,8 @@ private fun ConversationWorkScope(
                     onLongPress = onLongPress,
                     onCopyAssistant = onCopyAssistant,
                     onShareAssistant = onShareAssistant,
-                    onExportAssistantMarkdown = onExportAssistantMarkdown,
                     onBranchAssistant = onBranchAssistant,
+                    onEnsureAttachmentPreview = onEnsureAttachmentPreview,
                     onOpenImagePreview = onOpenImagePreview,
                     onOpenPdfPreview = onOpenPdfPreview,
                     onOpenVideoPreview = onOpenVideoPreview,
@@ -2139,7 +2429,7 @@ private fun ConversationAttemptHistory(items: List<com.nanzhufeng.ai.domain.Conv
         } else items.forEach { item ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("${attemptActionLabel(item.actionKind)} · ${attemptStateLabel(item.deliveryState)}", style = MaterialTheme.typography.bodyMedium)
-                Text("${com.nanzhufeng.ai.domain.modelDisplayNameForUser(item.modelDisplayName)} · ${item.modelId}", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+                Text("${com.nanzhufeng.ai.domain.modelDisplayNameForUser(item.modelDisplayName)} · ${item.modelId}", style = MaterialTheme.typography.bodySmall, color = SecondaryText, fontWeight = FontWeight.Bold)
                 Text("${item.harnessLabel} · ${item.registrySnapshotId.value}", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                 Text("本地 fixture · 不产生 Provider 费用 · ${attemptTokenLabel(item)}", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
             }
@@ -2171,6 +2461,7 @@ private fun ConversationNavigationDrawer(
     projects: List<ProjectSnapshot>,
     onCreate: () -> Unit,
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
+    onClearWatchLater: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onScope: (ConversationListScope) -> Unit,
     onOpenSearchPage: () -> Unit,
     onManage: (com.nanzhufeng.ai.domain.Conversation, ConversationManagementAction, String?) -> Unit,
@@ -2226,11 +2517,17 @@ private fun ConversationNavigationDrawer(
             projects = projects,
             conversations = drawerConversations,
             selectedConversationId = state.selectedConversationId,
+            watchLaterAtEpochMs = state.watchLaterAtEpochMs,
             onSelect = { id ->
                 // Match the normal drawer: with a row ribbon exposed, the first tap
                 // on any other conversation is a safe dismissal, never a surprise
                 // navigation away from the currently open conversation.
-                if (revealedConversationId != null) revealedConversationId = null else onSelect(id)
+                if (revealedConversationId != null) {
+                    revealedConversationId = null
+                } else {
+                    onClearWatchLater(id)
+                    onSelect(id)
+                }
             },
             onConversationActions = { conversation, anchor ->
                 if (revealedConversationId != null) revealedConversationId = null else onRequestConversationActions(conversation, anchor)
@@ -2247,9 +2544,20 @@ private fun ConversationNavigationDrawer(
             onOpenSettings = { if (revealedConversationId != null) revealedConversationId = null else onOpenRoute(P5ARoute.SETTINGS) },
         )
     } else {
-        val pinned = drawerConversations.filter { it.pinnedAt != null }
-        val content = drawerConversations.filter { it.pinnedAt == null }
-        val batchCandidates = pinned + content
+        fun prioritizeWatchLater(items: List<com.nanzhufeng.ai.domain.Conversation>) = items.sortedWith(
+            compareByDescending<com.nanzhufeng.ai.domain.Conversation> { it.id in state.watchLaterAtEpochMs }
+                .thenByDescending { state.watchLaterAtEpochMs[it.id] ?: Long.MIN_VALUE },
+        )
+        val pinned = remember(drawerConversations, state.watchLaterAtEpochMs) {
+            prioritizeWatchLater(drawerConversations.filter { it.pinnedAt != null })
+        }
+        val content = remember(drawerConversations, state.watchLaterAtEpochMs) {
+            prioritizeWatchLater(drawerConversations.filter { it.pinnedAt == null })
+        }
+        val batchCandidates = remember(pinned, content) { pinned + content }
+        val batchCandidateIds = remember(batchCandidates) {
+            batchCandidates.mapTo(linkedSetOf()) { it.id.value }
+        }
         var batchEditing by remember { mutableStateOf(false) }
         var selectedBatchConversationIds by remember { mutableStateOf<Set<String>>(emptySet()) }
         var pendingBatchDelete by remember { mutableStateOf<List<com.nanzhufeng.ai.domain.Conversation>>(emptyList()) }
@@ -2257,9 +2565,12 @@ private fun ConversationNavigationDrawer(
             val currentIds = drawerConversations.map { it.id.value }.toSet()
             selectedBatchConversationIds = selectedBatchConversationIds.intersect(currentIds)
         }
-        val allBatchSelected = batchCandidates.isNotEmpty() && batchCandidates.all { it.id.value in selectedBatchConversationIds }
+        val allBatchSelected = batchCandidateIds.isNotEmpty() &&
+            selectedBatchConversationIds.size == batchCandidateIds.size &&
+            selectedBatchConversationIds.containsAll(batchCandidateIds)
         val drawerIdentityVisualSize = scaledAppIconSize(36.dp)
         val drawerIdentityTitleLineHeight = scaledAppTextUnit(28.sp)
+        val drawerContentTopInset = with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() } + 16.dp
         val drawerIdentityHeaderReservedHeight = maxOf(
             drawerIdentityVisualSize,
             with(LocalDensity.current) { drawerIdentityTitleLineHeight.toDp() },
@@ -2272,7 +2583,7 @@ private fun ConversationNavigationDrawer(
         Box(modifier = Modifier.fillMaxSize().background(ConversationDrawerBaseSurface)) {
             // Empty drawer space is a neutral dismissal target for the currently revealed row.
             // Interactive children remain above this transparent layer and retain their action.
-            Column(
+            LazyColumn(
                 // The two bottom actions are independent floating controls.  Keep the
                 // conversation canvas continuous beneath them instead of reserving a
                 // bottom tray (which visually reads as a white strip behind the actions).
@@ -2284,79 +2595,117 @@ private fun ConversationNavigationDrawer(
                     // This is the scroll viewport treatment: it must wrap the scroll node,
                     // not be a sibling layer or be clipped by the content safe-area inset.
                     .conversationEdgeGrayFade(edgeColor = ConversationDrawerBaseSurface)
-                    .verticalScroll(rememberScrollState())
-                    .statusBarsPadding()
-                    .padding(
-                    start = 5.dp,
-                    end = 5.dp,
-                    top = 16.dp,
-                )
+                    .padding(horizontal = 5.dp)
                     .clickable(
                         enabled = revealedConversationId != null,
                         interactionSource = drawerDismissInteractionSource,
                         indication = null,
                         onClick = { dismissRevealedConversation() },
                 ),
+                contentPadding = PaddingValues(top = drawerContentTopInset),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // This is scrollable top space for the fixed identity header. It must match the
                 // larger icon/title line so the first quick action never sits underneath it.
-                Spacer(Modifier.height(drawerIdentityHeaderReservedHeight))
-                Surface(
-                    color = ConversationDrawerQuickActionSurface,
-                    shape = P5AInteractiveShape,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(42.dp)
-                        .clip(P5AInteractiveShape)
-                        .combinedClickable(onClick = {
-                            if (!dismissRevealedConversation()) onOpenSearchPage()
-                        }),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
+                item(key = "drawer-identity-space", contentType = "spacer") {
+                    Spacer(Modifier.height(drawerIdentityHeaderReservedHeight))
+                }
+                item(key = "drawer-search", contentType = "quick-action") {
+                    Surface(
+                        color = ConversationDrawerQuickActionSurface,
+                        shape = P5AInteractiveShape,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .clip(P5AInteractiveShape)
+                            .combinedClickable(onClick = {
+                                if (!dismissRevealedConversation()) onOpenSearchPage()
+                            }),
                     ) {
-                        Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(17.dp)), tint = BodyText)
-                        Text(
-                            "搜索",
-                            color = BodyText,
-                            fontSize = scaledConversationTextUnit(16.sp),
-                            lineHeight = scaledConversationTextUnit(20.sp),
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(17.dp)), tint = BodyText)
+                            Text(
+                                "搜索",
+                                color = BodyText,
+                                fontSize = scaledConversationTextUnit(16.sp),
+                                lineHeight = scaledConversationTextUnit(20.sp),
+                            )
+                        }
                     }
                 }
-                Surface(
-                    color = ConversationDrawerQuickActionSurface,
-                    shape = P5AInteractiveShape,
-                    modifier = Modifier.fillMaxWidth().height(42.dp).clip(P5AInteractiveShape).combinedClickable(onClick = {
-                        if (!dismissRevealedConversation()) onOpenScheduledMonitors()
-                    }),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
+                item(key = "drawer-scheduled", contentType = "quick-action") {
+                    Surface(
+                        onClick = {
+                            if (!dismissRevealedConversation()) onOpenScheduledMonitors()
+                        },
+                        color = Color.Transparent,
+                        contentColor = BodyText,
+                        shape = P5AInteractiveShape,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                     ) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(18.dp)), tint = SecondaryText)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "已计划",
-                            color = BodyText,
-                            fontSize = scaledConversationTextUnit(16.sp),
-                            lineHeight = scaledConversationTextUnit(20.sp),
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.Schedule, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(24.dp)), tint = BodyText)
+                            Spacer(Modifier.width(16.dp))
+                            Text(
+                                "定时任务",
+                                color = BodyText,
+                                fontSize = scaledConversationTextUnit(16.sp),
+                                lineHeight = scaledConversationTextUnit(20.sp),
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
+                item(key = "drawer-document-markdown", contentType = "quick-action") {
+                    Surface(
+                        onClick = {
+                            if (!dismissRevealedConversation()) onOpenRoute(P5ARoute.OCR)
+                        },
+                        color = Color.Transparent,
+                        contentColor = BodyText,
+                        shape = P5AInteractiveShape,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(scaledAppIconSize(24.dp)), tint = BodyText)
+                            Spacer(Modifier.width(16.dp))
+                            Text(
+                                GLM_OCR_WORKSPACE_TITLE,
+                                color = BodyText,
+                                fontSize = scaledConversationTextUnit(16.sp),
+                                lineHeight = scaledConversationTextUnit(20.sp),
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
                     }
                 }
                 if (pinned.isNotEmpty() && state.listScope == ConversationListScope.ACTIVE) {
-                    Text("已置顶", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-                    pinned.forEach { conversation ->
+                    item(key = "drawer-pinned-header", contentType = "section-header") {
+                        Text("已置顶", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                    }
+                    items(
+                        items = pinned,
+                        key = { "pinned:${it.id.value}" },
+                        contentType = { "conversation-row" },
+                    ) { conversation ->
                         ConversationNavigationRow(
                             conversation = conversation,
                             selected = conversation.id == state.selectedConversationId,
                             unread = notificationReminderSettings.unreadConversationIndicatorsEnabled && conversation.id in state.unreadConversationIds,
-                            onSelect = { id -> if (!dismissRevealedConversation()) onSelect(id) },
+                            watchLater = conversation.id in state.watchLaterAtEpochMs,
+                            onSelect = { id -> if (!dismissRevealedConversation()) { onClearWatchLater(id); onSelect(id) } },
                             onRequestConversationActions = { target, anchor ->
                                 if (!dismissRevealedConversation()) onRequestConversationActions(target, anchor)
                             },
@@ -2373,27 +2722,39 @@ private fun ConversationNavigationDrawer(
                         )
                     }
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("最近", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-                    IconButton(
-                        onClick = {
-                            if (!dismissRevealedConversation()) {
-                                batchEditing = !batchEditing
-                                selectedBatchConversationIds = emptySet()
-                            }
-                        },
-                        enabled = batchCandidates.isNotEmpty(),
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(Icons.Rounded.Edit, contentDescription = if (batchEditing) "退出批量编辑" else "批量编辑对话", modifier = Modifier.size(scaledAppIconSize(19.dp)), tint = if (batchEditing) AccentOrange else SecondaryText)
+                item(key = "drawer-recent-header", contentType = "section-header") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("最近", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                        IconButton(
+                            onClick = {
+                                if (!dismissRevealedConversation()) {
+                                    batchEditing = !batchEditing
+                                    selectedBatchConversationIds = emptySet()
+                                }
+                            },
+                            enabled = batchCandidates.isNotEmpty(),
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.Edit,
+                                contentDescription = if (batchEditing) "退出批量编辑" else "批量编辑对话",
+                                modifier = Modifier.size(scaledAppIconSize(13.3.dp)),
+                                tint = if (batchEditing) AccentOrange else SecondaryText,
+                            )
+                        }
                     }
                 }
-                content.forEach { conversation ->
+                items(
+                    items = content,
+                    key = { "recent:${it.id.value}" },
+                    contentType = { "conversation-row" },
+                ) { conversation ->
                     ConversationNavigationRow(
                         conversation = conversation,
                         selected = conversation.id == state.selectedConversationId,
                         unread = notificationReminderSettings.unreadConversationIndicatorsEnabled && conversation.id in state.unreadConversationIds,
-                        onSelect = { id -> if (!dismissRevealedConversation()) onSelect(id) },
+                        watchLater = conversation.id in state.watchLaterAtEpochMs,
+                        onSelect = { id -> if (!dismissRevealedConversation()) { onClearWatchLater(id); onSelect(id) } },
                         onRequestConversationActions = { target, anchor ->
                             if (!dismissRevealedConversation()) onRequestConversationActions(target, anchor)
                         },
@@ -2409,7 +2770,9 @@ private fun ConversationNavigationDrawer(
                         },
                     )
                 }
-                Spacer(Modifier.height(drawerScrollableEndInset))
+                item(key = "drawer-end-space", contentType = "spacer") {
+                    Spacer(Modifier.height(drawerScrollableEndInset))
+                }
             }
             Row(
                 modifier = Modifier
@@ -2453,7 +2816,7 @@ private fun ConversationNavigationDrawer(
                     selectedCount = selectedBatchConversationIds.size,
                     allSelected = allBatchSelected,
                     onSelectAll = {
-                        selectedBatchConversationIds = if (allBatchSelected) emptySet() else batchCandidates.map { it.id.value }.toSet()
+                        selectedBatchConversationIds = if (allBatchSelected) emptySet() else batchCandidateIds
                     },
                     onDelete = {
                         pendingBatchDelete = batchCandidates.filter { it.id.value in selectedBatchConversationIds }
@@ -2478,7 +2841,7 @@ private fun ConversationNavigationDrawer(
                     modifier = Modifier.conversationForegroundShadow(shape = CircleShape),
                 ) {
                     IconButton(onClick = { if (!dismissRevealedConversation()) onOpenRoute(P5ARoute.SETTINGS) }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = DrawerSettingsAccent)
+                        Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = BodyText)
                     }
                 }
                 Button(
@@ -2503,7 +2866,7 @@ private fun ConversationNavigationDrawer(
                 containerColor = ForegroundSurface,
                 shape = RoundedCornerShape(24.dp),
                 title = { Text("移入回收站？") },
-                text = { Text("将把 $batchCount 个会话移入回收站，可在设置中的回收站恢复；不会物理删除消息、附件或调用关联。") },
+                text = { Text("$batchCount 个会话将移入回收站，可恢复。") },
                 confirmButton = {
                     Button(onClick = {
                         onBatchSoftDelete(pendingBatchDelete)
@@ -2602,6 +2965,7 @@ private fun WorkProjectNavigationDrawer(
     projects: List<ProjectSnapshot>,
     conversations: List<com.nanzhufeng.ai.domain.Conversation>,
     selectedConversationId: com.nanzhufeng.ai.domain.ConversationId?,
+    watchLaterAtEpochMs: Map<com.nanzhufeng.ai.domain.ConversationId, Long>,
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onConversationActions: (com.nanzhufeng.ai.domain.Conversation, androidx.compose.ui.geometry.Rect) -> Unit,
     onConversationSwipeAction: (com.nanzhufeng.ai.domain.Conversation, ConversationRowSwipeAction) -> Unit,
@@ -2617,7 +2981,11 @@ private fun WorkProjectNavigationDrawer(
 ) {
     var sidebarMenuVisible by remember { mutableStateOf(false) }
     val activeProjectIds = projects.map { it.project.id.value }.toSet()
-    val ungrouped = conversations.filter { it.projectId !in activeProjectIds }
+    fun prioritizeWatchLater(items: List<com.nanzhufeng.ai.domain.Conversation>) = items.sortedWith(
+        compareByDescending<com.nanzhufeng.ai.domain.Conversation> { it.id in watchLaterAtEpochMs }
+            .thenByDescending { watchLaterAtEpochMs[it.id] ?: Long.MIN_VALUE },
+    )
+    val ungrouped = prioritizeWatchLater(conversations.filter { it.projectId !in activeProjectIds })
     Box(Modifier.fillMaxSize().background(ConversationDrawerBaseSurface)) {
         Column(
             // Match the normal-chat drawer: the last work conversation must be able
@@ -2652,11 +3020,12 @@ private fun WorkProjectNavigationDrawer(
                 Text("还没有项目。创建项目后，可在项目内新建独立工作对话。", color = SecondaryText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp))
             }
             projects.forEach { project ->
-                val projectConversations = conversations.filter { it.projectId == project.project.id.value }
+                val projectConversations = prioritizeWatchLater(conversations.filter { it.projectId == project.project.id.value })
                 WorkProjectFolder(
                     project = project,
                     conversations = projectConversations,
                     selectedConversationId = selectedConversationId,
+                    watchLaterAtEpochMs = watchLaterAtEpochMs,
                     onSelect = onSelect,
                     onConversationActions = onConversationActions,
                     onConversationSwipeAction = onConversationSwipeAction,
@@ -2674,6 +3043,7 @@ private fun WorkProjectNavigationDrawer(
                     ConversationNavigationRow(
                         conversation = conversation,
                         selected = conversation.id == selectedConversationId,
+                        watchLater = conversation.id in watchLaterAtEpochMs,
                         onSelect = onSelect,
                         onRequestConversationActions = onConversationActions,
                         onSwipeAction = onConversationSwipeAction,
@@ -2695,7 +3065,7 @@ private fun WorkProjectNavigationDrawer(
                 .conversationForegroundShadow(shape = CircleShape),
         ) {
             IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = DrawerSettingsAccent)
+                Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = BodyText)
             }
         }
     }
@@ -2706,6 +3076,7 @@ private fun WorkProjectFolder(
     project: ProjectSnapshot,
     conversations: List<com.nanzhufeng.ai.domain.Conversation>,
     selectedConversationId: com.nanzhufeng.ai.domain.ConversationId?,
+    watchLaterAtEpochMs: Map<com.nanzhufeng.ai.domain.ConversationId, Long>,
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onConversationActions: (com.nanzhufeng.ai.domain.Conversation, androidx.compose.ui.geometry.Rect) -> Unit,
     onConversationSwipeAction: (com.nanzhufeng.ai.domain.Conversation, ConversationRowSwipeAction) -> Unit,
@@ -2765,6 +3136,7 @@ private fun WorkProjectFolder(
                 ConversationNavigationRow(
                     conversation = conversation,
                     selected = conversation.id == selectedConversationId,
+                    watchLater = conversation.id in watchLaterAtEpochMs,
                     onSelect = onSelect,
                     onRequestConversationActions = onConversationActions,
                     onSwipeAction = onConversationSwipeAction,
@@ -2805,7 +3177,7 @@ private fun TemporaryConversationNavigationDrawer(onExit: () -> Unit, onOpenSett
                 .conversationForegroundShadow(shape = CircleShape),
         ) {
             IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = DrawerSettingsAccent)
+                Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = BodyText)
             }
         }
     }
@@ -3097,7 +3469,7 @@ internal fun ConversationLifecycleListSettingsCard(
             containerColor = ForegroundSurface,
             shape = RoundedCornerShape(24.dp),
             title = { Text("移入回收站？") },
-            text = { Text("“${conversation.title}”会从已归档移入回收站；消息和附件不会被物理删除。") },
+            text = { Text("“${conversation.title}”将移入回收站，可恢复。") },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("取消") } },
             confirmButton = {
                 Button(onClick = {
@@ -3113,7 +3485,7 @@ internal fun ConversationLifecycleListSettingsCard(
             containerColor = ForegroundSurface,
             shape = RoundedCornerShape(24.dp),
             title = { Text("永久删除？") },
-            text = { Text("“${conversation.title}”的本地对话和从属记录将被永久删除，无法恢复。已保存的记忆摘要和费用统计不会受影响。") },
+            text = { Text("将永久删除“${conversation.title}”，无法恢复。") },
             dismissButton = { TextButton(onClick = { pendingPermanentDelete = null }) { Text("取消") } },
             confirmButton = {
                 Button(
@@ -3134,9 +3506,9 @@ internal fun ConversationLifecycleListSettingsCard(
             title = { Text(if (isRecycleBin) "清空回收站？" else "清空已归档？") },
             text = {
                 if (isRecycleBin) {
-                    Text("将永久删除 ${state.conversations.size} 个回收站会话及其本地消息树，无法恢复。已保存的记忆摘要和费用统计不会受影响。")
+                    Text("将永久删除 ${state.conversations.size} 个会话，无法恢复。")
                 } else {
-                    Text("将把 ${state.conversations.size} 个已归档会话移入回收站；不会物理删除，之后仍可在回收站恢复。")
+                    Text("${state.conversations.size} 个会话将移入回收站，可恢复。")
                 }
             },
             dismissButton = { TextButton(onClick = { pendingBulkCleanup = false }) { Text("取消") } },
@@ -3367,10 +3739,42 @@ private fun SearchResultsMainPanel(
  * A separate destination, not a drawer expansion: the source workspace remains intact beneath
  * it and the six categories all consume the same local-only search owner.
  */
+private data class ConversationSearchScrollStates(
+    val all: LazyListState,
+    val text: LazyListState,
+    val image: LazyGridState,
+    val video: LazyGridState,
+    val audio: LazyGridState,
+    val file: LazyGridState,
+) {
+    fun list(category: ConversationSearchCategory): LazyListState = when (category) {
+        ConversationSearchCategory.ALL -> all
+        ConversationSearchCategory.TEXT -> text
+        else -> error("$category does not use a search list")
+    }
+
+    fun grid(category: ConversationSearchCategory): LazyGridState = when (category) {
+        ConversationSearchCategory.IMAGE -> image
+        ConversationSearchCategory.VIDEO -> video
+        ConversationSearchCategory.AUDIO -> audio
+        ConversationSearchCategory.FILE -> file
+        else -> error("$category does not use a search grid")
+    }
+}
+
 @Composable
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun ConversationSearchPage(
     state: ConversationFoundationUiState,
+    scrollStates: ConversationSearchScrollStates,
+    attachmentSortMode: ConversationAttachmentSortMode,
+    attachmentFileType: ConversationAttachmentFileType,
+    locateConversationId: String?,
+    locateMessageId: String?,
+    locateAttachmentId: String?,
+    locateRequestId: Long,
+    onSelectAttachmentSortMode: (ConversationAttachmentSortMode) -> Unit,
+    onSelectAttachmentFileType: (ConversationAttachmentFileType) -> Unit,
     onDismiss: () -> Unit,
     onQueryChanged: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -3381,8 +3785,10 @@ private fun ConversationSearchPage(
     onClearHistory: () -> Unit,
     onOpenTextHit: (com.nanzhufeng.ai.domain.ConversationSearchHit) -> Unit,
     onOpenAttachmentHit: (ConversationAttachmentSearchHit) -> Unit,
+    onOpenGlmOcrHit: (GlmOcrDocumentSearchHit) -> Unit,
     onEnsureAttachmentPreview: (ConversationAttachmentReference) -> Unit,
     onLocateAttachment: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
+    onLocateGlmOcr: (GlmOcrDocumentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
     val searchPlaceholder = when (state.searchCategory) {
         ConversationSearchCategory.ALL -> "搜索全部内容"
@@ -3421,7 +3827,7 @@ private fun ConversationSearchPage(
                     ) {
                         ConversationSearchCategory.entries.forEach { category ->
                             val selected = category == state.searchCategory
-                            val categoryShape = RoundedCornerShape(16.dp)
+                            val categoryShape = RoundedCornerShape(50)
                             Surface(
                                 onClick = { onSelectCategory(category) },
                                 color = if (selected) ForegroundSurface else Color.Transparent,
@@ -3442,6 +3848,24 @@ private fun ConversationSearchPage(
                         }
                     }
                 }
+                if (state.searchCategory != ConversationSearchCategory.TEXT) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(36.dp),
+                    ) {
+                        if (state.searchCategory == ConversationSearchCategory.FILE) {
+                            SearchAttachmentFileTypeControl(
+                                selected = attachmentFileType,
+                                onSelect = onSelectAttachmentFileType,
+                                modifier = Modifier.align(Alignment.CenterStart),
+                            )
+                        }
+                        SearchAttachmentSortControl(
+                            selected = attachmentSortMode,
+                            onSelect = onSelectAttachmentSortMode,
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                        )
+                    }
+                }
                 HorizontalDivider(color = SubtleDivider)
                 // Keep the whole usable search canvas above the IME. This makes empty-state
                 // guidance stay centered in what remains visible, while the bottom controls
@@ -3452,21 +3876,46 @@ private fun ConversationSearchPage(
                         ConversationSearchCategory.VIDEO,
                         ConversationSearchCategory.AUDIO,
                         ConversationSearchCategory.FILE -> SearchAttachmentGrid(
-                            hits = state.attachmentSearchResults,
+                            hits = if (state.searchCategory == ConversationSearchCategory.FILE) {
+                                filterSearchFileType(state.attachmentSearchResults, attachmentFileType)
+                            } else {
+                                state.attachmentSearchResults
+                            },
+                            glmOcrHits = if (state.searchCategory == ConversationSearchCategory.FILE) {
+                                filterGlmOcrSearchFileType(state.glmOcrSearchResults, attachmentFileType)
+                            } else {
+                                state.glmOcrSearchResults
+                            },
+                            gridState = scrollStates.grid(state.searchCategory),
+                            sortMode = attachmentSortMode,
+                            locateConversationId = locateConversationId,
+                            locateMessageId = locateMessageId,
+                            locateAttachmentId = locateAttachmentId,
+                            locateRequestId = locateRequestId,
                             query = state.searchQuery,
                             previews = state.searchAttachmentPreviews,
                             textPreviews = state.searchAttachmentTextPreviews,
                             onOpen = onOpenAttachmentHit,
+                            onOpenGlmOcr = onOpenGlmOcrHit,
                             onEnsurePreview = onEnsureAttachmentPreview,
                             onLocate = onLocateAttachment,
+                            onLocateGlmOcr = onLocateGlmOcr,
                             bottomContentPadding = 78.dp,
                         )
                         ConversationSearchCategory.ALL, ConversationSearchCategory.TEXT -> SearchAllOrTextResults(
                             state = state,
+                            listState = scrollStates.list(state.searchCategory),
+                            sortMode = attachmentSortMode,
+                            locateConversationId = locateConversationId,
+                            locateMessageId = locateMessageId,
+                            locateAttachmentId = locateAttachmentId,
+                            locateRequestId = locateRequestId,
                             onOpenText = onOpenTextHit,
                             onOpenAttachment = onOpenAttachmentHit,
+                            onOpenGlmOcr = onOpenGlmOcrHit,
                             onEnsureAttachmentPreview = onEnsureAttachmentPreview,
                             onLocateAttachment = onLocateAttachment,
+                            onLocateGlmOcr = onLocateGlmOcr,
                             bottomContentPadding = 78.dp,
                         )
                     }
@@ -3490,6 +3939,7 @@ private fun ConversationSearchPage(
                         )
                         SearchHistoryPanel(
                             history = state.searchHistory,
+                            highlightedQuery = state.searchHistoryHighlightedQuery,
                             onFill = onFillHistory,
                             onClear = onClearHistory,
                             onDismiss = onCloseHistory,
@@ -3565,6 +4015,173 @@ private fun ConversationSearchPage(
     }
 }
 
+@Composable
+private fun SearchAttachmentSortControl(
+    selected: ConversationAttachmentSortMode,
+    onSelect: (ConversationAttachmentSortMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.height(36.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        SearchAttachmentSortColumn(
+            label = "时间",
+            selected = selected,
+            column = ConversationAttachmentSortColumn.TIME,
+            onSelect = onSelect,
+        )
+        SearchAttachmentSortColumn(
+            label = "大小",
+            selected = selected,
+            column = ConversationAttachmentSortColumn.SIZE,
+            onSelect = onSelect,
+        )
+        val restored = selected == ConversationAttachmentSortMode.DEFAULT
+        val restoreShape = RoundedCornerShape(50)
+        Surface(
+            onClick = { onSelect(ConversationAttachmentSortMode.DEFAULT) },
+            color = SearchControlSurface,
+            contentColor = if (restored) SecondaryText else MaterialTheme.colorScheme.primary,
+            shape = restoreShape,
+            modifier = Modifier.width(72.dp).fillMaxHeight().semantics {
+                contentDescription = if (restored) "还原，当前已按月默认排序" else "还原默认按月排序"
+            },
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "还原",
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchAttachmentSortColumn(
+    label: String,
+    selected: ConversationAttachmentSortMode,
+    column: ConversationAttachmentSortColumn,
+    onSelect: (ConversationAttachmentSortMode) -> Unit,
+) {
+    val active = when (column) {
+        ConversationAttachmentSortColumn.TIME -> selected in setOf(
+            ConversationAttachmentSortMode.TIME_DESCENDING,
+            ConversationAttachmentSortMode.TIME_ASCENDING,
+        )
+        ConversationAttachmentSortColumn.SIZE -> selected in setOf(
+            ConversationAttachmentSortMode.SIZE_DESCENDING,
+            ConversationAttachmentSortMode.SIZE_ASCENDING,
+        )
+    }
+    val descending = selected == when (column) {
+        ConversationAttachmentSortColumn.TIME -> ConversationAttachmentSortMode.TIME_DESCENDING
+        ConversationAttachmentSortColumn.SIZE -> ConversationAttachmentSortMode.SIZE_DESCENDING
+    }
+    val direction = if (descending) "倒序" else "正序"
+    val shape = RoundedCornerShape(50)
+    Surface(
+        onClick = { onSelect(nextAttachmentSortMode(selected, column)) },
+        color = SearchControlSurface,
+        contentColor = if (active) MaterialTheme.colorScheme.primary else SecondaryText,
+        shape = shape,
+        modifier = Modifier.width(72.dp).fillMaxHeight().semantics {
+            contentDescription = if (active) "$label，当前$direction，点击切换" else "$label，点击按倒序排序"
+        },
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Icon(
+                imageVector = when {
+                    !active -> Icons.Rounded.SwapVert
+                    descending -> Icons.Rounded.KeyboardArrowDown
+                    else -> Icons.Rounded.KeyboardArrowUp
+                },
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchAttachmentFileTypeControl(
+    selected: ConversationAttachmentFileType,
+    onSelect: (ConversationAttachmentFileType) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier) {
+        val shape = RoundedCornerShape(50)
+        Surface(
+            onClick = { expanded = true },
+            color = SearchControlSurface,
+            contentColor = BodyText,
+            shape = shape,
+            // This is a left-side pill, not a flexible row background.  Without an
+            // explicit width the fillMaxSize child can consume the whole sort row,
+            // merging its gray surface with the three right-side sort controls and
+            // leaving the category label effectively invisible.
+            modifier = Modifier.width(128.dp).height(36.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(selected.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(14.dp))
+            }
+        }
+        TransientMenuTextScale {
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                containerColor = ForegroundSurface,
+                shape = RoundedCornerShape(18.dp),
+                tonalElevation = 0.dp,
+                shadowElevation = 6.dp,
+                modifier = Modifier.widthIn(min = 148.dp),
+            ) {
+                ConversationAttachmentFileType.entries.forEach { type ->
+                    val isSelected = type == selected
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                type.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else BodyText,
+                            )
+                        },
+                        trailingIcon = {
+                            if (isSelected) Icon(
+                                Icons.Rounded.Check,
+                                contentDescription = "当前类型",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            onSelect(type)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
 /** Search results share the same theme-colored, bold occurrence treatment as in-chat find. */
 private fun searchHighlightedText(value: String, query: String, highlightColor: Color): AnnotatedString = buildAnnotatedString {
     append(value)
@@ -3585,18 +4202,26 @@ private fun searchHighlightedText(value: String, query: String, highlightColor: 
 @Composable
 private fun SearchAllOrTextResults(
     state: ConversationFoundationUiState,
+    listState: LazyListState,
+    sortMode: ConversationAttachmentSortMode,
+    locateConversationId: String?,
+    locateMessageId: String?,
+    locateAttachmentId: String?,
+    locateRequestId: Long,
     onOpenText: (com.nanzhufeng.ai.domain.ConversationSearchHit) -> Unit,
     onOpenAttachment: (ConversationAttachmentSearchHit) -> Unit,
+    onOpenGlmOcr: (GlmOcrDocumentSearchHit) -> Unit,
     onEnsureAttachmentPreview: (ConversationAttachmentReference) -> Unit,
     onLocateAttachment: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
+    onLocateGlmOcr: (GlmOcrDocumentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
     bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
-    if (state.searchResults.isEmpty() && state.attachmentSearchResults.isEmpty()) {
+    if (state.searchResults.isEmpty() && state.attachmentSearchResults.isEmpty() && state.glmOcrSearchResults.isEmpty()) {
         SearchHint(if (state.searchQuery.isBlank()) "暂无可浏览的本地内容" else "没有匹配的本地内容")
         return
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomContentPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (state.searchResults.isNotEmpty()) item { Text(if (state.searchQuery.isBlank()) "最近对话" else if (state.searchCategory == ConversationSearchCategory.ALL) "正文" else "搜索结果", style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomContentPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (state.searchResults.isNotEmpty()) item { Text(if (state.searchQuery.isBlank() || state.searchCategory == ConversationSearchCategory.ALL) "正文" else "搜索结果", style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
         items(state.searchResults, key = { "text:${it.conversationId.value}:${it.messageNodeId?.value.orEmpty()}" }) { hit ->
             val resultShape = RoundedCornerShape(14.dp)
             Surface(color = ForegroundSurface, shape = resultShape, modifier = Modifier.fillMaxWidth().clip(resultShape).combinedClickable(onClick = { onOpenText(hit) })) {
@@ -3607,19 +4232,70 @@ private fun SearchAllOrTextResults(
                 }
             }
         }
-        if (state.attachmentSearchResults.isNotEmpty()) item { Text((if (state.searchQuery.isBlank()) "本地附件" else "附件") + " · ${state.attachmentSearchResults.size} 项", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
-        attachmentSearchMonthGroups(state.attachmentSearchResults).forEach { group ->
-            item(key = "all-month:${group.key}") { SearchAttachmentMonthHeading(group.label, group.hits.size) }
-            items(group.hits, key = { "attachment:${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }) { hit ->
-                SearchAttachmentRow(
-                    hit = hit,
-                    query = state.searchQuery,
-                    preview = state.searchAttachmentPreviews[hit.attachment.id],
-                    textPreview = state.searchAttachmentTextPreviews[hit.attachment.id],
-                    onOpen = onOpenAttachment,
-                    onEnsurePreview = onEnsureAttachmentPreview,
-                    onLocate = onLocateAttachment,
-                )
+        if (sortMode == ConversationAttachmentSortMode.DEFAULT) {
+            val totalAttachmentCount = state.attachmentSearchResults.size + state.glmOcrSearchResults.size
+            if (totalAttachmentCount > 0) item { Text((if (state.searchQuery.isBlank()) "本地附件" else "附件") + " · $totalAttachmentCount 项", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
+            unifiedSearchAttachmentMonthGroups(state.attachmentSearchResults, state.glmOcrSearchResults).forEach { group ->
+                item(key = "all-month:${group.key}") { SearchAttachmentMonthHeading(group.label, group.entries.size) }
+                items(group.entries, key = { it.stableKey }) { entry ->
+                    when (entry) {
+                        is UnifiedSearchAttachmentEntry.Conversation -> SearchAttachmentRow(
+                            hit = entry.hit,
+                            query = state.searchQuery,
+                            preview = state.searchAttachmentPreviews[entry.attachment.id],
+                            textPreview = state.searchAttachmentTextPreviews[entry.attachment.id],
+                            locateConversationId = locateConversationId,
+                            locateMessageId = locateMessageId,
+                            locateAttachmentId = locateAttachmentId,
+                            locateRequestId = locateRequestId,
+                            onOpen = onOpenAttachment,
+                            onEnsurePreview = onEnsureAttachmentPreview,
+                            onLocate = onLocateAttachment,
+                        )
+                        is UnifiedSearchAttachmentEntry.GlmOcr -> GlmOcrSearchAttachmentRow(
+                            hit = entry.hit,
+                            query = state.searchQuery,
+                            preview = state.searchAttachmentPreviews[entry.attachment.id],
+                            textPreview = state.searchAttachmentTextPreviews[entry.attachment.id],
+                            onOpen = onOpenGlmOcr,
+                            onEnsurePreview = onEnsureAttachmentPreview,
+                            onLocate = onLocateGlmOcr,
+                        )
+                    }
+                }
+            }
+        } else {
+            item {
+                Text("附件 · ${state.attachmentSearchResults.size + state.glmOcrSearchResults.size} 项", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = SecondaryText)
+            }
+            items(
+                sortedUnifiedSearchAttachmentEntries(state.attachmentSearchResults, state.glmOcrSearchResults, sortMode),
+                key = { it.stableKey },
+            ) { entry ->
+                when (entry) {
+                    is UnifiedSearchAttachmentEntry.Conversation -> SearchAttachmentRow(
+                        hit = entry.hit,
+                        query = state.searchQuery,
+                        preview = state.searchAttachmentPreviews[entry.attachment.id],
+                        textPreview = state.searchAttachmentTextPreviews[entry.attachment.id],
+                        locateConversationId = locateConversationId,
+                        locateMessageId = locateMessageId,
+                        locateAttachmentId = locateAttachmentId,
+                        locateRequestId = locateRequestId,
+                        onOpen = onOpenAttachment,
+                        onEnsurePreview = onEnsureAttachmentPreview,
+                        onLocate = onLocateAttachment,
+                    )
+                    is UnifiedSearchAttachmentEntry.GlmOcr -> GlmOcrSearchAttachmentRow(
+                        hit = entry.hit,
+                        query = state.searchQuery,
+                        preview = state.searchAttachmentPreviews[entry.attachment.id],
+                        textPreview = state.searchAttachmentTextPreviews[entry.attachment.id],
+                        onOpen = onOpenGlmOcr,
+                        onEnsurePreview = onEnsureAttachmentPreview,
+                        onLocate = onLocateGlmOcr,
+                    )
+                }
             }
         }
     }
@@ -3628,17 +4304,27 @@ private fun SearchAllOrTextResults(
 @Composable
 private fun SearchAttachmentGrid(
     hits: List<ConversationAttachmentSearchHit>,
+    glmOcrHits: List<GlmOcrDocumentSearchHit>,
+    gridState: LazyGridState,
+    sortMode: ConversationAttachmentSortMode,
+    locateConversationId: String?,
+    locateMessageId: String?,
+    locateAttachmentId: String?,
+    locateRequestId: Long,
     query: String,
     previews: Map<AttachmentId, ConversationAttachmentPreview>,
     textPreviews: Map<AttachmentId, ConversationAttachmentTextPreview>,
     onOpen: (ConversationAttachmentSearchHit) -> Unit,
+    onOpenGlmOcr: (GlmOcrDocumentSearchHit) -> Unit,
     onEnsurePreview: (ConversationAttachmentReference) -> Unit,
     onLocate: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
+    onLocateGlmOcr: (GlmOcrDocumentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
     bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
-    if (hits.isEmpty()) { SearchHint("没有匹配的本地附件"); return }
+    if (hits.isEmpty() && glmOcrHits.isEmpty()) { SearchHint("没有匹配的本地附件"); return }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 152.dp),
+        state = gridState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomContentPadding),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -3646,38 +4332,73 @@ private fun SearchAttachmentGrid(
         item(
             key = "attachment-total",
             span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
-        ) { Text("共 ${hits.size} 项", style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
-        attachmentSearchMonthGroups(hits).forEach { group ->
-            item(
-                key = "month:${group.key}",
-                span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
-            ) { SearchAttachmentMonthHeading(group.label, group.hits.size) }
-            gridItems(group.hits, key = { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }) { hit ->
-                SearchAttachmentCard(hit, query, previews[hit.attachment.id], textPreviews[hit.attachment.id], onOpen, onEnsurePreview, onLocate)
+        ) { Text("共 ${hits.size + glmOcrHits.size} 项", style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
+        if (sortMode == ConversationAttachmentSortMode.DEFAULT) {
+            unifiedSearchAttachmentMonthGroups(hits, glmOcrHits).forEach { group ->
+                item(
+                    key = "month:${group.key}",
+                    span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
+                ) { SearchAttachmentMonthHeading(group.label, group.entries.size) }
+                gridItems(group.entries, key = { it.stableKey }) { entry ->
+                    when (entry) {
+                        is UnifiedSearchAttachmentEntry.Conversation -> SearchAttachmentCard(
+                            hit = entry.hit,
+                            query = query,
+                            preview = previews[entry.attachment.id],
+                            textPreview = textPreviews[entry.attachment.id],
+                            locateConversationId = locateConversationId,
+                            locateMessageId = locateMessageId,
+                            locateAttachmentId = locateAttachmentId,
+                            locateRequestId = locateRequestId,
+                            onOpen = onOpen,
+                            onEnsurePreview = onEnsurePreview,
+                            onLocate = onLocate,
+                        )
+                        is UnifiedSearchAttachmentEntry.GlmOcr -> GlmOcrSearchAttachmentCard(
+                            hit = entry.hit,
+                            query = query,
+                            preview = previews[entry.attachment.id],
+                            textPreview = textPreviews[entry.attachment.id],
+                            onOpen = onOpenGlmOcr,
+                            onEnsurePreview = onEnsurePreview,
+                            onLocate = onLocateGlmOcr,
+                        )
+                    }
+                }
+            }
+        } else {
+            gridItems(
+                sortedUnifiedSearchAttachmentEntries(hits, glmOcrHits, sortMode),
+                key = { it.stableKey },
+            ) { entry ->
+                when (entry) {
+                    is UnifiedSearchAttachmentEntry.Conversation -> SearchAttachmentCard(
+                        hit = entry.hit,
+                        query = query,
+                        preview = previews[entry.attachment.id],
+                        textPreview = textPreviews[entry.attachment.id],
+                        locateConversationId = locateConversationId,
+                        locateMessageId = locateMessageId,
+                        locateAttachmentId = locateAttachmentId,
+                        locateRequestId = locateRequestId,
+                        onOpen = onOpen,
+                        onEnsurePreview = onEnsurePreview,
+                        onLocate = onLocate,
+                    )
+                    is UnifiedSearchAttachmentEntry.GlmOcr -> GlmOcrSearchAttachmentCard(
+                        hit = entry.hit,
+                        query = query,
+                        preview = previews[entry.attachment.id],
+                        textPreview = textPreviews[entry.attachment.id],
+                        onOpen = onOpenGlmOcr,
+                        onEnsurePreview = onEnsurePreview,
+                        onLocate = onLocateGlmOcr,
+                    )
+                }
             }
         }
     }
 }
-
-private data class SearchAttachmentMonthGroup(
-    val key: String,
-    val label: String,
-    val hits: List<ConversationAttachmentSearchHit>,
-)
-
-private fun attachmentSearchMonthGroups(hits: List<ConversationAttachmentSearchHit>): List<SearchAttachmentMonthGroup> = hits
-    .sortedByDescending { it.timestampEpochMs }
-    .groupBy { hit ->
-        val date = java.time.Instant.ofEpochMilli(hit.timestampEpochMs).atZone(java.time.ZoneId.systemDefault())
-        "%04d-%02d".format(java.util.Locale.ROOT, date.year, date.monthValue)
-    }
-    .entries
-    .sortedByDescending { it.key }
-    .map { (key, groupedHits) ->
-        val year = key.substringBefore('-')
-        val month = key.substringAfter('-').toInt()
-        SearchAttachmentMonthGroup(key, "${year}年${month}月", groupedHits)
-    }
 
 @Composable
 private fun SearchAttachmentMonthHeading(label: String, count: Int) {
@@ -3705,7 +4426,116 @@ private fun SearchAttachmentRows(
     if (hits.isEmpty()) { SearchHint("没有匹配的本地附件"); return }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomContentPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(hits, key = { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }) { hit ->
-            SearchAttachmentRow(hit, query, previews[hit.attachment.id], textPreviews[hit.attachment.id], onOpen, onEnsurePreview, onLocate)
+            SearchAttachmentRow(
+                hit = hit,
+                query = query,
+                preview = previews[hit.attachment.id],
+                textPreview = textPreviews[hit.attachment.id],
+                onOpen = onOpen,
+                onEnsurePreview = onEnsurePreview,
+                onLocate = onLocate,
+            )
+        }
+    }
+}
+
+/** Bitmap decoding is CPU-heavy and must not run during a Compose measure/recomposition frame. */
+@Composable
+private fun rememberDecodedBitmap(bytes: ByteArray?, cacheKey: Any?): android.graphics.Bitmap? {
+    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, cacheKey, bytes) {
+        value = withContext(Dispatchers.Default) {
+            bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+        }
+    }
+    return bitmap
+}
+
+@Composable
+private fun GlmOcrSearchAttachmentCard(
+    hit: GlmOcrDocumentSearchHit,
+    query: String,
+    preview: ConversationAttachmentPreview?,
+    textPreview: ConversationAttachmentTextPreview?,
+    onOpen: (GlmOcrDocumentSearchHit) -> Unit,
+    onEnsurePreview: (ConversationAttachmentReference) -> Unit,
+    onLocate: (GlmOcrDocumentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
+) {
+    LaunchedEffect(hit.attachment.id) { onEnsurePreview(hit.attachment) }
+    val bitmap = rememberDecodedBitmap(preview?.thumbnail?.bytes, preview?.id)
+    val cardShape = RoundedCornerShape(14.dp)
+    var cardBounds by remember(hit.attachment.id) { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    Surface(
+        color = ForegroundSurface,
+        shape = cardShape,
+        modifier = Modifier.fillMaxWidth().height(204.dp).onGloballyPositioned { cardBounds = it.boundsInRoot() }.clip(cardShape).combinedClickable(onClick = { onOpen(hit) }, onLongClick = { onLocate(hit, cardBounds) }),
+    ) {
+        Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+                Modifier.fillMaxWidth().height(104.dp).clip(RoundedCornerShape(10.dp))
+                    .background(NeutralSystemSurface).border(1.dp, SubtleDivider.copy(alpha = 0.45f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    bitmap != null -> Image(bitmap.asImageBitmap(), contentDescription = "南枫转写文件缩略图", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                    textPreview?.text != null -> AttachmentTextSnippet(textPreview.text, hit.attachment.mimeType, Modifier.fillMaxSize())
+                    else -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Icon(Icons.Rounded.Description, contentDescription = null, tint = SecondaryText, modifier = Modifier.size(30.dp))
+                        Text(if (hit.attachment.mimeType == "application/pdf") "PDF" else if (hit.attachment.mimeType == "text/markdown") "Markdown" else "图片", style = MaterialTheme.typography.labelSmall, color = SecondaryText, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            Text(searchHighlightedText(hit.attachment.displayName ?: "南枫转写文件", query, MaterialTheme.colorScheme.primary), minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            Text(hit.title, minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+            Row(Modifier.fillMaxWidth().height(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(formatAttachmentBytes(hit.attachment.byteCount), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                Spacer(Modifier.weight(1f))
+                Text(formatSearchAttachmentTimestamp(hit.timestampEpochMs), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlmOcrSearchAttachmentRow(
+    hit: GlmOcrDocumentSearchHit,
+    query: String,
+    preview: ConversationAttachmentPreview?,
+    textPreview: ConversationAttachmentTextPreview?,
+    onOpen: (GlmOcrDocumentSearchHit) -> Unit,
+    onEnsurePreview: (ConversationAttachmentReference) -> Unit,
+    onLocate: (GlmOcrDocumentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
+) {
+    LaunchedEffect(hit.attachment.id) { onEnsurePreview(hit.attachment) }
+    val bitmap = rememberDecodedBitmap(preview?.thumbnail?.bytes, preview?.id)
+    val rowShape = RoundedCornerShape(14.dp)
+    var rowBounds by remember(hit.attachment.id) { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    Surface(
+        color = ForegroundSurface,
+        shape = rowShape,
+        modifier = Modifier.fillMaxWidth().onGloballyPositioned { rowBounds = it.boundsInRoot() }.clip(rowShape).combinedClickable(onClick = { onOpen(hit) }, onLongClick = { onLocate(hit, rowBounds) }),
+    ) {
+        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = NeutralSystemSurface, shape = RoundedCornerShape(10.dp), modifier = Modifier.size(58.dp, 48.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    when {
+                        bitmap != null -> Image(bitmap.asImageBitmap(), contentDescription = "南枫转写文件缩略图", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                        textPreview?.text != null -> AttachmentTextSnippet(textPreview.text, hit.attachment.mimeType, Modifier.fillMaxSize())
+                        else -> Icon(Icons.Rounded.Description, contentDescription = null, tint = SecondaryText)
+                    }
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(searchHighlightedText(hit.attachment.displayName ?: "南枫转写文件", query, MaterialTheme.colorScheme.primary), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(hit.title, style = MaterialTheme.typography.bodySmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                (hit.matchSnippet ?: textPreview?.text?.replace('\n', ' '))?.let { text ->
+                    Text(searchHighlightedText(text, query, MaterialTheme.colorScheme.primary), style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(formatAttachmentBytes(hit.attachment.byteCount), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                    Spacer(Modifier.weight(1f))
+                    Text(formatSearchAttachmentTimestamp(hit.timestampEpochMs), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                }
+            }
         }
     }
 }
@@ -3716,14 +4546,19 @@ private fun SearchAttachmentCard(
     query: String,
     preview: ConversationAttachmentPreview?,
     textPreview: ConversationAttachmentTextPreview?,
+    locateConversationId: String?,
+    locateMessageId: String?,
+    locateAttachmentId: String?,
+    locateRequestId: Long,
     onOpen: (ConversationAttachmentSearchHit) -> Unit,
     onEnsurePreview: (ConversationAttachmentReference) -> Unit,
     onLocate: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
     LaunchedEffect(hit.attachment.id) { onEnsurePreview(hit.attachment) }
-    val bitmap = preview?.thumbnail?.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val bitmap = rememberDecodedBitmap(preview?.thumbnail?.bytes, preview?.id)
     val isVideo = hit.attachment.mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_VIDEO_MIME_TYPES
     val isAudio = hit.attachment.mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_AUDIO_MIME_TYPES
+    val isArchive = com.nanzhufeng.ai.domain.isSafeArchiveAttachment(hit.attachment.mimeType, hit.attachment.displayName)
     val darkCatalogSurface = ForegroundSurface.red < 0.5f
     val audioCatalogSurface = catalogAudioPreviewSurface(dark = darkCatalogSurface)
     val videoPlayContainer = if (darkCatalogSurface) Color.Black.copy(alpha = 0.62f) else Color.White.copy(alpha = 0.88f)
@@ -3731,6 +4566,7 @@ private fun SearchAttachmentCard(
     val visualLabel = when {
         isVideo -> "视频"
         isAudio -> "音频"
+        isArchive -> "ZIP"
         hit.attachment.mimeType == "application/pdf" -> "PDF"
         bitmap != null -> "图片"
         else -> "文件"
@@ -3747,6 +4583,13 @@ private fun SearchAttachmentCard(
             .fillMaxWidth()
             .height(204.dp)
             .onGloballyPositioned { anchorBounds = it.boundsInRoot() }
+            .searchAttachmentAnchorHighlight(
+                targeted = hit.conversationId.value == locateConversationId &&
+                    hit.messageNodeId.value == locateMessageId &&
+                    hit.attachment.id.value == locateAttachmentId,
+                requestId = locateRequestId,
+                cornerRadius = 14.dp,
+            )
             .clip(cardShape)
             .combinedClickable(onClick = { onOpen(hit) }, onLongClick = { anchorBounds?.let { onLocate(hit, it) } }),
     ) {
@@ -3775,7 +4618,7 @@ private fun SearchAttachmentCard(
                 } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Icon(Icons.Rounded.AttachFile, contentDescription = null, tint = if (isAudio) Color.White else SecondaryText, modifier = Modifier.size(30.dp))
                     Text(visualLabel, style = MaterialTheme.typography.labelSmall, color = if (isAudio) Color.White else SecondaryText, fontWeight = FontWeight.SemiBold)
-                    if (!isAudio) Text(preview?.unavailableReason ?: "暂无可读预览", style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!isAudio) Text(preview?.unavailableReason ?: if (isArchive) "点击查看压缩包内容" else "暂无可读预览", style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (isVideo) {
                     Surface(
@@ -3790,12 +4633,10 @@ private fun SearchAttachmentCard(
             }
             Text(searchHighlightedText(hit.attachment.displayName ?: "本地附件", query, MaterialTheme.colorScheme.primary), minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
             Text(searchHighlightedText(hit.title, query, MaterialTheme.colorScheme.primary), minLines = 1, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-            // One quiet label line is enough to keep cards aligned when no extra status exists.
-            Box(Modifier.fillMaxWidth().height(14.dp)) {
-                when {
-                    hit.matchSnippet != null -> Text(searchHighlightedText(hit.matchSnippet, query, MaterialTheme.colorScheme.primary), style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    textPreview?.truncated == true -> Text("仅显示开头片段", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-                }
+            Row(Modifier.fillMaxWidth().height(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(formatAttachmentBytes(hit.attachment.byteCount), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                Spacer(Modifier.weight(1f))
+                Text(formatSearchAttachmentTimestamp(hit.timestampEpochMs), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
             }
         }
     }
@@ -3807,13 +4648,18 @@ private fun SearchAttachmentRow(
     query: String,
     preview: ConversationAttachmentPreview?,
     textPreview: ConversationAttachmentTextPreview?,
+    locateConversationId: String? = null,
+    locateMessageId: String? = null,
+    locateAttachmentId: String? = null,
+    locateRequestId: Long = 0L,
     onOpen: (ConversationAttachmentSearchHit) -> Unit,
     onEnsurePreview: (ConversationAttachmentReference) -> Unit,
     onLocate: (ConversationAttachmentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
     LaunchedEffect(hit.attachment.id) { onEnsurePreview(hit.attachment) }
-    val bitmap = preview?.thumbnail?.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val bitmap = rememberDecodedBitmap(preview?.thumbnail?.bytes, preview?.id)
     val isAudio = hit.attachment.mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_AUDIO_MIME_TYPES
+    val isArchive = com.nanzhufeng.ai.domain.isSafeArchiveAttachment(hit.attachment.mimeType, hit.attachment.displayName)
     val audioCatalogSurface = catalogAudioPreviewSurface(dark = ForegroundSurface.red < 0.5f)
     val rowShape = RoundedCornerShape(14.dp)
     var anchorBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -3823,6 +4669,13 @@ private fun SearchAttachmentRow(
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { anchorBounds = it.boundsInRoot() }
+            .searchAttachmentAnchorHighlight(
+                targeted = hit.conversationId.value == locateConversationId &&
+                    hit.messageNodeId.value == locateMessageId &&
+                    hit.attachment.id.value == locateAttachmentId,
+                requestId = locateRequestId,
+                cornerRadius = 14.dp,
+            )
             .clip(rowShape)
             .combinedClickable(onClick = { onOpen(hit) }, onLongClick = { anchorBounds?.let { onLocate(hit, it) } }),
     ) {
@@ -3845,8 +4698,13 @@ private fun SearchAttachmentRow(
                 Text(searchHighlightedText(hit.attachment.displayName ?: "本地附件", query, MaterialTheme.colorScheme.primary), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(searchHighlightedText(hit.title, query, MaterialTheme.colorScheme.primary), style = MaterialTheme.typography.bodySmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 (hit.matchSnippet ?: textPreview?.text?.replace('\n', ' '))?.let { text -> Text(searchHighlightedText(text, query, MaterialTheme.colorScheme.primary), style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                if (bitmap == null && textPreview?.text == null && !isAudio) Text(preview?.unavailableReason ?: "暂无可读预览", style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (bitmap == null && textPreview?.text == null && !isAudio) Text(preview?.unavailableReason ?: if (isArchive) "点击查看压缩包内容" else "暂无可读预览", style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (isAudio) AudioCatalogTimeline(preview?.audioDurationMillis, modifier = Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(formatAttachmentBytes(hit.attachment.byteCount), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                    Spacer(Modifier.weight(1f))
+                    Text(formatSearchAttachmentTimestamp(hit.timestampEpochMs), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                }
             }
             if (isAudio) Text(preview?.audioDurationMillis?.let(::formatAudioDuration) ?: "--:--", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
         }
@@ -3870,6 +4728,9 @@ private fun formatAudioDuration(durationMillis: Long): String {
     val totalSeconds = (durationMillis.coerceAtLeast(0L) / 1_000L)
     return "%d:%02d".format(java.util.Locale.ROOT, totalSeconds / 60, totalSeconds % 60)
 }
+
+private fun formatSearchAttachmentTimestamp(timestampEpochMs: Long): String =
+    formatTranscriptTimeOrNull(java.time.Instant.ofEpochMilli(timestampEpochMs)).orEmpty()
 
 @Composable
 private fun AudioCatalogPlayer(mimeType: String, durationMillis: Long?, onPlay: () -> Unit, modifier: Modifier = Modifier) {
@@ -4056,7 +4917,20 @@ private fun textAttachmentFormatLabel(mimeType: String): String = when (mimeType
 }
 
 @Composable
-private fun SearchHistoryPanel(history: List<String>, onFill: (String) -> Unit, onClear: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+private fun SearchHistoryPanel(
+    history: List<String>,
+    highlightedQuery: String?,
+    onFill: (String) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val historyListState = rememberLazyListState()
+    LaunchedEffect(highlightedQuery, history) {
+        history.indexOf(highlightedQuery).takeIf { it >= 0 }?.let { index ->
+            historyListState.scrollToItem(index)
+        }
+    }
     Surface(color = ForegroundSurface, shape = RoundedCornerShape(18.dp), shadowElevation = 12.dp, modifier = modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -4065,7 +4939,31 @@ private fun SearchHistoryPanel(history: List<String>, onFill: (String) -> Unit, 
                 IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) { Icon(Icons.Rounded.Close, contentDescription = "关闭历史") }
             }
             if (history.isEmpty()) Text("暂无已提交的本地搜索。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
-            else history.forEach { query -> TextButton(onClick = { onFill(query) }, modifier = Modifier.fillMaxWidth()) { Text(query, modifier = Modifier.fillMaxWidth(), color = BodyText) } }
+            else LazyColumn(
+                state = historyListState,
+                modifier = Modifier.fillMaxWidth().height((history.size.coerceAtMost(6) * 48).dp),
+            ) {
+                items(history, key = { it }) { query ->
+                    val highlighted = query == highlightedQuery
+                    Surface(
+                        onClick = { onFill(query) },
+                        color = if (highlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                        contentColor = if (highlighted) MaterialTheme.colorScheme.primary else BodyText,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) {
+                        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
+                            Text(
+                                query,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (highlighted) MaterialTheme.colorScheme.primary else BodyText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -4081,6 +4979,7 @@ private fun ConversationNavigationRow(
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onRequestConversationActions: (com.nanzhufeng.ai.domain.Conversation, androidx.compose.ui.geometry.Rect) -> Unit,
     unread: Boolean = false,
+    watchLater: Boolean = false,
     onSwipeAction: ((com.nanzhufeng.ai.domain.Conversation, ConversationRowSwipeAction) -> Unit)? = null,
     revealed: Boolean = false,
     onRevealChanged: (Boolean) -> Unit = {},
@@ -4192,17 +5091,17 @@ private fun ConversationNavigationRow(
                         tint = SecondaryText,
                     )
                 }
-                Text(conversation.title, modifier = Modifier.weight(1f), fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(conversationListLocalDate(conversation.updatedAt), modifier = Modifier.wrapContentWidth(Alignment.End), style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
-                if (unread) {
+                if (unread || watchLater) {
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .clip(CircleShape)
                             .background(AccentOrange)
-                            .semantics { contentDescription = "有未查看的新内容" },
+                            .semantics { contentDescription = if (watchLater) "待看对话" else "有未查看的新内容" },
                     )
                 }
+                Text(conversation.title, modifier = Modifier.weight(1f), color = if (selected) AccentOrange else BodyText, fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(conversationListLocalDate(conversation.createdAt), modifier = Modifier.wrapContentWidth(Alignment.End), style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
             }
         }
     }
@@ -4355,16 +5254,23 @@ private data class SearchAttachmentActionMenuTarget(
     val anchorBounds: androidx.compose.ui.geometry.Rect,
 )
 
+private data class SearchGlmOcrActionMenuTarget(
+    val hit: GlmOcrDocumentSearchHit,
+    val anchorBounds: androidx.compose.ui.geometry.Rect,
+)
+
 @Composable
 private fun SearchAttachmentActionPopup(
     displayName: String,
     onOpenConversation: () -> Unit,
+    onRequestDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = true),
     ) {
+        TransientMenuTextScale {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             DismissibleDialogBackdrop(onDismiss)
             Surface(
@@ -4380,7 +5286,7 @@ private fun SearchAttachmentActionPopup(
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     Text(
                         displayName,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -4401,14 +5307,31 @@ private fun SearchAttachmentActionPopup(
                             Icon(
                                 Icons.AutoMirrored.Outlined.OpenInNew,
                                 contentDescription = null,
-                                modifier = Modifier.size(28.dp),
+                                modifier = Modifier.size(20.dp),
                                 tint = BodyText,
                             )
-                            Text("快速定位到对应对话", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                            Text("快速定位", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    Surface(
+                        onClick = onRequestDelete,
+                        color = NeutralSystemSurface,
+                        contentColor = ErrorRed,
+                        shape = actionShape,
+                        modifier = Modifier.fillMaxWidth().clip(actionShape),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 19.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(20.dp), tint = ErrorRed)
+                            Text("删除", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = ErrorRed)
                         }
                     }
                 }
             }
+        }
         }
     }
 }
@@ -4418,13 +5341,14 @@ private fun ConversationActionSheet(
     conversation: com.nanzhufeng.ai.domain.Conversation,
     anchor: androidx.compose.ui.geometry.Rect,
     onManage: (com.nanzhufeng.ai.domain.Conversation, ConversationManagementAction, String?) -> Unit,
+    onMarkWatchLater: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     workMode: Boolean,
     includeRename: Boolean,
     onRequestRename: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestProject: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestDelete: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onShareConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
-    onExportConversationMarkdown: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onShowUploadedFiles: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onFindInConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onAddToHomeScreen: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
@@ -4437,8 +5361,8 @@ private fun ConversationActionSheet(
         conversation.deletedAt != null -> 1
         // The ordinary conversation menu stays focused on reading and managing the chat.
         // Workspace keeps its existing project, attachment and launcher actions.
-        workMode -> 10 + if (includeRename) 1 else 0
-        else -> 7 + if (includeRename) 1 else 0
+        workMode -> 11 + if (includeRename) 1 else 0
+        else -> 8 + if (includeRename) 1 else 0
     }
     val horizontalMargin = with(density) { 16.dp.roundToPx() }
     val verticalGap = with(density) { 6.dp.roundToPx() }
@@ -4446,6 +5370,7 @@ private fun ConversationActionSheet(
     val menuHeightPx = with(density) { ((rowCount * 48).dp + 60.dp).roundToPx() }
     val screenWidthPx = containerSize.width
     val screenHeightPx = containerSize.height
+    val maxMenuHeight = with(density) { (screenHeightPx - horizontalMargin * 2).coerceAtLeast(48).toDp() }
     val x = (anchor.right.toInt() - menuWidthPx).coerceIn(horizontalMargin, (screenWidthPx - menuWidthPx - horizontalMargin).coerceAtLeast(horizontalMargin))
     val below = anchor.bottom.toInt() + verticalGap
     val y = (if (below + menuHeightPx <= screenHeightPx - horizontalMargin) below else anchor.top.toInt() - menuHeightPx - verticalGap)
@@ -4460,10 +5385,10 @@ private fun ConversationActionSheet(
             color = ForegroundSurface,
             shape = RoundedCornerShape(20.dp),
             shadowElevation = 6.dp,
-            modifier = Modifier.width(menuWidth),
+            modifier = Modifier.width(menuWidth).heightIn(max = maxMenuHeight),
         ) {
             TransientMenuTextScale {
-                Column(Modifier.padding(vertical = 6.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
                 Text(
                     conversation.title,
                     modifier = Modifier.padding(start = 18.dp, top = 6.dp, end = 18.dp, bottom = 8.dp),
@@ -4477,9 +5402,10 @@ private fun ConversationActionSheet(
                 } else {
                     if (workMode) {
                         ConversationMenuAction(Icons.Rounded.PushPin, if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
+                        ConversationMenuAction(Icons.Rounded.Visibility, "待看", onClick = { onDismiss(); onMarkWatchLater(conversation) })
                         ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
-                        ConversationMenuAction(Icons.Rounded.FileDownload, "导出 Markdown", onClick = { onExportConversationMarkdown(conversation) })
+                        ConversationMenuAction(Icons.Rounded.CloudUpload, "同步到南枫云", onClick = { onSyncConversation(conversation) })
                         if (includeRename) ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove, if (conversation.projectId == null) "添加到项目" else "移动或移出项目", trailing = Icons.Rounded.ChevronRight, onClick = { onRequestProject(conversation) })
                         ConversationMenuAction(Icons.Rounded.AttachFile, "已上传文件", onClick = { onShowUploadedFiles(conversation) })
@@ -4489,10 +5415,11 @@ private fun ConversationActionSheet(
                         ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
                     } else {
                         ConversationMenuAction(Icons.Rounded.PushPin, if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
+                        ConversationMenuAction(Icons.Rounded.Visibility, "待看", onClick = { onDismiss(); onMarkWatchLater(conversation) })
                         ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
                         if (includeRename) ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
-                        ConversationMenuAction(Icons.Rounded.FileDownload, "导出 Markdown", onClick = { onExportConversationMarkdown(conversation) })
+                        ConversationMenuAction(Icons.Rounded.CloudUpload, "同步到南枫云", onClick = { onSyncConversation(conversation) })
                         ConversationMenuAction(Icons.Rounded.Search, "在聊天中查找", onClick = { onFindInConversation(conversation) })
                         ConversationMenuAction(if (conversation.archivedAt == null) Icons.Rounded.Archive else Icons.Rounded.Unarchive, if (conversation.archivedAt == null) "归档" else "恢复", onClick = { onDismiss(); onManage(conversation, if (conversation.archivedAt == null) ConversationManagementAction.ARCHIVE else ConversationManagementAction.UNARCHIVE, null) })
                         ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
@@ -4629,7 +5556,7 @@ private fun ConversationFindInChatDialog(
                 if (query.isNotBlank()) {
                     when {
                         matches.isEmpty() -> Text("当前对话没有匹配内容。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                        else -> Text("找到 ${matches.size} 处匹配；点“查找”后可用上一个、下一个逐个定位。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                        else -> Text("找到 ${matches.size} 处", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -4720,6 +5647,7 @@ private fun conversationFindTextSegments(message: PresentedMessage): List<Conver
             is PresentationBlock.PlainText -> add(ConversationFindTextSegment(conversationFindBlockKey(blockIndex), block.raw))
             is PresentationBlock.SafeToolSummary -> add(ConversationFindTextSegment(conversationFindBlockKey(blockIndex), conversationSafeToolSummaryText(block)))
             is PresentationBlock.HorizontalRule,
+            is PresentationBlock.Reasoning,
             is PresentationBlock.AttachmentReference,
             -> Unit
         }
@@ -4804,8 +5732,8 @@ private fun MessageBubble(
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
     onCopyAssistant: (PresentedTranscriptMessage) -> Unit,
     onShareAssistant: (PresentedTranscriptMessage) -> Unit,
-    onExportAssistantMarkdown: (PresentedTranscriptMessage) -> Unit,
     onBranchAssistant: (MessageNodeId) -> Unit,
+    onEnsureAttachmentPreview: (ConversationAttachmentReference) -> Unit,
     onOpenImagePreview: (AttachmentId) -> Unit,
     onOpenPdfPreview: (AttachmentId) -> Unit,
     onOpenVideoPreview: (AttachmentId) -> Unit,
@@ -4815,10 +5743,21 @@ private fun MessageBubble(
     val message = transcript.message
     val roleVisual = chatRoleVisual(message.role)
     var messageBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    val textBlocks = message.blocks.filterNot { it is PresentationBlock.AttachmentReference }
-    val attachmentBlocks = message.blocks.filterIsInstance<PresentationBlock.AttachmentReference>()
-    val assistantImageBlocks = attachmentBlocks.filter { it.attachment.mimeType.startsWith("image/") }
-    val assistantOtherAttachmentBlocks = attachmentBlocks.filterNot { it.attachment.mimeType.startsWith("image/") }
+    val textBlocks = remember(message.blocks) {
+        message.blocks.filterNot { it is PresentationBlock.AttachmentReference }
+    }
+    val attachmentBlocks = remember(message.blocks) {
+        message.blocks.filterIsInstance<PresentationBlock.AttachmentReference>()
+    }
+    val assistantImageBlocks = remember(attachmentBlocks) {
+        ascendingAssistantImageOrder(attachmentBlocks.filter { it.attachment.mimeType.startsWith("image/") })
+    }
+    val assistantOtherAttachmentBlocks = remember(attachmentBlocks) {
+        attachmentBlocks.filterNot { it.attachment.mimeType.startsWith("image/") }
+    }
+    LaunchedEffect(attachmentBlocks) {
+        attachmentBlocks.forEach { block -> onEnsureAttachmentPreview(block.attachment) }
+    }
     // USER is the only bubble role. The remaining transcript roles may use their own surface,
     // but share the document-sized text metrics instead of the bubble's compact inset.
     val isAssistantDocument = message.role != com.nanzhufeng.ai.domain.MessageRole.USER
@@ -4944,7 +5883,7 @@ private fun MessageBubble(
             }
             if (textBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth()) { textContent() }
             if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { assistantAttachmentContent() }
-            AssistantMessageActionRow(transcript, contextSelections, onCopyAssistant, onShareAssistant, onExportAssistantMarkdown, onBranchAssistant)
+            AssistantMessageActionRow(transcript, contextSelections, onCopyAssistant, onShareAssistant, onBranchAssistant)
         }
         else -> Surface(color = roleVisual.surface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { textContent(); attachmentContent() }
@@ -5088,7 +6027,6 @@ private fun AssistantMessageActionRow(
     contextSelections: List<ContextSelectionAuditRecord>,
     onCopy: (PresentedTranscriptMessage) -> Unit,
     onShare: (PresentedTranscriptMessage) -> Unit,
-    onExportMarkdown: (PresentedTranscriptMessage) -> Unit,
     onBranch: (MessageNodeId) -> Unit,
 ) {
     val time = formatTranscriptTimeOrNull(transcript.metadata.createdAt)
@@ -5153,14 +6091,6 @@ private fun AssistantMessageActionRow(
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("导出 Markdown") },
-                        leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
-                        onClick = {
-                            moreActionsExpanded = false
-                            onExportMarkdown(transcript)
-                        },
-                    )
-                    DropdownMenuItem(
                         text = { Text("创建分支") },
                         leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
                         onClick = {
@@ -5171,10 +6101,10 @@ private fun AssistantMessageActionRow(
                 }
             }
             BoxWithConstraints(Modifier.weight(1f)) {
-                val inlineMetadata = listOfNotNull(time, model, cost).joinToString(" · ")
-                val primaryMetadata = listOfNotNull(time, model).joinToString(" · ")
+                val inlineMetadata = assistantFooterMetadataText(time, model, cost)
+                val primaryMetadata = assistantFooterMetadataText(time, model, null)
                 val inlineWidth = rememberTextMeasurer().measure(
-                    text = AnnotatedString(inlineMetadata),
+                    text = inlineMetadata,
                     style = metadataStyle,
                     softWrap = false,
                     maxLines = 1,
@@ -5213,9 +6143,9 @@ private fun List<ContextSelectionAuditRecord>.answerContextDisclosureOrNull(): A
     if (isEmpty()) return null
     val sourceRows = flatMap { it.answerContextDisclosure().sources }
         .distinctBy { "${it.kind}\u0000${it.stableId}" }
+    if (sourceRows.isEmpty()) return null
     return AnswerContextDisclosure(
         sources = sourceRows,
-        noAdditionalSourceExplanation = first().answerContextDisclosure().noAdditionalSourceExplanation,
     )
 }
 
@@ -5232,10 +6162,7 @@ private fun AnswerContextDisclosureDialog(
                 modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("以下仅显示本次回答实际加入的本地来源，不显示来源正文。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                if (disclosure.sources.isEmpty()) {
-                    Text(disclosure.noAdditionalSourceExplanation, color = BodyText, style = MaterialTheme.typography.bodyMedium)
-                } else disclosure.sources.forEach { source ->
+                disclosure.sources.forEach { source ->
                     AnswerContextSourceRow(source)
                 }
             }
@@ -5247,10 +6174,13 @@ private fun AnswerContextDisclosureDialog(
 
 @Composable
 private fun AnswerContextSourceRow(source: AnswerContextSourceDisclosure) {
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text("${source.kind} · ${source.title}", color = BodyText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-        Text(source.whyUsed, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-    }
+    Text(answerContextSourceTitle(source), color = BodyText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+}
+
+private fun answerContextSourceTitle(source: AnswerContextSourceDisclosure): String = when (source.kind) {
+    "个性化资料" -> source.title
+    "自定义指令" -> source.kind
+    else -> "${source.kind} · ${source.title}"
 }
 
 /** The footer is a reading aid, not a technical route ledger. */
@@ -5258,6 +6188,17 @@ private fun assistantFooterModelName(label: String?): String? = label
     ?.let { com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
     ?.trim()
     ?.takeIf { it.isNotBlank() }
+
+private fun assistantFooterMetadataText(time: String?, model: String?, cost: String?): AnnotatedString =
+    if (model == null) {
+        AnnotatedString(listOfNotNull(time, cost).joinToString(" · "))
+    } else {
+        modelNameAnnotatedText(
+            prefix = time?.let { "$it · " }.orEmpty(),
+            modelName = model,
+            suffix = cost?.let { " · $it" }.orEmpty(),
+        )
+    }
 
 /** A visually quiet but still comfortably tappable action used by every assistant footer command. */
 @Composable
@@ -5285,7 +6226,7 @@ private fun AssistantMessageAction(
 private fun MessageActionPopup(
     anchorBounds: androidx.compose.ui.geometry.Rect,
     pressPosition: androidx.compose.ui.geometry.Offset,
-    headline: String,
+    headline: AnnotatedString,
     editable: Boolean,
     onDismiss: () -> Unit,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
@@ -5595,13 +6536,14 @@ private fun ImportedConversationProvenance(label: String) {
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
         contentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.78f),
         shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.wrapContentWidth(Alignment.Start),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
             label,
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 8.dp),
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -5765,6 +6707,7 @@ private fun presentedMessagePlainText(message: PresentedMessage): String = messa
     is PresentationBlock.Table -> tablePlainText(block)
     is PresentationBlock.PlainText -> block.raw
     is PresentationBlock.AttachmentReference -> "${block.attachment.displayName ?: "本地附件"} · ${block.attachment.mimeType}"
+    is PresentationBlock.Reasoning -> ""
     is PresentationBlock.SafeToolSummary -> "工具结果（安全摘要）：${block.toolName} · ${block.summary}"
 } }
 
@@ -5803,7 +6746,7 @@ private suspend fun shareAssistantMarkdown(
         putExtra(Intent.EXTRA_TITLE, file.name)
         clipData = android.content.ClipData.newRawUri("南枫 AI Markdown", uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }, "导出 Markdown"))
+    }, "分享"))
 }
 
 /** Exports one current-path conversation as readable Markdown, never as a raw provider archive. */
@@ -5837,7 +6780,7 @@ private suspend fun shareConversationMarkdown(
         putExtra(Intent.EXTRA_TITLE, file.name)
         clipData = android.content.ClipData.newRawUri("南枫 AI 对话 Markdown", uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }, "导出 Markdown"))
+    }, "分享"))
 }
 
 /** The user sees a semantic Markdown reconstruction; raw Provider bodies never enter this path. */
@@ -5853,6 +6796,7 @@ private fun presentedMessageMarkdown(message: PresentedMessage): String = messag
     is PresentationBlock.Table -> tableMarkdownText(block)
     is PresentationBlock.PlainText -> block.raw
     is PresentationBlock.AttachmentReference -> "<${attachmentKindLabel(block.attachment.mimeType)}>"
+    is PresentationBlock.Reasoning -> ""
     is PresentationBlock.SafeToolSummary -> "工具结果（安全摘要）：${block.toolName} · ${block.summary}"
 } }.trim()
 
@@ -5894,6 +6838,14 @@ private val UserBubbleTypography = ConversationMessageTypography(
     body = 15.sp, bodyLineHeight = 23.sp, note = 13.sp, noteLineHeight = 19.sp, list = 15.sp, listLineHeight = 23.sp,
 )
 
+/** File preview hierarchy: Markdown remains legible without page-sized heading jumps. */
+private val TextPreviewTypography = ConversationMessageTypography(
+    headingOne = 19.sp, headingTwo = 18.sp, headingMinor = 17.sp,
+    headingOneLineHeight = 27.sp, headingTwoLineHeight = 26.sp, headingMinorLineHeight = 25.sp,
+    headingOneWeight = FontWeight.SemiBold, headingTwoWeight = FontWeight.SemiBold, headingMinorWeight = FontWeight.Medium,
+    body = 15.sp, bodyLineHeight = 23.sp, note = 13.sp, noteLineHeight = 20.sp, list = 15.sp, listLineHeight = 23.sp,
+)
+
 private fun markdownInlineText(spans: List<InlinePresentation>): String = spans.joinToString("") { span -> when (span) {
     is InlinePresentation.Text -> span.value
     is InlinePresentation.Strong -> "**${span.value}**"
@@ -5903,8 +6855,8 @@ private fun markdownInlineText(spans: List<InlinePresentation>): String = spans.
 } }
 
 @Composable
-private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>, bodyColor: Color, sentAt: java.time.Instant?, assistantDocument: Boolean, onOpenImagePreview: (AttachmentId) -> Unit, onOpenPdfPreview: (AttachmentId) -> Unit, onOpenVideoPreview: (AttachmentId) -> Unit, onOpenAudioPreview: (AttachmentId) -> Unit, onOpenTextPreview: (AttachmentId) -> Unit, searchAnchorAttachmentId: AttachmentId? = null, searchAnchorRequestId: Long = 0L, findBlockIndex: Int? = null) {
-    val typography = if (assistantDocument) AssistantDocumentTypography else UserBubbleTypography
+private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>, bodyColor: Color, sentAt: java.time.Instant?, assistantDocument: Boolean, onOpenImagePreview: (AttachmentId) -> Unit, onOpenPdfPreview: (AttachmentId) -> Unit, onOpenVideoPreview: (AttachmentId) -> Unit, onOpenAudioPreview: (AttachmentId) -> Unit, onOpenTextPreview: (AttachmentId) -> Unit, searchAnchorAttachmentId: AttachmentId? = null, searchAnchorRequestId: Long = 0L, findBlockIndex: Int? = null, typographyOverride: ConversationMessageTypography? = null) {
+    val typography = typographyOverride ?: if (assistantDocument) AssistantDocumentTypography else UserBubbleTypography
     val findMessageId = findBlockIndex?.let { block.identity.messageId }
     val blockFindKey = findBlockIndex?.let(::conversationFindBlockKey)
     when (block) {
@@ -6007,7 +6959,22 @@ private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: 
                 )
             }
         }
-        is PresentationBlock.AttachmentReference -> AttachmentPreviewChip(attachmentPreviews[block.attachment.id], block.attachment.displayName, block.attachment.mimeType, block.attachment.byteCount, sentAt, onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview, searchAnchorAttachmentId, searchAnchorRequestId)
+        is PresentationBlock.AttachmentReference -> AttachmentPreviewChip(
+            preview = attachmentPreviews[block.attachment.id],
+            messageNodeId = block.identity.messageId,
+            displayName = block.attachment.displayName,
+            mimeType = block.attachment.mimeType,
+            byteCount = block.attachment.byteCount,
+            sentAt = sentAt,
+            onOpenImagePreview = onOpenImagePreview,
+            onOpenPdfPreview = onOpenPdfPreview,
+            onOpenVideoPreview = onOpenVideoPreview,
+            onOpenAudioPreview = onOpenAudioPreview,
+            onOpenTextPreview = onOpenTextPreview,
+            searchAnchorAttachmentId = searchAnchorAttachmentId,
+            searchAnchorRequestId = searchAnchorRequestId,
+        )
+        is PresentationBlock.Reasoning -> AssistantReasoningDisclosure(block)
         is PresentationBlock.SafeToolSummary -> InlinePresentationText(
             spans = listOf(InlinePresentation.Text(conversationSafeToolSummaryText(block))),
             color = SecondaryText,
@@ -6015,6 +6982,45 @@ private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: 
             findMessageId = findMessageId,
             findSegmentKey = blockFindKey,
         )
+    }
+}
+
+/** A multi-line disclosure uses a rounded rectangle, never a pill-shaped card. */
+@Composable
+private fun AssistantReasoningDisclosure(block: PresentationBlock.Reasoning) {
+    var expanded by rememberSaveable(block.identity.messageId.value, block.identity.contentBlockPosition) { mutableStateOf(false) }
+    Surface(
+        onClick = { expanded = !expanded },
+        color = NeutralSystemSurface,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().semantics {
+            contentDescription = if (expanded) "收起思考过程" else "展开思考过程"
+        },
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "思考过程",
+                    color = SecondaryText,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = SecondaryText,
+                )
+            }
+            if (expanded) {
+                Text(
+                    text = block.text,
+                    color = SecondaryText,
+                    style = MaterialTheme.typography.bodySmall,
+                    lineHeight = scaledConversationTextUnit(20.sp),
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+            }
+        }
     }
 }
 
@@ -6512,9 +7518,10 @@ private fun sourceShortcutLabel(sources: List<InlinePresentation.Link>): String 
 @Composable
 private fun ImportedChatGptMarkerChip(label: String) {
     Surface(
-        color = Color(0xFFEDEDED),
+        color = NeutralSystemSurface,
         contentColor = SecondaryText,
         shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, NeutralBorder.copy(alpha = 0.58f)),
         modifier = Modifier.height(28.dp),
     ) {
         Row(
@@ -6584,9 +7591,10 @@ private fun SourceLinkShortcut(sources: List<InlinePresentation.Link>) {
     val primary = sources.first()
     Surface(
         onClick = { visible = true },
-        color = Color(0xFFEDEDED),
+        color = NeutralSystemSurface,
         contentColor = BodyText,
         shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, NeutralBorder.copy(alpha = 0.58f)),
         modifier = Modifier.height(28.dp).semantics { contentDescription = "打开 ${sources.size} 个来源网站" },
     ) {
         Row(
@@ -6718,19 +7726,31 @@ private fun DraftComposer(
     val canSubmit = !state.isSending && (draft.text.isNotBlank() || draft.attachments.isNotEmpty())
     val manualId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId
     val autoFacts = com.nanzhufeng.ai.domain.AutoRoutingFacts(
-        hasImageVideoOrPdf = draft.attachments.isNotEmpty(),
-        isComplexProjectDebug = draft.text.contains(Regex("(?i)\\b(debug|bug|stacktrace|exception|compile)\\b|调试|复杂项目|报错")),
+        hasAttachment = draft.attachments.isNotEmpty(),
+        requiresComplexReasoning = com.nanzhufeng.ai.domain.AutoRoutingTaskClassifier.requiresComplexReasoning(draft.text),
     )
     val selectedPresets = manualId?.let { id -> com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(id).routes }
         ?: listOf(com.nanzhufeng.ai.domain.AutoModelRouter.resolve(autoFacts))
     val modelLabel = composerModelDisplayLabel(selectedPresets)
     val selectedPreset = selectedPresets.first()
+    val hasBinaryMaterial = draft.attachments.any { reference ->
+        reference.mimeType !in com.nanzhufeng.ai.domain.TEXT_ATTACHMENT_MIME_TYPES
+    }
     val attachmentRecipient = if (manualId == null) {
-        "自动选择支持本附件的已配置服务商（发送时确定）"
+        AnnotatedString(
+            if (hasBinaryMaterial) "本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR，再自动选择已配置模型"
+            else "本机先统一解析，再自动选择已配置模型（发送时确定）",
+        )
     } else {
-        com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.provider(
-            com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(selectedPreset),
-        )?.displayName.orEmpty() + " · " + com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(selectedPreset).displayName
+        val selectedProvider = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(selectedPreset)
+        val providerName = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.provider(selectedProvider)?.displayName.orEmpty()
+        val bridgePrefix = if (hasBinaryMaterial && selectedProvider != com.nanzhufeng.ai.domain.ProviderId.OPENROUTER) {
+            "本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR，再交给 "
+        } else ""
+        modelNameAnnotatedText(
+            prefix = "$bridgePrefix$providerName · ",
+            modelName = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(selectedPreset).displayName,
+        )
     }
     ConversationComposerDock(
         value = draft.text,
@@ -6743,7 +7763,10 @@ private fun DraftComposer(
             {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        "点击发送后，本次附件将发送至：$attachmentRecipient",
+                        buildAnnotatedString {
+                            append("点击发送后，本次附件将发送至：")
+                            append(attachmentRecipient)
+                        },
                         color = SecondaryText,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
@@ -6813,7 +7836,7 @@ private fun ComposerModelEntry(
                     label,
                     fontSize = 13.sp,
                     fontFamily = DrawerIdentityRoundedFontFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -6931,9 +7954,11 @@ private fun ComposerAttachmentPreview(
     val isPdf = mimeType == "application/pdf"
     val isVideo = mimeType == "video/mp4"
     val isAudio = mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_AUDIO_MIME_TYPES
-    val isText = mimeType in com.nanzhufeng.ai.domain.TEXT_ATTACHMENT_MIME_TYPES
+    // Draft previews and persisted conversation attachments must make the same
+    // capability decision as search/open: MIME first, then a safe filename fallback.
+    val isText = com.nanzhufeng.ai.domain.isSafeTextAttachment(mimeType, displayName)
     val previewCorner = if (isVideo) 20.dp else if (isImage) 10.dp else 14.dp
-    val bitmap = preview?.thumbnail?.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val bitmap = rememberDecodedBitmap(preview?.thumbnail?.bytes, preview?.id)
     val previewModifier = when {
         isImage -> originalAspectPreviewModifier(bitmap, maxEdge = 92.dp, fallbackSize = 92.dp)
         isVideo -> Modifier.size(92.dp)
@@ -7002,6 +8027,7 @@ private fun ComposerAttachmentPreview(
             attachmentPressPosition?.takeIf { attachmentInfoVisible }?.let { pressPosition ->
                 AttachmentInfoPopup(
                     attachmentId = preview?.id ?: return@let,
+                    messageNodeId = null,
                     anchorBounds = bounds,
                     pressPosition = pressPosition,
                     displayName = displayName,
@@ -7035,7 +8061,6 @@ private fun ComposerMenuOverlay(
     selectedModelId: String?,
     onDismiss: () -> Unit,
     onSelectModel: ((String?) -> Unit)? = null,
-    onSelectCompare: (() -> Unit)? = null,
 ) {
     if (menu == ComposerMenu.NONE) return
     var selectedSlot by remember(menu) { mutableStateOf<com.nanzhufeng.ai.domain.ComposerModelSlot?>(null) }
@@ -7052,12 +8077,23 @@ private fun ComposerMenuOverlay(
     } ?: return
     val density = LocalDensity.current
     val currentChoices = selectedSlot?.let { com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.groups[it].orEmpty() }.orEmpty()
-    val activeModelSlot = selectedModelId
-        ?.let(com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog::choice)
-        ?.slot
-        ?: com.nanzhufeng.ai.domain.ComposerModelSlot.AUTO
+    val normalizedSelectedChoice = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(selectedModelId)
+    val activeModelSlot = normalizedSelectedChoice.slot
+    val deepSeekPricingPeriod by produceState(
+        initialValue = com.nanzhufeng.ai.domain.DeepSeekPricingWindow.periodAt(java.time.Instant.now()),
+        key1 = menu,
+    ) {
+        while (true) {
+            val now = java.time.Instant.now()
+            value = com.nanzhufeng.ai.domain.DeepSeekPricingWindow.periodAt(now)
+            delay(
+                (com.nanzhufeng.ai.domain.DeepSeekPricingWindow.millisUntilNextTransition(now) + 50L)
+                    .coerceAtLeast(250L),
+            )
+        }
+    }
     val menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 248.dp
-    // The root needs room for one automatic row and four task rows. A child list uses the same
+    // The root needs room for one automatic row and the Daily/Deep task rows. A child list uses the same
     // header plus only the rows it actually owns, so it never has a blank lower tray.
     val modelPickerContentHeight = if (selectedSlot == null) {
         ComposerModelPickerRootContentHeight
@@ -7130,19 +8166,19 @@ private fun ComposerMenuOverlay(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                 if (selectedSlot == null) {
+                    val autoDetail = modelOptions.firstOrNull()?.second ?: "Auto · DeepSeek V4 Flash"
                     ComposerModelPickerSectionLabel("自动选择")
                     ComposerModelOverlayRow(
                         label = "自动",
-                        detail = modelOptions.firstOrNull()?.second ?: "Auto · GPT-5.6 Terra",
-                        selected = selectedModelId == null || selectedModelId == com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.auto.id,
+                        detail = autoDetail,
+                        detailModelName = autoDetail.substringAfter(" · ", missingDelimiterValue = "").takeIf { it.isNotBlank() },
+                        selected = normalizedSelectedChoice.id == com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.auto.id,
                         onClick = { onSelectModel?.invoke(null) ?: onDismiss() },
                     )
                     ComposerModelPickerSectionLabel("按任务选择")
                     listOf(
                         com.nanzhufeng.ai.domain.ComposerModelSlot.DAILY,
                         com.nanzhufeng.ai.domain.ComposerModelSlot.DEEP,
-                        com.nanzhufeng.ai.domain.ComposerModelSlot.MULTIMODAL,
-                        com.nanzhufeng.ai.domain.ComposerModelSlot.COMPARE,
                     ).forEach { slot ->
                             ComposerModelOverlayRow(
                                 label = slot.label,
@@ -7161,24 +8197,30 @@ private fun ComposerMenuOverlay(
                 } else {
                     ComposerModelPickerSectionLabel("选择具体模型")
                     currentChoices.forEach { choice ->
+                        val providerId = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(choice.routes.single())
+                        val isDeepSeek = providerId == com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK
                         val officialWebSearchDetail = choice.slot.takeIf { it == com.nanzhufeng.ai.domain.ComposerModelSlot.DEEP }?.let {
-                            when (com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(choice.routes.single())) {
+                            when (providerId) {
                                 com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter · 官方实时联网检索"
                                 com.nanzhufeng.ai.domain.ProviderId.QWEN -> "千问 · 官方实时联网检索"
-                                com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> "DeepSeek · 官方实时联网检索"
+                                com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> null
+                                com.nanzhufeng.ai.domain.ProviderId.ZHIPU -> "智谱 · 官方实时联网检索"
                                 com.nanzhufeng.ai.domain.ProviderId.MOCK -> null
                             }
                         }
                         ComposerModelOverlayRow(
                             label = choice.label,
-                            detail = officialWebSearchDetail ?: when (choice.slot) {
+                            detail = if (isDeepSeek) {
+                                "${deepSeekPricingPeriod.pickerLabel} · 官方实时联网检索"
+                            } else officialWebSearchDetail ?: when (choice.slot) {
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.COMPARE -> "两个模型并行回答，便于对照"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.DAILY -> "适合日常问答与轻量任务"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.DEEP -> "适合复杂推理与专业分析"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.MULTIMODAL -> "支持图像、视频与 PDF"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.AUTO -> ""
                             },
-                            selected = choice.id == selectedModelId,
+                            emphasizedDetailPrefix = deepSeekPricingPeriod.pickerLabel.takeIf { isDeepSeek },
+                            selected = choice.id == normalizedSelectedChoice.id,
                             onClick = { onSelectModel?.invoke(choice.id) ?: onDismiss() },
                         )
                     }
@@ -7212,7 +8254,7 @@ private fun ComposerModelPickerHeader(title: String, onBackOrClose: () -> Unit, 
             title,
             modifier = Modifier.align(Alignment.Center),
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
         )
     }
 }
@@ -7234,6 +8276,8 @@ private fun ComposerModelOverlayRow(
     detail: String,
     selected: Boolean = false,
     showNext: Boolean = false,
+    detailModelName: String? = null,
+    emphasizedDetailPrefix: String? = null,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -7249,8 +8293,26 @@ private fun ComposerModelOverlayRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall, color = SecondaryText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(label, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (detail.isNotBlank()) Text(
+                    detailModelName?.let { modelNameAnnotatedTextIn(detail, it) }
+                        ?: emphasizedDetailPrefix
+                            ?.takeIf(detail::startsWith)
+                            ?.let { prefix ->
+                                buildAnnotatedString {
+                                    withStyle(SpanStyle(color = AccentOrange, fontWeight = FontWeight.Bold)) {
+                                        append(prefix)
+                                    }
+                                    append(detail.removePrefix(prefix))
+                                }
+                            }
+                        ?: AnnotatedString(detail),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SecondaryText,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             when {
                 selected -> Icon(Icons.Rounded.Check, contentDescription = "当前模型", modifier = Modifier.size(22.dp))
@@ -7319,6 +8381,7 @@ private fun ComposerDraftTextField(
     onFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val composerTextSizeSp = composerNativeTextSizeSp(LocalAppTextScale.current)
     // The native editable view keeps Android's real text ActionMode.  In particular, a long
     // press must expose the white system toolbar's Paste / Select all / Autofill actions instead
     // of reducing the user to the keyboard's Autofill bubble alone.
@@ -7330,7 +8393,7 @@ private fun ComposerDraftTextField(
                 setTextColor(BodyText.toArgb())
                 setHintTextColor(Color(0xFF9A9E9B).toArgb())
                 hint = "回复 南枫AI"
-                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, composerTextSizeSp)
                 includeFontPadding = false
                 gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
@@ -7358,6 +8421,9 @@ private fun ComposerDraftTextField(
             }
         },
         update = { editor ->
+            // AndroidView does not inherit Compose Typography. Re-apply the same live app font
+            // scale so typed text and the hint change immediately with Settings → 字体大小.
+            editor.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, composerTextSizeSp)
             // Re-apply on every theme recomposition: changing the appearance accent must update
             // an already-created EditText instead of leaving its system teal selection behind.
             applyComposerNativeSelectionColors(
@@ -7512,9 +8578,7 @@ private fun AssistantGeneratedImageGroup(
     }
     val selected = images.firstOrNull { it.attachment.id.value == selectedIdValue } ?: images.first()
     val selectedPreview = attachmentPreviews[selected.attachment.id]
-    val selectedBitmap = remember(selectedPreview?.id, selectedPreview?.thumbnail?.bytes) {
-        selectedPreview?.thumbnail?.bytes?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
-    }
+    val selectedBitmap = rememberDecodedBitmap(selectedPreview?.thumbnail?.bytes, selectedPreview?.id)
     Column(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -7578,9 +8642,7 @@ private fun AssistantGeneratedImageGroup(
             ) {
                 images.forEachIndexed { index, image ->
                     val preview = attachmentPreviews[image.attachment.id]
-                    val bitmap = remember(preview?.id, preview?.thumbnail?.bytes) {
-                        preview?.thumbnail?.bytes?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
-                    }
+                    val bitmap = rememberDecodedBitmap(preview?.thumbnail?.bytes, preview?.id)
                     val selectedThumbnail = image.attachment.id.value == selectedIdValue
                     Surface(
                         onClick = { selectedIdValue = image.attachment.id.value },
@@ -7611,14 +8673,31 @@ private fun AssistantGeneratedImageGroup(
 }
 
 @Composable
-private fun AttachmentPreviewChip(preview: ConversationAttachmentPreview?, displayName: String?, mimeType: String, byteCount: Long, sentAt: java.time.Instant?, onOpenImagePreview: (AttachmentId) -> Unit, onOpenPdfPreview: (AttachmentId) -> Unit, onOpenVideoPreview: (AttachmentId) -> Unit, onOpenAudioPreview: (AttachmentId) -> Unit, onOpenTextPreview: (AttachmentId) -> Unit, searchAnchorAttachmentId: AttachmentId? = null, searchAnchorRequestId: Long = 0L) {
+private fun AttachmentPreviewChip(
+    preview: ConversationAttachmentPreview?,
+    messageNodeId: MessageNodeId,
+    displayName: String?,
+    mimeType: String,
+    byteCount: Long,
+    sentAt: java.time.Instant?,
+    onOpenImagePreview: (AttachmentId) -> Unit,
+    onOpenPdfPreview: (AttachmentId) -> Unit,
+    onOpenVideoPreview: (AttachmentId) -> Unit,
+    onOpenAudioPreview: (AttachmentId) -> Unit,
+    onOpenTextPreview: (AttachmentId) -> Unit,
+    searchAnchorAttachmentId: AttachmentId? = null,
+    searchAnchorRequestId: Long = 0L,
+) {
     val isImage = mimeType.startsWith("image/")
     val isPdf = mimeType == "application/pdf"
     val isVideo = mimeType == "video/mp4"
     val isAudio = mimeType in com.nanzhufeng.ai.domain.CONVERSATION_ALLOWED_AUDIO_MIME_TYPES
-    val isText = mimeType in setOf("text/plain", "text/markdown", "application/json", "text/csv")
+    // Do not maintain a second, narrower format list here.  The preview surface and
+    // tap action intentionally share the domain safety gate used by search and the
+    // extractor, including DOCX/XLSX/PPTX and safe octet-stream filename fallbacks.
+    val isText = com.nanzhufeng.ai.domain.isSafeTextAttachment(mimeType, displayName)
     val previewCorner = if (isVideo) 20.dp else if (isImage) 10.dp else 10.dp
-    val bitmap = preview?.thumbnail?.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val bitmap = rememberDecodedBitmap(preview?.thumbnail?.bytes, preview?.id)
     // Attachments are content, not message bubbles: a photo is its own rounded pixel surface;
     // only video/document-like content receives a deliberate card treatment.
     val previewModifier = when {
@@ -7701,6 +8780,7 @@ private fun AttachmentPreviewChip(preview: ConversationAttachmentPreview?, displ
             attachmentPressPosition?.takeIf { attachmentInfoVisible }?.let { pressPosition ->
                 AttachmentInfoPopup(
                     attachmentId = preview?.id ?: return@let,
+                    messageNodeId = messageNodeId,
                     anchorBounds = bounds,
                     pressPosition = pressPosition,
                     displayName = displayName,
@@ -7735,6 +8815,7 @@ private fun AudioMessageAttachmentPlayer(mimeType: String, durationMillis: Long?
 @Composable
 private fun AttachmentInfoPopup(
     attachmentId: AttachmentId,
+    messageNodeId: MessageNodeId?,
     anchorBounds: androidx.compose.ui.geometry.Rect,
     pressPosition: androidx.compose.ui.geometry.Offset,
     displayName: String?,
@@ -7746,10 +8827,14 @@ private fun AttachmentInfoPopup(
     onDismiss: () -> Unit,
 ) {
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
+    val locateAttachmentInSearch = LocalAttachmentSearchLocateRequest.current
     val density = LocalDensity.current
     val containerSize = LocalWindowInfo.current.containerSize
-    val popupWidth = 252.dp
-    val popupHeight = if ((displayName?.length ?: 0) > 34) 220.dp else 198.dp
+    val popupWidth = minOf(
+        300.dp,
+        with(density) { (containerSize.width - 32.dp.roundToPx()).coerceAtLeast(240.dp.roundToPx()).toDp() },
+    )
+    val popupHeight = if ((displayName?.length ?: 0) > 34) 208.dp else 188.dp
     val horizontalMargin = with(density) { 16.dp.roundToPx() }
     val verticalGap = with(density) { 6.dp.roundToPx() }
     val popupWidthPx = with(density) { popupWidth.roundToPx() }
@@ -7783,19 +8868,26 @@ private fun AttachmentInfoPopup(
         Surface(
             color = ForegroundSurface,
             contentColor = BodyText,
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             shadowElevation = 6.dp,
             modifier = Modifier.width(popupWidth),
         ) {
-            Column(Modifier.padding(start = 16.dp, top = 14.dp, end = 10.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            TransientMenuTextScale {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
-                    Icon(
-                        imageVector = if (kind == "图片") Icons.Rounded.AddPhotoAlternate else Icons.Rounded.AttachFile,
-                        contentDescription = null,
-                        tint = SecondaryText,
-                        modifier = Modifier.padding(top = 2.dp).size(20.dp),
-                    )
-                    Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                    Surface(
+                        color = NeutralSystemSurface,
+                        contentColor = SecondaryText,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (kind == "图片") Icons.Rounded.AddPhotoAlternate else Icons.Rounded.AttachFile,
+                            contentDescription = null,
+                            modifier = Modifier.padding(10.dp).size(16.dp),
+                        )
+                    }
+                    Column(Modifier.padding(start = 10.dp, top = 2.dp).weight(1f)) {
                         Text(
                             displayName ?: "未命名附件",
                             style = MaterialTheme.typography.bodyMedium,
@@ -7803,16 +8895,21 @@ private fun AttachmentInfoPopup(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(kind, color = SecondaryText, style = MaterialTheme.typography.labelSmall)
                     }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
-                        Icon(Icons.Rounded.Close, contentDescription = "关闭附件信息", modifier = Modifier.size(18.dp))
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Rounded.Close, contentDescription = "关闭附件信息", modifier = Modifier.size(16.dp))
                     }
                 }
                 Text(detail, color = SecondaryText, style = MaterialTheme.typography.labelSmall)
                 time?.let { Text(if (isDraft) it else "发送于 $it", color = SecondaryText, style = MaterialTheme.typography.labelSmall) }
                 HorizontalDivider(color = Color(0x141E2925))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (!isDraft && messageNodeId != null) {
+                        AttachmentPopupAction(Icons.Rounded.Search, "搜索定位", Modifier.weight(1f), emphasized = true) {
+                            locateAttachmentInSearch(messageNodeId, attachmentId, mimeType)
+                            onDismiss()
+                        }
+                    }
                     AttachmentPopupAction(Icons.Rounded.FileDownload, "下载", Modifier.weight(1f)) {
                         requestAttachmentTransfer(attachmentId, AttachmentTransferAction.DOWNLOAD)
                         onDismiss()
@@ -7822,22 +8919,32 @@ private fun AttachmentInfoPopup(
                         onDismiss()
                     }
                 }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun AttachmentPopupAction(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun AttachmentPopupAction(
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    emphasized: Boolean = false,
+    onClick: () -> Unit,
+) {
     TextButton(
         onClick = onClick,
-        modifier = modifier.height(36.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.textButtonColors(contentColor = BodyText),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+        modifier = modifier.height(38.dp),
+        shape = RoundedCornerShape(19.dp),
+        colors = ButtonDefaults.textButtonColors(
+            containerColor = NeutralSystemSurface,
+            contentColor = if (emphasized) MaterialTheme.colorScheme.primary else BodyText,
+        ),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 5.dp),
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(6.dp))
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(4.dp))
         Text(label, style = MaterialTheme.typography.labelMedium)
     }
 }
@@ -7935,23 +9042,26 @@ private fun FilePreviewTopActions(
     dark: Boolean,
     onDownload: () -> Unit,
     onShare: () -> Unit,
+    showTransferActions: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val container = if (dark) Color.White.copy(alpha = 0.16f) else Color(0xFFF1F4F2)
     val content = if (dark) Color.White else BodyText
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onDownload, modifier = Modifier.size(48.dp)) {
-            Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
-                Icon(Icons.Rounded.FileDownload, contentDescription = "下载文件", tint = content, modifier = Modifier.padding(12.dp).size(24.dp))
+        if (showTransferActions) {
+            IconButton(onClick = onDownload, modifier = Modifier.size(48.dp)) {
+                Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
+                    Icon(Icons.Rounded.FileDownload, contentDescription = "下载文件", tint = content, modifier = Modifier.padding(12.dp).size(24.dp))
+                }
             }
+            Button(
+                onClick = onShare,
+                modifier = Modifier.width(78.dp).height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            ) { Text("分享", style = MaterialTheme.typography.labelLarge) }
         }
-        Button(
-            onClick = onShare,
-            modifier = Modifier.width(78.dp).height(48.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-        ) { Text("分享", style = MaterialTheme.typography.labelLarge) }
     }
 }
 
@@ -7968,22 +9078,24 @@ private fun PreviewCloseButton(dark: Boolean, onClose: () -> Unit, modifier: Mod
 
 /** Audio keeps all three header actions in one fixed row, leaving the title one stable slot. */
 @Composable
-private fun AudioPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare: () -> Unit, onClose: () -> Unit) {
+private fun AudioPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare: () -> Unit, onClose: () -> Unit, showTransferActions: Boolean = true) {
     val container = if (dark) Color.White.copy(alpha = 0.16f) else Color(0xFFF1F4F2)
     val content = if (dark) Color.White else BodyText
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onDownload, modifier = Modifier.size(44.dp)) {
-            Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
-                Icon(Icons.Rounded.FileDownload, contentDescription = "下载文件", tint = content, modifier = Modifier.padding(11.dp).size(22.dp))
+        if (showTransferActions) {
+            IconButton(onClick = onDownload, modifier = Modifier.size(44.dp)) {
+                Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
+                    Icon(Icons.Rounded.FileDownload, contentDescription = "下载文件", tint = content, modifier = Modifier.padding(11.dp).size(22.dp))
+                }
             }
+            Button(
+                onClick = onShare,
+                modifier = Modifier.width(68.dp).height(44.dp),
+                shape = RoundedCornerShape(22.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            ) { Text("分享", style = MaterialTheme.typography.labelLarge) }
         }
-        Button(
-            onClick = onShare,
-            modifier = Modifier.width(68.dp).height(44.dp),
-            shape = RoundedCornerShape(22.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-        ) { Text("分享", style = MaterialTheme.typography.labelLarge) }
         IconButton(onClick = onClose, modifier = Modifier.size(44.dp)) {
             Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
                 Icon(Icons.Rounded.Close, contentDescription = "关闭文件预览", tint = content, modifier = Modifier.padding(11.dp).size(22.dp))
@@ -7994,22 +9106,31 @@ private fun AudioPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShar
 
 /** Text reading keeps a smaller persistent action group so the full-screen title still breathes. */
 @Composable
-private fun TextPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare: () -> Unit, onClose: () -> Unit) {
+private fun TextPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit, onClose: () -> Unit, showTransferActions: Boolean = true, showCopy: Boolean = true) {
     val container = if (dark) Color.White.copy(alpha = 0.16f) else Color(0xFFF1F4F2)
     val content = if (dark) Color.White else BodyText
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onDownload, modifier = Modifier.size(40.dp)) {
-            Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
-                Icon(Icons.Rounded.FileDownload, contentDescription = "下载文件", tint = content, modifier = Modifier.padding(10.dp).size(20.dp))
+        if (showTransferActions) {
+            IconButton(onClick = onDownload, modifier = Modifier.size(40.dp)) {
+                Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
+                    Icon(Icons.Rounded.FileDownload, contentDescription = "下载文件", tint = content, modifier = Modifier.padding(10.dp).size(20.dp))
+                }
+            }
+            Button(
+                onClick = onShare,
+                modifier = Modifier.width(62.dp).height(40.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            ) { Text("分享", style = MaterialTheme.typography.labelMedium) }
+        }
+        if (showCopy) {
+            IconButton(onClick = onCopy, modifier = Modifier.size(40.dp)) {
+                Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
+                    Icon(Icons.Rounded.ContentCopy, contentDescription = "复制全文", tint = content, modifier = Modifier.padding(10.dp).size(20.dp))
+                }
             }
         }
-        Button(
-            onClick = onShare,
-            modifier = Modifier.width(62.dp).height(40.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-        ) { Text("分享", style = MaterialTheme.typography.labelMedium) }
         IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
             Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
                 Icon(Icons.Rounded.Close, contentDescription = "关闭文件预览", tint = content, modifier = Modifier.padding(10.dp).size(20.dp))
@@ -8019,20 +9140,57 @@ private fun TextPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare
 }
 
 @Composable
-private fun PdfPreviewDialog(preview: ConversationAttachmentPdfPreview, onOpenPage: (Int) -> Unit, onClose: () -> Unit) {
+internal fun SharedPdfPreviewDialog(
+    preview: ConversationAttachmentPdfPreview,
+    loading: Boolean,
+    onOpenPage: (Int) -> Unit,
+    onClose: () -> Unit,
+) = PdfPreviewDialog(preview, loading, onOpenPage, onClose)
+
+@Composable
+private fun PdfPreviewDialog(
+    preview: ConversationAttachmentPdfPreview,
+    loading: Boolean,
+    onOpenPage: (Int) -> Unit,
+    onClose: () -> Unit,
+) {
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
     val chrome = rememberFilePreviewChromeState(preview.id.value)
     val darkFilePreview = isDarkFilePreviewSurface()
     val page = preview.page
-    val bitmap = page?.image?.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val bitmap = rememberDecodedBitmap(page?.image?.bytes, "${preview.id.value}:${page?.pageNumber}")
+    DisposableEffect(bitmap) { onDispose { bitmap?.recycle() } }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(color = localFilePreviewCanvas(darkFilePreview), modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().toggleFilePreviewChrome(preview.id.value, chrome.toggle), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        // Page gestures end above navigation controls, so a PDF pan can never
+                        // steal the Previous/Next hit area.
+                        .padding(bottom = 92.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
                     when {
+                        page == null && loading -> Unit
                         page == null -> Text(preview.unavailableReason ?: "本地 PDF 已损坏，无法阅读。", color = SecondaryText)
                         bitmap == null -> Text("本地 PDF 页渲染失败，无法阅读。", color = SecondaryText)
-                        else -> Image(bitmap = bitmap.asImageBitmap(), contentDescription = "${preview.displayName ?: "本地 PDF"} 第 ${page.pageNumber} 页", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                        else -> PdfPageCanvas(
+                            bitmap = bitmap,
+                            displayName = preview.displayName,
+                            pageNumber = page.pageNumber,
+                            pageCount = page.pageCount,
+                            loading = loading,
+                            onToggleChrome = chrome.toggle,
+                            onOpenPage = onOpenPage,
+                        )
+                    }
+                    if (loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(28.dp).zIndex(2f),
+                            color = AccentOrange,
+                            strokeWidth = 2.5.dp,
+                        )
                     }
                 }
                 if (chrome.visible) {
@@ -8041,17 +9199,131 @@ private fun PdfPreviewDialog(preview: ConversationAttachmentPdfPreview, onOpenPa
                         dark = darkFilePreview,
                         onDownload = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
                         onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
+                        showTransferActions = preview.canTransfer,
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
                     )
                 }
                 page?.let {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
-                        OutlinedButton(onClick = { onOpenPage(it.pageNumber - 1) }, enabled = it.pageNumber > 1, shape = RoundedCornerShape(14.dp)) { Text("上一页") }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(12.dp)
+                            .zIndex(3f),
+                    ) {
+                        OutlinedButton(onClick = { onOpenPage(it.pageNumber - 1) }, enabled = it.pageNumber > 1 && !loading, shape = RoundedCornerShape(14.dp)) { Text("上一页") }
                         Text("第 ${it.pageNumber} / ${it.pageCount} 页", style = MaterialTheme.typography.labelSmall, color = SecondaryText, modifier = Modifier.padding(horizontal = 10.dp))
-                        OutlinedButton(onClick = { onOpenPage(it.pageNumber + 1) }, enabled = it.pageNumber < it.pageCount, shape = RoundedCornerShape(14.dp)) { Text("下一页") }
+                        OutlinedButton(onClick = { onOpenPage(it.pageNumber + 1) }, enabled = it.pageNumber < it.pageCount && !loading, shape = RoundedCornerShape(14.dp)) { Text("下一页") }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * PDF pages support deliberate document gestures without borrowing the image-only double-tap
+ * contract: pinch zoom and pan work at any page, while a single horizontal swipe changes pages
+ * only at fitted zoom so reading movement cannot accidentally navigate.
+ */
+@Composable
+private fun PdfPageCanvas(
+    bitmap: android.graphics.Bitmap,
+    displayName: String?,
+    pageNumber: Int,
+    pageCount: Int,
+    loading: Boolean,
+    onToggleChrome: () -> Unit,
+    onOpenPage: (Int) -> Unit,
+) {
+    var zoom by rememberSaveable(pageNumber) { mutableStateOf(1f) }
+    var offsetX by rememberSaveable(pageNumber) { mutableStateOf(0f) }
+    var offsetY by rememberSaveable(pageNumber) { mutableStateOf(0f) }
+    val currentZoom = rememberUpdatedState(zoom)
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopStart) {
+        val viewportWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        val viewportHeightPx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+        val sourceWidthPx = bitmap.width.toFloat().coerceAtLeast(1f)
+        val sourceHeightPx = bitmap.height.toFloat().coerceAtLeast(1f)
+        val initialScale = minOf(viewportWidthPx / sourceWidthPx, viewportHeightPx / sourceHeightPx)
+        val fittedWidthPx = sourceWidthPx * initialScale
+        val fittedHeightPx = sourceHeightPx * initialScale
+        val maximumZoom = maximumOriginalImageZoom(initialScale)
+        val renderedWidthPx = fittedWidthPx * zoom
+        val renderedHeightPx = fittedHeightPx * zoom
+        val placedX = if (renderedWidthPx <= viewportWidthPx) (viewportWidthPx - renderedWidthPx) / 2f else offsetX.coerceIn(viewportWidthPx - renderedWidthPx, 0f)
+        val placedY = if (renderedHeightPx <= viewportHeightPx) (viewportHeightPx - renderedHeightPx) / 2f else offsetY.coerceIn(viewportHeightPx - renderedHeightPx, 0f)
+        val density = LocalDensity.current
+        val renderedWidth = with(density) { renderedWidthPx.toDp() }
+        val renderedHeight = with(density) { renderedHeightPx.toDp() }
+        val swipeThresholdPx = with(density) { 56.dp.toPx() }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(pageNumber, pageCount, loading) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val fittedZoomAtStart = currentZoom.value <= 1.001f
+                        var previousPosition = down.position
+                        var horizontalDistancePx = 0f
+                        var verticalDistancePx = 0f
+                        var usedMultiplePointers = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.changes.count { it.pressed } > 1) usedMultiplePointers = true
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            val delta = change.position - previousPosition
+                            previousPosition = change.position
+                            horizontalDistancePx += delta.x
+                            verticalDistancePx += delta.y
+                            if (change.changedToUpIgnoreConsumed()) {
+                                if (
+                                    !loading &&
+                                    fittedZoomAtStart &&
+                                    currentZoom.value <= 1.001f &&
+                                    !usedMultiplePointers &&
+                                    abs(horizontalDistancePx) > abs(verticalDistancePx) * 1.25f
+                                ) {
+                                    when {
+                                        horizontalDistancePx <= -swipeThresholdPx && pageNumber < pageCount -> onOpenPage(pageNumber + 1)
+                                        horizontalDistancePx >= swipeThresholdPx && pageNumber > 1 -> onOpenPage(pageNumber - 1)
+                                    }
+                                }
+                                break
+                            }
+                        }
+                    }
+                },
+        ) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "${displayName ?: "本地 PDF"} 第 $pageNumber 页",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .size(renderedWidth, renderedHeight)
+                    .offset { IntOffset(placedX.toInt(), placedY.toInt()) }
+                    .pointerInput(pageNumber, viewportWidthPx, viewportHeightPx) {
+                        detectTransformGestures { centroid, pan, zoomChange, _ ->
+                            val oldZoom = zoom
+                            val nextZoom = (oldZoom * zoomChange).coerceIn(1f, maximumZoom)
+                            val ratio = nextZoom / oldZoom
+                            val nextWidth = fittedWidthPx * nextZoom
+                            val nextHeight = fittedHeightPx * nextZoom
+                            val focusX = placedX + centroid.x
+                            val focusY = placedY + centroid.y
+                            val nextX = focusX - (focusX - placedX) * ratio + pan.x
+                            val nextY = focusY - (focusY - placedY) * ratio + pan.y
+                            zoom = nextZoom
+                            offsetX = if (nextWidth <= viewportWidthPx) 0f else nextX.coerceIn(viewportWidthPx - nextWidth, 0f)
+                            offsetY = if (nextHeight <= viewportHeightPx) 0f else nextY.coerceIn(viewportHeightPx - nextHeight, 0f)
+                        }
+                    }
+                    // PDF deliberately has no onDoubleTap; that gesture belongs to image files.
+                    .pointerInput(pageNumber, onToggleChrome) {
+                        detectTapGestures(onTap = { onToggleChrome() })
+                    },
+            )
         }
     }
 }
@@ -8196,6 +9468,7 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                         dark = true,
                         onDownload = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
                         onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
+                        showTransferActions = preview.canTransfer,
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
                     )
                 }
@@ -8465,6 +9738,7 @@ private fun AudioPreviewDialog(preview: ConversationAttachmentAudioPreview, onCl
                             onDownload = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
                             onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
                             onClose = { onClose(position()) },
+                            showTransferActions = preview.canTransfer,
                         )
                     }
                 }
@@ -8512,11 +9786,35 @@ private fun AudioPreviewDialog(preview: ConversationAttachmentAudioPreview, onCl
 @Composable
 private fun TextPreviewDialog(preview: ConversationAttachmentTextPreview, onClose: () -> Unit) {
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
+    SharedTextPreviewDialog(preview, onClose, requestAttachmentTransfer)
+}
+
+@Composable
+internal fun SharedTextPreviewDialog(
+    preview: ConversationAttachmentTextPreview,
+    onClose: () -> Unit,
+    onRequestAttachmentTransfer: (AttachmentId, AttachmentTransferAction) -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     // A text preview is a reading surface, so its compact top-right actions stay visible.
     rememberFilePreviewChromeState(preview.id.value, autoHide = false)
     val darkTextPreview = isDarkFilePreviewSurface()
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(color = ForegroundSurface, shape = RectangleShape, modifier = Modifier.fillMaxSize()) {
+    val previewSurface = if (darkTextPreview) ForegroundSurface else Color.White
+    val markdownBlocks = remember(preview.id, preview.text) {
+        preview.text?.let { text ->
+            MessagePresentationRenderer().renderText(
+                PresentationBlockIdentity(MessageNodeId("local-text-preview:${preview.id.value}"), 0),
+                text,
+            ).map(PresentationBlock::inertTextPreviewBlock)
+        }.orEmpty()
+    }
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        TextPreviewSystemBarsEffect(darkTextPreview)
+        Surface(color = previewSurface, shape = RectangleShape, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -8528,9 +9826,17 @@ private fun TextPreviewDialog(preview: ConversationAttachmentTextPreview, onClos
                     Text("本地安全文本预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(end = 8.dp))
                     TextPreviewTopActions(
                         dark = darkTextPreview,
-                        onDownload = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
-                        onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
+                        onDownload = { onRequestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
+                        onShare = { onRequestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
+                        onCopy = {
+                            preview.text?.let { text ->
+                                clipboard.setText(AnnotatedString(text))
+                                Toast.makeText(context, "已复制全文", Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         onClose = onClose,
+                        showTransferActions = preview.canTransfer,
+                        showCopy = preview.text != null,
                     )
                 }
                 if (preview.text == null) {
@@ -8547,20 +9853,37 @@ private fun TextPreviewDialog(preview: ConversationAttachmentTextPreview, onClos
                     ) {
                         Text("${preview.displayName ?: "未命名文件"} · ${preview.mimeType} · ${formatAttachmentBytes(preview.byteCount)}", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
                         if (preview.truncated) Text("仅显示前 128 KiB；原文件未执行或外发。", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-                        SelectionContainer(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                            Text(
-                                preview.text,
-                                fontFamily = FontFamily.Monospace,
-                                style = MaterialTheme.typography.bodySmall,
+                        SelectionContainer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(localFilePreviewCanvas(darkTextPreview)),
+                        ) {
+                            Column(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .verticalScroll(rememberScrollState())
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(localFilePreviewCanvas(darkTextPreview))
-                                    .padding(12.dp),
-                            )
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                markdownBlocks.forEach { block ->
+                                    PresentationBlockView(
+                                        block = block,
+                                        attachmentPreviews = emptyMap(),
+                                        bodyColor = BodyText,
+                                        sentAt = null,
+                                        assistantDocument = false,
+                                        onOpenImagePreview = {},
+                                        onOpenPdfPreview = {},
+                                        onOpenVideoPreview = {},
+                                        onOpenAudioPreview = {},
+                                        onOpenTextPreview = {},
+                                        typographyOverride = TextPreviewTypography,
+                                    )
+                                }
+                            }
                         }
-                        Text("内容按 inert UTF-8 纯文本显示；不会渲染 HTML、执行链接、脚本或 Markdown 指令。", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
                     }
                 }
             }
@@ -8568,10 +9891,198 @@ private fun TextPreviewDialog(preview: ConversationAttachmentTextPreview, onClos
     }
 }
 
+@Composable
+private fun ArchivePreviewDialog(
+    preview: com.nanzhufeng.ai.domain.ConversationAttachmentArchivePreview,
+    onOpenEntry: (com.nanzhufeng.ai.domain.AttachmentArchiveEntry) -> Unit,
+    onClose: () -> Unit,
+) {
+    val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
+    val darkPreview = isDarkFilePreviewSurface()
+    val previewSurface = if (darkPreview) ForegroundSurface else Color.White
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        TextPreviewSystemBarsEffect(darkPreview)
+        Surface(color = previewSurface, shape = RectangleShape, modifier = Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(start = 18.dp, top = 12.dp, end = 14.dp, bottom = 10.dp),
+                ) {
+                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            when {
+                                preview.directoryPath.isNotEmpty() -> preview.directoryPath.last()
+                                preview.containerPath.isNotEmpty() -> preview.containerPath.last().substringAfterLast('/')
+                                else -> "压缩包内容"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            preview.displayName ?: "未命名压缩文件",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SecondaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    TextPreviewTopActions(
+                        dark = darkPreview,
+                        onDownload = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
+                        onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
+                        onCopy = {},
+                        onClose = onClose,
+                        showCopy = false,
+                    )
+                }
+                if (preview.unavailableReason != null) {
+                    Box(Modifier.fillMaxSize().padding(18.dp), contentAlignment = Alignment.Center) {
+                        Text(preview.unavailableReason, color = SecondaryText)
+                    }
+                } else {
+                    Column(
+                        Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "${preview.totalEntryCount} 项 · ${formatAttachmentBytes(preview.byteCount)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SecondaryText,
+                        )
+                        if (preview.truncated) {
+                            Text("内容较多，仅显示前 2000 项。", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                        }
+                        if (preview.entries.isEmpty()) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("压缩包为空。", color = SecondaryText)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                contentPadding = PaddingValues(bottom = 10.dp),
+                            ) {
+                                itemsIndexed(preview.entries, key = { index, entry -> "$index:${entry.path}:${entry.isDirectory}:${entry.byteCount}" }) { _, entry ->
+                                    Surface(
+                                        onClick = { onOpenEntry(entry) },
+                                        enabled = entry.isDirectory || entry.mimeType != null,
+                                        color = localFilePreviewCanvas(darkPreview),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            Icon(
+                                                if (entry.isDirectory) Icons.Rounded.Folder else Icons.Rounded.AttachFile,
+                                                contentDescription = null,
+                                                tint = SecondaryText,
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Text(entry.path.substringAfterLast('/'), style = MaterialTheme.typography.bodySmall, color = BodyText)
+                                                if (!entry.isDirectory) {
+                                                    Text(
+                                                        listOfNotNull(archiveEntryTypeLabel(entry.mimeType), entry.byteCount?.let(::formatAttachmentBytes)).joinToString(" · "),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = SecondaryText,
+                                                    )
+                                                }
+                                            }
+                                            if (entry.isDirectory) {
+                                                Icon(
+                                                    Icons.Rounded.ChevronRight,
+                                                    contentDescription = "进入${entry.path.substringAfterLast('/')}",
+                                                    tint = SecondaryText,
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun archiveEntryTypeLabel(mimeType: String?): String? = when (mimeType) {
+    "image/jpeg", "image/png", "image/webp" -> "图片"
+    "video/mp4" -> "视频"
+    "audio/mpeg", "audio/wav", "audio/mp4" -> "音频"
+    "application/pdf" -> "PDF"
+    "text/markdown" -> "Markdown"
+    "text/plain" -> "文本"
+    "application/json" -> "JSON"
+    "text/csv" -> "CSV"
+    "application/xml", "text/xml" -> "XML"
+    "application/x-yaml", "text/yaml" -> "YAML"
+    "text/html" -> "HTML"
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "Word"
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "Excel"
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "PowerPoint"
+    "application/zip" -> "ZIP"
+    null -> null
+    else -> "文件"
+}
+
+@Composable
+private fun TextPreviewSystemBarsEffect(dark: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(view, dark) {
+        val window = (view.parent as? DialogWindowProvider)?.window
+        if (window == null) return@DisposableEffect onDispose { }
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        val previousLightStatusBars = controller.isAppearanceLightStatusBars
+        controller.isAppearanceLightStatusBars = !dark
+        onDispose {
+            controller.isAppearanceLightStatusBars = previousLightStatusBars
+        }
+    }
+}
+
+private fun PresentationBlock.inertTextPreviewBlock(): PresentationBlock = when (this) {
+    is PresentationBlock.Paragraph -> copy(spans = spans.inertTextPreviewSpans())
+    is PresentationBlock.Note -> copy(spans = spans.inertTextPreviewSpans())
+    is PresentationBlock.Heading -> copy(spans = spans.inertTextPreviewSpans())
+    is PresentationBlock.UnorderedList -> copy(items = items.map { item -> item.copy(spans = item.spans.inertTextPreviewSpans()) })
+    is PresentationBlock.OrderedList -> copy(items = items.map { item -> item.copy(spans = item.spans.inertTextPreviewSpans()) })
+    is PresentationBlock.Quote -> copy(spans = spans.inertTextPreviewSpans())
+    is PresentationBlock.Table -> copy(
+        headers = headers.map(List<InlinePresentation>::inertTextPreviewSpans),
+        rows = rows.map { row -> row.map(List<InlinePresentation>::inertTextPreviewSpans) },
+    )
+    else -> this
+}
+
+private fun List<InlinePresentation>.inertTextPreviewSpans(): List<InlinePresentation> = map { span ->
+    if (span is InlinePresentation.Link) InlinePresentation.Text(span.label) else span
+}
+
 private fun formatVideoDuration(milliseconds: Long): String {
     val seconds = (milliseconds / 1000).coerceAtLeast(0)
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }
+
+@Composable
+internal fun SharedImagePreviewDialog(
+    preview: ConversationAttachmentOriginalPreview,
+    relatedImageIds: List<AttachmentId>,
+    onOpenImagePreview: (AttachmentId) -> Unit,
+    onClose: () -> Unit,
+    onRequestAttachmentTransfers: (List<AttachmentId>, AttachmentTransferAction) -> Unit,
+) = ImagePreviewDialog(preview, relatedImageIds, onOpenImagePreview, onClose, onRequestAttachmentTransfers)
 
 @Composable
 private fun ImagePreviewDialog(
@@ -8584,7 +10095,7 @@ private fun ImagePreviewDialog(
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
     // Decode the verified original once per opened attachment. Zoom recompositions must never
     // repeatedly decode a long screenshot or silently fall back to its catalogue thumbnail.
-    val bitmap = remember(preview.id) { preview.bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+    val bitmap = rememberDecodedBitmap(preview.bytes, preview.id)
     DisposableEffect(bitmap) { onDispose { bitmap?.recycle() } }
     val generatedImageIds = relatedImageIds.distinct().ifEmpty { listOf(preview.id) }
     val hasMultipleGeneratedImages = generatedImageIds.size > 1
@@ -8594,10 +10105,11 @@ private fun ImagePreviewDialog(
     var offsetX by rememberSaveable(preview.id.value) { mutableStateOf(0f) }
     var offsetY by rememberSaveable(preview.id.value) { mutableStateOf(0f) }
     val currentPreviewZoom = rememberUpdatedState(zoom)
+    val imageGestureScope = rememberCoroutineScope()
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(color = Color.Black, modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().toggleFilePreviewChrome(preview.id.value, chrome.toggle), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (bitmap == null) Text(preview.unavailableReason ?: "本地原图已损坏，无法预览。", color = Color.White)
                     else BoxWithConstraints(
                         modifier = Modifier.fillMaxSize(),
@@ -8616,80 +10128,230 @@ private fun ImagePreviewDialog(
                         val placedX = if (renderedWidthPx <= viewportWidthPx) (viewportWidthPx - renderedWidthPx) / 2f else offsetX.coerceIn(viewportWidthPx - renderedWidthPx, 0f)
                         val placedY = if (renderedHeightPx <= viewportHeightPx) (viewportHeightPx - renderedHeightPx) / 2f else offsetY.coerceIn(viewportHeightPx - renderedHeightPx, 0f)
                         val density = LocalDensity.current
-                        val renderedWidth = with(density) { renderedWidthPx.toDp() }
-                        val renderedHeight = with(density) { renderedHeightPx.toDp() }
                         val swipeThresholdPx = with(density) { 56.dp.toPx() }
                         val currentImageIndex = generatedImageIds.indexOf(preview.id)
+                        val currentPlacedX = rememberUpdatedState(placedX)
+                        val currentPlacedY = rememberUpdatedState(placedY)
                         Box(
                             Modifier
                                 .fillMaxSize()
-                                // Observe the same raw pointer stream as zoom instead of joining a
-                                // competing draggable recognizer. The transform owner may consume
-                                // movement, but this single-finger observer still sees it and only
-                                // changes images after a horizontal release at native zoom.
-                                .pointerInput(preview.id, generatedImageIds) {
+                                // The stable viewport is the sole image-gesture owner. The Image
+                                // below is remeasured and moved after every zoom step, so attaching
+                                // recognizers to it can invalidate the hit target mid-gesture and
+                                // makes independent tap/transform detectors race each other.
+                                .pointerInput(
+                                    preview.id,
+                                    generatedImageIds,
+                                    viewportWidthPx,
+                                    viewportHeightPx,
+                                    fittedWidthPx,
+                                    fittedHeightPx,
+                                    maximumZoom,
+                                ) {
+                                    var lastImageTapUptime = 0L
+                                    var lastImageTapPosition = Offset.Unspecified
+                                    var pendingSingleTap: Job? = null
+                                    val doubleTapTimeoutMillis = viewConfiguration.doubleTapTimeoutMillis
+                                    val doubleTapMinTimeMillis = viewConfiguration.doubleTapMinTimeMillis
+                                    val touchSlopPx = viewConfiguration.touchSlop
+                                    val doubleTapSlopPx = touchSlopPx * 2f
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false)
                                         val nativeZoomAtStart = currentPreviewZoom.value <= 1.001f
+                                        val startZoom = currentPreviewZoom.value
+                                        val startPlacedX = currentPlacedX.value
+                                        val startPlacedY = currentPlacedY.value
+                                        var gestureZoom = startZoom
+                                        var gesturePlacedX = startPlacedX
+                                        var gesturePlacedY = startPlacedY
+                                        val startRenderedWidth = fittedWidthPx * startZoom
+                                        val startRenderedHeight = fittedHeightPx * startZoom
+                                        val startedInsideImage =
+                                            down.position.x >= startPlacedX &&
+                                            down.position.x <= startPlacedX + startRenderedWidth &&
+                                            down.position.y >= startPlacedY &&
+                                            down.position.y <= startPlacedY + startRenderedHeight
                                         var previousPosition = down.position
                                         var horizontalDistancePx = 0f
                                         var verticalDistancePx = 0f
                                         var usedMultiplePointers = false
+                                        var transformed = false
+                                        var upPosition = down.position
+                                        var upUptime = down.uptimeMillis
                                         while (true) {
                                             val event = awaitPointerEvent()
-                                            if (event.changes.count { it.pressed } > 1) usedMultiplePointers = true
+                                            val pressedCount = event.changes.count { it.pressed }
+                                            if (pressedCount > 1) usedMultiplePointers = true
                                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                             val delta = change.position - previousPosition
                                             previousPosition = change.position
                                             horizontalDistancePx += delta.x
                                             verticalDistancePx += delta.y
-                                            if (change.changedToUpIgnoreConsumed()) {
-                                                if (
-                                                    hasMultipleGeneratedImages &&
-                                                    nativeZoomAtStart &&
-                                                    currentPreviewZoom.value <= 1.001f &&
-                                                    !usedMultiplePointers &&
-                                                    abs(horizontalDistancePx) > abs(verticalDistancePx) * 1.25f
-                                                ) {
-                                                    val targetIndex = when {
-                                                        horizontalDistancePx <= -swipeThresholdPx -> currentImageIndex + 1
-                                                        horizontalDistancePx >= swipeThresholdPx -> currentImageIndex - 1
-                                                        else -> currentImageIndex
-                                                    }
-                                                    generatedImageIds.getOrNull(targetIndex)
-                                                        ?.takeIf { target -> target != preview.id }
-                                                        ?.let(onOpenImagePreview)
+
+                                            if (startedInsideImage && usedMultiplePointers && pressedCount > 0) {
+                                                val activeChanges = event.changes.filter { it.pressed && it.previousPressed }
+                                                val previousCentroid = if (activeChanges.isEmpty()) down.position else Offset(
+                                                    x = activeChanges.sumOf { it.previousPosition.x.toDouble() }.toFloat() / activeChanges.size,
+                                                    y = activeChanges.sumOf { it.previousPosition.y.toDouble() }.toFloat() / activeChanges.size,
+                                                )
+                                                val centroid = if (activeChanges.isEmpty()) previousCentroid else Offset(
+                                                    x = activeChanges.sumOf { it.position.x.toDouble() }.toFloat() / activeChanges.size,
+                                                    y = activeChanges.sumOf { it.position.y.toDouble() }.toFloat() / activeChanges.size,
+                                                )
+                                                val previousSpread = activeChanges
+                                                    .map { (it.previousPosition - previousCentroid).getDistance() }
+                                                    .average().toFloat()
+                                                val currentSpread = activeChanges
+                                                    .map { (it.position - centroid).getDistance() }
+                                                    .average().toFloat()
+                                                val zoomChange = if (previousSpread > 0.001f) currentSpread / previousSpread else 1f
+                                                val pan = centroid - previousCentroid
+                                                if (zoomChange != 1f || pan != Offset.Zero) {
+                                                    val next = imagePreviewGestureTransform(
+                                                        currentZoom = gestureZoom,
+                                                        zoomChange = zoomChange,
+                                                        panX = pan.x,
+                                                        panY = pan.y,
+                                                        focusX = centroid.x,
+                                                        focusY = centroid.y,
+                                                        placedX = gesturePlacedX,
+                                                        placedY = gesturePlacedY,
+                                                        fittedWidthPx = fittedWidthPx,
+                                                        fittedHeightPx = fittedHeightPx,
+                                                        viewportWidthPx = viewportWidthPx,
+                                                        viewportHeightPx = viewportHeightPx,
+                                                        maximumZoom = maximumZoom,
+                                                    )
+                                                    zoom = next.zoom
+                                                    offsetX = next.offsetX
+                                                    offsetY = next.offsetY
+                                                    gestureZoom = next.zoom
+                                                    val nextRenderedWidth = fittedWidthPx * next.zoom
+                                                    val nextRenderedHeight = fittedHeightPx * next.zoom
+                                                    gesturePlacedX = if (nextRenderedWidth <= viewportWidthPx) {
+                                                        (viewportWidthPx - nextRenderedWidth) / 2f
+                                                    } else next.offsetX
+                                                    gesturePlacedY = if (nextRenderedHeight <= viewportHeightPx) {
+                                                        (viewportHeightPx - nextRenderedHeight) / 2f
+                                                    } else next.offsetY
+                                                    event.changes.filter { it.positionChanged() }.forEach { it.consume() }
+                                                    transformed = true
                                                 }
+                                            } else if (
+                                                startedInsideImage &&
+                                                gestureZoom > 1.001f &&
+                                                change.pressed &&
+                                                change.positionChanged()
+                                            ) {
+                                                val next = imagePreviewGestureTransform(
+                                                    currentZoom = gestureZoom,
+                                                    zoomChange = 1f,
+                                                    panX = delta.x,
+                                                    panY = delta.y,
+                                                    focusX = change.position.x,
+                                                    focusY = change.position.y,
+                                                    placedX = gesturePlacedX,
+                                                    placedY = gesturePlacedY,
+                                                    fittedWidthPx = fittedWidthPx,
+                                                    fittedHeightPx = fittedHeightPx,
+                                                    viewportWidthPx = viewportWidthPx,
+                                                    viewportHeightPx = viewportHeightPx,
+                                                    maximumZoom = maximumZoom,
+                                                )
+                                                zoom = next.zoom
+                                                offsetX = next.offsetX
+                                                offsetY = next.offsetY
+                                                gestureZoom = next.zoom
+                                                val nextRenderedWidth = fittedWidthPx * next.zoom
+                                                val nextRenderedHeight = fittedHeightPx * next.zoom
+                                                gesturePlacedX = if (nextRenderedWidth <= viewportWidthPx) {
+                                                    (viewportWidthPx - nextRenderedWidth) / 2f
+                                                } else next.offsetX
+                                                gesturePlacedY = if (nextRenderedHeight <= viewportHeightPx) {
+                                                    (viewportHeightPx - nextRenderedHeight) / 2f
+                                                } else next.offsetY
+                                                change.consume()
+                                                transformed = true
+                                            }
+                                            if (change.changedToUpIgnoreConsumed()) {
+                                                upPosition = change.position
+                                                upUptime = change.uptimeMillis
                                                 break
+                                            }
+                                        }
+
+                                        if (usedMultiplePointers || transformed) return@awaitEachGesture
+                                        val travelled = maxOf(abs(horizontalDistancePx), abs(verticalDistancePx))
+                                        if (travelled > touchSlopPx) {
+                                            if (
+                                                startedInsideImage &&
+                                                hasMultipleGeneratedImages &&
+                                                nativeZoomAtStart &&
+                                                gestureZoom <= 1.001f &&
+                                                abs(horizontalDistancePx) > abs(verticalDistancePx) * 1.25f
+                                            ) {
+                                                val targetIndex = when {
+                                                    horizontalDistancePx <= -swipeThresholdPx -> currentImageIndex + 1
+                                                    horizontalDistancePx >= swipeThresholdPx -> currentImageIndex - 1
+                                                    else -> currentImageIndex
+                                                }
+                                                generatedImageIds.getOrNull(targetIndex)
+                                                    ?.takeIf { target -> target != preview.id }
+                                                    ?.let(onOpenImagePreview)
+                                            }
+                                            return@awaitEachGesture
+                                        }
+
+                                        if (!startedInsideImage) {
+                                            chrome.toggle()
+                                            return@awaitEachGesture
+                                        }
+
+                                        val sinceLastTap = upUptime - lastImageTapUptime
+                                        val closeToLastTap = lastImageTapPosition != Offset.Unspecified &&
+                                            (upPosition - lastImageTapPosition).getDistance() <= doubleTapSlopPx
+                                        if (
+                                            sinceLastTap in doubleTapMinTimeMillis..doubleTapTimeoutMillis &&
+                                            closeToLastTap
+                                        ) {
+                                            pendingSingleTap?.cancel()
+                                            pendingSingleTap = null
+                                            lastImageTapUptime = 0L
+                                            lastImageTapPosition = Offset.Unspecified
+                                            val next = imagePreviewDoubleTapTransform(
+                                                currentZoom = currentPreviewZoom.value,
+                                                focusX = upPosition.x,
+                                                focusY = upPosition.y,
+                                                placedX = currentPlacedX.value,
+                                                placedY = currentPlacedY.value,
+                                                fittedWidthPx = fittedWidthPx,
+                                                fittedHeightPx = fittedHeightPx,
+                                                viewportWidthPx = viewportWidthPx,
+                                                viewportHeightPx = viewportHeightPx,
+                                                maximumZoom = maximumZoom,
+                                            )
+                                            zoom = next.zoom
+                                            offsetX = next.offsetX
+                                            offsetY = next.offsetY
+                                        } else {
+                                            lastImageTapUptime = upUptime
+                                            lastImageTapPosition = upPosition
+                                            pendingSingleTap?.cancel()
+                                            pendingSingleTap = imageGestureScope.launch {
+                                                delay(doubleTapTimeoutMillis)
+                                                chrome.toggle()
                                             }
                                         }
                                     }
                                 }
-                                .pointerInput(preview.id, viewportWidthPx, viewportHeightPx) {
-                                detectTransformGestures { centroid, pan, zoomChange, _ ->
-                                    val oldZoom = zoom
-                                    val nextZoom = (oldZoom * zoomChange).coerceIn(1f, maximumZoom)
-                                    val ratio = nextZoom / oldZoom
-                                    val nextWidth = fittedWidthPx * nextZoom
-                                    val nextHeight = fittedHeightPx * nextZoom
-                                    val nextX = centroid.x - (centroid.x - placedX) * ratio + pan.x
-                                    val nextY = centroid.y - (centroid.y - placedY) * ratio + pan.y
-                                    zoom = nextZoom
-                                    offsetX = if (nextWidth <= viewportWidthPx) 0f else nextX.coerceIn(viewportWidthPx - nextWidth, 0f)
-                                    offsetY = if (nextHeight <= viewportHeightPx) 0f else nextY.coerceIn(viewportHeightPx - nextHeight, 0f)
-                                }
-                                },
                         ) {
-                            // Remeasure from the original bitmap at every zoom. Tall screenshots
-                            // open width-filled and top-aligned, then pan vertically; ordinary
-                            // images open wholly visible. Zoom is not capped before native pixels.
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
+                            OriginalImageZoomLayer(
+                                image = bitmap.asImageBitmap(),
                                 contentDescription = "${preview.displayName ?: "本地图片"} 原图预览",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .size(renderedWidth, renderedHeight)
-                                    .offset { IntOffset(placedX.toInt(), placedY.toInt()) },
+                                renderedWidthPx = renderedWidthPx,
+                                renderedHeightPx = renderedHeightPx,
+                                placedX = placedX,
+                                placedY = placedY,
                             )
                         }
                     }
@@ -8703,6 +10365,7 @@ private fun ImagePreviewDialog(
                             else requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD)
                         },
                         onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
+                        showTransferActions = preview.canTransfer,
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
                     )
                 }
@@ -8752,6 +10415,42 @@ private fun ImagePreviewDialog(
     }
 }
 
+/**
+ * Measure the original bitmap at its real zoomed size while the surrounding viewport remains
+ * stable. `Modifier.size` obeys the viewport's maximum constraints, so using it here would keep
+ * a 2.5x image at 1x pixels and only apply the enlarged offset — the exact failure seen on device.
+ */
+@Composable
+private fun OriginalImageZoomLayer(
+    image: androidx.compose.ui.graphics.ImageBitmap,
+    contentDescription: String,
+    renderedWidthPx: Float,
+    renderedHeightPx: Float,
+    placedX: Float,
+    placedY: Float,
+) {
+    val measuredWidthPx = renderedWidthPx.toInt().coerceAtLeast(1)
+    val measuredHeightPx = renderedHeightPx.toInt().coerceAtLeast(1)
+    Layout(
+        content = {
+            Image(
+                bitmap = image,
+                contentDescription = contentDescription,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) { measurables, viewportConstraints ->
+        val imagePlaceable = measurables.single().measure(
+            Constraints.fixed(measuredWidthPx, measuredHeightPx),
+        )
+        layout(viewportConstraints.maxWidth, viewportConstraints.maxHeight) {
+            imagePlaceable.place(placedX.toInt(), placedY.toInt())
+        }
+    }
+}
+
 @Composable
 private fun ComposerSendButton(
     onClick: () -> Unit,
@@ -8787,9 +10486,35 @@ private fun ComposerSendButton(
     }
 }
 
-private fun formatAttachmentBytes(bytes: Long): String = if (bytes < 1024 * 1024) "${bytes / 1024} KB" else "%.1f MB".format(bytes / 1024f / 1024f)
+private fun formatAttachmentBytes(bytes: Long): String = when {
+    bytes < 1024L -> "$bytes B"
+    bytes < 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f KB", bytes / 1024.0)
+    else -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+}
 
 /** Writes only after the explicit preview action; no private path crosses the UI state boundary. */
+@Composable
+internal fun AttachmentTransferEffect(
+    transfer: AttachmentTransferRequest,
+    onConsumeAttachmentTransfer: (AttachmentId) -> Unit,
+) {
+    val context = LocalContext.current
+    LaunchedEffect(transfer.id, transfer.action, transfer.batch.map { it.id }) {
+        runCatching { performAttachmentTransfer(context, transfer) }
+            .onSuccess {
+                val message = when {
+                    transfer.action == AttachmentTransferAction.DOWNLOAD && transfer.batch.size > 1 -> "已同时保存 ${transfer.batch.size} 张到图库"
+                    transfer.action == AttachmentTransferAction.DOWNLOAD && isGalleryMediaMime(transfer.mimeType) -> "已保存到图库"
+                    transfer.action == AttachmentTransferAction.DOWNLOAD -> "已保存到下载"
+                    else -> "已准备分享"
+                }
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+            .onFailure { error -> Toast.makeText(context, error.message ?: "文件操作失败，请重试", Toast.LENGTH_SHORT).show() }
+        onConsumeAttachmentTransfer(transfer.id)
+    }
+}
+
 private suspend fun performAttachmentTransfer(context: android.content.Context, request: AttachmentTransferRequest) {
     when (request.action) {
         AttachmentTransferAction.DOWNLOAD -> withContext(Dispatchers.IO) {
@@ -9000,8 +10725,8 @@ private fun TemporaryConversationPane(
         }
     }
     val temporaryAutoFacts = com.nanzhufeng.ai.domain.AutoRoutingFacts(
-        hasImageVideoOrPdf = recovery.draftAttachmentIds.isNotEmpty(),
-        isComplexProjectDebug = draftText.contains(Regex("(?i)\\b(debug|bug|stacktrace|exception|compile)\\b|调试|复杂项目|报错")),
+        hasAttachment = recovery.draftAttachmentIds.isNotEmpty(),
+        requiresComplexReasoning = com.nanzhufeng.ai.domain.AutoRoutingTaskClassifier.requiresComplexReasoning(draftText),
     )
     val selectedPresets = recovery.modelOverrideId
         ?.let { id -> com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(id).routes }

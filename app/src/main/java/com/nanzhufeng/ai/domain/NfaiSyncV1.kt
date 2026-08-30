@@ -25,6 +25,9 @@ private val FORBIDDEN_SYNC_KEY = Regex("(?i)(credential|api[_-]?key|authorizatio
 data class NfaiSyncRecord(val kind: String, val id: String, val revision: Long, val classification: String, val contentJson: String)
 data class NfaiSyncPreparedSnapshot(val appId: String, val documentId: String, val revision: Long, val records: List<NfaiSyncRecord>)
 data class NfaiSyncKnownAnswerMaterial(val dataKey: ByteArray, val salt: ByteArray, val wrappingNonce: ByteArray, val payloadNonce: ByteArray)
+data class NfaiSyncAccountWrappingMaterial(val wrappingKey: ByteArray, val salt: ByteArray) {
+    init { require(wrappingKey.size == 32 && salt.size == 16) }
+}
 data class NfaiSyncPreflight(val appId: String, val documentId: String, val revision: Long, val payloadHash: String, val payloadByteCount: Int)
 data class NfaiSyncOpenedSnapshot(val snapshot: NfaiSyncPreparedSnapshot, val canonicalPayload: String)
 
@@ -55,6 +58,29 @@ object NfaiSyncV1Gateway {
     fun sealKnownAnswer(snapshot: NfaiSyncPreparedSnapshot, recoveryCode: CharArray, material: NfaiSyncKnownAnswerMaterial): NfaiSyncResult =
         sealInternal(snapshot, recoveryCode, material)
 
+    /** The recovery code is consumed once; only its Keystore-protected derived material is retained. */
+    fun createAccountWrappingMaterial(recoveryCode: CharArray): NfaiSyncAccountWrappingMaterial {
+        require(recoveryCode.size >= 12)
+        val salt = ByteArray(16).also(random::nextBytes)
+        return NfaiSyncAccountWrappingMaterial(derive(recoveryCode, salt), salt)
+    }
+
+    fun sealWithAccountWrappingMaterial(
+        snapshot: NfaiSyncPreparedSnapshot,
+        dataKey: ByteArray,
+        material: NfaiSyncAccountWrappingMaterial,
+    ): NfaiSyncResult = sealInternal(
+        snapshot = snapshot,
+        recoveryCode = CharArray(0),
+        known = NfaiSyncKnownAnswerMaterial(
+            dataKey = dataKey,
+            salt = material.salt,
+            wrappingNonce = ByteArray(12).also(random::nextBytes),
+            payloadNonce = ByteArray(12).also(random::nextBytes),
+        ),
+        wrappingKeyOverride = material.wrappingKey,
+    )
+
     fun preflight(envelopeJson: String): NfaiSyncResult = runCatching { NfaiSyncResult.Preflighted(parseEnvelope(envelopeJson).first) }
         .getOrElse { NfaiSyncResult.Rejected("PREFLIGHT_REJECTED") }
 
@@ -76,7 +102,12 @@ object NfaiSyncV1Gateway {
         } finally { dataKey.fill(0); wrappingKey.fill(0) }
     }.getOrElse { error -> NfaiSyncResult.Rejected(if (error.message == "REVISION_ROLLBACK") "REVISION_ROLLBACK" else "OPEN_REJECTED") }
 
-    private fun sealInternal(snapshot: NfaiSyncPreparedSnapshot, recoveryCode: CharArray, known: NfaiSyncKnownAnswerMaterial): NfaiSyncResult = runCatching {
+    private fun sealInternal(
+        snapshot: NfaiSyncPreparedSnapshot,
+        recoveryCode: CharArray,
+        known: NfaiSyncKnownAnswerMaterial,
+        wrappingKeyOverride: ByteArray? = null,
+    ): NfaiSyncResult = runCatching {
         val payload = payloadFor(snapshot); val plain = canonical(payload).toByteArray(StandardCharsets.UTF_8)
         require(plain.size <= MAX_PAYLOAD_BYTES) { "payload 超限" }
         val dataKey = known.dataKey.copyOf(); val salt = known.salt.copyOf(); val wrappingNonce = known.wrappingNonce.copyOf(); val payloadNonce = known.payloadNonce.copyOf()
@@ -90,7 +121,7 @@ object NfaiSyncV1Gateway {
                 put("wrappedDataKey", JSONObject().put("algorithm", "AES-256-GCM").put("nonce", encode(wrappingNonce)).put("ciphertext", ""))
                 put("payload", JSONObject().put("algorithm", "AES-256-GCM").put("nonce", encode(payloadNonce)).put("ciphertext", ""))
             }
-            val wrappingKey = derive(recoveryCode, salt); val aad = aad(envelope)
+            val wrappingKey = wrappingKeyOverride?.copyOf() ?: derive(recoveryCode, salt); val aad = aad(envelope)
             try {
                 envelope.getJSONObject("wrappedDataKey").put("ciphertext", encode(encrypt(wrappingKey, wrappingNonce, dataKey, aad)))
                 envelope.getJSONObject("payload").put("ciphertext", encode(encrypt(dataKey, payloadNonce, plain, aad)))

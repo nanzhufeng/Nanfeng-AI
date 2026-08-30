@@ -29,6 +29,7 @@ class CaptureTextDraftUseCase(
             CaptureSourceType.MANUAL_TEXT -> draftFactory.fromManualText(input.text)
             CaptureSourceType.ANDROID_TEXT_SHARE -> draftFactory.fromAndroidTextShare(input.text, input.sourceReference)
             CaptureSourceType.IMAGE -> error("图片必须通过图片捕获用例进入草稿。")
+            CaptureSourceType.HISTORY_CONVERSATION -> error("历史对话整理不能通过文本捕获入口创建草稿。")
         }
         return runCatching { CaptureTextDraftResult.Saved(draftRepository.save(draft)) }
             .getOrElse { CaptureTextDraftResult.Rejected(AiTaskError.PersistenceConflict) }

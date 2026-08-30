@@ -50,6 +50,33 @@ class P3BConversationRuntimeContractsTest {
     }
 
     @Test
+    fun `completion atomically replaces raw streamed text with canonical visible reply`() {
+        val base = ConversationTreeService(clock).create("流式正文收口")
+        val invocation = InvocationId("canonical-invocation")
+        val message = MessageNodeId("canonical-message")
+        val started = machine.apply(base, null, RuntimeRunStarted(AiRuntimeEventId("c0"), invocation, base.conversation.id, message, 0, now, safe))
+        val leaked = machine.apply(started.snapshot, started.state, RuntimeContentDelta(AiRuntimeEventId("c1"), invocation, base.conversation.id, message, 1, now, "架南烛枫，直接给结论。", safe))
+        val completed = machine.apply(
+            leaked.snapshot,
+            leaked.state,
+            RuntimeCompleted(
+                eventId = AiRuntimeEventId("c2"),
+                invocationId = invocation,
+                conversationId = base.conversation.id,
+                messageId = message,
+                sequence = 2,
+                emittedAt = now,
+                security = safe,
+                finalVisibleText = "南烛枫，直接给结论。",
+            ),
+        )
+
+        val node = completed.snapshot.nodes.single()
+        assertEquals(MessageDeliveryState.COMPLETE, node.deliveryState)
+        assertEquals("南烛枫，直接给结论。", (node.content.single() as ContentBlock.Text).text)
+    }
+
+    @Test
     fun `fixture has stable deterministic ordered IDs and no transport capability`() {
         val base = ConversationTreeService(clock).create("fixture")
         val state = machine.apply(base, null, RuntimeRunStarted(AiRuntimeEventId("f0"), InvocationId("fixture-invocation"), base.conversation.id, MessageNodeId("fixture-message"), 0, now, safe)).state

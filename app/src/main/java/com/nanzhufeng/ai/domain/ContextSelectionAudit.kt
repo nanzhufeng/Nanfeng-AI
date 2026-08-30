@@ -2,7 +2,23 @@ package com.nanzhufeng.ai.domain
 
 import java.time.Instant
 
-data class ContextSelectionSource(val kind: String, val stableId: String, val title: String, val estimatedTokens: Int)
+data class ContextSelectionSource(
+    val kind: String,
+    val stableId: String,
+    val title: String,
+    val estimatedTokens: Int,
+    /** True only when the selected conversation/Memory/Knowledge candidate passed a model relevance check. */
+    val selectedByModel: Boolean = false,
+)
+
+/** Metadata only: records a high-confidence topic's local retrieval outcome without retaining query text or bodies. */
+data class ContextRetrievalAudit(
+    val topic: String,
+    val memorySearched: Boolean,
+    val selectedMemoryCount: Int,
+    val knowledgeSearched: Boolean,
+    val selectedKnowledgeCount: Int,
+)
 
 data class ContextSelectionAuditRecord(
     val createdAt: Instant,
@@ -18,6 +34,9 @@ data class ContextSelectionAuditRecord(
     val budget: ContextBudget,
     val selectedSources: List<ContextSelectionSource>,
     val indexStatus: LocalContextBroker.AssemblyStatus = LocalContextBroker.AssemblyStatus.READY,
+    /** Older records did not capture direct profile/current-path participation. */
+    val participationAuditAvailable: Boolean = false,
+    val retrievalAudit: ContextRetrievalAudit? = null,
 )
 
 /** Local debugging only. Bodies, prompts, attachments, responses and credentials are forbidden. */
@@ -40,7 +59,6 @@ data class AnswerContextSourceDisclosure(
 
 data class AnswerContextDisclosure(
     val sources: List<AnswerContextSourceDisclosure>,
-    val noAdditionalSourceExplanation: String,
 )
 
 fun ContextSelectionAuditRecord.answerContextDisclosure(): AnswerContextDisclosure {
@@ -52,15 +70,18 @@ fun ContextSelectionAuditRecord.answerContextDisclosure(): AnswerContextDisclosu
                 stableId = source.stableId,
                 title = source.title,
                 whyUsed = when (source.kind) {
-                    "记忆" -> "已启用记忆；该条内容按本次问题和当前对话范围在本机匹配。"
-                    "知识库" -> "已启用资料库搜索；该条资料按本次问题和当前项目范围在本机匹配。"
-                    "历史对话" -> "该普通历史对话按本次问题和当前项目范围在本机匹配，用于补充上下文。"
+                    "记忆" -> if (source.selectedByModel) "先由本机索引召回候选，再由本轮模型判断其与问题相关。" else "已启用记忆；该条内容按本次问题和当前对话范围在本机匹配。"
+                    "知识库" -> if (source.selectedByModel) "先由本机索引召回候选，再由本轮模型判断其与问题相关。" else "已启用资料库搜索；该条资料按本次问题和当前项目范围在本机匹配。"
+                    "历史对话" -> if (source.selectedByModel) "先由本机历史索引召回候选，再由本轮模型判断其与问题相关。" else "该普通历史对话按本次问题和当前项目范围在本机匹配，用于补充上下文。"
+                    "当前对话路径" -> "当前对话中的此前消息已随本次请求发送。"
+                    "个性化资料" -> "已使用设置中的个性化资料。"
+                    "自定义指令" -> "已使用已保存的自定义指令。"
+                    "对话风格" -> "已使用已选的对话风格。"
                     else -> "该本地资料按本次问题和当前对话范围在本机匹配。"
                 },
             )
         }
     return AnswerContextDisclosure(
         sources = sources,
-        noAdditionalSourceExplanation = "本次未加入记忆、资料库或历史对话；仅使用本轮输入、当前对话路径及固定系统规则。",
     )
 }

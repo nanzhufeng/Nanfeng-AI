@@ -24,8 +24,10 @@ data class AssistantExperienceSettings(
     val interests: String = "",
     val customInstructions: String = "",
     val memoryRetrievalEnabled: Boolean = true,
-    /** Controls only local Knowledge-library retrieval for ordinary chat. Defaults on for upgrade parity. */
+    /** Legacy retrieval bit retained for a safe migration to the unified history-library switch. */
     val librarySearchEnabled: Boolean = true,
+    /** Legacy explicit egress consent retained for a safe migration to the unified history-library switch. */
+    val autoHistoryKnowledgeEnabled: Boolean = false,
     /** Allows ordinary chat to request a provider's official public-web tool when current facts are needed. */
     val webSearchEnabled: Boolean = true,
     /** A user-selected response style; unlike personal profile data it may affect chat alone. */
@@ -33,6 +35,12 @@ data class AssistantExperienceSettings(
 ) {
     /** One user-facing switch owns both profile injection and relevant summary retrieval. */
     val memoryEnabled: Boolean get() = personalizationEnabled && memoryRetrievalEnabled
+    /**
+     * One user-facing history-library switch owns both directions of the same capability:
+     * bounded automatic curation and later relevant retrieval.  Keeping the legacy consent bit
+     * prevents an upgrade from silently starting model egress for people who only used retrieval.
+     */
+    val historyLibraryEnabled: Boolean get() = librarySearchEnabled && autoHistoryKnowledgeEnabled
     init {
         require(displayName.length <= DISPLAY_NAME_MAX_LENGTH)
         require(occupation.length <= OCCUPATION_MAX_LENGTH)
@@ -71,6 +79,18 @@ data class AssistantExperienceSettings(
             ?.joinToString(prefix = "本次回答的个性化要求：\n", separator = "\n")
     }
 
+    /**
+     * Prompting alone is not a sufficient delivery guarantee: providers can omit an instruction
+     * even when it was sent.  The ordinary-chat owner uses this narrow, user-controlled prefix
+     * as a final presentation guard for the first successful reply of a new conversation.
+     */
+    fun firstReplyAddressPrefix(userMessage: String, isFirstAssistantReply: Boolean): String? {
+        val name = displayName.trim()
+        if (!personalizationEnabled || !isFirstAssistantReply || name.isBlank()) return null
+        if (EXPLICIT_ADDRESS_REQUEST.containsMatchIn(userMessage)) return null
+        return "$name，"
+    }
+
     companion object {
         /**
          * A user-authored answer preference is a durable personal profile, not a one-line
@@ -83,6 +103,63 @@ data class AssistantExperienceSettings(
         const val OCCUPATION_MAX_LENGTH = 120
         const val INTERESTS_MAX_LENGTH = 500
     }
+}
+
+/** Do not override a name that the user explicitly asks to use (or explicitly rejects). */
+private val EXPLICIT_ADDRESS_REQUEST = Regex(
+    "(?:称呼我|叫我|喊我|称我|称为|称作|不要叫我|别叫我|不要称呼我|call\\s+me|address\\s+me)",
+    RegexOption.IGNORE_CASE,
+)
+
+fun String.withRequiredOpeningAddress(prefix: String?): String {
+    if (prefix == null) return this
+    val expectedName = prefix.removeSuffix("，")
+    return if (trimStart().startsWith(expectedName)) this else prefix + this.trimStart()
+}
+
+/**
+ * A few OpenAI-compatible providers have occasionally repeated the last reasoning character as
+ * the first visible delta.  It is safe to remove only when that exact tail is immediately
+ * followed by the configured opening name; ordinary answer text is never guessed at or trimmed.
+ */
+fun String.withoutLeakedReasoningTailBeforeOpeningAddress(
+    reasoning: String?,
+    prefix: String?,
+): String {
+    val cleanReasoning = reasoning?.trim().orEmpty()
+    val expectedName = prefix?.removeSuffix("，").orEmpty()
+    if (cleanReasoning.isEmpty() || expectedName.isEmpty()) return this
+    val candidate = trimStart()
+    // Some providers finish reasoning with punctuation/Markdown after its last semantic
+    // character, then repeat that character as the first visible delta.  Comparing only the
+    // literal final code point misses e.g. reasoning="...框架。" + answer="架南烛枫，...".
+    val reasoningTails = listOf(
+        cleanReasoning,
+        cleanReasoning.trimEnd { it.isWhitespace() || it.isReasoningTailDecoration() },
+    ).distinct()
+    for (reasoningTail in reasoningTails) {
+        val maximumOverlap = minOf(reasoningTail.length, 16)
+        for (length in maximumOverlap downTo 1) {
+            val overlap = reasoningTail.takeLast(length)
+            if (candidate.startsWith(overlap + expectedName)) {
+                return candidate.removePrefix(overlap)
+            }
+        }
+    }
+    return this
+}
+
+private fun Char.isReasoningTailDecoration(): Boolean = when (Character.getType(this)) {
+    Character.CONNECTOR_PUNCTUATION.toInt(),
+    Character.DASH_PUNCTUATION.toInt(),
+    Character.START_PUNCTUATION.toInt(),
+    Character.END_PUNCTUATION.toInt(),
+    Character.INITIAL_QUOTE_PUNCTUATION.toInt(),
+    Character.FINAL_QUOTE_PUNCTUATION.toInt(),
+    Character.OTHER_PUNCTUATION.toInt(),
+    Character.FORMAT.toInt(),
+    -> true
+    else -> false
 }
 
 private fun ConversationStyle.instruction(): String? = when (this) {

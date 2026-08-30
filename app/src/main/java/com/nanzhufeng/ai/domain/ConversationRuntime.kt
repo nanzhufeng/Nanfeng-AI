@@ -93,7 +93,13 @@ data class RuntimeCompleted(
     override val eventId: AiRuntimeEventId, override val invocationId: InvocationId, override val conversationId: ConversationId,
     override val messageId: MessageNodeId, override val sequence: Long, override val emittedAt: Instant,
     override val security: AiRuntimeSecurityMetadata, override val schemaVersion: Int = 1,
-) : RuntimeTerminalEvent { override val kind = AiRuntimeEventKind.COMPLETED; override fun canonicalPayload() = "completed" }
+    /** Canonical visible answer after Provider reasoning/text separation and presentation guards. */
+    val finalVisibleText: String? = null,
+) : RuntimeTerminalEvent {
+    init { require(finalVisibleText == null || finalVisibleText.isNotBlank()) { "最终可见正文不能为空。" } }
+    override val kind = AiRuntimeEventKind.COMPLETED
+    override fun canonicalPayload() = "completed:${finalVisibleText.orEmpty()}"
+}
 
 data class RuntimeFailed(
     override val eventId: AiRuntimeEventId, override val invocationId: InvocationId, override val conversationId: ConversationId,
@@ -175,8 +181,10 @@ class ConversationRuntimeStateMachine(private val clock: Clock) {
             is RuntimeUsageUpdated -> node to prior.copy(nextExpectedSequence = event.sequence + 1, updatedAt = event.emittedAt, inputTokens = event.inputTokens, outputTokens = event.outputTokens)
             is RuntimeCheckpoint -> node.copy(checkpoint = MessageCheckpoint(event.sequence, event.resumableFromSequence)) to prior.copy(nextExpectedSequence = event.sequence + 1, updatedAt = event.emittedAt, lastCheckpointSequence = event.sequence, resumableFromSequence = event.resumableFromSequence)
             is RuntimeCompleted -> {
-                require(text.isNotBlank()) { "未完成输出不得伪装为成功。" }
-                node.copy(deliveryState = MessageDeliveryState.COMPLETE, checkpoint = MessageCheckpoint(event.sequence, null)) to prior.copy(nextExpectedSequence = event.sequence + 1, status = ConversationRuntimeStatus.COMPLETED, updatedAt = event.emittedAt, lastCheckpointSequence = event.sequence, resumableFromSequence = null)
+                val completedText = event.finalVisibleText ?: text
+                require(completedText.isNotBlank()) { "未完成输出不得伪装为成功。" }
+                val completedContent = event.finalVisibleText?.let { listOf(ContentBlock.Text(it)) } ?: node.content
+                node.copy(content = completedContent, deliveryState = MessageDeliveryState.COMPLETE, checkpoint = MessageCheckpoint(event.sequence, null)) to prior.copy(nextExpectedSequence = event.sequence + 1, status = ConversationRuntimeStatus.COMPLETED, updatedAt = event.emittedAt, lastCheckpointSequence = event.sequence, resumableFromSequence = null)
             }
             is RuntimeFailed -> node.copy(deliveryState = MessageDeliveryState.FAILED, checkpoint = MessageCheckpoint(event.sequence, event.sequence + 1)) to prior.copy(nextExpectedSequence = event.sequence + 1, status = ConversationRuntimeStatus.FAILED, updatedAt = event.emittedAt, safeErrorCode = event.safeErrorCode, lastCheckpointSequence = event.sequence, resumableFromSequence = event.sequence + 1)
             is RuntimeCancelled -> node.copy(deliveryState = MessageDeliveryState.CANCELLED, checkpoint = MessageCheckpoint(event.sequence, event.sequence + 1)) to prior.copy(nextExpectedSequence = event.sequence + 1, status = ConversationRuntimeStatus.CANCELLED, updatedAt = event.emittedAt, lastCheckpointSequence = event.sequence, resumableFromSequence = event.sequence + 1)

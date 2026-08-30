@@ -31,8 +31,8 @@ class NewConversationRecentListContractsTest {
 
         assertTrue(drawer.contains("val drawerConversations = state.conversations.filter { it.currentLeafMessageId != null }"))
         assertTrue(drawer.contains("conversations = drawerConversations"))
-        assertTrue(drawer.contains("val pinned = drawerConversations.filter"))
-        assertTrue(drawer.contains("val content = drawerConversations.filter"))
+        assertTrue(drawer.contains("val pinned = remember(drawerConversations) { drawerConversations.filter"))
+        assertTrue(drawer.contains("val content = remember(drawerConversations) { drawerConversations.filter"))
         assertFalse(drawer.contains("val content = state.conversations.filter"))
     }
 }

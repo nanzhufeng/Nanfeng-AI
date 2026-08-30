@@ -9,14 +9,16 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class ConversationTitleFormatContractsTest {
     @Test
-    fun `title accepts only Chinese or English summary phrases`() {
+    fun `title accepts Chinese English or Arabic number summary phrases`() {
         assertEquals("南枫AI标题问题", parseConversationTitleResponse("{\"title\":\"南枫AI标题问题\"}"))
         assertEquals("Model Review", parseConversationTitleResponse("{\"title\":\"Model Review\"}"))
+        assertEquals("GPT5模型选择", parseConversationTitleResponse("{\"title\":\"GPT5模型选择\"}"))
+        assertEquals("2026科技趋势", parseConversationTitleResponse("{\"title\":\"2026科技趋势\"}"))
     }
 
     @Test
-    fun `title rejects numbers punctuation symbols and markdown`() {
-        for (title in listOf("标题生成问题1", "标题生成问题！", "标题生成问题 v2", "标题生成问题_修复", "标题生成问题🙂", "# 标题生成问题")) {
+    fun `title rejects punctuation symbols and markdown`() {
+        for (title in listOf("标题生成问题！", "标题生成问题_修复", "标题生成问题🙂", "# 标题生成问题")) {
             assertNull(title, parseConversationTitleResponse("{\"title\":\"$title\"}"))
         }
     }

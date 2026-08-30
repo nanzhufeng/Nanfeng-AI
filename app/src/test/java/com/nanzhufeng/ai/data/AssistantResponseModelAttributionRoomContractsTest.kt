@@ -65,7 +65,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
             modelId = "openai/gpt-5.6",
             modelDisplayName = "GPT-5.6",
             recordedAt = Instant.EPOCH,
-            usage = ProviderUsage(inputTokens = 12, outputTokens = 4),
+            usage = ProviderUsage(inputTokens = 12, outputTokens = 4, reasoningTokens = 2),
             cost = ProviderCost("openrouter-provider-response", "USD", 5_210L),
             costSource = ConversationCostSource.PROVIDER_RESPONSE,
         )
@@ -82,7 +82,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
                 while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
             }
         }
-        assertEquals(setOf("assistantMessageId", "attemptId", "providerId", "receiverProviderId", "modelId", "modelDisplayName", "recordedAtEpochMs", "inputTokens", "outputTokens", "totalTokens", "cachedInputTokens", "costPriceVersion", "costCurrencyCode", "costTotalMicros", "costSource"), columns)
+        assertEquals(setOf("assistantMessageId", "attemptId", "providerId", "receiverProviderId", "modelId", "modelDisplayName", "recordedAtEpochMs", "inputTokens", "outputTokens", "totalTokens", "cachedInputTokens", "reasoningTokens", "costPriceVersion", "costCurrencyCode", "costTotalMicros", "costSource"), columns)
         val indexNames = reopened.openHelper.writableDatabase.query("PRAGMA index_list(assistant_response_model_attributions)").use { cursor ->
             buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
         }
@@ -116,6 +116,33 @@ class AssistantResponseModelAttributionRoomContractsTest {
                 buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
             }
             org.junit.Assert.assertTrue(indexNames.contains("index_assistant_response_model_attributions_costTotalMicros_recordedAtEpochMs"))
+        } finally {
+            helper.close(); context.deleteDatabase(name)
+        }
+    }
+
+    @Test fun `schema sixty two preserves accounting while adding optional reasoning tokens`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "assistant-reasoning-token-migration-${UUID.randomUUID()}.db"
+        context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(62) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE TABLE assistant_response_model_attributions (assistantMessageId TEXT NOT NULL, attemptId TEXT NOT NULL, providerId TEXT NOT NULL, receiverProviderId TEXT NOT NULL, modelId TEXT NOT NULL, modelDisplayName TEXT NOT NULL, recordedAtEpochMs INTEGER NOT NULL, inputTokens INTEGER, outputTokens INTEGER, totalTokens INTEGER, cachedInputTokens INTEGER, costPriceVersion TEXT, costCurrencyCode TEXT, costTotalMicros INTEGER, costSource TEXT, PRIMARY KEY(assistantMessageId,attemptId))")
+                    db.execSQL("INSERT INTO assistant_response_model_attributions VALUES ('message','attempt','QWEN','QWEN','qwen3.8-max','Qwen3.8-Max',0,83273,17242,100515,0,'old','CNY',1497056,'LOCAL_ESTIMATE')")
+                }
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            }).build(),
+        )
+        val sqlite = helper.writableDatabase
+        try {
+            NanfengAiDatabase.MIGRATION_62_63.migrate(sqlite)
+            sqlite.query("SELECT outputTokens, reasoningTokens, costTotalMicros FROM assistant_response_model_attributions WHERE assistantMessageId='message'").use { cursor ->
+                org.junit.Assert.assertTrue(cursor.moveToFirst())
+                assertEquals(17_242L, cursor.getLong(0))
+                org.junit.Assert.assertTrue(cursor.isNull(1))
+                assertEquals(1_497_056L, cursor.getLong(2))
+            }
         } finally {
             helper.close(); context.deleteDatabase(name)
         }

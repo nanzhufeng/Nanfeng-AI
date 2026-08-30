@@ -70,6 +70,21 @@ interface ConversationSearchRepository {
     fun snapshotsForSearch(): List<ConversationSnapshot>
 }
 
+/** Large local catalogues can answer search directly without rebuilding every message tree. */
+interface OptimizedConversationSearchRepository {
+    fun browseConversationHits(scope: ConversationListScope): List<ConversationSearchHit>
+    fun searchCurrentPathHits(query: String, scope: ConversationListScope): List<ConversationSearchHit>
+    fun browseAttachmentHits(
+        category: ConversationSearchCategory,
+        scope: ConversationListScope,
+    ): List<ConversationAttachmentSearchHit>
+    fun searchAttachmentHits(
+        query: String,
+        category: ConversationSearchCategory,
+        scope: ConversationListScope,
+    ): List<ConversationAttachmentSearchHit>
+}
+
 /** P6-F2-A's read port. Implementations return only already-sanitized index rows. */
 interface LocalSearchIndexRepository {
     fun searchLocalIndex(normalizedQuery: String, scope: ConversationListScope): List<LocalSearchIndexRecord>
@@ -88,6 +103,9 @@ interface ConversationReadMarkerStore {
     fun markInitialized()
     fun lastReadAtEpochMs(conversationId: ConversationId): Long?
     fun markRead(conversationId: ConversationId, updatedAtEpochMs: Long)
+    fun watchLaterAtEpochMs(conversationId: ConversationId): Long? = null
+    fun markWatchLater(conversationId: ConversationId, markedAtEpochMs: Long) = Unit
+    fun clearWatchLater(conversationId: ConversationId) = Unit
 }
 
 interface ConversationListRepository {
@@ -105,6 +123,8 @@ interface ImportedConversationProvenanceReader {
     fun isClaudeExportImported(conversationId: ConversationId): Boolean
     fun isP6KZipImported(conversationId: ConversationId): Boolean
     fun importSource(conversationId: ConversationId): ConversationImportSource?
+    fun importSources(conversationIds: Collection<ConversationId>): Map<ConversationId, ConversationImportSource> =
+        conversationIds.distinct().mapNotNull { id -> importSource(id)?.let { source -> id to source } }.toMap()
 }
 
 /** P3-D owns only saved drafts and atomic draft-to-user-message submission. */
@@ -112,6 +132,20 @@ interface ConversationDraftRepository {
     fun loadDraft(conversationId: ConversationId): ConversationDraft?
     fun saveDraft(conversationId: ConversationId, draft: ConversationDraft): ConversationDraft
     fun submitDraft(snapshotWithClearedDraft: ConversationSnapshot, expectedDraft: ConversationDraft): ConversationDraftSubmissionResult
+}
+
+/**
+ * The persisted-message attachment owner. Search/UI may request one exact unlink, but only this
+ * port may change message content; it never deletes the message node or its conversation.
+ */
+interface ConversationMessageAttachmentRepository {
+    fun unlinkMessageAttachment(
+        conversationId: ConversationId,
+        messageNodeId: MessageNodeId,
+        attachmentId: AttachmentId,
+        expectedSha256: String,
+        updatedAt: java.time.Instant,
+    ): MessageAttachmentUnlinkResult
 }
 
 /** P3-B owns atomic runtime-event fact, message projection and recovery checkpoint persistence. */
@@ -262,11 +296,53 @@ sealed interface AttachmentOpenResult {
     data class Rejected(val error: AiTaskError) : AttachmentOpenResult
 }
 
+data class AttachmentArchiveEntry(
+    val path: String,
+    val byteCount: Long?,
+    val isDirectory: Boolean,
+    val mimeType: String?,
+)
+
+data class AttachmentArchiveIndex(
+    val entries: List<AttachmentArchiveEntry>,
+    val totalEntryCount: Int,
+    val truncated: Boolean,
+)
+
+sealed interface AttachmentArchiveIndexResult {
+    data class Ready(val index: AttachmentArchiveIndex) : AttachmentArchiveIndexResult
+    data class Rejected(val error: AiTaskError) : AttachmentArchiveIndexResult
+}
+
+data class AttachmentArchiveEntryContent(
+    val path: String,
+    val mimeType: String,
+    val bytes: ByteArray,
+)
+
+sealed interface AttachmentArchiveEntryReadResult {
+    data class Content(val entry: AttachmentArchiveEntryContent) : AttachmentArchiveEntryReadResult
+    data class Rejected(val error: AiTaskError) : AttachmentArchiveEntryReadResult
+}
+
 interface PrivateAttachmentStore {
     fun import(request: AttachmentImportRequest): AttachmentImportResult
     fun read(attachment: AttachmentReference): AttachmentReadResult
     /** Default keeps legacy/test stores fail-closed until they implement verified streaming. */
     fun openVerified(attachment: AttachmentReference): AttachmentOpenResult = AttachmentOpenResult.Rejected(AiTaskError.AttachmentNotReady)
+    /**
+     * Lists one bounded, inert folder of ZIP metadata. `containerPath` addresses explicitly
+     * opened nested ZIPs; `directoryPath` addresses ordinary folders inside that archive.
+     */
+    fun archiveIndex(
+        attachment: AttachmentReference,
+        containerPath: List<String> = emptyList(),
+        directoryPath: List<String> = emptyList(),
+    ): AttachmentArchiveIndexResult = AttachmentArchiveIndexResult.Rejected(AiTaskError.AttachmentUnsupportedType)
+    /** Reads only the selected bounded entry into memory; it never writes an archive tree or executes content. */
+    fun archiveEntry(attachment: AttachmentReference, containerPath: List<String>, entryPath: String): AttachmentArchiveEntryReadResult = AttachmentArchiveEntryReadResult.Rejected(AiTaskError.AttachmentUnsupportedType)
+    /** Renders one selected PDF entry without exposing or extracting the surrounding archive tree. */
+    fun archivePdfPage(attachment: AttachmentReference, containerPath: List<String>, entryPath: String, pageNumber: Int): AttachmentPdfPageResult = AttachmentPdfPageResult.Rejected(AiTaskError.AttachmentUnsupportedType)
     fun thumbnail(attachment: AttachmentReference): AttachmentThumbnailResult
     /** Renders one inert PDF page from the verified private copy; no path ever reaches UI. */
     fun pdfPage(attachment: AttachmentReference, pageNumber: Int): AttachmentPdfPageResult = AttachmentPdfPageResult.Rejected(AiTaskError.AttachmentUnsupportedType)
@@ -286,6 +362,22 @@ interface PrivateAttachmentRepository {
     fun findBySha256(sha256: String): AttachmentReference?
     /** P6-E calls this only after its isolated reference record has been removed. */
     fun removeIfUnreferenced(id: AttachmentId): AttachmentReference? = null
+
+    /**
+     * Deletes bytes and catalog metadata only while one Room transaction proves that no live
+     * message, draft, temporary chat, ZIP occurrence or resumable upload still references them.
+     */
+    fun deleteIfUnreferenced(
+        id: AttachmentId,
+        deletePrivateCopy: (AttachmentReference) -> Boolean,
+    ): PrivateAttachmentCleanupResult = PrivateAttachmentCleanupResult.Missing
+}
+
+sealed interface PrivateAttachmentCleanupResult {
+    data class Retained(val referenceCount: Int) : PrivateAttachmentCleanupResult
+    data object Deleted : PrivateAttachmentCleanupResult
+    data object Missing : PrivateAttachmentCleanupResult
+    data object DeleteFailed : PrivateAttachmentCleanupResult
 }
 
 data class AttachmentThumbnail(val bytes: ByteArray, val width: Int, val height: Int)

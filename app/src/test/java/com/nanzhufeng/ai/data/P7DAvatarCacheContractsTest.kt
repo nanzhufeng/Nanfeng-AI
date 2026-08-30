@@ -15,5 +15,8 @@ class P7DAvatarCacheContractsTest {
         assertArrayEquals(byteArrayOf(1, 2), cache.read("account-a", url)); assertNull(cache.read("account-b", url))
         cache.deleteAccount("account-a"); assertNull(cache.read("account-a", url))
         org.junit.Assert.assertTrue(runCatching { cache.write("account-a", "https://evil.invalid/a", byteArrayOf(1)) }.isFailure)
+        org.junit.Assert.assertTrue(P7DAvatarCache.isAllowedGoogleAvatarUrl("https://googleusercontent.com/a"))
+        org.junit.Assert.assertTrue(!P7DAvatarCache.isAllowedGoogleAvatarUrl("https://user@lh3.googleusercontent.com/a"))
+        org.junit.Assert.assertTrue(!P7DAvatarCache.isAllowedGoogleAvatarUrl("http://lh3.googleusercontent.com/a"))
     }
 }

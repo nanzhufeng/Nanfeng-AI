@@ -49,10 +49,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Hub
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.ImportExport
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
@@ -67,6 +71,7 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Brightness6
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Button
@@ -92,6 +97,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -176,7 +182,6 @@ internal var AccentOrange by mutableStateOf(DefaultAccentOrange)
 internal var AccentOrangeHover by mutableStateOf(Color(0xFFD86520))
 internal var AccentOrangePressed by mutableStateOf(Color(0xFFC2581A))
 internal var AccentOrangeSoft by mutableStateOf(Color(0xFFFFF1E5))
-internal var DrawerSettingsAccent by mutableStateOf(Color(0xFFB95520))
 /** Low-emphasis input focus only; primary orange remains reserved for CTAs. */
 internal var ComposerFocusBorder by mutableStateOf(Color(0xFFEFBD94))
 internal var ComposerIdleBorder by mutableStateOf(Color(0xFFDFE2DE))
@@ -291,6 +296,7 @@ private enum class SettingsDestination(val label: String) {
     HOME("设置"),
     APPEARANCE("外观"),
     PERSONALIZATION("个性化"),
+    MEMORY_OVERVIEW("记忆"),
     NOTIFICATIONS("提醒"),
     MODEL("模型与联网"),
     MODEL_CONFIGURATION("模型设置"),
@@ -303,12 +309,12 @@ private enum class SettingsDestination(val label: String) {
     RECYCLE_BIN("回收站"),
     WORKSPACE("工作区"),
     DEVELOPMENT("开发与诊断"),
-    DATA_STORAGE("数据与存储"),
+    DATA_STORAGE("导入与导出"),
     JSON_IMPORT_RESULTS("JSON 导入结果"),
     ZIP_IMPORT_RESULTS("ZIP 导入结果"),
     LOCAL_BACKUP("备份与恢复"),
     ABOUT("关于"),
-    PRIVACY("隐私与安全"),
+    PRIVACY("本机数据"),
 }
 
 private fun TextStyle.scaledForAppFontSize(scale: Float): TextStyle = copy(
@@ -421,17 +427,6 @@ private fun com.nanzhufeng.ai.domain.AccentColor.themeContainerColor(dark: Boole
     com.nanzhufeng.ai.domain.AccentColor.PINK -> if (dark) Color(0xFF593E4B) else Color(0xFFFFEAF1)
 }
 
-/** A compact navigation glyph needs more contrast than a selected background fill. */
-private fun com.nanzhufeng.ai.domain.AccentColor.drawerSettingsIconColor(dark: Boolean): Color = when (this) {
-    com.nanzhufeng.ai.domain.AccentColor.ORANGE -> if (dark) Color(0xFFE58A55) else Color(0xFFB95520)
-    com.nanzhufeng.ai.domain.AccentColor.BLUE -> if (dark) Color(0xFF81AEF2) else Color(0xFF245DB8)
-    com.nanzhufeng.ai.domain.AccentColor.BLACK -> if (dark) Color(0xFFD0D4D1) else Color(0xFF252A27)
-    com.nanzhufeng.ai.domain.AccentColor.GREEN -> if (dark) Color(0xFF83D2B8) else Color(0xFF106C55)
-    com.nanzhufeng.ai.domain.AccentColor.YELLOW -> if (dark) Color(0xFFF0CE62) else Color(0xFFAF8217)
-    com.nanzhufeng.ai.domain.AccentColor.PURPLE -> if (dark) Color(0xFFC0A0F6) else Color(0xFF6941B0)
-    com.nanzhufeng.ai.domain.AccentColor.PINK -> if (dark) Color(0xFFF39ABB) else Color(0xFFB9446C)
-}
-
 /** Utility icons remain secondary but cannot fade into the light setting cards. */
 private fun settingsUtilityIconTint(): Color = if (BodyText.red > 0.5f) SecondaryText else Color(0xFF4D5954)
 
@@ -492,6 +487,7 @@ private fun pickerDisplayName(context: Context, uri: Uri, fallback: String): Str
 internal fun NanfengAiApp(
     viewModel: CaptureViewModel,
     modelSettingsViewModel: ModelSettingsViewModel,
+    glmOcrWorkspaceViewModel: GlmOcrWorkspaceViewModel,
     invocationLedgerViewModel: InvocationLedgerViewModel,
     conversationCostLedgerViewModel: ConversationCostLedgerViewModel,
     knowledgeLibraryViewModel: KnowledgeLibraryViewModel,
@@ -529,33 +525,104 @@ internal fun NanfengAiApp(
     onExitSettingsToConversationDrawer: () -> Unit,
 ) {
     val context = LocalContext.current
+    val pickerIoScope = rememberCoroutineScope()
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         viewModel.onPhotoPickerResult(uri)
     }
     val markdownPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        val name = uri.lastPathSegment?.substringAfterLast('/') ?: "selected.md"
-        val mime = context.contentResolver.getType(uri) ?: "text/markdown"
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            // Bound the untrusted provider stream before any parse or Room write.
-            markdownImportViewModel.selectedFile(name, mime, input.readMarkdownBounded((com.nanzhufeng.ai.domain.MARKDOWN_TASK_MAX_BYTES + 1).toInt()))
+        pickerIoScope.launch {
+            val selected = withContext(Dispatchers.IO) {
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "selected.md"
+                val mime = context.contentResolver.getType(uri) ?: "text/markdown"
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    Triple(name, mime, input.readMarkdownBounded((com.nanzhufeng.ai.domain.MARKDOWN_TASK_MAX_BYTES + 1).toInt()))
+                }
+            }
+            selected?.let { (name, mime, bytes) -> markdownImportViewModel.selectedFile(name, mime, bytes) }
         }
     }
     val jsonKnowledgePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        val name = uri.lastPathSegment?.substringAfterLast('/') ?: "knowledge.json"; val mime = context.contentResolver.getType(uri) ?: "application/json"
-        context.contentResolver.openInputStream(uri)?.use { input -> jsonKnowledgeImportViewModel.selectedFile(name, mime, input.readMarkdownBounded((com.nanzhufeng.ai.domain.JSON_KNOWLEDGE_MAX_BYTES + 1).toInt())) }
+        pickerIoScope.launch {
+            val selected = withContext(Dispatchers.IO) {
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "knowledge.json"
+                val mime = context.contentResolver.getType(uri) ?: "application/json"
+                context.contentResolver.openInputStream(uri)?.use { input -> Triple(name, mime, input.readMarkdownBounded((com.nanzhufeng.ai.domain.JSON_KNOWLEDGE_MAX_BYTES + 1).toInt())) }
+            }
+            selected?.let { (name, mime, bytes) -> jsonKnowledgeImportViewModel.selectedFile(name, mime, bytes) }
+        }
     }
-    val chatGptExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri ?: return@rememberLauncherForActivityResult; val name = uri.lastPathSegment?.substringAfterLast('/') ?: "conversations.json"; val mime = context.contentResolver.getType(uri) ?: "application/json"; context.contentResolver.openInputStream(uri)?.use { chatGptExportImportViewModel.selectedFile(name, mime, it.readMarkdownBounded((com.nanzhufeng.ai.domain.CHATGPT_EXPORT_MAX_BYTES + 1).toInt())) } }
-    val claudeExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri ?: return@rememberLauncherForActivityResult; val name = uri.lastPathSegment?.substringAfterLast('/') ?: "conversations.json"; val mime = context.contentResolver.getType(uri) ?: "application/json"; context.contentResolver.openInputStream(uri)?.use { claudeExportImportViewModel.selectedFile(name, mime, it.readMarkdownBounded((com.nanzhufeng.ai.domain.CLAUDE_EXPORT_MAX_BYTES + 1).toInt())) } }
-    val p6kChatGptZipPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri ?: return@rememberLauncherForActivityResult; val name = pickerDisplayName(context, uri, "chatgpt-export.zip"); val mime = context.contentResolver.getType(uri) ?: "application/zip"; context.contentResolver.openInputStream(uri)?.let { p6kZipImportViewModel.selected(com.nanzhufeng.ai.domain.ThirdPartyZipProvider.CHATGPT, name, mime, it) } }
-    val p6kClaudeZipPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri ?: return@rememberLauncherForActivityResult; val name = pickerDisplayName(context, uri, "claude-export.zip"); val mime = context.contentResolver.getType(uri) ?: "application/zip"; context.contentResolver.openInputStream(uri)?.let { p6kZipImportViewModel.selected(com.nanzhufeng.ai.domain.ThirdPartyZipProvider.CLAUDE, name, mime, it) } }
-    val nanfengKnowledgeExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri ?: return@rememberLauncherForActivityResult; val name = uri.lastPathSegment?.substringAfterLast('/') ?: "knowledge-export.json"; val mime = context.contentResolver.getType(uri) ?: "application/json"; context.contentResolver.openInputStream(uri)?.use { nanfengKnowledgeExportImportViewModel.selectedFile(name, mime, it.readMarkdownBounded((com.nanzhufeng.ai.domain.NANFENG_KNOWLEDGE_EXPORT_MAX_BYTES + 1).toInt())) } }
+    val chatGptExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        pickerIoScope.launch {
+            val selected = withContext(Dispatchers.IO) {
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "conversations.json"
+                val mime = context.contentResolver.getType(uri) ?: "application/json"
+                context.contentResolver.openInputStream(uri)?.use { Triple(name, mime, it.readMarkdownBounded((com.nanzhufeng.ai.domain.CHATGPT_EXPORT_MAX_BYTES + 1).toInt())) }
+            }
+            selected?.let { (name, mime, bytes) -> chatGptExportImportViewModel.selectedFile(name, mime, bytes) }
+        }
+    }
+    val claudeExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        pickerIoScope.launch {
+            val selected = withContext(Dispatchers.IO) {
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "conversations.json"
+                val mime = context.contentResolver.getType(uri) ?: "application/json"
+                context.contentResolver.openInputStream(uri)?.use { Triple(name, mime, it.readMarkdownBounded((com.nanzhufeng.ai.domain.CLAUDE_EXPORT_MAX_BYTES + 1).toInt())) }
+            }
+            selected?.let { (name, mime, bytes) -> claudeExportImportViewModel.selectedFile(name, mime, bytes) }
+        }
+    }
+    val p6kChatGptZipPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        pickerIoScope.launch {
+            val selected = withContext(Dispatchers.IO) {
+                Triple(
+                    pickerDisplayName(context, uri, "chatgpt-export.zip"),
+                    context.contentResolver.getType(uri) ?: "application/zip",
+                    context.contentResolver.openInputStream(uri),
+                )
+            }
+            selected.third?.let { p6kZipImportViewModel.selected(com.nanzhufeng.ai.domain.ThirdPartyZipProvider.CHATGPT, selected.first, selected.second, it) }
+        }
+    }
+    val p6kClaudeZipPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        pickerIoScope.launch {
+            val selected = withContext(Dispatchers.IO) {
+                Triple(
+                    pickerDisplayName(context, uri, "claude-export.zip"),
+                    context.contentResolver.getType(uri) ?: "application/zip",
+                    context.contentResolver.openInputStream(uri),
+                )
+            }
+            selected.third?.let { p6kZipImportViewModel.selected(com.nanzhufeng.ai.domain.ThirdPartyZipProvider.CLAUDE, selected.first, selected.second, it) }
+        }
+    }
+    val nanfengKnowledgeExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        pickerIoScope.launch {
+            val selected = withContext(Dispatchers.IO) {
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "knowledge-export.json"
+                val mime = context.contentResolver.getType(uri) ?: "application/json"
+                context.contentResolver.openInputStream(uri)?.use { Triple(name, mime, it.readMarkdownBounded((com.nanzhufeng.ai.domain.NANFENG_KNOWLEDGE_EXPORT_MAX_BYTES + 1).toInt())) }
+            }
+            selected?.let { (name, mime, bytes) -> nanfengKnowledgeExportImportViewModel.selectedFile(name, mime, bytes) }
+        }
+    }
     val pdfTextPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        val name = uri.lastPathSegment?.substringAfterLast('/') ?: "document.pdf"; val mime = context.contentResolver.getType(uri) ?: "application/pdf"
-        context.contentResolver.openInputStream(uri)?.use { input -> pdfTextImportViewModel.selectedFile(name, mime, input.readMarkdownBounded((com.nanzhufeng.ai.domain.PDF_TEXT_MAX_BYTES + 1).toInt())) }
+        pickerIoScope.launch {
+            val selected = withContext(Dispatchers.IO) {
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "document.pdf"
+                val mime = context.contentResolver.getType(uri) ?: "application/pdf"
+                context.contentResolver.openInputStream(uri)?.use { input -> Triple(name, mime, input.readMarkdownBounded((com.nanzhufeng.ai.domain.PDF_TEXT_MAX_BYTES + 1).toInt())) }
+            }
+            selected?.let { (name, mime, bytes) -> pdfTextImportViewModel.selectedFile(name, mime, bytes) }
+        }
     }
     val localBackupExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri -> uri?.let(localBackupRestoreViewModel::exported) }
     val localBackupImportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(localBackupRestoreViewModel::selected) }
@@ -594,7 +661,6 @@ internal fun NanfengAiApp(
         AccentOrangePressed = appearanceAccent.copy(alpha = 0.74f)
         ActionOrange = appearanceAccent
         AccentOrangeSoft = appearance.accentColor.themeContainerColor(darkAppearance)
-        DrawerSettingsAccent = appearance.accentColor.drawerSettingsIconColor(darkAppearance)
         ActiveUserBubbleSurface = appearance.accentColor.userBubbleColor(darkAppearance)
         ActiveUserBubbleAccent = appearanceAccent
     }
@@ -673,16 +739,38 @@ internal fun NanfengAiApp(
         // the conversation surfaces keep their separate reading background.
         val rootRoute = navigationViewModel.state.route
         val usesSettingsCanvas = rootRoute != P5ARoute.CAPTURE && rootRoute != P5ARoute.CONVERSATION
+        val rootCanvasColor = when {
+            rootRoute == P5ARoute.OCR -> ForegroundSurface
+            usesSettingsCanvas -> SettingsPageBackground
+            else -> PageBackground
+        }
         Surface(
-            color = if (usesSettingsCanvas) SettingsPageBackground else PageBackground,
+            // OCR is a full-height document surface. Because the Activity status bar is
+            // transparent, owning the root canvas here also removes the stray gray strip
+            // behind system time, signal and battery icons.
+            color = rootCanvasColor,
             // Settings owns a custom canvas colour.  Declare its foreground explicitly so
             // every heading and icon which correctly relies on LocalContentColor stays legible
             // in dark mode instead of inheriting the light-theme black default.
             contentColor = BodyText,
             modifier = Modifier.fillMaxSize(),
         ) {
+            LaunchedEffect(accountSyncViewModel.state.notice, accountSyncViewModel.state.detailVisible) {
+                accountSyncViewModel.state.notice?.takeIf { !accountSyncViewModel.state.detailVisible }?.let { message ->
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
             if (accountSyncViewModel.state.detailVisible) {
-                P7DAccountSyncScreen(accountSyncViewModel.state, accountSyncViewModel::close)
+                P7DAccountSyncScreen(
+                    state = accountSyncViewModel.state,
+                    onBack = accountSyncViewModel::close,
+                    onSignIn = { accountSyncViewModel.signIn(activity ?: context) },
+                    onSwitchAccount = { accountSyncViewModel.switchAccount(activity ?: context) },
+                    onSignOut = accountSyncViewModel::signOut,
+                    onPrepareRecovery = accountSyncViewModel::prepareRecoveryProtection,
+                    onPeriodicChanged = accountSyncViewModel::setPeriodicEnabled,
+                    loadAvatar = accountSyncViewModel::loadAvatar,
+                )
                 return@Surface
             }
             Box(modifier = Modifier.fillMaxSize()) {
@@ -710,6 +798,8 @@ internal fun NanfengAiApp(
                 onDismissMessage = viewModel::clearMessage,
                 onRequestAi = viewModel::requestAiConfirmation,
                 modelSettingsState = modelSettingsViewModel.state,
+                glmOcrWorkspaceState = glmOcrWorkspaceViewModel.state,
+                glmOcrWorkspaceViewModel = glmOcrWorkspaceViewModel,
                 onSaveModelSettings = modelSettingsViewModel::save,
                 onSaveChatRoutingPolicy = modelSettingsViewModel::saveRoutingPolicy,
                 onRevealModelCredential = modelSettingsViewModel::revealStoredCredential,
@@ -733,6 +823,7 @@ internal fun NanfengAiApp(
                 },
                 accountSyncState = accountSyncViewModel.state,
                 onOpenAccountSync = accountSyncViewModel::open,
+                onSyncConversation = accountSyncViewModel::requestConversationSync,
                 dualPathState = dualPathConnectionViewModel.state,
                 onOpenDualPath = dualPathConnectionViewModel::open,
                 onOpenP8ControlledAgent = p8ControlledAgentViewModel::show,
@@ -893,12 +984,6 @@ internal fun NanfengAiApp(
                 onDelete = scheduledMonitorViewModel::delete,
                 onRequestNotifications = { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) },
             )
-            assistantExperienceSettingsViewModel.state.notice?.let { notice ->
-                CenteredPersonalizationSaveNotice(
-                    notice = notice,
-                    onDismiss = assistantExperienceSettingsViewModel::clearNotice,
-                )
-            }
             }
         }
     }
@@ -913,6 +998,8 @@ private fun CaptureScreen(
     onDismissMessage: () -> Unit,
     onRequestAi: () -> Unit,
     modelSettingsState: ModelSettingsUiState,
+    glmOcrWorkspaceState: GlmOcrWorkspaceUiState,
+    glmOcrWorkspaceViewModel: GlmOcrWorkspaceViewModel,
     onSaveModelSettings: (ProviderId, Boolean, ModelPresetId, String?) -> Unit,
     onSaveChatRoutingPolicy: (com.nanzhufeng.ai.domain.ChatRoutingPolicy) -> Unit,
     onRevealModelCredential: (ProviderId) -> Unit,
@@ -934,6 +1021,7 @@ private fun CaptureScreen(
     onSelectWorkspaceExchangeV2RestoreDocument: () -> Unit,
     accountSyncState: P7DAccountSyncUiState,
     onOpenAccountSync: () -> Unit,
+    onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     dualPathState: DualPathConnectionUiState,
     onOpenDualPath: () -> Unit,
     onOpenP8ControlledAgent: () -> Unit,
@@ -1014,6 +1102,7 @@ private fun CaptureScreen(
     var settingsDestination by remember { mutableStateOf(SettingsDestination.HOME) }
     var personalizationDraft by remember { mutableStateOf(assistantExperienceSettingsState.settings) }
     var personalizationDirty by remember { mutableStateOf(false) }
+    var pendingConversationSearchCategory by remember { mutableStateOf<com.nanzhufeng.ai.domain.ConversationSearchCategory?>(null) }
     val settingsRoot = SettingsNavigationEntry(P5ARoute.SETTINGS, SettingsDestination.HOME)
     var settingsNavigationStack by remember { mutableStateOf(listOf(settingsRoot)) }
     // A lifecycle row opens its real conversation without discarding the list that supplied it.
@@ -1037,8 +1126,30 @@ private fun CaptureScreen(
         personalizationDirty = false
         openSettingsLevel(P5ARoute.SETTINGS, SettingsDestination.PERSONALIZATION)
     }
+    fun hasUnsavedPersonalizationEditorContent(
+        draft: com.nanzhufeng.ai.domain.AssistantExperienceSettings,
+        saved: com.nanzhufeng.ai.domain.AssistantExperienceSettings,
+    ): Boolean = draft.displayName != saved.displayName ||
+        draft.occupation != saved.occupation ||
+        draft.interests != saved.interests ||
+        draft.customInstructions != saved.customInstructions ||
+        draft.conversationStyle != saved.conversationStyle
+
+    fun savedWithPersonalizationEditorContent(
+        saved: com.nanzhufeng.ai.domain.AssistantExperienceSettings,
+        draft: com.nanzhufeng.ai.domain.AssistantExperienceSettings,
+    ) = saved.copy(
+        displayName = draft.displayName,
+        occupation = draft.occupation,
+        interests = draft.interests,
+        customInstructions = draft.customInstructions,
+        conversationStyle = draft.conversationStyle,
+    )
+
     val savePersonalizationDraft: () -> Unit = {
-        onUpdateAssistantExperienceSettings { personalizationDraft }
+        val saved = savedWithPersonalizationEditorContent(assistantExperienceSettingsState.settings, personalizationDraft)
+        onUpdateAssistantExperienceSettings { saved }
+        personalizationDraft = saved
         personalizationDirty = false
     }
     val settingsOwnsCurrentRoute = settingsNavigationStack.lastOrNull()?.route == route
@@ -1080,6 +1191,8 @@ private fun CaptureScreen(
             }
         }
     }
+    val settingsSearchReturnsToLocalData = settingsNavigationStack.lastOrNull() ==
+        SettingsNavigationEntry(P5ARoute.CONVERSATION, SettingsDestination.PRIVACY)
     // The chat root owns its own LazyColumn. It must not inherit the settings/workspace
     // verticalScroll container, otherwise Compose measures the transcript at infinity.
     if (route == P5ARoute.CAPTURE || route == P5ARoute.CONVERSATION) {
@@ -1093,10 +1206,18 @@ private fun CaptureScreen(
             contextBodySelectionViewModel,
             scheduledMonitorViewModel,
             notificationReminderSettingsState.settings,
+            onSyncConversation,
             onRouteSelected,
             conversationDrawerOpen,
             onConversationDrawerChanged,
-            onReturnToLifecycleList = returnToLifecycleList,
+            onReturnToLifecycleList = if (settingsSearchReturnsToLocalData) returnFromSettings else returnToLifecycleList,
+            searchDismissesToParent = settingsSearchReturnsToLocalData,
+            initialSearchCategory = pendingConversationSearchCategory,
+            onInitialSearchCategoryConsumed = { pendingConversationSearchCategory = null },
+            onOpenGlmOcrSearchHit = { hit ->
+                glmOcrWorkspaceViewModel.openDetail(hit.taskId)
+                onRouteSelected(P5ARoute.OCR)
+            },
         )
         return
     }
@@ -1120,6 +1241,20 @@ private fun CaptureScreen(
                 },
                 onQuerySummary = memoryViewModel::querySummary,
                 onAppendSummaryUpdate = memoryViewModel::appendSummaryUpdate,
+            )
+        }
+        return
+    }
+    if (route == P5ARoute.OCR) {
+        SettingsTextScale {
+            GlmOcrWorkspacePage(
+                state = glmOcrWorkspaceState,
+                viewModel = glmOcrWorkspaceViewModel,
+                onBack = { onRouteSelected(P5ARoute.CONVERSATION) },
+                onOpenConversation = { conversationId ->
+                    conversationViewModel.selectConversation(conversationId)
+                    onRouteSelected(P5ARoute.CONVERSATION)
+                },
             )
         }
         return
@@ -1166,6 +1301,7 @@ private fun CaptureScreen(
             P5ARoute.KNOWLEDGE -> WorkbenchRoute(expanded) {
                 KnowledgeLibraryPage(
                     state = knowledgeLibraryState,
+                    currentConversationId = conversationState.selectedConversationId,
                     onOpenDetail = knowledgeLibraryViewModel::openDetail,
                     onBackToList = knowledgeLibraryViewModel::backToList,
                     onSearch = knowledgeLibraryViewModel::updateSearch,
@@ -1181,10 +1317,16 @@ private fun CaptureScreen(
                     onCancelEdit = knowledgeLibraryViewModel::cancelEdit,
                     onSaveEdit = knowledgeLibraryViewModel::saveEdit,
                     onFindDuplicateCandidates = knowledgeLibraryViewModel::findDuplicateCandidates,
+                    onRequestHistoryCuration = knowledgeLibraryViewModel::requestHistoryCuration,
+                    onConfirmHistoryCuration = knowledgeLibraryViewModel::confirmHistoryCuration,
+                    onCancelHistoryCuration = knowledgeLibraryViewModel::cancelHistoryCuration,
+                    onUpdateHistoryCurationDraft = knowledgeLibraryViewModel::updateHistoryCurationDraft,
+                    onSaveHistoryCurationDraft = knowledgeLibraryViewModel::saveHistoryCurationDraft,
                     onStartRelationshipBuilder = knowledgeLibraryViewModel::startRelationshipBuilder,
                     onShowRelationshipList = knowledgeLibraryViewModel::showRelationshipList,
                 )
             }
+            P5ARoute.OCR -> error("OCR returns before the settings scroll container")
             P5ARoute.PROJECTS -> WorkbenchRoute(expanded) { ProjectWorkspacePage(projectState, projectViewModel) }
             P5ARoute.MEMORY -> error("memory returns before the settings scroll container")
             P5ARoute.CONTEXT -> WorkbenchRoute(expanded) { ContextControlCard(conversationState, contextBodySelectionViewModel) }
@@ -1210,7 +1352,12 @@ private fun CaptureScreen(
                 personalizationDraft = personalizationDraft,
                 onUpdatePersonalizationDraft = { transform ->
                     personalizationDraft = transform(personalizationDraft)
-                    personalizationDirty = personalizationDraft != assistantExperienceSettingsState.settings
+                    personalizationDirty = hasUnsavedPersonalizationEditorContent(personalizationDraft, assistantExperienceSettingsState.settings)
+                },
+                onUpdatePersonalizationSwitch = { transform ->
+                    onUpdateAssistantExperienceSettings(transform)
+                    personalizationDraft = transform(personalizationDraft)
+                    personalizationDirty = hasUnsavedPersonalizationEditorContent(personalizationDraft, assistantExperienceSettingsState.settings)
                 },
                 onSavePersonalization = savePersonalizationDraft,
                 onOpenPersonalization = ::openPersonalizationSettings,
@@ -1251,6 +1398,13 @@ private fun CaptureScreen(
                 privacyDataState = privacyDataState,
                 privacyDataViewModel = privacyDataViewModel,
                 onOpenPrivacyData = onOpenPrivacyData,
+                onOpenAccountSync = onOpenAccountSync,
+                onOpenSearchCategory = { category ->
+                    conversationViewModel.setListScope(com.nanzhufeng.ai.domain.ConversationListScope.ALL)
+                    pendingConversationSearchCategory = category
+                    onConversationDrawerChanged(false)
+                    openSettingsLevel(P5ARoute.CONVERSATION, SettingsDestination.PRIVACY)
+                },
                 dataStorageImportContent = {
                     DataImportCenterContent(
                         chatGptImportState = chatGptImportState,
@@ -1418,7 +1572,6 @@ private fun DataImportCenterContent(
                 )
                 DataStorageGroupedDivider()
                 DataStorageImportResultsRow(
-                    summary = jsonImportResultSummary(chatGptImportState, claudeImportState),
                     onClick = onOpenJsonImportResults,
                 )
             }
@@ -1431,7 +1584,6 @@ private fun DataImportCenterContent(
                 )
                 DataStorageGroupedDivider()
                 DataStorageImportResultsRow(
-                    summary = zipImportResultSummary(p6kZipImportState),
                     onClick = onOpenZipImportResults,
                 )
             }
@@ -1517,10 +1669,9 @@ private fun WorkspaceExchangeV2ScopeDialog(
         title = { Text("完整工作区范围") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("将严格导出当前范围内的全部对象；任一对象不完整、不可读取或不符合 v2 合同，均不会写入文件。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 Text("项目 ${scope.projectCount} · 对话 ${scope.conversationCount} · 知识 ${scope.knowledgeCount}", style = MaterialTheme.typography.bodyMedium)
                 Text("记忆 ${scope.memoryCount} · 关系 ${scope.relationCount} · 附件 ${scope.attachmentCount}", style = MaterialTheme.typography.bodyMedium)
-                Text("附件按高敏感级别处理；选择保存位置后即开始生成与回读，不再显示第二次产品确认。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+                Text("选择保存位置后开始导出。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
@@ -1568,15 +1719,16 @@ private fun SettingsPageHeader(
         MaterialTheme.typography.headlineSmall
     }
     if (destination == SettingsDestination.HOME) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+        Box(modifier = Modifier.fillMaxWidth().height(48.dp)) {
+            IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart).size(48.dp)) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回侧栏")
             }
-            Text(destination.label, modifier = Modifier.semantics { heading() }, style = titleStyle, fontWeight = FontWeight.SemiBold)
+            Text(
+                destination.label,
+                modifier = Modifier.align(Alignment.Center).semantics { heading() },
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
         }
         return
     }
@@ -1617,6 +1769,7 @@ private fun SettingsHierarchy(
     onUpdateAssistantExperienceSettings: ((com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> Unit,
     personalizationDraft: com.nanzhufeng.ai.domain.AssistantExperienceSettings,
     onUpdatePersonalizationDraft: ((com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> Unit,
+    onUpdatePersonalizationSwitch: ((com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> Unit,
     onSavePersonalization: () -> Unit,
     onOpenPersonalization: () -> Unit,
     notificationReminderSettingsState: NotificationReminderSettingsUiState,
@@ -1644,6 +1797,8 @@ private fun SettingsHierarchy(
     privacyDataState: PrivacyDataUiState,
     privacyDataViewModel: PrivacyDataViewModel,
     onOpenPrivacyData: () -> Unit,
+    onOpenAccountSync: () -> Unit,
+    onOpenSearchCategory: (com.nanzhufeng.ai.domain.ConversationSearchCategory) -> Unit,
     dataStorageImportContent: @Composable () -> Unit,
     jsonImportResultsContent: @Composable () -> Unit,
     zipImportResultsContent: @Composable () -> Unit,
@@ -1677,6 +1832,7 @@ private fun SettingsHierarchy(
             appearanceState = appearanceSettingsState,
             onUpdateAppearance = onUpdateAppearanceSettings,
             onOpenPersonalization = onOpenPersonalization,
+            onOpenAccountSync = onOpenAccountSync,
             onSelect = onSelect,
         )
         return
@@ -1690,11 +1846,15 @@ private fun SettingsHierarchy(
             )
             SettingsDestination.PERSONALIZATION -> AssistantPersonalizationSettingsCard(
                 settings = personalizationDraft,
-                notice = assistantExperienceSettingsState.notice,
                 error = assistantExperienceSettingsState.error,
                 onUpdate = onUpdatePersonalizationDraft,
+                onUpdateSwitch = onUpdatePersonalizationSwitch,
                 onSave = onSavePersonalization,
                 onOpenMemoryManager = onOpenMemoryManager,
+            )
+            SettingsDestination.MEMORY_OVERVIEW -> MemoryOverviewSettingsCard(
+                onOpenMemorySummary = onOpenMemoryManager,
+                onOpenPersonalization = { onSelect(SettingsDestination.PERSONALIZATION) },
             )
             SettingsDestination.NOTIFICATIONS -> NotificationReminderSettingsCard(
                 state = notificationReminderSettingsState,
@@ -1801,17 +1961,39 @@ private fun SettingsHierarchy(
             SettingsDestination.ABOUT -> AboutSettingsCard()
             SettingsDestination.PRIVACY -> {
                 LaunchedEffect(Unit) { onOpenPrivacyData() }
-                PrivacyDataPage(
-                    state = privacyDataState,
-                    onPreview = privacyDataViewModel::preview,
-                    onToggleTask = privacyDataViewModel::toggleTask,
-                    onPreviewSelectedTasks = privacyDataViewModel::previewSelectedTasks,
-                    onConfirmation = privacyDataViewModel::confirmation,
-                    onDelete = privacyDataViewModel::delete,
-                    onRetryFailedTaskDeletion = privacyDataViewModel::retryFailedTaskDeletion,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(26.dp)) {
+                    PrivacyStorageSummary(
+                        inventory = privacyDataState.inventory,
+                        onOpenSearchCategory = onOpenSearchCategory,
+                        onOpenMemory = { onSelect(SettingsDestination.MEMORY_OVERVIEW) },
+                        onOpenKnowledge = onOpenKnowledgeLibrary,
+                        onOpenProjects = onOpenProjectManager,
+                    )
+                    PrivacyDataPage(
+                        state = privacyDataState,
+                        onPreview = privacyDataViewModel::preview,
+                        onToggleTask = privacyDataViewModel::toggleTask,
+                        onPreviewSelectedTasks = privacyDataViewModel::previewSelectedTasks,
+                        onConfirmation = privacyDataViewModel::confirmation,
+                        onDelete = privacyDataViewModel::delete,
+                        onRetryFailedTaskDeletion = privacyDataViewModel::retryFailedTaskDeletion,
+                        onCleanupImportedZipPackages = privacyDataViewModel::cleanupImportedZipPackages,
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun MemoryOverviewSettingsCard(
+    onOpenMemorySummary: () -> Unit,
+    onOpenPersonalization: () -> Unit,
+) {
+    SettingsCategoryGroup(title = "记忆内容") {
+        SettingsCategoryRow(Icons.Rounded.Memory, "记忆摘要", grouped = true, onClick = onOpenMemorySummary)
+        SettingsCategoryDivider()
+        SettingsCategoryRow(Icons.Rounded.PersonOutline, "个性化与资料库搜索", grouped = true, onClick = onOpenPersonalization)
     }
 }
 
@@ -1878,43 +2060,22 @@ internal fun DataStorageGroupedActionRow(
 
 @Composable
 private fun DataStorageImportResultsRow(
-    summary: String,
     onClick: () -> Unit,
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 82.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         shape = RectangleShape,
         color = ForegroundSurface,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("导入结果", style = MaterialTheme.typography.titleMedium, color = BodyText)
-                Text(summary, style = MaterialTheme.typography.bodySmall, color = SecondaryText)
-            }
-            Text("查看详情", style = MaterialTheme.typography.labelLarge, color = AccentOrange)
+            Text("导入结果", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = BodyText)
+            Icon(Icons.Rounded.ChevronRight, contentDescription = "查看导入结果", tint = SecondaryText)
         }
     }
-}
-
-private fun jsonImportResultSummary(
-    chatGpt: ChatGptImportUiState,
-    claude: ClaudeImportUiState,
-): String {
-    val batches = chatGpt.tasks.size + claude.tasks.size
-    val imported = chatGpt.tasks.sumOf { task -> task.items.count { it.status == com.nanzhufeng.ai.domain.ChatGptImportItemStatus.CONFIRMED } } +
-        claude.tasks.sumOf { task -> task.items.count { it.status == com.nanzhufeng.ai.domain.ClaudeImportItemStatus.CONFIRMED } }
-    return "$batches 个导入批次 · $imported 个对话已导入"
-}
-
-private fun zipImportResultSummary(zip: P6KZipImportUiState): String {
-    val imported = zip.tasks.sumOf { task -> task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.CONFIRMED } }
-    val restoredAttachments = zip.tasks.sumOf { task -> task.assets.count { it.attachmentId != null } }
-    return "${zip.tasks.size} 个导入批次 · $imported 个对话已导入 · $restoredAttachments 个附件已恢复"
 }
 
 @Composable
@@ -1922,6 +2083,7 @@ private fun SettingsCategoryList(
     appearanceState: AppearanceSettingsUiState,
     onUpdateAppearance: ((com.nanzhufeng.ai.domain.AppearanceSettings) -> com.nanzhufeng.ai.domain.AppearanceSettings) -> Unit,
     onOpenPersonalization: () -> Unit,
+    onOpenAccountSync: () -> Unit,
     onSelect: (SettingsDestination) -> Unit,
 ) {
     Column(
@@ -1931,7 +2093,7 @@ private fun SettingsCategoryList(
         SettingsCategoryGroup(title = "对话") {
             SettingsCategoryRow(Icons.Rounded.PersonOutline, "个性化", grouped = true, onClick = onOpenPersonalization)
             SettingsCategoryDivider()
-            SettingsCategoryRow(Icons.Rounded.Tune, "模型与联网", grouped = true) { onSelect(SettingsDestination.MODEL) }
+            SettingsCategoryRow(Icons.Rounded.Hub, "模型与联网", grouped = true) { onSelect(SettingsDestination.MODEL) }
             SettingsCategoryDivider()
             SettingsCategoryRow(Icons.Rounded.Notifications, "提醒", grouped = true) { onSelect(SettingsDestination.NOTIFICATIONS) }
             SettingsCategoryDivider()
@@ -1949,12 +2111,14 @@ private fun SettingsCategoryList(
                 grouped = true,
             )
         }
-        SettingsCategoryGroup(title = "应用与数据") {
-            SettingsCategoryRow(Icons.Rounded.Storage, "数据与存储", iconTint = settingsUtilityIconTint(), grouped = true) { onSelect(SettingsDestination.DATA_STORAGE) }
+        SettingsCategoryGroup(title = "数据管理") {
+            SettingsCategoryRow(Icons.Rounded.AccountCircle, "Google 账号与同步", iconTint = settingsUtilityIconTint(), grouped = true, onClick = onOpenAccountSync)
             SettingsCategoryDivider()
-            SettingsCategoryRow(Icons.Rounded.Lock, "隐私与安全", iconTint = settingsUtilityIconTint(), grouped = true) { onSelect(SettingsDestination.PRIVACY) }
+            SettingsCategoryRow(Icons.Rounded.ImportExport, "导入与导出", iconTint = settingsUtilityIconTint(), grouped = true) { onSelect(SettingsDestination.DATA_STORAGE) }
             SettingsCategoryDivider()
-            SettingsCategoryRow(Icons.Rounded.Settings, "关于", iconTint = settingsUtilityIconTint(), grouped = true) { onSelect(SettingsDestination.ABOUT) }
+            SettingsCategoryRow(Icons.Rounded.Storage, "本机数据", iconTint = settingsUtilityIconTint(), grouped = true) { onSelect(SettingsDestination.PRIVACY) }
+            SettingsCategoryDivider()
+            SettingsCategoryRow(Icons.Rounded.Info, "关于", iconTint = settingsUtilityIconTint(), grouped = true) { onSelect(SettingsDestination.ABOUT) }
         }
         SettingsCategoryGroup(title = "工作区") {
             SettingsCategoryRow(Icons.Rounded.FolderOpen, "项目与知识", grouped = true) { onSelect(SettingsDestination.WORKSPACE) }
@@ -1994,9 +2158,9 @@ private fun SettingsCategoryDivider() = Spacer(
 @Composable
 private fun AssistantPersonalizationSettingsCard(
     settings: com.nanzhufeng.ai.domain.AssistantExperienceSettings,
-    notice: String?,
     error: String?,
     onUpdate: ((com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> Unit,
+    onUpdateSwitch: ((com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> com.nanzhufeng.ai.domain.AssistantExperienceSettings) -> Unit,
     onSave: () -> Unit,
     onOpenMemoryManager: () -> Unit,
 ) = Column(modifier = Modifier.fillMaxWidth()) {
@@ -2017,7 +2181,7 @@ private fun AssistantPersonalizationSettingsCard(
         title = "启用记忆",
         summary = "",
         checked = settings.memoryEnabled,
-        onCheckedChange = { enabled -> onUpdate { current -> current.copy(personalizationEnabled = enabled, memoryRetrievalEnabled = enabled) } },
+        onCheckedChange = { enabled -> onUpdateSwitch { current -> current.copy(personalizationEnabled = enabled, memoryRetrievalEnabled = enabled) } },
         surface = true,
     )
     Spacer(Modifier.height(8.dp))
@@ -2029,15 +2193,20 @@ private fun AssistantPersonalizationSettingsCard(
     )
     Spacer(Modifier.height(12.dp))
     SettingsSwitchRow(
-        title = "资料库搜索",
+        title = "历史资料库",
         summary = "",
-        checked = settings.librarySearchEnabled,
-        onCheckedChange = { enabled -> onUpdate { current -> current.copy(librarySearchEnabled = enabled) } },
+        checked = settings.historyLibraryEnabled,
+        onCheckedChange = { enabled -> onUpdateSwitch { current ->
+            current.copy(
+                librarySearchEnabled = enabled,
+                autoHistoryKnowledgeEnabled = enabled,
+            )
+        } },
         surface = true,
     )
     Spacer(Modifier.height(6.dp))
     Text(
-        "允许 南枫AI 自动搜索资料库中的文件以查找答案。",
+        "开启后，低频整理有价值的历史对话，并在后续对话优先调用少量相关资料。原对话、附件和工具内容不会发送；可随时编辑或删除已沉淀资料。",
         modifier = Modifier.padding(horizontal = 4.dp),
         color = SecondaryText,
         style = MaterialTheme.typography.bodySmall,
@@ -2244,34 +2413,6 @@ private fun CustomInstructionsFullscreenEditor(
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CenteredPersonalizationSaveNotice(
-    notice: String,
-    onDismiss: () -> Unit,
-) {
-    LaunchedEffect(notice) {
-        delay(1_800)
-        onDismiss()
-    }
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = ForegroundSurface,
-            shadowElevation = 6.dp,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 13.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(18.dp))
-                Text(notice, color = BodyText, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -2650,9 +2791,16 @@ private fun FeatureReviewSettingsCard() {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("模型服务设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
-            Text("当前：设置 → 模型与联网提供模型设置、费用与用量、上下文记录与运行诊断；模型设置只保留 OpenRouter、Qwen、DeepSeek 三个服务配置。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("当前：设置 → 模型与联网提供模型设置、费用与用量、上下文记录与运行诊断；模型设置包含 OpenRouter、Qwen、DeepSeek 与智谱服务配置。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
             Text("建议：保留设置 → AI 模型服务的单一入口，不在聊天或 Composer 增加按键。三类记录只显示本机安全元数据，不显示 Key、对话正文、附件、提示词或完整响应。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("会话待看", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("当前：会话长按菜单提供“待看”；标记后在已置顶或最近的所属分组内优先显示，并用主题色圆点提醒，真正点击进入后清除。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("建议：保留长按菜单这一低频入口，不在聊天主页、Composer 或侧栏增加常驻按键；状态只保存对话 ID 与设置时间。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("项目、知识与本地控制", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -2753,12 +2901,6 @@ private fun AboutSettingsCard() = Surface(
             Text("Android 版 ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(3.dp))
             Text("构建号 ${BuildConfig.VERSION_CODE}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        }
-        SettingsCategoryDivider()
-        AboutSettingsSection {
-            Text("数据与隐私", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Text("本机数据、导入导出与权限控制请在“隐私与安全”中查看。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -2904,10 +3046,15 @@ private fun ConversationFoundationCard(
     contextBodySelectionViewModel: ContextBodySelectionViewModel,
     scheduledMonitorViewModel: ScheduledMonitorViewModel,
     notificationReminderSettings: com.nanzhufeng.ai.domain.NotificationReminderSettings,
+    onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRouteSelected: (P5ARoute) -> Unit,
     drawerOpen: Boolean,
     onDrawerOpenChanged: (Boolean) -> Unit,
     onReturnToLifecycleList: (() -> Unit)? = null,
+    searchDismissesToParent: Boolean = false,
+    initialSearchCategory: com.nanzhufeng.ai.domain.ConversationSearchCategory? = null,
+    onInitialSearchCategoryConsumed: () -> Unit = {},
+    onOpenGlmOcrSearchHit: (com.nanzhufeng.ai.domain.GlmOcrDocumentSearchHit) -> Unit = {},
 ) {
     var workspaceVisible by rememberSaveable { mutableStateOf(true) }
     val context = LocalContext.current
@@ -2956,14 +3103,16 @@ private fun ConversationFoundationCard(
         notificationReminderSettings = notificationReminderSettings,
         onDismiss = onReturnToLifecycleList ?: { /* Root chat has no dismiss-to-workbench escape hatch. */ },
         interceptsSystemBack = onReturnToLifecycleList != null,
+        searchDismissesToParent = searchDismissesToParent,
         onCreate = viewModel::createDevelopmentConversation,
-        onSelect = viewModel::selectConversation, onSurfaceChanged = viewModel::selectSurface, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
+        onSelect = viewModel::selectConversation, onClearWatchLater = viewModel::clearConversationWatchLater, onSurfaceChanged = viewModel::selectSurface, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
         onRetryNormalSend = viewModel::retryLatestNormalSend, onMarkNormalSendFailed = viewModel::markLatestNormalSendFailed,
         onStartFixture = { viewModel.startDeterministicLocalStream() }, onStartFailureFixture = { viewModel.startDeterministicLocalStream(fail = true) },
         onStop = viewModel::stopLocalStream, onAction = viewModel::performAction, onSwitchBranch = viewModel::switchToBranch, onBranchFromMessage = viewModel::branchFromMessage, onDismissBranchCreation = viewModel::dismissBranchCreation,
         onEditUserMessage = viewModel::editCurrentPathUserMessage,
-        onListScope = viewModel::setListScope, onSearchChanged = viewModel::updateSearchQuery, onSearchCategoryChanged = viewModel::selectSearchCategory, onSearchRequested = viewModel::submitSearch, onSearchFocus = viewModel::openSearchHistory, onCloseSearchHistory = viewModel::closeSearchHistory, onFillSearchHistory = viewModel::fillSearchHistory, onClearSearchHistory = viewModel::clearSearchHistory, onCloseSearch = viewModel::closeSearchPanel, onOpenSearchHit = viewModel::openSearchHit, onOpenSearchAttachment = viewModel::openSearchAttachment, onLocateSearchAttachment = viewModel::locateSearchAttachment, onEnsureSearchAttachmentPreview = viewModel::ensureSearchAttachmentPreview,
-        onManage = viewModel::manage, onBatchSoftDelete = viewModel::softDeleteConversations, onExport = viewModel::exportCurrentConversation,
+        onListScope = viewModel::setListScope, onSearchChanged = viewModel::updateSearchQuery, onSearchCategoryChanged = viewModel::selectSearchCategory, onSearchRequested = viewModel::submitSearch, onSearchFocus = viewModel::openSearchHistory, onCloseSearchHistory = viewModel::closeSearchHistory, onFillSearchHistory = viewModel::fillSearchHistory, onClearSearchHistory = viewModel::clearSearchHistory, onCloseSearch = viewModel::closeSearchPanel, onOpenSearchHit = viewModel::openSearchHit, onOpenSearchAttachment = viewModel::openSearchAttachment, onOpenGlmOcrSearchHit = onOpenGlmOcrSearchHit, onDeleteGlmOcrSearchHit = viewModel::deleteGlmOcrSearchDocument, onLocateSearchAttachment = viewModel::locateSearchAttachment, onDeleteSearchAttachment = viewModel::deleteSearchAttachment, onEnsureSearchAttachmentPreview = viewModel::ensureSearchAttachmentPreview, onEnsureAttachmentPreview = viewModel::ensureAttachmentPreview,
+        onManage = viewModel::manage, onMarkWatchLater = viewModel::markConversationWatchLater, onBatchSoftDelete = viewModel::softDeleteConversations, onExport = viewModel::exportCurrentConversation,
+        onSyncConversation = onSyncConversation,
         onAddCamera = {
             createCameraCaptureUri(context, "conversation")?.let { uri ->
                 conversationCameraUri = uri.toString()
@@ -2971,7 +3120,13 @@ private fun ConversationFoundationCard(
             } ?: viewModel.reportCameraCaptureUnavailable(temporary = false)
         },
         onAddImage = { conversationVisualPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-        onAddFile = { conversationDocumentPicker.launch(arrayOf("video/mp4", "audio/*", "application/pdf", "text/plain", "text/markdown", "application/json", "text/csv")) },
+        onAddFile = { conversationDocumentPicker.launch(arrayOf(
+            "video/mp4", "audio/*", "application/pdf", "text/*", "application/json", "application/xml", "application/x-yaml",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/zip", "application/x-zip-compressed",
+        )) },
         onRemoveAttachment = viewModel::removeDraftAttachment,
         onOpenImagePreview = viewModel::openImagePreview,
         onCloseImagePreview = viewModel::closeImagePreview,
@@ -2984,6 +3139,7 @@ private fun ConversationFoundationCard(
         onCloseAudioPreview = viewModel::closeAudioPreview,
         onOpenTextPreview = viewModel::openTextPreview,
         onCloseTextPreview = viewModel::closeTextPreview,
+        onOpenArchiveEntry = viewModel::openArchiveEntry,
         onRequestAttachmentTransfer = viewModel::requestAttachmentTransfer,
         onRequestAttachmentTransfers = viewModel::requestAttachmentTransfers,
         onConsumeAttachmentTransfer = viewModel::consumeAttachmentTransfer,
@@ -3001,7 +3157,13 @@ private fun ConversationFoundationCard(
             } ?: viewModel.reportCameraCaptureUnavailable(temporary = true)
         },
         onAddTemporaryImage = { temporaryVisualPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-        onAddTemporaryFile = { temporaryDocumentPicker.launch(arrayOf("video/mp4", "audio/*", "application/pdf", "text/plain", "text/markdown", "application/json", "text/csv")) },
+        onAddTemporaryFile = { temporaryDocumentPicker.launch(arrayOf(
+            "video/mp4", "audio/*", "application/pdf", "text/*", "application/json", "application/xml", "application/x-yaml",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/zip", "application/x-zip-compressed",
+        )) },
         onRemoveTemporaryDraftAttachment = viewModel::removeTemporaryDraftAttachment,
         projects = projectState.activeProjects,
         currentProjectId = state.currentProjectId?.let { com.nanzhufeng.ai.domain.ProjectId(it) },
@@ -3021,6 +3183,8 @@ private fun ConversationFoundationCard(
         memorySummaryGenerationEnabled = memorySummaryGenerationEnabled,
         drawerOpen = drawerOpen,
         onDrawerOpenChanged = onDrawerOpenChanged,
+        initialSearchCategory = initialSearchCategory,
+        onInitialSearchCategoryConsumed = onInitialSearchCategoryConsumed,
     )
 }
 
@@ -3054,12 +3218,17 @@ private fun PrivacyDataCard(state: PrivacyDataUiState, onOpen: () -> Unit) = Col
 
 @Composable
 private fun Header(route: P5ARoute) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.Start,
+    ) {
         Text(route.label, modifier = Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Text(
             when (route) {
                 P5ARoute.CAPTURE -> "先把文字或图片安全保存到本机，再进入整理与知识沉淀。"
                 P5ARoute.CONVERSATION -> "本地对话、草稿与当前路径由同一份持久化事实恢复。"
+                P5ARoute.OCR -> "使用 GLM-OCR 将图片或 PDF 转为可复用的 Markdown 文件。"
                 P5ARoute.KNOWLEDGE -> "知识管理与导出保持明确确认和本地优先边界。"
                 P5ARoute.PROJECTS -> "项目指令、会话与知识范围隔离由 Projects 统一管理。"
                 P5ARoute.MEMORY -> "长期 Memory 必须显式创建；启用记忆后会按当前问题自动检索相关内容。"
@@ -3144,7 +3313,10 @@ private fun LoadingWorkspace(label: String) {
 
 @Composable
 private fun CapturedPreview(captured: CapturedImageState) {
-    val preview = remember(captured.previewBytes) { decodePreview(captured.previewBytes) }
+    val preview by produceState<ImageBitmap?>(initialValue = null, captured.previewBytes) {
+        value = withContext(Dispatchers.Default) { decodePreview(captured.previewBytes) }
+    }
+    val decodedPreview = preview
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(
             modifier = Modifier
@@ -3154,11 +3326,11 @@ private fun CapturedPreview(captured: CapturedImageState) {
                 .background(Color(0xFFF5F7F6)),
             contentAlignment = Alignment.Center,
         ) {
-            if (preview == null) {
+            if (decodedPreview == null) {
                 Text("私有副本已保存，但此设备暂时无法生成预览。", color = ErrorRed, modifier = Modifier.padding(20.dp))
             } else {
                 Image(
-                    bitmap = preview,
+                    bitmap = decodedPreview,
                     contentDescription = "已选择图片预览",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp, max = 460.dp),
@@ -3296,16 +3468,15 @@ private fun AiEgressConfirmationDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("服务：${preview.providerLabel}", fontWeight = FontWeight.Medium)
-                Text("预设：${preview.presetLabel} · 实际模型：${preview.model.id}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("预设：${preview.presetLabel} · 实际模型：${preview.model.id}", color = SecondaryText, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                 Text("发送范围：${if (preview.text.isNullOrBlank()) "不发送文字" else "当前草稿文字"}；图片 ${preview.imageCount} 张。", color = BodyText)
                 preview.text?.let { text ->
                     Text(text.take(500), modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(NeutralAssistantSurface).padding(12.dp), style = MaterialTheme.typography.bodySmall)
                 }
-                Text("隐私：本次由本地 Mock 在设备内生成，不会连接 OpenRouter 或其他真实服务，也不会读取密钥或外发文字、图片。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                Text("费用：本地 Mock 的已验证本地成本为 0；这不代表任何真实服务免费。Token 未估算时会显示为未知。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("本次在设备内运行，不联网，费用为 0。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = consentChecked, onCheckedChange = onConsentChecked)
-                    Text("我已确认以上本次内容范围与本地 Mock 语义", style = MaterialTheme.typography.bodySmall)
+                    Text("确认以上内容范围", style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
@@ -3333,11 +3504,14 @@ private fun CandidateReviewDialog(
         text = {
             Column(modifier = Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "${if (candidate.providerId == com.nanzhufeng.ai.domain.ProviderId.OPENROUTER) "OpenRouter（真实服务）" else "本地 Mock（非真实服务）"} · ${candidate.modelId}",
+                    modelNameAnnotatedText(
+                        prefix = "${if (candidate.providerId == com.nanzhufeng.ai.domain.ProviderId.OPENROUTER) "OpenRouter（真实服务）" else "本地 Mock（非真实服务）"} · ",
+                        modelName = candidate.modelId,
+                    ),
                     color = SecondaryText,
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Text("这是候选，尚未保存为知识。可编辑后确认保存，或取消候选；两者都不会删除本地草稿和调用记录。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("编辑后保存，或取消。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(value = title, onValueChange = { title = it }, modifier = Modifier.fillMaxWidth(), label = { Text("标题") }, enabled = !isSaving, shape = RoundedCornerShape(14.dp))
                 OutlinedTextField(value = body, onValueChange = { body = it }, modifier = Modifier.fillMaxWidth().p5aKeyboardTraversal(), minLines = 5, label = { Text("候选内容") }, enabled = !isSaving, shape = RoundedCornerShape(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

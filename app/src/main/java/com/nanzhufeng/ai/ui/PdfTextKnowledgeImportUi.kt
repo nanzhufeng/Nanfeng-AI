@@ -42,12 +42,12 @@ class PdfTextImportViewModel(private val imports: ManagePdfTextKnowledgeImportUs
         text = {
             Column(Modifier.p5aKeyboardTraversal().heightIn(max = 540.dp).verticalScroll(rememberScrollState())) {
                 if (selected == null) {
-                    Text("仅保存私有副本与安全任务事实；系统 URI 或路径不会显示或持久化。", color = SecondaryText)
+                    Text("导入任务会保留，可在重启后继续。", color = SecondaryText)
                     state.tasks.forEach { row -> TextButton(onClick = { open(row) }) { Text("${row.asset?.displayName ?: "未完成选择"} · ${row.status}") } }
                 } else {
                     Text("${selected.asset?.displayName} · ${selected.status}")
-                    Text("阶段：${selected.extractedPageCount}/${selected.pageCount} 页 · PDF 文本 Adapter v${selected.asset?.adapterVersion ?: PDF_TEXT_ADAPTER_VERSION}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                    selected.failure?.let { Text("安全失败：$it。未写入 Knowledge；可重试或取消。", color = ErrorRed) }
+                    Text("已处理 ${selected.extractedPageCount}/${selected.pageCount} 页", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    selected.failure?.let { Text("失败：$it，可重试或取消。", color = ErrorRed) }
                     selected.items.forEach { item ->
                         HorizontalDivider(); Text("第 ${item.pageNumber} 页 · ${item.status}"); Text(item.title, fontWeight = FontWeight.Medium)
                         if (item.status == PdfTextImportItemStatus.PENDING_CONFIRMATION) {

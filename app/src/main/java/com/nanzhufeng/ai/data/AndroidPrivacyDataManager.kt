@@ -5,6 +5,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
+import com.nanzhufeng.ai.data.local.RoomPrivateAttachmentRepository
+import com.nanzhufeng.ai.domain.AttachmentId
+import com.nanzhufeng.ai.domain.PrivateAttachmentCleanupResult
 import com.nanzhufeng.ai.domain.PrivacyAggregate
 import com.nanzhufeng.ai.domain.PrivacyDataManager
 import com.nanzhufeng.ai.domain.PrivacyDeleteScope
@@ -15,6 +18,7 @@ import com.nanzhufeng.ai.domain.PrivacyInventory
 import com.nanzhufeng.ai.domain.PrivacyTaskAdapter
 import com.nanzhufeng.ai.domain.PrivacyTaskDeletionCandidate
 import com.nanzhufeng.ai.domain.PrivacyTaskDeletionPolicy
+import com.nanzhufeng.ai.domain.ImportedZipCleanupResult
 import com.nanzhufeng.ai.domain.SecurityDiagnosticAllowlist
 import com.nanzhufeng.ai.domain.SecurityDiagnosticArtifact
 import com.nanzhufeng.ai.domain.SecurityDiagnosticResult
@@ -36,11 +40,13 @@ class AndroidPrivacyDataManager(
 ) : PrivacyDataManager {
     private val filesRoot = context.applicationContext.filesDir.canonicalFile
     private val db get() = database.openHelper.writableDatabase
+    private val importedZipCleanup = AndroidImportedZipPackageCleanup(context, database)
 
     override fun inventory(): PrivacyInventory = PrivacyInventory(
         aggregates = inventoryAggregates(),
         credentialReferencePresent = context.getSharedPreferences("provider_credentials_v1", Context.MODE_PRIVATE).contains("OPENROUTER"),
         internetPermissionPresent = context.packageManager.checkPermission(android.Manifest.permission.INTERNET, context.packageName) == PackageManager.PERMISSION_GRANTED,
+        importedZipCleanup = importedZipCleanup.status(),
     )
 
     override fun preview(scope: PrivacyDeleteScope, selectedTaskIds: Set<String>): PrivacyDeletionPreview {
@@ -50,6 +56,7 @@ class AndroidPrivacyDataManager(
             PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS -> selected.groupBy { it.adapter }.map { (adapter, rows) ->
                 PrivacyAggregate("selected_${adapter.wireValue}_tasks", rows.size.toLong(), rows.sumOf { it.privateAssetByteCount })
             }
+            PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES -> listOf(orphanedAttachmentAggregate())
             PrivacyDeleteScope.OFFLINE_EVAL_RUNS -> listOf(PrivacyAggregate("offline_eval_runs", count("offline_eval_runs")), fileAggregate("offline_eval_reports", "exports/offline-eval/v1"))
             PrivacyDeleteScope.KNOWLEDGE_MEMORY_TRASH -> listOf(PrivacyAggregate("deleted_knowledge", countWhere("knowledge_items", "status='DELETED'")), PrivacyAggregate("deleted_memory", countWhere("memories", "status='DELETED'")))
             PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA -> inventoryAggregates() + knownRoots().map { fileAggregate("files_${it.replace('/', '_')}", it) }
@@ -73,6 +80,7 @@ class AndroidPrivacyDataManager(
             return PrivacyDeletionResult.Rejected("数据已变化、状态不再安全或存在正式引用，请重新预览后确认。")
         }
         if (request.scope == PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS) return deleteSelectedTaskAssets(current.taskCandidates.filter { it.selectionId in request.selectedTaskIds })
+        if (request.scope == PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES) return deleteOrphanedAttachmentFiles(current)
         val pending = File(filesRoot, "p5c-pending-delete/${UUID.randomUUID()}")
         var moved = emptyList<Pair<File, File>>()
         return try {
@@ -96,6 +104,8 @@ class AndroidPrivacyDataManager(
         val failures = deleteStaged(root)
         return if (failures == 0) PrivacyDeletionResult.Completed(emptyList()) else PrivacyDeletionResult.Partial(emptyList(), failures)
     }
+
+    override fun cleanupImportedZipPackages(): ImportedZipCleanupResult = importedZipCleanup.cleanup()
 
     override fun exportSecurityDiagnostic(destination: Uri): SecurityDiagnosticResult {
         return try {
@@ -122,13 +132,19 @@ class AndroidPrivacyDataManager(
     }
 
     private fun inventoryAggregates(): List<PrivacyAggregate> = listOf(
-        PrivacyAggregate("capture_drafts", count("capture_drafts")), PrivacyAggregate("conversations", count("conversations")),
-        PrivacyAggregate("messages", count("message_nodes")), PrivacyAggregate("conversation_drafts", count("conversation_drafts")),
-        PrivacyAggregate("invocations", count("invocation_records")), PrivacyAggregate("projects", count("projects")),
-        PrivacyAggregate("memory", count("memories")), PrivacyAggregate("knowledge", count("knowledge_items")),
+        PrivacyAggregate("capture_drafts", count("capture_drafts"), textBytes("capture_drafts", "text")),
+        PrivacyAggregate("conversations", count("conversations"), textBytes("conversations", "title")),
+        PrivacyAggregate("messages", count("message_nodes"), textBytes("message_content_blocks", "textContent", "displayName", "toolSafeSummary")),
+        PrivacyAggregate("conversation_drafts", count("conversation_drafts"), textBytes("conversation_drafts", "text")),
+        PrivacyAggregate("invocations", count("invocation_records"), textBytes("invocation_records", "providerId", "modelId", "status", "errorCode")),
+        PrivacyAggregate("projects", count("projects"), textBytes("projects", "title", "description") + textBytes("project_instruction_revisions", "content")),
+        PrivacyAggregate("memory", count("memories"), textBytes("memories", "title", "body", "sourceSummary") + textBytes("memory_revisions", "title", "body", "sourceSummary")),
+        PrivacyAggregate("knowledge", count("knowledge_items"), textBytes("knowledge_items", "title", "body") + textBytes("knowledge_revisions", "title", "body")),
         PrivacyAggregate("knowledge_relations", count("knowledge_relationships")), PrivacyAggregate("markdown_tasks", count("markdown_import_tasks")),
         PrivacyAggregate("json_tasks", count("json_knowledge_import_tasks")), PrivacyAggregate("pdf_tasks", count("pdf_text_import_tasks")),
-        PrivacyAggregate("web_tasks", count("web_text_snapshot_tasks")), PrivacyAggregate("offline_eval_runs", count("offline_eval_runs")),
+        PrivacyAggregate("web_tasks", count("web_text_snapshot_tasks")),
+        PrivacyAggregate("glm_ocr_tasks", count("glm_ocr_tasks")),
+        PrivacyAggregate("offline_eval_runs", count("offline_eval_runs"), textBytes("offline_eval_assertions", "fact", "detail") + textBytes("offline_eval_human_scores", "note")),
         // Import facts are shown separately from the total conversation count.  They are aggregate
         // provenance/task facts only: no title, body, filename, source id, or archive size enters
         // the privacy overview.
@@ -140,12 +156,23 @@ class AndroidPrivacyDataManager(
         PrivacyAggregate("zip_imported_conversations", count("p6k_zip_import_provenance")),
         PrivacyAggregate("zip_pending_media", countWhere("p6k_zip_asset_candidates", "attachmentId IS NULL")),
         PrivacyAggregate("zip_imported_profile_fields", sum("p6k_zip_profile_candidates", "mappedFieldCount")),
-        fileAggregate("zip_archives", "p6k-zip-import/v1/archives"),
-        fileAggregate("private_assets", "attachments/v1") + fileAggregate("markdown_assets", "markdown-import-assets/v1") +
-            fileAggregate("json_assets", "json-knowledge-import-assets/v1") + fileAggregate("pdf_assets", "pdf-text-import-assets/v1") + fileAggregate("web_assets", "web-text-snapshots/v1"),
+        attachmentAggregate("attachment_images", "a.mimeType LIKE 'image/%'"),
+        attachmentAggregate("attachment_videos", "a.mimeType LIKE 'video/%'"),
+        attachmentAggregate("attachment_audio", "a.mimeType LIKE 'audio/%'"),
+        attachmentAggregate("attachment_files", "a.mimeType NOT LIKE 'image/%' AND a.mimeType NOT LIKE 'video/%' AND a.mimeType NOT LIKE 'audio/%'"),
+        attachmentAggregate("zip_imported_attachments", "a.attachmentId IN (SELECT DISTINCT attachmentId FROM p6k_zip_asset_occurrence_receipt)"),
+        attachmentAggregate("glm_ocr_attachments", "a.attachmentId IN (SELECT sourceAttachmentId FROM glm_ocr_tasks UNION SELECT resultAttachmentId FROM glm_ocr_tasks WHERE resultAttachmentId IS NOT NULL)"),
+        orphanedAttachmentAggregate(),
+        fileAggregate("import_source_assets", "markdown-import-assets/v1") + fileAggregate("import_source_assets", "json-knowledge-import-assets/v1") +
+            fileAggregate("import_source_assets", "pdf-text-import-assets/v1") + fileAggregate("import_source_assets", "web-text-snapshots/v1") +
+            fileAggregate("import_source_assets", "p6k-zip-import/v1"),
     )
 
-    private operator fun PrivacyAggregate.plus(other: PrivacyAggregate) = PrivacyAggregate("$key+${other.key}", count + other.count, byteCount + other.byteCount)
+    private operator fun PrivacyAggregate.plus(other: PrivacyAggregate) = PrivacyAggregate(
+        if (key == other.key) key else "$key+${other.key}",
+        count + other.count,
+        byteCount + other.byteCount,
+    )
 
     private data class TaskSpec(
         val adapter: PrivacyTaskAdapter,
@@ -243,6 +270,111 @@ class AndroidPrivacyDataManager(
     private fun count(table: String) = db.query("SELECT COUNT(*) FROM $table").use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
     private fun countWhere(table: String, condition: String) = db.query("SELECT COUNT(*) FROM $table WHERE $condition").use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
     private fun sum(table: String, column: String) = db.query("SELECT COALESCE(SUM($column), 0) FROM $table").use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
+    private fun textBytes(table: String, vararg columns: String): Long {
+        if (columns.isEmpty()) return 0
+        val expression = columns.joinToString(" + ") { "LENGTH(CAST(COALESCE($it, '') AS BLOB))" }
+        return db.query("SELECT COALESCE(SUM($expression), 0) FROM $table").use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
+    }
+    /** The privacy page reports bytes that are physically present now, never stale catalog
+     * byteCount metadata. Archive-backed entries remain searchable while their package exists,
+     * but the package bytes are counted once under import_source_assets instead of once per ZIP
+     * entry (which previously inflated usage to the logical uncompressed total). */
+    private fun attachmentAggregate(key: String, condition: String): PrivacyAggregate = db.query(
+        "SELECT a.storageKey FROM private_attachment_assets a WHERE ($condition) AND ($ACTIVE_ATTACHMENT_REFERENCE_SQL) ORDER BY a.storageKey ASC",
+    ).use { cursor ->
+        var count = 0L
+        var bytes = 0L
+        while (cursor.moveToNext()) {
+            when (val storage = actualAttachmentStorage(cursor.getString(0))) {
+                null -> Unit
+                is ActualAttachmentStorage.Managed -> {
+                    count += 1L
+                    bytes += storage.byteCount
+                }
+                ActualAttachmentStorage.ArchiveBacked -> count += 1L
+            }
+        }
+        PrivacyAggregate(key, count, bytes)
+    }
+
+    /** Files left behind by an interrupted or older delete stay visible as real occupied bytes,
+     * but no longer inflate the image/video/audio rows that drill into live search results. */
+    private fun orphanedAttachmentAggregate(): PrivacyAggregate {
+        val candidates = orphanedManagedAttachments()
+        return PrivacyAggregate(
+            key = "orphaned_attachment_files",
+            count = candidates.size.toLong(),
+            byteCount = candidates.sumOf { it.second },
+        )
+    }
+
+    private fun orphanedManagedAttachments(): List<Pair<String, Long>> = db.query(
+        "SELECT a.attachmentId,a.storageKey FROM private_attachment_assets a " +
+            "WHERE a.storageKey LIKE 'attachments/v1/%' AND NOT ($ACTIVE_ATTACHMENT_REFERENCE_SQL) ORDER BY a.attachmentId ASC",
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                val id = cursor.getString(0)
+                val storage = actualAttachmentStorage(cursor.getString(1)) as? ActualAttachmentStorage.Managed ?: continue
+                add(id to storage.byteCount)
+            }
+        }
+    }
+
+    private fun deleteOrphanedAttachmentFiles(preview: PrivacyDeletionPreview): PrivacyDeletionResult {
+        val expected = preview.aggregates.singleOrNull { it.key == "orphaned_attachment_files" }
+            ?: return PrivacyDeletionResult.Rejected("待清理文件状态已变化，请重新预览。")
+        val candidates = orphanedManagedAttachments()
+        if (candidates.size.toLong() != expected.count || candidates.sumOf { it.second } != expected.byteCount) {
+            return PrivacyDeletionResult.Rejected("待清理文件状态已变化，请重新预览。")
+        }
+        val assets = RoomPrivateAttachmentRepository(database)
+        val store = AndroidPrivateAttachmentStore(context)
+        var deletedCount = 0L
+        var deletedBytes = 0L
+        var failures = 0
+        candidates.forEach { (attachmentId, byteCount) ->
+            try {
+                database.runInTransaction {
+                    // ZIP rows are derivative ownership receipts. With no live owner they must not
+                    // keep a physically orphaned private copy alive forever.
+                    db.execSQL("DELETE FROM p6k_zip_asset_occurrence_receipt WHERE attachmentId=?", arrayOf(attachmentId))
+                    db.execSQL("DELETE FROM p6k_zip_asset_link_receipts WHERE attachmentId=?", arrayOf(attachmentId))
+                    db.execSQL("DELETE FROM p6k_zip_asset_link_provenance WHERE attachmentId=?", arrayOf(attachmentId))
+                    db.execSQL("DELETE FROM p6k_zip_asset_catalog WHERE attachmentId=?", arrayOf(attachmentId))
+                    db.execSQL("DELETE FROM p6k_zip_asset_candidates WHERE attachmentId=?", arrayOf(attachmentId))
+                }
+                when (assets.deleteIfUnreferenced(AttachmentId(attachmentId), store::deletePrivateCopy)) {
+                    PrivateAttachmentCleanupResult.Deleted, PrivateAttachmentCleanupResult.Missing -> {
+                        deletedCount++
+                        deletedBytes += byteCount
+                    }
+                    is PrivateAttachmentCleanupResult.Retained, PrivateAttachmentCleanupResult.DeleteFailed -> failures++
+                }
+            } catch (_: Exception) {
+                failures++
+            }
+        }
+        val deleted = listOf(PrivacyAggregate("orphaned_attachment_files", deletedCount, deletedBytes))
+        return if (failures == 0) PrivacyDeletionResult.Completed(deleted) else PrivacyDeletionResult.Partial(deleted, failures)
+    }
+
+    private sealed interface ActualAttachmentStorage {
+        data class Managed(val byteCount: Long) : ActualAttachmentStorage
+        data object ArchiveBacked : ActualAttachmentStorage
+    }
+
+    private fun actualAttachmentStorage(storageKey: String): ActualAttachmentStorage? {
+        if (storageKey.startsWith("attachments/v1/")) {
+            val root = safeRoot("attachments/v1") ?: return null
+            val file = File(filesRoot, storageKey).canonicalFile
+            if (!file.path.startsWith(root.path + File.separator) || !file.isFile || Files.isSymbolicLink(file.toPath())) return null
+            return ActualAttachmentStorage.Managed(file.length())
+        }
+        val archive = P6KZipArchiveAssetStorage.parse(storageKey) ?: return null
+        val file = safeRoot("p6k-zip-import/v1/archives/${archive.taskId}.zip") ?: return null
+        return if (file.isFile && !Files.isSymbolicLink(file.toPath())) ActualAttachmentStorage.ArchiveBacked else null
+    }
     private fun fileAggregate(key: String, relative: String): PrivacyAggregate {
         val root = safeRoot(relative) ?: return PrivacyAggregate(key, 0, 0)
         val files = root.walkTopDown().filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }.toList()
@@ -252,6 +384,7 @@ class AndroidPrivacyDataManager(
     private fun stageFiles(scope: PrivacyDeleteScope, pending: File): List<Pair<File, File>> {
         val roots = when (scope) {
             PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS -> failedAssetRoots()
+            PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES -> emptyList()
             PrivacyDeleteScope.OFFLINE_EVAL_RUNS -> listOf("exports/offline-eval/v1")
             PrivacyDeleteScope.KNOWLEDGE_MEMORY_TRASH -> emptyList()
             PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA -> knownRoots()
@@ -271,6 +404,7 @@ class AndroidPrivacyDataManager(
     private fun deleteRoomFacts(scope: PrivacyDeleteScope) {
         when (scope) {
             PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS -> listOf("markdown_import", "json_knowledge_import", "pdf_text_import", "web_text_snapshot").forEach { prefix -> db.execSQL("DELETE FROM ${prefix}_items WHERE taskId IN (SELECT id FROM ${prefix}_tasks WHERE status IN ('FAILED','CANCELLED'))"); if (prefix == "pdf_text_import") db.execSQL("DELETE FROM pdf_text_import_pages WHERE taskId IN (SELECT id FROM pdf_text_import_tasks WHERE status IN ('FAILED','CANCELLED'))"); db.execSQL("DELETE FROM ${prefix}_tasks WHERE status IN ('FAILED','CANCELLED')") }
+            PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES -> Unit
             PrivacyDeleteScope.OFFLINE_EVAL_RUNS -> listOf("offline_eval_human_scores", "offline_eval_assertions", "offline_eval_case_results", "offline_eval_runs").forEach { db.execSQL("DELETE FROM $it") }
             PrivacyDeleteScope.KNOWLEDGE_MEMORY_TRASH -> { db.execSQL("DELETE FROM knowledge_revisions WHERE knowledgeId IN (SELECT id FROM knowledge_items WHERE status='DELETED')"); db.execSQL("DELETE FROM knowledge_items WHERE status='DELETED'"); db.execSQL("DELETE FROM memory_revisions WHERE memoryId IN (SELECT id FROM memories WHERE status='DELETED')"); db.execSQL("DELETE FROM memory_intents WHERE memoryId IN (SELECT id FROM memories WHERE status='DELETED')"); db.execSQL("DELETE FROM memories WHERE status='DELETED'") }
             PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA -> database.clearAllTables()
@@ -305,5 +439,16 @@ class AndroidPrivacyDataManager(
         const val FULL_DELETE_PHRASE = "删除全部本地业务数据"
         const val PENDING_TASK_ROOT = "p5c-pending-delete/tasks"
         val TASK_ID_PATTERN = Regex("[A-Za-z0-9-]+")
+        val ACTIVE_ATTACHMENT_REFERENCE_SQL = """
+            EXISTS(SELECT 1 FROM conversation_draft_attachments r WHERE r.attachmentId=a.attachmentId)
+            OR EXISTS(SELECT 1 FROM capture_draft_attachments r WHERE r.attachmentId=a.attachmentId)
+            OR EXISTS(SELECT 1 FROM knowledge_attachments r WHERE r.attachmentId=a.attachmentId)
+            OR EXISTS(SELECT 1 FROM message_content_blocks r WHERE r.attachmentId=a.attachmentId)
+            OR EXISTS(SELECT 1 FROM p6k_zip_asset_occurrence_receipt r INNER JOIN p6k_zip_import_tasks t ON t.id=r.taskId WHERE r.attachmentId=a.attachmentId AND t.status NOT IN ('COMPLETED','FAILED','CANCELLED'))
+            OR EXISTS(SELECT 1 FROM p6k_zip_asset_link_provenance r INNER JOIN p6k_zip_import_tasks t ON t.id=r.taskId WHERE r.attachmentId=a.attachmentId AND t.status NOT IN ('COMPLETED','FAILED','CANCELLED'))
+            OR EXISTS(SELECT 1 FROM temporary_conversation_attachments r WHERE r.attachmentId=a.attachmentId)
+            OR EXISTS(SELECT 1 FROM resumable_attachment_uploads r WHERE r.attachmentId=a.attachmentId AND r.status IN ('PENDING','UPLOADING','FAILED','UNKNOWN'))
+            OR EXISTS(SELECT 1 FROM glm_ocr_tasks r WHERE r.sourceAttachmentId=a.attachmentId OR r.resultAttachmentId=a.attachmentId)
+        """.trimIndent()
     }
 }

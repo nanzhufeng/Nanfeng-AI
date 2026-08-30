@@ -36,10 +36,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.nanzhufeng.ai.domain.AiTaskError
+import com.nanzhufeng.ai.domain.CnyMoneyDisplay
 import com.nanzhufeng.ai.domain.InvocationRecord
 import com.nanzhufeng.ai.domain.InvocationRepository
 import com.nanzhufeng.ai.domain.InvocationStatus
 import com.nanzhufeng.ai.domain.ProviderId
+import com.nanzhufeng.ai.domain.GlmOcrTask
+import com.nanzhufeng.ai.domain.GlmOcrTaskOwner
+import com.nanzhufeng.ai.domain.modelDisplayNameForUser
+import com.nanzhufeng.ai.domain.toInvocationTaskId
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
@@ -50,25 +55,29 @@ data class InvocationLedgerUiState(
     val dialogVisible: Boolean = false,
     val isLoading: Boolean = false,
     val records: List<InvocationRecord> = emptyList(),
+    val glmOcrTasksByInvocationTaskId: Map<String, GlmOcrTask> = emptyMap(),
 )
 
-class InvocationLedgerViewModel(private val repository: InvocationRepository) : ViewModel() {
+class InvocationLedgerViewModel(
+    private val repository: InvocationRepository,
+    private val glmOcr: GlmOcrTaskOwner? = null,
+) : ViewModel() {
     var state by mutableStateOf(InvocationLedgerUiState())
         private set
 
     fun showDialog() {
         state = state.copy(dialogVisible = true, isLoading = true)
         viewModelScope.launch {
-            val records = withContext(Dispatchers.IO) { repository.listNewestFirst() }
-            state = InvocationLedgerUiState(dialogVisible = true, records = records)
+            val (records, ocrTasks) = withContext(Dispatchers.IO) { loadLedger() }
+            state = InvocationLedgerUiState(dialogVisible = true, records = records, glmOcrTasksByInvocationTaskId = ocrTasks)
         }
     }
 
     fun load() {
         state = state.copy(isLoading = true)
         viewModelScope.launch {
-            val records = withContext(Dispatchers.IO) { repository.listNewestFirst() }
-            state = state.copy(isLoading = false, records = records)
+            val (records, ocrTasks) = withContext(Dispatchers.IO) { loadLedger() }
+            state = state.copy(isLoading = false, records = records, glmOcrTasksByInvocationTaskId = ocrTasks)
         }
     }
 
@@ -76,11 +85,17 @@ class InvocationLedgerViewModel(private val repository: InvocationRepository) : 
         state = state.copy(dialogVisible = false)
     }
 
-    class Factory(private val repository: InvocationRepository) : ViewModelProvider.Factory {
+    private fun loadLedger(): Pair<List<InvocationRecord>, Map<String, GlmOcrTask>> =
+        repository.listNewestFirst() to glmOcr?.tasks().orEmpty().associateBy { it.toInvocationTaskId().value }
+
+    class Factory(
+        private val repository: InvocationRepository,
+        private val glmOcr: GlmOcrTaskOwner? = null,
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(InvocationLedgerViewModel::class.java))
-            return InvocationLedgerViewModel(repository) as T
+            return InvocationLedgerViewModel(repository, glmOcr) as T
         }
     }
 }
@@ -130,7 +145,7 @@ fun InvocationLedgerDialog(state: InvocationLedgerUiState, onDismiss: () -> Unit
                 ) {
                     state.records.forEachIndexed { index, record ->
                         if (index > 0) HorizontalDivider(color = NeutralBorder)
-                        InvocationLedgerRow(record)
+                        InvocationLedgerRow(record, state.glmOcrTasksByInvocationTaskId[record.taskId.value])
                     }
                 }
             }
@@ -156,7 +171,7 @@ fun InvocationLedgerPage(state: InvocationLedgerUiState) {
         else -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             state.records.forEachIndexed { index, record ->
                 if (index > 0) HorizontalDivider(color = NeutralBorder)
-                InvocationLedgerRow(record)
+                InvocationLedgerRow(record, state.glmOcrTasksByInvocationTaskId[record.taskId.value])
             }
         }
     }
@@ -176,20 +191,35 @@ private fun EmptyInvocationLedger() {
 }
 
 @Composable
-private fun InvocationLedgerRow(record: InvocationRecord) {
+private fun InvocationLedgerRow(record: InvocationRecord, glmOcrTask: GlmOcrTask? = null) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(record.status.uiLabel(), color = record.status.uiColor(), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             Text(record.completedAt.ledgerTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
-        Text("${record.providerLabel()} · ${record.modelId}", style = MaterialTheme.typography.bodyMedium)
+        Text(modelNameAnnotatedText(prefix = "${record.providerLabel()} · ", modelName = record.displayModelName()), style = MaterialTheme.typography.bodyMedium)
         Text(
             "Harness v${record.harnessVersion} · 耗时 ${record.taskRun.durationMillis()} ms · ${record.taskRun.attempts.size} 次 Attempt",
             color = SecondaryText,
             style = MaterialTheme.typography.bodySmall,
         )
         Text(record.usageAndCostLabel(), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        glmOcrTask?.let { task ->
+            Text("功能：南枫转写", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("关联文件：${task.sourceDisplayName}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text(
+                listOfNotNull(
+                    task.pageCount?.let { "页数：$it" },
+                    task.requestId?.let { "请求 ID：$it" },
+                ).joinToString(" · ").ifBlank { "服务商请求 ID：未返回" },
+                color = SecondaryText,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            task.safeErrorCode?.let { code ->
+                Text("安全错误码：$code", color = ErrorRed, style = MaterialTheme.typography.bodySmall)
+            }
+        }
         record.error?.let { error ->
             Text("原因：${error.uiLabel()}", color = ErrorRed, style = MaterialTheme.typography.bodySmall)
         }
@@ -214,6 +244,7 @@ private fun ProviderId.uiLabel(): String = when (this) {
     ProviderId.OPENROUTER -> "OpenRouter（未验证真实连接）"
     ProviderId.QWEN -> "Qwen 官方直连（未验证真实连接）"
     ProviderId.DEEPSEEK -> "DeepSeek 官方直连（未验证真实连接）"
+    ProviderId.ZHIPU -> "智谱官方直连（未验证真实连接）"
 }
 
 private fun InvocationRecord.providerLabel(): String = when (providerId) {
@@ -223,11 +254,16 @@ private fun InvocationRecord.providerLabel(): String = when (providerId) {
     ProviderId.OPENROUTER -> if (taskRun.attempts.isNotEmpty()) "OpenRouter（真实服务）" else providerId.uiLabel()
     ProviderId.QWEN -> if (taskRun.attempts.isNotEmpty()) "Qwen 官方直连（真实服务）" else providerId.uiLabel()
     ProviderId.DEEPSEEK -> if (taskRun.attempts.isNotEmpty()) "DeepSeek 官方直连（真实服务）" else providerId.uiLabel()
+    ProviderId.ZHIPU -> if (taskRun.attempts.isNotEmpty()) "智谱官方直连（真实服务）" else providerId.uiLabel()
 }
+
+private fun InvocationRecord.displayModelName(): String = if (modelId == "glm-ocr") "GLM-OCR" else modelDisplayNameForUser(modelId)
 
 private fun InvocationRecord.usageAndCostLabel(): String {
     fun Long?.valueOrUnknown(): String = this?.toString() ?: "未知"
-    val fee = cost.totalMicros?.let { micros -> "${cost.currencyCode} ${micros} 微货币" } ?: "未知"
+    val fee = cost.totalMicros?.let { micros ->
+        CnyMoneyDisplay.label(micros, cost.currencyCode, estimated = false) ?: "暂无法换算"
+    } ?: "未知"
     return "输入 Token：${usage.inputTokens.valueOrUnknown()} · 输出 Token：${usage.outputTokens.valueOrUnknown()} · 费用：$fee"
 }
 
@@ -239,7 +275,10 @@ private fun java.time.Instant.ledgerTimestamp(): String =
 
 private fun AiTaskError.uiLabel(): String = when (this) {
     AiTaskError.ConsentRequired -> "未完成本次外发确认"
+    AiTaskError.ProviderConfigurationInvalid -> "服务尚未启用或配置无效"
+    AiTaskError.ProviderCredentialMissing -> "未保存 API Key"
     AiTaskError.ProviderTimedOut -> "调用已取消或超时"
+    AiTaskError.ProviderRequestCancelled -> "请求已取消"
     AiTaskError.ProviderAuthenticationFailed -> "鉴权失败"
     AiTaskError.ProviderBalanceInsufficient -> "余额不足"
     AiTaskError.ProviderRateLimited -> "请求受限"
@@ -248,5 +287,10 @@ private fun AiTaskError.uiLabel(): String = when (this) {
     AiTaskError.ProviderResponseFormatInvalid -> "响应格式无效"
     AiTaskError.ProviderSchemaValidationFailed -> "输出合同校验失败"
     AiTaskError.ProviderContextOverflow -> "上下文超限"
+    AiTaskError.AttachmentSourceUnavailable -> "原始文件不可用"
+    AiTaskError.AttachmentIntegrityMismatch -> "原始文件完整性校验失败"
+    AiTaskError.AttachmentTooLarge -> "文件或结果超过安全上限"
+    AiTaskError.PersistenceConflict -> "本机结果或元数据保存失败"
+    AiTaskError.ProviderFailure -> "服务商调用失败"
     else -> "${this.javaClass.simpleName}"
 }

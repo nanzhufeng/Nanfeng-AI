@@ -16,7 +16,8 @@ class MemorySummaryUiContractsTest {
             "Text(\"记忆摘要\"", "updatedText", "Icons.Rounded.MoreVert", "关于记忆", "刷新摘要",
             "删除记忆", "关闭记忆摘要生成和应用", "询问或更新", "BasicTextField", "询问摘要", "补充记忆",
             "style = MaterialTheme.typography.titleLarge", "style = MaterialTheme.typography.bodyLarge",
-            "Modifier.align(Alignment.BottomCenter)", "navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 12.dp)",
+            ".align(Alignment.BottomCenter)", "onSizeChanged { composerHeightPx = it.height }",
+            "imePadding()", "bottom = composerHeight + 24.dp",
         )) assertTrue("missing memory-summary UI token: $token", page.contains(token))
         assertTrue("legacy combined action must be removed", !page.contains("删除并关闭记忆"))
         for (token in listOf("fun refreshSummary()", "fun querySummary(query: String)", "fun appendSummaryUpdate(raw: String)", "fun clearSummary()", "fun markSummaryGenerationAndUseDisabled()")) {

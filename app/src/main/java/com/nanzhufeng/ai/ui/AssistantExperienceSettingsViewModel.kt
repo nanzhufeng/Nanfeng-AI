@@ -11,7 +11,6 @@ import com.nanzhufeng.ai.domain.SaveAssistantExperienceSettingsUseCase
 
 data class AssistantExperienceSettingsUiState(
     val settings: AssistantExperienceSettings = AssistantExperienceSettings(),
-    val notice: String? = null,
     val error: String? = null,
 )
 
@@ -19,33 +18,35 @@ data class AssistantExperienceSettingsUiState(
 class AssistantExperienceSettingsViewModel(
     private val load: LoadAssistantExperienceSettingsUseCase,
     private val save: SaveAssistantExperienceSettingsUseCase,
+    private val onAutoHistoryKnowledgeChanged: (Boolean) -> Unit = {},
 ) : ViewModel() {
     var state by mutableStateOf(AssistantExperienceSettingsUiState(settings = load.execute()))
         private set
 
     fun update(transform: (AssistantExperienceSettings) -> AssistantExperienceSettings) {
         val next = runCatching { transform(state.settings) }.getOrElse {
-            state = state.copy(notice = null, error = "个性化内容超过可保存范围。")
+            state = state.copy(error = "个性化内容超过可保存范围。")
             return
         }
-        val onlyWebSearchToggle = next.copy(webSearchEnabled = state.settings.webSearchEnabled) == state.settings
         val saved = runCatching { save.execute(next) }
         state = saved.fold(
-            onSuccess = { state.copy(settings = it, notice = if (onlyWebSearchToggle) null else "已保存在本机。", error = null) },
-            onFailure = { state.copy(notice = null, error = "保存失败；已有设置保持不变。") },
+            onSuccess = {
+                if (it.historyLibraryEnabled != state.settings.historyLibraryEnabled) onAutoHistoryKnowledgeChanged(it.historyLibraryEnabled)
+                // Every successful personalization edit already updates its visible control.
+                // Do not obscure the page with a redundant success dialog; failures remain explicit.
+                state.copy(settings = it, error = null)
+            },
+            onFailure = { state.copy(error = "保存失败；已有设置保持不变。") },
         )
-    }
-
-    fun clearNotice() {
-        state = state.copy(notice = null)
     }
 
     class Factory(
         private val load: LoadAssistantExperienceSettingsUseCase,
         private val save: SaveAssistantExperienceSettingsUseCase,
+        private val onAutoHistoryKnowledgeChanged: (Boolean) -> Unit = {},
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            AssistantExperienceSettingsViewModel(load, save) as T
+            AssistantExperienceSettingsViewModel(load, save, onAutoHistoryKnowledgeChanged) as T
     }
 }

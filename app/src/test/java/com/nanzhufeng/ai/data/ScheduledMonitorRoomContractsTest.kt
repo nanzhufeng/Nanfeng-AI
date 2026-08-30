@@ -32,6 +32,7 @@ class ScheduledMonitorRoomContractsTest {
 
         assertTrue(executor.contains("if (!options.liveWebSearch) return fail(\"WEB_SEARCH_UNAVAILABLE\")"))
         assertTrue(executor.contains("ProviderId.DEEPSEEK -> ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)"))
+        assertTrue(executor.contains("ProviderId.ZHIPU -> ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)"))
         assertTrue(executor.contains("appendProviderWebSources(reply.text, reply.webSources)"))
         assertFalse(executor.contains("ProviderId.DEEPSEEK -> ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)"))
     }

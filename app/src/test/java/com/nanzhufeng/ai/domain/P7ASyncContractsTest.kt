@@ -52,4 +52,21 @@ class P7ASyncContractsTest {
         val unclassifiedSecret = NfaiSyncPreparedSnapshot("com.nanzhufeng.ai", "safe-doc", 1, listOf(NfaiSyncRecord("knowledge", "knowledge-safe", 1, "NORMAL", "{\"apiKey\":\"forbidden\"}")))
         rejected(NfaiSyncV1Gateway.seal(unclassifiedSecret, code, ByteArray(32)))
     }
+
+    @Test fun `one time recovery setup can seal later without persisting the recovery code`() {
+        val fixture = fixture()
+        val code = "saved-once-recovery-code".toCharArray()
+        val wrapping = NfaiSyncV1Gateway.createAccountWrappingMaterial(code)
+        val dataKey = ByteArray(32) { (it + 1).toByte() }
+        try {
+            val sealed = NfaiSyncV1Gateway.sealWithAccountWrappingMaterial(snapshot(fixture), dataKey, wrapping) as NfaiSyncResult.Sealed
+            val opened = NfaiSyncV1Gateway.open(sealed.canonicalEnvelope, code, "com.nanzhufeng.ai", "sync-fixture-v1", 7)
+            assertTrue(opened is NfaiSyncResult.Opened)
+        } finally {
+            code.fill('\u0000')
+            wrapping.wrappingKey.fill(0)
+            wrapping.salt.fill(0)
+            dataKey.fill(0)
+        }
+    }
 }

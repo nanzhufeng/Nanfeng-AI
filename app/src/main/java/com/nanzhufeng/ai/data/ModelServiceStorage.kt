@@ -63,6 +63,7 @@ class AndroidModelServiceSettingsRepository(context: Context) : ModelServiceSett
             ProviderId.OPENROUTER -> ModelPresetId.GPT_5_6_TERRA
             ProviderId.QWEN -> ModelPresetId.QWEN_3_7_PLUS
             ProviderId.DEEPSEEK -> ModelPresetId.DEEPSEEK_V4_PRO
+            ProviderId.ZHIPU -> ModelPresetId.GLM_5_3_FLASH
             ProviderId.MOCK -> ModelPresetId.GPT_5_6_TERRA
         }
     }

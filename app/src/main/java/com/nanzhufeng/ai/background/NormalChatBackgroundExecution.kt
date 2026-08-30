@@ -225,6 +225,7 @@ class NormalChatGenerationForegroundService : Service() {
 
 private fun NormalChatOpenRouterExecutor.Result.toSafeResult(): String? = when (this) {
     NormalChatOpenRouterExecutor.Result.Sent -> null
+    is NormalChatOpenRouterExecutor.Result.SentWithNotice -> "NOTICE:${notice.name}"
     is NormalChatOpenRouterExecutor.Result.Blocked -> "BLOCKED:${code.name}"
     is NormalChatOpenRouterExecutor.Result.Failed -> "FAILED:${code.name}"
 }

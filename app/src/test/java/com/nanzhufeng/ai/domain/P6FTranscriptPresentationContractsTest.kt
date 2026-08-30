@@ -87,12 +87,12 @@ class P6FTranscriptPresentationContractsTest {
             cost = ProviderCost("local-calibrated-openrouter-v1", "USD", 5_340L), costSource = ConversationCostSource.LOCAL_ESTIMATE,
         )
 
-        assertEquals("\$0.00521", exact.footerCostLabel())
-        assertEquals("≈ \$0.00534（估算）", estimated.footerCostLabel())
+        assertEquals("约 ¥0.035013", exact.footerCostLabel())
+        assertEquals("≈ ¥0.035886（估算）", estimated.footerCostLabel())
         val projected = ConversationTranscriptPresentation(MessagePresentationRenderer())
             .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(exact)))
             .single()
-        assertEquals("\$0.00521", projected.metadata.costLabel)
+        assertEquals("约 ¥0.035013", projected.metadata.costLabel)
     }
 
     @Test fun `hosted DeepSeek search footer stays a model name while route remains persisted`() {

@@ -11,7 +11,6 @@ import com.nanzhufeng.ai.domain.ConversationTitleRefinementResult
 import com.nanzhufeng.ai.domain.ConversationTitleRefiner
 import com.nanzhufeng.ai.domain.ConversationTitleSource
 import com.nanzhufeng.ai.domain.LoadModelServiceConfigurationUseCase
-import com.nanzhufeng.ai.domain.ModelPresetId
 import com.nanzhufeng.ai.domain.ModelResolver
 import com.nanzhufeng.ai.domain.NanfengModelServiceCatalog
 import com.nanzhufeng.ai.domain.ProviderCost
@@ -24,11 +23,11 @@ import org.json.JSONObject
 
 /**
  * Sends only the opening user message and its first completed assistant reply to a configured,
- * ordinary daily model. It never receives profile data, later turns or attachments.
+ * economical background model. It never receives profile data, later turns or attachments.
  *
- * Title work must not consume a premium reasoning model. The fixed candidate order deliberately
- * excludes 5.6 Sol, Fable 5 and Opus 5, while allowing a configured provider to fail over to a
- * lower-cost alternative that is already available to the user.
+ * Title and history-library refinement intentionally share one fixed candidate order. This keeps
+ * these background jobs on the user's low-cost direct providers without changing normal chat or
+ * Auto routing.
  */
 class ConfiguredConversationTitleRefiner(
     private val records: ConversationTitleGenerationRecordStore,
@@ -47,14 +46,14 @@ class ConfiguredConversationTitleRefiner(
             usage: ProviderUsage = ProviderUsage(),
             safeCode: String? = null,
         ) {
-            val cost = modelId?.let { ConversationCostEstimator.estimate(it, usage) } ?: ProviderCost()
+            val cost = modelId?.let { ConversationCostEstimator.estimate(it, usage, requestedAt) } ?: ProviderCost()
             records.record(ConversationTitleGenerationRecord(
                 ConversationTitleGenerationId.new(), sourceConversationId, requestedAt, status, providerId, modelId,
                 usage, cost, cost.totalMicros?.let { ConversationCostSource.LOCAL_ESTIMATE }, safeCode,
             ))
         }
         val preflightFailures = mutableListOf<Pair<ProviderId, String>>()
-        val configuredProviders = listOf(ProviderId.QWEN, ProviderId.OPENROUTER, ProviderId.DEEPSEEK)
+        val configuredProviders = TitleAndHistoryRefinementRouting.candidates.map { it.providerId }.distinct()
             .mapNotNull { providerId ->
                 val config = configuration.execute(providerId)
                 when {
@@ -80,7 +79,7 @@ class ConfiguredConversationTitleRefiner(
             }
             return ConversationTitleRefinementResult.Failed("NO_CONFIGURED_TITLE_MODEL")
         }
-        titleCandidates.filter { it.providerId in configuredProviders }.forEach { candidate ->
+        TitleAndHistoryRefinementRouting.candidates.filter { it.providerId in configuredProviders }.forEach { candidate ->
             val config = checkNotNull(configuredProviders[candidate.providerId])
             val resolved = modelResolver.resolve(candidate.preset) as? ResolvedModelResult.Resolved
             if (resolved == null || resolved.model.providerId != candidate.providerId) {
@@ -155,25 +154,16 @@ class ConfiguredConversationTitleRefiner(
 
     private companion object {
         const val MAX_SOURCE_CHARS = 4_000
-        /** These are daily / economical candidates, never the premium user-facing tiers. */
-        val titleCandidates = listOf(
-            TitleCandidate(ProviderId.QWEN, ModelPresetId.QWEN_3_6_FLASH),
-            TitleCandidate(ProviderId.QWEN, ModelPresetId.QWEN_3_7_PLUS),
-            TitleCandidate(ProviderId.OPENROUTER, ModelPresetId.GPT_5_6_LUNA),
-            TitleCandidate(ProviderId.OPENROUTER, ModelPresetId.GPT_5_6_TERRA),
-            TitleCandidate(ProviderId.DEEPSEEK, ModelPresetId.DEEPSEEK_V4_PRO),
-        )
         val TITLE_CONTRACT = """
             你只负责为下方同一对话的开头用户发言与南枫AI开头回答生成一个会话标题。
             标题必须是“明确对象 + 具体意图、问题或任务”的紧凑短语，让未打开会话的用户立即知道讨论什么、要做什么。
             优先复用原文明确出现的主体、产品、组织或术语，并用准确动作收束，例如“模型差异与费用分析”“产品设计范式冲突”“视频内容分析”“API Key与模型选择”。
             不得把回答里的 Markdown 小节、论证步骤、抽象方法词或一句结论片段当标题；不得引入两段文字未明确支持的人名、事实或偏好。
             禁止只写“继续说”“分析”“总结”“问题”“请求”“聊天”“对话”“更新文档”等没有讨论对象的空泛标题；无法同时确认对象和意图时返回空 title，不得猜测。
-            标题必须是 6 到 13 个字符的一句话总结，优先约 8 个字符，在不丢失明确对象和意图的前提下越精炼越好。只能使用汉字或英文字母；英文短语的单词之间允许一个普通空格。严禁数字、标点、引号、Markdown、编号、emoji、括号、斜杠、下划线、连字符和任何其他符号。只返回严格 JSON：{"title":"..."}。
+            标题必须是 6 到 13 个字符的一句话总结，优先约 8 个字符，在不丢失明确对象和意图的前提下越精炼越好。只能使用汉字、英文字母或阿拉伯数字；英文短语的单词之间允许一个普通空格。严禁标点、引号、Markdown、编号符号、emoji、括号、斜杠、下划线、连字符和任何其他符号。只返回严格 JSON：{"title":"..."}。
         """.trimIndent()
     }
 
-    private data class TitleCandidate(val providerId: ProviderId, val preset: ModelPresetId)
 }
 
 /**
@@ -186,11 +176,11 @@ internal fun parseConversationTitleResponse(rawResponse: String): String? = runC
     title.takeIf {
         it.length in 6..13 &&
             it !in GENERIC_TITLES &&
-            it.split(' ').all { word -> word.isNotEmpty() && word.all(Char::isConversationTitleLetter) }
+            it.split(' ').all { word -> word.isNotEmpty() && word.all(Char::isConversationTitleCharacter) }
     }
 }.getOrNull()
 
 private val GENERIC_TITLES = setOf("继续说", "分析", "总结", "问题", "请求", "聊天", "对话", "更新文档", "事实核验", "工程观点")
 
-private fun Char.isConversationTitleLetter(): Boolean =
-    this in 'A'..'Z' || this in 'a'..'z' || code in 0x4E00..0x9FFF
+private fun Char.isConversationTitleCharacter(): Boolean =
+    this in 'A'..'Z' || this in 'a'..'z' || this in '0'..'9' || code in 0x4E00..0x9FFF

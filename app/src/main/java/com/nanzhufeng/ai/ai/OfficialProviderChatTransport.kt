@@ -30,16 +30,29 @@ data class ProviderChatRequest(
     val idempotencyKey: String = UUID.randomUUID().toString(),
     /** Adapter-selected per-read deadline; a supported long document may need a longer first token. */
     val readTimeoutMillis: Int = DEFAULT_READ_TIMEOUT_MS,
+    /** Visible streaming is immediate by default; exact provider protocol traces may be buffered. */
+    val streamTextMode: ProviderStreamTextMode = ProviderStreamTextMode.IMMEDIATE,
+    /** Total stream lifetime. Active junk output must not keep a request alive indefinitely. */
+    val maxStreamDurationMillis: Int = DEFAULT_MAX_STREAM_DURATION_MS,
     /** Derived from the resolved model output ceiling; never a fixed UI text-truncation limit. */
     val maxResponseBytes: Int = ProviderResponseByteBudget.DEFAULT_BYTES,
     val cancellation: ProviderChatCancellation? = null,
 ) {
     init {
         require(readTimeoutMillis in 1_000..300_000)
-        require(maxResponseBytes in ProviderResponseByteBudget.MIN_BYTES..ProviderResponseByteBudget.MAX_BYTES)
+        require(maxStreamDurationMillis in 1_000..600_000)
+        require(maxResponseBytes in ProviderResponseByteBudget.MIN_BYTES..ProviderResponseByteBudget.ABSOLUTE_MAX_BYTES)
     }
 
     internal fun effectiveBody(): ProviderChatRequestBody = body ?: ProviderChatRequestBody.Utf8Json(jsonBody)
+}
+
+enum class ProviderStreamTextMode {
+    IMMEDIATE,
+    /** Qwen Chat Completions fallback: provider search XML is never user-visible. */
+    BUFFER_QWEN_WEB_SEARCH,
+    /** Responses API emits semantic tool/status events and requires an explicit terminal event. */
+    RESPONSES_API,
 }
 
 /**
@@ -103,6 +116,7 @@ private class NonClosingOutputStream(output: OutputStream) : FilterOutputStream(
 }
 
 private const val DEFAULT_READ_TIMEOUT_MS = 90_000
+private const val DEFAULT_MAX_STREAM_DURATION_MS = 300_000
 
 /**
  * A bounded transport allocation, scaled from the resolved model's declared output capacity.
@@ -113,6 +127,9 @@ object ProviderResponseByteBudget {
     const val DEFAULT_BYTES = 1 * 1024 * 1024
     const val MIN_BYTES = 64 * 1024
     const val MAX_BYTES = 8 * 1024 * 1024
+    /** Large non-streaming document projections may legitimately exceed the chat envelope. */
+    const val DOCUMENT_MAX_BYTES = 32 * 1024 * 1024
+    const val ABSOLUTE_MAX_BYTES = DOCUMENT_MAX_BYTES
     private const val JSON_UTF8_BYTES_PER_TOKEN = 16L
     private const val ENVELOPE_BYTES = 64L * 1024L
 
@@ -136,7 +153,15 @@ data class ProviderSseEvent(
     val toolCallEncountered: Boolean = false,
     /** Provider-reported cache hits used by the transparent local estimate fallback. */
     val cachedInputTokens: Long? = null,
+    /** Provider-reported subset of output tokens spent on hidden reasoning. */
+    val reasoningTokens: Long? = null,
+    /** Public URLs returned by a provider-owned search tool; never parsed from generated prose. */
+    val webSources: List<ProviderWebSource> = emptyList(),
+    /** Responses streams are not complete merely because the socket reached EOF. */
+    val terminal: ProviderStreamTerminal? = null,
 )
+
+enum class ProviderStreamTerminal { COMPLETED, INCOMPLETE, FAILED }
 
 /** Cancels one in-flight request without retaining headers, body, or response content. */
 class ProviderChatCancellation {
@@ -167,6 +192,8 @@ sealed interface ProviderChatOutcome {
         val reportedCostUsdMicros: Long?,
         val toolCallEncountered: Boolean,
         val cachedInputTokens: Long? = null,
+        val reasoningTokens: Long? = null,
+        val webSources: List<ProviderWebSource> = emptyList(),
         /** Present only when an execution adapter owns encrypted remote events. */
         val durableTaskId: String? = null,
         val durableTerminalSequence: Long? = null,
@@ -208,10 +235,19 @@ class OfficialProviderChatTransport : ProviderChatTransport {
             if (status in 200..299) request.onAccepted()
             if (status in 200..299 && request.expectsStream) {
                 val streamed = connection.inputStream.use { stream ->
-                    ProviderSseDecoder.read(stream, request.onTextDelta, request.streamEventDecoder)
+                    ProviderSseDecoder.read(
+                        stream,
+                        request.onTextDelta,
+                        request.streamEventDecoder,
+                        request.streamTextMode,
+                        request.maxResponseBytes,
+                        request.maxStreamDurationMillis,
+                    )
                 }
                 return ProviderChatOutcome.StreamedResponse(
-                    status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedCostUsdMicros, streamed.toolCallEncountered, streamed.cachedInputTokens,
+                    status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedCostUsdMicros, streamed.toolCallEncountered, streamed.cachedInputTokens, streamed.reasoningTokens,
+                    webSources = streamed.webSources,
+                    finishReason = streamed.finishReason,
                 )
             }
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
@@ -225,6 +261,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
         when {
             request.cancellation?.isCancelled() == true -> ProviderChatOutcome.Cancelled
             error is SocketTimeoutException -> ProviderChatOutcome.TimedOut
+            error is ProviderResponseTooLargeException -> ProviderChatOutcome.ResponseTooLarge
             else -> ProviderChatOutcome.NetworkFailure
         }
     }
@@ -240,16 +277,45 @@ class OfficialProviderChatTransport : ProviderChatTransport {
  * prior visible text. The raw event JSON never escapes this method.
  */
 internal object ProviderSseDecoder {
-    data class Result(val text: String, val reasoning: String?, val inputTokens: Long?, val outputTokens: Long?, val reportedCostUsdMicros: Long?, val toolCallEncountered: Boolean, val cachedInputTokens: Long? = null)
+    data class Result(
+        val text: String,
+        val reasoning: String?,
+        val inputTokens: Long?,
+        val outputTokens: Long?,
+        val reportedCostUsdMicros: Long?,
+        val toolCallEncountered: Boolean,
+        val cachedInputTokens: Long? = null,
+        val reasoningTokens: Long? = null,
+        val webSources: List<ProviderWebSource> = emptyList(),
+        val finishReason: String? = null,
+    )
 
-    fun read(input: java.io.InputStream, onDelta: (String) -> Unit, decodeEvent: (String) -> ProviderSseEvent?): Result {
+    fun read(
+        input: java.io.InputStream,
+        onDelta: (String) -> Unit,
+        decodeEvent: (String) -> ProviderSseEvent?,
+        textMode: ProviderStreamTextMode = ProviderStreamTextMode.IMMEDIATE,
+        maxResponseBytes: Int = ProviderResponseByteBudget.DEFAULT_BYTES,
+        maxDurationMillis: Int = DEFAULT_MAX_STREAM_DURATION_MS,
+        nanoTime: () -> Long = System::nanoTime,
+    ): Result {
         var inputTokens: Long? = null
         var outputTokens: Long? = null
         var cachedInputTokens: Long? = null
+        var reasoningTokens: Long? = null
         var reportedCostUsdMicros: Long? = null
         var toolCallEncountered = false
+        val webSources = linkedMapOf<String, ProviderWebSource>()
+        var terminal: ProviderStreamTerminal? = null
         val output = StringBuilder()
+        val bufferedVisibleText = StringBuilder()
         val reasoning = StringBuilder()
+        var decodedTextBytes = 0L
+        val startedAtNanos = nanoTime()
+        fun enforceDuration() {
+            val elapsedMillis = (nanoTime() - startedAtNanos) / 1_000_000L
+            if (elapsedMillis > maxDurationMillis) throw ProviderHardStreamTimeoutException()
+        }
         BufferedReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
             var eventData = StringBuilder()
             fun consumeEvent() {
@@ -257,17 +323,31 @@ internal object ProviderSseDecoder {
                 eventData = StringBuilder()
                 if (data.isBlank() || data == "[DONE]") return
                 decodeEvent(data)?.let { event ->
-                    event.text?.let { delta -> output.append(delta); onDelta(delta) }
+                    event.text?.let { delta ->
+                        decodedTextBytes += delta.toByteArray(Charsets.UTF_8).size
+                        if (decodedTextBytes > maxResponseBytes) throw ProviderResponseTooLargeException()
+                        if (textMode != ProviderStreamTextMode.BUFFER_QWEN_WEB_SEARCH) {
+                            output.append(delta)
+                            onDelta(delta)
+                        } else {
+                            bufferedVisibleText.append(delta)
+                        }
+                    }
                     event.reasoning?.let(reasoning::append)
                     event.inputTokens?.let { inputTokens = it }
                     event.outputTokens?.let { outputTokens = it }
                     event.cachedInputTokens?.let { cachedInputTokens = it }
+                    event.reasoningTokens?.let { reasoningTokens = it }
                     event.reportedCostUsdMicros?.let { reportedCostUsdMicros = it }
                     toolCallEncountered = toolCallEncountered || event.toolCallEncountered
+                    event.webSources.forEach { source -> webSources.putIfAbsent(source.url, source) }
+                    event.terminal?.let { terminal = it }
                 }
             }
             while (true) {
+                enforceDuration()
                 val line = reader.readLine() ?: break
+                enforceDuration()
                 when {
                     line.isEmpty() -> consumeEvent()
                     line.startsWith(":") -> Unit
@@ -279,7 +359,50 @@ internal object ProviderSseDecoder {
             }
             consumeEvent()
         }
-        return Result(output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens, reportedCostUsdMicros, toolCallEncountered, cachedInputTokens)
+        if (textMode == ProviderStreamTextMode.BUFFER_QWEN_WEB_SEARCH) {
+            ProviderWebSearchToolTraceText.visibleText(bufferedVisibleText.toString()).takeIf(String::isNotBlank)?.let { visible ->
+                output.append(visible)
+                onDelta(visible)
+            }
+        }
+        val finishReason = when {
+            textMode != ProviderStreamTextMode.RESPONSES_API -> null
+            terminal == ProviderStreamTerminal.COMPLETED -> "COMPLETED"
+            terminal == ProviderStreamTerminal.INCOMPLETE -> "INCOMPLETE"
+            terminal == ProviderStreamTerminal.FAILED -> "FAILED"
+            else -> "MISSING_COMPLETION"
+        }
+        return Result(
+            output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens,
+            reportedCostUsdMicros, toolCallEncountered, cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason,
+        )
+    }
+}
+
+private class ProviderHardStreamTimeoutException : SocketTimeoutException("stream duration exceeded")
+private class ProviderResponseTooLargeException : IOException("provider response too large")
+
+/**
+ * Qwen's Chat Completions search fallback has occasionally emitted its internal XML protocol as
+ * ordinary content. Buffering the complete stream lets us remove exact machine blocks atomically,
+ * including tags split across SSE deltas. A preamble followed only by tool traffic is incomplete,
+ * so it becomes an empty response-format failure instead of a false successful answer.
+ */
+internal object ProviderWebSearchToolTraceText {
+    private val completeToolBlock = Regex("<tool_(?:use|result)>[\\s\\S]*?</tool_(?:use|result)>")
+    private val openingToolTag = Regex("<tool_(?:use|result)>")
+
+    fun visibleText(raw: String): String {
+        val matches = completeToolBlock.findAll(raw).toList()
+        if (matches.isEmpty()) {
+            val unterminated = openingToolTag.find(raw)
+            return (unterminated?.let { raw.substring(0, it.range.first) } ?: raw).trim()
+        }
+        val afterLastToolBlock = raw.substring(matches.last().range.last + 1)
+        if (afterLastToolBlock.isBlank()) return ""
+        val withoutCompleteBlocks = completeToolBlock.replace(raw, "")
+        val unterminated = openingToolTag.find(withoutCompleteBlocks)
+        return (unterminated?.let { withoutCompleteBlocks.substring(0, it.range.first) } ?: withoutCompleteBlocks).trim()
     }
 }
 

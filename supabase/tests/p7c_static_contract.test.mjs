@@ -5,11 +5,11 @@ import { readFile } from 'node:fs/promises'
 const migration = await readFile(new URL('../migrations/202608130001_p7c_secure_sync.sql', import.meta.url), 'utf8')
 
 test('P7-C migration has default-deny tables and only authenticated RPC access', () => {
-  assert.match(migration, /create table if not exists public\.nanfeng_account_keys/)
-  assert.match(migration, /create table if not exists public\.nanfeng_sync_documents/)
+  assert.match(migration, /create table if not exists public\.nfai_account_keys/)
+  assert.match(migration, /create table if not exists public\.nfai_sync_documents/)
   assert.match(migration, /enable row level security/)
   assert.match(migration, /force row level security/)
-  assert.match(migration, /revoke all on public\.nanfeng_account_keys, public\.nanfeng_sync_documents from anon, authenticated/)
+  assert.match(migration, /revoke all on public\.nfai_account_keys, public\.nfai_sync_documents from anon, authenticated/)
   assert.match(migration, /grant execute on function[\s\S]+to authenticated/)
   assert.doesNotMatch(migration, /grant\s+(select|insert|update|delete)[\s\S]+to\s+(anon|authenticated)/i)
 })

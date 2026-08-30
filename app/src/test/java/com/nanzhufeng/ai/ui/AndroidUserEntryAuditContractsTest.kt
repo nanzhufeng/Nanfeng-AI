@@ -44,12 +44,16 @@ class AndroidUserEntryAuditContractsTest {
     fun aboutSettingsShowsRuntimeVersionWithoutInventingSupportOrLegalActions() {
         val source = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val hierarchy = source.substringAfter("private fun SettingsHierarchy(").substringBefore("@Composable\nprivate fun SettingsCategoryList")
+        val categories = source.substringAfter("private fun SettingsCategoryList(").substringBefore("@Composable\nprivate fun SettingsCategoryGroup")
         val about = source.substringAfter("private fun AboutSettingsCard()").substringBefore("@Composable\nprivate fun SettingsCategoryRow")
 
         assertTrue(hierarchy.contains("SettingsDestination.ABOUT -> AboutSettingsCard"))
-        for (token in listOf("Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}", "数据与隐私")) assertTrue("missing about detail: $token", about.contains(token))
+        assertTrue(categories.contains("SettingsCategoryRow(Icons.Rounded.Info, \"关于\""))
+        assertFalse(categories.contains("SettingsCategoryRow(Icons.Rounded.Settings, \"关于\""))
+        for (token in listOf("Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}")) assertTrue("missing about detail: $token", about.contains(token))
+        assertFalse("about must not repeat the data-management destination", about.contains("数据与隐私") || about.contains("隐私与安全") || about.contains("数据管理"))
         assertTrue("about modules must share one full-width rounded foreground card", about.contains("modifier = Modifier.fillMaxWidth()") && about.contains("shape = CardShape"))
-        assertTrue("about modules must retain the shared canvas separators", Regex("SettingsCategoryDivider\\(\\)").findAll(about).count() == 2)
+        assertTrue("about modules must retain the shared canvas separator", Regex("SettingsCategoryDivider\\(\\)").findAll(about).count() == 1)
         assertTrue("about sections must not shrink to their text", about.contains("AboutSettingsSection") && about.contains("Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp)"))
         for (forbidden in listOf("帮助中心", "使用条款", "许可证")) assertFalse("invented about action: $forbidden", about.contains(forbidden))
     }
@@ -75,7 +79,8 @@ class AndroidUserEntryAuditContractsTest {
         val review = app.substringAfter("private fun FeatureReviewSettingsCard()").substringBefore("@Composable\nprivate fun AboutSettingsCard")
 
         for (token in listOf("计划监控与对话提醒", "本地依据当前一问一答整理建议草案，保存前可编辑且不自动发送对话正文", "Desktop 尚待同等真实 owner")) assertFalse("duplicate feature-review prompt remains: $token", review.contains(token))
-        for (token in listOf("已计划", "添加提醒 / 监控", "ConversationTailMonitorAction")) assertTrue("missing approved entry: $token", workspace.contains(token))
+        for (token in listOf("定时任务", "添加提醒 / 监控", "ConversationTailMonitorAction")) assertTrue("missing approved entry: $token", workspace.contains(token))
+        assertFalse(workspace.contains("\"已计划\""))
         assertTrue(workspace.contains("ScheduledMonitorSuggestionPolicy.shouldOffer"))
         assertTrue(workspace.contains("assistantIndex < 0 || assistantIndex != messages.lastIndex"))
         assertTrue(executor.contains("监控要求：\${task.instruction}"))

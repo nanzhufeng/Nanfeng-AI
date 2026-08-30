@@ -3,6 +3,7 @@ package com.nanzhufeng.ai.data.local
 import com.nanzhufeng.ai.domain.AttachmentId
 import com.nanzhufeng.ai.domain.AttachmentReference
 import com.nanzhufeng.ai.domain.PrivateAttachmentRepository
+import com.nanzhufeng.ai.domain.PrivateAttachmentCleanupResult
 import com.nanzhufeng.ai.domain.isReadyPrivateCopy
 
 /** The only Room adapter allowed to reveal a private storage key to Attachment Domain. */
@@ -40,17 +41,46 @@ class RoomPrivateAttachmentRepository(private val database: NanfengAiDatabase) :
         database.runInTransaction {
             val dao = database.privateAttachmentAssetDao()
             val asset = dao.findById(id.value) ?: return@runInTransaction
-            if (
-                dao.normalDraftReferences(id.value) > 0 ||
-                dao.normalMessageReferences(id.value) > 0 ||
-                dao.zipOccurrenceReceiptReferences(id.value) > 0
-            ) return@runInTransaction
+            if (dao.referenceCount(id.value) > 0) return@runInTransaction
             dao.deleteById(id.value)
             removed = asset.toDomain()
         }
         return removed
     }
+
+    override fun deleteIfUnreferenced(
+        id: AttachmentId,
+        deletePrivateCopy: (AttachmentReference) -> Boolean,
+    ): PrivateAttachmentCleanupResult {
+        var result: PrivateAttachmentCleanupResult = PrivateAttachmentCleanupResult.Missing
+        database.runInTransaction {
+            val dao = database.privateAttachmentAssetDao()
+            val asset = dao.findById(id.value) ?: return@runInTransaction
+            val references = dao.referenceCount(id.value)
+            if (references > 0) {
+                result = PrivateAttachmentCleanupResult.Retained(references)
+                return@runInTransaction
+            }
+            if (!deletePrivateCopy(asset.toDomain())) {
+                result = PrivateAttachmentCleanupResult.DeleteFailed
+                return@runInTransaction
+            }
+            check(dao.deleteById(id.value) == 1) { "私有附件文件已清理，但目录行未能同步删除。" }
+            result = PrivateAttachmentCleanupResult.Deleted
+        }
+        return result
+    }
 }
+
+private fun PrivateAttachmentAssetDao.referenceCount(attachmentId: String): Int =
+    normalDraftReferences(attachmentId) +
+        captureDraftReferences(attachmentId) +
+        knowledgeReferences(attachmentId) +
+        normalMessageReferences(attachmentId) +
+        zipOccurrenceReceiptReferences(attachmentId) +
+        temporaryConversationReferences(attachmentId) +
+        resumableUploadReferences(attachmentId) +
+        glmOcrTaskReferences(attachmentId)
 
 private fun PrivateAttachmentAssetEntity.toDomain() = AttachmentReference(
     reference = storageKey,

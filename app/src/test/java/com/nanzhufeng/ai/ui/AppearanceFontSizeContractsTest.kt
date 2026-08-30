@@ -70,6 +70,20 @@ class AppearanceFontSizeContractsTest {
         assertTrue(conversation.contains("val drawerIdentityVisualSize = scaledAppIconSize(36.dp)"))
         assertTrue(conversation.contains("Modifier.height(drawerIdentityHeaderReservedHeight)"))
         assertTrue(conversation.contains("fontSize = scaledAppTextUnit(22.sp)"))
-        assertTrue(conversation.contains("\"搜索\",\n                            color = BodyText,\n                            fontSize = scaledConversationTextUnit(16.sp)"))
+        assertTrue(conversation.contains("fontSize = scaledConversationTextUnit(16.sp)"))
+        assertTrue(conversation.contains("lineHeight = scaledConversationTextUnit(20.sp)"))
+    }
+
+    @Test
+    fun `native composer text and hint follow the same font size preference`() {
+        assertEquals(12.8f, composerNativeTextSizeSp(AppFontSize.SMALL.scale), 0.001f)
+        assertEquals(16f, composerNativeTextSizeSp(AppFontSize.STANDARD.scale), 0.001f)
+        assertEquals(19.84f, composerNativeTextSizeSp(AppFontSize.LARGE.scale), 0.001f)
+
+        val conversation = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val composer = conversation.substringAfter("private fun ComposerDraftTextField(").substringBefore("/** Native AndroidView selection")
+        assertTrue(composer.contains("composerNativeTextSizeSp(LocalAppTextScale.current)"))
+        assertTrue(composer.contains("setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, composerTextSizeSp)"))
+        assertEquals(2, composer.split("setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, composerTextSizeSp)").size - 1)
     }
 }

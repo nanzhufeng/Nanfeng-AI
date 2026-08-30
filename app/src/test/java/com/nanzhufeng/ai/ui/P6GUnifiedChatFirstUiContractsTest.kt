@@ -33,10 +33,14 @@ class P6GUnifiedChatFirstUiContractsTest {
     }
 
     @Test
-    fun `logical model slots stay explicit and selection is persisted per conversation`() {
-        for (token in listOf("ComposerModelSlot.COMPARE", "ComposerModelSlot.DAILY", "ComposerModelSlot.DEEP", "ComposerModelSlot.MULTIMODAL", "onSelectP6GModel(modelId)")) {
+    fun `public logical model slots keep only daily and deep while selection is persisted per conversation`() {
+        for (token in listOf("ComposerModelSlot.DAILY", "ComposerModelSlot.DEEP", "onSelectP6GModel(modelId)")) {
             assertTrue("missing $token", workspace.contains(token))
         }
+        val publicSlotsStart = workspace.indexOf("listOf(\n                        com.nanzhufeng.ai.domain.ComposerModelSlot.DAILY")
+        val publicSlots = workspace.substring(publicSlotsStart, workspace.indexOf(").forEach { slot ->", publicSlotsStart))
+        assertFalse(publicSlots.contains("ComposerModelSlot.COMPARE"))
+        assertFalse(publicSlots.contains("ComposerModelSlot.MULTIMODAL"))
         val owner = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
         assertTrue(owner.contains("installP6GLocalFixtureCatalog"))
         assertTrue(owner.contains("P6GProviderFamily.LOCAL"))

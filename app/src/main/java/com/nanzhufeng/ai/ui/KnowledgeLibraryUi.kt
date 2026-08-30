@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.NavigateNext
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -71,6 +72,12 @@ import com.nanzhufeng.ai.domain.KnowledgeRelationshipSuggestionSource
 import com.nanzhufeng.ai.domain.KnowledgeRelationshipType
 import com.nanzhufeng.ai.domain.ManageKnowledgeRelationshipsUseCase
 import com.nanzhufeng.ai.domain.SourceEvidence
+import com.nanzhufeng.ai.domain.ConversationId
+import com.nanzhufeng.ai.domain.HistoryKnowledgeCurationDraft
+import com.nanzhufeng.ai.domain.HistoryKnowledgeCurationResult
+import com.nanzhufeng.ai.domain.HistoryKnowledgeRefiner
+import com.nanzhufeng.ai.domain.ReadHistoryKnowledgeCurationSourceResult
+import com.nanzhufeng.ai.domain.ReadHistoryKnowledgeCurationSourceUseCase
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -95,6 +102,10 @@ data class KnowledgeLibraryUiState(
     val duplicateCandidates: KnowledgeDuplicateCandidatesResult? = null,
     val mutationMessage: String? = null,
     val relationshipUi: KnowledgeRelationshipUiState = KnowledgeRelationshipUiState(),
+    val historyCurationConversationId: ConversationId? = null,
+    val historyCurationDraft: HistoryKnowledgeCurationDraft? = null,
+    val historyCurationError: String? = null,
+    val historyCurationLoading: Boolean = false,
 )
 
 data class KnowledgeRelationshipUiState(
@@ -113,6 +124,8 @@ class KnowledgeLibraryViewModel(
     private val readKnowledgeLibrary: ReadKnowledgeLibraryUseCase,
     private val manageKnowledge: ManageKnowledgeUseCase,
     private val manageRelationships: ManageKnowledgeRelationshipsUseCase,
+    private val readHistoryCurationSource: ReadHistoryKnowledgeCurationSourceUseCase,
+    private val historyKnowledgeRefiner: HistoryKnowledgeRefiner,
 ) : ViewModel() {
     var state by mutableStateOf(KnowledgeLibraryUiState())
         private set
@@ -157,6 +170,45 @@ class KnowledgeLibraryViewModel(
         mutate(KnowledgeIntent(KnowledgeIntentId.new(), action, snapshot.item.id))
     }
     fun startCreate() { state = state.copy(editing = true, creating = true, detail = null, managedDetail = null, editTitle = "", editBody = "", editTags = "") }
+
+    /** First step only opens the explicit egress confirmation; it never calls a model. */
+    fun requestHistoryCuration(conversationId: ConversationId?) {
+        conversationId ?: return
+        state = state.copy(historyCurationConversationId = conversationId, historyCurationDraft = null, historyCurationError = null)
+    }
+    fun cancelHistoryCuration() { state = state.copy(historyCurationConversationId = null, historyCurationDraft = null, historyCurationError = null, historyCurationLoading = false) }
+    fun confirmHistoryCuration() {
+        val conversationId = state.historyCurationConversationId ?: return
+        state = state.copy(historyCurationLoading = true, historyCurationError = null)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                when (val source = readHistoryCurationSource.execute(conversationId)) {
+                    is ReadHistoryKnowledgeCurationSourceResult.Available -> historyKnowledgeRefiner.refine(source.source)
+                    ReadHistoryKnowledgeCurationSourceResult.MissingConversation -> HistoryKnowledgeCurationResult.Failed("MISSING_CONVERSATION")
+                    ReadHistoryKnowledgeCurationSourceResult.NoText -> HistoryKnowledgeCurationResult.NotEligible
+                }
+            }
+            state = when (result) {
+                is HistoryKnowledgeCurationResult.Draft -> state.copy(historyCurationLoading = false, historyCurationDraft = result.value)
+                HistoryKnowledgeCurationResult.NotEligible -> state.copy(historyCurationLoading = false, historyCurationError = "这条对话没有足够明确的长期资料，未生成候选。")
+                is HistoryKnowledgeCurationResult.Failed -> state.copy(historyCurationLoading = false, historyCurationError = "整理未完成：${result.safeCode}。")
+            }
+        }
+    }
+    fun updateHistoryCurationDraft(title: String, body: String, tags: String) {
+        state.historyCurationDraft?.let { draft -> state = state.copy(historyCurationDraft = draft.copy(title = title, body = body, tags = tags.split(',').map(String::trim).filter(String::isNotBlank).toSet())) }
+    }
+    fun saveHistoryCurationDraft() {
+        val conversationId = state.historyCurationConversationId ?: return
+        val draft = state.historyCurationDraft ?: return
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                manageKnowledge.execute(KnowledgeIntent(KnowledgeIntentId.new(), KnowledgeIntentAction.CREATE_HISTORY_CONVERSATION, KnowledgeItemId.new(), draft.title, draft.body, draft.tags, KnowledgeScope.GLOBAL, importReference = "conversation:${conversationId.value}", generatedProviderId = draft.providerId, generatedModelId = draft.modelId))
+            }
+            if (result is KnowledgeMutationResult.Applied || result is KnowledgeMutationResult.Replayed) { cancelHistoryCuration(); reload() }
+            else state = state.copy(historyCurationError = "候选未保存，请检查内容后重试。")
+        }
+    }
     fun startEdit() { state.managedDetail?.let { snapshot -> state = state.copy(editing = true, creating = false, editTitle = snapshot.item.title, editBody = snapshot.item.body, editTags = snapshot.lifecycle.tags.joinToString(", ")) } }
     fun updateEdit(title: String = state.editTitle, body: String = state.editBody, tags: String = state.editTags) { state = state.copy(editTitle = title, editBody = body, editTags = tags, mutationMessage = null) }
     fun cancelEdit() { state = state.copy(editing = false, creating = false) }
@@ -245,11 +297,11 @@ class KnowledgeLibraryViewModel(
         }
     }
 
-    class Factory(private val readKnowledgeLibrary: ReadKnowledgeLibraryUseCase, private val manageKnowledge: ManageKnowledgeUseCase, private val manageRelationships: ManageKnowledgeRelationshipsUseCase) : ViewModelProvider.Factory {
+    class Factory(private val readKnowledgeLibrary: ReadKnowledgeLibraryUseCase, private val manageKnowledge: ManageKnowledgeUseCase, private val manageRelationships: ManageKnowledgeRelationshipsUseCase, private val readHistoryCurationSource: ReadHistoryKnowledgeCurationSourceUseCase, private val historyKnowledgeRefiner: HistoryKnowledgeRefiner) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(KnowledgeLibraryViewModel::class.java))
-            return KnowledgeLibraryViewModel(readKnowledgeLibrary, manageKnowledge, manageRelationships) as T
+            return KnowledgeLibraryViewModel(readKnowledgeLibrary, manageKnowledge, manageRelationships, readHistoryCurationSource, historyKnowledgeRefiner) as T
         }
     }
 }
@@ -277,6 +329,7 @@ fun KnowledgeLibraryCard(state: KnowledgeLibraryUiState, onOpen: () -> Unit) {
 @Composable
 fun KnowledgeLibraryPage(
     state: KnowledgeLibraryUiState,
+    currentConversationId: ConversationId?,
     onOpenDetail: (KnowledgeItemId) -> Unit,
     onBackToList: () -> Unit,
     onSearch: (String) -> Unit,
@@ -294,6 +347,11 @@ fun KnowledgeLibraryPage(
     onFindDuplicateCandidates: () -> Unit,
     onStartRelationshipBuilder: () -> Unit,
     onShowRelationshipList: () -> Unit,
+    onRequestHistoryCuration: (ConversationId?) -> Unit,
+    onConfirmHistoryCuration: () -> Unit,
+    onCancelHistoryCuration: () -> Unit,
+    onUpdateHistoryCurationDraft: (String, String, String) -> Unit,
+    onSaveHistoryCurationDraft: () -> Unit,
 ) {
     val detail = state.detail
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -312,8 +370,8 @@ fun KnowledgeLibraryPage(
             else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("搜索", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(state.query, onSearch, Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("搜索标题、正文、标签、来源") })
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { KnowledgeStatus.entries.forEach { status -> TextButton(onClick = { onStatus(status) }) { Text(if (state.status == status) "● ${status.label()}" else status.label()) } }; TextButton(onClick = onStartCreate) { Text("新建") } }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf<CaptureSourceType?>(null, CaptureSourceType.MANUAL_TEXT, CaptureSourceType.ANDROID_TEXT_SHARE, CaptureSourceType.IMAGE).forEach { source -> TextButton(onClick = { onSource(source) }) { Text(if (state.sourceType == source) "● ${source.label()}" else source.label()) } } }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { KnowledgeStatus.entries.forEach { status -> TextButton(onClick = { onStatus(status) }) { Text(if (state.status == status) "● ${status.label()}" else status.label()) } }; TextButton(onClick = onStartCreate) { Text("新建") }; TextButton(onClick = { onRequestHistoryCuration(currentConversationId) }, enabled = currentConversationId != null) { Text("整理当前对话") } }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf<CaptureSourceType?>(null, CaptureSourceType.HISTORY_CONVERSATION, CaptureSourceType.MANUAL_TEXT, CaptureSourceType.ANDROID_TEXT_SHARE, CaptureSourceType.IMAGE).forEach { source -> TextButton(onClick = { onSource(source) }) { Text(if (state.sourceType == source) "● ${source.label()}" else source.label()) } } }
                 if (state.entries.isEmpty()) KnowledgeEmptyState() else KnowledgeList(state.entries, onOpenDetail)
             }
         }
@@ -323,6 +381,38 @@ fun KnowledgeLibraryPage(
                 Button(onClick = onSaveEdit, enabled = !state.isLoading) { Text("保存修订") }
             }
         }
+    }
+    state.historyCurationConversationId?.let {
+        AlertDialog(
+            onDismissRequest = { if (!state.historyCurationLoading) onCancelHistoryCuration() },
+            title = { Text(if (state.historyCurationDraft == null) "整理为资料候选" else "核对资料候选") },
+            text = {
+                if (state.historyCurationDraft == null) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("将把当前对话的文字内容发送给已启用的直连模型，按以下顺序选择：", color = SecondaryText)
+                        Text("DeepSeek V4 Flash → GLM-5.3 Flash → Qwen3.6 Flash", fontWeight = FontWeight.SemiBold)
+                        Text("生成可复用的资料候选。不会发送附件，不会修改原对话；可能产生模型用量。", color = SecondaryText)
+                        state.historyCurationError?.let { Text(it, color = ErrorRed) }
+                    }
+                } else {
+                    val draft = state.historyCurationDraft
+                    Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row {
+                            Text("来源：当前本地对话；模型：", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                            Text(draft.modelId, color = SecondaryText, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        }
+                        OutlinedTextField(draft.title, { onUpdateHistoryCurationDraft(it, draft.body, draft.tags.joinToString(",")) }, Modifier.fillMaxWidth(), label = { Text("标题") })
+                        OutlinedTextField(draft.body, { onUpdateHistoryCurationDraft(draft.title, it, draft.tags.joinToString(",")) }, Modifier.fillMaxWidth().heightIn(min = 150.dp), label = { Text("资料内容") })
+                        OutlinedTextField(draft.tags.joinToString(","), { onUpdateHistoryCurationDraft(draft.title, draft.body, it) }, Modifier.fillMaxWidth(), label = { Text("标签") })
+                    }
+                }
+            },
+            confirmButton = {
+                if (state.historyCurationDraft == null) Button(onClick = onConfirmHistoryCuration, enabled = !state.historyCurationLoading) { Text(if (state.historyCurationLoading) "正在整理…" else "确认并整理") }
+                else Button(onClick = onSaveHistoryCurationDraft) { Text("确认保存") }
+            },
+            dismissButton = { TextButton(onClick = onCancelHistoryCuration, enabled = !state.historyCurationLoading) { Text("取消") } },
+        )
     }
 }
 
@@ -408,7 +498,15 @@ private fun KnowledgeDetailContent(detail: KnowledgeDetail, managed: KnowledgeSn
         Text("Candidate：${item.provenance.candidateId.value}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         Text("候选状态：${detail.candidateStatus?.toChineseLabel() ?: "历史知识未保留候选记录"}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         Text("Invocation：${item.provenance.invocationId.value}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        Text("服务：${item.provenance.providerId.toDisplayLabel()} · 模型：${item.provenance.modelId} · Harness v${item.provenance.harnessVersion}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        Text(
+            modelNameAnnotatedText(
+                prefix = "服务：${item.provenance.providerId.toDisplayLabel()} · 模型：",
+                modelName = item.provenance.modelId,
+                suffix = " · Harness v${item.provenance.harnessVersion}",
+            ),
+            color = SecondaryText,
+            style = MaterialTheme.typography.bodySmall,
+        )
         Text("保存时间：${formatKnowledgeTime(item.createdAt)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         managed?.let { snapshot ->
             Text("状态：${snapshot.lifecycle.status.label()} · ${snapshot.lifecycle.scope.name}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
@@ -476,12 +574,13 @@ private fun KnowledgeRejectionCode.label(): String = when (this) {
 }
 
 private fun KnowledgeStatus.label(): String = when (this) { KnowledgeStatus.ACTIVE -> "活动"; KnowledgeStatus.ARCHIVED -> "归档"; KnowledgeStatus.DELETED -> "回收站" }
-private fun CaptureSourceType?.label(): String = when (this) { null -> "全部来源"; CaptureSourceType.MANUAL_TEXT -> "手工"; CaptureSourceType.ANDROID_TEXT_SHARE -> "分享"; CaptureSourceType.IMAGE -> "图片" }
+private fun CaptureSourceType?.label(): String = when (this) { null -> "全部来源"; CaptureSourceType.MANUAL_TEXT -> "手工"; CaptureSourceType.ANDROID_TEXT_SHARE -> "分享"; CaptureSourceType.IMAGE -> "图片"; CaptureSourceType.HISTORY_CONVERSATION -> "历史对话" }
 
 private fun SourceEvidence.sourceLabel(): String = when (sourceType) {
     CaptureSourceType.MANUAL_TEXT -> "手工文本"
     CaptureSourceType.ANDROID_TEXT_SHARE -> "系统文本分享${sourceReference?.let { "（$it）" }.orEmpty()}"
     CaptureSourceType.IMAGE -> "相册图片"
+    CaptureSourceType.HISTORY_CONVERSATION -> "历史对话整理${sourceReference?.let { "（$it）" }.orEmpty()}"
 }
 
 private fun CandidateReviewStatus.toChineseLabel(): String = when (this) {
@@ -495,6 +594,7 @@ private fun com.nanzhufeng.ai.domain.ProviderId.toDisplayLabel(): String = when 
     com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter（未验证真实连接）"
     com.nanzhufeng.ai.domain.ProviderId.QWEN -> "Qwen 官方直连（未验证真实连接）"
     com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> "DeepSeek 官方直连（未验证真实连接）"
+    com.nanzhufeng.ai.domain.ProviderId.ZHIPU -> "智谱官方直连（未验证真实连接）"
 }
 
 private fun formatKnowledgeTime(instant: Instant): String = instant.atZone(ZoneId.systemDefault()).format(KNOWLEDGE_TIME_FORMAT)

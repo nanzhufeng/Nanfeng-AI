@@ -159,6 +159,34 @@ data class PrivateAttachmentAssetEntity(
     val schemaVersion: Int = 1,
 )
 
+/** GLM-OCR stores only durable lineage and safe accounting metadata; content stays in attachments. */
+@Entity(
+    tableName = "glm_ocr_tasks",
+    foreignKeys = [
+        ForeignKey(entity = PrivateAttachmentAssetEntity::class, parentColumns = ["attachmentId"], childColumns = ["sourceAttachmentId"], onDelete = ForeignKey.NO_ACTION),
+        ForeignKey(entity = PrivateAttachmentAssetEntity::class, parentColumns = ["attachmentId"], childColumns = ["resultAttachmentId"], onDelete = ForeignKey.NO_ACTION),
+    ],
+    indices = [Index("sourceAttachmentId"), Index("resultAttachmentId"), Index(value = ["status", "updatedAtEpochMs"])],
+)
+data class GlmOcrTaskEntity(
+    @androidx.room.PrimaryKey val taskId: String,
+    val sourceAttachmentId: String,
+    val resultAttachmentId: String?,
+    val sourceDisplayName: String,
+    val sourceMimeType: String,
+    val sourceByteCount: Long,
+    val sourceSha256: String,
+    val status: String,
+    val requestId: String?,
+    val pageCount: Int?,
+    val inputTokens: Long?,
+    val outputTokens: Long?,
+    val costCnyMicros: Long?,
+    val safeErrorCode: String?,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+)
+
 /** P6-E's recovery is intentionally outside every normal Conversation table. */
 @Entity(tableName = "temporary_conversation_recovery")
 data class TemporaryConversationRecoveryEntity(
@@ -475,7 +503,7 @@ data class MessageContentBlockEntity(
     val schemaVersion: Int,
 )
 
-/** P6-F2-A safe projection. The searchable payload is restricted to title/current text/safe attachment label. */
+/** Safe projection. The searchable payload is restricted to title, user/assistant text, and safe attachment labels. */
 @Entity(tableName = "local_search_index", indices = [Index("conversationId"), Index(value = ["normalizedText", "deletedAtEpochMs", "archivedAtEpochMs"])])
 data class LocalSearchIndexEntity(
     @androidx.room.PrimaryKey val id: String,
@@ -488,6 +516,36 @@ data class LocalSearchIndexEntity(
     val timestampEpochMs: Long,
     val archivedAtEpochMs: Long?,
     val deletedAtEpochMs: Long?,
+)
+
+/** Read-only search projections keep large catalogues out of full ConversationSnapshot rebuilds. */
+data class ConversationSearchBrowseRow(
+    val conversationId: String,
+    val title: String,
+    val snippet: String,
+    val timestampEpochMs: Long,
+)
+
+data class ConversationPathTextSearchRow(
+    val conversationId: String,
+    val messageNodeId: String,
+    val title: String,
+    val text: String,
+    val timestampEpochMs: Long,
+)
+
+data class ConversationPathAttachmentRow(
+    val conversationId: String,
+    val messageNodeId: String,
+    val title: String,
+    val createdAtEpochMs: Long,
+    val attachmentId: String?,
+    val storageKey: String?,
+    val mimeType: String?,
+    val displayName: String?,
+    val byteCount: Long?,
+    val sha256: String?,
+    val messageText: String,
 )
 
 @Entity(
@@ -637,6 +695,7 @@ data class AssistantResponseModelAttributionEntity(
     val outputTokens: Long?,
     val totalTokens: Long?,
     val cachedInputTokens: Long?,
+    val reasoningTokens: Long?,
     val costPriceVersion: String?,
     val costCurrencyCode: String?,
     val costTotalMicros: Long?,
@@ -1477,6 +1536,7 @@ interface ChatGptExportImportTaskDao {
     @Query("SELECT * FROM chatgpt_import_receipts WHERE sourceConversationId=:sourceConversationId AND packageHash=:packageHash") fun receipt(sourceConversationId: String, packageHash: String): ChatGptImportReceiptEntity?
     @Query("SELECT * FROM chatgpt_import_provenance WHERE sourceConversationId=:sourceConversationId ORDER BY importedAtEpochMs DESC") fun provenanceForSource(sourceConversationId: String): List<ChatGptImportProvenanceEntity>
     @Query("SELECT EXISTS(SELECT 1 FROM chatgpt_import_provenance WHERE conversationId=:conversationId)") fun hasProvenanceForConversation(conversationId: String): Boolean
+    @Query("SELECT DISTINCT conversationId FROM chatgpt_import_provenance WHERE conversationId IN (:conversationIds)") fun conversationIdsWithProvenance(conversationIds: List<String>): List<String>
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertProvenance(value: ChatGptImportProvenanceEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertReceipt(value: ChatGptImportReceiptEntity)
 }
@@ -1494,6 +1554,7 @@ interface ClaudeExportImportTaskDao {
     @Query("SELECT * FROM claude_export_import_messages WHERE taskId=:taskId AND itemId=:itemId ORDER BY siblingPosition ASC, sourceMessageId ASC") fun messages(taskId: String, itemId: String): List<ClaudeExportImportMessageEntity>
     @Query("SELECT * FROM claude_import_receipts WHERE sourceConversationId=:sourceConversationId AND packageHash=:packageHash") fun receipt(sourceConversationId: String, packageHash: String): ClaudeImportReceiptEntity?
     @Query("SELECT EXISTS(SELECT 1 FROM claude_import_provenance WHERE conversationId=:conversationId)") fun hasProvenanceForConversation(conversationId: String): Boolean
+    @Query("SELECT DISTINCT conversationId FROM claude_import_provenance WHERE conversationId IN (:conversationIds)") fun conversationIdsWithProvenance(conversationIds: List<String>): List<String>
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertProvenance(value: ClaudeImportProvenanceEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertReceipt(value: ClaudeImportReceiptEntity)
 }
@@ -1537,6 +1598,7 @@ interface P6KZipImportTaskDao {
     @Query("SELECT * FROM p6k_zip_import_receipts WHERE sourceConversationId=:sourceConversationId AND packageHash=:packageHash") fun receipt(sourceConversationId: String, packageHash: String): P6KZipImportReceiptEntity?
     @Query("SELECT * FROM p6k_zip_import_provenance WHERE sourceConversationId=:sourceConversationId ORDER BY importedAtEpochMs DESC, conversationId ASC") fun provenanceForSource(sourceConversationId: String): List<P6KZipImportProvenanceEntity>
     @Query("SELECT EXISTS(SELECT 1 FROM p6k_zip_import_provenance WHERE conversationId=:conversationId)") fun hasProvenanceForConversation(conversationId: String): Boolean
+    @Query("SELECT DISTINCT conversationId FROM p6k_zip_import_provenance WHERE conversationId IN (:conversationIds)") fun conversationIdsWithProvenance(conversationIds: List<String>): List<String>
     @Query("SELECT * FROM p6k_zip_import_provenance WHERE taskId=:taskId ORDER BY conversationId ASC") fun provenanceForTask(taskId: String): List<P6KZipImportProvenanceEntity>
     @Query("SELECT * FROM p6k_zip_import_message_provenance WHERE conversationId=:conversationId ORDER BY sourceMessageId ASC") fun messageProvenanceForConversation(conversationId: String): List<P6KZipImportMessageProvenanceEntity>
     @Query("DELETE FROM p6k_zip_import_receipts WHERE taskId=:taskId") fun deleteReceiptsForTask(taskId: String)
@@ -1558,6 +1620,12 @@ interface P6KZipImportTaskDao {
     @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt WHERE taskId=:taskId") fun assetOccurrenceReceiptCount(taskId: String): Int
     @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt WHERE attachmentId=:attachmentId") fun assetOccurrenceReceiptCountForAttachment(attachmentId: String): Int
     @Query("DELETE FROM p6k_zip_asset_occurrence_receipt WHERE taskId=:taskId") fun deleteAssetOccurrenceReceiptsForTask(taskId: String)
+    @Query("DELETE FROM p6k_zip_asset_occurrence_receipt WHERE conversationId=:conversationId AND messageId=:messageId AND attachmentId=:attachmentId")
+    fun deleteAssetOccurrenceReceiptsForMessageAttachment(conversationId: String, messageId: String, attachmentId: String): Int
+    @Query("DELETE FROM p6k_zip_asset_link_receipts WHERE conversationId=:conversationId AND messageId=:messageId AND attachmentId=:attachmentId")
+    fun deleteAssetLinkReceiptsForMessageAttachment(conversationId: String, messageId: String, attachmentId: String): Int
+    @Query("DELETE FROM p6k_zip_asset_link_provenance WHERE conversationId=:conversationId AND messageId=:messageId AND attachmentId=:attachmentId")
+    fun deleteAssetLinkProvenanceForMessageAttachment(conversationId: String, messageId: String, attachmentId: String): Int
     @Query("DELETE FROM p6k_zip_asset_occurrence WHERE taskId=:taskId") fun deleteAssetOccurrencesForTask(taskId: String)
     @Query("DELETE FROM p6k_zip_asset_catalog WHERE taskId=:taskId") fun deleteAssetCatalogForTask(taskId: String)
     @Query("DELETE FROM p6k_zip_asset_link_receipts WHERE taskId=:taskId") fun deleteAssetLinkReceiptsForTask(taskId: String)
@@ -1850,11 +1918,161 @@ interface ConversationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsertSearchIndex(entries: List<LocalSearchIndexEntity>)
 
-    @Query("SELECT * FROM local_search_index WHERE normalizedText LIKE '%' || :query || '%' AND ((:scope = 'ACTIVE' AND deletedAtEpochMs IS NULL AND archivedAtEpochMs IS NULL) OR (:scope = 'ARCHIVED' AND deletedAtEpochMs IS NULL AND archivedAtEpochMs IS NOT NULL) OR (:scope = 'DELETED' AND deletedAtEpochMs IS NOT NULL) OR :scope = 'ALL')")
+    @Query("""
+        SELECT s.* FROM local_search_index s
+        JOIN conversations c ON c.id = s.conversationId
+        WHERE s.normalizedText LIKE '%' || :query || '%' AND c.surface = 'CHAT' AND (
+            (:scope = 'ACTIVE' AND c.deletedAtEpochMs IS NULL AND c.archivedAtEpochMs IS NULL) OR
+            (:scope = 'FAVORITES' AND c.deletedAtEpochMs IS NULL AND c.archivedAtEpochMs IS NULL AND c.favoritedAtEpochMs IS NOT NULL) OR
+            (:scope = 'ARCHIVED' AND c.deletedAtEpochMs IS NULL AND c.archivedAtEpochMs IS NOT NULL) OR
+            (:scope = 'DELETED' AND c.deletedAtEpochMs IS NOT NULL) OR
+            (:scope = 'ALL' AND c.deletedAtEpochMs IS NULL)
+        )
+    """)
     fun searchLocalIndex(query: String, scope: String): List<LocalSearchIndexEntity>
+
+    @Query("""
+        SELECT s.* FROM local_search_index s
+        JOIN conversations c ON c.id = s.conversationId
+        WHERE s.messageNodeId IS NOT NULL AND s.contentKind = 'TEXT' AND c.surface = 'CHAT' AND (
+            (:scope = 'ACTIVE' AND c.deletedAtEpochMs IS NULL AND c.archivedAtEpochMs IS NULL) OR
+            (:scope = 'FAVORITES' AND c.deletedAtEpochMs IS NULL AND c.archivedAtEpochMs IS NULL AND c.favoritedAtEpochMs IS NOT NULL) OR
+            (:scope = 'ARCHIVED' AND c.deletedAtEpochMs IS NULL AND c.archivedAtEpochMs IS NOT NULL) OR
+            (:scope = 'DELETED' AND c.deletedAtEpochMs IS NOT NULL) OR
+            (:scope = 'ALL' AND c.deletedAtEpochMs IS NULL)
+        )
+        ORDER BY s.timestampEpochMs DESC, s.conversationId ASC, s.messageNodeId ASC, s.id ASC
+    """)
+    fun browseLocalTextIndex(scope: String): List<LocalSearchIndexEntity>
+
+    @Query("""
+        SELECT c.id AS conversationId,
+               c.title AS title,
+               COALESCE((
+                   SELECT s.snippet FROM local_search_index s
+                   WHERE s.conversationId = c.id AND s.messageNodeId IS NOT NULL AND s.contentKind = 'TEXT'
+                   ORDER BY s.timestampEpochMs DESC, s.id DESC LIMIT 1
+               ), '本地对话') AS snippet,
+               c.updatedAtEpochMs AS timestampEpochMs
+        FROM conversations c
+        WHERE c.surface = 'CHAT' AND c.deletedAtEpochMs IS NULL AND (
+            (:scope = 'ACTIVE' AND c.archivedAtEpochMs IS NULL) OR
+            (:scope = 'FAVORITES' AND c.archivedAtEpochMs IS NULL AND c.favoritedAtEpochMs IS NOT NULL) OR
+            (:scope = 'ARCHIVED' AND c.archivedAtEpochMs IS NOT NULL) OR
+            :scope = 'ALL'
+        )
+        ORDER BY CASE WHEN :scope = 'ACTIVE' AND c.pinnedAtEpochMs IS NULL THEN 1 ELSE 0 END ASC,
+                 c.updatedAtEpochMs DESC,
+                 c.id ASC
+        LIMIT :limit
+    """)
+    fun browseConversationSearchRows(scope: String, limit: Int): List<ConversationSearchBrowseRow>
+
+    @Query("""
+        WITH RECURSIVE current_path(conversationId, messageId) AS (
+            SELECT c.id, c.currentLeafMessageId
+            FROM conversations c
+            WHERE c.surface = 'CHAT' AND c.deletedAtEpochMs IS NULL AND c.currentLeafMessageId IS NOT NULL AND (
+                (:scope = 'ACTIVE' AND c.archivedAtEpochMs IS NULL) OR
+                (:scope = 'FAVORITES' AND c.archivedAtEpochMs IS NULL AND c.favoritedAtEpochMs IS NOT NULL) OR
+                (:scope = 'ARCHIVED' AND c.archivedAtEpochMs IS NOT NULL) OR
+                :scope = 'ALL'
+            )
+            UNION ALL
+            SELECT p.conversationId, n.parentMessageId
+            FROM current_path p
+            JOIN message_nodes n ON n.id = p.messageId
+            WHERE n.parentMessageId IS NOT NULL
+        )
+        SELECT p.conversationId AS conversationId,
+               n.id AS messageNodeId,
+               c.title AS title,
+               GROUP_CONCAT(b.textContent, char(10)) AS text,
+               n.createdAtEpochMs AS timestampEpochMs
+        FROM current_path p
+        JOIN conversations c ON c.id = p.conversationId
+        JOIN message_nodes n ON n.id = p.messageId
+        JOIN message_content_blocks b ON b.messageId = n.id AND b.kind = 'TEXT' AND b.textContent IS NOT NULL
+        GROUP BY p.conversationId, n.id, c.title, n.createdAtEpochMs
+        HAVING LOWER(GROUP_CONCAT(b.textContent, char(10))) LIKE '%' || :query || '%'
+        ORDER BY n.createdAtEpochMs DESC, n.id ASC
+        LIMIT :limit
+    """)
+    fun searchCurrentPathTextRows(query: String, scope: String, limit: Int): List<ConversationPathTextSearchRow>
+
+    @Query("""
+        WITH RECURSIVE current_path(conversationId, messageId) AS (
+            SELECT c.id, c.currentLeafMessageId
+            FROM conversations c
+            WHERE c.surface = 'CHAT' AND c.deletedAtEpochMs IS NULL AND c.currentLeafMessageId IS NOT NULL AND (
+                (:scope = 'ACTIVE' AND c.archivedAtEpochMs IS NULL) OR
+                (:scope = 'FAVORITES' AND c.archivedAtEpochMs IS NULL AND c.favoritedAtEpochMs IS NOT NULL) OR
+                (:scope = 'ARCHIVED' AND c.archivedAtEpochMs IS NOT NULL) OR
+                :scope = 'ALL'
+            )
+            UNION ALL
+            SELECT p.conversationId, n.parentMessageId
+            FROM current_path p
+            JOIN message_nodes n ON n.id = p.messageId
+            WHERE n.parentMessageId IS NOT NULL
+        )
+        SELECT p.conversationId AS conversationId,
+               n.id AS messageNodeId,
+               c.title AS title,
+               n.createdAtEpochMs AS createdAtEpochMs,
+               b.attachmentId AS attachmentId,
+               b.storageKey AS storageKey,
+               b.mimeType AS mimeType,
+               b.displayName AS displayName,
+               b.byteCount AS byteCount,
+               b.sha256 AS sha256,
+               COALESCE((
+                   SELECT GROUP_CONCAT(t.textContent, char(10))
+                   FROM message_content_blocks t
+                   WHERE t.messageId = n.id AND t.kind = 'TEXT' AND t.textContent IS NOT NULL
+               ), '') AS messageText
+        FROM current_path p
+        JOIN conversations c ON c.id = p.conversationId
+        JOIN message_nodes n ON n.id = p.messageId
+        JOIN message_content_blocks b ON b.messageId = n.id AND b.kind = 'ATTACHMENT'
+        WHERE :query = '' OR LOWER(c.title) LIKE '%' || :query || '%'
+            OR LOWER(COALESCE(b.displayName, '')) LIKE '%' || :query || '%'
+            OR EXISTS(
+                SELECT 1 FROM message_content_blocks t
+                WHERE t.messageId = n.id AND t.kind = 'TEXT' AND t.textContent IS NOT NULL
+                  AND LOWER(t.textContent) LIKE '%' || :query || '%'
+            )
+        ORDER BY n.createdAtEpochMs DESC, n.id ASC, b.position ASC
+    """)
+    fun currentPathAttachmentRows(query: String, scope: String): List<ConversationPathAttachmentRow>
 
     @Query("SELECT COUNT(*) FROM local_search_index")
     fun searchIndexCount(): Int
+
+    /** Finds old partial indexes without reading any message body into the caller. */
+    @Query("""
+        SELECT c.id FROM conversations c
+        WHERE NOT EXISTS (
+            SELECT 1 FROM local_search_index title
+            WHERE title.id = c.id || ':title'
+        ) OR (
+            SELECT COUNT(*)
+            FROM message_nodes n
+            JOIN message_content_blocks b ON b.messageId = n.id
+            WHERE n.conversationId = c.id
+              AND n.role IN ('USER', 'ASSISTANT')
+              AND b.kind = 'TEXT'
+              AND b.textContent IS NOT NULL
+              AND TRIM(b.textContent) != ''
+        ) != (
+            SELECT COUNT(*) FROM local_search_index s
+            WHERE s.conversationId = c.id
+              AND s.messageNodeId IS NOT NULL
+              AND s.contentKind = 'TEXT'
+        )
+        ORDER BY c.updatedAtEpochMs DESC, c.id ASC
+    """)
+    fun conversationIdsWithIncompleteTextSearchIndex(): List<String>
 
     @Query("UPDATE message_nodes SET deliveryState = :deliveryState, lastPersistedSequence = :lastPersistedSequence, resumableFromSequence = :resumableFromSequence WHERE id = :id")
     fun updateRuntimeNode(id: String, deliveryState: String, lastPersistedSequence: Long?, resumableFromSequence: Long?): Int
@@ -1929,6 +2147,9 @@ interface ConversationDao {
     @Query("SELECT * FROM message_content_blocks WHERE messageId = :messageId ORDER BY position")
     fun blocksFor(messageId: String): List<MessageContentBlockEntity>
 
+    @Query("SELECT * FROM message_content_blocks WHERE messageId IN (SELECT id FROM message_nodes WHERE conversationId = :conversationId) ORDER BY messageId, position")
+    fun blocksForConversation(conversationId: String): List<MessageContentBlockEntity>
+
     @Query("SELECT * FROM conversation_drafts WHERE conversationId = :conversationId")
     fun draftFor(conversationId: String): ConversationDraftEntity?
 
@@ -1937,6 +2158,9 @@ interface ConversationDao {
 
     @Query("SELECT * FROM conversation_memory_sources WHERE conversationId = :conversationId ORDER BY position")
     fun memorySourcesFor(conversationId: String): List<ConversationMemorySourceEntity>
+
+    @Query("SELECT * FROM conversation_memory_sources WHERE conversationId IN (:conversationIds) ORDER BY conversationId, position")
+    fun memorySourcesForConversations(conversationIds: List<String>): List<ConversationMemorySourceEntity>
 }
 
 @Dao
@@ -1991,17 +2215,46 @@ interface PrivateAttachmentAssetDao {
 
     @Query("SELECT COUNT(*) FROM private_attachment_assets") fun assetCount(): Int
 
+    @Query("SELECT * FROM private_attachment_assets WHERE storageKey LIKE 'p6k-zip-assets/v1/%' ORDER BY attachmentId ASC")
+    fun archiveBackedAssets(): List<PrivateAttachmentAssetEntity>
+
+    @Query("UPDATE private_attachment_assets SET storageKey = :managedStorageKey WHERE attachmentId = :attachmentId AND storageKey = :archiveStorageKey")
+    fun materializeArchiveBackedAsset(attachmentId: String, archiveStorageKey: String, managedStorageKey: String): Int
+
     @Query("DELETE FROM private_attachment_assets WHERE attachmentId = :attachmentId")
     fun deleteById(attachmentId: String): Int
 
     @Query("SELECT COUNT(*) FROM conversation_draft_attachments WHERE attachmentId = :attachmentId")
     fun normalDraftReferences(attachmentId: String): Int
 
+    @Query("SELECT COUNT(*) FROM capture_draft_attachments WHERE attachmentId = :attachmentId")
+    fun captureDraftReferences(attachmentId: String): Int
+
+    @Query("SELECT COUNT(*) FROM knowledge_attachments WHERE attachmentId = :attachmentId")
+    fun knowledgeReferences(attachmentId: String): Int
+
     @Query("SELECT COUNT(*) FROM message_content_blocks WHERE attachmentId = :attachmentId")
     fun normalMessageReferences(attachmentId: String): Int
 
-    @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt WHERE attachmentId = :attachmentId")
+    @Query("SELECT COUNT(*) FROM (SELECT r.conversationId FROM p6k_zip_asset_occurrence_receipt r INNER JOIN p6k_zip_import_tasks t ON t.id=r.taskId WHERE r.attachmentId=:attachmentId AND t.status NOT IN ('COMPLETED','FAILED','CANCELLED') UNION ALL SELECT p.conversationId FROM p6k_zip_asset_link_provenance p INNER JOIN p6k_zip_import_tasks t ON t.id=p.taskId WHERE p.attachmentId=:attachmentId AND t.status NOT IN ('COMPLETED','FAILED','CANCELLED'))")
     fun zipOccurrenceReceiptReferences(attachmentId: String): Int
+
+    @Query("SELECT COUNT(*) FROM temporary_conversation_attachments WHERE attachmentId = :attachmentId")
+    fun temporaryConversationReferences(attachmentId: String): Int
+
+    @Query("SELECT COUNT(*) FROM resumable_attachment_uploads WHERE attachmentId = :attachmentId AND status IN ('PENDING','UPLOADING','FAILED','UNKNOWN')")
+    fun resumableUploadReferences(attachmentId: String): Int
+
+    @Query("SELECT COUNT(*) FROM glm_ocr_tasks WHERE sourceAttachmentId = :attachmentId OR resultAttachmentId = :attachmentId")
+    fun glmOcrTaskReferences(attachmentId: String): Int
+}
+
+@Dao
+interface GlmOcrTaskDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun upsert(task: GlmOcrTaskEntity)
+    @Query("SELECT * FROM glm_ocr_tasks WHERE taskId=:taskId") fun find(taskId: String): GlmOcrTaskEntity?
+    @Query("SELECT * FROM glm_ocr_tasks ORDER BY createdAtEpochMs DESC, taskId DESC") fun listNewestFirst(): List<GlmOcrTaskEntity>
+    @Query("DELETE FROM glm_ocr_tasks WHERE taskId=:taskId") fun delete(taskId: String): Int
 }
 
 @Dao
@@ -2082,6 +2335,34 @@ interface SyncJobDao {
     @Query("SELECT * FROM sync_job_receipts WHERE intentId = :intentId") fun receipt(intentId: String): SyncJobReceiptEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) fun save(job: SyncJobEntity)
     @Insert(onConflict = OnConflictStrategy.ABORT) fun saveReceipt(receipt: SyncJobReceiptEntity)
+}
+
+/** Manual-only per-conversation cloud receipt. It contains no title, message text or token. */
+@Entity(
+    tableName = "manual_conversation_sync_state",
+    primaryKeys = ["accountRef", "conversationId"],
+    indices = [Index("conversationId"), Index("lastSyncedAtEpochMs")],
+)
+data class ManualConversationSyncStateEntity(
+    val accountRef: String,
+    val conversationId: String,
+    val documentId: String,
+    val remoteRevision: Long,
+    val payloadHash: String,
+    val localContentHash: String,
+    val lastSyncedAtEpochMs: Long,
+)
+
+@Dao
+interface ManualConversationSyncStateDao {
+    @Query("SELECT * FROM manual_conversation_sync_state WHERE accountRef=:accountRef AND conversationId=:conversationId")
+    fun find(accountRef: String, conversationId: String): ManualConversationSyncStateEntity?
+
+    @Query("SELECT * FROM manual_conversation_sync_state WHERE accountRef=:accountRef ORDER BY lastSyncedAtEpochMs DESC")
+    fun listForAccount(accountRef: String): List<ManualConversationSyncStateEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun save(state: ManualConversationSyncStateEntity)
 }
 
 /** P8-A durable facts deliberately exclude tool input/output bodies, credentials, paths and URIs. */
@@ -2301,7 +2582,7 @@ interface AssistantResponseModelAttributionDao {
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun find(assistantMessageId: String, attemptId: String): AssistantResponseModelAttributionEntity?
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId IN (:assistantMessageIds) ORDER BY recordedAtEpochMs ASC, attemptId ASC") fun forMessages(assistantMessageIds: List<String>): List<AssistantResponseModelAttributionEntity>
     @Query("SELECT * FROM assistant_response_model_attributions WHERE inputTokens IS NOT NULL OR outputTokens IS NOT NULL OR costTotalMicros IS NOT NULL ORDER BY recordedAtEpochMs DESC, attemptId DESC") fun listCostedNewestFirst(): List<AssistantResponseModelAttributionEntity>
-    @Query("UPDATE assistant_response_model_attributions SET inputTokens=:inputTokens, outputTokens=:outputTokens, totalTokens=:totalTokens, cachedInputTokens=:cachedInputTokens, costPriceVersion=:costPriceVersion, costCurrencyCode=:costCurrencyCode, costTotalMicros=:costTotalMicros, costSource=:costSource WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichAccounting(assistantMessageId: String, attemptId: String, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?): Int
+    @Query("UPDATE assistant_response_model_attributions SET inputTokens=:inputTokens, outputTokens=:outputTokens, totalTokens=:totalTokens, cachedInputTokens=:cachedInputTokens, reasoningTokens=:reasoningTokens, costPriceVersion=:costPriceVersion, costCurrencyCode=:costCurrencyCode, costTotalMicros=:costTotalMicros, costSource=:costSource WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichAccounting(assistantMessageId: String, attemptId: String, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, reasoningTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?): Int
 }
 
 @Dao
@@ -2326,6 +2607,7 @@ interface ResumableAttachmentUploadDao {
         KnowledgeEvidenceEntity::class,
         KnowledgeAttachmentEntity::class,
         PrivateAttachmentAssetEntity::class,
+        GlmOcrTaskEntity::class,
         TemporaryConversationRecoveryEntity::class,
         TemporaryConversationMessageEntity::class,
         TemporaryConversationAttachmentEntity::class,
@@ -2422,6 +2704,7 @@ interface ResumableAttachmentUploadDao {
         SyncIntentEntity::class,
         SyncJobEntity::class,
         SyncJobReceiptEntity::class,
+        ManualConversationSyncStateEntity::class,
         AgentRunEntity::class,
         AgentStepEntity::class,
         AgentEventEntity::class,
@@ -2438,7 +2721,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 60,
+    version = 63,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2469,9 +2752,11 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
     abstract fun memoryDao(): MemoryDao
     abstract fun privateAttachmentAssetDao(): PrivateAttachmentAssetDao
+    abstract fun glmOcrTaskDao(): GlmOcrTaskDao
     abstract fun temporaryConversationRecoveryDao(): TemporaryConversationRecoveryDao
     abstract fun syncAccountMetadataDao(): SyncAccountMetadataDao
     abstract fun syncJobDao(): SyncJobDao
+    abstract fun manualConversationSyncStateDao(): ManualConversationSyncStateDao
     abstract fun agentLedgerDao(): AgentLedgerDao
     abstract fun p9bIntegrationLedgerDao(): P9BIntegrationLedgerDao
     abstract fun workspaceExchangeV2RestoreDao(): WorkspaceExchangeV2RestoreDao
@@ -3115,6 +3400,29 @@ abstract class NanfengAiDatabase : RoomDatabase() {
                 db.execSQL("INSERT OR IGNORE INTO p6k_zip_asset_catalog (taskId,entryName,sha256,byteCount,mimeType,displayName,attachmentId,missingInArchive,verificationState) SELECT c.taskId,c.entryName,NULLIF(c.sha256,''),c.byteCount,c.mimeType,p.displayName,c.attachmentId,0,CASE WHEN c.sourceConversationId IS NOT NULL AND c.sourceMessageId IS NOT NULL THEN 'LEGACY_BACKFILLED' ELSE 'NEEDS_REVERIFY' END FROM p6k_zip_asset_candidates c LEFT JOIN private_attachment_assets p ON p.attachmentId=c.attachmentId")
                 db.execSQL("INSERT OR IGNORE INTO p6k_zip_asset_occurrence (taskId,entryName,sourceConversationId,sourceMessageId) SELECT r.taskId,r.entryName,c.sourceConversationId,c.sourceMessageId FROM p6k_zip_asset_link_receipts r JOIN p6k_zip_asset_candidates c ON c.taskId=r.taskId AND c.entryName=r.entryName WHERE c.sourceConversationId IS NOT NULL AND c.sourceMessageId IS NOT NULL")
                 db.execSQL("INSERT OR IGNORE INTO p6k_zip_asset_occurrence_receipt (taskId,entryName,sourceConversationId,sourceMessageId,conversationId,messageId,attachmentId,linkedAtMs) SELECT r.taskId,r.entryName,c.sourceConversationId,c.sourceMessageId,r.conversationId,r.messageId,r.attachmentId,r.committedAtEpochMs FROM p6k_zip_asset_link_receipts r JOIN p6k_zip_asset_candidates c ON c.taskId=r.taskId AND c.entryName=r.entryName WHERE c.sourceConversationId IS NOT NULL AND c.sourceMessageId IS NOT NULL")
+            }
+        }
+        /** Adds content-free receipts for explicit single-conversation cloud sync only. */
+        val MIGRATION_60_61 = object : Migration(60, 61) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `manual_conversation_sync_state` (`accountRef` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `documentId` TEXT NOT NULL, `remoteRevision` INTEGER NOT NULL, `payloadHash` TEXT NOT NULL, `localContentHash` TEXT NOT NULL, `lastSyncedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`accountRef`, `conversationId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_manual_conversation_sync_state_conversationId` ON `manual_conversation_sync_state` (`conversationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_manual_conversation_sync_state_lastSyncedAtEpochMs` ON `manual_conversation_sync_state` (`lastSyncedAtEpochMs`)")
+            }
+        }
+        /** Adds source-to-Markdown lineage for explicit GLM-OCR document conversion tasks. */
+        val MIGRATION_61_62 = object : Migration(61, 62) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `glm_ocr_tasks` (`taskId` TEXT NOT NULL, `sourceAttachmentId` TEXT NOT NULL, `resultAttachmentId` TEXT, `sourceDisplayName` TEXT NOT NULL, `sourceMimeType` TEXT NOT NULL, `sourceByteCount` INTEGER NOT NULL, `sourceSha256` TEXT NOT NULL, `status` TEXT NOT NULL, `requestId` TEXT, `pageCount` INTEGER, `inputTokens` INTEGER, `outputTokens` INTEGER, `costCnyMicros` INTEGER, `safeErrorCode` TEXT, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`taskId`), FOREIGN KEY(`sourceAttachmentId`) REFERENCES `private_attachment_assets`(`attachmentId`) ON UPDATE NO ACTION ON DELETE NO ACTION, FOREIGN KEY(`resultAttachmentId`) REFERENCES `private_attachment_assets`(`attachmentId`) ON UPDATE NO ACTION ON DELETE NO ACTION)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_glm_ocr_tasks_sourceAttachmentId` ON `glm_ocr_tasks` (`sourceAttachmentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_glm_ocr_tasks_resultAttachmentId` ON `glm_ocr_tasks` (`resultAttachmentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_glm_ocr_tasks_status_updatedAtEpochMs` ON `glm_ocr_tasks` (`status`, `updatedAtEpochMs`)")
+            }
+        }
+        /** Persists provider-reported reasoning usage separately from visible answer tokens. */
+        val MIGRATION_62_63 = object : Migration(62, 63) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `reasoningTokens` INTEGER")
             }
         }
     }

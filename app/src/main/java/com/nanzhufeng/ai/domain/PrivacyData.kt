@@ -3,6 +3,7 @@ package com.nanzhufeng.ai.domain
 /** P5-C contains only aggregate facts; no business body is valid diagnostic input. */
 enum class PrivacyDeleteScope(val wireValue: String, val requiresPhrase: Boolean) {
     TEMPORARY_FAILED_TASK_ASSETS("temporary_failed_task_assets", false),
+    ORPHANED_ATTACHMENT_FILES("orphaned_attachment_files", false),
     OFFLINE_EVAL_RUNS("offline_eval_runs", false),
     KNOWLEDGE_MEMORY_TRASH("knowledge_memory_trash", false),
     ALL_LOCAL_BUSINESS_DATA("all_local_business_data", true),
@@ -13,7 +14,42 @@ data class PrivacyInventory(
     val aggregates: List<PrivacyAggregate>,
     val credentialReferencePresent: Boolean,
     val internetPermissionPresent: Boolean,
+    val importedZipCleanup: ImportedZipCleanupStatus = ImportedZipCleanupStatus(),
 )
+
+data class ImportedZipCleanupStatus(
+    /** Original packages still occupying app-private storage. Their byte size is deliberately not user-facing. */
+    val originalPackageCount: Long = 0,
+    /** Attachments already linked into normal app data, including archive-backed attachments. */
+    val importedAttachmentCount: Long = 0,
+    val importedAttachmentByteCount: Long = 0,
+    /** Linked attachment records that have not yet become independently managed local files. */
+    val sourceDependentAttachmentCount: Long = 0,
+    /** Packages whose conversation/attachment recovery has not reached a safe terminal state. */
+    val blockedPackageCount: Long = 0,
+    /** Packages already staged for deletion but whose final filesystem cleanup must be retried. */
+    val pendingDeletionCount: Long = 0,
+) {
+    val canDeleteOriginalPackages: Boolean
+        get() = originalPackageCount > 0 && blockedPackageCount == 0L
+
+    /** Safe for a direct source-package deletion because no linked data still reads from ZIP. */
+    val allImportedAttachmentsManaged: Boolean
+        get() = sourceDependentAttachmentCount == 0L
+}
+
+sealed interface ImportedZipCleanupResult {
+    data class Completed(
+        val deletedPackageCount: Long,
+        val materializedAttachmentCount: Long,
+    ) : ImportedZipCleanupResult
+    data class Partial(
+        val deletedPackageCount: Long,
+        val remainingPackageCount: Long,
+        val reason: String,
+    ) : ImportedZipCleanupResult
+    data class Rejected(val reason: String) : ImportedZipCleanupResult
+}
 data class PrivacyDeletionPreview(
     val scope: PrivacyDeleteScope,
     val aggregates: List<PrivacyAggregate>,
@@ -66,6 +102,8 @@ interface PrivacyDataManager {
     fun delete(request: PrivacyDeletionRequest): PrivacyDeletionResult
     /** Explicit only: process recreation must never call this automatically. */
     fun retryFailedTaskDeletion(): PrivacyDeletionResult
+    /** Explicit only: first materialize every linked imported attachment, then remove safe original packages. */
+    fun cleanupImportedZipPackages(): ImportedZipCleanupResult
     fun exportSecurityDiagnostic(destination: android.net.Uri): SecurityDiagnosticResult
 }
 

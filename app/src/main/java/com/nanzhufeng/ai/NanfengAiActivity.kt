@@ -24,6 +24,7 @@ import com.nanzhufeng.ai.data.AndroidScheduledMonitorScheduler
 import com.nanzhufeng.ai.ui.CaptureViewModel
 import com.nanzhufeng.ai.ui.NanfengAiApp
 import com.nanzhufeng.ai.ui.ModelSettingsViewModel
+import com.nanzhufeng.ai.ui.GlmOcrWorkspaceViewModel
 import com.nanzhufeng.ai.ui.InvocationLedgerViewModel
 import com.nanzhufeng.ai.ui.ConversationCostLedgerViewModel
 import com.nanzhufeng.ai.ui.KnowledgeLibraryViewModel
@@ -74,6 +75,7 @@ class NanfengAiActivity : ComponentActivity() {
     private lateinit var textShareGate: AndroidTextShareIntentGate
     private lateinit var captureViewModel: CaptureViewModel
     private lateinit var modelSettingsViewModel: ModelSettingsViewModel
+    private lateinit var glmOcrWorkspaceViewModel: GlmOcrWorkspaceViewModel
     private lateinit var invocationLedgerViewModel: InvocationLedgerViewModel
     private lateinit var conversationCostLedgerViewModel: ConversationCostLedgerViewModel
     private lateinit var knowledgeLibraryViewModel: KnowledgeLibraryViewModel
@@ -171,17 +173,27 @@ class NanfengAiActivity : ComponentActivity() {
                 container.providerConnectionProbe,
             ),
         )[ModelSettingsViewModel::class.java]
+        glmOcrWorkspaceViewModel = ViewModelProvider(
+            this,
+            GlmOcrWorkspaceViewModel.Factory(
+                container.glmOcrTaskOwner,
+                container.glmOcrScheduler,
+                container.documentSelectionReader,
+                container.conversationAttachmentPreviewProjection,
+                container.pdfPreviewPositionStore,
+            ),
+        )[GlmOcrWorkspaceViewModel::class.java]
         invocationLedgerViewModel = ViewModelProvider(
             this,
-            InvocationLedgerViewModel.Factory(container.invocationRepository),
+            InvocationLedgerViewModel.Factory(container.invocationRepository, container.glmOcrTaskOwner),
         )[InvocationLedgerViewModel::class.java]
         conversationCostLedgerViewModel = ViewModelProvider(
             this,
-            ConversationCostLedgerViewModel.Factory(container.assistantResponseModelAttributions, container.reminderDraftGenerationRecords, container.conversationTitleGenerationRecords),
+            ConversationCostLedgerViewModel.Factory(container.assistantResponseModelAttributions, container.reminderDraftGenerationRecords, container.conversationTitleGenerationRecords, container.scheduledMonitorRepository, container.directChatCallAudit, container.invocationRepository),
         )[ConversationCostLedgerViewModel::class.java]
         knowledgeLibraryViewModel = ViewModelProvider(
             this,
-            KnowledgeLibraryViewModel.Factory(container.readKnowledgeLibrary, container.manageKnowledge, container.manageKnowledgeRelationships),
+            KnowledgeLibraryViewModel.Factory(container.readKnowledgeLibrary, container.manageKnowledge, container.manageKnowledgeRelationships, container.readHistoryKnowledgeCurationSource, container.qwenHistoryKnowledgeRefiner),
         )[KnowledgeLibraryViewModel::class.java]
         knowledgeExportViewModel = ViewModelProvider(
             this,
@@ -205,6 +217,7 @@ class NanfengAiActivity : ComponentActivity() {
                 container.manageConversation,
                 container.searchConversations,
                 container.searchConversationAttachments,
+                container.glmOcrTaskOwner,
                 container.localSearchHistory,
                 container.conversationReadMarkerStore,
                 container.exportConversationPackage,
@@ -212,6 +225,7 @@ class NanfengAiActivity : ComponentActivity() {
                 container.documentSelectionReader,
                 container.addConversationImageAttachment,
                 container.removeConversationAttachment,
+                container.deletePersistedConversationAttachment,
                 container.conversationAttachmentPreviewProjection,
                 container.pdfPreviewPositionStore,
                 container.videoPreviewPositionStore,
@@ -246,6 +260,7 @@ class NanfengAiActivity : ComponentActivity() {
             AssistantExperienceSettingsViewModel.Factory(
                 container.loadAssistantExperienceSettings,
                 container.saveAssistantExperienceSettings,
+                container.historyKnowledgeAutoCurationScheduler::onSettingChanged,
             ),
         )[AssistantExperienceSettingsViewModel::class.java]
         notificationReminderSettingsViewModel = ViewModelProvider(
@@ -278,7 +293,14 @@ class NanfengAiActivity : ComponentActivity() {
         conversationExchangeExportViewModel = ViewModelProvider(this, ConversationExchangeExportViewModel.Factory(container.conversationExchangeExportPort))[ConversationExchangeExportViewModel::class.java]
         workspaceExchangeV2ExportViewModel = ViewModelProvider(this, WorkspaceExchangeV2ExportViewModel.Factory(container.workspaceExchangeV2ExportPort))[WorkspaceExchangeV2ExportViewModel::class.java]
         workspaceExchangeV2RestoreViewModel = ViewModelProvider(this, WorkspaceExchangeV2RestoreViewModel.Factory(container.workspaceExchangeV2OpenDocumentRestorePort))[WorkspaceExchangeV2RestoreViewModel::class.java]
-        accountSyncViewModel = ViewModelProvider(this)[P7DAccountSyncViewModel::class.java]
+        accountSyncViewModel = ViewModelProvider(
+            this,
+            P7DAccountSyncViewModel.Factory(
+                container.p7fGoogleAccountOwner,
+                container.p7fManualConversationSyncOwner,
+                container.p7fSelectedConversationSyncScheduler,
+            ),
+        )[P7DAccountSyncViewModel::class.java]
         dualPathConnectionViewModel = ViewModelProvider(this, DualPathConnectionViewModel.Factory(container.readConnectionCapability))[DualPathConnectionViewModel::class.java]
         p8ControlledAgentViewModel = ViewModelProvider(this, P8ControlledAgentViewModel.Factory(container.p8CProductionLocalAgent))[P8ControlledAgentViewModel::class.java]
         scheduledMonitorViewModel = ViewModelProvider(
@@ -298,6 +320,7 @@ class NanfengAiActivity : ComponentActivity() {
             NanfengAiApp(
                 captureViewModel,
                 modelSettingsViewModel,
+                glmOcrWorkspaceViewModel,
                 invocationLedgerViewModel,
                 conversationCostLedgerViewModel,
                 knowledgeLibraryViewModel,

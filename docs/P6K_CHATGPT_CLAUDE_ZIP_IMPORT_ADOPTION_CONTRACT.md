@@ -1,7 +1,7 @@
 # 南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同
 
 日期：2026-08-16  
-状态：**Android 已实现 ZIP→严格文本→原子 Conversation/Message Tree 提交，并于 2026-08-28 补齐官方源关系附件恢复。新实包复查发现，`message.metadata.attachments[].id` 可与 ZIP entry 精确对应，`conversation_asset_file_names.json` 提供原始显示名；这推翻了 K7“全部无可证明关系”的旧结论。只有当前导出路径上、ID 唯一且 entry/hash/size 一致的附件才恢复为普通 `ContentBlock.Attachment`；无官方归属的 entry 仍不猜测。Desktop 仍保持其现有人工精确关联边界，不得由 Android 结论冒充已同步。**
+状态：**Android 已实现 ZIP→严格文本→原子 Conversation/Message Tree 提交，并于 2026-08-28 补齐官方源关系附件恢复。稳定基线 `c1c9ae0`／Room Schema 56 又将数分钟附件恢复迁到持久化后台 job：状态、进度、失败类型与按会话 checkpoint 均不含正文，页面退出后可续跑和显式重试。新实包复查发现，`message.metadata.attachments[].id` 可与 ZIP entry 精确对应，`conversation_asset_file_names.json` 提供原始显示名；这推翻了 K7“全部无可证明关系”的旧结论。只有当前导出路径上、ID 唯一且 entry/hash/size 一致的附件才恢复为普通 `ContentBlock.Attachment`；无官方归属的 entry 仍不猜测。Desktop 仍保持其现有人工精确关联边界，不得由 Android 结论冒充已同步。用户已要求本次文档同步排除 P2 及后续正在进行任务和未提交 WIP。**
 
 ## 0. 结论与范围
 
@@ -48,9 +48,9 @@
 - **已实现 Claude 变体：** 实包验证的 ZIP 根 `conversations.json` 数组，逐个通过既有 P6-I `ClaudeExportJsonAdapter`；其 38.4 MiB / 282 对话证据使严格边界调整为 64 MiB / 1,000 对话。没有公开媒体 manifest，故不推断附件关联。
 - K1 只持久化 `p6k_zip_import_tasks/items/messages/asset_candidates/profile_candidates`，不复用 P6-H/I/J 表、provenance 或 receipt。
 - ZIP 预检上限以实包证据收窄设定为 **6 GiB archive、6 GiB total、256 MiB single entry**。2026-08 用户选择的累积 ChatGPT ZIP 为约 4.91 GB archive／5.17 GB total，最大单 entry 仍约 247 MB；entry 只流式 hash，不解压到业务资产。
-- 资产先逐 entry 流式计算 path/hash/size/MIME。2026-08-27 新包中，当前路径上 `metadata.attachments` 共 `855` 条记录、`854` 个唯一 ID；其中 `853` 个 entry 实际存在，`851` 个还有官方原始显示名。Android 只恢复这 `853` 个 source-confirmed 附件；其余 `822` 个候选与 `1` 个缺失 entry 不自动关联。禁止从文件名、时间或相邻消息猜关联。
+- P1 采用两阶段读取：前台只保存受限 ZIP 目录元数据；后台打开 ZIP 后先从官方 JSON 建立 source-confirmed 归属，再只对命中的 entry 流式校验 path/hash/size/MIME。2026-08-27 新包中，当前路径上 `metadata.attachments` 共 `855` 条记录、`854` 个唯一 ID；其中 `853` 个 entry 实际存在，`851` 个还有官方原始显示名。Android 只恢复这 `853` 个 source-confirmed 附件；其余 `822` 个候选与 `1` 个缺失 entry 不自动关联。禁止从文件名、时间或相邻消息猜关联。
 - profile candidate 固定为 `NOT_EVALUATED_NO_REGISTERED_SCHEMA / 0`，不解析/保留 profile 原文。
-- Android Schema 33→34→35 与 `RoomP6KZipImportTaskRepository` 是 K0 journal 的唯一长期恢复路径；旧 app-private properties journal 在 IO 下迁入 Room 后删除，archive 本身保持 private staging。Settings 入口显示导入进度/结果与“删除导入批次”，而非确认按钮。
+- Android 早期 Schema 33→34→35 建立 K0 journal；稳定基线已连续迁移到 Schema 56。`RoomP6KZipImportTaskRepository` 保存导入事实，`RoomP6KZipAssetRecoveryJobRepository` 保存内容无关恢复状态；旧 app-private properties journal 在 IO 下迁入 Room 后删除，archive 本身保持 private staging。Settings 入口显示导入进度／恢复状态／结果与“删除导入批次”，而非确认按钮。
 
 ### K2：直接、原子、可恢复提交（已实现）
 
@@ -58,12 +58,14 @@
 - 重复包仍按 source ID+package hash 幂等回读。**累积导出的跨包去重**以 provider source conversation ID 为主键：同源且会话级语义 hash 相同，只复用原本地会话并把最新批次 receipt/provenance 转移为 owner；同源且仅新增消息时，借助 source-message→本地 node provenance 在原会话内追加新节点，绝不新建重复会话。单条消息 identity 不含遍历序号，避免新增节点使后续旧节点的临时序号变化而误冲突；会话 hash 仍包含完整可见消息顺序。
 - 任一旧 source message 被改写／删除、source→node provenance 缺失或歧义、树无法维持，均标为 `CONFLICT_REIMPORT` 并保持现有本地会话不变；不覆盖用户可见历史、草稿、附件、Key、Provider 或设置。删除旧批次不会删除已转移给新累计批次的会话；删除最新 owner 批次才按既有软删除和 receipt/provenance 撤销规则处理。
 - ChatGPT 的 `multimodal_text` 只接纳明确 string 文本部件；非文本对象、`thoughts`／`reasoning_recap` 等不形成消息，也不能因单个非文本节点否决整段对话。结构但无文本的节点折叠到最近可导入文本祖先；完全没有可安全文本的对话保留为 `EMPTY_CONTENT`，不伪造空会话。
+- `AndroidP6KZipAssetRecoveryScheduler` 是 P1 后台调度 owner；`RoomP6KZipMappedAssetLinkOwner` 每完成一个 source conversation 就更新 checkpoint。中断保留已提交会话与 job，续跑从下一个会话开始且不得重复挂载；失败只保存枚举化原因与时间，不保存正文、路径、文件名或外部 ID。
 - Desktop Schema 16→17 仅追加 P6-K task/item/message/asset/profile/provenance/receipt journal；其 commit 将安全 title、TEXT blocks、parent/sibling/time 写入既有 `workspace_exchange`，重建既有本地搜索索引。没有新的会话/消息业务表或另一条渲染路径。
 
 ### K3：消息、排版、附件与预览
 
 - `ConversationRepository` / Desktop workspace conversation mutation 仍是唯一消息树真值；节点保留角色、顺序、父子、时间、来源 opaque ID。新增受限 `ImportedRichTextBlock` 只保存安全、可渲染的文本层级（段落、代码、列表、引用、行内 emphasis/link label）；HTML、脚本、样式、远端 fetch、tool/thinking/执行指令一律文本化或 item-level 跳过。
 - 附件只通过 `PrivateAttachmentRepository` / Desktop asset owner 私有复制，Message `ContentBlock.Attachment` 只持有 ID、MIME、安全显示名、大小、hash。既有 P6-F2 projection 负责 image/PDF/video/audio/text；未知/Office 先是安全文件卡，不假装可原位预览。
+- Android 搜索删除只由 `ConversationMessageAttachmentRepository → DeletePersistedConversationAttachmentUseCase → PrivateAttachmentRepository` 处理：先校验当前路径上的精确 conversation/message/attachment/hash，原子移除该消息附件块和对应 ZIP occurrence receipt，并重建既有搜索索引；绝不删除消息节点、会话或其他引用。附件目录同时统计普通草稿、普通消息、临时聊天、ZIP occurrence receipt 与 `PENDING/UPLOADING/FAILED/UNKNOWN` 可重试上传；仅引用总数归零时删除受管私有文件与目录行。仅附件消息以“附件已删除”文本占位保留原节点；文件删除失败时保留目录行并如实报告，不能伪装物理清理成功。
 - 每项归属缺失、MIME/content mismatch、重复 hash 的策略由专属 asset receipt 决定；无归属资产不导入、不成为孤儿文件。
 
 ### K4/K6：profile / personalization 映射
@@ -79,6 +81,7 @@
 - Android 的真实验收只安装通过项目既有正式签名链构建的最新 APK，并只可 `install -r` 覆盖；签名链缺少既有外部材料时立即停止，不读取/导出/改写/新建密钥或环境变量、不输入密码，也不得以旧 APK、卸载、clear 或 DB 注入替代。
 - Desktop 本次实包回归：先以合成跨文件 graph、隔离失败、重开、幂等与 soft-delete 证明归一化；再从已有 private ChatGPT batch 的 normal retry 直接提交，并从正常 picker 重选 Claude。回读只报告 task/receipt/conversation/message/media/profile 的安全聚合，永不截图或输出正文、ID、账户资料或附件名。
 - 退出要分别覆盖 unknown-version reject、zip-slip/炸弹、部分会话/附件失败、取消、事务 rollback、重复/reimport、每种媒体预览、profile skip、迁移和 restart。OPPO 仍不在授权范围。
+- P1 稳定记录：标准 JVM `819 tests / 0 failures / 0 errors / 3 skipped`；新包附件 Room 链 `tests=1, skipped=0, failures=0, errors=0`、`257.597s`。这证明 checkpoint 代码与隔离 Room，不证明 OPPO 后台调度、系统约束或实际 UI 已闭环。
 
 ### K7：实包 message↔asset 只读采纳判定（已完成，2026-08-16）
 
@@ -95,7 +98,9 @@
 - 合成 fixture 覆盖 PNG、MP4、PDF 在目标消息原位的附件 block、replay/reopen、重复/冲突关闭、失败资产不影响其余候选、batch delete 与失败撤销保留 recovery entry；Android 另从该 message block 回读既有 image/video/PDF projection。Room 36→37 migration 仅证明表结构与旧候选保留，不能替代这一媒体 owner/renderer 链。真实包没有触发人工操作，继续 `UNMAPPED_REJECTED`，不读取/展示其媒体内容。
 - K9 验收审计补充：Android Settings 对 task 只显示 provider 与匿名批次序号，禁止显示选择的 ZIP 文件名；删除必须在 conversation、asset receipt、profile、private archive 与 legacy journal 全部成功撤销后才删除 task。任一失败保留 task/archive recovery entry，并显示可重试回执。该恢复规则不构成真实媒体关联证据。
 
-## 3. 明确缺口与顺序
+## 3. 历史缺口与当前顺序
+
+下方 K0–K5 是早期实施顺序，不能再被解释为全部仍未实现。稳定提交 `c1c9ae0` 已完成 P0 标准 JVM 收口和 P1 可续跑恢复；P2 及后续正在进行任务由用户明确排除，只有形成独立 checkpoint 后才更新本合同。
 
 1. **最高优先级：K0 format registry + metadata-only envelope parser**。先为 OpenAI/Anthropic 各自建立可审核格式证据；没有 registry entry 不实现解压或 UI 承诺。
 2. K1 的有界 ZIP staging 与 manifest/asset ownership；需要 Android 与 Rust 各自实现、同一拒绝矩阵。

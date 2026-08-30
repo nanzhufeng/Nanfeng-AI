@@ -80,7 +80,7 @@ internal fun ScheduledMonitorDialog(
                         verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         CircularProgressIndicator(color = AccentOrange)
-                        Text("正在用千问整理提醒草案", fontWeight = FontWeight.SemiBold)
+                        Text("正在用千问整理提醒草案", fontWeight = FontWeight.Bold)
                         Text("仅发送本对话开头的一问一答；不会发送完整对话或附件。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                     }
                 } else if (state.creating) {
@@ -93,7 +93,7 @@ internal fun ScheduledMonitorDialog(
                         onCreate = onCreate,
                     )
                 } else {
-                    Text("创建后会按所选周期联网检索并用 5.6 Terra（标准）生成简报。任务可随时暂停或删除。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text("按所选周期联网生成简报，可随时暂停或删除。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = onRequestNotifications, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                         Icon(Icons.Rounded.Notifications, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
@@ -127,7 +127,7 @@ private fun ScheduledMonitorEditor(
     onCancel: () -> Unit,
     onCreate: () -> Unit,
 ) {
-    Text("草案由千问仅根据本对话开头的一问一答整理。保存后仅任务名称和监控要求会发送给模型；完整对话和附件不会发送。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    Text("仅发送任务名称和监控要求，不发送完整对话或附件。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     TextField(
         value = state.draft.title,
         onValueChange = onTitleChanged,

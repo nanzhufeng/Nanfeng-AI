@@ -116,3 +116,15 @@
 - Desktop 已开始将既有统一 shell 纠正到开放 Assistant 内容列、受限 USER bubble、真实 message-owned metadata 与离底回底控件；Android 已开始删除底部/rail 根导航，并让 Chat-first workspace 与 P6-G local owner 投影成为同一路径。
 - 状态仍为**实施中**：已重建 Android Debug/Release 及签名/hash、Android cold-start，和最新唯一 Desktop `.app` 的宽窗/restart；Android 完整 GUI 交互、Desktop 窄窗、OPPO 与 Provider 仍无结论。此注记不授权 Key、HTTP、Provider、账号同步或发布。
 - FB-P6-025 将四张图与意图优先产品哲学合为一个通过门：视觉结构、信息节奏和对象语义必须一起成立，不能分别以截图或代码片段替代。
+
+## 2026-08-30 GLM-OCR 南枫转写决策
+
+- 用户明确将 GLM-OCR 定位为左侧栏独立的“南枫转写”工具，而不是聊天模型；入口固定在“定时任务”之后，页内顶部同名标题居中，设置正常展示能力，但 Composer 与 Auto 路由永久排除。
+- 用户后续明确收归为“列表首页 + 单条详情”：主页直接展示全部 Markdown 结果，选择图片／PDF 作为底部独立悬浮按钮；点击条目后详情只呈现可打开的原文件与无截断的完整文字。长按已完成结果可创建新对话并把 `.md` 作为未发送附件加入输入框。
+- 该决策允许 Android 新增侧栏入口，不授权真实 Provider 调用、读取明文凭据、OPPO 安装或 Desktop 伪实现。权威行为见 `docs/GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md`。
+
+## 2026-08-30 GLM-5.3 聊天模型完整接入决策
+
+- `GLM-5.3` 是独立于 `GLM-5.3 Flash` 和 `GLM-OCR` 的智谱聊天预设：深度列表固定在 `Qwen3.8-Max` 上方，并进入普通、复杂与附件三条 Auto 路线；现有 Flash 默认、日常顺序、自动标题／历史资料整理与旧会话 override 不变。
+- 复用既有智谱官方端点和同一份加密 API Key，不新增服务商分段或常驻入口。完整接入必须覆盖设置、模型档案、强制 max 思考、官方联网、流式／非流式解码、统一附件解析、真实模型归因、Token／耗时／诊断和构建测试；缺任一适用环节不得称已接入。
+- MD／PDF／图片／视频等由共享解析 owner 本机转文本或经 Qwen3.7-Plus／GLM-OCR 转为 Markdown，最终仍由 `GLM-5.3` 回答并按它归因。当前中国区直连价目未从官方公开价目源可靠取得时，调用记录保留 Token 但金额未知，不得拿 Flash 或国际渠道价格代填。

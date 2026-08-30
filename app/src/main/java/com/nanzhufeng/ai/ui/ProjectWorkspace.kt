@@ -80,7 +80,7 @@ fun ProjectWorkspacePage(state: ProjectUiState, viewModel: ProjectViewModel) {
     )
     selected?.let { snapshot -> if (editingInstruction) AlertDialog(
         onDismissRequest = { editingInstruction = false }, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text("项目指令") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("空内容会产生一条可审计的“已清空”修订。项目指令不能覆盖系统或安全规则。", style = MaterialTheme.typography.bodySmall, color = SecondaryText); OutlinedTextField(instruction, { instruction = it }, minLines = 5, label = { Text("用户拥有的本地指令") }, modifier = Modifier.fillMaxWidth().p5aKeyboardTraversal()) } },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("项目指令不能覆盖系统或安全规则。", style = MaterialTheme.typography.bodySmall, color = SecondaryText); OutlinedTextField(instruction, { instruction = it }, minLines = 5, label = { Text("用户拥有的本地指令") }, modifier = Modifier.fillMaxWidth().p5aKeyboardTraversal()) } },
         confirmButton = { Button(onClick = { viewModel.updateInstruction(snapshot.project.id, instruction); editingInstruction = false }, shape = RoundedCornerShape(14.dp)) { Text("保存新修订") } }, dismissButton = { TextButton(onClick = { editingInstruction = false }, shape = RoundedCornerShape(14.dp)) { Text("取消") } },
     ) }
 }
@@ -94,7 +94,6 @@ fun ProjectAssignmentDialog(
         onDismissRequest = onDismiss, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp), title = { Text("归入项目") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("这是本机显式归属操作；不会改变消息树、调用、附件或导出。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
                 projects.forEach { item ->
                     OutlinedButton(onClick = { onAssign(item.project.id, true); onDismiss() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
                         Text(if (item.project.id == current) "当前：${item.project.title}" else item.project.title)

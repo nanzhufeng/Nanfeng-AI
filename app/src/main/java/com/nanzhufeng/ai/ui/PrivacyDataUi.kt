@@ -3,15 +3,17 @@ package com.nanzhufeng.ai.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -29,12 +31,45 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.nanzhufeng.ai.domain.ConversationSearchCategory
 import com.nanzhufeng.ai.domain.PrivacyDeleteScope
 
 @Composable
-internal fun PrivacyDataPage(state: PrivacyDataUiState, onPreview: (PrivacyDeleteScope) -> Unit, onToggleTask: (com.nanzhufeng.ai.domain.PrivacyTaskDeletionCandidate) -> Unit, onPreviewSelectedTasks: () -> Unit, onConfirmation: (String) -> Unit, onDelete: () -> Unit, onRetryFailedTaskDeletion: () -> Unit) {
+internal fun PrivacyDataPage(state: PrivacyDataUiState, onPreview: (PrivacyDeleteScope) -> Unit, onToggleTask: (com.nanzhufeng.ai.domain.PrivacyTaskDeletionCandidate) -> Unit, onPreviewSelectedTasks: () -> Unit, onConfirmation: (String) -> Unit, onDelete: () -> Unit, onRetryFailedTaskDeletion: () -> Unit, onCleanupImportedZipPackages: () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                PrivacyStorageSummary(state.inventory)
+                val zipCleanup = state.inventory?.importedZipCleanup
+                var zipCleanupDialogVisible by remember { mutableStateOf(false) }
+                if (zipCleanup != null && zipCleanup.shouldShowImportedZipStatus()) {
+                    ImportedZipCleanupReadiness(zipCleanup)
+                }
+                if (zipCleanup != null && (zipCleanup.originalPackageCount > 0 || zipCleanup.pendingDeletionCount > 0)) {
+                    OutlinedButton(
+                        onClick = { zipCleanupDialogVisible = true },
+                        enabled = !state.working && (zipCleanup.canDeleteOriginalPackages || zipCleanup.pendingDeletionCount > 0),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        shape = P5AInteractiveShape,
+                        border = null,
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = ErrorRed),
+                    ) {
+                        Text(
+                            when {
+                                zipCleanup.pendingDeletionCount > 0 -> "重新清理 ZIP 原始包"
+                                zipCleanup.sourceDependentAttachmentCount > 0 -> "整理并删除 ZIP 原始包"
+                                else -> "删除 ZIP 原始包"
+                            },
+                        )
+                    }
+                }
+                if (zipCleanupDialogVisible) {
+                    ImportedZipCleanupDialog(
+                        status = requireNotNull(zipCleanup),
+                        onDismiss = { if (!state.working) zipCleanupDialogVisible = false },
+                        onConfirm = {
+                            zipCleanupDialogVisible = false
+                            onCleanupImportedZipPackages()
+                        },
+                    )
+                }
                 var cleanupDialogVisible by remember { mutableStateOf(false) }
                 OutlinedButton(
                     onClick = { cleanupDialogVisible = true },
@@ -88,8 +123,62 @@ internal fun PrivacyDataPage(state: PrivacyDataUiState, onPreview: (PrivacyDelet
     }
 }
 
+private fun com.nanzhufeng.ai.domain.ImportedZipCleanupStatus.shouldShowImportedZipStatus(): Boolean =
+    originalPackageCount > 0 || pendingDeletionCount > 0 || importedAttachmentCount > 0 || sourceDependentAttachmentCount > 0
+
 @Composable
-private fun PrivacyStorageSummary(inventory: com.nanzhufeng.ai.domain.PrivacyInventory?) {
+private fun ImportedZipCleanupReadiness(status: com.nanzhufeng.ai.domain.ImportedZipCleanupStatus) {
+    val (title, detail, color) = when {
+        status.pendingDeletionCount > 0 -> Triple(
+            "ZIP 清理待完成",
+            "原始包已移出导入位置，仍有 ${status.pendingDeletionCount} 个隔离文件待清理。请重新清理，期间不要手动删除应用文件。",
+            AccentOrange,
+        )
+        status.blockedPackageCount > 0 -> Triple(
+            "请保留 ZIP 原始包",
+            "仍有 ${status.blockedPackageCount} 个导入任务未完成。完成前，原始包仍是恢复来源。",
+            ErrorRed,
+        )
+        status.sourceDependentAttachmentCount > 0 -> Triple(
+            "尚未全部内置",
+            if (status.originalPackageCount > 0) {
+                "${status.sourceDependentAttachmentCount} 个已归属附件仍依赖 ZIP。点“整理并删除”会先复制到本机受管存储并逐项校验；任一步失败都会保留原始包。"
+            } else {
+                "${status.sourceDependentAttachmentCount} 个已归属附件尚未转为本机受管存储，但找不到对应 ZIP 原始包。请重新导入原始包后再整理。"
+            },
+            AccentOrange,
+        )
+        status.originalPackageCount > 0 && status.allImportedAttachmentsManaged -> Triple(
+            "可以安全删除 ZIP 原始包",
+            "已确认导入资料不再依赖 ZIP；可删除 ${status.originalPackageCount} 个原始包。",
+            AccentOrange,
+        )
+        else -> Triple(
+            "导入资料已内置",
+            "${status.importedAttachmentCount} 个导入附件已保存在本机受管存储，ZIP 原始包已删除。",
+            AccentOrange,
+        )
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = NeutralSystemSurface,
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(title, color = color, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+internal fun PrivacyStorageSummary(
+    inventory: com.nanzhufeng.ai.domain.PrivacyInventory?,
+    onOpenSearchCategory: (ConversationSearchCategory) -> Unit,
+    onOpenMemory: () -> Unit,
+    onOpenKnowledge: () -> Unit,
+    onOpenProjects: () -> Unit,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -101,82 +190,153 @@ private fun PrivacyStorageSummary(inventory: com.nanzhufeng.ai.domain.PrivacyInv
                 Text("正在读取本机数据", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 return@Column
             }
-            val totalBytes = inventory.aggregates.sumOf { it.byteCount }
+            val values = inventory.aggregates.associateBy { it.key }
+            val contentRows = listOf(
+                PrivacySummaryRow("对话", values["conversations"], "个") { onOpenSearchCategory(ConversationSearchCategory.ALL) },
+                PrivacySummaryRow("消息", values["messages"], "条") { onOpenSearchCategory(ConversationSearchCategory.TEXT) },
+                PrivacySummaryRow("记忆", values["memory"], "条", onOpenMemory),
+                PrivacySummaryRow("知识", values["knowledge"], "条", onOpenKnowledge),
+                PrivacySummaryRow("项目", values["projects"], "个", onOpenProjects),
+            ).filter(PrivacySummaryRow::hasData)
+            val attachmentRows = listOf(
+                PrivacySummaryRow("图片", values["attachment_images"], "个") { onOpenSearchCategory(ConversationSearchCategory.IMAGE) },
+                PrivacySummaryRow("视频", values["attachment_videos"], "个") { onOpenSearchCategory(ConversationSearchCategory.VIDEO) },
+                PrivacySummaryRow("音频", values["attachment_audio"], "个") { onOpenSearchCategory(ConversationSearchCategory.AUDIO) },
+                PrivacySummaryRow("文档与其他文件", values["attachment_files"], "个") { onOpenSearchCategory(ConversationSearchCategory.FILE) },
+                PrivacySummaryRow("其他导入资料", values["import_source_assets"], "份"),
+                PrivacySummaryRow("待清理残留文件", values["orphaned_attachment_files"], "个"),
+            ).filter(PrivacySummaryRow::hasData)
+            val totalBytes = (contentRows + attachmentRows).sumOf { it.aggregate?.byteCount ?: 0L }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("本机数据", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("统计仍保存在 App 内的本机数据", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 }
                 Text(formatStorageBytes(totalBytes), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             }
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("API Key", color = SecondaryText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                Text(if (inventory.credentialReferencePresent) "已保存在本机" else "未保存", color = if (inventory.credentialReferencePresent) AccentOrange else SecondaryText, style = MaterialTheme.typography.bodyMedium)
-            }
+            PrivacySummarySection("对话与内容", contentRows)
+            PrivacySummarySection("附件与导入资料", attachmentRows)
             PrivacyImportSummary(inventory)
-            inventory.aggregates
-                .filterNot { it.key in privacyImportAggregateKeys }
-                .filter { it.count > 0 || it.byteCount > 0 }
-                .sortedBy { it.key }
-                .forEach { aggregate ->
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(privacyAggregateLabel(aggregate.key), color = SecondaryText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text("${aggregate.count} 项", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                        if (aggregate.byteCount > 0) {
-                            Spacer(Modifier.padding(start = 8.dp))
-                            Text(formatStorageBytes(aggregate.byteCount), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
         }
     }
 }
 
-private val privacyImportAggregateKeys = setOf(
-    "chatgpt_json_import_batches",
-    "chatgpt_json_imported_conversations",
-    "claude_json_import_batches",
-    "claude_json_imported_conversations",
-    "zip_import_batches",
-    "zip_imported_conversations",
-    "zip_pending_media",
-    "zip_imported_profile_fields",
-    "zip_archives",
-)
+private data class PrivacySummaryRow(
+    val label: String,
+    val aggregate: com.nanzhufeng.ai.domain.PrivacyAggregate?,
+    val unit: String,
+    val onClick: (() -> Unit)? = null,
+) {
+    fun hasData() = aggregate?.let { it.count > 0 || it.byteCount > 0 } == true
+}
+
+@Composable
+private fun PrivacySummarySection(title: String, rows: List<PrivacySummaryRow>) {
+    if (rows.isEmpty()) return
+    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        rows.forEach { row ->
+            val content: @Composable () -> Unit = {
+                val aggregate = requireNotNull(row.aggregate)
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(row.label, color = BodyText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("${aggregate.count} ${row.unit} · ${formatStorageBytes(aggregate.byteCount)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    if (row.onClick != null) {
+                        Icon(
+                            Icons.Rounded.ChevronRight,
+                            contentDescription = "进入${row.label}",
+                            tint = SecondaryText,
+                            modifier = Modifier.padding(start = 6.dp).size(scaledAppIconSize(18.dp)),
+                        )
+                    }
+                }
+            }
+            if (row.onClick != null) {
+                Surface(
+                    onClick = row.onClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = NeutralSystemSurface,
+                    content = content,
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = NeutralSystemSurface,
+                    content = content,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun PrivacyImportSummary(inventory: com.nanzhufeng.ai.domain.PrivacyInventory) {
     val values = inventory.aggregates.associateBy { it.key }
-    if (privacyImportAggregateKeys.none { values[it]?.count.orZero() > 0 || values[it]?.byteCount.orZero() > 0 }) return
-    Text("导入数据", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    val importedConversations = listOf("chatgpt_json_imported_conversations", "claude_json_imported_conversations", "zip_imported_conversations").sumOf { values[it]?.count ?: 0L }
+    val importBatches = listOf("chatgpt_json_import_batches", "claude_json_import_batches", "zip_import_batches", "markdown_tasks", "json_tasks", "pdf_tasks", "web_tasks").sumOf { values[it]?.count ?: 0L }
+    val importedAttachments = values["zip_imported_attachments"]?.count ?: 0L
+    val importedAttachmentBytes = values["zip_imported_attachments"]?.byteCount ?: 0L
+    val glmOcrTasks = values["glm_ocr_tasks"]?.count ?: 0L
+    val glmOcrFiles = values["glm_ocr_attachments"]
+    val profileFields = values["zip_imported_profile_fields"]?.count ?: 0L
+    if (importedConversations == 0L && importBatches == 0L && importedAttachments == 0L && profileFields == 0L && glmOcrTasks == 0L) return
+    Text("导入概况", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
     listOf(
-        "ChatGPT JSON 批次" to values["chatgpt_json_import_batches"],
-        "ChatGPT JSON 对话" to values["chatgpt_json_imported_conversations"],
-        "Claude JSON 批次" to values["claude_json_import_batches"],
-        "Claude JSON 对话" to values["claude_json_imported_conversations"],
-        "ZIP 导入批次" to values["zip_import_batches"],
-        "ZIP 已导入对话" to values["zip_imported_conversations"],
-        "ZIP 待处理媒体" to values["zip_pending_media"],
-        "已导入个性化资料" to values["zip_imported_profile_fields"],
-        "ZIP 原始包（本机保留）" to values["zip_archives"],
-    ).filter { it.second?.count.orZero() > 0 || it.second?.byteCount.orZero() > 0 }.forEach { (label, aggregate) ->
+        "导入批次" to "$importBatches 批",
+        "已导入对话" to "$importedConversations 个",
+        "已导入附件" to "$importedAttachments 个 · ${formatStorageBytes(importedAttachmentBytes)}",
+        "已导入个性化资料" to "$profileFields 项",
+        "南枫转写" to "$glmOcrTasks 条 · ${glmOcrFiles?.count ?: 0L} 个文件 · ${formatStorageBytes(glmOcrFiles?.byteCount ?: 0L)}",
+    ).filterNot { (_, value) -> value.startsWith("0 ") }.forEach { (label, value) ->
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = SecondaryText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-            Text(privacyImportAggregateValue(label, requireNotNull(aggregate)), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text(value, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
-private fun Long?.orZero(): Long = this ?: 0L
-
-private fun privacyImportAggregateValue(label: String, aggregate: com.nanzhufeng.ai.domain.PrivacyAggregate): String =
-    if (aggregate.byteCount > 0) "${aggregate.count} 个 · ${formatStorageBytes(aggregate.byteCount)}"
-    else "${aggregate.count} ${if (label.contains("批次")) "批" else "项"}"
+@Composable
+private fun ImportedZipCleanupDialog(
+    status: com.nanzhufeng.ai.domain.ImportedZipCleanupStatus,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val detail = when {
+        status.pendingDeletionCount > 0 ->
+            "原始包已从导入位置移出，但隔离区仍有文件待清理。重新清理会继续完成这一步。"
+        status.sourceDependentAttachmentCount > 0 ->
+            "会先将 ${status.sourceDependentAttachmentCount} 个仍依赖 ZIP 的附件写入本机受管存储并逐项校验；成功后才删除原始包。任何一步失败都会保留原始包。"
+        else ->
+            "已确认导入资料不再依赖 ZIP。将删除 ${status.originalPackageCount} 个 ZIP 原始包，未归属文件也会移除。此操作不可撤销。"
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().widthIn(max = 520.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = ForegroundSurface,
+            shadowElevation = 8.dp,
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("删除 ZIP 原始包", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(detail, color = SecondaryText, style = MaterialTheme.typography.bodyMedium)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f), shape = P5AInteractiveShape) { Text("取消") }
+                    Button(onClick = onConfirm, modifier = Modifier.weight(1f), shape = P5AInteractiveShape) { Text("整理并删除") }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun PrivacyCleanupScopeDialog(selected: PrivacyDeleteScope?, onDismiss: () -> Unit, onSelect: (PrivacyDeleteScope) -> Unit) {
     val scopes = listOf(
         PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS,
+        PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES,
         PrivacyDeleteScope.KNOWLEDGE_MEMORY_TRASH,
         PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA,
     )
@@ -216,6 +376,7 @@ private fun formatStorageBytes(bytes: Long): String = when {
 
 private fun PrivacyDeleteScope.label(): String = when (this) {
     PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS -> "清理失败任务"
+    PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES -> "清理残留附件"
     PrivacyDeleteScope.OFFLINE_EVAL_RUNS -> "清理本地运行记录"
     PrivacyDeleteScope.KNOWLEDGE_MEMORY_TRASH -> "清空知识与记忆回收站"
     PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA -> "删除全部本地数据"
@@ -223,16 +384,8 @@ private fun PrivacyDeleteScope.label(): String = when (this) {
 
 private fun PrivacyDeleteScope.detail(): String = when (this) {
     PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS -> "选择后可逐项清理失败任务的附件。"
+    PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES -> "清理已无消息、草稿、知识或转写任务引用，但仍占用空间的本机附件。"
     PrivacyDeleteScope.OFFLINE_EVAL_RUNS -> "清理本机运行记录。"
     PrivacyDeleteScope.KNOWLEDGE_MEMORY_TRASH -> "只清空已放入知识与记忆回收站的内容。"
     PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA -> "删除全部本机业务数据，需输入确认文字。"
-}
-
-private fun privacyAggregateLabel(key: String): String = when {
-    key == "conversation_drafts" -> "对话草稿"
-    key == "conversations" -> "对话"
-    key == "messages" -> "消息"
-    key == "memory" -> "记忆"
-    key.contains("assets") -> "附件与导入资料"
-    else -> key.replace('_', ' ')
 }

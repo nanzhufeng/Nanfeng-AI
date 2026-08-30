@@ -63,6 +63,25 @@ class ProviderAdapterContractsTest {
         assertTrue(qwenSerializer.contains("Base64File"))
     }
 
+    @Test fun `Qwen Max ordinary chat explicitly uses low bounded reasoning instead of provider xhigh default`() {
+        val qwenMax = model().copy(
+            providerId = com.nanzhufeng.ai.domain.ProviderId.QWEN,
+            modelId = "qwen3.8-max",
+            maxOutputTokens = 131_072,
+        )
+        val ready = QwenChatAdapter().prepare(
+            qwenMax,
+            listOf("user" to "分析这项投资"),
+            emptyList(),
+            stream = true,
+        ) as ChatAdapterPrepareResult.Ready
+
+        assertTrue(ready.jsonBody.contains("\"reasoning_effort\":\"low\""))
+        assertTrue(ready.jsonBody.contains("\"preserve_thinking\":false"))
+        assertTrue(ready.jsonBody.contains("\"max_completion_tokens\":16384"))
+        assertFalse(ready.jsonBody.contains("\"max_tokens\":131072"))
+    }
+
     @Test fun `Qwen PDF request streams base64 bytes into valid full file data`() {
         val attachment = ChatAttachment(ChatAttachmentKind.PDF, "application/pdf", "report.pdf", "%PDF-1.7".toByteArray())
         val model = model().copy(
@@ -110,6 +129,38 @@ class ProviderAdapterContractsTest {
         assertTrue(ready.jsonBody.contains("# 标题\\n正文"))
         assertFalse(ready.jsonBody.contains("\"type\":\"file\""))
         assertFalse(ready.jsonBody.contains("\"content\":["))
+    }
+
+    @Test fun `Markdown is a complete local text input for DeepSeek and Zhipu`() {
+        val markdown = ChatAttachment(ChatAttachmentKind.FILE, "text/markdown", "notes.md", "# 标题\n正文".toByteArray())
+        val deepSeek = DeepSeekChatAdapter().prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, modelId = "deepseek-v4-flash"),
+            listOf("user" to "整理文件"), listOf(markdown), stream = true,
+        ) as ChatAdapterPrepareResult.Ready
+        val zhipu = ZhipuChatAdapter().prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.ZHIPU, modelId = "glm-5.3-flash"),
+            listOf("user" to "整理文件"), listOf(markdown), stream = true,
+        ) as ChatAdapterPrepareResult.Ready
+
+        listOf(deepSeek.jsonBody, zhipu.jsonBody).forEach { body ->
+            assertTrue(body.contains("以下是文件 notes.md 的完整 UTF-8 文本"))
+            assertTrue(body.contains("# 标题\\n正文"))
+            assertFalse(body.contains("\"type\":\"file\""))
+        }
+    }
+
+    @Test fun `safe markup files are local text for every direct text adapter`() {
+        val yaml = ChatAttachment(ChatAttachmentKind.FILE, "application/x-yaml", "config.yaml", "name: 南枫".toByteArray())
+        val deepSeek = DeepSeekChatAdapter().prepare(model(), emptyList(), listOf(yaml), stream = false)
+        val zhipu = ZhipuChatAdapter().prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.ZHIPU, modelId = "glm-5.3-flash"),
+            emptyList(), listOf(yaml), stream = false,
+        )
+
+        assertTrue(deepSeek is ChatAdapterPrepareResult.Ready)
+        assertTrue(zhipu is ChatAdapterPrepareResult.Ready)
+        assertTrue((deepSeek as ChatAdapterPrepareResult.Ready).jsonBody.contains("name: 南枫"))
+        assertTrue((zhipu as ChatAdapterPrepareResult.Ready).jsonBody.contains("name: 南枫"))
     }
 
     @Test fun `OpenRouter image and markdown request keeps both materials model visible`() {
@@ -250,6 +301,39 @@ class ProviderAdapterContractsTest {
         assertFalse(ready.jsonBody.contains("stream_options"))
     }
 
+    @Test fun `DeepSeek V4 Flash uses the existing official direct chat transport`() {
+        val flash = model().copy(
+            providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK,
+            modelId = "deepseek-v4-flash",
+        )
+        val ready = DeepSeekChatAdapter().prepare(flash, listOf("user" to "你好"), emptyList(), stream = true) as ChatAdapterPrepareResult.Ready
+
+        assertTrue(ready.jsonBody.contains("\"model\":\"deepseek-v4-flash\""))
+        assertTrue(ready.jsonBody.contains("\"stream\":true"))
+        assertEquals(com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, ChatProviderAdapters().adapter(com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK)?.providerId)
+    }
+
+    @Test fun `Zhipu GLM models explicitly lock max reasoning without pretending attachments were sent`() {
+        val flagship = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.ZHIPU, modelId = "glm-5.3")
+        val flash = flagship.copy(modelId = "glm-5.3-flash")
+        val text = ZhipuChatAdapter().prepare(flagship, listOf("user" to "你好"), emptyList(), stream = false) as ChatAdapterPrepareResult.Ready
+        val flashText = ZhipuChatAdapter().prepare(flash, listOf("user" to "你好"), emptyList(), stream = false) as ChatAdapterPrepareResult.Ready
+        val image = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "chart.png", byteArrayOf(1, 2, 3))
+
+        assertTrue(text.jsonBody.contains("\"model\":\"glm-5.3\""))
+        assertTrue(text.jsonBody.contains("\"thinking\":{\"type\":\"enabled\"}"))
+        assertTrue(text.jsonBody.contains("\"reasoning_effort\":\"max\""))
+        assertTrue(flashText.jsonBody.contains("\"model\":\"glm-5.3-flash\""))
+        assertTrue(flashText.jsonBody.contains("\"reasoning_effort\":\"max\""))
+        assertTrue(text.jsonBody.contains("\"stream\":false"))
+        assertTrue(ZhipuChatAdapter().prepare(flagship, emptyList(), listOf(image), stream = false) is ChatAdapterPrepareResult.AttachmentUnsupported)
+        assertEquals(com.nanzhufeng.ai.domain.ProviderId.ZHIPU, ChatProviderAdapters().adapter(com.nanzhufeng.ai.domain.ProviderId.ZHIPU)?.providerId)
+
+        val deepSeek = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, modelId = "deepseek-v4-flash")
+        val unrelated = DeepSeekChatAdapter().prepare(deepSeek, listOf("user" to "你好"), emptyList(), stream = false) as ChatAdapterPrepareResult.Ready
+        assertFalse(unrelated.jsonBody.contains("\"reasoning_effort\""))
+    }
+
     @Test fun `each explicit web route uses its own documented protocol without relaying a model`() {
         val openRouter = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER)
         val options = ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)
@@ -261,12 +345,33 @@ class ProviderAdapterContractsTest {
         assertFalse(OpenRouterChatAdapter().supportsStreaming(openRouter, options))
         val qwen = QwenChatAdapter()
         val qwenOptions = ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
-        val qwenGrounded = qwen.prepare(model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.QWEN), listOf("user" to "查一下最新财报"), emptyList(), stream = false, options = qwenOptions) as ChatAdapterPrepareResult.Ready
+        val qwenModel = model().copy(
+            providerId = com.nanzhufeng.ai.domain.ProviderId.QWEN,
+            modelId = "qwen3.8-max",
+            capabilities = com.nanzhufeng.ai.domain.ModelCapabilities(true, false, true, false),
+            maxOutputTokens = 131_072,
+        )
+        val qwenGrounded = qwen.prepare(qwenModel, listOf("user" to "查一下最新财报"), emptyList(), stream = true, options = qwenOptions) as ChatAdapterPrepareResult.Ready
         assertEquals(OfficialWebSearchRoute.QWEN_RESPONSES, qwenOptions.webSearchRoute)
         assertEquals("/responses", qwen.endpointPath(qwenOptions))
-        assertFalse(qwen.supportsStreaming(openRouter, qwenOptions))
+        assertTrue(qwen.supportsStreaming(qwenModel, qwenOptions))
         assertTrue(qwenGrounded.jsonBody.contains("\"tools\":[{\"type\":\"web_search\"}]"))
+        assertTrue(qwenGrounded.jsonBody.contains("\"store\":false"))
+        assertTrue(qwenGrounded.jsonBody.contains("\"stream\":true"))
+        assertTrue(qwenGrounded.jsonBody.contains("\"reasoning\":{\"effort\":\"low\"}"))
+        assertTrue(qwenGrounded.jsonBody.contains("\"max_output_tokens\":16384"))
         assertFalse(qwenGrounded.jsonBody.contains("\"tool_choice\""))
+        assertEquals(ProviderStreamTextMode.RESPONSES_API, qwen.streamTextMode(qwenOptions))
+        assertEquals(180_000, qwen.readTimeoutMillis(qwenModel, emptyList(), stream = true, options = qwenOptions))
+        assertEquals(300_000, qwen.maxStreamDurationMillis(qwenModel, emptyList(), qwenOptions))
+        val qwenChatSearch = ChatRequestOptions(OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS)
+        assertEquals(ProviderStreamTextMode.BUFFER_QWEN_WEB_SEARCH, qwen.streamTextMode(qwenChatSearch))
+        assertEquals(180_000, qwen.maxStreamDurationMillis(openRouter, emptyList(), qwenChatSearch))
+        val qwen38ChatSearch = qwen.prepare(qwenModel, listOf("user" to "查一下最新财报"), emptyList(), stream = true, options = qwenChatSearch) as ChatAdapterPrepareResult.Ready
+        assertTrue(qwen38ChatSearch.jsonBody.contains("\"enable_search\":true"))
+        assertTrue(qwen38ChatSearch.jsonBody.contains("\"forced_search\":true"))
+        assertTrue(qwen38ChatSearch.jsonBody.contains("\"reasoning_effort\":\"low\""))
+        assertTrue(qwen38ChatSearch.jsonBody.contains("\"max_completion_tokens\":16384"))
 
         val deepSeek = DeepSeekChatAdapter()
         val deepSeekOptions = ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
@@ -279,6 +384,20 @@ class ProviderAdapterContractsTest {
         assertTrue(deepSeekDirect.jsonBody.contains("\"tool_choice\":{\"type\":\"web_search\"}"))
         assertTrue(deepSeekDirect.jsonBody.contains("\"input\":[{\"role\":\"user\""))
         assertFalse(deepSeekDirect.jsonBody.contains("\"messages\":"))
+
+        val zhipu = ZhipuChatAdapter()
+        val zhipuOptions = ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)
+        val zhipuGrounded = zhipu.prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.ZHIPU, modelId = "glm-5.3"),
+            listOf("user" to "查一下最新财报"), emptyList(), stream = false, options = zhipuOptions,
+        ) as ChatAdapterPrepareResult.Ready
+        assertEquals(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS, zhipuOptions.webSearchRoute)
+        assertTrue(zhipuGrounded.jsonBody.contains("\"type\":\"web_search\""))
+        assertTrue(zhipuGrounded.jsonBody.contains("\"search_engine\":\"search_std\""))
+        assertTrue(zhipuGrounded.jsonBody.contains("\"search_result\":true"))
+        assertTrue(zhipuGrounded.jsonBody.contains("\"tool_choice\":\"auto\""))
+        assertTrue(zhipuGrounded.jsonBody.contains("\"thinking\":{\"type\":\"enabled\"}"))
+        assertTrue(zhipuGrounded.jsonBody.contains("\"reasoning_effort\":\"max\""))
     }
 
     @Test fun `a deep model selection alone never adds a web tool`() {
@@ -302,6 +421,16 @@ class ProviderAdapterContractsTest {
         assertEquals(listOf(ProviderWebSource("https://example.test/notice", "官方公告")), decoded?.webSources)
     }
 
+    @Test fun `Responses reasoning is retained separately and never concatenated into final reply`() {
+        val decoded = DeepSeekChatAdapter().decodeNonStreaming(
+            """{"output":[{"type":"reasoning","content":[{"type":"reasoning_text","text":"Let me search the latest index data first."}]},{"type":"message","content":[{"type":"output_text","text":"南烛枫，结论如下。"}]}],"usage":{"input_tokens":8,"output_tokens":5}}""",
+        ) as? ChatAdapterDecodedResult.Text
+
+        assertEquals("南烛枫，结论如下。", decoded?.text)
+        assertEquals("Let me search the latest index data first.", decoded?.reasoning)
+        assertFalse(decoded?.text.orEmpty().contains("Let me search"))
+    }
+
     @Test fun `Qwen Responses result keeps its public web-search source separately from model prose`() {
         val decoded = QwenChatAdapter().decodeNonStreaming(
             """{"output_text":"已根据实时来源完成检索。","output":[{"type":"web_search_call","action":{"sources":[{"url":"https://news.example.test/item","title":"公告"}]}}],"usage":{"input_tokens":9,"output_tokens":3}}""",
@@ -310,6 +439,48 @@ class ProviderAdapterContractsTest {
         assertEquals(9L, decoded?.inputTokens)
         assertEquals(3L, decoded?.outputTokens)
         assertEquals(listOf(ProviderWebSource("https://news.example.test/item", "公告")), decoded?.webSources)
+    }
+
+    @Test fun `Qwen Responses rejects a tool-trace-only payload instead of persisting it as an answer`() {
+        val decoded = QwenChatAdapter().decodeNonStreaming(
+            """{"output_text":"准备检索。<tool_use>{}</tool_use><tool_result>{}</tool_result>","output":[],"usage":{"input_tokens":9,"output_tokens":30}}""",
+        )
+
+        assertEquals(ChatAdapterDecodedResult.EmptyOrMalformed, decoded)
+    }
+
+    @Test fun `Qwen Responses stream exposes only answer deltas and terminal metadata`() {
+        val qwen = QwenChatAdapter()
+        val options = ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
+        val delta = qwen.decodeStreamingEvent(
+            """{"type":"response.output_text.delta","delta":"南烛枫，结论如下。"}""",
+            options,
+        )
+        val tool = qwen.decodeStreamingEvent(
+            """{"type":"response.web_search_call.searching","sequence_number":3}""",
+            options,
+        )
+        val completed = qwen.decodeStreamingEvent(
+            """{"type":"response.completed","response":{"output":[{"type":"web_search_call","action":{"sources":[{"url":"https://example.test/source","title":"官方来源"}]}}],"usage":{"input_tokens":9,"output_tokens":5,"output_tokens_details":{"reasoning_tokens":2}}}}""",
+            options,
+        )
+
+        assertEquals("南烛枫，结论如下。", delta?.text)
+        assertEquals(null, tool)
+        assertEquals(ProviderStreamTerminal.COMPLETED, completed?.terminal)
+        assertEquals(9L, completed?.inputTokens)
+        assertEquals(5L, completed?.outputTokens)
+        assertEquals(2L, completed?.reasoningTokens)
+        assertEquals(listOf(ProviderWebSource("https://example.test/source", "官方来源")), completed?.webSources)
+    }
+
+    @Test fun `Zhipu chat web search returns official sources without putting them in answer prose`() {
+        val decoded = ZhipuChatAdapter().decodeNonStreaming(
+            """{"choices":[{"message":{"content":"已核验。"}}],"web_search":[{"search_result":[{"title":"官方公告","link":"https://example.test/official"}]}],"usage":{"prompt_tokens":6,"completion_tokens":2}}""",
+        ) as? ChatAdapterDecodedResult.Text
+
+        assertEquals("已核验。", decoded?.text)
+        assertEquals(listOf(ProviderWebSource("https://example.test/official", "官方公告")), decoded?.webSources)
     }
 
     @Test fun `attachment budget comes from model profile metadata rather than adapter constants`() {

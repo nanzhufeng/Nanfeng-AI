@@ -135,6 +135,7 @@ class ScheduledMonitorExecutor(
         ProviderId.OPENROUTER -> ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)
         ProviderId.QWEN -> ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
         ProviderId.DEEPSEEK -> ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
+        ProviderId.ZHIPU -> ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)
         ProviderId.MOCK -> ChatRequestOptions.Standard
     }
 

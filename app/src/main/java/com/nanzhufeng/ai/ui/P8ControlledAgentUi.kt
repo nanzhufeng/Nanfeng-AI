@@ -102,7 +102,7 @@ internal fun P8ControlledAgentDialog(state: P8ControlledAgentUiState, dismiss: (
     onDismissRequest = dismiss, containerColor = ForegroundSurface,
     title = { Text("本地受控运行", fontWeight = FontWeight.SemiBold) },
     text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("本地受控运行 / 未连接模型与外部工具。不会读取 Key、Provider、网络、系统文件、其他应用或业务正文。", color = SecondaryText)
+        Text("只读检查本机账本，不联网。", color = SecondaryText)
         val ledger = state.ledger
         Text("账本：Run ${ledger?.runCount ?: "未知"} · Step ${ledger?.stepCount ?: "未知"} · Event ${ledger?.eventCount ?: "未知"} · Receipt ${ledger?.receiptCount ?: "未知"}", color = SecondaryText)
         Text("内建动作：p8c_local_ledger_inspect · READ_ONLY / LOCAL_READ · side effect 0 · 预算 1/1/0。", color = SecondaryText)
@@ -118,9 +118,9 @@ internal fun P8ControlledAgentDialog(state: P8ControlledAgentUiState, dismiss: (
                 }
             } }
         }
-        if (state.runs.isEmpty()) Text("暂无 durable Run。未因打开页面或重建进程创建运行。", color = SecondaryText)
+        if (state.runs.isEmpty()) Text("暂无运行记录。", color = SecondaryText)
         state.notice?.let { Text(it, color = BrandGreen) }; state.error?.let { Text(it, color = ErrorRed) }
     } },
     dismissButton = { TextButton(onClick = dismiss, enabled = !state.working) { Text("关闭") } },
-    confirmButton = { if (state.awaitingApproval) Button(onClick = confirm, enabled = !state.working) { Text("明确确认并执行只读自检") } else Button(onClick = begin, enabled = !state.working) { Text("创建本地只读计划") } },
+    confirmButton = { if (state.awaitingApproval) Button(onClick = confirm, enabled = !state.working) { Text("确认并运行") } else Button(onClick = begin, enabled = !state.working) { Text("创建检查计划") } },
 )

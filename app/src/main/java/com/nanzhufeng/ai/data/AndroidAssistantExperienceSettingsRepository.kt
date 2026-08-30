@@ -19,6 +19,7 @@ class AndroidAssistantExperienceSettingsRepository(context: Context) : Assistant
         // locally ranked for ordinary chat before this explicit setting was introduced.
         memoryRetrievalEnabled = preferences.getBoolean(MEMORY_RETRIEVAL_ENABLED, true),
         librarySearchEnabled = preferences.getBoolean(LIBRARY_SEARCH_ENABLED, true),
+        autoHistoryKnowledgeEnabled = preferences.getBoolean(AUTO_HISTORY_KNOWLEDGE_ENABLED, false),
         webSearchEnabled = preferences.getBoolean(WEB_SEARCH_ENABLED, true),
         conversationStyle = runCatching {
             ConversationStyle.valueOf(preferences.getString(CONVERSATION_STYLE, null).orEmpty())
@@ -35,6 +36,7 @@ class AndroidAssistantExperienceSettingsRepository(context: Context) : Assistant
                 .putString(CUSTOM_INSTRUCTIONS, settings.customInstructions)
                 .putBoolean(MEMORY_RETRIEVAL_ENABLED, settings.memoryRetrievalEnabled)
                 .putBoolean(LIBRARY_SEARCH_ENABLED, settings.librarySearchEnabled)
+                .putBoolean(AUTO_HISTORY_KNOWLEDGE_ENABLED, settings.autoHistoryKnowledgeEnabled)
                 .putBoolean(WEB_SEARCH_ENABLED, settings.webSearchEnabled)
                 .putString(CONVERSATION_STYLE, settings.conversationStyle.name)
                 .commit(),
@@ -51,6 +53,7 @@ class AndroidAssistantExperienceSettingsRepository(context: Context) : Assistant
         const val CUSTOM_INSTRUCTIONS = "custom_instructions"
         const val MEMORY_RETRIEVAL_ENABLED = "memory_retrieval_enabled"
         const val LIBRARY_SEARCH_ENABLED = "library_search_enabled"
+        const val AUTO_HISTORY_KNOWLEDGE_ENABLED = "auto_history_knowledge_enabled"
         const val WEB_SEARCH_ENABLED = "web_search_enabled"
         const val CONVERSATION_STYLE = "conversation_style"
     }

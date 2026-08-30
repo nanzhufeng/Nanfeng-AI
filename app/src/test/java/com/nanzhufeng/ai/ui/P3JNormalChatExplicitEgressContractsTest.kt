@@ -110,7 +110,17 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertTrue(executor.contains("webSearchRoute=\${options.webSearchRoute.name}"))
         assertTrue(executor.contains("recordResponseFormatDiagnostic"))
         assertTrue(workspace.contains("OpenRouter · 官方实时联网检索"))
-        assertTrue(workspace.contains("DeepSeek · 官方实时联网检索"))
+        assertTrue(workspace.contains("deepSeekPricingPeriod.pickerLabel"))
+        assertTrue(workspace.contains("· 官方实时联网检索"))
+    }
+
+    @Test fun `Qwen Responses search streams the final answer without accepting tool traces or partial EOF`() {
+        assertTrue(adapters.contains("OfficialWebSearchRoute.QWEN_RESPONSES -> ProviderStreamTextMode.RESPONSES_API"))
+        assertTrue(adapters.contains("\\\"store\\\":false,\\\"stream\\\":"))
+        assertTrue(executor.contains("adapter.decodeStreamingEvent(event, requestOptions)"))
+        assertTrue(executor.contains("adapter.readTimeoutMillis(resolvedModel, providerAttachments, stream, requestOptions)"))
+        assertTrue(executor.contains("outcome.finishReason in setOf(\"INCOMPLETE\", \"FAILED\", \"MISSING_COMPLETION\")"))
+        assertTrue(executor.contains("appendProviderWebSources(reply, outcome.webSources)"))
     }
 
     @Test fun `process recovery is service owned and Activity never changes an in flight task`() {

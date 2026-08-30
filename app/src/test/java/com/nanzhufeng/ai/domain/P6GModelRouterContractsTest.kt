@@ -1,6 +1,7 @@
 package com.nanzhufeng.ai.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -87,26 +88,39 @@ class P6GModelRouterContractsTest {
             ComposerModelRoutingCatalog.choices.map { it.label },
             P6GCuratedModelCatalog.snapshot().candidates.map { it.displayName },
         )
+        assertEquals(
+            setOf(ComposerModelSlot.AUTO, ComposerModelSlot.DAILY, ComposerModelSlot.DEEP),
+            ComposerModelRoutingCatalog.choices.map { it.slot }.toSet(),
+        )
+        assertEquals(ComposerModelRoutingCatalog.auto, ComposerModelRoutingCatalog.choice("logical:compare:gpt-claude"))
+        assertEquals(ComposerModelRoutingCatalog.auto, ComposerModelRoutingCatalog.choice("logical:media:gemini-flash"))
     }
 
     @Test fun `composer picker preserves the approved daily and deep ordering`() {
         assertEquals(
-            listOf("Claude Sonnet 5", "GPT-5.6 Terra", "Qwen3.7-Plus", "Gemini 3.7 Flash"),
+            listOf("Claude Sonnet 5", "DeepSeek V4 Flash", "GPT-5.6 Terra", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 3.7 Flash"),
             ComposerModelRoutingCatalog.daily.map { it.label },
         )
         assertEquals(
-            listOf("Claude Opus 5", "GPT-5.6 Sol", "Qwen3.8-Max", "DeepSeek V4 Pro"),
+            listOf("Claude Fable 5", "Claude Opus 5", "DeepSeek V4 Pro", "GPT-5.6 Sol", "GLM-5.3", "Qwen3.8-Max"),
             ComposerModelRoutingCatalog.deep.map { it.label },
         )
     }
 
     @Test fun `composer uses compact labels while picker retains complete catalog names`() {
-        assertEquals("GPT-5.6 Sol", ComposerModelRoutingCatalog.deep[1].label)
+        assertEquals("Claude Fable 5", ComposerModelRoutingCatalog.deep[0].label)
+        assertEquals("DeepSeek V4 Pro", ComposerModelRoutingCatalog.deep[2].label)
+        assertEquals("GPT-5.6 Sol", ComposerModelRoutingCatalog.deep[3].label)
         assertEquals("Claude Sonnet 5", ComposerModelRoutingCatalog.daily[0].label)
-        assertEquals("5.6 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[1].label))
+        assertEquals("Fable 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[0].label))
+        assertEquals("V4 Pro", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[2].label))
+        assertEquals("5.6 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[3].label))
         assertEquals("Sonnet 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.daily[0].label))
         assertEquals("3.7 Flash", composerModelShortNameForUser("Gemini 3.7 Flash"))
+        assertEquals("GLM 5.3", composerModelShortNameForUser("GLM-5.3"))
+        assertEquals("5.3 Flash", composerModelShortNameForUser("GLM-5.3 Flash"))
         assertEquals("V4 Pro", composerModelShortNameForUser("DeepSeek V4 Pro"))
+        assertEquals("V4 Flash", composerModelShortNameForUser("DeepSeek V4 Flash"))
     }
 
     @Test fun `legacy provider and route decorations normalize to the curated model name`() {
@@ -115,10 +129,34 @@ class P6GModelRouterContractsTest {
         assertEquals("DeepSeek V4 Pro", modelDisplayNameForUser("模型：DeepSeek V4 Pro · 通义千问官方实时检索"))
     }
 
-    @Test fun `automatic routing follows media knowledge and complex-debug priorities`() {
-        assertEquals(ModelPresetId.GPT_5_6_TERRA, AutoModelRouter.resolve(AutoRoutingFacts()))
-        assertEquals(ModelPresetId.GEMINI_3_7_FLASH, AutoModelRouter.resolve(AutoRoutingFacts(hasImageVideoOrPdf = true, knowledgeItemCount = 900, isComplexProjectDebug = true)))
-        assertEquals(ModelPresetId.QWEN_3_6_FLASH, AutoModelRouter.resolve(AutoRoutingFacts(knowledgeItemCount = 500, isComplexProjectDebug = true)))
-        assertEquals(ModelPresetId.GPT_5_6_SOL, AutoModelRouter.resolve(AutoRoutingFacts(isComplexProjectDebug = true)))
+    @Test fun `automatic routing follows explicit default attachment and complex priorities`() {
+        assertEquals(ModelPresetId.DEEPSEEK_V4_FLASH, AutoModelRouter.resolve(AutoRoutingFacts()))
+        assertEquals(ModelPresetId.QWEN_3_7_PLUS, AutoModelRouter.resolve(AutoRoutingFacts(hasAttachment = true, requiresComplexReasoning = true)))
+        assertEquals(ModelPresetId.GPT_5_6_SOL, AutoModelRouter.resolve(AutoRoutingFacts(requiresComplexReasoning = true)))
+        assertEquals(
+            listOf(ModelPresetId.DEEPSEEK_V4_FLASH, ModelPresetId.GPT_5_6_TERRA, ModelPresetId.CLAUDE_SONNET_5),
+            AutoModelRouter.candidates(AutoRoutingFacts()).take(3),
+        )
+        listOf(
+            AutoRoutingFacts(),
+            AutoRoutingFacts(requiresComplexReasoning = true),
+            AutoRoutingFacts(hasAttachment = true),
+        ).forEach { facts ->
+            val candidates = AutoModelRouter.candidates(facts)
+            assertEquals(NanfengModelServiceCatalog.chatPresets.map { it.id }.toSet(), candidates.toSet())
+            assertTrue(candidates.contains(ModelPresetId.GLM_5_3))
+            assertTrue(candidates.indexOf(ModelPresetId.GLM_5_3) < candidates.indexOf(ModelPresetId.QWEN_3_8_MAX))
+        }
+        assertEquals(
+            ModelPresetId.GEMINI_3_7_FLASH,
+            AutoModelRouter.candidates(AutoRoutingFacts(hasAttachment = true)).last(),
+        )
+    }
+
+    @Test fun `automatic routing classifier escalates only explicit deep work or very long prompts`() {
+        assertFalse(AutoRoutingTaskClassifier.requiresComplexReasoning("帮我概括这段话"))
+        assertFalse(AutoRoutingTaskClassifier.requiresComplexReasoning("分析一下这家公司"))
+        assertTrue(AutoRoutingTaskClassifier.requiresComplexReasoning("请做完整方案，并说明架构设计与权衡"))
+        assertTrue(AutoRoutingTaskClassifier.requiresComplexReasoning("a".repeat(2_400)))
     }
 }

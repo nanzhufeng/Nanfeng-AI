@@ -20,7 +20,7 @@ class CapabilityAwareAutoModelRouterTest {
         )
 
         val result = CapabilityAwareAutoModelRouter(resolver).resolve(
-            AutoRoutingFacts(hasImageVideoOrPdf = true, requiresPdf = true),
+            AutoRoutingFacts(hasAttachment = true, requiresPdf = true),
         ) { it == ModelPresetId.DEEPSEEK_V4_PRO || it == ModelPresetId.QWEN_3_7_PLUS }
 
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, result)
@@ -33,7 +33,7 @@ class CapabilityAwareAutoModelRouterTest {
         )
 
         val result = CapabilityAwareAutoModelRouter(resolver).resolve(
-            AutoRoutingFacts(hasImageVideoOrPdf = true, requiresVideo = true),
+            AutoRoutingFacts(hasAttachment = true, requiresVideo = true),
         ) { it == ModelPresetId.GEMINI_3_7_FLASH || it == ModelPresetId.QWEN_3_7_PLUS }
 
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, result)
@@ -46,9 +46,26 @@ class CapabilityAwareAutoModelRouterTest {
         )
 
         val routed = CapabilityAwareAutoModelRouter(resolver).resolve(
-            AutoRoutingFacts(hasImageVideoOrPdf = true, requiresAudio = true),
+            AutoRoutingFacts(hasAttachment = true, requiresAudio = true),
         ) { it == ModelPresetId.GPT_5_6_TERRA || it == ModelPresetId.QWEN_3_7_PLUS }
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, routed)
+    }
+
+    @Test fun `degraded primary is demoted behind a healthy compatible fallback`() {
+        val resolver = fixtureResolver(
+            ModelPresetId.DEEPSEEK_V4_FLASH to profile(
+                ModelPresetId.DEEPSEEK_V4_FLASH,
+                ProviderId.DEEPSEEK,
+                health = ModelHealth.DEGRADED,
+            ),
+            ModelPresetId.GPT_5_6_TERRA to profile(ModelPresetId.GPT_5_6_TERRA, ProviderId.OPENROUTER),
+        )
+
+        val routed = CapabilityAwareAutoModelRouter(resolver).resolve(AutoRoutingFacts()) {
+            it == ModelPresetId.DEEPSEEK_V4_FLASH || it == ModelPresetId.GPT_5_6_TERRA
+        }
+
+        assertEquals(ModelPresetId.GPT_5_6_TERRA, routed)
     }
 
     private fun fixtureResolver(vararg entries: Pair<ModelPresetId, ResolvedModel>) = ModelResolver { preset ->

@@ -21,6 +21,7 @@ import com.nanzhufeng.ai.domain.MessageRevision
 import com.nanzhufeng.ai.domain.MessageRole
 import com.nanzhufeng.ai.domain.MessageTree
 import com.nanzhufeng.ai.domain.ProviderId
+import com.nanzhufeng.ai.domain.PrivateAttachmentStore
 import com.nanzhufeng.ai.domain.InvocationId
 import com.nanzhufeng.ai.domain.AiRuntimeEvent
 import com.nanzhufeng.ai.domain.ConversationRuntimePersistenceResult
@@ -35,12 +36,19 @@ import com.nanzhufeng.ai.domain.ConversationActionIntentId
 import com.nanzhufeng.ai.domain.ConversationActionKind
 import com.nanzhufeng.ai.domain.ConversationModelSelection
 import com.nanzhufeng.ai.domain.ConversationDraftRepository
+import com.nanzhufeng.ai.domain.ConversationMessageAttachmentRepository
+import com.nanzhufeng.ai.domain.MessageAttachmentUnlinkResult
 import com.nanzhufeng.ai.domain.ConversationDraftSubmissionResult
 import com.nanzhufeng.ai.domain.ConversationManagementIntent
 import com.nanzhufeng.ai.domain.ConversationManagementRepository
 import com.nanzhufeng.ai.domain.ConversationManagementResult
 import com.nanzhufeng.ai.domain.ConversationPurgeResult
 import com.nanzhufeng.ai.domain.ConversationSearchRepository
+import com.nanzhufeng.ai.domain.OptimizedConversationSearchRepository
+import com.nanzhufeng.ai.domain.ConversationSearchHit
+import com.nanzhufeng.ai.domain.ConversationAttachmentSearchHit
+import com.nanzhufeng.ai.domain.ConversationSearchCategory
+import com.nanzhufeng.ai.domain.conversationAttachmentSearchCategory
 import com.nanzhufeng.ai.domain.LocalSearchIndexRepository
 import com.nanzhufeng.ai.domain.LocalSearchIndexRecord
 import com.nanzhufeng.ai.domain.ConversationListRepository
@@ -55,8 +63,14 @@ import com.nanzhufeng.ai.domain.payloadFingerprint
 import java.time.Instant
 import java.util.concurrent.Callable
 
-/** Room owns only atomic persistence/rebuild. It never chooses a branch or rewrites a message. */
-class RoomConversationRepository(private val database: NanfengAiDatabase) : ConversationRepository, ConversationDraftRepository, ConversationRuntimeRepository, ConversationActionRepository, ConversationManagementRepository, ConversationSearchRepository, LocalSearchIndexRepository, ConversationListRepository, ConversationSurfaceRepository, ImportedConversationProvenanceReader {
+/**
+ * Room owns atomic persistence/rebuild. It never chooses a branch; the one explicit attachment
+ * unlink port may rewrite only the targeted content block while preserving its message node.
+ */
+class RoomConversationRepository(
+    private val database: NanfengAiDatabase,
+    private val privateAttachmentStore: PrivateAttachmentStore? = null,
+) : ConversationRepository, ConversationDraftRepository, ConversationMessageAttachmentRepository, ConversationRuntimeRepository, ConversationActionRepository, ConversationManagementRepository, ConversationSearchRepository, OptimizedConversationSearchRepository, LocalSearchIndexRepository, ConversationListRepository, ConversationSurfaceRepository, ImportedConversationProvenanceReader {
     private companion object {
         const val RECENT_MESSAGES_EXCLUDED_FROM_SUMMARY = 8
         const val ROLLING_SUMMARY_MAX_CHARS = 1_800
@@ -65,8 +79,68 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
         persistSnapshot(database.conversationDao(), snapshot)
     }
 
-    override fun permanentlyDelete(conversationId: ConversationId, expectedRevision: Long): ConversationPurgeResult =
-        database.inConversationTransaction {
+    override fun unlinkMessageAttachment(
+        conversationId: ConversationId,
+        messageNodeId: MessageNodeId,
+        attachmentId: AttachmentId,
+        expectedSha256: String,
+        updatedAt: Instant,
+    ): MessageAttachmentUnlinkResult = database.inConversationTransaction {
+        val dao = database.conversationDao()
+        val snapshot = dao.loadSnapshot(conversationId)
+            ?: return@inConversationTransaction MessageAttachmentUnlinkResult.Rejected("所属对话已不存在，附件没有改变。")
+        val currentPathIds = MessageTree(snapshot.conversation, snapshot.nodes).contextPath().mapTo(mutableSetOf(), MessageNode::id)
+        if (messageNodeId !in currentPathIds) {
+            return@inConversationTransaction MessageAttachmentUnlinkResult.Rejected("搜索结果已变化，请刷新后再删除附件。")
+        }
+        val target = snapshot.nodes.firstOrNull { it.id == messageNodeId }
+            ?: return@inConversationTransaction MessageAttachmentUnlinkResult.Rejected("所属消息已不存在，附件没有改变。")
+        val matching = target.content.filterIsInstance<ContentBlock.Attachment>()
+            .filter { it.attachment.id == attachmentId && it.attachment.sha256 == expectedSha256 }
+        if (matching.size != 1) {
+            return@inConversationTransaction MessageAttachmentUnlinkResult.Rejected("附件引用已变化，请刷新后重试。")
+        }
+        val removed = matching.single().attachment
+        val remaining = target.content.filterNot { block ->
+            block is ContentBlock.Attachment && block.attachment.id == attachmentId && block.attachment.sha256 == expectedSha256
+        }
+        val nextContent = remaining.ifEmpty { listOf(ContentBlock.Text("附件已删除")) }
+        val nextNode = target.copy(content = nextContent)
+        val nextConversation = snapshot.conversation.copy(
+            updatedAt = updatedAt,
+            revision = snapshot.conversation.revision + 1,
+        )
+        check(dao.update(nextConversation.toEntity()) == 1) { "附件删除时无法更新所属对话。" }
+        dao.deleteBlocks(messageNodeId.value)
+        dao.insertBlocks(nextNode.content.mapIndexed { position, block -> block.toEntity(messageNodeId, position) })
+        database.p6kZipImportTaskDao().deleteAssetOccurrenceReceiptsForMessageAttachment(
+            conversationId.value,
+            messageNodeId.value,
+            attachmentId.value,
+        )
+        database.p6kZipImportTaskDao().deleteAssetLinkReceiptsForMessageAttachment(
+            conversationId.value,
+            messageNodeId.value,
+            attachmentId.value,
+        )
+        database.p6kZipImportTaskDao().deleteAssetLinkProvenanceForMessageAttachment(
+            conversationId.value,
+            messageNodeId.value,
+            attachmentId.value,
+        )
+        replaceSafeSearchIndex(
+            dao,
+            snapshot.copy(
+                conversation = nextConversation,
+                nodes = snapshot.nodes.map { if (it.id == messageNodeId) nextNode else it },
+            ),
+        )
+        MessageAttachmentUnlinkResult.Unlinked(removed)
+    }
+
+    override fun permanentlyDelete(conversationId: ConversationId, expectedRevision: Long): ConversationPurgeResult {
+        var attachmentIds = emptySet<AttachmentId>()
+        val result = database.inConversationTransaction {
             val dao = database.conversationDao()
             val stored = dao.loadSnapshot(conversationId) ?: return@inConversationTransaction ConversationPurgeResult.Rejected("会话不存在，未执行删除。")
             if (stored.conversation.revision != expectedRevision) {
@@ -76,6 +150,17 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
                 return@inConversationTransaction ConversationPurgeResult.Rejected("只能永久删除回收站中的会话。")
             }
             val id = conversationId.value
+            attachmentIds = buildSet {
+                stored.nodes.flatMap { it.content }.filterIsInstance<ContentBlock.Attachment>().forEach { add(it.attachment.id) }
+                stored.draft.attachments.forEach { add(it.id) }
+            }
+            // Imported ownership rows are derivative of the conversation/message reference. They
+            // must leave with a permanent purge or they keep deleted media artificially alive.
+            database.openHelper.writableDatabase.execSQL("DELETE FROM p6k_zip_asset_occurrence_receipt WHERE conversationId=?", arrayOf(id))
+            database.openHelper.writableDatabase.execSQL("DELETE FROM p6k_zip_asset_link_receipts WHERE conversationId=?", arrayOf(id))
+            database.openHelper.writableDatabase.execSQL("DELETE FROM p6k_zip_asset_link_provenance WHERE conversationId=?", arrayOf(id))
+            database.openHelper.writableDatabase.execSQL("DELETE FROM p6k_zip_import_message_provenance WHERE conversationId=?", arrayOf(id))
+            database.openHelper.writableDatabase.execSQL("DELETE FROM p6k_zip_import_provenance WHERE conversationId=?", arrayOf(id))
             dao.deleteBlocksForConversation(id)
             dao.deleteNodesForConversation(id)
             dao.deleteDraftAttachments(id)
@@ -92,6 +177,14 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
             if (dao.deleteConversation(id) != 1) return@inConversationTransaction ConversationPurgeResult.Rejected("会话删除未完成。")
             ConversationPurgeResult.Deleted
         }
+        if (result == ConversationPurgeResult.Deleted && privateAttachmentStore != null) {
+            val assets = RoomPrivateAttachmentRepository(database)
+            attachmentIds.forEach { attachmentId ->
+                assets.deleteIfUnreferenced(attachmentId, privateAttachmentStore::deletePrivateCopy)
+            }
+        }
+        return result
+    }
 
     /** Adapter-owned commit stores call this only inside the same Room transaction as their receipt. */
     internal fun persistInExistingTransaction(snapshot: ConversationSnapshot): ConversationSnapshot =
@@ -169,6 +262,24 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
         else -> null
     }
 
+    override fun importSources(conversationIds: Collection<ConversationId>): Map<ConversationId, com.nanzhufeng.ai.domain.ConversationImportSource> {
+        val ids = conversationIds.distinct().map(ConversationId::value)
+        if (ids.isEmpty()) return emptyMap()
+        val batches = ids.chunked(ROOM_IN_QUERY_BATCH_SIZE)
+        val chatGpt = batches.flatMap(database.chatGptExportImportTaskDao()::conversationIdsWithProvenance).toSet()
+        val claude = batches.flatMap(database.claudeExportImportTaskDao()::conversationIdsWithProvenance).toSet()
+        val zip = batches.flatMap(database.p6kZipImportTaskDao()::conversationIdsWithProvenance).toSet()
+        return ids.mapNotNull { id ->
+            val source = when (id) {
+                in chatGpt -> com.nanzhufeng.ai.domain.ConversationImportSource.CHATGPT_JSON
+                in claude -> com.nanzhufeng.ai.domain.ConversationImportSource.CLAUDE_JSON
+                in zip -> com.nanzhufeng.ai.domain.ConversationImportSource.CHATGPT_ZIP
+                else -> null
+            }
+            source?.let { ConversationId(id) to it }
+        }.toMap()
+    }
+
     override fun loadDraft(conversationId: ConversationId): ConversationDraft? =
         database.conversationDao().loadSnapshot(conversationId)?.draft
 
@@ -235,8 +346,8 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
             if (normalized.isNotBlank()) rows += LocalSearchIndexEntity(id, conversation.id.value, messageId, kind, conversation.title, normalized, raw.trim().replace(Regex("\\s+"), " ").take(snippetLimit), timestamp, conversation.archivedAt?.toEpochMilli(), conversation.deletedAt?.toEpochMilli())
         }
         add("${conversation.id.value}:title", null, "TEXT", conversation.title, conversation.updatedAt.toEpochMilli())
-        val contextPath = MessageTree(conversation, snapshot.nodes).contextPath()
-        contextPath.forEach { node ->
+        val searchableNodes = snapshot.nodes.filter { it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT }
+        searchableNodes.forEach { node ->
             if (node.role == MessageRole.USER || node.role == MessageRole.ASSISTANT) {
                 node.content.filterIsInstance<ContentBlock.Text>().forEachIndexed { index, text -> add("${conversation.id.value}:${node.id.value}:text:$index", node.id.value, "TEXT", text.text, node.createdAt.toEpochMilli()) }
                 node.content.filterIsInstance<ContentBlock.Attachment>().forEachIndexed { index, attachment ->
@@ -245,6 +356,7 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
                 }
             }
         }
+        val contextPath = MessageTree(conversation, snapshot.nodes).contextPath()
         val rollingSummary = contextPath
             .filter { it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT }
             .dropLast(RECENT_MESSAGES_EXCLUDED_FROM_SUMMARY)
@@ -274,33 +386,123 @@ class RoomConversationRepository(private val database: NanfengAiDatabase) : Conv
 
     override fun findById(id: ConversationId): ConversationSnapshot? = database.conversationDao().loadSnapshot(id)
 
-    override fun listActive(): List<Conversation> = database.conversationDao().listVisibleActiveConversations().map { entity ->
-        entity.toDomain(database.conversationDao().memorySourcesFor(entity.id))
+    override fun listActive(): List<Conversation> = database.conversationDao().let { dao ->
+        dao.restoreConversationList(dao.listVisibleActiveConversations())
     }
 
-    override fun list(scope: ConversationListScope): List<Conversation> = when (scope) {
-        ConversationListScope.ACTIVE -> database.conversationDao().listVisibleActiveConversations()
-        ConversationListScope.FAVORITES -> database.conversationDao().listFavoriteConversations()
-        ConversationListScope.ARCHIVED -> database.conversationDao().listArchivedConversations()
-        ConversationListScope.DELETED -> database.conversationDao().listDeletedConversations()
-        ConversationListScope.ALL -> database.conversationDao().listAllNonDeletedConversations()
-    }.map { entity -> entity.toDomain(database.conversationDao().memorySourcesFor(entity.id)) }
+    override fun list(scope: ConversationListScope): List<Conversation> = database.conversationDao().let { dao ->
+        dao.restoreConversationList(when (scope) {
+            ConversationListScope.ACTIVE -> dao.listVisibleActiveConversations()
+            ConversationListScope.FAVORITES -> dao.listFavoriteConversations()
+            ConversationListScope.ARCHIVED -> dao.listArchivedConversations()
+            ConversationListScope.DELETED -> dao.listDeletedConversations()
+            ConversationListScope.ALL -> dao.listAllNonDeletedConversations()
+        })
+    }
 
-    override fun listActive(surface: ConversationSurface): List<Conversation> = when (surface) {
-        ConversationSurface.CHAT -> database.conversationDao().listVisibleActiveConversations()
-        ConversationSurface.WORK -> database.conversationDao().listActiveWorkConversations()
-    }.map { entity -> entity.toDomain(database.conversationDao().memorySourcesFor(entity.id)) }
+    override fun listActive(surface: ConversationSurface): List<Conversation> = database.conversationDao().let { dao ->
+        dao.restoreConversationList(when (surface) {
+            ConversationSurface.CHAT -> dao.listVisibleActiveConversations()
+            ConversationSurface.WORK -> dao.listActiveWorkConversations()
+        })
+    }
 
     override fun snapshotsForSearch(): List<ConversationSnapshot> = database.conversationDao().listAllNonDeletedConversations()
         .mapNotNull { database.conversationDao().loadSnapshot(ConversationId(it.id)) }
 
+    override fun browseConversationHits(scope: ConversationListScope): List<ConversationSearchHit> =
+        database.inConversationTransaction {
+            val dao = database.conversationDao()
+            repairIncompleteTextSearchIndex(dao)
+            dao.browseLocalTextIndex(scope.name).map { row ->
+                ConversationSearchHit(
+                    conversationId = ConversationId(row.conversationId),
+                    messageNodeId = requireNotNull(row.messageNodeId).let(::MessageNodeId),
+                    title = row.title,
+                    snippet = row.snippet.take(240),
+                    titleMatch = false,
+                )
+            }
+        }
+
+    override fun searchCurrentPathHits(query: String, scope: ConversationListScope): List<ConversationSearchHit> {
+        val normalized = query.trim().replace(Regex("\\s+"), " ").lowercase(java.util.Locale.ROOT)
+        if (normalized.isBlank()) return emptyList()
+        return database.conversationDao().searchCurrentPathTextRows(normalized, scope.name, 100).map { row ->
+            ConversationSearchHit(
+                conversationId = ConversationId(row.conversationId),
+                messageNodeId = MessageNodeId(row.messageNodeId),
+                title = row.title,
+                snippet = row.text.searchSnippet(normalized),
+                titleMatch = false,
+            )
+        }
+    }
+
+    override fun browseAttachmentHits(
+        category: ConversationSearchCategory,
+        scope: ConversationListScope,
+    ): List<ConversationAttachmentSearchHit> = attachmentHits("", category, scope)
+
+    override fun searchAttachmentHits(
+        query: String,
+        category: ConversationSearchCategory,
+        scope: ConversationListScope,
+    ): List<ConversationAttachmentSearchHit> {
+        val normalized = query.trim().replace(Regex("\\s+"), " ").lowercase(java.util.Locale.ROOT)
+        if (normalized.isBlank()) return emptyList()
+        return attachmentHits(normalized, category, scope)
+    }
+
+    private fun attachmentHits(
+        normalizedQuery: String,
+        category: ConversationSearchCategory,
+        scope: ConversationListScope,
+    ): List<ConversationAttachmentSearchHit> {
+        if (category == ConversationSearchCategory.TEXT) return emptyList()
+        return database.conversationDao().currentPathAttachmentRows(normalizedQuery, scope.name)
+            .asSequence()
+            .mapNotNull { row ->
+                val id = row.attachmentId ?: return@mapNotNull null
+                val mime = row.mimeType ?: return@mapNotNull null
+                val byteCount = row.byteCount ?: return@mapNotNull null
+                val sha256 = row.sha256 ?: return@mapNotNull null
+                val attachment = ConversationAttachmentReference(
+                    id = AttachmentId(id),
+                    mimeType = mime,
+                    displayName = row.displayName,
+                    byteCount = byteCount,
+                    sha256 = sha256,
+                )
+                if (category != ConversationSearchCategory.ALL && attachment.searchCategory() != category) return@mapNotNull null
+                ConversationAttachmentSearchHit(
+                    conversationId = ConversationId(row.conversationId),
+                    messageNodeId = MessageNodeId(row.messageNodeId),
+                    title = row.title,
+                    attachment = attachment,
+                    timestampEpochMs = row.createdAtEpochMs,
+                    matchSnippet = row.messageText.takeIf {
+                        normalizedQuery.isNotBlank() && it.lowercase(java.util.Locale.ROOT).contains(normalizedQuery)
+                    }?.searchSnippet(normalizedQuery),
+                )
+            }
+            .distinctBy { "${it.conversationId.value}:${it.messageNodeId.value}:${it.attachment.id.value}" }
+            .toList()
+    }
+
     override fun searchLocalIndex(normalizedQuery: String, scope: ConversationListScope): List<LocalSearchIndexRecord> = database.inConversationTransaction {
         val dao = database.conversationDao()
-        if (dao.searchIndexCount() == 0) dao.listAllNonDeletedConversations().forEach { entity ->
-            dao.loadSnapshot(ConversationId(entity.id))?.let { replaceSafeSearchIndex(dao, it) }
-        }
+        repairIncompleteTextSearchIndex(dao)
         dao.searchLocalIndex(normalizedQuery, scope.name).map { row ->
             LocalSearchIndexRecord(ConversationId(row.conversationId), row.messageNodeId?.let(::MessageNodeId), row.title, row.snippet, row.contentKind, row.timestampEpochMs, row.contentKind == "TEXT" && row.messageNodeId == null)
+        }
+    }
+
+    /** Older releases indexed only the selected branch. Repair just the incomplete conversations
+     * on first browse/search so already imported ChatGPT trees become complete without a DB reset. */
+    private fun repairIncompleteTextSearchIndex(dao: ConversationDao) {
+        dao.conversationIdsWithIncompleteTextSearchIndex().forEach { rawId ->
+            dao.loadSnapshot(ConversationId(rawId))?.let { replaceSafeSearchIndex(dao, it) }
         }
     }
 
@@ -549,7 +751,8 @@ private fun ConversationDao.update(entity: ConversationEntity): Int = updateConv
 )
 
 private fun ConversationDao.loadSnapshot(id: ConversationId): ConversationSnapshot? = findConversation(id.value)?.let { entity ->
-    val nodes = nodesFor(entity.id).map(::loadNode)
+    val blocksByMessageId = blocksForConversation(entity.id).groupBy(MessageContentBlockEntity::messageId)
+    val nodes = nodesFor(entity.id).map { node -> loadNode(node, blocksByMessageId[node.id].orEmpty()) }
     ConversationSnapshot(
         conversation = entity.toDomain(memorySourcesFor(entity.id)),
         nodes = nodes,
@@ -564,13 +767,18 @@ private fun ConversationDao.loadSnapshot(id: ConversationId): ConversationSnapsh
     )
 }
 
-private fun ConversationDao.loadNode(entity: MessageNodeEntity): MessageNode = MessageNode(
+private fun ConversationDao.loadNode(entity: MessageNodeEntity): MessageNode = loadNode(entity, blocksFor(entity.id))
+
+private fun ConversationDao.loadNode(
+    entity: MessageNodeEntity,
+    blocks: List<MessageContentBlockEntity>,
+): MessageNode = MessageNode(
     id = MessageNodeId(entity.id),
     conversationId = ConversationId(entity.conversationId),
     parentMessageId = entity.parentMessageId?.let(::MessageNodeId),
     siblingPosition = entity.siblingPosition,
     role = MessageRole.valueOf(entity.role),
-    content = blocksFor(entity.id).map(MessageContentBlockEntity::toDomain),
+    content = blocks.map(MessageContentBlockEntity::toDomain),
     createdAt = Instant.ofEpochMilli(entity.createdAtEpochMs),
     deliveryState = MessageDeliveryState.valueOf(entity.deliveryState),
     revision = MessageRevision(entity.revision, entity.revisesMessageId?.let(::MessageNodeId)),
@@ -580,6 +788,17 @@ private fun ConversationDao.loadNode(entity: MessageNodeEntity): MessageNode = M
     },
     schemaVersion = entity.schemaVersion,
 )
+
+private fun ConversationDao.restoreConversationList(entities: List<ConversationEntity>): List<Conversation> {
+    if (entities.isEmpty()) return emptyList()
+    val memorySourcesByConversation = entities.map(ConversationEntity::id)
+        .chunked(ROOM_IN_QUERY_BATCH_SIZE)
+        .flatMap(::memorySourcesForConversations)
+        .groupBy(ConversationMemorySourceEntity::conversationId)
+    return entities.map { entity -> entity.toDomain(memorySourcesByConversation[entity.id].orEmpty()) }
+}
+
+private const val ROOM_IN_QUERY_BATCH_SIZE = 900
 
 private fun Conversation.toEntity() = ConversationEntity(
     id = id.value,
@@ -646,6 +865,7 @@ private fun MessageNode.toEntity() = MessageNodeEntity(
 
 private fun ContentBlock.toEntity(messageId: MessageNodeId, position: Int): MessageContentBlockEntity = when (this) {
     is ContentBlock.Text -> MessageContentBlockEntity(messageId.value, position, "TEXT", text, null, null, null, null, null, null, null, null, schemaVersion)
+    is ContentBlock.Reasoning -> MessageContentBlockEntity(messageId.value, position, "REASONING", text, null, null, null, null, null, null, null, null, schemaVersion)
     is ContentBlock.Attachment -> MessageContentBlockEntity(
         // Schema 7 retains this column for compatibility. P3-G stores only the stable ID here,
         // never an app-private storage key; Attachment Domain resolves the asset separately.
@@ -659,6 +879,7 @@ private fun ContentBlock.toEntity(messageId: MessageNodeId, position: Int): Mess
 
 private fun MessageContentBlockEntity.toDomain(): ContentBlock = when (kind) {
     "TEXT" -> ContentBlock.Text(requireNotNull(textContent) { "文本内容块缺少正文。" }, schemaVersion)
+    "REASONING" -> ContentBlock.Reasoning(requireNotNull(textContent) { "思考过程内容块缺少正文。" }, schemaVersion)
     "ATTACHMENT" -> ContentBlock.Attachment(
         ConversationAttachmentReference(
             id = AttachmentId(requireNotNull(attachmentId) { "附件内容块缺少 ID。" }),
@@ -702,5 +923,14 @@ private fun ConversationDraftAttachmentEntity.toAttachment() = ConversationAttac
     byteCount = requireNotNull(byteCount) { "对话草稿附件缺少大小。" },
     sha256 = requireNotNull(sha256) { "对话草稿附件缺少摘要。" },
 )
+
+private fun String.searchSnippet(query: String): String {
+    val index = lowercase(java.util.Locale.ROOT).indexOf(query).coerceAtLeast(0)
+    val start = (index - 36).coerceAtLeast(0)
+    return substring(start, (index + query.length + 84).coerceAtMost(length)).replace('\n', ' ')
+}
+
+private fun ConversationAttachmentReference.searchCategory(): ConversationSearchCategory =
+    conversationAttachmentSearchCategory(mimeType)
 
 private fun <T> RoomDatabase.inConversationTransaction(action: () -> T): T = runInTransaction(Callable { action() })

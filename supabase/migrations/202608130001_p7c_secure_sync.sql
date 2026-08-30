@@ -2,7 +2,7 @@
 -- key, account, business row, recovery-code plaintext, service_role use, or direct table grant.
 begin;
 
-create table if not exists public.nanfeng_account_keys (
+create table if not exists public.nfai_account_keys (
   user_id uuid not null references auth.users(id) on delete cascade,
   app_id text not null check (app_id = 'com.nanzhufeng.ai'),
   protocol_version integer not null check (protocol_version = 1),
@@ -16,7 +16,7 @@ create table if not exists public.nanfeng_account_keys (
   primary key (user_id, app_id)
 );
 
-create table if not exists public.nanfeng_sync_documents (
+create table if not exists public.nfai_sync_documents (
   user_id uuid not null references auth.users(id) on delete cascade,
   app_id text not null check (app_id = 'com.nanzhufeng.ai'),
   document_id text not null check (document_id ~ '^[A-Za-z0-9._-]{2,128}$'),
@@ -36,11 +36,11 @@ create or replace function public.nanfeng_sync_touch_updated_at()
 returns trigger language plpgsql set search_path = '' as $$
 begin new.updated_at = now(); return new; end;
 $$;
-drop trigger if exists nanfeng_account_keys_touch_updated_at on public.nanfeng_account_keys;
-create trigger nanfeng_account_keys_touch_updated_at before update on public.nanfeng_account_keys
+drop trigger if exists nfai_account_keys_touch_updated_at on public.nfai_account_keys;
+create trigger nfai_account_keys_touch_updated_at before update on public.nfai_account_keys
   for each row execute function public.nanfeng_sync_touch_updated_at();
-drop trigger if exists nanfeng_sync_documents_touch_updated_at on public.nanfeng_sync_documents;
-create trigger nanfeng_sync_documents_touch_updated_at before update on public.nanfeng_sync_documents
+drop trigger if exists nfai_sync_documents_touch_updated_at on public.nfai_sync_documents;
+create trigger nfai_sync_documents_touch_updated_at before update on public.nfai_sync_documents
   for each row execute function public.nanfeng_sync_touch_updated_at();
 
 -- The account-key record is a field-exact P7-A wrapping projection (kdf + wrappedDataKey + AAD
@@ -84,12 +84,12 @@ returns boolean language sql immutable set search_path = '' as $$
     and p_envelope #>> '{payload,ciphertext}' ~ '^[A-Za-z0-9_-]{1,1398123}$';
 $$;
 
-alter table public.nanfeng_account_keys enable row level security;
-alter table public.nanfeng_account_keys force row level security;
-alter table public.nanfeng_sync_documents enable row level security;
-alter table public.nanfeng_sync_documents force row level security;
+alter table public.nfai_account_keys enable row level security;
+alter table public.nfai_account_keys force row level security;
+alter table public.nfai_sync_documents enable row level security;
+alter table public.nfai_sync_documents force row level security;
 -- No table policies and no table grants: default deny. SECURITY DEFINER RPCs below re-check auth.uid().
-revoke all on public.nanfeng_account_keys, public.nanfeng_sync_documents from anon, authenticated;
+revoke all on public.nfai_account_keys, public.nfai_sync_documents from anon, authenticated;
 
 create or replace function public.nanfeng_sync_read_account_key(p_app_id text)
 returns table(key_document_id text, key_revision bigint, key_payload_hash text, recovery_wrap_metadata jsonb, metadata_hash text)
@@ -97,7 +97,7 @@ language plpgsql security definer set search_path = public, auth as $$
 begin
   if auth.uid() is null or p_app_id <> 'com.nanzhufeng.ai' then raise exception 'NFAI_SYNC_UNAUTHORIZED'; end if;
   return query select k.key_document_id, k.key_revision, k.key_payload_hash, k.recovery_wrap_metadata, k.metadata_hash
-    from public.nanfeng_account_keys k where k.user_id = auth.uid() and k.app_id = p_app_id;
+    from public.nfai_account_keys k where k.user_id = auth.uid() and k.app_id = p_app_id;
 end;
 $$;
 
@@ -106,18 +106,18 @@ create or replace function public.nanfeng_sync_put_account_key(
   p_recovery_wrap_metadata jsonb, p_metadata_hash text
 ) returns table(inserted boolean, metadata_hash text)
 language plpgsql security definer set search_path = public, auth as $$
-declare existing public.nanfeng_account_keys%rowtype;
+declare existing public.nfai_account_keys%rowtype;
 begin
   if auth.uid() is null or p_app_id <> 'com.nanzhufeng.ai' or p_key_document_id !~ '^[A-Za-z0-9._-]{2,128}$'
      or p_key_revision <= 0 or p_key_payload_hash !~ '^[a-f0-9]{64}$' or p_metadata_hash !~ '^[a-f0-9]{64}$'
      or not public.nanfeng_sync_valid_key_metadata(p_recovery_wrap_metadata) then raise exception 'NFAI_SYNC_INVALID_KEY_RECORD'; end if;
   perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text || ':' || p_app_id || ':account-key', 0));
-  select * into existing from public.nanfeng_account_keys where user_id = auth.uid() and app_id = p_app_id for update;
+  select * into existing from public.nfai_account_keys where user_id = auth.uid() and app_id = p_app_id for update;
   if found then
     if existing.metadata_hash <> p_metadata_hash then raise exception 'NFAI_SYNC_ACCOUNT_KEY_EXISTS'; end if;
     return query select false, existing.metadata_hash; return;
   end if;
-  insert into public.nanfeng_account_keys(user_id, app_id, protocol_version, key_document_id, key_revision, key_payload_hash, recovery_wrap_metadata, metadata_hash)
+  insert into public.nfai_account_keys(user_id, app_id, protocol_version, key_document_id, key_revision, key_payload_hash, recovery_wrap_metadata, metadata_hash)
     values(auth.uid(), p_app_id, 1, p_key_document_id, p_key_revision, p_key_payload_hash, p_recovery_wrap_metadata, p_metadata_hash);
   return query select true, p_metadata_hash;
 end;
@@ -128,7 +128,7 @@ returns table(revision bigint, payload_hash text, envelope jsonb)
 language plpgsql security definer set search_path = public, auth as $$
 begin
   if auth.uid() is null or p_app_id <> 'com.nanzhufeng.ai' or p_document_id !~ '^[A-Za-z0-9._-]{2,128}$' then raise exception 'NFAI_SYNC_UNAUTHORIZED'; end if;
-  return query select d.revision, d.payload_hash, d.envelope from public.nanfeng_sync_documents d
+  return query select d.revision, d.payload_hash, d.envelope from public.nfai_sync_documents d
     where d.user_id = auth.uid() and d.app_id = p_app_id and d.document_id = p_document_id;
 end;
 $$;
@@ -140,11 +140,11 @@ declare current_revision bigint; next_revision bigint; envelope_bytes integer;
 begin
   if auth.uid() is null or p_app_id <> 'com.nanzhufeng.ai' or p_document_id !~ '^[A-Za-z0-9._-]{2,128}$' or p_expected_revision < 0 then raise exception 'NFAI_SYNC_UNAUTHORIZED'; end if;
   perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text || ':' || p_app_id || ':' || p_document_id, 0));
-  select d.revision into current_revision from public.nanfeng_sync_documents d where d.user_id = auth.uid() and d.app_id = p_app_id and d.document_id = p_document_id for update;
+  select d.revision into current_revision from public.nfai_sync_documents d where d.user_id = auth.uid() and d.app_id = p_app_id and d.document_id = p_document_id for update;
   if coalesce(current_revision, 0) <> p_expected_revision then raise exception 'NFAI_SYNC_STALE_REVISION'; end if;
   next_revision := p_expected_revision + 1; envelope_bytes := octet_length(p_envelope::text);
   if envelope_bytes not between 1 and 2097152 or not public.nanfeng_sync_valid_envelope(p_envelope, p_app_id, p_document_id, next_revision) then raise exception 'NFAI_SYNC_INVALID_ENVELOPE'; end if;
-  insert into public.nanfeng_sync_documents(user_id, app_id, document_id, revision, protocol_version, schema_version, payload_hash, payload_byte_count, envelope_byte_count, envelope)
+  insert into public.nfai_sync_documents(user_id, app_id, document_id, revision, protocol_version, schema_version, payload_hash, payload_byte_count, envelope_byte_count, envelope)
     values(auth.uid(), p_app_id, p_document_id, next_revision, 1, 1, p_envelope->>'payloadHash', (p_envelope->>'payloadByteCount')::integer, envelope_bytes, p_envelope)
   on conflict (user_id, app_id, document_id) do update set revision = excluded.revision, payload_hash = excluded.payload_hash,
     payload_byte_count = excluded.payload_byte_count, envelope_byte_count = excluded.envelope_byte_count, envelope = excluded.envelope, updated_at = now();

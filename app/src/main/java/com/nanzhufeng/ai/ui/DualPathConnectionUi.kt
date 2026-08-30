@@ -90,16 +90,16 @@ internal fun DualPathConnectionDialog(
             Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("本地与联网双路径", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 Text("本地离线", fontWeight = FontWeight.SemiBold)
-                Text("LOCAL_OFFLINE / LOCAL_ONLY · 始终可用；断网、未配置或取消时不会丢失本地工作。", color = SecondaryText)
+                Text("始终可用，断网或取消联网不会影响本地内容。", color = SecondaryText)
                 Text("联网模型", fontWeight = FontWeight.SemiBold)
-                Text("ONLINE_PROVIDER · 配置：${snapshot.providerConfiguration}；Key presence：${snapshot.credentialPresence}（只显示存在性）；目录：${snapshot.catalogFreshness}；逐次外发同意：${snapshot.egressConsent}。", color = SecondaryText)
+                Text("配置：${snapshot.providerConfiguration} · 密钥：${snapshot.credentialPresence} · 模型目录：${snapshot.catalogFreshness}", color = SecondaryText)
                 Text("账号同步", fontWeight = FontWeight.SemiBold)
-                Text("ENCRYPTED_SYNC · ${snapshot.syncCapability}；它与模型外发单独配置、单独授权，不会自动上传本地数据。", color = SecondaryText)
+                Text("${snapshot.syncCapability}，与模型联网分开设置。", color = SecondaryText)
                 Text("当前联网状态", fontWeight = FontWeight.SemiBold)
-                Text("${snapshot.degradedReasons.joinToString()}。这些状态不是成功；需要联网的请求会明确阻止，用户可选择继续本地工作或修复后重试。", color = SecondaryText)
+                Text(snapshot.degradedReasons.joinToString().ifBlank { "可用" }, color = SecondaryText)
                 when (val selection = state.selection) {
-                    is PathSelectionResult.LocalReady -> Text("已选择 LOCAL_OFFLINE / ${selection.dataPath}：可继续本地工作；没有调用模型或同步。", color = SecondaryText)
-                    is PathSelectionResult.OnlineBlocked -> Text("ONLINE_PROVIDER 未启动：${selection.reasons.joinToString()}。未来须经授权完成配置、价格确认、模型选择与本次外发同意。", color = SecondaryText)
+                    is PathSelectionResult.LocalReady -> Text("已选择本地模式。", color = SecondaryText)
+                    is PathSelectionResult.OnlineBlocked -> Text("尚不能联网：${selection.reasons.joinToString()}", color = SecondaryText)
                     else -> Unit
                 }
                 OutlinedButton(onClick = onSelectLocal, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Text("继续本地工作") }

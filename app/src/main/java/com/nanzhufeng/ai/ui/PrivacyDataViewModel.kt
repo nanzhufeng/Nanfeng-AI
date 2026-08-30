@@ -15,6 +15,7 @@ import com.nanzhufeng.ai.domain.PrivacyDeletionResult
 import com.nanzhufeng.ai.domain.PrivacyInventory
 import com.nanzhufeng.ai.domain.PrivacyTaskDeletionCandidate
 import com.nanzhufeng.ai.domain.SecurityDiagnosticResult
+import com.nanzhufeng.ai.domain.ImportedZipCleanupResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,6 +73,26 @@ class PrivacyDataViewModel(private val manager: PrivacyDataManager) : ViewModel(
                 is PrivacyDeletionResult.Completed -> state.copy(working = false, retryAvailable = false, notice = "已完成失败剩余项重试；没有自动继续删除。", inventory = manager.inventory())
                 is PrivacyDeletionResult.Partial -> state.copy(working = false, retryAvailable = true, error = "仍有 ${result.retryableFailureCount} 项待重试；未超出原选择范围。", inventory = manager.inventory())
                 is PrivacyDeletionResult.Rejected -> state.copy(working = false, error = result.reason)
+            }
+        }
+    }
+    fun cleanupImportedZipPackages() {
+        state = state.copy(working = true, notice = null, error = null)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { manager.cleanupImportedZipPackages() }
+            state = when (result) {
+                is ImportedZipCleanupResult.Completed -> state.copy(
+                    working = false,
+                    notice = if (result.deletedPackageCount == 0L) "没有需要删除的 ZIP 原始包。"
+                    else "已整理 ${result.materializedAttachmentCount} 个导入附件，并删除 ${result.deletedPackageCount} 个 ZIP 原始包。",
+                    inventory = withContext(Dispatchers.IO) { manager.inventory() },
+                )
+                is ImportedZipCleanupResult.Partial -> state.copy(
+                    working = false,
+                    error = result.reason,
+                    inventory = withContext(Dispatchers.IO) { manager.inventory() },
+                )
+                is ImportedZipCleanupResult.Rejected -> state.copy(working = false, error = result.reason)
             }
         }
     }

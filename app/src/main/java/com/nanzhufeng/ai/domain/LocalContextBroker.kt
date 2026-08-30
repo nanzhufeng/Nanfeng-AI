@@ -26,11 +26,18 @@ class LocalContextBroker(
         val selectedSources: List<ContextSelectionSource>,
         val effectiveBudget: ContextBudget,
         val status: AssemblyStatus,
+        val includedCurrentPathMessageCount: Int = 0,
+        val investmentDecisionContext: Boolean = false,
     )
 
     enum class AssemblyStatus { READY, INPUT_TOO_LARGE, INDEX_UNAVAILABLE }
 
-    data class Message(val role: MessageRole, val text: String, val source: ContextSelectionSource? = null)
+    data class Message(
+        val role: MessageRole,
+        val text: String,
+        val source: ContextSelectionSource? = null,
+        val isCurrentPathMessage: Boolean = false,
+    )
 
     fun activeKnowledgeCount(): Int = index.activeKnowledgeCount()
 
@@ -42,6 +49,7 @@ class LocalContextBroker(
         fixedInstructionTokens: Int = 0,
         policy: RetrievalPolicy = RetrievalPolicy(),
     ): Package {
+        val investmentDecisionContext = InvestmentContextPolicy.matches(userMessage)
         val tokenizerId = budget.tokenizerId
         val effectiveBudget = budget.reserveFixedInput(
             ModelTokenEstimators.estimate(tokenizerId, userMessage) + attachmentInputTokens + fixedInstructionTokens,
@@ -51,10 +59,10 @@ class LocalContextBroker(
             selectedSources = emptyList(), effectiveBudget = budget,
             status = AssemblyStatus.INPUT_TOO_LARGE,
         )
-        val queryTerms = terms(userMessage)
+        val queryTerms = terms(userMessage) + InvestmentContextPolicy.additionalTerms(investmentDecisionContext)
         val scope = ContextRetrievalScope(current.conversation.id, current.conversation.projectId)
         val allCurrentMessages = MessageTree(current.conversation, current.nodes).contextPath()
-            .mapNotNull { node -> node.text()?.let { Message(node.role, it) } }
+            .mapNotNull { node -> node.text()?.let { Message(node.role, it, isCurrentPathMessage = true) } }
             .takeLast(CURRENT_PATH_MESSAGE_LIMIT)
         val currentUserIndex = allCurrentMessages.indexOfLast { it.role == MessageRole.USER && it.text == userMessage }
         val currentPath = allCurrentMessages.filterIndexed { index, _ -> index != currentUserIndex }
@@ -71,9 +79,12 @@ class LocalContextBroker(
         }
         val history = index.searchActiveHistory(queryTerms, scope, HISTORY_LIMIT).map(::candidate)
 
-        val sourceMessages = (memory + library + history)
+        // Confirmed secondary knowledge is the compact, durable layer over the full history.
+        // It gets the first context budget; raw historical turns are a fallback when that layer
+        // has no relevant entry or leaves room.  This avoids repeatedly shipping whole old chats.
+        val sourceMessages = (library + memory + history)
             .distinctBy { it.title.normalizedDedupKey() + "\u0000" + it.body.normalizedDedupKey() }
-            .sortedWith(compareBy<Candidate> { it.score }.thenByDescending { it.updatedAt }.thenBy { it.title })
+            .sortedWith(compareBy<Candidate> { it.sourcePriority }.thenBy { it.score }.thenByDescending { it.updatedAt }.thenBy { it.title })
             .map { candidate ->
                 val text = "[本地${candidate.kind}：${candidate.title}]\n${candidate.body}"
                 Message(MessageRole.SYSTEM, text, ContextSelectionSource(candidate.kind, candidate.id, candidate.title, ModelTokenEstimators.estimate(tokenizerId, text)))
@@ -91,12 +102,34 @@ class LocalContextBroker(
             selectedSources = messages.mapNotNull(Message::source),
             effectiveBudget = effectiveBudget,
             status = if (index.status() == LocalContextIndexStatus.AVAILABLE) AssemblyStatus.READY else AssemblyStatus.INDEX_UNAVAILABLE,
+            includedCurrentPathMessageCount = messages.count(Message::isCurrentPathMessage),
+            investmentDecisionContext = investmentDecisionContext,
         )
     }
 
-    private data class Candidate(val id: String, val kind: String, val title: String, val body: String, val updatedAt: Long, val score: Double)
+    private data class Candidate(
+        val id: String,
+        val kind: String,
+        val title: String,
+        val body: String,
+        val updatedAt: Long,
+        val score: Double,
+        val sourcePriority: Int,
+    )
 
-    private fun candidate(hit: LocalContextIndexHit) = Candidate(hit.stableId, hit.kind, hit.title, hit.body, hit.updatedAtEpochMs, hit.rank)
+    private fun candidate(hit: LocalContextIndexHit) = Candidate(
+        hit.stableId,
+        hit.kind,
+        hit.title,
+        hit.body,
+        hit.updatedAtEpochMs,
+        hit.rank,
+        when (hit.kind) {
+            "知识库" -> 0
+            "记忆" -> 1
+            else -> 2
+        },
+    )
 
     /** Adds complete entries only. No selected Memory/Knowledge/history record is character-cut. */
     private fun List<Message>.fitToTokenBudget(budget: Int, tokenizerId: String, prioritizeLatest: Boolean = true): List<Message> {
@@ -127,4 +160,15 @@ class LocalContextBroker(
         const val KNOWLEDGE_LIMIT = 8
         const val HISTORY_LIMIT = 8
     }
+}
+
+private object InvestmentContextPolicy {
+    private val topicMarkers = setOf(
+        "投资", "资产配置", "仓位", "估值", "买入", "卖出", "定投", "基金", "etf", "股票", "a股",
+        "沪深", "中证", "a500", "pe", "pb", "股息", "回撤", "宽基",
+    )
+
+    fun matches(text: String): Boolean = text.lowercase().let { normalized -> topicMarkers.any(normalized::contains) }
+    fun additionalTerms(isInvestmentDecisionContext: Boolean): Set<String> =
+        if (isInvestmentDecisionContext) setOf("投资", "投资体系", "资产配置", "估值", "仓位", "风险") else emptySet()
 }

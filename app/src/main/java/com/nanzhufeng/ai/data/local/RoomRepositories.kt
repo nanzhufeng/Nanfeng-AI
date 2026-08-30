@@ -152,11 +152,17 @@ class RoomKnowledgeRepository(private val database: NanfengAiDatabase, private v
         val dao = database.knowledgeDao(); val current = dao.loadSnapshot(intent.knowledgeId)
         managementDomain.mutate(current, intent)?.let { return@inTransaction it }
         when (intent.action) {
-            KnowledgeIntentAction.CREATE_MANUAL, KnowledgeIntentAction.CREATE_MARKDOWN_IMPORT, KnowledgeIntentAction.CREATE_JSON_IMPORT, KnowledgeIntentAction.CREATE_PDF_TEXT_IMPORT, KnowledgeIntentAction.CREATE_WEB_TEXT_SNAPSHOT -> {
+            KnowledgeIntentAction.CREATE_MANUAL, KnowledgeIntentAction.CREATE_HISTORY_CONVERSATION, KnowledgeIntentAction.CREATE_MARKDOWN_IMPORT, KnowledgeIntentAction.CREATE_JSON_IMPORT, KnowledgeIntentAction.CREATE_PDF_TEXT_IMPORT, KnowledgeIntentAction.CREATE_WEB_TEXT_SNAPSHOT -> {
                 if (current != null) return@inTransaction KnowledgeMutationResult.Rejected(KnowledgeRejectionCode.INVALID_ACTION)
                 if (intent.scope == KnowledgeScope.PROJECT && database.projectDao().findProject(requireNotNull(intent.projectId).value) == null) return@inTransaction KnowledgeMutationResult.Rejected(KnowledgeRejectionCode.INVALID_SCOPE)
                 val title = managementDomain.normalizedTitle(requireNotNull(intent.title)); val body = managementDomain.normalizedBody(requireNotNull(intent.body)); val tags = managementDomain.normalizedTags(intent.tags); val now = managementDomain.now()
-                val item = KnowledgeItem(intent.knowledgeId, title, body, listOf(SourceEvidence(CaptureSourceType.MANUAL_TEXT, now, null, setOf("knowledge"))), CandidateProvenance(CandidateId("manual:${intent.knowledgeId.value}"), InvocationId("manual:${intent.knowledgeId.value}"), ProviderId.MOCK, "local-manual", 0), now, schemaVersion = 2)
+                val fromHistory = intent.action == KnowledgeIntentAction.CREATE_HISTORY_CONVERSATION
+                val sourceType = if (fromHistory) CaptureSourceType.HISTORY_CONVERSATION else CaptureSourceType.MANUAL_TEXT
+                val provider = if (fromHistory) requireNotNull(intent.generatedProviderId) else ProviderId.MOCK
+                val modelId = if (fromHistory) requireNotNull(intent.generatedModelId) else "local-manual"
+                val sourceReference = if (fromHistory) requireNotNull(intent.importReference) else null
+                val historyTag = if (intent.generatedAutomatically) "history-auto-curation" else "history-curation"
+                val item = KnowledgeItem(intent.knowledgeId, title, body, listOf(SourceEvidence(sourceType, now, sourceReference, setOf("knowledge", if (fromHistory) historyTag else "manual"))), CandidateProvenance(CandidateId("${if (fromHistory) "history" else "manual"}:${intent.knowledgeId.value}"), InvocationId("${if (fromHistory) "history" else "manual"}:${intent.knowledgeId.value}"), provider, modelId, if (fromHistory) 1 else 0), now, schemaVersion = 2)
                 val snapshot = KnowledgeSnapshot(item, KnowledgeLifecycle(KnowledgeStatus.ACTIVE, intent.scope, intent.projectId, tags, managementDomain.contentHash(title, body), now), emptyList()).appendRevision(now)
                 persistManaged(dao, snapshot); KnowledgeMutationResult.Applied(requireNotNull(dao.loadSnapshot(intent.knowledgeId)))
             }

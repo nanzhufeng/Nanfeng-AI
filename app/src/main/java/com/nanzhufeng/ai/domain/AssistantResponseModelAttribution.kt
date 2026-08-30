@@ -1,8 +1,6 @@
 package com.nanzhufeng.ai.domain
 
 import java.time.Instant
-import java.math.BigDecimal
-import java.math.RoundingMode
 
 /** The user must be able to distinguish a provider settlement from a local fallback estimate. */
 enum class ConversationCostSource {
@@ -47,8 +45,11 @@ data class AssistantResponseModelAttribution(
 
     /** Returns no label for an unknown amount; zero is a legitimate billed amount. */
     fun footerCostLabel(): String? = cost.totalMicros?.let { micros ->
-        val amount = "\$${micros.toUsdText()}"
-        if (costSource == ConversationCostSource.LOCAL_ESTIMATE) "≈ $amount（估算）" else amount
+        CnyMoneyDisplay.label(
+            totalMicros = micros,
+            currencyCode = cost.currencyCode,
+            estimated = costSource == ConversationCostSource.LOCAL_ESTIMATE,
+        )
     }
 
     private fun visibleModelName(): String = modelDisplayNameForUser(modelDisplayName)
@@ -61,15 +62,9 @@ data class AssistantResponseModelAttribution(
  */
 fun AssistantResponseModelAttribution.withAvailableLocalCostEstimate(): AssistantResponseModelAttribution {
     if (cost.totalMicros != null) return this
-    val estimate = ConversationCostEstimator.estimate(modelId, usage) ?: return this
+    val estimate = ConversationCostEstimator.estimate(modelId, usage, recordedAt) ?: return this
     return copy(cost = estimate, costSource = ConversationCostSource.LOCAL_ESTIMATE)
 }
-
-private fun Long.toUsdText(): String = BigDecimal.valueOf(this)
-    .movePointLeft(6)
-    .setScale(6, RoundingMode.UNNECESSARY)
-    .stripTrailingZeros()
-    .toPlainString()
 
 interface AssistantResponseModelAttributionStore {
     /** Idempotent only for the same assistant-message/Attempt route; contradictory facts reject. */

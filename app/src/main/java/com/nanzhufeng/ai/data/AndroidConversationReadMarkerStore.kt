@@ -21,7 +21,19 @@ class AndroidConversationReadMarkerStore(context: Context) : ConversationReadMar
         preferences.edit().putLong(readKey(conversationId), updatedAtEpochMs).apply()
     }
 
+    override fun watchLaterAtEpochMs(conversationId: ConversationId): Long? =
+        preferences.getLong(watchLaterKey(conversationId), MISSING).takeIf { it != MISSING }
+
+    override fun markWatchLater(conversationId: ConversationId, markedAtEpochMs: Long) {
+        preferences.edit().putLong(watchLaterKey(conversationId), markedAtEpochMs).apply()
+    }
+
+    override fun clearWatchLater(conversationId: ConversationId) {
+        preferences.edit().remove(watchLaterKey(conversationId)).apply()
+    }
+
     private fun readKey(conversationId: ConversationId) = "read_at_${conversationId.value}"
+    private fun watchLaterKey(conversationId: ConversationId) = "watch_later_at_${conversationId.value}"
 
     private companion object {
         const val FILE = "conversation_read_markers_v1"

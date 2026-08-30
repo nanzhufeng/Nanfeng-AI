@@ -74,6 +74,63 @@ sealed interface RemoveConversationAttachmentResult {
     data class Rejected(val reason: String) : RemoveConversationAttachmentResult
 }
 
+sealed interface MessageAttachmentUnlinkResult {
+    data class Unlinked(val attachment: ConversationAttachmentReference) : MessageAttachmentUnlinkResult
+    data class Rejected(val reason: String) : MessageAttachmentUnlinkResult
+}
+
+sealed interface DeletePersistedConversationAttachmentResult {
+    data class Removed(
+        val sharedReferenceCount: Int,
+        val privateFileDeleted: Boolean,
+        val cleanupPending: Boolean = false,
+    ) : DeletePersistedConversationAttachmentResult
+    data class Rejected(val reason: String) : DeletePersistedConversationAttachmentResult
+}
+
+/**
+ * Exact search hit -> one message attachment unlink -> reference-aware private-file cleanup.
+ * The message node and conversation remain; shared bytes survive until their final reference.
+ */
+class DeletePersistedConversationAttachmentUseCase(
+    private val messages: ConversationMessageAttachmentRepository,
+    private val assets: PrivateAttachmentRepository,
+    private val privateStore: PrivateAttachmentStore,
+    private val clock: java.time.Clock,
+) {
+    fun execute(hit: ConversationAttachmentSearchHit): DeletePersistedConversationAttachmentResult {
+        val unlinked = messages.unlinkMessageAttachment(
+            conversationId = hit.conversationId,
+            messageNodeId = hit.messageNodeId,
+            attachmentId = hit.attachment.id,
+            expectedSha256 = hit.attachment.sha256,
+            updatedAt = clock.instant(),
+        )
+        if (unlinked is MessageAttachmentUnlinkResult.Rejected) {
+            return DeletePersistedConversationAttachmentResult.Rejected(unlinked.reason)
+        }
+        return when (val cleanup = assets.deleteIfUnreferenced(hit.attachment.id, privateStore::deletePrivateCopy)) {
+            is PrivateAttachmentCleanupResult.Retained -> DeletePersistedConversationAttachmentResult.Removed(
+                sharedReferenceCount = cleanup.referenceCount,
+                privateFileDeleted = false,
+            )
+            PrivateAttachmentCleanupResult.Deleted -> DeletePersistedConversationAttachmentResult.Removed(
+                sharedReferenceCount = 0,
+                privateFileDeleted = true,
+            )
+            PrivateAttachmentCleanupResult.Missing -> DeletePersistedConversationAttachmentResult.Removed(
+                sharedReferenceCount = 0,
+                privateFileDeleted = false,
+            )
+            PrivateAttachmentCleanupResult.DeleteFailed -> DeletePersistedConversationAttachmentResult.Removed(
+                sharedReferenceCount = 0,
+                privateFileDeleted = false,
+                cleanupPending = true,
+            )
+        }
+    }
+}
+
 /** Removing a conversation reference never deletes the private asset or any other reference. */
 class RemoveConversationAttachmentUseCase(
     private val drafts: ConversationDraftRepository,
@@ -110,6 +167,7 @@ data class ConversationAttachmentOriginalPreview(
     val byteCount: Long,
     val bytes: ByteArray?,
     val unavailableReason: String? = null,
+    val canTransfer: Boolean = true,
 )
 
 data class ConversationAttachmentPdfPreview(
@@ -118,6 +176,7 @@ data class ConversationAttachmentPdfPreview(
     val byteCount: Long,
     val page: AttachmentPdfPage?,
     val unavailableReason: String? = null,
+    val canTransfer: Boolean = true,
 )
 
 data class ConversationAttachmentVideoPreview(
@@ -130,6 +189,7 @@ data class ConversationAttachmentVideoPreview(
     val bytes: ByteArray? = null,
     val open: (() -> java.io.InputStream)? = null,
     val unavailableReason: String? = null,
+    val canTransfer: Boolean = true,
 )
 
 data class ConversationAttachmentAudioPreview(
@@ -143,6 +203,7 @@ data class ConversationAttachmentAudioPreview(
     val bytes: ByteArray? = null,
     val open: (() -> java.io.InputStream)? = null,
     val unavailableReason: String? = null,
+    val canTransfer: Boolean = true,
 )
 
 data class ConversationAttachmentTextPreview(
@@ -153,6 +214,20 @@ data class ConversationAttachmentTextPreview(
     val text: String? = null,
     val truncated: Boolean = false,
     val unavailableReason: String? = null,
+    val canTransfer: Boolean = true,
+)
+
+data class ConversationAttachmentArchivePreview(
+    val id: AttachmentId,
+    val displayName: String?,
+    val byteCount: Long,
+    val entries: List<AttachmentArchiveEntry> = emptyList(),
+    val totalEntryCount: Int = 0,
+    val truncated: Boolean = false,
+    val unavailableReason: String? = null,
+    val containerPath: List<String> = emptyList(),
+    /** Ordinary folder location; nested ZIPs remain separately addressed by [containerPath]. */
+    val directoryPath: List<String> = emptyList(),
 )
 
 /** UI asks this projection for a bounded thumbnail; it never receives a private path or URI. */
@@ -199,7 +274,10 @@ class ConversationAttachmentPreviewProjection(
         if (reference.mimeType in CONVERSATION_ALLOWED_AUDIO_MIME_TYPES) {
             return ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null, audioDurationMillis = privateStore.audioDurationMillis(asset), unavailableReason = null)
         }
-        if (reference.mimeType in TEXT_ATTACHMENT_MIME_TYPES) {
+        if (isSafeArchiveAttachment(reference.mimeType, reference.displayName)) {
+            return ConversationAttachmentPreview(reference.id, reference.mimeType, reference.displayName, reference.byteCount, null, unavailableReason = null)
+        }
+        if (isSafeTextAttachment(reference.mimeType, reference.displayName)) {
             val textPreview = text(reference)
             return ConversationAttachmentPreview(
                 reference.id,
@@ -301,27 +379,138 @@ class ConversationAttachmentPreviewProjection(
     fun text(reference: ConversationAttachmentReference): ConversationAttachmentTextPreview {
         val asset = assets.findById(reference.id)
             ?: return ConversationAttachmentTextPreview(reference.id, reference.displayName, reference.mimeType, reference.byteCount, unavailableReason = "本地文本附件不可用")
-        if (reference.mimeType !in TEXT_ATTACHMENT_MIME_TYPES || asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
+        if (!isSafeTextAttachment(reference.mimeType, reference.displayName) || asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
             return ConversationAttachmentTextPreview(reference.id, reference.displayName, reference.mimeType, reference.byteCount, unavailableReason = "本地文本附件校验不一致")
         }
         val bytes = when (val result = privateStore.read(asset)) {
             is AttachmentReadResult.Content -> result.bytes
             is AttachmentReadResult.Rejected -> return ConversationAttachmentTextPreview(reference.id, reference.displayName, reference.mimeType, reference.byteCount, unavailableReason = "本地文本无法安全读取")
         }
-        val truncated = bytes.size > MAX_INERT_TEXT_PREVIEW_BYTES
-        val bounded = bytes.copyOf(minOf(bytes.size, MAX_INERT_TEXT_PREVIEW_BYTES))
-        val decoded = runCatching {
-            java.nio.charset.StandardCharsets.UTF_8.newDecoder()
-                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
-                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
-                .decode(java.nio.ByteBuffer.wrap(bounded)).toString().removePrefix("\uFEFF")
-        }.getOrNull() ?: return ConversationAttachmentTextPreview(reference.id, reference.displayName, reference.mimeType, reference.byteCount, unavailableReason = "文件不是可安全解码的 UTF-8 文本")
-        return ConversationAttachmentTextPreview(reference.id, reference.displayName, reference.mimeType, reference.byteCount, text = decoded, truncated = truncated)
+        return inertConversationAttachmentTextPreview(reference.id, reference.displayName, reference.mimeType, reference.byteCount, bytes)
+    }
+
+    /** ZIP viewing exposes only an inert bounded index; no entry is extracted or executed. */
+    fun archive(
+        reference: ConversationAttachmentReference,
+        containerPath: List<String> = emptyList(),
+        directoryPath: List<String> = emptyList(),
+    ): ConversationAttachmentArchivePreview {
+        val asset = assets.findById(reference.id)
+            ?: return ConversationAttachmentArchivePreview(reference.id, reference.displayName, reference.byteCount, unavailableReason = "本地压缩文件不可用")
+        if (!isSafeArchiveAttachment(reference.mimeType, reference.displayName) || asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
+            return ConversationAttachmentArchivePreview(reference.id, reference.displayName, reference.byteCount, unavailableReason = "本地压缩文件校验不一致")
+        }
+        return when (val result = privateStore.archiveIndex(asset, containerPath, directoryPath)) {
+            is AttachmentArchiveIndexResult.Ready -> ConversationAttachmentArchivePreview(
+                reference.id,
+                reference.displayName,
+                reference.byteCount,
+                result.index.entries,
+                result.index.totalEntryCount,
+                result.index.truncated,
+                containerPath = containerPath,
+                directoryPath = directoryPath,
+            )
+            is AttachmentArchiveIndexResult.Rejected -> ConversationAttachmentArchivePreview(
+                reference.id,
+                reference.displayName,
+                reference.byteCount,
+                unavailableReason = "本地压缩文件无法安全读取",
+                containerPath = containerPath,
+                directoryPath = directoryPath,
+            )
+        }
+    }
+
+    fun archiveEntry(
+        reference: ConversationAttachmentReference,
+        containerPath: List<String>,
+        entryPath: String,
+    ): AttachmentArchiveEntryReadResult {
+        val asset = assets.findById(reference.id)
+            ?: return AttachmentArchiveEntryReadResult.Rejected(AiTaskError.AttachmentNotReady)
+        if (!isSafeArchiveAttachment(reference.mimeType, reference.displayName) || asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
+            return AttachmentArchiveEntryReadResult.Rejected(AiTaskError.AttachmentIntegrityMismatch)
+        }
+        return privateStore.archiveEntry(asset, containerPath, entryPath)
+    }
+
+    fun archivePdfPage(
+        reference: ConversationAttachmentReference,
+        containerPath: List<String>,
+        entryPath: String,
+        pageNumber: Int,
+    ): ConversationAttachmentPdfPreview {
+        val asset = assets.findById(reference.id)
+            ?: return ConversationAttachmentPdfPreview(reference.id, entryPath.substringAfterLast('/'), 0L, null, "压缩包内 PDF 不可用", canTransfer = false)
+        if (!isSafeArchiveAttachment(reference.mimeType, reference.displayName) || asset.mimeType != reference.mimeType || asset.byteCount != reference.byteCount || asset.sha256 != reference.sha256) {
+            return ConversationAttachmentPdfPreview(reference.id, entryPath.substringAfterLast('/'), 0L, null, "压缩包内 PDF 校验不一致", canTransfer = false)
+        }
+        return when (val result = privateStore.archivePdfPage(asset, containerPath, entryPath, pageNumber)) {
+            is AttachmentPdfPageResult.Ready -> ConversationAttachmentPdfPreview(reference.id, entryPath.substringAfterLast('/'), 0L, result.page, canTransfer = false)
+            is AttachmentPdfPageResult.Rejected -> ConversationAttachmentPdfPreview(reference.id, entryPath.substringAfterLast('/'), 0L, null, "压缩包内 PDF 无法安全阅读", canTransfer = false)
+        }
     }
 }
 
 const val MAX_INERT_TEXT_PREVIEW_BYTES = 128 * 1024
-val TEXT_ATTACHMENT_MIME_TYPES = setOf("text/plain", "text/markdown", "application/json", "text/csv")
+val TEXT_ATTACHMENT_MIME_TYPES = setOf(
+    "text/plain", "text/markdown", "application/json", "text/csv",
+    "application/xml", "text/xml", "application/x-yaml", "text/yaml", "text/html",
+) + OFFICE_OPEN_XML_MIME_TYPES
+
+internal fun inertConversationAttachmentTextPreview(
+    id: AttachmentId,
+    displayName: String?,
+    mimeType: String,
+    byteCount: Long,
+    bytes: ByteArray,
+    canTransfer: Boolean = true,
+): ConversationAttachmentTextPreview {
+    val officeMimeType = when {
+        mimeType in OFFICE_OPEN_XML_MIME_TYPES -> mimeType
+        mimeType == "application/octet-stream" -> when (normalizedAttachmentExtension(displayName)) {
+            "docx" -> DOCX_MIME_TYPE
+            "xlsx" -> XLSX_MIME_TYPE
+            "pptx" -> PPTX_MIME_TYPE
+            else -> null
+        }
+        else -> null
+    }
+    if (officeMimeType != null) {
+        val extracted = extractOfficeOpenXmlText(bytes, officeMimeType)
+            ?: return ConversationAttachmentTextPreview(id, displayName, mimeType, byteCount, unavailableReason = "文档内容无法安全读取", canTransfer = canTransfer)
+        return ConversationAttachmentTextPreview(id, displayName, mimeType, byteCount, text = extracted.text, truncated = extracted.truncated, canTransfer = canTransfer)
+    }
+    val truncated = bytes.size > MAX_INERT_TEXT_PREVIEW_BYTES
+    val bounded = bytes.copyOf(minOf(bytes.size, MAX_INERT_TEXT_PREVIEW_BYTES))
+    val decoded = runCatching {
+        java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            .decode(java.nio.ByteBuffer.wrap(bounded)).toString().removePrefix("\uFEFF")
+    }.getOrNull() ?: return ConversationAttachmentTextPreview(id, displayName, mimeType, byteCount, unavailableReason = "文件不是可安全解码的 UTF-8 文本", canTransfer = canTransfer)
+    return ConversationAttachmentTextPreview(id, displayName, mimeType, byteCount, text = decoded, truncated = truncated, canTransfer = canTransfer)
+}
+
+internal fun normalizedAttachmentExtension(displayName: String?): String = displayName.orEmpty()
+    .trim()
+    .replace(Regex("[\u3002\uFF0E]\\s*(?=[A-Za-z0-9]+$)"), ".")
+    .substringAfterLast('.', "")
+    .trim()
+    .lowercase()
+
+internal fun isSafeTextAttachment(mimeType: String, displayName: String?): Boolean =
+    mimeType in TEXT_ATTACHMENT_MIME_TYPES ||
+        (mimeType == "application/octet-stream" && normalizedAttachmentExtension(displayName) in setOf(
+            "txt", "md", "markdown", "json", "csv", "xml", "yaml", "yml", "html", "htm",
+            "log", "ini", "cfg", "conf", "kt", "kts", "java", "py", "js", "ts", "tsx", "jsx", "css", "sql", "sh",
+            "docx", "xlsx", "pptx",
+        ))
+
+internal fun isSafeArchiveAttachment(mimeType: String, displayName: String?): Boolean =
+    mimeType in setOf("application/zip", "application/x-zip-compressed") ||
+        (mimeType == "application/octet-stream" && normalizedAttachmentExtension(displayName) == "zip")
 
 private fun AiTaskError.toConversationAttachmentReason() = when (this) {
     AiTaskError.AttachmentUnsupportedType -> "文件类型或内容标识不受支持。"

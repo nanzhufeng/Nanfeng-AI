@@ -44,6 +44,8 @@ class P6KZipArchiveAttachmentStorageContractsTest {
             val store = AndroidPrivateAttachmentStore(context)
             val opened = store.openVerified(reference) as AttachmentOpenResult.Opened
             assertArrayEquals(bytes, opened.open().use { it.readBytes() })
+            val reopened = store.openVerified(reference) as AttachmentOpenResult.Opened
+            assertArrayEquals(bytes, reopened.open().use { it.readBytes() })
             assertTrue(store.deletePrivateCopy(reference))
             assertTrue(archive.isFile)
 

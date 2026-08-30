@@ -49,10 +49,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nanzhufeng.ai.domain.CredentialState
 import com.nanzhufeng.ai.domain.ModelPresetDescriptor
 import com.nanzhufeng.ai.domain.ModelPresetId
+import com.nanzhufeng.ai.domain.ModelPresetUsage
 import com.nanzhufeng.ai.domain.ModelServiceConfiguration
 import com.nanzhufeng.ai.domain.NanfengModelServiceCatalog
 import com.nanzhufeng.ai.domain.ProviderId
@@ -88,10 +90,12 @@ internal fun ModelServiceStatusCard(
         val openRouter = state.providerConfigurations[ProviderId.OPENROUTER] ?: state.configuration
         val qwen = state.providerConfigurations[ProviderId.QWEN]
         val deepSeek = state.providerConfigurations[ProviderId.DEEPSEEK]
+        val zhipu = state.providerConfigurations[ProviderId.ZHIPU]
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             ProviderReadinessLine("OpenAI / Claude / Gemini", openRouter)
             ProviderReadinessLine("Qwen", qwen)
             ProviderReadinessLine("DeepSeek", deepSeek)
+            ProviderReadinessLine("智谱 GLM", zhipu)
         }
         if (state.error != null) {
             Spacer(Modifier.height(10.dp))
@@ -192,25 +196,26 @@ internal fun ModelSettingsConfigurationPage(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             shape = RoundedCornerShape(999.dp),
             color = ForegroundSurface,
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                modifier = Modifier.fillMaxWidth().padding(3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                listOf(ProviderId.OPENROUTER, ProviderId.QWEN, ProviderId.DEEPSEEK).forEach { provider ->
+                listOf(ProviderId.OPENROUTER, ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN).forEach { provider ->
                     val label = when (provider) {
                         ProviderId.OPENROUTER -> "OpenRouter"
                         ProviderId.QWEN -> "Qwen"
                         ProviderId.DEEPSEEK -> "DeepSeek"
+                        ProviderId.ZHIPU -> "智谱"
                         ProviderId.MOCK -> ""
                     }
                     val selected = selectedProvider == provider
                     Surface(
                         onClick = { selectedProvider = provider },
-                        modifier = Modifier.weight(1f).height(36.dp),
+                        modifier = Modifier.weight(1f).height(32.dp),
                         shape = RoundedCornerShape(999.dp),
                         color = if (selected) AccentOrange else Color.Transparent,
                         contentColor = if (selected) Color.White else BodyText,
@@ -219,7 +224,13 @@ internal fun ModelSettingsConfigurationPage(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
@@ -427,7 +438,7 @@ private fun ModelSettingsPrimaryEntry(onClick: () -> Unit) {
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
                 Text("模型设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("OpenRouter、Qwen、DeepSeek 的 API Key、模型与连接", color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                Text("OpenRouter、Qwen、DeepSeek、智谱的 API Key 与模型", color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
             Icon(Icons.Rounded.ChevronRight, contentDescription = "进入模型设置", tint = AccentOrange, modifier = Modifier.size(scaledAppIconSize(22.dp)))
         }
@@ -452,7 +463,7 @@ private fun ModelSettingsRecordsCard(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
             )
-            ModelSettingsGroupedEntry("费用与用量", "统计对话、标题与提醒整理的 Token 与金额", onOpenConversationCostLedger)
+            ModelSettingsGroupedEntry("费用与用量", "统计对话、标题、历史与南枫转写的 Token 与金额", onOpenConversationCostLedger)
             HorizontalDivider(modifier = Modifier.padding(start = 18.dp), color = NeutralBorder)
             ModelSettingsGroupedEntry("上下文记录", "查看所有回答参考了什么", onOpenContextSelections)
             HorizontalDivider(modifier = Modifier.padding(start = 18.dp), color = NeutralBorder)
@@ -489,11 +500,8 @@ internal fun ModelSettingsContextSelectionsPage(
         Surface(modifier = Modifier.fillMaxWidth(), color = ForegroundSurface, shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(audit.conversationTitle(conversationTitles), fontWeight = FontWeight.SemiBold)
-                Text(audit.createdAt.recordTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
-                Text("${audit.providerId.userLabel()} · ${audit.modelId}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                if (audit.selectedSources.isEmpty()) {
-                    Text("本次没有加入记忆、知识库或历史资料。", style = MaterialTheme.typography.bodySmall)
-                } else {
+                Text(modelNameAnnotatedText(prefix = "${audit.providerId.userLabel()} · ", modelName = audit.modelId), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                if (audit.selectedSources.isNotEmpty()) {
                     Text("已加入 ${audit.selectedSources.size} 项资料", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                     audit.selectedSources.take(2).forEach { source ->
                         Text("${source.kind} · ${source.title}", color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
@@ -501,6 +509,7 @@ internal fun ModelSettingsContextSelectionsPage(
                     if (audit.selectedSources.size > 2) Text("其余 ${audit.selectedSources.size - 2} 项资料", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 }
                 Text("本次消息与附件约 ${audit.budget.fixedInputTokens} Token", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+                RecordTimestamp(audit.createdAt)
             }
         }
     }
@@ -516,8 +525,7 @@ internal fun ModelSettingsDiagnosticsPage(state: ModelSettingsUiState, conversat
         Surface(modifier = Modifier.fillMaxWidth(), color = ForegroundSurface, shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(diagnostic.conversationTitle(conversationTitles), fontWeight = FontWeight.SemiBold)
-                Text(diagnostic.createdAt.recordTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
-                Text("${diagnostic.providerId.userLabel()} · ${diagnostic.apiModelId}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text(modelNameAnnotatedText(prefix = "${diagnostic.providerId.userLabel()} · ", modelName = diagnostic.apiModelId), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 Text(diagnostic.userFacingSummary(), color = ErrorRed, style = MaterialTheme.typography.bodySmall)
                 diagnostic.redactedBody?.takeIf { it.isNotBlank() }?.let {
                     TextButton(onClick = { detailsVisible = !detailsVisible }) {
@@ -528,9 +536,20 @@ internal fun ModelSettingsDiagnosticsPage(state: ModelSettingsUiState, conversat
                         Text(it.take(500), color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 8)
                     }
                 }
+                RecordTimestamp(diagnostic.createdAt)
             }
         }
     }
+}
+
+@Composable
+private fun ColumnScope.RecordTimestamp(createdAt: java.time.Instant) {
+    Text(
+        createdAt.recordTimestamp(),
+        modifier = Modifier.align(Alignment.End),
+        color = SecondaryText,
+        style = MaterialTheme.typography.labelSmall,
+    )
 }
 
 private fun ContextSelectionAuditRecord.conversationTitle(titles: Map<String, String>): String =
@@ -558,6 +577,7 @@ private fun ProviderId.userLabel(): String = when (this) {
     ProviderId.OPENROUTER -> "OpenRouter"
     ProviderId.QWEN -> "Qwen"
     ProviderId.DEEPSEEK -> "DeepSeek"
+    ProviderId.ZHIPU -> "智谱"
     ProviderId.MOCK -> "本地测试"
 }
 
@@ -582,17 +602,19 @@ private fun AiPresetSelectionSurface(
             colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText),
         ) {
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                Text(selected.displayName, fontWeight = FontWeight.SemiBold)
+                Text(selected.displayName, fontWeight = FontWeight.Bold)
                 Text(selected.modelFamilyHint, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             }
             Icon(Icons.Rounded.ArrowDropDown, contentDescription = "展开模型预设")
         }
         AiSelectionSurface(expanded = expanded, onDismiss = { expanded = false }) {
-            NanfengModelServiceCatalog.presets.filter { NanfengModelServiceCatalog.providerFor(it.id) == allowedProvider }.forEach { preset ->
+            NanfengModelServiceCatalog.presets.filter {
+                it.usage == ModelPresetUsage.CHAT && NanfengModelServiceCatalog.providerFor(it.id) == allowedProvider
+            }.forEach { preset ->
                 DropdownMenuItem(
                     text = {
                         Column {
-                            Text(preset.displayName, fontWeight = FontWeight.SemiBold, color = BodyText)
+                            Text(preset.displayName, fontWeight = FontWeight.Bold, color = BodyText)
                             Text(preset.description, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                         }
                     },
@@ -602,6 +624,19 @@ private fun AiPresetSelectionSurface(
                     },
                     modifier = Modifier.widthIn(min = 280.dp, max = 400.dp),
                 )
+            }
+            if (allowedProvider == ProviderId.ZHIPU) {
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp), color = NeutralBorder)
+                Column(
+                    modifier = Modifier
+                        .widthIn(min = 280.dp, max = 400.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text("GLM-OCR", fontWeight = FontWeight.Bold, color = BodyText)
+                    Text("图片与 PDF 转 Markdown · 使用同一智谱 API Key", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text("仅在左侧栏“$GLM_OCR_WORKSPACE_TITLE”中调用，不加入聊天模型选择。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }

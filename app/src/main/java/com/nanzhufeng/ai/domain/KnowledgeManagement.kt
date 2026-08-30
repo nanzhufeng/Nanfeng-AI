@@ -9,7 +9,7 @@ import java.util.UUID
 
 enum class KnowledgeStatus { ACTIVE, ARCHIVED, DELETED }
 enum class KnowledgeScope { GLOBAL, PROJECT }
-enum class KnowledgeIntentAction { CREATE_MANUAL, CREATE_MARKDOWN_IMPORT, CREATE_JSON_IMPORT, CREATE_PDF_TEXT_IMPORT, CREATE_WEB_TEXT_SNAPSHOT, UPDATE, ARCHIVE, RESTORE, DELETE, RESTORE_FROM_TRASH }
+enum class KnowledgeIntentAction { CREATE_MANUAL, CREATE_HISTORY_CONVERSATION, CREATE_MARKDOWN_IMPORT, CREATE_JSON_IMPORT, CREATE_PDF_TEXT_IMPORT, CREATE_WEB_TEXT_SNAPSHOT, UPDATE, ARCHIVE, RESTORE, DELETE, RESTORE_FROM_TRASH }
 
 data class KnowledgeLifecycle(
     val status: KnowledgeStatus = KnowledgeStatus.ACTIVE,
@@ -57,6 +57,11 @@ data class KnowledgeIntent(
     val projectId: ProjectId? = null,
     /** Safe, stable task/item reference only; never an external URI or a filesystem path. */
     val importReference: String? = null,
+    /** Present only for a user-confirmed model curation of one local history conversation. */
+    val generatedProviderId: ProviderId? = null,
+    val generatedModelId: String? = null,
+    /** The user has explicitly enabled background history curation for this generated item. */
+    val generatedAutomatically: Boolean = false,
 )
 
 data class KnowledgeSearchFilter(
@@ -91,8 +96,9 @@ enum class KnowledgeRejectionCode { EMPTY_TITLE, EMPTY_BODY, TITLE_TOO_LONG, BOD
 class KnowledgeDomain(private val clock: Clock) {
     fun mutate(snapshot: KnowledgeSnapshot?, intent: KnowledgeIntent): KnowledgeMutationResult.Rejected? = runCatching {
         when (intent.action) {
-            KnowledgeIntentAction.CREATE_MANUAL, KnowledgeIntentAction.CREATE_MARKDOWN_IMPORT, KnowledgeIntentAction.CREATE_JSON_IMPORT, KnowledgeIntentAction.CREATE_PDF_TEXT_IMPORT, KnowledgeIntentAction.CREATE_WEB_TEXT_SNAPSHOT, KnowledgeIntentAction.UPDATE -> {
+            KnowledgeIntentAction.CREATE_MANUAL, KnowledgeIntentAction.CREATE_HISTORY_CONVERSATION, KnowledgeIntentAction.CREATE_MARKDOWN_IMPORT, KnowledgeIntentAction.CREATE_JSON_IMPORT, KnowledgeIntentAction.CREATE_PDF_TEXT_IMPORT, KnowledgeIntentAction.CREATE_WEB_TEXT_SNAPSHOT, KnowledgeIntentAction.UPDATE -> {
                 val title = normalizedTitle(requireNotNull(intent.title)); val body = normalizedBody(requireNotNull(intent.body)); require(MemoryDomain.sensitiveRejection("$title\n$body") == null) { "sensitive" }; normalizedTags(intent.tags); validateScope(intent.scope, intent.projectId)
+                if (intent.action == KnowledgeIntentAction.CREATE_HISTORY_CONVERSATION) require(intent.importReference?.startsWith("conversation:") == true && intent.generatedProviderId != null && !intent.generatedModelId.isNullOrBlank()) { "historysource" }
             }
             else -> requireNotNull(snapshot)
         }
@@ -128,7 +134,7 @@ class KnowledgeDomain(private val clock: Clock) {
 class ManageKnowledgeUseCase(private val domain: KnowledgeDomain, private val repository: KnowledgeManagementRepository) {
     fun execute(intent: KnowledgeIntent): KnowledgeMutationResult {
         domain.mutate(repository.findSnapshot(intent.knowledgeId), intent)?.let { return it }
-        return repository.mutate(intent, MemoryDomain.sha256(listOf(intent.id.value, intent.action.name, intent.knowledgeId.value, intent.title.orEmpty(), intent.body.orEmpty(), intent.tags.sorted().joinToString(","), intent.scope.name, intent.projectId?.value.orEmpty(), intent.importReference.orEmpty()).joinToString("|")))
+        return repository.mutate(intent, MemoryDomain.sha256(listOf(intent.id.value, intent.action.name, intent.knowledgeId.value, intent.title.orEmpty(), intent.body.orEmpty(), intent.tags.sorted().joinToString(","), intent.scope.name, intent.projectId?.value.orEmpty(), intent.importReference.orEmpty(), intent.generatedProviderId?.name.orEmpty(), intent.generatedModelId.orEmpty(), intent.generatedAutomatically).joinToString("|")))
     }
     fun search(filter: KnowledgeSearchFilter): List<KnowledgeSearchResult> = domain.search(repository.listSnapshots(filter), filter)
     fun detail(id: KnowledgeItemId): KnowledgeSnapshot? = repository.findSnapshot(id)

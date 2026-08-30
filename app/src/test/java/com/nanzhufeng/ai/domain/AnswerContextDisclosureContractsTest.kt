@@ -28,7 +28,29 @@ class AnswerContextDisclosureContractsTest {
         assertTrue(disclosure.sources.first().whyUsed.contains("已启用记忆"))
         assertTrue(disclosure.sources[1].whyUsed.contains("资料库搜索"))
         assertTrue(disclosure.sources[2].whyUsed.contains("普通历史对话"))
-        assertTrue(disclosure.noAdditionalSourceExplanation.contains("本轮输入"))
+        assertEquals(3, disclosure.sources.size)
+    }
+
+    @Test fun `new participation audit distinguishes direct profile and current path from retrieval`() {
+        val disclosure = ContextSelectionAuditRecord(
+            createdAt = Instant.parse("2026-08-29T00:00:00Z"),
+            providerId = ProviderId.OPENROUTER,
+            modelId = "model-1",
+            tokenizerId = "cl100k_base",
+            budget = ContextBudget.safeDefault(),
+            participationAuditAvailable = true,
+            retrievalAudit = ContextRetrievalAudit("投资决策", memorySearched = true, selectedMemoryCount = 1, knowledgeSearched = true, selectedKnowledgeCount = 0),
+            selectedSources = listOf(
+                ContextSelectionSource("当前对话路径", "current-conversation-path", "此前 4 条消息", 0),
+                ContextSelectionSource("个性化资料", "assistant-profile", "关注方向", 0),
+                ContextSelectionSource("自定义指令", "assistant-custom-instructions", "已保存的自定义指令", 0),
+            ),
+        ).answerContextDisclosure()
+
+        assertEquals(listOf("当前对话路径", "个性化资料", "自定义指令"), disclosure.sources.map(AnswerContextSourceDisclosure::kind))
+        assertTrue(disclosure.sources[0].whyUsed.contains("此前消息"))
+        assertTrue(disclosure.sources[1].whyUsed.contains("个性化资料"))
+        assertTrue(disclosure.sources[2].whyUsed.contains("自定义指令"))
     }
 
     @Test fun `temporary isolation disables every normal context and automatic persistence route`() {

@@ -4,10 +4,43 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class P6F2EAudioAndTextPreviewUiContractsTest {
-    @Test fun `workspace keeps explicit local audio and inert text actions`() {
+    @Test fun `workspace keeps explicit local audio and formatted inert text actions`() {
         val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
-        for (token in listOf("AudioPreviewDialog", "TextPreviewDialog", "inert UTF-8", "不会渲染 HTML、执行链接、脚本或 Markdown 指令", "onOpenAudioPreview", "onOpenTextPreview", "AttachmentTextSnippet", "AttachmentTextPreviewUnavailable", "textAttachmentFormatLabel", "preview?.textPreview")) assertTrue(token, source.contains(token))
+        for (token in listOf("AudioPreviewDialog", "TextPreviewDialog", "MessagePresentationRenderer().renderText", "TextPreviewTypography", "inertTextPreviewBlock", "onOpenAudioPreview", "onOpenTextPreview", "AttachmentTextSnippet", "AttachmentTextPreviewUnavailable", "textAttachmentFormatLabel", "preview?.textPreview")) assertTrue(token, source.contains(token))
+        assertTrue(!source.contains("长按可选择复制；下载或分享仍使用未修改的原文件。"))
+        assertTrue(!source.contains("内容按 inert UTF-8 纯文本显示"))
+        assertTrue(!source.contains("不会渲染 HTML、执行链接、脚本或 Markdown 指令"))
         assertTrue(java.io.File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText().contains("\"audio/*\""))
+    }
+
+    @Test fun `composer and transcript use the same safe document gate as search`() {
+        val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val composer = source.substring(source.indexOf("private fun ComposerAttachmentPreview"), source.indexOf("private fun ComposerMenuOverlay"))
+        val transcript = source.substring(source.indexOf("private fun AttachmentPreviewChip"), source.indexOf("private fun AttachmentInfoPopup"))
+        val previewOwner = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
+
+        for (surface in listOf(composer, transcript)) {
+            assertTrue(surface.contains("isSafeTextAttachment(mimeType, displayName)"))
+            assertTrue(surface.contains("onOpenTextPreview"))
+        }
+        assertTrue(previewOwner.contains("fun openSearchAttachment(reference: ConversationAttachmentReference)"))
+        val searchOpen = previewOwner.substringAfter("fun openSearchAttachment(reference: ConversationAttachmentReference)").substringBefore("fun requestAttachmentTransfer")
+        assertTrue(searchOpen.contains("else -> viewModelScope.launch"))
+        assertTrue(searchOpen.contains("attachmentPreview.text(reference)"))
+        assertTrue(previewOwner.contains("fun openTextPreview(id: AttachmentId)"))
+    }
+
+    @Test fun `standalone text preview reuses the safe Markdown semantic projection`() {
+        val blocks = com.nanzhufeng.ai.domain.MessagePresentationRenderer().renderText(
+            com.nanzhufeng.ai.domain.PresentationBlockIdentity(com.nanzhufeng.ai.domain.MessageNodeId("text-preview-contract"), 0),
+            "# 标题\n\n> 引用\n\n- 列表\n\n**加粗正文**",
+        )
+        assertTrue(blocks.any { it is com.nanzhufeng.ai.domain.PresentationBlock.Heading })
+        assertTrue(blocks.any { it is com.nanzhufeng.ai.domain.PresentationBlock.Quote })
+        assertTrue(blocks.any { it is com.nanzhufeng.ai.domain.PresentationBlock.UnorderedList })
+        assertTrue(blocks.filterIsInstance<com.nanzhufeng.ai.domain.PresentationBlock.Paragraph>().any { paragraph ->
+            paragraph.spans.any { it is com.nanzhufeng.ai.domain.InlinePresentation.Strong }
+        })
     }
 
     @Test fun `audio timeline previews while dragging and commits one local seek on release`() {
@@ -39,9 +72,15 @@ class P6F2EAudioAndTextPreviewUiContractsTest {
         assertTrue(pdf.contains("PreviewCloseButton(dark = dark"))
         assertTrue(text.contains("TextPreviewTopActions("))
         assertTrue(text.contains("rememberFilePreviewChromeState(preview.id.value, autoHide = false)"))
-        assertTrue(text.contains("Surface(color = ForegroundSurface, shape = RectangleShape, modifier = Modifier.fillMaxSize())"))
+        assertTrue(text.contains("val previewSurface = if (darkTextPreview) ForegroundSurface else Color.White"))
+        assertTrue(text.contains("Surface(color = previewSurface, shape = RectangleShape, modifier = Modifier.fillMaxSize())"))
+        assertTrue(text.contains("decorFitsSystemWindows = false"))
+        assertTrue(text.contains("TextPreviewSystemBarsEffect(darkTextPreview)"))
+        assertTrue(text.contains("controller.isAppearanceLightStatusBars = !dark"))
         assertTrue(text.contains(".statusBarsPadding()"))
         assertTrue(text.contains(".navigationBarsPadding()"))
+        assertTrue(text.contains("typographyOverride = TextPreviewTypography"))
+        assertTrue(!text.contains("Text(\n                                preview.text"))
         assertTrue(!text.contains("if (chrome.visible)"))
         assertTrue(!text.contains("toggleFilePreviewChrome"))
         assertTrue(!text.contains("dark = false"))

@@ -51,6 +51,29 @@ class P3DMessagePresentationContractsTest {
         assertEquals(2, renderer.cachedBlockCount())
     }
 
+    @Test fun `provider reasoning remains a distinct presentation block instead of markdown answer prose`() {
+        val node = message("reasoning", "最终答复").copy(
+            content = listOf(ContentBlock.Reasoning("Let me verify the current data."), ContentBlock.Text("最终答复")),
+        )
+        val blocks = MessagePresentationRenderer().render(listOf(node)).single().blocks
+
+        assertEquals("Let me verify the current data.", (blocks.first() as PresentationBlock.Reasoning).text)
+        assertTrue(blocks.drop(1).any { it is PresentationBlock.Paragraph })
+    }
+
+    @Test fun `legacy DeepSeek mixed planning trace is collapsed without rewriting the stored answer`() {
+        val legacy = """
+            The user asks: \"哪个更好？\"
+            Let me search the latest data first. I need to compare valuation, weights and risk before answering.
+            南烛枫，直接给结论：**长期底仓选中证A500。**
+        """.trimIndent()
+        val blocks = MessagePresentationRenderer().render(listOf(message("legacy-trace", legacy))).single().blocks
+
+        assertTrue((blocks.first() as PresentationBlock.Reasoning).text.startsWith("The user asks:"))
+        val finalText = (blocks.drop(1).filterIsInstance<PresentationBlock.Paragraph>().single().spans.first() as InlinePresentation.Text).value
+        assertTrue(finalText.startsWith("南烛枫，直接给结论："))
+    }
+
     @Test fun `tables and raw https links become structured readable blocks without losing ordinary punctuation`() {
         val source = """
             ## 估值对照
