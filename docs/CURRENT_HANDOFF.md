@@ -2,6 +2,12 @@
 
 > **当前合同读取门（2026-08-27，优先于全文）：** 本文下方的**最新有效交接**与按时间累积的实现、设备与验收记录，只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
 
+## 2026-08-31：OPPO 保数据覆盖（主题色调色盘 Release）
+
+- **候选与构建：** `:app:assembleRelease`（含 `lintVitalRelease`）通过。当前正式候选 [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) 为 `28,017,559` bytes，SHA-256 `8ac61ede4db14ee7d49c0dd571ddefd7c89e382139daa34085d85d8e2bb014e4`，包名 `com.nanzhufeng.ai`、code `66`、`0.3.0-p10j`、非 Debug，v2/v3 证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。主题色提交 `f596b8b` 的隔离快照缺少当前工作树中配套的模型／会话源码而不能独立编译，因此本包忠实构建自当前工作树；未改写或提交既有未提交改动。
+- **覆盖门禁与结果：** 用户授权目标唯一为 OPPO PKH120 / Android 16 `3B157F009E800000`。覆盖前现装包为 `28,017,564` bytes、SHA-256 `8279335eef23b7aff39fbf08ff367e2a7d3ec8b0325f04f5d0e3062aabe95593`，同包名、版本、非 Debug 和同一 v2/v3 正式证书。候选推送至 `/data/local/tmp` 后设备端 SHA-256 一致，只执行一次 `pm install -r --user 0`，返回 `Success`；覆盖后按新 `pm path` 回拉 `base.apk`，与候选逐字节一致。
+- **数据与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均不变；覆盖后 `lastUpdateTime=2026-08-31 20:00:45`，用户 0 仍为 `installed=true`、`stopped=false`。未卸载、未清数据、未读取私有业务内容、未启动 App、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`。设备在安装和回读完成后断开调试连接，故 `/data/local/tmp/nanfeng-ai-release-overlay-20260831.apk` 尚待其恢复连接后精确删除；本机校验副本与隔离工作树已清理。
+
 ## 2026-08-31：设置“主题色”语义与图标收口
 
 - **可见语义：** 设置“外观”分组的原“强调色”统一更名为“主题色”，行首使用 Material 圆角调色盘图标；选择面标题同步更新。右侧仍显示当前颜色文字与小色点，行高、触控热区、选项、即时生效和深浅皮肤逻辑不变。
