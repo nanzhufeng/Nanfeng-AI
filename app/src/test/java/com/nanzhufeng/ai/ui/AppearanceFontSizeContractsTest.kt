@@ -4,6 +4,7 @@ import com.nanzhufeng.ai.domain.AppFontSize
 import com.nanzhufeng.ai.domain.AppearanceSettings
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -46,6 +47,20 @@ class AppearanceFontSizeContractsTest {
             "previewIcon = Icons.Rounded.FormatSize",
             "previewScale = option.scale",
         )) assertTrue("missing font-size choice contract: $token", app.contains(token) || controls.contains(token))
+    }
+
+    @Test
+    fun `theme color keeps the shared accent owner but uses a color-specific palette icon`() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val controls = app.substring(
+            app.indexOf("private fun AppearanceSettingsControls"),
+            app.indexOf("private fun AppearancePreferenceRow"),
+        )
+
+        assertTrue(controls.contains("icon = Icons.Rounded.Palette"))
+        assertTrue(controls.contains("title = \"主题色\""))
+        assertTrue(controls.contains("AppearancePicker.ACCENT -> AppearancePickerDialog"))
+        assertFalse(controls.contains("title = \"强调色\""))
     }
 
     @Test

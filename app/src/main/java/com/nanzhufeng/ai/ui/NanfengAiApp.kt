@@ -66,6 +66,7 @@ import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Brightness6
@@ -2517,8 +2518,8 @@ private fun AppearanceSettingsControls(
         )
         if (grouped) SettingsCategoryDivider()
         AppearancePreferenceRow(
-            icon = Icons.Rounded.Tune,
-            title = "强调色",
+            icon = Icons.Rounded.Palette,
+            title = "主题色",
             value = settings.accentColor.label(),
             dotColor = settings.accentColor.toColor(),
             onClick = { picker = AppearancePicker.ACCENT },
@@ -2540,7 +2541,7 @@ private fun AppearanceSettingsControls(
             }
         }
         AppearancePicker.ACCENT -> AppearancePickerDialog(
-            title = "强调色",
+            title = "主题色",
             onDismiss = { picker = null },
         ) {
             com.nanzhufeng.ai.domain.AccentColor.entries.forEach { option ->

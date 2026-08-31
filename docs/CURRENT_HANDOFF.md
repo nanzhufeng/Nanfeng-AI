@@ -2,6 +2,11 @@
 
 > **当前合同读取门（2026-08-27，优先于全文）：** 本文下方的**最新有效交接**与按时间累积的实现、设备与验收记录，只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
 
+## 2026-08-31：设置“主题色”语义与图标收口
+
+- **可见语义：** 设置“外观”分组的原“强调色”统一更名为“主题色”，行首使用 Material 圆角调色盘图标；选择面标题同步更新。右侧仍显示当前颜色文字与小色点，行高、触控热区、选项、即时生效和深浅皮肤逻辑不变。
+- **owner 与验证：** 内部 `AccentColor` 及其已持久化的用户偏好保持不动，继续驱动全局主题令牌、气泡、选中态、保存、发送、开关和文本选择色。`AppearanceFontSizeContractsTest`、`SettingsUiSimplificationContractsTest` 通过；未安装或操作 OPPO，尚无本轮真机视觉回读。
+
 ## 2026-08-31：最终回归与 checkpoint 证据
 
 - **本次增量：** 当前 checkpoint `d6db5bf` 收口 Composer 草稿附件与已发送附件共用本地预览投影、退役 Grok 选择的历史归因与 `MODEL_NOT_FOUND` 失败关闭、以及全屏原图的“可缩小到完整图／按真实溢出自由查看”手势边界。旧会话不被静默换模型；预览不改变附件外发；图片没有固定尺寸或固定位置规则。
