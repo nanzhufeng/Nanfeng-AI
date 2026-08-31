@@ -5,17 +5,17 @@
 > 2026-08-23 普通聊天与附件外发修订：用户选择附件、预览及草稿阶段只允许本机处理；用户点击“发送”即授权把该准确已提交草稿中的仍存附件或必要解析结果发送给界面明确显示的当前 Provider/模型。普通聊天不得再弹逐条确认、勾选或二次确认；切换 Provider 不得静默转发，删除的附件不得出站，附件不得进入日志、统计或无关第三方。本文早期“逐次外发确认”仅适用于历史结构化高风险 Task，不得套用到当前普通聊天。
 
 > 文档性质：全生命周期方向与阶段门禁的权威总图  
-> 当前版本：1.2
+> 当前版本：1.3
 > 基线日期：2026-08-12  
-> 最近一次计划收口：2026-08-30
+> 最近一次计划收口：2026-08-31
 
-> **2026-08-30 唯一当前总控门（优先于本文全部旧阶段与日期记录）：** 当前代码基线为 `b7e1c2f`，测试／文档收口为 `1f7f356`，Android Room 当前为 Schema 63。现行实现、回归、Release 和设备边界只读取 [当前交接](CURRENT_HANDOFF.md) 顶部；跨域完成范围、待验门和复查顺序只读取 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部“2026-08-30 当前总控门”。本蓝图只继续负责长期方向、依赖顺序和停止条件，不再用早期 P 阶段清单判断当前代码是否完成。
+> **2026-08-31 唯一当前总控门（优先于本文全部旧阶段与日期记录）：** 当前 Android checkpoint 为 `d6db5bf checkpoint(android): stabilize model and media interactions`，Android Room 当前为 Schema 63。现行实现、回归、Release 和设备边界只读取 [当前交接](CURRENT_HANDOFF.md) 顶部；跨域完成范围、待验门和复查顺序只读取 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部“2026-08-31 当前总控门”。本蓝图只继续负责长期方向、依赖顺序和停止条件，不再用早期 P 阶段清单判断当前代码是否完成。
 
 > **现行合同路由：** Android 会话／搜索／文件操作／主题读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)，设置读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)，普通聊天上下文读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)，模型选择与 Auto 读取 [P6-G 模型选择合同](P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md)，南枫转写读取 [GLM-OCR 当前合同](GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md)，ChatGPT／Claude ZIP 读取 [P6-K 导入合同](P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md)，费用读取 [AI 用量与费用合同](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)。历史截图、旧 APK、旧 Schema、旧测试数和旧“下一唯一入口”不得覆盖这些现行入口。
 
-> **当前收口边界：** 本轮已把模型与 Provider、附件解析、南枫转写、统一搜索、导入媒体、私有文件预览、真实 owner 存储统计、费用与用量、会话“待看”和相应设置／入口纳入同一 Android 产品体系；完成部分后续只做回归，不再重复实现。Desktop 继续保持其既有已验证基线，Android 新增能力不得自动写成 Desktop 已同步。当前仍有 4 项历史 JVM 合同失败、新重建 Release 尚未覆盖到 OPPO、真实 Provider 耗时／Token／账单及若干真机视觉交互未重新验收；这些门分别保留，不能互相替代。
+> **当前收口边界：** 已纳入同一 Android 产品体系的模型与 Provider、附件解析、南枫转写、统一搜索、私有文件预览、真实 owner 存储统计、费用与用量、会话“待看”和设置入口只做防回退，不重复实现。本 checkpoint 额外冻结：退役模型保留历史归因但请求失败关闭、生成任务在切换对话／界面时持续由会话 owner 管理、草稿与已发送附件共用本地预览投影、原图查看按真实溢出缩放与平移。完整 JVM 已为 `1042 tests / 0 failures / 3 skipped`，`lintVitalRelease` 与 `assembleRelease` 通过；具体产物、已覆盖 OPPO 包和未验的真机／真实 Provider 边界只读当前交接。Desktop 继续保持既有已验证基线，Android 新增能力不得自动写成 Desktop 已同步。
 
-> **历史读取门：** 下方所有 2026-08-26 及更早的“当前状态”“当前计划”“下一唯一入口”和阶段数字都只作历史证据；与上方 2026-08-30 总控门冲突时一律失效。需要追根因时可读取，后续复查和排程不得从中恢复旧行为。
+> **历史读取门：** 下方所有 2026-08-30 及更早的“当前状态”“当前计划”“下一唯一入口”和阶段数字都只作历史证据；与上方 2026-08-31 总控门冲突时一律失效。需要追根因时可读取，后续复查和排程不得从中恢复旧行为。
 
 > **2026-08-26 历史计划覆盖层（已被 2026-08-30 总控门取代）：** Android 的当前可见产品以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 与 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md) 为唯一正文；当前实现、构建、正式包与设备事实只读取 [当前交接](CURRENT_HANDOFF.md) 顶部和 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 的最新“当前总控门”。本文较早的“当前状态”、固定颜色、Dialog、设置入口、模型显示、功能审阅、数据导入或归档／回收站描述均是历史阶段记录，若冲突一律失效。
 
@@ -1241,14 +1241,14 @@ Agent Run 至少保存：目标、范围、Task、模型、Harness、预算、�
 
 ## 23. 当前状态与下一入口
 
-> **2026-08-30 当前状态覆盖。** 本节以下早期阶段清单全部降为历史路线，不再直接参与排程。当前代码与文档 checkpoint 为 `b7e1c2f`、`1f7f356`；当前行为按本文件顶部合同路由读取，当前验证、APK、OPPO 和未验门按 [当前交接](CURRENT_HANDOFF.md) 顶部读取，跨域完成范围按 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部读取。
+> **2026-08-31 当前状态覆盖。** 本节以下早期阶段清单全部降为历史路线，不再直接参与排程。当前 Android checkpoint 为 `d6db5bf`；当前行为按本文件顶部合同路由读取，当前验证、APK、OPPO 和未验门按 [当前交接](CURRENT_HANDOFF.md) 顶部读取，跨域完成范围按 [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部读取。
 
 ### 当前已完成且后续只回归
 
 - Android 对话／工作壳、Composer、会话管理、搜索与文件操作已经形成共享入口；ChatGPT／Claude 导入内容、南枫转写原文件与 Markdown、普通附件统一进入搜索、预览、打开、复制／下载／分享和 owner 生命周期。
 - 模型服务已形成统一目录、Provider／Adapter、Auto／手动顺序、附件材料桥、标题与历史资料后台路由、调用记录和费用投影；新增模型必须同时经过目录、权限、能力、附件、Auto、设置、账本与回归门，不能只加入选择列表。
 - 本机数据统计按活动 owner、唯一受管文件与当前物理字节计算；无 owner 残留单列并只经显式清理处理，南枫转写和导入文件不能再绕开排序、搜索、统计或引用保护。
-- 当前 Android Room 为 Schema 63；最终全量 JVM 为 `1013 tests / 4 failures / 3 skipped`，本轮新增回归为 0；`lintVitalRelease` 与 `assembleRelease` 通过。具体失败项、APK 和设备哈希不在本蓝图重复维护。
+- 当前 Android Room 为 Schema 63；最终全量 JVM 为 `1042 tests / 0 failures / 3 skipped`，`lintVitalRelease` 与 `assembleRelease` 通过。具体失败项、APK 和设备哈希不在本蓝图重复维护。
 
 ### 当前仍需独立关闭的门
 

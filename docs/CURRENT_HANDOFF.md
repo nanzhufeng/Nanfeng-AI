@@ -4,7 +4,7 @@
 
 ## 2026-08-31：最终回归与 checkpoint 证据
 
-- **本次增量：** 当前 checkpoint 收口 Composer 草稿附件与已发送附件共用本地预览投影、退役 Grok 选择的历史归因与 `MODEL_NOT_FOUND` 失败关闭、以及全屏原图的“初始完整可见／可缩小到完整图／按真实溢出自由查看”手势边界。旧会话不被静默换模型；预览不改变附件外发；图片没有固定尺寸或固定位置规则。
+- **本次增量：** 当前 checkpoint `d6db5bf` 收口 Composer 草稿附件与已发送附件共用本地预览投影、退役 Grok 选择的历史归因与 `MODEL_NOT_FOUND` 失败关闭、以及全屏原图的“可缩小到完整图／按真实溢出自由查看”手势边界。旧会话不被静默换模型；预览不改变附件外发；图片没有固定尺寸或固定位置规则。
 - **最终 JVM：** `:app:testDebugUnitTest` 为 `1042 tests / 0 failures / 3 skipped`。本轮修正的 5 项均为已演进源码与静态文本断言漂移：Provider continuation API、动态交接页首屏、调用记录字段、工具调用失败分支和 Registry 门禁；没有改写对应运行逻辑。
 - **正式构建与边界：** `:app:assembleRelease`（含 `lintVitalRelease`）通过。现有正式 APK [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) 为 `28,017,564` bytes，SHA-256 `8279335eef23b7aff39fbf08ff367e2a7d3ec8b0325f04f5d0e3062aabe95593`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本 checkpoint 未运行 `connected*AndroidTest`，未安装或操作 OPPO，未使用用户 Key 请求真实 Provider；既有同签名保数据覆盖证据仍只证明安装与字节一致，不替代南烛枫的真机手势和真实回复回读。
 
@@ -73,16 +73,16 @@
 - **结构与网关：** 搜索历史/PDF 缓存策略、设置根画布策略、Room 搜索轻量投影已从巨型 owner 拆到独立文件。Go 网关补齐认证、幂等、续传、哈希完成、签名下载与过期拒绝测试，并修复多字段错误共用 JSON tag 的真实协议缺陷；`go vet ./...`、`go test -cover ./...` 通过，覆盖率 `54.5%`。
 - **仍需决策：** 仓库仍没有 remote、upstream 或 tag；当前工作树混有既有未提交改动，且没有可确认的远端仓库名称／可见性，不能安全创建或标记发布。Compose、ViewModel 与数据库巨型文件只完成首批低风险拆分，未宣称债务清零。
 
-## 2026-08-30：总控方案现行门提升
+## 2026-08-30：总控方案现行门提升（历史；已由 2026-08-31 总控门取代）
 
-- [总控开发蓝图](MASTER_DEVELOPMENT_BLUEPRINT.md) 已将唯一当前覆盖层提升到 2026-08-30，代码／文档 checkpoint 固定为 `b7e1c2f` 与 `1f7f356`，并把 2026-08-26 及更早“当前状态／下一入口”明确降为历史证据。
+- 2026-08-30 当时的总控门曾以 `b7e1c2f` 与 `1f7f356` 为 checkpoint；现已由 2026-08-31 的 `d6db5bf` 总控门取代。该历史条目只保留当时的裁决过程，不得作为后续复查入口。
 - [总控完成审计](MASTER_PLAN_COMPLETION_AUDIT_20260816.md) 顶部已重建当前完成范围、验证边界、独立待验门和后续复查顺序；旧 `c1c9ae0`、Schema 56、819 项 JVM、旧 APK／OPPO 状态继续保留在 2026-08-28 历史门，不得返向覆盖当前 Schema 63 与最终回归。
 - 本次只修正文档权威层和冲突裁决，没有修改运行时代码、Schema、APK 或设备。后续先读 HEAD／工作树，再读总控门、本文顶部和受影响的一份现行合同；已完成范围只做防回退验证，不重复实现。
 
 ## 2026-08-30：当前代码 checkpoint、最终回归与增量档案固化
 
 - **代码冻结：** 从 `2fec04c` 之后累积的 Android 主代码、Room Schema 61–63、模型／附件／转写／搜索／存储／对话交互、定向合同与项目文档共 `216` 个文件冻结为本地 checkpoint `b7e1c2f` (`checkpoint(android): freeze integrated product baseline`)。未夹带构建目录或强特征密钥，暂存前 `git diff --check` 通过。
-- **最终回归：** 首次全量 JVM 为 `1013 tests / 12 failures / 3 skipped`；其中 8 项是仍锁定旧行为的静态／Room 合同（完成 ZIP receipt、待看排序／圆点，菜单行数，统一搜索时间线，费用分类语义色），只更新合同后定向 `8/8` 通过。再次全量严格收敛为 `1013 tests / 4 failures / 3 skipped`，新增回归为 0；保留的 4 项仍是旧基线已记录的 PDF renderer cache、统一 Dialog 遮罩、Dialog 内向边缘手势和设置画布合同，本次按“已完成部分忽略”不扩张修复。
+- **当时的最终回归：** 首次全量 JVM 为 `1013 tests / 12 failures / 3 skipped`；其中 8 项是仍锁定旧行为的静态／Room 合同（完成 ZIP receipt、待看排序／圆点，菜单行数，统一搜索时间线，费用分类语义色），只更新合同后定向 `8/8` 通过。再次全量严格收敛为 `1013 tests / 4 failures / 3 skipped`，新增回归为 0；保留的 4 项仍是旧基线已记录的 PDF renderer cache、统一 Dialog 遮罩、Dialog 内向边缘手势和设置画布合同。本历史数字已由文首当前 checkpoint 的 `1042 / 0 / 3` 取代。
 - **Release 与设备边界：** `:app:lintVitalRelease` 与 `:app:assembleRelease` 通过。重建后的 code 66 / `0.3.0-p10j` 非 Debug 候选为 `app/build/outputs/apk/release/南枫AI.apk`，`27,984,644` bytes，SHA-256 `0dba16156f36e76a23fe52748ed0416c7126db1e3d6b207b896e24605a7adfe0`，v2/v3 证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。该候选因嵌入新 checkpoint 信息而与已安装 APK 字节不同，本次未再获得覆盖授权；OPPO 当前仍是上一次已验证并保数据覆盖的 SHA-256 `4f4344e7f13764e6f1e32e9eeba981fd30174995a42a9dccaf330bda8efdf464`。
 - **正式增量沉淀：** [完整开发档案](%E5%8D%97%E6%9E%ABAI%E5%AE%8C%E6%95%B4%E5%BC%80%E5%8F%91%E6%A1%A3%E6%A1%88.md) 只新增当前 checkpoint 摘要与读取边界，[可迁移开发经验](%E5%8F%AF%E8%BF%81%E7%A7%BB%E5%BC%80%E5%8F%91%E7%BB%8F%E9%AA%8C.md) 只补充三条本轮新结论，[决策日志](decision-log.md) 只固化“活动 owner + 当前物理字节”的存储统计口径；已完成的模块说明不再复制。本轮不直接修改长期记忆生成文件。
 

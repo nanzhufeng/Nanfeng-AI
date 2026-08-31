@@ -65,7 +65,7 @@ class CurrentRuntimeContextContractTest {
             assertTrue(source.contains("ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md"))
             assertTrue(source.contains("ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md"))
         }
-        assertTrue(masterGate.contains("2026-08-30 当前总控门"))
+        assertTrue(masterGate.contains("2026-08-31 当前总控门"))
         assertTrue(masterGate.contains("[当前交接](CURRENT_HANDOFF.md) 顶部"))
         assertTrue(handoffGate.contains("总控方案现行门提升"))
         assertFalse(masterGate.contains("2026-08-28 当前总控门"))
