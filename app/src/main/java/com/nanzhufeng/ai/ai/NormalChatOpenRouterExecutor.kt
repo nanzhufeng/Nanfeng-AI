@@ -132,7 +132,7 @@ class NormalChatOpenRouterExecutor(
         data class Failed(val code: Code) : Result
     }
 
-    enum class CompletionNotice { REASONING_NOT_SAVED }
+    enum class CompletionNotice { REASONING_NOT_SAVED, TOOL_CALL_NOT_EXECUTED }
 
     enum class Code {
         SERVICE_DISABLED, CREDENTIAL_MISSING, REGISTRY_UNVERIFIED, MODEL_UNAVAILABLE,
@@ -277,6 +277,11 @@ class NormalChatOpenRouterExecutor(
         val choice = ComposerModelRoutingCatalog.choice(selectedId)
         val routingPolicy = loadRoutingPolicy.execute()
         val automatic = routingPolicy.autoRoutingEnabled && (selectedId == null || choice == ComposerModelRoutingCatalog.auto)
+        // Persisted selections must never become an implicit fallback after a product model is
+        // removed. Stop before loading a credential or preparing an external request.
+        if (!automatic && ComposerModelRoutingCatalog.isRetired(selectedId)) {
+            return Result.Blocked(Code.MODEL_NOT_FOUND).also { runtime?.fail(Code.MODEL_NOT_FOUND.name) }
+        }
         val attachmentPayloads = when {
             !hasMedia -> emptyList()
             else -> prepareAttachments(latest.content.filterIsInstance<ContentBlock.Attachment>())
@@ -305,17 +310,30 @@ class NormalChatOpenRouterExecutor(
         val openRouterPresets = presets.filter {
             NanfengModelServiceCatalog.providerFor(it) == ProviderId.OPENROUTER
         }
-        // A stored directory can be perfectly valid but stale.  Refresh whenever it cannot
-        // resolve the exact requested logical preset, instead of forcing the user into Settings.
-        if (openRouterPresets.any {
+        // K3 and Grok are explicit, fast-changing OpenRouter selections. A stored snapshot can
+        // still resolve an ID that the public catalog has since withdrawn or changed. Verify
+        // their exact mapping before any user material or Key is read; never approximate a
+        // similarly named model when the provider catalog no longer confirms it.
+        val requiresFreshOpenRouterVerification = openRouterPresets.any {
+            it in setOf(ModelPresetId.KIMI_K3, ModelPresetId.GROK_4_1_FAST)
+        }
+        // Other OpenRouter selections retain the existing cold-start behaviour: refresh only
+        // when the stored directory cannot resolve their exact logical preset.
+        if (requiresFreshOpenRouterVerification || openRouterPresets.any {
                 registry.resolve(ProviderId.OPENROUTER, it) !is ModelRegistryResolution.Resolved
             }
         ) {
-            when (verifyOpenRouterRegistry.execute()) {
-                // A cold start may use the resolver's exact text-only standard-ID fallback.
-                // A stale/malformed existing snapshot still remains fail-closed in the resolver.
-                is VerifyOpenRouterRegistryResult.Unavailable -> Unit
-                else -> Unit
+            val verified = verifyOpenRouterRegistry.execute()
+            if (requiresFreshOpenRouterVerification) {
+                // Exact explicit routes do not use an old snapshot or cold-start fallback. A
+                // successful refresh that lacks the selected ID means no request may be made;
+                // a refresh failure is likewise not permission to egress user material blindly.
+                if (verified !is VerifyOpenRouterRegistryResult.Verified) {
+                    return Result.Blocked(Code.REGISTRY_UNVERIFIED).also { runtime?.fail(Code.REGISTRY_UNVERIFIED.name) }
+                }
+                if (openRouterPresets.any { registry.resolve(ProviderId.OPENROUTER, it) !is ModelRegistryResolution.Resolved }) {
+                    return Result.Blocked(Code.MODEL_NOT_FOUND).also { runtime?.fail(Code.MODEL_NOT_FOUND.name) }
+                }
             }
         }
         val cancellation = runtime?.let { active ->
@@ -373,12 +391,14 @@ class NormalChatOpenRouterExecutor(
                     if (index > 0) add(ContentBlock.Text("\n"))
                     add(ContentBlock.Text("【${NanfengModelServiceCatalog.preset(preset).displayName}】"))
                     reply.reasoning?.let { add(ContentBlock.Reasoning(it)) }
+                    reply.toolCalls.forEach { add(ContentBlock.ProviderToolCall(it.id, it.name, it.argumentsJson)) }
                     add(ContentBlock.Text(reply.text))
                 }
             }
         } else replies.single().second.let { reply ->
             buildList {
                 reply.reasoning?.let { add(ContentBlock.Reasoning(it)) }
+                reply.toolCalls.forEach { add(ContentBlock.ProviderToolCall(it.id, it.name, it.argumentsJson)) }
                 add(ContentBlock.Text(reply.text.withRequiredOpeningAddress(openingPrefix)))
             }
         }
@@ -402,10 +422,44 @@ class NormalChatOpenRouterExecutor(
     private fun choiceForConversation(conversationId: ConversationId) =
         ComposerModelRoutingCatalog.choice(selection.readConversationOverride(conversationId).modelId)
 
+    /** K3 starts from a clean current-path context, then keeps only its own exact protocol suffix. */
+    private fun kimiK3ContinuationMessages(
+        snapshot: com.nanzhufeng.ai.domain.ConversationSnapshot,
+        selected: List<LocalContextBroker.Message>,
+        systemFact: String,
+    ): List<ChatHistoryMessage> {
+        val nodes = snapshot.nodes.associateBy { it.id }
+        val currentPath = selected.filter(LocalContextBroker.Message::isCurrentPathMessage)
+        val attribution = responseModelAttributions.forMessages(currentPath.mapNotNull(LocalContextBroker.Message::messageId))
+        fun LocalContextBroker.Message.assistantModelIds(): List<String> =
+            messageId?.let { attribution[it] }.orEmpty().map { it.modelId }
+        val lastForeignAssistant = currentPath.indexOfLast { message ->
+            message.role == MessageRole.ASSISTANT && message.assistantModelIds().any { it != KIMI_K3_MODEL_ID }
+        }
+        val firstK3Assistant = currentPath.withIndex().firstOrNull { (index, message) ->
+            index > lastForeignAssistant && message.role == MessageRole.ASSISTANT && KIMI_K3_MODEL_ID in message.assistantModelIds()
+        }?.index ?: -1
+        val suffixStart = if (firstK3Assistant >= 0) (firstK3Assistant - 1).coerceAtLeast(lastForeignAssistant + 1) else currentPath.lastIndex
+        val allowedCurrentIds = currentPath.drop(suffixStart.coerceAtLeast(0)).mapNotNull(LocalContextBroker.Message::messageId).toSet()
+        return listOf(ChatHistoryMessage("system", systemFact)) + selected.mapNotNull { message ->
+            if (message.isCurrentPathMessage && message.messageId !in allowedCurrentIds) return@mapNotNull null
+            val node = message.messageId?.let(nodes::get)
+            ChatHistoryMessage(
+                role = message.role.name.lowercase(),
+                content = message.text,
+                reasoningContent = node?.content?.filterIsInstance<ContentBlock.Reasoning>()?.joinToString("") { it.text },
+                toolCalls = node?.content?.filterIsInstance<ContentBlock.ProviderToolCall>()?.map {
+                    ChatToolCall(it.callId, it.toolName, it.argumentsJson)
+                }.orEmpty(),
+            )
+        }
+    }
+
     private sealed interface OneResult {
         data class Reply(
             val text: String,
             val reasoning: String? = null,
+            val toolCalls: List<ChatToolCall> = emptyList(),
             val completionNotice: CompletionNotice? = null,
             val attempt: NormalChatSendAttempt,
             val providerId: ProviderId,
@@ -422,6 +476,11 @@ class NormalChatOpenRouterExecutor(
     }
 
     private fun requestOne(preset: ModelPresetId, conversationId: ConversationId, userMessageId: com.nanzhufeng.ai.domain.MessageNodeId, snapshot: com.nanzhufeng.ai.domain.ConversationSnapshot, userMessage: String, attachments: List<ChatAttachment>, choice: com.nanzhufeng.ai.domain.ComposerModelChoice, runtime: ActiveProviderRuntime?, onStreamProgress: () -> Unit, cancellation: ProviderChatCancellation? = null, existingAttempt: NormalChatSendAttempt? = null): OneResult {
+        // Old persisted routes remain recognizable for attribution and a precise UI explanation,
+        // but recovery must never turn an unavailable historical model into a new egress.
+        if (NanfengModelServiceCatalog.preset(preset).usage != com.nanzhufeng.ai.domain.ModelPresetUsage.CHAT) {
+            return OneResult.Blocked(Code.MODEL_NOT_FOUND)
+        }
         val providerId = NanfengModelServiceCatalog.providerFor(preset)
         val resolved = modelResolver.resolve(preset)
         var resolvedModel = (resolved as? ResolvedModelResult.Resolved)?.model
@@ -511,9 +570,13 @@ class NormalChatOpenRouterExecutor(
             ),
         )
         if (context.status == AssemblyStatus.INPUT_TOO_LARGE) return OneResult.Blocked(Code.CONTEXT_LIMIT)
-        val contextMessages = listOf("system" to systemFact) + context.messages.map { it.role.name.lowercase() to it.text } +
-            bridged.contextText.takeIf(String::isNotBlank)?.let { listOf("user" to it) }.orEmpty()
-        val prepared = adapter.prepare(resolvedModel, contextMessages, providerAttachments, stream, requestOptions)
+        val protocolMessages = if (modelId == KIMI_K3_MODEL_ID) {
+            kimiK3ContinuationMessages(snapshot, context.messages, systemFact)
+        } else {
+            listOf(ChatHistoryMessage("system", systemFact)) + context.messages.map { ChatHistoryMessage(it.role.name.lowercase(), it.text) }
+        } + bridged.contextText.takeIf(String::isNotBlank)?.let { listOf(ChatHistoryMessage("user", it)) }.orEmpty()
+        val contextMessages = protocolMessages.map { it.role to it.content }
+        val prepared = adapter.prepareContinuation(resolvedModel, protocolMessages, providerAttachments, stream, requestOptions)
         if (prepared !is ChatAdapterPrepareResult.Ready) return OneResult.Blocked(Code.ATTACHMENT_MODEL_UNSUPPORTED)
         val now = clock.instant()
         val attempt = existingAttempt ?: runCatching {
@@ -618,7 +681,7 @@ class NormalChatOpenRouterExecutor(
                 // A model may emit explanatory text alongside tool calls.  No ordinary-chat
                 // tool is registered or approved here, so treating that mixed response as a
                 // completed answer would falsely claim the required action has happened.
-                val toolCallEncountered = !requestOptions.liveWebSearch && (toolOnly != null || reply?.toolCallEncountered == true)
+                val toolCallEncountered = !requestOptions.liveWebSearch && (toolOnly != null || (reply?.toolCallEncountered == true && modelId != KIMI_K3_MODEL_ID))
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, reply?.inputTokens ?: toolOnly?.inputTokens, reply?.outputTokens ?: toolOnly?.outputTokens, when { toolCallEncountered -> "TOOL_CALL_UNSUPPORTED"; reply != null && requestOptions.liveWebSearch -> "WEB_SEARCH_ENABLED_SUCCEEDED"; reply != null -> "SUCCEEDED"; else -> "RESPONSE_FORMAT" }))
                 if (toolCallEncountered) {
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "TOOL_CALL_UNSUPPORTED")
@@ -645,7 +708,7 @@ class NormalChatOpenRouterExecutor(
                     if (runtime?.persistenceRejected == true) return OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
                     runtime?.complete(visibleReply)
                     if (runtime?.persistenceRejected == true) OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE) else {
-                        val reasoningRetained = runtime?.retainReasoning(reply.reasoning) ?: true
+                        val reasoningRetained = runtime?.retainProviderContinuation(reply.reasoning, if (modelId == KIMI_K3_MODEL_ID) reply.toolCalls else emptyList()) ?: true
                         sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.COMPLETED, clock.instant())
                         val usage = ProviderUsage(
                             inputTokens = reply.inputTokens,
@@ -654,14 +717,20 @@ class NormalChatOpenRouterExecutor(
                             reasoningTokens = reply.reasoningTokens,
                         )
                         val (cost, source) = resolvedConversationCost(executionProviderId, modelId, usage, reply.reportedCostUsdMicros)
-                        OneResult.Reply(visibleReply, reply.reasoning, if (reasoningRetained) null else CompletionNotice.REASONING_NOT_SAVED, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName, usage, cost, source)
+                        val k3Tools = if (modelId == KIMI_K3_MODEL_ID) reply.toolCalls else emptyList()
+                        val notice = when {
+                            !reasoningRetained -> CompletionNotice.REASONING_NOT_SAVED
+                            k3Tools.isNotEmpty() -> CompletionNotice.TOOL_CALL_NOT_EXECUTED
+                            else -> null
+                        }
+                        OneResult.Reply(visibleReply, reply.reasoning, k3Tools, notice, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName, usage, cost, source)
                     }
                 }
             }
             is ProviderChatOutcome.StreamedResponse -> {
                 val reply = outcome.text.cleanReply()
                 val incompleteResponsesStream = outcome.finishReason in setOf("INCOMPLETE", "FAILED", "MISSING_COMPLETION")
-                audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, outcome.inputTokens, outcome.outputTokens, when { incompleteResponsesStream -> "RESPONSE_INCOMPLETE"; outcome.toolCallEncountered -> "TOOL_CALL_UNSUPPORTED"; reply == null -> "RESPONSE_FORMAT"; requestOptions.liveWebSearch -> "WEB_SEARCH_ENABLED_STREAM_SUCCEEDED"; else -> "STREAM_SUCCEEDED" }))
+                audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, outcome.inputTokens, outcome.outputTokens, when { incompleteResponsesStream -> "RESPONSE_INCOMPLETE"; outcome.toolCallEncountered && modelId != KIMI_K3_MODEL_ID -> "TOOL_CALL_UNSUPPORTED"; reply == null -> "RESPONSE_FORMAT"; requestOptions.liveWebSearch -> "WEB_SEARCH_ENABLED_STREAM_SUCCEEDED"; else -> "STREAM_SUCCEEDED" }))
                 if (runtime?.persistenceRejected == true) {
                     OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
                 } else if (incompleteResponsesStream) {
@@ -675,7 +744,7 @@ class NormalChatOpenRouterExecutor(
                     runtime?.fail(Code.RESPONSE_FORMAT.name)
                     recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
                     OneResult.Failed(Code.RESPONSE_FORMAT)
-                } else if (outcome.toolCallEncountered) {
+                } else if (outcome.toolCallEncountered && modelId != KIMI_K3_MODEL_ID) {
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "TOOL_CALL_UNSUPPORTED")
                     OneResult.Failed(Code.TOOL_CALL_UNSUPPORTED)
                 } else if (reply == null) {
@@ -696,7 +765,7 @@ class NormalChatOpenRouterExecutor(
                         .withRequiredOpeningAddress(openingAddressPrefix)
                     runtime?.complete(visibleReply)
                     if (runtime?.persistenceRejected == true) return OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
-                    val reasoningRetained = runtime?.retainReasoning(outcome.reasoning) ?: true
+                    val reasoningRetained = runtime?.retainProviderContinuation(outcome.reasoning, if (modelId == KIMI_K3_MODEL_ID) outcome.toolCalls else emptyList()) ?: true
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.COMPLETED, clock.instant())
                     val usage = ProviderUsage(
                         inputTokens = outcome.inputTokens,
@@ -705,7 +774,13 @@ class NormalChatOpenRouterExecutor(
                         reasoningTokens = outcome.reasoningTokens,
                     )
                     val (cost, source) = resolvedConversationCost(executionProviderId, modelId, usage, outcome.reportedCostUsdMicros)
-                    OneResult.Reply(visibleReply, outcome.reasoning, if (reasoningRetained) null else CompletionNotice.REASONING_NOT_SAVED, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName, usage, cost, source)
+                    val k3Tools = if (modelId == KIMI_K3_MODEL_ID) outcome.toolCalls else emptyList()
+                    val notice = when {
+                        !reasoningRetained -> CompletionNotice.REASONING_NOT_SAVED
+                        k3Tools.isNotEmpty() -> CompletionNotice.TOOL_CALL_NOT_EXECUTED
+                        else -> null
+                    }
+                    OneResult.Reply(visibleReply, outcome.reasoning, k3Tools, notice, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName, usage, cost, source)
                 }
             }
             ProviderChatOutcome.TimedOut -> OneResult.Failed(Code.TIMEOUT).also {
@@ -713,9 +788,13 @@ class NormalChatOpenRouterExecutor(
                 recordTransportDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.TIMEOUT)
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, null, null, "TIMEOUT"))
             }
-            ProviderChatOutcome.NetworkFailure -> OneResult.Failed(Code.NETWORK).also {
+            is ProviderChatOutcome.NetworkFailure -> OneResult.Failed(Code.NETWORK).also {
                 sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), "NETWORK")
-                recordTransportDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.NETWORK)
+                recordTransportDiagnostic(
+                    conversationId, executionProviderId, endpoint, modelId, contextMessages,
+                    providerAttachments, requestOptions, requestedAt, ProviderDiagnosticErrorClass.NETWORK,
+                    safeDetail = "TRANSPORT_${outcome.kind.name}",
+                )
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, null, null, "NETWORK"))
             }
             ProviderChatOutcome.ResponseTooLarge -> OneResult.Failed(Code.RESPONSE_FORMAT).also {
@@ -783,12 +862,13 @@ class NormalChatOpenRouterExecutor(
         conversationId: ConversationId, providerId: ProviderId, endpoint: String, modelId: String, messages: List<Pair<String, String>>,
         attachments: List<ChatAttachment>, options: ChatRequestOptions, requestedAt: java.time.Instant,
         errorClass: ProviderDiagnosticErrorClass,
+        safeDetail: String? = null,
     ) {
         diagnostics.append(
             ProviderDiagnosticRecord(
                 createdAt = clock.instant(), conversationId = conversationId.value, providerId = providerId,
                 endpointHost = ProviderDiagnosticRecord.endpointHost(endpoint), apiModelId = modelId,
-                httpStatus = null, errorClass = errorClass, redactedBody = null,
+                httpStatus = null, errorClass = errorClass, redactedBody = safeDetail,
                 requestShape = requestShape(messages, attachments, options),
                 latencyMs = java.time.Duration.between(requestedAt, clock.instant()).toMillis().coerceAtLeast(0),
             ),
@@ -932,17 +1012,22 @@ class NormalChatOpenRouterExecutor(
          * Reasoning is an optional disclosure: a failure here must never roll back the reply,
          * automatic title, accounting, or the user's ability to submit a new question.
          */
-        fun retainReasoning(reasoning: String?): Boolean {
-            val clean = reasoning?.cleanReply() ?: return true
+        fun retainProviderContinuation(reasoning: String?, toolCalls: List<ChatToolCall>): Boolean {
+            val clean = reasoning?.cleanReply()
+            if (clean == null && toolCalls.isEmpty()) return true
             val snapshot = conversations.findById(state.conversationId) ?: run {
                 return false
             }
             val target = snapshot.nodes.firstOrNull { it.id == state.messageId } ?: run {
                 return false
             }
-            val revisedContent = if (target.content.none { it is ContentBlock.Reasoning }) {
-                listOf(ContentBlock.Reasoning(clean)) + target.content
-            } else target.content
+            val continuation = buildList {
+                if (clean != null && target.content.none { it is ContentBlock.Reasoning }) add(ContentBlock.Reasoning(clean))
+                if (target.content.none { it is ContentBlock.ProviderToolCall }) toolCalls.forEach {
+                    add(ContentBlock.ProviderToolCall(it.id, it.name, it.argumentsJson))
+                }
+            }
+            val revisedContent = continuation + target.content
             if (target.content == revisedContent) return true
             return runCatching {
                 conversations.save(

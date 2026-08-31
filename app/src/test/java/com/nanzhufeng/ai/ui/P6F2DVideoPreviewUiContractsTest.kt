@@ -24,7 +24,8 @@ class P6F2DVideoPreviewUiContractsTest {
         assertTrue(chip.contains("isVideo -> Modifier.widthIn(min = 144.dp, max = 220.dp).height(128.dp)"))
         assertTrue(chip.contains("isImage -> originalAspectPreviewModifier(bitmap, maxEdge = 220.dp, fallbackSize = 92.dp)"))
         org.junit.Assert.assertFalse(chip.contains("isImage -> Modifier.border(1.dp, Color.Black.copy(alpha = 0.08f), RoundedCornerShape(previewCorner))"))
-        assertTrue(composer.contains("val previewCorner = if (isVideo) 20.dp else if (isImage) 10.dp else 14.dp"))
+        assertTrue(composer.contains("val previewCorner = if (isVideo) 20.dp else 10.dp"))
+        assertTrue(composer.contains("isVideo -> Modifier.widthIn(min = 144.dp, max = 220.dp).height(128.dp)"))
     }
 
     @Test fun `expanded video keeps central and bottom controls in one toggle state and supports double tap playback`() {

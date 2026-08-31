@@ -58,7 +58,7 @@ class CurrentRuntimeContextContractTest {
         val masterGate = projectFile("docs/MASTER_PLAN_COMPLETION_AUDIT_20260816.md")
             .readLines().take(45).joinToString("\n")
         val handoffGate = projectFile("docs/CURRENT_HANDOFF.md")
-            .readLines().take(32).joinToString("\n")
+            .readLines().take(96).joinToString("\n")
 
         for (source in listOf(masterGate, handoffGate)) {
             assertTrue(source.contains("ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md"))

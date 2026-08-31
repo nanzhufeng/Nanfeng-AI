@@ -2,6 +2,77 @@
 
 > **当前合同读取门（2026-08-27，优先于全文）：** 本文下方的**最新有效交接**与按时间累积的实现、设备与验收记录，只能说明当时事实，不能重新定义当前行为。Android 会话、抽屉、Composer、搜索、文本选择、主题和暗色皮肤只读取 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；Android 设置首页及二级至四级页面只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；普通聊天的个性化、Memory、资料库与历史对话上下文只读取 [Android 当前运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。下方任何“当前”“固定”“橙色”“Dialog”“功能审阅”“不会自动加入上下文”等历史措辞与这三份合同冲突时一律失效；数据／安全／Provider owner 仍按各自领域合同执行。
 
+## 2026-08-31：最终回归与 checkpoint 证据
+
+- **本次增量：** 当前 checkpoint 收口 Composer 草稿附件与已发送附件共用本地预览投影、退役 Grok 选择的历史归因与 `MODEL_NOT_FOUND` 失败关闭、以及全屏原图的“初始完整可见／可缩小到完整图／按真实溢出自由查看”手势边界。旧会话不被静默换模型；预览不改变附件外发；图片没有固定尺寸或固定位置规则。
+- **最终 JVM：** `:app:testDebugUnitTest` 为 `1042 tests / 0 failures / 3 skipped`。本轮修正的 5 项均为已演进源码与静态文本断言漂移：Provider continuation API、动态交接页首屏、调用记录字段、工具调用失败分支和 Registry 门禁；没有改写对应运行逻辑。
+- **正式构建与边界：** `:app:assembleRelease`（含 `lintVitalRelease`）通过。现有正式 APK [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) 为 `28,017,564` bytes，SHA-256 `8279335eef23b7aff39fbf08ff367e2a7d3ec8b0325f04f5d0e3062aabe95593`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本 checkpoint 未运行 `connected*AndroidTest`，未安装或操作 OPPO，未使用用户 Key 请求真实 Provider；既有同签名保数据覆盖证据仍只证明安装与字节一致，不替代南烛枫的真机手势和真实回复回读。
+
+## 2026-08-31：图片原图缩小与自由查看恢复
+
+- **根因与恢复：** 草稿缩略图修复未改动全屏 `ImagePreviewDialog`；当前图片查看器却把单指拖动错误限制为“必须先放大”，使按宽度显示的纵向长图无法在原始比例上下查看。现恢复为：长图在原始比例就可上下拖动，双指可缩小到整张图片完整落入视口，双击仍以触点为中心放大 `2.5×`，所有放大后溢出方向都可连续单指拖动；位置只按真实图片边界收束，不再用固定比例或固定位置锁死。
+- **验证与覆盖：** `P6F2BImagePreviewUiContractsTest` 与受影响的会话附件回归通过，`:app:assembleRelease`（含 `lintVitalRelease`）通过。正式包 [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) 为 `28,017,564` bytes，SHA-256 `8279335eef23b7aff39fbf08ff367e2a7d3ec8b0325f04f5d0e3062aabe95593`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。已在 OPPO `3B157F009E800000` 用 `pm install -r --user 0` 同签名覆盖成功，回拉 `base.apk` 与候选逐字节一致；首装时间及 `ceDataInode=1459104`／`deDataInode=1433378` 不变。未读取私有图片、未启动 App、未运行 `connected*AndroidTest`；真机手势体感仍需南烛枫以任意图片实际回读。
+
+## 2026-08-31：Grok 4.6 High 从可选模型移除
+
+- **选择与路由：** `Grok 4.6 High` 已从 Composer 深度列表、设置模型列表和 Auto 候选移除；和此前的 Grok 4.1 Fast／4.5 一样，不再形成普通聊天请求。保留其稳定逻辑 ID 仅为历史消息归因与旧选择识别；旧会话或旧全局默认会在读取 Key、准备附件和外发正文前以 `MODEL_NOT_FOUND` 失败关闭，绝不静默改为其他模型。
+- **验证与覆盖：** 模型路由、Provider 门禁、OpenRouter 目录和内置档案的 5 组定向 JVM 合同通过；`:app:assembleRelease`（含 `lintVitalRelease`）通过。正式包 [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) 为 `28,017,558` bytes，SHA-256 `56e4e072b6ec87fdd58a804fcc6a8e7a017441121c01c7975b311dfcc56752d1`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。已在 OPPO `3B157F009E800000` 用 `pm install -r --user 0` 同签名覆盖成功，回拉 `base.apk` 与候选逐字节一致；首装时间与 `ceDataInode=1459104`／`deDataInode=1433378` 未变。未卸载、未清数据、未启动 App、未部署 Debug／仪器包、未运行 `connected*AndroidTest`，也未使用用户 Key 请求 Provider。
+
+## 2026-08-31：Composer 草稿附件真实预览
+
+- **修复：** 草稿附件此前只查 `attachmentPreviews` 缓存，首次选择的图片没有发起投影，因此会长期显示通用图片图标。Composer 现与已发送气泡共用 `ConversationAttachmentPreviewProjection`：在本地已验证资产上生成图片缩略图、PDF 首页、视频海报、音频语义播放器或安全文本／Office 摘要；草稿与对话卡复用同一尺寸、圆角和裁切，仅保留草稿专属的移除按钮。
+- **边界与验证：** 本地预览不上传、外发或改写附件。`P6DConversationRowAccessibilityContractsTest`、`P6F2DVideoPreviewUiContractsTest`、`P6F2EAudioAndTextPreviewUiContractsTest` 合计 `101 tests / 0 failures`；`:app:assembleRelease`（含 `lintVitalRelease`）通过。正式候选为 [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk)，`28,017,560` bytes，SHA-256 `15e673b9160ce5dff40d0795f9e9d503f9566416bb6950776661acc3afdf522c`，v2/v3 正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。已在 OPPO `3B157F009E800000` 同签名覆盖成功；覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 不变，未卸载、未清数据、未部署 Debug／仪器包、未运行 `connected*AndroidTest`。尚未以用户私有附件做真机视觉验收。
+
+## 2026-08-31：对话生成期间的导航连续性
+
+- **真实 owner 与状态投影：** 普通对话请求继续由 `NormalChatGenerationForegroundService` 按会话持有；新增活动会话集合，切换对话、对话／工作界面、设置或搜索只更换 UI 投影，不触发取消、重启或重复发送。切回正在生成的会话会恢复对应 `isSending`、Room 增量与停止入口；非当前会话完成只刷新列表／未读，不抢回页面。进入后台时若存在生成任务，回到应用不再因长后台间隔自动创建新对话。
+- **多会话与可见反馈：** 服务注册表可同时独立跟踪多个会话，每个会话仍最多一个活动请求；侧栏标题前显示主题色进度环。通知保持无标题／正文内容，只显示单个状态或活动数量，批量动作明确为“停止全部生成”；Composer 的停止动作仍只取消当前会话。终态广播调整为注册表清理后只发送一次，避免刚完成的进度环被并发 reload 短暂复活。
+- **验证与边界：** 新增合同及并发注册表测试为 `2 tests / 0 failures / 0 errors / 0 skipped`；扩展相关回归执行 `99 tests`，其中 `98` 通过，唯一失败是未触碰的 `NormalChatOpenRouterExecutor` 既有静态测试仍查找已更名的 `retainReasoning`，不属于本次导航改动。`:app:assembleRelease`（含 `lintVitalRelease`）通过；正式 APK [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) 为 `28,017,555` bytes，SHA-256 `38475cb3d099369948bd72071853a2a33d1179413b6c34d9b023362ad6b7a58a`，v2/v3 正式证书 SHA-256 为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未连接或安装 OPPO、未运行 `connected*AndroidTest`、未用真实 Provider 发请求；真实多会话／后台／系统杀进程行为仍需后续显式设备验收。
+
+## 2026-08-31：OPPO 保数据覆盖（K3／Grok 精确目录与网络诊断 Release）
+
+- **2026-08-31 当前修复：** OpenRouter 实时目录已不含 `x-ai/grok-4.1-fast`，故该旧逻辑路由只保留为“已下线”的历史选择；发送与重试均在读取 Key、外发正文前以 `MODEL_NOT_FOUND` 停止，不能回退 Auto 或近似模型。`Grok 4.5` 与 `Grok 4.6 High` 都已从选择器、Auto 与设置模型列表移除；持久化的旧选择同样在读取 Key、外发正文前失败关闭，不能静默替换。历史消息仍显示其当时实际模型归因。传输失败诊断仍仅保留 DNS／TLS／连接／协议／I/O 类别，不保存异常原文、Key、正文或响应。
+- **覆盖门禁与结果：** 用户授权的唯一目标为 OPPO PKH120 / Android 16 `3B157F009E800000`。候选与现装均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug，v2/v3 正式证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。候选 [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) 为 `28,017,560` bytes，SHA-256 `9a80bab03d953c1c2d07acac07bdf1d3074cb47a71df67a31a2681774cff76c3`；设备临时副本哈希一致，只执行一次 `pm install -r --user 0` 并返回 `Success`。覆盖后按新 `pm path` 拉回 `base.apk`，哈希和字节均与候选一致。
+- **数据与验收边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均不变；覆盖后 `lastUpdateTime=2026-08-31 15:16:15`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 和本机预检目录均已精确清理；未卸载、未清数据、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`。本轮未使用用户 Key 发送真实 K3／Grok 请求；覆盖闭环不替代真实账户／Provider 回复验收。
+
+## 2026-08-31：OPPO 保数据覆盖（上下文记录与运行诊断列表 Release）
+
+- **覆盖门禁：** 目标唯一为 OPPO PKH120 / Android 16 `3B157F009E800000`。现装与候选均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug，v2/v3 正式证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。覆盖前现装包为 `28,001,174` bytes，SHA-256 `da0653dcb0e5b4b584df059739faac2abea322cf7f9d7a33e6594497dc64af11`。
+- **构建与覆盖：** 包含列表层级收敛改动的 `:app:assembleRelease`（含 lint vital）通过。候选 [南枫AI.apk](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) 为 `28,017,558` bytes，SHA-256 `55624758863290b367a82cc828761c41d05e62403678e0548bb26a6f727e95ca`。设备临时副本哈希一致，只执行一次 `pm install -r --user 0` 并返回 `Success`；覆盖后重新读取变化后的 `pm path`，回拉 `base.apk` 与候选逐字节一致。
+- **数据保留与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均不变；覆盖后 `lastUpdateTime=2026-08-31 14:36:34`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 与本机回读校验副本已精确清理。未卸载、未清数据、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`；本轮未启动 App，安装闭环不代替列表视觉与交互的用户真机体感确认。
+
+## 2026-08-31：上下文记录与运行诊断列表层级收敛
+
+- **上下文记录：** 只展示实际使用了资料的回答，不再把“未加入／未检索”的空记录混入列表。每张 18dp 白卡统一为“对话标题与资料数量 → Provider／模型 → 最多两条资料类型和标题 → 本轮输入 Token／右下时间”，卡片间固定 10dp 间距，长标题单行省略，保留真实数量与 Token 精度。
+- **运行诊断：** 页面优先展示近 7 天“连接失败”，再展示“自动与工具任务”，两组都显示范围说明与记录数量。连接失败和调用记录共用“对象／模型与状态 → Provider → 关键结果 → 耗时／右下时间”的层级；Token 与费用拆行。Harness 版本、请求 ID、脱敏错误正文和安全错误码默认折叠进“技术详情”，不再与用户可执行信息争夺主视觉。
+- **验证边界：** `ModelSettingsUiContractsTest`、`SettingsUiSimplificationContractsTest`、`P2MVisibleConfirmationContractsTest` 合计 `22 tests / 0 failures / 0 errors / 0 skipped`，Debug 主代码与测试代码完成编译，定向 `git diff --check` 通过。本节改动后续已由上方 14:36 的正式 Release 保数据覆盖到 OPPO；真机外屏、展开态、深色皮肤和大字体视觉仍待南烛枫实际体感确认。
+
+## 2026-08-31：OPPO 保数据覆盖（Grok OpenRouter Release）
+
+- **覆盖门禁：** 目标唯一为 OPPO PKH120 / Android 16 `3B157F009E800000`。现装与候选均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug，v2/v3 正式证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。安装前现装包 `28,001,051` bytes，SHA-256 `b672dee93eb7b5e4508c4608ddcf1271fda672242ab45d820106c3d00287d6d5`。
+- **构建与覆盖：** 当前 Grok 接入代码的 `:app:assembleRelease`（含 lint vital）通过。候选 [南枫AI.apk](../app/build/outputs/apk/release/南枫AI.apk) 为 `28,001,174` bytes，SHA-256 `da0653dcb0e5b4b584df059739faac2abea322cf7f9d7a33e6594497dc64af11`。候选与设备临时包哈希一致，只执行一次 `pm install -r --user 0` 并返回 `Success`；覆盖后重新读取变化后的 `pm path`，拉回 `base.apk` 与候选逐字节一致。
+- **数据保留与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均不变；覆盖后 `lastUpdateTime=2026-08-31 14:10:03`，用户 0 仍为 `installed=true`、`stopped=false`。设备临时 APK 与本机校验副本已精确清理。未卸载、未清数据、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`；本轮未启动 App，也未使用用户 OpenRouter Key 发起真实 Grok 调用。
+
+## 2026-08-31：OpenRouter Grok 4.1 Fast / Grok 4.6 High 完整接入
+
+- **入口与排序：** OpenRouter 新增精确预设 `x-ai/grok-4.1-fast` 与 `x-ai/grok-4.6`。Composer“日常”把 `Grok 4.1 Fast` 固定放在 `GPT-5.6 Terra` 下方，说明为“实时 · X · 搜索”；“深度”把产品预设 `Grok 4.6 High` 固定放在 `GPT-5.6 Sol` 下方，说明为“旗舰 · 深度 · Agent”。两项同步进入设置 OpenRouter 模型目录、普通直发、Auto 的完整候选集合与实际模型归因，不新增独立 API Key 或可编辑端点。
+- **请求与能力：** 4.1 Fast 默认明确发送 `reasoning.enabled=false`；4.6 High 默认发送 `reasoning.effort=high`。两项单次产品输出预算均封顶 `65,536` Token，不把 Provider 能力上限当作默认生成目标；文本、图片、PDF／文件、流式、工具、结构化输出继续由 OpenRouter Adapter 和已核验目录统一处理。需要当前信息时沿用 OpenRouter `openrouter:web_search` 插件；xAI 模型由 OpenRouter 自动补充 `x_search`，应用不伪造独立 X 工具协议。
+- **目录与费用诚实边界：** 4.6 当前公开目录为 500K 上下文、最大输出能力 450K，并按输入少于 200K 的 `$2/$6/$0.5` 与达到 200K 后的 `$4/$12/$1`（输入／输出／缓存读取，每百万 Token）做版本化本地估算；OpenRouter 实际 `usage.cost` 始终优先，联网搜索费不从 Token 猜测。4.1 官方产品页确认 2M 上下文、图像／文件与可开关推理，但实时 `/models` 当前未返回固定费率，故本地不编造费用，目录未映射时按既有 fail-closed 规则显示不可用。
+- **验证边界：** 模型排序与 Auto 完整性、OpenRouter 请求体、图片／实时搜索组合、目录精确映射、离线能力档案和费用分档的 5 组定向 JVM 合同通过，Debug 主代码与测试代码完成编译。未使用用户 OpenRouter Key 发起真实 Grok 调用，未构建 Release、未安装或操作 OPPO、未运行任何 `connected*AndroidTest`；真实账户可用性、Provider 账单和真机选择面仍需后续显式验收。
+
+## 2026-08-31：OPPO 保数据覆盖（搜索与启动 I/O 优化 Release）
+
+- **覆盖门禁：** 目标仅为 OPPO PKH120 / Android 16 `3B157F009E800000`。候选与现装均为 `com.nanzhufeng.ai` code 66 / `0.3.0-p10j`、非 Debug，v2/v3 正式证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；覆盖前现装 APK 为 `27,984,644` bytes，SHA-256 `4f4344e7f13764e6f1e32e9eeba981fd30174995a42a9dccaf330bda8efdf464`。
+- **构建与覆盖：** 当前工作树的定向 6 组 JVM 契约、Debug Kotlin、Release Kotlin、lint vital 与 `:app:assembleRelease` 通过。候选 `app/build/outputs/apk/release/南枫AI.apk` 为 `28,001,051` bytes，SHA-256 `b672dee93eb7b5e4508c4608ddcf1271fda672242ab45d820106c3d00287d6d5`；设备临时包哈希一致，只执行一次 `pm install -r --user 0`，返回 `Success`。安装后重新读取变化后的 `pm path` 并拉回 `base.apk`，与候选逐字节一致，签名仍为同一正式证书。
+- **数据保留与边界：** 覆盖前后 `firstInstallTime=2026-08-20 15:15:31`、`ceDataInode=1459104`、`deDataInode=1433378` 均未变；覆盖后 `lastUpdateTime=2026-08-31 02:40:40`，用户 0 仍为 `installed=true`、`stopped=false`。设备 APK 临时文件与本机回读校验目录均已精确清理；未卸载、未清数据、未读取私有业务内容、未部署 Debug／仪器包、未运行任何 `connected*AndroidTest`。安装闭环不替代搜索与知识库流畅度的用户真机体感确认。
+
+## 2026-08-31：历史失败、真实 ZIP 与网关测试收口
+
+- **四项历史失败：** 知识库与 ZIP 导入确认面已改回共享 Dialog owner；统一遮罩、外部关闭和内向边缘手势重新由 `P5ADialogDismissBehavior` 接管。PDF renderer 合同改为验证当前“完整 SHA-256 校验 + 元数据缓存 + 活跃 descriptor”实现，设置根画布抽成独立路由策略。四个原失败类合计 `110 tests / 0 failures`。
+- **真实 ZIP：** 用户明确选择的 2026-07 与 2026-08 ChatGPT ZIP 已运行三项 opt-in 验收，XML 为 `3 tests / 0 failures / 0 errors / 0 skipped`；未输出正文／附件名，未复制 ZIP，未接触设备。一次完整 JVM 为 `1024 tests / 3 failures`，三项均为已演进实现的静态锚点漂移，修正后对应三类定向回归通过；用户要求停止重复的大包全量扫描，因此没有把第二次中断的完整 JVM 写成全绿。
+- **结构与网关：** 搜索历史/PDF 缓存策略、设置根画布策略、Room 搜索轻量投影已从巨型 owner 拆到独立文件。Go 网关补齐认证、幂等、续传、哈希完成、签名下载与过期拒绝测试，并修复多字段错误共用 JSON tag 的真实协议缺陷；`go vet ./...`、`go test -cover ./...` 通过，覆盖率 `54.5%`。
+- **仍需决策：** 仓库仍没有 remote、upstream 或 tag；当前工作树混有既有未提交改动，且没有可确认的远端仓库名称／可见性，不能安全创建或标记发布。Compose、ViewModel 与数据库巨型文件只完成首批低风险拆分，未宣称债务清零。
+
 ## 2026-08-30：总控方案现行门提升
 
 - [总控开发蓝图](MASTER_DEVELOPMENT_BLUEPRINT.md) 已将唯一当前覆盖层提升到 2026-08-30，代码／文档 checkpoint 固定为 `b7e1c2f` 与 `1f7f356`，并把 2026-08-26 及更早“当前状态／下一入口”明确降为历史证据。
@@ -2984,3 +3055,9 @@ sed -n '1,180p' /Users/nanzhufeng/.codex/docs/codex-workflow/handoffs/rollout-20
 - **本机数据事实源：** 附件分类不再 `SUM(private_attachment_assets.byteCount)`。现在逐行校验当前受管文件是否真实存在并使用 `File.length()`；缺失文件不计数。ZIP-backed 条目保持可检索计数，但其逻辑解压大小不再逐项累加，实际 ZIP/导入目录只在“其他导入资料”按磁盘文件计一次。新增南枫转写任务/文件汇总，OCR 来源与 Markdown 仍通过同一附件目录计数，不重复加入总额。
 - **验证：** 定向 32 项 JVM 回归通过（OCR domain/UI、统一搜索排序与锚点、真实存储统计、ZIP 清理）。全量 `:app:testDebugUnitTest` 执行 988 项，981 通过、4 失败、3 跳过；4 项仍为既有 PDF renderer 静态合同、全局 Dialog import/scrim、全局 Dialog swipe 与设置 canvas 静态合同，本次定向链全部通过，不能写作全量通过。`:app:assembleRelease` 成功；`0.3.0-p10j` / code 66 APK `app/build/outputs/apk/release/南枫AI.apk`，27,968,235 bytes，SHA-256 `f2e75b8accbae964a6b8914b34d7185e2bf6b35591007b0f94aa6a823c5cc905`，非 Debug 正式签名 v2/v3 通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
 - **边界：** 未运行任何 `connected*AndroidTest`，未安装 APK，未改动 OPPO 数据，未请求 Provider/Key。真机点击、排序视觉与本机数据数值刷新仍需用户明确要求覆盖安装后验收。
+# 2026-08-31 Kimi K3 完整接入与 Session Sticky
+
+- OpenRouter 新增 `Kimi K3`（`moonshotai/kimi-k3`），设置说明为“复杂分析 · Agent · 长上下文”；深度模式以 K3 替换 Qwen3.8-Max，Qwen3.8-Max 本身仍保留在千问设置和历史兼容中。
+- K3 为显式 opt-in，不进入 Auto。既有会话首次切入 K3 时只从当前用户轮建立 Provider 上下文；已有 K3 回答后只续接 K3 阶段，避免继承其他模型的压缩／标准化历史。
+- OpenRouter K3 Adapter 将 `reasoning_content` 与结构化 `tool_calls` 解析为隐藏消息协议块并在后续 K3 请求中回放；这些字段不进入搜索、标题、知识提取或通用交换，Provider raw envelope 仍不落库。保存 tool call 不代表工具已执行。
+- 目录、1M context profile、OpenRouter registry 精确映射、冷启动精确 ID、费用估算和模型健康归因均已接入；官方公开价格采用本次核验的 USD 2.55/M input、12.75/M output、0.256/M cache read，Provider 回传 `usage.cost` 仍优先。

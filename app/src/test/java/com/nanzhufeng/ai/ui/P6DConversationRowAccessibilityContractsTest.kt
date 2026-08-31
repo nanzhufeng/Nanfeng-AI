@@ -85,7 +85,8 @@ class P6DConversationRowAccessibilityContractsTest {
             .toList()
         assertTrue(uiSources.none { it.readText().contains("import androidx.compose.material3.AlertDialog") })
         assertTrue(uiSources.none { it.readText().contains("import androidx.compose.ui.window.Dialog\n") })
-        assertTrue(uiSources.none { it.readText().contains("onDismissRequest = { if") })
+        assertTrue(uiSources.none { it.readText().contains("androidx.compose.material3.AlertDialog(") })
+        assertTrue(uiSources.none { it.readText().contains("androidx.compose.ui.window.Dialog(") })
         val composerOverlay = source.substring(source.indexOf("private fun ComposerMenuOverlay"), source.indexOf("private fun ComposerModelPickerHeader"))
         assertTrue(composerOverlay.contains(".p5aDismissOnInwardEdgeSwipe(onOverlayBack)"))
         assertTrue(composerOverlay.contains("BackHandler(onBack = onOverlayBack)"))
@@ -338,7 +339,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "else -> 8 + if (includeRename) 1 else 0",
             "if (workMode) {",
             "ConversationMenuAction(Icons.Rounded.PushPin",
-            "ConversationMenuAction(Icons.Rounded.Visibility, \"待看\"",
+            "ConversationMenuAction(Icons.Rounded.Visibility, \"未读\"",
             "ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove",
             "ConversationMenuAction(Icons.Rounded.AttachFile, \"已上传文件\"",
             "ConversationMenuAction(Icons.Rounded.CloudUpload, \"同步到南枫云\"",
@@ -554,7 +555,9 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(page.contains(".imePadding()"))
         assertTrue(page.contains("bottom = if (imeVisible) 8.dp else 14.dp"))
         assertTrue(page.contains("Text(\"历史\""))
-        assertTrue(source.contains("onSearchChanged(\"\")\n                                onSearchRequested()"))
+        val openSearch = source.substring(source.indexOf("onOpenSearchPage = {"), source.indexOf("onManage = onManage"))
+        assertTrue(openSearch.contains("onSearchChanged(\"\")"))
+        assertFalse(openSearch.contains("onSearchRequested()"))
     }
 
     @Test
@@ -579,7 +582,11 @@ class P6DConversationRowAccessibilityContractsTest {
         val drawer = source.substring(source.indexOf("private fun ConversationNavigationDrawer"), source.indexOf("private fun WorkProjectNavigationDrawer"))
         val projectDrawer = source.substring(source.indexOf("private fun WorkProjectNavigationDrawer"), source.indexOf("private fun TemporaryConversationNavigationDrawer"))
         assertTrue(drawer.contains("onClick = { if (!dismissRevealedConversation()) onCreate() }"))
-        assertTrue(drawer.contains("IconButton(onClick = { if (!dismissRevealedConversation()) onOpenRoute(P5ARoute.SETTINGS) }, modifier = Modifier.size(48.dp))"))
+        assertTrue(source.contains("ConversationDrawerSettingsPillWidth = 108.dp"))
+        assertFalse(source.contains("ConversationDrawerNewConversationPillWidth"))
+        assertTrue(drawer.contains("width(ConversationDrawerSettingsPillWidth)"))
+        assertFalse(drawer.contains("width(ConversationDrawerNewConversationPillWidth)"))
+        assertTrue(drawer.contains("IconButton(onClick = { if (!dismissRevealedConversation()) onOpenRoute(P5ARoute.SETTINGS) }, modifier = Modifier.fillMaxSize())"))
         assertTrue(drawer.contains("modifier = Modifier.align(Alignment.BottomCenter)"))
         assertTrue(drawer.contains(".conversationEdgeGrayFade(edgeColor = ConversationDrawerBaseSurface)"))
         assertTrue(drawer.contains("LazyColumn("))
@@ -612,7 +619,8 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(composer.contains("val modelLabel = composerModelDisplayLabel(selectedPresets)"))
         assertFalse(composer.contains("Auto · 发送时按能力选择"))
         val modelEntry = source.substring(source.indexOf("private fun ComposerModelEntry"), source.indexOf("private fun ConversationComposerDock"))
-        assertTrue(modelEntry.contains("fontFamily = DrawerIdentityRoundedFontFamily"))
+        assertTrue(source.contains("android.graphics.Typeface.create(\"sans-serif-rounded\", android.graphics.Typeface.BOLD)"))
+        assertTrue(modelEntry.contains("fontFamily = ComposerModelRoundedBoldFontFamily"))
         assertTrue(modelEntry.contains("fontWeight = FontWeight.Bold"))
         assertFalse(modelEntry.contains("fontWeight = FontWeight.Normal"))
         assertTrue(source.contains("private val ComposerModelDisplayWidth = 88.dp"))
@@ -891,7 +899,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "unreadConversationIds = state.unreadConversationIds - id",
         )) assertTrue("missing unread watermark anchor $token", viewModel.contains(token))
         assertTrue("drawer must consume its state unread projection", source.contains("unread = notificationReminderSettings.unreadConversationIndicatorsEnabled && conversation.id in state.unreadConversationIds"))
-        for (token in listOf("if (unread || watchLater)", "size(7.dp)", "background(AccentOrange)", "contentDescription = if (watchLater) \"待看对话\" else \"有未查看的新内容\"")) {
+        for (token in listOf("if (unread || watchLater)", "size(7.dp)", "background(AccentOrange)", "contentDescription = if (watchLater) \"未读对话\" else \"有未查看的新内容\"")) {
             assertTrue("missing unread marker rendering $token", row.contains(token))
         }
     }
@@ -990,7 +998,8 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(source.contains("import androidx.compose.ui.zIndex"))
         assertTrue(source.contains(".zIndex(ConversationScrollToLatestZIndex)"))
         val drawer = source.substring(source.indexOf("private fun ConversationNavigationDrawer"), source.indexOf("private fun ConversationNavigationRow"))
-        assertTrue(drawer.contains("modifier = Modifier.conversationForegroundShadow(shape = CircleShape)"))
+        assertEquals(3, Regex("width\\(ConversationDrawerSettingsPillWidth\\)").findAll(drawer).count())
+        assertTrue(Regex("\\.conversationForegroundShadow\\(shape = P5AInteractiveShape\\)").findAll(drawer).count() >= 3)
         assertTrue(drawer.contains(".conversationForegroundShadow(shape = CircleShape)"))
         assertEquals(3, Regex("""Icon\(Icons\.Rounded\.Settings, contentDescription = "设置", tint = BodyText\)""").findAll(drawer).count())
         assertFalse(drawer.contains("DrawerSettingsAccent"))
@@ -1028,10 +1037,12 @@ class P6DConversationRowAccessibilityContractsTest {
         val draftPreview = source.substring(source.indexOf("private fun ComposerAttachmentPreview"), source.indexOf("private fun ComposerMenuOverlay"))
         assertTrue(draftComposer.contains("attachmentPreview = if (draft.attachments.isNotEmpty())"))
         assertTrue(draftComposer.contains("ComposerAttachmentPreview("))
+        assertTrue(draftComposer.contains("LaunchedEffect(draft.attachments)"))
+        assertTrue(draftComposer.contains("draft.attachments.forEach(onEnsureAttachmentPreview)"))
         assertFalse(draftComposer.contains("TextButton(onClick = { onRemoveAttachment(attachment.id) }"))
         assertTrue(dock.contains("attachmentPreview?.invoke()"))
         assertTrue(dock.contains("Draft previews are intentionally inside this single white surface"))
-        for (token in listOf("contentDescription = if (isVideo) \"草稿视频代表帧\" else \"草稿图片预览\"", "isImage -> originalAspectPreviewModifier(bitmap, maxEdge = 92.dp, fallbackSize = 92.dp)", "contentScale = if (isVideo) ContentScale.Crop else ContentScale.Fit", "contentDescription = \"移除草稿附件", "IconButton(\n            onClick = onRemove")) {
+        for (token in listOf("contentDescription = if (isVideo) \"草稿视频代表帧\" else \"草稿图片预览\"", "isImage -> originalAspectPreviewModifier(bitmap, maxEdge = 220.dp, fallbackSize = 92.dp)", "isText -> Modifier.widthIn(min = 164.dp, max = 228.dp).heightIn(min = 96.dp, max = 128.dp)", "AttachmentTextSnippet", "contentScale = if (isVideo) ContentScale.Crop else ContentScale.Fit", "contentDescription = \"移除草稿附件", "IconButton(\n            onClick = onRemove")) {
             assertTrue("missing $token", draftPreview.contains(token))
         }
     }
@@ -1265,7 +1276,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(appSource.contains("route == P5ARoute.ADAPTERS && chatGptImportState.selected != null"))
         assertTrue(appSource.contains("BackHandler(onBack = returnFromSettings)"))
         assertTrue(appSource.contains("Modifier.systemGestureExclusion()"))
-        assertTrue(appSource.contains("Modifier.settingsEdgeExit(returnFromSettings)"))
+        assertTrue(appSource.contains("Modifier.settingsEdgeExit(returnFromCurrentPage)"))
         assertTrue(appSource.contains("contentDescription = \"返回侧栏\""))
         assertTrue(appSource.contains("contentDescription = \"返回设置\""))
         assertTrue(hierarchy.contains("if (destination == SettingsDestination.HOME)"))
@@ -1283,6 +1294,7 @@ class P6DConversationRowAccessibilityContractsTest {
         val row = source.substring(source.indexOf("private fun ConversationNavigationRow"), source.indexOf("private data class ConversationActionMenuTarget"))
         assertTrue(row.contains("contentColor = BodyText"))
         assertTrue(row.contains("color = if (selected) AccentOrange else BodyText"))
+        assertTrue(row.contains("tint = if (selected) AccentOrange else SecondaryText"))
     }
 
     @Test
@@ -1294,7 +1306,7 @@ class P6DConversationRowAccessibilityContractsTest {
         for (token in listOf("internal fun chatRoleVisual", "MessageRole.USER -> ChatRoleVisual(", "ActiveUserBubbleSurface", "ActiveUserBubbleAccent", "MessageRole.ASSISTANT -> ChatRoleVisual(NeutralAssistantSurface", "MessageRole.SYSTEM -> ChatRoleVisual(NeutralSystemSurface", "MessageRole.TOOL -> ChatRoleVisual(ToolSurface")) assertTrue("missing $token", appSource.contains(token))
         assertFalse(attachment.contains("AccentOrangeSoft"))
         assertFalse(composerAttachment.contains("AccentOrangeSoft"))
-        assertTrue(composerAttachment.contains("background(ForegroundSurface)"))
+        assertTrue(composerAttachment.contains("background(if (isPdf || isText) ForegroundSurface else NeutralAssistantSurface)"))
         for (token in listOf("is PresentationBlock.Quote -> Row", "height(IntrinsicSize.Min)", "Box(Modifier.width(3.dp).fillMaxHeight()", "SecondaryText.copy(alpha = 0.42f)")) assertTrue("missing quote format token $token", presentation.contains(token))
         assertFalse(presentation.contains("fontStyle = androidx.compose.ui.text.font.FontStyle.Italic"))
         assertTrue(presentation.contains("is PresentationBlock.Note -> InlinePresentationText("))

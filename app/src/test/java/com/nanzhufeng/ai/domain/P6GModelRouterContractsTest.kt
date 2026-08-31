@@ -7,6 +7,33 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class P6GModelRouterContractsTest {
+    @Test fun `K3 replaces Qwen Max only in deep picker and remains explicit opt in`() {
+        assertTrue(ComposerModelRoutingCatalog.deep.any { it.routes == listOf(ModelPresetId.KIMI_K3) && it.label == "Kimi K3" })
+        assertFalse(ComposerModelRoutingCatalog.deep.any { ModelPresetId.QWEN_3_8_MAX in it.routes })
+        assertTrue(NanfengModelServiceCatalog.autoRoutingCandidates(AutoRoutingFacts(requiresComplexReasoning = true)).none { it == ModelPresetId.KIMI_K3 })
+        val preset = NanfengModelServiceCatalog.preset(ModelPresetId.KIMI_K3)
+        assertEquals("复杂分析 · Agent · 长上下文", preset.description)
+        assertEquals(ProviderId.OPENROUTER, NanfengModelServiceCatalog.providerFor(ModelPresetId.KIMI_K3))
+        assertEquals(ModelPresetId.KIMI_K3, ComposerModelRoutingCatalog.choice("logical:deep:qwen-max").routes.single())
+    }
+
+    @Test fun `removed Grok routes cannot reenter the picker or automatic routing`() {
+        val retired41 = NanfengModelServiceCatalog.preset(ModelPresetId.GROK_4_1_FAST)
+        val retired45 = NanfengModelServiceCatalog.preset(ModelPresetId.GROK_4_5)
+        val retired46 = NanfengModelServiceCatalog.preset(ModelPresetId.GROK_4_6_HIGH)
+
+        assertEquals(ModelPresetUsage.RETIRED, retired41.usage)
+        assertEquals(ModelPresetUsage.RETIRED, retired45.usage)
+        assertEquals(ModelPresetUsage.RETIRED, retired46.usage)
+        assertFalse(ComposerModelRoutingCatalog.daily.any { ModelPresetId.GROK_4_1_FAST in it.routes || ModelPresetId.GROK_4_5 in it.routes })
+        assertFalse(ComposerModelRoutingCatalog.deep.any { ModelPresetId.GROK_4_6_HIGH in it.routes })
+        assertEquals(ModelPresetId.GROK_4_1_FAST, ComposerModelRoutingCatalog.choice("logical:daily:grok-4.1-fast").routes.single())
+        assertEquals(ModelPresetId.GROK_4_5, ComposerModelRoutingCatalog.choice("logical:daily:grok-4.5").routes.single())
+        assertEquals(ModelPresetId.GROK_4_6_HIGH, ComposerModelRoutingCatalog.choice("logical:deep:grok-4.6-high").routes.single())
+        assertTrue(ComposerModelRoutingCatalog.isRetired("logical:deep:grok-4.6-high"))
+        assertTrue(NanfengModelServiceCatalog.autoRoutingCandidates(AutoRoutingFacts()).none { it == ModelPresetId.GROK_4_6_HIGH })
+    }
+
     private val router = P6GModelRouter()
     private fun candidate(family: P6GProviderFamily, id: String, cost: Long?, available: Boolean = true, capabilities: Set<P6GCapability> = setOf(P6GCapability.TEXT)) =
         P6GCatalogCandidate(family, family.name.lowercase(), id, "fixture $id", setOf(P6GModelTier.BALANCED), capabilities, available, cost, 1)
@@ -102,7 +129,7 @@ class P6GModelRouterContractsTest {
             ComposerModelRoutingCatalog.daily.map { it.label },
         )
         assertEquals(
-            listOf("Claude Fable 5", "Claude Opus 5", "DeepSeek V4 Pro", "GPT-5.6 Sol", "GLM-5.3", "Qwen3.8-Max"),
+            listOf("Claude Fable 5", "Claude Opus 5", "DeepSeek V4 Pro", "GPT-5.6 Sol", "GLM-5.3", "Kimi K3"),
             ComposerModelRoutingCatalog.deep.map { it.label },
         )
     }
@@ -115,6 +142,8 @@ class P6GModelRouterContractsTest {
         assertEquals("Fable 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[0].label))
         assertEquals("V4 Pro", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[2].label))
         assertEquals("5.6 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[3].label))
+        assertEquals("4.1 Fast", composerModelShortNameForUser("Grok 4.1 Fast"))
+        assertEquals("4.6 High", composerModelShortNameForUser("Grok 4.6 High"))
         assertEquals("Sonnet 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.daily[0].label))
         assertEquals("3.7 Flash", composerModelShortNameForUser("Gemini 3.7 Flash"))
         assertEquals("GLM 5.3", composerModelShortNameForUser("GLM-5.3"))
@@ -143,7 +172,7 @@ class P6GModelRouterContractsTest {
             AutoRoutingFacts(hasAttachment = true),
         ).forEach { facts ->
             val candidates = AutoModelRouter.candidates(facts)
-            assertEquals(NanfengModelServiceCatalog.chatPresets.map { it.id }.toSet(), candidates.toSet())
+            assertEquals(NanfengModelServiceCatalog.chatPresets.map { it.id }.toSet() - ModelPresetId.KIMI_K3, candidates.toSet())
             assertTrue(candidates.contains(ModelPresetId.GLM_5_3))
             assertTrue(candidates.indexOf(ModelPresetId.GLM_5_3) < candidates.indexOf(ModelPresetId.QWEN_3_8_MAX))
         }

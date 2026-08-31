@@ -85,8 +85,8 @@ class P3JNormalChatExplicitEgressContractsTest {
     }
 
     @Test fun `mixed non streaming text and tool call never claims a completed answer`() {
-        assertTrue(executor.contains("val toolCallEncountered = !requestOptions.liveWebSearch && (toolOnly != null || reply?.toolCallEncountered == true)"))
-        assertTrue(executor.contains("when { toolCallEncountered -> \"TOOL_CALL_UNSUPPORTED\""))
+        assertTrue(executor.contains("toolOnly != null || (reply?.toolCallEncountered == true && modelId != KIMI_K3_MODEL_ID)"))
+        assertTrue(executor.contains("OneResult.Failed(Code.TOOL_CALL_UNSUPPORTED)"))
     }
 
     @Test fun `normal streaming completion does not silently clip a model reply`() {
@@ -96,7 +96,7 @@ class P3JNormalChatExplicitEgressContractsTest {
     @Test fun `current-information OpenRouter requests distinguish a live web tool from model selection`() {
         assertTrue(executor.contains("val requestedOptions = ChatRequestOptions.Standard"))
         assertTrue(executor.contains("appendProviderWebSources(reply.text, reply.webSources)"))
-        assertTrue(executor.contains("is VerifyOpenRouterRegistryResult.Unavailable -> Unit"))
+        assertTrue(executor.contains("if (verified !is VerifyOpenRouterRegistryResult.Verified)"))
         assertTrue(executor.contains("val attachmentFact = attachmentReferenceInstruction(attachments)"))
         assertTrue(executor.contains("EvidenceFirstAnalysisPolicy.modeFor(userMessage, attachments)"))
         assertTrue(executor.contains("val isFirstAssistantReply = snapshot.nodes.none"))

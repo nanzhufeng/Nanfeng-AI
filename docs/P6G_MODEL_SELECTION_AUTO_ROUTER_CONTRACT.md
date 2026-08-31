@@ -7,6 +7,9 @@
 ## 优先级与目录
 
 - 会话手动 override > 全局默认 > Auto；手动选择绝不经过自动路由。
+- Kimi K3 是深度模式中的显式选择，替代该选择面的 Qwen3.8-Max；它不加入 Auto。选择后沿用现有会话 override 与下一会话默认值，首次从其他模型切入时由 K3 Adapter 从当前用户轮建立独立 Provider 上下文。
+- `Grok 4.1 Fast`（`x-ai/grok-4.1-fast`）已从 OpenRouter 当前公开目录下线：保留其逻辑 ID 仅用于旧会话识别与归因，不出现在选择器、Auto 候选或重试发送中。旧选择必须在读取 Key、外发正文前以“模型已不在服务商目录”失败，绝不静默替换。
+- `Grok 4.5`（`x-ai/grok-4.5`）与 `Grok 4.6 High`（`x-ai/grok-4.6`）都已从产品模型列表与 Auto 候选移除；持久化旧选择只能失败关闭，不能回退、近似替换或继续外发。历史消息仍保留当时实际模型归因。
 - Auto 在合格候选中优先 Claude/Anthropic，OpenAI/ChatGPT API 是明确 fallback/特长候选：Claude 不可用、限流/超时、能力/上下文/工具/结构化输出不匹配、成本/延迟越界或用户手选时才可切换。
 - Domain 只持久化稳定层级 `FAST / BALANCED / DEEP / APEX_REVIEW`；catalog snapshot 在接入时动态映射真实 model ID/display name/capability/price/context/status。Haiku 4.5、Sonnet 5、Opus 5、Fable 5 等用户目标名不是当前 AVAILABLE 模型或 fake preset。
 

@@ -344,6 +344,9 @@ private val ConversationWorkspaceCanvas: Color get() = PageBackground
 // Header controls stay clearly readable over the pale neutral canvas without
 // reintroducing an outline or a narrow, dark edge shadow around their surfaces.
 private val ConversationControlGlyph: Color get() = BodyText
+// Settings owns a fixed capsule width. "新对话" remains content-measured so changing this
+// icon-only control can never compress, wrap, or reposition the independent primary action.
+private val ConversationDrawerSettingsPillWidth = 108.dp
 // These are drawn by Compose itself, rather than as platform elevation shadows: elevation
 // spreads a shadow but cannot make it denser on the very pale chat canvas.  Short, downward
 // shadows give both surfaces a clearly visible lift without a black outline or backing tray.
@@ -457,6 +460,12 @@ private fun scaledTransientMenuTextUnit(value: androidx.compose.ui.unit.TextUnit
 /** Android's bundled rounded sans keeps the drawer identity friendly without shipping a font file. */
 private val DrawerIdentityRoundedFontFamily = FontFamily(
     android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.NORMAL),
+)
+
+/** A normal-only platform Typeface ignores the requested Compose weight on some devices.
+ * Bind the Composer label to the real bold rounded face so the visible model name is bold. */
+private val ComposerModelRoundedBoldFontFamily = FontFamily(
+    android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD),
 )
 
 /** Composer alone uses compact names; its picker keeps the catalog's full concrete names. */
@@ -1008,7 +1017,6 @@ internal fun ConversationWorkspaceDialog(
                                 searchLocateMessageId = null
                                 searchLocateAttachmentId = null
                                 onSearchChanged("")
-                                onSearchRequested()
                                 searchPageVisible = true
                                 drawerScope.launch { drawerState.close() }
                             },
@@ -1425,6 +1433,7 @@ internal fun ConversationWorkspaceDialog(
                         ) {
                         DraftComposer(
                             state = state,
+                            onEnsureAttachmentPreview = onEnsureAttachmentPreview,
                             onDraftChanged = onDraftChanged,
                             onSubmit = {
                                 if (state.surface == com.nanzhufeng.ai.domain.ConversationSurface.WORK) {
@@ -1522,7 +1531,8 @@ internal fun ConversationWorkspaceDialog(
                     )) + com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choices
                         .filterNot { it == com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.auto }
                         .map { it.id to it.label },
-                    selectedModelId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId,
+                    selectedModelId = (state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId)
+                        ?.let(com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog::choice)?.id,
                     onDismiss = { composerMenu = ComposerMenu.NONE },
                     onSelectModel = { modelId -> composerMenu = ComposerMenu.NONE; onSelectP6GModel(modelId) },
                 )
@@ -2703,6 +2713,7 @@ private fun ConversationNavigationDrawer(
                         ConversationNavigationRow(
                             conversation = conversation,
                             selected = conversation.id == state.selectedConversationId,
+                            generating = conversation.id in state.runningConversationIds,
                             unread = notificationReminderSettings.unreadConversationIndicatorsEnabled && conversation.id in state.unreadConversationIds,
                             watchLater = conversation.id in state.watchLaterAtEpochMs,
                             onSelect = { id -> if (!dismissRevealedConversation()) { onClearWatchLater(id); onSelect(id) } },
@@ -2752,6 +2763,7 @@ private fun ConversationNavigationDrawer(
                     ConversationNavigationRow(
                         conversation = conversation,
                         selected = conversation.id == state.selectedConversationId,
+                        generating = conversation.id in state.runningConversationIds,
                         unread = notificationReminderSettings.unreadConversationIndicatorsEnabled && conversation.id in state.unreadConversationIds,
                         watchLater = conversation.id in state.watchLaterAtEpochMs,
                         onSelect = { id -> if (!dismissRevealedConversation()) { onClearWatchLater(id); onSelect(id) } },
@@ -2835,12 +2847,15 @@ private fun ConversationNavigationDrawer(
             ) {
                 Surface(
                     color = ForegroundSurface,
-                    shape = CircleShape,
+                    shape = P5AInteractiveShape,
                     tonalElevation = 0.dp,
                     shadowElevation = 0.dp,
-                    modifier = Modifier.conversationForegroundShadow(shape = CircleShape),
+                    modifier = Modifier
+                        .width(ConversationDrawerSettingsPillWidth)
+                        .height(48.dp)
+                        .conversationForegroundShadow(shape = P5AInteractiveShape),
                 ) {
-                    IconButton(onClick = { if (!dismissRevealedConversation()) onOpenRoute(P5ARoute.SETTINGS) }, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = { if (!dismissRevealedConversation()) onOpenRoute(P5ARoute.SETTINGS) }, modifier = Modifier.fillMaxSize()) {
                         Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = BodyText)
                     }
                 }
@@ -3056,15 +3071,17 @@ private fun WorkProjectNavigationDrawer(
         }
         Surface(
             color = ForegroundSurface,
-            shape = CircleShape,
+            shape = P5AInteractiveShape,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 24.dp, bottom = 12.dp)
-                .conversationForegroundShadow(shape = CircleShape),
+                .width(ConversationDrawerSettingsPillWidth)
+                .height(48.dp)
+                .conversationForegroundShadow(shape = P5AInteractiveShape),
         ) {
-            IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp)) {
+            IconButton(onClick = onOpenSettings, modifier = Modifier.fillMaxSize()) {
                 Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = BodyText)
             }
         }
@@ -3168,15 +3185,17 @@ private fun TemporaryConversationNavigationDrawer(onExit: () -> Unit, onOpenSett
         }
         Surface(
             color = ForegroundSurface,
-            shape = CircleShape,
+            shape = P5AInteractiveShape,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 24.dp, bottom = 12.dp)
-                .conversationForegroundShadow(shape = CircleShape),
+                .width(ConversationDrawerSettingsPillWidth)
+                .height(48.dp)
+                .conversationForegroundShadow(shape = P5AInteractiveShape),
         ) {
-            IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp)) {
+            IconButton(onClick = onOpenSettings, modifier = Modifier.fillMaxSize()) {
                 Icon(Icons.Rounded.Settings, contentDescription = "设置", tint = BodyText)
             }
         }
@@ -3700,10 +3719,26 @@ private fun ConversationSelector(
         val listed = state.conversations.filter { it.pinnedAt == null }
         if (pinned.isNotEmpty() && state.listScope == ConversationListScope.ACTIVE) {
             Text("已置顶", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-            pinned.forEach { conversation -> ConversationNavigationRow(conversation, conversation.id == state.selectedConversationId, onSelect, onRequestConversationActions) }
+            pinned.forEach { conversation ->
+                ConversationNavigationRow(
+                    conversation = conversation,
+                    selected = conversation.id == state.selectedConversationId,
+                    onSelect = onSelect,
+                    onRequestConversationActions = onRequestConversationActions,
+                    generating = conversation.id in state.runningConversationIds,
+                )
+            }
         }
         Text("最近", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-        listed.forEach { conversation -> ConversationNavigationRow(conversation, conversation.id == state.selectedConversationId, onSelect, onRequestConversationActions) }
+        listed.forEach { conversation ->
+            ConversationNavigationRow(
+                conversation = conversation,
+                selected = conversation.id == state.selectedConversationId,
+                onSelect = onSelect,
+                onRequestConversationActions = onRequestConversationActions,
+                generating = conversation.id in state.runningConversationIds,
+            )
+        }
     }
 }
 
@@ -3795,6 +3830,20 @@ private fun ConversationSearchPage(
         else -> "搜索${state.searchCategory.label}"
     }
     val imeVisible = WindowInsets.isImeVisible
+    val attachmentGridHits = remember(state.searchCategory, state.attachmentSearchResults, attachmentFileType) {
+        if (state.searchCategory == ConversationSearchCategory.FILE) {
+            filterSearchFileType(state.attachmentSearchResults, attachmentFileType)
+        } else {
+            state.attachmentSearchResults
+        }
+    }
+    val glmOcrGridHits = remember(state.searchCategory, state.glmOcrSearchResults, attachmentFileType) {
+        if (state.searchCategory == ConversationSearchCategory.FILE) {
+            filterGlmOcrSearchFileType(state.glmOcrSearchResults, attachmentFileType)
+        } else {
+            state.glmOcrSearchResults
+        }
+    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -3848,23 +3897,21 @@ private fun ConversationSearchPage(
                         }
                     }
                 }
-                if (state.searchCategory != ConversationSearchCategory.TEXT) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(36.dp),
-                    ) {
-                        if (state.searchCategory == ConversationSearchCategory.FILE) {
-                            SearchAttachmentFileTypeControl(
-                                selected = attachmentFileType,
-                                onSelect = onSelectAttachmentFileType,
-                                modifier = Modifier.align(Alignment.CenterStart),
-                            )
-                        }
-                        SearchAttachmentSortControl(
-                            selected = attachmentSortMode,
-                            onSelect = onSelectAttachmentSortMode,
-                            modifier = Modifier.align(Alignment.CenterEnd),
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(36.dp),
+                ) {
+                    if (state.searchCategory == ConversationSearchCategory.FILE) {
+                        SearchAttachmentFileTypeControl(
+                            selected = attachmentFileType,
+                            onSelect = onSelectAttachmentFileType,
+                            modifier = Modifier.align(Alignment.CenterStart),
                         )
                     }
+                    SearchAttachmentSortControl(
+                        selected = attachmentSortMode,
+                        onSelect = onSelectAttachmentSortMode,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
                 }
                 HorizontalDivider(color = SubtleDivider)
                 // Keep the whole usable search canvas above the IME. This makes empty-state
@@ -3876,16 +3923,8 @@ private fun ConversationSearchPage(
                         ConversationSearchCategory.VIDEO,
                         ConversationSearchCategory.AUDIO,
                         ConversationSearchCategory.FILE -> SearchAttachmentGrid(
-                            hits = if (state.searchCategory == ConversationSearchCategory.FILE) {
-                                filterSearchFileType(state.attachmentSearchResults, attachmentFileType)
-                            } else {
-                                state.attachmentSearchResults
-                            },
-                            glmOcrHits = if (state.searchCategory == ConversationSearchCategory.FILE) {
-                                filterGlmOcrSearchFileType(state.glmOcrSearchResults, attachmentFileType)
-                            } else {
-                                state.glmOcrSearchResults
-                            },
+                            hits = attachmentGridHits,
+                            glmOcrHits = glmOcrGridHits,
                             gridState = scrollStates.grid(state.searchCategory),
                             sortMode = attachmentSortMode,
                             locateConversationId = locateConversationId,
@@ -4216,26 +4255,46 @@ private fun SearchAllOrTextResults(
     onLocateGlmOcr: (GlmOcrDocumentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
     bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
+    val textResults = remember(state.searchResults, sortMode) {
+        sortedConversationSearchHits(state.searchResults, sortMode)
+    }
+    val attachmentMonthGroups = remember(state.attachmentSearchResults, state.glmOcrSearchResults) {
+        unifiedSearchAttachmentMonthGroups(state.attachmentSearchResults, state.glmOcrSearchResults)
+    }
+    val sortedAttachmentEntries = remember(state.attachmentSearchResults, state.glmOcrSearchResults, sortMode) {
+        sortedUnifiedSearchAttachmentEntries(state.attachmentSearchResults, state.glmOcrSearchResults, sortMode)
+    }
     if (state.searchResults.isEmpty() && state.attachmentSearchResults.isEmpty() && state.glmOcrSearchResults.isEmpty()) {
         SearchHint(if (state.searchQuery.isBlank()) "暂无可浏览的本地内容" else "没有匹配的本地内容")
         return
     }
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomContentPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (state.searchResults.isNotEmpty()) item { Text(if (state.searchQuery.isBlank() || state.searchCategory == ConversationSearchCategory.ALL) "正文" else "搜索结果", style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
-        items(state.searchResults, key = { "text:${it.conversationId.value}:${it.messageNodeId?.value.orEmpty()}" }) { hit ->
+        if (textResults.isNotEmpty()) item {
+            Text(
+                "正文 · ${textResults.size} 条",
+                style = MaterialTheme.typography.labelLarge,
+                color = SecondaryText,
+            )
+        }
+        items(textResults, key = { "text:${it.conversationId.value}:${it.messageNodeId?.value.orEmpty()}" }) { hit ->
             val resultShape = RoundedCornerShape(14.dp)
             Surface(color = ForegroundSurface, shape = resultShape, modifier = Modifier.fillMaxWidth().clip(resultShape).combinedClickable(onClick = { onOpenText(hit) })) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(searchHighlightedText(hit.title, state.searchQuery, MaterialTheme.colorScheme.primary), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     hit.importSource?.let { source -> Text(source.searchLabel, color = AccentOrange, style = MaterialTheme.typography.labelSmall) }
-                    Text(searchHighlightedText(hit.snippet, state.searchQuery, MaterialTheme.colorScheme.primary), color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(searchHighlightedText(hit.snippet, state.searchQuery, MaterialTheme.colorScheme.primary), color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(formatAttachmentBytes(hit.byteCount), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                        Spacer(Modifier.weight(1f))
+                        Text(formatSearchAttachmentTimestamp(hit.timestampEpochMs), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
+                    }
                 }
             }
         }
         if (sortMode == ConversationAttachmentSortMode.DEFAULT) {
             val totalAttachmentCount = state.attachmentSearchResults.size + state.glmOcrSearchResults.size
-            if (totalAttachmentCount > 0) item { Text((if (state.searchQuery.isBlank()) "本地附件" else "附件") + " · $totalAttachmentCount 项", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
-            unifiedSearchAttachmentMonthGroups(state.attachmentSearchResults, state.glmOcrSearchResults).forEach { group ->
+            if (totalAttachmentCount > 0) item { Text("附件 · $totalAttachmentCount 项", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
+            attachmentMonthGroups.forEach { group ->
                 item(key = "all-month:${group.key}") { SearchAttachmentMonthHeading(group.label, group.entries.size) }
                 items(group.entries, key = { it.stableKey }) { entry ->
                     when (entry) {
@@ -4269,7 +4328,7 @@ private fun SearchAllOrTextResults(
                 Text("附件 · ${state.attachmentSearchResults.size + state.glmOcrSearchResults.size} 项", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = SecondaryText)
             }
             items(
-                sortedUnifiedSearchAttachmentEntries(state.attachmentSearchResults, state.glmOcrSearchResults, sortMode),
+                sortedAttachmentEntries,
                 key = { it.stableKey },
             ) { entry ->
                 when (entry) {
@@ -4321,6 +4380,12 @@ private fun SearchAttachmentGrid(
     onLocateGlmOcr: (GlmOcrDocumentSearchHit, androidx.compose.ui.geometry.Rect) -> Unit,
     bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
+    val attachmentMonthGroups = remember(hits, glmOcrHits) {
+        unifiedSearchAttachmentMonthGroups(hits, glmOcrHits)
+    }
+    val sortedAttachmentEntries = remember(hits, glmOcrHits, sortMode) {
+        sortedUnifiedSearchAttachmentEntries(hits, glmOcrHits, sortMode)
+    }
     if (hits.isEmpty() && glmOcrHits.isEmpty()) { SearchHint("没有匹配的本地附件"); return }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 152.dp),
@@ -4334,7 +4399,7 @@ private fun SearchAttachmentGrid(
             span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
         ) { Text("共 ${hits.size + glmOcrHits.size} 项", style = MaterialTheme.typography.labelLarge, color = SecondaryText) }
         if (sortMode == ConversationAttachmentSortMode.DEFAULT) {
-            unifiedSearchAttachmentMonthGroups(hits, glmOcrHits).forEach { group ->
+            attachmentMonthGroups.forEach { group ->
                 item(
                     key = "month:${group.key}",
                     span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
@@ -4368,7 +4433,7 @@ private fun SearchAttachmentGrid(
             }
         } else {
             gridItems(
-                sortedUnifiedSearchAttachmentEntries(hits, glmOcrHits, sortMode),
+                sortedAttachmentEntries,
                 key = { it.stableKey },
             ) { entry ->
                 when (entry) {
@@ -4978,6 +5043,7 @@ private fun ConversationNavigationRow(
     selected: Boolean,
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onRequestConversationActions: (com.nanzhufeng.ai.domain.Conversation, androidx.compose.ui.geometry.Rect) -> Unit,
+    generating: Boolean = false,
     unread: Boolean = false,
     watchLater: Boolean = false,
     onSwipeAction: ((com.nanzhufeng.ai.domain.Conversation, ConversationRowSwipeAction) -> Unit)? = null,
@@ -5088,7 +5154,7 @@ private fun ConversationNavigationRow(
                         painter = painterResource(R.drawable.ic_nanfeng_conversation_bubble),
                         contentDescription = null,
                         modifier = Modifier.size(scaledAppIconSize(18.dp)),
-                        tint = SecondaryText,
+                        tint = if (selected) AccentOrange else SecondaryText,
                     )
                 }
                 if (unread || watchLater) {
@@ -5097,7 +5163,16 @@ private fun ConversationNavigationRow(
                             .size(7.dp)
                             .clip(CircleShape)
                             .background(AccentOrange)
-                            .semantics { contentDescription = if (watchLater) "待看对话" else "有未查看的新内容" },
+                            .semantics { contentDescription = if (watchLater) "未读对话" else "有未查看的新内容" },
+                    )
+                }
+                if (generating) {
+                    CircularProgressIndicator(
+                        color = AccentOrange,
+                        strokeWidth = 1.8.dp,
+                        modifier = Modifier
+                            .size(12.dp)
+                            .semantics { contentDescription = "正在生成回复" },
                     )
                 }
                 Text(conversation.title, modifier = Modifier.weight(1f), color = if (selected) AccentOrange else BodyText, fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -5402,7 +5477,7 @@ private fun ConversationActionSheet(
                 } else {
                     if (workMode) {
                         ConversationMenuAction(Icons.Rounded.PushPin, if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
-                        ConversationMenuAction(Icons.Rounded.Visibility, "待看", onClick = { onDismiss(); onMarkWatchLater(conversation) })
+                        ConversationMenuAction(Icons.Rounded.Visibility, "未读", onClick = { onDismiss(); onMarkWatchLater(conversation) })
                         ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
                         ConversationMenuAction(Icons.Rounded.CloudUpload, "同步到南枫云", onClick = { onSyncConversation(conversation) })
@@ -5415,7 +5490,7 @@ private fun ConversationActionSheet(
                         ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
                     } else {
                         ConversationMenuAction(Icons.Rounded.PushPin, if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
-                        ConversationMenuAction(Icons.Rounded.Visibility, "待看", onClick = { onDismiss(); onMarkWatchLater(conversation) })
+                        ConversationMenuAction(Icons.Rounded.Visibility, "未读", onClick = { onDismiss(); onMarkWatchLater(conversation) })
                         ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
                         if (includeRename) ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
@@ -7707,6 +7782,7 @@ private fun ConversationActions(
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 private fun DraftComposer(
     state: ConversationFoundationUiState,
+    onEnsureAttachmentPreview: (com.nanzhufeng.ai.domain.ConversationAttachmentReference) -> Unit,
     onDraftChanged: (String) -> Unit,
     onSubmit: () -> Unit,
     onStop: () -> Unit,
@@ -7722,6 +7798,12 @@ private fun DraftComposer(
     onModelAnchorChanged: (androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
     val draft = state.draft ?: return
+    // A draft attachment is already a private, verified local asset. Request the same bounded
+    // projection used by transcript rows as soon as it enters the composer; never wait until
+    // after sending, and never replace an unavailable local cover with a fake image.
+    LaunchedEffect(draft.attachments) {
+        draft.attachments.forEach(onEnsureAttachmentPreview)
+    }
     val canStopRuntime = state.runtime?.isTerminal == false
     val canSubmit = !state.isSending && (draft.text.isNotBlank() || draft.attachments.isNotEmpty())
     val manualId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId
@@ -7835,7 +7917,7 @@ private fun ComposerModelEntry(
                 Text(
                     label,
                     fontSize = 13.sp,
-                    fontFamily = DrawerIdentityRoundedFontFamily,
+                    fontFamily = ComposerModelRoundedBoldFontFamily,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -7936,7 +8018,7 @@ private fun ConversationComposerDock(
     }
 }
 
-/** One draft-only presentation: image thumbnails and their remove action stay inside the composer. */
+/** Draft attachments reuse the transcript's local preview geometry; only removal is draft-only. */
 @Composable
 private fun ComposerAttachmentPreview(
     preview: ConversationAttachmentPreview?,
@@ -7957,13 +8039,18 @@ private fun ComposerAttachmentPreview(
     // Draft previews and persisted conversation attachments must make the same
     // capability decision as search/open: MIME first, then a safe filename fallback.
     val isText = com.nanzhufeng.ai.domain.isSafeTextAttachment(mimeType, displayName)
-    val previewCorner = if (isVideo) 20.dp else if (isImage) 10.dp else 14.dp
+    val previewCorner = if (isVideo) 20.dp else 10.dp
     val bitmap = rememberDecodedBitmap(preview?.thumbnail?.bytes, preview?.id)
+    // Keep the exact same content bounds as a sent attachment. This makes a PDF first page,
+    // text excerpt, audio cue or video poster readable before send instead of turning all
+    // formats into one generic attachment icon.
     val previewModifier = when {
-        isImage -> originalAspectPreviewModifier(bitmap, maxEdge = 92.dp, fallbackSize = 92.dp)
-        isVideo -> Modifier.size(92.dp)
-        else -> Modifier.size(76.dp)
-    }
+        isVideo -> Modifier.widthIn(min = 144.dp, max = 220.dp).height(128.dp)
+        isImage -> originalAspectPreviewModifier(bitmap, maxEdge = 220.dp, fallbackSize = 92.dp)
+        isAudio -> Modifier.width(176.dp).height(42.dp)
+        isText -> Modifier.widthIn(min = 164.dp, max = 228.dp).heightIn(min = 96.dp, max = 128.dp)
+        else -> Modifier.size(92.dp)
+    }.clip(RoundedCornerShape(previewCorner))
     var attachmentInfoVisible by rememberSaveable("composer-attachment-info-${preview?.id?.value ?: displayName}") { mutableStateOf(false) }
     var attachmentBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var attachmentPressPosition by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
@@ -7980,8 +8067,6 @@ private fun ComposerAttachmentPreview(
     }
     Box(
         modifier = previewModifier
-            .clip(RoundedCornerShape(previewCorner))
-            .then(if (isImage) Modifier else Modifier.background(ForegroundSurface).border(1.dp, NeutralBorder.copy(alpha = 0.35f), RoundedCornerShape(previewCorner)))
             .onGloballyPositioned { attachmentBounds = it.boundsInRoot() }
             .pointerInput(preview?.id, mimeType) {
                 detectTapGestures(
@@ -7994,22 +8079,45 @@ private fun ComposerAttachmentPreview(
             }
             .semantics { contentDescription = "${attachmentKindLabel(mimeType)}附件，点击预览，长按查看信息" },
     ) {
-        if (bitmap != null) {
-            Image(
+        if (isAudio) {
+            AudioMessageAttachmentPlayer(
+                mimeType = mimeType,
+                durationMillis = preview?.audioDurationMillis,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else Box(
+            Modifier.fillMaxSize().then(
+                if (isVideo) Modifier.border(1.dp, Color.Black.copy(alpha = 0.18f), RoundedCornerShape(previewCorner)) else Modifier,
+            ),
+        ) {
+            if (bitmap != null) Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = if (isVideo) "草稿视频代表帧" else "草稿图片预览",
                 contentScale = if (isVideo) ContentScale.Crop else ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Icon(
-                imageVector = if (isImage) Icons.Rounded.AddPhotoAlternate else Icons.Rounded.AttachFile,
-                contentDescription = if (isImage) "草稿图片预览不可用" else "草稿附件",
-                tint = SecondaryText,
-                modifier = Modifier.align(Alignment.Center).size(24.dp),
-            )
+            ) else Box(
+                Modifier.fillMaxSize()
+                    .background(if (isPdf || isText) ForegroundSurface else NeutralAssistantSurface)
+                    .border(if (isPdf || isText) 1.dp else 0.dp, Color(0x141E2925), RoundedCornerShape(10.dp)),
+            ) {
+                val textPreview = preview?.textPreview
+                when {
+                    isText && textPreview?.text != null -> AttachmentTextSnippet(textPreview.text, mimeType, Modifier.fillMaxSize())
+                    isText -> AttachmentTextPreviewUnavailable(
+                        mimeType = mimeType,
+                        reason = textPreview?.unavailableReason ?: preview?.unavailableReason ?: "文本预览不可用",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    else -> Icon(
+                        imageVector = if (isImage) Icons.Rounded.AddPhotoAlternate else Icons.Rounded.AttachFile,
+                        contentDescription = if (isImage) "草稿图片预览不可用" else "草稿附件",
+                        tint = SecondaryText,
+                        modifier = Modifier.align(Alignment.Center).size(24.dp),
+                    )
+                }
+            }
+            if (isVideo) VideoAttachmentOverlay(preview?.videoDurationMillis)
         }
-        if (isVideo) VideoAttachmentOverlay(preview?.videoDurationMillis)
         IconButton(
             onClick = onRemove,
             modifier = Modifier.align(Alignment.TopEnd).padding(3.dp).size(28.dp),
@@ -10239,9 +10347,10 @@ private fun ImagePreviewDialog(
                                                 }
                                             } else if (
                                                 startedInsideImage &&
-                                                gestureZoom > 1.001f &&
                                                 change.pressed &&
-                                                change.positionChanged()
+                                                change.positionChanged() &&
+                                                (fittedWidthPx * gestureZoom > viewportWidthPx ||
+                                                    fittedHeightPx * gestureZoom > viewportHeightPx)
                                             ) {
                                                 val next = imagePreviewGestureTransform(
                                                     currentZoom = gestureZoom,

@@ -116,8 +116,11 @@ class GlmOcrUiContractsTest {
         val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val routeOwner = app.substringAfter("if (route == P5ARoute.OCR)").substringBefore("Column(")
         assertTrue(routeOwner.contains("GlmOcrWorkspacePage("))
+        assertTrue(routeOwner.contains("onBack = onReturnToConversationDrawer"))
         assertTrue(routeOwner.contains("return"))
-        assertTrue(app.contains("rootRoute == P5ARoute.OCR -> ForegroundSurface"))
+        val canvasPolicy = File("src/main/java/com/nanzhufeng/ai/ui/RootCanvasPolicy.kt").readText()
+        assertTrue(canvasPolicy.contains("P5ARoute.OCR -> RootCanvasKind.DOCUMENT"))
+        assertTrue(app.contains("RootCanvasKind.DOCUMENT -> ForegroundSurface"))
         assertTrue(app.contains("isAppearanceLightStatusBars = !darkAppearance"))
     }
 
@@ -132,16 +135,16 @@ class GlmOcrUiContractsTest {
     @Test fun `ocr invocation metadata and both files join existing settings and search surfaces`() {
         val ledger = File("src/main/java/com/nanzhufeng/ai/ui/InvocationLedgerUi.kt").readText()
         assertTrue(ledger.contains("glmOcrTasksByInvocationTaskId"))
-        assertTrue(ledger.contains("功能：南枫转写"))
-        assertTrue(ledger.contains("关联文件："))
-        assertTrue(ledger.contains("请求 ID："))
+        assertTrue(ledger.contains("if (glmOcrTask == null) record.displayModelName() else \"南枫转写\""))
+        assertTrue(ledger.contains("文件："))
+        assertTrue(ledger.contains("服务商请求 ID："))
 
         val searchOwner = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
         val searchUi = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val routeOwner = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         assertTrue(searchOwner.contains("glmOcr.searchDocuments(query, category)"))
         assertTrue(searchUi.contains("GlmOcrSearchAttachmentRow("))
-        assertTrue(searchUi.contains("GlmOcrSearchAttachmentCard("))
+        assertTrue(searchUi.contains("private fun GlmOcrSearchAttachmentCard("))
         assertTrue(searchUi.contains("onOpenSearchAttachment(hit.attachment)"))
         assertTrue(searchUi.contains("SearchGlmOcrActionMenuTarget"))
         assertTrue(searchUi.contains("onDeleteGlmOcrSearchHit(hit)"))

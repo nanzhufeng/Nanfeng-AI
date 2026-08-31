@@ -95,6 +95,83 @@ class P6F2BImagePreviewUiContractsTest {
         assertTrue(3_000f * ordinaryInitial <= 2_000f)
     }
 
+    @Test fun `tall original pans vertically at its initial scale without requiring a pinch first`() {
+        val panned = imagePreviewGestureTransform(
+            currentZoom = 1f,
+            zoomChange = 1f,
+            panX = 0f,
+            panY = -300f,
+            focusX = 500f,
+            focusY = 1_000f,
+            placedX = 0f,
+            placedY = 0f,
+            fittedWidthPx = 1_000f,
+            fittedHeightPx = 2_500f,
+            viewportWidthPx = 1_000f,
+            viewportHeightPx = 2_000f,
+            maximumZoom = 6f,
+        )
+        assertEquals(1f, panned.zoom, 0f)
+        assertEquals(-300f, panned.offsetY, 0f)
+
+        val viewer = workspace.substring(workspace.indexOf("private fun ImagePreviewDialog"), workspace.indexOf("private fun ComposerSendButton"))
+        assertTrue(viewer.contains("fittedHeightPx * gestureZoom > viewportHeightPx"))
+        assertFalse(viewer.contains("gestureZoom > 1.001f &&\n                                                change.pressed"))
+    }
+
+    @Test fun `tall original can pinch out to show the whole image and pinch in then pan freely`() {
+        val fitWhole = imagePreviewGestureTransform(
+            currentZoom = 1f,
+            zoomChange = 0.5f,
+            panX = 0f,
+            panY = 0f,
+            focusX = 500f,
+            focusY = 1_000f,
+            placedX = 0f,
+            placedY = 0f,
+            fittedWidthPx = 1_000f,
+            fittedHeightPx = 2_500f,
+            viewportWidthPx = 1_000f,
+            viewportHeightPx = 2_000f,
+            maximumZoom = 6f,
+        )
+        assertEquals(0.8f, fitWhole.zoom, 0.0001f)
+
+        val enlarged = imagePreviewGestureTransform(
+            currentZoom = fitWhole.zoom,
+            zoomChange = 3.125f,
+            panX = 0f,
+            panY = 0f,
+            focusX = 500f,
+            focusY = 1_000f,
+            placedX = 100f,
+            placedY = 0f,
+            fittedWidthPx = 1_000f,
+            fittedHeightPx = 2_500f,
+            viewportWidthPx = 1_000f,
+            viewportHeightPx = 2_000f,
+            maximumZoom = 6f,
+        )
+        val moved = imagePreviewGestureTransform(
+            currentZoom = enlarged.zoom,
+            zoomChange = 1f,
+            panX = -180f,
+            panY = -260f,
+            focusX = 500f,
+            focusY = 1_000f,
+            placedX = enlarged.offsetX,
+            placedY = enlarged.offsetY,
+            fittedWidthPx = 1_000f,
+            fittedHeightPx = 2_500f,
+            viewportWidthPx = 1_000f,
+            viewportHeightPx = 2_000f,
+            maximumZoom = 6f,
+        )
+        assertEquals(2.5f, enlarged.zoom, 0.0001f)
+        assertTrue(moved.offsetX < enlarged.offsetX)
+        assertTrue(moved.offsetY < enlarged.offsetY)
+    }
+
     @Test fun `image region owns focused double tap zoom and a second double tap resets`() {
         val enlarged = imagePreviewDoubleTapTransform(
             currentZoom = 1f,

@@ -12,7 +12,7 @@ class NormalChatCompletionPersistenceContractsTest {
 
     @Test fun `reasoning persistence is an optional post completion supplement`() {
         val completion = executor.indexOf("runtime?.complete(visibleReply)")
-        val reasoningAfterCompletion = executor.indexOf("val reasoningRetained = runtime?.retainReasoning", completion)
+        val reasoningAfterCompletion = executor.indexOf("val reasoningRetained = runtime?.retainProviderContinuation", completion)
         assertTrue("canonical visible reply must complete atomically before optional reasoning is saved", completion >= 0 && reasoningAfterCompletion > completion)
         assertTrue(executor.contains("finalVisibleText = finalVisibleText"))
         assertTrue(executor.contains("REASONING_NOT_SAVED"))

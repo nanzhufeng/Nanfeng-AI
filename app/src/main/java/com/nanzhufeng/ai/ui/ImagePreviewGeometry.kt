@@ -51,9 +51,17 @@ internal fun imagePreviewGestureTransform(
     viewportHeightPx: Float,
     maximumZoom: Float,
 ): ImagePreviewTransform {
-    val safeCurrentZoom = currentZoom.coerceIn(1f, maximumZoom.coerceAtLeast(1f))
+    // A width-filled tall original starts at 1x for readable detail, but pinch-out must still
+    // reach the scale where the entire original fits inside the viewport. Ordinary images
+    // already start at that scale, so their lower bound remains 1x.
+    val minimumZoom = minOf(
+        1f,
+        viewportWidthPx.coerceAtLeast(1f) / fittedWidthPx.coerceAtLeast(1f),
+        viewportHeightPx.coerceAtLeast(1f) / fittedHeightPx.coerceAtLeast(1f),
+    )
+    val safeCurrentZoom = currentZoom.coerceIn(minimumZoom, maximumZoom.coerceAtLeast(minimumZoom))
     val nextZoom = (safeCurrentZoom * zoomChange.coerceAtLeast(0.01f))
-        .coerceIn(1f, maximumZoom.coerceAtLeast(1f))
+        .coerceIn(minimumZoom, maximumZoom.coerceAtLeast(minimumZoom))
     val ratio = nextZoom / safeCurrentZoom
     val targetWidthPx = fittedWidthPx * nextZoom
     val targetHeightPx = fittedHeightPx * nextZoom

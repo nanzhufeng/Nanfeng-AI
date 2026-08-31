@@ -69,10 +69,37 @@ object NanfengModelServiceCatalog {
             modelFamilyHint = "OpenAI",
         ),
         ModelPresetDescriptor(
+            id = ModelPresetId.GROK_4_1_FAST,
+            displayName = "Grok 4.1 Fast（已下线）",
+            description = "OpenRouter 当前目录已无此精确模型；保留仅为识别旧会话。",
+            modelFamilyHint = "xAI · OpenRouter",
+            usage = ModelPresetUsage.RETIRED,
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.GROK_4_5,
+            displayName = "Grok 4.5（已移除）",
+            description = "已从产品模型列表移除；保留仅为识别旧会话。",
+            modelFamilyHint = "xAI · OpenRouter",
+            usage = ModelPresetUsage.RETIRED,
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.GROK_4_6_HIGH,
+            displayName = "Grok 4.6 High（已移除）",
+            description = "已从产品模型列表移除；保留仅为识别旧会话。",
+            modelFamilyHint = "xAI · OpenRouter",
+            usage = ModelPresetUsage.RETIRED,
+        ),
+        ModelPresetDescriptor(
             id = ModelPresetId.GEMINI_3_7_FLASH,
             displayName = "Gemini 3.7 Flash",
             description = "快速处理文字、图片和文件任务。",
             modelFamilyHint = "Google · OpenRouter",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.KIMI_K3,
+            displayName = "Kimi K3",
+            description = "复杂分析 · Agent · 长上下文",
+            modelFamilyHint = "Moonshot AI · OpenRouter",
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.QWEN_3_7_PLUS,
@@ -253,6 +280,8 @@ fun composerModelShortNameForUser(displayName: String): String = when (modelDisp
     "GPT-5.6 Sol" -> "5.6 Sol"
     "GPT-5.6 Terra" -> "5.6 Terra"
     "GPT-5.6 Luna" -> "5.6 Luna"
+    "Grok 4.1 Fast" -> "4.1 Fast"
+    "Grok 4.6 High" -> "4.6 High"
     "Gemini 3.7 Flash" -> "3.7 Flash"
     "Qwen3.7-Plus" -> "3.7-Plus"
     "Qwen3.8-Max" -> "3.8-Max"

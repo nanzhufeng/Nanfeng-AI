@@ -6,8 +6,76 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.net.UnknownHostException
+import javax.net.ssl.SSLHandshakeException
 
 class ProviderAdapterContractsTest {
+    @Test fun `transport network diagnostics retain only a safe failure category`() {
+        assertEquals(ProviderNetworkFailureKind.DNS, classifyProviderNetworkFailure(UnknownHostException("openrouter.ai")))
+        assertEquals(ProviderNetworkFailureKind.TLS, classifyProviderNetworkFailure(SSLHandshakeException("certificate details stay out of diagnostics")))
+    }
+
+    @Test fun `explicit K3 and legacy Grok requests require their exact fresh public catalog mapping before Key access`() {
+        val source = File("src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt").readText()
+        assertTrue(source.contains("requiresFreshOpenRouterVerification"))
+        assertTrue(source.contains("ModelPresetId.KIMI_K3, ModelPresetId.GROK_4_1_FAST"))
+        assertTrue(source.contains("ComposerModelRoutingCatalog.isRetired(selectedId)"))
+        assertTrue(source.indexOf("verifyOpenRouterRegistry.execute()") < source.indexOf("credentials.loadCredential(executionProviderId)"))
+        assertTrue(source.contains("verified !is VerifyOpenRouterRegistryResult.Verified"))
+        assertTrue(source.contains("Result.Blocked(Code.MODEL_NOT_FOUND)"))
+        assertTrue(source.contains("ModelPresetUsage.CHAT"))
+    }
+
+    @Test fun `Grok 4 point 6 High owns a bounded high reasoning request`() {
+        val adapter = OpenRouterChatAdapter()
+        val high = adapter.prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER, modelId = GROK_4_6_MODEL_ID, maxOutputTokens = 450_000),
+            listOf("user" to "深入分析"), emptyList(), stream = true,
+        ) as ChatAdapterPrepareResult.Ready
+
+        assertTrue(high.jsonBody.contains("\"reasoning\":{\"effort\":\"high\"}"))
+        assertTrue(high.jsonBody.contains("\"max_tokens\":65536"))
+        assertFalse(high.jsonBody.contains("\"max_tokens\":450000"))
+    }
+
+    @Test fun `Grok multimodal request retains product reasoning and OpenRouter X aware search plugin`() {
+        val attachment = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "chart.png", byteArrayOf(1, 2, 3))
+        val options = ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)
+        val ready = OpenRouterChatAdapter().prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER, modelId = GROK_4_6_MODEL_ID),
+            listOf("user" to "结合实时信息分析"), listOf(attachment), stream = false, options = options,
+        ) as ChatAdapterPrepareResult.Ready
+        val output = java.io.ByteArrayOutputStream()
+        ready.body.writeTo(output)
+        val body = output.toString(Charsets.UTF_8)
+
+        assertTrue(body.contains("\"reasoning\":{\"effort\":\"high\"}"))
+        assertTrue(body.contains("\"type\":\"openrouter:web_search\""))
+        assertTrue(body.contains("\"image_url\":{\"url\":\"data:image/png;base64,AQID\"}"))
+    }
+
+    @Test fun `K3 continuation preserves reasoning content and tool calls instead of flattening assistant content`() {
+        val k3 = model().copy(
+            providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,
+            modelId = KIMI_K3_MODEL_ID,
+            maxOutputTokens = 131_072,
+        )
+        val ready = OpenRouterChatAdapter().prepareContinuation(
+            k3,
+            listOf(
+                ChatHistoryMessage("user", "继续分析"),
+                ChatHistoryMessage("assistant", "阶段结论", "内部推理", listOf(ChatToolCall("call_1", "lookup", "{\"q\":\"K3\"}"))),
+            ),
+            emptyList(),
+            stream = true,
+        ) as ChatAdapterPrepareResult.Ready
+
+        assertTrue(ready.jsonBody.contains("\"reasoning_content\":\"内部推理\""))
+        assertTrue(ready.jsonBody.contains("\"tool_calls\":["))
+        assertTrue(ready.jsonBody.contains("\"id\":\"call_1\""))
+        assertTrue(ready.jsonBody.contains("\\\"q\\\":\\\"K3\\\""))
+    }
+
     @Test fun `non streaming OpenAI compatible response keeps text reasoning tool call and usage`() {
         val decoded = OpenAiCompatibleProbe().decodeNonStreaming(
             """{"choices":[{"message":{"content":[{"type":"text","text":"完成"}],"reasoning_content":"本地保留","tool_calls":[{"id":"call_1","function":{"name":"lookup","arguments":"{}"}}]}}],"usage":{"prompt_tokens":12,"completion_tokens":4}}""",
