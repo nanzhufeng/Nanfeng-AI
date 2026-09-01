@@ -17,13 +17,14 @@ import com.nanzhufeng.ai.domain.PrivacyTaskDeletionCandidate
 import com.nanzhufeng.ai.domain.SecurityDiagnosticResult
 import com.nanzhufeng.ai.domain.ImportedZipCleanupResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class PrivacyDataUiState(
     val visible: Boolean = false,
     val working: Boolean = false,
-    val inventory: PrivacyInventory? = null,
+    val inventory: PrivacyInventory = PrivacyInventory.EmptySnapshot,
     val preview: PrivacyDeletionPreview? = null,
     val taskCandidates: List<PrivacyTaskDeletionCandidate> = emptyList(),
     val selectedTaskIds: Set<String> = emptySet(),
@@ -34,8 +35,9 @@ data class PrivacyDataUiState(
 )
 
 class PrivacyDataViewModel(private val manager: PrivacyDataManager) : ViewModel() {
-    var state by mutableStateOf(PrivacyDataUiState())
+    var state by mutableStateOf(PrivacyDataUiState(inventory = manager.cachedInventory()))
         private set
+    private var refreshJob: Job? = null
 
     fun show() { state = state.copy(visible = true, notice = null, error = null); refresh() }
     fun dismiss() { if (!state.working) state = state.copy(visible = false, preview = null, taskCandidates = emptyList(), selectedTaskIds = emptySet(), confirmation = "", error = null) }
@@ -107,7 +109,13 @@ class PrivacyDataViewModel(private val manager: PrivacyDataManager) : ViewModel(
             }
         }
     }
-    private fun refresh() { viewModelScope.launch { state = state.copy(inventory = withContext(Dispatchers.IO) { manager.inventory() }) } }
+    private fun refresh() {
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
+            val inventory = withContext(Dispatchers.IO) { manager.inventory() }
+            state = state.copy(inventory = inventory)
+        }
+    }
 
     class Factory(private val manager: PrivacyDataManager) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T {

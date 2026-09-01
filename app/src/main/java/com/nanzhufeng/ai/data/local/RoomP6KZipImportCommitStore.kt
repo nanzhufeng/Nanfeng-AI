@@ -31,48 +31,75 @@ import java.util.concurrent.Callable
 class RoomP6KZipImportCommitStore(
     private val database: NanfengAiDatabase,
     private val conversations: RoomConversationRepository,
+    private val identities: RoomP6KImportIdentityLedger = RoomP6KImportIdentityLedger(database),
 ) : P6KZipImportCommitStore {
     override fun confirm(task: P6KZipImportTask, item: P6KZipImportItem, importedAt: Instant): P6KZipCommitResult = runCatching {
         requireNotNull(item.candidate)
         database.runInTransaction(Callable<P6KZipCommitResult> {
             val dao = database.p6kZipImportTaskDao(); val candidate = requireNotNull(item.candidate)
+            val identityDecision = identities.conversationDecision(task, candidate)
+            when (identityDecision) {
+                P6KConversationIdentityDecision.UserDeleted -> {
+                    dao.decideItem(task.id.value, item.id.value, P6KZipItemStatus.SKIPPED.name, null, "USER_DELETED")
+                    identities.mutateBatchReceipt(task, importedAt) { it.copy(skippedUserDeleted = it.skippedUserDeleted + 1) }
+                    dao.refreshTerminalTaskStatus(task, importedAt.toEpochMilli())
+                    return@Callable P6KZipCommitResult.SkippedUserDeleted
+                }
+                P6KConversationIdentityDecision.Conflict -> return@Callable conflict(dao, task, item, importedAt)
+                is P6KConversationIdentityDecision.Existing,
+                P6KConversationIdentityDecision.New -> Unit
+            }
             dao.receipt(candidate.sourceConversationId, task.packageHash)?.let { receipt ->
+                if (identityDecision !is P6KConversationIdentityDecision.Existing ||
+                    identityDecision.conversationId.value != receipt.conversationId
+                ) return@let
                 if (receipt.contentHash != candidate.contentHash) {
                     dao.decideItem(task.id.value, item.id.value, P6KZipItemStatus.FAILED.name, null, "CONFLICT_REIMPORT")
-                    dao.refreshTerminalTaskStatus(task.id.value, importedAt.toEpochMilli())
+                    identities.mutateBatchReceipt(task, importedAt) { it.copy(identityConflicts = it.identityConflicts + 1) }
+                    dao.refreshTerminalTaskStatus(task, importedAt.toEpochMilli())
                     return@Callable P6KZipCommitResult.ConflictReimport
                 }
                 dao.decideItem(task.id.value, item.id.value, P6KZipItemStatus.CONFIRMED.name, receipt.conversationId, null)
-                dao.refreshTerminalTaskStatus(task.id.value, importedAt.toEpochMilli())
+                identities.mutateBatchReceipt(task, importedAt) { it.copy(skippedExisting = it.skippedExisting + 1) }
+                dao.refreshTerminalTaskStatus(task, importedAt.toEpochMilli())
                 return@Callable P6KZipCommitResult.Replayed(ConversationId(receipt.conversationId))
             }
             val existing = dao.provenanceForSource(candidate.sourceConversationId)
+                .filter { it.adapterId == task.provider.adapterId() }
             if (existing.size > 1) return@Callable conflict(dao, task, item, importedAt)
             val previous = existing.singleOrNull()
             when {
                 previous == null -> {
                     val imported = candidate.toImportedSnapshot()
                     val saved = conversations.persistInExistingTransaction(imported.snapshot)
+                    identities.registerConversation(task, candidate, saved.conversation.id, imported.sourceMessageIds, importedAt)
                     persistProvenance(dao, task, item, candidate, saved.conversation.id, imported.sourceMessageIds, importedAt)
+                    identities.mutateBatchReceipt(task, importedAt) { it.copy(importedNewConversations = it.importedNewConversations + 1, importedNewMessages = it.importedNewMessages + imported.sourceMessageIds.size) }
                     P6KZipCommitResult.Created(saved.conversation.id)
                 }
                 previous.contentHash == candidate.contentHash -> {
                     val conversationId = ConversationId(previous.conversationId)
                     if (conversations.findById(conversationId) == null) return@Callable conflict(dao, task, item, importedAt)
+                    identities.registerConversation(task, candidate, conversationId, emptyMap(), importedAt)
                     persistProvenance(dao, task, item, candidate, conversationId, emptyMap(), importedAt)
+                    identities.mutateBatchReceipt(task, importedAt) { it.copy(skippedExisting = it.skippedExisting + 1) }
                     P6KZipCommitResult.Replayed(conversationId)
                 }
                 else -> {
                     val merged = mergeAppendOnly(previous, candidate, dao) ?: return@Callable conflict(dao, task, item, importedAt)
                     val saved = conversations.persistInExistingTransaction(merged.snapshot)
+                    identities.registerConversation(task, candidate, saved.conversation.id, merged.newSourceMessageIds, importedAt)
                     persistProvenance(dao, task, item, candidate, saved.conversation.id, merged.newSourceMessageIds, importedAt)
+                    identities.mutateBatchReceipt(task, importedAt) { it.copy(importedNewMessages = it.importedNewMessages + merged.newSourceMessageIds.size) }
                     P6KZipCommitResult.Merged(saved.conversation.id, merged.newSourceMessageIds.size)
                 }
             }
         })
     }.getOrElse {
         database.runInTransaction(Callable {
-            val dao = database.p6kZipImportTaskDao(); dao.decideItem(task.id.value, item.id.value, P6KZipItemStatus.FAILED.name, null, "COMMIT_FAILED"); dao.refreshTerminalTaskStatus(task.id.value, importedAt.toEpochMilli())
+            val dao = database.p6kZipImportTaskDao(); dao.decideItem(task.id.value, item.id.value, P6KZipItemStatus.FAILED.name, null, "COMMIT_FAILED")
+            identities.mutateBatchReceipt(task, importedAt) { it.copy(failed = it.failed + 1) }
+            dao.refreshTerminalTaskStatus(task, importedAt.toEpochMilli())
         })
         P6KZipCommitResult.Failed
     }
@@ -81,12 +108,11 @@ class RoomP6KZipImportCommitStore(
         database.runInTransaction(Callable {
             val dao = database.p6kZipImportTaskDao()
             val changed = dao.decideItem(task.id.value, item.id.value, P6KZipItemStatus.SKIPPED.name, null, null) == 1
-            dao.refreshTerminalTaskStatus(task.id.value, at.toEpochMilli()); changed
+            dao.refreshTerminalTaskStatus(task, at.toEpochMilli()); changed
         })
     }.getOrDefault(false)
 
-    /** Batch deletion is reversible at the Conversation layer: imported conversations are soft-deleted,
-     * then receipts/provenance are removed so a later explicit ZIP selection is a fresh import. */
+    /** Batch deletion tombstones every imported identity before the reversible Conversation delete. */
     override fun deleteBatch(task: P6KZipImportTask, at: Instant): Boolean = runCatching {
         database.runInTransaction(Callable {
             val dao = database.p6kZipImportTaskDao()
@@ -97,30 +123,28 @@ class RoomP6KZipImportCommitStore(
                     ConversationManagementAction.SOFT_DELETE, snapshot.conversation.revision,
                 )
                 conversations.persistInExistingTransaction(ConversationManagementDomain(java.time.Clock.fixed(at, java.time.ZoneOffset.UTC)).apply(snapshot, intent))
-                dao.deleteMessageProvenanceForConversation(provenance.conversationId)
+                identities.tombstoneConversation(provenance.conversationId, "USER_DELETED_IMPORT_BATCH", at)
             }
-            dao.deleteReceiptsForTask(task.id.value)
-            dao.deleteProvenanceForTask(task.id.value)
-            dao.deleteAssetOccurrenceReceiptsForTask(task.id.value)
-            dao.deleteAssetOccurrencesForTask(task.id.value)
-            dao.deleteAssetCatalogForTask(task.id.value)
             true
         })
     }.getOrDefault(false)
 
-    private fun P6KZipImportTaskDao.refreshTerminalTaskStatus(taskId: String, at: Long) {
-        val statuses = items(taskId).map { it.status }
+    private fun P6KZipImportTaskDao.refreshTerminalTaskStatus(task: P6KZipImportTask, at: Long) {
+        val statuses = items(task.id.value).map { it.status }
         val status = when {
-            statuses.all { it in setOf(P6KZipItemStatus.CONFIRMED.name, P6KZipItemStatus.SKIPPED.name, P6KZipItemStatus.FAILED.name) } -> P6KZipTaskStatus.COMPLETED
+            statuses.all { it in setOf(P6KZipItemStatus.CONFIRMED.name, P6KZipItemStatus.SKIPPED.name) } -> P6KZipTaskStatus.COMPLETED
+            statuses.all { it in setOf(P6KZipItemStatus.CONFIRMED.name, P6KZipItemStatus.SKIPPED.name, P6KZipItemStatus.FAILED.name) } -> P6KZipTaskStatus.FAILED
             statuses.any { it != P6KZipItemStatus.PENDING_CONFIRMATION.name } -> P6KZipTaskStatus.PARTIALLY_COMPLETED
             else -> P6KZipTaskStatus.AWAITING_CONFIRMATION
         }
-        updateTaskStatus(taskId, status.name, at)
+        updateTaskStatus(task.id.value, status.name, at)
+        identities.finishBatch(task, statuses, Instant.ofEpochMilli(at))
     }
 
     private fun conflict(dao: P6KZipImportTaskDao, task: P6KZipImportTask, item: P6KZipImportItem, at: Instant): P6KZipCommitResult {
         dao.decideItem(task.id.value, item.id.value, P6KZipItemStatus.FAILED.name, null, "CONFLICT_REIMPORT")
-        dao.refreshTerminalTaskStatus(task.id.value, at.toEpochMilli())
+        identities.mutateBatchReceipt(task, at) { it.copy(identityConflicts = it.identityConflicts + 1) }
+        dao.refreshTerminalTaskStatus(task, at.toEpochMilli())
         return P6KZipCommitResult.ConflictReimport
     }
 
@@ -137,9 +161,12 @@ class RoomP6KZipImportCommitStore(
         if (newSourceMessageIds.isNotEmpty()) dao.insertMessageProvenance(candidate.messages.mapNotNull { message ->
             newSourceMessageIds[message.sourceId]?.let { id -> P6KZipImportMessageProvenanceEntity(conversationId.value, message.sourceId, id.value, message.semanticContentHash()) }
         })
-        dao.insertReceipt(P6KZipImportReceiptEntity(candidate.sourceConversationId, task.packageHash, task.id.value, item.id.value, conversationId.value, candidate.contentHash, importedAt.toEpochMilli()))
+        val legacyReceipt = dao.receipt(candidate.sourceConversationId, task.packageHash)
+        if (legacyReceipt == null || legacyReceipt.conversationId == conversationId.value) {
+            if (legacyReceipt == null) dao.insertReceipt(P6KZipImportReceiptEntity(candidate.sourceConversationId, task.packageHash, task.id.value, item.id.value, conversationId.value, candidate.contentHash, importedAt.toEpochMilli()))
+        }
         check(dao.decideItem(task.id.value, item.id.value, P6KZipItemStatus.CONFIRMED.name, conversationId.value, null) == 1)
-        dao.refreshTerminalTaskStatus(task.id.value, importedAt.toEpochMilli())
+        dao.refreshTerminalTaskStatus(task, importedAt.toEpochMilli())
     }
 
     /** Only additive exports can extend an existing imported conversation.  Edited/deleted source

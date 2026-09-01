@@ -34,10 +34,13 @@ class AndroidPrivateAttachmentStorePdfRenderSizeTest {
         val source = File("src/main/java/com/nanzhufeng/ai/data/AndroidPrivateAttachmentStore.kt").readText()
         val session = source.substring(source.indexOf("private class PdfRendererSession"), source.indexOf("/**\n * PdfRenderer reports"))
         val owner = source.substring(source.indexOf("private fun pdfRendererSessionFor"), source.indexOf("private fun sampleSizeFor"))
+        val verification = source.substring(source.indexOf("private fun verifiedFileFor"), source.indexOf("private fun ByteArray.toHex"))
 
-        for (token in listOf("expectedSha256", "file.length()", "file.lastModified()", "file.sha256()", "PdfRenderer(descriptor)", "closePdfRendererSession")) {
+        for (token in listOf("expectedSha256", "file.length()", "file.lastModified()", "PdfRenderer(descriptor)", "closePdfRendererSession")) {
             assertTrue(token, session.contains(token) || owner.contains(token))
         }
+        assertTrue("full digest verification", verification.contains("cached.sha256() == expectedHash") && verification.contains("sha256() != attachment.sha256"))
+        assertTrue("verified-file metadata cache", verification.contains("verified.expectedHash == attachment.sha256") && verification.contains("verified.lastModified == file.lastModified()"))
         assertFalse(owner.contains("MAX_PDF_PREVIEW_EDGE ="))
     }
 }

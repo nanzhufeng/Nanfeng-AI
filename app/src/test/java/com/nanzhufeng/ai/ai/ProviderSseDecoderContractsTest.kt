@@ -8,6 +8,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProviderSseDecoderContractsTest {
+    @Test fun `fragmented OpenRouter tool calls are reconstructed with reasoning for K3 continuation`() {
+        val payload = """
+            data: {"choices":[{"delta":{"reasoning_content":"先查资料","tool_calls":[{"index":0,"id":"call_1","function":{"name":"lookup","arguments":"{\"q\":"}}]}}]}
+
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"K3\"}"}}]}}]}
+
+            data: {"choices":[{"delta":{"content":"已完成"}}]}
+
+            data: [DONE]
+        """.trimIndent()
+
+        val result = ProviderSseDecoder.read(ByteArrayInputStream(payload.toByteArray()), { }, OpenRouterChatAdapter()::decodeStreamingEvent)
+
+        assertEquals("先查资料", result.reasoning)
+        assertEquals("已完成", result.text)
+        assertEquals(ChatToolCall("call_1", "lookup", "{\"q\":\"K3\"}"), result.toolCalls.single())
+    }
+
     @Test fun `SSE framing retains Adapter decoded text and final usage`() {
         val payload = """
             : keepalive

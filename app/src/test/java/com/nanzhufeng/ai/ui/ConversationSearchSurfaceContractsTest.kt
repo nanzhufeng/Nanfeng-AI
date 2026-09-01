@@ -89,7 +89,8 @@ class ConversationSearchSurfaceContractsTest {
 
         assertTrue(source.contains("mutableStateOf(ConversationAttachmentSortMode.DEFAULT)"))
         assertTrue(source.contains("mutableStateOf(ConversationAttachmentFileType.ALL)"))
-        assertTrue(source.contains("if (state.searchCategory != ConversationSearchCategory.TEXT)"))
+        assertFalse(source.contains("if (state.searchCategory != ConversationSearchCategory.TEXT)"))
+        assertTrue(page.contains("SearchAttachmentSortControl("))
         assertTrue(control.contains("SearchAttachmentSortColumn("))
         assertTrue(control.contains("label = \"时间\""))
         assertTrue(control.contains("label = \"大小\""))
@@ -104,7 +105,8 @@ class ConversationSearchSurfaceContractsTest {
         assertTrue(control.contains("private fun SearchAttachmentFileTypeControl("))
         assertFalse(control.contains("Text(\"类型\""))
         assertTrue(control.contains("modifier = Modifier.width(128.dp).height(36.dp)"))
-        assertTrue(page.contains("if (state.searchCategory == ConversationSearchCategory.FILE) {\n                            SearchAttachmentFileTypeControl("))
+        assertTrue(page.contains("if (state.searchCategory == ConversationSearchCategory.FILE) {"))
+        assertTrue(page.contains("SearchAttachmentFileTypeControl("))
         assertTrue(page.contains("modifier = Modifier.align(Alignment.CenterStart)"))
         assertTrue(page.contains("modifier = Modifier.align(Alignment.CenterEnd)"))
         assertTrue(control.countOccurrences("Modifier.width(72.dp).fillMaxHeight()") >= 2)
@@ -308,6 +310,40 @@ class ConversationSearchSurfaceContractsTest {
                 messageNodeId = "message-second",
             ),
         )
+    }
+
+    @Test
+    fun `正文和全部同步展示本机事实并由同一筛选真实排序`() {
+        val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val results = workspace.substringAfter("private fun SearchAllOrTextResults").substringBefore("private fun SearchAttachmentGrid")
+        val position = File("src/main/java/com/nanzhufeng/ai/ui/ConversationSearchPosition.kt").readText()
+        val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
+
+        assertFalse(workspace.contains("if (state.searchCategory != ConversationSearchCategory.TEXT)"))
+        assertTrue(results.contains("val textResults = remember(state.searchResults, sortMode)"))
+        assertTrue(results.contains("sortedConversationSearchHits(state.searchResults, sortMode)"))
+        assertTrue(results.contains("formatAttachmentBytes(hit.byteCount)"))
+        assertTrue(results.contains("formatSearchAttachmentTimestamp(hit.timestampEpochMs)"))
+        assertTrue(results.contains("maxLines = 2"))
+        assertTrue(results.contains("\"正文 · \${textResults.size} 条\""))
+        assertTrue(results.contains("\"附件 · \$totalAttachmentCount 项\""))
+        assertTrue(position.contains("internal fun sortedConversationSearchHits("))
+        assertTrue(viewModel.contains("val (results, attachments, glmOcrDocuments) = coroutineScope"))
+        assertTrue(viewModel.contains("val text = async(Dispatchers.IO)"))
+        assertTrue(viewModel.contains("val attachment = async(Dispatchers.IO)"))
+
+        fun hit(id: String, time: Long, bytes: Long) = com.nanzhufeng.ai.domain.ConversationSearchHit(
+            conversationId = com.nanzhufeng.ai.domain.ConversationId(id),
+            messageNodeId = null,
+            title = id,
+            snippet = id,
+            titleMatch = false,
+            timestampEpochMs = time,
+            byteCount = bytes,
+        )
+        val hits = listOf(hit("old-large", 1L, 300L), hit("new-small", 3L, 100L), hit("middle", 2L, 200L))
+        assertEquals(listOf("new-small", "middle", "old-large"), sortedConversationSearchHits(hits, ConversationAttachmentSortMode.TIME_DESCENDING).map { it.conversationId.value })
+        assertEquals(listOf("old-large", "middle", "new-small"), sortedConversationSearchHits(hits, ConversationAttachmentSortMode.SIZE_DESCENDING).map { it.conversationId.value })
     }
 
     private fun String.countOccurrences(token: String): Int = windowed(token.length, 1).count { it == token }

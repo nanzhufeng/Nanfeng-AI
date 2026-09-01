@@ -1,4 +1,9 @@
 [[permission]]
+identifier = "allow-desktop-reminders"
+description = "Allows only reviewable reminder drafts, explicit confirm/reject/edit, persisted local schedules, runtime due execution through the existing fixed Provider transport and usage ledger, pause/resume/delete/retry, content-safe notification receipts and exact opaque-id routing. It grants no silent plan creation, arbitrary URL/model/credential/path access, notification permission bypass or UNKNOWN auto-resend."
+commands.allow = ["read_desktop_reminders", "generate_desktop_reminder_draft", "retry_desktop_reminder_draft", "create_desktop_manual_reminder_draft", "confirm_desktop_reminder_draft", "reject_desktop_reminder_draft", "update_desktop_reminder_plan", "set_desktop_reminder_plan_paused", "retry_desktop_reminder_plan", "delete_desktop_reminder_plan", "run_desktop_reminders_due", "read_pending_desktop_reminder_notifications", "acknowledge_desktop_reminder_notification", "read_desktop_reminder_notification_bridge_status", "read_desktop_reminder_notification_permission", "request_desktop_reminder_notification_permission", "resolve_desktop_reminder_notification_target", "consume_desktop_reminder_notification_action", "drain_desktop_reminder_notification_actions", "activate_desktop_reminder_notification_target", "send_pending_desktop_reminder_notification"]
+
+[[permission]]
 identifier = "allow-stage-preflight-selected-exchange"
 description = "Allows only a user-selected .nfai-exchange file to be bounded and copied into private app data staging."
 commands.allow = ["stage_preflight_selected_exchange"]
@@ -37,6 +42,16 @@ commands.allow = ["export_desktop_workspace_to_selected_path"]
 identifier = "allow-mutate-desktop-domain"
 description = "Allows only typed, revision-checked local P6-C domain intents through Rust SQLite."
 commands.allow = ["mutate_desktop_domain"]
+
+[[permission]]
+identifier = "allow-desktop-ordinary-chat"
+description = "Allows one user send or explicit retry to atomically persist an ordinary-chat Attempt and use only the fixed provider/model registry, scoped system credential, verified message attachments and bounded streaming transport. Stop and latest-attempt readback are conversation/Attempt scoped; no arbitrary URL, path, credential value, silent retry or raw payload is exposed."
+commands.allow = ["submit_desktop_ordinary_chat", "retry_desktop_ordinary_chat", "cancel_desktop_ordinary_chat", "read_latest_desktop_ordinary_chat_attempt", "read_desktop_ordinary_chat_context_records", "read_desktop_ordinary_chat_diagnostic_records"]
+
+[[permission]]
+identifier = "allow-desktop-compare"
+description = "Allows one explicit Composer Compare action to create exactly one user message plus independent GPT-5.6 Terra and Claude Sonnet 5 ordinary-chat branches through the existing OpenRouter credential, context, attachment, streaming, usage and error owners. Stop affects the active pair; retry is explicit per branch; no arbitrary provider, model, URL, credential projection, silent fallback or automatic resend is exposed."
+commands.allow = ["submit_desktop_compare", "retry_desktop_compare_branch", "cancel_desktop_compare", "read_desktop_compare_execution"]
 
 [[permission]]
 identifier = "allow-import-desktop-conversation-attachment"
@@ -100,8 +115,13 @@ commands.allow = ["stage_p6k_zip_import_selected", "retry_p6k_zip_import_task", 
 
 [[permission]]
 identifier = "allow-search-desktop-local-index"
-description = "Allows one normalized local query to read the Rust-owned safe search index and record only that normalized query in owner-local history. It grants no filesystem, transport, credential, export, or media access."
-commands.allow = ["search_desktop_local_index"]
+description = "Allows one normalized local query to read the Rust-owned safe search index and records history only for an explicit submitted query. It grants no filesystem, transport, credential, export, or media access."
+commands.allow = ["search_desktop_local_index", "query_desktop_local_index"]
+
+[[permission]]
+identifier = "allow-catalog-desktop-local-index"
+description = "Allows Settings 本机数据 to open a blank-query category catalogue from the same Rust-owned safe search index across local workspaces. It records no search history and grants no body, filesystem, transport, credential, export or media access."
+commands.allow = ["catalog_desktop_local_index"]
 
 [[permission]]
 identifier = "allow-read-desktop-local-search-history"
@@ -137,3 +157,78 @@ commands.allow = ["read_desktop_audio_preview"]
 identifier = "allow-read-desktop-text-preview"
 description = "Allows only a workspace-owned verified text attachment ID to return bounded inert UTF-8 text; no path, URI, HTML, script, transport, or arbitrary file read is granted."
 commands.allow = ["read_desktop_text_preview"]
+
+[[permission]]
+identifier = "allow-open-desktop-attachment-with-system"
+description = "Allows an explicit user gesture to open only a workspace-owned, hash-verified private attachment through the macOS system opener. The webview never receives its path and no arbitrary path is accepted."
+commands.allow = ["open_desktop_attachment_with_system"]
+
+[[permission]]
+identifier = "allow-read-desktop-runtime-info"
+description = "Allows only the current packaged application version, operating-system family and CPU architecture to be shown in About. It grants no path, environment, device identifier, credential or network access."
+commands.allow = ["read_desktop_runtime_info"]
+
+[[permission]]
+identifier = "allow-write-desktop-markdown-to-selected-path"
+description = "Allows only bounded visible conversation Markdown to be atomically written to one native-save-picker-selected absolute .md path and read back for hash verification. It grants no arbitrary read, directory traversal, attachment bytes, credential or network access."
+commands.allow = ["write_desktop_markdown_to_selected_path"]
+
+[[permission]]
+identifier = "allow-desktop-model-service-settings"
+description = "Allows the latest Android model-service settings contract: safe provider projections, revisioned local selection, system-Keychain credential save or explicit reveal, and an explicit fixed-endpoint connection probe. It grants no arbitrary URL, hidden credential read, background test, prompt, conversation or model invocation."
+commands.allow = ["read_desktop_model_service_settings", "save_desktop_model_service_settings", "reveal_desktop_model_service_credential", "test_desktop_model_service_connection"]
+
+[[permission]]
+identifier = "allow-desktop-app-settings"
+description = "Allows the native settings surface to read and revision-save only non-secret appearance and Android-parity preferences in Rust-owned SQLite. Runtime capability flags remain fail-closed; this grants no credential, notification, account, update, model, prompt, attachment, path or network access."
+commands.allow = ["read_desktop_app_settings", "save_desktop_app_settings", "read_desktop_favorite_conversation_ids", "set_desktop_conversation_favorite"]
+
+[[permission]]
+identifier = "allow-desktop-conversation-read-state"
+description = "Allows only opaque workspace/conversation read watermarks, manual unread marking, and true-open clearing in device-local SQLite. It grants no title, message body, prompt, attachment, path, credential, transport, export or account-sync access."
+commands.allow = ["read_desktop_conversation_read_state", "mark_desktop_conversation_opened", "mark_desktop_conversation_unread"]
+
+[[permission]]
+identifier = "allow-read-desktop-background-runtime"
+description = "Allows reading only the content-free macOS background wake-up status. It grants no LaunchAgent mutation, arbitrary command, path, prompt, conversation body, credential, provider payload, or network access."
+commands.allow = ["read_desktop_background_runtime"]
+
+[[permission]]
+identifier = "allow-desktop-history-knowledge"
+description = "Allows the opted-in low-frequency history-library owner to read content-free candidate projections, wake the fixed model route, explicitly retry UNKNOWN/failed work, and accept/reject/delete one candidate. It grants no arbitrary URL, credential projection, attachment/tool content, silent retry, direct Memory write, or Knowledge write before explicit acceptance."
+commands.allow = ["read_desktop_history_knowledge", "run_desktop_history_knowledge_due", "retry_desktop_history_knowledge", "accept_desktop_history_knowledge", "reject_desktop_history_knowledge", "delete_desktop_history_knowledge"]
+
+[[permission]]
+identifier = "allow-desktop-transcription"
+description = "Allows persistent workspace-scoped transcription tasks: native-picker-selected bounded media or JPG/PNG/PDF import into verified private attachments, explicit Qwen ASR or GLM-OCR execution on their fixed endpoint/model with the existing provider-scoped credential, cancel/retry/delete, and native-picker-selected verified exports. It grants no arbitrary URL, path projection, recording, pause, hidden background replay, SenseVoice execution, arbitrary OCR model, or credential projection."
+commands.allow = ["read_desktop_transcription_state", "save_desktop_transcription_settings", "import_desktop_transcription_source", "import_desktop_ocr_source", "run_desktop_transcription_task", "run_desktop_ocr_task", "retry_desktop_transcription_task", "cancel_desktop_transcription_task", "delete_desktop_transcription_task", "export_desktop_transcription_task"]
+
+[[permission]]
+identifier = "allow-read-desktop-usage-ledger"
+description = "Allows only a safe read projection of final measured token and amount facts from the local append-only Usage Ledger. It grants no prompt, response, credential, attachment, path, mutation or provider access."
+commands.allow = ["read_desktop_usage_ledger"]
+
+[[permission]]
+identifier = "allow-desktop-local-backup-restore"
+description = "Allows only native-picker-selected .nfai-backup export, strict private-inbox preflight, explicit replacement restore, cancellation, and restart-status readback. It grants no arbitrary path discovery, credential export, network, merge, background retry, or silent continuation."
+commands.allow = ["export_desktop_local_backup", "preflight_desktop_local_backup", "restore_desktop_local_backup", "cancel_desktop_local_restore", "read_desktop_local_backup_status"]
+
+[[permission]]
+identifier = "allow-read-desktop-privacy-inventory"
+description = "Allows only aggregate counts and byte totals across local workspaces, messages, attachments and private import packages for Settings 本机数据. It grants no content, names, paths, credentials, deletion, export or provider access."
+commands.allow = ["read_desktop_privacy_inventory"]
+
+[[permission]]
+identifier = "allow-desktop-privacy-cleanup"
+description = "Allows Android-parity local cleanup only through an aggregate fingerprinted preview and one of three fixed scopes: explicitly selected terminal failed-task assets, deleted knowledge/memory trash, or all app-private business data with the exact confirmation phrase. It grants no arbitrary path, wildcard command, content projection, export, transport or provider invocation."
+commands.allow = ["preview_desktop_privacy_deletion", "delete_desktop_privacy_data"]
+
+[[permission]]
+identifier = "allow-permanently-delete-desktop-conversation"
+description = "Allows only an exact workspace-owned recycle-bin conversation ID and revision to be permanently removed with its full-snapshot history and last-reference private assets. It grants no bulk wildcard, arbitrary filesystem path, restore, credential, transport or provider access."
+commands.allow = ["permanently_delete_desktop_conversation"]
+
+[[permission]]
+identifier = "allow-desktop-account-sync"
+description = "Allows explicit Google system-browser sign-in, one-time recovery-code confirmation, safe account status readback, and sign-out while retaining local data. It grants no webview credential access, arbitrary endpoint, automatic upload, recovery-code reread, local deletion or hidden account switching."
+commands.allow = ["read_desktop_account_sync", "sign_in_desktop_google_account", "create_desktop_recovery_code", "confirm_desktop_recovery_code", "sign_out_desktop_google_account", "sync_selected_desktop_conversation", "reconcile_desktop_conversation_sync", "set_desktop_periodic_sync", "choose_desktop_selected_sync_start", "create_desktop_recovery_rotation", "confirm_desktop_recovery_rotation", "retry_desktop_recovery_rotation", "list_desktop_cloud_documents", "restore_desktop_cloud_conversation"]

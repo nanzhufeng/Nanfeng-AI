@@ -518,36 +518,6 @@ data class LocalSearchIndexEntity(
     val deletedAtEpochMs: Long?,
 )
 
-/** Read-only search projections keep large catalogues out of full ConversationSnapshot rebuilds. */
-data class ConversationSearchBrowseRow(
-    val conversationId: String,
-    val title: String,
-    val snippet: String,
-    val timestampEpochMs: Long,
-)
-
-data class ConversationPathTextSearchRow(
-    val conversationId: String,
-    val messageNodeId: String,
-    val title: String,
-    val text: String,
-    val timestampEpochMs: Long,
-)
-
-data class ConversationPathAttachmentRow(
-    val conversationId: String,
-    val messageNodeId: String,
-    val title: String,
-    val createdAtEpochMs: Long,
-    val attachmentId: String?,
-    val storageKey: String?,
-    val mimeType: String?,
-    val displayName: String?,
-    val byteCount: Long?,
-    val sha256: String?,
-    val messageText: String,
-)
-
 @Entity(
     tableName = "conversation_drafts",
     foreignKeys = [ForeignKey(
@@ -690,6 +660,8 @@ data class AssistantResponseModelAttributionEntity(
     val receiverProviderId: String,
     val modelId: String,
     val modelDisplayName: String,
+    val conversationStyleId: String?,
+    val webSearchUsed: Boolean?,
     val recordedAtEpochMs: Long,
     val inputTokens: Long?,
     val outputTokens: Long?,
@@ -1242,6 +1214,75 @@ data class P6KZipImportMessageProvenanceEntity(val conversationId: String, val s
 @Entity(tableName = "p6k_zip_import_receipts", primaryKeys = ["sourceConversationId", "packageHash"])
 data class P6KZipImportReceiptEntity(val sourceConversationId: String, val packageHash: String, val taskId: String, val itemId: String, val conversationId: String, val contentHash: String, val committedAtEpochMs: Long)
 
+/**
+ * Content-free, permanent identity ledger for official third-party ZIP imports. Provider IDs,
+ * archive paths and filenames are encoded before they cross this boundary. Business rows may be
+ * purged; USER_DELETED rows here deliberately survive so a later export cannot resurrect them.
+ */
+@Entity(
+    tableName = "p6k_import_identity_ledger",
+    primaryKeys = ["provider", "schemaVersion", "objectType", "identityKey"],
+    indices = [
+        Index("rootConversationKey"),
+        Index("localConversationId"),
+        Index(value = ["localConversationId", "localMessageId", "localAttachmentId"]),
+    ],
+)
+data class P6KImportIdentityLedgerEntity(
+    val provider: String,
+    val schemaVersion: String,
+    val objectType: String,
+    val identityKey: String,
+    val rootConversationKey: String,
+    val parentIdentityKey: String?,
+    val contentSha256: String?,
+    val assetSha256: String?,
+    val assetByteCount: Long?,
+    val localConversationId: String?,
+    val localMessageId: String?,
+    val localAttachmentId: String?,
+    val firstBatchHash: String,
+    val lastBatchHash: String,
+    val identityQuality: String,
+    val state: String,
+    val deletionReason: String?,
+    val firstSeenAtEpochMs: Long,
+    val lastSeenAtEpochMs: Long,
+    val revision: Long,
+)
+
+/** One content-free receipt per selected ZIP. COMPLETED is written only for a zero-failure run. */
+@Entity(tableName = "p6k_import_batch_receipts", indices = [Index("status")])
+data class P6KImportBatchReceiptEntity(
+    @androidx.room.PrimaryKey val taskId: String,
+    val provider: String,
+    val schemaVersion: String,
+    val packageHash: String,
+    val status: String,
+    val importedNewConversations: Int,
+    val importedNewMessages: Int,
+    val importedNewAttachments: Int,
+    val reusedAssetBytes: Long,
+    val skippedExisting: Int,
+    val skippedUserDeleted: Int,
+    val identityConflicts: Int,
+    val failed: Int,
+    val startedAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+    val completedAtEpochMs: Long?,
+)
+
+/** Records exact-evidence backfill and the honest legacy gap for already-purged old imports. */
+@Entity(tableName = "p6k_import_identity_migration_state")
+data class P6KImportIdentityMigrationStateEntity(
+    @androidx.room.PrimaryKey val id: Int = 1,
+    val completedAtEpochMs: Long,
+    val backfilledConversations: Int,
+    val backfilledMessages: Int,
+    val backfilledOccurrences: Int,
+    val legacyCoverageGap: Boolean,
+)
+
 /** The single native K6 personalization/settings projection.  It is not an account record. */
 @Entity(tableName = "third_party_profile_personalization_settings")
 data class ThirdPartyProfilePersonalizationSettingsEntity(
@@ -1600,6 +1641,7 @@ interface P6KZipImportTaskDao {
     @Query("SELECT EXISTS(SELECT 1 FROM p6k_zip_import_provenance WHERE conversationId=:conversationId)") fun hasProvenanceForConversation(conversationId: String): Boolean
     @Query("SELECT DISTINCT conversationId FROM p6k_zip_import_provenance WHERE conversationId IN (:conversationIds)") fun conversationIdsWithProvenance(conversationIds: List<String>): List<String>
     @Query("SELECT * FROM p6k_zip_import_provenance WHERE taskId=:taskId ORDER BY conversationId ASC") fun provenanceForTask(taskId: String): List<P6KZipImportProvenanceEntity>
+    @Query("SELECT * FROM p6k_zip_import_provenance ORDER BY importedAtEpochMs ASC, conversationId ASC") fun allProvenance(): List<P6KZipImportProvenanceEntity>
     @Query("SELECT * FROM p6k_zip_import_message_provenance WHERE conversationId=:conversationId ORDER BY sourceMessageId ASC") fun messageProvenanceForConversation(conversationId: String): List<P6KZipImportMessageProvenanceEntity>
     @Query("DELETE FROM p6k_zip_import_receipts WHERE taskId=:taskId") fun deleteReceiptsForTask(taskId: String)
     @Query("DELETE FROM p6k_zip_import_provenance WHERE taskId=:taskId") fun deleteProvenanceForTask(taskId: String)
@@ -1619,6 +1661,7 @@ interface P6KZipImportTaskDao {
     @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence WHERE taskId=:taskId") fun assetOccurrenceCount(taskId: String): Int
     @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt WHERE taskId=:taskId") fun assetOccurrenceReceiptCount(taskId: String): Int
     @Query("SELECT COUNT(*) FROM p6k_zip_asset_occurrence_receipt WHERE attachmentId=:attachmentId") fun assetOccurrenceReceiptCountForAttachment(attachmentId: String): Int
+    @Query("SELECT * FROM p6k_zip_asset_occurrence_receipt ORDER BY linkedAtMs ASC, taskId ASC") fun allAssetOccurrenceReceipts(): List<P6KZipAssetOccurrenceReceiptEntity>
     @Query("DELETE FROM p6k_zip_asset_occurrence_receipt WHERE taskId=:taskId") fun deleteAssetOccurrenceReceiptsForTask(taskId: String)
     @Query("DELETE FROM p6k_zip_asset_occurrence_receipt WHERE conversationId=:conversationId AND messageId=:messageId AND attachmentId=:attachmentId")
     fun deleteAssetOccurrenceReceiptsForMessageAttachment(conversationId: String, messageId: String, attachmentId: String): Int
@@ -1637,6 +1680,25 @@ interface P6KZipImportTaskDao {
     @Query("SELECT * FROM p6k_zip_asset_recovery_jobs ORDER BY updatedAtMs DESC, taskId ASC") fun assetRecoveryJobs(): List<P6KZipAssetRecoveryJobEntity>
     @Query("SELECT * FROM p6k_zip_asset_recovery_jobs WHERE state IN ('PENDING','INDEXING','MAPPING','LINKING','PARTIAL') ORDER BY updatedAtMs ASC, taskId ASC") fun resumableAssetRecoveryJobs(): List<P6KZipAssetRecoveryJobEntity>
     @Query("DELETE FROM p6k_zip_asset_recovery_jobs WHERE taskId=:taskId") fun deleteAssetRecoveryJob(taskId: String): Int
+}
+
+@Dao
+interface P6KImportIdentityLedgerDao {
+    @Query("SELECT * FROM p6k_import_identity_ledger WHERE provider=:provider AND schemaVersion=:schemaVersion AND objectType=:objectType AND identityKey=:identityKey")
+    fun find(provider: String, schemaVersion: String, objectType: String, identityKey: String): P6KImportIdentityLedgerEntity?
+    @Query("SELECT * FROM p6k_import_identity_ledger WHERE localConversationId=:conversationId ORDER BY objectType, identityKey")
+    fun forConversation(conversationId: String): List<P6KImportIdentityLedgerEntity>
+    @Query("SELECT * FROM p6k_import_identity_ledger WHERE localConversationId=:conversationId AND localMessageId=:messageId AND localAttachmentId=:attachmentId AND objectType='ASSET_OCCURRENCE'")
+    fun forOccurrence(conversationId: String, messageId: String, attachmentId: String): List<P6KImportIdentityLedgerEntity>
+    @Query("SELECT COUNT(*) FROM p6k_import_identity_ledger WHERE objectType=:objectType") fun countByObjectType(objectType: String): Int
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: P6KImportIdentityLedgerEntity)
+    @androidx.room.Update fun update(value: P6KImportIdentityLedgerEntity): Int
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun upsertBatchReceipt(value: P6KImportBatchReceiptEntity)
+    @Query("SELECT * FROM p6k_import_batch_receipts WHERE taskId=:taskId") fun batchReceipt(taskId: String): P6KImportBatchReceiptEntity?
+    @Query("UPDATE p6k_import_batch_receipts SET status='UNKNOWN', updatedAtEpochMs=:at, completedAtEpochMs=NULL WHERE status='IN_PROGRESS'")
+    fun markInterruptedAsUnknown(at: Long): Int
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertMigrationState(value: P6KImportIdentityMigrationStateEntity)
+    @Query("SELECT * FROM p6k_import_identity_migration_state WHERE id=1") fun migrationState(): P6KImportIdentityMigrationStateEntity?
 }
 
 @Dao
@@ -1945,6 +2007,15 @@ interface ConversationDao {
     """)
     fun browseLocalTextIndex(scope: String): List<LocalSearchIndexEntity>
 
+    /** Uses the exact same visible-message predicate as the blank-query 正文 search. */
+    @Query("""
+        SELECT COUNT(*) FROM local_search_index s
+        JOIN conversations c ON c.id = s.conversationId
+        WHERE s.messageNodeId IS NOT NULL AND s.contentKind = 'TEXT' AND c.surface = 'CHAT'
+          AND c.deletedAtEpochMs IS NULL
+    """)
+    fun visibleTextSearchResultCount(): Long
+
     @Query("""
         SELECT c.id AS conversationId,
                c.title AS title,
@@ -2045,6 +2116,27 @@ interface ConversationDao {
         ORDER BY n.createdAtEpochMs DESC, n.id ASC, b.position ASC
     """)
     fun currentPathAttachmentRows(query: String, scope: String): List<ConversationPathAttachmentRow>
+
+    /** Counts the distinct rows returned by the blank-query 全部 attachment catalogue. */
+    @Query("""
+        WITH RECURSIVE current_path(conversationId, messageId) AS (
+            SELECT c.id, c.currentLeafMessageId
+            FROM conversations c
+            WHERE c.surface = 'CHAT' AND c.deletedAtEpochMs IS NULL AND c.currentLeafMessageId IS NOT NULL
+            UNION ALL
+            SELECT p.conversationId, n.parentMessageId
+            FROM current_path p
+            JOIN message_nodes n ON n.id = p.messageId
+            WHERE n.parentMessageId IS NOT NULL
+        ), visible_references AS (
+            SELECT DISTINCT p.conversationId, n.id AS messageNodeId, b.attachmentId
+            FROM current_path p
+            JOIN message_nodes n ON n.id = p.messageId
+            JOIN message_content_blocks b ON b.messageId = n.id AND b.kind = 'ATTACHMENT'
+        )
+        SELECT COUNT(*) FROM visible_references
+    """)
+    fun visibleConversationAttachmentSearchResultCount(): Long
 
     @Query("SELECT COUNT(*) FROM local_search_index")
     fun searchIndexCount(): Int
@@ -2582,7 +2674,7 @@ interface AssistantResponseModelAttributionDao {
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun find(assistantMessageId: String, attemptId: String): AssistantResponseModelAttributionEntity?
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId IN (:assistantMessageIds) ORDER BY recordedAtEpochMs ASC, attemptId ASC") fun forMessages(assistantMessageIds: List<String>): List<AssistantResponseModelAttributionEntity>
     @Query("SELECT * FROM assistant_response_model_attributions WHERE inputTokens IS NOT NULL OR outputTokens IS NOT NULL OR costTotalMicros IS NOT NULL ORDER BY recordedAtEpochMs DESC, attemptId DESC") fun listCostedNewestFirst(): List<AssistantResponseModelAttributionEntity>
-    @Query("UPDATE assistant_response_model_attributions SET inputTokens=:inputTokens, outputTokens=:outputTokens, totalTokens=:totalTokens, cachedInputTokens=:cachedInputTokens, reasoningTokens=:reasoningTokens, costPriceVersion=:costPriceVersion, costCurrencyCode=:costCurrencyCode, costTotalMicros=:costTotalMicros, costSource=:costSource WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichAccounting(assistantMessageId: String, attemptId: String, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, reasoningTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?): Int
+    @Query("UPDATE assistant_response_model_attributions SET conversationStyleId=COALESCE(conversationStyleId,:conversationStyleId), webSearchUsed=COALESCE(webSearchUsed,:webSearchUsed), inputTokens=COALESCE(inputTokens,:inputTokens), outputTokens=COALESCE(outputTokens,:outputTokens), totalTokens=COALESCE(totalTokens,:totalTokens), cachedInputTokens=COALESCE(cachedInputTokens,:cachedInputTokens), reasoningTokens=COALESCE(reasoningTokens,:reasoningTokens), costPriceVersion=COALESCE(costPriceVersion,:costPriceVersion), costCurrencyCode=COALESCE(costCurrencyCode,:costCurrencyCode), costTotalMicros=COALESCE(costTotalMicros,:costTotalMicros), costSource=COALESCE(costSource,:costSource) WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichCompletedFacts(assistantMessageId: String, attemptId: String, conversationStyleId: String?, webSearchUsed: Boolean?, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, reasoningTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?): Int
 }
 
 @Dao
@@ -2684,6 +2776,9 @@ interface ResumableAttachmentUploadDao {
         P6KZipImportProvenanceEntity::class,
         P6KZipImportMessageProvenanceEntity::class,
         P6KZipImportReceiptEntity::class,
+        P6KImportIdentityLedgerEntity::class,
+        P6KImportBatchReceiptEntity::class,
+        P6KImportIdentityMigrationStateEntity::class,
         ThirdPartyProfilePersonalizationSettingsEntity::class,
         P6KProfileImportProvenanceEntity::class,
         P6KProfileImportReceiptEntity::class,
@@ -2721,7 +2816,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 63,
+    version = 65,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2734,6 +2829,7 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun claudeExportImportTaskDao(): ClaudeExportImportTaskDao
     abstract fun nanfengKnowledgeExportImportTaskDao(): NanfengKnowledgeExportImportTaskDao
     abstract fun p6kZipImportTaskDao(): P6KZipImportTaskDao
+    abstract fun p6kImportIdentityLedgerDao(): P6KImportIdentityLedgerDao
     abstract fun p6kProfilePersonalizationSettingsDao(): P6KProfilePersonalizationSettingsDao
     abstract fun pdfTextImportTaskDao(): PdfTextImportTaskDao
     abstract fun webTextSnapshotTaskDao(): WebTextSnapshotTaskDao
@@ -3423,6 +3519,25 @@ abstract class NanfengAiDatabase : RoomDatabase() {
         val MIGRATION_62_63 = object : Migration(62, 63) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `reasoningTokens` INTEGER")
+            }
+        }
+        /** Adds the content-free permanent ZIP identity ledger and batch completion receipt. */
+        val MIGRATION_63_64 = object : Migration(63, 64) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_import_identity_ledger` (`provider` TEXT NOT NULL, `schemaVersion` TEXT NOT NULL, `objectType` TEXT NOT NULL, `identityKey` TEXT NOT NULL, `rootConversationKey` TEXT NOT NULL, `parentIdentityKey` TEXT, `contentSha256` TEXT, `assetSha256` TEXT, `assetByteCount` INTEGER, `localConversationId` TEXT, `localMessageId` TEXT, `localAttachmentId` TEXT, `firstBatchHash` TEXT NOT NULL, `lastBatchHash` TEXT NOT NULL, `identityQuality` TEXT NOT NULL, `state` TEXT NOT NULL, `deletionReason` TEXT, `firstSeenAtEpochMs` INTEGER NOT NULL, `lastSeenAtEpochMs` INTEGER NOT NULL, `revision` INTEGER NOT NULL, PRIMARY KEY(`provider`, `schemaVersion`, `objectType`, `identityKey`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_import_identity_ledger_rootConversationKey` ON `p6k_import_identity_ledger` (`rootConversationKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_import_identity_ledger_localConversationId` ON `p6k_import_identity_ledger` (`localConversationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_import_identity_ledger_localConversationId_localMessageId_localAttachmentId` ON `p6k_import_identity_ledger` (`localConversationId`, `localMessageId`, `localAttachmentId`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_import_batch_receipts` (`taskId` TEXT NOT NULL, `provider` TEXT NOT NULL, `schemaVersion` TEXT NOT NULL, `packageHash` TEXT NOT NULL, `status` TEXT NOT NULL, `importedNewConversations` INTEGER NOT NULL, `importedNewMessages` INTEGER NOT NULL, `importedNewAttachments` INTEGER NOT NULL, `reusedAssetBytes` INTEGER NOT NULL, `skippedExisting` INTEGER NOT NULL, `skippedUserDeleted` INTEGER NOT NULL, `identityConflicts` INTEGER NOT NULL, `failed` INTEGER NOT NULL, `startedAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, `completedAtEpochMs` INTEGER, PRIMARY KEY(`taskId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_p6k_import_batch_receipts_status` ON `p6k_import_batch_receipts` (`status`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `p6k_import_identity_migration_state` (`id` INTEGER NOT NULL, `completedAtEpochMs` INTEGER NOT NULL, `backfilledConversations` INTEGER NOT NULL, `backfilledMessages` INTEGER NOT NULL, `backfilledOccurrences` INTEGER NOT NULL, `legacyCoverageGap` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            }
+        }
+        /** Persists immutable answer-level style and verified web-search outcome. */
+        val MIGRATION_64_65 = object : Migration(64, 65) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `conversationStyleId` TEXT")
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `webSearchUsed` INTEGER")
             }
         }
     }

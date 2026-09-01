@@ -63,8 +63,6 @@ class P7DAccountSyncViewModel(
     var state by mutableStateOf(loadState())
         private set
 
-    init { refreshLatestSync() }
-
     fun open() {
         val notice = state.notice
         state = loadState().copy(detailVisible = true, notice = notice)

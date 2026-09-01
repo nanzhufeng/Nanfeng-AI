@@ -2,11 +2,35 @@ package com.nanzhufeng.ai.ai
 
 import com.nanzhufeng.ai.domain.ProviderId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AutomaticWebSearchPolicyTest {
     @Test
-    fun `current-information requests use each provider official supported route`() {
+    fun `only absolute HTTP sources with a real host can prove live search`() {
+        listOf(
+            "https://",
+            "https://not a url",
+            "https:///missing-host",
+            "ftp://example.test/file",
+            "https://user@example.test/private",
+        ).forEach { invalid ->
+            assertNull(ProviderWebSource.fromProvider(invalid, "invalid"))
+            assertFalse(runCatching { ProviderWebSource(invalid, "invalid") }.isSuccess)
+        }
+
+        val source = ProviderWebSource.fromProvider(" https://example.test/policy ", " 政策原文 ")
+        assertEquals(ProviderWebSource("https://example.test/policy", "政策原文"), source)
+        assertTrue(WebSearchGroundingPolicy.hasRequiredSources(
+            ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES),
+            listOf(requireNotNull(source)),
+        ))
+    }
+
+    @Test
+    fun `enabled search uses each provider official supported route`() {
         assertEquals(
             OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL,
             AutomaticWebSearchPolicy.requestOptions(ProviderId.OPENROUTER, ChatRequestOptions.Standard, true, "查询今天的 AI 新闻", emptyList()).webSearchRoute,
@@ -75,10 +99,10 @@ class AutomaticWebSearchPolicyTest {
     }
 
     @Test
-    fun `evergreen questions retain the selected ordinary route`() {
+    fun `enabled search also grounds ordinary wording instead of guessing from keywords`() {
         assertEquals(
-            ChatRequestOptions.Standard,
-            AutomaticWebSearchPolicy.requestOptions(ProviderId.OPENROUTER, ChatRequestOptions.Standard, true, "解释什么是递归", emptyList()),
+            OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL,
+            AutomaticWebSearchPolicy.requestOptions(ProviderId.OPENROUTER, ChatRequestOptions.Standard, true, "解释什么是递归", emptyList()).webSearchRoute,
         )
     }
 
@@ -107,18 +131,42 @@ class AutomaticWebSearchPolicyTest {
     }
 
     @Test
-    fun `local document lookup wording does not enable a public web tool`() {
+    fun `markdown and OCR attachment wording keeps the explicit web-search requirement`() {
         val attachment = ChatAttachment(ChatAttachmentKind.FILE, "text/markdown", "design.md", "# design".toByteArray())
 
         assertEquals(
-            ChatRequestOptions.Standard,
+            OfficialWebSearchRoute.DEEPSEEK_RESPONSES,
             AutomaticWebSearchPolicy.requestOptions(
-                ProviderId.OPENROUTER,
+                ProviderId.DEEPSEEK,
                 ChatRequestOptions.Standard,
                 true,
-                "请查找附件文档中的根因并给出修复方案",
+                "请分析这份文件",
                 listOf(attachment),
+            ).webSearchRoute,
+        )
+        assertEquals(
+            OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS,
+            AutomaticWebSearchPolicy.requestOptions(
+                ProviderId.ZHIPU,
+                ChatRequestOptions.Standard,
+                true,
+                "请分析 OCR Markdown 材料",
+                listOf(attachment),
+            ).webSearchRoute,
+        )
+    }
+
+    @Test
+    fun `grounded completion requires provider-returned public sources`() {
+        val live = ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
+        assertEquals(false, WebSearchGroundingPolicy.hasRequiredSources(live, emptyList()))
+        assertEquals(
+            true,
+            WebSearchGroundingPolicy.hasRequiredSources(
+                live,
+                listOf(ProviderWebSource("https://example.test/policy", "政策原文")),
             ),
         )
+        assertEquals(true, WebSearchGroundingPolicy.hasRequiredSources(ChatRequestOptions.Standard, emptyList()))
     }
 }

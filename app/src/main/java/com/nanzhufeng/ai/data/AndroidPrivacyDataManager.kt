@@ -30,6 +30,35 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.UUID
 
+private val LOCAL_BUSINESS_PREFERENCE_FILES = setOf(
+    "assistant_experience_settings_v1",
+    "appearance_settings_v1",
+    "chat_routing_policy_v1",
+    "conversation-style-overrides-v1",
+    "conversation-web-search-overrides-v1",
+    "conversation_app_entry",
+    "conversation_read_markers_v1",
+    "direct_chat_call_audit_v1",
+    "history_knowledge_auto_curation_runs_v1",
+    "history_knowledge_auto_curation_v1",
+    "local-audio-preview-position-v1",
+    "local-pdf-preview-position-v1",
+    "local-search-history-v1",
+    "local-video-preview-position-v1",
+    "model-health-v1",
+    "model_service_settings_v1",
+    "nanfeng_ai_google_account",
+    "nanfeng_ai_selected_conversation_sync",
+    "notification_reminder_settings_v1",
+    "p5a_ui",
+    "p5d_local_backup",
+    "p6g-model-selection-v1",
+    "p6k_import_identity",
+    "p7e_restore_receipts_v1",
+    "privacy_inventory_cache_v1",
+    "provider_credentials_v1",
+)
+
 /** P5-C Android owner. It only queries aggregate SQL and never selects a user-content column. */
 class AndroidPrivacyDataManager(
     private val context: Context,
@@ -39,15 +68,42 @@ class AndroidPrivacyDataManager(
     private val fileDeleter: (File) -> Boolean = { it.delete() },
 ) : PrivacyDataManager {
     private val filesRoot = context.applicationContext.filesDir.canonicalFile
+    private val inventoryCache = context.applicationContext.getSharedPreferences("privacy_inventory_cache_v1", Context.MODE_PRIVATE)
     private val db get() = database.openHelper.writableDatabase
     private val importedZipCleanup = AndroidImportedZipPackageCleanup(context, database)
 
-    override fun inventory(): PrivacyInventory = PrivacyInventory(
-        aggregates = inventoryAggregates(),
-        credentialReferencePresent = context.getSharedPreferences("provider_credentials_v1", Context.MODE_PRIVATE).contains("OPENROUTER"),
-        internetPermissionPresent = context.packageManager.checkPermission(android.Manifest.permission.INTERNET, context.packageName) == PackageManager.PERMISSION_GRANTED,
-        importedZipCleanup = importedZipCleanup.status(),
-    )
+    override fun cachedInventory(): PrivacyInventory {
+        val encoded = inventoryCache.getString("aggregates", null) ?: return PrivacyInventory.EmptySnapshot
+        val aggregates = runCatching {
+            encoded.split('|').filter(String::isNotBlank).map { entry ->
+                val (key, count, bytes) = entry.split(':', limit = 3)
+                PrivacyAggregate(key, count.toLong(), bytes.toLong())
+            }
+        }.getOrNull() ?: return PrivacyInventory.EmptySnapshot
+        return PrivacyInventory(
+            aggregates = aggregates,
+            credentialReferencePresent = inventoryCache.getBoolean("credentialReferencePresent", false),
+            internetPermissionPresent = inventoryCache.getBoolean("internetPermissionPresent", false),
+            importedZipCleanup = com.nanzhufeng.ai.domain.ImportedZipCleanupStatus(
+                originalPackageCount = inventoryCache.getLong("zipOriginalPackageCount", 0L),
+                importedAttachmentCount = inventoryCache.getLong("zipImportedAttachmentCount", 0L),
+                importedAttachmentByteCount = inventoryCache.getLong("zipImportedAttachmentByteCount", 0L),
+                sourceDependentAttachmentCount = inventoryCache.getLong("zipSourceDependentAttachmentCount", 0L),
+                blockedPackageCount = inventoryCache.getLong("zipBlockedPackageCount", 0L),
+                pendingDeletionCount = inventoryCache.getLong("zipPendingDeletionCount", 0L),
+            ),
+        )
+    }
+
+    override fun inventory(): PrivacyInventory {
+        cleanupOrphanedAttachmentFilesSilently()
+        return PrivacyInventory(
+            aggregates = inventoryAggregates(),
+            credentialReferencePresent = context.getSharedPreferences("provider_credentials_v1", Context.MODE_PRIVATE).contains("OPENROUTER"),
+            internetPermissionPresent = context.packageManager.checkPermission(android.Manifest.permission.INTERNET, context.packageName) == PackageManager.PERMISSION_GRANTED,
+            importedZipCleanup = importedZipCleanup.status(),
+        ).also(::cacheInventory)
+    }
 
     override fun preview(scope: PrivacyDeleteScope, selectedTaskIds: Set<String>): PrivacyDeletionPreview {
         val candidates = if (scope == PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS) taskDeletionCandidates() else emptyList()
@@ -132,6 +188,11 @@ class AndroidPrivacyDataManager(
     }
 
     private fun inventoryAggregates(): List<PrivacyAggregate> = listOf(
+        // These two facts deliberately use the same ALL-scope search owners as the drill-down
+        // rows below.  Raw Room table counts would include records that the user cannot see in
+        // 全部／正文 and made the two surfaces look contradictory.
+        PrivacyAggregate("search_text", database.conversationDao().visibleTextSearchResultCount()),
+        PrivacyAggregate("search_attachments", database.conversationDao().visibleConversationAttachmentSearchResultCount() + glmOcrSearchDocumentCount()),
         PrivacyAggregate("capture_drafts", count("capture_drafts"), textBytes("capture_drafts", "text")),
         PrivacyAggregate("conversations", count("conversations"), textBytes("conversations", "title")),
         PrivacyAggregate("messages", count("message_nodes"), textBytes("message_content_blocks", "textContent", "displayName", "toolSafeSummary")),
@@ -162,11 +223,22 @@ class AndroidPrivacyDataManager(
         attachmentAggregate("attachment_files", "a.mimeType NOT LIKE 'image/%' AND a.mimeType NOT LIKE 'video/%' AND a.mimeType NOT LIKE 'audio/%'"),
         attachmentAggregate("zip_imported_attachments", "a.attachmentId IN (SELECT DISTINCT attachmentId FROM p6k_zip_asset_occurrence_receipt)"),
         attachmentAggregate("glm_ocr_attachments", "a.attachmentId IN (SELECT sourceAttachmentId FROM glm_ocr_tasks UNION SELECT resultAttachmentId FROM glm_ocr_tasks WHERE resultAttachmentId IS NOT NULL)"),
-        orphanedAttachmentAggregate(),
         fileAggregate("import_source_assets", "markdown-import-assets/v1") + fileAggregate("import_source_assets", "json-knowledge-import-assets/v1") +
             fileAggregate("import_source_assets", "pdf-text-import-assets/v1") + fileAggregate("import_source_assets", "web-text-snapshots/v1") +
             fileAggregate("import_source_assets", "p6k-zip-import/v1"),
     )
+
+    /** Mirrors [GlmOcrTaskOwner.searchDocuments] for the blank-query 全部 catalogue. */
+    private fun glmOcrSearchDocumentCount(): Long = db.query(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT taskId, sourceAttachmentId AS attachmentId FROM glm_ocr_tasks
+            UNION ALL
+            SELECT taskId, resultAttachmentId AS attachmentId FROM glm_ocr_tasks WHERE resultAttachmentId IS NOT NULL
+        ) task_assets
+        JOIN private_attachment_assets assets ON assets.attachmentId = task_assets.attachmentId
+        """.trimIndent(),
+    ).use { cursor -> cursor.moveToFirst(); cursor.getLong(0) }
 
     private operator fun PrivacyAggregate.plus(other: PrivacyAggregate) = PrivacyAggregate(
         if (key == other.key) key else "$key+${other.key}",
@@ -321,6 +393,39 @@ class AndroidPrivacyDataManager(
         }
     }
 
+    /** These files have no current owner by definition.  Clean them before exposing storage
+     * facts, and retry on a later refresh if an I/O failure leaves one behind. */
+    private fun cleanupOrphanedAttachmentFilesSilently() {
+        val aggregate = orphanedAttachmentAggregate()
+        if (aggregate.count == 0L) return
+        runCatching {
+            deleteOrphanedAttachmentFiles(
+                PrivacyDeletionPreview(
+                    scope = PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES,
+                    aggregates = listOf(aggregate),
+                    fingerprint = "automatic-orphan-cleanup",
+                ),
+            )
+        }
+    }
+
+    private fun cacheInventory(inventory: PrivacyInventory) {
+        val zip = inventory.importedZipCleanup
+        inventoryCache.edit()
+            .putString("aggregates", inventory.aggregates.joinToString("|") { "${it.key}:${it.count}:${it.byteCount}" })
+            .putBoolean("credentialReferencePresent", inventory.credentialReferencePresent)
+            .putBoolean("internetPermissionPresent", inventory.internetPermissionPresent)
+            .putLong("zipOriginalPackageCount", zip.originalPackageCount)
+            .putLong("zipImportedAttachmentCount", zip.importedAttachmentCount)
+            .putLong("zipImportedAttachmentByteCount", zip.importedAttachmentByteCount)
+            .putLong("zipSourceDependentAttachmentCount", zip.sourceDependentAttachmentCount)
+            .putLong("zipBlockedPackageCount", zip.blockedPackageCount)
+            .putLong("zipPendingDeletionCount", zip.pendingDeletionCount)
+            // inventory() already runs on Dispatchers.IO. Persist before it returns so a process
+            // stop immediately after leaving this screen cannot reopen without its last snapshot.
+            .commit()
+    }
+
     private fun deleteOrphanedAttachmentFiles(preview: PrivacyDeletionPreview): PrivacyDeletionResult {
         val expected = preview.aggregates.singleOrNull { it.key == "orphaned_attachment_files" }
             ?: return PrivacyDeletionResult.Rejected("待清理文件状态已变化，请重新预览。")
@@ -411,10 +516,11 @@ class AndroidPrivacyDataManager(
         }
     }
     private fun clearBusinessPreferences() {
-        listOf(
-            "model_service_settings_v1", "provider_credentials_v1", "p5a_ui",
-            "direct_chat_call_audit_v1", "model-health-v1", "conversation_read_markers_v1",
-        ).forEach { context.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit() }
+        LOCAL_BUSINESS_PREFERENCE_FILES.forEach { file ->
+            check(context.getSharedPreferences(file, Context.MODE_PRIVATE).edit().clear().commit()) {
+                "LOCAL_BUSINESS_PREFERENCE_CLEAR_FAILED:$file"
+            }
+        }
     }
     private fun deleteStaged(pending: File): Int = pending.walkBottomUp().count { file -> file.exists() && !fileDeleter(file) }
     private fun restoreStaged(moved: List<Pair<File, File>>) = moved.asReversed().forEach { (source, staged) -> if (staged.exists() && !source.exists()) runCatching { source.parentFile?.mkdirs(); Files.move(staged.toPath(), source.toPath(), StandardCopyOption.ATOMIC_MOVE) } }

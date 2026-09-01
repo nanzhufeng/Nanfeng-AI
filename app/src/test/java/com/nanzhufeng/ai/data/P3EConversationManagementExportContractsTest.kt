@@ -160,6 +160,23 @@ class P3EConversationManagementExportContractsTest {
         assertEquals(saved.nodes.last().createdAt.toEpochMilli(), attachmentSearch.browse(ConversationSearchCategory.IMAGE, ConversationListScope.ACTIVE).single().timestampEpochMs)
     }
 
+    @Test fun `正文目录使用真实本机文本时间和 UTF8 字节数`() {
+        val body = "中文正文 abc"
+        val saved = repository.save(
+            tree.append(tree.create("正文事实"), AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text(body)))),
+        )
+        val search = SearchConversationsUseCase(repository, ConversationSearchProjection(ConversationManagementDomain(clock)))
+
+        val browseHit = search.browse(ConversationListScope.ACTIVE).single { it.conversationId == saved.conversation.id }
+        val queryHit = search.execute("正文", ConversationListScope.ACTIVE).single { it.conversationId == saved.conversation.id && it.messageNodeId != null }
+        val expectedBytes = body.toByteArray(Charsets.UTF_8).size.toLong()
+        val expectedTimestamp = saved.nodes.last().createdAt.toEpochMilli()
+        assertEquals(expectedBytes, browseHit.byteCount)
+        assertEquals(expectedTimestamp, browseHit.timestampEpochMs)
+        assertEquals(expectedBytes, queryHit.byteCount)
+        assertEquals(expectedTimestamp, queryHit.timestampEpochMs)
+    }
+
     @Test fun `attachment catalogue never truncates valid local occurrences at fifty`() {
         var snapshot = tree.create("全量附件目录")
         repeat(75) { index ->

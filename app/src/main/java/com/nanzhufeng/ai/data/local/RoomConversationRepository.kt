@@ -70,6 +70,7 @@ import java.util.concurrent.Callable
 class RoomConversationRepository(
     private val database: NanfengAiDatabase,
     private val privateAttachmentStore: PrivateAttachmentStore? = null,
+    private val p6kImportIdentities: RoomP6KImportIdentityLedger = RoomP6KImportIdentityLedger(database),
 ) : ConversationRepository, ConversationDraftRepository, ConversationMessageAttachmentRepository, ConversationRuntimeRepository, ConversationActionRepository, ConversationManagementRepository, ConversationSearchRepository, OptimizedConversationSearchRepository, LocalSearchIndexRepository, ConversationListRepository, ConversationSurfaceRepository, ImportedConversationProvenanceReader {
     private companion object {
         const val RECENT_MESSAGES_EXCLUDED_FROM_SUMMARY = 8
@@ -110,9 +111,18 @@ class RoomConversationRepository(
             updatedAt = updatedAt,
             revision = snapshot.conversation.revision + 1,
         )
+        p6kImportIdentities.tombstoneOccurrence(
+            conversationId.value,
+            messageNodeId.value,
+            attachmentId.value,
+            "USER_DELETED_ATTACHMENT_OCCURRENCE",
+            updatedAt,
+        )
         check(dao.update(nextConversation.toEntity()) == 1) { "附件删除时无法更新所属对话。" }
         dao.deleteBlocks(messageNodeId.value)
         dao.insertBlocks(nextNode.content.mapIndexed { position, block -> block.toEntity(messageNodeId, position) })
+        // Derivative reference rows may be removed, but the independent USER_DELETED occurrence
+        // above survives and prevents a later ZIP from attaching it again.
         database.p6kZipImportTaskDao().deleteAssetOccurrenceReceiptsForMessageAttachment(
             conversationId.value,
             messageNodeId.value,
@@ -150,6 +160,7 @@ class RoomConversationRepository(
                 return@inConversationTransaction ConversationPurgeResult.Rejected("只能永久删除回收站中的会话。")
             }
             val id = conversationId.value
+            p6kImportIdentities.tombstoneConversation(id, "USER_DELETED_CONVERSATION_PURGE", stored.conversation.updatedAt)
             attachmentIds = buildSet {
                 stored.nodes.flatMap { it.content }.filterIsInstance<ContentBlock.Attachment>().forEach { add(it.attachment.id) }
                 stored.draft.attachments.forEach { add(it.id) }
@@ -421,6 +432,8 @@ class RoomConversationRepository(
                     title = row.title,
                     snippet = row.snippet.take(240),
                     titleMatch = false,
+                    timestampEpochMs = row.timestampEpochMs,
+                    byteCount = row.normalizedText.toByteArray(Charsets.UTF_8).size.toLong(),
                 )
             }
         }
@@ -435,6 +448,8 @@ class RoomConversationRepository(
                 title = row.title,
                 snippet = row.text.searchSnippet(normalized),
                 titleMatch = false,
+                timestampEpochMs = row.timestampEpochMs,
+                byteCount = row.text.toByteArray(Charsets.UTF_8).size.toLong(),
             )
         }
     }
@@ -494,7 +509,16 @@ class RoomConversationRepository(
         val dao = database.conversationDao()
         repairIncompleteTextSearchIndex(dao)
         dao.searchLocalIndex(normalizedQuery, scope.name).map { row ->
-            LocalSearchIndexRecord(ConversationId(row.conversationId), row.messageNodeId?.let(::MessageNodeId), row.title, row.snippet, row.contentKind, row.timestampEpochMs, row.contentKind == "TEXT" && row.messageNodeId == null)
+            LocalSearchIndexRecord(
+                conversationId = ConversationId(row.conversationId),
+                messageNodeId = row.messageNodeId?.let(::MessageNodeId),
+                title = row.title,
+                snippet = row.snippet,
+                contentKind = row.contentKind,
+                timestampEpochMs = row.timestampEpochMs,
+                titleMatch = row.contentKind == "TEXT" && row.messageNodeId == null,
+                byteCount = row.normalizedText.toByteArray(Charsets.UTF_8).size.toLong(),
+            )
         }
     }
 
@@ -530,6 +554,13 @@ class RoomConversationRepository(
             }
         }
         val updated = runCatching { mutate(stored) }.getOrElse { return@inConversationTransaction ConversationManagementResult.Rejected(it.message ?: "管理操作被拒绝。") }
+        if (intent.action == com.nanzhufeng.ai.domain.ConversationManagementAction.SOFT_DELETE) {
+            p6kImportIdentities.tombstoneConversation(
+                intent.conversationId.value,
+                "USER_DELETED_CONVERSATION",
+                updated.conversation.updatedAt,
+            )
+        }
         persistSnapshot(dao, updated)
         dao.insertManagementIntent(ConversationManagementIntentEntity(
             intentId = intent.id.value, conversationId = intent.conversationId.value, action = intent.action.name,
@@ -866,6 +897,9 @@ private fun MessageNode.toEntity() = MessageNodeEntity(
 private fun ContentBlock.toEntity(messageId: MessageNodeId, position: Int): MessageContentBlockEntity = when (this) {
     is ContentBlock.Text -> MessageContentBlockEntity(messageId.value, position, "TEXT", text, null, null, null, null, null, null, null, null, schemaVersion)
     is ContentBlock.Reasoning -> MessageContentBlockEntity(messageId.value, position, "REASONING", text, null, null, null, null, null, null, null, null, schemaVersion)
+    is ContentBlock.ProviderToolCall -> MessageContentBlockEntity(
+        messageId.value, position, "PROVIDER_TOOL_CALL", callId, null, null, null, null, null, null, toolName, argumentsJson, schemaVersion,
+    )
     is ContentBlock.Attachment -> MessageContentBlockEntity(
         // Schema 7 retains this column for compatibility. P3-G stores only the stable ID here,
         // never an app-private storage key; Attachment Domain resolves the asset separately.
@@ -880,6 +914,12 @@ private fun ContentBlock.toEntity(messageId: MessageNodeId, position: Int): Mess
 private fun MessageContentBlockEntity.toDomain(): ContentBlock = when (kind) {
     "TEXT" -> ContentBlock.Text(requireNotNull(textContent) { "文本内容块缺少正文。" }, schemaVersion)
     "REASONING" -> ContentBlock.Reasoning(requireNotNull(textContent) { "思考过程内容块缺少正文。" }, schemaVersion)
+    "PROVIDER_TOOL_CALL" -> ContentBlock.ProviderToolCall(
+        textContent,
+        requireNotNull(toolName) { "Provider Tool Call 缺少名称。" },
+        requireNotNull(toolSafeSummary) { "Provider Tool Call 缺少参数。" },
+        schemaVersion,
+    )
     "ATTACHMENT" -> ContentBlock.Attachment(
         ConversationAttachmentReference(
             id = AttachmentId(requireNotNull(attachmentId) { "附件内容块缺少 ID。" }),

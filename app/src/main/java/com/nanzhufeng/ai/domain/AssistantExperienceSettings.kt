@@ -8,13 +8,66 @@ package com.nanzhufeng.ai.domain
  * is an explicit all-chat preference; the memory switch controls only the relevant long-term
  * Memory retrieval path and never hides the user's current message.
  */
-enum class ConversationStyle {
-    DEFAULT,
-    DIRECT,
-    PROFESSIONAL,
-    FRIENDLY,
-    EFFICIENT,
-    HUMOROUS,
+enum class ConversationStyle(val persistedId: String) {
+    DEFAULT("DEFAULT"),
+    DIRECT("DIRECT"),
+    PROFESSIONAL("PROFESSIONAL"),
+    FRIENDLY("FRIENDLY"),
+    EFFICIENT("EFFICIENT"),
+    HUMOROUS("HUMOROUS"),
+    ;
+
+    fun effective(): ConversationStyle = this
+
+    companion object {
+        val selectable: List<ConversationStyle> = listOf(DEFAULT, DIRECT, PROFESSIONAL, FRIENDLY, EFFICIENT, HUMOROUS)
+
+        fun fromPersistedIdOrNull(value: String?): ConversationStyle? = entries.firstOrNull {
+            it.persistedId.equals(value?.trim(), ignoreCase = true) || it.name.equals(value?.trim(), ignoreCase = true)
+        }
+
+        fun fromPersistedId(value: String?): ConversationStyle = fromPersistedIdOrNull(value) ?: DEFAULT
+    }
+}
+
+data class ConversationStyleDefinition(
+    val label: String,
+    val summary: String,
+    val instruction: String,
+)
+
+/** One product definition owns both the selection explanation and the provider instruction. */
+fun ConversationStyle.definition(): ConversationStyleDefinition = when (effective()) {
+    ConversationStyle.DEFAULT -> ConversationStyleDefinition(
+        label = "默认",
+        summary = "自然、清晰地回答，按问题复杂度调整详略；先解决当前问题，不刻意强化某一种表达风格。",
+        instruction = "对话方式：默认。自然、清晰地回答，并按问题复杂度、风险和用户需要调整详略。优先解决当前问题，不刻意强化直言、专业、亲和、高效或幽默中的某一种表达风格。保持事实准确，明确区分已确认事实、合理判断与待验证信息；发现关键前提有误时应说明并纠正。",
+    )
+    ConversationStyle.DIRECT -> ConversationStyleDefinition(
+        label = "直言不讳",
+        summary = "先说结论，直接指出问题，减少铺垫。事实和现实约束优先；发现错误、情绪化、过度自信或悲观时明确纠正，可以反驳但不羞辱、不武断。",
+        instruction = "对话方式：直言不讳。先说结论，直接指出问题，减少与判断和行动无关的铺垫。以可核验的事实、证据和现实约束为优先，不要因为用户立场强烈就迎合或违背事实妥协。发现用户观点错误、重要前提不成立、表达明显情绪化、过度自信或过度悲观时，应明确指出问题、直击要害，并给出针对性提醒或修正方向。可以反驳用户或与用户讨论不同观点，但不得无依据武断、羞辱、嘲讽或人身攻击。清楚区分已确认事实、合理判断与待验证信息，不把不确定推断写成事实。",
+    )
+    ConversationStyle.PROFESSIONAL -> ConversationStyleDefinition(
+        label = "专业可靠",
+        summary = "像严谨的专业顾问。先核对事实与条件，结构化说明依据、推理、风险和限制；不编造确定性。",
+        instruction = "对话方式：专业可靠。像严谨的专业顾问一样回答：先核对事实、口径、条件和关键前提，再用清晰结构说明依据、推理过程、风险、限制和适用范围。明确区分已确认事实、专业判断和待验证信息；不编造确定性，也不省略会改变结论的重要前提。发现用户前提或结论有误时应有依据地纠正，不得为了显得专业而使用无法证明的断言。",
+    )
+    ConversationStyle.FRIENDLY -> ConversationStyleDefinition(
+        label = "亲和友善",
+        summary = "先理解你的处境和情绪，用温和、耐心的方式解释并给出支持；仍会纠正明显错误，不用安慰替代事实。",
+        instruction = "对话方式：亲和友善。先理解用户的处境、目标和情绪，用温和、耐心、容易接受的方式解释，并给出实际支持。同理不等于迎合：对明显错误的观点、有害或不现实的判断仍要明确纠正，不用安慰取代事实、风险和必要的限制。纠正时说清依据和可行下一步，不羞辱、不责备用户，也不把不确定判断写成事实。",
+    )
+    ConversationStyle.EFFICIENT -> ConversationStyleDefinition(
+        label = "高效务实",
+        summary = "回答精简。先给结论、优先级和下一步，只保留影响决策的内容；主动指出关键阻碍、取舍、成本和停止条件。",
+        instruction = "对话方式：高效务实。回答务必精简：先给出结论、优先级和立即可执行的下一步，只保留会影响判断、决策或行动的内容。主动指出当前最关键的阻碍、取舍、成本、依赖和停止条件，给出能真正执行的最短路径。不得为了简短而省略会改变结论的风险、必要依据或不确定性；发现用户方案不可行时直接说明原因并给出更可行的替代方案。",
+    )
+    ConversationStyle.HUMOROUS -> ConversationStyleDefinition(
+        label = "风趣搞笑",
+        summary = "在事实准确和任务完成不受影响时，用适度幽默和类比降低阅读压力；严肃、高风险或负面情绪场景会自动收敛。",
+        instruction = "对话方式：风趣搞笑。在事实准确、结论清晰且任务完成不受影响的前提下，可以用适度幽默、类比和轻松表达降低阅读压力。不得牺牲准确性，不得嘲讽或羞辱用户，不拿用户的敏感处境、痛苦、风险或负面情绪开玩笑。在医疗、法律、投资、安全等高风险任务，严肃话题或用户明显负面情绪时，自动收敛幽默。幽默不得取代事实、必要风险提示、不确定性或可执行结论。",
+    )
 }
 
 data class AssistantExperienceSettings(
@@ -51,7 +104,7 @@ data class AssistantExperienceSettings(
     /** A transient system-message addition. It is never written to call audits or diagnostics. */
     fun modelInstruction(isFirstAssistantReply: Boolean = false): String? {
         val fields = buildList {
-            conversationStyle.instruction()?.let(::add)
+            add(conversationStyle.definition().instruction)
             // A nickname is direct, user-provided personalization. It must not disappear just
             // because long-term memory retrieval is unavailable, disabled, or intentionally
             // omitted from this request.
@@ -160,15 +213,6 @@ private fun Char.isReasoningTailDecoration(): Boolean = when (Character.getType(
     Character.FORMAT.toInt(),
     -> true
     else -> false
-}
-
-private fun ConversationStyle.instruction(): String? = when (this) {
-    ConversationStyle.DEFAULT -> null
-    ConversationStyle.DIRECT -> "对话方式：直言不讳。先给结论，清楚区分事实、判断与待验证信息；直接指出风险和关键分歧，不要空泛安慰。"
-    ConversationStyle.PROFESSIONAL -> "对话方式：专业可靠。以准确、严谨、可追溯为优先；用清晰结构解释依据，并明确不确定性。"
-    ConversationStyle.FRIENDLY -> "对话方式：亲和友善。语气温和自然，但结论与建议仍须明确、具体，避免过度迎合。"
-    ConversationStyle.EFFICIENT -> "对话方式：高效务实。优先给可执行结论和下一步；只保留解决问题必要的背景与分析。"
-    ConversationStyle.HUMOROUS -> "对话方式：风趣搞笑。可以自然使用轻松、聪明的幽默来增进可读性，但不得牺牲准确性、清晰度、风险提示或任务结论；严肃、高风险或用户明确要求正式时保持克制。"
 }
 
 interface AssistantExperienceSettingsRepository {

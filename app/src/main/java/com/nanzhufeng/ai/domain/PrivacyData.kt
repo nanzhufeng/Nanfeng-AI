@@ -15,7 +15,16 @@ data class PrivacyInventory(
     val credentialReferencePresent: Boolean,
     val internetPermissionPresent: Boolean,
     val importedZipCleanup: ImportedZipCleanupStatus = ImportedZipCleanupStatus(),
-)
+) {
+    companion object {
+        /** Immediate first-frame value when an older install has not produced a durable snapshot yet. */
+        val EmptySnapshot = PrivacyInventory(
+            aggregates = emptyList(),
+            credentialReferencePresent = false,
+            internetPermissionPresent = false,
+        )
+    }
+}
 
 data class ImportedZipCleanupStatus(
     /** Original packages still occupying app-private storage. Their byte size is deliberately not user-facing. */
@@ -97,6 +106,8 @@ sealed interface SecurityDiagnosticResult {
 }
 
 interface PrivacyDataManager {
+    /** Always-available aggregate-only snapshot. It contains no titles, body text, paths or file names. */
+    fun cachedInventory(): PrivacyInventory = PrivacyInventory.EmptySnapshot
     fun inventory(): PrivacyInventory
     fun preview(scope: PrivacyDeleteScope, selectedTaskIds: Set<String> = emptySet()): PrivacyDeletionPreview
     fun delete(request: PrivacyDeletionRequest): PrivacyDeletionResult

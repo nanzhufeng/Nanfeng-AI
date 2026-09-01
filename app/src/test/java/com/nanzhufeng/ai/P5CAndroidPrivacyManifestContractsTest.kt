@@ -25,5 +25,9 @@ class P5CAndroidPrivacyManifestContractsTest {
         assertFalse(manifest.contains("RECORD_AUDIO"))
     }
 
-    @Test fun `manifest documents disabled provider boundary`() = assertTrue(manifest.contains("OpenRouterEgressPolicy.Disabled"))
+    @Test fun `manifest documents the current user initiated network boundary`() {
+        assertTrue(manifest.contains("user-initiated model calls"))
+        assertTrue(manifest.contains("credentials remain scoped to their owner"))
+        assertFalse(manifest.contains("OpenRouterEgressPolicy.Disabled"))
+    }
 }

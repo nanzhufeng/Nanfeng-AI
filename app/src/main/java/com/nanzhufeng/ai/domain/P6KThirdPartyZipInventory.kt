@@ -238,6 +238,19 @@ data class P6KZipImportTask(
     val items: List<P6KZipImportItem> = emptyList(),
     val assets: List<P6KZipAssetCandidate> = emptyList(),
     val profile: P6KImportedProfileCandidate = P6KImportedProfileCandidate(),
+    val receipt: P6KImportBatchReceipt? = null,
+)
+
+data class P6KImportBatchReceipt(
+    val status: String,
+    val importedNewConversations: Int,
+    val importedNewMessages: Int,
+    val importedNewAttachments: Int,
+    val reusedAssetBytes: Long,
+    val skippedExisting: Int,
+    val skippedUserDeleted: Int,
+    val identityConflicts: Int,
+    val failed: Int,
 )
 
 interface P6KZipImportTaskRepository {
@@ -251,6 +264,7 @@ sealed interface P6KZipCommitResult {
     data class Created(val conversationId: ConversationId) : P6KZipCommitResult
     data class Replayed(val conversationId: ConversationId) : P6KZipCommitResult
     data class Merged(val conversationId: ConversationId, val appendedMessageCount: Int) : P6KZipCommitResult
+    data object SkippedUserDeleted : P6KZipCommitResult
     data object ConflictReimport : P6KZipCommitResult
     data object Failed : P6KZipCommitResult
 }

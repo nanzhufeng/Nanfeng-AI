@@ -1,6 +1,7 @@
 package com.nanzhufeng.ai.ui
 
 import com.nanzhufeng.ai.domain.ConversationAttachmentSearchHit
+import com.nanzhufeng.ai.domain.ConversationSearchHit
 import com.nanzhufeng.ai.domain.GlmOcrDocumentSearchHit
 import com.nanzhufeng.ai.domain.normalizedAttachmentExtension
 import java.time.Instant
@@ -38,6 +39,31 @@ internal fun nextAttachmentSortMode(
     } else {
         ConversationAttachmentSortMode.SIZE_DESCENDING
     }
+}
+
+/** Text hits and attachment hits share the same visible time/size controls.  The default keeps
+ * the repository's relevance or browsing order; an explicit choice is a stable global order. */
+internal fun sortedConversationSearchHits(
+    hits: List<ConversationSearchHit>,
+    sortMode: ConversationAttachmentSortMode,
+): List<ConversationSearchHit> = when (sortMode) {
+    ConversationAttachmentSortMode.DEFAULT -> hits
+    ConversationAttachmentSortMode.TIME_DESCENDING -> hits.sortedWith(
+        compareByDescending<ConversationSearchHit> { it.timestampEpochMs }.thenBySearchTextIdentity(),
+    )
+    ConversationAttachmentSortMode.TIME_ASCENDING -> hits.sortedWith(
+        compareBy<ConversationSearchHit> { it.timestampEpochMs }.thenBySearchTextIdentity(),
+    )
+    ConversationAttachmentSortMode.SIZE_DESCENDING -> hits.sortedWith(
+        compareByDescending<ConversationSearchHit> { it.byteCount }
+            .thenByDescending { it.timestampEpochMs }
+            .thenBySearchTextIdentity(),
+    )
+    ConversationAttachmentSortMode.SIZE_ASCENDING -> hits.sortedWith(
+        compareBy<ConversationSearchHit> { it.byteCount }
+            .thenByDescending { it.timestampEpochMs }
+            .thenBySearchTextIdentity(),
+    )
 }
 
 /** File-tab refinement only. Other attachment categories retain their existing exact owners. */
@@ -185,6 +211,10 @@ private fun Comparator<ConversationAttachmentSearchHit>.thenBySearchAttachmentId
     thenBy { it.conversationId.value }
         .thenBy { it.messageNodeId.value }
         .thenBy { it.attachment.id.value }
+
+private fun Comparator<ConversationSearchHit>.thenBySearchTextIdentity(): Comparator<ConversationSearchHit> =
+    thenBy { it.conversationId.value }
+        .thenBy { it.messageNodeId?.value.orEmpty() }
 
 /** Lazy item indices include section headings; these resolvers keep an attachment as the
  * fallback anchor if the result set changes while its owner conversation is open. */

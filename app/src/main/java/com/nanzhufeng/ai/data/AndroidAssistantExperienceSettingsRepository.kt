@@ -21,9 +21,7 @@ class AndroidAssistantExperienceSettingsRepository(context: Context) : Assistant
         librarySearchEnabled = preferences.getBoolean(LIBRARY_SEARCH_ENABLED, true),
         autoHistoryKnowledgeEnabled = preferences.getBoolean(AUTO_HISTORY_KNOWLEDGE_ENABLED, false),
         webSearchEnabled = preferences.getBoolean(WEB_SEARCH_ENABLED, true),
-        conversationStyle = runCatching {
-            ConversationStyle.valueOf(preferences.getString(CONVERSATION_STYLE, null).orEmpty())
-        }.getOrDefault(ConversationStyle.DEFAULT),
+        conversationStyle = ConversationStyle.fromPersistedId(preferences.getString(CONVERSATION_STYLE, null)),
     )
 
     override fun save(settings: AssistantExperienceSettings): AssistantExperienceSettings {
@@ -38,7 +36,7 @@ class AndroidAssistantExperienceSettingsRepository(context: Context) : Assistant
                 .putBoolean(LIBRARY_SEARCH_ENABLED, settings.librarySearchEnabled)
                 .putBoolean(AUTO_HISTORY_KNOWLEDGE_ENABLED, settings.autoHistoryKnowledgeEnabled)
                 .putBoolean(WEB_SEARCH_ENABLED, settings.webSearchEnabled)
-                .putString(CONVERSATION_STYLE, settings.conversationStyle.name)
+                .putString(CONVERSATION_STYLE, settings.conversationStyle.persistedId)
                 .commit(),
         ) { "个性化与记忆设置无法写入本机。" }
         return load()

@@ -12,18 +12,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.NavigateNext
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.RestoreFromTrash
+import androidx.compose.material.icons.rounded.Unarchive
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
@@ -40,12 +48,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.nanzhufeng.ai.domain.CandidateReviewStatus
 import com.nanzhufeng.ai.domain.CaptureSourceType
 import com.nanzhufeng.ai.domain.KnowledgeDetail
-import com.nanzhufeng.ai.domain.KnowledgeDuplicateCandidatesRejection
 import com.nanzhufeng.ai.domain.KnowledgeDuplicateCandidatesResult
-import com.nanzhufeng.ai.domain.KnowledgeDuplicateReason
 import com.nanzhufeng.ai.domain.KnowledgeItemId
 import com.nanzhufeng.ai.domain.KnowledgeListEntry
 import com.nanzhufeng.ai.domain.ReadKnowledgeLibraryUseCase
@@ -82,6 +87,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -93,7 +100,6 @@ data class KnowledgeLibraryUiState(
     val managedDetail: KnowledgeSnapshot? = null,
     val query: String = "",
     val status: KnowledgeStatus = KnowledgeStatus.ACTIVE,
-    val sourceType: CaptureSourceType? = null,
     val editing: Boolean = false,
     val creating: Boolean = false,
     val editTitle: String = "",
@@ -129,13 +135,12 @@ class KnowledgeLibraryViewModel(
 ) : ViewModel() {
     var state by mutableStateOf(KnowledgeLibraryUiState())
         private set
+    private var reloadJob: Job? = null
+    private var reloadGeneration = 0L
 
     fun showDialog() {
-        state = state.copy(dialogVisible = true, isLoading = true, detail = null, duplicateCandidates = null)
-        viewModelScope.launch {
-            val entries = withContext(Dispatchers.IO) { filteredEntries() }
-            state = KnowledgeLibraryUiState(dialogVisible = true, entries = entries)
-        }
+        state = KnowledgeLibraryUiState(dialogVisible = true, isLoading = true)
+        reload(clearLoading = true)
     }
 
     fun openDetail(id: KnowledgeItemId) {
@@ -156,9 +161,12 @@ class KnowledgeLibraryViewModel(
         if (!state.isLoading) state = state.copy(dialogVisible = false, detail = null, managedDetail = null, duplicateCandidates = null)
     }
 
-    fun updateSearch(value: String) { state = state.copy(query = value); reload() }
+    fun updateSearch(value: String) {
+        if (state.query == value) return
+        state = state.copy(query = value)
+        reload(debounce = value.isNotBlank())
+    }
     fun setStatus(status: KnowledgeStatus) { state = state.copy(status = status); reload() }
-    fun setSourceType(sourceType: CaptureSourceType?) { state = state.copy(sourceType = sourceType); reload() }
     fun archiveOrRestore() {
         val snapshot = state.managedDetail ?: return
         val action = if (snapshot.lifecycle.status == KnowledgeStatus.ARCHIVED) KnowledgeIntentAction.RESTORE else KnowledgeIntentAction.ARCHIVE
@@ -284,16 +292,24 @@ class KnowledgeLibraryViewModel(
     private fun mutate(intent: KnowledgeIntent) = viewModelScope.launch {
         withContext(Dispatchers.IO) { manageKnowledge.execute(intent) }; backToList(); reload()
     }
-    private fun reload() = viewModelScope.launch {
-        val entries = withContext(Dispatchers.IO) { filteredEntries() }; state = state.copy(entries = entries)
+    private fun reload(debounce: Boolean = false, clearLoading: Boolean = false) {
+        val query = state.query
+        val status = state.status
+        val generation = ++reloadGeneration
+        reloadJob?.cancel()
+        reloadJob = viewModelScope.launch {
+            if (debounce) delay(180)
+            val entries = withContext(Dispatchers.IO) { filteredEntries(query, status) }
+            if (generation == reloadGeneration && state.query == query && state.status == status) {
+                state = state.copy(entries = entries, isLoading = if (clearLoading) false else state.isLoading)
+            }
+        }
     }
-    private fun filteredEntries(): List<KnowledgeListEntry> {
+    private fun filteredEntries(query: String, status: KnowledgeStatus): List<KnowledgeListEntry> {
         // P2's library projection is intentionally ACTIVE-only. P4-E lifecycle filters must instead
         // project the same filtered Knowledge snapshot, otherwise an archived/trash row could not be restored.
-        return manageKnowledge.search(KnowledgeSearchFilter(query = state.query, status = state.status, sourceType = state.sourceType)).mapNotNull { result ->
-            manageKnowledge.detail(result.id)?.item?.let { item ->
-                KnowledgeListEntry(item.id, item.title, item.body, item.sourceEvidence, item.createdAt)
-            }
+        return manageKnowledge.search(KnowledgeSearchFilter(query = query, status = status)).map { result ->
+            KnowledgeListEntry(result.id, result.title, result.snippet, result.sourceEvidence, result.createdAt)
         }
     }
 
@@ -331,10 +347,8 @@ fun KnowledgeLibraryPage(
     state: KnowledgeLibraryUiState,
     currentConversationId: ConversationId?,
     onOpenDetail: (KnowledgeItemId) -> Unit,
-    onBackToList: () -> Unit,
     onSearch: (String) -> Unit,
     onStatus: (KnowledgeStatus) -> Unit,
-    onSource: (CaptureSourceType?) -> Unit,
     onArchiveRestore: () -> Unit,
     onDeleteRestore: () -> Unit,
     onStartCreate: () -> Unit,
@@ -344,9 +358,6 @@ fun KnowledgeLibraryPage(
     onEditTags: (String) -> Unit,
     onCancelEdit: () -> Unit,
     onSaveEdit: () -> Unit,
-    onFindDuplicateCandidates: () -> Unit,
-    onStartRelationshipBuilder: () -> Unit,
-    onShowRelationshipList: () -> Unit,
     onRequestHistoryCuration: (ConversationId?) -> Unit,
     onConfirmHistoryCuration: () -> Unit,
     onCancelHistoryCuration: () -> Unit,
@@ -355,23 +366,19 @@ fun KnowledgeLibraryPage(
 ) {
     val detail = state.detail
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (detail != null) {
-                TextButton(onClick = onBackToList, enabled = !state.isLoading) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回知识列表")
-                }
-            }
-            Text(if (detail == null) "本地知识" else "知识详情", fontWeight = FontWeight.SemiBold)
-        }
         when {
             state.isLoading -> KnowledgeLoading()
             state.editing -> KnowledgeEditor(state, onEditTitle, onEditBody, onEditTags)
-            detail != null -> KnowledgeDetailContent(detail, state.managedDetail, state.duplicateCandidates, state.relationshipUi.records.size, onArchiveRestore, onDeleteRestore, onStartEdit, onFindDuplicateCandidates, onStartRelationshipBuilder, onShowRelationshipList)
+            detail != null -> KnowledgeDetailContent(detail, state.managedDetail, onArchiveRestore, onDeleteRestore, onStartEdit)
             else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                KnowledgeStatusSelector(state.status, onStatus)
                 Text("搜索", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(state.query, onSearch, Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("搜索标题、正文、标签、来源") })
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { KnowledgeStatus.entries.forEach { status -> TextButton(onClick = { onStatus(status) }) { Text(if (state.status == status) "● ${status.label()}" else status.label()) } }; TextButton(onClick = onStartCreate) { Text("新建") }; TextButton(onClick = { onRequestHistoryCuration(currentConversationId) }, enabled = currentConversationId != null) { Text("整理当前对话") } }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf<CaptureSourceType?>(null, CaptureSourceType.HISTORY_CONVERSATION, CaptureSourceType.MANUAL_TEXT, CaptureSourceType.ANDROID_TEXT_SHARE, CaptureSourceType.IMAGE).forEach { source -> TextButton(onClick = { onSource(source) }) { Text(if (state.sourceType == source) "● ${source.label()}" else source.label()) } } }
+                KnowledgePrimaryActions(
+                    canOrganizeConversation = currentConversationId != null,
+                    onStartCreate = onStartCreate,
+                    onOrganizeConversation = { currentConversationId?.let(onRequestHistoryCuration) },
+                )
                 if (state.entries.isEmpty()) KnowledgeEmptyState() else KnowledgeList(state.entries, onOpenDetail)
             }
         }
@@ -413,6 +420,74 @@ fun KnowledgeLibraryPage(
             },
             dismissButton = { TextButton(onClick = onCancelHistoryCuration, enabled = !state.historyCurationLoading) { Text("取消") } },
         )
+    }
+}
+
+@Composable
+private fun KnowledgeStatusSelector(
+    selected: KnowledgeStatus,
+    onSelect: (KnowledgeStatus) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = NeutralSystemSurface,
+        shape = P5AInteractiveShape,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            KnowledgeStatus.entries.forEach { status ->
+                val isSelected = status == selected
+                Surface(
+                    onClick = { onSelect(status) },
+                    modifier = Modifier.weight(1f).height(38.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    contentColor = if (isSelected) Color.White else BodyText,
+                    shape = P5AInteractiveShape,
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(status.filterLabel(), style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KnowledgePrimaryActions(
+    canOrganizeConversation: Boolean,
+    onStartCreate: () -> Unit,
+    onOrganizeConversation: () -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = onStartCreate,
+            modifier = Modifier.weight(1f).height(46.dp),
+            shape = P5AInteractiveShape,
+            colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText),
+        ) {
+            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.size(6.dp))
+            Text("新建知识")
+        }
+        if (canOrganizeConversation) {
+            Button(
+                onClick = onOrganizeConversation,
+                modifier = Modifier.weight(1f).height(46.dp),
+                shape = P5AInteractiveShape,
+                colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText),
+            ) {
+                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.size(6.dp))
+                Text("整理当前对话")
+            }
+        }
     }
 }
 
@@ -473,7 +548,13 @@ private fun KnowledgeList(entries: List<KnowledgeListEntry>, onOpenDetail: (Know
 }
 
 @Composable
-private fun KnowledgeDetailContent(detail: KnowledgeDetail, managed: KnowledgeSnapshot?, duplicateCandidates: KnowledgeDuplicateCandidatesResult?, relationshipCount: Int, onArchiveRestore: () -> Unit, onDeleteRestore: () -> Unit, onStartEdit: () -> Unit, onFindDuplicateCandidates: () -> Unit, onStartRelationshipBuilder: () -> Unit, onShowRelationshipList: () -> Unit) {
+private fun KnowledgeDetailContent(
+    detail: KnowledgeDetail,
+    managed: KnowledgeSnapshot?,
+    onArchiveRestore: () -> Unit,
+    onDeleteRestore: () -> Unit,
+    onStartEdit: () -> Unit,
+) {
     val item = detail.item
     Column(
         modifier = Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState()),
@@ -485,71 +566,76 @@ private fun KnowledgeDetailContent(detail: KnowledgeDetail, managed: KnowledgeSn
         Text("来源", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         item.sourceEvidence.forEach { source ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(source.sourceLabel(), fontWeight = FontWeight.Medium)
-                Text("来源引用：${source.sourceReference ?: "未提供"}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                Text("接收时间：${formatKnowledgeTime(source.receivedAt)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text(source.sourceType.displayLabel(), fontWeight = FontWeight.Medium)
+                Text(formatKnowledgeTime(source.receivedAt), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             }
         }
         if (item.attachments.isNotEmpty()) {
-            Text("关联附件：${item.attachments.size} 项（仅保留本地引用，未显示原图或附件正文）", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("附件：${item.attachments.size} 项", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         }
         HorizontalDivider(color = NeutralBorder)
-        Text("生成与保存溯源", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text("Candidate：${item.provenance.candidateId.value}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        Text("候选状态：${detail.candidateStatus?.toChineseLabel() ?: "历史知识未保留候选记录"}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        Text("Invocation：${item.provenance.invocationId.value}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        Text(
-            modelNameAnnotatedText(
-                prefix = "服务：${item.provenance.providerId.toDisplayLabel()} · 模型：",
-                modelName = item.provenance.modelId,
-                suffix = " · Harness v${item.provenance.harnessVersion}",
-            ),
-            color = SecondaryText,
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text("保存时间：${formatKnowledgeTime(item.createdAt)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         managed?.let { snapshot ->
-            Text("状态：${snapshot.lifecycle.status.label()} · ${snapshot.lifecycle.scope.name}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Text("标签：${snapshot.lifecycle.tags.ifEmpty { setOf("未标注") }.joinToString(" · ")}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Text("修订：${snapshot.revisions.size} 条", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Row { TextButton(onClick = onStartEdit, enabled = snapshot.lifecycle.status != KnowledgeStatus.DELETED) { Text("编辑") }; TextButton(onClick = onArchiveRestore) { Text(if (snapshot.lifecycle.status == KnowledgeStatus.ARCHIVED) "恢复归档" else "归档") }; TextButton(onClick = onDeleteRestore) { Text(if (snapshot.lifecycle.status == KnowledgeStatus.DELETED) "从回收站恢复" else "移入回收站") } }
-            if (snapshot.lifecycle.status == KnowledgeStatus.ACTIVE) {
-                TextButton(onClick = onFindDuplicateCandidates) { Text("本机查找重复候选") }
-                TextButton(onClick = onStartRelationshipBuilder) { Text("建立本地关系") }
+            Surface(color = ForegroundSurface, shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("保存于 ${formatKnowledgeTime(item.createdAt)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text("状态 · ${snapshot.lifecycle.status.label()}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text("标签 · ${snapshot.lifecycle.tags.ifEmpty { setOf("未标注") }.joinToString(" · ")}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                }
             }
-            TextButton(onClick = onShowRelationshipList) { Text("查看关系（$relationshipCount）") }
+            KnowledgeDetailActions(snapshot.lifecycle.status, onStartEdit, onArchiveRestore, onDeleteRestore)
         }
-        duplicateCandidates?.let { DuplicateCandidatesContent(it) }
-        Text("不会显示 API Key、完整 Prompt、完整服务响应、原图或附件正文。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
     }
 }
 
 @Composable
-private fun DuplicateCandidatesContent(result: KnowledgeDuplicateCandidatesResult) = Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    HorizontalDivider(color = NeutralBorder)
-    Text("重复候选（仅本机只读）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-    when (result) {
-        is KnowledgeDuplicateCandidatesResult.Available -> if (result.candidates.isEmpty()) {
-            Text("未发现同一范围内的确定性重复候选。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        } else {
-            Text("不会自动合并、建立关系或改变任何 Knowledge。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            result.candidates.forEach { candidate ->
-                Text("${candidate.title} · r${candidate.revision} · ${candidate.reasons.joinToString("、") { it.label() }}", color = BodyText, style = MaterialTheme.typography.bodySmall)
-            }
+private fun KnowledgeDetailActions(
+    status: KnowledgeStatus,
+    onEdit: () -> Unit,
+    onArchiveRestore: () -> Unit,
+    onDeleteRestore: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (status != KnowledgeStatus.DELETED) {
+            KnowledgeDetailIconAction(Icons.Rounded.Edit, "编辑", onEdit)
         }
-        is KnowledgeDuplicateCandidatesResult.Rejected -> Text(result.code.label(), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        if (status != KnowledgeStatus.DELETED) {
+            KnowledgeDetailIconAction(
+                icon = if (status == KnowledgeStatus.ARCHIVED) Icons.Rounded.Unarchive else Icons.Rounded.Archive,
+                contentDescription = if (status == KnowledgeStatus.ARCHIVED) "恢复归档" else "归档",
+                onClick = onArchiveRestore,
+            )
+        }
+        KnowledgeDetailIconAction(
+            icon = if (status == KnowledgeStatus.DELETED) Icons.Rounded.RestoreFromTrash else Icons.Rounded.DeleteOutline,
+            contentDescription = if (status == KnowledgeStatus.DELETED) "从回收站恢复" else "移入回收站",
+            onClick = onDeleteRestore,
+            danger = status != KnowledgeStatus.DELETED,
+        )
     }
 }
 
-private fun KnowledgeDuplicateReason.label(): String = when (this) {
-    KnowledgeDuplicateReason.EXACT_CONTENT -> "内容完全相同"
-    KnowledgeDuplicateReason.SAME_NORMALIZED_TITLE -> "规范化标题相同"
-}
-
-private fun KnowledgeDuplicateCandidatesRejection.label(): String = when (this) {
-    KnowledgeDuplicateCandidatesRejection.MISSING_KNOWLEDGE -> "该 Knowledge 已不存在，未返回候选。"
-    KnowledgeDuplicateCandidatesRejection.INELIGIBLE_KNOWLEDGE -> "仅活动 Knowledge 可查找候选。"
-    KnowledgeDuplicateCandidatesRejection.HIGH_SENSITIVITY -> "检测到高敏正文，未返回任何候选。"
+@Composable
+private fun KnowledgeDetailIconAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    danger: Boolean = false,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
+        shape = CircleShape,
+        color = ForegroundSurface,
+        contentColor = if (danger) ErrorRed else MaterialTheme.colorScheme.primary,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(20.dp))
+        }
+    }
 }
 
 @Composable private fun KnowledgeEditor(state: KnowledgeLibraryUiState, onTitle: (String) -> Unit, onBody: (String) -> Unit, onTags: (String) -> Unit) = Column(Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -574,7 +660,7 @@ private fun KnowledgeRejectionCode.label(): String = when (this) {
 }
 
 private fun KnowledgeStatus.label(): String = when (this) { KnowledgeStatus.ACTIVE -> "活动"; KnowledgeStatus.ARCHIVED -> "归档"; KnowledgeStatus.DELETED -> "回收站" }
-private fun CaptureSourceType?.label(): String = when (this) { null -> "全部来源"; CaptureSourceType.MANUAL_TEXT -> "手工"; CaptureSourceType.ANDROID_TEXT_SHARE -> "分享"; CaptureSourceType.IMAGE -> "图片"; CaptureSourceType.HISTORY_CONVERSATION -> "历史对话" }
+private fun KnowledgeStatus.filterLabel(): String = when (this) { KnowledgeStatus.ACTIVE -> "知识"; KnowledgeStatus.ARCHIVED -> "归档"; KnowledgeStatus.DELETED -> "回收站" }
 
 private fun SourceEvidence.sourceLabel(): String = when (sourceType) {
     CaptureSourceType.MANUAL_TEXT -> "手工文本"
@@ -583,18 +669,11 @@ private fun SourceEvidence.sourceLabel(): String = when (sourceType) {
     CaptureSourceType.HISTORY_CONVERSATION -> "历史对话整理${sourceReference?.let { "（$it）" }.orEmpty()}"
 }
 
-private fun CandidateReviewStatus.toChineseLabel(): String = when (this) {
-    CandidateReviewStatus.PENDING_REVIEW -> "待核对"
-    CandidateReviewStatus.SAVED -> "已确认保存"
-    CandidateReviewStatus.DISCARDED -> "已丢弃"
-}
-
-private fun com.nanzhufeng.ai.domain.ProviderId.toDisplayLabel(): String = when (this) {
-    com.nanzhufeng.ai.domain.ProviderId.MOCK -> "本地 Mock（非真实服务）"
-    com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter（未验证真实连接）"
-    com.nanzhufeng.ai.domain.ProviderId.QWEN -> "Qwen 官方直连（未验证真实连接）"
-    com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> "DeepSeek 官方直连（未验证真实连接）"
-    com.nanzhufeng.ai.domain.ProviderId.ZHIPU -> "智谱官方直连（未验证真实连接）"
+private fun CaptureSourceType.displayLabel(): String = when (this) {
+    CaptureSourceType.MANUAL_TEXT -> "手工创建"
+    CaptureSourceType.ANDROID_TEXT_SHARE -> "系统分享"
+    CaptureSourceType.IMAGE -> "图片整理"
+    CaptureSourceType.HISTORY_CONVERSATION -> "对话整理"
 }
 
 private fun formatKnowledgeTime(instant: Instant): String = instant.atZone(ZoneId.systemDefault()).format(KNOWLEDGE_TIME_FORMAT)

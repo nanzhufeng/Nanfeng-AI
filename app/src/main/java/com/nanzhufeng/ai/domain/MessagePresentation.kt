@@ -107,6 +107,7 @@ class MessagePresentationRenderer(private val parserVersion: Int = MESSAGE_PRESE
         } ?: SafeMarkdownParser.parse(identity, block.text)
         is ContentBlock.Attachment -> listOf(PresentationBlock.AttachmentReference(identity, block.attachment))
         is ContentBlock.Reasoning -> listOf(PresentationBlock.Reasoning(identity, block.text))
+        is ContentBlock.ProviderToolCall -> emptyList()
         is ContentBlock.ToolResult -> listOf(PresentationBlock.SafeToolSummary(identity, block.toolName, block.safeSummary))
     }
 
@@ -115,6 +116,7 @@ class MessagePresentationRenderer(private val parserVersion: Int = MESSAGE_PRESE
             is ContentBlock.Text -> "text|$schemaVersion|$text"
             is ContentBlock.Attachment -> "attachment|$schemaVersion|${attachment.id.value}|${attachment.mimeType}|${attachment.displayName}|${attachment.byteCount}|${attachment.sha256}"
             is ContentBlock.Reasoning -> "reasoning|$schemaVersion|$text"
+            is ContentBlock.ProviderToolCall -> "provider-tool-call|$schemaVersion|${callId.orEmpty()}|$toolName|$argumentsJson"
             is ContentBlock.ToolResult -> "tool|$schemaVersion|$toolName|$safeSummary"
         }
         return MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).joinToString("") { "%02x".format(it) }

@@ -543,12 +543,18 @@ class ProviderAdapterContractsTest {
     }
 
     @Test fun `Zhipu chat web search returns official sources without putting them in answer prose`() {
-        val decoded = ZhipuChatAdapter().decodeNonStreaming(
+        val adapter = ZhipuChatAdapter()
+        val decoded = adapter.decodeNonStreaming(
             """{"choices":[{"message":{"content":"已核验。"}}],"web_search":[{"search_result":[{"title":"官方公告","link":"https://example.test/official"}]}],"usage":{"prompt_tokens":6,"completion_tokens":2}}""",
         ) as? ChatAdapterDecodedResult.Text
 
         assertEquals("已核验。", decoded?.text)
         assertEquals(listOf(ProviderWebSource("https://example.test/official", "官方公告")), decoded?.webSources)
+
+        val streamedSources = adapter.decodeStreamingEvent(
+            """{"choices":[{"delta":{}}],"web_search":[{"search_result":[{"title":"政策原文","link":"https://example.test/policy"}]}]}""",
+        )
+        assertEquals(listOf(ProviderWebSource("https://example.test/policy", "政策原文")), streamedSources?.webSources)
     }
 
     @Test fun `attachment budget comes from model profile metadata rather than adapter constants`() {

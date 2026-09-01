@@ -37,13 +37,19 @@ data class ContextSelectionAuditRecord(
     /** Older records did not capture direct profile/current-path participation. */
     val participationAuditAvailable: Boolean = false,
     val retrievalAudit: ContextRetrievalAudit? = null,
+    /** Final answer fact. Null is reserved for legacy/unfinalized records. */
+    val webSearchUsed: Boolean? = null,
 )
 
 /** Local debugging only. Bodies, prompts, attachments, responses and credentials are forbidden. */
 interface ContextSelectionAuditStore {
     fun append(record: ContextSelectionAuditRecord)
     /** Associates the newest unbound context assembly for an attempt with its visible answer. */
-    fun bindAnswer(attemptId: NormalChatSendAttemptId, assistantMessageId: MessageNodeId)
+    fun bindAnswer(
+        attemptId: NormalChatSendAttemptId,
+        assistantMessageId: MessageNodeId,
+        webSearchUsed: Boolean? = null,
+    )
     /** Answer-level projection. Context diagnostics that never produced an answer stay hidden here. */
     fun forAssistantMessages(messageIds: Collection<MessageNodeId>): Map<MessageNodeId, List<ContextSelectionAuditRecord>>
     fun recent(limit: Int = 8): List<ContextSelectionAuditRecord>

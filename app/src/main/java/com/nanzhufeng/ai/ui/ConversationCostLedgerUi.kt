@@ -18,10 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.DocumentScanner
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -38,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -52,6 +47,9 @@ import com.nanzhufeng.ai.domain.ConversationCostEstimator
 import com.nanzhufeng.ai.domain.DirectChatCallAuditRecord
 import com.nanzhufeng.ai.domain.DirectChatCallAuditStore
 import com.nanzhufeng.ai.domain.HISTORY_CURATION_AUDIT_ALIAS
+import com.nanzhufeng.ai.domain.HistoryKnowledgeAutoCurationRunRecord
+import com.nanzhufeng.ai.domain.HistoryKnowledgeAutoCurationRunStatus
+import com.nanzhufeng.ai.domain.HistoryKnowledgeAutoCurationRunStore
 import com.nanzhufeng.ai.domain.ProviderCost
 import com.nanzhufeng.ai.domain.ProviderUsage
 import com.nanzhufeng.ai.domain.InvocationRecord
@@ -77,6 +75,7 @@ data class ConversationCostLedgerUiState(
     val titleGenerationRecords: List<ConversationTitleGenerationRecord> = emptyList(),
     val scheduledMonitorRuns: List<ScheduledMonitorRun> = emptyList(),
     val historyCurationCalls: List<DirectChatCallAuditRecord> = emptyList(),
+    val historyCurationRun: HistoryKnowledgeAutoCurationRunRecord? = null,
     val glmOcrCalls: List<InvocationRecord> = emptyList(),
 )
 
@@ -86,6 +85,7 @@ private data class CostLedgerRecords(
     val titles: List<ConversationTitleGenerationRecord>,
     val monitorRuns: List<ScheduledMonitorRun>,
     val historyCurationCalls: List<DirectChatCallAuditRecord>,
+    val historyCurationRun: HistoryKnowledgeAutoCurationRunRecord?,
     val glmOcrCalls: List<InvocationRecord>,
 )
 
@@ -103,6 +103,7 @@ class ConversationCostLedgerViewModel(
     private val titleGenerationRecords: ConversationTitleGenerationRecordStore,
     private val scheduledMonitorRepository: ScheduledMonitorRepository,
     private val directChatCallAudit: DirectChatCallAuditStore,
+    private val historyCurationRuns: HistoryKnowledgeAutoCurationRunStore,
     private val invocations: InvocationRepository,
 ) : ViewModel() {
     var state by mutableStateOf(ConversationCostLedgerUiState())
@@ -131,6 +132,7 @@ class ConversationCostLedgerViewModel(
             titles = titleGenerationRecords.listNewestFirst(),
             monitorRuns = scheduledMonitorRepository.listCostedRunsNewestFirst(),
             historyCurationCalls = directChatCallAudit.listNewestFirst().filter { it.modelAlias == HISTORY_CURATION_AUDIT_ALIAS },
+            historyCurationRun = historyCurationRuns.latest(),
             glmOcrCalls = invocations.listNewestFirst().filter { it.taskId.value.startsWith("glm-ocr:") },
         )
     }
@@ -142,6 +144,7 @@ class ConversationCostLedgerViewModel(
         titleGenerationRecords = titles,
         scheduledMonitorRuns = monitorRuns,
         historyCurationCalls = historyCurationCalls,
+        historyCurationRun = historyCurationRun,
         glmOcrCalls = glmOcrCalls,
     )
 
@@ -151,11 +154,12 @@ class ConversationCostLedgerViewModel(
         private val titleGenerationRecords: ConversationTitleGenerationRecordStore,
         private val scheduledMonitorRepository: ScheduledMonitorRepository,
         private val directChatCallAudit: DirectChatCallAuditStore,
+        private val historyCurationRuns: HistoryKnowledgeAutoCurationRunStore,
         private val invocations: InvocationRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ConversationCostLedgerViewModel::class.java))
-            return ConversationCostLedgerViewModel(attributions, reminderDraftRecords, titleGenerationRecords, scheduledMonitorRepository, directChatCallAudit, invocations) as T
+            return ConversationCostLedgerViewModel(attributions, reminderDraftRecords, titleGenerationRecords, scheduledMonitorRepository, directChatCallAudit, historyCurationRuns, invocations) as T
         }
     }
 }
@@ -204,10 +208,15 @@ fun ConversationCostLedgerPage(state: ConversationCostLedgerUiState) {
     Text("已返回输入和输出 Token 的调用会显示服务商金额或本地估算。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
 }
 
-private fun ConversationCostLedgerUiState.isEmpty() = records.isEmpty() && reminderDraftRecords.isEmpty() && titleGenerationRecords.isEmpty() && scheduledMonitorRuns.isEmpty() && historyCurationCalls.isEmpty() && glmOcrCalls.isEmpty()
+private fun ConversationCostLedgerUiState.isEmpty() = records.isEmpty() && reminderDraftRecords.isEmpty() && titleGenerationRecords.isEmpty() && scheduledMonitorRuns.isEmpty() && historyCurationCalls.isEmpty() && historyCurationRun == null && glmOcrCalls.isEmpty()
 
 @Composable private fun ConversationCostLedgerContent(state: ConversationCostLedgerUiState) {
-    var selectedSection by remember { mutableStateOf(ConversationCostLedgerSection.CONVERSATION) }
+    var selectedSection by remember {
+        mutableStateOf(
+            if (state.records.isEmpty() && state.titleGenerationRecords.isEmpty() && state.historyCurationRun != null) ConversationCostLedgerSection.HISTORY
+            else ConversationCostLedgerSection.CONVERSATION,
+        )
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ConversationCostSummary(state)
         ConversationCostCategoryGrid(state)
@@ -231,13 +240,16 @@ private fun ConversationCostLedgerUiState.isEmpty() = records.isEmpty() && remin
         state.historyCurationCalls.mapNotNull(DirectChatCallAuditRecord::estimatedCost) +
         state.glmOcrCalls.map { it.cost }
     ConversationCostSummarySection(title = "本机累计") {
+        if (exact.isEmpty() && estimated.isEmpty()) {
+            ConversationCostSummaryMetric(label = "计费调用", value = "暂无")
+        }
         if (exact.isNotEmpty()) {
-            CnyMoneyDisplay.totalLabel(exact, estimated = false)?.let { amount ->
+            CnyMoneyDisplay.summaryLabel(exact)?.let { amount ->
                 ConversationCostSummaryMetric(label = "OpenRouter 实际金额", value = amount, emphasizeValue = true)
             }
         }
         if (estimated.isNotEmpty()) {
-            CnyMoneyDisplay.totalLabel(estimated, estimated = true)?.let { amount ->
+            CnyMoneyDisplay.summaryLabel(estimated)?.let { amount ->
                 ConversationCostSummaryMetric(label = "本地估算", value = amount, emphasizeValue = true)
             }
         }
@@ -288,39 +300,31 @@ private data class ConversationCostCategoryMetric(
 private fun ConversationCostCategoryGrid(state: ConversationCostLedgerUiState) {
     if (state.records.isEmpty() && state.titleGenerationRecords.isEmpty() && state.historyCurationCalls.isEmpty() && state.glmOcrCalls.isEmpty()) return
 
-    val conversationExact = state.records.filter { it.costSource == ConversationCostSource.PROVIDER_RESPONSE }.map { it.cost }
-    val conversationEstimated = state.records.filter { it.costSource == ConversationCostSource.LOCAL_ESTIMATE }.map { it.cost }
     val conversationMetrics = buildList {
-        add(ConversationCostCategoryMetric("已返回 Token 的会话", "${state.records.size} 次"))
-        CnyMoneyDisplay.totalLabel(conversationExact, estimated = false)?.let { add(ConversationCostCategoryMetric("实际金额", it, true)) }
-        CnyMoneyDisplay.totalLabel(conversationEstimated, estimated = true)?.let { add(ConversationCostCategoryMetric("本地估算", it, true)) }
+        add(ConversationCostCategoryMetric("次数", "${state.records.size} 次"))
+        add(ConversationCostCategoryMetric("费用", CnyMoneyDisplay.summaryLabel(state.records.map { it.cost }) ?: "金额未知", true))
     }
     val titleMetrics = listOf(
-        ConversationCostCategoryMetric("已配置模型整理", "${state.titleGenerationRecords.size} 次"),
+        ConversationCostCategoryMetric("次数", "${state.titleGenerationRecords.size} 次"),
         ConversationCostCategoryMetric(
-            "本地估算",
-            CnyMoneyDisplay.totalLabel(state.titleGenerationRecords.map { it.cost }, estimated = true) ?: "金额未知",
+            "费用",
+            CnyMoneyDisplay.summaryLabel(state.titleGenerationRecords.map { it.cost }) ?: "金额未知",
             true,
         ),
     )
     val historyMetrics = listOf(
-        ConversationCostCategoryMetric("已返回 Token 的整理", "${state.historyCurationCalls.size} 次"),
+        ConversationCostCategoryMetric("次数", "${state.historyCurationCalls.size} 次"),
         ConversationCostCategoryMetric(
-            "本地估算",
-            CnyMoneyDisplay.totalLabel(state.historyCurationCalls.mapNotNull(DirectChatCallAuditRecord::estimatedCost), estimated = true) ?: "金额未知",
+            "费用",
+            CnyMoneyDisplay.summaryLabel(state.historyCurationCalls.mapNotNull(DirectChatCallAuditRecord::estimatedCost)) ?: "金额未知",
             true,
         ),
     )
     val ocrMetrics = listOf(
-        ConversationCostCategoryMetric("模型", "GLM-OCR"),
-        ConversationCostCategoryMetric("调用次数", "${state.glmOcrCalls.size} 次"),
+        ConversationCostCategoryMetric("次数", "${state.glmOcrCalls.size} 次"),
         ConversationCostCategoryMetric(
-            "已返回 Token",
-            "${state.glmOcrCalls.count { it.usage.inputTokens != null || it.usage.outputTokens != null }} 次",
-        ),
-        ConversationCostCategoryMetric(
-            "本地估算",
-            CnyMoneyDisplay.totalLabel(state.glmOcrCalls.map { it.cost }, estimated = true) ?: "金额未知",
+            "费用",
+            CnyMoneyDisplay.summaryLabel(state.glmOcrCalls.map { it.cost }) ?: "金额未知",
             true,
         ),
     )
@@ -334,16 +338,12 @@ private fun ConversationCostCategoryGrid(state: ConversationCostLedgerUiState) {
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
                 ConversationCostCategoryCell(
                     title = "会话",
-                    icon = Icons.Outlined.ChatBubbleOutline,
-                    tone = Color(0xFFD96A73),
                     metrics = conversationMetrics,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
                 VerticalDivider(color = NeutralBorder.copy(alpha = 0.66f))
                 ConversationCostCategoryCell(
                     title = "会话标题整理",
-                    icon = Icons.Outlined.Title,
-                    tone = Color(0xFFD58A3A),
                     metrics = titleMetrics,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
@@ -352,16 +352,12 @@ private fun ConversationCostCategoryGrid(state: ConversationCostLedgerUiState) {
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
                 ConversationCostCategoryCell(
                     title = "历史资料整理",
-                    icon = Icons.Outlined.History,
-                    tone = Color(0xFF4D86B8),
                     metrics = historyMetrics,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
                 VerticalDivider(color = NeutralBorder.copy(alpha = 0.66f))
                 ConversationCostCategoryCell(
                     title = "南枫转写",
-                    icon = Icons.Outlined.DocumentScanner,
-                    tone = BrandGreen,
                     metrics = ocrMetrics,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
@@ -373,29 +369,19 @@ private fun ConversationCostCategoryGrid(state: ConversationCostLedgerUiState) {
 @Composable
 private fun ConversationCostCategoryCell(
     title: String,
-    icon: ImageVector,
-    tone: Color,
     metrics: List<ConversationCostCategoryMetric>,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.heightIn(min = 156.dp).padding(horizontal = 14.dp, vertical = 16.dp),
+        modifier = modifier.padding(horizontal = 14.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            Surface(color = tone.copy(alpha = 0.13f), shape = RoundedCornerShape(13.dp), modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = tone, modifier = Modifier.size(21.dp))
-                }
-            }
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = BodyText,
-                modifier = Modifier.weight(1f),
-            )
-        }
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = BodyText,
+        )
         metrics.forEach { metric ->
             ConversationCostSummaryMetric(
                 label = metric.label,
@@ -481,6 +467,7 @@ private fun ConversationCostCategoryCell(
         else state.titleGenerationRecords.forEach { record -> ConversationTitleCostRow(record) }
     }
     ConversationCostLedgerSection.HISTORY -> {
+        state.historyCurationRun?.let { HistoryCurationRunStatusRow(it) }
         if (state.historyCurationCalls.isEmpty()) ConversationCostLedgerSectionEmpty(section)
         else state.historyCurationCalls.forEach { record -> HistoryCurationCostRow(record) }
     }
@@ -566,6 +553,41 @@ private fun ConversationCostCategoryCell(
     val amount = record.estimatedCost()?.let { CnyMoneyDisplay.label(it.totalMicros ?: 0L, it.currencyCode, estimated = true) } ?: "未产生可用金额"
     Text(amount, color = if (record.estimatedCost() == null) SecondaryText else AccentOrange, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
     Text("输入 ${record.inputTokens ?: "未知"} · 输出 ${record.outputTokens ?: "未知"} · ${record.status}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+}
+
+@Composable private fun HistoryCurationRunStatusRow(record: HistoryKnowledgeAutoCurationRunRecord) = Column(
+    Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("最近自动检查", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.weight(1f))
+        Text((record.completedAt ?: record.startedAt).costTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+    }
+    Text(
+        record.historyCurationRunLabel(),
+        color = if (record.status == HistoryKnowledgeAutoCurationRunStatus.FAILED || record.status == HistoryKnowledgeAutoCurationRunStatus.UNKNOWN) AccentOrange else SecondaryText,
+        style = MaterialTheme.typography.bodySmall,
+    )
+}
+
+private fun HistoryKnowledgeAutoCurationRunRecord.historyCurationRunLabel(): String = when (status) {
+    HistoryKnowledgeAutoCurationRunStatus.RUNNING -> "正在检查候选对话"
+    HistoryKnowledgeAutoCurationRunStatus.DISABLED -> "历史资料库已关闭，本轮未调用模型"
+    HistoryKnowledgeAutoCurationRunStatus.SAVED -> "已从本轮对话整理 1 条资料"
+    HistoryKnowledgeAutoCurationRunStatus.UNKNOWN -> "上次运行被中断；为避免重复发送，未自动重发"
+    HistoryKnowledgeAutoCurationRunStatus.FAILED -> when {
+        retryable -> "检查失败（${reasonCode ?: "网络错误"}），网络恢复后可重试"
+        reasonCode == "CREDENTIAL_MISSING" || reasonCode == "SERVICE_DISABLED" || reasonCode == "MODEL_UNAVAILABLE" -> "模型服务未配置完整，本轮未产生费用"
+        else -> "检查失败（${reasonCode ?: "未知错误"}），未自动重发"
+    }
+    HistoryKnowledgeAutoCurationRunStatus.NO_CANDIDATE -> when (reasonCode) {
+        "MODEL_NOT_ELIGIBLE" -> "模型判断本轮对话没有可沉淀资料"
+        "LOW_CONFIDENCE" -> "模型信心不足，本轮未写入资料库"
+        "DUPLICATE_CONTENT" -> "模型结果与已有资料重复，本轮未写入"
+        "ALREADY_PROCESSED", "EXISTING_SOURCE" -> "最近对话已检查过，本轮未调用模型"
+        "TOO_FEW_MESSAGES", "SOURCE_TOO_SHORT", "SOURCE_TOO_LONG", "NO_TEXT", "MISSING_CONVERSATION" -> "候选对话不符合整理条件，本轮未调用模型"
+        else -> "暂无符合条件的对话，本轮未调用模型"
+    }
 }
 
 @Composable private fun GlmOcrCostRow(record: InvocationRecord) = Column(

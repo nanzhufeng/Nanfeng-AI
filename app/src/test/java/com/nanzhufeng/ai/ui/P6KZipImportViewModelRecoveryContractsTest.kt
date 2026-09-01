@@ -36,7 +36,7 @@ class P6KZipImportViewModelRecoveryContractsTest {
             override fun linkUnmappedAsset(taskId: String, entryName: String, conversationId: String, messageId: String): P6KZipImportTask { zipReads.incrementAndGet(); error("not called") }
         }
 
-        P6KZipImportViewModel(store)
+        P6KZipImportViewModel(store).show()
 
         assertTrue("show did not read its persisted projection", listed.await(2, TimeUnit.SECONDS))
         assertTrue(listReads.get() >= 1)

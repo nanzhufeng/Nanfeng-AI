@@ -37,12 +37,12 @@ import com.nanzhufeng.ai.domain.PrivacyDeleteScope
 @Composable
 internal fun PrivacyDataPage(state: PrivacyDataUiState, onPreview: (PrivacyDeleteScope) -> Unit, onToggleTask: (com.nanzhufeng.ai.domain.PrivacyTaskDeletionCandidate) -> Unit, onPreviewSelectedTasks: () -> Unit, onConfirmation: (String) -> Unit, onDelete: () -> Unit, onRetryFailedTaskDeletion: () -> Unit, onCleanupImportedZipPackages: () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                val zipCleanup = state.inventory?.importedZipCleanup
+                val zipCleanup = state.inventory.importedZipCleanup
                 var zipCleanupDialogVisible by remember { mutableStateOf(false) }
-                if (zipCleanup != null && zipCleanup.shouldShowImportedZipStatus()) {
+                if (zipCleanup.shouldShowImportedZipStatus()) {
                     ImportedZipCleanupReadiness(zipCleanup)
                 }
-                if (zipCleanup != null && (zipCleanup.originalPackageCount > 0 || zipCleanup.pendingDeletionCount > 0)) {
+                if (zipCleanup.originalPackageCount > 0 || zipCleanup.pendingDeletionCount > 0) {
                     OutlinedButton(
                         onClick = { zipCleanupDialogVisible = true },
                         enabled = !state.working && (zipCleanup.canDeleteOriginalPackages || zipCleanup.pendingDeletionCount > 0),
@@ -62,7 +62,7 @@ internal fun PrivacyDataPage(state: PrivacyDataUiState, onPreview: (PrivacyDelet
                 }
                 if (zipCleanupDialogVisible) {
                     ImportedZipCleanupDialog(
-                        status = requireNotNull(zipCleanup),
+                        status = zipCleanup,
                         onDismiss = { if (!state.working) zipCleanupDialogVisible = false },
                         onConfirm = {
                             zipCleanupDialogVisible = false
@@ -173,7 +173,7 @@ private fun ImportedZipCleanupReadiness(status: com.nanzhufeng.ai.domain.Importe
 
 @Composable
 internal fun PrivacyStorageSummary(
-    inventory: com.nanzhufeng.ai.domain.PrivacyInventory?,
+    inventory: com.nanzhufeng.ai.domain.PrivacyInventory,
     onOpenSearchCategory: (ConversationSearchCategory) -> Unit,
     onOpenMemory: () -> Unit,
     onOpenKnowledge: () -> Unit,
@@ -186,27 +186,33 @@ internal fun PrivacyStorageSummary(
         shadowElevation = 0.dp,
     ) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (inventory == null) {
-                Text("正在读取本机数据", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                return@Column
-            }
             val values = inventory.aggregates.associateBy { it.key }
+            val searchableText = values["search_text"]
+            val searchableAttachments = values["search_attachments"]
             val contentRows = listOf(
-                PrivacySummaryRow("对话", values["conversations"], "个") { onOpenSearchCategory(ConversationSearchCategory.ALL) },
-                PrivacySummaryRow("消息", values["messages"], "条") { onOpenSearchCategory(ConversationSearchCategory.TEXT) },
-                PrivacySummaryRow("记忆", values["memory"], "条", onOpenMemory),
-                PrivacySummaryRow("知识", values["knowledge"], "条", onOpenKnowledge),
-                PrivacySummaryRow("项目", values["projects"], "个", onOpenProjects),
+                PrivacySummaryRow(
+                    label = "全部",
+                    aggregate = searchableText,
+                    unit = "条",
+                    secondaryAggregate = searchableAttachments,
+                    valueText = "${searchableText?.count ?: 0} 条正文 · ${searchableAttachments?.count ?: 0} 项附件",
+                ) { onOpenSearchCategory(ConversationSearchCategory.ALL) },
+                PrivacySummaryRow("正文", searchableText, "条") { onOpenSearchCategory(ConversationSearchCategory.TEXT) },
+                PrivacySummaryRow("记忆", values["memory"], "条", onClick = onOpenMemory),
+                PrivacySummaryRow("知识库", values["knowledge"], "条", onClick = onOpenKnowledge),
+                PrivacySummaryRow("项目", values["projects"], "个", onClick = onOpenProjects),
             ).filter(PrivacySummaryRow::hasData)
             val attachmentRows = listOf(
                 PrivacySummaryRow("图片", values["attachment_images"], "个") { onOpenSearchCategory(ConversationSearchCategory.IMAGE) },
                 PrivacySummaryRow("视频", values["attachment_videos"], "个") { onOpenSearchCategory(ConversationSearchCategory.VIDEO) },
                 PrivacySummaryRow("音频", values["attachment_audio"], "个") { onOpenSearchCategory(ConversationSearchCategory.AUDIO) },
-                PrivacySummaryRow("文档与其他文件", values["attachment_files"], "个") { onOpenSearchCategory(ConversationSearchCategory.FILE) },
+                PrivacySummaryRow("文件", values["attachment_files"], "个") { onOpenSearchCategory(ConversationSearchCategory.FILE) },
                 PrivacySummaryRow("其他导入资料", values["import_source_assets"], "份"),
-                PrivacySummaryRow("待清理残留文件", values["orphaned_attachment_files"], "个"),
             ).filter(PrivacySummaryRow::hasData)
-            val totalBytes = (contentRows + attachmentRows).sumOf { it.aggregate?.byteCount ?: 0L }
+            val totalBytes = listOf(
+                "conversations", "messages", "memory", "knowledge", "projects",
+                "attachment_images", "attachment_videos", "attachment_audio", "attachment_files", "import_source_assets",
+            ).sumOf { values[it]?.byteCount ?: 0L }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("本机数据", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -214,7 +220,7 @@ internal fun PrivacyStorageSummary(
                 Text(formatStorageBytes(totalBytes), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             }
             PrivacySummarySection("对话与内容", contentRows)
-            PrivacySummarySection("附件与导入资料", attachmentRows)
+            PrivacySummarySection("附件", attachmentRows)
             PrivacyImportSummary(inventory)
         }
     }
@@ -224,9 +230,11 @@ private data class PrivacySummaryRow(
     val label: String,
     val aggregate: com.nanzhufeng.ai.domain.PrivacyAggregate?,
     val unit: String,
+    val secondaryAggregate: com.nanzhufeng.ai.domain.PrivacyAggregate? = null,
+    val valueText: String? = null,
     val onClick: (() -> Unit)? = null,
 ) {
-    fun hasData() = aggregate?.let { it.count > 0 || it.byteCount > 0 } == true
+    fun hasData() = listOfNotNull(aggregate, secondaryAggregate).any { it.count > 0 || it.byteCount > 0 }
 }
 
 @Composable
@@ -242,7 +250,11 @@ private fun PrivacySummarySection(title: String, rows: List<PrivacySummaryRow>) 
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(row.label, color = BodyText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    Text("${aggregate.count} ${row.unit} · ${formatStorageBytes(aggregate.byteCount)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        row.valueText ?: "${aggregate.count} ${row.unit} · ${formatStorageBytes(aggregate.byteCount)}",
+                        color = SecondaryText,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     if (row.onClick != null) {
                         Icon(
                             Icons.Rounded.ChevronRight,
@@ -336,7 +348,6 @@ private fun ImportedZipCleanupDialog(
 private fun PrivacyCleanupScopeDialog(selected: PrivacyDeleteScope?, onDismiss: () -> Unit, onSelect: (PrivacyDeleteScope) -> Unit) {
     val scopes = listOf(
         PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS,
-        PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES,
         PrivacyDeleteScope.KNOWLEDGE_MEMORY_TRASH,
         PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA,
     )

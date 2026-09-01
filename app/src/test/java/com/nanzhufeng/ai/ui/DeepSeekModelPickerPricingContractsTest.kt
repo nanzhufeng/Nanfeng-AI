@@ -12,7 +12,9 @@ class DeepSeekModelPickerPricingContractsTest {
         assertTrue(overlay.contains("DeepSeekPricingWindow.periodAt(java.time.Instant.now())"))
         assertTrue(overlay.contains("DeepSeekPricingWindow.millisUntilNextTransition(now)"))
         assertTrue(overlay.contains("providerId == com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK"))
-        assertTrue(overlay.contains("\"${'$'}{deepSeekPricingPeriod.pickerLabel} · 官方实时联网检索\""))
+        assertTrue(overlay.contains("if (enabled) \"实时联网\" else \"未联网\""))
+        assertTrue(overlay.contains("\"${'$'}{deepSeekPricingPeriod.pickerLabel} · ${'$'}webSearchStateLabel\""))
+        assertTrue(!overlay.contains("官方实时联网检索"))
     }
 
     @Test fun `only DeepSeek pricing status uses theme accent and bold weight`() {

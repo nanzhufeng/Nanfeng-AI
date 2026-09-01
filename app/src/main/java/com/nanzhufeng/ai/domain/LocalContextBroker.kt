@@ -37,6 +37,7 @@ class LocalContextBroker(
         val text: String,
         val source: ContextSelectionSource? = null,
         val isCurrentPathMessage: Boolean = false,
+        val messageId: MessageNodeId? = null,
     )
 
     fun activeKnowledgeCount(): Int = index.activeKnowledgeCount()
@@ -62,7 +63,7 @@ class LocalContextBroker(
         val queryTerms = terms(userMessage) + InvestmentContextPolicy.additionalTerms(investmentDecisionContext)
         val scope = ContextRetrievalScope(current.conversation.id, current.conversation.projectId)
         val allCurrentMessages = MessageTree(current.conversation, current.nodes).contextPath()
-            .mapNotNull { node -> node.text()?.let { Message(node.role, it, isCurrentPathMessage = true) } }
+            .mapNotNull { node -> node.text()?.let { Message(node.role, it, isCurrentPathMessage = true, messageId = node.id) } }
             .takeLast(CURRENT_PATH_MESSAGE_LIMIT)
         val currentUserIndex = allCurrentMessages.indexOfLast { it.role == MessageRole.USER && it.text == userMessage }
         val currentPath = allCurrentMessages.filterIndexed { index, _ -> index != currentUserIndex }

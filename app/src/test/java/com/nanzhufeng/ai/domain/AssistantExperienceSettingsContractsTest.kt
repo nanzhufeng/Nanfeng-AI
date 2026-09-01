@@ -4,6 +4,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -59,6 +60,76 @@ class AssistantExperienceSettingsContractsTest {
 
         assertTrue(instruction.contains("直言不讳"))
         assertFalse(instruction.contains("南烛枫"))
+    }
+
+    @Test
+    fun `conversation style picker exposes default first and six stable user choices`() {
+        assertEquals(
+            listOf(
+                ConversationStyle.DEFAULT,
+                ConversationStyle.DIRECT,
+                ConversationStyle.PROFESSIONAL,
+                ConversationStyle.FRIENDLY,
+                ConversationStyle.EFFICIENT,
+                ConversationStyle.HUMOROUS,
+            ),
+            ConversationStyle.selectable,
+        )
+        assertEquals(ConversationStyle.DEFAULT, ConversationStyle.DEFAULT.effective())
+        assertEquals(ConversationStyle.DEFAULT, ConversationStyle.fromPersistedId("removed-style"))
+        assertEquals(ConversationStyle.PROFESSIONAL, ConversationStyle.fromPersistedId("professional"))
+    }
+
+    @Test
+    fun `conversation style override changes one conversation without rewriting the global style`() {
+        val values = mutableMapOf<ConversationId, ConversationStyleOverride>()
+        val owner = ConversationStyleOverrideOwner(object : ConversationStyleOverrideStore {
+            override fun read(conversationId: ConversationId): ConversationStyleOverride =
+                values[conversationId] ?: ConversationStyleOverride(conversationId, 0)
+
+            override fun save(value: ConversationStyleOverride): Boolean {
+                values[value.conversationId] = value
+                return true
+            }
+        })
+        val first = ConversationId("first")
+        val second = ConversationId("second")
+
+        assertEquals(ConversationStyle.PROFESSIONAL, owner.effectiveStyle(first, ConversationStyle.PROFESSIONAL))
+        assertTrue(owner.setStyle(first, ConversationStyle.DIRECT, expectedRevision = 0) is ConversationStyleOverrideMutationResult.Applied)
+        assertEquals(ConversationStyle.DIRECT, owner.effectiveStyle(first, ConversationStyle.PROFESSIONAL))
+        assertEquals(ConversationStyle.PROFESSIONAL, owner.effectiveStyle(second, ConversationStyle.PROFESSIONAL))
+        assertTrue(owner.setStyle(first, ConversationStyle.EFFICIENT, expectedRevision = 0) is ConversationStyleOverrideMutationResult.Conflict)
+    }
+
+    @Test
+    fun `each visible style owns one distinct complete request instruction`() {
+        val emitted = ConversationStyle.selectable.map { style ->
+            AssistantExperienceSettings(conversationStyle = style).modelInstruction().orEmpty()
+        }
+
+        assertEquals(emitted.size, emitted.toSet().size)
+        emitted.forEach { instruction ->
+            assertEquals(1, instruction.split("对话方式：").size - 1)
+        }
+        assertTrue(emitted[0].contains("对话方式：默认") && emitted[0].contains("按问题复杂度"))
+        assertTrue(emitted[1].contains("先说结论") && emitted[1].contains("减少与判断和行动无关的铺垫"))
+        assertTrue(emitted[1].contains("现实约束") && emitted[1].contains("可以反驳用户"))
+        assertTrue(emitted[2].contains("专业顾问") && emitted[2].contains("适用范围"))
+        assertTrue(emitted[3].contains("同理不等于迎合") && emitted[3].contains("明显错误"))
+        assertTrue(emitted[4].contains("回答务必精简") && emitted[4].contains("只保留会影响判断、决策或行动的内容"))
+        assertTrue(emitted[4].contains("最短路径") && emitted[4].contains("停止条件"))
+        assertTrue(emitted[5].contains("自动收敛幽默") && emitted[5].contains("不得牺牲准确性"))
+    }
+
+    @Test
+    fun `unknown legacy style safely receives the neutral default`() {
+        val restored = ConversationStyle.fromPersistedId("legacy-unknown")
+        val instruction = AssistantExperienceSettings(conversationStyle = restored).modelInstruction().orEmpty()
+
+        assertEquals(ConversationStyle.DEFAULT, restored)
+        assertTrue(instruction.contains("对话方式：默认"))
+        assertEquals(1, instruction.split("对话方式：").size - 1)
     }
 
     @Test

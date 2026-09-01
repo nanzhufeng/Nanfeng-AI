@@ -36,24 +36,28 @@ class PrivacyStorageNavigationContractsTest {
         )
 
         for ((label, category) in listOf(
-            "对话" to "ALL",
-            "消息" to "TEXT",
+            "全部" to "ALL",
+            "正文" to "TEXT",
             "图片" to "IMAGE",
             "视频" to "VIDEO",
             "音频" to "AUDIO",
-            "文档与其他文件" to "FILE",
+            "文件" to "FILE",
         )) {
-            assertTrue(summary.contains("PrivacySummaryRow(\"$label\""))
+            assertTrue(summary.contains("PrivacySummaryRow(\"$label\"") || summary.contains("label = \"$label\""))
             assertTrue(summary.contains("ConversationSearchCategory.$category"))
         }
-        assertTrue(summary.contains("PrivacySummaryRow(\"记忆\", values[\"memory\"], \"条\", onOpenMemory)"))
-        assertTrue(summary.contains("PrivacySummaryRow(\"知识\", values[\"knowledge\"], \"条\", onOpenKnowledge)"))
-        assertTrue(summary.contains("PrivacySummaryRow(\"项目\", values[\"projects\"], \"个\", onOpenProjects)"))
+        assertTrue(summary.contains("PrivacySummaryRow(\"记忆\", values[\"memory\"], \"条\", onClick = onOpenMemory)"))
+        assertTrue(summary.contains("PrivacySummaryRow(\"知识库\", values[\"knowledge\"], \"条\", onClick = onOpenKnowledge)"))
+        assertTrue(summary.contains("PrivacySummaryRow(\"项目\", values[\"projects\"], \"个\", onClick = onOpenProjects)"))
         assertFalse(summary.contains("PrivacySummaryRow(\"草稿\""))
         assertTrue(summary.contains("PrivacySummaryRow(\"其他导入资料\", values[\"import_source_assets\"], \"份\")"))
-        assertTrue(summary.contains("PrivacySummaryRow(\"待清理残留文件\", values[\"orphaned_attachment_files\"], \"个\")"))
+        assertTrue(summary.contains("valueText = \"\${searchableText?.count ?: 0} 条正文 · \${searchableAttachments?.count ?: 0} 项附件\""))
+        assertTrue(summary.contains("PrivacySummarySection(\"附件\", attachmentRows)"))
+        assertFalse(summary.contains("待清理残留文件"))
         assertTrue(privacy.contains("\"南枫转写\" to \"\$glmOcrTasks 条"))
-        assertTrue(privacy.contains("PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES"))
+        val cleanupDialog = privacy.substringAfter("private fun PrivacyCleanupScopeDialog")
+        val scopes = cleanupDialog.substring(cleanupDialog.indexOf("val scopes = listOf("), cleanupDialog.indexOf("Dialog(onDismissRequest = onDismiss)"))
+        assertFalse(scopes.contains("PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES"))
     }
 
     @Test
@@ -93,5 +97,24 @@ class PrivacyStorageNavigationContractsTest {
         assertTrue(hub.contains("记忆摘要") && hub.contains("onOpenMemorySummary"))
         assertTrue(hub.contains("个性化与资料库搜索") && hub.contains("onOpenPersonalization"))
         assertFalse(hub.contains("查看详情"))
+    }
+
+    @Test
+    fun `本机数据先呈现缓存快照再后台更新并不暴露无引用残留`() {
+        val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/PrivacyDataViewModel.kt").readText()
+        val manager = File("src/main/java/com/nanzhufeng/ai/data/AndroidPrivacyDataManager.kt").readText()
+        val privacyUi = File("src/main/java/com/nanzhufeng/ai/ui/PrivacyDataUi.kt").readText()
+
+        assertTrue(viewModel.contains("PrivacyDataUiState(inventory = manager.cachedInventory())"))
+        assertTrue(viewModel.contains("val inventory: PrivacyInventory = PrivacyInventory.EmptySnapshot"))
+        assertFalse(viewModel.contains("init { refresh() }"))
+        assertTrue(viewModel.contains("fun show() { state = state.copy(visible = true, notice = null, error = null); refresh() }"))
+        assertTrue(viewModel.contains("if (refreshJob?.isActive == true) return"))
+        assertTrue(manager.contains("override fun cachedInventory(): PrivacyInventory"))
+        assertTrue(manager.contains("?: return PrivacyInventory.EmptySnapshot"))
+        assertTrue(manager.contains(".commit()"))
+        assertFalse(privacyUi.contains("正在读取本机数据"))
+        assertTrue(manager.contains("cleanupOrphanedAttachmentFilesSilently()"))
+        assertFalse(manager.substring(manager.indexOf("private fun inventoryAggregates"), manager.indexOf("private operator fun PrivacyAggregate.plus")).contains("orphanedAttachmentAggregate()"))
     }
 }

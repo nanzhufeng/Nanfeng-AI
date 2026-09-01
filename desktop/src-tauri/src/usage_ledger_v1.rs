@@ -13,7 +13,7 @@ pub enum FactGrade {
 }
 
 impl FactGrade {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Estimated => "ESTIMATED",
             Self::ProviderReported => "PROVIDER_REPORTED",
@@ -40,7 +40,7 @@ pub enum Kind {
 }
 
 impl Kind {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::StreamPending => "STREAM_PENDING",
             Self::FinalMeasured => "FINAL_MEASURED",
@@ -69,7 +69,7 @@ pub enum Source {
 }
 
 impl Source {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::AndroidLocal => "ANDROID_LOCAL",
             Self::DesktopLocal => "DESKTOP_LOCAL",
@@ -199,6 +199,16 @@ impl Ledger {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| "Usage Ledger persisted row invalid".to_owned());
         entries
+    }
+
+    pub fn all_entries(&self) -> Result<Vec<Entry>, String> {
+        let mut statement = self.connection.prepare("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries ORDER BY occurred_at_ms DESC,entry_id DESC").map_err(|_| "Usage Ledger read failed".to_owned())?;
+        let entries = statement
+            .query_map([], row)
+            .map_err(|_| "Usage Ledger read failed".to_owned())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| "Usage Ledger persisted row invalid".to_owned())?;
+        Ok(entries)
     }
 
     pub fn read_model_for_execution(&self, execution_id: &str) -> Result<ReadModel, String> {
@@ -451,6 +461,7 @@ mod tests {
             ledger.append(&value).unwrap(),
             AppendResult::Replayed(_)
         ));
+        assert_eq!(ledger.all_entries().unwrap(), vec![value.clone()]);
         assert_eq!(
             ledger
                 .append(&Entry {

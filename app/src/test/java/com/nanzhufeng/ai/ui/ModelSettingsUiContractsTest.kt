@@ -12,7 +12,7 @@ class ModelSettingsUiContractsTest {
         val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ModelSettingsViewModel.kt").readText()
         val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
 
-        for (token in listOf("ProviderId.ZHIPU", "智谱 GLM", "实时网页搜索", "需要当前信息时自动检索公开网页并标注来源", "WebSearchSettingsRow", "AiPresetSelectionSurface", "API Key", "测试连接", "费用与用量", "上下文记录", "运行诊断", "conversationTitle", "recordTimestamp", "查看技术详情")) {
+        for (token in listOf("ProviderId.ZHIPU", "智谱 GLM", "实时网页搜索", "开启后每次普通对话均检索公开网页并标注来源", "WebSearchSettingsRow", "AiPresetSelectionSurface", "API Key", "测试连接", "费用与用量", "上下文记录", "运行诊断", "conversationTitle", "recordTimestamp", "查看技术详情")) {
             assertTrue("missing configuration or record entry: $token", ui.contains(token))
         }
         assertTrue(ui.contains("ModelSettingsContextSelectionsPage"))
@@ -64,13 +64,36 @@ class ModelSettingsUiContractsTest {
         val ui = File("src/main/java/com/nanzhufeng/ai/ui/ModelSettingsUi.kt").readText()
         val context = ui.substringAfter("internal fun ModelSettingsContextSelectionsPage(").substringBefore("@Composable\ninternal fun ModelSettingsDiagnosticsPage")
         val diagnostics = ui.substringAfter("internal fun ModelSettingsDiagnosticsPage(").substringBefore("private fun ContextSelectionAuditRecord.conversationTitle")
-        val timestamp = ui.substringAfter("private fun ColumnScope.RecordTimestamp(").substringBefore("private fun ContextSelectionAuditRecord.conversationTitle")
+        val footer = ui.substringAfter("private fun RecordFooter(").substringBefore("private fun ProviderDiagnosticRecord.latencyLabel")
 
-        assertTrue(context.contains("RecordTimestamp(audit.createdAt)"))
-        assertTrue(context.indexOf("RecordTimestamp(audit.createdAt)") > context.indexOf("budget.fixedInputTokens"))
-        assertTrue(diagnostics.contains("RecordTimestamp(diagnostic.createdAt)"))
-        assertTrue(diagnostics.indexOf("RecordTimestamp(diagnostic.createdAt)") > diagnostics.indexOf("diagnostic.redactedBody"))
-        assertTrue(timestamp.contains("modifier = Modifier.align(Alignment.End)"))
-        assertTrue(timestamp.contains("MaterialTheme.typography.labelSmall"))
+        assertTrue(context.contains("records.filter { it.selectedSources.isNotEmpty() }"))
+        assertTrue(context.contains("RecordFooter(\"本轮输入约 ${'$'}{audit.budget.fixedInputTokens} Token\", audit.createdAt)"))
+        assertTrue(context.indexOf("RecordFooter(") > context.indexOf("audit.selectedSources.take(2)"))
+        assertTrue(diagnostics.contains("RecordFooter(diagnostic.latencyLabel(), diagnostic.createdAt)"))
+        assertTrue(diagnostics.indexOf("RecordFooter(") > diagnostics.indexOf("diagnostic.redactedBody"))
+        assertTrue(footer.contains("Row(modifier = Modifier.fillMaxWidth()"))
+        assertTrue(footer.contains("Spacer(Modifier.weight(1f))"))
+        assertTrue(footer.contains("MaterialTheme.typography.labelSmall"))
+    }
+
+    @Test
+    fun recordListsUseClearCardsAndKeepTechnicalDetailsOutOfThePrimaryHierarchy() {
+        val settings = File("src/main/java/com/nanzhufeng/ai/ui/ModelSettingsUi.kt").readText()
+        val runtime = File("src/main/java/com/nanzhufeng/ai/ui/RuntimeDiagnosticsUi.kt").readText()
+        val invocation = File("src/main/java/com/nanzhufeng/ai/ui/InvocationLedgerUi.kt").readText()
+        val context = settings.substringAfter("internal fun ModelSettingsContextSelectionsPage(").substringBefore("@Composable\ninternal fun ModelSettingsDiagnosticsPage")
+        val diagnostic = settings.substringAfter("internal fun ModelSettingsDiagnosticsPage(").substringBefore("private fun ContextSelectionAuditRecord.conversationTitle")
+        val row = invocation.substringAfter("private fun InvocationLedgerRow(").substringBefore("private fun InvocationStatus.uiLabel")
+
+        assertTrue(context.contains("Arrangement.spacedBy(10.dp)"))
+        assertTrue(context.contains("RoundedCornerShape(18.dp)"))
+        assertTrue(context.contains("audit.selectedSources.size} 项"))
+        assertTrue(diagnostic.indexOf("Text(\"技术详情\")") < diagnostic.indexOf("redactedBody.take(500)"))
+        assertTrue(runtime.indexOf("title = \"连接失败\"") < runtime.indexOf("title = \"自动与工具任务\""))
+        assertTrue(runtime.contains("近 7 天的失败记录"))
+        assertTrue(invocation.contains("RoundedCornerShape(18.dp)"))
+        assertTrue(row.indexOf("Text(\"技术详情\")") < row.indexOf("运行框架 v"))
+        assertTrue(row.indexOf("durationAndAttemptsLabel()") < row.indexOf("completedAt.ledgerTimestamp()"))
+        assertFalse(row.contains("Harness v"))
     }
 }

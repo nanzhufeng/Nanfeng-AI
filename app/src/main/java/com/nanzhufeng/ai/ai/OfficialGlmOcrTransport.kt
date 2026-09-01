@@ -34,7 +34,7 @@ class OfficialGlmOcrTransport(
                 GlmOcrTransportResult.Failed(httpCode(outcome.statusCode))
             }
             ProviderChatOutcome.TimedOut -> GlmOcrTransportResult.Failed("TIMEOUT_UNKNOWN")
-            ProviderChatOutcome.NetworkFailure -> GlmOcrTransportResult.Failed("NETWORK_UNKNOWN")
+            is ProviderChatOutcome.NetworkFailure -> GlmOcrTransportResult.Failed("NETWORK_UNKNOWN")
             ProviderChatOutcome.ResponseTooLarge -> GlmOcrTransportResult.Failed("RESPONSE_TOO_LARGE")
             ProviderChatOutcome.Cancelled -> GlmOcrTransportResult.Failed("CANCELLED")
             is ProviderChatOutcome.StreamedResponse -> GlmOcrTransportResult.Failed("UNEXPECTED_STREAM")

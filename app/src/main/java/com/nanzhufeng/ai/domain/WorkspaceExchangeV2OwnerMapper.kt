@@ -168,6 +168,7 @@ class NfaiExchangeV2OwnerMapper(
             put("blocks", JSONArray(node.content.mapIndexed { ordinal, block -> when (block) {
                 is ContentBlock.Text -> JSONObject().put("kind", "TEXT").put("ordinal", ordinal).put("text", block.text)
                 is ContentBlock.Reasoning -> error("模型思考过程不能进入 v2 交换。")
+                is ContentBlock.ProviderToolCall -> error("Provider Tool Call 不能进入 v2 交换。")
                 is ContentBlock.Attachment -> JSONObject().put("kind", "ASSET_REF").put("ordinal", ordinal).put("asset", attachments[block.attachment.id.value] ?: error("消息附件缺少 owner 元数据。"))
                 is ContentBlock.ToolResult -> error("工具结果不能进入 v2 交换。")
             } }))

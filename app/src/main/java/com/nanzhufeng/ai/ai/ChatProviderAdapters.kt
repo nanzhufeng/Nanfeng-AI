@@ -13,6 +13,7 @@ import com.nanzhufeng.ai.domain.OFFICE_OPEN_XML_MIME_TYPES
 import com.nanzhufeng.ai.domain.extractOfficeOpenXmlText
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.net.URI
 
 /** Provider boundary: the executor sees only this contract, never provider JSON field names. */
 interface ChatProviderAdapter {
@@ -30,6 +31,13 @@ interface ChatProviderAdapter {
         stream: Boolean,
         options: ChatRequestOptions = ChatRequestOptions.Standard,
     ): ChatAdapterPrepareResult
+    fun prepareContinuation(
+        model: ResolvedModel,
+        messages: List<ChatHistoryMessage>,
+        attachments: List<ChatAttachment>,
+        stream: Boolean,
+        options: ChatRequestOptions = ChatRequestOptions.Standard,
+    ): ChatAdapterPrepareResult = prepare(model, messages.map { it.role to it.content }, attachments, stream, options)
     /** Transport deadlines are provider protocol metadata, never executor-specific model guesses. */
     fun readTimeoutMillis(model: ResolvedModel, attachments: List<ChatAttachment>, stream: Boolean): Int = 90_000
     fun readTimeoutMillis(model: ResolvedModel, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): Int =
@@ -105,10 +113,34 @@ sealed interface ChatAdapterDecodedResult {
 }
 
 data class ChatToolCall(val id: String?, val name: String, val argumentsJson: String)
+data class ChatToolCallDelta(val index: Int, val id: String?, val name: String?, val argumentsDelta: String)
+
+/** Parsed message protocol; provider-specific adapters may preserve fields beyond visible text. */
+data class ChatHistoryMessage(
+    val role: String,
+    val content: String,
+    val reasoningContent: String? = null,
+    val toolCalls: List<ChatToolCall> = emptyList(),
+)
 
 /** A public source returned by a provider's own web-search result, not model-generated metadata. */
 data class ProviderWebSource(val url: String, val title: String? = null) {
-    init { require(url.startsWith("https://") || url.startsWith("http://")) }
+    init { require(isValidPublicHttpUrl(url)) { "Provider web source must be an absolute HTTP(S) URL with a host." } }
+
+    companion object {
+        fun fromProvider(url: String?, title: String?): ProviderWebSource? {
+            val normalized = url?.trim()?.takeIf(::isValidPublicHttpUrl) ?: return null
+            return ProviderWebSource(normalized, title?.trim()?.takeIf(String::isNotBlank))
+        }
+
+        fun isValidPublicHttpUrl(value: String): Boolean = runCatching {
+            val uri = URI(value)
+            uri.isAbsolute &&
+                uri.scheme.lowercase() in setOf("http", "https") &&
+                !uri.host.isNullOrBlank() &&
+                uri.userInfo == null
+        }.getOrDefault(false)
+    }
 }
 
 /**
@@ -117,7 +149,7 @@ data class ProviderWebSource(val url: String, val title: String? = null) {
  */
 fun appendProviderWebSources(text: String, sources: List<ProviderWebSource>): String {
     val distinct = sources.asSequence()
-        .filter { it.url.startsWith("https://") || it.url.startsWith("http://") }
+        .filter { ProviderWebSource.isValidPublicHttpUrl(it.url) }
         .distinctBy { it.url }
         .take(10)
         .toList()
@@ -240,15 +272,36 @@ abstract class OpenAiCompatibleChatAdapter : ChatProviderAdapter {
 open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
     override open val providerId = ProviderId.OPENROUTER
 
+    /** Grok product presets own their reasoning mode and a bounded product output budget. The
+     * provider capability ceiling may be much larger, but sending it as the default maximum would
+     * create avoidable latency and cost risk for an ordinary conversation. */
+    protected override fun StringBuilder.appendOutputTokenLimit(model: ResolvedModel) {
+        openRouterRequestOutputLimit(model)?.let { append(",\"max_tokens\":").append(it) }
+    }
+
+    protected override fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel) {
+        append(openRouterModelOptionsSuffix(model.modelId))
+    }
+
     override fun prepare(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): ChatAdapterPrepareResult {
+        return prepareContinuation(model, messages.map { ChatHistoryMessage(it.first, it.second) }, attachments, stream, options)
+    }
+
+    override fun prepareContinuation(model: ResolvedModel, messages: List<ChatHistoryMessage>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): ChatAdapterPrepareResult {
         // OpenRouter's `file` content part is for provider-supported file modalities such as PDF.
         // Markdown/TXT/JSON/CSV must remain model-visible text; sending them as generic `file`
         // parts can make a mixed image + document message reach the model without either item.
         val inlineTextFiles = inlineUtf8TextFiles(attachments) ?: return ChatAdapterPrepareResult.AttachmentUnsupported
         return when {
-            attachments.isEmpty() -> ChatAdapterPrepareResult.Ready(textOnlyBody(model, messages, stream, options))
+            attachments.isEmpty() -> ChatAdapterPrepareResult.Ready(
+                if (model.modelId == KIMI_K3_MODEL_ID) kimiK3TextBody(model, messages, stream, options)
+                else textOnlyBody(model, messages.map { it.role to it.content }, stream, options),
+            )
             attachments.all { it.kind == ChatAttachmentKind.FILE } ->
-                ChatAdapterPrepareResult.Ready(textOnlyBody(model, messages + ("user" to inlineTextFiles), stream, options))
+                ChatAdapterPrepareResult.Ready(
+                    if (model.modelId == KIMI_K3_MODEL_ID) kimiK3TextBody(model, messages + ChatHistoryMessage("user", inlineTextFiles), stream, options)
+                    else textOnlyBody(model, messages.map { it.role to it.content } + ("user" to inlineTextFiles), stream, options),
+                )
             else -> ChatAdapterPrepareResult.Ready(
                 "<streamed-openrouter-chat-body>",
                 openRouterMultimodalBody(model, messages, attachments, inlineTextFiles, stream, options),
@@ -260,6 +313,55 @@ open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
     override fun supportsStreaming(model: ResolvedModel, options: ChatRequestOptions): Boolean =
         !options.liveWebSearch && super.supportsStreaming(model, options)
     override fun decodeStreamingEvent(body: String) = OpenAiCompatibleJsonCodec.decodeStream(body)
+}
+
+internal const val KIMI_K3_MODEL_ID = "moonshotai/kimi-k3"
+internal const val GROK_4_1_FAST_MODEL_ID = "x-ai/grok-4.1-fast"
+internal const val GROK_4_6_MODEL_ID = "x-ai/grok-4.6"
+private const val GROK_PRODUCT_OUTPUT_TOKENS = 65_536L
+
+private fun openRouterRequestOutputLimit(model: ResolvedModel): Long? = when (model.modelId) {
+    GROK_4_1_FAST_MODEL_ID, GROK_4_6_MODEL_ID ->
+        (model.maxOutputTokens ?: GROK_PRODUCT_OUTPUT_TOKENS).coerceAtMost(GROK_PRODUCT_OUTPUT_TOKENS)
+    else -> model.maxOutputTokens
+}
+
+private fun openRouterModelOptionsSuffix(modelId: String): String = when (modelId) {
+    // The daily preset stays fast and economical; deep synthesis is represented by 4.6 High.
+    GROK_4_1_FAST_MODEL_ID -> ",\"reasoning\":{\"enabled\":false}"
+    GROK_4_6_MODEL_ID -> ",\"reasoning\":{\"effort\":\"high\"}"
+    else -> ""
+}
+
+/** K3 continuity requires its assistant reasoning/tool protocol, not a lossy content-only copy. */
+private fun kimiK3TextBody(model: ResolvedModel, messages: List<ChatHistoryMessage>, stream: Boolean, options: ChatRequestOptions) = buildString {
+    append("{\"model\":\""); append(model.modelId.escapeJson()); append("\",\"messages\":[")
+    messages.forEachIndexed { index, message ->
+        if (index > 0) append(',')
+        append(kimiK3MessageJson(message))
+    }
+    append(']')
+    model.maxOutputTokens?.let { append(",\"max_tokens\":").append(it) }
+    appendRequestOptions(options, stream)
+}
+
+private fun kimiK3MessageJson(message: ChatHistoryMessage): String = buildString {
+    append("{\"role\":\""); append(message.role.escapeJson()); append("\",\"content\":\""); append(message.content.escapeJson()); append('"')
+    message.reasoningContent?.takeIf(String::isNotBlank)?.let {
+        append(",\"reasoning_content\":\""); append(it.escapeJson()); append('"')
+    }
+    if (message.toolCalls.isNotEmpty()) {
+        append(",\"tool_calls\":[")
+        message.toolCalls.forEachIndexed { index, call ->
+            if (index > 0) append(',')
+            append("{\"type\":\"function\"")
+            call.id?.let { append(",\"id\":\"").append(it.escapeJson()).append('"') }
+            append(",\"function\":{\"name\":\"").append(call.name.escapeJson())
+            append("\",\"arguments\":\"").append(call.argumentsJson.escapeJson()).append("\"}}")
+        }
+        append(']')
+    }
+    append('}')
 }
 
 /**
@@ -417,13 +519,13 @@ private fun requestOptionsSuffix(options: ChatRequestOptions, stream: Boolean): 
 }
 
 /** OpenRouter serialization stays separate even though current content field names overlap Qwen. */
-private fun openRouterMultimodalBody(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, inlineTextFiles: String, stream: Boolean, options: ChatRequestOptions): ProviderChatRequestBody {
+private fun openRouterMultimodalBody(model: ResolvedModel, messages: List<ChatHistoryMessage>, attachments: List<ChatAttachment>, inlineTextFiles: String, stream: Boolean, options: ChatRequestOptions): ProviderChatRequestBody {
     val parts = mutableListOf<ProviderChatRequestBody.Part>()
     fun text(value: String) { parts += ProviderChatRequestBody.Part.Utf8(value) }
     text("{\"model\":\"${model.modelId.escapeJson()}\",\"messages\":[")
-    messages.forEachIndexed { index, (role, content) ->
+    messages.forEachIndexed { index, message ->
         if (index > 0) text(",")
-        text("{\"role\":\"${role.escapeJson()}\",\"content\":\"${content.escapeJson()}\"}")
+        text(if (model.modelId == KIMI_K3_MODEL_ID) kimiK3MessageJson(message) else "{\"role\":\"${message.role.escapeJson()}\",\"content\":\"${message.content.escapeJson()}\"}")
     }
     if (messages.isNotEmpty()) text(",")
     text("{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"")
@@ -451,7 +553,8 @@ private fun openRouterMultimodalBody(model: ResolvedModel, messages: List<Pair<S
         }
     }
     text("]}]")
-    model.maxOutputTokens?.let { text(",\"max_tokens\":$it") }
+    openRouterRequestOutputLimit(model)?.let { text(",\"max_tokens\":$it") }
+    text(openRouterModelOptionsSuffix(model.modelId))
     text(requestOptionsSuffix(options, stream))
     return ProviderChatRequestBody.Segmented(parts)
 }
@@ -608,8 +711,10 @@ private object ResponsesWebSearchJsonCodec {
                 .filter { it.stringValue("type") == "web_search_call" }
                 .flatMap { item -> item.objectValue("action")?.arrayValue("sources").orEmpty().asSequence() }
                 .mapNotNull { raw -> raw.objectValue()?.let { source ->
-                    source.stringValue("url")?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
-                        ?.let { url -> ProviderWebSource(url, source.stringValue("title") ?: source.stringValue("name")) }
+                    ProviderWebSource.fromProvider(
+                        source.stringValue("url"),
+                        source.stringValue("title") ?: source.stringValue("name"),
+                    )
                 } }
                 .distinctBy(ProviderWebSource::url)
                 .toList(),
@@ -683,9 +788,10 @@ private object ResponsesSseJsonCodec {
             .filter { it.stringValue("type") == "web_search_call" }
             .flatMap { item -> item.objectValue("action")?.arrayValue("sources").orEmpty().asSequence() }
             .mapNotNull { raw -> raw.objectValue()?.let { source ->
-                source.stringValue("url")
-                    ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
-                    ?.let { url -> ProviderWebSource(url, source.stringValue("title") ?: source.stringValue("name")) }
+                ProviderWebSource.fromProvider(
+                    source.stringValue("url"),
+                    source.stringValue("title") ?: source.stringValue("name"),
+                )
             } }
             .distinctBy(ProviderWebSource::url)
             .take(10)
@@ -742,14 +848,24 @@ private object OpenAiCompatibleJsonCodec {
             ?: delta?.stringValue("reasoning")?.takeIf(String::isNotBlank)
         val rawTools = delta?.arrayValue("tool_calls")
         val tools = rawTools.toolCalls().orEmpty()
+        val toolDeltas = rawTools.toolCallDeltas()
         val input = usage?.long("prompt_tokens", "input_tokens")
         val output = usage?.long("completion_tokens", "output_tokens")
         val cost = usage?.decimalMicros("cost")
         val cachedInput = usage?.objectValue("input_tokens_details")?.long("cached_tokens")
             ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens")
         val reasoningTokens = usage?.reasoningTokens()
-        if (text == null && reasoning == null && tools.isEmpty() && input == null && output == null && cost == null && reasoningTokens == null) null
-        else ProviderSseEvent(text, reasoning, input, output, reportedCostUsdMicros = cost, toolCallEncountered = rawTools?.isNotEmpty() == true, cachedInputTokens = cachedInput, reasoningTokens = reasoningTokens)
+        val webSources = root.webSources(delta.orEmpty())
+        if (text == null && reasoning == null && toolDeltas.isEmpty() && input == null && output == null && cost == null && reasoningTokens == null && webSources.isEmpty()) null
+        else ProviderSseEvent(
+            text, reasoning, input, output,
+            reportedCostUsdMicros = cost,
+            toolCallEncountered = rawTools?.isNotEmpty() == true,
+            webSources = webSources,
+            toolCallDeltas = toolDeltas,
+            cachedInputTokens = cachedInput,
+            reasoningTokens = reasoningTokens,
+        )
     }.getOrNull()
 
     private fun Map<String, Any?>.contentText(): String? = when (val content = this["content"]) {
@@ -778,8 +894,10 @@ private object OpenAiCompatibleJsonCodec {
     }.distinctBy(ProviderWebSource::url).take(10)
 
     private fun Map<String, Any?>.asProviderWebSource(): ProviderWebSource? {
-        val url = (stringValue("url") ?: stringValue("link"))?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return null
-        return ProviderWebSource(url, stringValue("title") ?: stringValue("name"))
+        return ProviderWebSource.fromProvider(
+            stringValue("url") ?: stringValue("link"),
+            stringValue("title") ?: stringValue("name"),
+        )
     }
 
     private fun List<Any?>?.toolCalls(): List<ChatToolCall> = buildList {
@@ -790,6 +908,26 @@ private object OpenAiCompatibleJsonCodec {
             val name = function.stringValue("name")?.takeIf(String::isNotBlank) ?: return@forEach
             add(ChatToolCall(call.stringValue("id")?.takeIf(String::isNotBlank), name, function.stringValue("arguments") ?: "{}"))
         }
+    }
+
+    private fun List<Any?>?.toolCallDeltas(): List<ChatToolCallDelta> = buildList {
+        this@toolCallDeltas ?: return@buildList
+        this@toolCallDeltas.forEachIndexed { fallbackIndex, rawCall ->
+            val call = rawCall.objectValue() ?: return@forEachIndexed
+            val function = call.objectValue("function")
+            add(ChatToolCallDelta(
+                index = call.intValue("index") ?: fallbackIndex,
+                id = call.stringValue("id")?.takeIf(String::isNotBlank),
+                name = function?.stringValue("name")?.takeIf(String::isNotBlank),
+                argumentsDelta = function?.stringValue("arguments").orEmpty(),
+            ))
+        }
+    }
+
+    private fun Map<String, Any?>.intValue(key: String): Int? = when (val value = this[key]) {
+        is java.math.BigDecimal -> runCatching { value.intValueExact() }.getOrNull()
+        is Number -> value.toInt()
+        else -> null
     }
 
     private fun Map<String, Any?>.long(vararg keys: String): Long? = keys.asSequence().mapNotNull { key ->

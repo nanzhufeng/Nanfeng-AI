@@ -22,6 +22,10 @@ data class AssistantResponseModelAttribution(
     val modelId: String,
     val modelDisplayName: String,
     val recordedAt: Instant,
+    /** Exact style instruction used for this answer; null means a legacy record. */
+    val conversationStyle: ConversationStyle? = null,
+    /** True only after a verified-source web request produced this visible answer. */
+    val webSearchUsed: Boolean? = null,
     /** Content-free response accounting. Unknown stays null; a verified zero remains zero. */
     val usage: ProviderUsage = ProviderUsage(),
     val cost: ProviderCost = ProviderCost(),

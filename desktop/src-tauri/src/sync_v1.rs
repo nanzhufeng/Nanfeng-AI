@@ -8,7 +8,7 @@ use pbkdf2::pbkdf2_hmac;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 const ENVELOPE: &str = "nfai.sync.envelope";
 const PAYLOAD: &str = "nfai.sync.payload";
@@ -25,9 +25,20 @@ pub struct KnownMaterial {
     pub wrapping_nonce: Vec<u8>,
     pub payload_nonce: Vec<u8>,
 }
+#[derive(Clone)]
+pub struct AccountWrappingMaterial {
+    pub wrapping_key: Vec<u8>,
+    pub salt: Vec<u8>,
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct Opened {
     pub payload: Value,
+}
+pub struct RecoveredAccountMaterial {
+    pub payload: Value,
+    pub data_key: Zeroizing<Vec<u8>>,
+    pub wrapping_key: Zeroizing<Vec<u8>>,
+    pub salt: Vec<u8>,
 }
 
 fn err() -> String {
@@ -446,6 +457,15 @@ fn preflight_value(value: &Value) -> Result<(String, String, u64, String, usize)
 pub fn seal_known(
     payload: Value,
     recovery: &str,
+    material: KnownMaterial,
+) -> Result<String, String> {
+    let wrapping = derive(recovery, &material.salt);
+    seal_known_with_wrapping(payload, &wrapping, material)
+}
+
+fn seal_known_with_wrapping(
+    payload: Value,
+    wrapping_key: &[u8],
     mut material: KnownMaterial,
 ) -> Result<String, String> {
     validate_payload(&payload)?;
@@ -458,15 +478,15 @@ pub fn seal_known(
         || material.wrapping_nonce.len() != 12
         || material.payload_nonce.len() != 12
         || material.wrapping_nonce == material.payload_nonce
+        || wrapping_key.len() != 32
     {
         return Err(err());
     }
     let mut envelope = json!({"format":ENVELOPE,"protocolVersion":VERSION,"schemaVersion":VERSION,"appId":payload["appId"],"documentId":payload["documentId"],"revision":payload["revision"],"payloadHash":hash(&plain),"payloadByteCount":plain.len(),"kdf":{"algorithm":"PBKDF2-HMAC-SHA256","version":VERSION,"iterations":ITERATIONS,"salt":URL_SAFE_NO_PAD.encode(&material.salt)},"wrappedDataKey":{"algorithm":"AES-256-GCM","nonce":URL_SAFE_NO_PAD.encode(&material.wrapping_nonce),"ciphertext":""},"payload":{"algorithm":"AES-256-GCM","nonce":URL_SAFE_NO_PAD.encode(&material.payload_nonce),"ciphertext":""}});
     let root = object(&envelope)?;
-    let mut wrapping = derive(recovery, &material.salt);
     let aad = aad(root)?;
     let wrapped = crypt(
-        &wrapping,
+        wrapping_key,
         &material.wrapping_nonce,
         &material.data_key,
         &aad,
@@ -479,7 +499,6 @@ pub fn seal_known(
         &aad,
         false,
     )?;
-    wrapping.zeroize();
     envelope["wrappedDataKey"]["ciphertext"] = Value::String(URL_SAFE_NO_PAD.encode(wrapped));
     envelope["payload"]["ciphertext"] = Value::String(URL_SAFE_NO_PAD.encode(encrypted));
     let result = canonical(&envelope);
@@ -488,6 +507,47 @@ pub fn seal_known(
     material.wrapping_nonce.zeroize();
     material.payload_nonce.zeroize();
     result
+}
+
+pub fn create_account_wrapping_material(recovery: &str) -> Result<AccountWrappingMaterial, String> {
+    if recovery.chars().count() < 12 {
+        return Err(err());
+    }
+    let mut salt = vec![0; 16];
+    OsRng.fill_bytes(&mut salt);
+    Ok(AccountWrappingMaterial {
+        wrapping_key: derive(recovery, &salt),
+        salt,
+    })
+}
+
+pub fn seal_with_account_wrapping_material(
+    payload: Value,
+    data_key: &[u8],
+    material: &AccountWrappingMaterial,
+) -> Result<String, String> {
+    if data_key.len() != 32 || material.wrapping_key.len() != 32 || material.salt.len() != 16 {
+        return Err(err());
+    }
+    let mut wrapping_nonce = vec![0; 12];
+    let mut payload_nonce = vec![0; 12];
+    OsRng.fill_bytes(&mut wrapping_nonce);
+    loop {
+        OsRng.fill_bytes(&mut payload_nonce);
+        if payload_nonce != wrapping_nonce {
+            break;
+        }
+    }
+    seal_known_with_wrapping(
+        payload,
+        &material.wrapping_key,
+        KnownMaterial {
+            data_key: data_key.to_vec(),
+            salt: material.salt.clone(),
+            wrapping_nonce,
+            payload_nonce,
+        },
+    )
 }
 
 /// P7-A accepts a caller-held key; P7-B owns account-level generation and secure storage.
@@ -525,25 +585,120 @@ pub fn open(
     minimum_revision: u64,
 ) -> Result<Opened, String> {
     let value = strict(text_value)?;
+    let root = object(&value)?;
+    let kdf = object(root.get("kdf").ok_or_else(err)?)?;
+    let salt = b64(text(kdf, "salt")?, Some(16), 16)?;
+    let mut wrapping = derive(recovery, &salt);
+    let result = open_with_wrapping_value(
+        value,
+        &wrapping,
+        expected_app,
+        expected_document,
+        minimum_revision,
+    );
+    wrapping.zeroize();
+    result
+}
+
+pub fn recover_account_material(
+    text_value: &str,
+    recovery: &str,
+    expected_app: &str,
+    expected_document: &str,
+    minimum_revision: u64,
+) -> Result<RecoveredAccountMaterial, String> {
+    if recovery.chars().count() < 12 {
+        return Err(err());
+    }
+    let value = strict(text_value)?;
+    let root = object(&value)?;
+    let kdf = object(root.get("kdf").ok_or_else(err)?)?;
+    let salt = b64(text(kdf, "salt")?, Some(16), 16)?;
+    let wrapping_key = Zeroizing::new(derive(recovery, &salt));
+    let (payload, data_key) = open_with_wrapping_value_and_key(
+        value,
+        wrapping_key.as_slice(),
+        expected_app,
+        expected_document,
+        minimum_revision,
+    )?;
+    Ok(RecoveredAccountMaterial {
+        payload,
+        data_key: Zeroizing::new(data_key),
+        wrapping_key,
+        salt,
+    })
+}
+
+pub fn open_with_account_wrapping_material(
+    text_value: &str,
+    material: &AccountWrappingMaterial,
+    expected_app: &str,
+    expected_document: &str,
+    minimum_revision: u64,
+) -> Result<Opened, String> {
+    if material.wrapping_key.len() != 32 || material.salt.len() != 16 {
+        return Err(err());
+    }
+    let value = strict(text_value)?;
+    let root = object(&value)?;
+    let kdf = object(root.get("kdf").ok_or_else(err)?)?;
+    let salt = b64(text(kdf, "salt")?, Some(16), 16)?;
+    if salt != material.salt {
+        return Err(err());
+    }
+    open_with_wrapping_value(
+        value,
+        &material.wrapping_key,
+        expected_app,
+        expected_document,
+        minimum_revision,
+    )
+}
+
+fn open_with_wrapping_value(
+    value: Value,
+    wrapping_key: &[u8],
+    expected_app: &str,
+    expected_document: &str,
+    minimum_revision: u64,
+) -> Result<Opened, String> {
+    let (payload, mut data_key) = open_with_wrapping_value_and_key(
+        value,
+        wrapping_key,
+        expected_app,
+        expected_document,
+        minimum_revision,
+    )?;
+    data_key.zeroize();
+    Ok(Opened { payload })
+}
+
+fn open_with_wrapping_value_and_key(
+    value: Value,
+    wrapping_key: &[u8],
+    expected_app: &str,
+    expected_document: &str,
+    minimum_revision: u64,
+) -> Result<(Value, Vec<u8>), String> {
+    if wrapping_key.len() != 32 {
+        return Err(err());
+    }
     let (app, doc, revision, hash_value, length) = preflight_value(&value)?;
     if app != expected_app || doc != expected_document || revision < minimum_revision {
         return Err(err());
     }
     let root = object(&value)?;
-    let kdf = object(root.get("kdf").unwrap())?;
-    let salt = b64(text(kdf, "salt")?, Some(16), 16)?;
     let wrap = object(root.get("wrappedDataKey").unwrap())?;
     let payload = object(root.get("payload").unwrap())?;
     let aad = aad(root)?;
-    let mut wrapping = derive(recovery, &salt);
-    let mut data_key = crypt(
-        &wrapping,
+    let data_key = Zeroizing::new(crypt(
+        wrapping_key,
         &b64(text(wrap, "nonce")?, Some(12), 12)?,
         &b64(text(wrap, "ciphertext")?, Some(48), 48)?,
         &aad,
         true,
-    )?;
-    wrapping.zeroize();
+    )?);
     let plain = crypt(
         &data_key,
         &b64(text(payload, "nonce")?, Some(12), 12)?,
@@ -551,7 +706,6 @@ pub fn open(
         &aad,
         true,
     )?;
-    data_key.zeroize();
     if plain.len() != length || hash(&plain) != hash_value {
         return Err(err());
     }
@@ -565,9 +719,7 @@ pub fn open(
     {
         return Err(err());
     }
-    Ok(Opened {
-        payload: payload_value,
-    })
+    Ok((payload_value, data_key.to_vec()))
 }
 
 #[cfg(test)]

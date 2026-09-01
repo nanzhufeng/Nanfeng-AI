@@ -19,15 +19,76 @@ import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.ProviderUsage
 import com.nanzhufeng.ai.domain.ProviderCost
 import com.nanzhufeng.ai.domain.ConversationCostSource
+import com.nanzhufeng.ai.domain.ConversationStyle
 import java.time.Instant
 import java.util.UUID
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class AssistantResponseModelAttributionRoomContractsTest {
+    @Test fun `completed response enriches prewritten attribution with immutable execution evidence`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "assistant-model-enrichment-${UUID.randomUUID()}.db"
+        context.deleteDatabase(name)
+        val database = open(context, name)
+        val store = RoomAssistantResponseModelAttributionStore(database)
+        val initial = AssistantResponseModelAttribution(
+            assistantMessageId = MessageNodeId("assistant-model-enrichment-message"),
+            attemptId = NormalChatSendAttemptId("assistant-model-enrichment-attempt"),
+            providerId = ProviderId.OPENROUTER,
+            receiverProviderId = ProviderId.OPENROUTER,
+            modelId = "openai/gpt-5.6",
+            modelDisplayName = "GPT-5.6",
+            recordedAt = Instant.EPOCH,
+        )
+        store.record(initial)
+
+        store.record(initial.copy(
+            conversationStyle = ConversationStyle.DIRECT,
+            webSearchUsed = true,
+            usage = ProviderUsage(inputTokens = 12, outputTokens = 4, totalTokens = 16),
+            cost = ProviderCost("provider-response", "USD", 42L),
+            costSource = ConversationCostSource.PROVIDER_RESPONSE,
+        ))
+
+        val restored = store.forMessages(listOf(initial.assistantMessageId)).getValue(initial.assistantMessageId).single()
+        assertEquals(ConversationStyle.DIRECT, restored.conversationStyle)
+        assertEquals(true, restored.webSearchUsed)
+        assertEquals(16L, restored.usage.totalTokens)
+        assertEquals(42L, restored.cost.totalMicros)
+        database.close(); context.deleteDatabase(name)
+    }
+
+    @Test fun `completed response cannot replace previously recorded execution evidence`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "assistant-model-evidence-conflict-${UUID.randomUUID()}.db"
+        context.deleteDatabase(name)
+        val database = open(context, name)
+        val store = RoomAssistantResponseModelAttributionStore(database)
+        val recorded = AssistantResponseModelAttribution(
+            assistantMessageId = MessageNodeId("assistant-model-conflict-message"),
+            attemptId = NormalChatSendAttemptId("assistant-model-conflict-attempt"),
+            providerId = ProviderId.OPENROUTER,
+            receiverProviderId = ProviderId.OPENROUTER,
+            modelId = "openai/gpt-5.6",
+            modelDisplayName = "GPT-5.6",
+            conversationStyle = ConversationStyle.DIRECT,
+            webSearchUsed = true,
+            recordedAt = Instant.EPOCH,
+        )
+        store.record(recorded)
+
+        val failure = runCatching { store.record(recorded.copy(conversationStyle = ConversationStyle.PROFESSIONAL)) }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertEquals(ConversationStyle.DIRECT, store.forMessages(listOf(recorded.assistantMessageId)).getValue(recorded.assistantMessageId).single().conversationStyle)
+        database.close(); context.deleteDatabase(name)
+    }
+
     @Test fun `cost list projects only the matching completed model attempt duration`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val name = "assistant-model-duration-${UUID.randomUUID()}.db"
@@ -65,6 +126,8 @@ class AssistantResponseModelAttributionRoomContractsTest {
             modelId = "openai/gpt-5.6",
             modelDisplayName = "GPT-5.6",
             recordedAt = Instant.EPOCH,
+            conversationStyle = ConversationStyle.DIRECT,
+            webSearchUsed = true,
             usage = ProviderUsage(inputTokens = 12, outputTokens = 4, reasoningTokens = 2),
             cost = ProviderCost("openrouter-provider-response", "USD", 5_210L),
             costSource = ConversationCostSource.PROVIDER_RESPONSE,
@@ -82,7 +145,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
                 while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
             }
         }
-        assertEquals(setOf("assistantMessageId", "attemptId", "providerId", "receiverProviderId", "modelId", "modelDisplayName", "recordedAtEpochMs", "inputTokens", "outputTokens", "totalTokens", "cachedInputTokens", "reasoningTokens", "costPriceVersion", "costCurrencyCode", "costTotalMicros", "costSource"), columns)
+        assertEquals(setOf("assistantMessageId", "attemptId", "providerId", "receiverProviderId", "modelId", "modelDisplayName", "conversationStyleId", "webSearchUsed", "recordedAtEpochMs", "inputTokens", "outputTokens", "totalTokens", "cachedInputTokens", "reasoningTokens", "costPriceVersion", "costCurrencyCode", "costTotalMicros", "costSource"), columns)
         val indexNames = reopened.openHelper.writableDatabase.query("PRAGMA index_list(assistant_response_model_attributions)").use { cursor ->
             buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
         }
@@ -142,6 +205,33 @@ class AssistantResponseModelAttributionRoomContractsTest {
                 assertEquals(17_242L, cursor.getLong(0))
                 org.junit.Assert.assertTrue(cursor.isNull(1))
                 assertEquals(1_497_056L, cursor.getLong(2))
+            }
+        } finally {
+            helper.close(); context.deleteDatabase(name)
+        }
+    }
+
+    @Test fun `schema sixty four preserves old answers while adding optional execution evidence`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "assistant-answer-evidence-migration-${UUID.randomUUID()}.db"
+        context.deleteDatabase(name)
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(64) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE TABLE assistant_response_model_attributions (assistantMessageId TEXT NOT NULL, attemptId TEXT NOT NULL, providerId TEXT NOT NULL, receiverProviderId TEXT NOT NULL, modelId TEXT NOT NULL, modelDisplayName TEXT NOT NULL, recordedAtEpochMs INTEGER NOT NULL, inputTokens INTEGER, outputTokens INTEGER, totalTokens INTEGER, cachedInputTokens INTEGER, reasoningTokens INTEGER, costPriceVersion TEXT, costCurrencyCode TEXT, costTotalMicros INTEGER, costSource TEXT, PRIMARY KEY(assistantMessageId,attemptId))")
+                    db.execSQL("INSERT INTO assistant_response_model_attributions VALUES ('message','attempt','QWEN','QWEN','qwen3.7-plus','Qwen3.7-Plus',0,10,5,15,0,0,'v','CNY',20,'LOCAL_ESTIMATE')")
+                }
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            }).build(),
+        )
+        val sqlite = helper.writableDatabase
+        try {
+            NanfengAiDatabase.MIGRATION_64_65.migrate(sqlite)
+            sqlite.query("SELECT modelDisplayName, conversationStyleId, webSearchUsed FROM assistant_response_model_attributions WHERE assistantMessageId='message'").use { cursor ->
+                org.junit.Assert.assertTrue(cursor.moveToFirst())
+                assertEquals("Qwen3.7-Plus", cursor.getString(0))
+                org.junit.Assert.assertTrue(cursor.isNull(1))
+                org.junit.Assert.assertTrue(cursor.isNull(2))
             }
         } finally {
             helper.close(); context.deleteDatabase(name)

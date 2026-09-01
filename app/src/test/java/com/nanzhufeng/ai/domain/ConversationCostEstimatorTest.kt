@@ -17,6 +17,7 @@ class ConversationCostEstimatorTest {
             "openai/gpt-5.6-sol",
             "openai/gpt-5.6-terra",
             "openai/gpt-5.6-luna",
+            "x-ai/grok-4.6",
             "google/gemini-3.7-flash",
             "qwen3.7-plus",
             "qwen3.8-max",
@@ -29,6 +30,15 @@ class ConversationCostEstimatorTest {
         modelIds.forEach { modelId ->
             assertNotNull("missing local estimate for $modelId", ConversationCostEstimator.estimate(modelId, usage))
         }
+        assertNull(ConversationCostEstimator.estimate("x-ai/grok-4.1-fast", usage))
+    }
+
+    @Test fun `Grok 4_6 applies OpenRouter long context pricing without estimating web search fees`() {
+        val regular = requireNotNull(ConversationCostEstimator.estimate("x-ai/grok-4.6", ProviderUsage(inputTokens = 100_000, outputTokens = 10_000, cachedInputTokens = 20_000)))
+        val long = requireNotNull(ConversationCostEstimator.estimate("x-ai/grok-4.6", ProviderUsage(inputTokens = 200_000, outputTokens = 10_000, cachedInputTokens = 20_000)))
+
+        assertEquals(230_000L, regular.totalMicros)
+        assertEquals(860_000L, long.totalMicros)
     }
 
     @Test fun `GLM Flash uses the official time-bounded promotion then published standard rate`() {

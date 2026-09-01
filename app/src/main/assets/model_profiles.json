@@ -1,6 +1,21 @@
 {
   "profiles": [
     {
+      "presetId": "GROK_4_1_FAST", "providerId": "OPENROUTER", "modelId": "x-ai/grok-4.1-fast", "displayName": "Grok 4.1 Fast",
+      "capabilities": { "text": true, "image": true, "pdf": true, "video": false, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
+      "contextWindowTokens": 2000000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-31T00:00:00Z"
+    },
+    {
+      "presetId": "GROK_4_6_HIGH", "providerId": "OPENROUTER", "modelId": "x-ai/grok-4.6", "displayName": "Grok 4.6 High",
+      "capabilities": { "text": true, "image": true, "pdf": true, "video": false, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
+      "contextWindowTokens": 500000, "maxOutputTokens": 450000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-31T00:00:00Z"
+    },
+    {
+      "presetId": "KIMI_K3", "providerId": "OPENROUTER", "modelId": "moonshotai/kimi-k3", "displayName": "Kimi K3",
+      "capabilities": { "text": true, "image": true, "pdf": false, "video": true, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
+      "contextWindowTokens": 1000000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-31T00:00:00Z"
+    },
+    {
       "presetId": "QWEN_3_7_PLUS", "providerId": "QWEN", "modelId": "qwen3.7-plus", "displayName": "Qwen3.7-Plus",
       "capabilities": { "text": true, "image": true, "pdf": false, "video": true, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
       "contextWindowTokens": 1000000, "maxOutputTokens": 65536, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-23T00:00:00Z"

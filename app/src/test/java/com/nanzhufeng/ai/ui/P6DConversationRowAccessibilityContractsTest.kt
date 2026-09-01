@@ -1078,7 +1078,7 @@ class P6DConversationRowAccessibilityContractsTest {
         for (token in listOf(
             "Box(Modifier.fillMaxSize().zIndex(ConversationModalOverlayZIndex))", "BackHandler(onBack = onOverlayBack)", "pointerInput(menu, onDismiss)", "detectTapGestures(onTap = { onDismiss() })",
             "anchor.top - heightPx - verticalGap", "attachmentActions.forEach", "ComposerOverlayAction",
-            "contentColor = BodyText", "menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 248.dp",
+            "contentColor = BodyText", "menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 280.dp",
             "Modifier.background(Color.Black.copy(alpha = 0.16f))", "RoundedCornerShape(if (menu == ComposerMenu.MODEL) 28.dp else 22.dp)",
             "shadowElevation = if (menu == ComposerMenu.MODEL) 14.dp else 10.dp", "ComposerModelPickerHeader(",
             "ComposerModelPickerSectionLabel(", "heightIn(max = modelPickerContentHeight)", "Icons.Rounded.Check", "Icons.Rounded.ChevronRight",
@@ -1099,9 +1099,9 @@ class P6DConversationRowAccessibilityContractsTest {
         val header = source.substring(source.indexOf("private fun ComposerModelPickerHeader"), source.indexOf("private fun ComposerModelPickerSectionLabel"))
         val row = source.substring(source.indexOf("private fun ComposerModelOverlayRow"), source.indexOf("private fun ComposerOverlayAction"))
         for (token in listOf(
-            "val menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 248.dp",
+            "val menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 280.dp",
             "ComposerModelPickerRootContentHeight", "ComposerModelPickerHeaderHeight", "32.dp + 72.dp * currentChoices.size.toFloat()", "Color.Black.copy(alpha = 0.16f)", "选择模型", "自动选择", "按任务选择", "选择具体模型",
-            "heightIn(max = modelPickerContentHeight)", "selected = slot == activeModelSlot", "showNext = slot != activeModelSlot", "BackHandler(onBack = onOverlayBack)", "p5aDismissOnInwardEdgeSwipe(onOverlayBack)", "pointerInput(menu, onDismiss)", "detectTapGestures(onTap = { onDismiss() })", "if (menu == ComposerMenu.MODEL && selectedSlot != null) selectedSlot = null else onDismiss()", "onSelectModel?.invoke(null)", "onSelectModel?.invoke(choice.id)",
+            "heightIn(max = modelPickerContentHeight)", "selected = slot == activeModelSlot", "showNext = slot != activeModelSlot", "BackHandler(onBack = onOverlayBack)", "p5aDismissOnInwardEdgeSwipe(onOverlayBack)", "pointerInput(menu, onDismiss)", "detectTapGestures(onTap = { onDismiss() })", "menu == ComposerMenu.MODEL && selectedSlot != null -> selectedSlot = null", "onSelectModel?.invoke(null)", "onSelectModel?.invoke(choice.id)",
             "viewportWidthPx - widthPx - horizontalPadding",
         )) assertTrue("missing layered model picker token $token", overlay.contains(token))
         for (token in listOf("width(36.dp)", "height(4.dp)", "ComposerModelPickerHeaderHeight", "关闭模型选择", "返回模型分类", "Icons.AutoMirrored.Outlined.ArrowBack")) assertTrue("missing sheet header token $token", header.contains(token))
@@ -1471,8 +1471,9 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(source.contains("MediaStore.Downloads.EXTERNAL_CONTENT_URI"))
         assertTrue(source.contains("\"${'$'}{Environment.DIRECTORY_DCIM}/Camera\""))
         assertTrue(source.contains("stampDownloadedImageTakenAt(resolver, uri, downloadedAtMillis)"))
-        assertTrue(source.contains("android.media.ExifInterface.TAG_DATETIME_ORIGINAL"))
-        assertTrue(source.contains("android.media.ExifInterface.TAG_OFFSET_TIME_ORIGINAL"))
+        assertTrue(source.contains("import androidx.exifinterface.media.ExifInterface"))
+        assertTrue(source.contains("ExifInterface.TAG_DATETIME_ORIGINAL"))
+        assertTrue(source.contains("ExifInterface.TAG_OFFSET_TIME_ORIGINAL"))
         assertFalse(source.contains("put(MediaStore.Images.Media.DATE_TAKEN"))
         assertTrue(source.contains("resolver.openOutputStream(uri, \"wt\")"))
         assertTrue(source.contains("if (item.mimeType == \"video/mp4\")"))

@@ -35,6 +35,7 @@ import com.nanzhufeng.ai.domain.ConversationSurfaceRepository
 import com.nanzhufeng.ai.domain.ImportedConversationProvenanceReader
 import com.nanzhufeng.ai.domain.InvocationRepository
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttributionStore
+import com.nanzhufeng.ai.domain.AssistantResponseModelAttribution
 import com.nanzhufeng.ai.domain.ContextSelectionAuditRecord
 import com.nanzhufeng.ai.domain.ContextSelectionAuditStore
 import com.nanzhufeng.ai.domain.ConversationManagementAction
@@ -111,6 +112,10 @@ import com.nanzhufeng.ai.domain.P6GModelTier
 import com.nanzhufeng.ai.domain.ConversationWebSearchOverride
 import com.nanzhufeng.ai.domain.ConversationWebSearchOverrideOwner
 import com.nanzhufeng.ai.domain.ConversationWebSearchOverrideMutationResult
+import com.nanzhufeng.ai.domain.ConversationStyle
+import com.nanzhufeng.ai.domain.ConversationStyleOverride
+import com.nanzhufeng.ai.domain.ConversationStyleOverrideOwner
+import com.nanzhufeng.ai.domain.ConversationStyleOverrideMutationResult
 import com.nanzhufeng.ai.domain.LoadAssistantExperienceSettingsUseCase
 import com.nanzhufeng.ai.domain.P6GProviderFamily
 import com.nanzhufeng.ai.domain.P6GRouteRequest
@@ -129,39 +134,19 @@ import android.net.Uri
 import com.nanzhufeng.ai.domain.SwitchConversationBranchUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.util.Locale
 
 /** Returning after this gap is treated like a fresh chat entry, never a resume of old prose. */
 private const val FRESH_CHAT_AFTER_BACKGROUND_MS = 15L * 60L * 1_000L
 private const val PDF_PAGE_CACHE_MAX_ENTRIES = 4
 private const val PDF_PAGE_CACHE_MAX_BYTES = 24L * 1024L * 1024L
 private const val PDF_NEIGHBOUR_PREFETCH_DELAY_MS = 90L
-
-private data class PdfPageCacheKey(
-    val attachmentId: String,
-    val sourceKey: String,
-    val pageNumber: Int,
-)
-
-private data class ArchivePdfContext(
-    val containerPath: List<String>,
-    val entryPath: String,
-)
-
-/** Exact history wins, then the most recent prefix, then the most recent contained match. */
-internal fun bestSearchHistoryMatch(input: String, history: List<String>): String? {
-    val normalized = input.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
-    if (normalized.isBlank()) return null
-    fun canonical(value: String) = value.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
-    return history.firstOrNull { canonical(it) == normalized }
-        ?: history.firstOrNull { canonical(it).startsWith(normalized) }
-        ?: history.firstOrNull { canonical(it).contains(normalized) }
-}
 
 private sealed interface PickedConversationAttachment {
     data class Opened(val selection: ConversationAttachmentSelection) : PickedConversationAttachment
@@ -179,6 +164,8 @@ data class ConversationFoundationUiState(
     val isLoading: Boolean = true,
     val isCreating: Boolean = false,
     val isSending: Boolean = false,
+    /** Foreground-service tasks are owned by conversation, never by the visible route. */
+    val runningConversationIds: Set<com.nanzhufeng.ai.domain.ConversationId> = emptySet(),
     val conversations: List<Conversation> = emptyList(),
     val unreadConversationIds: Set<com.nanzhufeng.ai.domain.ConversationId> = emptySet(),
     /** Content-free user reminder. Its timestamp controls priority within pinned/recent. */
@@ -211,6 +198,8 @@ data class ConversationFoundationUiState(
     val messages: List<PresentedTranscriptMessage> = emptyList(),
     /** Local, content-free source disclosures bound to individual visible assistant answers. */
     val answerContextSelections: Map<MessageNodeId, List<ContextSelectionAuditRecord>> = emptyMap(),
+    /** Durable answer execution facts; unlike bounded diagnostics these remain answer-owned. */
+    val answerResponseAttributions: Map<MessageNodeId, List<AssistantResponseModelAttribution>> = emptyMap(),
     val draft: ConversationDraft? = null,
     val recovery: ConversationRecoveryPresentation? = null,
     val currentLeafId: MessageNodeId? = null,
@@ -235,6 +224,8 @@ data class ConversationFoundationUiState(
     val p6gConversationOverride: P6GConversationOverride? = null,
     val globalWebSearchEnabled: Boolean = true,
     val conversationWebSearchOverride: ConversationWebSearchOverride? = null,
+    val globalConversationStyle: ConversationStyle = ConversationStyle.DEFAULT,
+    val conversationStyleOverride: ConversationStyleOverride? = null,
     val importedFromChatGptExport: Boolean = false,
     val importedFromClaudeExport: Boolean = false,
     val importedFromChatGptZip: Boolean = false,
@@ -332,6 +323,7 @@ class ConversationFoundationViewModel(
     private val clearTemporary: ClearTemporaryConversationUseCase,
     private val p6gModelSelection: P6GModelSelectionOwner,
     private val conversationWebSearchOverrides: ConversationWebSearchOverrideOwner,
+    private val conversationStyleOverrides: ConversationStyleOverrideOwner,
     private val loadAssistantExperienceSettings: LoadAssistantExperienceSettingsUseCase,
     private val invocations: InvocationRepository,
     private val responseModelAttributions: AssistantResponseModelAttributionStore,
@@ -341,6 +333,8 @@ class ConversationFoundationViewModel(
     private val startWithFreshChat: Boolean = false,
 ) : ViewModel() {
     private var streamJob: Job? = null
+    private var searchDebounceJob: Job? = null
+    private var searchExecutionJob: Job? = null
     private var searchInputGeneration = 0L
     /** Search keeps the full lightweight catalogue; only composed rows request local bytes. */
     private val searchPreviewRequests = mutableSetOf<AttachmentId>()
@@ -367,6 +361,7 @@ class ConversationFoundationViewModel(
     private var selectedChatConversationId: com.nanzhufeng.ai.domain.ConversationId? = null
     private var selectedWorkConversationId: com.nanzhufeng.ai.domain.ConversationId? = null
     private var appBackgroundElapsedRealtime: Long? = null
+    private var backgroundGenerationConversationIds = emptySet<com.nanzhufeng.ai.domain.ConversationId>()
     var state by mutableStateOf(ConversationFoundationUiState())
         private set
 
@@ -419,14 +414,20 @@ class ConversationFoundationViewModel(
 
     fun onAppBackground(nowElapsedRealtime: Long) {
         appBackgroundElapsedRealtime = nowElapsedRealtime
+        backgroundGenerationConversationIds = state.runningConversationIds +
+            normalChatBackgroundExecution.runningConversationIds()
     }
 
     /** Returns true only when the background gap requires the Activity to reveal a fresh chat. */
     fun onAppForeground(nowElapsedRealtime: Long): Boolean {
         val backgroundAt = appBackgroundElapsedRealtime ?: return false
         appBackgroundElapsedRealtime = null
-        if (state.isSending || state.selectedConversationId?.let(normalChatBackgroundExecution::isRunning) == true) {
-            reload(keepSending = true)
+        val runningConversationIds = normalChatBackgroundExecution.runningConversationIds()
+        val preservesGenerationContinuity = backgroundGenerationConversationIds.isNotEmpty() || runningConversationIds.isNotEmpty()
+        backgroundGenerationConversationIds = emptySet()
+        if (preservesGenerationContinuity) {
+            state = state.copy(runningConversationIds = runningConversationIds)
+            reload(keepSending = state.selectedConversationId in runningConversationIds)
             return false
         }
         if (nowElapsedRealtime - backgroundAt < FRESH_CHAT_AFTER_BACKGROUND_MS) return false
@@ -554,11 +555,13 @@ class ConversationFoundationViewModel(
             val p6gConversationOverride = snapshot?.conversation?.id?.let { id ->
                 withContext(Dispatchers.IO) { p6gModelSelection.readConversationOverride(id) }
             }
-            val globalWebSearchEnabled = withContext(Dispatchers.IO) {
-                loadAssistantExperienceSettings.execute().webSearchEnabled
-            }
+            val assistantExperience = withContext(Dispatchers.IO) { loadAssistantExperienceSettings.execute() }
+            val globalWebSearchEnabled = assistantExperience.webSearchEnabled
             val conversationWebSearchOverride = snapshot?.conversation?.id?.let { id ->
                 withContext(Dispatchers.IO) { conversationWebSearchOverrides.read(id) }
+            }
+            val conversationStyleOverride = snapshot?.conversation?.id?.let { id ->
+                withContext(Dispatchers.IO) { conversationStyleOverrides.read(id) }
             }
             val normalSendRecovery = snapshot?.conversation?.id?.let { id ->
                 withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.recoveryForConversation(id) }
@@ -566,17 +569,32 @@ class ConversationFoundationViewModel(
             val visibleSendError = state.sendError.takeIf {
                 normalSendRecovery == null && state.sendErrorConversationId == snapshot?.conversation?.id
             }
+            val serviceRunningConversationIds = normalChatBackgroundExecution.runningConversationIds()
+            val projectedRunningConversationIds = if (
+                keepSending && snapshot?.conversation?.id != null && normalChatBackgroundExecution.ownsExecution()
+            ) {
+                serviceRunningConversationIds + snapshot.conversation.id
+            } else {
+                serviceRunningConversationIds
+            }
+            val selectedIsSending = if (normalChatBackgroundExecution.ownsExecution()) {
+                snapshot?.conversation?.id in projectedRunningConversationIds
+            } else {
+                keepSending
+            }
             when (surface) {
                 ConversationSurface.CHAT -> selectedChatConversationId = snapshot?.conversation?.id
                 ConversationSurface.WORK -> selectedWorkConversationId = snapshot?.conversation?.id
             }
             state = state.copy(
                 surface = surface,
-                isLoading = false, isCreating = false, isSending = keepSending,
+                isLoading = false, isCreating = false, isSending = selectedIsSending,
+                runningConversationIds = projectedRunningConversationIds,
                 conversations = conversations, unreadConversationIds = unreadConversationIds, watchLaterAtEpochMs = watchLaterAtEpochMs, selectedConversationId = snapshot?.conversation?.id,
                 currentProjectId = snapshot?.conversation?.projectId,
                 runtime = runtime, messages = messages, draft = snapshot?.draft,
                 answerContextSelections = answerContextSelections,
+                answerResponseAttributions = responseAttributions,
                 recovery = ConversationRecoveryPresenter.present(runtime, runtimeMessage),
                 currentLeafId = currentLeaf, branchLeaves = leaves, editableUserMessages = editable, lineage = lineage,
                 attemptHistory = attemptHistory,
@@ -588,6 +606,8 @@ class ConversationFoundationViewModel(
                 p6gGlobalDefault = p6gGlobalDefault,
                 globalWebSearchEnabled = globalWebSearchEnabled,
                 conversationWebSearchOverride = conversationWebSearchOverride,
+                globalConversationStyle = assistantExperience.conversationStyle,
+                conversationStyleOverride = conversationStyleOverride,
                 p6gConversationOverride = p6gConversationOverride,
                 importedFromChatGptExport = loaded.importedFromChatGptExport,
                 importedFromClaudeExport = loaded.importedFromClaudeExport,
@@ -605,11 +625,23 @@ class ConversationFoundationViewModel(
         running: Boolean,
         safeResult: String? = null,
     ) {
-        if (conversationId != state.selectedConversationId) return
+        val runningConversationIds = if (running) {
+            state.runningConversationIds + conversationId
+        } else {
+            state.runningConversationIds - conversationId
+        }
+        if (conversationId != state.selectedConversationId) {
+            state = state.copy(runningConversationIds = runningConversationIds)
+            // Completion refreshes timestamps and unread state, but never steals the route the
+            // user is currently reading.
+            reload(keepSending = state.selectedConversationId in runningConversationIds)
+            return
+        }
         val error = safeResult?.toNormalChatBackgroundErrorLabel()
         val notice = safeResult?.toNormalChatBackgroundNoticeLabel()
         state = state.copy(
             isSending = running,
+            runningConversationIds = runningConversationIds,
             sendError = error ?: state.sendError,
             sendErrorConversationId = if (error != null) conversationId else state.sendErrorConversationId,
             notice = notice ?: state.notice,
@@ -766,6 +798,24 @@ class ConversationFoundationViewModel(
                 }
                 ConversationWebSearchOverrideMutationResult.Conflict -> reload("当前对话联网状态已更新；请按最新状态重试。")
                 ConversationWebSearchOverrideMutationResult.PersistenceFailed -> reload("当前对话联网状态未保存；本机设置保持不变。")
+            }
+        }
+    }
+
+    /** Quick switching is scoped to this conversation and affects only subsequent requests. */
+    fun setCurrentConversationStyle(style: ConversationStyle) {
+        val conversationId = state.selectedConversationId ?: return
+        val current = state.conversationStyleOverride ?: return
+        viewModelScope.launch {
+            when (withContext(Dispatchers.IO) {
+                conversationStyleOverrides.setStyle(conversationId, style, current.revision)
+            }) {
+                is ConversationStyleOverrideMutationResult.Applied -> {
+                    state = state.copy(notice = null)
+                    reload()
+                }
+                ConversationStyleOverrideMutationResult.Conflict -> reload("当前对话风格已更新；请按最新状态重试。")
+                ConversationStyleOverrideMutationResult.PersistenceFailed -> reload("当前对话风格未保存；本机设置保持不变。")
             }
         }
     }
@@ -1283,8 +1333,14 @@ class ConversationFoundationViewModel(
             ConversationSurface.CHAT -> selectedChatConversationId = id
             ConversationSurface.WORK -> selectedWorkConversationId = id
         }
-        state = state.copy(selectedConversationId = id, unreadConversationIds = state.unreadConversationIds - id)
-        reload(targetSurface = state.surface, selectedBefore = id)
+        state = state.copy(
+            selectedConversationId = id,
+            isSending = id in state.runningConversationIds,
+            unreadConversationIds = state.unreadConversationIds - id,
+        )
+        // Selection changes only the UI projection. The service continues every active request,
+        // while this conversation restores its own sending state.
+        reload(keepSending = id in state.runningConversationIds, targetSurface = state.surface, selectedBefore = id)
     }
 
     fun clearConversationWatchLater(id: com.nanzhufeng.ai.domain.ConversationId) {
@@ -1298,7 +1354,7 @@ class ConversationFoundationViewModel(
         conversationReadMarkerStore.markWatchLater(conversation.id, markedAt)
         state = state.copy(
             watchLaterAtEpochMs = state.watchLaterAtEpochMs + (conversation.id to markedAt),
-            notice = "已标为待看；点击进入后提醒会消失。",
+            notice = "已标为未读；点击进入后提醒会消失。",
         )
     }
 
@@ -1369,11 +1425,13 @@ class ConversationFoundationViewModel(
 
     fun setListScope(scope: ConversationListScope) {
         if (state.listScope == scope) return
+        cancelPendingSearch()
         state = state.copy(listScope = scope, searchResults = emptyList(), attachmentSearchResults = emptyList(), glmOcrSearchResults = emptyList(), searchAttachmentPreviews = emptyMap(), searchAttachmentTextPreviews = emptyMap(), searchQuery = "", searchPanelOpen = false, searchHistoryOpen = false, searchHistoryHighlightedQuery = null, searchHistoryManuallyOpened = false)
         reload()
     }
 
     fun updateSearchQuery(query: String) {
+        cancelPendingSearch()
         val generation = ++searchInputGeneration
         searchPreviewRequests.clear()
         val recentHistory = searchHistory.recent(state.listScope)
@@ -1390,7 +1448,7 @@ class ConversationFoundationViewModel(
             searchHistoryOpen = state.searchHistoryManuallyOpened || matchedHistory != null,
             searchHistoryHighlightedQuery = matchedHistory,
         )
-        viewModelScope.launch {
+        searchDebounceJob = viewModelScope.launch {
             if (query.isNotBlank()) delay(180)
             if (generation == searchInputGeneration && state.searchQuery == query) {
                 executeSearch(recordHistory = false, closeHistoryOnComplete = false)
@@ -1400,6 +1458,7 @@ class ConversationFoundationViewModel(
 
     fun selectSearchCategory(category: ConversationSearchCategory) {
         if (state.searchCategory == category) return
+        cancelPendingSearch()
         searchInputGeneration += 1
         searchPreviewRequests.clear()
         state = state.copy(searchCategory = category, searchResults = emptyList(), attachmentSearchResults = emptyList(), glmOcrSearchResults = emptyList(), searchAttachmentPreviews = emptyMap(), searchAttachmentTextPreviews = emptyMap(), searchPanelOpen = false, searchHistoryOpen = false, searchHistoryHighlightedQuery = null, searchHistoryManuallyOpened = false)
@@ -1417,6 +1476,7 @@ class ConversationFoundationViewModel(
     }
     fun closeSearchHistory() { state = state.copy(searchHistoryOpen = false, searchHistoryHighlightedQuery = null, searchHistoryManuallyOpened = false) }
     fun fillSearchHistory(query: String) {
+        cancelPendingSearch()
         searchInputGeneration += 1
         state = state.copy(searchQuery = query, searchHistoryOpen = false, searchHistoryHighlightedQuery = null, searchHistoryManuallyOpened = false)
         executeSearch(recordHistory = true, closeHistoryOnComplete = true)
@@ -1424,24 +1484,43 @@ class ConversationFoundationViewModel(
     fun clearSearchHistory() { searchHistory.clear(state.listScope); state = state.copy(searchHistory = emptyList(), searchHistoryHighlightedQuery = null) }
 
     /** Opening and category changes browse local records; typing debounces the same local filter. */
-    fun submitSearch() = executeSearch(recordHistory = true, closeHistoryOnComplete = true)
+    fun submitSearch() {
+        searchDebounceJob?.cancel()
+        searchDebounceJob = null
+        searchInputGeneration += 1
+        executeSearch(recordHistory = true, closeHistoryOnComplete = true)
+    }
+
+    private fun cancelPendingSearch() {
+        searchDebounceJob?.cancel()
+        searchDebounceJob = null
+        searchExecutionJob?.cancel()
+        searchExecutionJob = null
+    }
 
     private fun executeSearch(recordHistory: Boolean, closeHistoryOnComplete: Boolean) {
         val query = state.searchQuery
         val browsing = query.isBlank()
         val category = state.searchCategory
         val scope = state.listScope
-        viewModelScope.launch {
-            val results = withContext(Dispatchers.IO) {
-                if (category == ConversationSearchCategory.TEXT || category == ConversationSearchCategory.ALL) {
-                    if (browsing) searchConversations.browse(scope) else searchConversations.execute(query, scope)
-                } else emptyList()
+        searchExecutionJob?.cancel()
+        searchExecutionJob = viewModelScope.launch {
+            // Each catalogue has an independent local owner.  Loading them concurrently keeps
+            // the All tab bounded by its slowest query rather than serially waiting for text,
+            // attachments and OCR documents before Compose can present the next category.
+            val (results, attachments, glmOcrDocuments) = coroutineScope {
+                val text = async(Dispatchers.IO) {
+                    if (category == ConversationSearchCategory.TEXT || category == ConversationSearchCategory.ALL) {
+                        if (browsing) searchConversations.browse(scope) else searchConversations.execute(query, scope)
+                    } else emptyList()
+                }
+                val attachment = async(Dispatchers.IO) {
+                    if (browsing) searchConversationAttachments.browse(category, scope)
+                    else searchConversationAttachments.execute(query, category, scope)
+                }
+                val ocr = async(Dispatchers.IO) { glmOcr.searchDocuments(query, category) }
+                Triple(text.await(), attachment.await(), ocr.await())
             }
-            val attachments = withContext(Dispatchers.IO) {
-                if (browsing) searchConversationAttachments.browse(category, scope)
-                else searchConversationAttachments.execute(query, category, scope)
-            }
-            val glmOcrDocuments = withContext(Dispatchers.IO) { glmOcr.searchDocuments(query, category) }
             if (state.searchQuery == query && state.searchCategory == category && state.listScope == scope) {
                 if (recordHistory && !browsing) searchHistory.record(query, scope)
                 searchPreviewRequests.clear()
@@ -1771,6 +1850,9 @@ class ConversationFoundationViewModel(
         ++draftSaveGeneration
         state = state.copy(
             isSending = true,
+            runningConversationIds = if (
+                state.surface == ConversationSurface.CHAT && normalChatBackgroundExecution.ownsExecution()
+            ) state.runningConversationIds + id else state.runningConversationIds,
             sendError = null,
             sendErrorConversationId = null,
             notice = null,
@@ -1784,14 +1866,24 @@ class ConversationFoundationViewModel(
                     saved
                 }
                 if (saved !is ConversationDraftResult.Saved) {
-                    state = state.copy(isSending = false, sendError = normalChatResultLabel(NormalChatOpenRouterExecutor.Code.DRAFT_UNAVAILABLE, sent = false), sendErrorConversationId = id)
+                    state = state.copy(
+                        isSending = false,
+                        runningConversationIds = state.runningConversationIds - id,
+                        sendError = normalChatResultLabel(NormalChatOpenRouterExecutor.Code.DRAFT_UNAVAILABLE, sent = false),
+                        sendErrorConversationId = id,
+                    )
                     return@launch
                 }
                 // Android production transfers the entire actual request to the foreground
                 // service. The ViewModel never owns its socket or stream callbacks.
                 if (normalChatBackgroundExecution.ownsExecution()) {
                     if (!normalChatBackgroundExecution.begin(id, NormalChatBackgroundOperation.SEND)) {
-                        state = state.copy(isSending = false, sendError = "系统未能启动后台生成；本次没有向服务商发送内容。", sendErrorConversationId = id)
+                        state = state.copy(
+                            isSending = false,
+                            runningConversationIds = state.runningConversationIds - id,
+                            sendError = "系统未能启动后台生成；本次没有向服务商发送内容。",
+                            sendErrorConversationId = id,
+                        )
                     } else {
                         reload(keepSending = true)
                     }
@@ -1848,11 +1940,22 @@ class ConversationFoundationViewModel(
     fun retryLatestNormalSend() {
         val id = state.selectedConversationId ?: return
         if (state.isSending || state.normalSendRecovery?.canRetry != true) return
-        state = state.copy(isSending = true, sendError = null, sendErrorConversationId = null, notice = null)
+        state = state.copy(
+            isSending = true,
+            runningConversationIds = if (normalChatBackgroundExecution.ownsExecution()) {
+                state.runningConversationIds + id
+            } else {
+                state.runningConversationIds
+            },
+            sendError = null,
+            sendErrorConversationId = null,
+            notice = null,
+        )
         if (normalChatBackgroundExecution.ownsExecution()) {
             if (!normalChatBackgroundExecution.begin(id, NormalChatBackgroundOperation.RETRY)) {
                 state = state.copy(
                     isSending = false,
+                    runningConversationIds = state.runningConversationIds - id,
                     sendError = "系统未能启动后台重试；本次没有向服务商发送内容。",
                     sendErrorConversationId = id,
                     normalSendRetryInProgress = false,
@@ -2166,6 +2269,7 @@ class ConversationFoundationViewModel(
         private val clearTemporary: ClearTemporaryConversationUseCase,
         private val p6gModelSelection: P6GModelSelectionOwner,
         private val conversationWebSearchOverrides: ConversationWebSearchOverrideOwner,
+        private val conversationStyleOverrides: ConversationStyleOverrideOwner,
         private val loadAssistantExperienceSettings: LoadAssistantExperienceSettingsUseCase,
         private val invocations: InvocationRepository,
         private val responseModelAttributions: AssistantResponseModelAttributionStore,
@@ -2177,7 +2281,7 @@ class ConversationFoundationViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ConversationFoundationViewModel::class.java))
-            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, glmOcr, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, deletePersistedAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat) as T
+            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, glmOcr, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, deletePersistedAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, conversationStyleOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat) as T
         }
     }
 }
@@ -2198,13 +2302,15 @@ private fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent:
     NormalChatOpenRouterExecutor.Code.TIMEOUT -> "服务响应超时，未自动重试。"
     NormalChatOpenRouterExecutor.Code.NETWORK -> "网络连接已中断，未收到服务返回结果。"
     NormalChatOpenRouterExecutor.Code.SERVICE -> "服务商未完成本次请求，未自动重试。"
-    NormalChatOpenRouterExecutor.Code.MODEL_NOT_FOUND -> "服务商未找到该模型：请在模型设置中刷新目录或改选模型。"
+    NormalChatOpenRouterExecutor.Code.MODEL_NOT_FOUND -> "当前模型已不在服务商目录，本次未发送任何内容；请在模型设置中重新选择模型。"
     NormalChatOpenRouterExecutor.Code.STREAM_REQUIRED -> "该模型要求流式输出；流式发送升级正在启用，请稍后重试。"
     NormalChatOpenRouterExecutor.Code.INVALID_REQUEST -> "服务商拒绝了本次请求格式；可在模型设置的本机诊断中查看脱敏原因。"
     NormalChatOpenRouterExecutor.Code.RESPONSE_FORMAT -> "服务返回内容无法安全读取，未自动重试。"
     NormalChatOpenRouterExecutor.Code.TOOL_CALL_UNSUPPORTED -> "服务要求执行工具调用；普通聊天未执行该工具，也没有伪造回答。"
+    NormalChatOpenRouterExecutor.Code.WEB_SEARCH_UNAVAILABLE -> "当前模型没有可验证的官方实时网页搜索路由，本次未改用模型记忆回答。请更换支持联网的模型后重试。"
+    NormalChatOpenRouterExecutor.Code.WEB_SEARCH_NO_SOURCES -> "已请求实时网页搜索，但服务商没有返回可验证的公开来源；本次未保存为完整回答。请显式重试或更换支持联网的模型。"
     NormalChatOpenRouterExecutor.Code.LOCAL_RESPONSE_PERSISTENCE -> if (sent) "服务已返回，但本机未能确认本条回复已完整保存；不会自动重发。你仍可正常发送新问题或同题新请求。" else "本机未能创建可保存的回复。"
-    NormalChatOpenRouterExecutor.Code.LOCAL_ACCOUNTING_PERSISTENCE -> "回复已保存，但本机未能保存本次费用与 Token 归因；不会影响继续提问。"
+    NormalChatOpenRouterExecutor.Code.LOCAL_ACCOUNTING_PERSISTENCE -> "回复已保存，但本机未能保存本次费用、Token 与回答执行信息；不会影响继续提问。"
     NormalChatOpenRouterExecutor.Code.LOCAL_ATTEMPT_PERSISTENCE -> "本机未能保存本次发送记录，未继续请求服务商。"
     NormalChatOpenRouterExecutor.Code.RECOVERY_UNAVAILABLE -> "这次发送无法从本机恢复；不会擅自新建请求。"
     NormalChatOpenRouterExecutor.Code.RECOVERY_MODEL_CHANGED -> "原模型档案已变化，不能安全地把旧请求改发给新模型。"
@@ -2212,6 +2318,7 @@ private fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent:
 
 private fun normalChatCompletionNoticeLabel(notice: NormalChatOpenRouterExecutor.CompletionNotice): String = when (notice) {
     NormalChatOpenRouterExecutor.CompletionNotice.REASONING_NOT_SAVED -> "回复、标题与费用已保存；本次模型思考过程未能保留。"
+    NormalChatOpenRouterExecutor.CompletionNotice.TOOL_CALL_NOT_EXECUTED -> "回复与工具调用协议已保存；当前普通对话没有执行该工具。"
 }
 
 private fun String.toNormalChatBackgroundErrorLabel(): String? {

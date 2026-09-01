@@ -7,10 +7,15 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.ProtocolException
 import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.SSLException
 import javax.net.ssl.HttpsURLConnection
 
 /**
@@ -151,6 +156,7 @@ data class ProviderSseEvent(
     val reportedCostUsdMicros: Long? = null,
     /** Normal chat never runs tools; retaining this fact prevents a false empty-answer success. */
     val toolCallEncountered: Boolean = false,
+    val toolCallDeltas: List<ChatToolCallDelta> = emptyList(),
     /** Provider-reported cache hits used by the transparent local estimate fallback. */
     val cachedInputTokens: Long? = null,
     /** Provider-reported subset of output tokens spent on hidden reasoning. */
@@ -191,6 +197,7 @@ sealed interface ProviderChatOutcome {
         val outputTokens: Long?,
         val reportedCostUsdMicros: Long?,
         val toolCallEncountered: Boolean,
+        val toolCalls: List<ChatToolCall> = emptyList(),
         val cachedInputTokens: Long? = null,
         val reasoningTokens: Long? = null,
         val webSources: List<ProviderWebSource> = emptyList(),
@@ -200,9 +207,23 @@ sealed interface ProviderChatOutcome {
         val finishReason: String? = null,
     ) : ProviderChatOutcome
     data object TimedOut : ProviderChatOutcome
-    data object NetworkFailure : ProviderChatOutcome
+    /**
+     * A bounded local transport fact. It deliberately contains no exception message, URL,
+     * credential, request body, or response data, so it is safe to persist in diagnostics.
+     */
+    data class NetworkFailure(val kind: ProviderNetworkFailureKind) : ProviderChatOutcome
     data object ResponseTooLarge : ProviderChatOutcome
     data object Cancelled : ProviderChatOutcome
+}
+
+enum class ProviderNetworkFailureKind { DNS, TLS, CONNECT, PROTOCOL, IO }
+
+internal fun classifyProviderNetworkFailure(error: Throwable): ProviderNetworkFailureKind = when (error) {
+    is UnknownHostException -> ProviderNetworkFailureKind.DNS
+    is SSLException -> ProviderNetworkFailureKind.TLS
+    is ConnectException, is NoRouteToHostException -> ProviderNetworkFailureKind.CONNECT
+    is ProtocolException -> ProviderNetworkFailureKind.PROTOCOL
+    else -> ProviderNetworkFailureKind.IO
 }
 
 interface ProviderChatTransport {
@@ -245,7 +266,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
                     )
                 }
                 return ProviderChatOutcome.StreamedResponse(
-                    status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedCostUsdMicros, streamed.toolCallEncountered, streamed.cachedInputTokens, streamed.reasoningTokens,
+                    status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedCostUsdMicros, streamed.toolCallEncountered, streamed.toolCalls, streamed.cachedInputTokens, streamed.reasoningTokens,
                     webSources = streamed.webSources,
                     finishReason = streamed.finishReason,
                 )
@@ -262,7 +283,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
             request.cancellation?.isCancelled() == true -> ProviderChatOutcome.Cancelled
             error is SocketTimeoutException -> ProviderChatOutcome.TimedOut
             error is ProviderResponseTooLargeException -> ProviderChatOutcome.ResponseTooLarge
-            else -> ProviderChatOutcome.NetworkFailure
+            else -> ProviderChatOutcome.NetworkFailure(classifyProviderNetworkFailure(error))
         }
     }
 
@@ -284,6 +305,7 @@ internal object ProviderSseDecoder {
         val outputTokens: Long?,
         val reportedCostUsdMicros: Long?,
         val toolCallEncountered: Boolean,
+        val toolCalls: List<ChatToolCall>,
         val cachedInputTokens: Long? = null,
         val reasoningTokens: Long? = null,
         val webSources: List<ProviderWebSource> = emptyList(),
@@ -305,6 +327,8 @@ internal object ProviderSseDecoder {
         var reasoningTokens: Long? = null
         var reportedCostUsdMicros: Long? = null
         var toolCallEncountered = false
+        data class PendingToolCall(var id: String? = null, var name: String? = null, val arguments: StringBuilder = StringBuilder())
+        val pendingToolCalls = linkedMapOf<Int, PendingToolCall>()
         val webSources = linkedMapOf<String, ProviderWebSource>()
         var terminal: ProviderStreamTerminal? = null
         val output = StringBuilder()
@@ -340,6 +364,12 @@ internal object ProviderSseDecoder {
                     event.reasoningTokens?.let { reasoningTokens = it }
                     event.reportedCostUsdMicros?.let { reportedCostUsdMicros = it }
                     toolCallEncountered = toolCallEncountered || event.toolCallEncountered
+                    event.toolCallDeltas.forEach { delta ->
+                        val pending = pendingToolCalls.getOrPut(delta.index) { PendingToolCall() }
+                        delta.id?.let { pending.id = it }
+                        delta.name?.let { pending.name = it }
+                        pending.arguments.append(delta.argumentsDelta)
+                    }
                     event.webSources.forEach { source -> webSources.putIfAbsent(source.url, source) }
                     event.terminal?.let { terminal = it }
                 }
@@ -374,7 +404,9 @@ internal object ProviderSseDecoder {
         }
         return Result(
             output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens,
-            reportedCostUsdMicros, toolCallEncountered, cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason,
+            reportedCostUsdMicros, toolCallEncountered,
+            pendingToolCalls.values.mapNotNull { pending -> pending.name?.let { ChatToolCall(pending.id, it, pending.arguments.toString().ifBlank { "{}" }) } },
+            cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason,
         )
     }
 }

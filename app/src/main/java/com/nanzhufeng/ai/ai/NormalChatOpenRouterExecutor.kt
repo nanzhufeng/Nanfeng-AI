@@ -80,6 +80,7 @@ import com.nanzhufeng.ai.domain.ConversationAutoTitle
 import com.nanzhufeng.ai.domain.openingTitleSource
 import com.nanzhufeng.ai.domain.withRequiredOpeningAddress
 import com.nanzhufeng.ai.domain.withoutLeakedReasoningTailBeforeOpeningAddress
+import com.nanzhufeng.ai.domain.definition
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 
@@ -115,6 +116,7 @@ class NormalChatOpenRouterExecutor(
     private val attachmentBridge: ChatAttachmentBridge = PassthroughChatAttachmentBridge,
     private val loadAssistantExperienceSettings: () -> AssistantExperienceSettings = { AssistantExperienceSettings() },
     private val resolveConversationWebSearchEnabled: (ConversationId, Boolean) -> Boolean = { _, globalEnabled -> globalEnabled },
+    private val resolveConversationStyle: (ConversationId, com.nanzhufeng.ai.domain.ConversationStyle) -> com.nanzhufeng.ai.domain.ConversationStyle = { _, globalStyle -> globalStyle },
     private val saveMemorySummary: (ConversationId, MemorySummaryDraft) -> MemoryMutationResult = { _, _ ->
         MemoryMutationResult.Rejected(com.nanzhufeng.ai.domain.MemoryRejectionCode.INVALID_ACTION)
     },
@@ -138,6 +140,7 @@ class NormalChatOpenRouterExecutor(
         SERVICE_DISABLED, CREDENTIAL_MISSING, REGISTRY_UNVERIFIED, MODEL_UNAVAILABLE,
         ATTACHMENTS_UNSUPPORTED, ATTACHMENT_MODEL_UNSUPPORTED, ATTACHMENT_BRIDGE_UNAVAILABLE, CONTEXT_LIMIT, DRAFT_UNAVAILABLE, AUTHENTICATION, BALANCE, RATE_LIMIT,
         TIMEOUT, NETWORK, SERVICE, MODEL_NOT_FOUND, STREAM_REQUIRED, INVALID_REQUEST, RESPONSE_FORMAT, TOOL_CALL_UNSUPPORTED,
+        WEB_SEARCH_UNAVAILABLE, WEB_SEARCH_NO_SOURCES,
         LOCAL_RESPONSE_PERSISTENCE, LOCAL_ACCOUNTING_PERSISTENCE, LOCAL_ATTEMPT_PERSISTENCE,
         RECOVERY_UNAVAILABLE, RECOVERY_MODEL_CHANGED,
     }
@@ -230,7 +233,11 @@ class NormalChatOpenRouterExecutor(
         return when (retried) {
             is OneResult.Reply -> {
                 if (!recordResponseAttribution(resumedRuntime.state.messageId, retried)) return Result.Failed(Code.LOCAL_ACCOUNTING_PERSISTENCE)
-                contextSelectionAudits.bindAnswer(retried.attempt.attemptId, resumedRuntime.state.messageId)
+                contextSelectionAudits.bindAnswer(
+                    retried.attempt.attemptId,
+                    resumedRuntime.state.messageId,
+                    retried.webSearchUsed,
+                )
                 completedResult(listOf(retried)).also { maybeRefineOpeningTitle(conversationId); onConversationCompleted(conversationId) }
             }
             is OneResult.Blocked -> Result.Blocked(retried.code).also { resumedRuntime.fail(retried.code.name) }
@@ -357,7 +364,13 @@ class NormalChatOpenRouterExecutor(
                     if (runtime != null && !recordResponseAttribution(runtime.state.messageId, request)) {
                         return Result.Failed(Code.LOCAL_ACCOUNTING_PERSISTENCE)
                     }
-                    runtime?.let { active -> contextSelectionAudits.bindAnswer(request.attempt.attemptId, active.state.messageId) }
+                    runtime?.let { active ->
+                        contextSelectionAudits.bindAnswer(
+                            request.attempt.attemptId,
+                            active.state.messageId,
+                            request.webSearchUsed,
+                        )
+                    }
                     replies += preset to request
                 }
                 is OneResult.Blocked -> {
@@ -407,7 +420,9 @@ class NormalChatOpenRouterExecutor(
             is com.nanzhufeng.ai.domain.ConversationMutationResult.Saved -> {
                 if (!replies.all { (_, reply) -> recordResponseAttribution(messageId, reply) }) return Result.Failed(Code.LOCAL_ACCOUNTING_PERSISTENCE)
                 completedResult(replies.map { it.second }).also {
-                replies.forEach { (_, reply) -> contextSelectionAudits.bindAnswer(reply.attempt.attemptId, messageId) }
+                replies.forEach { (_, reply) ->
+                    contextSelectionAudits.bindAnswer(reply.attempt.attemptId, messageId, reply.webSearchUsed)
+                }
                 maybeRefineOpeningTitle(conversationId)
                 onConversationCompleted(conversationId)
             }
@@ -469,6 +484,8 @@ class NormalChatOpenRouterExecutor(
             val usage: ProviderUsage,
             val cost: ProviderCost,
             val costSource: ConversationCostSource?,
+            val conversationStyle: com.nanzhufeng.ai.domain.ConversationStyle,
+            val webSearchUsed: Boolean,
         ) : OneResult
         data class Blocked(val code: Code) : OneResult
         data class Failed(val code: Code) : OneResult
@@ -487,7 +504,10 @@ class NormalChatOpenRouterExecutor(
             ?: return OneResult.Blocked(Code.MODEL_UNAVAILABLE)
         if (!resolvedModel.capabilities.supportsText) return OneResult.Blocked(Code.MODEL_UNAVAILABLE)
         val adapter = adapters.adapter(providerId) ?: return OneResult.Blocked(Code.MODEL_UNAVAILABLE)
-        val experience = loadAssistantExperienceSettings()
+        val globalExperience = loadAssistantExperienceSettings()
+        val experience = globalExperience.copy(
+            conversationStyle = resolveConversationStyle(conversationId, globalExperience.conversationStyle),
+        )
         val webSearchEnabled = resolveConversationWebSearchEnabled(conversationId, experience.webSearchEnabled)
         val analysisMode = EvidenceFirstAnalysisPolicy.modeFor(userMessage, attachments)
         val requestedOptions = ChatRequestOptions.Standard
@@ -505,6 +525,9 @@ class NormalChatOpenRouterExecutor(
             modelId = resolvedModel.modelId,
         )
         val requestOptions = automaticOptions
+        if (webSearchEnabled && !requestOptions.liveWebSearch) {
+            return OneResult.Blocked(Code.WEB_SEARCH_UNAVAILABLE)
+        }
         val fulfilledAnalysisMode = analysisMode.copy(liveEvidence = requestOptions.liveWebSearch)
         val executionProviderId = adapter.executionProviderId(requestOptions)
         val config = configuration.execute(executionProviderId) ?: return OneResult.Blocked(Code.SERVICE_DISABLED)
@@ -682,7 +705,15 @@ class NormalChatOpenRouterExecutor(
                 // tool is registered or approved here, so treating that mixed response as a
                 // completed answer would falsely claim the required action has happened.
                 val toolCallEncountered = !requestOptions.liveWebSearch && (toolOnly != null || (reply?.toolCallEncountered == true && modelId != KIMI_K3_MODEL_ID))
-                audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, reply?.inputTokens ?: toolOnly?.inputTokens, reply?.outputTokens ?: toolOnly?.outputTokens, when { toolCallEncountered -> "TOOL_CALL_UNSUPPORTED"; reply != null && requestOptions.liveWebSearch -> "WEB_SEARCH_ENABLED_SUCCEEDED"; reply != null -> "SUCCEEDED"; else -> "RESPONSE_FORMAT" }))
+                val webSearchMissingSources = reply != null &&
+                    !WebSearchGroundingPolicy.hasRequiredSources(requestOptions, reply.webSources)
+                audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, reply?.inputTokens ?: toolOnly?.inputTokens, reply?.outputTokens ?: toolOnly?.outputTokens, when {
+                    toolCallEncountered -> "TOOL_CALL_UNSUPPORTED"
+                    webSearchMissingSources -> "WEB_SEARCH_NO_SOURCES"
+                    reply != null && requestOptions.liveWebSearch -> "WEB_SEARCH_SUCCEEDED_WITH_SOURCES"
+                    reply != null -> "SUCCEEDED"
+                    else -> "RESPONSE_FORMAT"
+                }))
                 if (toolCallEncountered) {
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "TOOL_CALL_UNSUPPORTED")
                     OneResult.Failed(Code.TOOL_CALL_UNSUPPORTED)
@@ -696,6 +727,18 @@ class NormalChatOpenRouterExecutor(
                     )
                     recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
                     OneResult.Failed(Code.RESPONSE_FORMAT)
+                } else if (webSearchMissingSources) {
+                    sendAttempts.transition(
+                        attempt.attemptId,
+                        setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING),
+                        NormalChatSendAttemptStatus.FAILED,
+                        clock.instant(),
+                        "WEB_SEARCH_NO_SOURCES",
+                    )
+                    modelHealthReporter.recordFailure(preset, ProviderDiagnosticErrorClass.RESPONSE_FORMAT)
+                    runtime?.fail(Code.WEB_SEARCH_NO_SOURCES.name)
+                    recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
+                    OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)
                 } else {
                     modelHealthReporter.recordSuccess(preset)
                     val responseText = if (explicitMemoryCommand) {
@@ -723,14 +766,28 @@ class NormalChatOpenRouterExecutor(
                             k3Tools.isNotEmpty() -> CompletionNotice.TOOL_CALL_NOT_EXECUTED
                             else -> null
                         }
-                        OneResult.Reply(visibleReply, reply.reasoning, k3Tools, notice, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName, usage, cost, source)
+                        OneResult.Reply(
+                            visibleReply, reply.reasoning, k3Tools, notice, attempt, providerId,
+                            executionProviderId, modelId, resolvedModel.displayName, usage, cost, source,
+                            conversationStyle = experience.conversationStyle,
+                            webSearchUsed = requestOptions.liveWebSearch,
+                        )
                     }
                 }
             }
             is ProviderChatOutcome.StreamedResponse -> {
                 val reply = outcome.text.cleanReply()
                 val incompleteResponsesStream = outcome.finishReason in setOf("INCOMPLETE", "FAILED", "MISSING_COMPLETION")
-                audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, outcome.inputTokens, outcome.outputTokens, when { incompleteResponsesStream -> "RESPONSE_INCOMPLETE"; outcome.toolCallEncountered && modelId != KIMI_K3_MODEL_ID -> "TOOL_CALL_UNSUPPORTED"; reply == null -> "RESPONSE_FORMAT"; requestOptions.liveWebSearch -> "WEB_SEARCH_ENABLED_STREAM_SUCCEEDED"; else -> "STREAM_SUCCEEDED" }))
+                val webSearchMissingSources = reply != null &&
+                    !WebSearchGroundingPolicy.hasRequiredSources(requestOptions, outcome.webSources)
+                audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, outcome.inputTokens, outcome.outputTokens, when {
+                    incompleteResponsesStream -> "RESPONSE_INCOMPLETE"
+                    outcome.toolCallEncountered && modelId != KIMI_K3_MODEL_ID -> "TOOL_CALL_UNSUPPORTED"
+                    reply == null -> "RESPONSE_FORMAT"
+                    webSearchMissingSources -> "WEB_SEARCH_NO_SOURCES"
+                    requestOptions.liveWebSearch -> "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES"
+                    else -> "STREAM_SUCCEEDED"
+                }))
                 if (runtime?.persistenceRejected == true) {
                     OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
                 } else if (incompleteResponsesStream) {
@@ -758,6 +815,18 @@ class NormalChatOpenRouterExecutor(
                     runtime?.fail(Code.RESPONSE_FORMAT.name)
                     recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
                     OneResult.Failed(Code.RESPONSE_FORMAT)
+                } else if (webSearchMissingSources) {
+                    sendAttempts.transition(
+                        attempt.attemptId,
+                        setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING),
+                        NormalChatSendAttemptStatus.FAILED,
+                        clock.instant(),
+                        "WEB_SEARCH_NO_SOURCES",
+                    )
+                    modelHealthReporter.recordFailure(preset, ProviderDiagnosticErrorClass.RESPONSE_FORMAT)
+                    runtime?.fail(Code.WEB_SEARCH_NO_SOURCES.name)
+                    recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
+                    OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)
                 } else {
                     modelHealthReporter.recordSuccess(preset)
                     val visibleReply = appendProviderWebSources(reply, outcome.webSources)
@@ -780,7 +849,12 @@ class NormalChatOpenRouterExecutor(
                         k3Tools.isNotEmpty() -> CompletionNotice.TOOL_CALL_NOT_EXECUTED
                         else -> null
                     }
-                    OneResult.Reply(visibleReply, outcome.reasoning, k3Tools, notice, attempt, providerId, executionProviderId, modelId, resolvedModel.displayName, usage, cost, source)
+                    OneResult.Reply(
+                        visibleReply, outcome.reasoning, k3Tools, notice, attempt, providerId,
+                        executionProviderId, modelId, resolvedModel.displayName, usage, cost, source,
+                        conversationStyle = experience.conversationStyle,
+                        webSearchUsed = requestOptions.liveWebSearch,
+                    )
                 }
             }
             ProviderChatOutcome.TimedOut -> OneResult.Failed(Code.TIMEOUT).also {
@@ -815,6 +889,7 @@ class NormalChatOpenRouterExecutor(
     ): Boolean = recordResponseAttribution(
         assistantMessageId, reply.attempt, reply.providerId, reply.receiverProviderId, reply.modelId, reply.modelDisplayName,
         reply.usage, reply.cost, reply.costSource,
+        reply.conversationStyle, reply.webSearchUsed,
     )
 
     private fun recordResponseAttribution(
@@ -827,6 +902,8 @@ class NormalChatOpenRouterExecutor(
         usage: ProviderUsage = ProviderUsage(),
         cost: ProviderCost = ProviderCost(),
         costSource: ConversationCostSource? = null,
+        conversationStyle: com.nanzhufeng.ai.domain.ConversationStyle? = null,
+        webSearchUsed: Boolean? = null,
     ): Boolean = runCatching {
         responseModelAttributions.record(
             AssistantResponseModelAttribution(
@@ -837,6 +914,8 @@ class NormalChatOpenRouterExecutor(
                 modelId = modelId,
                 modelDisplayName = modelDisplayName,
                 recordedAt = clock.instant(),
+                conversationStyle = conversationStyle,
+                webSearchUsed = webSearchUsed,
                 usage = usage,
                 cost = cost,
                 costSource = costSource,
@@ -947,9 +1026,8 @@ class NormalChatOpenRouterExecutor(
         if (experience.customInstructions.isNotBlank()) {
             add(ContextSelectionSource("自定义指令", "assistant-custom-instructions", "已保存的自定义指令", 0))
         }
-        if (experience.conversationStyle != com.nanzhufeng.ai.domain.ConversationStyle.DEFAULT) {
-            add(ContextSelectionSource("对话风格", "assistant-conversation-style", experience.conversationStyle.name, 0))
-        }
+        val effectiveStyle = experience.conversationStyle.effective()
+        add(ContextSelectionSource("对话风格", "assistant-conversation-style", effectiveStyle.definition().label, 0))
     }
 
     private fun completedMemoryCommandReply(conversationId: ConversationId, providerText: String): String {

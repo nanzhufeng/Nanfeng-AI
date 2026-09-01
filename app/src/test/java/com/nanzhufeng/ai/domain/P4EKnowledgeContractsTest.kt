@@ -17,6 +17,8 @@ class P4EKnowledgeContractsTest {
         val results = domain.search(listOf(archived, active), KnowledgeSearchFilter(query = "检索"))
         assertEquals(listOf(KnowledgeItemId("k-a")), results.map { it.id })
         assertTrue(results.single().snippet.contains("检索"))
+        assertEquals(active.item.sourceEvidence, results.single().sourceEvidence)
+        assertEquals(active.item.createdAt, results.single().createdAt)
         assertEquals(listOf(KnowledgeItemId("k-a")), domain.search(listOf(active), KnowledgeSearchFilter(query = "kotlin")).map { it.id })
         assertEquals(listOf(KnowledgeItemId("k-a")), domain.search(listOf(active), KnowledgeSearchFilter(query = "代码")).map { it.id })
         assertEquals(listOf(KnowledgeItemId("k-z")), domain.search(listOf(archived), KnowledgeSearchFilter(query = "search", status = KnowledgeStatus.ARCHIVED)).map { it.id })

@@ -99,6 +99,31 @@ class P2JOpenRouterRegistryContractsTest {
     }
 
     @Test
+    fun `removed Grok 4 point 5 is ignored while exact 4 point 6 remains mapped`() {
+        val grok45 = catalogModel("x-ai/grok-4.5", "Grok 4.5", null, null).copy(
+            contextWindowTokens = 500_000,
+            maxOutputTokens = 450_000,
+            inputModalities = setOf("text", "image", "file"),
+            supportedParameters = setOf("reasoning", "tools", "response_format"),
+        )
+        val grokHigh = catalogModel("x-ai/grok-4.6", "Grok 4.6", "0.000002", "0.000006").copy(
+            contextWindowTokens = 500_000,
+            maxOutputTokens = 450_000,
+            inputModalities = setOf("text", "image", "file"),
+            supportedParameters = setOf("reasoning_effort", "tools", "response_format"),
+        )
+        val snapshot = requireNotNull(OpenRouterRegistrySnapshotVerifier().verify(
+            OpenRouterCatalogResponse(claudeCatalog() + listOf(grok45, grokHigh), null), now,
+        ))
+
+        assertNull(snapshot.modelFor(ModelPresetId.GROK_4_1_FAST))
+        assertNull(snapshot.modelFor(ModelPresetId.GROK_4_5))
+        assertEquals("x-ai/grok-4.6", snapshot.modelFor(ModelPresetId.GROK_4_6_HIGH)?.id)
+        assertTrue(snapshot.models.any { it.id == "x-ai/grok-4.5" })
+        assertEquals(450_000L, snapshot.modelFor(ModelPresetId.GROK_4_6_HIGH)?.maxOutputTokens)
+    }
+
+    @Test
     fun `standard GPT presets never select similarly named Pro variants`() {
         val snapshot = OpenRouterRegistrySnapshotVerifier().verify(
             OpenRouterCatalogResponse(

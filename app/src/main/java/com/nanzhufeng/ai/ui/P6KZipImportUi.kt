@@ -42,7 +42,6 @@ data class P6KZipImportUiState(val working: Boolean = false, val workingProvider
 class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel() {
     var state by mutableStateOf(P6KZipImportUiState()); private set
     private var projectionRefresh: Job? = null
-    init { show() }
     fun show() {
         projectionRefresh?.cancel()
         projectionRefresh = viewModelScope.launch {
@@ -121,6 +120,18 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
                 importedCount = task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.CONFIRMED },
                 failedCount = task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.FAILED },
                 skippedCount = task.items.count { it.status == com.nanzhufeng.ai.domain.P6KZipItemStatus.SKIPPED },
+                receiptSummary = task.receipt?.let { receipt ->
+                    listOf(
+                        "新增对话 ${receipt.importedNewConversations}",
+                        "新增消息 ${receipt.importedNewMessages}",
+                        "新增附件 ${receipt.importedNewAttachments}",
+                        "复用字节 ${receipt.reusedAssetBytes}",
+                        "已有 ${receipt.skippedExisting}",
+                        "主动删除 ${receipt.skippedUserDeleted}",
+                        "身份冲突 ${receipt.identityConflicts}",
+                        "失败 ${receipt.failed}",
+                    ).joinToString(" · ")
+                },
                 restoredAssetCount = recovery?.linkedOccurrences ?: task.assets.count { it.attachmentId != null },
                 unresolvedAssetCount = recovery?.unattributedCandidates ?: 0,
                 missingSourceAssetCount = recovery?.missingEntries ?: 0,
@@ -142,7 +153,7 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
         }
     }
     pendingDeleteZipId?.let { taskId ->
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { pendingDeleteZipId = null },
             title = { Text("删除本批次？") },
             text = { Text("仅删除本批次导入的对话。") },
@@ -160,6 +171,7 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
     importedCount: Int,
     failedCount: Int,
     skippedCount: Int,
+    receiptSummary: String? = null,
     restoredAssetCount: Int = 0,
     unresolvedAssetCount: Int = 0,
     missingSourceAssetCount: Int = 0,
@@ -174,9 +186,10 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
             Text(status, style = MaterialTheme.typography.bodyMedium, color = AccentOrange)
         }
         Text("$importedCount 个对话已导入", style = MaterialTheme.typography.bodyMedium, color = BodyText)
+        receiptSummary?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SecondaryText) }
         listOfNotNull(
             failedCount.takeIf { it > 0 }?.let { "$it 个未导入" },
-            skippedCount.takeIf { it > 0 }?.let { "$it 个已跳过" },
+            skippedCount.takeIf { it > 0 }?.let { "$it 个已跳过此前导入或主动删除的内容" },
         ).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = SecondaryText) }
         recoveryLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BodyText) }
         if (restoredAssetCount > 0) Text("$restoredAssetCount 个附件已恢复", style = MaterialTheme.typography.bodySmall, color = BodyText)

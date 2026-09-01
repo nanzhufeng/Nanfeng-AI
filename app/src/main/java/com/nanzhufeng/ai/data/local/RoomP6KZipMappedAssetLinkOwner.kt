@@ -30,6 +30,7 @@ class RoomP6KZipMappedAssetLinkOwner(
     private val conversations: RoomConversationRepository,
     private val onConversationFailure: (Throwable) -> Unit = {},
     private val beforeConversationCommit: (conversationNumber: Int, sourceConversationId: String) -> Unit = { _, _ -> },
+    private val identityLedger: RoomP6KImportIdentityLedger = RoomP6KImportIdentityLedger(database),
 ) : P6KZipMappedAssetLinkOwner {
     override fun reconcile(
         task: P6KZipImportTask,
@@ -87,6 +88,15 @@ class RoomP6KZipMappedAssetLinkOwner(
                             val stored = storedCandidates[entryName] ?: return@forEach
                             if (stored.sha256 != prepared.sha256 || stored.byteCount != prepared.byteCount) return@forEach
                             val existing = attachmentDao.findBySha256(requireNotNull(prepared.sha256))
+                            when (identityLedger.sourceAssetDecision(task, entryName, requireNotNull(prepared.sha256), requireNotNull(prepared.byteCount))) {
+                                P6KAssetIdentityDecision.New -> if (existing != null) {
+                                    identityLedger.mutateBatchReceipt(task, at) { receipt ->
+                                        receipt.copy(reusedAssetBytes = receipt.reusedAssetBytes + requireNotNull(prepared.byteCount))
+                                    }
+                                }
+                                P6KAssetIdentityDecision.Existing -> Unit
+                                P6KAssetIdentityDecision.Conflict -> error("P6K_ASSET_IDENTITY_CONFLICT")
+                            }
                             val effective = existing?.toReference() ?: prepared.also { asset ->
                                 attachmentDao.insert(
                                     PrivateAttachmentAssetEntity(
@@ -136,7 +146,22 @@ class RoomP6KZipMappedAssetLinkOwner(
                         var previousLocalId: MessageNodeId? = null
                         var newlyCreated = 0
                         sourceConversation.currentPath.forEach { sourceMessage ->
-                            val availableEntries = sourceMessage.entryNames.filter(effectiveByEntry::containsKey)
+                            val availableEntries = sourceMessage.entryNames.filter(effectiveByEntry::containsKey).filter { entryName ->
+                                val stored = storedCandidates[entryName] ?: return@filter false
+                                when (identityLedger.occurrenceDecision(
+                                    task,
+                                    sourceConversation.sourceConversationId,
+                                    sourceMessage.sourceMessageId,
+                                    entryName,
+                                    stored.sha256,
+                                    stored.byteCount,
+                                )) {
+                                    P6KOccurrenceIdentityDecision.New -> true
+                                    P6KOccurrenceIdentityDecision.Existing,
+                                    P6KOccurrenceIdentityDecision.UserDeleted -> false
+                                    P6KOccurrenceIdentityDecision.Conflict -> error("P6K_ASSET_IDENTITY_CONFLICT")
+                                }
+                            }
                             var localId = localBySource[sourceMessage.sourceMessageId]
                             val linkedNode = localId?.let(nodes::get)
                             if (linkedNode != null && linkedNode.role != sourceMessage.role &&
@@ -202,6 +227,31 @@ class RoomP6KZipMappedAssetLinkOwner(
                                 val reference = effectiveByEntry[entryName] ?: return@forEach
                                 val mapped = mapping.assets[entryName] ?: return@forEach
                                 val stored = zipDao.asset(task.id.value, entryName) ?: return@forEach
+                                when (identityLedger.occurrenceDecision(
+                                    task,
+                                    sourceConversation.sourceConversationId,
+                                    sourceMessage.sourceMessageId,
+                                    entryName,
+                                    stored.sha256,
+                                    stored.byteCount,
+                                )) {
+                                    P6KOccurrenceIdentityDecision.UserDeleted,
+                                    P6KOccurrenceIdentityDecision.Existing -> return@forEach
+                                    P6KOccurrenceIdentityDecision.Conflict -> error("P6K_ASSET_IDENTITY_CONFLICT")
+                                    P6KOccurrenceIdentityDecision.New -> Unit
+                                }
+                                identityLedger.registerOccurrence(
+                                    task,
+                                    sourceConversation.sourceConversationId,
+                                    sourceMessage.sourceMessageId,
+                                    entryName,
+                                    stored.sha256,
+                                    stored.byteCount,
+                                    conversationId,
+                                    localId,
+                                    reference.id.value,
+                                    at,
+                                )
                                 zipDao.insertAssetOccurrence(
                                     P6KZipAssetOccurrenceEntity(
                                         task.id.value,
@@ -230,6 +280,9 @@ class RoomP6KZipMappedAssetLinkOwner(
                                         ),
                                     )
                                     newlyLinked += 1
+                                    identityLedger.mutateBatchReceipt(task, at) {
+                                        it.copy(importedNewAttachments = it.importedNewAttachments + 1)
+                                    }
                                 }
                                 zipDao.upsertAssets(
                                     listOf(
@@ -266,6 +319,13 @@ class RoomP6KZipMappedAssetLinkOwner(
                 }.getOrElse { error ->
                     failedConversations += 1
                     onConversationFailure(error)
+                    identityLedger.mutateBatchReceipt(task, at) { receipt ->
+                        if (error.message == "P6K_ASSET_IDENTITY_CONFLICT") {
+                            receipt.copy(identityConflicts = receipt.identityConflicts + 1)
+                        } else {
+                            receipt.copy(failed = receipt.failed + 1)
+                        }
+                    }
                     checkpoint?.let { current ->
                         val failed = current.copy(
                             state = P6KZipAssetRecoveryState.PARTIAL,
@@ -300,6 +360,7 @@ class RoomP6KZipMappedAssetLinkOwner(
                 updatedAtMs = at.toEpochMilli(),
             )
             dao.upsertAssetRecoveryJob(terminal.toEntity())
+            identityLedger.finishAssetRecovery(task, complete, at)
         }
         val unresolved = database.p6kZipImportTaskDao().assets(task.id.value).count { it.attachmentId == null }
         return P6KZipMappedAssetLinkSummary(linked, createdMessages, unresolved, failedConversations)

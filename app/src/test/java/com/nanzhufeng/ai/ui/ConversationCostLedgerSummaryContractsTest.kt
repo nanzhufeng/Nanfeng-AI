@@ -15,7 +15,8 @@ class ConversationCostLedgerSummaryContractsTest {
 
         assertTrue(summary.contains("label = \"OpenRouter 实际金额\", value = amount, emphasizeValue = true"))
         assertTrue(summary.contains("label = \"本地估算\", value = amount, emphasizeValue = true"))
-        assertTrue(summary.contains("CnyMoneyDisplay.totalLabel"))
+        assertTrue(summary.contains("CnyMoneyDisplay.summaryLabel(exact)"))
+        assertTrue(summary.contains("CnyMoneyDisplay.summaryLabel(estimated)"))
         assertTrue(summary.contains("CnyMoneyDisplay.USD_REFERENCE_LABEL"))
         assertFalse(ui.contains("usdText()"))
         assertFalse(ui.contains("\\$"))
@@ -32,11 +33,20 @@ class ConversationCostLedgerSummaryContractsTest {
         assertTrue(section.contains("MaterialTheme.typography.titleMedium"))
         assertFalse(section.contains("HorizontalDivider"))
 
-        assertTrue(grid.contains("ConversationCostCategoryMetric(\"实际金额\", it, true)"))
-        assertTrue(grid.contains("ConversationCostCategoryMetric(\"本地估算\", it, true)"))
+        assertTrue(grid.contains("ConversationCostCategoryMetric(\"次数\", \"\${state.records.size} 次\")"))
+        assertTrue(grid.contains("ConversationCostCategoryMetric(\"费用\", CnyMoneyDisplay.summaryLabel(state.records.map { it.cost }) ?: \"金额未知\", true)"))
+        assertTrue(grid.contains("CnyMoneyDisplay.summaryLabel(state.titleGenerationRecords.map { it.cost })"))
         assertTrue(grid.contains("state.titleGenerationRecords.map { it.cost }"))
         assertTrue(grid.contains("state.historyCurationCalls.mapNotNull(DirectChatCallAuditRecord::estimatedCost)"))
         assertTrue(grid.contains("state.glmOcrCalls.map { it.cost }"))
+        assertFalse(grid.contains("（估算）"))
+        assertFalse(grid.contains("ImageVector"))
+        assertFalse(grid.contains("icon ="))
+        assertFalse(grid.contains("tone ="))
+
+        val cell = ui.substringAfter("private fun ConversationCostCategoryCell(").substringBefore("@Composable private fun ReminderDraftCostSummary")
+        assertTrue(cell.contains("modifier = modifier.padding(horizontal = 14.dp, vertical = 16.dp)"))
+        assertFalse(cell.contains("heightIn(min ="))
     }
 
     @Test fun invocationLedgerAlsoProjectsStoredCurrencyFactsAsRmb() {
@@ -96,6 +106,8 @@ class ConversationCostLedgerSummaryContractsTest {
         assertTrue(ui.contains("GlmOcrCostRow(record)"))
         assertTrue(ui.contains("输入 \${record.usage.inputTokens"))
         assertTrue(ui.contains("record.taskRun.durationMillis().costDurationLabel()"))
-        assertTrue(activity.contains("container.directChatCallAudit, container.invocationRepository"))
+        val costFactory = activity.substringAfter("ConversationCostLedgerViewModel.Factory(").substringBefore(")[ConversationCostLedgerViewModel::class.java]")
+        assertTrue(costFactory.contains("container.directChatCallAudit"))
+        assertTrue(costFactory.contains("container.invocationRepository"))
     }
 }

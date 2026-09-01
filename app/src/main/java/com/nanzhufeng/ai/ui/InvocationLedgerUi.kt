@@ -15,17 +15,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -168,10 +172,11 @@ fun InvocationLedgerPage(state: InvocationLedgerUiState) {
             Text("正在读取本地记录…", color = SecondaryText)
         }
         state.records.isEmpty() -> EmptyInvocationLedger()
-        else -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            state.records.forEachIndexed { index, record ->
-                if (index > 0) HorizontalDivider(color = NeutralBorder)
-                InvocationLedgerRow(record, state.glmOcrTasksByInvocationTaskId[record.taskId.value])
+        else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            state.records.forEach { record ->
+                Surface(modifier = Modifier.fillMaxWidth(), color = ForegroundSurface, shape = RoundedCornerShape(18.dp)) {
+                    InvocationLedgerRow(record, state.glmOcrTasksByInvocationTaskId[record.taskId.value])
+                }
             }
         }
     }
@@ -192,36 +197,48 @@ private fun EmptyInvocationLedger() {
 
 @Composable
 private fun InvocationLedgerRow(record: InvocationRecord, glmOcrTask: GlmOcrTask? = null) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    var detailsVisible by remember(record.id.value) { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(record.status.uiLabel(), color = record.status.uiColor(), fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.weight(1f))
-            Text(record.completedAt.ledgerTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
-        }
-        Text(modelNameAnnotatedText(prefix = "${record.providerLabel()} · ", modelName = record.displayModelName()), style = MaterialTheme.typography.bodyMedium)
-        Text(
-            "Harness v${record.harnessVersion} · 耗时 ${record.taskRun.durationMillis()} ms · ${record.taskRun.attempts.size} 次 Attempt",
-            color = SecondaryText,
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(record.usageAndCostLabel(), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        glmOcrTask?.let { task ->
-            Text("功能：南枫转写", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Text("关联文件：${task.sourceDisplayName}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text(
-                listOfNotNull(
-                    task.pageCount?.let { "页数：$it" },
-                    task.requestId?.let { "请求 ID：$it" },
-                ).joinToString(" · ").ifBlank { "服务商请求 ID：未返回" },
-                color = SecondaryText,
-                style = MaterialTheme.typography.bodySmall,
+                if (glmOcrTask == null) record.displayModelName() else "南枫转写",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
             )
-            task.safeErrorCode?.let { code ->
-                Text("安全错误码：$code", color = ErrorRed, style = MaterialTheme.typography.bodySmall)
-            }
+            Text(record.status.uiLabel(), color = record.status.uiColor(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        }
+        Text(modelNameAnnotatedText(prefix = "${record.providerLabel()} · ", modelName = record.displayModelName()), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        Text(record.usageLabel(), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        Text(record.costLabel(), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        glmOcrTask?.let { task ->
+            Text("文件：${task.sourceDisplayName}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            task.pageCount?.let { Text("$it 页", color = SecondaryText, style = MaterialTheme.typography.bodySmall) }
         }
         record.error?.let { error ->
             Text("原因：${error.uiLabel()}", color = ErrorRed, style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = { detailsVisible = !detailsVisible }) {
+            Text("技术详情")
+            Icon(
+                if (detailsVisible) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                contentDescription = if (detailsVisible) "收起技术详情" else "展开技术详情",
+                modifier = Modifier.size(scaledAppIconSize(18.dp)),
+            )
+        }
+        if (detailsVisible) {
+            Surface(color = SettingsPageBackground, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("运行框架 v${record.harnessVersion}", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+                    glmOcrTask?.requestId?.let { Text("服务商请求 ID：$it", color = SecondaryText, style = MaterialTheme.typography.labelSmall) }
+                    glmOcrTask?.safeErrorCode?.let { Text("安全错误码：$it", color = ErrorRed, style = MaterialTheme.typography.labelSmall) }
+                }
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(record.durationAndAttemptsLabel(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.weight(1f))
+            Text(record.completedAt.ledgerTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -259,16 +276,29 @@ private fun InvocationRecord.providerLabel(): String = when (providerId) {
 
 private fun InvocationRecord.displayModelName(): String = if (modelId == "glm-ocr") "GLM-OCR" else modelDisplayNameForUser(modelId)
 
-private fun InvocationRecord.usageAndCostLabel(): String {
+private fun InvocationRecord.usageLabel(): String {
     fun Long?.valueOrUnknown(): String = this?.toString() ?: "未知"
+    return "Token：输入 ${usage.inputTokens.valueOrUnknown()} · 输出 ${usage.outputTokens.valueOrUnknown()}"
+}
+
+private fun InvocationRecord.costLabel(): String {
     val fee = cost.totalMicros?.let { micros ->
         CnyMoneyDisplay.label(micros, cost.currencyCode, estimated = false) ?: "暂无法换算"
     } ?: "未知"
-    return "输入 Token：${usage.inputTokens.valueOrUnknown()} · 输出 Token：${usage.outputTokens.valueOrUnknown()} · 费用：$fee"
+    return "费用：$fee"
 }
+
+private fun InvocationRecord.durationAndAttemptsLabel(): String =
+    "耗时 ${taskRun.durationMillis().readableDuration()} · ${taskRun.attempts.size} 次尝试"
 
 private fun com.nanzhufeng.ai.domain.TaskRun.durationMillis(): Long =
     completedAt.toEpochMilli() - startedAt.toEpochMilli()
+
+private fun Long.readableDuration(): String {
+    if (this < 1_000L) return "$this 毫秒"
+    val tenths = this / 100L
+    return if (tenths % 10L == 0L) "${tenths / 10L} 秒" else "${tenths / 10L}.${tenths % 10L} 秒"
+}
 
 private fun java.time.Instant.ledgerTimestamp(): String =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(this)

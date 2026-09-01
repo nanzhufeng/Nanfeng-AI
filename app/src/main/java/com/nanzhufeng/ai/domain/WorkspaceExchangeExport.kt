@@ -157,6 +157,7 @@ class ExportWorkspaceExchangeUseCase(
             put("blocks", JSONArray(node.content.mapIndexed { ordinal, block -> when (block) {
                 is ContentBlock.Text -> JSONObject().put("kind", "TEXT").put("ordinal", ordinal).put("text", block.text)
                 is ContentBlock.Reasoning -> error("模型思考过程尚无 v1 可回导表达。")
+                is ContentBlock.ProviderToolCall -> error("Provider Tool Call 不能进入 v1 交换。")
                 is ContentBlock.Attachment -> block.attachment.let { attachment -> JSONObject().put("kind", "ASSET_REF").put("ordinal", ordinal).put("asset", JSONObject().apply {
                     put("id", attachment.id.value); put("entry", "assets/${attachment.sha256}"); put("mimeType", attachment.mimeType)
                     put("displayName", attachment.displayName ?: "附件"); put("byteCount", attachment.byteCount); put("sha256", attachment.sha256)

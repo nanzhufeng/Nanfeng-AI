@@ -1,5 +1,6 @@
 package com.nanzhufeng.ai.ui
 
+import android.annotation.SuppressLint
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -71,6 +72,7 @@ internal fun Modifier.p5aDismissOnInwardEdgeSwipe(onDismissRequest: () -> Unit):
  * scroll containers and media gestures retain priority.
  */
 @Composable
+@SuppressLint("ClickableViewAccessibility")
 private fun P5ADialogEdgeDismissEffect(onDismissRequest: () -> Unit) {
     val latestDismiss by rememberUpdatedState(onDismissRequest)
     val density = LocalDensity.current
@@ -83,6 +85,8 @@ private fun P5ADialogEdgeDismissEffect(onDismissRequest: () -> Unit) {
         var direction = 0
         var startX = 0f
         var startY = 0f
+        // This observer never consumes the event; the host View remains the click/accessibility
+        // owner, so synthesizing performClick() here would duplicate its normal click handling.
         val listener = View.OnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {

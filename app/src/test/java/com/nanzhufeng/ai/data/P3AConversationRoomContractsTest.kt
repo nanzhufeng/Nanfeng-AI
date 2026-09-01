@@ -64,6 +64,25 @@ class P3AConversationRoomContractsTest {
     }
 
     @Test
+    fun `K3 parsed continuation protocol survives Room without becoming visible text`() {
+        val snapshot = service.append(
+            service.append(service.create("K3 续接"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("继续")))),
+            AppendMessageRequest(
+                MessageRole.ASSISTANT,
+                listOf(
+                    ContentBlock.Reasoning("推理"),
+                    ContentBlock.ProviderToolCall("call_1", "lookup", "{\"q\":\"K3\"}"),
+                    ContentBlock.Text("结论"),
+                ),
+            ),
+        )
+
+        repository.save(snapshot)
+
+        assertEquals(snapshot, RoomConversationRepository(database).findById(snapshot.conversation.id))
+    }
+
+    @Test
     fun `transaction failure rejects conflicting immutable node and leaves stored snapshot unchanged`() {
         val baseline = repository.save(
             service.append(service.create("事务合同"), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("原文")))),

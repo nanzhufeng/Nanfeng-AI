@@ -74,6 +74,7 @@ import com.nanzhufeng.ai.data.AndroidChatRoutingPolicyRepository
 import com.nanzhufeng.ai.data.AndroidAssistantExperienceSettingsRepository
 import com.nanzhufeng.ai.data.AndroidHistoryKnowledgeCurationCheckpointStore
 import com.nanzhufeng.ai.data.AndroidHistoryKnowledgeAutoCurationScheduler
+import com.nanzhufeng.ai.data.AndroidHistoryKnowledgeAutoCurationRunStore
 import com.nanzhufeng.ai.data.AndroidNotificationReminderSettingsRepository
 import com.nanzhufeng.ai.data.AndroidAppearanceSettingsRepository
 import com.nanzhufeng.ai.data.AndroidModelRegistrySnapshotStore
@@ -83,6 +84,7 @@ import com.nanzhufeng.ai.data.AndroidProviderModelListClient
 import com.nanzhufeng.ai.data.AndroidContextSelectionAuditStore
 import com.nanzhufeng.ai.data.AndroidP6GModelSelectionStore
 import com.nanzhufeng.ai.data.AndroidConversationWebSearchOverrideStore
+import com.nanzhufeng.ai.data.AndroidConversationStyleOverrideStore
 import com.nanzhufeng.ai.data.local.RoomCompareBranchExecutionPorts
 import com.nanzhufeng.ai.data.local.RoomCompareConversationSessionStore
 import com.nanzhufeng.ai.data.AndroidOpenRouterRegistryCatalogClient
@@ -96,6 +98,8 @@ import com.nanzhufeng.ai.data.local.RoomP6KZipAssetRecoveryJobRepository
 import com.nanzhufeng.ai.data.local.RoomP6KZipImportCommitStore
 import com.nanzhufeng.ai.data.local.RoomP6KZipManualAssetLinkOwner
 import com.nanzhufeng.ai.data.local.RoomP6KZipMappedAssetLinkOwner
+import com.nanzhufeng.ai.data.local.RoomP6KImportIdentityLedger
+import com.nanzhufeng.ai.data.local.AndroidP6KImportIdentityEncoder
 import com.nanzhufeng.ai.data.local.RoomP6KProfilePersonalizationSettingsOwner
 import com.nanzhufeng.ai.data.local.RoomCaptureDraftRepository
 import com.nanzhufeng.ai.data.local.RoomKnowledgeRepository
@@ -152,6 +156,7 @@ import com.nanzhufeng.ai.domain.OpenRouterRegistrySnapshotVerifier
 import com.nanzhufeng.ai.domain.P6GModelRouter
 import com.nanzhufeng.ai.domain.P6GModelSelectionOwner
 import com.nanzhufeng.ai.domain.ConversationWebSearchOverrideOwner
+import com.nanzhufeng.ai.domain.ConversationStyleOverrideOwner
 import com.nanzhufeng.ai.domain.ConversationTreeService
 import com.nanzhufeng.ai.domain.ConversationManagementDomain
 import com.nanzhufeng.ai.domain.ConversationSearchProjection
@@ -320,6 +325,8 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_60_61,
         NanfengAiDatabase.MIGRATION_61_62,
         NanfengAiDatabase.MIGRATION_62_63,
+        NanfengAiDatabase.MIGRATION_63_64,
+        NanfengAiDatabase.MIGRATION_64_65,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
@@ -359,15 +366,16 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     private val webTextSnapshotTasks = RoomWebTextSnapshotTaskRepository(database)
     val invocationRepository = RoomInvocationRepository(database)
     val generatedCandidateRepository = RoomGeneratedCandidateRepository(database)
-    val conversationRepository = RoomConversationRepository(database, privateAttachmentStore)
+    private val p6kImportIdentityLedger = RoomP6KImportIdentityLedger(database, AndroidP6KImportIdentityEncoder(context))
+    val conversationRepository = RoomConversationRepository(database, privateAttachmentStore, p6kImportIdentityLedger)
     /** P6-A: one active, standalone, text-only conversation can reach the shared exchange gateway via SAF. */
     val conversationExchangeExportPort = AndroidConversationExchangeExportPort(
         context,
         ExportConversationExchangeUseCase(conversationRepository, BuildConfig.VERSION_NAME, clock),
     )
-    private val p6kZipCommitStore = RoomP6KZipImportCommitStore(database, conversationRepository)
+    private val p6kZipCommitStore = RoomP6KZipImportCommitStore(database, conversationRepository, p6kImportIdentityLedger)
     private val p6kZipManualAssetLinkOwner = RoomP6KZipManualAssetLinkOwner(database, conversationRepository)
-    private val p6kZipMappedAssetLinkOwner = RoomP6KZipMappedAssetLinkOwner(database, conversationRepository)
+    private val p6kZipMappedAssetLinkOwner = RoomP6KZipMappedAssetLinkOwner(database, conversationRepository, identityLedger = p6kImportIdentityLedger)
     private val manageP6KChatGptZipImport = com.nanzhufeng.ai.domain.ManageP6KChatGptZipImportUseCase(p6kZipImportTasks, p6kZipCommitStore, clock)
     val p6kZipAssetRecoveryScheduler = AndroidP6KZipAssetRecoveryScheduler(context, p6kZipAssetRecoveryJobs, p6kZipImportTasks)
     val p6kZipIntakeStore = AndroidP6KZipIntakeStore(
@@ -376,7 +384,15 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         conversationRepository, clock, assetRecoveryJobs = p6kZipAssetRecoveryJobs,
         assetRecoveryScheduler = p6kZipAssetRecoveryScheduler,
     )
-    init { p6kZipAssetRecoveryScheduler.resumePending() }
+    init {
+        kotlin.concurrent.thread(isDaemon = true, name = "p6k-import-ledger-recovery") {
+            runCatching {
+                p6kImportIdentityLedger.backfillExactLegacyEvidence(clock.instant())
+                p6kImportIdentityLedger.markInterruptedAsUnknown(clock.instant())
+            }
+        }
+        p6kZipAssetRecoveryScheduler.resumePending()
+    }
     private val chatGptConversationCommitStore = RoomChatGptImportCommitStore(database, conversationRepository)
     private val claudeConversationCommitStore = RoomClaudeImportCommitStore(database, conversationRepository)
     private val nanfengKnowledgeConversationCommitStore = RoomNanfengKnowledgeImportCommitStore(database, conversationRepository)
@@ -516,6 +532,8 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     val p6gModelSelection = P6GModelSelectionOwner(AndroidP6GModelSelectionStore(context), P6GModelRouter())
     /** Per-conversation web-search overrides are local, content-free, and do not alter the global default. */
     val conversationWebSearchOverrides = ConversationWebSearchOverrideOwner(AndroidConversationWebSearchOverrideStore(context))
+    /** Per-conversation answer style is independent from the global personalization setting. */
+    val conversationStyleOverrides = ConversationStyleOverrideOwner(AndroidConversationStyleOverrideStore(context))
     val readConversationAttemptHistory = ReadConversationAttemptHistoryUseCase(conversationRepository, conversationRepository)
     val messagePresentationRenderer = MessagePresentationRenderer()
     private val conversationRuntimeStateMachine = ConversationRuntimeStateMachine(clock)
@@ -555,6 +573,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     private val assistantExperienceSettingsRepository = AndroidAssistantExperienceSettingsRepository(context)
     val historyKnowledgeAutoCurationScheduler = AndroidHistoryKnowledgeAutoCurationScheduler(context)
     private val historyKnowledgeAutoCurationCheckpointStore = AndroidHistoryKnowledgeCurationCheckpointStore(context)
+    val historyKnowledgeAutoCurationRunStore = AndroidHistoryKnowledgeAutoCurationRunStore(context)
     private val notificationReminderSettingsRepository = AndroidNotificationReminderSettingsRepository(context)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository(context)
     private val providerCredentialStore = createAndroidProviderCredentialStore(context)
@@ -731,6 +750,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         startProviderRuntimeForExistingUser = startProviderRuntimeForExistingUser,
         loadAssistantExperienceSettings = loadAssistantExperienceSettings::execute,
         resolveConversationWebSearchEnabled = conversationWebSearchOverrides::effectiveEnabled,
+        resolveConversationStyle = conversationStyleOverrides::effectiveStyle,
         applyRuntimeEvent = applyConversationRuntimeEvent,
         runtimeRepository = conversationRepository,
         attachmentBridge = com.nanzhufeng.ai.ai.UniversalChatAttachmentBridge(

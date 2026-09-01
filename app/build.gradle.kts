@@ -245,6 +245,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("androidx.exifinterface:exifinterface:1.4.2")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     ksp("androidx.room:room-compiler:$roomVersion")

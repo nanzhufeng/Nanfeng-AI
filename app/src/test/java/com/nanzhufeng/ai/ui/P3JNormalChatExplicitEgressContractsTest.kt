@@ -109,9 +109,10 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertTrue(executor.contains("不得把训练数据截止时间说成当前日期"))
         assertTrue(executor.contains("webSearchRoute=\${options.webSearchRoute.name}"))
         assertTrue(executor.contains("recordResponseFormatDiagnostic"))
-        assertTrue(workspace.contains("OpenRouter · 官方实时联网检索"))
+        assertTrue(workspace.contains("OpenRouter · ${'$'}webSearchStateLabel"))
         assertTrue(workspace.contains("deepSeekPricingPeriod.pickerLabel"))
-        assertTrue(workspace.contains("· 官方实时联网检索"))
+        assertTrue(workspace.contains("if (enabled) \"实时联网\" else \"未联网\""))
+        assertTrue(!workspace.contains("· 官方实时联网检索"))
     }
 
     @Test fun `Qwen Responses search streams the final answer without accepting tool traces or partial EOF`() {

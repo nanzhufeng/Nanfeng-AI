@@ -118,8 +118,6 @@ class GlmOcrWorkspaceViewModel(
     var state by mutableStateOf(GlmOcrWorkspaceUiState())
         private set
 
-    init { refresh() }
-
     fun selectSource(uri: Uri?) {
         if (state.importing || uri == null) return
         state = state.copy(importing = true, notice = null)

@@ -33,6 +33,7 @@ interface NormalChatBackgroundExecution {
     fun cancel(conversationId: ConversationId)
     fun ownsExecution(): Boolean
     fun isRunning(conversationId: ConversationId): Boolean
+    fun runningConversationIds(): Set<ConversationId>
 }
 
 /** Unit-test/local fallback: the ViewModel remains owner only where Android services do not exist. */
@@ -41,6 +42,7 @@ object NoopNormalChatBackgroundExecution : NormalChatBackgroundExecution {
     override fun cancel(conversationId: ConversationId) = Unit
     override fun ownsExecution() = false
     override fun isRunning(conversationId: ConversationId) = false
+    override fun runningConversationIds() = emptySet<ConversationId>()
 }
 
 class AndroidNormalChatBackgroundExecution(private val context: Context) : NormalChatBackgroundExecution {
@@ -64,6 +66,7 @@ class AndroidNormalChatBackgroundExecution(private val context: Context) : Norma
 
     override fun ownsExecution() = true
     override fun isRunning(conversationId: ConversationId) = NormalChatGenerationRegistry.isRunning(conversationId)
+    override fun runningConversationIds() = NormalChatGenerationRegistry.snapshot()
 }
 
 /** In-process truth used only to avoid marking an active foreground request as interrupted. */
@@ -73,6 +76,7 @@ object NormalChatGenerationRegistry {
     fun markFinished(conversationId: ConversationId) { activeConversationIds -= conversationId.value }
     fun isRunning(conversationId: ConversationId) = conversationId.value in activeConversationIds
     fun hasActiveExecution() = activeConversationIds.isNotEmpty()
+    fun snapshot(): Set<ConversationId> = activeConversationIds.mapTo(linkedSetOf(), ::ConversationId)
 }
 
 class NormalChatGenerationForegroundService : Service() {
@@ -100,13 +104,19 @@ class NormalChatGenerationForegroundService : Service() {
         val operation = intent.getStringExtra(EXTRA_OPERATION)
             ?.let { raw -> NormalChatBackgroundOperation.entries.firstOrNull { it.name == raw } }
             ?: NormalChatBackgroundOperation.SEND
-        showOngoingNotification()
+        // Enter foreground immediately. The count is refreshed after this conversation joins
+        // the registry, but Android's foreground-service deadline must not wait for I/O.
+        showOngoingNotification(activeCount = (jobs.size + 1).coerceAtLeast(1))
         acquireWakeLockForSync()
         synchronized(jobs) {
-            if (jobs.containsKey(conversationId)) return
+            if (jobs.containsKey(conversationId)) {
+                showOngoingNotification(activeCount = jobs.size.coerceAtLeast(1))
+                return
+            }
             NormalChatGenerationRegistry.markRunning(conversationId)
             publishExecutionState(conversationId, running = true)
             val job = serviceScope.launch(start = CoroutineStart.LAZY) {
+                var safeResult: String? = null
                 try {
                     val result = when (operation) {
                         NormalChatBackgroundOperation.SEND -> container.normalChatOpenRouterExecutor.execute(
@@ -115,18 +125,23 @@ class NormalChatGenerationForegroundService : Service() {
                         )
                         NormalChatBackgroundOperation.RETRY -> container.normalChatOpenRouterExecutor.retryLatestAttempt(conversationId)
                     }
-                    publishExecutionState(conversationId, running = false, safeResult = result.toSafeResult())
+                    safeResult = result.toSafeResult()
                 } finally {
                     jobs.remove(conversationId)
                     NormalChatGenerationRegistry.markFinished(conversationId)
-                    publishExecutionState(conversationId, running = false)
+                    // Publish terminal state only after the registry changes, so a simultaneous
+                    // UI reload cannot resurrect a just-completed spinner from a stale snapshot.
+                    publishExecutionState(conversationId, running = false, safeResult = safeResult)
                     if (jobs.isEmpty()) {
                         releaseWakeLock()
                         stopForeground(STOP_FOREGROUND_REMOVE).also { stopSelf() }
+                    } else {
+                        showOngoingNotification(activeCount = jobs.size)
                     }
                 }
             }
             jobs[conversationId] = job
+            showOngoingNotification(activeCount = jobs.size)
             job.start()
         }
     }
@@ -147,7 +162,7 @@ class NormalChatGenerationForegroundService : Service() {
         )
     }
 
-    private fun showOngoingNotification() {
+    private fun showOngoingNotification(activeCount: Int) {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "回复生成", NotificationManager.IMPORTANCE_LOW).apply {
             description = "南枫 AI 正在后台生成回复"
@@ -159,8 +174,8 @@ class NormalChatGenerationForegroundService : Service() {
         }
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nanfeng_send_rounded)
-            .setContentTitle("南枫 AI 正在生成回复")
-            .setContentText("离开应用后将继续生成；点按可返回对话。")
+            .setContentTitle(if (activeCount > 1) "$activeCount 个对话正在生成" else "南枫 AI 正在生成回复")
+            .setContentText("切换对话或界面不会中断；点按可返回应用。")
             .setCategory(Notification.CATEGORY_PROGRESS)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -168,7 +183,7 @@ class NormalChatGenerationForegroundService : Service() {
             .addAction(
                 Notification.Action.Builder(
                     android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_nanfeng_send_rounded),
-                    "停止生成",
+                    "停止全部生成",
                     PendingIntent.getService(
                         this, 1,
                         Intent(this, NormalChatGenerationForegroundService::class.java).setAction(ACTION_CANCEL_ALL),

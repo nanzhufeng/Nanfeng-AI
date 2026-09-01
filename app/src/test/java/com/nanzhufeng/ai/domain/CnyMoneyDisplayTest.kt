@@ -26,6 +26,16 @@ class CnyMoneyDisplayTest {
         assertEquals("约 ¥7.720309", total)
     }
 
+    @Test fun `summary amounts are always concise approximate RMB without a repeated source suffix`() {
+        val total = CnyMoneyDisplay.summaryLabel(
+            listOf(
+                ProviderCost("usd", "USD", 1_000_000L),
+                ProviderCost("cny", "CNY", 1_000_000L),
+            ),
+        )
+        assertEquals("约 ¥7.720309", total)
+    }
+
     @Test fun `unsupported currency is never mislabeled as RMB`() {
         assertNull(CnyMoneyDisplay.label(1_000_000L, "EUR", estimated = false))
     }

@@ -20,6 +20,9 @@ class ConversationWebSearchComposerContractsTest {
             "SettingsSwitch(",
             "onSetCurrentConversationWebSearchEnabled(enabled)",
         )) assertTrue("missing composer web-search control token $token", workspace.contains(token))
+        val composerEntry = workspace.substringAfter("private fun ComposerModelEntry(").substringBefore("private fun ConversationComposerDock")
+        assertTrue("composer must not add a persistent web-search status label", !composerEntry.contains("实时联网") && !composerEntry.contains("未联网"))
+        assertTrue("model picker must show the current conversation state", workspace.contains("if (enabled) \"实时联网\" else \"未联网\""))
         assertTrue("Composer must reuse the shared switch instead of owning its dimensions", !workspace.contains("SettingsSwitchTrackWidth"))
         val action = workspace.substringAfter("private fun ComposerConversationWebSearchAction(").substringBefore("/** The mobile composer")
         assertTrue("composer control must not add a duplicate supporting label", !action.contains("仅影响本对话"))
@@ -28,6 +31,10 @@ class ConversationWebSearchComposerContractsTest {
         assertTrue(viewModel.contains("conversationWebSearchOverrides.setEnabled"))
         assertTrue(executor.contains("resolveConversationWebSearchEnabled(conversationId, experience.webSearchEnabled)"))
         assertTrue(executor.contains("enabled = webSearchEnabled"))
+        assertTrue(executor.contains("webSearchEnabled && !requestOptions.liveWebSearch"))
+        assertTrue(executor.contains("WebSearchGroundingPolicy.hasRequiredSources"))
+        assertTrue(executor.contains("WEB_SEARCH_NO_SOURCES"))
+        assertTrue(viewModel.contains("已请求实时网页搜索，但服务商没有返回可验证的公开来源"))
         assertTrue(container.contains("resolveConversationWebSearchEnabled = conversationWebSearchOverrides::effectiveEnabled"))
         assertTrue(File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText().contains("conversationViewModel.reload()"))
     }

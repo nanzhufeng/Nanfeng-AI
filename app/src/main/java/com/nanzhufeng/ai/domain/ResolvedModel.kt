@@ -85,7 +85,7 @@ class UnifiedModelResolver(
             ?: ResolvedModelResult.Unavailable("模型档案不存在或已失效。")
         return when (val value = registry.resolve(provider, presetId)) {
             is ModelRegistryResolution.Resolved -> ResolvedModelResult.Resolved(value.model.let { descriptor ->
-                withObservedHealth(ResolvedModel(provider, descriptor.id, descriptor.displayName, descriptor.capabilities.copy(
+                withObservedHealth(ResolvedModel(provider, descriptor.id, NanfengModelServiceCatalog.preset(presetId).displayName, descriptor.capabilities.copy(
                     supportsPdf = "pdf" in descriptor.inputModalities || "file" in descriptor.inputModalities,
                     supportsVideo = "video" in descriptor.inputModalities,
                     supportsAudio = "audio" in descriptor.inputModalities,
@@ -100,6 +100,9 @@ class UnifiedModelResolver(
                 // preset from reaching OpenRouter at all. These are exact product-owned IDs,
                 // not guessed relatives; any provider rejection is still shown and health-marked.
                 if (registry.currentSnapshot(ProviderId.OPENROUTER) == null) {
+                    profileDirectory.profile(presetId)
+                        ?.takeIf { it.providerId == ProviderId.OPENROUTER }
+                        ?.let { fallback -> return ResolvedModelResult.Resolved(withObservedHealth(fallback, presetId)) }
                     OpenRouterColdStartTextFallback.resolve(presetId)?.let { fallback ->
                         return ResolvedModelResult.Resolved(withObservedHealth(fallback, presetId))
                     }
@@ -143,7 +146,10 @@ private object OpenRouterColdStartTextFallback {
         ModelPresetId.GPT_5_6_SOL to "openai/gpt-5.6-sol",
         ModelPresetId.GPT_5_6_TERRA to "openai/gpt-5.6-terra",
         ModelPresetId.GPT_5_6_LUNA to "openai/gpt-5.6-luna",
+        ModelPresetId.GROK_4_1_FAST to "x-ai/grok-4.1-fast",
+        ModelPresetId.GROK_4_6_HIGH to "x-ai/grok-4.6",
         ModelPresetId.GEMINI_3_7_FLASH to "google/gemini-3.7-flash",
+        ModelPresetId.KIMI_K3 to "moonshotai/kimi-k3",
     )
 
     fun resolve(presetId: ModelPresetId): ResolvedModel? = ids[presetId]?.let { modelId ->

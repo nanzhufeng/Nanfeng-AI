@@ -57,6 +57,18 @@ class P5CTaskDeletionRoomContractsTest {
         assertTrue(archive.isFile)
     }
 
+    @Test fun `privacy inventory always has an immediate snapshot and persists the refreshed facts`() {
+        context.getSharedPreferences("privacy_inventory_cache_v1", Context.MODE_PRIVATE).edit().clear().commit()
+        val firstManager = AndroidPrivacyDataManager(context, db, "test")
+
+        assertEquals(PrivacyInventory.EmptySnapshot, firstManager.cachedInventory())
+
+        val refreshed = firstManager.inventory()
+        val recreatedManager = AndroidPrivacyDataManager(context, db, "test")
+
+        assertEquals(refreshed, recreatedManager.cachedInventory())
+    }
+
     @Test fun `one selected cancelled fixture deletes without touching another historical task`() {
         val historical = cancelled("history.md")
         val fixture = cancelled("p5c-visible-fixture.md")
@@ -87,6 +99,55 @@ class P5CTaskDeletionRoomContractsTest {
         val retried = AndroidPrivacyDataManager(context, db, "test").retryFailedTaskDeletion()
         assertTrue(retried is PrivacyDeletionResult.Completed)
         assertFalse(File(context.filesDir, "p5c-pending-delete/tasks").exists())
+    }
+
+    @Test fun `full local deletion clears every app owned business preference file`() {
+        val preferenceFiles = setOf(
+            "assistant_experience_settings_v1",
+            "appearance_settings_v1",
+            "chat_routing_policy_v1",
+            "conversation-style-overrides-v1",
+            "conversation-web-search-overrides-v1",
+            "conversation_app_entry",
+            "conversation_read_markers_v1",
+            "direct_chat_call_audit_v1",
+            "history_knowledge_auto_curation_runs_v1",
+            "history_knowledge_auto_curation_v1",
+            "local-audio-preview-position-v1",
+            "local-pdf-preview-position-v1",
+            "local-search-history-v1",
+            "local-video-preview-position-v1",
+            "model-health-v1",
+            "model_service_settings_v1",
+            "nanfeng_ai_google_account",
+            "nanfeng_ai_selected_conversation_sync",
+            "notification_reminder_settings_v1",
+            "p5a_ui",
+            "p5d_local_backup",
+            "p6g-model-selection-v1",
+            "p6k_import_identity",
+            "p7e_restore_receipts_v1",
+            "privacy_inventory_cache_v1",
+            "provider_credentials_v1",
+        )
+        preferenceFiles.forEach { file ->
+            assertTrue(context.getSharedPreferences(file, Context.MODE_PRIVATE).edit().putString("deletion-proof", file).commit())
+        }
+
+        val manager = AndroidPrivacyDataManager(context, db, "test")
+        val preview = manager.preview(PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA)
+        val result = manager.delete(
+            PrivacyDeletionRequest(
+                scope = PrivacyDeleteScope.ALL_LOCAL_BUSINESS_DATA,
+                previewFingerprint = preview.fingerprint,
+                confirmationPhrase = "删除全部本地业务数据",
+            ),
+        )
+
+        assertTrue(result is PrivacyDeletionResult.Completed)
+        preferenceFiles.forEach { file ->
+            assertTrue("$file still contains local business data", context.getSharedPreferences(file, Context.MODE_PRIVATE).all.isEmpty())
+        }
     }
 
     private fun cancelled(name: String): MarkdownImportTask = imports.cancel(imports.select(name, "text/markdown", "# $name\nnon-sensitive fixture".toByteArray()).id)

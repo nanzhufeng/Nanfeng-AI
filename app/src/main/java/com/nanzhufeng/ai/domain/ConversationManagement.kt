@@ -120,6 +120,10 @@ data class ConversationSearchHit(
     val title: String,
     val snippet: String,
     val titleMatch: Boolean,
+    /** The local message or indexed-text timestamp shown beside the searchable body. */
+    val timestampEpochMs: Long = 0L,
+    /** Exact UTF-8 bytes of the local searchable text, never an attachment or provider payload. */
+    val byteCount: Long = 0L,
     /** Content-free import label; it never changes searchable text. */
     val importSource: ConversationImportSource? = null,
 )
@@ -154,6 +158,7 @@ data class LocalSearchIndexRecord(
     val contentKind: String,
     val timestampEpochMs: Long,
     val titleMatch: Boolean,
+    val byteCount: Long,
 )
 
 /** Read-only projection: it deliberately receives only repository snapshots. */
@@ -167,16 +172,17 @@ class ConversationSearchProjection(private val management: ConversationManagemen
                 .asReversed()
                 .asSequence()
                 .filter { it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT }
-                .flatMap { node -> node.content.filterIsInstance<ContentBlock.Text>().asReversed().asSequence().map { it.text } }
+                .flatMap { node -> node.content.filterIsInstance<ContentBlock.Text>().asReversed().asSequence().map { node to it.text } }
                 .firstOrNull()
-                ?.trim()
-                .orEmpty()
+            val latestBody = latestText?.second?.trim().orEmpty()
             ConversationSearchHit(
                 conversationId = snapshot.conversation.id,
                 messageNodeId = null,
                 title = snapshot.conversation.title,
-                snippet = latestText.take(120).ifBlank { "本地对话" },
+                snippet = latestBody.take(120).ifBlank { "本地对话" },
                 titleMatch = true,
+                timestampEpochMs = latestText?.first?.createdAt?.toEpochMilli() ?: snapshot.conversation.updatedAt.toEpochMilli(),
+                byteCount = latestBody.toByteArray(Charsets.UTF_8).size.toLong(),
             )
         }
         .take(MAX_RESULTS)
@@ -201,12 +207,32 @@ class ConversationSearchProjection(private val management: ConversationManagemen
 
     private fun hitsFor(snapshot: ConversationSnapshot, normalized: String): List<ConversationSearchHit> {
         val titleMatch = snapshot.conversation.title.lowercase(Locale.ROOT).contains(normalized)
-        val titleHit = if (titleMatch) listOf(ConversationSearchHit(snapshot.conversation.id, null, snapshot.conversation.title, snapshot.conversation.title, true)) else emptyList()
+        val titleHit = if (titleMatch) listOf(
+            ConversationSearchHit(
+                conversationId = snapshot.conversation.id,
+                messageNodeId = null,
+                title = snapshot.conversation.title,
+                snippet = snapshot.conversation.title,
+                titleMatch = true,
+                timestampEpochMs = snapshot.conversation.updatedAt.toEpochMilli(),
+                byteCount = snapshot.conversation.title.toByteArray(Charsets.UTF_8).size.toLong(),
+            ),
+        ) else emptyList()
         val messageHits = MessageTree(snapshot.conversation, snapshot.nodes).contextPath()
             .asSequence().filter { it.role == MessageRole.USER || it.role == MessageRole.ASSISTANT }
             .mapNotNull { node -> node.content.filterIsInstance<ContentBlock.Text>().joinToString("\n") { it.text }
                 .takeIf { it.lowercase(Locale.ROOT).contains(normalized) }
-                ?.let { text -> ConversationSearchHit(snapshot.conversation.id, node.id, snapshot.conversation.title, snippet(text, normalized), false) } }
+                ?.let { text ->
+                    ConversationSearchHit(
+                        conversationId = snapshot.conversation.id,
+                        messageNodeId = node.id,
+                        title = snapshot.conversation.title,
+                        snippet = snippet(text, normalized),
+                        titleMatch = false,
+                        timestampEpochMs = node.createdAt.toEpochMilli(),
+                        byteCount = text.toByteArray(Charsets.UTF_8).size.toLong(),
+                    )
+                } }
             .toList()
         return titleHit + messageHits
     }
@@ -248,7 +274,17 @@ class SearchConversationsUseCase(private val repository: ConversationSearchRepos
                 .thenByDescending { it.timestampEpochMs }
                 .thenBy { it.conversationId.value }
                 .thenBy { it.messageNodeId?.value.orEmpty() },
-        ).take(50).map { ConversationSearchHit(it.conversationId, it.messageNodeId, it.title, it.snippet, it.titleMatch) }
+        ).take(50).map {
+            ConversationSearchHit(
+                conversationId = it.conversationId,
+                messageNodeId = it.messageNodeId,
+                title = it.title,
+                snippet = it.snippet,
+                titleMatch = it.titleMatch,
+                timestampEpochMs = it.timestampEpochMs,
+                byteCount = it.byteCount,
+            )
+        }
         // Older app versions may leave a non-empty but partial acceleration index. Merge the
         // current persisted path so a valid hit never disappears merely because another row
         // still exists in that index.

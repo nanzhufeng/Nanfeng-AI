@@ -136,7 +136,8 @@ class UniversalChatAttachmentBridgeContractsTest {
         enabled: Set<ProviderId>,
         invocations: InvocationLog,
         providerTransport: ProviderChatTransport = object : ProviderChatTransport {
-            override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome = ProviderChatOutcome.NetworkFailure
+            override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome =
+                ProviderChatOutcome.NetworkFailure(ProviderNetworkFailureKind.IO)
         },
         glm: GlmOcrTransport = GlmOcrTransport { _, _ -> GlmOcrTransportResult.Failed("disabled") },
     ) = UniversalChatAttachmentBridge(

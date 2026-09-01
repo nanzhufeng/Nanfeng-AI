@@ -13,6 +13,7 @@ import android.widget.Toast
 import android.widget.VideoView
 import android.media.MediaPlayer
 import androidx.core.content.FileProvider
+import androidx.exifinterface.media.ExifInterface
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Animatable
@@ -275,9 +276,9 @@ import com.nanzhufeng.ai.domain.PresentationBlockIdentity
 import com.nanzhufeng.ai.domain.PresentedMessage
 import com.nanzhufeng.ai.domain.PresentedTranscriptMessage
 import com.nanzhufeng.ai.domain.ContextSelectionAuditRecord
-import com.nanzhufeng.ai.domain.AnswerContextDisclosure
+import com.nanzhufeng.ai.domain.AssistantResponseModelAttribution
+import com.nanzhufeng.ai.domain.definition
 import com.nanzhufeng.ai.domain.AnswerContextSourceDisclosure
-import com.nanzhufeng.ai.domain.answerContextDisclosure
 import com.nanzhufeng.ai.domain.ConversationListScope
 import com.nanzhufeng.ai.domain.ConversationManagementAction
 import com.nanzhufeng.ai.domain.AttachmentId
@@ -623,6 +624,7 @@ internal fun ConversationWorkspaceDialog(
     onExitTemporary: () -> Unit,
     onSelectP6GModel: (String?) -> Unit,
     onSetCurrentConversationWebSearchEnabled: (Boolean) -> Unit,
+    onSetCurrentConversationStyle: (com.nanzhufeng.ai.domain.ConversationStyle) -> Unit,
     onAddTemporaryCamera: () -> Unit,
     onAddTemporaryImage: () -> Unit,
     onAddTemporaryFile: () -> Unit,
@@ -1281,6 +1283,7 @@ internal fun ConversationWorkspaceDialog(
                                     transcript = message,
                                     attachmentPreviews = state.attachmentPreviews,
                                     contextSelections = state.answerContextSelections[message.message.messageId].orEmpty(),
+                                    responseAttributions = state.answerResponseAttributions[message.message.messageId].orEmpty(),
                                     assistantGenerationPhaseOverride = if (
                                         state.normalSendRetryInProgress && message.message.messageId == state.currentLeafId
                                     ) "南枫AI 继续生成…" else null,
@@ -1523,6 +1526,8 @@ internal fun ConversationWorkspaceDialog(
                     ),
                     conversationWebSearchEnabled = state.conversationWebSearchOverride?.enabled ?: state.globalWebSearchEnabled,
                     onToggleConversationWebSearch = { enabled -> onSetCurrentConversationWebSearchEnabled(enabled) },
+                    conversationStyle = state.conversationStyleOverride?.style ?: state.globalConversationStyle,
+                    onSelectConversationStyle = onSetCurrentConversationStyle,
                     modelOptions = listOf(null to com.nanzhufeng.ai.domain.AutoModelRouter.label(
                         com.nanzhufeng.ai.domain.AutoRoutingFacts(
                             hasAttachment = state.draft?.attachments?.isNotEmpty() == true,
@@ -2228,6 +2233,7 @@ private fun ConversationWorkScope(
                     transcript = transcript,
                     attachmentPreviews = attachmentPreviews,
                     contextSelections = state.answerContextSelections[transcript.message.messageId].orEmpty(),
+                    responseAttributions = state.answerResponseAttributions[transcript.message.messageId].orEmpty(),
                     assistantGenerationPhaseOverride = if (
                         state.normalSendRetryInProgress && transcript.message.messageId == state.currentLeafId
                     ) "南枫AI 继续生成…" else null,
@@ -5801,6 +5807,7 @@ private fun MessageBubble(
     transcript: PresentedTranscriptMessage,
     attachmentPreviews: Map<AttachmentId, ConversationAttachmentPreview>,
     contextSelections: List<ContextSelectionAuditRecord>,
+    responseAttributions: List<AssistantResponseModelAttribution>,
     assistantGenerationPhaseOverride: String? = null,
     searchAnchorAttachmentId: AttachmentId? = null,
     searchAnchorRequestId: Long = 0L,
@@ -5958,7 +5965,7 @@ private fun MessageBubble(
             }
             if (textBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth()) { textContent() }
             if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { assistantAttachmentContent() }
-            AssistantMessageActionRow(transcript, contextSelections, onCopyAssistant, onShareAssistant, onBranchAssistant)
+            AssistantMessageActionRow(transcript, contextSelections, responseAttributions, onCopyAssistant, onShareAssistant, onBranchAssistant)
         }
         else -> Surface(color = roleVisual.surface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { textContent(); attachmentContent() }
@@ -6100,6 +6107,7 @@ private fun BranchCreationFeedback(
 private fun AssistantMessageActionRow(
     transcript: PresentedTranscriptMessage,
     contextSelections: List<ContextSelectionAuditRecord>,
+    responseAttributions: List<AssistantResponseModelAttribution>,
     onCopy: (PresentedTranscriptMessage) -> Unit,
     onShare: (PresentedTranscriptMessage) -> Unit,
     onBranch: (MessageNodeId) -> Unit,
@@ -6111,8 +6119,8 @@ private fun AssistantMessageActionRow(
     // label without estimate provenance and rounds only this rendered amount; settings and the
     // cost ledger keep their full source-qualified accounting label.
     val cost = assistantFooterCostDisplay(transcript.metadata.costLabel)
-    val contextDisclosure = contextSelections.answerContextDisclosureOrNull()
-    var contextDisclosureVisible by remember(transcript.message.messageId) { mutableStateOf(false) }
+    val answerInformation = contextSelections.answerInformationDisclosure(responseAttributions)
+    var answerInformationVisible by remember(transcript.message.messageId) { mutableStateOf(false) }
     val metadataStyle = MaterialTheme.typography.labelSmall
     Column(
         modifier = Modifier.fillMaxWidth().padding(
@@ -6155,16 +6163,14 @@ private fun AssistantMessageActionRow(
                     containerColor = ForegroundSurface,
                     shape = RoundedCornerShape(16.dp),
                 ) {
-                    if (contextDisclosure != null) {
-                        DropdownMenuItem(
-                            text = { Text("本次上下文来源") },
-                            leadingIcon = { Icon(Icons.Rounded.AccountTree, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
-                            onClick = {
-                                moreActionsExpanded = false
-                                contextDisclosureVisible = true
-                            },
-                        )
-                    }
+                    DropdownMenuItem(
+                        text = { Text("本次回答信息") },
+                        leadingIcon = { Icon(Icons.Rounded.AccountTree, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
+                        onClick = {
+                            moreActionsExpanded = false
+                            answerInformationVisible = true
+                        },
+                    )
                     DropdownMenuItem(
                         text = { Text("创建分支") },
                         leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
@@ -6209,42 +6215,59 @@ private fun AssistantMessageActionRow(
             }
         }
     }
-    if (contextDisclosureVisible && contextDisclosure != null) {
-        AnswerContextDisclosureDialog(contextDisclosure) { contextDisclosureVisible = false }
+    if (answerInformationVisible) {
+        AnswerInformationDialog(answerInformation) { answerInformationVisible = false }
     }
 }
 
-private fun List<ContextSelectionAuditRecord>.answerContextDisclosureOrNull(): AnswerContextDisclosure? {
-    if (isEmpty()) return null
-    val sourceRows = flatMap { it.answerContextDisclosure().sources }
-        .distinctBy { "${it.kind}\u0000${it.stableId}" }
-    if (sourceRows.isEmpty()) return null
-    return AnswerContextDisclosure(
-        sources = sourceRows,
-    )
-}
-
 @Composable
-private fun AnswerContextDisclosureDialog(
-    disclosure: AnswerContextDisclosure,
+private fun AnswerInformationDialog(
+    disclosure: AnswerInformationDisclosure,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("本次上下文来源") },
+        title = { Text("本次回答信息") },
         text = {
             Column(
                 modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                disclosure.sources.forEach { source ->
-                    AnswerContextSourceRow(source)
+                AnswerInformationFact(
+                    label = "基础风格和语气",
+                    value = disclosure.styleLabel ?: "未记录（旧回答）",
+                )
+                AnswerInformationFact(
+                    label = "实时网络",
+                    value = when (disclosure.webSearchUsed) {
+                        true -> "已实际使用"
+                        false -> "本次未使用"
+                        null -> "未记录（旧回答）"
+                    },
+                    emphasized = disclosure.webSearchUsed == true,
+                )
+                if (disclosure.sources.isNotEmpty()) {
+                    Text("本次上下文来源", color = SecondaryText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+                    disclosure.sources.forEach { source -> AnswerContextSourceRow(source) }
                 }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("知道了") } },
         containerColor = ForegroundSurface,
     )
+}
+
+@Composable
+private fun AnswerInformationFact(label: String, value: String, emphasized: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, modifier = Modifier.weight(1f), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        Text(
+            value,
+            color = if (emphasized) AccentOrange else BodyText,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
 }
 
 @Composable
@@ -8165,6 +8188,8 @@ private fun ComposerMenuOverlay(
     attachmentActions: List<ComposerAttachmentAction>,
     conversationWebSearchEnabled: Boolean? = null,
     onToggleConversationWebSearch: ((Boolean) -> Unit)? = null,
+    conversationStyle: com.nanzhufeng.ai.domain.ConversationStyle? = null,
+    onSelectConversationStyle: ((com.nanzhufeng.ai.domain.ConversationStyle) -> Unit)? = null,
     modelOptions: List<Pair<String?, String>>,
     selectedModelId: String?,
     onDismiss: () -> Unit,
@@ -8172,8 +8197,13 @@ private fun ComposerMenuOverlay(
 ) {
     if (menu == ComposerMenu.NONE) return
     var selectedSlot by remember(menu) { mutableStateOf<com.nanzhufeng.ai.domain.ComposerModelSlot?>(null) }
+    var styleMenuVisible by remember(menu) { mutableStateOf(false) }
     val onOverlayBack: () -> Unit = {
-        if (menu == ComposerMenu.MODEL && selectedSlot != null) selectedSlot = null else onDismiss()
+        when {
+            menu == ComposerMenu.MODEL && selectedSlot != null -> selectedSlot = null
+            menu == ComposerMenu.ATTACHMENTS && styleMenuVisible -> styleMenuVisible = false
+            else -> onDismiss()
+        }
     }
     // An overlay is always the first Back consumer. A model child page returns to its root
     // before the overlay itself closes, so Back never falls through to the conversation/App.
@@ -8200,7 +8230,7 @@ private fun ComposerMenuOverlay(
             )
         }
     }
-    val menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 248.dp
+    val menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 280.dp
     // The root needs room for one automatic row and the Daily/Deep task rows. A child list uses the same
     // header plus only the rows it actually owns, so it never has a blank lower tray.
     val modelPickerContentHeight = if (selectedSlot == null) {
@@ -8209,7 +8239,13 @@ private fun ComposerMenuOverlay(
         32.dp + 72.dp * currentChoices.size.toFloat()
     }
     val menuHeight = if (menu == ComposerMenu.ATTACHMENTS) {
-        52.dp * attachmentActions.size + if (conversationWebSearchEnabled != null && onToggleConversationWebSearch != null) 72.dp else 16.dp
+        if (styleMenuVisible) {
+            ComposerModelPickerHeaderHeight + 52.dp * com.nanzhufeng.ai.domain.ConversationStyle.selectable.size + 16.dp
+        } else {
+            52.dp * attachmentActions.size +
+                (if (conversationStyle != null && onSelectConversationStyle != null) 56.dp else 0.dp) +
+                (if (conversationWebSearchEnabled != null && onToggleConversationWebSearch != null) 72.dp else 16.dp)
+        }
     } else {
         ComposerModelPickerHeaderHeight + modelPickerContentHeight
     }
@@ -8250,13 +8286,37 @@ private fun ComposerMenuOverlay(
                 .width(menuWidth)
                 .p5aDismissOnInwardEdgeSwipe(onOverlayBack),
         ) {
-            if (menu == ComposerMenu.ATTACHMENTS) Column(Modifier.padding(vertical = 8.dp)) {
-                attachmentActions.forEach { action -> ComposerOverlayAction(action.icon, action.label, action.onClick) }
-                if (conversationWebSearchEnabled != null && onToggleConversationWebSearch != null) {
-                    ComposerConversationWebSearchAction(
-                        enabled = conversationWebSearchEnabled,
-                        onEnabledChange = onToggleConversationWebSearch,
-                    )
+            if (menu == ComposerMenu.ATTACHMENTS) {
+                if (styleMenuVisible && conversationStyle != null && onSelectConversationStyle != null) {
+                    Column {
+                        ComposerStylePickerHeader(onBack = { styleMenuVisible = false })
+                        Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) {
+                            com.nanzhufeng.ai.domain.ConversationStyle.selectable.forEach { style ->
+                                ComposerStyleOptionRow(
+                                    label = style.definition().label,
+                                    selected = style == conversationStyle,
+                                    onClick = {
+                                        onSelectConversationStyle(style)
+                                        onDismiss()
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else Column(Modifier.padding(vertical = 8.dp)) {
+                    attachmentActions.forEach { action -> ComposerOverlayAction(action.icon, action.label, action.onClick) }
+                    if (conversationStyle != null && onSelectConversationStyle != null) {
+                        ComposerConversationStyleAction(
+                            selectedLabel = conversationStyle.definition().label,
+                            onClick = { styleMenuVisible = true },
+                        )
+                    }
+                    if (conversationWebSearchEnabled != null && onToggleConversationWebSearch != null) {
+                        ComposerConversationWebSearchAction(
+                            enabled = conversationWebSearchEnabled,
+                            onEnabledChange = onToggleConversationWebSearch,
+                        )
+                    }
                 }
             } else TransientMenuTextScale {
                 Column {
@@ -8304,23 +8364,30 @@ private fun ComposerMenuOverlay(
                     }
                 } else {
                     ComposerModelPickerSectionLabel("选择具体模型")
+                    val webSearchStateLabel = conversationWebSearchEnabled?.let { enabled ->
+                        if (enabled) "实时联网" else "未联网"
+                    }
                     currentChoices.forEach { choice ->
                         val providerId = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(choice.routes.single())
                         val isDeepSeek = providerId == com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK
-                        val officialWebSearchDetail = choice.slot.takeIf { it == com.nanzhufeng.ai.domain.ComposerModelSlot.DEEP }?.let {
+                        val webSearchDetail = choice.slot.takeIf {
+                            it == com.nanzhufeng.ai.domain.ComposerModelSlot.DEEP && webSearchStateLabel != null
+                        }?.let {
                             when (providerId) {
-                                com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter · 官方实时联网检索"
-                                com.nanzhufeng.ai.domain.ProviderId.QWEN -> "千问 · 官方实时联网检索"
+                                com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter · $webSearchStateLabel"
+                                com.nanzhufeng.ai.domain.ProviderId.QWEN -> "千问 · $webSearchStateLabel"
                                 com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> null
-                                com.nanzhufeng.ai.domain.ProviderId.ZHIPU -> "智谱 · 官方实时联网检索"
+                                com.nanzhufeng.ai.domain.ProviderId.ZHIPU -> "智谱 · $webSearchStateLabel"
                                 com.nanzhufeng.ai.domain.ProviderId.MOCK -> null
                             }
                         }
                         ComposerModelOverlayRow(
                             label = choice.label,
-                            detail = if (isDeepSeek) {
-                                "${deepSeekPricingPeriod.pickerLabel} · 官方实时联网检索"
-                            } else officialWebSearchDetail ?: when (choice.slot) {
+                            detail = if (isDeepSeek && webSearchStateLabel != null) {
+                                "${deepSeekPricingPeriod.pickerLabel} · $webSearchStateLabel"
+                            } else if (isDeepSeek) {
+                                deepSeekPricingPeriod.pickerLabel
+                            } else webSearchDetail ?: when (choice.slot) {
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.COMPARE -> "两个模型并行回答，便于对照"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.DAILY -> "适合日常问答与轻量任务"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.DEEP -> "适合复杂推理与专业分析"
@@ -8441,6 +8508,77 @@ private fun ComposerOverlayAction(icon: ImageVector, label: String, onClick: () 
         ComposerMenuIconSurface(icon = icon, tint = BodyText)
         Spacer(Modifier.width(12.dp))
         Text(label, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Start)
+    }
+}
+
+@Composable
+private fun ComposerConversationStyleAction(selectedLabel: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ComposerMenuIconSurface(icon = Icons.Rounded.AutoAwesome, tint = AccentOrange)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                "基础风格和语气",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
+            Text(
+                selectedLabel,
+                color = AccentOrange,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Rounded.ChevronRight, contentDescription = "切换基础风格和语气", modifier = Modifier.size(18.dp), tint = SecondaryText)
+        }
+    }
+}
+
+@Composable
+private fun ComposerStylePickerHeader(onBack: () -> Unit) {
+    Box(Modifier.fillMaxWidth().height(ComposerModelPickerHeaderHeight)) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp).size(44.dp),
+        ) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回附件菜单")
+        }
+        Text(
+            "基础风格和语气",
+            modifier = Modifier.align(Alignment.Center),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun ComposerStyleOptionRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = if (selected) AccentOrangeSoft else Color.Transparent,
+        contentColor = if (selected) AccentOrange else BodyText,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            if (selected) Icon(Icons.Rounded.Check, contentDescription = "当前风格", modifier = Modifier.size(20.dp))
+        }
     }
 }
 
@@ -10719,12 +10857,12 @@ private fun stampDownloadedImageTakenAt(resolver: android.content.ContentResolve
     val exifTime = downloadedImageExifTimeFormatter.format(downloadedAt)
     val offset = downloadedImageExifOffsetFormatter.format(downloadedAt)
     resolver.openFileDescriptor(uri, "rw")?.use { descriptor ->
-        val exif = android.media.ExifInterface(descriptor.fileDescriptor)
-        exif.setAttribute(android.media.ExifInterface.TAG_DATETIME, exifTime)
-        exif.setAttribute(android.media.ExifInterface.TAG_DATETIME_ORIGINAL, exifTime)
-        exif.setAttribute(android.media.ExifInterface.TAG_DATETIME_DIGITIZED, exifTime)
-        exif.setAttribute(android.media.ExifInterface.TAG_OFFSET_TIME_ORIGINAL, offset)
-        exif.setAttribute(android.media.ExifInterface.TAG_OFFSET_TIME_DIGITIZED, offset)
+        val exif = ExifInterface(descriptor.fileDescriptor)
+        exif.setAttribute(ExifInterface.TAG_DATETIME, exifTime)
+        exif.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, exifTime)
+        exif.setAttribute(ExifInterface.TAG_DATETIME_DIGITIZED, exifTime)
+        exif.setAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL, offset)
+        exif.setAttribute(ExifInterface.TAG_OFFSET_TIME_DIGITIZED, offset)
         exif.saveAttributes()
     }
 }

@@ -189,7 +189,7 @@ class NanfengAiActivity : ComponentActivity() {
         )[InvocationLedgerViewModel::class.java]
         conversationCostLedgerViewModel = ViewModelProvider(
             this,
-            ConversationCostLedgerViewModel.Factory(container.assistantResponseModelAttributions, container.reminderDraftGenerationRecords, container.conversationTitleGenerationRecords, container.scheduledMonitorRepository, container.directChatCallAudit, container.invocationRepository),
+            ConversationCostLedgerViewModel.Factory(container.assistantResponseModelAttributions, container.reminderDraftGenerationRecords, container.conversationTitleGenerationRecords, container.scheduledMonitorRepository, container.directChatCallAudit, container.historyKnowledgeAutoCurationRunStore, container.invocationRepository),
         )[ConversationCostLedgerViewModel::class.java]
         knowledgeLibraryViewModel = ViewModelProvider(
             this,
@@ -236,6 +236,7 @@ class NanfengAiActivity : ComponentActivity() {
                 container.clearTemporaryConversation,
                 container.p6gModelSelection,
                 container.conversationWebSearchOverrides,
+                container.conversationStyleOverrides,
                 container.loadAssistantExperienceSettings,
                 container.invocationRepository,
                 container.assistantResponseModelAttributions,

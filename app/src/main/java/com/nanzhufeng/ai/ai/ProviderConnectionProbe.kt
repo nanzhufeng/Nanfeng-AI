@@ -58,7 +58,7 @@ class ProviderConnectionProbe(
             }
             is ProviderChatOutcome.StreamedResponse -> ProviderConnectionProbeResult.Connected(providerId, ProviderDiagnosticRecord.endpointHost(endpoint), modelId, latencyMs)
             ProviderChatOutcome.TimedOut -> failed(providerId, endpoint, modelId, ProviderDiagnosticErrorClass.TIMEOUT, latencyMs)
-            ProviderChatOutcome.NetworkFailure -> failed(providerId, endpoint, modelId, ProviderDiagnosticErrorClass.NETWORK, latencyMs)
+            is ProviderChatOutcome.NetworkFailure -> failed(providerId, endpoint, modelId, ProviderDiagnosticErrorClass.NETWORK, latencyMs)
             ProviderChatOutcome.ResponseTooLarge -> failed(providerId, endpoint, modelId, ProviderDiagnosticErrorClass.RESPONSE_TOO_LARGE, latencyMs)
             ProviderChatOutcome.Cancelled -> ProviderConnectionProbeResult.Blocked("连接测试已取消；没有写入失败诊断。")
         }

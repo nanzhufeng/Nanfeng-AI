@@ -53,6 +53,7 @@ object ConversationCostEstimator {
         "anthropic/claude-sonnet-5" to price(OPENROUTER_PRICE_VERSION, "2", "10"),
         "anthropic/claude-haiku-4.5" to price(OPENROUTER_PRICE_VERSION, "1", "5"),
         "google/gemini-3.7-flash" to price(OPENROUTER_PRICE_VERSION, "0.375", "1.875"),
+        "moonshotai/kimi-k3" to price(OPENROUTER_PRICE_VERSION, "2.55", "12.75", "0.256"),
         "qwen3.8-max" to price(QWEN_PRICE_VERSION, "12", "36", "1.5", "CNY"),
     )
 
@@ -93,6 +94,10 @@ object ConversationCostEstimator {
         "openai/gpt-5.6-luna" to listOf(
             InputTier(271_999, price(OPENROUTER_PRICE_VERSION, "0.2", "1.2")),
             InputTier(Long.MAX_VALUE, price(OPENROUTER_PRICE_VERSION, "0.4", "1.8")),
+        ),
+        "x-ai/grok-4.6" to listOf(
+            InputTier(199_999, price(OPENROUTER_PRICE_VERSION, "2", "6", "0.5")),
+            InputTier(Long.MAX_VALUE, price(OPENROUTER_PRICE_VERSION, "4", "12", "1")),
         ),
         "qwen3.7-plus" to listOf(
             InputTier(256_000, price(QWEN_PRICE_VERSION, "0.276", "1.101")),

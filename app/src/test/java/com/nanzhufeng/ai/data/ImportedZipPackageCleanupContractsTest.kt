@@ -46,7 +46,7 @@ class ImportedZipPackageCleanupContractsTest {
     }
 
     @Test
-    fun `inventory separates unreferenced physical bytes and uses current file length`() {
+    fun `inventory automatically reclaims unreferenced bytes and uses current file length`() {
         val hash = "a".repeat(64)
         database.privateAttachmentAssetDao().insert(
             PrivateAttachmentAssetEntity(
@@ -70,9 +70,22 @@ class ImportedZipPackageCleanupContractsTest {
         aggregate = manager.inventory().aggregates.associateBy { it.key }.getValue("attachment_images")
         assertEquals(0L, aggregate.count)
         assertEquals(0L, aggregate.byteCount)
-        var orphaned = manager.inventory().aggregates.associateBy { it.key }.getValue("orphaned_attachment_files")
-        assertEquals(1L, orphaned.count)
-        assertEquals(actual.length(), orphaned.byteCount)
+        assertFalse(actual.exists())
+        assertEquals(null, database.privateAttachmentAssetDao().findById("actual-size-fixture"))
+        assertFalse(manager.inventory().aggregates.any { it.key == "orphaned_attachment_files" })
+
+        database.privateAttachmentAssetDao().insert(
+            PrivateAttachmentAssetEntity(
+                attachmentId = "actual-size-fixture",
+                storageKey = "attachments/v1/$hash.png",
+                mimeType = "image/png",
+                displayName = "actual.png",
+                byteCount = 9_999_999L,
+                sha256 = hash,
+            ),
+        )
+        actual.parentFile!!.mkdirs()
+        actual.writeBytes(ByteArray(321))
 
         database.glmOcrTaskDao().upsert(
             GlmOcrTaskEntity(
@@ -95,15 +108,16 @@ class ImportedZipPackageCleanupContractsTest {
             ),
         )
         aggregate = manager.inventory().aggregates.associateBy { it.key }.getValue("attachment_images")
-        orphaned = manager.inventory().aggregates.associateBy { it.key }.getValue("orphaned_attachment_files")
         assertEquals(1L, aggregate.count)
         assertEquals(actual.length(), aggregate.byteCount)
-        assertEquals(0L, orphaned.count)
-        assertEquals(0L, orphaned.byteCount)
+        database.glmOcrTaskDao().delete("ocr-live-reference")
+        manager.inventory()
+        assertFalse(actual.exists())
+        assertEquals(null, database.privateAttachmentAssetDao().findById("actual-size-fixture"))
     }
 
     @Test
-    fun `explicit orphan cleanup removes actual leftover bytes and catalog row`() {
+    fun `inventory cleanup removes actual leftover bytes and catalog row`() {
         val hash = "b".repeat(64)
         val attachmentId = "orphan-video-fixture"
         val file = File(context.filesDir, "attachments/v1/$hash.mp4").also {
@@ -138,20 +152,10 @@ class ImportedZipPackageCleanupContractsTest {
             ),
         )
         val manager = AndroidPrivacyDataManager(context, database, "test")
-        val preview = manager.preview(com.nanzhufeng.ai.domain.PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES)
-        assertEquals(777L, preview.aggregates.single().byteCount)
-
-        val result = manager.delete(
-            com.nanzhufeng.ai.domain.PrivacyDeletionRequest(
-                scope = com.nanzhufeng.ai.domain.PrivacyDeleteScope.ORPHANED_ATTACHMENT_FILES,
-                previewFingerprint = preview.fingerprint,
-            ),
-        )
-
-        assertTrue(result is com.nanzhufeng.ai.domain.PrivacyDeletionResult.Completed)
+        manager.inventory()
         assertFalse(file.exists())
         assertEquals(null, database.privateAttachmentAssetDao().findById(attachmentId))
-        assertEquals(0L, manager.inventory().aggregates.associateBy { it.key }.getValue("orphaned_attachment_files").byteCount)
+        assertFalse(manager.inventory().aggregates.any { it.key == "orphaned_attachment_files" })
     }
 
     @Test

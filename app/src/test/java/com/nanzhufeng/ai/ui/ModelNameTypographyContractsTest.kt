@@ -32,13 +32,16 @@ class ModelNameTypographyContractsTest {
         val ledgers = listOf(
             File("src/main/java/com/nanzhufeng/ai/ui/InvocationLedgerUi.kt").readText(),
             File("src/main/java/com/nanzhufeng/ai/ui/ConversationCostLedgerUi.kt").readText(),
-            File("src/main/java/com/nanzhufeng/ai/ui/KnowledgeLibraryUi.kt").readText(),
             File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText(),
             File("src/main/java/com/nanzhufeng/ai/ui/ScheduledMonitorDialog.kt").readText(),
         )
 
+        assertTrue(workspace.contains("private val ComposerModelRoundedBoldFontFamily = FontFamily("))
+        assertTrue(workspace.contains("android.graphics.Typeface.create(\"sans-serif-rounded\", android.graphics.Typeface.BOLD)"))
+        assertTrue(composer.contains("fontFamily = ComposerModelRoundedBoldFontFamily"))
         assertTrue(composer.contains("fontWeight = FontWeight.Bold"))
         assertFalse(composer.contains("fontWeight = FontWeight.Normal"))
+        assertFalse(composer.contains("fontFamily = DrawerIdentityRoundedFontFamily"))
         assertTrue(picker.contains("Text(label, fontWeight = FontWeight.Bold"))
         assertFalse(picker.contains("labelIsModelName"))
         assertTrue(pickerHeader.contains("fontWeight = FontWeight.Bold"))

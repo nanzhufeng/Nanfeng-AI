@@ -3,6 +3,7 @@ package com.nanzhufeng.ai.data.local
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttribution
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttributionStore
 import com.nanzhufeng.ai.domain.ConversationCostSource
+import com.nanzhufeng.ai.domain.ConversationStyle
 import com.nanzhufeng.ai.domain.MessageNodeId
 import com.nanzhufeng.ai.domain.NormalChatSendAttemptId
 import com.nanzhufeng.ai.domain.ProviderId
@@ -23,23 +24,31 @@ class RoomAssistantResponseModelAttributionStore(
             require(existing.providerId == attribution.providerId.name &&
                 existing.receiverProviderId == attribution.receiverProviderId.name &&
                 existing.modelId == attribution.modelId &&
-                existing.modelDisplayName == attribution.modelDisplayName
+                existing.modelDisplayName == attribution.modelDisplayName &&
+                compatible(existing.conversationStyleId, attribution.conversationStyle?.persistedId) &&
+                compatible(existing.webSearchUsed, attribution.webSearchUsed)
             ) { "助手回复已有冲突的模型归属。" }
-            val existingCost = existing.costTotalMicros
-            val incomingCost = attribution.cost.totalMicros
-            require(existingCost == null || incomingCost == null ||
-                (existingCost == incomingCost && existing.costSource == attribution.costSource?.name)
+            require(
+                compatible(existing.inputTokens, attribution.usage.inputTokens) &&
+                    compatible(existing.outputTokens, attribution.usage.outputTokens) &&
+                    compatible(existing.totalTokens, attribution.usage.totalTokens) &&
+                    compatible(existing.cachedInputTokens, attribution.usage.cachedInputTokens) &&
+                    compatible(existing.reasoningTokens, attribution.usage.reasoningTokens) &&
+                    compatible(existing.costPriceVersion, attribution.cost.priceVersion) &&
+                    compatible(existing.costCurrencyCode, attribution.cost.currencyCode) &&
+                    compatible(existing.costTotalMicros, attribution.cost.totalMicros) &&
+                    compatible(existing.costSource, attribution.costSource?.name)
             ) { "助手回复已有冲突的费用事实。" }
             // Model provenance is written before transport for streaming visibility. A completed
             // response may enrich that exact row once; an unknown retry can never erase it.
-            if (existingCost == null && (incomingCost != null || attribution.usage != com.nanzhufeng.ai.domain.ProviderUsage())) {
-                dao.enrichAccounting(
-                    attribution.assistantMessageId.value, attribution.attemptId.value,
-                    attribution.usage.inputTokens, attribution.usage.outputTokens, attribution.usage.totalTokens, attribution.usage.cachedInputTokens,
-                    attribution.usage.reasoningTokens,
-                    attribution.cost.priceVersion, attribution.cost.currencyCode, incomingCost, attribution.costSource?.name,
-                )
-            }
+            check(dao.enrichCompletedFacts(
+                attribution.assistantMessageId.value, attribution.attemptId.value,
+                attribution.conversationStyle?.persistedId, attribution.webSearchUsed,
+                attribution.usage.inputTokens, attribution.usage.outputTokens, attribution.usage.totalTokens,
+                attribution.usage.cachedInputTokens, attribution.usage.reasoningTokens,
+                attribution.cost.priceVersion, attribution.cost.currencyCode, attribution.cost.totalMicros,
+                attribution.costSource?.name,
+            ) == 1) { "助手回复完成事实未能写入本机。" }
         }
     })
 
@@ -64,6 +73,9 @@ class RoomAssistantResponseModelAttributionStore(
     }
 }
 
+private fun <T> compatible(existing: T?, incoming: T?): Boolean =
+    existing == null || incoming == null || existing == incoming
+
 /** The completed Attempt is the sole timestamp owner; absent/interrupted attempts stay unknown. */
 private fun CompletedNormalChatAttemptDuration.modelDurationMillis(): Long? =
     (updatedAtEpochMs - createdAtEpochMs)
@@ -76,6 +88,8 @@ private fun AssistantResponseModelAttribution.toEntity() = AssistantResponseMode
     receiverProviderId = receiverProviderId.name,
     modelId = modelId,
     modelDisplayName = modelDisplayName,
+    conversationStyleId = conversationStyle?.persistedId,
+    webSearchUsed = webSearchUsed,
     recordedAtEpochMs = recordedAt.toEpochMilli(),
     inputTokens = usage.inputTokens,
     outputTokens = usage.outputTokens,
@@ -95,6 +109,8 @@ private fun AssistantResponseModelAttributionEntity.toDomain() = AssistantRespon
     receiverProviderId = ProviderId.valueOf(receiverProviderId),
     modelId = modelId,
     modelDisplayName = modelDisplayName,
+    conversationStyle = conversationStyleId?.let(ConversationStyle::fromPersistedId),
+    webSearchUsed = webSearchUsed,
     recordedAt = Instant.ofEpochMilli(recordedAtEpochMs),
     usage = com.nanzhufeng.ai.domain.ProviderUsage(inputTokens, outputTokens, totalTokens, cachedInputTokens, reasoningTokens),
     cost = com.nanzhufeng.ai.domain.ProviderCost(costPriceVersion, costCurrencyCode, costTotalMicros),

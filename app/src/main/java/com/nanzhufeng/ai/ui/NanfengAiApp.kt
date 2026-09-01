@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.systemGestureExclusion
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -106,6 +108,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.nanzhufeng.ai.domain.P6KZipManualLinkTarget
 import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.ModelPresetId
+import com.nanzhufeng.ai.domain.definition
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -738,12 +741,10 @@ internal fun NanfengAiApp(
         // settings home used [SettingsPageBackground], producing a visible dark-gray flash on
         // every level change.  Treat every non-conversation route as one settings canvas; only
         // the conversation surfaces keep their separate reading background.
-        val rootRoute = navigationViewModel.state.route
-        val usesSettingsCanvas = rootRoute != P5ARoute.CAPTURE && rootRoute != P5ARoute.CONVERSATION
-        val rootCanvasColor = when {
-            rootRoute == P5ARoute.OCR -> ForegroundSurface
-            usesSettingsCanvas -> SettingsPageBackground
-            else -> PageBackground
+        val rootCanvasColor = when (rootCanvasKind(navigationViewModel.state.route)) {
+            RootCanvasKind.DOCUMENT -> ForegroundSurface
+            RootCanvasKind.SETTINGS -> SettingsPageBackground
+            RootCanvasKind.CONVERSATION -> PageBackground
         }
         Surface(
             // OCR is a full-height document surface. Because the Activity status bar is
@@ -853,6 +854,7 @@ internal fun NanfengAiApp(
                 onRetryClaudeImportTask = claudeExportImportViewModel::retry,
                 onCancelClaudeImport = claudeExportImportViewModel::cancel,
                 p6kZipImportState = p6kZipImportViewModel.state,
+                onRefreshP6KZip = p6kZipImportViewModel::show,
                 // Keep the system chooser honest: this import accepts ZIP archives only. The
                 // staged file still passes the filename, app-private-copy and strict
                 // central-directory checks in P6-K after the user selects it.
@@ -974,7 +976,10 @@ internal fun NanfengAiApp(
             if (p8ControlledAgentViewModel.state.visible) P8ControlledAgentDialog(p8ControlledAgentViewModel.state, p8ControlledAgentViewModel::dismiss, p8ControlledAgentViewModel::begin, p8ControlledAgentViewModel::confirm, p8ControlledAgentViewModel::pause, p8ControlledAgentViewModel::resume, p8ControlledAgentViewModel::cancel)
             if (scheduledMonitorViewModel.state.visible) ScheduledMonitorDialog(
                 state = scheduledMonitorViewModel.state,
-                onDismiss = scheduledMonitorViewModel::dismiss,
+                onDismiss = {
+                    scheduledMonitorViewModel.dismiss()
+                    onExitSettingsToConversationDrawer()
+                },
                 onStartCreate = scheduledMonitorViewModel::startCreate,
                 onCancelCreate = scheduledMonitorViewModel::cancelCreate,
                 onTitleChanged = scheduledMonitorViewModel::updateTitle,
@@ -1051,6 +1056,7 @@ private fun CaptureScreen(
     onRetryClaudeImportTask: (ClaudeImportTaskId) -> Unit,
     onCancelClaudeImport: () -> Unit,
     p6kZipImportState: P6KZipImportUiState,
+    onRefreshP6KZip: () -> Unit,
     onOpenP6KChatGptZip: () -> Unit,
     onOpenP6KClaudeZip: () -> Unit,
     onClearP6KZip: (String) -> Unit,
@@ -1127,6 +1133,11 @@ private fun CaptureScreen(
         personalizationDirty = false
         openSettingsLevel(P5ARoute.SETTINGS, SettingsDestination.PERSONALIZATION)
     }
+    LaunchedEffect(settingsDestination) {
+        if (settingsDestination == SettingsDestination.DATA_STORAGE || settingsDestination == SettingsDestination.ZIP_IMPORT_RESULTS) {
+            onRefreshP6KZip()
+        }
+    }
     fun hasUnsavedPersonalizationEditorContent(
         draft: com.nanzhufeng.ai.domain.AssistantExperienceSettings,
         saved: com.nanzhufeng.ai.domain.AssistantExperienceSettings,
@@ -1192,6 +1203,22 @@ private fun CaptureScreen(
             }
         }
     }
+    val returnFromRouteRoot: () -> Unit = {
+        if (settingsOwnsCurrentRoute && settingsNavigationStack.size > 1) {
+            returnFromSettings()
+        } else {
+            onRouteSelected(if (route == P5ARoute.CONTROL) P5ARoute.SETTINGS else P5ARoute.CONVERSATION)
+        }
+    }
+    // Every visible back mechanism consumes exactly one knowledge level before leaving the
+    // knowledge route: editor -> detail/list -> parent route. This keeps the toolbar, Android
+    // system back and inward edge gesture on the same navigation owner.
+    val returnFromCurrentPage: () -> Unit = when {
+        route == P5ARoute.KNOWLEDGE && knowledgeLibraryState.editing -> knowledgeLibraryViewModel::cancelEdit
+        route == P5ARoute.KNOWLEDGE && knowledgeLibraryState.detail != null -> knowledgeLibraryViewModel::backToList
+        route == P5ARoute.SETTINGS -> returnFromSettings
+        else -> returnFromRouteRoot
+    }
     val settingsSearchReturnsToLocalData = settingsNavigationStack.lastOrNull() ==
         SettingsNavigationEntry(P5ARoute.CONVERSATION, SettingsDestination.PRIVACY)
     // The chat root owns its own LazyColumn. It must not inherit the settings/workspace
@@ -1247,11 +1274,12 @@ private fun CaptureScreen(
         return
     }
     if (route == P5ARoute.OCR) {
+        LaunchedEffect(Unit) { glmOcrWorkspaceViewModel.refresh() }
         SettingsTextScale {
             GlmOcrWorkspacePage(
                 state = glmOcrWorkspaceState,
                 viewModel = glmOcrWorkspaceViewModel,
-                onBack = { onRouteSelected(P5ARoute.CONVERSATION) },
+                onBack = onReturnToConversationDrawer,
                 onOpenConversation = { conversationId ->
                     conversationViewModel.selectConversation(conversationId)
                     onRouteSelected(P5ARoute.CONVERSATION)
@@ -1265,17 +1293,14 @@ private fun CaptureScreen(
             .widthIn(max = 1280.dp)
             .fillMaxSize()
             .then(if (settingsOwnsCurrentRoute) Modifier.systemGestureExclusion() else Modifier)
-            .then(if (settingsOwnsCurrentRoute) Modifier.settingsEdgeExit(returnFromSettings) else Modifier)
+            .then(if (settingsOwnsCurrentRoute) Modifier.settingsEdgeExit(returnFromCurrentPage) else Modifier)
             .verticalScroll(settingsScrollState)
             .padding(start = if (expanded) 32.dp else 20.dp, end = if (expanded) 32.dp else 20.dp, top = 24.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        if (settingsOwnsCurrentRoute) {
-            // Every settings return shares one stack: detail → parent route/category → settings
-            // home → drawer. The bottom system gesture remains untouched because no bottom
-            // exclusion is set.
-            BackHandler(onBack = returnFromSettings)
-        }
+        // Every non-chat page handled here owns one system-back step. Child content is consumed
+        // first; only its root may leave for the parent route.
+        BackHandler(onBack = returnFromCurrentPage)
         SettingsTextScale {
             if (route == P5ARoute.SETTINGS) {
                 SettingsPageHeader(
@@ -1288,14 +1313,26 @@ private fun CaptureScreen(
                 )
             } else if (route != P5ARoute.CAPTURE && route != P5ARoute.CONVERSATION) {
                 val returnToSettingsParent = settingsOwnsCurrentRoute && settingsNavigationStack.size > 1
-                val returnRoute = if (route == P5ARoute.CONTROL) P5ARoute.SETTINGS else P5ARoute.CONVERSATION
-                TextButton(
-                    onClick = { if (returnToSettingsParent) returnFromSettings() else onRouteSelected(returnRoute) },
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text(if (returnToSettingsParent) "返回上一级" else if (route == P5ARoute.CONTROL) "返回设置" else "返回对话")
-                }
-                Header(route)
+                val knowledgeDetailVisible = route == P5ARoute.KNOWLEDGE && knowledgeLibraryState.detail != null
+                val knowledgeEditorVisible = route == P5ARoute.KNOWLEDGE && knowledgeLibraryState.editing
+                RoutePageHeader(
+                    route = route,
+                    title = when {
+                        knowledgeEditorVisible && knowledgeLibraryState.creating -> "新建知识"
+                        knowledgeEditorVisible -> "编辑知识"
+                        knowledgeDetailVisible -> "知识详情"
+                        else -> route.label
+                    },
+                    onBack = returnFromCurrentPage,
+                    backContentDescription = when {
+                        knowledgeEditorVisible && knowledgeLibraryState.creating -> "取消新建并返回知识列表"
+                        knowledgeEditorVisible -> "取消编辑并返回知识详情"
+                        knowledgeDetailVisible -> "返回知识列表"
+                        returnToSettingsParent -> "返回上一级"
+                        route == P5ARoute.CONTROL -> "返回设置"
+                        else -> "返回对话"
+                    },
+                )
             }
             when (route) {
             P5ARoute.CAPTURE, P5ARoute.CONVERSATION -> error("chat routes return before the settings scroll container")
@@ -1304,10 +1341,8 @@ private fun CaptureScreen(
                     state = knowledgeLibraryState,
                     currentConversationId = conversationState.selectedConversationId,
                     onOpenDetail = knowledgeLibraryViewModel::openDetail,
-                    onBackToList = knowledgeLibraryViewModel::backToList,
                     onSearch = knowledgeLibraryViewModel::updateSearch,
                     onStatus = knowledgeLibraryViewModel::setStatus,
-                    onSource = knowledgeLibraryViewModel::setSourceType,
                     onArchiveRestore = knowledgeLibraryViewModel::archiveOrRestore,
                     onDeleteRestore = knowledgeLibraryViewModel::deleteOrRestoreTrash,
                     onStartCreate = knowledgeLibraryViewModel::startCreate,
@@ -1317,14 +1352,11 @@ private fun CaptureScreen(
                     onEditTags = { knowledgeLibraryViewModel.updateEdit(tags = it) },
                     onCancelEdit = knowledgeLibraryViewModel::cancelEdit,
                     onSaveEdit = knowledgeLibraryViewModel::saveEdit,
-                    onFindDuplicateCandidates = knowledgeLibraryViewModel::findDuplicateCandidates,
                     onRequestHistoryCuration = knowledgeLibraryViewModel::requestHistoryCuration,
                     onConfirmHistoryCuration = knowledgeLibraryViewModel::confirmHistoryCuration,
                     onCancelHistoryCuration = knowledgeLibraryViewModel::cancelHistoryCuration,
                     onUpdateHistoryCurationDraft = knowledgeLibraryViewModel::updateHistoryCurationDraft,
                     onSaveHistoryCurationDraft = knowledgeLibraryViewModel::saveHistoryCurationDraft,
-                    onStartRelationshipBuilder = knowledgeLibraryViewModel::startRelationshipBuilder,
-                    onShowRelationshipList = knowledgeLibraryViewModel::showRelationshipList,
                 )
             }
             P5ARoute.OCR -> error("OCR returns before the settings scroll container")
@@ -2218,25 +2250,18 @@ private fun AssistantPersonalizationSettingsCard(
         onClick = { stylePickerVisible = true },
     )
     if (stylePickerVisible) {
-        AppearancePickerDialog(
-            title = "基础风格和语气",
+        ConversationStylePickerDialog(
+            selected = settings.conversationStyle.effective(),
+            onSelected = { option ->
+                onUpdate { current -> current.copy(conversationStyle = option) }
+                stylePickerVisible = false
+            },
             onDismiss = { stylePickerVisible = false },
-        ) {
-            com.nanzhufeng.ai.domain.ConversationStyle.entries.forEach { option ->
-                AppearancePickerOption(
-                    label = option.label(),
-                    selected = option == settings.conversationStyle,
-                    onClick = {
-                        onUpdate { current -> current.copy(conversationStyle = option) }
-                        stylePickerVisible = false
-                    },
-                )
-            }
-        }
+        )
     }
     Spacer(Modifier.height(8.dp))
     Text(
-        "这是 南枫AI 在与你对话时使用的主要语气。这不会影响 南枫AI 的功能。",
+        "当前风格会用于每次普通对话；只改变表达方式，不改变模型、联网、记忆或资料库功能。",
         modifier = Modifier.padding(horizontal = 4.dp),
         color = SecondaryText,
         style = MaterialTheme.typography.bodySmall,
@@ -2419,15 +2444,6 @@ private fun CustomInstructionsFullscreenEditor(
     }
 }
 
-private fun com.nanzhufeng.ai.domain.ConversationStyle.label(): String = when (this) {
-    com.nanzhufeng.ai.domain.ConversationStyle.DEFAULT -> "默认"
-    com.nanzhufeng.ai.domain.ConversationStyle.DIRECT -> "直言不讳"
-    com.nanzhufeng.ai.domain.ConversationStyle.PROFESSIONAL -> "专业可靠"
-    com.nanzhufeng.ai.domain.ConversationStyle.FRIENDLY -> "亲和友善"
-    com.nanzhufeng.ai.domain.ConversationStyle.EFFICIENT -> "高效务实"
-    com.nanzhufeng.ai.domain.ConversationStyle.HUMOROUS -> "风趣搞笑"
-}
-
 @Composable
 private fun ConversationStylePreferenceRow(
     style: com.nanzhufeng.ai.domain.ConversationStyle,
@@ -2445,7 +2461,86 @@ private fun ConversationStylePreferenceRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("基础风格和语气", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-            Text(style.label(), color = SecondaryText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(style.definition().label, color = SecondaryText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun ConversationStylePickerDialog(
+    selected: com.nanzhufeng.ai.domain.ConversationStyle,
+    onSelected: (com.nanzhufeng.ai.domain.ConversationStyle) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.90f).widthIn(max = 520.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = ForegroundSurface,
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp,
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Text(
+                    "基础风格和语气",
+                    modifier = Modifier.padding(start = 26.dp, end = 26.dp, top = 24.dp, bottom = 14.dp),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = BodyText,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                        .padding(start = 18.dp, end = 18.dp, bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    com.nanzhufeng.ai.domain.ConversationStyle.selectable.forEach { option ->
+                        val definition = option.definition()
+                        val isSelected = option == selected
+                        Surface(
+                            onClick = { onSelected(option) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (isSelected) AccentOrange.copy(alpha = 0.10f) else SettingsPageBackground,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) AccentOrange.copy(alpha = 0.55f) else NeutralBorder.copy(alpha = 0.65f),
+                            ),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        definition.label,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = if (isSelected) AccentOrange else BodyText,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        definition.summary,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = SecondaryText,
+                                        maxLines = 3,
+                                    )
+                                }
+                                if (isSelected) {
+                                    Spacer(Modifier.width(14.dp))
+                                    Icon(
+                                        Icons.Rounded.Check,
+                                        contentDescription = "已选中",
+                                        modifier = Modifier.size(scaledAppIconSize(22.dp)),
+                                        tint = AccentOrange,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -2797,9 +2892,9 @@ private fun FeatureReviewSettingsCard() {
             Text("建议：保留设置 → AI 模型服务的单一入口，不在聊天或 Composer 增加按键。三类记录只显示本机安全元数据，不显示 Key、对话正文、附件、提示词或完整响应。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("会话待看", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("会话未读", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
-            Text("当前：会话长按菜单提供“待看”；标记后在已置顶或最近的所属分组内优先显示，并用主题色圆点提醒，真正点击进入后清除。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("当前：会话长按菜单提供“未读”；标记后在已置顶或最近的所属分组内优先显示，并用主题色圆点提醒，真正点击进入后清除。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
             Text("建议：保留长按菜单这一低频入口，不在聊天主页、Composer 或侧栏增加常驻按键；状态只保存对话 ID 与设置时间。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
@@ -2834,9 +2929,9 @@ private fun FeatureReviewSettingsCard() {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("ChatGPT / Claude ZIP 导入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
-            Text("当前：待您判断保留或删减 · 入口：设置 → 数据与导入 → 导入中心。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("当前：作为后台安全规则保留 · 入口：设置 → 数据与导入 → 导入中心。重复导入会跳过已有内容，用户主动删除的对话或附件引用不会被后续 ZIP 恢复。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
-            Text("建议：保留设置入口；暂不在对话主页添加快捷按钮，避免高敏感导入被误触。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("建议：只保留设置入口和导入回执，回执明确区分新增、复用、已存在、用户已删除、身份冲突与失败；不在聊天主页或 Composer 增加按钮。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("未关联媒体人工关联", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -3151,6 +3246,7 @@ private fun ConversationFoundationCard(
         onExitTemporary = viewModel::leaveTemporaryConversation,
         onSelectP6GModel = viewModel::selectP6GModel,
         onSetCurrentConversationWebSearchEnabled = viewModel::setCurrentConversationWebSearchEnabled,
+        onSetCurrentConversationStyle = viewModel::setCurrentConversationStyle,
         onAddTemporaryCamera = {
             createCameraCaptureUri(context, "temporary")?.let { uri ->
                 temporaryCameraUri = uri.toString()
@@ -3218,19 +3314,39 @@ private fun PrivacyDataCard(state: PrivacyDataUiState, onOpen: () -> Unit) = Col
 }
 
 @Composable
-private fun Header(route: P5ARoute) {
+private fun RoutePageHeader(
+    route: P5ARoute,
+    title: String,
+    onBack: () -> Unit,
+    backContentDescription: String,
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        horizontalAlignment = Alignment.Start,
     ) {
-        Text(route.label, modifier = Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-        Text(
-            when (route) {
+        Box(modifier = Modifier.fillMaxWidth().height(48.dp)) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.align(Alignment.CenterStart).size(48.dp),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = backContentDescription,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                title,
+                modifier = Modifier.align(Alignment.Center).semantics { heading() },
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        val description = when (route) {
                 P5ARoute.CAPTURE -> "先把文字或图片安全保存到本机，再进入整理与知识沉淀。"
                 P5ARoute.CONVERSATION -> "本地对话、草稿与当前路径由同一份持久化事实恢复。"
                 P5ARoute.OCR -> "使用 GLM-OCR 将图片或 PDF 转为可复用的 Markdown 文件。"
-                P5ARoute.KNOWLEDGE -> "知识管理与导出保持明确确认和本地优先边界。"
+                P5ARoute.KNOWLEDGE -> null
                 P5ARoute.PROJECTS -> "项目指令、会话与知识范围隔离由 Projects 统一管理。"
                 P5ARoute.MEMORY -> "长期 Memory 必须显式创建；启用记忆后会按当前问题自动检索相关内容。"
                 P5ARoute.CONTEXT -> "仅为当前会话显式选择本地 Context；不会构造 Prompt。"
@@ -3238,10 +3354,10 @@ private fun Header(route: P5ARoute) {
                 P5ARoute.SETTINGS -> "模型配置与调用账本保持本地、可审计的产品边界。"
                 P5ARoute.ADAPTERS -> "每种导入/网页适配器独立确认，外部数据始终不可信。"
                 P5ARoute.CONTROL -> "在紧凑屏中进入其余可恢复的本地工作区。"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = SecondaryText,
-        )
+        }
+        description?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = SecondaryText)
+        }
     }
 }
 

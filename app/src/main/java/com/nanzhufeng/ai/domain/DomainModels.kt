@@ -127,7 +127,11 @@ enum class ModelPresetId {
     GPT_5_6_SOL,
     GPT_5_6_TERRA,
     GPT_5_6_LUNA,
+    GROK_4_1_FAST,
+    GROK_4_5,
+    GROK_4_6_HIGH,
     GEMINI_3_7_FLASH,
+    KIMI_K3,
     QWEN_3_7_PLUS,
     QWEN_3_8_MAX,
     QWEN_3_6_FLASH,
@@ -139,7 +143,7 @@ enum class ModelPresetId {
 }
 
 /** Chat presets may be routed into the composer; utility presets own a dedicated workflow. */
-enum class ModelPresetUsage { CHAT, DOCUMENT_OCR }
+enum class ModelPresetUsage { CHAT, RETIRED, DOCUMENT_OCR }
 
 data class ProviderDescriptor(
     val id: ProviderId,

@@ -77,6 +77,8 @@ data class KnowledgeSearchResult(
     val id: KnowledgeItemId,
     val title: String,
     val snippet: String,
+    val sourceEvidence: List<SourceEvidence>,
+    val createdAt: Instant,
     val tags: Set<String>,
     val scope: KnowledgeScope,
     val projectId: ProjectId?,
@@ -118,7 +120,19 @@ class KnowledgeDomain(private val clock: Clock) {
             .sortedWith(compareByDescending<KnowledgeSnapshot> { it.lifecycle.updatedAt }.thenBy { it.item.id.value })
             .take(filter.limit.coerceIn(1, 50)).map { snapshot ->
                 val revision = snapshot.revisions.maxOfOrNull { it.revision } ?: 1
-                KnowledgeSearchResult(snapshot.item.id, snapshot.item.title, snippet(snapshot.item.title, snapshot.item.body, snapshot.lifecycle.tags, needle), snapshot.lifecycle.tags, snapshot.lifecycle.scope, snapshot.lifecycle.projectId, snapshot.item.sourceEvidence.map(SourceEvidence::sourceType).toSet(), snapshot.lifecycle.contentHash, revision)
+                KnowledgeSearchResult(
+                    id = snapshot.item.id,
+                    title = snapshot.item.title,
+                    snippet = snippet(snapshot.item.title, snapshot.item.body, snapshot.lifecycle.tags, needle),
+                    sourceEvidence = snapshot.item.sourceEvidence,
+                    createdAt = snapshot.item.createdAt,
+                    tags = snapshot.lifecycle.tags,
+                    scope = snapshot.lifecycle.scope,
+                    projectId = snapshot.lifecycle.projectId,
+                    sourceTypes = snapshot.item.sourceEvidence.map(SourceEvidence::sourceType).toSet(),
+                    contentHash = snapshot.lifecycle.contentHash,
+                    revision = revision,
+                )
             }.toList()
     }
     private fun searchable(snapshot: KnowledgeSnapshot) = listOf(snapshot.item.title, snapshot.item.body, snapshot.lifecycle.tags.joinToString(" "), snapshot.item.sourceEvidence.joinToString(" ") { it.sourceType.name }).joinToString(" ").lowercase(java.util.Locale.ROOT)

@@ -19,6 +19,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Visibility
@@ -120,7 +122,7 @@ private fun WebSearchSettingsRow(
     onEnabledChange: (Boolean) -> Unit,
 ) {
     val supportingText = if (enabled) {
-        "需要当前信息时自动检索公开网页并标注来源；可能产生服务费用"
+        "开启后每次普通对话均检索公开网页并标注来源；可能产生服务费用"
     } else {
         "已关闭；普通对话不会使用网页检索"
     }
@@ -494,22 +496,42 @@ internal fun ModelSettingsContextSelectionsPage(
     conversations: List<Conversation>,
 ) {
     val conversationTitles = conversations.associate { it.id.value to it.title }
-    if (records.isEmpty()) {
+    val visibleRecords = records.filter { it.selectedSources.isNotEmpty() }
+    if (visibleRecords.isEmpty()) {
         Text("还没有上下文记录。", color = SecondaryText, style = MaterialTheme.typography.bodyMedium)
-    } else records.forEach { audit ->
-        Surface(modifier = Modifier.fillMaxWidth(), color = ForegroundSurface, shape = RoundedCornerShape(16.dp)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(audit.conversationTitle(conversationTitles), fontWeight = FontWeight.SemiBold)
-                Text(modelNameAnnotatedText(prefix = "${audit.providerId.userLabel()} · ", modelName = audit.modelId), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                if (audit.selectedSources.isNotEmpty()) {
-                    Text("已加入 ${audit.selectedSources.size} 项资料", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                    audit.selectedSources.take(2).forEach { source ->
-                        Text("${source.kind} · ${source.title}", color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+    } else Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        visibleRecords.forEach { audit ->
+            Surface(modifier = Modifier.fillMaxWidth(), color = ForegroundSurface, shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            audit.conversationTitle(conversationTitles),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text("${audit.selectedSources.size} 项", color = AccentOrange, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                     }
-                    if (audit.selectedSources.size > 2) Text("其余 ${audit.selectedSources.size - 2} 项资料", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text(modelNameAnnotatedText(prefix = "${audit.providerId.userLabel()} · ", modelName = audit.modelId), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    HorizontalDivider(color = NeutralBorder)
+                    audit.selectedSources.take(2).forEach { source ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                source.kind,
+                                modifier = Modifier.widthIn(min = 72.dp, max = 92.dp),
+                                color = BodyText,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                            )
+                            Text(source.title, modifier = Modifier.weight(1f), color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (audit.selectedSources.size > 2) Text("另有 ${audit.selectedSources.size - 2} 项", modifier = Modifier.align(Alignment.End), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+                    RecordFooter("本轮输入约 ${audit.budget.fixedInputTokens} Token", audit.createdAt)
                 }
-                Text("本次消息与附件约 ${audit.budget.fixedInputTokens} Token", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
-                RecordTimestamp(audit.createdAt)
             }
         }
     }
@@ -520,36 +542,60 @@ internal fun ModelSettingsDiagnosticsPage(state: ModelSettingsUiState, conversat
     val conversationTitles = conversations.associate { it.id.value to it.title }
     if (state.recentDiagnostics.isEmpty()) {
         Text("近 7 天没有连接失败记录。", color = SecondaryText, style = MaterialTheme.typography.bodyMedium)
-    } else state.recentDiagnostics.forEach { diagnostic ->
-        var detailsVisible by remember(diagnostic.id) { mutableStateOf(false) }
-        Surface(modifier = Modifier.fillMaxWidth(), color = ForegroundSurface, shape = RoundedCornerShape(16.dp)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(diagnostic.conversationTitle(conversationTitles), fontWeight = FontWeight.SemiBold)
-                Text(modelNameAnnotatedText(prefix = "${diagnostic.providerId.userLabel()} · ", modelName = diagnostic.apiModelId), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                Text(diagnostic.userFacingSummary(), color = ErrorRed, style = MaterialTheme.typography.bodySmall)
-                diagnostic.redactedBody?.takeIf { it.isNotBlank() }?.let {
-                    TextButton(onClick = { detailsVisible = !detailsVisible }) {
-                        Text(if (detailsVisible) "收起技术详情" else "查看技术详情")
+    } else Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        state.recentDiagnostics.forEach { diagnostic ->
+            var detailsVisible by remember(diagnostic.id) { mutableStateOf(false) }
+            Surface(modifier = Modifier.fillMaxWidth(), color = ForegroundSurface, shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        diagnostic.conversationTitle(conversationTitles),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(modelNameAnnotatedText(prefix = "${diagnostic.providerId.userLabel()} · ", modelName = diagnostic.apiModelId), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    Text(diagnostic.userFacingSummary(), color = ErrorRed, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    diagnostic.redactedBody?.takeIf { it.isNotBlank() }?.let { redactedBody ->
+                        TextButton(onClick = { detailsVisible = !detailsVisible }) {
+                            Text("技术详情")
+                            Icon(
+                                if (detailsVisible) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = if (detailsVisible) "收起技术详情" else "展开技术详情",
+                                modifier = Modifier.size(scaledAppIconSize(18.dp)),
+                            )
+                        }
+                        if (detailsVisible) {
+                            Surface(color = SettingsPageBackground, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("${diagnostic.endpointHost} · ${diagnostic.httpStatus?.let { "HTTP $it" } ?: "未收到服务器响应"}", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+                                    Text(redactedBody.take(500), color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 8)
+                                }
+                            }
+                        }
                     }
-                    if (detailsVisible) {
-                        Text("${diagnostic.endpointHost} · ${diagnostic.httpStatus?.let { "HTTP $it" } ?: "未收到服务器响应"}", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
-                        Text(it.take(500), color = SecondaryText, style = MaterialTheme.typography.bodySmall, maxLines = 8)
-                    }
+                    RecordFooter(diagnostic.latencyLabel(), diagnostic.createdAt)
                 }
-                RecordTimestamp(diagnostic.createdAt)
             }
         }
     }
 }
 
 @Composable
-private fun ColumnScope.RecordTimestamp(createdAt: java.time.Instant) {
-    Text(
-        createdAt.recordTimestamp(),
-        modifier = Modifier.align(Alignment.End),
-        color = SecondaryText,
-        style = MaterialTheme.typography.labelSmall,
-    )
+private fun RecordFooter(label: String, createdAt: java.time.Instant) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.weight(1f))
+        Text(createdAt.recordTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+private fun ProviderDiagnosticRecord.latencyLabel(): String = latencyMs?.let { "耗时 ${it.readableDuration()}" } ?: "耗时未记录"
+
+private fun Long.readableDuration(): String {
+    if (this < 1_000L) return "$this 毫秒"
+    val tenths = this / 100L
+    return if (tenths % 10L == 0L) "${tenths / 10L} 秒" else "${tenths / 10L}.${tenths % 10L} 秒"
 }
 
 private fun ContextSelectionAuditRecord.conversationTitle(titles: Map<String, String>): String =

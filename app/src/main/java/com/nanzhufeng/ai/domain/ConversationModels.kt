@@ -53,6 +53,23 @@ sealed interface ContentBlock {
     }
 
     /**
+     * Parsed assistant tool-call protocol retained for same-model continuation. This is not a
+     * rendered tool result and is never indexed, exported or treated as an executed action.
+     */
+    data class ProviderToolCall(
+        val callId: String?,
+        val toolName: String,
+        val argumentsJson: String,
+        override val schemaVersion: Int = 1,
+    ) : ContentBlock {
+        init {
+            require(callId == null || callId.isNotBlank()) { "Provider Tool Call ID 不能为空白。" }
+            require(toolName.isNotBlank()) { "Provider Tool Call 名称不能为空。" }
+            require(argumentsJson.isNotBlank()) { "Provider Tool Call 参数不能为空。" }
+        }
+    }
+
+    /**
      * Conversation content deliberately stores a safe asset reference only.  The Attachment
      * Domain remains the sole owner of the app-private storage key and binary reader.
      */
@@ -134,6 +151,9 @@ data class MessageNode(
         }
         require(role == MessageRole.TOOL || content.none { it is ContentBlock.ToolResult }) {
             "Tool 结果块只能出现在 Tool 消息中。"
+        }
+        require(role == MessageRole.ASSISTANT || content.none { it is ContentBlock.ProviderToolCall }) {
+            "Provider Tool Call 只能附着在 assistant 消息中。"
         }
         require(deliveryState != MessageDeliveryState.PARTIAL || role == MessageRole.ASSISTANT) {
             "只有 assistant 消息可以保存部分输出。"

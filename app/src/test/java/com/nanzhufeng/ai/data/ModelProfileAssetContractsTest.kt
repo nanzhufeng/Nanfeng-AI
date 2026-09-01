@@ -8,6 +8,23 @@ import java.io.File
 
 /** Keeps the verified Qwen context and per-model output ceilings from silently drifting. */
 class ModelProfileAssetContractsTest {
+    @Test fun `Grok bundled profiles retain exact current OpenRouter IDs and verified modality boundaries`() {
+        val raw = File("src/main/assets/model_profiles.json").readText()
+        val high = raw.substringAfter("\"presetId\": \"GROK_4_6_HIGH\"").substringBefore("\n    }")
+
+        assertFalse(raw.contains("\"presetId\": \"GROK_4_5\""))
+        assertTrue(high.contains("\"modelId\": \"x-ai/grok-4.6\""))
+        assertTrue(high.contains("\"contextWindowTokens\": 500000"))
+        listOf(high).forEach { profile ->
+            assertTrue(profile.contains("\"image\": true"))
+            assertTrue(profile.contains("\"pdf\": true"))
+            assertTrue(profile.contains("\"tools\": true"))
+            assertTrue(profile.contains("\"reasoning\": true"))
+            assertFalse(profile.contains("\"video\": true"))
+            assertFalse(profile.contains("\"audio\": true"))
+        }
+    }
+
     @Test fun `Qwen profiles retain verified one million context and model specific capability boundaries`() {
         val raw = File("src/main/assets/model_profiles.json").readText()
         val expected = mapOf("QWEN_3_7_PLUS" to (65_536 to true), "QWEN_3_8_MAX" to (131_072 to false), "QWEN_3_6_FLASH" to (65_536 to true))

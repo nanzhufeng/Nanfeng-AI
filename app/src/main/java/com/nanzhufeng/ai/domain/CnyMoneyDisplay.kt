@@ -65,6 +65,27 @@ object CnyMoneyDisplay {
         return "$prefix¥$amount$suffix"
     }
 
+    /**
+     * Compact summary cards intentionally show one blended RMB total. The source remains in the
+     * left-hand label or the detail ledger, so repeating an estimate suffix beside every amount
+     * makes the summary harder to scan without adding accounting information.
+     */
+    fun summaryLabel(
+        costs: List<ProviderCost>,
+        maximumFractionDigits: Int = 6,
+    ): String? {
+        val known = costs.filter { it.totalMicros != null }
+        if (known.isEmpty()) return null
+        val amounts = known.map { cost ->
+            amountInYuan(requireNotNull(cost.totalMicros), cost.currencyCode) ?: return null
+        }
+        val amount = amounts.fold(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(maximumFractionDigits, RoundingMode.HALF_UP)
+            .stripTrailingZeros()
+            .toPlainString()
+        return "约 ¥$amount"
+    }
+
     private fun amountInYuan(totalMicros: Long, currencyCode: String?): BigDecimal? {
         val sourceAmount = BigDecimal.valueOf(totalMicros).divide(microsPerUnit)
         return when (currencyCode) {

@@ -112,7 +112,7 @@ class QwenHistoryKnowledgeRefiner(
     private fun ProviderChatOutcome.safeCode() = when (this) {
         is ProviderChatOutcome.HttpResponse -> "HTTP_$statusCode"
         ProviderChatOutcome.TimedOut -> "TIMEOUT"
-        ProviderChatOutcome.NetworkFailure -> "NETWORK"
+        is ProviderChatOutcome.NetworkFailure -> "NETWORK"
         ProviderChatOutcome.ResponseTooLarge -> "RESPONSE_TOO_LARGE"
         ProviderChatOutcome.Cancelled -> "CANCELLED"
         is ProviderChatOutcome.StreamedResponse -> "UNEXPECTED_STREAM"

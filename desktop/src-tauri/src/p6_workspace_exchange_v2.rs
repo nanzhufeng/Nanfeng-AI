@@ -832,14 +832,14 @@ mod tests {
     }
 
     #[test]
-    fn production_migration_is_v1_isolated_and_registers_schema_21() {
+    fn production_migration_is_v1_isolated_after_later_desktop_schema() {
         let root = tempdir().unwrap();
         let store = crate::DesktopWorkspaceStore::open(root.path().to_path_buf()).unwrap();
         let mut connection = store.connection().unwrap();
         let version: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 21);
+        assert_eq!(version, 34);
         let package = fixture();
         import(root.path(), &mut connection, &package, None).unwrap();
         let v1_rows: i64 = connection

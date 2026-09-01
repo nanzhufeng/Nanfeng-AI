@@ -177,10 +177,40 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Allows Settings 本机数据 to open a blank-query category catalogue from the same Rust-owned safe search index across local workspaces. It records no search history and grants no body, filesystem, transport, credential, export or media access.",
+          "type": "string",
+          "const": "allow-catalog-desktop-local-index",
+          "markdownDescription": "Allows Settings 本机数据 to open a blank-query category catalogue from the same Rust-owned safe search index across local workspaces. It records no search history and grants no body, filesystem, transport, credential, export or media access."
+        },
+        {
           "description": "Allows clearing only normalized owner-local search history; it cannot clear conversations, index rows, or workspace content.",
           "type": "string",
           "const": "allow-clear-desktop-local-search-history",
           "markdownDescription": "Allows clearing only normalized owner-local search history; it cannot clear conversations, index rows, or workspace content."
+        },
+        {
+          "description": "Allows explicit Google system-browser sign-in, one-time recovery-code confirmation, safe account status readback, and sign-out while retaining local data. It grants no webview credential access, arbitrary endpoint, automatic upload, recovery-code reread, local deletion or hidden account switching.",
+          "type": "string",
+          "const": "allow-desktop-account-sync",
+          "markdownDescription": "Allows explicit Google system-browser sign-in, one-time recovery-code confirmation, safe account status readback, and sign-out while retaining local data. It grants no webview credential access, arbitrary endpoint, automatic upload, recovery-code reread, local deletion or hidden account switching."
+        },
+        {
+          "description": "Allows the native settings surface to read and revision-save only non-secret appearance and Android-parity preferences in Rust-owned SQLite. Runtime capability flags remain fail-closed; this grants no credential, notification, account, update, model, prompt, attachment, path or network access.",
+          "type": "string",
+          "const": "allow-desktop-app-settings",
+          "markdownDescription": "Allows the native settings surface to read and revision-save only non-secret appearance and Android-parity preferences in Rust-owned SQLite. Runtime capability flags remain fail-closed; this grants no credential, notification, account, update, model, prompt, attachment, path or network access."
+        },
+        {
+          "description": "Allows one explicit Composer Compare action to create exactly one user message plus independent GPT-5.6 Terra and Claude Sonnet 5 ordinary-chat branches through the existing OpenRouter credential, context, attachment, streaming, usage and error owners. Stop affects the active pair; retry is explicit per branch; no arbitrary provider, model, URL, credential projection, silent fallback or automatic resend is exposed.",
+          "type": "string",
+          "const": "allow-desktop-compare",
+          "markdownDescription": "Allows one explicit Composer Compare action to create exactly one user message plus independent GPT-5.6 Terra and Claude Sonnet 5 ordinary-chat branches through the existing OpenRouter credential, context, attachment, streaming, usage and error owners. Stop affects the active pair; retry is explicit per branch; no arbitrary provider, model, URL, credential projection, silent fallback or automatic resend is exposed."
+        },
+        {
+          "description": "Allows only opaque workspace/conversation read watermarks, manual unread marking, and true-open clearing in device-local SQLite. It grants no title, message body, prompt, attachment, path, credential, transport, export or account-sync access.",
+          "type": "string",
+          "const": "allow-desktop-conversation-read-state",
+          "markdownDescription": "Allows only opaque workspace/conversation read watermarks, manual unread marking, and true-open clearing in device-local SQLite. It grants no title, message body, prompt, attachment, path, credential, transport, export or account-sync access."
         },
         {
           "description": "Allows persistent local undo, redo and recycle-bin projections.",
@@ -189,16 +219,58 @@
           "markdownDescription": "Allows persistent local undo, redo and recycle-bin projections."
         },
         {
+          "description": "Allows the opted-in low-frequency history-library owner to read content-free candidate projections, wake the fixed model route, explicitly retry UNKNOWN/failed work, and accept/reject/delete one candidate. It grants no arbitrary URL, credential projection, attachment/tool content, silent retry, direct Memory write, or Knowledge write before explicit acceptance.",
+          "type": "string",
+          "const": "allow-desktop-history-knowledge",
+          "markdownDescription": "Allows the opted-in low-frequency history-library owner to read content-free candidate projections, wake the fixed model route, explicitly retry UNKNOWN/failed work, and accept/reject/delete one candidate. It grants no arbitrary URL, credential projection, attachment/tool content, silent retry, direct Memory write, or Knowledge write before explicit acceptance."
+        },
+        {
+          "description": "Allows only native-picker-selected .nfai-backup export, strict private-inbox preflight, explicit replacement restore, cancellation, and restart-status readback. It grants no arbitrary path discovery, credential export, network, merge, background retry, or silent continuation.",
+          "type": "string",
+          "const": "allow-desktop-local-backup-restore",
+          "markdownDescription": "Allows only native-picker-selected .nfai-backup export, strict private-inbox preflight, explicit replacement restore, cancellation, and restart-status readback. It grants no arbitrary path discovery, credential export, network, merge, background retry, or silent continuation."
+        },
+        {
+          "description": "Allows the latest Android model-service settings contract: safe provider projections, revisioned local selection, system-Keychain credential save or explicit reveal, and an explicit fixed-endpoint connection probe. It grants no arbitrary URL, hidden credential read, background test, prompt, conversation or model invocation.",
+          "type": "string",
+          "const": "allow-desktop-model-service-settings",
+          "markdownDescription": "Allows the latest Android model-service settings contract: safe provider projections, revisioned local selection, system-Keychain credential save or explicit reveal, and an explicit fixed-endpoint connection probe. It grants no arbitrary URL, hidden credential read, background test, prompt, conversation or model invocation."
+        },
+        {
+          "description": "Allows one user send or explicit retry to atomically persist an ordinary-chat Attempt and use only the fixed provider/model registry, scoped system credential, verified message attachments and bounded streaming transport. Stop and latest-attempt readback are conversation/Attempt scoped; no arbitrary URL, path, credential value, silent retry or raw payload is exposed.",
+          "type": "string",
+          "const": "allow-desktop-ordinary-chat",
+          "markdownDescription": "Allows one user send or explicit retry to atomically persist an ordinary-chat Attempt and use only the fixed provider/model registry, scoped system credential, verified message attachments and bounded streaming transport. Stop and latest-attempt readback are conversation/Attempt scoped; no arbitrary URL, path, credential value, silent retry or raw payload is exposed."
+        },
+        {
           "description": "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual override, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access.",
           "type": "string",
           "const": "allow-desktop-p6g-model-selection",
           "markdownDescription": "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual override, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access."
         },
         {
+          "description": "Allows Android-parity local cleanup only through an aggregate fingerprinted preview and one of three fixed scopes: explicitly selected terminal failed-task assets, deleted knowledge/memory trash, or all app-private business data with the exact confirmation phrase. It grants no arbitrary path, wildcard command, content projection, export, transport or provider invocation.",
+          "type": "string",
+          "const": "allow-desktop-privacy-cleanup",
+          "markdownDescription": "Allows Android-parity local cleanup only through an aggregate fingerprinted preview and one of three fixed scopes: explicitly selected terminal failed-task assets, deleted knowledge/memory trash, or all app-private business data with the exact confirmation phrase. It grants no arbitrary path, wildcard command, content projection, export, transport or provider invocation."
+        },
+        {
+          "description": "Allows only reviewable reminder drafts, explicit confirm/reject/edit, persisted local schedules, runtime due execution through the existing fixed Provider transport and usage ledger, pause/resume/delete/retry, content-safe notification receipts and exact opaque-id routing. It grants no silent plan creation, arbitrary URL/model/credential/path access, notification permission bypass or UNKNOWN auto-resend.",
+          "type": "string",
+          "const": "allow-desktop-reminders",
+          "markdownDescription": "Allows only reviewable reminder drafts, explicit confirm/reject/edit, persisted local schedules, runtime due execution through the existing fixed Provider transport and usage ledger, pause/resume/delete/retry, content-safe notification receipts and exact opaque-id routing. It grants no silent plan creation, arbitrary URL/model/credential/path access, notification permission bypass or UNKNOWN auto-resend."
+        },
+        {
           "description": "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, private attachment binding/removal, and irreversible clear. It grants no normal Conversation, workspace, search, export, cache, credential, or transport command.",
           "type": "string",
           "const": "allow-desktop-temporary-conversation",
           "markdownDescription": "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, private attachment binding/removal, and irreversible clear. It grants no normal Conversation, workspace, search, export, cache, credential, or transport command."
+        },
+        {
+          "description": "Allows persistent workspace-scoped transcription tasks: native-picker-selected bounded media or JPG/PNG/PDF import into verified private attachments, explicit Qwen ASR or GLM-OCR execution on their fixed endpoint/model with the existing provider-scoped credential, cancel/retry/delete, and native-picker-selected verified exports. It grants no arbitrary URL, path projection, recording, pause, hidden background replay, SenseVoice execution, arbitrary OCR model, or credential projection.",
+          "type": "string",
+          "const": "allow-desktop-transcription",
+          "markdownDescription": "Allows persistent workspace-scoped transcription tasks: native-picker-selected bounded media or JPG/PNG/PDF import into verified private attachments, explicit Qwen ASR or GLM-OCR execution on their fixed endpoint/model with the existing provider-scoped credential, cancel/retry/delete, and native-picker-selected verified exports. It grants no arbitrary URL, path projection, recording, pause, hidden background replay, SenseVoice execution, arbitrary OCR model, or credential projection."
         },
         {
           "description": "Allows a typed workspace ID to export only to a user-selected .nfai-exchange path.",
@@ -243,6 +315,12 @@
           "markdownDescription": "Allows only typed, revision-checked local P6-C domain intents through Rust SQLite."
         },
         {
+          "description": "Allows an explicit user gesture to open only a workspace-owned, hash-verified private attachment through the macOS system opener. The webview never receives its path and no arbitrary path is accepted.",
+          "type": "string",
+          "const": "allow-open-desktop-attachment-with-system",
+          "markdownDescription": "Allows an explicit user gesture to open only a workspace-owned, hash-verified private attachment through the macOS system opener. The webview never receives its path and no arbitrary path is accepted."
+        },
+        {
           "description": "Allows only the no-argument P6-E acceptance status and fixed owner-maintenance fixture. Rust rejects both unless the explicit acceptance environment marker selected the isolated /tmp app-private root.",
           "type": "string",
           "const": "allow-p6e-temporary-maintenance-acceptance",
@@ -273,10 +351,22 @@
           "markdownDescription": "Allows only P6-K user-selected ChatGPT or Claude ZIP imports: private staging, bounded strict adapter, receipt-backed direct commit, recovery, and soft-delete. It grants no arbitrary filesystem read, credential, transport, Provider, model or tool invocation access."
         },
         {
+          "description": "Allows only an exact workspace-owned recycle-bin conversation ID and revision to be permanently removed with its full-snapshot history and last-reference private assets. It grants no bulk wildcard, arbitrary filesystem path, restore, credential, transport or provider access.",
+          "type": "string",
+          "const": "allow-permanently-delete-desktop-conversation",
+          "markdownDescription": "Allows only an exact workspace-owned recycle-bin conversation ID and revision to be permanently removed with its full-snapshot history and last-reference private assets. It grants no bulk wildcard, arbitrary filesystem path, restore, credential, transport or provider access."
+        },
+        {
           "description": "Allows only a workspace-owned verified audio attachment ID and local resume position; no path, URI, transport, or arbitrary file read is granted.",
           "type": "string",
           "const": "allow-read-desktop-audio-preview",
           "markdownDescription": "Allows only a workspace-owned verified audio attachment ID and local resume position; no path, URI, transport, or arbitrary file read is granted."
+        },
+        {
+          "description": "Allows reading only the content-free macOS background wake-up status. It grants no LaunchAgent mutation, arbitrary command, path, prompt, conversation body, credential, provider payload, or network access.",
+          "type": "string",
+          "const": "allow-read-desktop-background-runtime",
+          "markdownDescription": "Allows reading only the content-free macOS background wake-up status. It grants no LaunchAgent mutation, arbitrary command, path, prompt, conversation body, credential, provider payload, or network access."
         },
         {
           "description": "Allows a workspace-owned image attachment ID to produce verified local thumbnail or user-requested original display bytes; no path, URI or arbitrary file read is granted.",
@@ -297,10 +387,28 @@
           "markdownDescription": "Allows only a workspace-owned PDF attachment ID and 1-based page to produce an owner-verified inert local display payload; no path, URI, text extraction, script action, transport or arbitrary file read is granted."
         },
         {
+          "description": "Allows only aggregate counts and byte totals across local workspaces, messages, attachments and private import packages for Settings 本机数据. It grants no content, names, paths, credentials, deletion, export or provider access.",
+          "type": "string",
+          "const": "allow-read-desktop-privacy-inventory",
+          "markdownDescription": "Allows only aggregate counts and byte totals across local workspaces, messages, attachments and private import packages for Settings 本机数据. It grants no content, names, paths, credentials, deletion, export or provider access."
+        },
+        {
+          "description": "Allows only the current packaged application version, operating-system family and CPU architecture to be shown in About. It grants no path, environment, device identifier, credential or network access.",
+          "type": "string",
+          "const": "allow-read-desktop-runtime-info",
+          "markdownDescription": "Allows only the current packaged application version, operating-system family and CPU architecture to be shown in About. It grants no path, environment, device identifier, credential or network access."
+        },
+        {
           "description": "Allows only a workspace-owned verified text attachment ID to return bounded inert UTF-8 text; no path, URI, HTML, script, transport, or arbitrary file read is granted.",
           "type": "string",
           "const": "allow-read-desktop-text-preview",
           "markdownDescription": "Allows only a workspace-owned verified text attachment ID to return bounded inert UTF-8 text; no path, URI, HTML, script, transport, or arbitrary file read is granted."
+        },
+        {
+          "description": "Allows only a safe read projection of final measured token and amount facts from the local append-only Usage Ledger. It grants no prompt, response, credential, attachment, path, mutation or provider access.",
+          "type": "string",
+          "const": "allow-read-desktop-usage-ledger",
+          "markdownDescription": "Allows only a safe read projection of final measured token and amount facts from the local append-only Usage Ledger. It grants no prompt, response, credential, attachment, path, mutation or provider access."
         },
         {
           "description": "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce an owner-verified local video payload; no path, URI, transport, decoder control, or arbitrary file read is granted.",
@@ -327,10 +435,10 @@
           "markdownDescription": "Allows listing committed private v2 exchange records and re-exporting exactly one UI-selected committed v2 owner only to a native-save-picker-selected .nfai-exchange target. It grants no v1 workspace, path projection, arbitrary filesystem API, credential, transport, Provider or model access."
         },
         {
-          "description": "Allows one normalized local query to read the Rust-owned safe search index and record only that normalized query in owner-local history. It grants no filesystem, transport, credential, export, or media access.",
+          "description": "Allows one normalized local query to read the Rust-owned safe search index and records history only for an explicit submitted query. It grants no filesystem, transport, credential, export, or media access.",
           "type": "string",
           "const": "allow-search-desktop-local-index",
-          "markdownDescription": "Allows one normalized local query to read the Rust-owned safe search index and record only that normalized query in owner-local history. It grants no filesystem, transport, credential, export, or media access."
+          "markdownDescription": "Allows one normalized local query to read the Rust-owned safe search index and records history only for an explicit submitted query. It grants no filesystem, transport, credential, export, or media access."
         },
         {
           "description": "Allows only a user-selected .nfai-exchange file to be bounded and copied into private app data staging.",
@@ -343,6 +451,12 @@
           "type": "string",
           "const": "allow-upsert-desktop-model-metadata",
           "markdownDescription": "Allows typed local-only safe provider/model metadata; no credentials or network catalog."
+        },
+        {
+          "description": "Allows only bounded visible conversation Markdown to be atomically written to one native-save-picker-selected absolute .md path and read back for hash verification. It grants no arbitrary read, directory traversal, attachment bytes, credential or network access.",
+          "type": "string",
+          "const": "allow-write-desktop-markdown-to-selected-path",
+          "markdownDescription": "Allows only bounded visible conversation Markdown to be atomically written to one native-save-picker-selected absolute .md path and read back for hash verification. It grants no arbitrary read, directory traversal, attachment bytes, credential or network access."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
@@ -2425,6 +2539,204 @@
           "type": "string",
           "const": "dialog:deny-save",
           "markdownDescription": "Denies the save command without any pre-configured scope."
+        },
+        {
+          "description": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`",
+          "type": "string",
+          "const": "notification:default",
+          "markdownDescription": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`"
+        },
+        {
+          "description": "Enables the batch command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-batch",
+          "markdownDescription": "Enables the batch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-cancel",
+          "markdownDescription": "Enables the cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the check_permissions command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-check-permissions",
+          "markdownDescription": "Enables the check_permissions command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the create_channel command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-create-channel",
+          "markdownDescription": "Enables the create_channel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the delete_channel command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-delete-channel",
+          "markdownDescription": "Enables the delete_channel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_active command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-get-active",
+          "markdownDescription": "Enables the get_active command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_pending command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-get-pending",
+          "markdownDescription": "Enables the get_pending command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the is_permission_granted command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-is-permission-granted",
+          "markdownDescription": "Enables the is_permission_granted command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the list_channels command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-list-channels",
+          "markdownDescription": "Enables the list_channels command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the notify command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-notify",
+          "markdownDescription": "Enables the notify command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the permission_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-permission-state",
+          "markdownDescription": "Enables the permission_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the register_action_types command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-register-action-types",
+          "markdownDescription": "Enables the register_action_types command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the register_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-register-listener",
+          "markdownDescription": "Enables the register_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the remove_active command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-remove-active",
+          "markdownDescription": "Enables the remove_active command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the request_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-request-permission",
+          "markdownDescription": "Enables the request_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the show command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:allow-show",
+          "markdownDescription": "Enables the show command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the batch command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-batch",
+          "markdownDescription": "Denies the batch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-cancel",
+          "markdownDescription": "Denies the cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_permissions command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-check-permissions",
+          "markdownDescription": "Denies the check_permissions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the create_channel command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-create-channel",
+          "markdownDescription": "Denies the create_channel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the delete_channel command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-delete-channel",
+          "markdownDescription": "Denies the delete_channel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_active command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-get-active",
+          "markdownDescription": "Denies the get_active command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_pending command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-get-pending",
+          "markdownDescription": "Denies the get_pending command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the is_permission_granted command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-is-permission-granted",
+          "markdownDescription": "Denies the is_permission_granted command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_channels command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-list-channels",
+          "markdownDescription": "Denies the list_channels command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the notify command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-notify",
+          "markdownDescription": "Denies the notify command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the permission_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-permission-state",
+          "markdownDescription": "Denies the permission_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register_action_types command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-register-action-types",
+          "markdownDescription": "Denies the register_action_types command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-register-listener",
+          "markdownDescription": "Denies the register_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_active command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-remove-active",
+          "markdownDescription": "Denies the remove_active command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the request_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-request-permission",
+          "markdownDescription": "Denies the request_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the show command without any pre-configured scope.",
+          "type": "string",
+          "const": "notification:deny-show",
+          "markdownDescription": "Denies the show command without any pre-configured scope."
         }
       ]
     },

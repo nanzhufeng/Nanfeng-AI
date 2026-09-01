@@ -25,11 +25,18 @@ class AndroidContextSelectionAuditStore(context: Context) : ContextSelectionAudi
         Unit
     }
 
-    override fun bindAnswer(attemptId: NormalChatSendAttemptId, assistantMessageId: MessageNodeId) = synchronized(lock) {
+    override fun bindAnswer(
+        attemptId: NormalChatSendAttemptId,
+        assistantMessageId: MessageNodeId,
+        webSearchUsed: Boolean?,
+    ) = synchronized(lock) {
         val entries = recent(MAX_ENTRIES).toMutableList()
         val index = entries.indexOfFirst { it.attemptId == attemptId && it.assistantMessageId == null }
         if (index >= 0) {
-            entries[index] = entries[index].copy(assistantMessageId = assistantMessageId)
+            entries[index] = entries[index].copy(
+                assistantMessageId = assistantMessageId,
+                webSearchUsed = webSearchUsed,
+            )
             runCatching { file.writeText(JSONArray(entries.map(::toJson)).toString()) }
         }
         Unit
@@ -55,6 +62,7 @@ class AndroidContextSelectionAuditStore(context: Context) : ContextSelectionAudi
         put("budget", JSONObject().apply { put("context", record.budget.contextWindowTokens); put("output", record.budget.reservedOutputTokens); put("prompt", record.budget.promptTokens); put("history", record.budget.historyTokens); put("retrieval", record.budget.retrievalTokens); put("fixedInput", record.budget.fixedInputTokens); put("tokenizerId", record.budget.tokenizerId) })
         put("indexStatus", record.indexStatus.name)
         put("participationAuditAvailable", record.participationAuditAvailable)
+        record.webSearchUsed?.let { put("webSearchUsed", it) }
         record.retrievalAudit?.let { retrieval ->
             put("retrievalAudit", JSONObject().apply {
                 put("topic", retrieval.topic)
@@ -89,6 +97,7 @@ class AndroidContextSelectionAuditStore(context: Context) : ContextSelectionAudi
             indexStatus = value.optString("indexStatus", com.nanzhufeng.ai.domain.LocalContextBroker.AssemblyStatus.READY.name).let { runCatching { com.nanzhufeng.ai.domain.LocalContextBroker.AssemblyStatus.valueOf(it) }.getOrDefault(com.nanzhufeng.ai.domain.LocalContextBroker.AssemblyStatus.READY) },
             participationAuditAvailable = value.optBoolean("participationAuditAvailable", false),
             retrievalAudit = retrieval,
+            webSearchUsed = value.takeIf { it.has("webSearchUsed") }?.getBoolean("webSearchUsed"),
         )
     }
 

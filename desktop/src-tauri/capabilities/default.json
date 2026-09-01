@@ -1,6 +1,6 @@
 {
   "identifier": "main-capability",
-  "description": "P6-G permits only local window basics, typed workspace commands, owner-local search/history/previews, and safe catalog/default/conversation-route metadata. It grants no credential, transport, prompt, invocation or executor access.",
+  "description": "Allows local workspace, search, preview, settings and persistent transcription owners. Speech and document transports require explicit task actions, fixed Qwen ASR or GLM-OCR endpoint/model pairs, and the existing system credential owner.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -13,6 +13,8 @@
     "allow-read-desktop-workspace",
     "allow-export-desktop-workspace-to-selected-path",
     "allow-mutate-desktop-domain",
+    "allow-desktop-ordinary-chat",
+    "allow-desktop-compare",
     "allow-import-desktop-conversation-attachment",
     "allow-desktop-temporary-conversation",
     "allow-desktop-domain-history",
@@ -26,12 +28,29 @@
     "allow-p6j-nanfeng-knowledge-export-import",
     "allow-p6k-zip-import",
     "allow-search-desktop-local-index",
+    "allow-catalog-desktop-local-index",
     "allow-read-desktop-local-search-history",
     "allow-clear-desktop-local-search-history",
     "allow-read-desktop-image-preview",
     "allow-read-desktop-pdf-preview",
     "allow-read-desktop-video-preview",
     "allow-read-desktop-audio-preview",
-    "allow-read-desktop-text-preview"
+    "allow-read-desktop-text-preview",
+    "allow-open-desktop-attachment-with-system",
+    "allow-read-desktop-runtime-info",
+    "allow-write-desktop-markdown-to-selected-path",
+    "allow-desktop-model-service-settings",
+    "allow-desktop-app-settings",
+    "allow-desktop-conversation-read-state",
+    "allow-read-desktop-background-runtime",
+    "allow-desktop-history-knowledge",
+    "allow-desktop-reminders",
+    "allow-desktop-transcription",
+    "allow-read-desktop-usage-ledger",
+    "allow-desktop-local-backup-restore",
+    "allow-read-desktop-privacy-inventory",
+    "allow-desktop-privacy-cleanup",
+    "allow-permanently-delete-desktop-conversation",
+    "allow-desktop-account-sync"
   ]
 }

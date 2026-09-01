@@ -17,7 +17,7 @@ class ImportedConversationSearchUiContractsTest {
         assertTrue(openHit.indexOf("switchBranch.execute(snapshot, leafId)") < openHit.indexOf("searchAnchorMessageId = hit.messageNodeId"))
         assertTrue(results.contains("hit.importSource?.let"))
         assertTrue(results.contains("source.searchLabel"))
-        assertTrue(results.contains("state.searchQuery.isBlank() || state.searchCategory == ConversationSearchCategory.ALL"))
+        assertFalse(results.contains("state.searchQuery.isBlank() || state.searchCategory == ConversationSearchCategory.ALL"))
         assertFalse(results.contains("\"最近对话\""))
     }
 }
