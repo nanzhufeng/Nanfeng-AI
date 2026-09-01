@@ -1,7 +1,7 @@
 # 南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同
 
 日期：2026-08-16  
-状态：**Android 已实现 ZIP→严格文本→原子 Conversation/Message Tree 提交，并于 2026-08-28 补齐官方源关系附件恢复。稳定基线 `c1c9ae0`／Room Schema 56 又将数分钟附件恢复迁到持久化后台 job：状态、进度、失败类型与按会话 checkpoint 均不含正文，页面退出后可续跑和显式重试。新实包复查发现，`message.metadata.attachments[].id` 可与 ZIP entry 精确对应，`conversation_asset_file_names.json` 提供原始显示名；这推翻了 K7“全部无可证明关系”的旧结论。只有当前导出路径上、ID 唯一且 entry/hash/size 一致的附件才恢复为普通 `ContentBlock.Attachment`；无官方归属的 entry 仍不猜测。Desktop 仍保持其现有人工精确关联边界，不得由 Android 结论冒充已同步。用户已要求本次文档同步排除 P2 及后续正在进行任务和未提交 WIP。**
+状态：**Android 已实现 ZIP→严格文本→原子 Conversation/Message Tree 提交，并于 2026-08-28 补齐官方源关系附件恢复。2026-09-01 的 Room Schema 64 再增加独立、不含内容的永久身份账本与 `USER_DELETED` 墓碑：已导入内容即使业务行被用户删除，也不得被后续累积 ZIP 复活。稳定基线 `c1c9ae0`／Room Schema 56 又将数分钟附件恢复迁到持久化后台 job：状态、进度、失败类型与按会话 checkpoint 均不含正文，页面退出后可续跑和显式重试。新实包复查发现，`message.metadata.attachments[].id` 可与 ZIP entry 精确对应，`conversation_asset_file_names.json` 提供原始显示名；这推翻了 K7“全部无可证明关系”的旧结论。只有当前导出路径上、ID 唯一且 entry/hash/size 一致的附件才恢复为普通 `ContentBlock.Attachment`；无官方归属的 entry 仍不猜测。Desktop 仍保持其现有人工精确关联边界，不得由 Android 结论冒充已同步。**
 
 ## 0. 结论与范围
 
@@ -61,6 +61,15 @@
 - `AndroidP6KZipAssetRecoveryScheduler` 是 P1 后台调度 owner；`RoomP6KZipMappedAssetLinkOwner` 每完成一个 source conversation 就更新 checkpoint。中断保留已提交会话与 job，续跑从下一个会话开始且不得重复挂载；失败只保存枚举化原因与时间，不保存正文、路径、文件名或外部 ID。
 - Desktop Schema 16→17 仅追加 P6-K task/item/message/asset/profile/provenance/receipt journal；其 commit 将安全 title、TEXT blocks、parent/sibling/time 写入既有 `workspace_exchange`，重建既有本地搜索索引。没有新的会话/消息业务表或另一条渲染路径。
 
+### K2.1：永久身份账本与删除墓碑（Android 已实现，2026-09-01）
+
+- 对话身份为 `provider + export schema + official conversation ID`；消息与附件 occurrence 使用同一 scope 下的官方稳定 ID。无稳定 ID 时只允许版本化、可解释的强内容指纹与 source occurrence；任何冲突 fail-closed，不使用标题、文件名、时间或相邻位置猜测。
+- `p6k_import_identity_ledger` 仅保存 provider/schema、HMAC-SHA-256 外部身份键、安全 SHA-256／size、本机绑定、批次、identity quality、state、delete reason 与 revision；禁止正文、标题、原始文件名、entry/path、URI 或 picker token。生产 HMAC secret 为随机 app-private 值，不进入账本或导入回执。
+- 用户删除对话、回收站永久删除、批次删除或删除单个消息附件引用时，先在同一 Room 事务写 `USER_DELETED` 墓碑，再更新业务行／清理派生引用。对话删除墓碑所有后代 occurrence；删除单 occurrence 不墓碑共享资产字节或其他消息引用。当前不提供“恢复已删导入身份”按钮。
+- 流程严格为 preflight→metadata inventory→identity diff→逐会话原子 commit→同事务 ledger/reference→completion marker。同对话的更新 ZIP 只追加未见官方消息；同消息 ID 内容改变或同资产 ID 的 hash/size 改变都是 identity conflict。相同资产 bytes 可被不同官方 ID 或多个显式 occurrence 安全复用。
+- `p6k_import_batch_receipts` 记录 `imported_new_conversations/messages/attachments`、`reused_asset_bytes`、`skipped_existing`、`skipped_user_deleted`、`identity_conflicts`、`failed`。只有零失败才写 `COMPLETED + completedAt`；进程中断转 `UNKNOWN` 且不自动重放。Settings 只显示这些内容无关计数和“已跳过此前导入或主动删除的内容”。
+- 升级回填只从仍存在的 exact provenance/message provenance/occurrence receipt 生成 HMAC 身份；旧版已删且证据不存在的历史固定标记 `legacyCoverageGap=true`，不伪造墓碑或猜测条目。
+
 ### K3：消息、排版、附件与预览
 
 - `ConversationRepository` / Desktop workspace conversation mutation 仍是唯一消息树真值；节点保留角色、顺序、父子、时间、来源 opaque ID。新增受限 `ImportedRichTextBlock` 只保存安全、可渲染的文本层级（段落、代码、列表、引用、行内 emphasis/link label）；HTML、脚本、样式、远端 fetch、tool/thinking/执行指令一律文本化或 item-level 跳过。
@@ -81,7 +90,7 @@
 - Android 的真实验收只安装通过项目既有正式签名链构建的最新 APK，并只可 `install -r` 覆盖；签名链缺少既有外部材料时立即停止，不读取/导出/改写/新建密钥或环境变量、不输入密码，也不得以旧 APK、卸载、clear 或 DB 注入替代。
 - Desktop 本次实包回归：先以合成跨文件 graph、隔离失败、重开、幂等与 soft-delete 证明归一化；再从已有 private ChatGPT batch 的 normal retry 直接提交，并从正常 picker 重选 Claude。回读只报告 task/receipt/conversation/message/media/profile 的安全聚合，永不截图或输出正文、ID、账户资料或附件名。
 - 退出要分别覆盖 unknown-version reject、zip-slip/炸弹、部分会话/附件失败、取消、事务 rollback、重复/reimport、每种媒体预览、profile skip、迁移和 restart。OPPO 仍不在授权范围。
-- P1 稳定记录：标准 JVM `819 tests / 0 failures / 0 errors / 3 skipped`；新包附件 Room 链 `tests=1, skipped=0, failures=0, errors=0`、`257.597s`。这证明 checkpoint 代码与隔离 Room，不证明 OPPO 后台调度、系统约束或实际 UI 已闭环。
+- P1 稳定记录：标准 JVM `819 tests / 0 failures / 0 errors / 3 skipped`；新包附件 Room 链 `tests=1, skipped=0, failures=0, errors=0`、`257.597s`。2026-08-31 又以用户明确选择的两份本机 ZIP 运行资产归属、跨包合并和附件全链三项 opt-in，结果为 `3 tests / 0 failures / 0 errors / 0 skipped`；不输出正文／附件名，不复制 ZIP。以上证明 checkpoint 代码与隔离 Room，不证明 OPPO 后台调度、系统约束或实际 UI 已闭环。
 
 ### K7：实包 message↔asset 只读采纳判定（已完成，2026-08-16）
 

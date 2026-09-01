@@ -1,35 +1,40 @@
-# Desktop Compare 联网执行合同
+# Desktop Compare 真实执行合同
 
-状态：阶段 5 已建立未注册的固定 OpenAI-compatible adapter 与安全双分支 receipt/status（2026-08-20）；**未配置、未联网、不可执行**。
+## 当前结论
 
-## 范围与唯一归属
+Desktop Compare 已从 fail-closed 占位升级为真实 Tauri／HTTP／SQLite／UI 执行链。它是 Android 当前公开模型选择面的明确 Desktop 例外：Android 继续不公开 Compare；Desktop 只保留 Composer 右侧一个“对比”入口，不再保留模型菜单行、长按或第二确认面。
 
-- `desktop/src/desktop-compare-execution-owner.mjs` 的 `DesktopCompareExecutionOwner` 是 Desktop Compare readiness 与显式执行决定的唯一 state owner。它目前只接收 `hasText`、`attachmentCount` 与安全 readiness facts，不能接收、保存、输出或记录草稿正文、附件、响应或 API Key。
-- 当前三个既有入口（模型菜单、Composer `对比`、模型长按）仍是唯一产品动作入口；不增加 Composer 常驻按键、不增加第二次产品确认面。
-- 默认边界固定为 OpenRouter 的 OpenAI-compatible `POST /chat/completions`。该常量只是未来 adapter 的受审查固定目标，本阶段没有 HTTP client、Tauri command、网络连接或凭据读取。
-- 阶段 5 的 `desktop_compare_execution_v1` 仅接收一次性 direct-click command、已核验的 ChatGPT/Claude provider model + price catalog 和短作用域文本。固定 endpoint 只经未注册的 `OpenAiCompatibleCompareHttpPort` 传递；production 没有 HTTP client、Tauri command 或 UI 组合。未知/空 provider model 或未知价格在构造 catalog 时失败关闭。
-- 每支执行仅追加 `execution_id`、logical/provider model、success/failure category、HTTP status（如有）、耗时和记录时点；SQLite 表没有正文、Key、请求或响应列。临时 draft 与 JSON body 使用 `Zeroizing`，凭据仍只能经既有 scoped credential boundary 在同一调用栈传给 mock/future port，绝不进入 receipt。
+## 固定目标与 Provider
 
-## 失败关闭顺序
+- Provider 固定为已存在的 `OPENROUTER` 设置、固定 OpenAI-compatible endpoint 与同一 Security.framework scoped credential owner。
+- ChatGPT 分支固定为 `GPT_5_6_TERRA`／`openai/gpt-5.6-terra`。
+- Claude 分支固定为 `CLAUDE_SONNET_5`／`anthropic/claude-sonnet-5`。
+- OpenRouter 未启用或凭据缺失时失败关闭；不得自动换 Provider、换模型或回退普通 Auto。
+- localhost mock 只在 `NANFENG_AI_DESKTOP_ORDINARY_CHAT_ACCEPTANCE=1` 且 endpoint 为 `127.0.0.1`／`localhost` 时可达，不是产品能力。
 
-1. 空草稿：`EMPTY_DRAFT`；不触及任何配置或执行状态。
-2. 含附件：`ATTACHMENTS_NOT_SUPPORTED`；Compare MVP 只接受 text-only。
-3. 没有安全凭据存在性：`CREDENTIAL_NOT_CONFIGURED`。
-4. 固定 ChatGPT + Claude preset 未经验证，或任一价格未知：`MODEL_OR_PRICE_UNVERIFIED`。
-5. 任一未来 native transport / receipt / branch adapter 未组合：`EXECUTION_NOT_COMPOSED`。
+## 一次提交与两条分支
 
-任何失败都不得退化为 generic model textbox、自动外发、Auto 路由、重试、背景请求或内容日志。
+- 一次点击只原子提交一条 USER 消息、一个 `desktop_compare_executions` envelope、两条 sibling Assistant 消息和两条 `desktop_ordinary_chat_attempts`。
+- 两分支共享同一个当次上下文快照：当前对话路径、语气、自定义指令、Memory、Knowledge、网页检索判断和附件投影均复用普通聊天 owner。
+- 两分支拥有不同 Attempt、idempotency key、requested／actual model、token、费用、错误与终态；Provider 实报费用优先，未知费用不得写 0。
+- 相同文字再次点击必须创建新的 execution／USER／Attempt，不得误报“请勿重复发送”，也不得复用旧响应。
 
-## 后续阶段门
+## 状态、停止、失败与恢复
 
-- 阶段 2 才可增加 macOS `Security.framework` 直接 API 的 app-owned credential adapter；严禁 `security -w`、命令行参数携带秘密、枚举、重置、真实读取或 self-test。测试只用 in-memory fake，真实凭据输入只能由用户在最终 Settings UI 动作完成。
-- 阶段 3 已实现 Settings → AI 模型服务的固定逻辑 Compare preset（ChatGPT、Claude）与 `NOT_CHECKED` / `BLOCKED` safe projection。provider-facing model 与价格在目录核验前明确显示为未知并失败关闭；Key 不得进入 SQLite、备份、同步、日志、前端状态或调用记录。
-- 阶段 4 已把既有显式 Compare 动作组合为一条 30 秒、一时点的 content-free direct-click command；command 只携带固定 provider、ChatGPT/Claude logical pair 与时效，不携带正文或 Key。无点击、过期、未来时间、未知模型/价格和未组合 transport 都失败关闭；当前没有 consumer，因此 `GRANTED` command 不会产生 transport。
-- 阶段 5 已接入未注册的固定 endpoint transport seam、双支状态与内容安全 receipt；测试只用 in-memory credential 和 mock HTTP port。真实 HTTP、真实 Keychain read、最终 Settings 凭据输入与 UI 组合仍须另有用户对非敏感文本、凭据和当次执行的授权。
+- 分支状态沿用普通聊天：`PENDING/RUNNING/COMPLETED/COMPLETED_ACCOUNTING_PENDING/FAILED/UNKNOWN/CANCELLED`。
+- execution 聚合为 `RUNNING/COMPLETED/COMPLETED_WITH_FAILURE/ACCOUNTING_PENDING/FAILED/UNKNOWN/CANCELLED`，但 UI 始终显示每条分支的独立事实。
+- 任一分支卡片的“停止”停止同一 execution 的两条活动信号；已生成正文保留，不删除 USER 或 sibling。
+- FAILED／UNKNOWN 只允许用户明确点击“重试该分支”；重试创建新 Attempt 并保留 Compare lineage，不自动重发 sibling。
+- 进程中断把未完成分支恢复为 `UNKNOWN/PROCESS_INTERRUPTED`，刷新 execution 聚合状态；不自动重发。
+- 打包环境下前端用只读 workspace 轮询补足流式投影，普通聊天与 Compare 共用；轮询不能把用户从已切换的会话抢回。
 
-## 验收
+## 数据、安全与生命周期
 
-- Node mock-only 单测覆盖默认关闭、空草稿/附件优先拒绝、未知模型/价格、未组合 transport 和 source 无 I/O/content/key surface。
-- Rust `desktop_compare_credentials_v1` 已把 Compare 的固定 app-owned service/account 封装为 Security.framework 直接 API；作用域内仅有 presence、用户提供 secret 的未来保存和 one-shot scoped read，secret 使用 `Zeroizing` 临时副本，并在回调异常展开时仍析构清零。它没有 Tauri command、Settings 输入或生产组合。旧 P7 adapter 同步移除 `/usr/bin/security` 与真实 Keychain self-test，改用相同的直接 API。
-- Rust mock-only 合同覆盖未知 model/price 的前置拒绝、固定 endpoint 的双支独立 status，以及 SQLite 只含七个安全元数据列；无真实 Keychain 或网络调用。
-- 本阶段不读取或写入 macOS Keychain，不更新备份/同步，不安装任何 app，不访问 OPPO，不发 HTTP。SQLite 只在 Rust `:memory:` mock test 中验证 receipt schema；未打开或变更用户 app database。
+- schema 30 只新增 Compare lineage 字段和 envelope 表；表中不允许正文、Prompt、Key、附件字节、路径或 Provider 原始 payload。
+- 正文仍只存在 workspace message tree；附件仍由既有私有复制、SHA-256、引用计数和最后引用清理 owner 管理。
+- 搜索、导出、备份、恢复、分支和旧会话回读继续读取同一 message tree；Compare 不创建第二套正文数据库。
+- 默认应用数据根、用户 Key、真实 Provider 和 OPPO 不属于 localhost 验收范围。
+
+## 验收口径
+
+专项状态与证据见 [Desktop Compare 验收矩阵](DESKTOP_COMPARE_EXECUTION_ACCEPTANCE_MATRIX_20260901.md)。代码／测试／Browser／原生壳／真实 Provider 必须分层报告；localhost mock 通过不能写成真实 OpenRouter 已验。

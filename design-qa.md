@@ -1,28 +1,43 @@
-# FB-P6-023/024/025 Unified Chat-first Design QA
+# Android → Desktop Visual Sync QA · 2026-09-01
 
 ## Comparison target
 
-- Source visual truth: `/tmp/nanfeng-ai-chat-shell-reference-contact-sheet-4.jpg` (four user-supplied references; the contact sheet was inspected first).
-- Product truth: `docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md`; visual fidelity and Intent-first / Progressive Disclosure / Object-bound state are one combined gate.
-- Intended implementation states: Android Chat root + drawer + Composer and Desktop wide/narrow Chat root + transcript + Composer.
-- Required comparison viewport: Android emulator outer-screen approximation and current Desktop `.app`, in the same chat/transcript state. No source density normalization is needed until those captures exist.
+- Android live-source reference screenshots: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05b3f-bf39-7580-97c0-0c60854681f3/android-current/`.
+- Desktop implementation screenshots: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05b3f-bf39-7580-97c0-0c60854681f3/desktop-current/`.
+- Combined comparison inputs inspected at original resolution:
+  - `android-desktop-compare-1-20260901.png` — main, model root, plus menu, search.
+  - `android-desktop-compare-2-20260901.png` — scheduled tasks, 南枫转写, settings.
+- Desktop evidence comes from the latest 2026-09-01 release bundle copied to a unique acceptance Bundle ID and a fresh `/tmp` data root. It does not read the normal Desktop data root.
 
-## 已实现并通过本地视觉/操作验收
+## Desktop adaptation rule
 
-- Desktop code now uses an open Assistant content column, a right-aligned bounded warm-orange USER bubble, message-owned metadata, and an off-bottom-only round return-to-latest action.
-- Android code removes root `NavigationBar`/`NavigationRail`, opens into the conversation workspace, routes low-frequency entries to drawer Settings, and projects P6-G local model selection from its owner in Composer/Settings.
-- Existing product icon sources and Material/Lucide-equivalent icons are used; no launcher/Dock asset was changed.
+- Synchronize capability, information hierarchy, icon meaning, card language, state wording, model grouping, and owner behavior.
+- Preserve Desktop-only geometry: the large multiline Composer, persistent left navigation, wide search canvas, two-pane settings, two-pane transcription workbench, pointer/keyboard density, and resizable navigation.
+- Do not add a fake camera item on Desktop. The plus menu keeps image, file, and live web search because those are the applicable Desktop capabilities.
 
-## Required fidelity surfaces
+## Visible comparison result
 
-- Typography, layout rhythm, colors/tokens, icons/assets, and app copy已在重建的 Android outer-screen emulator approximation 与当前 Desktop `.app` 的同态 chat/transcript 操作面复核。
-- 已实际复核 Assistant 开放列、USER 限宽/换行、固定 Composer clearance、drawer 底部 Settings、Chat/Work 的对象 scope 改变、离底回底与 Composer focus；Android 另复核 drawer search/IME，Desktop 另复核窄窗 drawer。
-- 参考结构/节奏与产品语义均成立：一个 Composer 的空/对话画布是 Intent 入口而非 Dashboard；metadata、附件、动作与箭头是对象归属的渐进披露；drawer 承接任务与持久治理；Chat/Work 不再把能力模块变成任务开始前目录；角色投影没有卡片化。
+- Main: Chat/Work identity, short `V4 Flash` model label, warm user bubble, fixed bottom Composer, and shared orange/gray/white design language align. The Desktop Composer remains deliberately larger.
+- Model picker: root is `Auto / Daily / Deep`; Daily and Deep enter complete candidate lists instead of silently selecting the first model. The obsolete visible Compare entry is absent.
+- Plus menu: image, file, and live web search use the matching icon/card language and real Desktop handlers.
+- Search: shared categories, sort/reset controls, bottom search field, file-type preview tile, real size/time, and explicit `预览`/`系统打开` action are present.
+- Scheduled tasks: the mobile hierarchy is retained while Desktop uses a wide status canvas and persistent navigation.
+- 南枫转写: GLM-OCR image/PDF is the default mode; Qwen audio/video remains a separate tab. Desktop keeps the task list/detail split and settings row needed for wide-screen operation.
+- Settings: the same grouped IA and white-card language is presented as a Desktop two-pane settings workbench.
 
-## Comparison history
+## Interaction and implementation evidence
 
-- Android（emulator-5554，2026-08-14）：正式签名 Debug `install -r` 后真实触控 drawer/search/IME、Settings、Chat/Work、普通会话手动 fixture → Auto、global FAST → Auto 与 TEMP 零泄漏的 force-stop/restart readback 均通过；回拉 `base.apk` hash 与产物一致。Computer Use 不可附着 emulator，因此这些是安全 ADB 本机 UI 操作，不是静态截图/UI dump 声称。
-- Desktop（当前唯一 ad-hoc bundle，2026-08-14）：真实 Computer Use 完成宽窗 Chat/Work、Settings 本地 fixture、普通会话 fixture → Auto 的完整退出/重开回读，以及窗口拖拽到窄窗后的 drawer 开/关、回底、Composer 本地保存。模型 popover 曾有裁切 P0，已改为可访问原生 select 并重新构建后实操通过。
-- 可复核路径、包 hash/签名边界与不越界声明见 `docs/FB_P6_023_024_025_P6G_UNIFIED_SHELL_EVIDENCE.md`。这是本地 UI QA 通过，不等于联网模型或发布验收。
+- Native Computer Use opened and captured main, model root, Daily candidates, plus menu, search, scheduled tasks, both transcription modes, and settings.
+- Model availability in screenshots is provided by an app-private local catalog fixture with no credential, endpoint, HTTP request, or provider call.
+- Final gate: lint, typecheck, Node `141/141`, static build, Rust `165/165`, macOS bundle, and strict codesign passed with no final failed or ignored tests.
+- macOS release bundle and strict codesign verification passed. The development bundle is still ad-hoc and is not a Developer ID/notarized distribution build.
+- No `connected*AndroidTest`, OPPO access, real Provider request, Google/Supabase request, or real billing/notification click was performed for this visual pass.
 
-final result: passed
+## Deep parity closure
+
+- The revoked first-level judgment has been replaced by a code-level Android/Desktop route matrix and native deep-flow evidence.
+- Native Computer Use exercised model roots, add/search paths, reminder create/edit/pause/resume/delete-confirmation, both transcription modes and picker cancellation, settings second/third-level pages, fullscreen custom instructions, local Memory actions, archived/recycle lifecycle, read-only conversation return, import picker, account/local-data/about/diagnostics pages, and search filtering/history/attachment location.
+- The final ACL rebuild was rechecked in a unique bundle and strict ordinary-chat acceptance root: create a plan, reopen its confirmed edit form, change the title, save, and read back `最终 ACL 隔离复验计划` from the list.
+- Real Provider content, Google/Supabase accounts, OS notification authorization/clicks, destructive confirmations, and Developer ID/notarization remain separate external acceptance boundaries.
+
+final result: passed for local Android → Desktop deep parity; external boundaries remain unverified

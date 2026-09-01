@@ -749,6 +749,26 @@ null
 
 不得伪造或估算成确定值。
 
+## 13.1 模型保真续接合同（Kimi K3 基线）
+
+统一 Provider Framework 只统一边界、观测和失败语义，不得把所有模型回包降格为
+`assistant.content`。对需要协议连续性的模型，Adapter 必须解析并保留其续接字段。
+
+- Kimi K3 使用 OpenRouter 固定模型 ID `moonshotai/kimi-k3`。
+- K3 Assistant 消息的 `reasoning_content` 与结构化 `tool_calls`（call id、函数名、参数）必须作为消息所属的隐藏续接协议保存；不得合并进可见正文、搜索索引、标题、知识提取或通用交换包。
+- 后续 K3 请求必须按原顺序回放可见 `content`、`reasoning_content` 与 `tool_calls`。Provider 原始 envelope、headers、Key 和未解析 raw body 仍不得落库。
+- K3 首次用于已有的非 K3 会话时，从当前用户轮开始建立新的 Provider 上下文，不继承该会话此前被压缩或标准化的模型历史；K3 已经回答后，只续接 K3 阶段的上下文。
+- K3 采用会话手动 override 的 sticky 语义：一次明确选择同时固定当前会话和后续新会话默认值。K3 不进入 Auto 候选，防止系统在无明确选择时跨模型切入。
+- `tool_calls` 被保存不等于工具已执行。没有已批准工具 owner/结果回传闭环时，不得把纯工具调用伪装成完成答案。
+
+## 13.2 Grok OpenRouter 预设合同
+
+- `Grok 4.1 Fast` 固定使用 `x-ai/grok-4.1-fast`，默认显式发送 `reasoning.enabled=false`；`Grok 4.6 High` 是固定模型 `x-ai/grok-4.6` 的产品推理预设，默认显式发送 `reasoning.effort=high`。产品名中的 `High` 不得拼进 Provider 模型 ID。
+- 两项均经 OpenRouter Adapter 的统一文本／图片／PDF 请求、流式解析、结构化工具、Token、实际 `usage.cost`、失败诊断和模型归因链；不得新增第二份 Key、旁路端点或把 Grok ID 送往其他 Provider。
+- 单次产品输出预算默认封顶 65,536 Token，和 Provider 最大能力分离。实时检索仍只由用户设置与当前信息意图触发 `openrouter:web_search`；xAI 的 `x_search` 由 OpenRouter 插件协议自动补充，应用不得自行伪造未核验工具字段。
+- 目录必须只按上述精确 ID 映射。目录缺失、模型下线或能力不满足时失败关闭，不得用 Grok 4 Fast、Grok 4.5、Grok 4.20 或其他相似名称代替。
+- Provider 返回费用始终优先。只有 OpenRouter 当前公开价目可精确版本化时才允许 Token 本地估算；搜索调用费、动态路由价或 4.1 Fast 的不确定费率不得猜测为确定金额。
+
 ---
 
 # 14. AI 任务成本应按“任务完成成本”计算
