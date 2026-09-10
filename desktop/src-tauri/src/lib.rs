@@ -18566,7 +18566,11 @@ pub fn run() {
             } else {
                 let default_root = app.path().app_data_dir().map_err(|_| "private app data unavailable")?.join("p6b-workspace");
                 let config = app.path().app_config_dir().map_err(|_| "private config unavailable")?.join("storage-location.json");
-                desktop_storage_location::resolve(&config, &default_root)?
+                desktop_storage_location::resolve_with_recovery(&config, &default_root, |selected| {
+                    if startup_mode.work_plan().recovers_business_state() {
+                        desktop_local_backup_v1::recover_interrupted_switch(selected, &selected.join("workspace.sqlite3"))
+                    } else { Ok(()) }
+                })?
             };
             fs::create_dir_all(&root).map_err(|_| "desktop private root unavailable")?;
             let process_lock = fs::OpenOptions::new()

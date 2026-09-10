@@ -221,6 +221,7 @@ data class ConversationFoundationUiState(
     val archivePreview: com.nanzhufeng.ai.domain.ConversationAttachmentArchivePreview? = null,
     val temporaryRecovery: TemporaryConversationRecovery? = null,
     val p6gCatalog: P6GLocalCatalogSnapshot? = null,
+    val normalChatRouting: com.nanzhufeng.ai.domain.NormalChatRoutingSnapshot? = null,
     val p6gGlobalDefault: P6GGlobalDefault = P6GGlobalDefault(0, null),
     val p6gConversationOverride: P6GConversationOverride? = null,
     val globalWebSearchEnabled: Boolean = true,
@@ -586,6 +587,9 @@ class ConversationFoundationViewModel(
                 .orEmpty()
             val editable = branchProjection?.editableUserMessages.orEmpty()
             val runtimeMessage = snapshot?.nodes?.firstOrNull { it.id == runtime?.messageId }
+            // Stream progress does not need another directory/presence read on every chunk.
+            val normalChatRouting = state.normalChatRouting?.takeIf { state.isSending && runtime?.isTerminal == false }
+                ?: withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.routingSnapshot() }
             val p6gCatalog = withContext(Dispatchers.IO) { p6gModelSelection.readCatalog() }
             val p6gGlobalDefault = withContext(Dispatchers.IO) { p6gModelSelection.readGlobalDefault() }
             val p6gConversationOverride = snapshot?.conversation?.id?.let { id ->
@@ -639,6 +643,7 @@ class ConversationFoundationViewModel(
                 pdfPreview = null,
                 videoPreview = null,
                 p6gCatalog = p6gCatalog,
+                normalChatRouting = normalChatRouting,
                 p6gGlobalDefault = p6gGlobalDefault,
                 globalWebSearchEnabled = globalWebSearchEnabled,
                 conversationWebSearchOverride = conversationWebSearchOverride,
@@ -779,6 +784,7 @@ class ConversationFoundationViewModel(
 
     /** One picker action fixes this conversation and persists the next-conversation default. */
     fun selectP6GModel(modelId: String?) {
+        if (state.isSending) return
         val conversationId = state.selectedConversationId ?: return
         val currentConversation = state.p6gConversationOverride ?: return
         val currentGlobal = state.p6gGlobalDefault
@@ -1877,16 +1883,16 @@ class ConversationFoundationViewModel(
         }
     }
 
-    fun submitCurrentDraft() {
+    fun submitCurrentDraft(disclosedConversationId: com.nanzhufeng.ai.domain.ConversationId?, egressAuthorization: NormalChatEgressAuthorization?) {
         val id = state.selectedConversationId ?: return
         val draft = state.draft ?: return
         if (state.isSending) return
-        // The visible send button is the one explicit approval action.  Keep a content-free
-        // receipt bound to this exact draft so a stale/background request cannot open a socket.
-        val egressAuthorization = NormalChatEgressAuthorization.forUserSend(
-            draft = draft,
-            approvedAtEpochMs = System.currentTimeMillis(),
-        )
+        if (id != disclosedConversationId) return
+        // The receipt was created by the rendered send affordance. Reject a stale draft before saving.
+        if (state.surface == ConversationSurface.CHAT && egressAuthorization?.matches(draft) != true) {
+            state = state.copy(sendError = "当前内容或模型披露已变化，请检查模型设置与草稿后重试。", sendErrorConversationId = id)
+            return
+        }
         // Older text-save jobs may already be running. The mutex makes them finish before this
         // exact visible draft is persisted, so clicking send cannot submit an older empty draft.
         ++draftSaveGeneration

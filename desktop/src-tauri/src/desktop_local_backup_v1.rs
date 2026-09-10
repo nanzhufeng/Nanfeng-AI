@@ -1687,4 +1687,30 @@ mod tests {
             .unwrap();
         assert_eq!(title, "备份前");
     }
+
+    #[test]
+    fn selected_root_missing_database_recovers_real_checkpoint_before_validation() {
+        use fs2::FileExt;
+        let temp = tempdir().unwrap();
+        let root = temp.path().join("selected"); fs::create_dir(&root).unwrap();
+        let db = root.join("workspace.sqlite3"); database(&db);
+        Connection::open(&db).unwrap().execute_batch("CREATE TABLE workspace_exchange(workspace_id TEXT);").unwrap();
+        create_checkpoint(&root, &db, "boundary-checkpoint").unwrap();
+        write_state(&root, &PersistedState {
+            operation: "INTERRUPTED".into(), phase: "SWITCHING".into(),
+            checkpoint_id: Some("boundary-checkpoint".into()), ..PersistedState::default()
+        }).unwrap();
+        fs::remove_file(&db).unwrap();
+        let config = temp.path().join("location.json");
+        fs::write(&config, serde_json::to_vec(&serde_json::json!({"active": root, "pending": null})).unwrap()).unwrap();
+        let selected = crate::desktop_storage_location::resolve_with_recovery(&config, &root, |selected| {
+            let competing = fs::OpenOptions::new().read(true).write(true).open(selected.join(".runtime-owner.lock")).unwrap();
+            assert!(competing.try_lock_exclusive().is_err());
+            recover_interrupted_switch(selected, &selected.join("workspace.sqlite3"))
+        }).unwrap();
+        assert_eq!(selected, root);
+        let title: String = Connection::open(&db).unwrap().query_row("SELECT title FROM workspaces WHERE id='workspace-one'", [], |row| row.get(0)).unwrap();
+        assert_eq!(title, "备份前");
+        assert_eq!(read_state(&root).phase, "ROLLED_BACK_INTERRUPTED");
+    }
 }

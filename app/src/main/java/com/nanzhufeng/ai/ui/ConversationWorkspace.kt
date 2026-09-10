@@ -566,7 +566,7 @@ internal fun ConversationWorkspaceDialog(
     onClearWatchLater: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onSurfaceChanged: (com.nanzhufeng.ai.domain.ConversationSurface) -> Unit,
     onDraftChanged: (String) -> Unit,
-    onSubmitDraft: () -> Unit,
+    onSubmitDraft: (com.nanzhufeng.ai.domain.ConversationId?, com.nanzhufeng.ai.domain.NormalChatEgressAuthorization?) -> Unit,
     onRetryNormalSend: () -> Unit,
     onMarkNormalSendFailed: () -> Unit,
     onStartFixture: () -> Unit,
@@ -1445,7 +1445,17 @@ internal fun ConversationWorkspaceDialog(
                                 } else {
                                     chatSentFromMessageCount = state.messages.size
                                 }
-                                onSubmitDraft()
+                                // Bind the actual rendered disclosure, not a later ViewModel state.
+                                val shownDraft = state.draft
+                                val shownRouting = state.normalChatRouting
+                                val shownModelId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId
+                                val authorization = if (shownRouting != null &&
+                                    shownRouting.canAuthorize(shownDraft, shownModelId) &&
+                                    state.surface == com.nanzhufeng.ai.domain.ConversationSurface.CHAT
+                                ) com.nanzhufeng.ai.domain.NormalChatEgressAuthorization.forUserSend(
+                                    shownDraft, System.currentTimeMillis(), shownModelId, shownRouting,
+                                ) else null
+                                onSubmitDraft(state.selectedConversationId, authorization)
                             },
                             onStop = onStop,
                             onRemoveAttachment = onRemoveAttachment,
@@ -7862,23 +7872,23 @@ private fun DraftComposer(
         draft.attachments.forEach(onEnsureAttachmentPreview)
     }
     val canStopRuntime = state.runtime?.isTerminal == false
-    val canSubmit = !state.isSending && (draft.text.isNotBlank() || draft.attachments.isNotEmpty())
+    val canSubmit = !state.isSending && (state.surface != com.nanzhufeng.ai.domain.ConversationSurface.CHAT || state.normalChatRouting != null) && (draft.text.isNotBlank() || draft.attachments.isNotEmpty())
     val manualId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId
-    val autoFacts = com.nanzhufeng.ai.domain.AutoRoutingFacts(
-        hasAttachment = draft.attachments.isNotEmpty(),
-        requiresComplexReasoning = com.nanzhufeng.ai.domain.AutoRoutingTaskClassifier.requiresComplexReasoning(draft.text),
-    )
-    val selectedPresets = manualId?.let { id -> com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(id).routes }
-        ?: listOf(com.nanzhufeng.ai.domain.AutoModelRouter.resolve(autoFacts))
+    val selectedPresets = state.normalChatRouting?.presets(draft, manualId)
+        ?: com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(manualId).routes
     val modelLabel = composerModelDisplayLabel(selectedPresets)
+    val recipientLabel = selectedPresets.joinToString("、") { preset ->
+        val provider = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(preset)
+        "${com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.provider(provider)?.displayName} · ${com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName}"
+    }
     val selectedPreset = selectedPresets.first()
     val hasBinaryMaterial = draft.attachments.any { reference ->
         reference.mimeType !in com.nanzhufeng.ai.domain.TEXT_ATTACHMENT_MIME_TYPES
     }
     val attachmentRecipient = if (manualId == null) {
         AnnotatedString(
-            if (hasBinaryMaterial) "本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR，再自动选择已配置模型"
-            else "本机先统一解析，再自动选择已配置模型（发送时确定）",
+            if (hasBinaryMaterial) "本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR，再交给下方已披露模型"
+            else "本机先统一解析，再交给下方已披露模型",
         )
     } else {
         val selectedProvider = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(selectedPreset)
@@ -7935,7 +7945,7 @@ private fun DraftComposer(
     ) {
         if (canSubmit && !canStopRuntime) {
             Text(
-                text = "点击发送即授权将本条内容${if (draft.attachments.isEmpty()) "" else "及附件"}交给 $modelLabel。费用：服务商按实际用量计费，当前无本地预估。",
+                text = "点击发送即授权将本条内容${if (draft.attachments.isEmpty()) "" else "及附件"}交给 $recipientLabel。费用：服务商按实际用量计费，当前无本地预估。",
                 color = SecondaryText,
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
@@ -7943,6 +7953,7 @@ private fun DraftComposer(
         }
         ComposerModelEntry(
             label = modelLabel,
+            enabled = !state.isSending,
             onClick = onToggleModel,
             onAnchorChanged = onModelAnchorChanged,
         )
@@ -7954,6 +7965,7 @@ private fun DraftComposer(
 @Composable
 private fun ComposerModelEntry(
     label: String,
+    enabled: Boolean = true,
     onClick: () -> Unit,
     onAnchorChanged: (androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
@@ -7965,6 +7977,7 @@ private fun ComposerModelEntry(
             .onGloballyPositioned { onAnchorChanged(it.boundsInRoot()) }
             .clip(shape)
             .combinedClickable(
+                enabled = enabled,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,

@@ -729,7 +729,6 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         conversations = conversationRepository,
         registry = modelRegistry,
         credentials = providerCredentialStore,
-        selection = p6gModelSelection,
         submitDraft = submitConversationDraft,
         appendMessage = appendConversationMessage,
         contextBroker = localContextBroker,

@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-09-10：四项边界修复
+
+- 用户授权从复盘转入业务修复，基线 `4bf3e00`。按顺序修复目录恢复锁顺序、已配置缺库失败关闭与备份回滚兼容、头像流式上限、Android 已披露接收方的 v2 授权快照；见[修复记录](review/20260910/BOUNDARY_FIXES.md)。此前“未改业务／尚未修复”仅适用于各自历史阶段。
+- Rust 全套 216 通过；Android JVM 1109／0／0／3，三个真实 ZIP opt-in 跳过；头像策略／静态合同 7/7，实际 handler 五个模拟场景通过。Debug／Release／Lint 全通过，正式 APK 验签成功、未安装；Lint 保留 101 warnings／19 hints。产物信息见[修复验证](review/20260910/boundary-fix-verification.json)。
+- 未安装主设备、未读取真实数据或凭据、未发真实 Provider 请求、未部署在线函数；原生与真实服务验收仍分开。原始发现与红灯保留，新修复不改写历史结论。
+
 ## 2026-09-10：完整复盘与边界审查续验
 
 - 已更新完整开发档案、可迁移经验、长期 AGENTS 与五个项目 Skill；全量文件与 Git 清单见 [审计记录](review/20260910/verification.json)。本阶段复盘材料纳入独立本地文档 checkpoint（提交主题 `docs: consolidate full project retrospective and boundary evidence`），业务 checkpoint 仍为 `c4aad94`；未推送或发布。

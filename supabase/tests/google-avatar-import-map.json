@@ -1,0 +1,1 @@
+{"imports":{"jsr:@supabase/supabase-js@2":"./fixtures/google-avatar-auth.mjs"}}

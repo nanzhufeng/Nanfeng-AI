@@ -48,3 +48,7 @@ Desktop 的 `p7c_remote_gateway_v1` 只定义同样的 private-config 可用性�
 ## 退出与后续
 
 P7-C 的工件完成不等于真实服务通过。真实退出条件是明确 Supabase target + 已授权 CLI + 私有配置 + Google OAuth 配置齐全后，部署并回读 schema/RLS/RPC/匿名拒绝，继而由真实账号在真机做受控 envelope 提交/回读 hash。P7-D 才能做冲突、自动同步、账号页、头像缓存、切换和退出 UI；P7-E 才能做真实 Android/Desktop 跨设备验收。
+
+## 头像读取上限修复（2026-09-10）
+
+`google-avatar/policy.mjs::readBoundedImage` 在读正文前检查 MIME 与声明长度，声明超限立即取消；未知／虚报长度逐块累计，首个超限块立即取消，不拼接超限响应。只接受非空且不超过 2 MiB 的图片响应。这里限制的是应用接收并保留的正文，不声称进程峰值内存或底层网络缓冲只有 2 MiB。重定向与非成功响应也释放 body。实际 handler 的模拟流测试见[修复记录](review/20260910/BOUNDARY_FIXES.md)，不代表线上函数已部署。

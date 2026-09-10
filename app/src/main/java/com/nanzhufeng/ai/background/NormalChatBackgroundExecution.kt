@@ -55,7 +55,10 @@ class AndroidNormalChatBackgroundExecution(private val context: Context) : Norma
                 .putExtra(NormalChatGenerationForegroundService.EXTRA_OPERATION, operation.name)
                 .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_APPROVED_AT_MS, authorization?.approvedAtEpochMs)
                 .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_DRAFT_FINGERPRINT, authorization?.draftFingerprint)
-                .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_DISCLOSURE_VERSION, authorization?.disclosureVersion),
+                .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_DISCLOSURE_VERSION, authorization?.disclosureVersion)
+                .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_CHOICE, authorization?.recipientChoiceId)
+                .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_PRESETS, authorization?.recipientPresets?.map { it.name }?.toTypedArray())
+                .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_MODELS, authorization?.recipientPresets?.map { authorization.recipientModelIds.getValue(it) }?.toTypedArray()),
         )
         true
     }.getOrDefault(false)
@@ -114,7 +117,15 @@ class NormalChatGenerationForegroundService : Service() {
                 val fingerprint = intent.getStringExtra(EXTRA_EGRESS_DRAFT_FINGERPRINT) ?: return
                 val version = intent.getStringExtra(EXTRA_EGRESS_DISCLOSURE_VERSION)
                     ?: NormalChatEgressAuthorization.DISCLOSURE_VERSION
-                runCatching { NormalChatEgressAuthorization(approvedAtEpochMs, fingerprint, version) }.getOrNull()
+                runCatching {
+                    val presets = requireNotNull(intent.getStringArrayExtra(EXTRA_EGRESS_PRESETS)).map {
+                        com.nanzhufeng.ai.domain.ModelPresetId.valueOf(it)
+                    }
+                    val modelIds = requireNotNull(intent.getStringArrayExtra(EXTRA_EGRESS_MODELS)).toList()
+                    require(presets.size == modelIds.size)
+                    NormalChatEgressAuthorization(approvedAtEpochMs, fingerprint, version,
+                        requireNotNull(intent.getStringExtra(EXTRA_EGRESS_CHOICE)), presets, presets.zip(modelIds).toMap())
+                }.getOrNull()
             }
         // Enter foreground immediately. The count is refreshed after this conversation joins
         // the registry, but Android's foreground-service deadline must not wait for I/O.
@@ -246,6 +257,9 @@ class NormalChatGenerationForegroundService : Service() {
         const val EXTRA_OPERATION = "operation"
         const val EXTRA_EGRESS_APPROVED_AT_MS = "egressApprovedAtMs"
         const val EXTRA_EGRESS_DRAFT_FINGERPRINT = "egressDraftFingerprint"
+        const val EXTRA_EGRESS_MODELS = "egressRecipientModels"
+        const val EXTRA_EGRESS_CHOICE = "egressRecipientChoice"
+        const val EXTRA_EGRESS_PRESETS = "egressRecipientPresets"
         const val EXTRA_EGRESS_DISCLOSURE_VERSION = "egressDisclosureVersion"
         const val EXTRA_RUNNING = "running"
         const val EXTRA_SAFE_RESULT = "safeResult"

@@ -30,7 +30,7 @@ data class NormalChatSendAttempt(
     init {
         require(modelId.isNotBlank() && idempotencyKey.isNotBlank())
         require(safeErrorCode == null || safeErrorCode.matches(Regex("[A-Z0-9_]{1,64}")))
-        require(egressDisclosureVersion == null || egressDisclosureVersion == NormalChatEgressAuthorization.DISCLOSURE_VERSION)
+        require(egressDisclosureVersion == null || egressDisclosureVersion in setOf(NormalChatEgressAuthorization.DISCLOSURE_VERSION, NormalChatEgressAuthorization.LEGACY_DISCLOSURE_VERSION))
     }
 }
 

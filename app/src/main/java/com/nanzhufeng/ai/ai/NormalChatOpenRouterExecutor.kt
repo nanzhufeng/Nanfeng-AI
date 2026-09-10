@@ -2,9 +2,6 @@ package com.nanzhufeng.ai.ai
 
 import com.nanzhufeng.ai.domain.AppendConversationMessageUseCase
 import com.nanzhufeng.ai.domain.AppendMessageRequest
-import com.nanzhufeng.ai.domain.AutoRoutingFacts
-import com.nanzhufeng.ai.domain.AutoRoutingTaskClassifier
-import com.nanzhufeng.ai.domain.CapabilityAwareAutoModelRouter
 import com.nanzhufeng.ai.domain.LoadChatRoutingPolicyUseCase
 import com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog
 import com.nanzhufeng.ai.domain.ContentBlock
@@ -39,7 +36,6 @@ import com.nanzhufeng.ai.domain.ModelPresetId
 import com.nanzhufeng.ai.domain.ModelRegistryResolution
 import com.nanzhufeng.ai.domain.AiTaskError
 import com.nanzhufeng.ai.domain.NanfengModelServiceCatalog
-import com.nanzhufeng.ai.domain.P6GModelSelectionOwner
 import com.nanzhufeng.ai.domain.ProviderCredentialStore
 import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.SubmitConversationDraftUseCase
@@ -92,7 +88,6 @@ class NormalChatOpenRouterExecutor(
     private val conversations: ConversationRepository,
     private val registry: VersionedModelRegistry,
     private val credentials: ProviderCredentialStore,
-    private val selection: P6GModelSelectionOwner,
     private val submitDraft: SubmitConversationDraftUseCase,
     private val appendMessage: AppendConversationMessageUseCase,
     private val contextBroker: LocalContextBroker,
@@ -255,6 +250,18 @@ class NormalChatOpenRouterExecutor(
             sendAttempts.markFailed(attempt.attemptId, clock.instant(), "USER_MARKED_FAILED") != null
         } ?: false
 
+    /** Read local metadata/presence only; never load a secret or refresh the network here. */
+    fun routingSnapshot(): com.nanzhufeng.ai.domain.NormalChatRoutingSnapshot {
+        val models = ModelPresetId.entries.mapNotNull { preset ->
+            (modelResolver.resolve(preset) as? ResolvedModelResult.Resolved)?.model?.let { preset to it }
+        }.toMap()
+        val availableProviders = models.keys.map(NanfengModelServiceCatalog::providerFor).toSet().filterTo(linkedSetOf()) { provider ->
+            configuration.execute(provider)?.settings?.enabled == true && credentials.hasCredential(provider)
+        }
+        val usable = models.keys.filterTo(linkedSetOf()) { NanfengModelServiceCatalog.providerFor(it) in availableProviders }
+        return com.nanzhufeng.ai.domain.NormalChatRoutingSnapshot(models, usable, loadRoutingPolicy.execute().autoRoutingEnabled)
+    }
+
     /** Invoked immediately after the user message and cleared draft have committed locally. */
     fun execute(
         conversationId: ConversationId,
@@ -263,7 +270,8 @@ class NormalChatOpenRouterExecutor(
         onStreamProgress: () -> Unit = {},
     ): Result {
         cancellationRequested -= conversationId
-        val selectedChoice = choiceForConversation(conversationId)
+        val approvedRecipient = authorization ?: return Result.Blocked(Code.EGRESS_AUTHORIZATION_REQUIRED)
+        val selectedChoice = ComposerModelRoutingCatalog.choice(approvedRecipient.recipientChoiceId)
         var providerRuntime: ConversationRuntimeState? = null
         val submitted = if (selectedChoice.isCompare) {
             submitDraft.execute(conversationId)
@@ -289,14 +297,12 @@ class NormalChatOpenRouterExecutor(
         if (userMessage.isBlank() && latest.content.none { it is ContentBlock.Attachment }) return Result.Blocked(Code.DRAFT_UNAVAILABLE)
         val hasMedia = latest.content.any { it is ContentBlock.Attachment }
 
-        val selectedId = selection.readConversationOverride(conversationId).modelId
-            ?: selection.readGlobalDefault().modelId
-        val choice = ComposerModelRoutingCatalog.choice(selectedId)
-        val routingPolicy = loadRoutingPolicy.execute()
-        val automatic = routingPolicy.autoRoutingEnabled && (selectedId == null || choice == ComposerModelRoutingCatalog.auto)
-        // Persisted selections must never become an implicit fallback after a product model is
-        // removed. Stop before loading a credential or preparing an external request.
-        if (!automatic && ComposerModelRoutingCatalog.isRetired(selectedId)) {
+        // The displayed recipient snapshot travels with the approved draft through the service.
+        // Never reread a mutable selection or reroute Auto after the send click.
+        val selectedId = acceptedAuthorization.recipientChoiceId
+        val choice = selectedChoice
+        val automatic = choice == ComposerModelRoutingCatalog.auto
+        if (ComposerModelRoutingCatalog.isRetired(selectedId) || choice.id != selectedId) {
             return Result.Blocked(Code.MODEL_NOT_FOUND).also { runtime?.fail(Code.MODEL_NOT_FOUND.name) }
         }
         val attachmentPayloads = when {
@@ -304,23 +310,7 @@ class NormalChatOpenRouterExecutor(
             else -> prepareAttachments(latest.content.filterIsInstance<ContentBlock.Attachment>())
                 ?: return Result.Blocked(Code.ATTACHMENTS_UNSUPPORTED).also { runtime?.fail(Code.ATTACHMENTS_UNSUPPORTED.name) }
         }
-        val autoFacts = AutoRoutingFacts(
-            hasAttachment = hasMedia,
-            requiresImage = attachmentPayloads.any { it.kind == ChatAttachmentKind.IMAGE },
-            requiresPdf = attachmentPayloads.any { it.kind == ChatAttachmentKind.PDF },
-            requiresVideo = attachmentPayloads.any { it.kind == ChatAttachmentKind.VIDEO },
-            requiresAudio = attachmentPayloads.any { it.kind == ChatAttachmentKind.AUDIO },
-            requiresFile = attachmentPayloads.any { it.kind == ChatAttachmentKind.FILE },
-            requiresComplexReasoning = AutoRoutingTaskClassifier.requiresComplexReasoning(userMessage),
-        )
-        val autoPreset = CapabilityAwareAutoModelRouter(modelResolver).resolve(autoFacts) { candidate ->
-            val candidateProvider = NanfengModelServiceCatalog.providerFor(candidate)
-            configuration.execute(candidateProvider)?.settings?.enabled == true &&
-                credentials.hasCredential(candidateProvider)
-        }
-        // Ordinary chat has one explicit egress attempt.  A failed request is surfaced with its
-        // selected model and never silently replayed to another model or Provider.
-        val presets = if (automatic) listOf(autoPreset) else choice.routes
+        val presets = acceptedAuthorization.recipientPresets
         // Public catalog verification is content-free and no longer a manual prerequisite for
         // sending.  The actual model request is still refused if the exact logical mapping is
         // unavailable; a user never gets silently downgraded to a nearby model.
@@ -450,9 +440,6 @@ class NormalChatOpenRouterExecutor(
     private fun completedResult(replies: List<OneResult.Reply>): Result =
         replies.firstOrNull { it.completionNotice != null }?.completionNotice?.let(Result::SentWithNotice) ?: Result.Sent
 
-    private fun choiceForConversation(conversationId: ConversationId) =
-        ComposerModelRoutingCatalog.choice(selection.readConversationOverride(conversationId).modelId)
-
     /** K3 starts from a clean current-path context, then keeps only its own exact protocol suffix. */
     private fun kimiK3ContinuationMessages(
         snapshot: com.nanzhufeng.ai.domain.ConversationSnapshot,
@@ -550,6 +537,9 @@ class NormalChatOpenRouterExecutor(
         }
         val fulfilledAnalysisMode = analysisMode.copy(liveEvidence = requestOptions.liveWebSearch)
         val executionProviderId = adapter.executionProviderId(requestOptions)
+        if (authorization != null && !authorization.allowsRecipient(preset, executionProviderId, resolvedModel.modelId)) {
+            return OneResult.Blocked(Code.EGRESS_AUTHORIZATION_REQUIRED)
+        }
         val config = configuration.execute(executionProviderId) ?: return OneResult.Blocked(Code.SERVICE_DISABLED)
         if (!config.settings.enabled) return OneResult.Blocked(Code.SERVICE_DISABLED)
         if (!credentials.hasCredential(executionProviderId)) return OneResult.Blocked(Code.CREDENTIAL_MISSING)
@@ -564,6 +554,10 @@ class NormalChatOpenRouterExecutor(
         val modelId = when (providerId) {
             ProviderId.OPENROUTER, ProviderId.QWEN, ProviderId.DEEPSEEK, ProviderId.ZHIPU -> resolvedModel.modelId
             ProviderId.MOCK -> return OneResult.Blocked(Code.MODEL_UNAVAILABLE)
+        }
+        // A content-free profile refresh may update an alias; it cannot expand this approval.
+        if (authorization != null && !authorization.allowsRecipient(preset, executionProviderId, modelId)) {
+            return OneResult.Blocked(Code.EGRESS_AUTHORIZATION_REQUIRED)
         }
         // Streaming creates the current assistant placeholder before the request is assembled.
         // Only a completed earlier assistant message means this conversation has already had its

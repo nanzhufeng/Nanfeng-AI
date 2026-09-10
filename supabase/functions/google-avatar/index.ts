@@ -1,5 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { MAX_BYTES, requireImageResponse, resolveVerifiedRedirect, verifiedGoogleAvatarUrl } from './policy.mjs'
+import { readBoundedImage, resolveVerifiedRedirect, verifiedGoogleAvatarUrl } from './policy.mjs'
 
 const timeoutMs = 8_000
 
@@ -20,10 +20,10 @@ Deno.serve(async (request) => {
   try {
     for (let hop = 0; hop <= 3; hop += 1) {
       const response = await fetch(target, { redirect: 'manual', signal: controller.signal })
-      if (response.status >= 300 && response.status < 400) { target = resolveVerifiedRedirect(response.headers.get('location'), target); continue }
-      if (!response.ok) return failure(502)
+      if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); target = resolveVerifiedRedirect(response.headers.get('location'), target); continue }
+      if (!response.ok) { await response.body?.cancel(); return failure(502) }
       const contentType = response.headers.get('content-type'); const declared = response.headers.get('content-length')
-      const bytes = new Uint8Array(await response.arrayBuffer()); requireImageResponse(contentType, declared === null ? null : Number(declared), bytes.byteLength)
+      const bytes = await readBoundedImage(response.body, contentType, declared === null ? null : Number(declared))
       return new Response(bytes, { status: 200, headers: { 'content-type': contentType!, 'cache-control': 'private, max-age=300', 'x-content-type-options': 'nosniff' } })
     }
     return failure(502)

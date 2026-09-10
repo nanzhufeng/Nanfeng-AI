@@ -15,7 +15,8 @@ class P3JNormalChatExplicitEgressContractsTest {
     private val activity = File("src/main/java/com/nanzhufeng/ai/NanfengAiActivity.kt").readText()
 
     @Test fun `ordinary send makes one visible authorization fact without a second composer path`() {
-        assertTrue(viewModel.contains("NormalChatEgressAuthorization.forUserSend"))
+        assertTrue(workspace.contains("NormalChatEgressAuthorization.forUserSend"))
+        assertTrue(viewModel.contains("egressAuthorization?.matches(draft)"))
         assertTrue(viewModel.contains("normalChatOpenRouterExecutor.execute("))
         assertTrue(executor.contains("authorization: NormalChatEgressAuthorization?"))
         assertTrue(executor.contains("Code.EGRESS_AUTHORIZATION_REQUIRED"))
@@ -45,9 +46,11 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertFalse(executor.contains("attachmentStore.pdfPage(asset, 1)"))
         assertFalse(executor.contains("attachmentStore.videoPreview(asset)"))
         assertTrue(executor.contains("credentials.loadCredential(executionProviderId)"))
-        assertTrue(executor.contains("selection.readConversationOverride(conversationId).modelId\n            ?: selection.readGlobalDefault().modelId"))
-        assertTrue(executor.contains("val automatic = routingPolicy.autoRoutingEnabled && (selectedId == null || choice == ComposerModelRoutingCatalog.auto)"))
-        assertTrue(executor.contains("val presets = if (automatic) listOf(autoPreset) else choice.routes"))
+        val sendPath = executor.substringAfter("    fun execute(").substringBefore("    private fun requireEgressAuthorization")
+        assertFalse(sendPath.contains("selection.readConversationOverride"))
+        assertFalse(sendPath.contains("selection.readGlobalDefault"))
+        assertTrue(sendPath.contains("val presets = acceptedAuthorization.recipientPresets"))
+        assertTrue(sendPath.indexOf("requireEgressAuthorization(authorization, latest)") < sendPath.indexOf("prepareAttachments("))
         assertFalse(executor.contains("automaticFallbackOrder"))
         assertTrue(executor.contains("fun cancelActive(conversationId: ConversationId)"))
         assertTrue(viewModel.contains("normalChatOpenRouterExecutor.cancelActive(visibleRuntime.conversationId)"))
@@ -55,7 +58,7 @@ class P3JNormalChatExplicitEgressContractsTest {
 
     @Test fun `composer structure stays anchored while its only model entry opens the menu`() {
         val submitLambda = workspace.substringAfter("onSubmit = {").substringBefore("onStop = onStop")
-        assertTrue(submitLambda.contains("onSubmitDraft()"))
+        assertTrue(submitLambda.contains("onSubmitDraft(state.selectedConversationId, authorization)"))
         assertTrue(workspace.contains("private val ComposerSendSurfaceSize = 36.dp"))
         assertTrue(workspace.contains("ComposerModelEntry("))
         assertTrue(workspace.contains("state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId"))

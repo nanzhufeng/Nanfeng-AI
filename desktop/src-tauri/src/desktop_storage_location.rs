@@ -52,24 +52,29 @@ fn copy_tree(source: &Path, target: &Path) -> Result<(), String> {
     Ok(())
 }
 pub fn resolve(config: &Path, default: &Path) -> Result<PathBuf, String> {
+    resolve_with_recovery(config, default, |_| Ok(()))
+}
+
+pub fn resolve_with_recovery(config: &Path, default: &Path, recover: impl Fn(&Path) -> Result<(), String>) -> Result<PathBuf, String> {
     let mut selection = read(config, default)?;
     if let Some(target) = selection.pending.clone() {
         validate(&selection.active)?;
+        let lock = fs::OpenOptions::new().create(true).read(true).write(true).open(selection.active.join(".runtime-owner.lock")).map_err(|_| "无法锁定旧目录")?;
+        lock.try_lock_exclusive().map_err(|_| "旧目录仍在使用，请关闭其他实例后再启动")?;
+        recover(&selection.active)?;
         let staging = target.with_file_name(format!(".{}.nanfeng-migration", target.file_name().and_then(|s| s.to_str()).ok_or("目录无效")?));
         if !target.exists() && staging.exists() {
-            existing_database(&staging)?;
+            if !existing_database(&staging)? { return Err("迁移暂存目录缺少数据库，未切换".into()); }
             fs::rename(&staging, &target).map_err(|_| "无法恢复目录切换")?;
         }
         validate(&target)?;
-        let lock = fs::OpenOptions::new().create(true).read(true).write(true).open(selection.active.join(".runtime-owner.lock")).map_err(|_| "无法锁定旧目录")?;
-        lock.try_lock_exclusive().map_err(|_| "旧目录仍在使用，请关闭其他实例后再启动")?;
         if !existing_database(&target)? {
             if staging.exists() { return Err("迁移暂存目录已存在，请保留旧目录并检查迁移状态".into()); }
             if let Err(error) = copy_tree(&selection.active, &staging) {
                 let _ = fs::remove_dir_all(&staging);
                 return Err(error);
             }
-            existing_database(&staging)?;
+            if !existing_database(&staging)? { return Err("迁移暂存目录缺少数据库，未切换".into()); }
             fs::remove_dir(&target).map_err(|_| "目标目录发生变化，未切换")?;
             fs::rename(&staging, &target).map_err(|_| "无法发布新目录，旧数据保留")?;
         }
@@ -77,7 +82,20 @@ pub fn resolve(config: &Path, default: &Path) -> Result<PathBuf, String> {
         selection.pending = None;
         write(config, &selection)?;
     }
-    if config.exists() { validate(&selection.active)?; }
+    if config.exists() {
+        validate(&selection.active)?;
+        if !matches!(existing_database(&selection.active), Ok(true)) {
+            // A legitimate interrupted backup switch may temporarily have no database.
+            // Only its existing recovery owner may restore it, under exclusive ownership.
+            let lock = fs::OpenOptions::new().create(true).read(true).write(true)
+                .open(selection.active.join(".runtime-owner.lock")).map_err(|_| "无法锁定数据目录")?;
+            lock.try_lock_exclusive().map_err(|_| "数据目录仍在使用，请关闭其他实例后再启动")?;
+            recover(&selection.active)?;
+            if !matches!(existing_database(&selection.active), Ok(true)) {
+                return Err("已配置的数据目录缺少有效数据库，请恢复数据后重试".into());
+            }
+        }
+    }
     Ok(selection.active)
 }
 
@@ -118,5 +136,98 @@ mod tests {
         fs::write(nested.join("unrelated"), b"keep").unwrap(); assert!(existing_database(&nested).is_err());
         write(&config, &Selection { active: temp.path().join("missing"), pending: None }).unwrap();
         assert!(resolve(&config, &old).is_err());
+    }
+    #[test]
+    fn recovery_must_not_publish_before_acquiring_source_lock() {
+        let temp = tempfile::tempdir().unwrap();
+        let old = temp.path().join("old");
+        let target = temp.path().join("new");
+        let staging = temp.path().join(".new.nanfeng-migration");
+        let config = temp.path().join("location.json");
+        seed(&old);
+        seed(&staging);
+        fs::write(&config, serde_json::to_vec(&serde_json::json!({"active":old,"pending":target})).unwrap()).unwrap();
+        let lock = fs::OpenOptions::new().create(true).read(true).write(true).open(old.join(".runtime-owner.lock")).unwrap();
+        lock.try_lock_exclusive().unwrap();
+        let result = super::resolve(&config, &old);
+        println!("PROBE locked_recovery returned_error={} target_published={} staging_remaining={} source_retained={}",
+                 result.is_err(), target.exists(), staging.exists(), old.join("workspace.sqlite3").exists());
+        assert!(result.is_err());
+        assert!(!target.exists(), "Recovery published target before proving exclusive source ownership");
+    }
+
+    #[test]
+    fn selected_root_missing_database_must_fail_closed() {
+        let temp = tempfile::tempdir().unwrap();
+        let old = temp.path().join("old");
+        let target = temp.path().join("new");
+        let config = temp.path().join("location.json");
+        seed(&old);
+        seed(&target);
+        super::schedule(&config, &old, &target).unwrap();
+        super::resolve(&config, &old).unwrap();
+        fs::remove_file(target.join("workspace.sqlite3")).unwrap();
+        let result = super::resolve(&config, &old);
+        println!("PROBE selected_missing_db accepted={} attachment_retained={}", result.is_ok(), target.join("attachment.bin").exists());
+        assert!(result.is_err(), "Configured root without its database was accepted");
+    }
+
+    #[test]
+    fn normal_migration_respects_source_lock() {
+        let temp = tempfile::tempdir().unwrap();
+        let old = temp.path().join("old");
+        let target = temp.path().join("new");
+        let config = temp.path().join("location.json");
+        seed(&old);
+        fs::create_dir(&target).unwrap();
+        super::schedule(&config, &old, &target).unwrap();
+        let lock = fs::OpenOptions::new().create(true).read(true).write(true).open(old.join(".runtime-owner.lock")).unwrap();
+        lock.try_lock_exclusive().unwrap();
+        assert!(super::resolve(&config, &old).is_err());
+        assert!(target.read_dir().unwrap().next().is_none());
+    }
+
+    #[test]
+    fn unconfigured_first_start_is_allowed_but_configured_empty_root_is_not() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("new-install");
+        let config = temp.path().join("location.json");
+        assert_eq!(resolve(&config, &root).unwrap(), root);
+        fs::create_dir(&root).unwrap();
+        write(&config, &Selection { active: root.clone(), pending: None }).unwrap();
+        assert!(resolve(&config, &root).is_err());
+        assert!(!root.join("workspace.sqlite3").exists());
+    }
+
+    #[test]
+    fn empty_recovery_staging_is_never_published() {
+        let temp = tempfile::tempdir().unwrap();
+        let old = temp.path().join("old"); seed(&old);
+        let target = temp.path().join("new");
+        let staging = temp.path().join(".new.nanfeng-migration");
+        fs::create_dir(&staging).unwrap();
+        let config = temp.path().join("location.json");
+        write(&config, &Selection { active: old.clone(), pending: Some(target.clone()) }).unwrap();
+        let before = fs::read(&config).unwrap();
+        assert!(resolve(&config, &old).is_err());
+        assert!(!target.exists());
+        assert!(staging.exists());
+        assert_eq!(fs::read(&config).unwrap(), before);
+    }
+
+    #[test]
+    fn interrupted_restore_runs_under_lock_before_database_validation() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("selected"); fs::create_dir(&root).unwrap();
+        let config = temp.path().join("location.json");
+        write(&config, &Selection { active: root.clone(), pending: None }).unwrap();
+        let selected = resolve_with_recovery(&config, &root, |path| {
+            let competing = fs::OpenOptions::new().read(true).write(true).open(path.join(".runtime-owner.lock")).unwrap();
+            assert!(competing.try_lock_exclusive().is_err());
+            seed(path); // Synthetic stand-in for the existing backup checkpoint owner.
+            Ok(())
+        }).unwrap();
+        assert_eq!(selected, root);
+        assert!(existing_database(&root).unwrap());
     }
 }

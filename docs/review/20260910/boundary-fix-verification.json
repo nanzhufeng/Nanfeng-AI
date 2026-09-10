@@ -1,0 +1,146 @@
+{
+  "date": "2026-09-10",
+  "baseline": "4bf3e00",
+  "scope": "Four authorized boundary fixes; no device or real-service operation",
+  "android_jvm": {
+    "tests": 1109,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3
+  },
+  "desktop_rust": {
+    "passed": 216,
+    "failed": 0,
+    "ignored": 0
+  },
+  "avatar": {
+    "node_policy_and_static": {
+      "passed": 7,
+      "failed": 0
+    },
+    "handler_mock": {
+      "network": "mocked; no network permission",
+      "outcomes": [
+        {
+          "declared": 8388608,
+          "status": 502,
+          "reads": 0,
+          "cancelled": true
+        },
+        {
+          "declared": null,
+          "status": 502,
+          "reads": 3,
+          "cancelled": true
+        },
+        {
+          "declared": 1,
+          "status": 502,
+          "reads": 3,
+          "cancelled": true
+        },
+        {
+          "size": 1,
+          "status": 200
+        },
+        {
+          "size": 2097152,
+          "status": 200
+        }
+      ]
+    },
+    "deno_check": "Passed with test-only SDK import binding; not online SDK integration"
+  },
+  "android_artifact": {
+    "file": "app/build/outputs/apk/release/南枫AI.apk",
+    "bytes": 28263760,
+    "sha256": "952cec95c19a99490d9eeb62466b784691e797e19075cbe61038d80a73c6a218",
+    "signature_verified": true,
+    "debuggable": false,
+    "versionCode": 66,
+    "versionName": "0.3.0-p10j",
+    "certificate_sha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "installed": false
+  },
+  "build_confirmation": {
+    "tasks": [
+      "testDebugUnitTest",
+      "assembleDebug",
+      "lintRelease",
+      "assembleRelease"
+    ],
+    "exit_code": 0,
+    "lint": {
+      "errors": 0,
+      "warnings": 101,
+      "hints": 19
+    }
+  },
+  "transient_build_failure": {
+    "task": ":app:packageRelease",
+    "class": "PackageAndroidArtifact$IncrementalSplitterRunnable",
+    "diagnostic_rerun": "Passed with --stacktrace; root cause not reproduced; no signing or dependency change"
+  },
+  "unrun": [
+    "OPPO or connected Android tests",
+    "Emulator or native UI",
+    "Real Provider, billing or Google",
+    "Online Edge deployment",
+    "Real user database migration"
+  ],
+  "changed_files": [
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+    "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt",
+    "app/src/main/java/com/nanzhufeng/ai/background/NormalChatBackgroundExecution.kt",
+    "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+    "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatRoutingSnapshot.kt",
+    "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatSendAttempt.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+    "app/src/test/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorizationTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ui/P3JNormalChatExplicitEgressContractsTest.kt",
+    "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+    "desktop/src-tauri/src/desktop_storage_location.rs",
+    "desktop/src-tauri/src/lib.rs",
+    "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+    "docs/C14_LOCAL_DATA_PARITY_CONTRACT.md",
+    "docs/CURRENT_HANDOFF.md",
+    "docs/P7C_REAL_SERVICE_CONFIGURATION_CONTRACT.md",
+    "docs/decision-log.md",
+    "docs/review/20260910/BOUNDARY_FIXES.md",
+    "docs/review/20260910/BOUNDARY_REVIEW.md",
+    "docs/review/20260910/boundary-fix-verification.json",
+    "docs/南枫AI完整开发档案.md",
+    "docs/可迁移开发经验.md",
+    "supabase/functions/google-avatar/index.ts",
+    "supabase/functions/google-avatar/policy.mjs",
+    "supabase/functions/google-avatar/policy.test.mjs",
+    "supabase/tests/fixtures/google-avatar-auth.mjs",
+    "supabase/tests/google-avatar-handler.test.ts",
+    "supabase/tests/google-avatar-import-map.json"
+  ],
+  "source_sha256": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "3a559427e79524f84207b96399474df459acd93247b850471e69cb4f1336aa26",
+    "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt": "b7a6debe5e1f5191e019e66fc6dc2b704ccc3a142e2ed02f6b876f8bd6426cbd",
+    "app/src/main/java/com/nanzhufeng/ai/background/NormalChatBackgroundExecution.kt": "31eff59748b6f80f289c39e59706880ea6b6c669c804e1aba4c4f15c42ee4fd1",
+    "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt": "ec8a574f457a8613f7e7e3e1d43aaf42031625d4231b3f334ef4f331e14c6056",
+    "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatRoutingSnapshot.kt": "7c4c78ddffecd1d594fca59963d6320e99d2c11d460d45ff5c24bcf2042e3431",
+    "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatSendAttempt.kt": "903e084d8de5be39a031a087d08cf3a20ab311286a54b65de03b5e6312fe4e63",
+    "app/src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt": "746cb795cb34781b9b3a696ae4bdf53de7b3f7b15681c1c07cd60b5e1bc2f737",
+    "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt": "34800ab7928327a7d960e7bff62c7fefab9b5ca6b345a8a01e6a683b86745a76",
+    "app/src/test/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorizationTest.kt": "d24ac6ccb1db0ac91e5aead92923ff57a547b3691c26c4b631d0200f1ed8f753",
+    "app/src/test/java/com/nanzhufeng/ai/ui/P3JNormalChatExplicitEgressContractsTest.kt": "97a8400bc46360df42239443a6cddea613efb5787973496af5f1090a01374c3c",
+    "desktop/src-tauri/src/desktop_local_backup_v1.rs": "1c63d8cdcce72fa14ec2531dd0324d2cd1bc03de4ee62b249414dac0b0667b00",
+    "desktop/src-tauri/src/desktop_storage_location.rs": "cfca705dfac04a4d8b96b255912217f4b38454025bfec8804556c983ff4747d1",
+    "desktop/src-tauri/src/lib.rs": "ef9f83617df99fa132a9855d92b97c24d8f076d7d65e6cc8c9660d96c8f14404",
+    "supabase/functions/google-avatar/index.ts": "82e81fea74c8eb57cc5a489fda9f26971ac415bedaeae235a03e923112f71d41",
+    "supabase/functions/google-avatar/policy.mjs": "d761dcf7221b380e865e71cba0e5c7a7d5eadd00b8b089b5f167c8eeef8d36fa",
+    "supabase/functions/google-avatar/policy.test.mjs": "67799a1998ea565f76940f5f6973dac3cafd066e39fb571815f5964555361a9f",
+    "supabase/tests/fixtures/google-avatar-auth.mjs": "8f334edcfa9897df4f42184231ac9ea65195e49524a3b06145515bc07651b4d2",
+    "supabase/tests/google-avatar-handler.test.ts": "c44ddc5fad3016f705fff8d9e8844f5b9859c3c92fda5619234045dee86a8da3",
+    "supabase/tests/google-avatar-import-map.json": "6e2fe98b4bfc0f1358de66b8cbc55f103c5b4154af06ec8ef03ddfe849eca60e"
+  },
+  "local_diff_check": "passed",
+  "local_links_missing": [],
+  "checkpoint_subject": "fix: close audited storage, avatar and recipient authorization boundaries"
+}

@@ -27,3 +27,29 @@ export function requireImageResponse(contentType, contentLength, actualBytes) {
 }
 
 export { MAX_BYTES }
+
+
+// Keep at most MAX_BYTES of accepted chunks; reject and cancel on the first overflow.
+export async function readBoundedImage(body, contentType, contentLength) {
+  let reader
+  try {
+    requireImageResponse(contentType, contentLength, 1)
+    if (!body) throw new Error('avatar content rejected')
+    reader = body.getReader()
+    const chunks = []; let total = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value.byteLength > MAX_BYTES - total) throw new Error('avatar content rejected')
+      total += value.byteLength
+      chunks.push(value)
+    }
+    requireImageResponse(contentType, contentLength, total)
+    const bytes = new Uint8Array(total); let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    return bytes
+  } catch (error) {
+    try { if (reader) await reader.cancel(); else await body?.cancel() } catch { /* Keep the original failure. */ }
+    throw error
+  } finally { reader?.releaseLock() }
+}
