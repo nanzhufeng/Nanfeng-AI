@@ -14,8 +14,14 @@ class P3JNormalChatExplicitEgressContractsTest {
     private val appContainer = File("src/main/java/com/nanzhufeng/ai/app/AppContainer.kt").readText()
     private val activity = File("src/main/java/com/nanzhufeng/ai/NanfengAiActivity.kt").readText()
 
-    @Test fun `ordinary send has no confirmation owner or second composer path`() {
+    @Test fun `ordinary send makes one visible authorization fact without a second composer path`() {
+        assertTrue(viewModel.contains("NormalChatEgressAuthorization.forUserSend"))
         assertTrue(viewModel.contains("normalChatOpenRouterExecutor.execute("))
+        assertTrue(executor.contains("authorization: NormalChatEgressAuthorization?"))
+        assertTrue(executor.contains("Code.EGRESS_AUTHORIZATION_REQUIRED"))
+        assertTrue(executor.contains("requireEgressAuthorization"))
+        assertTrue(workspace.contains("点击发送即授权"))
+        assertTrue(workspace.contains("费用：服务商按实际用量计费"))
         assertTrue(viewModel.contains("reload(keepSending = true)"))
         assertFalse(workspace.contains("NormalChatExplicitEgressConfirmationDialog"))
         assertFalse(workspace.contains("externalSendConfirmation"))
@@ -94,7 +100,8 @@ class P3JNormalChatExplicitEgressContractsTest {
     }
 
     @Test fun `current-information OpenRouter requests distinguish a live web tool from model selection`() {
-        assertTrue(executor.contains("val requestedOptions = ChatRequestOptions.Standard"))
+        assertTrue(executor.contains("val requestedOptions = adapter.requestOptions(resolvedModel, choice)"))
+        assertTrue(executor.contains("OpenRouterDeepReasoningPolicy.forPreset(preset, automaticOptions)"))
         assertTrue(executor.contains("appendProviderWebSources(reply.text, reply.webSources)"))
         assertTrue(executor.contains("if (verified !is VerifyOpenRouterRegistryResult.Verified)"))
         assertTrue(executor.contains("val attachmentFact = attachmentReferenceInstruction(attachments)"))

@@ -99,6 +99,20 @@ class AutomaticWebSearchPolicyTest {
     }
 
     @Test
+    fun `web-search routing preserves a previously selected reasoning effort`() {
+        val high = ChatRequestOptions(reasoningEffort = ReasoningEffort.HIGH)
+
+        assertEquals(
+            ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL, ReasoningEffort.HIGH),
+            AutomaticWebSearchPolicy.requestOptions(ProviderId.OPENROUTER, high, true, "最新新闻", emptyList()),
+        )
+        assertEquals(
+            ChatRequestOptions(OfficialWebSearchRoute.NONE, ReasoningEffort.HIGH),
+            AutomaticWebSearchPolicy.requestOptions(ProviderId.OPENROUTER, high, false, "最新新闻", emptyList()),
+        )
+    }
+
+    @Test
     fun `enabled search also grounds ordinary wording instead of guessing from keywords`() {
         assertEquals(
             OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL,

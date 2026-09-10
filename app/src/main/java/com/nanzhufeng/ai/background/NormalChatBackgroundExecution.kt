@@ -15,6 +15,7 @@ import com.nanzhufeng.ai.R
 import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
 import com.nanzhufeng.ai.app.AppContainer
 import com.nanzhufeng.ai.domain.ConversationId
+import com.nanzhufeng.ai.domain.NormalChatEgressAuthorization
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +30,7 @@ enum class NormalChatBackgroundOperation { SEND, RETRY }
 
 /** Starts the Android foreground-service execution owner using only opaque local ids. */
 interface NormalChatBackgroundExecution {
-    fun begin(conversationId: ConversationId, operation: NormalChatBackgroundOperation = NormalChatBackgroundOperation.SEND): Boolean
+    fun begin(conversationId: ConversationId, operation: NormalChatBackgroundOperation = NormalChatBackgroundOperation.SEND, authorization: NormalChatEgressAuthorization? = null): Boolean
     fun cancel(conversationId: ConversationId)
     fun ownsExecution(): Boolean
     fun isRunning(conversationId: ConversationId): Boolean
@@ -38,7 +39,7 @@ interface NormalChatBackgroundExecution {
 
 /** Unit-test/local fallback: the ViewModel remains owner only where Android services do not exist. */
 object NoopNormalChatBackgroundExecution : NormalChatBackgroundExecution {
-    override fun begin(conversationId: ConversationId, operation: NormalChatBackgroundOperation) = true
+    override fun begin(conversationId: ConversationId, operation: NormalChatBackgroundOperation, authorization: NormalChatEgressAuthorization?) = true
     override fun cancel(conversationId: ConversationId) = Unit
     override fun ownsExecution() = false
     override fun isRunning(conversationId: ConversationId) = false
@@ -46,12 +47,15 @@ object NoopNormalChatBackgroundExecution : NormalChatBackgroundExecution {
 }
 
 class AndroidNormalChatBackgroundExecution(private val context: Context) : NormalChatBackgroundExecution {
-    override fun begin(conversationId: ConversationId, operation: NormalChatBackgroundOperation): Boolean = runCatching {
+    override fun begin(conversationId: ConversationId, operation: NormalChatBackgroundOperation, authorization: NormalChatEgressAuthorization?): Boolean = runCatching {
         context.startForegroundService(
             Intent(context, NormalChatGenerationForegroundService::class.java)
                 .setAction(NormalChatGenerationForegroundService.ACTION_BEGIN)
                 .putExtra(NormalChatGenerationForegroundService.EXTRA_CONVERSATION_ID, conversationId.value)
-                .putExtra(NormalChatGenerationForegroundService.EXTRA_OPERATION, operation.name),
+                .putExtra(NormalChatGenerationForegroundService.EXTRA_OPERATION, operation.name)
+                .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_APPROVED_AT_MS, authorization?.approvedAtEpochMs)
+                .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_DRAFT_FINGERPRINT, authorization?.draftFingerprint)
+                .putExtra(NormalChatGenerationForegroundService.EXTRA_EGRESS_DISCLOSURE_VERSION, authorization?.disclosureVersion),
         )
         true
     }.getOrDefault(false)
@@ -104,6 +108,14 @@ class NormalChatGenerationForegroundService : Service() {
         val operation = intent.getStringExtra(EXTRA_OPERATION)
             ?.let { raw -> NormalChatBackgroundOperation.entries.firstOrNull { it.name == raw } }
             ?: NormalChatBackgroundOperation.SEND
+        val authorization = intent.getLongExtra(EXTRA_EGRESS_APPROVED_AT_MS, 0L)
+            .takeIf { it > 0L }
+            ?.let { approvedAtEpochMs ->
+                val fingerprint = intent.getStringExtra(EXTRA_EGRESS_DRAFT_FINGERPRINT) ?: return
+                val version = intent.getStringExtra(EXTRA_EGRESS_DISCLOSURE_VERSION)
+                    ?: NormalChatEgressAuthorization.DISCLOSURE_VERSION
+                runCatching { NormalChatEgressAuthorization(approvedAtEpochMs, fingerprint, version) }.getOrNull()
+            }
         // Enter foreground immediately. The count is refreshed after this conversation joins
         // the registry, but Android's foreground-service deadline must not wait for I/O.
         showOngoingNotification(activeCount = (jobs.size + 1).coerceAtLeast(1))
@@ -121,6 +133,7 @@ class NormalChatGenerationForegroundService : Service() {
                     val result = when (operation) {
                         NormalChatBackgroundOperation.SEND -> container.normalChatOpenRouterExecutor.execute(
                             conversationId,
+                            authorization = authorization,
                             onLocalSubmission = { publishExecutionState(conversationId, running = true) },
                         )
                         NormalChatBackgroundOperation.RETRY -> container.normalChatOpenRouterExecutor.retryLatestAttempt(conversationId)
@@ -231,6 +244,9 @@ class NormalChatGenerationForegroundService : Service() {
         const val ACTION_EXECUTION_STATE_CHANGED = "com.nanzhufeng.ai.action.NORMAL_CHAT_GENERATION_STATE_CHANGED"
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_OPERATION = "operation"
+        const val EXTRA_EGRESS_APPROVED_AT_MS = "egressApprovedAtMs"
+        const val EXTRA_EGRESS_DRAFT_FINGERPRINT = "egressDraftFingerprint"
+        const val EXTRA_EGRESS_DISCLOSURE_VERSION = "egressDisclosureVersion"
         const val EXTRA_RUNNING = "running"
         const val EXTRA_SAFE_RESULT = "safeResult"
         private const val CHANNEL_ID = "normal_chat_generation"

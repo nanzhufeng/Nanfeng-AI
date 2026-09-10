@@ -7,14 +7,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class P6GModelRouterContractsTest {
-    @Test fun `K3 replaces Qwen Max only in deep picker and remains explicit opt in`() {
-        assertTrue(ComposerModelRoutingCatalog.deep.any { it.routes == listOf(ModelPresetId.KIMI_K3) && it.label == "Kimi K3" })
-        assertFalse(ComposerModelRoutingCatalog.deep.any { ModelPresetId.QWEN_3_8_MAX in it.routes })
-        assertTrue(NanfengModelServiceCatalog.autoRoutingCandidates(AutoRoutingFacts(requiresComplexReasoning = true)).none { it == ModelPresetId.KIMI_K3 })
-        val preset = NanfengModelServiceCatalog.preset(ModelPresetId.KIMI_K3)
-        assertEquals("复杂分析 · Agent · 长上下文", preset.description)
-        assertEquals(ProviderId.OPENROUTER, NanfengModelServiceCatalog.providerFor(ModelPresetId.KIMI_K3))
-        assertEquals(ModelPresetId.KIMI_K3, ComposerModelRoutingCatalog.choice("logical:deep:qwen-max").routes.single())
+    @Test fun `Qwen Max is the seventh deep picker model and retired selections fail closed`() {
+        assertTrue(ComposerModelRoutingCatalog.deep.any { it.routes == listOf(ModelPresetId.QWEN_3_8_MAX) && it.label == "Qwen3.8-Max" })
+        assertFalse(ComposerModelRoutingCatalog.deep.any { ModelPresetId.KIMI_K3 in it.routes })
+        assertEquals(ModelPresetId.QWEN_3_8_MAX, ComposerModelRoutingCatalog.choice("logical:deep:qwen-max").routes.single())
+        assertEquals(ModelPresetId.KIMI_K3, ComposerModelRoutingCatalog.choice("logical:deep:kimi-k3").routes.single())
+        assertTrue(ComposerModelRoutingCatalog.isRetired("logical:deep:kimi-k3"))
+        assertEquals(ModelPresetId.CLAUDE_FABLE_5, ComposerModelRoutingCatalog.choice("logical:deep:claude-fable").routes.single())
+        assertTrue(ComposerModelRoutingCatalog.isRetired("logical:deep:claude-fable"))
     }
 
     @Test fun `removed Grok routes cannot reenter the picker or automatic routing`() {
@@ -129,19 +129,21 @@ class P6GModelRouterContractsTest {
             ComposerModelRoutingCatalog.daily.map { it.label },
         )
         assertEquals(
-            listOf("Claude Fable 5", "Claude Opus 5", "DeepSeek V4 Pro", "GPT-5.6 Sol", "GLM-5.3", "Kimi K3"),
+            listOf("Claude Fable 5.1", "Claude Opus 5", "GPT-6 Astra", "DeepSeek V4 Pro", "GPT-5.6 Sol", "GLM-5.3", "Qwen3.8-Max"),
             ComposerModelRoutingCatalog.deep.map { it.label },
         )
     }
 
     @Test fun `composer uses compact labels while picker retains complete catalog names`() {
-        assertEquals("Claude Fable 5", ComposerModelRoutingCatalog.deep[0].label)
-        assertEquals("DeepSeek V4 Pro", ComposerModelRoutingCatalog.deep[2].label)
-        assertEquals("GPT-5.6 Sol", ComposerModelRoutingCatalog.deep[3].label)
+        assertEquals("Claude Fable 5.1", ComposerModelRoutingCatalog.deep[0].label)
+        assertEquals("GPT-6 Astra", ComposerModelRoutingCatalog.deep[2].label)
+        assertEquals("DeepSeek V4 Pro", ComposerModelRoutingCatalog.deep[3].label)
+        assertEquals("GPT-5.6 Sol", ComposerModelRoutingCatalog.deep[4].label)
         assertEquals("Claude Sonnet 5", ComposerModelRoutingCatalog.daily[0].label)
-        assertEquals("Fable 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[0].label))
-        assertEquals("DS V4", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[2].label))
-        assertEquals("5.6 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[3].label))
+        assertEquals("Fable 5.1", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[0].label))
+        assertEquals("Astra", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[2].label))
+        assertEquals("DS V4", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[3].label))
+        assertEquals("5.6 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[4].label))
         assertEquals("4.1 Fast", composerModelShortNameForUser("Grok 4.1 Fast"))
         assertEquals("4.6 High", composerModelShortNameForUser("Grok 4.6 High"))
         assertEquals("Sonnet 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.daily[0].label))
@@ -165,7 +167,7 @@ class P6GModelRouterContractsTest {
     @Test fun `automatic routing follows explicit default attachment and complex priorities`() {
         assertEquals(ModelPresetId.DEEPSEEK_V4_FLASH, AutoModelRouter.resolve(AutoRoutingFacts()))
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, AutoModelRouter.resolve(AutoRoutingFacts(hasAttachment = true, requiresComplexReasoning = true)))
-        assertEquals(ModelPresetId.GPT_5_6_SOL, AutoModelRouter.resolve(AutoRoutingFacts(requiresComplexReasoning = true)))
+        assertEquals(ModelPresetId.GPT_6_ASTRA, AutoModelRouter.resolve(AutoRoutingFacts(requiresComplexReasoning = true)))
         assertEquals(
             listOf(ModelPresetId.DEEPSEEK_V4_FLASH, ModelPresetId.GPT_5_6_TERRA, ModelPresetId.CLAUDE_SONNET_5),
             AutoModelRouter.candidates(AutoRoutingFacts()).take(3),
@@ -176,7 +178,10 @@ class P6GModelRouterContractsTest {
             AutoRoutingFacts(hasAttachment = true),
         ).forEach { facts ->
             val candidates = AutoModelRouter.candidates(facts)
-            assertEquals(NanfengModelServiceCatalog.chatPresets.map { it.id }.toSet() - ModelPresetId.KIMI_K3, candidates.toSet())
+            assertEquals(
+                NanfengModelServiceCatalog.chatPresets.map { it.id }.toSet() - setOf(ModelPresetId.KIMI_K3, ModelPresetId.CLAUDE_FABLE_5),
+                candidates.toSet(),
+            )
             assertTrue(candidates.contains(ModelPresetId.GLM_5_3))
             assertTrue(candidates.indexOf(ModelPresetId.GLM_5_3) < candidates.indexOf(ModelPresetId.QWEN_3_8_MAX))
         }

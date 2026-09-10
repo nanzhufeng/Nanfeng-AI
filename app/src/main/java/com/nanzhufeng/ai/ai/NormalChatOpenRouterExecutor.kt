@@ -53,6 +53,7 @@ import com.nanzhufeng.ai.domain.NormalChatSendAttempt
 import com.nanzhufeng.ai.domain.NormalChatSendAttemptId
 import com.nanzhufeng.ai.domain.NormalChatSendAttemptStatus
 import com.nanzhufeng.ai.domain.NormalChatSendAttemptStore
+import com.nanzhufeng.ai.domain.NormalChatEgressAuthorization
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttribution
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttributionStore
 import com.nanzhufeng.ai.domain.ModelResolver
@@ -82,6 +83,7 @@ import com.nanzhufeng.ai.domain.withRequiredOpeningAddress
 import com.nanzhufeng.ai.domain.withoutLeakedReasoningTailBeforeOpeningAddress
 import com.nanzhufeng.ai.domain.definition
 import java.time.Clock
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /** Ordinary composer send. The chosen logical slot determines the concrete provider/model. */
@@ -141,6 +143,7 @@ class NormalChatOpenRouterExecutor(
         ATTACHMENTS_UNSUPPORTED, ATTACHMENT_MODEL_UNSUPPORTED, ATTACHMENT_BRIDGE_UNAVAILABLE, CONTEXT_LIMIT, DRAFT_UNAVAILABLE, AUTHENTICATION, BALANCE, RATE_LIMIT,
         TIMEOUT, NETWORK, SERVICE, MODEL_NOT_FOUND, STREAM_REQUIRED, INVALID_REQUEST, RESPONSE_FORMAT, TOOL_CALL_UNSUPPORTED,
         WEB_SEARCH_UNAVAILABLE, WEB_SEARCH_NO_SOURCES,
+        EGRESS_AUTHORIZATION_REQUIRED,
         LOCAL_RESPONSE_PERSISTENCE, LOCAL_ACCOUNTING_PERSISTENCE, LOCAL_ATTEMPT_PERSISTENCE,
         RECOVERY_UNAVAILABLE, RECOVERY_MODEL_CHANGED,
     }
@@ -255,6 +258,7 @@ class NormalChatOpenRouterExecutor(
     /** Invoked immediately after the user message and cleared draft have committed locally. */
     fun execute(
         conversationId: ConversationId,
+        authorization: NormalChatEgressAuthorization? = null,
         onLocalSubmission: () -> Unit = {},
         onStreamProgress: () -> Unit = {},
     ): Result {
@@ -275,6 +279,12 @@ class NormalChatOpenRouterExecutor(
         if (!selectedChoice.isCompare && runtime == null) return Result.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
         val latest = submitted.snapshot.nodes.lastOrNull { it.role == MessageRole.USER }
             ?: return Result.Blocked(Code.DRAFT_UNAVAILABLE)
+        if (!requireEgressAuthorization(authorization, latest)) {
+            return Result.Blocked(Code.EGRESS_AUTHORIZATION_REQUIRED).also {
+                runtime?.fail(Code.EGRESS_AUTHORIZATION_REQUIRED.name)
+            }
+        }
+        val acceptedAuthorization = requireNotNull(authorization)
         val userMessage = latest.content.filterIsInstance<ContentBlock.Text>().joinToString("") { it.text }
         if (userMessage.isBlank() && latest.content.none { it is ContentBlock.Attachment }) return Result.Blocked(Code.DRAFT_UNAVAILABLE)
         val hasMedia = latest.content.any { it is ContentBlock.Attachment }
@@ -354,7 +364,7 @@ class NormalChatOpenRouterExecutor(
         var lastBlocked: Code? = null
         var lastFailed: Code? = null
         for (preset in presets) {
-            val request = requestOne(preset, conversationId, latest.id, submitted.snapshot, userMessage, attachmentPayloads, choice, runtime, onStreamProgress, cancellation)
+            val request = requestOne(preset, conversationId, latest.id, submitted.snapshot, userMessage, attachmentPayloads, choice, runtime, onStreamProgress, cancellation, authorization = acceptedAuthorization)
             if (cancellation != null) activeCalls.remove(conversationId, cancellation)
             when (request) {
                 is OneResult.Reply -> {
@@ -431,6 +441,12 @@ class NormalChatOpenRouterExecutor(
         }
     }
 
+    /** This check runs before route resolution, credential reads, endpoint construction, or I/O. */
+    private fun requireEgressAuthorization(
+        authorization: NormalChatEgressAuthorization?,
+        userMessage: com.nanzhufeng.ai.domain.MessageNode,
+    ): Boolean = authorization?.matches(userMessage) == true
+
     private fun completedResult(replies: List<OneResult.Reply>): Result =
         replies.firstOrNull { it.completionNotice != null }?.completionNotice?.let(Result::SentWithNotice) ?: Result.Sent
 
@@ -492,7 +508,7 @@ class NormalChatOpenRouterExecutor(
         data object Cancelled : OneResult
     }
 
-    private fun requestOne(preset: ModelPresetId, conversationId: ConversationId, userMessageId: com.nanzhufeng.ai.domain.MessageNodeId, snapshot: com.nanzhufeng.ai.domain.ConversationSnapshot, userMessage: String, attachments: List<ChatAttachment>, choice: com.nanzhufeng.ai.domain.ComposerModelChoice, runtime: ActiveProviderRuntime?, onStreamProgress: () -> Unit, cancellation: ProviderChatCancellation? = null, existingAttempt: NormalChatSendAttempt? = null): OneResult {
+    private fun requestOne(preset: ModelPresetId, conversationId: ConversationId, userMessageId: com.nanzhufeng.ai.domain.MessageNodeId, snapshot: com.nanzhufeng.ai.domain.ConversationSnapshot, userMessage: String, attachments: List<ChatAttachment>, choice: com.nanzhufeng.ai.domain.ComposerModelChoice, runtime: ActiveProviderRuntime?, onStreamProgress: () -> Unit, cancellation: ProviderChatCancellation? = null, existingAttempt: NormalChatSendAttempt? = null, authorization: NormalChatEgressAuthorization? = null): OneResult {
         // Old persisted routes remain recognizable for attribution and a precise UI explanation,
         // but recovery must never turn an unavailable historical model into a new egress.
         if (NanfengModelServiceCatalog.preset(preset).usage != com.nanzhufeng.ai.domain.ModelPresetUsage.CHAT) {
@@ -510,7 +526,7 @@ class NormalChatOpenRouterExecutor(
         )
         val webSearchEnabled = resolveConversationWebSearchEnabled(conversationId, experience.webSearchEnabled)
         val analysisMode = EvidenceFirstAnalysisPolicy.modeFor(userMessage, attachments)
-        val requestedOptions = ChatRequestOptions.Standard
+        val requestedOptions = adapter.requestOptions(resolvedModel, choice)
         // Historical DeepSeek-to-Qwen attempts used a model ID that Qwen Responses does not
         // accept. Do not replay the known-invalid egress merely because it was persisted.
         if (existingAttempt?.providerId == ProviderId.DEEPSEEK &&
@@ -524,7 +540,11 @@ class NormalChatOpenRouterExecutor(
             attachments = attachments,
             modelId = resolvedModel.modelId,
         )
-        val requestOptions = automaticOptions
+        val requestOptions = if (providerId == ProviderId.OPENROUTER) {
+            OpenRouterDeepReasoningPolicy.forPreset(preset, automaticOptions)
+        } else {
+            automaticOptions
+        }
         if (webSearchEnabled && !requestOptions.liveWebSearch) {
             return OneResult.Blocked(Code.WEB_SEARCH_UNAVAILABLE)
         }
@@ -609,6 +629,8 @@ class NormalChatOpenRouterExecutor(
                     attemptId, userMessageId, conversationId,
                     providerId, modelId, "normal-chat-${attemptId.value}", NormalChatSendAttemptStatus.PENDING, now, now,
                     egressProviderId = executionProviderId,
+                    egressAuthorizedAt = authorization?.approvedAtEpochMs?.let(Instant::ofEpochMilli),
+                    egressDisclosureVersion = authorization?.disclosureVersion,
                 ),
             )
         }.getOrElse { return OneResult.Failed(Code.LOCAL_ATTEMPT_PERSISTENCE) }

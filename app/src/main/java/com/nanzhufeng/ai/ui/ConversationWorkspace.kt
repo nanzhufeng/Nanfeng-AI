@@ -1,5 +1,6 @@
 package com.nanzhufeng.ai.ui
 
+import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Intent
@@ -5963,6 +5964,9 @@ private fun MessageBubble(
                     hasPartialText = textBlocks.isNotEmpty(),
                 )
             }
+            if (message.deliveryState == com.nanzhufeng.ai.domain.MessageDeliveryState.FAILED) {
+                AssistantGenerationFailure(transcript.metadata.safeErrorCode)
+            }
             if (textBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth()) { textContent() }
             if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { assistantAttachmentContent() }
             AssistantMessageActionRow(transcript, contextSelections, responseAttributions, onCopyAssistant, onShareAssistant, onBranchAssistant)
@@ -6068,6 +6072,36 @@ private fun AssistantGenerationStatus(waitingPreview: com.nanzhufeng.ai.domain.A
     ) {
         CircularProgressIndicator(color = AccentOrange, strokeWidth = 2.dp, modifier = Modifier.size(14.dp).graphicsLayer(alpha = pulse))
         Text("南枫 AI 正在继续生成…", color = SecondaryText.copy(alpha = pulse), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Durable in-transcript failure feedback; it remains visible after broadcasts, reloads and restarts. */
+@Composable
+private fun AssistantGenerationFailure(safeErrorCode: String?) {
+    val detail = safeErrorCode
+        ?.let { raw -> runCatching { NormalChatOpenRouterExecutor.Code.valueOf(raw) }.getOrNull() }
+        ?.let { code -> normalChatResultLabel(code, sent = true) }
+        ?: "本次回答未完成；没有保存为空白的完整回答。你可以检查模型与联网设置后重试。"
+    Surface(
+        color = Color(0xFFFFF3F1),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = ConversationAssistantReadingStartInset,
+                top = 8.dp,
+                end = ConversationAssistantReadingEndInset,
+                bottom = 8.dp,
+            )
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Text("回答未完成", color = ErrorRed, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = BodyText, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
@@ -7899,6 +7933,14 @@ private fun DraftComposer(
             }
         } else null,
     ) {
+        if (canSubmit && !canStopRuntime) {
+            Text(
+                text = "点击发送即授权将本条内容${if (draft.attachments.isEmpty()) "" else "及附件"}交给 $modelLabel。费用：服务商按实际用量计费，当前无本地预估。",
+                color = SecondaryText,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
+            )
+        }
         ComposerModelEntry(
             label = modelLabel,
             onClick = onToggleModel,
@@ -8370,9 +8412,7 @@ private fun ComposerMenuOverlay(
                     currentChoices.forEach { choice ->
                         val providerId = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(choice.routes.single())
                         val isDeepSeek = providerId == com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK
-                        val webSearchDetail = choice.slot.takeIf {
-                            it == com.nanzhufeng.ai.domain.ComposerModelSlot.DEEP && webSearchStateLabel != null
-                        }?.let {
+                        val webSearchDetail = webSearchStateLabel?.let {
                             when (providerId) {
                                 com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter · $webSearchStateLabel"
                                 com.nanzhufeng.ai.domain.ProviderId.QWEN -> "千问 · $webSearchStateLabel"

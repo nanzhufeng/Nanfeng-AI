@@ -9,6 +9,8 @@ class NormalChatCompletionPersistenceContractsTest {
     private val executor = File("src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt").readText()
     private val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
     private val background = File("src/main/java/com/nanzhufeng/ai/background/NormalChatBackgroundExecution.kt").readText()
+    private val transcript = File("src/main/java/com/nanzhufeng/ai/domain/TranscriptPresentation.kt").readText()
+    private val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
 
     @Test fun `reasoning persistence is an optional post completion supplement`() {
         val completion = executor.indexOf("runtime?.complete(visibleReply)")
@@ -45,6 +47,14 @@ class NormalChatCompletionPersistenceContractsTest {
         }
         assertTrue(viewModel.contains("WEB_SEARCH_UNAVAILABLE"))
         assertTrue(viewModel.contains("本次未保存为完整回答"))
+    }
+
+    @Test fun `failed provider runtime stays visible inside the transcript after reload`() {
+        assertTrue(transcript.contains("val safeErrorCode: String? = null"))
+        assertTrue(transcript.contains("node.deliveryState == MessageDeliveryState.FAILED"))
+        assertTrue(workspace.contains("AssistantGenerationFailure(transcript.metadata.safeErrorCode)"))
+        assertTrue(workspace.contains("回答未完成"))
+        assertTrue(workspace.contains("normalChatResultLabel(code, sent = true)"))
     }
 
     @Test fun `manual sibling preset uses the shared provider credential and keeps exact attribution`() {

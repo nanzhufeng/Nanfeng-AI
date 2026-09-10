@@ -117,4 +117,22 @@ class PrivacyStorageNavigationContractsTest {
         assertTrue(manager.contains("cleanupOrphanedAttachmentFilesSilently()"))
         assertFalse(manager.substring(manager.indexOf("private fun inventoryAggregates"), manager.indexOf("private operator fun PrivacyAggregate.plus")).contains("orphanedAttachmentAggregate()"))
     }
+
+    @Test
+    fun `清理预览不得在主线程同步读取 Room`() {
+        val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/PrivacyDataViewModel.kt").readText()
+        val preview = viewModel.substring(
+            viewModel.indexOf("fun preview(scope: PrivacyDeleteScope)"),
+            viewModel.indexOf("fun toggleTask"),
+        )
+        val selectedPreview = viewModel.substring(
+            viewModel.indexOf("fun previewSelectedTasks()"),
+            viewModel.indexOf("fun confirmation"),
+        )
+
+        assertTrue(preview.contains("viewModelScope.launch"))
+        assertTrue(preview.contains("withContext(Dispatchers.IO) { manager.preview(scope) }"))
+        assertTrue(selectedPreview.contains("viewModelScope.launch"))
+        assertTrue(selectedPreview.contains("withContext(Dispatchers.IO)"))
+    }
 }

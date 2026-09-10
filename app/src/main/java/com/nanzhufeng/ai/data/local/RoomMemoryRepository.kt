@@ -41,6 +41,33 @@ class RoomMemoryRepository(private val database: NanfengAiDatabase, private val 
         }
     }
 
+    override fun replaceSummary(request: MemorySummaryReplacement, fingerprint: String): MemoryMutationResult = database.inMemoryTransaction {
+        val dao = database.memoryDao()
+        dao.intent(request.operationId.value)?.let { previous ->
+            if (previous.requestFingerprint != fingerprint) return@inMemoryTransaction MemoryMutationResult.Rejected(MemoryRejectionCode.INTENT_MISMATCH)
+            return@inMemoryTransaction MemoryMutationResult.Replayed(
+                previous.memoryId?.let { dao.loadSnapshot(MemoryId(it)) }?.let(::listOf).orEmpty(),
+            )
+        }
+        // Revalidate at the durable boundary before touching any existing section.
+        val intent = MemoryIntent(request.operationId, MemoryIntentAction.CREATE,
+            request.replacementId, "概览", request.body, MemoryScope(MemoryScopeKind.GLOBAL))
+        domain.validate(intent)?.let { return@inMemoryTransaction MemoryMutationResult.Rejected(it) }
+        val current = list(MemoryScopeKind.GLOBAL, MemoryStatus.ACTIVE, "")
+        val revisions = current.associate { it.memory.id to (it.revisions.maxOfOrNull { revision -> revision.revision } ?: 0) }
+        if (revisions != request.expectedRevisions) return@inMemoryTransaction MemoryMutationResult.Rejected(MemoryRejectionCode.STALE_SUMMARY)
+        if (dao.findMemory(request.replacementId.value) != null) return@inMemoryTransaction MemoryMutationResult.Rejected(MemoryRejectionCode.INTENT_MISMATCH)
+        val body = domain.normalizedBody(request.body)
+        val item = newItem(request.replacementId, "概览", body, MemoryScope(MemoryScopeKind.GLOBAL),
+            MemorySource.USER_CONFIRMED, "summary-editor", "用户在记忆摘要页编辑并保存全文",
+            domain.contentHash("概览", body), domain.conceptHash("概览"))
+        persist(dao, MemorySnapshot(item, listOf(item.initialRevision())))
+        current.forEach { persist(dao, it.withStatus(MemoryStatus.DELETED, now())) }
+        dao.insertIntent(MemoryIntentEntity(request.operationId.value, item.id.value,
+            "REPLACE_SUMMARY", fingerprint, null, now().toEpochMilli()))
+        MemoryMutationResult.Applied(listOf(requireNotNull(dao.loadSnapshot(item.id))))
+    }
+
     private fun create(dao: MemoryDao, intent: MemoryIntent, fingerprint: String): MemoryMutationResult {
         val scope = requireNotNull(intent.scope)
         if (!scopeExists(scope)) return MemoryMutationResult.Rejected(MemoryRejectionCode.INVALID_SCOPE_REFERENCE)

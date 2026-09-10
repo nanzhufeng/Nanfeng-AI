@@ -17,6 +17,7 @@ import com.nanzhufeng.ai.domain.PrivacyTaskDeletionCandidate
 import com.nanzhufeng.ai.domain.SecurityDiagnosticResult
 import com.nanzhufeng.ai.domain.ImportedZipCleanupResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,13 +39,23 @@ class PrivacyDataViewModel(private val manager: PrivacyDataManager) : ViewModel(
     var state by mutableStateOf(PrivacyDataUiState(inventory = manager.cachedInventory()))
         private set
     private var refreshJob: Job? = null
+    private var previewJob: Job? = null
 
     fun show() { state = state.copy(visible = true, notice = null, error = null); refresh() }
     fun dismiss() { if (!state.working) state = state.copy(visible = false, preview = null, taskCandidates = emptyList(), selectedTaskIds = emptySet(), confirmation = "", error = null) }
     fun preview(scope: PrivacyDeleteScope) {
-        val preview = manager.preview(scope)
-        state = if (scope == PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS) state.copy(preview = null, taskCandidates = preview.taskCandidates, selectedTaskIds = emptySet(), retryAvailable = false, confirmation = "", notice = null, error = null)
-        else state.copy(preview = preview, taskCandidates = emptyList(), selectedTaskIds = emptySet(), retryAvailable = false, confirmation = "", notice = null, error = null)
+        previewJob?.cancel()
+        state = state.copy(working = true, preview = null, taskCandidates = emptyList(), selectedTaskIds = emptySet(), retryAvailable = false, confirmation = "", notice = null, error = null)
+        previewJob = viewModelScope.launch {
+            try {
+                val preview = withContext(Dispatchers.IO) { manager.preview(scope) }
+                state = if (scope == PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS) state.copy(working = false, preview = null, taskCandidates = preview.taskCandidates)
+                else state.copy(working = false, preview = preview)
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                state = state.copy(working = false, error = "清理范围读取失败；本机数据未改变。")
+            }
+        }
     }
     fun toggleTask(candidate: PrivacyTaskDeletionCandidate) {
         val selected = state.selectedTaskIds.toMutableSet().also { if (!it.add(candidate.selectionId)) it.remove(candidate.selectionId) }
@@ -52,7 +63,20 @@ class PrivacyDataViewModel(private val manager: PrivacyDataManager) : ViewModel(
     }
     fun previewSelectedTasks() {
         if (state.selectedTaskIds.isEmpty()) return
-        state = state.copy(preview = manager.preview(PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS, state.selectedTaskIds), notice = null, error = null)
+        val selectedTaskIds = state.selectedTaskIds
+        previewJob?.cancel()
+        state = state.copy(working = true, preview = null, notice = null, error = null)
+        previewJob = viewModelScope.launch {
+            try {
+                val preview = withContext(Dispatchers.IO) {
+                    manager.preview(PrivacyDeleteScope.TEMPORARY_FAILED_TASK_ASSETS, selectedTaskIds)
+                }
+                state = state.copy(working = false, preview = preview)
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                state = state.copy(working = false, error = "清理范围读取失败；本机数据未改变。")
+            }
+        }
     }
     fun confirmation(value: String) { state = state.copy(confirmation = value) }
     fun delete() {
@@ -60,10 +84,13 @@ class PrivacyDataViewModel(private val manager: PrivacyDataManager) : ViewModel(
         state = state.copy(working = true, notice = null, error = null)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) { manager.delete(PrivacyDeletionRequest(preview.scope, preview.fingerprint, state.confirmation, state.selectedTaskIds)) }
+            val inventory = if (result is PrivacyDeletionResult.Completed || result is PrivacyDeletionResult.Partial) {
+                withContext(Dispatchers.IO) { manager.inventory() }
+            } else null
             state = when (result) {
-                is PrivacyDeletionResult.Completed -> state.copy(working = false, preview = null, taskCandidates = emptyList(), selectedTaskIds = emptySet(), retryAvailable = false, confirmation = "", notice = "已按预览范围删除；安装身份和签名未受影响。", inventory = manager.inventory())
+                is PrivacyDeletionResult.Completed -> state.copy(working = false, preview = null, taskCandidates = emptyList(), selectedTaskIds = emptySet(), retryAvailable = false, confirmation = "", notice = "已按预览范围删除；安装身份和签名未受影响。", inventory = requireNotNull(inventory))
                 is PrivacyDeletionResult.Rejected -> state.copy(working = false, error = result.reason)
-                is PrivacyDeletionResult.Partial -> state.copy(working = false, retryAvailable = true, error = "删除部分完成（${result.retryableFailureCount} 项待重试）；未静默忽略。", inventory = manager.inventory())
+                is PrivacyDeletionResult.Partial -> state.copy(working = false, retryAvailable = true, error = "删除部分完成（${result.retryableFailureCount} 项待重试）；未静默忽略。", inventory = requireNotNull(inventory))
             }
         }
     }
@@ -71,9 +98,12 @@ class PrivacyDataViewModel(private val manager: PrivacyDataManager) : ViewModel(
         state = state.copy(working = true, notice = null, error = null)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) { manager.retryFailedTaskDeletion() }
+            val inventory = if (result is PrivacyDeletionResult.Completed || result is PrivacyDeletionResult.Partial) {
+                withContext(Dispatchers.IO) { manager.inventory() }
+            } else null
             state = when (result) {
-                is PrivacyDeletionResult.Completed -> state.copy(working = false, retryAvailable = false, notice = "已完成失败剩余项重试；没有自动继续删除。", inventory = manager.inventory())
-                is PrivacyDeletionResult.Partial -> state.copy(working = false, retryAvailable = true, error = "仍有 ${result.retryableFailureCount} 项待重试；未超出原选择范围。", inventory = manager.inventory())
+                is PrivacyDeletionResult.Completed -> state.copy(working = false, retryAvailable = false, notice = "已完成失败剩余项重试；没有自动继续删除。", inventory = requireNotNull(inventory))
+                is PrivacyDeletionResult.Partial -> state.copy(working = false, retryAvailable = true, error = "仍有 ${result.retryableFailureCount} 项待重试；未超出原选择范围。", inventory = requireNotNull(inventory))
                 is PrivacyDeletionResult.Rejected -> state.copy(working = false, error = result.reason)
             }
         }

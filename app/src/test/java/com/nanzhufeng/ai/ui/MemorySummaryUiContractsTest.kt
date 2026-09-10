@@ -14,7 +14,7 @@ class MemorySummaryUiContractsTest {
 
         for (token in listOf(
             "Text(\"记忆摘要\"", "updatedText", "Icons.Rounded.MoreVert", "关于记忆", "刷新摘要",
-            "删除记忆", "关闭记忆摘要生成和应用", "询问或更新", "BasicTextField", "询问摘要", "补充记忆",
+            "编辑摘要", "全选", "清空重写", "MemorySummaryEditorPage", "删除记忆", "关闭记忆摘要生成和应用", "询问或更新", "BasicTextField", "询问摘要", "补充记忆",
             "style = MaterialTheme.typography.titleLarge", "style = MaterialTheme.typography.bodyLarge",
             ".align(Alignment.BottomCenter)", "onSizeChanged { composerHeightPx = it.height }",
             "imePadding()", "bottom = composerHeight + 24.dp",
@@ -27,6 +27,8 @@ class MemorySummaryUiContractsTest {
         val memoryRoute = app.substring(app.indexOf("if (route == P5ARoute.MEMORY)"), app.indexOf("    Column(\n        modifier = Modifier", app.indexOf("if (route == P5ARoute.MEMORY)")))
         assertTrue("memory summary must inherit the settings text scale", memoryRoute.contains("SettingsTextScale {"))
         assertTrue(memoryRoute.contains("MemorySummaryPage("))
+        assertTrue(app.contains("onEditSummary = memoryViewModel::editSummary"))
+        assertTrue(app.contains("onSaveSummaryEditor = memoryViewModel::saveSummaryEditor"))
         assertTrue(app.contains("onDeleteMemory = memoryViewModel::clearSummary"))
         assertTrue(app.contains("onDisableMemorySummaryGenerationAndUse = {"))
         assertTrue(app.contains("current.copy(memoryRetrievalEnabled = false)"))

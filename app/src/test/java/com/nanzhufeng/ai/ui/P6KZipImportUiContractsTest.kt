@@ -14,6 +14,8 @@ class P6KZipImportUiContractsTest {
         assertTrue(source.contains("导入 Claude ZIP"))
         assertTrue(source.contains("ImportResultsDetailsPage"))
         assertTrue(source.contains("删除本批次"))
+        assertTrue(source.contains("重复导入会按官方身份去重"))
+        assertTrue(source.contains("这些对话和附件都不会被重新导入"))
         assertTrue(source.contains("个对话已导入"))
         assertTrue(source.contains("个未导入"))
         assertFalse(source.contains("这里不显示聊天正文、标题或原始文件名"))

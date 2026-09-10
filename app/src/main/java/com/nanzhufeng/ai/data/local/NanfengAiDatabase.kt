@@ -627,6 +627,8 @@ data class NormalChatSendAttemptEntity(
     val updatedAtEpochMs: Long,
     val safeErrorCode: String?,
     val egressProviderId: String?,
+    val egressAuthorizedAtEpochMs: Long?,
+    val egressDisclosureVersion: String?,
     // Schema 53 compatibility only. These columns were introduced by the now-discarded gateway
     // experiment; normal chat never reads or writes their semantic values. They remain solely so
     // an already-installed database is not downgraded or destructively rebuilt.
@@ -2816,7 +2818,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 65,
+    version = 66,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -3538,6 +3540,13 @@ abstract class NanfengAiDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `conversationStyleId` TEXT")
                 db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `webSearchUsed` INTEGER")
+            }
+        }
+        /** Stores only the timestamp/version of the visible send approval, never user payload. */
+        val MIGRATION_65_66 = object : Migration(65, 66) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `egressAuthorizedAtEpochMs` INTEGER")
+                db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `egressDisclosureVersion` TEXT")
             }
         }
     }

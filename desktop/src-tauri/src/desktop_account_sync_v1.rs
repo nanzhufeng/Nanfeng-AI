@@ -1159,16 +1159,38 @@ pub fn restore_remote_conversation<C: CredentialStore, G: CloudGateway>(
         .and_then(Value::as_array)
         .ok_or_else(|| safe_error("云端恢复内容无效"))?;
     if records.is_empty() || records.len() > 3 {
-        return Err(safe_error("当前 Desktop 只能恢复单个纯文本对话、安全个性化字段及其已确认提醒计划"));
+        return Err(safe_error(
+            "当前 Desktop 只能恢复单个纯文本对话、安全个性化字段及其已确认提醒计划",
+        ));
     }
-    let record = records.iter().find(|record| record.get("kind").and_then(Value::as_str) == Some("conversation")).ok_or_else(|| safe_error("云端恢复缺少纯文本对话"))?;
-    let safe_settings = records.iter().find(|record| record.get("kind").and_then(Value::as_str) == Some("safe_settings"));
-    let reminder_plans = records.iter().find(|record| record.get("kind").and_then(Value::as_str) == Some("relation") && record.get("content").and_then(|content|content.get("type")).and_then(Value::as_str)==Some("REMINDER_PLANS_V1"));
-    if records.iter().any(|item| match item.get("kind").and_then(Value::as_str){
-        Some("conversation" | "safe_settings")=>false,
-        Some("relation")=>item.get("content").and_then(|content|content.get("type")).and_then(Value::as_str)!=Some("REMINDER_PLANS_V1"),
-        _=>true,
-    }) {
+    let record = records
+        .iter()
+        .find(|record| record.get("kind").and_then(Value::as_str) == Some("conversation"))
+        .ok_or_else(|| safe_error("云端恢复缺少纯文本对话"))?;
+    let safe_settings = records
+        .iter()
+        .find(|record| record.get("kind").and_then(Value::as_str) == Some("safe_settings"));
+    let reminder_plans = records.iter().find(|record| {
+        record.get("kind").and_then(Value::as_str) == Some("relation")
+            && record
+                .get("content")
+                .and_then(|content| content.get("type"))
+                .and_then(Value::as_str)
+                == Some("REMINDER_PLANS_V1")
+    });
+    if records
+        .iter()
+        .any(|item| match item.get("kind").and_then(Value::as_str) {
+            Some("conversation" | "safe_settings") => false,
+            Some("relation") => {
+                item.get("content")
+                    .and_then(|content| content.get("type"))
+                    .and_then(Value::as_str)
+                    != Some("REMINDER_PLANS_V1")
+            }
+            _ => true,
+        })
+    {
         return Err(safe_error("云端恢复包含不支持的记录"));
     }
     let portable_plans = reminder_plans
@@ -1295,22 +1317,34 @@ pub fn restore_remote_conversation<C: CredentialStore, G: CloudGateway>(
             .map_err(|_| safe_error("云端恢复对话未写入"))?;
         transaction.execute("INSERT INTO desktop_selected_conversation_sync(account_ref,workspace_id,conversation_id,document_id,remote_revision,payload_hash,local_content_hash,last_synced_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",params![account,workspace_id,conversation_id,document_id,remote.revision,remote.payload_hash,restored_local_hash,now_ms()]).map_err(|_| safe_error("云端恢复回执未写入"))?;
         for portable in portable_plans {
-            let source_id = portable.get("id").and_then(Value::as_str).filter(|value| !value.is_empty() && value.len() <= 64).ok_or_else(||safe_error("云端提醒标识无效"))?;
-            let text = |key:&str,limit:usize| portable.get(key).and_then(Value::as_str).filter(|value| !value.trim().is_empty() && value.chars().count()<=limit).map(str::to_owned).ok_or_else(||safe_error("云端提醒字段无效"));
-            let args=crate::desktop_reminders_v1::PortablePlanArgs{
-                source_key:format!("{document_id}:{source_id}"),
-                workspace_id:workspace_id.clone(),
-                conversation_id:conversation_id.clone(),
-                title:text("title",40)?,
-                instruction:text("instruction",8_000)?,
-                schedule_kind:text("scheduleKind",16)?,
-                anchor_local:text("anchorLocal",32)?,
-                timezone_id:text("timezoneId",64)?,
-                missed_policy:text("missedPolicy",16)?,
-                source_status:text("status",16)?,
-                next_run_at_ms:portable.get("nextRunAtMs").and_then(Value::as_i64),
+            let source_id = portable
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty() && value.len() <= 64)
+                .ok_or_else(|| safe_error("云端提醒标识无效"))?;
+            let text = |key: &str, limit: usize| {
+                portable
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty() && value.chars().count() <= limit)
+                    .map(str::to_owned)
+                    .ok_or_else(|| safe_error("云端提醒字段无效"))
             };
-            crate::desktop_reminders_v1::restore_portable_plan(&transaction,&args,now_ms()).map_err(|_|safe_error("云端提醒计划未安全恢复"))?;
+            let args = crate::desktop_reminders_v1::PortablePlanArgs {
+                source_key: format!("{document_id}:{source_id}"),
+                workspace_id: workspace_id.clone(),
+                conversation_id: conversation_id.clone(),
+                title: text("title", 40)?,
+                instruction: text("instruction", 8_000)?,
+                schedule_kind: text("scheduleKind", 16)?,
+                anchor_local: text("anchorLocal", 32)?,
+                timezone_id: text("timezoneId", 64)?,
+                missed_policy: text("missedPolicy", 16)?,
+                source_status: text("status", 16)?,
+                next_run_at_ms: portable.get("nextRunAtMs").and_then(Value::as_i64),
+            };
+            crate::desktop_reminders_v1::restore_portable_plan(&transaction, &args, now_ms())
+                .map_err(|_| safe_error("云端提醒计划未安全恢复"))?;
         }
         if let Some(interests) = safe_settings
             .and_then(|item| item.get("content"))
@@ -1386,20 +1420,26 @@ fn portable_reminder_plans(
         return Ok(Vec::new());
     }
     let mut statement=connection.prepare("SELECT plan_id,title,instruction,schedule_kind,anchor_local,timezone_id,missed_policy,status,next_run_at_ms FROM desktop_reminder_plans_v1 WHERE workspace_id=?1 AND conversation_id=?2 AND status IN ('ACTIVE','PAUSED','COMPLETED','FAILED','UNKNOWN') ORDER BY created_at_ms,plan_id LIMIT 101").map_err(|_|safe_error("提醒计划无法读取"))?;
-    let plans=statement.query_map(params![workspace_id,conversation_id],|row|{
-        Ok(json!({
-            "id":row.get::<_,String>(0)?,
-            "title":row.get::<_,String>(1)?,
-            "instruction":row.get::<_,String>(2)?,
-            "scheduleKind":row.get::<_,String>(3)?,
-            "anchorLocal":row.get::<_,String>(4)?,
-            "timezoneId":row.get::<_,String>(5)?,
-            "missedPolicy":row.get::<_,String>(6)?,
-            "status":row.get::<_,String>(7)?,
-            "nextRunAtMs":row.get::<_,Option<i64>>(8)?,
-        }))
-    }).map_err(|_|safe_error("提醒计划无法读取"))?.collect::<Result<Vec<_>,_>>().map_err(|_|safe_error("提醒计划无效"))?;
-    if plans.len()>100{return Err(safe_error("提醒计划数量超出同步限制"));}
+    let plans = statement
+        .query_map(params![workspace_id, conversation_id], |row| {
+            Ok(json!({
+                "id":row.get::<_,String>(0)?,
+                "title":row.get::<_,String>(1)?,
+                "instruction":row.get::<_,String>(2)?,
+                "scheduleKind":row.get::<_,String>(3)?,
+                "anchorLocal":row.get::<_,String>(4)?,
+                "timezoneId":row.get::<_,String>(5)?,
+                "missedPolicy":row.get::<_,String>(6)?,
+                "status":row.get::<_,String>(7)?,
+                "nextRunAtMs":row.get::<_,Option<i64>>(8)?,
+            }))
+        })
+        .map_err(|_| safe_error("提醒计划无法读取"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| safe_error("提醒计划无效"))?;
+    if plans.len() > 100 {
+        return Err(safe_error("提醒计划数量超出同步限制"));
+    }
     Ok(plans)
 }
 
@@ -1467,12 +1507,14 @@ fn conversation_payload(
         }));
     }
     let content = json!({"title":conversation.get("title").and_then(Value::as_str).unwrap_or("未命名会话"),"createdAt":conversation.get("createdAt"),"updatedAt":conversation.get("updatedAt"),"currentLeafId":conversation.get("currentLeafId"),"messages":safe_messages});
-    let interests: String = connection.query_row(
-        "SELECT interests FROM desktop_portable_personalization_v1 WHERE id=1",
-        [],
-        |row| row.get(0),
-    ).unwrap_or_default();
-    let reminder_plans=portable_reminder_plans(connection,workspace_id,conversation_id)?;
+    let interests: String = connection
+        .query_row(
+            "SELECT interests FROM desktop_portable_personalization_v1 WHERE id=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_default();
+    let reminder_plans = portable_reminder_plans(connection, workspace_id, conversation_id)?;
     let records = json!([
         {"kind":"conversation","id":conversation_id,"revision":conversation.get("revision").and_then(Value::as_u64).unwrap_or(1),"classification":"NORMAL","content":content},
         {"kind":"safe_settings","id":"profile-interests","revision":1,"classification":"NORMAL","content":{"interests":interests}},
@@ -2411,19 +2453,28 @@ mod tests {
             "READY"
         );
         assert_eq!(
-            target_store.connection.query_row(
-                "SELECT interests FROM desktop_portable_personalization_v1 WHERE id=1",
-                [],
-                |row|row.get::<_,String>(0),
-            ).unwrap(),
+            target_store
+                .connection
+                .query_row(
+                    "SELECT interests FROM desktop_portable_personalization_v1 WHERE id=1",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .unwrap(),
             "跨端可靠性与数据保全"
         );
-        let restored_plan:(String,Option<String>,Option<String>)=target_store.connection.query_row(
-            "SELECT status,latest_result,last_safe_error_code FROM desktop_reminder_plans_v1",
-            [],
-            |row|Ok((row.get(0)?,row.get(1)?,row.get(2)?)),
-        ).unwrap();
-        assert_eq!(restored_plan,("PAUSED".into(),None,Some("CLOUD_RESTORED_PAUSED".into())));
+        let restored_plan: (String, Option<String>, Option<String>) = target_store
+            .connection
+            .query_row(
+                "SELECT status,latest_result,last_safe_error_code FROM desktop_reminder_plans_v1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            restored_plan,
+            ("PAUSED".into(), None, Some("CLOUD_RESTORED_PAUSED".into()))
+        );
     }
     #[test]
     fn localhost_callback_requires_exact_state_and_returns_only_the_code() {

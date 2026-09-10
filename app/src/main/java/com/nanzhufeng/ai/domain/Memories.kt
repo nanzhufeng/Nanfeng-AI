@@ -114,10 +114,19 @@ enum class MemoryRejectionCode {
     EMPTY_TITLE, TITLE_TOO_LONG, BODY_EMPTY, BODY_TOO_LONG, CONTROL_CHARACTER,
     HIGH_SENSITIVITY_PASSWORD, HIGH_SENSITIVITY_API_KEY, HIGH_SENSITIVITY_AUTHORIZATION,
     HIGH_SENSITIVITY_RECOVERY_CODE, HIGH_SENSITIVITY_PAYMENT_CARD,
-    INVALID_SCOPE_REFERENCE, MISSING_MEMORY, INVALID_ACTION, INTENT_MISMATCH, MISSING_CONFLICT,
+    INVALID_SCOPE_REFERENCE, MISSING_MEMORY, INVALID_ACTION, INTENT_MISMATCH, MISSING_CONFLICT, STALE_SUMMARY,
 }
 
+data class MemorySummaryReplacement(
+    val operationId: MemoryIntentId,
+    val replacementId: MemoryId,
+    val body: String,
+    val expectedRevisions: Map<MemoryId, Int>,
+)
+
 interface MemoryRepository {
+    fun replaceSummary(request: MemorySummaryReplacement, fingerprint: String): MemoryMutationResult =
+        MemoryMutationResult.Rejected(MemoryRejectionCode.INVALID_ACTION)
     fun mutate(intent: MemoryIntent, fingerprint: String): MemoryMutationResult
     fun findById(id: MemoryId): MemorySnapshot?
     fun list(scope: MemoryScopeKind?, status: MemoryStatus?, search: String): List<MemorySnapshot>
@@ -186,6 +195,14 @@ class ManageMemoryUseCase(private val domain: MemoryDomain, private val reposito
     fun execute(intent: MemoryIntent): MemoryMutationResult {
         domain.validate(intent)?.let { return MemoryMutationResult.Rejected(it) }
         return repository.mutate(intent, fingerprint(intent))
+    }
+    fun replaceSummary(request: MemorySummaryReplacement): MemoryMutationResult {
+        val validation = MemoryIntent(request.operationId, MemoryIntentAction.CREATE,
+            request.replacementId, "概览", request.body, MemoryScope(MemoryScopeKind.GLOBAL))
+        domain.validate(validation)?.let { return MemoryMutationResult.Rejected(it) }
+        val revisions = request.expectedRevisions.entries.sortedBy { it.key.value }
+            .joinToString("|") { "${it.key.value}:${it.value}" }
+        return repository.replaceSummary(request, MemoryDomain.sha256("replace-summary|${fingerprint(validation)}|$revisions"))
     }
     fun list(scope: MemoryScopeKind?, status: MemoryStatus?, search: String) = repository.list(scope, status, search)
     private fun fingerprint(intent: MemoryIntent): String = MemoryDomain.sha256(listOf(

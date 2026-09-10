@@ -4,7 +4,7 @@
 //! and normalized response facts. Raw payloads, prompts and credentials never appear in results.
 
 use futures_util::StreamExt;
-use reqwest::Client;
+use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -17,6 +17,7 @@ use std::{
 use zeroize::{Zeroize, Zeroizing};
 
 const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(75);
 
 pub fn migrate(connection: &rusqlite::Connection) -> Result<(), String> {
     connection.execute_batch(
@@ -111,6 +112,31 @@ pub fn migrate_compare(connection: &rusqlite::Connection) -> Result<(), String> 
             ON desktop_ordinary_chat_attempts(compare_execution_id, compare_logical_model)
             WHERE compare_execution_id IS NOT NULL;"
     ).map_err(|_| "Desktop Compare SQLite migration 失败".to_owned())
+}
+
+/// Records the one visible send approval without duplicating user text, attachments, or Key bytes.
+pub fn migrate_egress_authorization(connection: &rusqlite::Connection) -> Result<(), String> {
+    let exists: bool = connection
+        .query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='desktop_ordinary_chat_attempts')", [], |row| row.get(0))
+        .map_err(|_| "Desktop 普通聊天外发授权表状态无法读取".to_owned())?;
+    // Focused migration fixtures may intentionally model only a later subsystem. They must not
+    // invent an absent ordinary-chat table merely to advance the global schema marker.
+    if !exists { return Ok(()); }
+    let mut statement = connection.prepare("SELECT name FROM pragma_table_info('desktop_ordinary_chat_attempts')")
+        .map_err(|_| "Desktop 普通聊天外发授权字段无法读取".to_owned())?;
+    let columns = statement.query_map([], |row| row.get::<_, String>(0))
+        .map_err(|_| "Desktop 普通聊天外发授权字段无法枚举".to_owned())?
+        .collect::<Result<std::collections::BTreeSet<_>, _>>()
+        .map_err(|_| "Desktop 普通聊天外发授权字段无效".to_owned())?;
+    if !columns.contains("egress_approved_at_ms") {
+        connection.execute_batch("ALTER TABLE desktop_ordinary_chat_attempts ADD COLUMN egress_approved_at_ms INTEGER;")
+            .map_err(|_| "Desktop 普通聊天外发授权时间字段迁移失败".to_owned())?;
+    }
+    if !columns.contains("egress_disclosure_version") {
+        connection.execute_batch("ALTER TABLE desktop_ordinary_chat_attempts ADD COLUMN egress_disclosure_version TEXT;")
+            .map_err(|_| "Desktop 普通聊天外发授权版本字段迁移失败".to_owned())?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -225,12 +251,27 @@ fn reasoning_delta(value: &Value) -> Option<&str> {
 }
 
 fn responses_input(messages: &Value) -> Value {
-    Value::Array(messages.as_array().into_iter().flatten().filter_map(|message| {
-        let role = message.get("role")?.as_str()?;
-        let content = message.get("content")?;
-        let text = content.as_str().map(ToOwned::to_owned).or_else(|| content.as_array().map(|parts| parts.iter().filter_map(|part| part.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n")))?;
-        Some(json!({"role":role,"content":[{"type":"input_text","text":text}]}))
-    }).collect())
+    Value::Array(
+        messages
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|message| {
+                let role = message.get("role")?.as_str()?;
+                let content = message.get("content")?;
+                let text = content.as_str().map(ToOwned::to_owned).or_else(|| {
+                    content.as_array().map(|parts| {
+                        parts
+                            .iter()
+                            .filter_map(|part| part.get("text").and_then(Value::as_str))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })
+                })?;
+                Some(json!({"role":role,"content":[{"type":"input_text","text":text}]}))
+            })
+            .collect(),
+    )
 }
 
 fn transport_body(request: &TransportRequest) -> Value {
@@ -250,7 +291,9 @@ fn transport_body(request: &TransportRequest) -> Value {
             });
             let object = body.as_object_mut().expect("request body is an object");
             match request.web_search_route.as_str() {
-                "OPENROUTER_SERVER_TOOL" => { object.insert("tools".into(), json!([{"type":"openrouter:web_search","parameters":{"max_results":5,"max_total_results":10}}])); }
+                "OPENROUTER_SERVER_TOOL" => {
+                    object.insert("tools".into(), json!([{"type":"openrouter:web_search","parameters":{"max_results":5,"max_total_results":10}}]));
+                }
                 "QWEN_CHAT_COMPLETIONS" => {
                     object.insert("enable_search".into(), Value::Bool(true));
                     object.insert("search_options".into(), json!({"forced_search":true}));
@@ -267,35 +310,195 @@ fn transport_body(request: &TransportRequest) -> Value {
 }
 
 fn response_sources(value: &Value) -> Vec<(String, String)> {
-    value.get("output").and_then(Value::as_array).into_iter().flatten()
+    fn source(value: &Value) -> Option<(String, String)> {
+        let url = value
+            .get("url")
+            .or_else(|| value.get("link"))?
+            .as_str()?
+            .trim();
+        let parsed = Url::parse(url).ok()?;
+        if !matches!(parsed.scheme(), "http" | "https")
+            || parsed.host_str().is_none()
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+        {
+            return None;
+        }
+        let title = value
+            .get("title")
+            .or_else(|| value.get("name"))
+            .and_then(Value::as_str)
+            .unwrap_or(url)
+            .trim();
+        Some((title.to_owned(), url.to_owned()))
+    }
+
+    fn push_unique(values: &mut Vec<(String, String)>, candidate: Option<(String, String)>) {
+        if let Some(candidate) = candidate {
+            if values.len() < 10 && !values.iter().any(|item| item.1 == candidate.1) {
+                values.push(candidate);
+            }
+        }
+    }
+
+    let mut values = value
+        .get("output")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
         .filter(|item| item.get("type").and_then(Value::as_str) == Some("web_search_call"))
-        .flat_map(|item| item.get("action").and_then(|action| action.get("sources")).and_then(Value::as_array).into_iter().flatten())
-        .filter_map(|source| {
-            let url = source.get("url")?.as_str()?.trim();
-            if !(url.starts_with("https://") || url.starts_with("http://")) { return None; }
-            let title = source.get("title").or_else(|| source.get("name")).and_then(Value::as_str).unwrap_or(url).trim();
-            Some((title.to_owned(), url.to_owned()))
-        }).fold(Vec::<(String,String)>::new(), |mut values, source| { if !values.iter().any(|item| item.1 == source.1) && values.len() < 10 { values.push(source); } values })
+        .flat_map(|item| {
+            item.get("action")
+                .and_then(|action| action.get("sources"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter_map(source)
+        .fold(Vec::<(String, String)>::new(), |mut values, source| {
+            if !values.iter().any(|item| item.1 == source.1) && values.len() < 10 {
+                values.push(source);
+            }
+            values
+        });
+
+    for choice in value
+        .get("choices")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        for envelope in [choice.get("message"), choice.get("delta")]
+            .into_iter()
+            .flatten()
+        {
+            for annotation in envelope
+                .get("annotations")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                push_unique(
+                    &mut values,
+                    source(annotation.get("url_citation").unwrap_or(annotation)),
+                );
+            }
+        }
+    }
+
+    for item in value
+        .get("web_search")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        push_unique(&mut values, source(item));
+        for key in ["search_result", "search_results", "results", "sources"] {
+            for candidate in item
+                .get(key)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                push_unique(&mut values, source(candidate));
+            }
+        }
+    }
+    values
 }
 
 fn append_sources(text: &mut String, sources: &[(String, String)]) {
-    if sources.is_empty() { return; }
+    if sources.is_empty() {
+        return;
+    }
     text.push_str("\n\n来源：");
-    for (title, url) in sources { text.push_str(&format!("\n- [{title}]({url})")); }
+    for (title, url) in sources {
+        text.push_str(&format!("\n- [{title}]({url})"));
+    }
 }
 
 fn decode_responses_non_streaming(bytes: &[u8], elapsed_ms: i64) -> Result<Completed, Failure> {
-    if bytes.is_empty() || bytes.len() > MAX_RESPONSE_BYTES { return Err(Failure::Unknown { code: "RESPONSE_SIZE" }); }
-    let value: Value = serde_json::from_slice(bytes).map_err(|_| Failure::Explicit { code:"RESPONSE_FORMAT", http_status:None })?;
-    let mut text = value.get("output_text").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()).map(ToOwned::to_owned)
-        .or_else(|| value.get("output").and_then(Value::as_array).into_iter().flatten().filter(|item| item.get("type").and_then(Value::as_str) == Some("message")).flat_map(|item| item.get("content").and_then(Value::as_array).into_iter().flatten()).filter(|item| matches!(item.get("type").and_then(Value::as_str), Some("output_text" | "text"))).filter_map(|item| item.get("text").and_then(Value::as_str)).collect::<String>().trim().to_owned().into())
-        .filter(|value| !value.is_empty()).ok_or(Failure::Explicit { code:"RESPONSE_FORMAT", http_status:None })?;
+    if bytes.is_empty() || bytes.len() > MAX_RESPONSE_BYTES {
+        return Err(Failure::Unknown {
+            code: "RESPONSE_SIZE",
+        });
+    }
+    let value: Value = serde_json::from_slice(bytes).map_err(|_| Failure::Explicit {
+        code: "RESPONSE_FORMAT",
+        http_status: None,
+    })?;
+    let mut text = value
+        .get("output_text")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            value
+                .get("output")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|item| item.get("type").and_then(Value::as_str) == Some("message"))
+                .flat_map(|item| {
+                    item.get("content")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                })
+                .filter(|item| {
+                    matches!(
+                        item.get("type").and_then(Value::as_str),
+                        Some("output_text" | "text")
+                    )
+                })
+                .filter_map(|item| item.get("text").and_then(Value::as_str))
+                .collect::<String>()
+                .trim()
+                .to_owned()
+                .into()
+        })
+        .filter(|value| !value.is_empty())
+        .ok_or(Failure::Explicit {
+            code: "RESPONSE_FORMAT",
+            http_status: None,
+        })?;
     append_sources(&mut text, &response_sources(&value));
     let usage = value.get("usage");
     Ok(Completed {
-        text, reasoning:None,
-        usage:Usage { input_tokens:usage.and_then(|v|v.get("input_tokens").or_else(||v.get("prompt_tokens"))).and_then(Value::as_i64), output_tokens:usage.and_then(|v|v.get("output_tokens").or_else(||v.get("completion_tokens"))).and_then(Value::as_i64), cached_input_tokens:usage.and_then(|v|v.get("input_tokens_details").or_else(||v.get("prompt_tokens_details"))).and_then(|v|v.get("cached_tokens")).and_then(Value::as_i64), reasoning_tokens:usage.and_then(|v|v.get("output_tokens_details").or_else(||v.get("completion_tokens_details"))).and_then(|v|v.get("reasoning_tokens")).and_then(Value::as_i64) },
-        reported_cost_micros:cost_micros(usage.and_then(|v|v.get("cost"))), actual_model_id:value.get("model").and_then(Value::as_str).map(ToOwned::to_owned), elapsed_ms,
+        text,
+        reasoning: None,
+        usage: Usage {
+            input_tokens: usage
+                .and_then(|v| v.get("input_tokens").or_else(|| v.get("prompt_tokens")))
+                .and_then(Value::as_i64),
+            output_tokens: usage
+                .and_then(|v| {
+                    v.get("output_tokens")
+                        .or_else(|| v.get("completion_tokens"))
+                })
+                .and_then(Value::as_i64),
+            cached_input_tokens: usage
+                .and_then(|v| {
+                    v.get("input_tokens_details")
+                        .or_else(|| v.get("prompt_tokens_details"))
+                })
+                .and_then(|v| v.get("cached_tokens"))
+                .and_then(Value::as_i64),
+            reasoning_tokens: usage
+                .and_then(|v| {
+                    v.get("output_tokens_details")
+                        .or_else(|| v.get("completion_tokens_details"))
+                })
+                .and_then(|v| v.get("reasoning_tokens"))
+                .and_then(Value::as_i64),
+        },
+        reported_cost_micros: cost_micros(usage.and_then(|v| v.get("cost"))),
+        actual_model_id: value
+            .get("model")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        elapsed_ms,
     })
 }
 
@@ -401,6 +604,16 @@ pub async fn execute_streaming(
                 Failure::Unknown { code: "NETWORK" }
             }
         })?;
+        let provider_sources = serde_json::from_slice::<Value>(&bytes)
+            .ok()
+            .map(|value| response_sources(&value))
+            .unwrap_or_default();
+        if provider_sources.is_empty() {
+            return Err(Failure::Explicit {
+                code: "WEB_SEARCH_NO_SOURCES",
+                http_status: Some(status),
+            });
+        }
         let completed = decode_responses_non_streaming(
             &bytes,
             started.elapsed().as_millis().min(i64::MAX as u128) as i64,
@@ -423,9 +636,25 @@ pub async fn execute_streaming(
         if cancelled.load(Ordering::SeqCst) {
             return Err(Failure::Cancelled);
         }
-        let next = tokio::select! {
-            value = stream.next() => value,
-            _ = tokio::time::sleep(Duration::from_millis(100)) => continue,
+        // A provider may take time to reason, but a silent socket cannot remain a fake
+        // “正在生成” forever. Keep polling cancellation while one `next()` future is alive;
+        // each actual SSE chunk resets the idle window.
+        let next = {
+            let next_chunk = stream.next();
+            tokio::pin!(next_chunk);
+            let idle = tokio::time::sleep(STREAM_IDLE_TIMEOUT);
+            tokio::pin!(idle);
+            loop {
+                tokio::select! {
+                    value = &mut next_chunk => break value,
+                    _ = &mut idle => return Err(Failure::Unknown { code: "TIMEOUT" }),
+                    _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                        if cancelled.load(Ordering::SeqCst) {
+                            return Err(Failure::Cancelled);
+                        }
+                    }
+                }
+            }
         };
         let Some(chunk) = next else { break };
         let chunk = chunk.map_err(|error| {
@@ -465,6 +694,11 @@ pub async fn execute_streaming(
                 code: "RESPONSE_FORMAT",
                 http_status: Some(status),
             })?;
+            for source in response_sources(&value) {
+                if sources.len() < 10 && !sources.iter().any(|item| item.1 == source.1) {
+                    sources.push(source);
+                }
+            }
             if responses_stream {
                 match value.get("type").and_then(Value::as_str) {
                     Some("response.output_text.delta") => {
@@ -508,15 +742,21 @@ pub async fn execute_streaming(
                                         .and_then(Value::as_i64),
                                 },
                             );
-                            if let Some(cost) = cost_micros(
-                                response_usage.and_then(|usage| usage.get("cost")),
-                            ) {
+                            if let Some(cost) =
+                                cost_micros(response_usage.and_then(|usage| usage.get("cost")))
+                            {
                                 reported_cost_micros = Some(cost);
                             }
                             if let Some(model) = response.get("model").and_then(Value::as_str) {
                                 actual_model_id = Some(model.to_owned());
                             }
-                            sources = response_sources(response);
+                            for source in response_sources(response) {
+                                if sources.len() < 10
+                                    && !sources.iter().any(|item| item.1 == source.1)
+                                {
+                                    sources.push(source);
+                                }
+                            }
                         }
                         completed = true;
                     }
@@ -563,6 +803,12 @@ pub async fn execute_streaming(
     if text.is_empty() {
         return Err(Failure::Explicit {
             code: "RESPONSE_FORMAT",
+            http_status: Some(status),
+        });
+    }
+    if request.web_search_route != "NONE" && sources.is_empty() {
+        return Err(Failure::Explicit {
+            code: "WEB_SEARCH_NO_SOURCES",
             http_status: Some(status),
         });
     }
@@ -627,7 +873,10 @@ mod tests {
         fixture.web_search_route = "ZHIPU_CHAT_COMPLETIONS".into();
         let body = transport_body(&fixture);
         assert_eq!(body["tools"][0]["type"], "web_search");
-        assert_eq!(body["tools"][0]["web_search"]["search_engine"], "search_std");
+        assert_eq!(
+            body["tools"][0]["web_search"]["search_engine"],
+            "search_std"
+        );
         assert_eq!(body["tool_choice"], "auto");
 
         fixture.web_search_route = "QWEN_CHAT_COMPLETIONS".into();
@@ -656,12 +905,54 @@ mod tests {
             12,
         )
         .unwrap();
-        assert_eq!(result.text, "answer\n\n来源：\n- [Official](https://example.com/a)");
+        assert_eq!(
+            result.text,
+            "answer\n\n来源：\n- [Official](https://example.com/a)"
+        );
         assert_eq!(result.usage.input_tokens, Some(5));
         assert_eq!(result.usage.cached_input_tokens, Some(2));
         assert_eq!(result.usage.reasoning_tokens, Some(3));
         assert_eq!(result.reported_cost_micros, Some(9));
         assert_eq!(result.actual_model_id.as_deref(), Some("deepseek-chat"));
+    }
+
+    #[test]
+    fn chat_completions_web_search_requires_provider_sources_and_keeps_safe_citations() {
+        let without_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"memory-only answer\"}}]}\n\ndata: [DONE]\n\n";
+        let mut missing = request(mock_server(without_sources));
+        missing.web_search_route = "OPENROUTER_SERVER_TOOL".into();
+        let failure = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(execute_streaming(
+                missing,
+                Zeroizing::new(b"fixture-secret-123".to_vec()),
+                Arc::new(AtomicBool::new(false)),
+                |_| Ok(()),
+            ));
+        assert_eq!(
+            failure,
+            Err(Failure::Explicit {
+                code: "WEB_SEARCH_NO_SOURCES",
+                http_status: Some(200),
+            })
+        );
+
+        let with_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"grounded answer\",\"annotations\":[{\"url_citation\":{\"title\":\"Official\",\"url\":\"https://example.com/source\"}},{\"url_citation\":{\"title\":\"Unsafe\",\"url\":\"https://user@example.com/private\"}}]}}]}\n\ndata: [DONE]\n\n";
+        let mut grounded = request(mock_server(with_sources));
+        grounded.web_search_route = "OPENROUTER_SERVER_TOOL".into();
+        let completed = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(execute_streaming(
+                grounded,
+                Zeroizing::new(b"fixture-secret-123".to_vec()),
+                Arc::new(AtomicBool::new(false)),
+                |_| Ok(()),
+            ))
+            .unwrap();
+        assert_eq!(
+            completed.text,
+            "grounded answer\n\n来源：\n- [Official](https://example.com/source)"
+        );
     }
 
     #[test]

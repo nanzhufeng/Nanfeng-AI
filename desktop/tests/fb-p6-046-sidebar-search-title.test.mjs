@@ -10,7 +10,7 @@ const [shell, css] = await Promise.all([
 
 test('sidebar search has no static title or duplicate button while preserving its accessible input', () => {
   const navigation = shell.slice(shell.indexOf('const chatNavigation'), shell.indexOf('return `', shell.indexOf('const chatNavigation')));
-  assert.match(navigation, /<div class="chat-search-wrap"><label><input id="chat-search" class="chat-search" type="search" placeholder="搜索" aria-label="搜索"/);
+  assert.match(navigation, /<div class="chat-search-wrap"><label><span class="chat-search-glyph"[^>]*>.*<\/span><input id="chat-search" class="chat-search" type="search" placeholder="搜索" aria-label="搜索"/);
   assert.doesNotMatch(navigation, /<button data-action="submit-search"/);
   assert.doesNotMatch(navigation, /chat-search-wrap"><span/);
   assert.doesNotMatch(css, /\.chat-search-wrap > span/);

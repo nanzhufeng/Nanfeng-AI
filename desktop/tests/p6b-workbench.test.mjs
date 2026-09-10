@@ -38,7 +38,7 @@ test('P6-C keeps editing, durable history, recycle bin and safe metadata on type
 
 test('P10-A exposes separate local, provider and encrypted-sync status without a network plugin', () => {
   for (const token of ['LOCAL_OFFLINE / LOCAL_ONLY', 'ENCRYPTED_SYNC', 'read_dual_path_status']) assert.ok(source.includes(token));
-  for (const token of ['设置中心', '本地可用', '联网未配置', '加密同步未配置']) assert.ok(chatShell.includes(token));
+  for (const token of ['data-action="show-settings"', '本地可用', '联网未配置', '加密同步未配置']) assert.ok(chatShell.includes(token));
   assert.ok(capability.includes('allow-read-dual-path-status'));
   assert.ok(permissions.includes('allow-read-dual-path-status'));
   assert.ok(!cargo.includes('tauri-plugin-http'));

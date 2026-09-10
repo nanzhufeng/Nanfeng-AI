@@ -201,10 +201,10 @@
           "markdownDescription": "Allows the native settings surface to read and revision-save only non-secret appearance and Android-parity preferences in Rust-owned SQLite. Runtime capability flags remain fail-closed; this grants no credential, notification, account, update, model, prompt, attachment, path or network access."
         },
         {
-          "description": "Allows one explicit Composer Compare action to create exactly one user message plus independent GPT-5.6 Terra and Claude Sonnet 5 ordinary-chat branches through the existing OpenRouter credential, context, attachment, streaming, usage and error owners. Stop affects the active pair; retry is explicit per branch; no arbitrary provider, model, URL, credential projection, silent fallback or automatic resend is exposed.",
+          "description": "Allows only stopping an already-running historical Compare execution so partial content remains recoverable. New Compare submission and branch retry are intentionally unavailable; no arbitrary provider, model, URL, credential projection or automatic resend is exposed.",
           "type": "string",
           "const": "allow-desktop-compare",
-          "markdownDescription": "Allows one explicit Composer Compare action to create exactly one user message plus independent GPT-5.6 Terra and Claude Sonnet 5 ordinary-chat branches through the existing OpenRouter credential, context, attachment, streaming, usage and error owners. Stop affects the active pair; retry is explicit per branch; no arbitrary provider, model, URL, credential projection, silent fallback or automatic resend is exposed."
+          "markdownDescription": "Allows only stopping an already-running historical Compare execution so partial content remains recoverable. New Compare submission and branch retry are intentionally unavailable; no arbitrary provider, model, URL, credential projection or automatic resend is exposed."
         },
         {
           "description": "Allows only opaque workspace/conversation read watermarks, manual unread marking, and true-open clearing in device-local SQLite. It grants no title, message body, prompt, attachment, path, credential, transport, export or account-sync access.",
@@ -243,10 +243,10 @@
           "markdownDescription": "Allows one user send or explicit retry to atomically persist an ordinary-chat Attempt and use only the fixed provider/model registry, scoped system credential, verified message attachments and bounded streaming transport. Stop and latest-attempt readback are conversation/Attempt scoped; no arbitrary URL, path, credential value, silent retry or raw payload is exposed."
         },
         {
-          "description": "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual override, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access.",
+          "description": "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual model override, conversation-local style/web-search preferences, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access.",
           "type": "string",
           "const": "allow-desktop-p6g-model-selection",
-          "markdownDescription": "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual override, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access."
+          "markdownDescription": "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual model override, conversation-local style/web-search preferences, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access."
         },
         {
           "description": "Allows Android-parity local cleanup only through an aggregate fingerprinted preview and one of three fixed scopes: explicitly selected terminal failed-task assets, deleted knowledge/memory trash, or all app-private business data with the exact confirmation phrase. It grants no arbitrary path, wildcard command, content projection, export, transport or provider invocation.",
@@ -261,10 +261,10 @@
           "markdownDescription": "Allows only reviewable reminder drafts, explicit confirm/reject/edit, persisted local schedules, runtime due execution through the existing fixed Provider transport and usage ledger, pause/resume/delete/retry, content-safe notification receipts and exact opaque-id routing. It grants no silent plan creation, arbitrary URL/model/credential/path access, notification permission bypass or UNKNOWN auto-resend."
         },
         {
-          "description": "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, private attachment binding/removal, and irreversible clear. It grants no normal Conversation, workspace, search, export, cache, credential, or transport command.",
+          "description": "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, native-picker or focused-Composer clipboard File attachment binding/removal, and irreversible clear. It grants no clipboard path or URI, normal Conversation, workspace, search, export, cache, credential, or transport command.",
           "type": "string",
           "const": "allow-desktop-temporary-conversation",
-          "markdownDescription": "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, private attachment binding/removal, and irreversible clear. It grants no normal Conversation, workspace, search, export, cache, credential, or transport command."
+          "markdownDescription": "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, native-picker or focused-Composer clipboard File attachment binding/removal, and irreversible clear. It grants no clipboard path or URI, normal Conversation, workspace, search, export, cache, credential, or transport command."
         },
         {
           "description": "Allows persistent workspace-scoped transcription tasks: native-picker-selected bounded media or JPG/PNG/PDF import into verified private attachments, explicit Qwen ASR or GLM-OCR execution on their fixed endpoint/model with the existing provider-scoped credential, cancel/retry/delete, and native-picker-selected verified exports. It grants no arbitrary URL, path projection, recording, pause, hidden background replay, SenseVoice execution, arbitrary OCR model, or credential projection.",
@@ -273,16 +273,22 @@
           "markdownDescription": "Allows persistent workspace-scoped transcription tasks: native-picker-selected bounded media or JPG/PNG/PDF import into verified private attachments, explicit Qwen ASR or GLM-OCR execution on their fixed endpoint/model with the existing provider-scoped credential, cancel/retry/delete, and native-picker-selected verified exports. It grants no arbitrary URL, path projection, recording, pause, hidden background replay, SenseVoice execution, arbitrary OCR model, or credential projection."
         },
         {
+          "description": "Allows one explicit native-save-picker action to copy only a workspace-owned, hash-verified attachment to that selected absolute file and verify the written bytes. It grants no path discovery, arbitrary source read, directory export, transport, credential or automatic share access.",
+          "type": "string",
+          "const": "allow-export-desktop-attachment-to-selected-path",
+          "markdownDescription": "Allows one explicit native-save-picker action to copy only a workspace-owned, hash-verified attachment to that selected absolute file and verify the written bytes. It grants no path discovery, arbitrary source read, directory export, transport, credential or automatic share access."
+        },
+        {
           "description": "Allows a typed workspace ID to export only to a user-selected .nfai-exchange path.",
           "type": "string",
           "const": "allow-export-desktop-workspace-to-selected-path",
           "markdownDescription": "Allows a typed workspace ID to export only to a user-selected .nfai-exchange path."
         },
         {
-          "description": "Allows only user-mediated local attachment import; it grants no filesystem API, transport, or credential access.",
+          "description": "Allows only a user-mediated native-picker selection, focused-Composer clipboard File bytes, or a current-window PNG camera frame into the same private content-addressed owner; it grants no clipboard path or URI, arbitrary camera control, filesystem API, transport, or credential access.",
           "type": "string",
           "const": "allow-import-desktop-conversation-attachment",
-          "markdownDescription": "Allows only user-mediated local attachment import; it grants no filesystem API, transport, or credential access."
+          "markdownDescription": "Allows only a user-mediated native-picker selection, focused-Composer clipboard File bytes, or a current-window PNG camera frame into the same private content-addressed owner; it grants no clipboard path or URI, arbitrary camera control, filesystem API, transport, or credential access."
         },
         {
           "description": "Allows one user-selected exact .nfai-exchange or Android DocumentsUI .nfai-exchange.zip package to enter only the v2 strict-preflight/private-archive/single-transaction owner. It grants no path projection, arbitrary filesystem API, v1 staging, credential, transport, Provider or model access.",
@@ -367,6 +373,12 @@
           "type": "string",
           "const": "allow-read-desktop-background-runtime",
           "markdownDescription": "Allows reading only the content-free macOS background wake-up status. It grants no LaunchAgent mutation, arbitrary command, path, prompt, conversation body, credential, provider payload, or network access."
+        },
+        {
+          "description": "Allows only the validated C16 appearance, font and layer tuple selected by the diagnostic-only isolated acceptance gate. Normal startup returns no tuple; this grants no path, environment, data, credential, provider or network access.",
+          "type": "string",
+          "const": "allow-read-desktop-c16-visual-acceptance-state",
+          "markdownDescription": "Allows only the validated C16 appearance, font and layer tuple selected by the diagnostic-only isolated acceptance gate. Normal startup returns no tuple; this grants no path, environment, data, credential, provider or network access."
         },
         {
           "description": "Allows a workspace-owned image attachment ID to produce verified local thumbnail or user-requested original display bytes; no path, URI or arbitrary file read is granted.",

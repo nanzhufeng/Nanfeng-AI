@@ -140,12 +140,14 @@ class UnifiedModelResolver(
 private object OpenRouterColdStartTextFallback {
     private val ids = mapOf(
         ModelPresetId.CLAUDE_FABLE_5 to "anthropic/claude-fable-5",
+        ModelPresetId.CLAUDE_FABLE_5_1 to "anthropic/claude-fable-5.1-20260831",
         ModelPresetId.CLAUDE_OPUS_5 to "anthropic/claude-opus-5",
         ModelPresetId.CLAUDE_SONNET_5 to "anthropic/claude-sonnet-5",
         ModelPresetId.CLAUDE_HAIKU_4_5 to "anthropic/claude-haiku-4.5",
         ModelPresetId.GPT_5_6_SOL to "openai/gpt-5.6-sol",
         ModelPresetId.GPT_5_6_TERRA to "openai/gpt-5.6-terra",
         ModelPresetId.GPT_5_6_LUNA to "openai/gpt-5.6-luna",
+        ModelPresetId.GPT_6_ASTRA to "openai/gpt-6-astra",
         ModelPresetId.GROK_4_1_FAST to "x-ai/grok-4.1-fast",
         ModelPresetId.GROK_4_6_HIGH to "x-ai/grok-4.6",
         ModelPresetId.GEMINI_3_7_FLASH to "google/gemini-3.7-flash",

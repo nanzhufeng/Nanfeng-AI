@@ -131,6 +131,58 @@ pub fn read_projection(
     })
 }
 
+/// Diagnostic UI/schema acceptance must not seed, prune or advance read markers. Existing rows
+/// remain visible while conversations without a marker project as neutral, read-only rows.
+pub fn read_projection_without_writes(
+    connection: &Connection,
+    workspace_id: &str,
+) -> Result<Projection, String> {
+    validate_id(workspace_id)?;
+    let conversation_ids = workspace_conversation_ids(connection, workspace_id)?;
+    let mut stored = connection
+        .prepare(
+            "SELECT conversation_id,last_read_at_ms,latest_completed_at_ms,manual_unread_at_ms
+             FROM desktop_conversation_read_markers_v1 WHERE workspace_id=?1",
+        )
+        .map_err(|_| "会话已读投影无法读取".to_owned())?
+        .query_map([workspace_id], |row| {
+            let last_read_at_ms: i64 = row.get(1)?;
+            let latest_completed_at_ms: i64 = row.get(2)?;
+            Ok(ConversationReadState {
+                conversation_id: row.get(0)?,
+                unread: latest_completed_at_ms > last_read_at_ms,
+                manual_unread_at_ms: row.get(3)?,
+                last_read_at_ms,
+                latest_completed_at_ms,
+            })
+        })
+        .map_err(|_| "会话已读投影无法读取".to_owned())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| "会话已读投影无效".to_owned())?
+        .into_iter()
+        .filter(|row| conversation_ids.contains(&row.conversation_id))
+        .map(|row| (row.conversation_id.clone(), row))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let conversations = conversation_ids
+        .into_iter()
+        .map(|conversation_id| {
+            stored
+                .remove(&conversation_id)
+                .unwrap_or(ConversationReadState {
+                    conversation_id,
+                    unread: false,
+                    manual_unread_at_ms: None,
+                    last_read_at_ms: 0,
+                    latest_completed_at_ms: 0,
+                })
+        })
+        .collect();
+    Ok(Projection {
+        workspace_id: workspace_id.to_owned(),
+        conversations,
+    })
+}
+
 /// A true row/search/lifecycle open clears both automatic and manual unread sources.
 pub fn mark_opened(
     connection: &mut Connection,
@@ -401,6 +453,30 @@ mod tests {
                 .manual_unread_at_ms,
             None
         );
+    }
+
+    #[test]
+    fn diagnostic_projection_does_not_seed_or_prune_read_markers() {
+        let connection = database();
+        let before: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM desktop_conversation_read_markers_v1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let projection = read_projection_without_writes(&connection, "workspace-one").unwrap();
+        let after: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM desktop_conversation_read_markers_v1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(before, 0);
+        assert_eq!(after, before);
+        assert_eq!(projection.conversations.len(), 2);
+        assert!(projection.conversations.iter().all(|row| !row.unread));
     }
 
     #[test]

@@ -47,6 +47,121 @@ class P4CMemoryRoomContractsTest {
         assertEquals(MemoryStatus.DELETED, repository.list(null, MemoryStatus.DELETED, "").single().memory.status)
     }
 
+    @Test fun `replace complete summary removes all active old sections and survives repository rebuild`() {
+        for (id in listOf("section-a", "section-b")) {
+            useCase.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.CREATE,
+                MemoryId(id), id, "old section $id", MemoryScope(MemoryScopeKind.GLOBAL)))
+        }
+        val baseline = repository.list(MemoryScopeKind.GLOBAL, MemoryStatus.ACTIVE, "")
+        val request = MemorySummaryReplacement(MemoryIntentId.new(), MemoryId("replacement"),
+            "Entirely rewritten summary", baseline.associate { it.memory.id to it.revisions.maxOf { r -> r.revision } })
+        assertTrue(useCase.replaceSummary(request) is MemoryMutationResult.Applied)
+        val rebuilt = RoomMemoryRepository(database, clock)
+        assertEquals("Entirely rewritten summary", rebuilt.list(MemoryScopeKind.GLOBAL, MemoryStatus.ACTIVE, "").single().memory.body)
+        baseline.forEach { old ->
+            val persisted = rebuilt.findById(old.memory.id)!!
+            assertEquals(MemoryStatus.DELETED, persisted.memory.status)
+            assertEquals(old.memory.body, persisted.revisions.first().body)
+        }
+        assertTrue(useCase.replaceSummary(request) is MemoryMutationResult.Replayed)
+    }
+
+    private fun seedSection(id: String = "original"): MemorySnapshot {
+        useCase.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.CREATE, MemoryId(id),
+            id, "Original body", MemoryScope(MemoryScopeKind.GLOBAL)))
+        return repository.findById(MemoryId(id))!!
+    }
+    private fun replacement(body: String = "Replacement body") = MemorySummaryReplacement(
+        MemoryIntentId.new(), MemoryId.new(), body,
+        repository.list(MemoryScopeKind.GLOBAL, MemoryStatus.ACTIVE, "")
+            .associate { it.memory.id to it.revisions.maxOf { r -> r.revision } },
+    )
+
+    @Test fun `concurrent addition or revision rejects stale replacement and preserves current data`() {
+        val original = seedSection()
+        val request = replacement()
+        seedSection("new-section")
+        assertEquals(MemoryMutationResult.Rejected(MemoryRejectionCode.STALE_SUMMARY), useCase.replaceSummary(request))
+        assertEquals(2, repository.list(MemoryScopeKind.GLOBAL, MemoryStatus.ACTIVE, "").size)
+        val secondRequest = replacement()
+        useCase.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.UPDATE, original.memory.id,
+            "original", "Concurrent edit", MemoryScope(MemoryScopeKind.GLOBAL)))
+        assertEquals(MemoryMutationResult.Rejected(MemoryRejectionCode.STALE_SUMMARY), useCase.replaceSummary(secondRequest))
+        assertEquals("Concurrent edit", repository.findById(original.memory.id)!!.memory.body)
+    }
+
+    @Test fun `invalid replacement leaves old summary intact and never saves sensitive body`() {
+        seedSection()
+        assertEquals(MemoryMutationResult.Rejected(MemoryRejectionCode.BODY_EMPTY), useCase.replaceSummary(replacement(" ")))
+        assertEquals(MemoryMutationResult.Rejected(MemoryRejectionCode.HIGH_SENSITIVITY_PASSWORD), useCase.replaceSummary(replacement("密码: fixture-secret")))
+        assertEquals("Original body", repository.list(null, null, "").single().memory.body)
+    }
+
+    @Test fun `transaction failure rolls back both replacement and old section deletion`() {
+        seedSection()
+        val request = replacement()
+        database.openHelper.writableDatabase.execSQL("CREATE TEMP TRIGGER reject_summary_receipt BEFORE INSERT ON memory_intents WHEN NEW.action = 'REPLACE_SUMMARY' BEGIN SELECT RAISE(ABORT, 'fixture write failure'); END")
+        try {
+            var failed = false
+            try { useCase.replaceSummary(request) } catch (_: android.database.SQLException) { failed = true }
+            assertTrue("Expected durable write failure", failed)
+            assertEquals("Original body", repository.list(null, null, "").single().memory.body)
+        } finally {
+            database.openHelper.writableDatabase.execSQL("DROP TRIGGER reject_summary_receipt")
+        }
+        assertTrue(useCase.replaceSummary(request) is MemoryMutationResult.Applied)
+    }
+
+    @Test fun `whole replacement survives database close reopen and preserves paused memories`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "memory-editor-${UUID.randomUUID()}.db"
+        var disk = Room.databaseBuilder(context, NanfengAiDatabase::class.java, name).allowMainThreadQueries().build()
+        try {
+            var diskRepository = RoomMemoryRepository(disk, clock)
+            val diskUseCase = ManageMemoryUseCase(MemoryDomain(clock), diskRepository)
+            val pausedId = MemoryId.new()
+            diskUseCase.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.CREATE, pausedId,
+                "Paused section", "Keep this paused", MemoryScope(MemoryScopeKind.GLOBAL)))
+            diskUseCase.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.PAUSE, pausedId))
+            val request = MemorySummaryReplacement(MemoryIntentId.new(), MemoryId.new(), "Saved full text", emptyMap())
+            assertTrue(diskUseCase.replaceSummary(request) is MemoryMutationResult.Applied)
+            disk.close()
+            disk = Room.databaseBuilder(context, NanfengAiDatabase::class.java, name).allowMainThreadQueries().build()
+            diskRepository = RoomMemoryRepository(disk, clock)
+            assertEquals("Saved full text", diskRepository.list(MemoryScopeKind.GLOBAL, MemoryStatus.ACTIVE, "").single().memory.body)
+            assertEquals(MemoryStatus.PAUSED, diskRepository.findById(pausedId)!!.memory.status)
+        } finally { disk.close(); context.deleteDatabase(name) }
+    }
+
+    @Test fun `persisted replacement excludes old text from rebuilt real SQLite retrieval index`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "memory-retrieval-${UUID.randomUUID()}.db"
+        val disk = Room.databaseBuilder(context, NanfengAiDatabase::class.java, name).allowMainThreadQueries().build()
+        try {
+            val diskRepository = RoomMemoryRepository(disk, clock)
+            val diskUseCase = ManageMemoryUseCase(MemoryDomain(clock), diskRepository)
+            diskUseCase.execute(MemoryIntent(MemoryIntentId.new(), MemoryIntentAction.CREATE, MemoryId.new(),
+                "Previous", "Original description", MemoryScope(MemoryScopeKind.GLOBAL)))
+            val request = MemorySummaryReplacement(MemoryIntentId.new(), MemoryId.new(), "Replacement description",
+                diskRepository.list(MemoryScopeKind.GLOBAL, MemoryStatus.ACTIVE, "")
+                    .associate { it.memory.id to it.revisions.maxOf { r -> r.revision } })
+            assertTrue(diskUseCase.replaceSummary(request) is MemoryMutationResult.Applied)
+            disk.close()
+            java.sql.DriverManager.registerDriver(org.sqlite.JDBC())
+            java.sql.DriverManager.getConnection("jdbc:sqlite:${context.getDatabasePath(name).absolutePath}").use { connection ->
+                connection.createStatement().use { statement ->
+                    com.nanzhufeng.ai.data.local.ContextIndexSchema.statements().forEach(statement::execute)
+                    statement.executeQuery("SELECT COUNT(*) FROM memory_context_fts WHERE memory_context_fts MATCH 'original*' AND status='ACTIVE'").use { result ->
+                        assertTrue(result.next()); assertEquals(0, result.getInt(1))
+                    }
+                    statement.executeQuery("SELECT COUNT(*) FROM memory_context_fts WHERE memory_context_fts MATCH 'replacement*' AND status='ACTIVE'").use { result ->
+                        assertTrue(result.next()); assertEquals(1, result.getInt(1))
+                    }
+                }
+            }
+        } finally { disk.close(); context.deleteDatabase(name) }
+    }
+
     @Test fun `high sensitive content never creates a row or conflict candidate`() {
         val result = useCase.execute(MemoryIntent(MemoryIntentId("secret"), MemoryIntentAction.CREATE, MemoryId("secret"), "密码", "密码: unsafe-secret", MemoryScope(MemoryScopeKind.GLOBAL)))
         assertEquals(MemoryMutationResult.Rejected(MemoryRejectionCode.HIGH_SENSITIVITY_PASSWORD), result)

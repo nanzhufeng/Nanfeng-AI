@@ -13,7 +13,7 @@ test('conversation suggestion requires an explicit future reminder or monitoring
   assert.equal(hasExplicitReminderIntent('你觉得我需要提醒吗'), false);
 });
 
-test('reminder settings render review-only drafts, persisted plans and fail-closed notification permission', () => {
+test('reminder settings retain notification controls without duplicate plan management', () => {
   const html = renderAndroidSettingsShell({
     page: 'reminders',
     native: true,
@@ -29,13 +29,10 @@ test('reminder settings render review-only drafts, persisted plans and fail-clos
     },
   });
   assert.match(html, /系统通知权限/);
-  assert.match(html, /审阅编辑/);
-  assert.match(html, /每日检查/);
-  assert.match(html, /费用未报告/);
-  assert.match(html, /data-reminder-plan-id="plan-safe"/);
-  assert.match(html, /data-action="edit-reminder-plan"/);
-  assert.match(html, /通知点击桥：原生桥已就绪 · READY/);
-  assert.match(html, /退出后后台唤醒：已启用/);
+  assert.doesNotMatch(html, /计划与监控|新建草案|审阅编辑|每日检查|费用未报告/);
+  assert.doesNotMatch(html, /data-reminder-plan-id|data-action="edit-reminder-plan"/);
+  assert.doesNotMatch(html, /通知点击桥：/);
+  assert.doesNotMatch(html, /退出后后台唤醒：/);
 });
 
 test('desktop reminder bridge keeps explicit confirmation, narrow notification permissions and safe click routing', async () => {

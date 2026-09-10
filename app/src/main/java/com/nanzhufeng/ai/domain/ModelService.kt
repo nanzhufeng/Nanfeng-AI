@@ -29,7 +29,13 @@ object NanfengModelServiceCatalog {
         ModelPresetDescriptor(
             id = ModelPresetId.CLAUDE_FABLE_5,
             displayName = "Claude Fable 5",
-            description = "应对最棘手的复杂任务。",
+            description = "旧版深度选择；既有会话保留其实际归因。",
+            modelFamilyHint = "Anthropic",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.CLAUDE_FABLE_5_1,
+            displayName = "Claude Fable 5.1",
+            description = "适合长程代码、研究与复杂知识工作。",
             modelFamilyHint = "Anthropic",
         ),
         ModelPresetDescriptor(
@@ -66,6 +72,12 @@ object NanfengModelServiceCatalog {
             id = ModelPresetId.GPT_5_6_LUNA,
             displayName = "GPT-5.6 Luna",
             description = "适合高频、轻量任务。",
+            modelFamilyHint = "OpenAI",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.GPT_6_ASTRA,
+            displayName = "GPT-6 Astra",
+            description = "适合高难分析、工程与长程复杂任务。",
             modelFamilyHint = "OpenAI",
         ),
         ModelPresetDescriptor(
@@ -200,15 +212,17 @@ object NanfengModelServiceCatalog {
             ModelPresetId.QWEN_3_8_MAX,
             ModelPresetId.GPT_5_6_SOL,
             ModelPresetId.CLAUDE_OPUS_5,
-            ModelPresetId.CLAUDE_FABLE_5,
+            ModelPresetId.CLAUDE_FABLE_5_1,
+            ModelPresetId.GPT_6_ASTRA,
         ),
         AutoTask.COMPLEX_REASONING to listOf(
+            ModelPresetId.GPT_6_ASTRA,
             ModelPresetId.GPT_5_6_SOL,
             ModelPresetId.DEEPSEEK_V4_PRO,
             ModelPresetId.GLM_5_3,
             ModelPresetId.QWEN_3_8_MAX,
             ModelPresetId.CLAUDE_OPUS_5,
-            ModelPresetId.CLAUDE_FABLE_5,
+            ModelPresetId.CLAUDE_FABLE_5_1,
             ModelPresetId.GPT_5_6_TERRA,
             ModelPresetId.CLAUDE_SONNET_5,
             ModelPresetId.DEEPSEEK_V4_FLASH,
@@ -233,7 +247,8 @@ object NanfengModelServiceCatalog {
             ModelPresetId.QWEN_3_8_MAX,
             ModelPresetId.GPT_5_6_LUNA,
             ModelPresetId.CLAUDE_HAIKU_4_5,
-            ModelPresetId.CLAUDE_FABLE_5,
+            ModelPresetId.CLAUDE_FABLE_5_1,
+            ModelPresetId.GPT_6_ASTRA,
             ModelPresetId.GEMINI_3_7_FLASH,
         ),
     )
@@ -274,12 +289,14 @@ fun modelDisplayNameForUser(displayName: String): String {
  */
 fun composerModelShortNameForUser(displayName: String): String = when (modelDisplayNameForUser(displayName)) {
     "Claude Fable 5" -> "Fable 5"
+    "Claude Fable 5.1" -> "Fable 5.1"
     "Claude Opus 5" -> "Opus 5"
     "Claude Sonnet 5" -> "Sonnet 5"
     "Claude Haiku 4.5" -> "Haiku 4.5"
     "GPT-5.6 Sol" -> "5.6 Sol"
     "GPT-5.6 Terra" -> "5.6 Terra"
     "GPT-5.6 Luna" -> "5.6 Luna"
+    "GPT-6 Astra" -> "Astra"
     "Grok 4.1 Fast" -> "4.1 Fast"
     "Grok 4.6 High" -> "4.6 High"
     "Gemini 3.7 Flash" -> "Gemini 3.7"

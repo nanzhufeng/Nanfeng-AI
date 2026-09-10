@@ -77,6 +77,24 @@ class P2JOpenRouterRegistryContractsTest {
     }
 
     @Test
+    fun `Fable 5 point 1 and Astra use their exact catalog IDs without reviving Fable 5`() {
+        val snapshot = requireNotNull(OpenRouterRegistrySnapshotVerifier().verify(
+            OpenRouterCatalogResponse(
+                claudeCatalog() + listOf(
+                    catalogModel("anthropic/claude-fable-5.1-20260831", "Claude Fable 5.1", "0.000004", "0.00002"),
+                    catalogModel("openai/gpt-6-astra", "GPT-6 Astra", "0.000005", "0.000025"),
+                ),
+                null,
+            ),
+            now,
+        ))
+
+        assertEquals("anthropic/claude-fable-5.1-20260831", snapshot.modelFor(ModelPresetId.CLAUDE_FABLE_5_1)?.id)
+        assertEquals("openai/gpt-6-astra", snapshot.modelFor(ModelPresetId.GPT_6_ASTRA)?.id)
+        assertNull(snapshot.modelFor(ModelPresetId.CLAUDE_FABLE_5))
+    }
+
+    @Test
     fun `fast provider variants never map or resolve as a normal preset`() {
         val snapshot = OpenRouterRegistrySnapshotVerifier().verify(
             OpenRouterCatalogResponse(

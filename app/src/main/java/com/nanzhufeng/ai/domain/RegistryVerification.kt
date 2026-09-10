@@ -90,7 +90,12 @@ class OpenRouterRegistrySnapshotVerifier {
         if (candidates.isEmpty()) return null
 
         fun exact(tokens: List<String>): ModelDescriptor? =
-            candidates.firstOrNull { candidate -> tokens.any { token -> token in candidate.id } }
+            candidates.firstOrNull { candidate ->
+                val terminalId = candidate.id.substringAfterLast('/').substringBefore(':').lowercase()
+                tokens.any { token ->
+                    Regex("(?<![A-Za-z0-9])${Regex.escape(token)}(?=$|[-_])").containsMatchIn(terminalId)
+                }
+            }
 
         // GPT standard and Pro variants are separate billable models.  A logical standard
         // preset must never select a similarly named Pro model merely because its ID contains
@@ -103,24 +108,28 @@ class OpenRouterRegistrySnapshotVerifier {
         // Do not guess.  Catalog names change, but a logical product label may only become
         // selectable when the public catalog contains its explicit mapping.
         val fable = exact(listOf("fable-5", "fable_5"))
+        val fable51 = exact(listOf("fable-5.1", "fable-5-1", "fable_5_1"))
         val opus = exact(listOf("opus-5", "opus_5")) ?: return null
         val sonnet = exact(listOf("sonnet-5", "sonnet_5"))
         val haiku = exact(listOf("haiku-4-5", "haiku_4_5", "haiku"))
         val sol = standardGpt(listOf("gpt-5.6-sol", "gpt-5-6-sol")) ?: return null
         val terra = standardGpt(listOf("gpt-5.6-terra", "gpt-5-6-terra")) ?: return null
         val luna = standardGpt(listOf("gpt-5.6-luna", "gpt-5-6-luna"))
+        val astra = standardGpt(listOf("gpt-6-astra"))
         val grok41Fast = candidates.firstOrNull { it.id == "x-ai/grok-4.1-fast" }
         val grok46 = candidates.firstOrNull { it.id == "x-ai/grok-4.6" }
         val gemini = exact(listOf("gemini-3.7-flash", "gemini-3-7-flash")) ?: return null
         val kimiK3 = candidates.firstOrNull { it.id == "moonshotai/kimi-k3" }
         val mappings = buildList {
             fable?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_FABLE_5, it.id)) }
+            fable51?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_FABLE_5_1, it.id)) }
             add(ModelPresetMapping(ModelPresetId.CLAUDE_OPUS_5, opus.id))
             sonnet?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_SONNET_5, it.id)) }
             haiku?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_HAIKU_4_5, it.id)) }
             add(ModelPresetMapping(ModelPresetId.GPT_5_6_SOL, sol.id))
             add(ModelPresetMapping(ModelPresetId.GPT_5_6_TERRA, terra.id))
             luna?.let { add(ModelPresetMapping(ModelPresetId.GPT_5_6_LUNA, it.id)) }
+            astra?.let { add(ModelPresetMapping(ModelPresetId.GPT_6_ASTRA, it.id)) }
             grok41Fast?.let { add(ModelPresetMapping(ModelPresetId.GROK_4_1_FAST, it.id)) }
             grok46?.let { add(ModelPresetMapping(ModelPresetId.GROK_4_6_HIGH, it.id)) }
             add(ModelPresetMapping(ModelPresetId.GEMINI_3_7_FLASH, gemini.id))

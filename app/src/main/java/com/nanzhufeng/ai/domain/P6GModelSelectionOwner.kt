@@ -33,7 +33,7 @@ data class P6GRouteMetadata(
  * until a separately verified registry is explicitly authorized.
  */
 object P6GCuratedModelCatalog {
-    const val VERSION = "official-model-picker-v1"
+    const val VERSION = "official-model-picker-v2"
 
     fun snapshot(): P6GLocalCatalogSnapshot = P6GLocalCatalogSnapshot(
         catalogVersion = VERSION,

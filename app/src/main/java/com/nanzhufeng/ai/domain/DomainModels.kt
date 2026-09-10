@@ -121,12 +121,14 @@ enum class ProviderId { MOCK, OPENROUTER, QWEN, DEEPSEEK, ZHIPU }
 
 enum class ModelPresetId {
     CLAUDE_FABLE_5,
+    CLAUDE_FABLE_5_1,
     CLAUDE_OPUS_5,
     CLAUDE_SONNET_5,
     CLAUDE_HAIKU_4_5,
     GPT_5_6_SOL,
     GPT_5_6_TERRA,
     GPT_5_6_LUNA,
+    GPT_6_ASTRA,
     GROK_4_1_FAST,
     GROK_4_5,
     GROK_4_6_HIGH,

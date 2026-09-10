@@ -8,6 +8,7 @@ import com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass
 import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.ComposerModelChoice
 import com.nanzhufeng.ai.domain.ComposerModelSlot
+import com.nanzhufeng.ai.domain.ModelPresetId
 import com.nanzhufeng.ai.domain.classifyProviderFailure
 import com.nanzhufeng.ai.domain.OFFICE_OPEN_XML_MIME_TYPES
 import com.nanzhufeng.ai.domain.extractOfficeOpenXmlText
@@ -70,9 +71,36 @@ enum class OfficialWebSearchRoute {
 
 data class ChatRequestOptions(
     val webSearchRoute: OfficialWebSearchRoute = OfficialWebSearchRoute.NONE,
+    /** OpenRouter's supported cross-provider reasoning control, selected by product policy. */
+    val reasoningEffort: ReasoningEffort? = null,
 ) {
     val liveWebSearch: Boolean get() = webSearchRoute != OfficialWebSearchRoute.NONE
     companion object { val Standard = ChatRequestOptions() }
+}
+
+enum class ReasoningEffort(val wireValue: String) {
+    HIGH("high"),
+}
+
+/**
+ * Deep selections that represent Claude or ChatGPT reasoning products share one explicit
+ * OpenRouter request setting.  This policy is based on product presets rather than an arbitrary
+ * provider model-ID substring, so both direct deep selection and Auto's chosen route are covered.
+ */
+internal object OpenRouterDeepReasoningPolicy {
+    private val highPresets = setOf(
+        ModelPresetId.CLAUDE_FABLE_5_1,
+        ModelPresetId.CLAUDE_OPUS_5,
+        ModelPresetId.GPT_6_ASTRA,
+        ModelPresetId.GPT_5_6_SOL,
+    )
+
+    fun forChoice(choice: ComposerModelChoice): ChatRequestOptions =
+        if (choice.routes.any { it in highPresets }) ChatRequestOptions(reasoningEffort = ReasoningEffort.HIGH)
+        else ChatRequestOptions.Standard
+
+    fun forPreset(preset: ModelPresetId, current: ChatRequestOptions): ChatRequestOptions =
+        if (preset in highPresets) current.copy(reasoningEffort = ReasoningEffort.HIGH) else current
 }
 
 sealed interface ChatAdapterPrepareResult {
@@ -271,6 +299,9 @@ abstract class OpenAiCompatibleChatAdapter : ChatProviderAdapter {
 
 open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
     override open val providerId = ProviderId.OPENROUTER
+
+    override fun requestOptions(model: ResolvedModel, choice: ComposerModelChoice): ChatRequestOptions =
+        OpenRouterDeepReasoningPolicy.forChoice(choice)
 
     /** Grok product presets own their reasoning mode and a bounded product output budget. The
      * provider capability ceiling may be much larger, but sending it as the default maximum would
@@ -503,6 +534,7 @@ private fun StringBuilder.appendRequestOptions(options: ChatRequestOptions, stre
         OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS -> append(",\"tools\":[{\"type\":\"web_search\",\"web_search\":{\"enable\":true,\"search_engine\":\"search_std\",\"search_result\":true,\"count\":5,\"content_size\":\"medium\"}}],\"tool_choice\":\"auto\"")
         OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.QWEN_RESPONSES, OfficialWebSearchRoute.DEEPSEEK_RESPONSES -> Unit
     }
+    options.reasoningEffort?.let { append(",\"reasoning\":{\"effort\":\"").append(it.wireValue).append("\"}") }
     append(",\"stream\":").append(stream)
     append('}')
 }
@@ -514,6 +546,7 @@ private fun requestOptionsSuffix(options: ChatRequestOptions, stream: Boolean): 
         OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS -> append(",\"tools\":[{\"type\":\"web_search\",\"web_search\":{\"enable\":true,\"search_engine\":\"search_std\",\"search_result\":true,\"count\":5,\"content_size\":\"medium\"}}],\"tool_choice\":\"auto\"")
         OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.QWEN_RESPONSES, OfficialWebSearchRoute.DEEPSEEK_RESPONSES -> Unit
     }
+    options.reasoningEffort?.let { append(",\"reasoning\":{\"effort\":\"").append(it.wireValue).append("\"}") }
     append(",\"stream\":").append(stream)
     append('}')
 }

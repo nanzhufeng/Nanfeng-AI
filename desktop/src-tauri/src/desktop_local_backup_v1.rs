@@ -1548,7 +1548,12 @@ mod tests {
                 [],
             )
             .unwrap();
-        connection.execute("UPDATE desktop_portable_personalization_v1 SET interests='备份后的关注方向'",[]).unwrap();
+        connection
+            .execute(
+                "UPDATE desktop_portable_personalization_v1 SET interests='备份后的关注方向'",
+                [],
+            )
+            .unwrap();
         connection.execute("UPDATE desktop_conversation_read_markers_v1 SET last_read_at_ms=30,manual_unread_at_ms=222",[]).unwrap();
         drop(connection);
         let usage_ledger = usage_ledger_path(&root);
@@ -1588,7 +1593,13 @@ mod tests {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .unwrap();
-        let interests:String=connection.query_row("SELECT interests FROM desktop_portable_personalization_v1 WHERE id=1",[],|row|row.get(0)).unwrap();
+        let interests: String = connection
+            .query_row(
+                "SELECT interests FROM desktop_portable_personalization_v1 WHERE id=1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         let history_state:String=connection.query_row("SELECT status FROM desktop_history_knowledge_candidates_v1 WHERE candidate_id='candidate-running'",[],|row|row.get(0)).unwrap();
         let reminder_draft:(String,Option<String>)=connection.query_row("SELECT status,safe_error_code FROM desktop_reminder_drafts_v1 WHERE draft_id='draft-running'",[],|row|Ok((row.get(0)?,row.get(1)?))).unwrap();
         let reminder_plan:(String,Option<i64>,Option<String>)=connection.query_row("SELECT status,next_run_at_ms,last_safe_error_code FROM desktop_reminder_plans_v1 WHERE plan_id='plan-running'",[],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?))).unwrap();
@@ -1598,12 +1609,25 @@ mod tests {
         assert_eq!(preset, "CURRENT_DEVICE");
         assert_eq!(derived, 0);
         assert_eq!(task, ("FAILED".into(), Some("INTERRUPTED".into())));
-        assert_eq!(interests,"备份前的关注方向");
-        assert_eq!(history_state,"UNKNOWN");
-        assert_eq!(reminder_draft,("UNKNOWN".into(),Some("BACKUP_RESTORED".into())));
-        assert_eq!(reminder_plan,("UNKNOWN".into(),None,Some("BACKUP_RESTORED".into())));
-        assert_eq!(reminder_run,("UNKNOWN".into(),"SUPPRESSED".into(),Some("BACKUP_RESTORED".into())));
-        assert_eq!(read_marker,(30,Some(222)));
+        assert_eq!(interests, "备份前的关注方向");
+        assert_eq!(history_state, "UNKNOWN");
+        assert_eq!(
+            reminder_draft,
+            ("UNKNOWN".into(), Some("BACKUP_RESTORED".into()))
+        );
+        assert_eq!(
+            reminder_plan,
+            ("UNKNOWN".into(), None, Some("BACKUP_RESTORED".into()))
+        );
+        assert_eq!(
+            reminder_run,
+            (
+                "UNKNOWN".into(),
+                "SUPPRESSED".into(),
+                Some("BACKUP_RESTORED".into())
+            )
+        );
+        assert_eq!(read_marker, (30, Some(222)));
         let usage_tokens: i64 = Connection::open(usage_ledger)
             .unwrap()
             .query_row(

@@ -1269,6 +1269,10 @@ private fun CaptureScreen(
                 },
                 onQuerySummary = memoryViewModel::querySummary,
                 onAppendSummaryUpdate = memoryViewModel::appendSummaryUpdate,
+                onEditSummary = memoryViewModel::editSummary,
+                onUpdateSummaryEditor = memoryViewModel::updateSummaryEditor,
+                onSaveSummaryEditor = memoryViewModel::saveSummaryEditor,
+                onDismissSummaryEditor = memoryViewModel::dismissSummaryEditor,
             )
         }
         return
@@ -2474,23 +2478,29 @@ private fun ConversationStylePickerDialog(
 ) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.90f).widthIn(max = 520.dp),
-            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(0.dp),
             color = ForegroundSurface,
             tonalElevation = 0.dp,
-            shadowElevation = 12.dp,
+            shadowElevation = 0.dp,
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Text(
-                    "基础风格和语气",
-                    modifier = Modifier.padding(start = 26.dp, end = 26.dp, top = 24.dp, bottom = 14.dp),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = BodyText,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp)) {
+                    Text(
+                        "基础风格和语气",
+                        modifier = Modifier.align(Alignment.Center).padding(horizontal = 48.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        color = BodyText,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterStart)) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", tint = BodyText)
+                    }
+                }
                 Column(
                     modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
                         .padding(start = 18.dp, end = 18.dp, bottom = 20.dp),
@@ -2516,15 +2526,14 @@ private fun ConversationStylePickerDialog(
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text(
                                         definition.label,
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleLarge,
                                         color = if (isSelected) AccentOrange else BodyText,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Bold,
                                     )
                                     Text(
                                         definition.summary,
-                                        style = MaterialTheme.typography.bodyLarge,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = SecondaryText,
-                                        maxLines = 3,
                                     )
                                 }
                                 if (isSelected) {

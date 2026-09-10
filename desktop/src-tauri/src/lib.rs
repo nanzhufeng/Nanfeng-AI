@@ -1,8 +1,9 @@
+mod desktop_storage_location;
 pub mod conversation_real_text_execution_v1;
 pub mod desktop_account_sync_v1;
 pub mod desktop_app_settings_v1;
-pub mod desktop_conversation_read_state_v1;
 pub mod desktop_background_runtime_v1;
+pub mod desktop_conversation_read_state_v1;
 pub mod desktop_history_knowledge_v1;
 pub mod desktop_local_backup_v1;
 pub mod desktop_model_service_v1;
@@ -41,7 +42,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     io::{Cursor, Read, Write},
     path::{Path, PathBuf},
@@ -85,12 +86,38 @@ const FB_P6_050_ACCEPTANCE_ENV: &str = "NANFENG_AI_FB_P6_050_ACCEPTANCE";
 const FB_P6_050_ACCEPTANCE_ROOT_NAME: &str = "nanfeng-ai-fb-p6-050-acceptance-20260815";
 const ORDINARY_CHAT_ACCEPTANCE_ENV: &str = "NANFENG_AI_DESKTOP_ORDINARY_CHAT_ACCEPTANCE";
 const ORDINARY_CHAT_MOCK_ENDPOINT_ENV: &str = "NANFENG_AI_DESKTOP_ORDINARY_CHAT_MOCK_ENDPOINT";
-const ORDINARY_CHAT_ACCEPTANCE_ROOT_ENV: &str =
-    "NANFENG_AI_DESKTOP_ORDINARY_CHAT_ACCEPTANCE_ROOT";
+const ORDINARY_CHAT_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_ORDINARY_CHAT_ACCEPTANCE_ROOT";
 const ORDINARY_CHAT_ACCEPTANCE_ROOT_PREFIX: &str =
     "/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.";
+const C02_C06_ACCEPTANCE_ENV: &str = "NANFENG_AI_DESKTOP_C02_C06_ACCEPTANCE";
+const C02_C06_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_C02_C06_ACCEPTANCE_ROOT";
+const C02_C06_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-desktop-c02-c06-acceptance.";
+const C02_C06_ACCEPTANCE_WORKSPACE_ID: &str = "workspace-c02-c06-visual-acceptance";
+const C13_ACCEPTANCE_ENV: &str = "NANFENG_AI_DESKTOP_C13_ACCEPTANCE";
+const C13_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_C13_ACCEPTANCE_ROOT";
+const C13_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-desktop-c13-acceptance.";
+const C13_ACCEPTANCE_WORKSPACE_ID: &str = "workspace-c13-lifecycle-acceptance";
+const C14_ACCEPTANCE_ENV: &str = "NANFENG_AI_DESKTOP_C14_ACCEPTANCE";
+const C14_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_C14_ACCEPTANCE_ROOT";
+const C14_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-desktop-c14-acceptance.";
+const C14_ACCEPTANCE_WORKSPACE_ID: &str = "workspace-c14-local-data-acceptance";
+const C15_ACCEPTANCE_ENV: &str = "NANFENG_AI_DESKTOP_C15_ACCEPTANCE";
+const C15_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_C15_ACCEPTANCE_ROOT";
+const C15_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-desktop-c15-acceptance.";
+const C15_ACCEPTANCE_WORKSPACE_ID: &str = "workspace-c15-workspace-acceptance";
+const C07_C12_ACCEPTANCE_ENV: &str = "NANFENG_AI_DESKTOP_C07_C12_OFFLINE_ACCEPTANCE";
+const C07_C12_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_C07_C12_OFFLINE_ACCEPTANCE_ROOT";
+const C07_C12_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-desktop-c07-c12-acceptance.";
+const C07_C12_ACCEPTANCE_WORKSPACE_ID: &str = "workspace-c07-c12-offline-acceptance";
+const C16_VISUAL_ACCEPTANCE_ENV: &str = "NANFENG_AI_DESKTOP_C16_VISUAL_ACCEPTANCE";
+const C16_VISUAL_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_C16_VISUAL_ACCEPTANCE_ROOT";
+const C16_VISUAL_ACCEPTANCE_STATE_ENV: &str = "NANFENG_AI_DESKTOP_C16_VISUAL_STATE";
+const C16_VISUAL_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-desktop-c16-visual-acceptance.";
 const ACCOUNT_SYNC_ACCEPTANCE_ROOT_ENV: &str = "NANFENG_AI_ACCOUNT_SYNC_ACCEPTANCE_ROOT";
 const ACCOUNT_SYNC_ACCEPTANCE_ROOT_PREFIX: &str = "/tmp/nanfeng-ai-account-sync-acceptance.";
+/// One-process acceptance seam for opening the real UI and running SQLite migrations without
+/// dispatching automatic work. It is intentionally a CLI-only diagnostic, never a saved setting.
+const UI_SCHEMA_DIAGNOSTIC_ARGUMENT: &str = "--diagnostic-ui-schema-acceptance";
 const P6E_ACCEPTANCE_RECEIPT_FILE: &str = "p6e-acceptance-receipt.json";
 const CHATGPT_EXPORT_MAX_BYTES: usize = 32 * 1024 * 1024;
 const CHATGPT_EXPORT_MAX_CONVERSATIONS: usize = 200;
@@ -127,6 +154,101 @@ const PAYLOADS: [&str; 6] = [
     "payload/relations.json",
     "payload/settings.safe.json",
 ];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DesktopStartupMode {
+    Normal,
+    BackgroundCycle,
+    UiSchemaDiagnostic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DesktopStartupWorkPlan {
+    automatic_work: bool,
+    external_access: bool,
+    business_state_recovery: bool,
+}
+
+impl DesktopStartupMode {
+    fn work_plan(self) -> DesktopStartupWorkPlan {
+        match self {
+            Self::Normal | Self::BackgroundCycle => DesktopStartupWorkPlan {
+                automatic_work: true,
+                external_access: true,
+                business_state_recovery: true,
+            },
+            Self::UiSchemaDiagnostic => DesktopStartupWorkPlan {
+                automatic_work: false,
+                external_access: false,
+                business_state_recovery: false,
+            },
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Normal => "NORMAL",
+            Self::BackgroundCycle => "BACKGROUND_CYCLE",
+            Self::UiSchemaDiagnostic => "UI_SCHEMA_DIAGNOSTIC_ACCEPTANCE",
+        }
+    }
+}
+
+impl DesktopStartupWorkPlan {
+    fn runs_automatic_work(self) -> bool {
+        self.automatic_work
+    }
+    fn allows_external_access(self) -> bool {
+        self.external_access
+    }
+    fn recovers_business_state(self) -> bool {
+        self.business_state_recovery
+    }
+}
+
+fn desktop_startup_mode_from_args<I, S>(args: I) -> Result<DesktopStartupMode, String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut diagnostic = false;
+    let mut background = false;
+    for argument in args {
+        match argument.as_ref() {
+            UI_SCHEMA_DIAGNOSTIC_ARGUMENT => diagnostic = true,
+            desktop_background_runtime_v1::BACKGROUND_CYCLE_ARGUMENT => background = true,
+            _ => {}
+        }
+    }
+    match (diagnostic, background) {
+        (true, true) => {
+            Err("UI/schema diagnostic acceptance cannot run as a background cycle".into())
+        }
+        (true, false) => Ok(DesktopStartupMode::UiSchemaDiagnostic),
+        (false, true) => Ok(DesktopStartupMode::BackgroundCycle),
+        (false, false) => Ok(DesktopStartupMode::Normal),
+    }
+}
+
+fn background_cycle_root(startup_mode: DesktopStartupMode) -> Result<Option<PathBuf>, String> {
+    if startup_mode != DesktopStartupMode::BackgroundCycle {
+        return Ok(None);
+    }
+    std::env::var_os(desktop_background_runtime_v1::BACKGROUND_APP_ROOT_ENV)
+        .map(PathBuf::from)
+        .map(|root| {
+            if !root.is_absolute()
+                || root.parent().is_none()
+                || root
+                    .components()
+                    .any(|component| component == std::path::Component::ParentDir)
+            {
+                return Err("Desktop 后台数据根无效".to_owned());
+            }
+            Ok(root)
+        })
+        .transpose()
+}
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -378,6 +500,30 @@ struct DesktopAttachmentImportArgs {
     selected_path: String,
 }
 
+/// Clipboard bytes are accepted only after the renderer has received a concrete File from the
+/// focused Composer paste event. The native owner never accepts a clipboard path or URI.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopClipboardAttachmentImportArgs {
+    workspace_id: String,
+    display_name: String,
+    bytes_base64: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopCameraCaptureImportArgs {
+    workspace_id: String,
+    data_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopTemporaryCameraCaptureImportArgs {
+    temporary_id: String,
+    data_url: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopMarkdownWriteArgs {
@@ -398,6 +544,8 @@ struct DesktopRuntimeInfo {
     version: String,
     platform: &'static str,
     arch: &'static str,
+    startup_mode: &'static str,
+    automatic_work_suppressed: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -462,11 +610,28 @@ struct DesktopSystemOpenAttachmentArgs {
     attachment_id: String,
 }
 
+/// Explicit native-save-picker target for one workspace-owned verified attachment.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopAttachmentExportArgs {
+    workspace_id: String,
+    attachment_id: String,
+    selected_path: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopTemporaryAttachmentImportArgs {
     temporary_id: String,
     selected_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopTemporaryClipboardAttachmentImportArgs {
+    temporary_id: String,
+    display_name: String,
+    bytes_base64: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -679,6 +844,16 @@ struct P6gConversationOverrideArgs {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct DesktopConversationPreferencesArgs {
+    workspace_id: String,
+    conversation_id: String,
+    expected_revision: u64,
+    tone_override: Option<String>,
+    web_search_override: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct P6gEvaluateArgs {
     workspace_id: String,
     conversation_id: String,
@@ -700,6 +875,7 @@ struct DesktopModelServiceSettingProjection {
     preset_id: String,
     preset_display_name: String,
     credential_stored: bool,
+    credential_status: String,
     revision: u64,
     presets: Vec<desktop_model_service_v1::PresetDescriptor>,
     non_chat_capabilities: Vec<desktop_model_service_v1::PresetDescriptor>,
@@ -745,10 +921,31 @@ struct DesktopModelServiceConnectionTestProjection {
 struct DesktopOrdinaryChatSubmitArgs {
     workspace_id: String,
     conversation_id: Option<String>,
+    /// Present only while creating the first message of a project-scoped work conversation.
+    #[serde(default)]
+    project_id: Option<String>,
     expected_revision: Option<u64>,
     text: String,
     #[serde(default)]
     attachment_ids: Vec<String>,
+    /// A draft-scoped exact model choice for the first message of a not-yet-created conversation.
+    #[serde(default)]
+    model_id: Option<String>,
+    /// Draft-scoped conversation style persisted atomically with a new conversation.
+    #[serde(default)]
+    tone_override: Option<String>,
+    /// Draft-scoped web-search choice persisted atomically with a new conversation.
+    #[serde(default)]
+    web_search_override: Option<bool>,
+    /// Produced by the visible Send action. This is not a second confirmation surface.
+    egress_authorization: Option<DesktopOrdinaryChatEgressAuthorization>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopOrdinaryChatEgressAuthorization {
+    approved_at_ms: i64,
+    disclosure_version: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -772,6 +969,8 @@ struct DesktopCompareSubmitArgs {
     text: String,
     #[serde(default)]
     attachment_ids: Vec<String>,
+    #[serde(default)]
+    egress_authorization: Option<DesktopOrdinaryChatEgressAuthorization>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -843,6 +1042,7 @@ struct DesktopOrdinaryChatPrepared {
     messages: Value,
     idempotency_key: String,
     web_search_route: String,
+    preflight_failure_code: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -923,6 +1123,7 @@ struct DesktopOrdinaryChatDiagnosticProjection {
     provider_label: String,
     model_id: String,
     summary: String,
+    latency_ms: Option<i64>,
     created_at_ms: i64,
 }
 
@@ -962,6 +1163,7 @@ struct DesktopPrivacyAggregateProjection {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopPrivacyInventoryProjection {
+    storage_path: String,
     total_bytes: u64,
     aggregates: Vec<DesktopPrivacyAggregateProjection>,
 }
@@ -1138,13 +1340,80 @@ struct AppState {
     store: Mutex<DesktopWorkspaceStore>,
     ordinary_chat_cancellations: Mutex<BTreeMap<String, Vec<Arc<AtomicBool>>>>,
     ordinary_chat_mock_endpoint: Option<String>,
+    ordinary_chat_acceptance_enabled: bool,
     history_knowledge_cancellations: Mutex<BTreeMap<String, Arc<AtomicBool>>>,
     reminder_cancellations: Mutex<BTreeMap<String, Arc<AtomicBool>>>,
     p6e_acceptance_enabled: bool,
     p6h_acceptance_enabled: bool,
     account_sync_mock_enabled: bool,
+    c16_visual_acceptance_state: Option<String>,
     pending_recovery: Mutex<BTreeMap<String, desktop_account_sync_v1::PendingRecovery>>,
     deferred_exit_started: AtomicBool,
+    startup_mode: DesktopStartupMode,
+}
+
+impl AppState {
+    fn require_external_access(&self) -> Result<(), String> {
+        if self.startup_mode.work_plan().allows_external_access() {
+            Ok(())
+        } else {
+            Err(json_error(
+                "UI/schema diagnostic acceptance 已抑制凭据、网络与外部进程",
+            ))
+        }
+    }
+}
+
+struct DiagnosticProviderCredentialStore;
+
+impl ProviderCredentialStore for DiagnosticProviderCredentialStore {
+    fn presence(&self, _provider_id: &str) -> desktop_model_service_v1::CredentialPresence {
+        desktop_model_service_v1::CredentialPresence::MissingOrUnavailable
+    }
+    fn save_user_provided_secret(&self, _provider_id: &str, _secret: &[u8]) -> Result<(), String> {
+        Err(json_error("诊断验收模式不写入 Provider 凭据"))
+    }
+    fn with_secret<T>(
+        &self,
+        _provider_id: &str,
+        _operation: impl FnOnce(&[u8]) -> Result<T, String>,
+    ) -> Result<T, String> {
+        Err(json_error("诊断验收模式不读取 Provider 凭据"))
+    }
+    fn reveal_user_requested_secret(
+        &self,
+        _provider_id: &str,
+    ) -> Result<Zeroizing<String>, String> {
+        Err(json_error("诊断验收模式不读取 Provider 凭据"))
+    }
+    fn delete_user_secret(&self, _provider_id: &str) -> Result<(), String> {
+        Err(json_error("诊断验收模式不写入 Provider 凭据"))
+    }
+}
+
+struct DiagnosticAccountCredentialStore;
+
+impl sync_state_v1::CredentialStore for DiagnosticAccountCredentialStore {
+    fn save(&self, _service: &str, _account: &str, _secret: &[u8]) -> Result<(), String> {
+        Err(json_error("诊断验收模式不写入账号凭据"))
+    }
+    fn read(&self, _service: &str, _account: &str) -> Result<Vec<u8>, String> {
+        Err(json_error("诊断验收模式不读取账号凭据"))
+    }
+    fn delete(&self, _service: &str, _account: &str) -> Result<(), String> {
+        Err(json_error("诊断验收模式不写入账号凭据"))
+    }
+}
+
+fn resolve_ocr_api_key_for_run(
+    ordinary_chat_acceptance_enabled: bool,
+    load_normal_credential: impl FnOnce() -> Result<Vec<u8>, String>,
+) -> Result<Vec<u8>, String> {
+    if ordinary_chat_acceptance_enabled {
+        Ok(Vec::new())
+    } else {
+        load_normal_credential()
+    }
 }
 
 struct PreflightedPackage {
@@ -1498,6 +1767,12 @@ fn is_temporary_model_override_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(*byte, b'.' | b'_' | b':' | b'-'))
 }
 
+fn is_desktop_chat_model_id(value: &str) -> bool {
+    desktop_model_service_v1::chat_presets()
+        .iter()
+        .any(|preset| preset.chat_selectable && (preset.id == value || preset.model_id == value))
+}
+
 fn is_sha256(value: &str) -> bool {
     value.len() == 64
         && value
@@ -1505,11 +1780,10 @@ fn is_sha256(value: &str) -> bool {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-fn local_now() -> &'static str {
-    // Exchange v1 requires UTC text. This local-only workbench deliberately does not ingest a
-    // device identifier or any external clock source; precise wall-clock display is a later UX
-    // concern, while revisions are the ordering authority.
-    "2026-08-13T00:00:00Z"
+fn local_now() -> String {
+    // Conversation timestamps describe when this local mutation actually happened. UTC keeps
+    // the exchange portable; formatting for the user's locale belongs in the renderer.
+    rfc3339_from_unix_millis(system_now_millis())
 }
 
 fn local_now_millis() -> i64 {
@@ -1698,6 +1972,103 @@ fn desktop_attachment_kind(
         };
     }
     None
+}
+
+/// Clipboard image providers on macOS can surface a static image only as TIFF, GIF or BMP even
+/// when the same pasteboard offers PNG. Clipboard commands normalize that closed set to PNG before
+/// it reaches the shared attachment owner, so preview and model projection retain one safe format.
+fn normalize_desktop_clipboard_raster<'a>(
+    bytes: Vec<u8>,
+    extension: Option<&'a str>,
+) -> Result<(Vec<u8>, Option<&'a str>), String> {
+    let format = match image::guess_format(&bytes) {
+        Ok(format) => format,
+        Err(_) => return Ok((bytes, extension)),
+    };
+    let standard_extension = match format {
+        ImageFormat::Png => Some("png"),
+        ImageFormat::Jpeg => Some("jpg"),
+        ImageFormat::WebP => Some("webp"),
+        _ => None,
+    };
+    if let Some(standard_extension) = standard_extension {
+        return Ok((bytes, Some(standard_extension)));
+    }
+    if !matches!(format, ImageFormat::Tiff | ImageFormat::Gif | ImageFormat::Bmp) {
+        return Ok((bytes, extension));
+    }
+    let reader = ImageReader::new(Cursor::new(&bytes))
+        .with_guessed_format()
+        .map_err(|_| json_error("剪贴板图片格式无效"))?;
+    let (width, height) = reader
+        .into_dimensions()
+        .map_err(|_| json_error("剪贴板图片尺寸无效"))?;
+    if width == 0
+        || height == 0
+        || u64::from(width) * u64::from(height) > MAX_CONVERSATION_IMAGE_PIXELS
+    {
+        return Err(json_error("图片像素超过本地安全预览上限"));
+    }
+    let image = ImageReader::new(Cursor::new(&bytes))
+        .with_guessed_format()
+        .map_err(|_| json_error("剪贴板图片格式无效"))?
+        .decode()
+        .map_err(|_| json_error("剪贴板图片无法转换为 PNG"))?;
+    let mut output = Cursor::new(Vec::new());
+    image
+        .write_to(&mut output, ImageFormat::Png)
+        .map_err(|_| json_error("剪贴板图片 PNG 编码失败"))?;
+    let output = output.into_inner();
+    if output.is_empty() || output.len() as u64 > MAX_CONVERSATION_ATTACHMENT_BYTES {
+        return Err(json_error("转换后的图片超过 20 MB 限制"));
+    }
+    Ok((output, Some("png")))
+}
+
+fn decode_camera_capture(data_url: &str) -> Result<Vec<u8>, String> {
+    let encoded = data_url
+        .strip_prefix("data:image/png;base64,")
+        .ok_or_else(|| json_error("相机只接受当前窗口生成的 PNG 原图"))?;
+    if encoded.is_empty() || encoded.len() > (MAX_CONVERSATION_ATTACHMENT_BYTES as usize * 2) {
+        return Err(json_error("相机原图为空或超过 20 MB"));
+    }
+    let bytes = BASE64
+        .decode(encoded)
+        .map_err(|_| json_error("相机原图编码无效"))?;
+    if bytes.is_empty() || bytes.len() as u64 > MAX_CONVERSATION_ATTACHMENT_BYTES {
+        return Err(json_error("相机原图为空或超过 20 MB"));
+    }
+    if desktop_attachment_kind(&bytes, Some("png")) != Some(("image/png", ".png")) {
+        return Err(json_error("相机原图内容不是有效 PNG"));
+    }
+    Ok(bytes)
+}
+
+fn decode_clipboard_attachment_bytes(encoded: &str) -> Result<Vec<u8>, String> {
+    // Base64 expands the bounded raw attachment by at most 4/3. Keep the outer payload bounded
+    // before decoding so a hostile clipboard cannot allocate an arbitrary in-memory buffer.
+    let max_encoded = ((MAX_CONVERSATION_ATTACHMENT_BYTES as usize + 2) / 3) * 4;
+    if encoded.is_empty() || encoded.len() > max_encoded {
+        return Err(json_error("粘贴附件为空或超过 20 MB"));
+    }
+    let bytes = BASE64
+        .decode(encoded)
+        .map_err(|_| json_error("粘贴附件编码无效"))?;
+    if bytes.is_empty() || bytes.len() as u64 > MAX_CONVERSATION_ATTACHMENT_BYTES {
+        return Err(json_error("粘贴附件为空或超过 20 MB"));
+    }
+    Ok(bytes)
+}
+
+fn validate_attachment_display_name(display_name: &str) -> Result<(), String> {
+    if display_name.contains("content://")
+        || display_name.contains('/')
+        || display_name.contains('\\')
+        || display_name.chars().count() > 180
+    {
+        return Err(json_error("附件显示名无效"));
+    }
+    Ok(())
 }
 
 fn is_mp4_video_iso_bmff(bytes: &[u8]) -> bool {
@@ -2010,6 +2381,62 @@ fn apply_domain_mutation(
         .ok_or_else(|| json_error("操作必须指定对象 ID"))?;
     if !is_stable_id(id) {
         return Err(json_error("对象 stable ID 无效"));
+    }
+    if args.action == "replaceMemorySummary" && args.entity == "memory" {
+        allowed_keys(fields, &["body"])?;
+        let body = require_short_text(
+            fields.get("body").unwrap_or(&Value::Null),
+            "body",
+            2_000_000,
+            false,
+        )?;
+        let items = root
+            .get_mut("memory")
+            .and_then(Value::as_array_mut)
+            .ok_or_else(|| json_error("memory 集合无效"))?;
+        let primary_index = items
+            .iter()
+            .position(|item| item.get("id").and_then(Value::as_str) == Some(id))
+            .ok_or_else(|| json_error("记忆摘要不存在"))?;
+        let primary = object(&items[primary_index], "memory")?;
+        let primary_is_active_global = primary.get("status").and_then(Value::as_str) == Some("ACTIVE")
+            && primary.get("scope").and_then(Value::as_str) == Some("GLOBAL")
+            && primary.get("scopeId").map_or(true, Value::is_null);
+        if !primary_is_active_global {
+            return Err(json_error("只能替换当前全局记忆摘要"));
+        }
+        let current = revision_of(primary)?;
+        if args.expected_revision != Some(current) {
+            return Err(json_error(&format!(
+                "REVISION_CONFLICT：expected={:?}，actual={current}",
+                args.expected_revision
+            )));
+        }
+        let next = current
+            .checked_add(1)
+            .ok_or_else(|| json_error("revision 溢出"))?;
+        for (index, value) in items.iter_mut().enumerate() {
+            let item = value
+                .as_object_mut()
+                .ok_or_else(|| json_error("memory 对象无效"))?;
+            let is_active_global = item.get("status").and_then(Value::as_str) == Some("ACTIVE")
+                && item.get("scope").and_then(Value::as_str) == Some("GLOBAL")
+                && item.get("scopeId").map_or(true, Value::is_null);
+            if index == primary_index {
+                item.insert("body".into(), Value::String(body.clone()));
+                item.insert("contentHash".into(), Value::String(sha256(body.as_bytes())));
+                item.insert("revision".into(), Value::Number(next.into()));
+                item.insert("updatedAt".into(), Value::String(now.to_owned()));
+            } else if is_active_global {
+                let revision = revision_of(item)?
+                    .checked_add(1)
+                    .ok_or_else(|| json_error("revision 溢出"))?;
+                item.insert("status".into(), Value::String("DELETED".into()));
+                item.insert("revision".into(), Value::Number(revision.into()));
+                item.insert("updatedAt".into(), Value::String(now.to_owned()));
+            }
+        }
+        return Ok((id.to_owned(), next));
     }
     if args.action == "setProject" && args.entity == "conversation" {
         let project_id = fields.get("projectId").and_then(Value::as_str);
@@ -2514,6 +2941,72 @@ fn collect_asset_ref_counts(exchange: &Value) -> Result<BTreeMap<String, u64>, S
         }
     }
     Ok(refs)
+}
+
+fn collect_asset_metadata(
+    exchange: &Value,
+) -> Result<BTreeMap<String, (DesktopAttachmentMetadata, u64)>, String> {
+    let conversations = require_array(object(exchange, "exchange")?, "conversations")?;
+    let mut assets = BTreeMap::<String, (DesktopAttachmentMetadata, u64)>::new();
+    for conversation in conversations {
+        for message in require_array(object(conversation, "conversation")?, "messages")? {
+            for block in require_array(object(message, "message")?, "blocks")? {
+                let block = object(block, "block")?;
+                if block.get("kind").and_then(Value::as_str) != Some("ASSET_REF") {
+                    continue;
+                }
+                let asset = object(
+                    block.get("asset").ok_or_else(|| json_error("asset 缺失"))?,
+                    "asset",
+                )?;
+                let id = require_string(asset, "id")?;
+                let mime_type = require_string(asset, "mimeType")?;
+                let display_name = require_string(asset, "displayName")?;
+                let sha256 = require_string(asset, "sha256")?;
+                let byte_count = asset
+                    .get("byteCount")
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| json_error("asset byteCount 无效"))?;
+                if !is_stable_id(id)
+                    || !is_sha256(sha256)
+                    || require_string(asset, "entry")? != format!("assets/{sha256}")
+                    || mime_type.is_empty()
+                    || mime_type.chars().count() > 160
+                    || display_name.is_empty()
+                    || display_name.contains("content://")
+                    || display_name.contains('/')
+                    || display_name.contains('\\')
+                    || display_name.chars().count() > 180
+                {
+                    return Err(json_error("asset 展示元数据无效"));
+                }
+                let metadata = DesktopAttachmentMetadata {
+                    id: id.to_owned(),
+                    mime_type: mime_type.to_owned(),
+                    display_name: display_name.to_owned(),
+                    byte_count,
+                    sha256: sha256.to_owned(),
+                };
+                match assets.entry(sha256.to_owned()) {
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        entry.insert((metadata, 1));
+                    }
+                    std::collections::btree_map::Entry::Occupied(mut entry) => {
+                        let (prior, count) = entry.get_mut();
+                        if prior.id != metadata.id
+                            || prior.mime_type != metadata.mime_type
+                            || prior.display_name != metadata.display_name
+                            || prior.byte_count != metadata.byte_count
+                        {
+                            return Err(json_error("同一 asset hash 的展示元数据不一致"));
+                        }
+                        *count += 1;
+                    }
+                }
+            }
+        }
+    }
+    Ok(assets)
 }
 
 fn validate_exchange(exchange: &Value) -> Result<(bool, usize), String> {
@@ -3059,6 +3552,7 @@ fn preflight_package(bytes: Vec<u8>) -> Result<PreflightedPackage, String> {
     });
     let (high_sensitive, message_count) = validate_exchange(&exchange)?;
     let assets = collect_asset_refs(&exchange)?;
+    let asset_metadata = collect_asset_metadata(&exchange)?;
     if entries
         .keys()
         .filter(|key| key.as_str() != "manifest.json")
@@ -3080,8 +3574,11 @@ fn preflight_package(bytes: Vec<u8>) -> Result<PreflightedPackage, String> {
         let hash = entry
             .strip_prefix("assets/")
             .ok_or_else(|| json_error("asset entry 无效"))?;
-        if sha256(content) != hash {
-            return Err(json_error("asset content hash 不符"));
+        let (metadata, _) = asset_metadata
+            .get(hash)
+            .ok_or_else(|| json_error("asset 展示元数据缺失"))?;
+        if sha256(content) != hash || metadata.byte_count != content.len() as u64 {
+            return Err(json_error("asset content hash 或真实大小不符"));
         }
         asset_bytes += content.len() as u64;
         copied_assets.insert(entry.clone(), content.clone());
@@ -4259,6 +4756,10 @@ fn parse_nanfeng_knowledge_export(
 
 impl DesktopWorkspaceStore {
     fn open(root: PathBuf) -> Result<Self, String> {
+        Self::open_for_startup(root, DesktopStartupMode::Normal)
+    }
+
+    fn open_for_startup(root: PathBuf, startup_mode: DesktopStartupMode) -> Result<Self, String> {
         fs::create_dir_all(root.join("staging")).map_err(|_| json_error("无法创建私有 staging"))?;
         fs::create_dir_all(root.join("packages"))
             .map_err(|_| json_error("无法创建私有 package 存储"))?;
@@ -4278,17 +4779,19 @@ impl DesktopWorkspaceStore {
             p8_agent_ledger,
         };
         store.migrate()?;
-        store.recover_interrupted_ordinary_chats()?;
-        desktop_history_knowledge_v1::recover_interrupted(
-            &store.connection()?,
-            system_now_millis(),
-        )
-        .map_err(|_| json_error("历史资料库中断状态无法恢复"))?;
-        desktop_reminders_v1::recover_interrupted(&store.connection()?, system_now_millis())
-            .map_err(|_| json_error("提醒与计划中断状态无法恢复"))?;
-        desktop_transcription_v1::recover_interrupted(&store.connection()?)
-            .map_err(|_| json_error("语音转写中断状态无法恢复"))?;
-        store.run_startup_attachment_maintenance()?;
+        if startup_mode.work_plan().recovers_business_state() {
+            store.recover_interrupted_ordinary_chats()?;
+            desktop_history_knowledge_v1::recover_interrupted(
+                &store.connection()?,
+                system_now_millis(),
+            )
+            .map_err(|_| json_error("历史资料库中断状态无法恢复"))?;
+            desktop_reminders_v1::recover_interrupted(&store.connection()?, system_now_millis())
+                .map_err(|_| json_error("提醒与计划中断状态无法恢复"))?;
+            desktop_transcription_v1::recover_interrupted(&store.connection()?)
+                .map_err(|_| json_error("语音转写中断状态无法恢复"))?;
+            store.run_startup_attachment_maintenance()?;
+        }
         Ok(store)
     }
 
@@ -4833,17 +5336,85 @@ impl DesktopWorkspaceStore {
                 .map_err(|_| json_error("无法读取本机导入资料概况"))?;
             add("import_source_assets", count, bytes);
         }
-        let (transcription_count, transcription_text_bytes) = connection
+        for (table, id) in [
+            ("chatgpt_import_tasks", "chatgpt_json_import_batches"),
+            ("claude_import_tasks", "claude_json_import_batches"),
+            ("p6k_zip_import_tasks", "zip_import_batches"),
+        ] {
+            let count = connection
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get::<_, u64>(0)
+                })
+                .map_err(|_| json_error("无法读取本机导入批次概况"))?;
+            add(id, count, 0);
+        }
+        for (table, id) in [
+            (
+                "chatgpt_import_provenance",
+                "chatgpt_json_imported_conversations",
+            ),
+            (
+                "claude_import_provenance",
+                "claude_json_imported_conversations",
+            ),
+            ("p6k_zip_import_provenance", "zip_imported_conversations"),
+        ] {
+            let condition = if table == "p6k_zip_import_provenance" {
+                String::new()
+            } else {
+                " WHERE revoked_at_ms IS NULL".to_owned()
+            };
+            let count = connection
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table}{condition}"),
+                    [],
+                    |row| row.get::<_, u64>(0),
+                )
+                .map_err(|_| json_error("无法读取本机已导入对话概况"))?;
+            add(id, count, 0);
+        }
+        let imported_profile_fields = connection
             .query_row(
-                "SELECT (SELECT COUNT(*) FROM desktop_transcription_tasks),COALESCE((SELECT SUM(LENGTH(text)) FROM desktop_transcription_segments),0)",
+                "SELECT COALESCE(SUM(mapped_field_count),0) FROM p6k_zip_import_profile_candidates",
+                [],
+                |row| row.get::<_, u64>(0),
+            )
+            .map_err(|_| json_error("无法读取本机导入个性化资料概况"))?;
+        add("zip_imported_profile_fields", imported_profile_fields, 0);
+        let (linked_zip_attachments, linked_zip_attachment_bytes) = connection
+            .query_row(
+                "SELECT COUNT(*),COALESCE(SUM(byte_count),0) FROM p6k_zip_import_asset_candidates WHERE status='MANUAL_LINKED'",
                 [],
                 |row| Ok((row.get::<_, u64>(0)?, row.get::<_, u64>(1)?)),
             )
+            .map_err(|_| json_error("无法读取本机已导入附件概况"))?;
+        add(
+            "zip_imported_attachments",
+            linked_zip_attachments,
+            linked_zip_attachment_bytes,
+        );
+        let (transcription_count, transcription_file_bytes, transcription_text_bytes) = connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM desktop_transcription_tasks),COALESCE((SELECT SUM(source_byte_count) FROM desktop_transcription_tasks),0),COALESCE((SELECT SUM(LENGTH(text)) FROM desktop_transcription_segments),0)",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, u64>(0)?,
+                        row.get::<_, u64>(1)?,
+                        row.get::<_, u64>(2)?,
+                    ))
+                },
+            )
             .map_err(|_| json_error("无法读取语音转写资料概况"))?;
         add(
-            "transcription_tasks",
+            "glm_ocr_tasks",
             transcription_count,
             transcription_text_bytes,
+        );
+        add(
+            "glm_ocr_attachments",
+            transcription_count,
+            transcription_file_bytes,
         );
         let total_bytes = aggregates
             .iter()
@@ -4851,6 +5422,7 @@ impl DesktopWorkspaceStore {
             .map(|(_, (_, bytes))| *bytes)
             .sum();
         Ok(DesktopPrivacyInventoryProjection {
+            storage_path: self.root.to_string_lossy().into_owned(),
             total_bytes,
             aggregates: aggregates
                 .into_iter()
@@ -5566,6 +6138,15 @@ impl DesktopWorkspaceStore {
             }
             transaction
                 .execute(
+                    "UPDATE p6k_zip_official_identity_ledger
+                 SET state='USER_DELETED',deletion_reason='USER_PERMANENT_DELETE',
+                     revision=revision+1,updated_at_ms=?3
+                 WHERE workspace_id=?1 AND entity_kind='CONVERSATION' AND local_object_id=?2",
+                    params![args.workspace_id, args.conversation_id, local_now_millis()],
+                )
+                .map_err(|_| json_error("无法保存 ZIP 会话永久删除墓碑"))?;
+            transaction
+                .execute(
                     "UPDATE p6k_zip_import_items SET conversation_id=NULL WHERE conversation_id=?1",
                     [&args.conversation_id],
                 )
@@ -5644,7 +6225,7 @@ impl DesktopWorkspaceStore {
         let current: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|_| json_error("无法读取 SQLite schema version"))?;
-        if current > 34 {
+        if current > 38 {
             return Err(json_error("SQLite schema 版本比当前客户端更新"));
         }
         if current == 0 {
@@ -6065,15 +6646,17 @@ impl DesktopWorkspaceStore {
                 .map_err(|_| json_error("无法开启 SQLite migration 32"))?;
             desktop_reminders_v1::migrate(&transaction)
                 .map_err(|_| json_error("SQLite migration 32 提醒与计划失败"))?;
-            transaction.execute(
-                "UPDATE desktop_app_settings
+            transaction
+                .execute(
+                    "UPDATE desktop_app_settings
                  SET monitor_notifications=0,
                      reminder_suggestions=0,
                      revision=revision+1,
                      updated_at_ms=0
                  WHERE monitor_notifications<>0 OR reminder_suggestions<>0",
-                [],
-            ).map_err(|_| json_error("SQLite migration 32 提醒旧状态安全关闭失败"))?;
+                    [],
+                )
+                .map_err(|_| json_error("SQLite migration 32 提醒旧状态安全关闭失败"))?;
             transaction
                 .pragma_update(None, "user_version", 32)
                 .map_err(|_| json_error("无法写入 SQLite schema version 32"))?;
@@ -6106,6 +6689,106 @@ impl DesktopWorkspaceStore {
             transaction
                 .commit()
                 .map_err(|_| json_error("SQLite migration 34 无法提交"))?;
+        }
+        if current < 35 {
+            let transaction = connection
+                .transaction()
+                .map_err(|_| json_error("无法开启 SQLite migration 35"))?;
+            transaction.execute_batch(
+                "CREATE TABLE IF NOT EXISTS p6k_zip_official_identity_ledger (
+                    workspace_id TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    entity_kind TEXT NOT NULL CHECK(entity_kind IN ('CONVERSATION','MESSAGE','ATTACHMENT')),
+                    parent_source_object_id TEXT NOT NULL DEFAULT '',
+                    source_object_id TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK(state IN ('IMPORTED','USER_DELETED')),
+                    local_object_id TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    deletion_reason TEXT,
+                    revision INTEGER NOT NULL,
+                    updated_at_ms INTEGER NOT NULL,
+                    PRIMARY KEY(workspace_id,provider,entity_kind,parent_source_object_id,source_object_id)
+                );
+                CREATE INDEX IF NOT EXISTS p6k_zip_official_identity_local
+                    ON p6k_zip_official_identity_ledger(workspace_id,entity_kind,local_object_id);
+                INSERT OR IGNORE INTO p6k_zip_official_identity_ledger(
+                    workspace_id,provider,entity_kind,parent_source_object_id,source_object_id,
+                    state,local_object_id,content_hash,deletion_reason,revision,updated_at_ms
+                )
+                SELECT workspace_id,provider,'CONVERSATION','',source_conversation_id,
+                       'IMPORTED',conversation_id,content_hash,NULL,1,imported_at_ms
+                FROM p6k_zip_import_provenance;",
+            )
+            .map_err(|_| json_error("SQLite migration 35 ZIP 官方身份账本失败"))?;
+            transaction
+                .pragma_update(None, "user_version", 35)
+                .map_err(|_| json_error("无法写入 SQLite schema version 35"))?;
+            transaction
+                .commit()
+                .map_err(|_| json_error("SQLite migration 35 无法提交"))?;
+        }
+        if current < 36 {
+            let transaction = connection
+                .transaction()
+                .map_err(|_| json_error("无法开启 SQLite migration 36"))?;
+            // provider_request_id and page_count were added to the idempotent transcription
+            // owner after schema 24 had already shipped. Existing schema-35 databases would
+            // therefore pass the global version gate while still missing both columns.
+            desktop_transcription_v1::migrate(&transaction)
+                .map_err(|_| json_error("SQLite migration 36 转写字段补全失败"))?;
+            transaction
+                .pragma_update(None, "user_version", 36)
+                .map_err(|_| json_error("无法写入 SQLite schema version 36"))?;
+            transaction
+                .commit()
+                .map_err(|_| json_error("SQLite migration 36 无法提交"))?;
+        }
+        if current < 37 {
+            let transaction = connection
+                .transaction()
+                .map_err(|_| json_error("无法开启 SQLite migration 37"))?;
+            let columns = {
+                let mut statement = transaction
+                    .prepare("SELECT name FROM pragma_table_info('p6g_conversation_override')")
+                    .map_err(|_| json_error("SQLite migration 37 无法读取会话偏好字段"))?;
+                let result = statement
+                    .query_map([], |row| row.get::<_, String>(0))
+                    .map_err(|_| json_error("SQLite migration 37 无法枚举会话偏好字段"))?
+                    .collect::<Result<BTreeSet<_>, _>>()
+                    .map_err(|_| json_error("SQLite migration 37 会话偏好字段无效"))?;
+                result
+            };
+            if !columns.contains("tone_override") {
+                transaction
+                    .execute_batch(
+                        "ALTER TABLE p6g_conversation_override ADD COLUMN tone_override TEXT;",
+                    )
+                    .map_err(|_| json_error("SQLite migration 37 风格字段补全失败"))?;
+            }
+            if !columns.contains("web_search_override") {
+                transaction
+                    .execute_batch("ALTER TABLE p6g_conversation_override ADD COLUMN web_search_override INTEGER;")
+                    .map_err(|_| json_error("SQLite migration 37 联网字段补全失败"))?;
+            }
+            transaction
+                .pragma_update(None, "user_version", 37)
+                .map_err(|_| json_error("无法写入 SQLite schema version 37"))?;
+            transaction
+                .commit()
+                .map_err(|_| json_error("SQLite migration 37 无法提交"))?;
+        }
+        if current < 38 {
+            let transaction = connection
+                .transaction()
+                .map_err(|_| json_error("无法开启 SQLite migration 38"))?;
+            desktop_ordinary_chat_v1::migrate_egress_authorization(&transaction)
+                .map_err(|_| json_error("SQLite migration 38 外发授权字段失败"))?;
+            transaction
+                .pragma_update(None, "user_version", 38)
+                .map_err(|_| json_error("无法写入 SQLite schema version 38"))?;
+            transaction
+                .commit()
+                .map_err(|_| json_error("SQLite migration 38 无法提交"))?;
         }
         Ok(())
     }
@@ -6255,7 +6938,12 @@ impl DesktopWorkspaceStore {
                 let blocks = require_array(message, "blocks")?;
                 let full_text = blocks
                     .iter()
-                    .filter(|block| block.get("kind").and_then(Value::as_str) == Some("TEXT"))
+                    .filter(|block| {
+                        matches!(
+                            block.get("kind").and_then(Value::as_str),
+                            Some("TEXT" | "MARKDOWN" | "CODE")
+                        )
+                    })
                     .filter_map(|block| block.get("text").and_then(Value::as_str))
                     .collect::<Vec<_>>()
                     .join("\n");
@@ -7131,27 +7819,77 @@ impl DesktopWorkspaceStore {
         })
     }
 
-    fn open_attachment_with_system(
+    fn prepare_attachment_for_system_open(
         &self,
         args: &DesktopSystemOpenAttachmentArgs,
-    ) -> Result<(), String> {
+    ) -> Result<PathBuf, String> {
         if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
             return Err(json_error("系统打开附件引用无效"));
         }
         let connection = self.connection()?;
-        let (byte_count, digest): (u64, String) = connection.query_row(
-            "SELECT byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+        let (mime_type, display_name, byte_count, digest): (String, String, u64, String) = connection.query_row(
+            "SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
             params![args.workspace_id, args.attachment_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         ).map_err(|_| json_error("本地附件不可用"))?;
         if !is_sha256(&digest) {
             return Err(json_error("本地附件 hash 无效"));
         }
-        let path = self.root.join("assets").join(&digest);
-        let bytes = fs::read(&path).map_err(|_| json_error("本地附件私有副本缺失"))?;
+        let source = self.root.join("assets").join(&digest);
+        let bytes = fs::read(&source).map_err(|_| json_error("本地附件私有副本缺失"))?;
         if bytes.len() as u64 != byte_count || sha256(&bytes) != digest {
             return Err(json_error("本地附件校验不一致"));
         }
+        let extension = display_name
+            .rsplit_once('.')
+            .map(|(_, extension)| extension.to_ascii_lowercase())
+            .filter(|extension| extension == "docx")
+            .filter(|_| {
+                mime_type
+                    == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            })
+            .ok_or_else(|| json_error("该附件没有受支持的系统打开适配器"))?;
+        let mut archive =
+            ZipArchive::new(Cursor::new(bytes)).map_err(|_| json_error("Office 附件容器无效"))?;
+        if archive.len() == 0 || archive.len() > P6K_ZIP_MAX_ENTRIES {
+            return Err(json_error("Office 附件容器条目无效"));
+        }
+        let mut names = BTreeSet::new();
+        for index in 0..archive.len() {
+            let entry = archive
+                .by_index(index)
+                .map_err(|_| json_error("Office 附件容器不可读"))?;
+            if entry.is_dir() {
+                continue;
+            }
+            let name = entry.name().replace('\\', "/");
+            if !safe_entry(&name) {
+                return Err(json_error("Office 附件容器路径无效"));
+            }
+            names.insert(name);
+        }
+        if !names.contains("[Content_Types].xml") || !names.contains("word/document.xml") {
+            return Err(json_error("Office 附件内容类型无效"));
+        }
+        let presentation_dir = self.root.join("system-open");
+        fs::create_dir_all(&presentation_dir)
+            .map_err(|_| json_error("无法创建本机系统打开目录"))?;
+        let presentation = presentation_dir.join(format!("{digest}.{extension}"));
+        if !presentation.exists() {
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&source, &presentation)
+                .map_err(|_| json_error("无法建立本机系统打开引用"))?;
+            #[cfg(not(unix))]
+            return Err(json_error("当前平台尚未提供受控系统打开适配器"));
+        }
+        Ok(presentation)
+    }
+
+    fn open_attachment_with_system(
+        &self,
+        args: &DesktopSystemOpenAttachmentArgs,
+    ) -> Result<(), String> {
+        let path = self.prepare_attachment_for_system_open(args)?;
         #[cfg(target_os = "macos")]
         {
             std::process::Command::new("/usr/bin/open")
@@ -7164,6 +7902,61 @@ impl DesktopWorkspaceStore {
         {
             Err(json_error("当前平台尚未提供受控系统打开适配器"))
         }
+    }
+
+    fn export_attachment_to_selected_path(
+        &self,
+        args: &DesktopAttachmentExportArgs,
+    ) -> Result<(), String> {
+        if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
+            return Err(json_error("附件导出引用无效"));
+        }
+        let target = PathBuf::from(&args.selected_path);
+        if !target.is_absolute() || target.file_name().is_none() {
+            return Err(json_error("附件只能导出到系统保存面板选择的文件"));
+        }
+        if fs::symlink_metadata(&target)
+            .ok()
+            .is_some_and(|metadata| metadata.file_type().is_symlink() || metadata.is_dir())
+        {
+            return Err(json_error("附件导出目标不能是符号链接或目录"));
+        }
+        let parent = target
+            .parent()
+            .filter(|parent| parent.is_dir())
+            .ok_or_else(|| json_error("附件导出目录无效"))?;
+        let connection = self.connection()?;
+        let (byte_count, digest): (u64, String) = connection
+            .query_row(
+                "SELECT byte_count,sha256 FROM desktop_conversation_attachments
+             WHERE workspace_id=?1 AND attachment_id=?2",
+                params![args.workspace_id, args.attachment_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|_| json_error("本地附件不可用"))?;
+        if !is_sha256(&digest) {
+            return Err(json_error("本地附件 hash 无效"));
+        }
+        let bytes = fs::read(self.root.join("assets").join(&digest))
+            .map_err(|_| json_error("本地附件私有副本缺失"))?;
+        if bytes.len() as u64 != byte_count || sha256(&bytes) != digest {
+            return Err(json_error("本地附件校验不一致"));
+        }
+        let temporary = parent.join(format!(
+            ".nanfeng-attachment-{}-{}.part",
+            &digest[..12],
+            local_now_millis()
+        ));
+        fs::write(&temporary, &bytes).map_err(|_| json_error("附件临时副本未写入"))?;
+        if fs::rename(&temporary, &target).is_err() {
+            let _ = fs::remove_file(&temporary);
+            return Err(json_error("附件副本未发布"));
+        }
+        let readback = fs::read(&target).map_err(|_| json_error("附件导出回读失败"))?;
+        if readback.len() as u64 != byte_count || sha256(&readback) != digest {
+            return Err(json_error("附件导出回读不一致"));
+        }
+        Ok(())
     }
 
     /// The only attachment cleanup path. `open` calls it with the system clock; tests pass a
@@ -7650,15 +8443,29 @@ impl DesktopWorkspaceStore {
         self.import_temporary_attachment_at(args, system_now_millis())
     }
 
+    fn import_temporary_clipboard_attachment(
+        &self,
+        args: DesktopTemporaryClipboardAttachmentImportArgs,
+    ) -> Result<DesktopTemporaryConversationRecovery, String> {
+        let bytes = decode_clipboard_attachment_bytes(&args.bytes_base64)?;
+        let extension = Path::new(&args.display_name)
+            .extension()
+            .and_then(|value| value.to_str());
+        let (bytes, extension) = normalize_desktop_clipboard_raster(bytes, extension)?;
+        self.import_temporary_attachment_bytes_at(
+            args.temporary_id,
+            bytes,
+            extension,
+            &args.display_name,
+            system_now_millis(),
+        )
+    }
+
     fn import_temporary_attachment_at(
         &self,
         args: DesktopTemporaryAttachmentImportArgs,
         now_ms: i64,
     ) -> Result<DesktopTemporaryConversationRecovery, String> {
-        let mut record = self.enter_or_restore_temporary_at(Some(args.temporary_id), now_ms)?;
-        if record.draft_attachment_ids.len() >= MAX_CONVERSATION_ATTACHMENT_COUNT {
-            return Err(json_error("每条临时消息最多保留 4 个附件"));
-        }
         let source = PathBuf::from(&args.selected_path);
         let metadata = fs::symlink_metadata(&source).map_err(|_| json_error("所选附件不可读"))?;
         if !metadata.file_type().is_file()
@@ -7673,9 +8480,52 @@ impl DesktopWorkspaceStore {
         input
             .read_to_end(&mut bytes)
             .map_err(|_| json_error("所选附件读取失败"))?;
-        let (mime_type, _) =
-            desktop_attachment_kind(&bytes, source.extension().and_then(|value| value.to_str()))
-                .ok_or_else(|| json_error("文件 MIME 或内容标识不受支持"))?;
+        let extension = source.extension().and_then(|value| value.to_str());
+        let display_name = source
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("本地附件");
+        self.import_temporary_attachment_bytes_at(
+            args.temporary_id,
+            bytes,
+            extension,
+            display_name,
+            now_ms,
+        )
+    }
+
+    fn import_temporary_camera_capture(
+        &self,
+        args: DesktopTemporaryCameraCaptureImportArgs,
+    ) -> Result<DesktopTemporaryConversationRecovery, String> {
+        let now_ms = system_now_millis();
+        self.import_temporary_attachment_bytes_at(
+            args.temporary_id,
+            decode_camera_capture(&args.data_url)?,
+            Some("png"),
+            &format!("相机照片-{now_ms}.png"),
+            now_ms,
+        )
+    }
+
+    fn import_temporary_attachment_bytes_at(
+        &self,
+        temporary_id: String,
+        bytes: Vec<u8>,
+        extension: Option<&str>,
+        display_name: &str,
+        now_ms: i64,
+    ) -> Result<DesktopTemporaryConversationRecovery, String> {
+        let mut record = self.enter_or_restore_temporary_at(Some(temporary_id), now_ms)?;
+        if record.draft_attachment_ids.len() >= MAX_CONVERSATION_ATTACHMENT_COUNT {
+            return Err(json_error("每条临时消息最多保留 4 个附件"));
+        }
+        if bytes.is_empty() || bytes.len() as u64 > MAX_CONVERSATION_ATTACHMENT_BYTES {
+            return Err(json_error("附件必须是小于 20 MB 的普通文件"));
+        }
+        validate_attachment_display_name(display_name)?;
+        let (mime_type, _) = desktop_attachment_kind(&bytes, extension)
+            .ok_or_else(|| json_error("文件 MIME 或内容标识不受支持"))?;
         let sha256 = sha256(&bytes);
         if let Some(existing) = record.attachments.iter().find(|item| item.sha256 == sha256) {
             if !record.draft_attachment_ids.contains(&existing.id) {
@@ -7684,17 +8534,6 @@ impl DesktopWorkspaceStore {
                 return self.save_temporary(&record);
             }
             return Ok(record);
-        }
-        let display_name = source
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("本地附件");
-        if display_name.contains("content://")
-            || display_name.contains('/')
-            || display_name.contains('\\')
-            || display_name.chars().count() > 180
-        {
-            return Err(json_error("附件显示名无效"));
         }
         let attachment = DesktopAttachmentMetadata {
             id: format!("attachment-{}", &sha256[..24]),
@@ -7730,9 +8569,6 @@ impl DesktopWorkspaceStore {
         &self,
         args: DesktopAttachmentImportArgs,
     ) -> Result<DesktopAttachmentMetadata, String> {
-        if !is_stable_id(&args.workspace_id) {
-            return Err(json_error("workspace ID 无效"));
-        }
         let source = PathBuf::from(&args.selected_path);
         let metadata = fs::symlink_metadata(&source).map_err(|_| json_error("所选附件不可读"))?;
         if !metadata.file_type().is_file()
@@ -7747,9 +8583,65 @@ impl DesktopWorkspaceStore {
         input
             .read_to_end(&mut bytes)
             .map_err(|_| json_error("所选附件读取失败"))?;
-        let (mime_type, _extension) =
-            desktop_attachment_kind(&bytes, source.extension().and_then(|value| value.to_str()))
-                .ok_or_else(|| json_error("文件 MIME 或内容标识不受支持"))?;
+        let extension = source.extension().and_then(|value| value.to_str());
+        let display_name = source
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("本地附件");
+        self.import_conversation_attachment_bytes(
+            &args.workspace_id,
+            bytes,
+            extension,
+            display_name,
+        )
+    }
+
+    fn import_conversation_clipboard_attachment(
+        &self,
+        args: DesktopClipboardAttachmentImportArgs,
+    ) -> Result<DesktopAttachmentMetadata, String> {
+        let bytes = decode_clipboard_attachment_bytes(&args.bytes_base64)?;
+        let extension = Path::new(&args.display_name)
+            .extension()
+            .and_then(|value| value.to_str());
+        let (bytes, extension) = normalize_desktop_clipboard_raster(bytes, extension)?;
+        self.import_conversation_attachment_bytes(
+            &args.workspace_id,
+            bytes,
+            extension,
+            &args.display_name,
+        )
+    }
+
+    fn import_camera_capture(
+        &self,
+        args: DesktopCameraCaptureImportArgs,
+    ) -> Result<DesktopAttachmentMetadata, String> {
+        let now_ms = system_now_millis();
+        self.import_conversation_attachment_bytes(
+            &args.workspace_id,
+            decode_camera_capture(&args.data_url)?,
+            Some("png"),
+            &format!("相机照片-{now_ms}.png"),
+        )
+    }
+
+    fn import_conversation_attachment_bytes(
+        &self,
+        workspace_id: &str,
+        bytes: Vec<u8>,
+        extension: Option<&str>,
+        display_name: &str,
+    ) -> Result<DesktopAttachmentMetadata, String> {
+        if !is_stable_id(workspace_id) {
+            return Err(json_error("workspace ID 无效"));
+        }
+        if bytes.is_empty() || bytes.len() as u64 > MAX_CONVERSATION_ATTACHMENT_BYTES {
+            return Err(json_error("附件必须是小于 20 MB 的普通文件"));
+        }
+        validate_attachment_display_name(display_name)?;
+        let (mime_type, _extension) = desktop_attachment_kind(&bytes, extension)
+            .ok_or_else(|| json_error("文件 MIME 或内容标识不受支持"))?;
         let sha256 = sha256(&bytes);
         let id = format!("attachment-{}", &sha256[..24]);
         let target = self.root.join("assets").join(&sha256);
@@ -7784,17 +8676,6 @@ impl DesktopWorkspaceStore {
                 .commit()
                 .map_err(|_| json_error("附件私有发布未提交；已回滚"))?;
         }
-        let display_name = source
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("本地附件");
-        if display_name.contains("content://")
-            || display_name.contains('/')
-            || display_name.contains('\\')
-            || display_name.chars().count() > 180
-        {
-            return Err(json_error("附件显示名无效"));
-        }
         let metadata = DesktopAttachmentMetadata {
             id,
             mime_type: mime_type.to_owned(),
@@ -7805,9 +8686,9 @@ impl DesktopWorkspaceStore {
         let connection = self.connection()?;
         connection.execute("INSERT INTO desktop_attachment_assets(sha256,byte_count,created_at_ms,last_referenced_at_ms,last_unreferenced_at_ms,reference_count) VALUES(?1,?2,?3,NULL,?3,0) ON CONFLICT(sha256) DO NOTHING", params![metadata.sha256, metadata.byte_count, now_ms])
             .map_err(|_| json_error("附件资产元数据未保存"))?;
-        connection.execute("INSERT INTO desktop_conversation_attachments(workspace_id, attachment_id, mime_type, display_name, byte_count, sha256, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(workspace_id,sha256) DO NOTHING", params![args.workspace_id, metadata.id, metadata.mime_type, metadata.display_name, metadata.byte_count, metadata.sha256, local_now()])
+        connection.execute("INSERT INTO desktop_conversation_attachments(workspace_id, attachment_id, mime_type, display_name, byte_count, sha256, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(workspace_id,sha256) DO NOTHING", params![workspace_id, metadata.id, metadata.mime_type, metadata.display_name, metadata.byte_count, metadata.sha256, local_now()])
             .map_err(|_| json_error("附件元数据未保存"))?;
-        connection.query_row("SELECT attachment_id,mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND sha256=?2", params![args.workspace_id, metadata.sha256], |row| Ok(DesktopAttachmentMetadata { id: row.get(0)?, mime_type: row.get(1)?, display_name: row.get(2)?, byte_count: row.get(3)?, sha256: row.get(4)? }))
+        connection.query_row("SELECT attachment_id,mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND sha256=?2", params![workspace_id, metadata.sha256], |row| Ok(DesktopAttachmentMetadata { id: row.get(0)?, mime_type: row.get(1)?, display_name: row.get(2)?, byte_count: row.get(3)?, sha256: row.get(4)? }))
             .map_err(|_| json_error("附件元数据无法回读"))
     }
 
@@ -7964,7 +8845,12 @@ impl DesktopWorkspaceStore {
         let revision = current.map(|(_, revision)| revision + 1).unwrap_or(1);
         let now = local_now_millis();
         transaction.execute("INSERT OR REPLACE INTO p6k_profile_personalization_settings(id,display_name,language,timezone,public_bio,custom_instructions,theme,notifications_enabled,source_task_id,revision,updated_at_ms) VALUES(1,?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)", params![profile.display_name,profile.language,profile.timezone,profile.public_bio,profile.custom_instructions,profile.theme,profile.notifications_enabled.map(|v|if v {1} else {0}),task_id,revision,now]).map_err(|_| json_error("无法保存资料设置"))?;
-        if let Some(interests) = profile.public_bio.as_deref().map(str::trim).filter(|value| !value.is_empty() && value.chars().count() <= 500) {
+        if let Some(interests) = profile
+            .public_bio
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && value.chars().count() <= 500)
+        {
             // Android retains its old “关注方向” value as a hidden compatibility field. A
             // versioned profile import may seed an empty owner, but never overwrites a value
             // already authored or restored by the user.
@@ -8038,11 +8924,283 @@ impl DesktopWorkspaceStore {
                 .map_err(|_| json_error("无法结束 ZIP 重放读取"))?;
             return Ok(());
         }
-        if let Ok((conversation_id, existing_hash)) = transaction.query_row("SELECT conversation_id,content_hash FROM p6k_zip_import_receipts WHERE workspace_id=?1 AND provider=?2 AND source_conversation_id=?3 AND package_hash=?4", params![workspace_id,provider,source_id,package_hash], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?))) { if existing_hash != content_hash { return Err(json_error("同源不同内容，需重新选择 ZIP")); } transaction.execute("UPDATE p6k_zip_import_items SET status='COMMITTED',conversation_id=?3 WHERE task_id=?1 AND id=?2", params![task_id,item_id,conversation_id]).map_err(|_| json_error("无法回写 ZIP 幂等结果"))?; transaction.commit().map_err(|_| json_error("ZIP 重放结果未提交"))?; return Ok(()); }
         let messages = transaction.prepare("SELECT source_message_id,parent_source_message_id,sibling_position,role,text,created_at_ms,imported_model FROM p6k_zip_import_messages WHERE task_id=?1 AND item_id=?2 ORDER BY sibling_position,source_message_id").map_err(|_| json_error("无法读取 ZIP 消息候选"))?.query_map(params![task_id,item_id], |row| Ok((row.get::<_,String>(0)?,row.get::<_,Option<String>>(1)?,row.get::<_,i64>(2)?,row.get::<_,String>(3)?,row.get::<_,String>(4)?,row.get::<_,i64>(5)?,row.get::<_,Option<String>>(6)?))).map_err(|_| json_error("ZIP 消息候选无效"))?.collect::<Result<Vec<_>,_>>().map_err(|_| json_error("ZIP 消息候选无法读取"))?;
         if messages.is_empty() {
             return Err(json_error("ZIP 候选没有安全消息"));
         }
+        let message_hashes = messages
+            .iter()
+            .map(|message| {
+                let canonical = canonical_json(&json!({
+                    "parentSourceMessageId": message.1,
+                    "role": message.3,
+                    "text": message.4,
+                    "createdAtMs": message.5,
+                    "importedModel": message.6,
+                }))?;
+                Ok((message.0.clone(), sha256(canonical.as_bytes())))
+            })
+            .collect::<Result<BTreeMap<_, _>, String>>()?;
+        if let Some((identity_state, conversation_id, existing_hash)) = transaction
+            .query_row(
+                "SELECT state,local_object_id,content_hash
+                 FROM p6k_zip_official_identity_ledger
+                 WHERE workspace_id=?1 AND provider=?2 AND entity_kind='CONVERSATION'
+                   AND parent_source_object_id='' AND source_object_id=?3",
+                params![workspace_id, provider, source_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|_| json_error("无法读取 ZIP 官方身份账本"))?
+        {
+            if identity_state == "USER_DELETED" {
+                transaction
+                    .execute(
+                        "UPDATE p6k_zip_import_items
+                     SET status='SKIPPED',failure='USER_DELETED',conversation_id=?3
+                     WHERE task_id=?1 AND id=?2",
+                        params![task_id, item_id, conversation_id],
+                    )
+                    .map_err(|_| json_error("无法记录 ZIP 删除墓碑跳过"))?;
+                transaction
+                    .commit()
+                    .map_err(|_| json_error("ZIP 删除墓碑结果未提交"))?;
+                return Ok(());
+            }
+            if existing_hash == content_hash {
+                let now = local_now_millis();
+                transaction.execute(
+                    "UPDATE p6k_zip_import_provenance
+                     SET task_id=?1,package_hash=?2,content_hash=?3,imported_at_ms=?4,adapter_version=3
+                     WHERE conversation_id=?5",
+                    params![task_id, package_hash, content_hash, now, conversation_id],
+                ).map_err(|_| json_error("无法转移 ZIP 去重 owner"))?;
+                transaction
+                    .execute(
+                        "INSERT OR REPLACE INTO p6k_zip_import_receipts(
+                        workspace_id,provider,source_conversation_id,package_hash,
+                        conversation_id,content_hash,committed_at_ms
+                     ) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+                        params![
+                            workspace_id,
+                            provider,
+                            source_id,
+                            package_hash,
+                            conversation_id,
+                            content_hash,
+                            now
+                        ],
+                    )
+                    .map_err(|_| json_error("无法保存 ZIP 跨包去重回执"))?;
+                transaction
+                    .execute(
+                        "UPDATE p6k_zip_import_items
+                     SET status='SKIPPED',failure='ALREADY_IMPORTED',conversation_id=?3
+                     WHERE task_id=?1 AND id=?2",
+                        params![task_id, item_id, conversation_id],
+                    )
+                    .map_err(|_| json_error("无法记录 ZIP 跨包去重结果"))?;
+                transaction
+                    .commit()
+                    .map_err(|_| json_error("ZIP 跨包去重结果未提交"))?;
+                return Ok(());
+            }
+
+            let existing_messages = transaction
+                .prepare(
+                    "SELECT source_object_id,state,local_object_id,content_hash
+                 FROM p6k_zip_official_identity_ledger
+                 WHERE workspace_id=?1 AND provider=?2 AND entity_kind='MESSAGE'
+                   AND parent_source_object_id=?3",
+                )
+                .map_err(|_| json_error("无法读取 ZIP 消息身份账本"))?
+                .query_map(params![workspace_id, provider, source_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })
+                .map_err(|_| json_error("ZIP 消息身份账本无效"))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| json_error("ZIP 消息身份账本无法读取"))?;
+            if existing_messages.is_empty() {
+                return Err(json_error("LEGACY_IDENTITY_COVERAGE_GAP"));
+            }
+            let candidate_source_ids = messages
+                .iter()
+                .map(|message| message.0.as_str())
+                .collect::<BTreeSet<_>>();
+            if existing_messages.iter().any(|message| {
+                message.1 == "IMPORTED" && !candidate_source_ids.contains(message.0.as_str())
+            }) {
+                return Err(json_error("OFFICIAL_IDENTITY_CONFLICT"));
+            }
+            let existing_by_source = existing_messages
+                .into_iter()
+                .map(|message| (message.0.clone(), message))
+                .collect::<BTreeMap<_, _>>();
+            for message in &messages {
+                if let Some(existing) = existing_by_source.get(&message.0) {
+                    if existing.1 == "USER_DELETED" || existing.3 != message_hashes[&message.0] {
+                        return Err(json_error("OFFICIAL_IDENTITY_CONFLICT"));
+                    }
+                }
+            }
+            let ids = messages
+                .iter()
+                .map(|message| {
+                    let local_id = existing_by_source
+                        .get(&message.0)
+                        .map(|existing| existing.2.clone())
+                        .unwrap_or_else(|| {
+                            format!(
+                                "message-p6k-{}",
+                                &sha256(format!("{provider}:{source_id}:{}", message.0).as_bytes())
+                                    [..24]
+                            )
+                        });
+                    (message.0.clone(), local_id)
+                })
+                .collect::<BTreeMap<_, _>>();
+            let new_messages = messages
+                .iter()
+                .filter(|message| !existing_by_source.contains_key(&message.0))
+                .collect::<Vec<_>>();
+            if new_messages.is_empty() {
+                return Err(json_error("OFFICIAL_IDENTITY_CONFLICT"));
+            }
+            let exchange_text: String = transaction
+                .query_row(
+                    "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1",
+                    [&workspace_id],
+                    |row| row.get(0),
+                )
+                .map_err(|_| json_error("工作区不存在"))?;
+            let mut exchange: Value = serde_json::from_str(&exchange_text)
+                .map_err(|_| json_error("本地工作区无法读取"))?;
+            let conversation = exchange
+                .get_mut("conversations")
+                .and_then(Value::as_array_mut)
+                .and_then(|items| {
+                    items.iter_mut().find(|item| {
+                        item.get("id").and_then(Value::as_str) == Some(conversation_id.as_str())
+                    })
+                })
+                .ok_or_else(|| json_error("ZIP 去重会话本地 owner 缺失"))?;
+            let local_messages = conversation
+                .get_mut("messages")
+                .and_then(Value::as_array_mut)
+                .ok_or_else(|| json_error("ZIP 去重会话消息树无效"))?;
+            if existing_by_source.values().any(|existing| {
+                !local_messages.iter().any(|message| {
+                    message.get("id").and_then(Value::as_str) == Some(existing.2.as_str())
+                })
+            }) {
+                return Err(json_error("OFFICIAL_IDENTITY_CONFLICT"));
+            }
+            for message in &new_messages {
+                let parent_id = message
+                    .1
+                    .as_ref()
+                    .map(|parent| {
+                        ids.get(parent)
+                            .cloned()
+                            .ok_or_else(|| json_error("ZIP 新消息父节点身份缺失"))
+                    })
+                    .transpose()?;
+                local_messages.push(json!({"id":ids[&message.0],"parentId":parent_id,"ordinal":message.2,"role":message.3,"delivery":"COMPLETE","revision":1,"createdAt":rfc3339_from_unix_millis(message.5),"importedAtEpochMs":message.5,"importedModel":message.6,"blocks":[{"kind":"TEXT","text":message.4}]}));
+            }
+            let leaf = messages
+                .iter()
+                .filter(|message| {
+                    !messages
+                        .iter()
+                        .any(|other| other.1.as_deref() == Some(&message.0))
+                })
+                .max_by_key(|message| (message.5, message.0.clone()))
+                .map(|message| ids[&message.0].clone())
+                .ok_or_else(|| json_error("ZIP current leaf 无效"))?;
+            conversation["currentLeafId"] = Value::String(leaf);
+            conversation["revision"] = Value::Number(
+                (conversation
+                    .get("revision")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0)
+                    + 1)
+                .into(),
+            );
+            conversation["updatedAt"] = Value::String(rfc3339_from_unix_millis(
+                messages
+                    .iter()
+                    .map(|message| message.5)
+                    .max()
+                    .unwrap_or(messages[0].5),
+            ));
+            let semantic_hash = refresh_exchange_hash(&mut exchange)?;
+            validate_exchange(&exchange)?;
+            transaction
+                .execute(
+                    "UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2",
+                    params![canonical_json(&exchange)?, workspace_id],
+                )
+                .map_err(|_| json_error("ZIP 累积消息未写入"))?;
+            self.rebuild_local_search_index(&transaction, &workspace_id, &exchange)?;
+            transaction
+                .execute(
+                    "UPDATE workspaces SET semantic_hash=?1 WHERE id=?2",
+                    params![semantic_hash, workspace_id],
+                )
+                .map_err(|_| json_error("ZIP 累积导入 workspace hash 未更新"))?;
+            let now = local_now_millis();
+            for message in new_messages {
+                transaction
+                    .execute(
+                        "INSERT INTO p6k_zip_official_identity_ledger(
+                        workspace_id,provider,entity_kind,parent_source_object_id,source_object_id,
+                        state,local_object_id,content_hash,deletion_reason,revision,updated_at_ms
+                     ) VALUES(?1,?2,'MESSAGE',?3,?4,'IMPORTED',?5,?6,NULL,1,?7)",
+                        params![
+                            workspace_id,
+                            provider,
+                            source_id,
+                            message.0,
+                            ids[&message.0],
+                            message_hashes[&message.0],
+                            now
+                        ],
+                    )
+                    .map_err(|_| json_error("ZIP 新消息身份账本未写入"))?;
+            }
+            transaction.execute(
+                "UPDATE p6k_zip_official_identity_ledger
+                 SET content_hash=?4,revision=revision+1,updated_at_ms=?5
+                 WHERE workspace_id=?1 AND provider=?2 AND entity_kind='CONVERSATION' AND source_object_id=?3",
+                params![workspace_id, provider, source_id, content_hash, now],
+            ).map_err(|_| json_error("ZIP 会话身份账本未更新"))?;
+            transaction
+                .execute(
+                    "UPDATE p6k_zip_import_provenance
+                 SET task_id=?1,package_hash=?2,content_hash=?3,imported_at_ms=?4,adapter_version=3
+                 WHERE conversation_id=?5",
+                    params![task_id, package_hash, content_hash, now, conversation_id],
+                )
+                .map_err(|_| json_error("ZIP 累积导入 owner 未转移"))?;
+            transaction.execute("INSERT OR REPLACE INTO p6k_zip_import_receipts(workspace_id,provider,source_conversation_id,package_hash,conversation_id,content_hash,committed_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7)", params![workspace_id,provider,source_id,package_hash,conversation_id,content_hash,now]).map_err(|_| json_error("ZIP 累积导入 receipt 未写入"))?;
+            transaction.execute("UPDATE p6k_zip_import_items SET status='COMMITTED',failure=NULL,conversation_id=?3 WHERE task_id=?1 AND id=?2", params![task_id,item_id,conversation_id]).map_err(|_| json_error("ZIP 累积导入状态未写入"))?;
+            transaction
+                .commit()
+                .map_err(|_| json_error("ZIP 累积导入未提交"))?;
+            return Ok(());
+        }
+        if let Ok((conversation_id, existing_hash)) = transaction.query_row("SELECT conversation_id,content_hash FROM p6k_zip_import_receipts WHERE workspace_id=?1 AND provider=?2 AND source_conversation_id=?3 AND package_hash=?4", params![workspace_id,provider,source_id,package_hash], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?))) { if existing_hash != content_hash { return Err(json_error("同源不同内容，需重新选择 ZIP")); } transaction.execute("UPDATE p6k_zip_import_items SET status='COMMITTED',conversation_id=?3 WHERE task_id=?1 AND id=?2", params![task_id,item_id,conversation_id]).map_err(|_| json_error("无法回写 ZIP 幂等结果"))?; transaction.commit().map_err(|_| json_error("ZIP 重放结果未提交"))?; return Ok(()); }
         let exchange_text: String = transaction
             .query_row(
                 "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1",
@@ -8054,7 +9212,7 @@ impl DesktopWorkspaceStore {
             serde_json::from_str(&exchange_text).map_err(|_| json_error("本地工作区无法读取"))?;
         let conversation_id = format!(
             "conversation-p6k-{}",
-            &sha256(format!("{provider}:{source_id}:{package_hash}").as_bytes())[..24]
+            &sha256(format!("{provider}:{source_id}").as_bytes())[..24]
         );
         let ids = messages
             .iter()
@@ -8062,9 +9220,8 @@ impl DesktopWorkspaceStore {
                 (
                     message.0.clone(),
                     format!(
-                        "message-p6k-{}-{}",
-                        &sha256(task_id.as_bytes())[..12],
-                        message.0
+                        "message-p6k-{}",
+                        &sha256(format!("{provider}:{source_id}:{}", message.0).as_bytes())[..24]
                     ),
                 )
             })
@@ -8106,8 +9263,43 @@ impl DesktopWorkspaceStore {
                 params![semantic_hash, workspace_id],
             )
             .map_err(|_| json_error("ZIP workspace hash 未更新"))?;
-        transaction.execute("INSERT INTO p6k_zip_import_provenance(conversation_id,task_id,workspace_id,provider,source_conversation_id,package_hash,content_hash,imported_at_ms,adapter_id,adapter_version) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,'p6k-zip',2)",params![conversation_id,task_id,workspace_id,provider,source_id,package_hash,content_hash,local_now_millis()]).map_err(|_| json_error("ZIP provenance 未写入"))?;
+        transaction.execute("INSERT INTO p6k_zip_import_provenance(conversation_id,task_id,workspace_id,provider,source_conversation_id,package_hash,content_hash,imported_at_ms,adapter_id,adapter_version) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,'p6k-zip',3)",params![conversation_id,task_id,workspace_id,provider,source_id,package_hash,content_hash,local_now_millis()]).map_err(|_| json_error("ZIP provenance 未写入"))?;
         transaction.execute("INSERT INTO p6k_zip_import_receipts(workspace_id,provider,source_conversation_id,package_hash,conversation_id,content_hash,committed_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![workspace_id,provider,source_id,package_hash,conversation_id,content_hash,local_now_millis()]).map_err(|_| json_error("ZIP receipt 未写入"))?;
+        transaction
+            .execute(
+                "INSERT INTO p6k_zip_official_identity_ledger(
+                workspace_id,provider,entity_kind,parent_source_object_id,source_object_id,
+                state,local_object_id,content_hash,deletion_reason,revision,updated_at_ms
+             ) VALUES(?1,?2,'CONVERSATION','',?3,'IMPORTED',?4,?5,NULL,1,?6)",
+                params![
+                    workspace_id,
+                    provider,
+                    source_id,
+                    conversation_id,
+                    content_hash,
+                    local_now_millis()
+                ],
+            )
+            .map_err(|_| json_error("ZIP 官方身份账本未写入"))?;
+        for message in &messages {
+            transaction
+                .execute(
+                    "INSERT INTO p6k_zip_official_identity_ledger(
+                    workspace_id,provider,entity_kind,parent_source_object_id,source_object_id,
+                    state,local_object_id,content_hash,deletion_reason,revision,updated_at_ms
+                 ) VALUES(?1,?2,'MESSAGE',?3,?4,'IMPORTED',?5,?6,NULL,1,?7)",
+                    params![
+                        workspace_id,
+                        provider,
+                        source_id,
+                        message.0,
+                        ids[&message.0],
+                        message_hashes[&message.0],
+                        local_now_millis()
+                    ],
+                )
+                .map_err(|_| json_error("ZIP 消息身份账本未写入"))?;
+        }
         transaction.execute("UPDATE p6k_zip_import_items SET status='COMMITTED',conversation_id=?3 WHERE task_id=?1 AND id=?2",params![task_id,item_id,conversation_id]).map_err(|_| json_error("ZIP 项目状态未写入"))?;
         transaction
             .commit()
@@ -8194,7 +9386,7 @@ impl DesktopWorkspaceStore {
             return Err(json_error("该媒体已归属另一条消息"));
         }
         let source: Result<(), String> = (|| {
-            let (storage_key, candidate_workspace, entry_name, expected_sha, expected_bytes, expected_mime): (String,String,String,String,u64,String) = connection.query_row("SELECT t.storage_key,t.workspace_id,a.entry_name,a.sha256,a.byte_count,a.mime_type FROM p6k_zip_import_tasks t JOIN p6k_zip_import_asset_candidates a ON a.task_id=t.id WHERE t.id=?1 AND a.ordinal=?2 AND a.status IN ('UNMAPPED_REJECTED','MANUAL_LINK_FAILED')", params![args.task_id,args.asset_ordinal], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?,row.get(5)?))).map_err(|_| json_error("未关联媒体候选不存在"))?;
+            let (storage_key, candidate_workspace, entry_name, expected_sha, expected_bytes, expected_mime, provider, source_conversation_id): (String,String,String,String,u64,String,String,String) = connection.query_row("SELECT t.storage_key,t.workspace_id,a.entry_name,a.sha256,a.byte_count,a.mime_type,t.provider,p.source_conversation_id FROM p6k_zip_import_tasks t JOIN p6k_zip_import_asset_candidates a ON a.task_id=t.id JOIN p6k_zip_import_provenance p ON p.task_id=t.id AND p.conversation_id=?3 WHERE t.id=?1 AND a.ordinal=?2 AND a.status IN ('UNMAPPED_REJECTED','MANUAL_LINK_FAILED')", params![args.task_id,args.asset_ordinal,args.conversation_id], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?,row.get(5)?,row.get(6)?,row.get(7)?))).map_err(|_| json_error("未关联媒体候选不存在"))?;
             if candidate_workspace != args.workspace_id
                 || !storage_key.starts_with(&format!("p6k-zip-import-assets/{}/", args.task_id))
                 || !safe_entry(&entry_name)
@@ -8204,6 +9396,24 @@ impl DesktopWorkspaceStore {
             let belongs: i64 = connection.query_row("SELECT COUNT(*) FROM p6k_zip_import_provenance WHERE task_id=?1 AND workspace_id=?2 AND conversation_id=?3", params![args.task_id,args.workspace_id,args.conversation_id], |row| row.get(0)).map_err(|_| json_error("ZIP provenance 无法读取"))?;
             if belongs != 1 {
                 return Err(json_error("目标不是该 ZIP 已导入会话"));
+            }
+            let was_user_deleted: i64 = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM p6k_zip_official_identity_ledger
+                 WHERE workspace_id=?1 AND provider=?2 AND entity_kind='ATTACHMENT'
+                   AND parent_source_object_id=?3 AND source_object_id=?4
+                   AND state='USER_DELETED')",
+                    params![
+                        args.workspace_id,
+                        provider,
+                        source_conversation_id,
+                        expected_sha
+                    ],
+                    |row| row.get(0),
+                )
+                .map_err(|_| json_error("无法读取 ZIP 附件删除墓碑"))?;
+            if was_user_deleted != 0 {
+                return Err(json_error("该 ZIP 附件已被你主动删除，未恢复"));
             }
             let exchange_text: String = connection
                 .query_row(
@@ -8335,6 +9545,17 @@ impl DesktopWorkspaceStore {
                 .map_err(|_| json_error("workspace hash 未更新"))?;
             transaction.execute("UPDATE p6k_zip_import_asset_candidates SET status='MANUAL_LINKED' WHERE task_id=?1 AND ordinal=?2",params![args.task_id,args.asset_ordinal]).map_err(|_|json_error("媒体关联状态未写入"))?;
             transaction.execute("INSERT INTO p6k_zip_asset_link_receipts(task_id,ordinal,sha256,attachment_id,workspace_id,conversation_id,message_id,committed_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",params![args.task_id,args.asset_ordinal,expected_sha,attachment_id,args.workspace_id,args.conversation_id,args.message_id,now]).map_err(|_|json_error("媒体关联回执未写入"))?;
+            transaction.execute(
+                "INSERT INTO p6k_zip_official_identity_ledger(
+                    workspace_id,provider,entity_kind,parent_source_object_id,source_object_id,
+                    state,local_object_id,content_hash,deletion_reason,revision,updated_at_ms
+                 ) VALUES(?1,?2,'ATTACHMENT',?3,?4,'IMPORTED',?5,?4,NULL,1,?6)
+                 ON CONFLICT(workspace_id,provider,entity_kind,parent_source_object_id,source_object_id)
+                 DO UPDATE SET state='IMPORTED',local_object_id=excluded.local_object_id,
+                    deletion_reason=NULL,revision=p6k_zip_official_identity_ledger.revision+1,
+                    updated_at_ms=excluded.updated_at_ms",
+                params![args.workspace_id, provider, source_conversation_id, expected_sha, attachment_id, now],
+            ).map_err(|_| json_error("ZIP 附件身份账本未写入"))?;
             transaction
                 .commit()
                 .map_err(|_| json_error("人工关联未提交；已回滚"))?;
@@ -8524,6 +9745,14 @@ impl DesktopWorkspaceStore {
                 params![semantic_hash, workspace_id],
             )
             .map_err(|_| json_error("ZIP workspace hash 未更新"))?;
+        transaction.execute(
+            "UPDATE p6k_zip_official_identity_ledger
+             SET state='USER_DELETED',deletion_reason='BATCH_DELETED',revision=revision+1,updated_at_ms=?2
+             WHERE local_object_id IN (
+                 SELECT conversation_id FROM p6k_zip_import_provenance WHERE task_id=?1
+             ) AND entity_kind='CONVERSATION'",
+            params![task_id, local_now_millis()],
+        ).map_err(|_| json_error("无法保存 ZIP 批次删除墓碑"))?;
         transaction.execute("DELETE FROM p6k_zip_import_receipts WHERE conversation_id IN (SELECT conversation_id FROM p6k_zip_import_provenance WHERE task_id=?1)",[task_id]).map_err(|_|json_error("无法删除 ZIP receipt"))?;
         transaction
             .execute(
@@ -9416,18 +10645,7 @@ impl DesktopWorkspaceStore {
             fs::read(&staging).map_err(|_| json_error("staging 不存在或已清理；请重新选择文件"))?,
         )?;
         let workspace_id = format!("workspace-{}", &preflight.receipt.package_hash[..24]);
-        // Write only verified, content-addressed private blobs before the DB transaction. A crash
-        // before commit can leave an orphan blob, but never a visible half workspace.
-        for (entry, content) in &preflight.assets {
-            let hash = entry
-                .strip_prefix("assets/")
-                .ok_or_else(|| json_error("asset entry 无效"))?;
-            let target = self.root.join("assets").join(hash);
-            if !target.exists() {
-                fs::write(target, content)
-                    .map_err(|_| json_error("asset 私有 staging 落盘失败；未创建工作区"))?;
-            }
-        }
+        self.persist_preflight_assets(&preflight)?;
         let archived_package = self
             .root
             .join("packages")
@@ -9456,6 +10674,23 @@ impl DesktopWorkspaceStore {
             .map_err(|_| json_error("导入未提交；未创建半工作区"))?;
         let _ = fs::remove_file(staging);
         self.workspace_projection(&workspace_id)
+    }
+
+    /// Persist verified, content-addressed private blobs before any import transaction exposes
+    /// their attachment metadata. Production import and isolated native acceptance share this
+    /// owner so a searchable fixture can never point at a missing private preview copy.
+    fn persist_preflight_assets(&self, preflight: &PreflightedPackage) -> Result<(), String> {
+        for (entry, content) in &preflight.assets {
+            let hash = entry
+                .strip_prefix("assets/")
+                .ok_or_else(|| json_error("asset entry 无效"))?;
+            let target = self.root.join("assets").join(hash);
+            if !target.exists() {
+                fs::write(target, content)
+                    .map_err(|_| json_error("asset 私有 staging 落盘失败；未创建工作区"))?;
+            }
+        }
+        Ok(())
     }
 
     fn commit_import(
@@ -9496,6 +10731,17 @@ impl DesktopWorkspaceStore {
         for (entry, bytes) in &preflight.assets {
             transaction.execute("INSERT INTO workspace_assets(workspace_id, sha256, byte_count) VALUES (?1, ?2, ?3)", params![workspace_id, entry.strip_prefix("assets/").unwrap_or_default(), bytes.len() as u64]).map_err(|_| json_error("无法写入 asset 索引"))?;
         }
+        let imported_at_ms = local_now_millis();
+        for (_sha256, (asset, reference_count)) in collect_asset_metadata(&preflight.exchange)? {
+            transaction.execute(
+                "INSERT INTO desktop_attachment_assets(sha256,byte_count,created_at_ms,last_referenced_at_ms,last_unreferenced_at_ms,reference_count) VALUES(?1,?2,?3,?3,?3,?4) ON CONFLICT(sha256) DO UPDATE SET reference_count=desktop_attachment_assets.reference_count+excluded.reference_count,last_referenced_at_ms=excluded.last_referenced_at_ms",
+                params![asset.sha256, asset.byte_count, imported_at_ms, reference_count],
+            ).map_err(|_| json_error("无法写入导入附件资产元数据"))?;
+            transaction.execute(
+                "INSERT INTO desktop_conversation_attachments(workspace_id,attachment_id,mime_type,display_name,byte_count,sha256,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+                params![workspace_id, asset.id, asset.mime_type, asset.display_name, asset.byte_count, asset.sha256, now],
+            ).map_err(|_| json_error("无法写入导入附件预览元数据"))?;
+        }
         transaction.execute("INSERT INTO import_journal(package_hash, workspace_id, semantic_hash, committed_at) VALUES (?1, ?2, ?3, ?4)", params![preflight.receipt.package_hash, workspace_id, preflight.receipt.semantic_hash, now]).map_err(|_| json_error("无法写入 import journal"))?;
         Ok(())
     }
@@ -9503,8 +10749,72 @@ impl DesktopWorkspaceStore {
     fn workspace_projection(&self, workspace_id: &str) -> Result<WorkspaceProjection, String> {
         let connection = self.connection()?;
         let row: (String, String, String, String) = connection.query_row("SELECT w.title, w.semantic_hash, w.package_hash, x.exchange_json FROM workspaces w JOIN workspace_exchange x ON x.workspace_id=w.id WHERE w.id=?1", [workspace_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))).map_err(|_| json_error("工作区不存在"))?;
-        let exchange: Value =
+        let mut exchange: Value =
             serde_json::from_str(&row.3).map_err(|_| json_error("本地交换 IR 无法读取"))?;
+        // A PARTIAL label is only a transcript fact. The attempt owner decides whether work is
+        // still live, so a stale or legacy partial can never trap the user in “正在生成”.
+        let mut attempts = connection.prepare(
+            "SELECT assistant_message_id,user_message_id,state,safe_error_code,created_at_ms FROM desktop_ordinary_chat_attempts WHERE workspace_id=?1",
+        ).map_err(|_| json_error("无法读取聊天运行状态"))?;
+        let attempts = attempts
+            .query_map([workspace_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            })
+            .map_err(|_| json_error("无法读取聊天运行状态"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| json_error("聊天运行状态无效"))?;
+        let runtime_by_message = attempts.iter().map(|(assistant_id, _, state, code, created_at_ms)| (
+            assistant_id.clone(), (state.clone(), code.clone(), *created_at_ms),
+        )).collect::<HashMap<_, _>>();
+        let created_by_user_message = attempts.iter().map(|(_, user_id, _, _, created_at_ms)| (
+            user_id.clone(), *created_at_ms,
+        )).collect::<HashMap<_, _>>();
+        if let Some(conversations) = exchange.get_mut("conversations").and_then(Value::as_array_mut) {
+            for conversation in conversations {
+                if let Some(messages) = conversation.get_mut("messages").and_then(Value::as_array_mut) {
+                    for message in messages {
+                        let message_id = message.get("id").and_then(Value::as_str).unwrap_or_default();
+                        // Pre-2026-09 desktop builds wrote a fixed display timestamp. Preserve
+                        // imported/static timestamps, but recover ordinary-chat timestamps from
+                        // the local Attempt when that durable fact exists.
+                        if message.get("createdAt").and_then(Value::as_str) == Some("2026-08-13T00:00:00Z") {
+                            let recorded_at = runtime_by_message
+                                .get(message_id)
+                                .map(|(_, _, created_at_ms)| *created_at_ms)
+                                .or_else(|| created_by_user_message.get(message_id).copied());
+                            if let Some(recorded_at) = recorded_at.filter(|value| *value > 0) {
+                                message["createdAt"] = Value::String(rfc3339_from_unix_millis(recorded_at));
+                            }
+                        }
+                        if message.get("delivery").and_then(Value::as_str) != Some("PARTIAL") {
+                            continue;
+                        }
+                        let runtime = message
+                            .get("id")
+                            .and_then(Value::as_str)
+                            .and_then(|id| runtime_by_message.get(id))
+                            .map(|(state, code, _)| {
+                                if matches!(state.as_str(), "PENDING" | "RUNNING") {
+                                    ("RUNNING", None)
+                                } else {
+                                    ("TERMINAL", code.clone())
+                                }
+                            })
+                            .unwrap_or(("MISSING", Some("LOCAL_RUNTIME_STATE_MISSING".into())));
+                        message["runtimeState"] = Value::String(runtime.0.into());
+                        if let Some(code) = runtime.1 {
+                            message["runtimeSafeErrorCode"] = Value::String(code);
+                        }
+                    }
+                }
+            }
+        }
         self.projection_from_exchange(workspace_id.to_owned(), row.0, row.1, row.2, exchange)
     }
 
@@ -9599,6 +10909,43 @@ impl DesktopWorkspaceStore {
         let before_hash = semantic_hash(&before)?;
         let mut after = before.clone();
         let (object_id, revision) = apply_domain_mutation(&mut after, &args)?;
+        if args.entity == "conversation" && args.action == "removeAttachment" {
+            let attachment_id = args
+                .fields
+                .get("attachmentId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| json_error("ZIP 附件删除引用无效"))?;
+            transaction
+                .execute(
+                    "UPDATE p6k_zip_official_identity_ledger
+                 SET state='USER_DELETED',deletion_reason='USER_ATTACHMENT_DELETE',
+                     revision=revision+1,updated_at_ms=?3
+                 WHERE workspace_id=?1 AND entity_kind='ATTACHMENT' AND local_object_id=?2",
+                    params![args.workspace_id, attachment_id, local_now_millis()],
+                )
+                .map_err(|_| json_error("无法保存 ZIP 附件删除墓碑"))?;
+        }
+        if args.entity == "conversation" && args.action == "softDelete" {
+            transaction
+                .execute(
+                    "UPDATE p6k_zip_official_identity_ledger
+                 SET state='USER_DELETED',deletion_reason='USER_SOFT_DELETE',
+                     revision=revision+1,updated_at_ms=?3
+                 WHERE workspace_id=?1 AND entity_kind='CONVERSATION' AND local_object_id=?2",
+                    params![args.workspace_id, object_id, local_now_millis()],
+                )
+                .map_err(|_| json_error("无法保存 ZIP 会话删除墓碑"))?;
+        } else if args.entity == "conversation" && args.action == "restoreDeleted" {
+            transaction
+                .execute(
+                    "UPDATE p6k_zip_official_identity_ledger
+                 SET state='IMPORTED',deletion_reason=NULL,
+                     revision=revision+1,updated_at_ms=?3
+                 WHERE workspace_id=?1 AND entity_kind='CONVERSATION' AND local_object_id=?2",
+                    params![args.workspace_id, object_id, local_now_millis()],
+                )
+                .map_err(|_| json_error("无法恢复 ZIP 会话身份状态"))?;
+        }
         let after_hash = refresh_exchange_hash(&mut after)?;
         validate_exchange(&after)?;
         let after_text = canonical_json(&after)?;
@@ -10031,6 +11378,15 @@ impl DesktopWorkspaceStore {
         Ok(())
     }
 
+    fn stored_conversation_override(
+        &self,
+        connection: &Connection,
+        workspace_id: &str,
+        conversation_id: &str,
+    ) -> Result<ConversationOverride, String> {
+        Ok(connection.query_row("SELECT revision,model_id,tone_override,web_search_override FROM p6g_conversation_override WHERE workspace_id=?1 AND conversation_id=?2", params![workspace_id, conversation_id], |row| Ok(ConversationOverride { conversation_id: conversation_id.into(), revision: row.get(0)?, model_id: row.get(1)?, tone_override: row.get(2)?, web_search_override: row.get::<_, Option<i64>>(3)?.map(|value| value != 0) })).unwrap_or(ConversationOverride { conversation_id: conversation_id.into(), revision: 0, model_id: None, tone_override: None, web_search_override: None }))
+    }
+
     fn p6g_override(
         &self,
         connection: &Connection,
@@ -10038,7 +11394,7 @@ impl DesktopWorkspaceStore {
         conversation_id: &str,
     ) -> Result<ConversationOverride, String> {
         self.require_p6g_conversation(connection, workspace_id, conversation_id)?;
-        Ok(connection.query_row("SELECT revision,model_id FROM p6g_conversation_override WHERE workspace_id=?1 AND conversation_id=?2", params![workspace_id, conversation_id], |row| Ok(ConversationOverride { conversation_id: conversation_id.into(), revision: row.get(0)?, model_id: row.get(1)? })).unwrap_or(ConversationOverride { conversation_id: conversation_id.into(), revision: 0, model_id: None }))
+        self.stored_conversation_override(connection, workspace_id, conversation_id)
     }
 
     fn p6g_last_route(
@@ -10193,11 +11549,12 @@ impl DesktopWorkspaceStore {
         }
         if let Some(model_id) = &args.model_id {
             let catalog = self.p6g_catalog(&transaction)?;
-            if !catalog
-                .snapshot
-                .candidates
-                .iter()
-                .any(|item| &item.model_id == model_id)
+            if !is_desktop_chat_model_id(model_id)
+                && !catalog
+                    .snapshot
+                    .candidates
+                    .iter()
+                    .any(|item| &item.model_id == model_id)
             {
                 return Err(json_error("P6-G 手动模型不在本地 catalog"));
             }
@@ -10210,6 +11567,43 @@ impl DesktopWorkspaceStore {
         transaction
             .commit()
             .map_err(|_| json_error("P6-G 会话选择未提交；已回滚"))?;
+        Ok(P6gMutationReceipt { revision })
+    }
+
+    fn set_conversation_preferences(
+        &self,
+        args: DesktopConversationPreferencesArgs,
+    ) -> Result<P6gMutationReceipt, String> {
+        if args.tone_override.as_deref().is_some_and(|tone| {
+            !matches!(
+                tone,
+                "direct" | "professional" | "friendly" | "efficient" | "humorous"
+            )
+        }) {
+            return Err(json_error("会话风格必须是五个当前可见风格之一"));
+        }
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|_| json_error("无法开启会话偏好 transaction"))?;
+        let current = self.p6g_override(&transaction, &args.workspace_id, &args.conversation_id)?;
+        if current.revision != args.expected_revision {
+            return Err(json_error("REVISION_CONFLICT：会话偏好已变化"));
+        }
+        let revision = current
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| json_error("会话偏好 revision 溢出"))?;
+        transaction.execute(
+            "INSERT INTO p6g_conversation_override(workspace_id,conversation_id,revision,model_id,tone_override,web_search_override)
+             VALUES(?1,?2,?3,?4,?5,?6)
+             ON CONFLICT(workspace_id,conversation_id) DO UPDATE SET
+               revision=excluded.revision,tone_override=excluded.tone_override,web_search_override=excluded.web_search_override",
+            params![args.workspace_id,args.conversation_id,revision,current.model_id,args.tone_override,args.web_search_override.map(i64::from)],
+        ).map_err(|_| json_error("无法保存会话风格与联网偏好"))?;
+        transaction
+            .commit()
+            .map_err(|_| json_error("会话偏好未提交；已回滚"))?;
         Ok(P6gMutationReceipt { revision })
     }
 
@@ -10357,34 +11751,30 @@ fn ordinary_chat_context_score(query_terms: &BTreeSet<String>, title: &str, body
 
 fn ordinary_chat_tone_instruction(tone: &str) -> &'static str {
     match tone {
-        "professional" => "专业可靠：结论清楚，依据准确，风险与边界明确。",
-        "friendly" => "亲和友善：自然温和，但不牺牲准确性和行动结论。",
-        "direct" => "直言不讳：直接指出问题、失衡和错误前提。",
-        "efficient" => "高效务实：先给结论，压缩重复解释，突出可执行步骤。",
-        "humorous" => "风趣搞笑：可自然幽默；严肃或高风险场景保持克制。",
-        _ => "默认：清楚、可靠、自然，并与用户当前语气相匹配。",
+        "direct" => "对话方式：直言不讳。先说结论，直接指出问题，减少与判断和行动无关的铺垫。以可核验的事实、证据和现实约束为优先，不要因为用户立场强烈就迎合或违背事实妥协。发现用户观点错误、重要前提不成立、表达明显情绪化、过度自信或过度悲观时，应明确指出问题、直击要害，并给出针对性提醒或修正方向。可以反驳用户或与用户讨论不同观点，但不得无依据武断、羞辱、嘲讽或人身攻击。清楚区分已确认事实、合理判断与待验证信息，不把不确定推断写成事实。",
+        "professional" => "对话方式：专业可靠。像严谨的专业顾问一样回答：先核对事实、口径、条件和关键前提，再用清晰结构说明依据、推理过程、风险、限制和适用范围。明确区分已确认事实、专业判断和待验证信息；不编造确定性，也不省略会改变结论的重要前提。发现用户前提或结论有误时应有依据地纠正，不得为了显得专业而使用无法证明的断言。",
+        "friendly" => "对话方式：亲和友善。先理解用户的处境、目标和情绪，用温和、耐心、容易接受的方式解释，并给出实际支持。同理不等于迎合：对明显错误的观点、有害或不现实的判断仍要明确纠正，不用安慰取代事实、风险和必要的限制。纠正时说清依据和可行下一步，不羞辱、不责备用户，也不把不确定判断写成事实。",
+        "efficient" => "对话方式：高效务实。回答务必精简：先给出结论、优先级和立即可执行的下一步，只保留会影响判断、决策或行动的内容。主动指出当前最关键的阻碍、取舍、成本、依赖和停止条件，给出能真正执行的最短路径。不得为了简短而省略会改变结论的风险、必要依据或不确定性；发现用户方案不可行时直接说明原因并给出更可行的替代方案。",
+        "humorous" => "对话方式：风趣搞笑。在事实准确、结论清晰且任务完成不受影响的前提下，可以用适度幽默、类比和轻松表达降低阅读压力。不得牺牲准确性，不得嘲讽或羞辱用户，不拿用户的敏感处境、痛苦、风险或负面情绪开玩笑。在医疗、法律、投资、安全等高风险任务，严肃话题或用户明显负面情绪时，自动收敛幽默。幽默不得取代事实、必要风险提示、不确定性或可执行结论。",
+        _ => "对话方式：默认。自然、清晰地回答，并按问题复杂度、风险和用户需要调整详略。优先解决当前问题，不刻意强化直言、专业、亲和、高效或幽默中的某一种表达风格。保持事实准确，明确区分已确认事实、合理判断与待验证信息；发现关键前提有误时应说明并纠正。",
     }
 }
 
-fn ordinary_chat_needs_current_web_information(value: &str) -> bool {
-    let value = value.to_lowercase();
-    const SIGNALS: [&str; 36] = [
-        "最新", "最近", "今天", "今日", "当前", "实时", "新闻", "动态", "价格", "股价", "汇率", "行情",
-        "财报", "业绩", "政策", "法规", "发布", "联网", "网页", "网络", "网上", "在线搜索", "web search",
-        "internet search", "latest", "recent", "today", "current", "real-time", "realtime", "news", "price", "stock",
-        "exchange rate", "earnings", "政策变化",
-    ];
-    SIGNALS.iter().any(|signal| value.contains(signal))
-}
-
-fn ordinary_chat_web_search_route(provider_id: &str, model_id: &str, enabled: bool, user_text: &str, has_attachments: bool) -> &'static str {
-    if !enabled || !ordinary_chat_needs_current_web_information(user_text) { return "NONE"; }
+fn ordinary_chat_web_search_route(
+    provider_id: &str,
+    model_id: &str,
+    enabled: bool,
+    has_attachments: bool,
+) -> &'static str {
+    if !enabled {
+        return "NONE";
+    }
     match provider_id {
         "OPENROUTER" => "OPENROUTER_SERVER_TOOL",
         "QWEN" if !has_attachments && model_id != "qwen3.8-max" => "QWEN_RESPONSES",
         "QWEN" => "QWEN_CHAT_COMPLETIONS",
-        "DEEPSEEK" if !has_attachments => "DEEPSEEK_RESPONSES",
-        "ZHIPU" if !has_attachments => "ZHIPU_CHAT_COMPLETIONS",
+        "DEEPSEEK" => "DEEPSEEK_RESPONSES",
+        "ZHIPU" => "ZHIPU_CHAT_COMPLETIONS",
         _ => "NONE",
     }
 }
@@ -10457,9 +11847,11 @@ impl DesktopWorkspaceStore {
         }
         self.connection()?.execute("UPDATE desktop_ordinary_chat_attempts SET state='COMPLETED_ACCOUNTING_PENDING',safe_error_code='LOCAL_ACCOUNTING_PERSISTENCE',updated_at_ms=?1 WHERE state='RESPONSE_COMMITTED'",[system_now_millis()]).map_err(|_|json_error("无法恢复已提交回复的账本状态"))?;
         let connection = self.connection()?;
-        let mut statement = connection.prepare("SELECT execution_id FROM desktop_compare_executions ORDER BY created_at_ms")
+        let mut statement = connection
+            .prepare("SELECT execution_id FROM desktop_compare_executions ORDER BY created_at_ms")
             .map_err(|_| json_error("无法读取 Compare 恢复状态"))?;
-        let execution_ids = statement.query_map([], |row| row.get::<_, String>(0))
+        let execution_ids = statement
+            .query_map([], |row| row.get::<_, String>(0))
             .map_err(|_| json_error("无法读取 Compare 恢复状态"))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| json_error("Compare 恢复状态无效"))?;
@@ -10509,7 +11901,7 @@ impl DesktopWorkspaceStore {
                 .copied()
                 .ok_or_else(|| json_error("当前会话指定的模型未启用或缺少凭据，未自动换模型"))?
         } else {
-            const ORDER: [&str; 15] = [
+            const ORDER: [&str; 17] = [
                 "DEEPSEEK_V4_FLASH",
                 "GPT_5_6_TERRA",
                 "CLAUDE_SONNET_5",
@@ -10524,6 +11916,8 @@ impl DesktopWorkspaceStore {
                 "QWEN_3_8_MAX",
                 "GPT_5_6_SOL",
                 "CLAUDE_OPUS_5",
+                "CLAUDE_FABLE_5_1",
+                "GPT_6_ASTRA",
                 "CLAUDE_FABLE_5",
             ];
             ORDER
@@ -10549,10 +11943,26 @@ impl DesktopWorkspaceStore {
         ))
     }
 
+    fn ordinary_chat_web_search_enabled(
+        &self,
+        connection: &Connection,
+        workspace_id: &str,
+        conversation_id: &str,
+    ) -> Result<bool, String> {
+        let global = desktop_app_settings_v1::read(connection)?
+            .product
+            .web_search_enabled;
+        Ok(self
+            .stored_conversation_override(connection, workspace_id, conversation_id)?
+            .web_search_override
+            .unwrap_or(global))
+    }
+
     fn ordinary_chat_request_messages(
         &self,
         connection: &Connection,
         exchange: &Value,
+        workspace_id: &str,
         conversation_id: &str,
         assistant_message_id: &str,
         provider_id: &str,
@@ -10602,11 +12012,23 @@ impl DesktopWorkspaceStore {
         let mut selected_sources = Vec::<DesktopOrdinaryChatSelectedSource>::new();
         let mut context_sections = Vec::<String>::new();
 
-        let tone = ordinary_chat_tone_instruction(&settings.tone);
+        let conversation_preferences =
+            self.stored_conversation_override(connection, workspace_id, conversation_id)?;
+        let tone_id = conversation_preferences
+            .tone_override
+            .as_deref()
+            .filter(|tone| {
+                matches!(
+                    *tone,
+                    "direct" | "professional" | "friendly" | "efficient" | "humorous"
+                )
+            })
+            .unwrap_or(&settings.tone);
+        let tone = ordinary_chat_tone_instruction(tone_id);
         context_sections.push(format!("基础风格和语气：{tone}"));
         selected_sources.push(DesktopOrdinaryChatSelectedSource {
             kind: "对话风格".into(),
-            source_id: format!("tone:{}", settings.tone),
+            source_id: format!("tone:{tone_id}"),
             title: "基础风格和语气".into(),
         });
         if !settings.custom_instructions.trim().is_empty() {
@@ -10830,6 +12252,29 @@ impl DesktopWorkspaceStore {
         if (text.is_empty() && args.attachment_ids.is_empty()) || text.chars().count() > 120_000 {
             return Err(json_error("请输入文字或保留附件，且正文不得超过上限"));
         }
+        if args.conversation_id.is_some()
+            && (args.project_id.is_some()
+                || args.model_id.is_some()
+                || args.tone_override.is_some()
+                || args.web_search_override.is_some())
+        {
+            return Err(json_error("已有会话的模型与会话偏好必须先通过会话 owner 保存"));
+        }
+        if args
+            .model_id
+            .as_deref()
+            .is_some_and(|model_id| !is_desktop_chat_model_id(model_id))
+        {
+            return Err(json_error("新对话选择的模型不在当前模型目录"));
+        }
+        if args.tone_override.as_deref().is_some_and(|tone| {
+            !matches!(
+                tone,
+                "direct" | "professional" | "friendly" | "efficient" | "humorous"
+            )
+        }) {
+            return Err(json_error("新对话选择的基础风格不在当前目录"));
+        }
         let attempt_id = ordinary_chat_random_id("chat-attempt")?;
         let intent_id = ordinary_chat_random_id("chat-send")?;
         let idempotency_key = format!("normal-{attempt_id}");
@@ -10861,11 +12306,20 @@ impl DesktopWorkspaceStore {
             fields: if args.conversation_id.is_some() {
                 json!({"text":text,"role":"user","attachmentIds":args.attachment_ids})
             } else {
-                json!({"title":if text.is_empty() { "附件对话".into() } else { text.chars().take(40).collect::<String>() },"firstMessage":text,"attachmentIds":args.attachment_ids})
+                json!({"title":if text.is_empty() { "附件对话".into() } else { text.chars().take(40).collect::<String>() },"projectId":args.project_id,"firstMessage":text,"attachmentIds":args.attachment_ids})
             },
         };
         self.hydrate_conversation_attachment_blocks(&transaction, &mut mutation)?;
         let (conversation_id, revision) = apply_domain_mutation(&mut after, &mutation)?;
+        if args.model_id.is_some()
+            || args.tone_override.is_some()
+            || args.web_search_override.is_some()
+        {
+            transaction.execute(
+                "INSERT INTO p6g_conversation_override(workspace_id,conversation_id,revision,model_id,tone_override,web_search_override) VALUES(?1,?2,1,?3,?4,?5)",
+                params![args.workspace_id, conversation_id, args.model_id, args.tone_override, args.web_search_override.map(i64::from)],
+            ).map_err(|_| json_error("新对话模型与会话偏好未能与首条消息一同保存"))?;
+        }
         let conversation = after
             .get_mut("conversations")
             .and_then(Value::as_array_mut)
@@ -10890,20 +12344,53 @@ impl DesktopWorkspaceStore {
         conversation["currentLeafId"] = Value::String(assistant_message_id.clone());
         conversation["revision"] = Value::Number((revision + 1).into());
         conversation["updatedAt"] = Value::String(local_now().into());
-        let (provider_id, model_id, model_display_name, mut endpoint) = self.ordinary_chat_route(
+        let route = self.ordinary_chat_route(
             &transaction,
             &args.workspace_id,
             &conversation_id,
             mock_endpoint,
-        )?;
+        );
+        let (provider_id, model_id, model_display_name, mut endpoint, preflight_failure_code) =
+            match route {
+                Ok((provider_id, model_id, model_display_name, endpoint)) => {
+                    (provider_id, model_id, model_display_name, endpoint, None)
+                }
+                Err(error)
+                    if mock_endpoint.is_none()
+                        && (error.contains("没有已启用") || error.contains("未启用或缺少凭据")) =>
+                {
+                    let code = if error.contains("当前会话指定") {
+                        "SELECTED_MODEL_UNAVAILABLE"
+                    } else {
+                        "PROVIDER_NOT_ENABLED"
+                    };
+                    (
+                        "UNAVAILABLE".into(),
+                        "unavailable".into(),
+                        "未启用聊天模型".into(),
+                        String::new(),
+                        Some(code.into()),
+                    )
+                }
+                Err(error) => return Err(error),
+            };
         let web_search_route = ordinary_chat_web_search_route(
             &provider_id,
             &model_id,
-            desktop_app_settings_v1::read(&transaction)?.product.web_search_enabled,
-            text,
+            self.ordinary_chat_web_search_enabled(
+                &transaction,
+                &args.workspace_id,
+                &conversation_id,
+            )?,
             !args.attachment_ids.is_empty(),
-        ).to_owned();
-        if mock_endpoint.is_none() && matches!(web_search_route.as_str(), "QWEN_RESPONSES" | "DEEPSEEK_RESPONSES") {
+        )
+        .to_owned();
+        if mock_endpoint.is_none()
+            && matches!(
+                web_search_route.as_str(),
+                "QWEN_RESPONSES" | "DEEPSEEK_RESPONSES"
+            )
+        {
             let provider = desktop_model_service_v1::provider(&provider_id)?;
             endpoint = format!("{}/responses", provider.endpoint.trim_end_matches('/'));
         }
@@ -10931,6 +12418,7 @@ impl DesktopWorkspaceStore {
         let (request_messages, selected_sources) = self.ordinary_chat_request_messages(
             &transaction,
             &after,
+            &args.workspace_id,
             &conversation_id,
             &assistant_message_id,
             &provider_id,
@@ -10952,7 +12440,7 @@ impl DesktopWorkspaceStore {
             )
             .map_err(|_| json_error("无法更新聊天 hash"))?;
         transaction.execute("INSERT INTO domain_intents(intent_id,workspace_id,entity,action,object_id,expected_revision,before_exchange_json,after_exchange_json,before_semantic_hash,after_semantic_hash,undone,created_at,result_revision) VALUES(?1,?2,'conversation',?3,?4,?5,?6,?7,?8,?9,0,?10,?11)", params![intent_id,args.workspace_id,mutation.action,conversation_id,args.expected_revision,before_text,canonical_json(&after)?,semantic_hash(&serde_json::from_str::<Value>(&before_text).map_err(|_| json_error("原会话无效"))?)?,after_hash,local_now(),revision + 1]).map_err(|_| json_error("无法记录聊天 intent"))?;
-        transaction.execute("INSERT INTO desktop_ordinary_chat_attempts(attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,retry_count,idempotency_key,request_fingerprint,provider_id,requested_model_id,model_display_name,state,created_at_ms,updated_at_ms,web_search_route) VALUES(?1,?2,?3,?4,?5,0,?6,?7,?8,?9,?10,'PENDING',?11,?11,?12)", params![attempt_id,args.workspace_id,conversation_id,user_message_id,assistant_message_id,idempotency_key,request_fingerprint,provider_id,model_id,model_display_name,now,web_search_route]).map_err(|_| json_error("无法记录聊天 Attempt"))?;
+        transaction.execute("INSERT INTO desktop_ordinary_chat_attempts(attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,retry_count,idempotency_key,request_fingerprint,provider_id,requested_model_id,model_display_name,state,created_at_ms,updated_at_ms,web_search_route,egress_approved_at_ms,egress_disclosure_version) VALUES(?1,?2,?3,?4,?5,0,?6,?7,?8,?9,?10,'PENDING',?11,?11,?12,?13,?14)", params![attempt_id,args.workspace_id,conversation_id,user_message_id,assistant_message_id,idempotency_key,request_fingerprint,provider_id,model_id,model_display_name,now,web_search_route,args.egress_authorization.as_ref().map(|value| value.approved_at_ms),args.egress_authorization.as_ref().map(|value| value.disclosure_version.as_str())]).map_err(|_| json_error("无法记录聊天 Attempt"))?;
         for (ordinal, source) in selected_sources.iter().enumerate() {
             transaction.execute(
                 "INSERT INTO desktop_ordinary_chat_context_sources(attempt_id,ordinal,source_kind,source_id,title) VALUES(?1,?2,?3,?4,?5)",
@@ -10971,13 +12459,21 @@ impl DesktopWorkspaceStore {
             messages: request_messages,
             idempotency_key,
             web_search_route,
+            preflight_failure_code,
         })
     }
 
     fn compare_routes(
         &self,
         mock_endpoint: Option<&str>,
-    ) -> Result<Vec<(&'static str, desktop_model_service_v1::PresetDescriptor, String)>, String> {
+    ) -> Result<
+        Vec<(
+            &'static str,
+            desktop_model_service_v1::PresetDescriptor,
+            String,
+        )>,
+        String,
+    > {
         let chatgpt = desktop_model_service_v1::preset("OPENROUTER", "GPT_5_6_TERRA")?;
         let claude = desktop_model_service_v1::preset("OPENROUTER", "CLAUDE_SONNET_5")?;
         let endpoint = if let Some(endpoint) = mock_endpoint {
@@ -11033,8 +12529,8 @@ impl DesktopWorkspaceStore {
                 |row| row.get(0),
             )
             .map_err(|_| json_error("工作区不存在"))?;
-        let mut after: Value = serde_json::from_str(&before_text)
-            .map_err(|_| json_error("本地交换 IR 无法读取"))?;
+        let mut after: Value =
+            serde_json::from_str(&before_text).map_err(|_| json_error("本地交换 IR 无法读取"))?;
         let mut mutation = DomainMutationArgs {
             intent_id: intent_id.clone(),
             workspace_id: args.workspace_id.clone(),
@@ -11086,7 +12582,9 @@ impl DesktopWorkspaceStore {
                 "modelSnapshot":{"providerId":"OPENROUTER","modelId":preset.model_id,"displayName":preset.display_name},
                 "blocks":[{"kind":"TEXT","text":""}]
             }));
-            if index == 0 { first_assistant_id = Some(assistant_message_id.clone()); }
+            if index == 0 {
+                first_assistant_id = Some(assistant_message_id.clone());
+            }
             branch_facts.push((
                 logical_model.to_string(),
                 *preset,
@@ -11095,24 +12593,30 @@ impl DesktopWorkspaceStore {
                 assistant_message_id,
             ));
         }
-        conversation["currentLeafId"] = Value::String(first_assistant_id.ok_or_else(|| json_error("Compare ChatGPT branch 缺失"))?);
+        conversation["currentLeafId"] = Value::String(
+            first_assistant_id.ok_or_else(|| json_error("Compare ChatGPT branch 缺失"))?,
+        );
         conversation["revision"] = Value::Number((revision + 1).into());
         conversation["updatedAt"] = Value::String(local_now().into());
 
-        let web_search_enabled = desktop_app_settings_v1::read(&transaction)?.product.web_search_enabled;
+        let web_search_enabled = self.ordinary_chat_web_search_enabled(
+            &transaction,
+            &args.workspace_id,
+            &conversation_id,
+        )?;
         let mut prepared_branches = Vec::with_capacity(2);
         for (logical_model, preset, endpoint, attempt_id, assistant_message_id) in &branch_facts {
             let web_search_route = ordinary_chat_web_search_route(
                 "OPENROUTER",
                 preset.model_id,
                 web_search_enabled,
-                text,
                 !args.attachment_ids.is_empty(),
             )
             .to_owned();
             let (request_messages, selected_sources) = self.ordinary_chat_request_messages(
                 &transaction,
                 &after,
+                &args.workspace_id,
                 &conversation_id,
                 assistant_message_id,
                 "OPENROUTER",
@@ -11120,8 +12624,8 @@ impl DesktopWorkspaceStore {
             let idempotency_key = format!("compare-{execution_id}-{logical_model}");
             let request_fingerprint = sha256(canonical_json(&request_messages)?.as_bytes());
             transaction.execute(
-                "INSERT INTO desktop_ordinary_chat_attempts(attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,retry_count,idempotency_key,request_fingerprint,provider_id,requested_model_id,model_display_name,state,created_at_ms,updated_at_ms,web_search_route,compare_execution_id,compare_logical_model) VALUES(?1,?2,?3,?4,?5,0,?6,?7,'OPENROUTER',?8,?9,'PENDING',?10,?10,?11,?12,?13)",
-                params![attempt_id,args.workspace_id,conversation_id,user_message_id,assistant_message_id,idempotency_key,request_fingerprint,preset.model_id,preset.display_name,now,web_search_route,execution_id,logical_model],
+                "INSERT INTO desktop_ordinary_chat_attempts(attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,retry_count,idempotency_key,request_fingerprint,provider_id,requested_model_id,model_display_name,state,created_at_ms,updated_at_ms,web_search_route,compare_execution_id,compare_logical_model,egress_approved_at_ms,egress_disclosure_version) VALUES(?1,?2,?3,?4,?5,0,?6,?7,'OPENROUTER',?8,?9,'PENDING',?10,?10,?11,?12,?13,?14,?15)",
+                params![attempt_id,args.workspace_id,conversation_id,user_message_id,assistant_message_id,idempotency_key,request_fingerprint,preset.model_id,preset.display_name,now,web_search_route,execution_id,logical_model,args.egress_authorization.as_ref().map(|value| value.approved_at_ms),args.egress_authorization.as_ref().map(|value| value.disclosure_version.as_str())],
             ).map_err(|_| json_error("无法记录 Compare branch Attempt"))?;
             for (ordinal, source) in selected_sources.iter().enumerate() {
                 transaction.execute(
@@ -11131,33 +12635,55 @@ impl DesktopWorkspaceStore {
             }
             prepared_branches.push(DesktopOrdinaryChatPrepared {
                 projection: DesktopOrdinaryChatAttemptProjection {
-                    attempt_id: attempt_id.clone(), workspace_id: args.workspace_id.clone(),
-                    conversation_id: conversation_id.clone(), user_message_id: user_message_id.clone(),
-                    assistant_message_id: assistant_message_id.clone(), provider_id: Some("OPENROUTER".into()),
-                    requested_model_id: Some(preset.model_id.into()), actual_model_id: None,
-                    model_display_name: Some(preset.display_name.into()), state: "PENDING".into(),
-                    safe_error_code: None, input_tokens: None, output_tokens: None,
-                    cached_input_tokens: None, reasoning_tokens: None, charge_micros: None,
-                    currency_code: None, cost_source: None, latency_ms: None, retry_count: 0,
-                    web_search_route: web_search_route.clone(), compare_execution_id: Some(execution_id.clone()),
-                    compare_logical_model: Some(logical_model.clone()), updated_at_ms: now,
+                    attempt_id: attempt_id.clone(),
+                    workspace_id: args.workspace_id.clone(),
+                    conversation_id: conversation_id.clone(),
+                    user_message_id: user_message_id.clone(),
+                    assistant_message_id: assistant_message_id.clone(),
+                    provider_id: Some("OPENROUTER".into()),
+                    requested_model_id: Some(preset.model_id.into()),
+                    actual_model_id: None,
+                    model_display_name: Some(preset.display_name.into()),
+                    state: "PENDING".into(),
+                    safe_error_code: None,
+                    input_tokens: None,
+                    output_tokens: None,
+                    cached_input_tokens: None,
+                    reasoning_tokens: None,
+                    charge_micros: None,
+                    currency_code: None,
+                    cost_source: None,
+                    latency_ms: None,
+                    retry_count: 0,
+                    web_search_route: web_search_route.clone(),
+                    compare_execution_id: Some(execution_id.clone()),
+                    compare_logical_model: Some(logical_model.clone()),
+                    updated_at_ms: now,
                 },
-                endpoint: endpoint.clone(), provider_id: "OPENROUTER".into(),
-                model_id: preset.model_id.into(), messages: request_messages,
-                idempotency_key, web_search_route,
+                endpoint: endpoint.clone(),
+                provider_id: "OPENROUTER".into(),
+                model_id: preset.model_id.into(),
+                messages: request_messages,
+                idempotency_key,
+                web_search_route,
+                preflight_failure_code: None,
             });
         }
         let after_hash = refresh_exchange_hash(&mut after)?;
         validate_exchange(&after)?;
-        transaction.execute(
-            "UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2",
-            params![canonical_json(&after)?, args.workspace_id],
-        ).map_err(|_| json_error("无法保存 Compare 消息"))?;
+        transaction
+            .execute(
+                "UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2",
+                params![canonical_json(&after)?, args.workspace_id],
+            )
+            .map_err(|_| json_error("无法保存 Compare 消息"))?;
         self.rebuild_local_search_index(&transaction, &args.workspace_id, &after)?;
-        transaction.execute(
-            "UPDATE workspaces SET semantic_hash=?1 WHERE id=?2",
-            params![after_hash, args.workspace_id],
-        ).map_err(|_| json_error("无法更新 Compare hash"))?;
+        transaction
+            .execute(
+                "UPDATE workspaces SET semantic_hash=?1 WHERE id=?2",
+                params![after_hash, args.workspace_id],
+            )
+            .map_err(|_| json_error("无法更新 Compare hash"))?;
         transaction.execute(
             "INSERT INTO domain_intents(intent_id,workspace_id,entity,action,object_id,expected_revision,before_exchange_json,after_exchange_json,before_semantic_hash,after_semantic_hash,undone,created_at,result_revision) VALUES(?1,?2,'conversation',?3,?4,?5,?6,?7,?8,?9,0,?10,?11)",
             params![intent_id,args.workspace_id,mutation.action,conversation_id,args.expected_revision,before_text,canonical_json(&after)?,semantic_hash(&serde_json::from_str::<Value>(&before_text).map_err(|_| json_error("原会话无效"))?)?,after_hash,local_now(),revision + 1],
@@ -11166,9 +12692,14 @@ impl DesktopWorkspaceStore {
             "INSERT INTO desktop_compare_executions(execution_id,workspace_id,conversation_id,user_message_id,chatgpt_attempt_id,claude_attempt_id,state,created_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,'PENDING',?7,?7)",
             params![execution_id,args.workspace_id,conversation_id,user_message_id,branch_facts[0].3,branch_facts[1].3,now],
         ).map_err(|_| json_error("无法记录 Compare execution"))?;
-        transaction.commit().map_err(|_| json_error("Compare 未提交；已回滚"))?;
+        transaction
+            .commit()
+            .map_err(|_| json_error("Compare 未提交；已回滚"))?;
         let projection = self.compare_execution_projection(&execution_id)?;
-        Ok(DesktopComparePrepared { projection, branches: prepared_branches })
+        Ok(DesktopComparePrepared {
+            projection,
+            branches: prepared_branches,
+        })
     }
 
     fn compare_execution_projection(
@@ -11182,9 +12713,17 @@ impl DesktopWorkspaceStore {
             |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,String>(3)?,row.get::<_,String>(4)?,row.get::<_,String>(5)?,row.get::<_,i64>(6)?,row.get::<_,i64>(7)?)),
         ).map_err(|_| json_error("Compare execution 不存在"))?;
         Ok(DesktopCompareExecutionProjection {
-            execution_id: execution_id.into(), workspace_id, conversation_id, user_message_id,
-            state, branches: vec![Self::ordinary_chat_projection(&connection, &chatgpt)?, Self::ordinary_chat_projection(&connection, &claude)?],
-            created_at_ms, updated_at_ms,
+            execution_id: execution_id.into(),
+            workspace_id,
+            conversation_id,
+            user_message_id,
+            state,
+            branches: vec![
+                Self::ordinary_chat_projection(&connection, &chatgpt)?,
+                Self::ordinary_chat_projection(&connection, &claude)?,
+            ],
+            created_at_ms,
+            updated_at_ms,
         })
     }
 
@@ -11193,8 +12732,15 @@ impl DesktopWorkspaceStore {
         execution_id: &str,
     ) -> Result<DesktopCompareExecutionProjection, String> {
         let projection = self.compare_execution_projection(execution_id)?;
-        let states = projection.branches.iter().map(|branch| branch.state.as_str()).collect::<Vec<_>>();
-        let state = if states.iter().any(|state| matches!(*state, "PENDING" | "RUNNING" | "RESPONSE_COMMITTED")) {
+        let states = projection
+            .branches
+            .iter()
+            .map(|branch| branch.state.as_str())
+            .collect::<Vec<_>>();
+        let state = if states
+            .iter()
+            .any(|state| matches!(*state, "PENDING" | "RUNNING" | "RESPONSE_COMMITTED"))
+        {
             "RUNNING"
         } else if states.iter().all(|state| *state == "COMPLETED") {
             "COMPLETED"
@@ -11204,7 +12750,10 @@ impl DesktopWorkspaceStore {
             "FAILED"
         } else if states.iter().all(|state| *state == "CANCELLED") {
             "CANCELLED"
-        } else if states.iter().any(|state| *state == "COMPLETED_ACCOUNTING_PENDING") {
+        } else if states
+            .iter()
+            .any(|state| *state == "COMPLETED_ACCOUNTING_PENDING")
+        {
             "ACCOUNTING_PENDING"
         } else {
             "COMPLETED_WITH_FAILURE"
@@ -11253,12 +12802,31 @@ impl DesktopWorkspaceStore {
                 |row| row.get(0),
             )
             .map_err(|_| json_error("重试幂等键缺失"))?;
-        let web_search_route = previous.web_search_route.clone();
-        let endpoint = if let Some(endpoint) = mock_endpoint {
+        let mut web_search_route = previous.web_search_route.clone();
+        let preflight_failure_code = if mock_endpoint.is_none() && provider_id == "UNAVAILABLE" {
+            Some(
+                previous
+                    .safe_error_code
+                    .clone()
+                    .unwrap_or_else(|| "PROVIDER_NOT_ENABLED".into()),
+            )
+        } else {
+            None
+        };
+        let mut endpoint = if let Some(endpoint) = mock_endpoint {
             endpoint.into()
+        } else if preflight_failure_code.is_some() {
+            String::new()
         } else {
             let provider = desktop_model_service_v1::provider(&provider_id)?;
-            let path = if matches!(web_search_route.as_str(), "QWEN_RESPONSES" | "DEEPSEEK_RESPONSES") { "responses" } else { "chat/completions" };
+            let path = if matches!(
+                web_search_route.as_str(),
+                "QWEN_RESPONSES" | "DEEPSEEK_RESPONSES"
+            ) {
+                "responses"
+            } else {
+                "chat/completions"
+            };
             format!("{}/{path}", provider.endpoint.trim_end_matches('/'))
         };
         let exchange_text: String = transaction
@@ -11295,6 +12863,41 @@ impl DesktopWorkspaceStore {
                 message["compareLogicalModel"] = Value::String(logical_model.into());
             }
         }
+        let original_user = messages
+            .iter()
+            .find(|message| {
+                message.get("id").and_then(Value::as_str) == Some(previous.user_message_id.as_str())
+            })
+            .ok_or_else(|| json_error("重试原用户消息不存在"))?;
+        let has_attachments = original_user
+            .get("blocks")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|block| block.get("kind").and_then(Value::as_str) == Some("ATTACHMENT"));
+        web_search_route = ordinary_chat_web_search_route(
+            &provider_id,
+            &model_id,
+            self.ordinary_chat_web_search_enabled(
+                &transaction,
+                &previous.workspace_id,
+                &previous.conversation_id,
+            )?,
+            has_attachments,
+        )
+        .to_owned();
+        if mock_endpoint.is_none() && preflight_failure_code.is_none() {
+            let provider = desktop_model_service_v1::provider(&provider_id)?;
+            let path = if matches!(
+                web_search_route.as_str(),
+                "QWEN_RESPONSES" | "DEEPSEEK_RESPONSES"
+            ) {
+                "responses"
+            } else {
+                "chat/completions"
+            };
+            endpoint = format!("{}/{path}", provider.endpoint.trim_end_matches('/'));
+        }
         conversation["currentLeafId"] = Value::String(assistant_message_id.clone());
         conversation["revision"] = Value::Number(
             (conversation
@@ -11305,18 +12908,15 @@ impl DesktopWorkspaceStore {
             .into(),
         );
         conversation["updatedAt"] = Value::String(local_now().into());
-        let (request_messages, _) = self.ordinary_chat_request_messages(
+        let (request_messages, selected_sources) = self.ordinary_chat_request_messages(
             &transaction,
             &exchange,
+            &previous.workspace_id,
             &previous.conversation_id,
             &assistant_message_id,
             &provider_id,
         )?;
         let request_fingerprint = sha256(canonical_json(&request_messages)?.as_bytes());
-        let original_fingerprint: String = transaction.query_row("SELECT request_fingerprint FROM desktop_ordinary_chat_attempts WHERE attempt_id=?1",[attempt_id],|row|row.get(0)).map_err(|_|json_error("重试指纹缺失"))?;
-        if request_fingerprint != original_fingerprint {
-            return Err(json_error("重试分支上下文已变化，请作为新消息发送"));
-        }
         let hash = refresh_exchange_hash(&mut exchange)?;
         validate_exchange(&exchange)?;
         transaction
@@ -11332,7 +12932,19 @@ impl DesktopWorkspaceStore {
                 params![hash, previous.workspace_id],
             )
             .map_err(|_| json_error("无法更新重试 hash"))?;
-        transaction.execute("UPDATE desktop_ordinary_chat_attempts SET assistant_message_id=?1,retry_count=retry_count+1,state='PENDING',safe_error_code=NULL,actual_model_id=NULL,input_tokens=NULL,output_tokens=NULL,cached_input_tokens=NULL,reasoning_tokens=NULL,charge_micros=NULL,currency_code=NULL,cost_source=NULL,latency_ms=NULL,updated_at_ms=?2,terminal_at_ms=NULL WHERE attempt_id=?3",params![assistant_message_id,system_now_millis(),attempt_id]).map_err(|_|json_error("无法重置 Attempt"))?;
+        transaction.execute("UPDATE desktop_ordinary_chat_attempts SET assistant_message_id=?1,retry_count=retry_count+1,state='PENDING',safe_error_code=NULL,actual_model_id=NULL,input_tokens=NULL,output_tokens=NULL,cached_input_tokens=NULL,reasoning_tokens=NULL,charge_micros=NULL,currency_code=NULL,cost_source=NULL,latency_ms=NULL,request_fingerprint=?2,web_search_route=?3,updated_at_ms=?4,terminal_at_ms=NULL WHERE attempt_id=?5",params![assistant_message_id,request_fingerprint,web_search_route,system_now_millis(),attempt_id]).map_err(|_|json_error("无法重置 Attempt"))?;
+        transaction
+            .execute(
+                "DELETE FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1",
+                [attempt_id],
+            )
+            .map_err(|_| json_error("无法刷新重试上下文来源"))?;
+        for (ordinal, source) in selected_sources.iter().enumerate() {
+            transaction.execute(
+                "INSERT INTO desktop_ordinary_chat_context_sources(attempt_id,ordinal,source_kind,source_id,title) VALUES(?1,?2,?3,?4,?5)",
+                params![attempt_id, ordinal as i64, source.kind, source.source_id, source.title],
+            ).map_err(|_| json_error("无法保存重试上下文来源"))?;
+        }
         transaction
             .commit()
             .map_err(|_| json_error("重试未提交；已回滚"))?;
@@ -11345,6 +12957,7 @@ impl DesktopWorkspaceStore {
             messages: request_messages,
             idempotency_key,
             web_search_route,
+            preflight_failure_code,
         })
     }
 
@@ -11397,9 +13010,10 @@ impl DesktopWorkspaceStore {
             .get("messages")
             .and_then(Value::as_array)
             .and_then(|items| {
-                items.iter().rev().find(|item| {
-                    item.get("role").and_then(Value::as_str) == Some("user")
-                })
+                items
+                    .iter()
+                    .rev()
+                    .find(|item| item.get("role").and_then(Value::as_str) == Some("user"))
             })
             .map(ordinary_chat_message_text)
             .is_some_and(|value| {
@@ -11589,35 +13203,91 @@ impl DesktopWorkspaceStore {
         let connection = self.connection()?;
         let cutoff = system_now_millis().saturating_sub(7 * 24 * 60 * 60 * 1000);
         let mut statement = connection.prepare(
-            "SELECT attempt.workspace_id,attempt.conversation_id,COALESCE(diagnostic.provider_id,''),COALESCE(diagnostic.model_id,''),COALESCE(diagnostic.safe_error_code,'UNKNOWN'),diagnostic.created_at_ms
+            "SELECT attempt.workspace_id,attempt.conversation_id,COALESCE(diagnostic.provider_id,''),COALESCE(diagnostic.model_id,''),COALESCE(diagnostic.safe_error_code,'UNKNOWN'),diagnostic.latency_ms,diagnostic.created_at_ms
              FROM desktop_ordinary_chat_diagnostics diagnostic
              JOIN desktop_ordinary_chat_attempts attempt ON attempt.attempt_id=diagnostic.attempt_id
              WHERE diagnostic.state IN ('FAILED','UNKNOWN') AND diagnostic.created_at_ms>=?1
              ORDER BY diagnostic.created_at_ms DESC LIMIT 200"
         ).map_err(|_| json_error("无法读取聊天诊断记录"))?;
-        let rows = statement.query_map([cutoff], |row| Ok((
-            row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?,
-            row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, i64>(5)?,
-        ))).map_err(|_| json_error("无法读取聊天诊断记录"))?
-            .collect::<Result<Vec<_>, _>>().map_err(|_| json_error("聊天诊断记录无效"))?;
+        let rows = statement
+            .query_map([cutoff], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<i64>>(5)?,
+                    row.get::<_, i64>(6)?,
+                ))
+            })
+            .map_err(|_| json_error("无法读取聊天诊断记录"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| json_error("聊天诊断记录无效"))?;
         drop(statement);
         let mut records = Vec::with_capacity(rows.len());
-        for (workspace_id, conversation_id, provider_id, model_id, code, created_at_ms) in rows {
-            let conversation_title = connection.query_row(
-                "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [&workspace_id], |row| row.get::<_, String>(0),
-            ).ok().and_then(|raw| serde_json::from_str::<Value>(&raw).ok()).and_then(|exchange| {
-                exchange.get("conversations").and_then(Value::as_array).and_then(|items| items.iter().find(|item| item.get("id").and_then(Value::as_str) == Some(conversation_id.as_str()))).and_then(|item| item.get("title")).and_then(Value::as_str).map(ToOwned::to_owned)
-            }).unwrap_or_else(|| "已删除的对话".into());
+        for (
+            workspace_id,
+            conversation_id,
+            provider_id,
+            model_id,
+            code,
+            latency_ms,
+            created_at_ms,
+        ) in rows
+        {
+            let conversation_title = connection
+                .query_row(
+                    "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1",
+                    [&workspace_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .ok()
+                .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+                .and_then(|exchange| {
+                    exchange
+                        .get("conversations")
+                        .and_then(Value::as_array)
+                        .and_then(|items| {
+                            items.iter().find(|item| {
+                                item.get("id").and_then(Value::as_str)
+                                    == Some(conversation_id.as_str())
+                            })
+                        })
+                        .and_then(|item| item.get("title"))
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned)
+                })
+                .unwrap_or_else(|| "已删除的对话".into());
             let provider_label = match provider_id.as_str() {
-                "OPENROUTER" => "OpenRouter", "QWEN" => "Qwen", "DEEPSEEK" => "DeepSeek", "ZHIPU" => "智谱 GLM", _ => provider_id.as_str(),
-            }.to_owned();
+                "OPENROUTER" => "OpenRouter",
+                "QWEN" => "Qwen",
+                "DEEPSEEK" => "DeepSeek",
+                "ZHIPU" => "智谱 GLM",
+                _ => provider_id.as_str(),
+            }
+            .to_owned();
             let summary = match code.as_str() {
-                "AUTHENTICATION" => "凭据不可用或已失效。", "AUTHORIZATION" => "当前凭据没有调用权限。",
-                "BALANCE" => "服务商余额不足。", "RATE_LIMIT" => "服务商触发限流。", "TIMEOUT" => "连接超时，结果未确认。",
-                "PROCESS_INTERRUPTED" | "MISSING_COMPLETION" => "连接结束但没有收到明确完成事件，未自动重发。",
-                "NETWORK" => "网络连接失败，未自动重发。", _ => "调用失败，请检查 Provider 设置后明确重试。",
-            }.to_owned();
-            records.push(DesktopOrdinaryChatDiagnosticProjection { conversation_title, provider_label, model_id, summary, created_at_ms });
+                "AUTHENTICATION" => "凭据不可用或已失效。",
+                "AUTHORIZATION" => "当前凭据没有调用权限。",
+                "BALANCE" => "服务商余额不足。",
+                "RATE_LIMIT" => "服务商触发限流。",
+                "TIMEOUT" => "连接超时，结果未确认。",
+                "PROCESS_INTERRUPTED" | "MISSING_COMPLETION" => {
+                    "连接结束但没有收到明确完成事件，未自动重发。"
+                }
+                "NETWORK" => "网络连接失败，未自动重发。",
+                _ => "调用失败，请检查 Provider 设置后明确重试。",
+            }
+            .to_owned();
+            records.push(DesktopOrdinaryChatDiagnosticProjection {
+                conversation_title,
+                provider_label,
+                model_id,
+                summary,
+                latency_ms,
+                created_at_ms,
+            });
         }
         Ok(records)
     }
@@ -11703,7 +13373,10 @@ impl DesktopWorkspaceStore {
         Ok((
             selected.provider_id.into(),
             selected.model_id.into(),
-            format!("{}/chat/completions", provider.endpoint.trim_end_matches('/')),
+            format!(
+                "{}/chat/completions",
+                provider.endpoint.trim_end_matches('/')
+            ),
         ))
     }
 
@@ -11712,19 +13385,14 @@ impl DesktopWorkspaceStore {
         mock_endpoint: Option<&str>,
     ) -> Result<Option<DesktopHistoryKnowledgePrepared>, String> {
         let mut connection = self.connection()?;
-        let selection = desktop_history_knowledge_v1::select_next(
-            &connection,
-            system_now_millis(),
-        )?;
+        let selection =
+            desktop_history_knowledge_v1::select_next(&connection, system_now_millis())?;
         let desktop_history_knowledge_v1::Selection::Ready(source) = selection else {
             return Ok(None);
         };
         let (provider_id, model_id, endpoint) = self.history_knowledge_route(mock_endpoint)?;
-        let reservation = desktop_history_knowledge_v1::reserve(
-            &mut connection,
-            &source,
-            system_now_millis(),
-        )?;
+        let reservation =
+            desktop_history_knowledge_v1::reserve(&mut connection, &source, system_now_millis())?;
         desktop_history_knowledge_v1::mark_running(
             &connection,
             &reservation.candidate_id,
@@ -11775,7 +13443,10 @@ impl DesktopWorkspaceStore {
         let ledger = usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
         let entry = usage_ledger_v1::Entry {
             entry_id: format!("usage-{}", prepared.reservation.attempt_id),
-            replay_token: format!("history-knowledge-final-{}", prepared.reservation.attempt_id),
+            replay_token: format!(
+                "history-knowledge-final-{}",
+                prepared.reservation.attempt_id
+            ),
             execution_id: prepared.reservation.candidate_id.clone(),
             conversation_id: prepared.reservation.source.conversation_id.clone(),
             branch_leaf_message_id: prepared.reservation.source.current_leaf_message_id.clone(),
@@ -11798,7 +13469,9 @@ impl DesktopWorkspaceStore {
             occurred_at_ms: system_now_millis(),
         };
         match ledger.append(&entry)? {
-            usage_ledger_v1::AppendResult::Conflict => Err(json_error("历史资料库用量账本幂等冲突")),
+            usage_ledger_v1::AppendResult::Conflict => {
+                Err(json_error("历史资料库用量账本幂等冲突"))
+            }
             usage_ledger_v1::AppendResult::Appended(_)
             | usage_ledger_v1::AppendResult::Replayed(_) => Ok(()),
         }
@@ -11826,8 +13499,7 @@ impl DesktopWorkspaceStore {
             return Err(json_error("提醒所需模型服务尚未启用"));
         }
         let credentials = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-        if credentials.presence(provider_id)
-            != desktop_model_service_v1::CredentialPresence::Stored
+        if credentials.presence(provider_id) != desktop_model_service_v1::CredentialPresence::Stored
         {
             return Err(json_error("提醒所需模型凭据尚未保存"));
         }
@@ -11835,7 +13507,10 @@ impl DesktopWorkspaceStore {
         Ok((
             provider_id.to_owned(),
             preset.model_id.to_owned(),
-            format!("{}/chat/completions", provider.endpoint.trim_end_matches('/')),
+            format!(
+                "{}/chat/completions",
+                provider.endpoint.trim_end_matches('/')
+            ),
         ))
     }
 
@@ -11854,15 +13529,15 @@ impl DesktopWorkspaceStore {
                 |row| row.get(0),
             )
             .map_err(|_| json_error("提醒来源工作区不存在"))?;
-        let root: Value = serde_json::from_str(&exchange)
-            .map_err(|_| json_error("提醒来源工作区无效"))?;
+        let root: Value =
+            serde_json::from_str(&exchange).map_err(|_| json_error("提醒来源工作区无效"))?;
         let conversation = root
             .get("conversations")
             .and_then(Value::as_array)
             .and_then(|items| {
-                items.iter().find(|item| {
-                    item.get("id").and_then(Value::as_str) == Some(conversation_id)
-                })
+                items
+                    .iter()
+                    .find(|item| item.get("id").and_then(Value::as_str) == Some(conversation_id))
             })
             .ok_or_else(|| json_error("提醒来源对话不存在"))?;
         let messages = conversation
@@ -11897,7 +13572,10 @@ impl DesktopWorkspaceStore {
                 Ok(text)
             }
         };
-        Ok((read_text(user_message_id, "user")?, read_text(assistant_message_id, "assistant")?))
+        Ok((
+            read_text(user_message_id, "user")?,
+            read_text(assistant_message_id, "assistant")?,
+        ))
     }
 
     fn prepare_reminder_draft(
@@ -11919,15 +13597,33 @@ impl DesktopWorkspaceStore {
             &assistant_text,
             system_now_millis(),
         )?;
-        let (provider_id, model_id, endpoint) = match self.reminder_route("QWEN", "QWEN_3_7_PLUS", mock_endpoint) {
-            Ok(route) => route,
-            Err(error) => {
-                let code = if error.contains("凭据") { "CREDENTIAL_MISSING" } else { "SERVICE_DISABLED" };
-                let _ = desktop_reminders_v1::fail_draft(&connection,&reservation.draft_id,Some("QWEN"),Some("qwen3.7-plus"),false,code,system_now_millis());
-                return Err(error);
-            }
-        };
-        Ok(DesktopReminderDraftPrepared { reservation, endpoint, provider_id, model_id })
+        let (provider_id, model_id, endpoint) =
+            match self.reminder_route("QWEN", "QWEN_3_7_PLUS", mock_endpoint) {
+                Ok(route) => route,
+                Err(error) => {
+                    let code = if error.contains("凭据") {
+                        "CREDENTIAL_MISSING"
+                    } else {
+                        "SERVICE_DISABLED"
+                    };
+                    let _ = desktop_reminders_v1::fail_draft(
+                        &connection,
+                        &reservation.draft_id,
+                        Some("QWEN"),
+                        Some("qwen3.7-plus"),
+                        false,
+                        code,
+                        system_now_millis(),
+                    );
+                    return Err(error);
+                }
+            };
+        Ok(DesktopReminderDraftPrepared {
+            reservation,
+            endpoint,
+            provider_id,
+            model_id,
+        })
     }
 
     fn prepare_reminder_draft_retry(
@@ -11937,22 +13633,60 @@ impl DesktopWorkspaceStore {
     ) -> Result<DesktopReminderDraftPrepared, String> {
         let connection = self.connection()?;
         let draft = desktop_reminders_v1::read_draft(&connection, draft_id)?;
-        let conversation_id = draft.conversation_id.as_deref().ok_or_else(|| json_error("手动草案没有模型重试来源"))?;
-        let user_message_id = draft.source_user_message_id.as_deref().ok_or_else(|| json_error("提醒草案缺少来源消息"))?;
-        let assistant_message_id = draft.source_assistant_message_id.as_deref().ok_or_else(|| json_error("提醒草案缺少来源回复"))?;
-        let (user_text, assistant_text) = self.reminder_source_pair(&draft.workspace_id,conversation_id,user_message_id,assistant_message_id)?;
+        let conversation_id = draft
+            .conversation_id
+            .as_deref()
+            .ok_or_else(|| json_error("手动草案没有模型重试来源"))?;
+        let user_message_id = draft
+            .source_user_message_id
+            .as_deref()
+            .ok_or_else(|| json_error("提醒草案缺少来源消息"))?;
+        let assistant_message_id = draft
+            .source_assistant_message_id
+            .as_deref()
+            .ok_or_else(|| json_error("提醒草案缺少来源回复"))?;
+        let (user_text, assistant_text) = self.reminder_source_pair(
+            &draft.workspace_id,
+            conversation_id,
+            user_message_id,
+            assistant_message_id,
+        )?;
         drop(connection);
         let mut connection = self.connection()?;
-        let reservation = desktop_reminders_v1::reserve_draft_retry(&mut connection,draft_id,&user_text,&assistant_text,system_now_millis())?;
-        let (provider_id, model_id, endpoint) = match self.reminder_route("QWEN", "QWEN_3_7_PLUS", mock_endpoint) {
-            Ok(route) => route,
-            Err(error) => {
-                let code = if error.contains("凭据") { "CREDENTIAL_MISSING" } else { "SERVICE_DISABLED" };
-                let _ = desktop_reminders_v1::fail_draft(&connection,&reservation.draft_id,Some("QWEN"),Some("qwen3.7-plus"),false,code,system_now_millis());
-                return Err(error);
-            }
-        };
-        Ok(DesktopReminderDraftPrepared { reservation, endpoint, provider_id, model_id })
+        let reservation = desktop_reminders_v1::reserve_draft_retry(
+            &mut connection,
+            draft_id,
+            &user_text,
+            &assistant_text,
+            system_now_millis(),
+        )?;
+        let (provider_id, model_id, endpoint) =
+            match self.reminder_route("QWEN", "QWEN_3_7_PLUS", mock_endpoint) {
+                Ok(route) => route,
+                Err(error) => {
+                    let code = if error.contains("凭据") {
+                        "CREDENTIAL_MISSING"
+                    } else {
+                        "SERVICE_DISABLED"
+                    };
+                    let _ = desktop_reminders_v1::fail_draft(
+                        &connection,
+                        &reservation.draft_id,
+                        Some("QWEN"),
+                        Some("qwen3.7-plus"),
+                        false,
+                        code,
+                        system_now_millis(),
+                    );
+                    return Err(error);
+                }
+            };
+        Ok(DesktopReminderDraftPrepared {
+            reservation,
+            endpoint,
+            provider_id,
+            model_id,
+        })
     }
 
     fn prepare_due_reminder(
@@ -11961,16 +13695,36 @@ impl DesktopWorkspaceStore {
     ) -> Result<Option<DesktopReminderRunPrepared>, String> {
         let mut connection = self.connection()?;
         let reservation = desktop_reminders_v1::claim_due(&mut connection, system_now_millis())?;
-        let Some(reservation)=reservation else { return Ok(None); };
-        let (provider_id, model_id, endpoint) = match self.reminder_route("OPENROUTER", "GPT_5_6_TERRA", mock_endpoint) {
-            Ok(route)=>route,
-            Err(error)=>{
-                let code=if error.contains("凭据"){"CREDENTIAL_MISSING"}else{"SERVICE_DISABLED"};
-                let _=desktop_reminders_v1::fail_run(&connection,&reservation,Some("OPENROUTER"),Some("openai/gpt-5.6-terra"),false,code,system_now_millis());
-                return Err(error);
-            }
+        let Some(reservation) = reservation else {
+            return Ok(None);
         };
-        Ok(Some(DesktopReminderRunPrepared { reservation, endpoint, provider_id, model_id }))
+        let (provider_id, model_id, endpoint) =
+            match self.reminder_route("OPENROUTER", "GPT_5_6_TERRA", mock_endpoint) {
+                Ok(route) => route,
+                Err(error) => {
+                    let code = if error.contains("凭据") {
+                        "CREDENTIAL_MISSING"
+                    } else {
+                        "SERVICE_DISABLED"
+                    };
+                    let _ = desktop_reminders_v1::fail_run(
+                        &connection,
+                        &reservation,
+                        Some("OPENROUTER"),
+                        Some("openai/gpt-5.6-terra"),
+                        false,
+                        code,
+                        system_now_millis(),
+                    );
+                    return Err(error);
+                }
+            };
+        Ok(Some(DesktopReminderRunPrepared {
+            reservation,
+            endpoint,
+            provider_id,
+            model_id,
+        }))
     }
 
     fn complete_reminder_usage(
@@ -12137,13 +13891,13 @@ fn desktop_model_service_projection(
         enabled: record.enabled,
         preset_id: record.preset_id,
         preset_display_name: preset.display_name.to_owned(),
+        credential_status: format!("{:?}", credential_store.presence(&record.provider_id)),
         credential_stored: credential_store.presence(&record.provider_id)
             == desktop_model_service_v1::CredentialPresence::Stored,
         revision: record.revision,
         presets: desktop_model_service_v1::presets_for(&record.provider_id)?,
         non_chat_capabilities: match record.provider_id.as_str() {
             "ZHIPU" => vec![desktop_model_service_v1::GLM_OCR],
-            "QWEN" => vec![desktop_model_service_v1::QWEN_ASR],
             _ => Vec::new(),
         },
     })
@@ -12158,11 +13912,21 @@ fn read_desktop_model_service_settings(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .read_desktop_model_service_setting_records()?;
-    let credential_store = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-    records
-        .into_iter()
-        .map(|record| desktop_model_service_projection(record, &credential_store))
-        .collect()
+    if state.startup_mode == DesktopStartupMode::UiSchemaDiagnostic {
+        records
+            .into_iter()
+            .map(|record| {
+                desktop_model_service_projection(record, &DiagnosticProviderCredentialStore)
+            })
+            .collect()
+    } else {
+        let credential_store =
+            desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+        records
+            .into_iter()
+            .map(|record| desktop_model_service_projection(record, &credential_store))
+            .collect()
+    }
 }
 
 #[tauri::command]
@@ -12188,8 +13952,8 @@ fn save_desktop_app_settings(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .connection()?;
-    let projection = desktop_app_settings_v1::save(&mut connection, args)
-        .map_err(|error| json_error(&error))?;
+    let projection =
+        desktop_app_settings_v1::save(&mut connection, args).map_err(|error| json_error(&error))?;
     desktop_history_knowledge_v1::set_enabled(
         &connection,
         projection.product.history_library_enabled,
@@ -12249,6 +14013,18 @@ fn read_desktop_conversation_read_state(
     workspace_id: String,
     observed_conversation_id: Option<String>,
 ) -> Result<desktop_conversation_read_state_v1::Projection, String> {
+    if state.startup_mode == DesktopStartupMode::UiSchemaDiagnostic {
+        let connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        return desktop_conversation_read_state_v1::read_projection_without_writes(
+            &connection,
+            &workspace_id,
+        )
+        .map_err(|error| json_error(&error));
+    }
     let mut connection = state
         .store
         .lock()
@@ -12344,11 +14120,44 @@ fn import_desktop_transcription_source(
 }
 
 #[tauri::command]
+fn choose_desktop_storage_location(app: tauri::AppHandle, state: State<'_, AppState>, selected_path: String) -> Result<(), String> {
+    let store = state.store.lock().map_err(|_| "数据目录繁忙")?;
+    let config = app.path().app_config_dir().map_err(|_| "配置目录不可用")?.join("storage-location.json");
+    desktop_storage_location::schedule(&config, &store.root, Path::new(&selected_path))
+}
+
+#[tauri::command]
+fn import_desktop_ocr_drop(
+    state: State<'_, AppState>,
+    args: DesktopClipboardAttachmentImportArgs,
+) -> Result<desktop_transcription_v1::TaskProjection, String> {
+    use base64::Engine as _;
+    let store = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?;
+    let name = std::path::Path::new(&args.display_name).file_name().and_then(|s| s.to_str()).ok_or("文件名无效")?;
+    if args.bytes_base64.len() > 140_000_000 { return Err("文件过大".into()); }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(&args.bytes_base64).map_err(|_| "文件内容无效")?;
+    let staging = store.root.join(format!("ocr-drop-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| "时间不可用")?.as_nanos()));
+    std::fs::create_dir(&staging).map_err(|_| "无法准备文件")?;
+    let path = staging.join(name);
+    let result = (|| {
+        std::fs::write(&path, bytes).map_err(|_| "无法读取拖入文件")?;
+        desktop_transcription_v1::import_document_source(&store.root, &store.database, desktop_transcription_v1::ImportArgs {
+            workspace_id: args.workspace_id, selected_path: path.to_string_lossy().into_owned(),
+        })
+    })();
+    let _ = std::fs::remove_dir_all(&staging);
+    result
+}
+
+#[tauri::command]
 fn import_desktop_ocr_source(
     state: State<'_, AppState>,
     args: desktop_transcription_v1::ImportArgs,
 ) -> Result<desktop_transcription_v1::TaskProjection, String> {
-    let store = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?;
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?;
     desktop_transcription_v1::import_document_source(&store.root, &store.database, args)
 }
 
@@ -12399,6 +14208,7 @@ async fn run_desktop_transcription_task(
     state: State<'_, AppState>,
     task_id: String,
 ) -> Result<desktop_transcription_v1::TaskProjection, String> {
+    state.require_external_access()?;
     let (root, database) = {
         let store = state
             .store
@@ -12425,16 +14235,28 @@ async fn run_desktop_ocr_task(
     state: State<'_, AppState>,
     task_id: String,
 ) -> Result<desktop_transcription_v1::TaskProjection, String> {
+    state.require_external_access()?;
     let (root, database) = {
-        let store = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?;
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
         (store.root.clone(), store.database.clone())
     };
-    let credential_store = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-    let api_key = credential_store.with_secret("ZHIPU", |bytes| Ok(bytes.to_vec())).map_err(|error| {
+    let api_key = resolve_ocr_api_key_for_run(state.ordinary_chat_acceptance_enabled, || {
+        let credential_store =
+            desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+        credential_store.with_secret("ZHIPU", |bytes| Ok(bytes.to_vec()))
+    })
+    .map_err(|error| {
         let _ = desktop_transcription_v1::run_ocr_task(&root, &database, &task_id, &[]);
         error
     })?;
-    tauri::async_runtime::spawn_blocking(move || desktop_transcription_v1::run_ocr_task(&root, &database, &task_id, &api_key)).await.map_err(|_| json_error("GLM-OCR 执行线程异常"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        desktop_transcription_v1::run_ocr_task(&root, &database, &task_id, &api_key)
+    })
+    .await
+    .map_err(|_| json_error("GLM-OCR 执行线程异常"))?
 }
 
 #[tauri::command]
@@ -12456,6 +14278,7 @@ fn save_desktop_model_service_settings(
     state: State<'_, AppState>,
     args: DesktopModelServiceSaveArgs,
 ) -> Result<DesktopModelServiceSettingProjection, String> {
+    state.require_external_access()?;
     desktop_model_service_v1::validate_configuration(&args.provider_id, &args.preset_id)?;
     let current = state
         .store
@@ -12492,7 +14315,11 @@ fn save_desktop_model_service_settings(
 
 /// Credential plaintext crosses IPC only after the user explicitly presses the reveal control.
 #[tauri::command]
-fn reveal_desktop_model_service_credential(provider_id: String) -> Result<String, String> {
+fn reveal_desktop_model_service_credential(
+    provider_id: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    state.require_external_access()?;
     let credential_store = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
     let secret = credential_store.reveal_user_requested_secret(&provider_id)?;
     Ok(secret.to_string())
@@ -12502,8 +14329,11 @@ fn reveal_desktop_model_service_credential(provider_id: String) -> Result<String
 #[tauri::command]
 async fn test_desktop_model_service_connection(
     args: DesktopModelServiceConnectionTestArgs,
+    state: State<'_, AppState>,
 ) -> Result<DesktopModelServiceConnectionTestProjection, String> {
+    state.require_external_access()?;
     desktop_model_service_v1::validate_configuration(&args.provider_id, &args.preset_id)?;
+    desktop_model_service_v1::allow_user_credential_retry(&args.provider_id);
     let credential_store = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
     let secret = credential_store.with_secret(&args.provider_id, |bytes| {
         Ok(Zeroizing::new(bytes.to_vec()))
@@ -13227,11 +15057,24 @@ fn open_desktop_attachment_with_system(
     state: State<'_, AppState>,
     args: DesktopSystemOpenAttachmentArgs,
 ) -> Result<(), String> {
+    state.require_external_access()?;
     state
         .store
         .lock()
         .map_err(|_| json_error("本地附件打开锁不可用"))?
         .open_attachment_with_system(&args)
+}
+
+#[tauri::command]
+fn export_desktop_attachment_to_selected_path(
+    state: State<'_, AppState>,
+    args: DesktopAttachmentExportArgs,
+) -> Result<(), String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("本地附件导出锁不可用"))?
+        .export_attachment_to_selected_path(&args)
 }
 
 #[tauri::command]
@@ -13314,12 +15157,22 @@ fn write_desktop_markdown_to_selected_path(
 }
 
 #[tauri::command]
-fn read_desktop_runtime_info(app: tauri::AppHandle) -> DesktopRuntimeInfo {
+fn read_desktop_runtime_info(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> DesktopRuntimeInfo {
     DesktopRuntimeInfo {
         version: app.package_info().version.to_string(),
         platform: std::env::consts::OS,
         arch: std::env::consts::ARCH,
+        startup_mode: state.startup_mode.label(),
+        automatic_work_suppressed: !state.startup_mode.work_plan().runs_automatic_work(),
     }
+}
+
+#[tauri::command]
+fn read_desktop_c16_visual_acceptance_state(state: State<'_, AppState>) -> Option<String> {
+    state.c16_visual_acceptance_state.clone()
 }
 
 #[tauri::command]
@@ -13340,21 +15193,40 @@ async fn execute_desktop_history_knowledge_prepared(
 ) -> Result<desktop_history_knowledge_v1::Projection, String> {
     let state = app.state::<AppState>();
     let signal = Arc::new(AtomicBool::new(false));
-    state.history_knowledge_cancellations
+    state
+        .history_knowledge_cancellations
         .lock()
         .map_err(|_| json_error("历史资料库停止状态被锁定"))?
         .insert(prepared.reservation.candidate_id.clone(), signal.clone());
     let secret = if state.ordinary_chat_mock_endpoint.is_some() {
         Zeroizing::new(b"local-history-knowledge-mock-only".to_vec())
     } else {
-        let credential_store = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-        match credential_store.with_secret(&prepared.provider_id, |bytes| Ok(Zeroizing::new(bytes.to_vec()))) {
+        let credential_store =
+            desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+        match credential_store.with_secret(&prepared.provider_id, |bytes| {
+            Ok(Zeroizing::new(bytes.to_vec()))
+        }) {
             Ok(secret) => secret,
             Err(_) => {
-                let connection = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.connection()?;
-                let _ = desktop_history_knowledge_v1::fail(&connection,&prepared.reservation.candidate_id,false,"CREDENTIAL",system_now_millis());
-                state.history_knowledge_cancellations.lock().ok().map(|mut values|values.remove(&prepared.reservation.candidate_id));
-                return desktop_history_knowledge_v1::read_projection(&connection).map_err(|error|json_error(&error));
+                let connection = state
+                    .store
+                    .lock()
+                    .map_err(|_| json_error("Desktop store 被锁定"))?
+                    .connection()?;
+                let _ = desktop_history_knowledge_v1::fail(
+                    &connection,
+                    &prepared.reservation.candidate_id,
+                    false,
+                    "CREDENTIAL",
+                    system_now_millis(),
+                );
+                state
+                    .history_knowledge_cancellations
+                    .lock()
+                    .ok()
+                    .map(|mut values| values.remove(&prepared.reservation.candidate_id));
+                return desktop_history_knowledge_v1::read_projection(&connection)
+                    .map_err(|error| json_error(&error));
             }
         }
     };
@@ -13376,10 +15248,15 @@ async fn execute_desktop_history_knowledge_prepared(
             signal,
             |_| Ok(()),
         ))
-    }).await.map_err(|_| json_error("历史资料库后台任务未返回"))?;
+    })
+    .await
+    .map_err(|_| json_error("历史资料库后台任务未返回"))?;
     let state = worker_app.state::<AppState>();
     let projection = {
-        let store = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?;
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
         let mut connection = store.connection()?;
         match result {
             Ok(completed) => {
@@ -13406,87 +15283,156 @@ async fn execute_desktop_history_knowledge_prepared(
             }
             Err(failure) => {
                 let (unknown, code) = match failure {
-                    desktop_ordinary_chat_v1::Failure::Cancelled => (false,"CANCELLED"),
-                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => (false,code),
-                    desktop_ordinary_chat_v1::Failure::Unknown { code } => (true,code),
+                    desktop_ordinary_chat_v1::Failure::Cancelled => (false, "CANCELLED"),
+                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => (false, code),
+                    desktop_ordinary_chat_v1::Failure::Unknown { code } => (true, code),
                 };
-                desktop_history_knowledge_v1::fail(&connection,&worker_prepared.reservation.candidate_id,unknown,code,system_now_millis())?
+                desktop_history_knowledge_v1::fail(
+                    &connection,
+                    &worker_prepared.reservation.candidate_id,
+                    unknown,
+                    code,
+                    system_now_millis(),
+                )?
             }
         }
     };
-    state.history_knowledge_cancellations.lock().ok().map(|mut values|values.remove(&worker_prepared.reservation.candidate_id));
-    let connection = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.connection()?;
+    state
+        .history_knowledge_cancellations
+        .lock()
+        .ok()
+        .map(|mut values| values.remove(&worker_prepared.reservation.candidate_id));
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
     let _ = projection;
-    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error|json_error(&error))
+    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
 fn read_desktop_history_knowledge(
     state: State<'_, AppState>,
 ) -> Result<desktop_history_knowledge_v1::Projection, String> {
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error|json_error(&error))
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
 async fn run_desktop_history_knowledge_due(
     app: tauri::AppHandle,
 ) -> Result<desktop_history_knowledge_v1::Projection, String> {
-    let prepared={
-        let state=app.state::<AppState>();
-        let store=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?;
-        let result=store.prepare_history_knowledge_due(state.ordinary_chat_mock_endpoint.as_deref())?;
+    app.state::<AppState>().require_external_access()?;
+    let prepared = {
+        let state = app.state::<AppState>();
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
+        let result =
+            store.prepare_history_knowledge_due(state.ordinary_chat_mock_endpoint.as_deref())?;
         result
     };
     match prepared {
-        Some(prepared)=>execute_desktop_history_knowledge_prepared(app,prepared).await,
-        None=>{
-            let state=app.state::<AppState>();
-            let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-            desktop_history_knowledge_v1::read_projection(&connection).map_err(|error|json_error(&error))
+        Some(prepared) => execute_desktop_history_knowledge_prepared(app, prepared).await,
+        None => {
+            let state = app.state::<AppState>();
+            let connection = state
+                .store
+                .lock()
+                .map_err(|_| json_error("Desktop store 被锁定"))?
+                .connection()?;
+            desktop_history_knowledge_v1::read_projection(&connection)
+                .map_err(|error| json_error(&error))
         }
     }
 }
 
 #[tauri::command]
 async fn retry_desktop_history_knowledge(
-    candidate_id:String,
-    app:tauri::AppHandle,
-)->Result<desktop_history_knowledge_v1::Projection,String>{
-    let prepared={
-        let state=app.state::<AppState>();
-        let store=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?;
-        let result=store.prepare_history_knowledge_retry(&candidate_id,state.ordinary_chat_mock_endpoint.as_deref())?;
+    candidate_id: String,
+    app: tauri::AppHandle,
+) -> Result<desktop_history_knowledge_v1::Projection, String> {
+    app.state::<AppState>().require_external_access()?;
+    let prepared = {
+        let state = app.state::<AppState>();
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
+        let result = store.prepare_history_knowledge_retry(
+            &candidate_id,
+            state.ordinary_chat_mock_endpoint.as_deref(),
+        )?;
         result
     };
-    execute_desktop_history_knowledge_prepared(app,prepared).await
+    execute_desktop_history_knowledge_prepared(app, prepared).await
 }
 
 #[tauri::command]
-fn reject_desktop_history_knowledge(candidate_id:String,state:State<'_,AppState>)->Result<desktop_history_knowledge_v1::Projection,String>{
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_history_knowledge_v1::review_action(&connection,&candidate_id,"reject",system_now_millis())?;
-    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error|json_error(&error))
+fn reject_desktop_history_knowledge(
+    candidate_id: String,
+    state: State<'_, AppState>,
+) -> Result<desktop_history_knowledge_v1::Projection, String> {
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_history_knowledge_v1::review_action(
+        &connection,
+        &candidate_id,
+        "reject",
+        system_now_millis(),
+    )?;
+    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
-fn delete_desktop_history_knowledge(candidate_id:String,state:State<'_,AppState>)->Result<desktop_history_knowledge_v1::Projection,String>{
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_history_knowledge_v1::review_action(&connection,&candidate_id,"delete",system_now_millis())?;
-    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error|json_error(&error))
+fn delete_desktop_history_knowledge(
+    candidate_id: String,
+    state: State<'_, AppState>,
+) -> Result<desktop_history_knowledge_v1::Projection, String> {
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_history_knowledge_v1::review_action(
+        &connection,
+        &candidate_id,
+        "delete",
+        system_now_millis(),
+    )?;
+    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
 fn accept_desktop_history_knowledge(
-    candidate_id:String,
-    title:String,
-    body:String,
-    tags:Vec<String>,
-    state:State<'_,AppState>,
-)->Result<desktop_history_knowledge_v1::Projection,String>{
-    let store=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?;
-    let connection=store.connection()?;
-    let plan=desktop_history_knowledge_v1::prepare_accept(&connection,&candidate_id,&title,&body,&tags,system_now_millis())?;
+    candidate_id: String,
+    title: String,
+    body: String,
+    tags: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<desktop_history_knowledge_v1::Projection, String> {
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?;
+    let connection = store.connection()?;
+    let plan = desktop_history_knowledge_v1::prepare_accept(
+        &connection,
+        &candidate_id,
+        &title,
+        &body,
+        &tags,
+        system_now_millis(),
+    )?;
     drop(connection);
     let receipt=store.mutate_domain(DomainMutationArgs{
         intent_id:plan.intent_id,
@@ -13497,284 +15443,661 @@ fn accept_desktop_history_knowledge(
         expected_revision:None,
         fields:json!({"title":plan.title,"body":plan.body,"tags":plan.tags,"scope":"GLOBAL","projectId":Value::Null,"classification":"NORMAL"}),
     })?;
-    let connection=store.connection()?;
-    desktop_history_knowledge_v1::mark_accepted(&connection,&candidate_id,&receipt.object_id,system_now_millis())?;
-    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error|json_error(&error))
+    let connection = store.connection()?;
+    desktop_history_knowledge_v1::mark_accepted(
+        &connection,
+        &candidate_id,
+        &receipt.object_id,
+        system_now_millis(),
+    )?;
+    desktop_history_knowledge_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 async fn execute_desktop_reminder_draft_prepared(
     app: tauri::AppHandle,
     prepared: DesktopReminderDraftPrepared,
 ) -> Result<desktop_reminders_v1::Projection, String> {
-    let state=app.state::<AppState>();
-    let signal=Arc::new(AtomicBool::new(false));
-    state.reminder_cancellations.lock().map_err(|_|json_error("提醒停止状态被锁定"))?.insert(prepared.reservation.draft_id.clone(),signal.clone());
-    let secret=if state.ordinary_chat_mock_endpoint.is_some(){
+    let state = app.state::<AppState>();
+    let signal = Arc::new(AtomicBool::new(false));
+    state
+        .reminder_cancellations
+        .lock()
+        .map_err(|_| json_error("提醒停止状态被锁定"))?
+        .insert(prepared.reservation.draft_id.clone(), signal.clone());
+    let secret = if state.ordinary_chat_mock_endpoint.is_some() {
         Zeroizing::new(b"local-reminder-draft-mock-only".to_vec())
-    }else{
-        let credentials=desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-        credentials.with_secret(&prepared.provider_id,|bytes|Ok(Zeroizing::new(bytes.to_vec())))?
+    } else {
+        let credentials = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+        credentials.with_secret(&prepared.provider_id, |bytes| {
+            Ok(Zeroizing::new(bytes.to_vec()))
+        })?
     };
-    let request=desktop_ordinary_chat_v1::TransportRequest{
-        endpoint:prepared.endpoint.clone(),provider_id:prepared.provider_id.clone(),model_id:prepared.model_id.clone(),
-        messages:desktop_reminders_v1::prompt(&prepared.reservation,system_now_millis()),idempotency_key:prepared.reservation.attempt_id.clone(),max_output_tokens:1024,web_search_route:"NONE".into(),
+    let request = desktop_ordinary_chat_v1::TransportRequest {
+        endpoint: prepared.endpoint.clone(),
+        provider_id: prepared.provider_id.clone(),
+        model_id: prepared.model_id.clone(),
+        messages: desktop_reminders_v1::prompt(&prepared.reservation, system_now_millis()),
+        idempotency_key: prepared.reservation.attempt_id.clone(),
+        max_output_tokens: 1024,
+        web_search_route: "NONE".into(),
     };
-    let worker=prepared.clone();
-    let result=tauri::async_runtime::spawn_blocking(move||tauri::async_runtime::block_on(desktop_ordinary_chat_v1::execute_streaming(request,secret,signal,|_|Ok(())))).await.map_err(|_|json_error("提醒草案后台任务未返回"))?;
-    let state=app.state::<AppState>();
+    let worker = prepared.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::block_on(desktop_ordinary_chat_v1::execute_streaming(
+            request,
+            secret,
+            signal,
+            |_| Ok(()),
+        ))
+    })
+    .await
+    .map_err(|_| json_error("提醒草案后台任务未返回"))?;
+    let state = app.state::<AppState>();
     {
-        let store=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?;
-        let connection=store.connection()?;
-        match result{
-            Ok(completed)=>{
-                let completion=desktop_reminders_v1::Completion{provider_id:&worker.provider_id,requested_model_id:&worker.model_id,actual_model_id:completed.actual_model_id.as_deref(),text:&completed.text,input_tokens:completed.usage.input_tokens,output_tokens:completed.usage.output_tokens,cached_input_tokens:completed.usage.cached_input_tokens,charge_micros:completed.reported_cost_micros};
-                if desktop_reminders_v1::complete_draft(&connection,&worker.reservation.draft_id,completion,system_now_millis()).is_err(){
-                    let _=desktop_reminders_v1::fail_draft(&connection,&worker.reservation.draft_id,Some(&worker.provider_id),Some(&worker.model_id),false,"REMINDER_DRAFT_FORMAT",system_now_millis());
-                }else{
-                    let _=store.complete_reminder_usage(&worker.reservation.draft_id,&worker.reservation.attempt_id,Some(&worker.reservation.conversation_id),&worker.model_id,&completed);
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
+        let connection = store.connection()?;
+        match result {
+            Ok(completed) => {
+                let completion = desktop_reminders_v1::Completion {
+                    provider_id: &worker.provider_id,
+                    requested_model_id: &worker.model_id,
+                    actual_model_id: completed.actual_model_id.as_deref(),
+                    text: &completed.text,
+                    input_tokens: completed.usage.input_tokens,
+                    output_tokens: completed.usage.output_tokens,
+                    cached_input_tokens: completed.usage.cached_input_tokens,
+                    charge_micros: completed.reported_cost_micros,
+                };
+                if desktop_reminders_v1::complete_draft(
+                    &connection,
+                    &worker.reservation.draft_id,
+                    completion,
+                    system_now_millis(),
+                )
+                .is_err()
+                {
+                    let _ = desktop_reminders_v1::fail_draft(
+                        &connection,
+                        &worker.reservation.draft_id,
+                        Some(&worker.provider_id),
+                        Some(&worker.model_id),
+                        false,
+                        "REMINDER_DRAFT_FORMAT",
+                        system_now_millis(),
+                    );
+                } else {
+                    let _ = store.complete_reminder_usage(
+                        &worker.reservation.draft_id,
+                        &worker.reservation.attempt_id,
+                        Some(&worker.reservation.conversation_id),
+                        &worker.model_id,
+                        &completed,
+                    );
                 }
             }
-            Err(failure)=>{
-                let (unknown,code)=match failure{desktop_ordinary_chat_v1::Failure::Cancelled=>(false,"CANCELLED"),desktop_ordinary_chat_v1::Failure::Explicit{code,..}=>(false,code),desktop_ordinary_chat_v1::Failure::Unknown{code}=>(true,code)};
-                let _=desktop_reminders_v1::fail_draft(&connection,&worker.reservation.draft_id,Some(&worker.provider_id),Some(&worker.model_id),unknown,code,system_now_millis());
+            Err(failure) => {
+                let (unknown, code) = match failure {
+                    desktop_ordinary_chat_v1::Failure::Cancelled => (false, "CANCELLED"),
+                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => (false, code),
+                    desktop_ordinary_chat_v1::Failure::Unknown { code } => (true, code),
+                };
+                let _ = desktop_reminders_v1::fail_draft(
+                    &connection,
+                    &worker.reservation.draft_id,
+                    Some(&worker.provider_id),
+                    Some(&worker.model_id),
+                    unknown,
+                    code,
+                    system_now_millis(),
+                );
             }
         }
     }
-    state.reminder_cancellations.lock().ok().map(|mut values|values.remove(&worker.reservation.draft_id));
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_reminders_v1::read_projection(&connection).map_err(|error|json_error(&error))
+    state
+        .reminder_cancellations
+        .lock()
+        .ok()
+        .map(|mut values| values.remove(&worker.reservation.draft_id));
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_reminders_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 async fn execute_desktop_reminder_run_prepared(
     app: tauri::AppHandle,
     prepared: DesktopReminderRunPrepared,
 ) -> Result<desktop_reminders_v1::Projection, String> {
-    let state=app.state::<AppState>();
-    let signal=Arc::new(AtomicBool::new(false));
-    state.reminder_cancellations.lock().map_err(|_|json_error("计划停止状态被锁定"))?.insert(prepared.reservation.plan.plan_id.clone(),signal.clone());
-    let secret=if state.ordinary_chat_mock_endpoint.is_some(){Zeroizing::new(b"local-reminder-monitor-mock-only".to_vec())}else{
-        let credentials=desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-        credentials.with_secret(&prepared.provider_id,|bytes|Ok(Zeroizing::new(bytes.to_vec())))?
+    let state = app.state::<AppState>();
+    let signal = Arc::new(AtomicBool::new(false));
+    state
+        .reminder_cancellations
+        .lock()
+        .map_err(|_| json_error("计划停止状态被锁定"))?
+        .insert(prepared.reservation.plan.plan_id.clone(), signal.clone());
+    let secret = if state.ordinary_chat_mock_endpoint.is_some() {
+        Zeroizing::new(b"local-reminder-monitor-mock-only".to_vec())
+    } else {
+        let credentials = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+        credentials.with_secret(&prepared.provider_id, |bytes| {
+            Ok(Zeroizing::new(bytes.to_vec()))
+        })?
     };
-    let request=desktop_ordinary_chat_v1::TransportRequest{
-        endpoint:prepared.endpoint.clone(),provider_id:prepared.provider_id.clone(),model_id:prepared.model_id.clone(),
-        messages:desktop_reminders_v1::run_prompt(&prepared.reservation,system_now_millis()),idempotency_key:prepared.reservation.attempt_id.clone(),max_output_tokens:4096,web_search_route:"OPENROUTER_SERVER_TOOL".into(),
+    let request = desktop_ordinary_chat_v1::TransportRequest {
+        endpoint: prepared.endpoint.clone(),
+        provider_id: prepared.provider_id.clone(),
+        model_id: prepared.model_id.clone(),
+        messages: desktop_reminders_v1::run_prompt(&prepared.reservation, system_now_millis()),
+        idempotency_key: prepared.reservation.attempt_id.clone(),
+        max_output_tokens: 4096,
+        web_search_route: "OPENROUTER_SERVER_TOOL".into(),
     };
-    let worker=prepared.clone();
-    let result=tauri::async_runtime::spawn_blocking(move||tauri::async_runtime::block_on(desktop_ordinary_chat_v1::execute_streaming(request,secret,signal,|_|Ok(())))).await.map_err(|_|json_error("计划监控后台任务未返回"))?;
-    let plan={
-        let store=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?;
-        let connection=store.connection()?;
-        match result{
-            Ok(completed)=>{
-                let plan=desktop_reminders_v1::complete_run(&connection,&worker.reservation,desktop_reminders_v1::Completion{provider_id:&worker.provider_id,requested_model_id:&worker.model_id,actual_model_id:completed.actual_model_id.as_deref(),text:&completed.text,input_tokens:completed.usage.input_tokens,output_tokens:completed.usage.output_tokens,cached_input_tokens:completed.usage.cached_input_tokens,charge_micros:completed.reported_cost_micros},system_now_millis())?;
-                let _=store.complete_reminder_usage(&worker.reservation.plan.plan_id,&worker.reservation.attempt_id,worker.reservation.plan.conversation_id.as_deref(),&worker.model_id,&completed);
+    let worker = prepared.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::block_on(desktop_ordinary_chat_v1::execute_streaming(
+            request,
+            secret,
+            signal,
+            |_| Ok(()),
+        ))
+    })
+    .await
+    .map_err(|_| json_error("计划监控后台任务未返回"))?;
+    let plan = {
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
+        let connection = store.connection()?;
+        match result {
+            Ok(completed) => {
+                let plan = desktop_reminders_v1::complete_run(
+                    &connection,
+                    &worker.reservation,
+                    desktop_reminders_v1::Completion {
+                        provider_id: &worker.provider_id,
+                        requested_model_id: &worker.model_id,
+                        actual_model_id: completed.actual_model_id.as_deref(),
+                        text: &completed.text,
+                        input_tokens: completed.usage.input_tokens,
+                        output_tokens: completed.usage.output_tokens,
+                        cached_input_tokens: completed.usage.cached_input_tokens,
+                        charge_micros: completed.reported_cost_micros,
+                    },
+                    system_now_millis(),
+                )?;
+                let _ = store.complete_reminder_usage(
+                    &worker.reservation.plan.plan_id,
+                    &worker.reservation.attempt_id,
+                    worker.reservation.plan.conversation_id.as_deref(),
+                    &worker.model_id,
+                    &completed,
+                );
                 plan
             }
-            Err(failure)=>{
-                let (unknown,code)=match failure{desktop_ordinary_chat_v1::Failure::Cancelled=>(false,"CANCELLED"),desktop_ordinary_chat_v1::Failure::Explicit{code,..}=>(false,code),desktop_ordinary_chat_v1::Failure::Unknown{code}=>(true,code)};
-                desktop_reminders_v1::fail_run(&connection,&worker.reservation,Some(&worker.provider_id),Some(&worker.model_id),unknown,code,system_now_millis())?
+            Err(failure) => {
+                let (unknown, code) = match failure {
+                    desktop_ordinary_chat_v1::Failure::Cancelled => (false, "CANCELLED"),
+                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => (false, code),
+                    desktop_ordinary_chat_v1::Failure::Unknown { code } => (true, code),
+                };
+                desktop_reminders_v1::fail_run(
+                    &connection,
+                    &worker.reservation,
+                    Some(&worker.provider_id),
+                    Some(&worker.model_id),
+                    unknown,
+                    code,
+                    system_now_millis(),
+                )?
             }
         }
     };
-    state.reminder_cancellations.lock().ok().map(|mut values|values.remove(&worker.reservation.plan.plan_id));
-    let _=app.emit("desktop-reminder-runtime-v1",DesktopReminderRuntimeEvent{plan_id:plan.plan_id.clone(),workspace_id:plan.workspace_id.clone(),conversation_id:plan.conversation_id.clone(),status:plan.status.clone()});
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_reminders_v1::read_projection(&connection).map_err(|error|json_error(&error))
+    state
+        .reminder_cancellations
+        .lock()
+        .ok()
+        .map(|mut values| values.remove(&worker.reservation.plan.plan_id));
+    let _ = app.emit(
+        "desktop-reminder-runtime-v1",
+        DesktopReminderRuntimeEvent {
+            plan_id: plan.plan_id.clone(),
+            workspace_id: plan.workspace_id.clone(),
+            conversation_id: plan.conversation_id.clone(),
+            status: plan.status.clone(),
+        },
+    );
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_reminders_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
-fn read_desktop_reminders(state:State<'_,AppState>)->Result<desktop_reminders_v1::Projection,String>{
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_reminders_v1::read_projection(&connection).map_err(|error|json_error(&error))
+fn read_desktop_reminders(
+    state: State<'_, AppState>,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_reminders_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
-async fn generate_desktop_reminder_draft(args:desktop_reminders_v1::GenerateDraftArgs,app:tauri::AppHandle)->Result<desktop_reminders_v1::Projection,String>{
-    let prepared={let state=app.state::<AppState>();let store=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?;store.prepare_reminder_draft(&args,state.ordinary_chat_mock_endpoint.as_deref())?};
-    execute_desktop_reminder_draft_prepared(app,prepared).await
+async fn generate_desktop_reminder_draft(
+    args: desktop_reminders_v1::GenerateDraftArgs,
+    app: tauri::AppHandle,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    app.state::<AppState>().require_external_access()?;
+    let prepared = {
+        let state = app.state::<AppState>();
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
+        store.prepare_reminder_draft(&args, state.ordinary_chat_mock_endpoint.as_deref())?
+    };
+    execute_desktop_reminder_draft_prepared(app, prepared).await
 }
 
 #[tauri::command]
-async fn retry_desktop_reminder_draft(draft_id:String,app:tauri::AppHandle)->Result<desktop_reminders_v1::Projection,String>{
-    let prepared={let state=app.state::<AppState>();let store=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?;store.prepare_reminder_draft_retry(&draft_id,state.ordinary_chat_mock_endpoint.as_deref())?};
-    execute_desktop_reminder_draft_prepared(app,prepared).await
+async fn retry_desktop_reminder_draft(
+    draft_id: String,
+    app: tauri::AppHandle,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    app.state::<AppState>().require_external_access()?;
+    let prepared = {
+        let state = app.state::<AppState>();
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
+        store
+            .prepare_reminder_draft_retry(&draft_id, state.ordinary_chat_mock_endpoint.as_deref())?
+    };
+    execute_desktop_reminder_draft_prepared(app, prepared).await
 }
 
 #[tauri::command]
-fn create_desktop_manual_reminder_draft(args:desktop_reminders_v1::ManualDraftArgs,state:State<'_,AppState>)->Result<desktop_reminders_v1::Projection,String>{
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_reminders_v1::create_manual_draft(&connection,&args,system_now_millis()).map_err(|error|json_error(&error))
+fn create_desktop_manual_reminder_draft(
+    args: desktop_reminders_v1::ManualDraftArgs,
+    state: State<'_, AppState>,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_reminders_v1::create_manual_draft(&connection, &args, system_now_millis())
+        .map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
-fn confirm_desktop_reminder_draft(args:desktop_reminders_v1::ConfirmDraftArgs,app:tauri::AppHandle)->Result<desktop_reminders_v1::Projection,String>{
-    let projection={let state=app.state::<AppState>();let mut connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;desktop_reminders_v1::confirm_draft(&mut connection,&args,system_now_millis()).map_err(|error|json_error(&error))?};
-    let _=reconcile_desktop_background_runtime(&app);
+fn confirm_desktop_reminder_draft(
+    args: desktop_reminders_v1::ConfirmDraftArgs,
+    app: tauri::AppHandle,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    let projection = {
+        let state = app.state::<AppState>();
+        let mut connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        desktop_reminders_v1::confirm_draft(&mut connection, &args, system_now_millis())
+            .map_err(|error| json_error(&error))?
+    };
+    let _ = reconcile_desktop_background_runtime(&app);
     Ok(projection)
 }
 
 #[tauri::command]
-fn update_desktop_reminder_plan(args:desktop_reminders_v1::UpdatePlanArgs,app:tauri::AppHandle)->Result<desktop_reminders_v1::Projection,String>{
-    let projection={let state=app.state::<AppState>();let mut connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;desktop_reminders_v1::update_plan(&mut connection,&args,system_now_millis()).map_err(|error|json_error(&error))?};
-    let _=reconcile_desktop_background_runtime(&app);
+fn update_desktop_reminder_plan(
+    args: desktop_reminders_v1::UpdatePlanArgs,
+    app: tauri::AppHandle,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    let projection = {
+        let state = app.state::<AppState>();
+        let mut connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        desktop_reminders_v1::update_plan(&mut connection, &args, system_now_millis())
+            .map_err(|error| json_error(&error))?
+    };
+    let _ = reconcile_desktop_background_runtime(&app);
     Ok(projection)
 }
 
 #[tauri::command]
-fn reject_desktop_reminder_draft(draft_id:String,state:State<'_,AppState>)->Result<desktop_reminders_v1::Projection,String>{
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_reminders_v1::reject_draft(&connection,&draft_id,system_now_millis()).map_err(|error|json_error(&error))
+fn reject_desktop_reminder_draft(
+    draft_id: String,
+    state: State<'_, AppState>,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_reminders_v1::reject_draft(&connection, &draft_id, system_now_millis())
+        .map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
-fn set_desktop_reminder_plan_paused(plan_id:String,paused:bool,app:tauri::AppHandle)->Result<desktop_reminders_v1::Projection,String>{
-    let projection={let state=app.state::<AppState>();if let Ok(signals)=state.reminder_cancellations.lock(){if let Some(signal)=signals.get(&plan_id){signal.store(true,Ordering::SeqCst);}}let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;desktop_reminders_v1::set_paused(&connection,&plan_id,paused,system_now_millis()).map_err(|error|json_error(&error))?};
-    let _=reconcile_desktop_background_runtime(&app);
+fn set_desktop_reminder_plan_paused(
+    plan_id: String,
+    paused: bool,
+    app: tauri::AppHandle,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    let projection = {
+        let state = app.state::<AppState>();
+        if let Ok(signals) = state.reminder_cancellations.lock() {
+            if let Some(signal) = signals.get(&plan_id) {
+                signal.store(true, Ordering::SeqCst);
+            }
+        }
+        let connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        desktop_reminders_v1::set_paused(&connection, &plan_id, paused, system_now_millis())
+            .map_err(|error| json_error(&error))?
+    };
+    let _ = reconcile_desktop_background_runtime(&app);
     Ok(projection)
 }
 
 #[tauri::command]
-fn retry_desktop_reminder_plan(plan_id:String,app:tauri::AppHandle)->Result<desktop_reminders_v1::Projection,String>{
-    let projection={let state=app.state::<AppState>();let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;desktop_reminders_v1::retry_plan(&connection,&plan_id,system_now_millis()).map_err(|error|json_error(&error))?};
-    let _=reconcile_desktop_background_runtime(&app);
+fn retry_desktop_reminder_plan(
+    plan_id: String,
+    app: tauri::AppHandle,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    let projection = {
+        let state = app.state::<AppState>();
+        let connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        desktop_reminders_v1::retry_plan(&connection, &plan_id, system_now_millis())
+            .map_err(|error| json_error(&error))?
+    };
+    let _ = reconcile_desktop_background_runtime(&app);
     Ok(projection)
 }
 
 #[tauri::command]
-fn delete_desktop_reminder_plan(plan_id:String,app:tauri::AppHandle)->Result<desktop_reminders_v1::Projection,String>{
-    let projection={let state=app.state::<AppState>();if let Ok(signals)=state.reminder_cancellations.lock(){if let Some(signal)=signals.get(&plan_id){signal.store(true,Ordering::SeqCst);}}let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;desktop_reminders_v1::delete_plan(&connection,&plan_id).map_err(|error|json_error(&error))?};
-    let _=reconcile_desktop_background_runtime(&app);
+fn delete_desktop_reminder_plan(
+    plan_id: String,
+    app: tauri::AppHandle,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    let projection = {
+        let state = app.state::<AppState>();
+        if let Ok(signals) = state.reminder_cancellations.lock() {
+            if let Some(signal) = signals.get(&plan_id) {
+                signal.store(true, Ordering::SeqCst);
+            }
+        }
+        let connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        desktop_reminders_v1::delete_plan(&connection, &plan_id)
+            .map_err(|error| json_error(&error))?
+    };
+    let _ = reconcile_desktop_background_runtime(&app);
     Ok(projection)
 }
 
 #[tauri::command]
-async fn run_desktop_reminders_due(app:tauri::AppHandle)->Result<desktop_reminders_v1::Projection,String>{
-    let prepared={let state=app.state::<AppState>();let store=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?;store.prepare_due_reminder(state.ordinary_chat_mock_endpoint.as_deref())?};
-    match prepared{Some(prepared)=>execute_desktop_reminder_run_prepared(app,prepared).await,None=>{let state=app.state::<AppState>();let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;desktop_reminders_v1::read_projection(&connection).map_err(|error|json_error(&error))}}
+async fn run_desktop_reminders_due(
+    app: tauri::AppHandle,
+) -> Result<desktop_reminders_v1::Projection, String> {
+    app.state::<AppState>().require_external_access()?;
+    let prepared = {
+        let state = app.state::<AppState>();
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?;
+        store.prepare_due_reminder(state.ordinary_chat_mock_endpoint.as_deref())?
+    };
+    match prepared {
+        Some(prepared) => execute_desktop_reminder_run_prepared(app, prepared).await,
+        None => {
+            let state = app.state::<AppState>();
+            let connection = state
+                .store
+                .lock()
+                .map_err(|_| json_error("Desktop store 被锁定"))?
+                .connection()?;
+            desktop_reminders_v1::read_projection(&connection).map_err(|error| json_error(&error))
+        }
+    }
 }
 
 #[tauri::command]
-fn read_pending_desktop_reminder_notifications(state:State<'_,AppState>)->Result<Vec<desktop_reminders_v1::NotificationProjection>,String>{
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_reminders_v1::pending_notifications(&connection).map_err(|error|json_error(&error))
+fn read_pending_desktop_reminder_notifications(
+    state: State<'_, AppState>,
+) -> Result<Vec<desktop_reminders_v1::NotificationProjection>, String> {
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_reminders_v1::pending_notifications(&connection).map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
-fn acknowledge_desktop_reminder_notification(run_id:String,sent:bool,safe_code:Option<String>,state:State<'_,AppState>)->Result<(),String>{
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_reminders_v1::acknowledge_notification(&connection,&run_id,sent,safe_code.as_deref()).map_err(|error|json_error(&error))
+fn acknowledge_desktop_reminder_notification(
+    run_id: String,
+    sent: bool,
+    safe_code: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_reminders_v1::acknowledge_notification(&connection, &run_id, sent, safe_code.as_deref())
+        .map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
-fn read_desktop_reminder_notification_bridge_status()->desktop_reminder_notification_v1::ReminderNotificationBridgeStatus{
+fn read_desktop_reminder_notification_bridge_status(
+) -> desktop_reminder_notification_v1::ReminderNotificationBridgeStatus {
     desktop_reminder_notification_v1::status()
 }
 
 #[tauri::command]
-async fn read_desktop_reminder_notification_permission()->Result<String,String>{
+async fn read_desktop_reminder_notification_permission(
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    state.require_external_access()?;
     tauri::async_runtime::spawn_blocking(desktop_reminder_notification_v1::permission_state)
         .await
-        .map_err(|_|json_error("提醒通知权限读取未返回"))?
+        .map_err(|_| json_error("提醒通知权限读取未返回"))?
         .map_err(json_error)
 }
 
 #[tauri::command]
-async fn request_desktop_reminder_notification_permission()->Result<String,String>{
+async fn request_desktop_reminder_notification_permission(
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    state.require_external_access()?;
     tauri::async_runtime::spawn_blocking(desktop_reminder_notification_v1::request_permission)
         .await
-        .map_err(|_|json_error("提醒通知授权未返回"))?
+        .map_err(|_| json_error("提醒通知授权未返回"))?
         .map_err(json_error)
 }
 
 fn resolve_reminder_notification_target(
-    state:&AppState,
-    target:&desktop_reminder_notification_v1::ReminderNotificationTarget,
-)->Result<Option<desktop_reminder_notification_v1::ReminderNotificationTarget>,String>{
-    let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-    desktop_reminders_v1::resolve_notification_target(&connection,target).map_err(|error|json_error(&error))
+    state: &AppState,
+    target: &desktop_reminder_notification_v1::ReminderNotificationTarget,
+) -> Result<Option<desktop_reminder_notification_v1::ReminderNotificationTarget>, String> {
+    let connection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .connection()?;
+    desktop_reminders_v1::resolve_notification_target(&connection, target)
+        .map_err(|error| json_error(&error))
 }
 
 #[tauri::command]
 fn resolve_desktop_reminder_notification_target(
-    target:desktop_reminder_notification_v1::ReminderNotificationTarget,
-    state:State<'_,AppState>,
-)->Result<Option<desktop_reminder_notification_v1::ReminderNotificationTarget>,String>{
-    resolve_reminder_notification_target(&state,&target)
+    target: desktop_reminder_notification_v1::ReminderNotificationTarget,
+    state: State<'_, AppState>,
+) -> Result<Option<desktop_reminder_notification_v1::ReminderNotificationTarget>, String> {
+    resolve_reminder_notification_target(&state, &target)
 }
 
 #[tauri::command]
 fn consume_desktop_reminder_notification_action(
-    click_id:String,
-    state:State<'_,AppState>,
-)->Result<Option<desktop_reminder_notification_v1::ReminderNotificationTarget>,String>{
-    let Some(action)=desktop_reminder_notification_v1::take_action(&click_id) else{return Ok(None)};
-    resolve_reminder_notification_target(&state,&desktop_reminder_notification_v1::ReminderNotificationTarget{
-        route:action.route,plan_id:action.plan_id,workspace_id:action.workspace_id,conversation_id:action.conversation_id,
-    })
+    click_id: String,
+    state: State<'_, AppState>,
+) -> Result<Option<desktop_reminder_notification_v1::ReminderNotificationTarget>, String> {
+    let Some(action) = desktop_reminder_notification_v1::take_action(&click_id) else {
+        return Ok(None);
+    };
+    resolve_reminder_notification_target(
+        &state,
+        &desktop_reminder_notification_v1::ReminderNotificationTarget {
+            route: action.route,
+            plan_id: action.plan_id,
+            workspace_id: action.workspace_id,
+            conversation_id: action.conversation_id,
+        },
+    )
 }
 
 #[tauri::command]
 fn drain_desktop_reminder_notification_actions(
-    state:State<'_,AppState>,
-)->Result<Vec<desktop_reminder_notification_v1::ReminderNotificationTarget>,String>{
-    let mut resolved=Vec::new();
-    for action in desktop_reminder_notification_v1::drain_actions(){
-        let target=desktop_reminder_notification_v1::ReminderNotificationTarget{
-            route:action.route,plan_id:action.plan_id,workspace_id:action.workspace_id,conversation_id:action.conversation_id,
+    state: State<'_, AppState>,
+) -> Result<Vec<desktop_reminder_notification_v1::ReminderNotificationTarget>, String> {
+    let mut resolved = Vec::new();
+    for action in desktop_reminder_notification_v1::drain_actions() {
+        let target = desktop_reminder_notification_v1::ReminderNotificationTarget {
+            route: action.route,
+            plan_id: action.plan_id,
+            workspace_id: action.workspace_id,
+            conversation_id: action.conversation_id,
         };
-        if let Some(target)=resolve_reminder_notification_target(&state,&target)?{resolved.push(target);}
+        if let Some(target) = resolve_reminder_notification_target(&state, &target)? {
+            resolved.push(target);
+        }
     }
     Ok(resolved)
 }
 
 #[tauri::command]
 fn activate_desktop_reminder_notification_target(
-    target:desktop_reminder_notification_v1::ReminderNotificationTarget,
-    app:tauri::AppHandle,
-)->Result<bool,String>{
-    let state=app.state::<AppState>();
-    if resolve_reminder_notification_target(&state,&target)?.is_none(){return Ok(false)}
-    let Some(window)=app.get_webview_window("main") else{return Err(json_error("提醒通知主窗口不可用"))};
-    window.show().map_err(|_|json_error("提醒通知窗口无法显示"))?;
-    window.unminimize().map_err(|_|json_error("提醒通知窗口无法恢复"))?;
-    window.set_focus().map_err(|_|json_error("提醒通知窗口无法激活"))?;
+    target: desktop_reminder_notification_v1::ReminderNotificationTarget,
+    app: tauri::AppHandle,
+) -> Result<bool, String> {
+    let state = app.state::<AppState>();
+    if resolve_reminder_notification_target(&state, &target)?.is_none() {
+        return Ok(false);
+    }
+    let Some(window) = app.get_webview_window("main") else {
+        return Err(json_error("提醒通知主窗口不可用"));
+    };
+    window
+        .show()
+        .map_err(|_| json_error("提醒通知窗口无法显示"))?;
+    window
+        .unminimize()
+        .map_err(|_| json_error("提醒通知窗口无法恢复"))?;
+    window
+        .set_focus()
+        .map_err(|_| json_error("提醒通知窗口无法激活"))?;
     Ok(true)
 }
 
 #[tauri::command]
-async fn send_pending_desktop_reminder_notification(run_id:String,app:tauri::AppHandle)->Result<String,String>{
-    let notification={
-        let state=app.state::<AppState>();
-        let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
+async fn send_pending_desktop_reminder_notification(
+    run_id: String,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    app.state::<AppState>().require_external_access()?;
+    let notification = {
+        let state = app.state::<AppState>();
+        let connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
         desktop_reminders_v1::pending_notifications(&connection)
-            .map_err(|error|json_error(&error))?
+            .map_err(|error| json_error(&error))?
             .into_iter()
-            .find(|item|item.run_id==run_id)
-            .ok_or_else(||json_error("提醒通知已处理或不存在"))?
+            .find(|item| item.run_id == run_id)
+            .ok_or_else(|| json_error("提醒通知已处理或不存在"))?
     };
-    let target=desktop_reminder_notification_v1::ReminderNotificationTarget{
-        route:desktop_reminder_notification_v1::ROUTE.into(),
-        plan_id:notification.plan_id.clone(),workspace_id:notification.workspace_id.clone(),
-        conversation_id:notification.conversation_id.clone().unwrap_or_default(),
+    let target = desktop_reminder_notification_v1::ReminderNotificationTarget {
+        route: desktop_reminder_notification_v1::ROUTE.into(),
+        plan_id: notification.plan_id.clone(),
+        workspace_id: notification.workspace_id.clone(),
+        conversation_id: notification.conversation_id.clone().unwrap_or_default(),
     };
-    let send_app=app.clone();
-    let send_notification=notification.clone();
-    let outcome=tauri::async_runtime::spawn_blocking(move||desktop_reminder_notification_v1::send(
-        &send_app,&send_notification.run_id,&send_notification.title,&send_notification.body,&target,
-    )).await.map_err(|_|json_error("提醒通知发送未返回"))?;
-    let (sent,safe_code,label)=match outcome{
-        desktop_reminder_notification_v1::NotificationSendOutcome::Sent=>(true,None,"SENT"),
-        desktop_reminder_notification_v1::NotificationSendOutcome::Failed=>(false,Some("NOTIFICATION_SEND_FAILED"),"FAILED"),
-        desktop_reminder_notification_v1::NotificationSendOutcome::Unknown=>(false,Some("NOTIFICATION_SEND_UNKNOWN"),"UNKNOWN"),
+    let send_app = app.clone();
+    let send_notification = notification.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        desktop_reminder_notification_v1::send(
+            &send_app,
+            &send_notification.run_id,
+            &send_notification.title,
+            &send_notification.body,
+            &target,
+        )
+    })
+    .await
+    .map_err(|_| json_error("提醒通知发送未返回"))?;
+    let (sent, safe_code, label) = match outcome {
+        desktop_reminder_notification_v1::NotificationSendOutcome::Sent => (true, None, "SENT"),
+        desktop_reminder_notification_v1::NotificationSendOutcome::Failed => {
+            (false, Some("NOTIFICATION_SEND_FAILED"), "FAILED")
+        }
+        desktop_reminder_notification_v1::NotificationSendOutcome::Unknown => {
+            (false, Some("NOTIFICATION_SEND_UNKNOWN"), "UNKNOWN")
+        }
     };
     {
-        let state=app.state::<AppState>();
-        let connection=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.connection()?;
-        desktop_reminders_v1::acknowledge_notification(&connection,&notification.run_id,sent,safe_code)
-            .map_err(|error|json_error(&error))?;
+        let state = app.state::<AppState>();
+        let connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        desktop_reminders_v1::acknowledge_notification(
+            &connection,
+            &notification.run_id,
+            sent,
+            safe_code,
+        )
+        .map_err(|error| json_error(&error))?;
     }
-    if sent{Ok(label.into())}else{Err(json_error(if label=="UNKNOWN"{"提醒通知发送结果未知"}else{"提醒通知发送失败"}))}
+    if sent {
+        Ok(label.into())
+    } else {
+        Err(json_error(if label == "UNKNOWN" {
+            "提醒通知发送结果未知"
+        } else {
+            "提醒通知发送失败"
+        }))
+    }
 }
 
 fn emit_ordinary_chat_event(
@@ -13797,7 +16120,24 @@ async fn execute_desktop_ordinary_chat_prepared(
     app: tauri::AppHandle,
     prepared: DesktopOrdinaryChatPrepared,
 ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
+    desktop_model_service_v1::allow_user_credential_retry(&prepared.provider_id);
     let state = app.state::<AppState>();
+    if let Some(code) = prepared.preflight_failure_code.as_deref() {
+        let failed = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .update_ordinary_chat_message(
+                &prepared.projection.attempt_id,
+                "",
+                "FAILED",
+                None,
+                None,
+                Some(code),
+            )?;
+        emit_ordinary_chat_event(&app, &failed);
+        return Ok(failed);
+    }
     let signal = Arc::new(AtomicBool::new(false));
     state
         .ordinary_chat_cancellations
@@ -13839,15 +16179,19 @@ async fn execute_desktop_ordinary_chat_prepared(
                         "FAILED",
                         None,
                         None,
-                        Some("CREDENTIAL"),
+                        Some(if error.contains("未获准") { "CREDENTIAL_DENIED" } else if error.contains("尚未保存") { "CREDENTIAL_MISSING" } else { "CREDENTIAL_UNAVAILABLE" }),
                     )?;
                 emit_ordinary_chat_event(&app, &failed);
                 if let Ok(mut values) = state.ordinary_chat_cancellations.lock() {
-                    let remove_key = values.get_mut(&prepared.projection.conversation_id).is_some_and(|signals| {
-                        signals.retain(|candidate| !Arc::ptr_eq(candidate, &signal));
-                        signals.is_empty()
-                    });
-                    if remove_key { values.remove(&prepared.projection.conversation_id); }
+                    let remove_key = values
+                        .get_mut(&prepared.projection.conversation_id)
+                        .is_some_and(|signals| {
+                            signals.retain(|candidate| !Arc::ptr_eq(candidate, &signal));
+                            signals.is_empty()
+                        });
+                    if remove_key {
+                        values.remove(&prepared.projection.conversation_id);
+                    }
                 }
                 let _ = error;
                 return Ok(failed);
@@ -13954,7 +16298,9 @@ async fn execute_desktop_ordinary_chat_prepared(
                     signals.retain(|candidate| !Arc::ptr_eq(candidate, &cleanup_signal));
                     signals.is_empty()
                 });
-                if remove_key { values.remove(&conversation_id); }
+                if remove_key {
+                    values.remove(&conversation_id);
+                }
             });
         Ok::<_, String>(final_projection)
     })
@@ -13969,6 +16315,16 @@ async fn submit_desktop_ordinary_chat(
     state: State<'_, AppState>,
     args: DesktopOrdinaryChatSubmitArgs,
 ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
+    let authorization = args
+        .egress_authorization
+        .as_ref()
+        .ok_or_else(|| json_error("本次发送未形成外发授权事实；未向服务商建立连接"))?;
+    if authorization.approved_at_ms <= 0
+        || authorization.disclosure_version != "normal-chat-egress-v1"
+    {
+        return Err(json_error("本次发送授权事实无效；未向服务商建立连接"));
+    }
+    state.require_external_access()?;
     if args
         .conversation_id
         .as_ref()
@@ -13983,8 +16339,12 @@ async fn submit_desktop_ordinary_chat(
         return Err(json_error("当前会话仍在生成；请先停止或等待完成"));
     }
     if let Some(conversation_id) = args.conversation_id.as_deref() {
-        if state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?
-            .has_active_compare_for_conversation(conversation_id)? {
+        if state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .has_active_compare_for_conversation(conversation_id)?
+        {
             return Err(json_error("当前 Compare 仍在生成；请先停止或等待完成"));
         }
     }
@@ -14002,8 +16362,12 @@ async fn execute_desktop_compare_prepared(
 ) -> Result<DesktopCompareExecutionProjection, String> {
     let execution_id = prepared.projection.execution_id.clone();
     let mut branches = prepared.branches.into_iter();
-    let chatgpt = branches.next().ok_or_else(|| json_error("Compare ChatGPT branch 缺失"))?;
-    let claude = branches.next().ok_or_else(|| json_error("Compare Claude branch 缺失"))?;
+    let chatgpt = branches
+        .next()
+        .ok_or_else(|| json_error("Compare ChatGPT branch 缺失"))?;
+    let claude = branches
+        .next()
+        .ok_or_else(|| json_error("Compare Claude branch 缺失"))?;
     if branches.next().is_some() {
         return Err(json_error("Compare branch 数量无效"));
     }
@@ -14028,16 +16392,38 @@ async fn submit_desktop_compare(
     state: State<'_, AppState>,
     args: DesktopCompareSubmitArgs,
 ) -> Result<DesktopCompareExecutionProjection, String> {
-    if args.conversation_id.as_ref().is_some_and(|conversation_id| {
-        state.ordinary_chat_cancellations.lock().ok().is_some_and(|values| {
-            values.get(conversation_id).is_some_and(|signals| !signals.is_empty())
+    let authorization = args
+        .egress_authorization
+        .as_ref()
+        .ok_or_else(|| json_error("本次 Compare 未形成外发授权事实；未向服务商建立连接"))?;
+    if authorization.approved_at_ms <= 0 || authorization.disclosure_version != "normal-chat-egress-v1" {
+        return Err(json_error("本次 Compare 外发授权事实无效；未向服务商建立连接"));
+    }
+    state.require_external_access()?;
+    if args
+        .conversation_id
+        .as_ref()
+        .is_some_and(|conversation_id| {
+            state
+                .ordinary_chat_cancellations
+                .lock()
+                .ok()
+                .is_some_and(|values| {
+                    values
+                        .get(conversation_id)
+                        .is_some_and(|signals| !signals.is_empty())
+                })
         })
-    }) {
+    {
         return Err(json_error("当前会话仍在生成；请先停止或等待完成"));
     }
     if let Some(conversation_id) = args.conversation_id.as_deref() {
-        if state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?
-            .has_active_compare_for_conversation(conversation_id)? {
+        if state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .has_active_compare_for_conversation(conversation_id)?
+        {
             return Err(json_error("当前 Compare 仍在生成；请先停止或等待完成"));
         }
     }
@@ -14055,17 +16441,30 @@ async fn retry_desktop_compare_branch(
     state: State<'_, AppState>,
     args: DesktopCompareRetryArgs,
 ) -> Result<DesktopCompareExecutionProjection, String> {
+    state.require_external_access()?;
     let prepared = state
         .store
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
-        .prepare_ordinary_chat_retry(&args.attempt_id, state.ordinary_chat_mock_endpoint.as_deref())?;
-    let execution_id = prepared.projection.compare_execution_id.clone()
+        .prepare_ordinary_chat_retry(
+            &args.attempt_id,
+            state.ordinary_chat_mock_endpoint.as_deref(),
+        )?;
+    let execution_id = prepared
+        .projection
+        .compare_execution_id
+        .clone()
         .ok_or_else(|| json_error("该 Attempt 不属于 Compare"))?;
-    state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
         .refresh_compare_execution_state(&execution_id)?;
     execute_desktop_ordinary_chat_prepared(app.clone(), prepared).await?;
-    app.state::<AppState>().store.lock().map_err(|_| json_error("Desktop store 被锁定"))?
+    app.state::<AppState>()
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
         .refresh_compare_execution_state(&execution_id)
 }
 
@@ -14074,14 +16473,21 @@ fn cancel_desktop_compare(
     state: State<'_, AppState>,
     args: DesktopCompareCancelArgs,
 ) -> Result<bool, String> {
-    let projection = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?
+    let projection = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
         .compare_execution_projection(&args.execution_id)?;
-    let signals = state.ordinary_chat_cancellations.lock()
+    let signals = state
+        .ordinary_chat_cancellations
+        .lock()
         .map_err(|_| json_error("Compare 停止状态被锁定"))?
         .get(&projection.conversation_id)
         .cloned();
     if let Some(signals) = signals {
-        for signal in signals { signal.store(true, Ordering::SeqCst); }
+        for signal in signals {
+            signal.store(true, Ordering::SeqCst);
+        }
         return Ok(true);
     }
     Ok(false)
@@ -14092,7 +16498,10 @@ fn read_desktop_compare_execution(
     state: State<'_, AppState>,
     execution_id: String,
 ) -> Result<DesktopCompareExecutionProjection, String> {
-    state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
         .compare_execution_projection(&execution_id)
 }
 
@@ -14102,6 +16511,7 @@ async fn retry_desktop_ordinary_chat(
     state: State<'_, AppState>,
     args: DesktopOrdinaryChatRetryArgs,
 ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
+    state.require_external_access()?;
     let prepared = state
         .store
         .lock()
@@ -14125,7 +16535,9 @@ fn cancel_desktop_ordinary_chat(
         .get(&args.conversation_id)
         .cloned();
     if let Some(signals) = signals {
-        for signal in signals { signal.store(true, Ordering::SeqCst); }
+        for signal in signals {
+            signal.store(true, Ordering::SeqCst);
+        }
         return Ok(true);
     }
     Ok(false)
@@ -14159,7 +16571,10 @@ fn read_desktop_ordinary_chat_context_records(
 fn read_desktop_ordinary_chat_diagnostic_records(
     state: State<'_, AppState>,
 ) -> Result<Vec<DesktopOrdinaryChatDiagnosticProjection>, String> {
-    state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
         .ordinary_chat_diagnostic_records()
 }
 
@@ -14173,6 +16588,30 @@ fn import_desktop_conversation_attachment(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .import_conversation_attachment(args)
+}
+
+#[tauri::command]
+fn import_desktop_conversation_clipboard_attachment(
+    state: State<'_, AppState>,
+    args: DesktopClipboardAttachmentImportArgs,
+) -> Result<DesktopAttachmentMetadata, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .import_conversation_clipboard_attachment(args)
+}
+
+#[tauri::command]
+fn import_desktop_camera_capture(
+    state: State<'_, AppState>,
+    args: DesktopCameraCaptureImportArgs,
+) -> Result<DesktopAttachmentMetadata, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .import_camera_capture(args)
 }
 
 #[tauri::command]
@@ -14232,6 +16671,30 @@ fn import_desktop_temporary_attachment(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .import_temporary_attachment(args)
+}
+
+#[tauri::command]
+fn import_desktop_temporary_clipboard_attachment(
+    state: State<'_, AppState>,
+    args: DesktopTemporaryClipboardAttachmentImportArgs,
+) -> Result<DesktopTemporaryConversationRecovery, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .import_temporary_clipboard_attachment(args)
+}
+
+#[tauri::command]
+fn import_desktop_temporary_camera_capture(
+    state: State<'_, AppState>,
+    args: DesktopTemporaryCameraCaptureImportArgs,
+) -> Result<DesktopTemporaryConversationRecovery, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .import_temporary_camera_capture(args)
 }
 
 #[tauri::command]
@@ -14407,6 +16870,18 @@ fn clear_desktop_p6g_conversation_override(
 }
 
 #[tauri::command]
+fn set_desktop_conversation_preferences(
+    state: State<'_, AppState>,
+    args: DesktopConversationPreferencesArgs,
+) -> Result<P6gMutationReceipt, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .set_conversation_preferences(args)
+}
+
+#[tauri::command]
 fn evaluate_desktop_p6g_auto_route(
     state: State<'_, AppState>,
     args: P6gEvaluateArgs,
@@ -14512,6 +16987,748 @@ fn ordinary_chat_acceptance_root() -> Result<Option<PathBuf>, String> {
         .transpose()
 }
 
+fn validate_c13_acceptance_root(root: PathBuf) -> Result<PathBuf, String> {
+    if root.is_absolute()
+        && root
+            .to_str()
+            .is_some_and(|path| path.starts_with(C13_ACCEPTANCE_ROOT_PREFIX))
+    {
+        Ok(root)
+    } else {
+        Err("C13 conversation lifecycle acceptance root invalid".to_owned())
+    }
+}
+
+fn c13_acceptance_root() -> Result<Option<PathBuf>, String> {
+    std::env::var_os(C13_ACCEPTANCE_ROOT_ENV)
+        .map(PathBuf::from)
+        .map(validate_c13_acceptance_root)
+        .transpose()
+}
+
+fn validate_c02_c06_acceptance_root(root: PathBuf) -> Result<PathBuf, String> {
+    if root.is_absolute()
+        && root
+            .to_str()
+            .is_some_and(|path| path.starts_with(C02_C06_ACCEPTANCE_ROOT_PREFIX))
+    {
+        Ok(root)
+    } else {
+        Err("C02-C06 visual acceptance root invalid".to_owned())
+    }
+}
+
+fn c02_c06_acceptance_root() -> Result<Option<PathBuf>, String> {
+    std::env::var_os(C02_C06_ACCEPTANCE_ROOT_ENV)
+        .map(PathBuf::from)
+        .map(validate_c02_c06_acceptance_root)
+        .transpose()
+}
+
+fn validate_c14_acceptance_root(root: PathBuf) -> Result<PathBuf, String> {
+    if root.is_absolute()
+        && root
+            .to_str()
+            .is_some_and(|path| path.starts_with(C14_ACCEPTANCE_ROOT_PREFIX))
+    {
+        Ok(root)
+    } else {
+        Err("C14 local data acceptance root invalid".to_owned())
+    }
+}
+
+fn c14_acceptance_root() -> Result<Option<PathBuf>, String> {
+    std::env::var_os(C14_ACCEPTANCE_ROOT_ENV)
+        .map(PathBuf::from)
+        .map(validate_c14_acceptance_root)
+        .transpose()
+}
+
+fn validate_c15_acceptance_root(root: PathBuf) -> Result<PathBuf, String> {
+    if root.is_absolute()
+        && root
+            .to_str()
+            .is_some_and(|path| path.starts_with(C15_ACCEPTANCE_ROOT_PREFIX))
+    {
+        Ok(root)
+    } else {
+        Err("C15 workspace acceptance root invalid".to_owned())
+    }
+}
+
+fn c15_acceptance_root() -> Result<Option<PathBuf>, String> {
+    std::env::var_os(C15_ACCEPTANCE_ROOT_ENV)
+        .map(PathBuf::from)
+        .map(validate_c15_acceptance_root)
+        .transpose()
+}
+
+fn validate_c07_c12_acceptance_root(root: PathBuf) -> Result<PathBuf, String> {
+    if root.is_absolute()
+        && root
+            .to_str()
+            .is_some_and(|path| path.starts_with(C07_C12_ACCEPTANCE_ROOT_PREFIX))
+    {
+        Ok(root)
+    } else {
+        Err("C07-C12 offline acceptance root invalid".to_owned())
+    }
+}
+
+fn c07_c12_acceptance_root() -> Result<Option<PathBuf>, String> {
+    std::env::var_os(C07_C12_ACCEPTANCE_ROOT_ENV)
+        .map(PathBuf::from)
+        .map(validate_c07_c12_acceptance_root)
+        .transpose()
+}
+
+fn validate_c16_visual_acceptance_root(root: PathBuf) -> Result<PathBuf, String> {
+    if root.is_absolute()
+        && root
+            .to_str()
+            .is_some_and(|path| path.starts_with(C16_VISUAL_ACCEPTANCE_ROOT_PREFIX))
+    {
+        Ok(root)
+    } else {
+        Err("C16 visual acceptance root invalid".to_owned())
+    }
+}
+
+fn c16_visual_acceptance_root() -> Result<Option<PathBuf>, String> {
+    std::env::var_os(C16_VISUAL_ACCEPTANCE_ROOT_ENV)
+        .map(PathBuf::from)
+        .map(validate_c16_visual_acceptance_root)
+        .transpose()
+}
+
+fn validate_c16_visual_acceptance_state(value: String) -> Result<String, String> {
+    let parts = value.split("__").collect::<Vec<_>>();
+    let valid = parts.len() == 3
+        && ["system-light", "system-dark", "light", "dark"].contains(&parts[0])
+        && ["small", "standard", "large"].contains(&parts[1])
+        && [
+            "model-root",
+            "model-daily",
+            "model-deep",
+            "add-root",
+            "style",
+            "search-history",
+            "settings-theme",
+        ]
+        .contains(&parts[2]);
+    if valid {
+        Ok(value)
+    } else {
+        Err("C16 visual acceptance state invalid".to_owned())
+    }
+}
+
+fn c16_visual_acceptance_state() -> Result<Option<String>, String> {
+    std::env::var(C16_VISUAL_ACCEPTANCE_STATE_ENV)
+        .ok()
+        .map(validate_c16_visual_acceptance_state)
+        .transpose()
+}
+
+/// Seeds deterministic, content-safe local records for C07/C08/C09/C10/C12 in one unique
+/// diagnostic root. Reopening never rewrites the records; active transcription is therefore
+/// allowed to become the production RECOVERY_REQUIRED state after a simulated restart.
+fn seed_c07_c12_offline_acceptance(store: &DesktopWorkspaceStore) -> Result<(), String> {
+    let existing = store.list_workspaces()?;
+    if !existing.is_empty() {
+        return if existing.len() == 1 && existing[0].id == C07_C12_ACCEPTANCE_WORKSPACE_ID {
+            Ok(())
+        } else {
+            Err("C07-C12 acceptance root is not fresh or owned by this fixture".to_owned())
+        };
+    }
+
+    let preflight = preflight_package(
+        include_bytes!("../../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange")
+            .to_vec(),
+    )?;
+    store.persist_preflight_assets(&preflight)?;
+    let mut connection = store.connection()?;
+    let transaction = connection
+        .transaction()
+        .map_err(|_| "C07-C12 acceptance transaction unavailable")?;
+    store.commit_import(
+        &transaction,
+        C07_C12_ACCEPTANCE_WORKSPACE_ID,
+        "C07-C12 Offline Acceptance",
+        &preflight,
+        false,
+    )?;
+    transaction
+        .commit()
+        .map_err(|_| "C07-C12 acceptance fixture unavailable")?;
+
+    let projection = store.workspace_projection(C07_C12_ACCEPTANCE_WORKSPACE_ID)?;
+    let conversation_id = projection.exchange["conversations"]
+        .as_array()
+        .and_then(|items| items.first())
+        .and_then(|item| item["id"].as_str())
+        .ok_or_else(|| "C07-C12 acceptance conversation unavailable".to_owned())?
+        .to_owned();
+    let now_ms = system_now_millis();
+
+    for (index, title) in [
+        "公开项目每日检查",
+        "已暂停的长期跟踪",
+        "配置待完成",
+        "已保存结果",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let item_now = now_ms.saturating_add(index as i64);
+        let created = desktop_reminders_v1::create_manual_draft(
+            &connection,
+            &desktop_reminders_v1::ManualDraftArgs {
+                workspace_id: C07_C12_ACCEPTANCE_WORKSPACE_ID.into(),
+                conversation_id: Some(conversation_id.clone()),
+                timezone_id: "Asia/Shanghai".into(),
+            },
+            item_now,
+        )?;
+        let draft_id = created
+            .drafts
+            .iter()
+            .find(|item| item.status == "PENDING_REVIEW")
+            .map(|item| item.draft_id.clone())
+            .ok_or_else(|| "C09 acceptance draft unavailable".to_owned())?;
+        desktop_reminders_v1::confirm_draft(
+            &mut connection,
+            &desktop_reminders_v1::ConfirmDraftArgs {
+                draft_id,
+                title: title.into(),
+                instruction: "只读公开状态，不外发通知。".into(),
+                schedule_kind: "DAILY".into(),
+                anchor_local: "2099-09-03T09:30".into(),
+                timezone_id: "Asia/Shanghai".into(),
+                missed_policy: "SKIP".into(),
+            },
+            item_now,
+        )?;
+    }
+    connection
+        .execute(
+            "UPDATE desktop_reminder_plans_v1 SET status='PAUSED',next_run_at_ms=NULL WHERE title='已暂停的长期跟踪'",
+            [],
+        )
+        .map_err(|_| "C09 paused fixture unavailable")?;
+    connection
+        .execute(
+            "UPDATE desktop_reminder_plans_v1 SET status='FAILED',last_run_at_ms=?1,last_safe_error_code='PROVIDER_NOT_CONFIGURED',next_run_at_ms=NULL WHERE title='配置待完成'",
+            [now_ms],
+        )
+        .map_err(|_| "C09 failed fixture unavailable")?;
+    connection
+        .execute(
+            "UPDATE desktop_reminder_plans_v1 SET status='COMPLETED',last_run_at_ms=?1,latest_result='公开状态已读取，结果保存在本机样本中。',last_provider_id='OPENROUTER',last_model_id='openai/gpt-5.6-terra',last_input_tokens=180,last_output_tokens=96,last_charge_micros=1120,last_currency_code='USD',next_run_at_ms=NULL WHERE title='已保存结果'",
+            [now_ms],
+        )
+        .map_err(|_| "C09 result fixture unavailable")?;
+
+    let png = BASE64
+        .decode("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==")
+        .map_err(|_| "C10 fixture image invalid")?;
+    let source_path = store.root.join("c10-offline-source.png");
+    fs::write(&source_path, &png).map_err(|_| "C10 fixture image unavailable")?;
+    let mut c10_tasks = Vec::new();
+    for _ in 0..3 {
+        c10_tasks.push(desktop_transcription_v1::import_document_source(
+            &store.root,
+            &store.database,
+            desktop_transcription_v1::ImportArgs {
+                workspace_id: C07_C12_ACCEPTANCE_WORKSPACE_ID.into(),
+                selected_path: source_path.to_string_lossy().into_owned(),
+            },
+        )?);
+    }
+    let result = store.import_conversation_attachment_bytes(
+        C07_C12_ACCEPTANCE_WORKSPACE_ID,
+        b"# C10 result\n\nOffline persisted Markdown fixture.".to_vec(),
+        Some("md"),
+        "C10-result.md",
+    )?;
+    connection.execute(
+        "UPDATE desktop_transcription_tasks SET state='TRANSCRIBING',attempt_count=1,updated_at_ms=?2 WHERE id=?1",
+        params![c10_tasks[0].id, now_ms],
+    ).map_err(|_| "C10 processing fixture unavailable")?;
+    connection.execute(
+        "UPDATE desktop_transcription_tasks SET state='FAILED',error_code='CREDENTIAL_MISSING',user_message='请先在设置启用智谱并保存 API Key',attempt_count=1,updated_at_ms=?2 WHERE id=?1",
+        params![c10_tasks[1].id, now_ms],
+    ).map_err(|_| "C10 failed fixture unavailable")?;
+    connection.execute(
+        "UPDATE desktop_transcription_tasks SET state='COMPLETED',result_attachment_id=?2,result_sha256=?3,result_byte_count=?4,provider_request_count=1,provider_request_id='c10-offline-fixture-request',page_count=1,input_tokens=90,output_tokens=410,estimated_charge_micros=3250,attempt_count=1,updated_at_ms=?5 WHERE id=?1",
+        params![c10_tasks[2].id, result.id, result.sha256, result.byte_count, now_ms],
+    ).map_err(|_| "C10 completed fixture unavailable")?;
+    connection.execute(
+        "INSERT INTO desktop_transcription_segments(task_id,ordinal,start_millis,end_millis,text) VALUES(?1,0,0,0,'# C10 result\n\nOffline persisted Markdown fixture.')",
+        [&c10_tasks[2].id],
+    ).map_err(|_| "C10 result segment unavailable")?;
+
+    let attempt_id = "c12-offline-attempt";
+    connection.execute(
+        "INSERT INTO desktop_ordinary_chat_attempts(attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,retry_count,idempotency_key,request_fingerprint,provider_id,requested_model_id,actual_model_id,model_display_name,state,input_tokens,output_tokens,cached_input_tokens,charge_micros,currency_code,cost_source,latency_ms,created_at_ms,updated_at_ms,terminal_at_ms,web_search_route) VALUES(?1,?2,?3,'c12-user','c12-assistant',0,'c12-offline-idempotency','c12-offline-fingerprint','OPENROUTER','openai/gpt-5.6-terra','openai/gpt-5.6-terra','GPT-5.6 Terra','COMPLETED',1680,680,220,14250,'USD','PROVIDER_RESPONSE',1450,?4,?4,?4,'NONE')",
+        params![attempt_id, C07_C12_ACCEPTANCE_WORKSPACE_ID, conversation_id, now_ms],
+    ).map_err(|_| "C12 call metadata fixture unavailable")?;
+    for (ordinal, kind, id, title) in [
+        (0, "知识库", "c12-contract", "C12 Android→Desktop 同步合同"),
+        (1, "当前对话路径", "c12-current", "当前对话上下文"),
+        (2, "记忆", "c12-memory", "本机用户偏好摘要"),
+    ] {
+        connection.execute(
+            "INSERT INTO desktop_ordinary_chat_context_sources(attempt_id,ordinal,source_kind,source_id,title) VALUES(?1,?2,?3,?4,?5)",
+            params![attempt_id, ordinal, kind, id, title],
+        ).map_err(|_| "C12 context fixture unavailable")?;
+    }
+    connection.execute(
+        "INSERT INTO desktop_ordinary_chat_diagnostics(diagnostic_id,attempt_id,provider_id,model_id,state,safe_error_code,http_status,event_count,latency_ms,created_at_ms) VALUES('c12-offline-diagnostic',?1,'OPENROUTER','openai/gpt-5.6-terra','FAILED','NETWORK',NULL,0,1450,?2)",
+        params![attempt_id, now_ms],
+    ).map_err(|_| "C12 diagnostic fixture unavailable")?;
+    usage_ledger_v1::Ledger::open(&store.root.join("usage-ledger"))?.append(&usage_ledger_v1::Entry {
+        entry_id: "usage-conversation-c12-offline".into(),
+        replay_token: "usage-conversation-c12-offline-replay".into(),
+        execution_id: "c12-offline-execution".into(),
+        conversation_id,
+        branch_leaf_message_id: "c12-assistant".into(),
+        invocation_id: "c12-offline-invocation".into(),
+        attempt_id: attempt_id.into(),
+        kind: usage_ledger_v1::Kind::FinalMeasured,
+        fact_grade: usage_ledger_v1::FactGrade::ProviderReported,
+        requested_model_id: "openai/gpt-5.6-terra".into(),
+        actual_model_id: Some("openai/gpt-5.6-terra".into()),
+        input_tokens: Some(1_240),
+        output_tokens: Some(680),
+        cached_input_tokens: Some(220),
+        charge_micros: Some(14_250),
+        budget_micros: None,
+        adjustment_micros: None,
+        currency_code: Some("USD".into()),
+        reconciliation_fingerprint: None,
+        reconciles_entry_id: None,
+        source: usage_ledger_v1::Source::DesktopLocal,
+        occurred_at_ms: now_ms,
+    })?;
+    Ok(())
+}
+
+/// Seeds only a fresh, explicitly-scoped C02-C06 diagnostic root. Its only conversation carries
+/// the same local failed state as Android and Browser, without reading credentials or dispatching.
+fn seed_c02_c06_visual_acceptance(store: &DesktopWorkspaceStore) -> Result<(), String> {
+    let existing = store.list_workspaces()?;
+    if !existing.is_empty() {
+        return if existing.len() == 1 && existing[0].id == C02_C06_ACCEPTANCE_WORKSPACE_ID {
+            Ok(())
+        } else {
+            Err("C02-C06 acceptance root is not fresh or owned by this fixture".to_owned())
+        };
+    }
+
+    let preflight = preflight_package(
+        include_bytes!("../../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange")
+            .to_vec(),
+    )?;
+    store.persist_preflight_assets(&preflight)?;
+    let mut connection = store.connection()?;
+    let transaction = connection
+        .transaction()
+        .map_err(|_| "C02-C06 acceptance transaction unavailable")?;
+    store.commit_import(
+        &transaction,
+        C02_C06_ACCEPTANCE_WORKSPACE_ID,
+        "C02-C06 Visual Acceptance",
+        &preflight,
+        false,
+    )?;
+    transaction
+        .commit()
+        .map_err(|_| "C02-C06 acceptance fixture unavailable")?;
+
+    let created = store.mutate_domain(DomainMutationArgs {
+        intent_id: "c02-c06-fixture-create-conversation".into(),
+        workspace_id: C02_C06_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "conversation".into(),
+        action: "create".into(),
+        object_id: None,
+        expected_revision: None,
+        fields: json!({
+            "title":"新对话",
+            "projectId":null,
+            "firstMessage":"C02-local-visual-fixture"
+        }),
+    })?;
+
+    let mut connection = store.connection()?;
+    let transaction = connection
+        .transaction()
+        .map_err(|_| "C02-C06 conversation fixture transaction unavailable")?;
+    let encoded: String = transaction
+        .query_row(
+            "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1",
+            [C02_C06_ACCEPTANCE_WORKSPACE_ID],
+            |row| row.get(0),
+        )
+        .map_err(|_| "C02-C06 conversation fixture unavailable")?;
+    let mut exchange: Value =
+        serde_json::from_str(&encoded).map_err(|_| "C02-C06 conversation fixture invalid")?;
+    let conversations = exchange
+        .get_mut("conversations")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| "C02-C06 conversations unavailable".to_owned())?;
+    conversations
+        .retain(|item| item.get("id").and_then(Value::as_str) == Some(created.object_id.as_str()));
+    let conversation = conversations
+        .first_mut()
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "C02-C06 target conversation unavailable".to_owned())?;
+    let parent_id = conversation
+        .get("currentLeafId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "C02-C06 user message unavailable".to_owned())?
+        .to_owned();
+    let next_revision = conversation
+        .get("revision")
+        .and_then(Value::as_u64)
+        .unwrap_or(1)
+        .saturating_add(1);
+    conversation
+        .get_mut("messages")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| "C02-C06 message tree unavailable".to_owned())?
+        .push(json!({
+            "id":"message-c02-provider-not-enabled",
+            "parentId":parent_id,
+            "ordinal":1,
+            "role":"assistant",
+            "delivery":"FAILED",
+            "source":"PROVIDER",
+            "safeErrorCode":"PROVIDER_NOT_ENABLED",
+            "revision":1,
+            "createdAt":local_now(),
+            "blocks":[{"kind":"TEXT","text":""}]
+        }));
+    conversation.insert(
+        "currentLeafId".into(),
+        Value::String("message-c02-provider-not-enabled".into()),
+    );
+    conversation.insert("revision".into(), Value::Number(next_revision.into()));
+    conversation.insert("updatedAt".into(), Value::String(local_now().into()));
+    let semantic_hash = refresh_exchange_hash(&mut exchange)?;
+    validate_exchange(&exchange)?;
+    transaction
+        .execute(
+            "UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2",
+            params![canonical_json(&exchange)?, C02_C06_ACCEPTANCE_WORKSPACE_ID],
+        )
+        .map_err(|_| "C02-C06 conversation fixture not saved")?;
+    transaction
+        .execute(
+            "UPDATE workspaces SET title='C02-C06 Visual Acceptance',semantic_hash=?1 WHERE id=?2",
+            params![semantic_hash, C02_C06_ACCEPTANCE_WORKSPACE_ID],
+        )
+        .map_err(|_| "C02-C06 workspace fixture not saved")?;
+    store.rebuild_local_search_index(&transaction, C02_C06_ACCEPTANCE_WORKSPACE_ID, &exchange)?;
+    transaction
+        .commit()
+        .map_err(|_| "C02-C06 conversation fixture not committed")?;
+    Ok(())
+}
+
+/// Seeds only a fresh, explicitly-scoped C13 diagnostic root. Reopening the same root never
+/// rewrites the exchange, which makes restore/delete persistence observable across app restarts.
+fn seed_c13_conversation_lifecycle_acceptance(store: &DesktopWorkspaceStore) -> Result<(), String> {
+    let existing = store.list_workspaces()?;
+    if !existing.is_empty() {
+        return if existing.len() == 1 && existing[0].id == C13_ACCEPTANCE_WORKSPACE_ID {
+            Ok(())
+        } else {
+            Err("C13 acceptance root is not fresh or owned by this fixture".to_owned())
+        };
+    }
+
+    let preflight = preflight_package(
+        include_bytes!("../../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange")
+            .to_vec(),
+    )?;
+    store.persist_preflight_assets(&preflight)?;
+    let mut connection = store.connection()?;
+    let transaction = connection
+        .transaction()
+        .map_err(|_| "C13 acceptance transaction unavailable")?;
+    store.commit_import(
+        &transaction,
+        C13_ACCEPTANCE_WORKSPACE_ID,
+        "C13 Conversation Lifecycle Acceptance",
+        &preflight,
+        false,
+    )?;
+    transaction
+        .commit()
+        .map_err(|_| "C13 acceptance fixture unavailable")?;
+
+    let projection = store.workspace_projection(C13_ACCEPTANCE_WORKSPACE_ID)?;
+    let favorite = projection.exchange["conversations"]
+        .as_array()
+        .and_then(|items| items.first())
+        .ok_or_else(|| "C13 acceptance source conversation unavailable".to_owned())?;
+    let favorite_id = favorite["id"]
+        .as_str()
+        .ok_or_else(|| "C13 acceptance source conversation id invalid".to_owned())?
+        .to_owned();
+    let favorite_revision = favorite["revision"]
+        .as_u64()
+        .ok_or_else(|| "C13 acceptance source conversation revision invalid".to_owned())?;
+    store.mutate_domain(DomainMutationArgs {
+        intent_id: "c13-fixture-rename-favorite".into(),
+        workspace_id: C13_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "conversation".into(),
+        action: "update".into(),
+        object_id: Some(favorite_id.clone()),
+        expected_revision: Some(favorite_revision),
+        fields: json!({"title":"C13 Favorite"}),
+    })?;
+
+    let archived = store.mutate_domain(DomainMutationArgs {
+        intent_id: "c13-fixture-create-archived".into(),
+        workspace_id: C13_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "conversation".into(),
+        action: "create".into(),
+        object_id: None,
+        expected_revision: None,
+        fields: json!({"title":"C13 Archived","projectId":null,"firstMessage":"C13 archived local-only fixture"}),
+    })?;
+    store.mutate_domain(DomainMutationArgs {
+        intent_id: "c13-fixture-archive".into(),
+        workspace_id: C13_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "conversation".into(),
+        action: "archive".into(),
+        object_id: Some(archived.object_id),
+        expected_revision: Some(archived.revision),
+        fields: json!({}),
+    })?;
+
+    let recycle = store.mutate_domain(DomainMutationArgs {
+        intent_id: "c13-fixture-create-recycle".into(),
+        workspace_id: C13_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "conversation".into(),
+        action: "create".into(),
+        object_id: None,
+        expected_revision: None,
+        fields: json!({"title":"C13 Recycle","projectId":null,"firstMessage":"C13 recycle local-only fixture"}),
+    })?;
+    store.mutate_domain(DomainMutationArgs {
+        intent_id: "c13-fixture-recycle".into(),
+        workspace_id: C13_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "conversation".into(),
+        action: "softDelete".into(),
+        object_id: Some(recycle.object_id),
+        expected_revision: Some(recycle.revision),
+        fields: json!({}),
+    })?;
+
+    let mut connection = store.connection()?;
+    desktop_app_settings_v1::set_conversation_favorite(
+        &mut connection,
+        C13_ACCEPTANCE_WORKSPACE_ID,
+        &favorite_id,
+        true,
+    )
+    .map_err(|error| json_error(&error))?;
+    Ok(())
+}
+
+/// Seeds a fresh, explicitly-scoped C14 root with synthetic local-only inventory. Reopening the
+/// root never rewrites state, so cleanup and deletion persistence remain observable.
+fn seed_c14_local_data_acceptance(store: &DesktopWorkspaceStore) -> Result<(), String> {
+    let existing = store.list_workspaces()?;
+    if !existing.is_empty() {
+        return if existing.len() == 1 && existing[0].id == C14_ACCEPTANCE_WORKSPACE_ID {
+            Ok(())
+        } else {
+            Err("C14 acceptance root is not fresh or owned by this fixture".to_owned())
+        };
+    }
+
+    let preflight = preflight_package(
+        include_bytes!("../../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange")
+            .to_vec(),
+    )?;
+    store.persist_preflight_assets(&preflight)?;
+    let mut connection = store.connection()?;
+    let transaction = connection
+        .transaction()
+        .map_err(|_| "C14 acceptance transaction unavailable")?;
+    store.commit_import(
+        &transaction,
+        C14_ACCEPTANCE_WORKSPACE_ID,
+        "C14 Local Data Acceptance",
+        &preflight,
+        false,
+    )?;
+    transaction
+        .commit()
+        .map_err(|_| "C14 acceptance fixture unavailable")?;
+
+    let projection = store.workspace_projection(C14_ACCEPTANCE_WORKSPACE_ID)?;
+    for (entity, item) in [
+        (
+            "knowledge",
+            projection.exchange["knowledge"]
+                .as_array()
+                .and_then(|items| items.first()),
+        ),
+        (
+            "memory",
+            projection.exchange["memory"]
+                .as_array()
+                .and_then(|items| items.first()),
+        ),
+    ] {
+        let item = item.ok_or_else(|| format!("C14 acceptance {entity} fixture unavailable"))?;
+        store.mutate_domain(DomainMutationArgs {
+            intent_id: format!("c14-fixture-delete-{entity}"),
+            workspace_id: C14_ACCEPTANCE_WORKSPACE_ID.into(),
+            entity: entity.into(),
+            action: "softDelete".into(),
+            object_id: item["id"].as_str().map(str::to_owned),
+            expected_revision: item["revision"].as_u64(),
+            fields: json!({}),
+        })?;
+    }
+
+    let task_id = "c14-failed-import-task";
+    let storage_key = format!("chatgpt-import-assets/{task_id}/fixture.json");
+    let asset = store.root.join(&storage_key);
+    fs::create_dir_all(
+        asset
+            .parent()
+            .ok_or_else(|| "C14 failed import fixture path invalid".to_owned())?,
+    )
+    .map_err(|_| "C14 failed import fixture directory unavailable")?;
+    fs::write(&asset, b"synthetic C14 failed import")
+        .map_err(|_| "C14 failed import fixture unavailable")?;
+    store
+        .connection()?
+        .execute(
+            "INSERT INTO chatgpt_import_tasks(id,status,storage_key,display_name,mime_type,byte_count,package_hash,failure,retry_count,created_at_ms,updated_at_ms) VALUES(?1,'FAILED',?2,'fixture.json','application/json',27,'c14-fixture-hash','PARSE_FAILED',0,1,1)",
+            params![task_id, storage_key],
+        )
+        .map_err(|_| "C14 failed import task unavailable")?;
+    Ok(())
+}
+
+/// Seeds only a fresh, explicitly-scoped C15 root from the same typed local domain chain used
+/// by production. Reopening never replaces user-visible revisions or recreates conversations.
+fn seed_c15_workspace_acceptance(store: &DesktopWorkspaceStore) -> Result<(), String> {
+    let existing = store.list_workspaces()?;
+    if !existing.is_empty() {
+        return if existing.len() == 1 && existing[0].id == C15_ACCEPTANCE_WORKSPACE_ID {
+            Ok(())
+        } else {
+            Err("C15 acceptance root is not fresh or owned by this fixture".to_owned())
+        };
+    }
+
+    let preflight = preflight_package(
+        include_bytes!("../../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange")
+            .to_vec(),
+    )?;
+    store.persist_preflight_assets(&preflight)?;
+    let mut connection = store.connection()?;
+    let transaction = connection
+        .transaction()
+        .map_err(|_| "C15 acceptance transaction unavailable")?;
+    store.commit_import(
+        &transaction,
+        C15_ACCEPTANCE_WORKSPACE_ID,
+        "C15 Android 同状态隔离样本",
+        &preflight,
+        false,
+    )?;
+    transaction
+        .commit()
+        .map_err(|_| "C15 acceptance fixture unavailable")?;
+
+    let projection = store.workspace_projection(C15_ACCEPTANCE_WORKSPACE_ID)?;
+    let project = projection.exchange["projects"]
+        .as_array()
+        .and_then(|items| items.first())
+        .ok_or_else(|| "C15 acceptance project unavailable".to_owned())?;
+    store.mutate_domain(DomainMutationArgs {
+        intent_id: "c15-fixture-update-project".into(),
+        workspace_id: C15_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "project".into(),
+        action: "update".into(),
+        object_id: project["id"].as_str().map(str::to_owned),
+        expected_revision: project["revision"].as_u64(),
+        fields: json!({"title":"C15_Project","description":"C15_local-only_fixture"}),
+    })?;
+
+    let knowledge = projection.exchange["knowledge"]
+        .as_array()
+        .and_then(|items| items.first())
+        .ok_or_else(|| "C15 acceptance knowledge unavailable".to_owned())?;
+    store.mutate_domain(DomainMutationArgs {
+        intent_id: "c15-fixture-update-knowledge".into(),
+        workspace_id: C15_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "knowledge".into(),
+        action: "update".into(),
+        object_id: knowledge["id"].as_str().map(str::to_owned),
+        expected_revision: knowledge["revision"].as_u64(),
+        fields: json!({"title":"C15_Knowledge","body":"C15_local-only_knowledge_fixture","tags":["c15","local"]}),
+    })?;
+
+    let memory = projection.exchange["memory"]
+        .as_array()
+        .and_then(|items| items.first())
+        .ok_or_else(|| "C15 acceptance memory unavailable".to_owned())?;
+    store.mutate_domain(DomainMutationArgs {
+        intent_id: "c15-fixture-update-memory".into(),
+        workspace_id: C15_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "memory".into(),
+        action: "update".into(),
+        object_id: memory["id"].as_str().map(str::to_owned),
+        expected_revision: memory["revision"].as_u64(),
+        fields: json!({"body":"C15_local-only_memory_fixture"}),
+    })?;
+
+    let conversation = projection.exchange["conversations"]
+        .as_array()
+        .and_then(|items| items.first())
+        .ok_or_else(|| "C15 acceptance source conversation unavailable".to_owned())?;
+    store.mutate_domain(DomainMutationArgs {
+        intent_id: "c15-fixture-delete-source-conversation".into(),
+        workspace_id: C15_ACCEPTANCE_WORKSPACE_ID.into(),
+        entity: "conversation".into(),
+        action: "softDelete".into(),
+        object_id: conversation["id"].as_str().map(str::to_owned),
+        expected_revision: conversation["revision"].as_u64(),
+        fields: json!({}),
+    })?;
+    for relation in projection.exchange["relations"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        store.mutate_domain(DomainMutationArgs {
+            intent_id: format!(
+                "c15-fixture-delete-relation-{}",
+                relation["id"].as_str().unwrap_or("unknown")
+            ),
+            workspace_id: C15_ACCEPTANCE_WORKSPACE_ID.into(),
+            entity: "relation".into(),
+            action: "softDelete".into(),
+            object_id: relation["id"].as_str().map(str::to_owned),
+            expected_revision: relation["revision"].as_u64(),
+            fields: json!({}),
+        })?;
+    }
+    Ok(())
+}
+
 fn account_sync_acceptance_root() -> Result<Option<PathBuf>, String> {
     std::env::var_os(ACCOUNT_SYNC_ACCEPTANCE_ROOT_ENV)
         .map(PathBuf::from)
@@ -14541,18 +17758,28 @@ fn read_desktop_account_sync(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .connection()?;
-    desktop_account_sync_v1::projection(
-        &connection,
-        &desktop_account_sync_v1::DesktopAccountCredentialStore,
-        configured,
-        None,
-    )
+    if state.startup_mode == DesktopStartupMode::UiSchemaDiagnostic {
+        desktop_account_sync_v1::projection(
+            &connection,
+            &DiagnosticAccountCredentialStore,
+            configured,
+            None,
+        )
+    } else {
+        desktop_account_sync_v1::projection(
+            &connection,
+            &desktop_account_sync_v1::DesktopAccountCredentialStore,
+            configured,
+            None,
+        )
+    }
 }
 
 #[tauri::command]
 fn sign_in_desktop_google_account(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
+    state.require_external_access()?;
     let (_, config) = desktop_account_sync_v1::resolve_config(state.account_sync_mock_enabled)?;
     let config = config.ok_or_else(|| json_error("请先配置 Google 与南枫云服务"))?;
     let mut connection = state
@@ -14579,6 +17806,7 @@ fn sign_in_desktop_google_account(
 fn create_desktop_recovery_code(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::RecoveryCodeProjection, String> {
+    state.require_external_access()?;
     let connection = state
         .store
         .lock()
@@ -14601,6 +17829,7 @@ fn confirm_desktop_recovery_code(
     confirmation_hash: String,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
+    state.require_external_access()?;
     let credentials = desktop_account_sync_v1::DesktopAccountCredentialStore;
     let session = desktop_account_sync_v1::read_session(&credentials)?
         .ok_or_else(|| json_error("请先登录 Google 账号"))?;
@@ -14629,6 +17858,7 @@ fn confirm_desktop_recovery_code(
 fn sign_out_desktop_google_account(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
+    state.require_external_access()?;
     let configured = desktop_account_sync_v1::resolve_config(state.account_sync_mock_enabled)?
         .1
         .is_some();
@@ -14666,6 +17896,7 @@ fn sync_selected_desktop_conversation(
     conversation_id: String,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::SyncReceipt, String> {
+    state.require_external_access()?;
     let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
     let mut connection = state
         .store
@@ -14687,6 +17918,7 @@ fn reconcile_desktop_conversation_sync(
     conversation_id: String,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::SyncReceipt, String> {
+    state.require_external_access()?;
     let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
     let mut connection = state
         .store
@@ -14707,6 +17939,7 @@ fn set_desktop_periodic_sync(
     enabled: bool,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
+    state.require_external_access()?;
     let credentials = desktop_account_sync_v1::DesktopAccountCredentialStore;
     let connection = state
         .store
@@ -14724,6 +17957,7 @@ fn set_desktop_periodic_sync(
 fn choose_desktop_selected_sync_start(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
+    state.require_external_access()?;
     let credentials = desktop_account_sync_v1::DesktopAccountCredentialStore;
     let mut connection = state
         .store
@@ -14738,6 +17972,7 @@ fn choose_desktop_selected_sync_start(
 fn create_desktop_recovery_rotation(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::RecoveryCodeProjection, String> {
+    state.require_external_access()?;
     let connection = state
         .store
         .lock()
@@ -14760,6 +17995,7 @@ fn confirm_desktop_recovery_rotation(
     confirmation_hash: String,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::RotationReceipt, String> {
+    state.require_external_access()?;
     let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
     let session = desktop_account_sync_v1::read_session(&credentials)?
         .ok_or_else(|| json_error("请先登录 Google 账号"))?;
@@ -14788,6 +18024,7 @@ fn confirm_desktop_recovery_rotation(
 fn retry_desktop_recovery_rotation(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::RotationReceipt, String> {
+    state.require_external_access()?;
     let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
     let mut connection = state
         .store
@@ -14807,6 +18044,7 @@ fn retry_desktop_recovery_rotation(
 fn list_desktop_cloud_documents(
     state: State<'_, AppState>,
 ) -> Result<Vec<desktop_account_sync_v1::RemoteDocumentProjection>, String> {
+    state.require_external_access()?;
     let (_, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
     desktop_account_sync_v1::list_remote_documents(&gateway)
 }
@@ -14817,6 +18055,7 @@ fn restore_desktop_cloud_conversation(
     recovery_code: String,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::RestoreReceipt, String> {
+    state.require_external_access()?;
     let recovery_code = Zeroizing::new(recovery_code);
     let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
     let mut connection = state
@@ -14870,15 +18109,26 @@ fn wake_desktop_history_knowledge_cycle(app: &tauri::AppHandle) {
     });
 }
 
-fn wake_desktop_reminder_cycle(app:&tauri::AppHandle){
-    let app=app.clone();
-    tauri::async_runtime::spawn(async move{let _=run_desktop_reminders_due(app).await;});
+fn wake_desktop_reminder_cycle(app: &tauri::AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = run_desktop_reminders_due(app).await;
+    });
 }
 
 fn reconcile_desktop_background_runtime(
     app: &tauri::AppHandle,
 ) -> Result<desktop_background_runtime_v1::Projection, String> {
     let state = app.state::<AppState>();
+    if state.startup_mode == DesktopStartupMode::UiSchemaDiagnostic {
+        let connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        return desktop_background_runtime_v1::read_projection(&connection)
+            .map_err(|error| json_error(&error));
+    }
     let (desired, root, acceptance_endpoint) = {
         let store = state
             .store
@@ -14892,7 +18142,8 @@ fn reconcile_desktop_background_runtime(
             state.ordinary_chat_mock_endpoint.clone(),
         )
     };
-    let runtime_identifier = desktop_background_runtime_v1::runtime_bundle_identifier(&app.config().identifier);
+    let runtime_identifier =
+        desktop_background_runtime_v1::runtime_bundle_identifier(&app.config().identifier);
     let label = desktop_background_runtime_v1::launch_agent_label(&runtime_identifier)
         .map_err(|error| json_error(&error))?;
     let spec = desktop_background_runtime_v1::LaunchAgentSpec {
@@ -14982,8 +18233,7 @@ fn read_desktop_background_runtime(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .connection()?;
-    desktop_background_runtime_v1::read_projection(&connection)
-        .map_err(|error| json_error(&error))
+    desktop_background_runtime_v1::read_projection(&connection).map_err(|error| json_error(&error))
 }
 
 async fn run_desktop_background_cycle(app: tauri::AppHandle) {
@@ -15061,19 +18311,209 @@ async fn run_desktop_background_cycle(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+#[cfg(target_os = "macos")]
+const MACOS_WINDOW_RESTORATION_DEFAULTS: [(&str, bool); 2] = [
+    ("ApplePersistenceIgnoreState", true),
+    ("ApplePersistenceIgnoreStateQuietly", true),
+];
+
+#[cfg(target_os = "macos")]
+fn disable_macos_native_window_restoration() {
+    use objc2_foundation::{NSString, NSUserDefaults};
+
+    // Tauri owns the only main window and the app restores its domain state from SQLite.
+    // AppKit's crash-recovery window restoration can otherwise stop the process before
+    // Tauri setup and repeatedly offer a "Reopen" path that Tao cannot safely unwind.
+    let defaults = NSUserDefaults::standardUserDefaults();
+    for (key, value) in MACOS_WINDOW_RESTORATION_DEFAULTS {
+        defaults.setBool_forKey(value, &NSString::from_str(key));
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn disable_macos_native_window_restoration() {}
+
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
-        .setup(|app| {
+    // Set this before any UI, background worker or credential access. Never re-enable
+    // process-wide Keychain interaction: denied/locked items must fail in-app.
+    #[cfg(target_os = "macos")]
+    if unsafe { security_framework_sys::keychain::SecKeychainSetUserInteractionAllowed(0) } != 0 {
+        eprintln!("无法启用无弹窗凭据访问，应用已停止启动。");
+        std::process::exit(2);
+    }
+    // Explicit operator-only live probe. No workspace is opened and no private content
+    // is sent; it uses the same credential owner and streaming transport as normal chat.
+    if std::env::args().any(|arg| arg == "--test-live-sonnet-connection") {
+        let credentials = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+        let secret = match credentials.with_secret("OPENROUTER", |bytes| Ok(zeroize::Zeroizing::new(bytes.to_vec()))) {
+            Ok(secret) => secret,
+            Err(_) => { eprintln!("LIVE_PROBE_CREDENTIAL_UNAVAILABLE"); std::process::exit(3); }
+        };
+        let runtime = tokio::runtime::Runtime::new().expect("diagnostic runtime");
+        let mut deltas = 0usize;
+        let result = runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(90), desktop_ordinary_chat_v1::execute_streaming(
+                desktop_ordinary_chat_v1::TransportRequest {
+                    endpoint: "https://openrouter.ai/api/v1/chat/completions".into(),
+                    provider_id: "OPENROUTER".into(), model_id: "anthropic/claude-sonnet-5".into(),
+                    messages: serde_json::json!([{"role":"user","content":"Reply with OK only."}]),
+                    idempotency_key: format!("live-probe-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()), max_output_tokens: 16,
+                    web_search_route: "NONE".into(),
+                }, secret, std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                |_| { deltas += 1; Ok(()) },
+            )).await
+        });
+        match result {
+            Ok(Ok(reply)) => println!("LIVE_PROBE_OK deltas={deltas} reply_bytes={} elapsed_ms={}", reply.text.len(), reply.elapsed_ms),
+            Ok(Err(error)) => { eprintln!("LIVE_PROBE_FAILED {error:?}"); std::process::exit(4); }
+            Err(_) => { eprintln!("LIVE_PROBE_DEADLINE"); std::process::exit(5); }
+        }
+        return;
+    }
+    let startup_mode = desktop_startup_mode_from_args(std::env::args()).unwrap_or_else(|message| {
+        eprintln!("{message}");
+        std::process::exit(2);
+    });
+    if startup_mode != DesktopStartupMode::UiSchemaDiagnostic {
+        disable_macos_native_window_restoration();
+    }
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let builder = if startup_mode == DesktopStartupMode::UiSchemaDiagnostic {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_notification::init())
+    };
+    builder
+        .setup(move |app| {
             // The native click bridge is intentionally non-fatal. Cold-start responses are
             // queued until the webview listener drains them after SQLite is managed below.
-            let _ = desktop_reminder_notification_v1::install(app.handle());
+            if startup_mode != DesktopStartupMode::UiSchemaDiagnostic {
+                let _ = desktop_reminder_notification_v1::install(app.handle());
+            }
             let ordinary_chat_acceptance_enabled =
                 std::env::var(ORDINARY_CHAT_ACCEPTANCE_ENV).ok().as_deref() == Some("1");
-            let background_cycle_enabled = std::env::args().any(|argument| {
-                argument == desktop_background_runtime_v1::BACKGROUND_CYCLE_ARGUMENT
-            });
+            let c02_c06_acceptance_enabled =
+                std::env::var(C02_C06_ACCEPTANCE_ENV).ok().as_deref() == Some("1");
+            let c02_c06_acceptance_root = c02_c06_acceptance_root()?;
+            if c02_c06_acceptance_enabled != c02_c06_acceptance_root.is_some() {
+                return Err(
+                    "C02-C06 acceptance requires both its explicit marker and unique /tmp root"
+                        .into(),
+                );
+            }
+            if c02_c06_acceptance_enabled
+                && (startup_mode != DesktopStartupMode::UiSchemaDiagnostic
+                    || ordinary_chat_acceptance_enabled)
+            {
+                return Err(
+                    "C02-C06 acceptance requires the isolated UI/schema diagnostic startup".into(),
+                );
+            }
+            let c07_c12_acceptance_enabled =
+                std::env::var(C07_C12_ACCEPTANCE_ENV).ok().as_deref() == Some("1");
+            let c07_c12_acceptance_root = c07_c12_acceptance_root()?;
+            if c07_c12_acceptance_enabled != c07_c12_acceptance_root.is_some() {
+                return Err(
+                    "C07-C12 acceptance requires both its explicit marker and unique /tmp root"
+                        .into(),
+                );
+            }
+            if c07_c12_acceptance_enabled
+                && (startup_mode != DesktopStartupMode::UiSchemaDiagnostic
+                    || ordinary_chat_acceptance_enabled
+                    || c02_c06_acceptance_enabled)
+            {
+                return Err(
+                    "C07-C12 acceptance requires the isolated UI/schema diagnostic startup"
+                        .into(),
+                );
+            }
+            let c13_acceptance_enabled =
+                std::env::var(C13_ACCEPTANCE_ENV).ok().as_deref() == Some("1");
+            let c13_acceptance_root = c13_acceptance_root()?;
+            if c13_acceptance_enabled != c13_acceptance_root.is_some() {
+                return Err(
+                    "C13 acceptance requires both its explicit marker and unique /tmp root".into(),
+                );
+            }
+            if c13_acceptance_enabled
+                && (startup_mode != DesktopStartupMode::UiSchemaDiagnostic
+                    || ordinary_chat_acceptance_enabled
+                    || c02_c06_acceptance_enabled
+                    || c07_c12_acceptance_enabled)
+            {
+                return Err(
+                    "C13 acceptance requires the isolated UI/schema diagnostic startup".into(),
+                );
+            }
+            let c14_acceptance_enabled =
+                std::env::var(C14_ACCEPTANCE_ENV).ok().as_deref() == Some("1");
+            let c14_acceptance_root = c14_acceptance_root()?;
+            if c14_acceptance_enabled != c14_acceptance_root.is_some() {
+                return Err(
+                    "C14 acceptance requires both its explicit marker and unique /tmp root".into(),
+                );
+            }
+            if c14_acceptance_enabled
+                && (startup_mode != DesktopStartupMode::UiSchemaDiagnostic
+                    || ordinary_chat_acceptance_enabled
+                    || c02_c06_acceptance_enabled
+                    || c07_c12_acceptance_enabled
+                    || c13_acceptance_enabled)
+            {
+                return Err(
+                    "C14 acceptance requires its isolated UI/schema diagnostic startup".into(),
+                );
+            }
+            let c15_acceptance_enabled =
+                std::env::var(C15_ACCEPTANCE_ENV).ok().as_deref() == Some("1");
+            let c15_acceptance_root = c15_acceptance_root()?;
+            if c15_acceptance_enabled != c15_acceptance_root.is_some() {
+                return Err(
+                    "C15 acceptance requires both its explicit marker and unique /tmp root".into(),
+                );
+            }
+            if c15_acceptance_enabled
+                && (startup_mode != DesktopStartupMode::UiSchemaDiagnostic
+                    || ordinary_chat_acceptance_enabled
+                    || c02_c06_acceptance_enabled
+                    || c07_c12_acceptance_enabled
+                    || c13_acceptance_enabled
+                    || c14_acceptance_enabled)
+            {
+                return Err(
+                    "C15 acceptance requires its isolated UI/schema diagnostic startup".into(),
+                );
+            }
+            let c16_visual_acceptance_enabled =
+                std::env::var(C16_VISUAL_ACCEPTANCE_ENV).ok().as_deref() == Some("1");
+            let c16_visual_acceptance_root = c16_visual_acceptance_root()?;
+            let c16_visual_acceptance_state = c16_visual_acceptance_state()?;
+            if c16_visual_acceptance_enabled
+                != (c16_visual_acceptance_root.is_some() && c16_visual_acceptance_state.is_some())
+                || (!c16_visual_acceptance_enabled
+                    && (c16_visual_acceptance_root.is_some()
+                        || c16_visual_acceptance_state.is_some()))
+            {
+                return Err(
+                    "C16 visual acceptance requires its marker, state and unique /tmp root".into(),
+                );
+            }
+            if c16_visual_acceptance_enabled
+                && (startup_mode != DesktopStartupMode::UiSchemaDiagnostic
+                    || ordinary_chat_acceptance_enabled
+                    || c02_c06_acceptance_enabled
+                    || c07_c12_acceptance_enabled
+                    || c13_acceptance_enabled
+                    || c14_acceptance_enabled
+                    || c15_acceptance_enabled)
+            {
+                return Err(
+                    "C16 visual acceptance requires its isolated UI/schema diagnostic startup"
+                        .into(),
+                );
+            }
+            let background_cycle_enabled = startup_mode == DesktopStartupMode::BackgroundCycle;
             let p6e_acceptance_enabled =
                 std::env::var(P6E_ACCEPTANCE_ENV).ok().as_deref() == Some("1");
             let p6h_acceptance_enabled = std::env::var(P6H_ACCEPTANCE_ENV).ok().as_deref()
@@ -15090,7 +18530,22 @@ pub fn run() {
                     || std::env::args().any(|argument| argument == "--fb-p6-050-acceptance");
             let account_sync_acceptance_root = account_sync_acceptance_root()?;
             let account_sync_mock_enabled = account_sync_acceptance_root.is_some();
-            let root = if ordinary_chat_acceptance_enabled {
+            let background_cycle_root = background_cycle_root(startup_mode)?;
+            let root = if let Some(root) = background_cycle_root {
+                root
+            } else if let Some(root) = c02_c06_acceptance_root {
+                root
+            } else if let Some(root) = c07_c12_acceptance_root {
+                root
+            } else if let Some(root) = c13_acceptance_root {
+                root
+            } else if let Some(root) = c14_acceptance_root {
+                root
+            } else if let Some(root) = c15_acceptance_root {
+                root
+            } else if let Some(root) = c16_visual_acceptance_root {
+                root
+            } else if ordinary_chat_acceptance_enabled {
                 ordinary_chat_acceptance_root()?.ok_or_else(|| {
                     "ordinary chat acceptance requires a unique /tmp root".to_owned()
                 })?
@@ -15109,10 +18564,9 @@ pub fn run() {
             } else if fb_p6_050_acceptance_enabled {
                 PathBuf::from("/tmp").join(FB_P6_050_ACCEPTANCE_ROOT_NAME)
             } else {
-                app.path()
-                    .app_data_dir()
-                    .map_err(|_| "private app data unavailable")?
-                    .join("p6b-workspace")
+                let default_root = app.path().app_data_dir().map_err(|_| "private app data unavailable")?.join("p6b-workspace");
+                let config = app.path().app_config_dir().map_err(|_| "private config unavailable")?.join("storage-location.json");
+                desktop_storage_location::resolve(&config, &default_root)?
             };
             fs::create_dir_all(&root).map_err(|_| "desktop private root unavailable")?;
             let process_lock = fs::OpenOptions::new()
@@ -15122,25 +18576,48 @@ pub fn run() {
                 .open(root.join(".runtime-owner.lock"))
                 .map_err(|_| "desktop runtime owner lock unavailable")?;
             if process_lock.try_lock_exclusive().is_err() {
-                if background_cycle_enabled {
-                    app.handle().exit(0);
-                    return Ok(());
-                }
-                return Err("another Desktop runtime already owns this private root".into());
+                // A scheduled background cycle or the already-open foreground instance may
+                // briefly own this root. Returning Err here crosses Tao's Objective-C launch
+                // callback and becomes SIGABRT. Exit cleanly instead; normal macOS activation
+                // continues to target the existing foreground instance.
+                app.handle().exit(0);
+                return Ok(());
             }
             let database = root.join("workspace.sqlite3");
-            desktop_local_backup_v1::recover_interrupted_switch(&root, &database)
-                .map_err(|_| "desktop local restore recovery unavailable")?;
-            let pending_fresh_restore = desktop_local_backup_v1::pending_fresh_restart(&root);
-            let store = DesktopWorkspaceStore::open(root.clone())
+            if startup_mode.work_plan().recovers_business_state() {
+                desktop_local_backup_v1::recover_interrupted_switch(&root, &database)
+                    .map_err(|_| "desktop local restore recovery unavailable")?;
+            }
+            let pending_fresh_restore = startup_mode.work_plan().recovers_business_state()
+                && desktop_local_backup_v1::pending_fresh_restart(&root);
+            let store = DesktopWorkspaceStore::open_for_startup(root.clone(), startup_mode)
                 .map_err(|_| "desktop SQLite unavailable")?;
-            if ordinary_chat_acceptance_enabled && store.list_workspaces()?.is_empty() {
+            if c02_c06_acceptance_enabled {
+                seed_c02_c06_visual_acceptance(&store)?;
+            }
+            if c07_c12_acceptance_enabled {
+                seed_c07_c12_offline_acceptance(&store)?;
+            }
+            if c13_acceptance_enabled {
+                seed_c13_conversation_lifecycle_acceptance(&store)?;
+            }
+            if c14_acceptance_enabled {
+                seed_c14_local_data_acceptance(&store)?;
+            }
+            if c15_acceptance_enabled {
+                seed_c15_workspace_acceptance(&store)?;
+            }
+            if startup_mode.work_plan().recovers_business_state()
+                && ordinary_chat_acceptance_enabled
+                && store.list_workspaces()?.is_empty()
+            {
                 let preflight = preflight_package(
                     include_bytes!(
                         "../../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange"
                     )
                     .to_vec(),
                 )?;
+                store.persist_preflight_assets(&preflight)?;
                 let mut connection = store.connection()?;
                 let transaction = connection
                     .transaction()
@@ -15161,8 +18638,10 @@ pub fn run() {
                     .rebuild_all_local_search_indexes()
                     .map_err(|_| "desktop local search rebuild unavailable")?;
             }
-            desktop_local_backup_v1::finalize_fresh_restart(&root)
-                .map_err(|_| "desktop local restore finalization unavailable")?;
+            if startup_mode.work_plan().recovers_business_state() {
+                desktop_local_backup_v1::finalize_fresh_restart(&root)
+                    .map_err(|_| "desktop local restore finalization unavailable")?;
+            }
             let ordinary_chat_mock_endpoint = ordinary_chat_acceptance_enabled
                 .then(|| std::env::var(ORDINARY_CHAT_MOCK_ENDPOINT_ENV).ok())
                 .flatten()
@@ -15175,13 +18654,16 @@ pub fn run() {
                 store: Mutex::new(store),
                 ordinary_chat_cancellations: Mutex::new(BTreeMap::new()),
                 ordinary_chat_mock_endpoint,
+                ordinary_chat_acceptance_enabled,
                 history_knowledge_cancellations: Mutex::new(BTreeMap::new()),
                 reminder_cancellations: Mutex::new(BTreeMap::new()),
                 p6e_acceptance_enabled,
                 p6h_acceptance_enabled,
                 account_sync_mock_enabled,
+                c16_visual_acceptance_state,
                 pending_recovery: Mutex::new(BTreeMap::new()),
                 deferred_exit_started: AtomicBool::new(false),
+                startup_mode,
             });
             if background_cycle_enabled {
                 if let Some(window) = app.get_webview_window("main") {
@@ -15193,14 +18675,19 @@ pub fn run() {
                 });
                 return Ok(());
             }
+            if startup_mode == DesktopStartupMode::UiSchemaDiagnostic {
+                return Ok(());
+            }
             let _ = reconcile_desktop_background_runtime(app.handle());
             wake_desktop_history_knowledge_cycle(app.handle());
             wake_desktop_reminder_cycle(app.handle());
-            let reminder_app=app.handle().clone();
-            let _=std::thread::Builder::new().name("nanfeng-reminder-runtime".into()).spawn(move||loop{
-                std::thread::sleep(std::time::Duration::from_secs(1));
-                wake_desktop_reminder_cycle(&reminder_app);
-            });
+            let reminder_app = app.handle().clone();
+            let _ = std::thread::Builder::new()
+                .name("nanfeng-reminder-runtime".into())
+                .spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    wake_desktop_reminder_cycle(&reminder_app);
+                });
             let periodic_app = app.handle().clone();
             let _ = std::thread::Builder::new()
                 .name("nanfeng-account-sync-periodic".into())
@@ -15212,6 +18699,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            read_desktop_c16_visual_acceptance_state,
             read_desktop_transcription_state,
             read_desktop_app_settings,
             save_desktop_app_settings,
@@ -15251,6 +18739,8 @@ pub fn run() {
             save_desktop_transcription_settings,
             import_desktop_transcription_source,
             import_desktop_ocr_source,
+            import_desktop_ocr_drop,
+            choose_desktop_storage_location,
             retry_desktop_transcription_task,
             cancel_desktop_transcription_task,
             delete_desktop_transcription_task,
@@ -15332,6 +18822,7 @@ pub fn run() {
             read_desktop_audio_preview,
             read_desktop_text_preview,
             open_desktop_attachment_with_system,
+            export_desktop_attachment_to_selected_path,
             export_desktop_workspace_to_selected_path,
             write_desktop_markdown_to_selected_path,
             read_desktop_runtime_info,
@@ -15347,11 +18838,15 @@ pub fn run() {
             read_desktop_ordinary_chat_context_records,
             read_desktop_ordinary_chat_diagnostic_records,
             import_desktop_conversation_attachment,
+            import_desktop_conversation_clipboard_attachment,
+            import_desktop_camera_capture,
             enter_or_restore_desktop_temporary_conversation,
             read_desktop_temporary_conversation,
             update_desktop_temporary_conversation,
             append_desktop_temporary_message,
             import_desktop_temporary_attachment,
+            import_desktop_temporary_clipboard_attachment,
+            import_desktop_temporary_camera_capture,
             clear_desktop_temporary_conversation,
             remove_desktop_temporary_attachment,
             undo_desktop_domain,
@@ -15366,6 +18861,7 @@ pub fn run() {
             set_desktop_p6g_global_default,
             set_desktop_p6g_conversation_override,
             clear_desktop_p6g_conversation_override,
+            set_desktop_conversation_preferences,
             evaluate_desktop_p6g_auto_route,
             inspect_p8_agent_runs,
             read_dual_path_status,
@@ -15416,53 +18912,53 @@ pub fn run() {
                     let forced_exit_deadline = std::time::Duration::from_secs(31 * 60);
                     let mut cancellation_sent = false;
                     loop {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    let state = exit_app.state::<AppState>();
-                    let active = state
-                        .ordinary_chat_cancellations
-                        .lock()
-                        .ok()
-                        .is_some_and(|values| !values.is_empty())
-                        || state
-                            .history_knowledge_cancellations
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        let state = exit_app.state::<AppState>();
+                        let active = state
+                            .ordinary_chat_cancellations
                             .lock()
                             .ok()
                             .is_some_and(|values| !values.is_empty())
-                        || state
-                            .reminder_cancellations
-                            .lock()
-                            .ok()
-                            .is_some_and(|values| !values.is_empty());
-                    if !active {
-                        exit_app.exit(0);
-                        break;
-                    }
-                    let elapsed = started_at.elapsed();
-                    if !cancellation_sent && elapsed >= cancellation_deadline {
-                        if let Ok(values) = state.ordinary_chat_cancellations.lock() {
-                            values.values().flatten().for_each(|signal| {
-                                signal.store(true, Ordering::SeqCst);
-                            });
+                            || state
+                                .history_knowledge_cancellations
+                                .lock()
+                                .ok()
+                                .is_some_and(|values| !values.is_empty())
+                            || state
+                                .reminder_cancellations
+                                .lock()
+                                .ok()
+                                .is_some_and(|values| !values.is_empty());
+                        if !active {
+                            exit_app.exit(0);
+                            break;
                         }
-                        if let Ok(values) = state.history_knowledge_cancellations.lock() {
-                            values.values().for_each(|signal| {
-                                signal.store(true, Ordering::SeqCst);
-                            });
+                        let elapsed = started_at.elapsed();
+                        if !cancellation_sent && elapsed >= cancellation_deadline {
+                            if let Ok(values) = state.ordinary_chat_cancellations.lock() {
+                                values.values().flatten().for_each(|signal| {
+                                    signal.store(true, Ordering::SeqCst);
+                                });
+                            }
+                            if let Ok(values) = state.history_knowledge_cancellations.lock() {
+                                values.values().for_each(|signal| {
+                                    signal.store(true, Ordering::SeqCst);
+                                });
+                            }
+                            if let Ok(values) = state.reminder_cancellations.lock() {
+                                values.values().for_each(|signal| {
+                                    signal.store(true, Ordering::SeqCst);
+                                });
+                            }
+                            cancellation_sent = true;
                         }
-                        if let Ok(values) = state.reminder_cancellations.lock() {
-                            values.values().for_each(|signal| {
-                                signal.store(true, Ordering::SeqCst);
-                            });
+                        if elapsed >= forced_exit_deadline {
+                            // Any owner still marked active is recovered as UNKNOWN on the next
+                            // startup; it is never replayed automatically.
+                            exit_app.exit(0);
+                            break;
                         }
-                        cancellation_sent = true;
                     }
-                    if elapsed >= forced_exit_deadline {
-                        // Any owner still marked active is recovered as UNKNOWN on the next
-                        // startup; it is never replayed automatically.
-                        exit_app.exit(0);
-                        break;
-                    }
-                }
                 });
         });
 }
@@ -15472,8 +18968,99 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_startup_disables_appkit_window_restoration() {
+        assert_eq!(
+            MACOS_WINDOW_RESTORATION_DEFAULTS,
+            [
+                ("ApplePersistenceIgnoreState", true),
+                ("ApplePersistenceIgnoreStateQuietly", true),
+            ]
+        );
+    }
+
     fn golden() -> Vec<u8> {
         fs::read("../../protocol/artifacts/nfai.exchange.v1.golden.nfai-exchange").expect("golden")
+    }
+
+    #[test]
+    fn migration_36_repairs_schema_35_transcription_columns() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("app-data");
+        let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        let connection = store.connection().unwrap();
+        connection
+            .execute_batch(
+                "ALTER TABLE desktop_transcription_tasks DROP COLUMN provider_request_id;
+                 ALTER TABLE desktop_transcription_tasks DROP COLUMN page_count;
+                 UPDATE desktop_transcription_settings SET revision=7 WHERE id=1;",
+            )
+            .unwrap();
+        connection.pragma_update(None, "user_version", 35).unwrap();
+        drop(connection);
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        let connection = reopened.connection().unwrap();
+        let repaired_columns: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('desktop_transcription_tasks')
+                 WHERE name IN ('provider_request_id','page_count')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let settings_revision: i64 = connection
+            .query_row(
+                "SELECT revision FROM desktop_transcription_settings WHERE id=1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let schema_version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(repaired_columns, 2);
+        assert_eq!(settings_revision, 7);
+        assert_eq!(schema_version, 38);
+        drop(connection);
+        drop(reopened);
+        DesktopWorkspaceStore::open(root)
+            .expect("schema 38 must reopen without a false future-version error");
+    }
+
+    #[test]
+    fn migration_37_adds_restart_persistent_conversation_preferences() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("app-data");
+        let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        let connection = store.connection().unwrap();
+        connection
+            .execute_batch(
+                "ALTER TABLE p6g_conversation_override DROP COLUMN tone_override;
+                 ALTER TABLE p6g_conversation_override DROP COLUMN web_search_override;",
+            )
+            .unwrap();
+        connection.pragma_update(None, "user_version", 36).unwrap();
+        drop(connection);
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(root).unwrap();
+        let connection = reopened.connection().unwrap();
+        let preference_columns: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('p6g_conversation_override')
+                 WHERE name IN ('tone_override','web_search_override')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let schema_version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(preference_columns, 2);
+        assert_eq!(schema_version, 38);
     }
 
     #[test]
@@ -15697,15 +19284,512 @@ mod tests {
                 "/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.fixture/app-home",
             ))
             .unwrap(),
-            PathBuf::from(
-                "/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.fixture/app-home"
-            )
+            PathBuf::from("/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.fixture/app-home")
         );
         assert!(validate_ordinary_chat_acceptance_root(PathBuf::from("relative-root")).is_err());
         assert!(validate_ordinary_chat_acceptance_root(PathBuf::from(
             "/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance"
         ))
         .is_err());
+    }
+
+    #[test]
+    fn c13_acceptance_root_requires_a_unique_scoped_tmp_root() {
+        assert_eq!(
+            validate_c13_acceptance_root(PathBuf::from(
+                "/tmp/nanfeng-ai-desktop-c13-acceptance.fixture/app-home",
+            ))
+            .unwrap(),
+            PathBuf::from("/tmp/nanfeng-ai-desktop-c13-acceptance.fixture/app-home")
+        );
+        assert!(validate_c13_acceptance_root(PathBuf::from("relative-root")).is_err());
+        assert!(validate_c13_acceptance_root(PathBuf::from(
+            "/tmp/nanfeng-ai-desktop-c13-acceptance"
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn c02_c06_acceptance_root_requires_a_unique_scoped_tmp_root() {
+        assert_eq!(
+            validate_c02_c06_acceptance_root(PathBuf::from(
+                "/tmp/nanfeng-ai-desktop-c02-c06-acceptance.fixture/app-home",
+            ))
+            .unwrap(),
+            PathBuf::from("/tmp/nanfeng-ai-desktop-c02-c06-acceptance.fixture/app-home")
+        );
+        assert!(validate_c02_c06_acceptance_root(PathBuf::from("relative-root")).is_err());
+        assert!(validate_c02_c06_acceptance_root(PathBuf::from(
+            "/tmp/nanfeng-ai-desktop-c02-c06-acceptance"
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn c16_visual_acceptance_gate_accepts_exactly_the_84_declared_states_and_scoped_root() {
+        let root = PathBuf::from("/tmp/nanfeng-ai-desktop-c16-visual-acceptance.fixture/app-home");
+        assert_eq!(
+            validate_c16_visual_acceptance_root(root.clone()).unwrap(),
+            root
+        );
+        assert!(validate_c16_visual_acceptance_root(PathBuf::from("relative-root")).is_err());
+        assert!(validate_c16_visual_acceptance_root(PathBuf::from(
+            "/tmp/nanfeng-ai-desktop-c16-visual-acceptance"
+        ))
+        .is_err());
+
+        let appearances = ["system-light", "system-dark", "light", "dark"];
+        let fonts = ["small", "standard", "large"];
+        let layers = [
+            "model-root",
+            "model-daily",
+            "model-deep",
+            "add-root",
+            "style",
+            "search-history",
+            "settings-theme",
+        ];
+        let mut count = 0;
+        for appearance in appearances {
+            for font in fonts {
+                for layer in layers {
+                    let state = format!("{appearance}__{font}__{layer}");
+                    assert_eq!(
+                        validate_c16_visual_acceptance_state(state.clone()).unwrap(),
+                        state
+                    );
+                    count += 1;
+                }
+            }
+        }
+        assert_eq!(count, 84);
+        assert!(validate_c16_visual_acceptance_state("dark__large__unknown".into()).is_err());
+        assert!(validate_c16_visual_acceptance_state("dark__large".into()).is_err());
+    }
+
+    #[test]
+    fn c02_c06_fixture_owns_one_failed_local_conversation_and_survives_reopen() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("app-data");
+        let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        seed_c02_c06_visual_acceptance(&store).unwrap();
+
+        let projection = store
+            .workspace_projection(C02_C06_ACCEPTANCE_WORKSPACE_ID)
+            .unwrap();
+        let conversations = projection.exchange["conversations"].as_array().unwrap();
+        assert_eq!(conversations.len(), 1);
+        assert_eq!(conversations[0]["title"], "新对话");
+        let messages = conversations[0]["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["blocks"][0]["text"], "C02-local-visual-fixture");
+        assert_eq!(messages[1]["delivery"], "FAILED");
+        assert_eq!(messages[1]["safeErrorCode"], "PROVIDER_NOT_ENABLED");
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(root).unwrap();
+        seed_c02_c06_visual_acceptance(&reopened).unwrap();
+        let readback = reopened
+            .workspace_projection(C02_C06_ACCEPTANCE_WORKSPACE_ID)
+            .unwrap();
+        assert_eq!(
+            readback.exchange["conversations"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(
+            reopened
+                .connection()
+                .unwrap()
+                .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
+                .unwrap(),
+            "ok"
+        );
+    }
+
+    #[test]
+    fn c07_c12_acceptance_root_requires_a_unique_scoped_tmp_root() {
+        assert_eq!(
+            validate_c07_c12_acceptance_root(PathBuf::from(
+                "/tmp/nanfeng-ai-desktop-c07-c12-acceptance.fixture/app-home",
+            ))
+            .unwrap(),
+            PathBuf::from("/tmp/nanfeng-ai-desktop-c07-c12-acceptance.fixture/app-home")
+        );
+        assert!(validate_c07_c12_acceptance_root(PathBuf::from("relative-root")).is_err());
+        assert!(validate_c07_c12_acceptance_root(PathBuf::from(
+            "/tmp/nanfeng-ai-desktop-c07-c12-acceptance"
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn c07_c12_fixture_persists_reminder_transcription_and_redacted_call_states() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("app-data");
+        let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        seed_c07_c12_offline_acceptance(&store).unwrap();
+
+        let reminders = desktop_reminders_v1::read_projection(&store.connection().unwrap()).unwrap();
+        assert_eq!(reminders.plans.len(), 4);
+        for status in ["ACTIVE", "PAUSED", "FAILED", "COMPLETED"] {
+            assert!(reminders.plans.iter().any(|item| item.status == status));
+        }
+        let transcription = desktop_transcription_v1::read_state(
+            &store.database,
+            Some(C07_C12_ACCEPTANCE_WORKSPACE_ID),
+        )
+        .unwrap();
+        for state in ["TRANSCRIBING", "FAILED", "COMPLETED"] {
+            assert!(transcription.tasks.iter().any(|item| item.state == state));
+        }
+        assert_eq!(store.ordinary_chat_context_records().unwrap().len(), 1);
+        assert_eq!(store.ordinary_chat_diagnostic_records().unwrap().len(), 1);
+        let usage = usage_ledger_v1::Ledger::open(&root.join("usage-ledger"))
+            .unwrap()
+            .all_entries()
+            .unwrap();
+        assert_eq!(usage.len(), 1);
+        assert_eq!(usage[0].input_tokens, Some(1_240));
+        assert_eq!(usage[0].output_tokens, Some(680));
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(root).unwrap();
+        seed_c07_c12_offline_acceptance(&reopened).unwrap();
+        let readback = desktop_transcription_v1::read_state(
+            &reopened.database,
+            Some(C07_C12_ACCEPTANCE_WORKSPACE_ID),
+        )
+        .unwrap();
+        assert!(readback.tasks.iter().any(|item| item.state == "RECOVERY_REQUIRED"));
+        assert!(readback.tasks.iter().any(|item| item.state == "FAILED"));
+        assert!(readback.tasks.iter().any(|item| item.state == "COMPLETED"));
+        assert_eq!(
+            reopened
+                .connection()
+                .unwrap()
+                .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
+                .unwrap(),
+            "ok"
+        );
+    }
+
+    #[test]
+    fn c13_fixture_owns_lifecycle_state_and_preserves_mutations_on_reopen() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("app-data");
+        let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        seed_c13_conversation_lifecycle_acceptance(&store).unwrap();
+
+        let projection = store
+            .workspace_projection(C13_ACCEPTANCE_WORKSPACE_ID)
+            .unwrap();
+        let conversations = projection.exchange["conversations"].as_array().unwrap();
+        assert_eq!(conversations.len(), 3);
+        let favorite = conversations
+            .iter()
+            .find(|item| item["title"] == "C13 Favorite")
+            .unwrap();
+        let archived = conversations
+            .iter()
+            .find(|item| item["title"] == "C13 Archived")
+            .unwrap();
+        let recycle = conversations
+            .iter()
+            .find(|item| item["title"] == "C13 Recycle")
+            .unwrap();
+        assert_ne!(favorite["archived"], Value::Bool(true));
+        assert_eq!(archived["archived"], Value::Bool(true));
+        assert_ne!(archived["deleted"], Value::Bool(true));
+        assert_eq!(recycle["archived"], Value::Bool(true));
+        assert_eq!(recycle["deleted"], Value::Bool(true));
+        assert_eq!(
+            desktop_app_settings_v1::read_favorite_conversation_ids(
+                &store.connection().unwrap(),
+                C13_ACCEPTANCE_WORKSPACE_ID,
+            )
+            .unwrap(),
+            vec![favorite["id"].as_str().unwrap().to_owned()]
+        );
+
+        let restored = store
+            .mutate_domain(DomainMutationArgs {
+                intent_id: "c13-test-restore-archived".into(),
+                workspace_id: C13_ACCEPTANCE_WORKSPACE_ID.into(),
+                entity: "conversation".into(),
+                action: "restore".into(),
+                object_id: Some(archived["id"].as_str().unwrap().to_owned()),
+                expected_revision: archived["revision"].as_u64(),
+                fields: json!({}),
+            })
+            .unwrap();
+        assert!(restored.revision > archived["revision"].as_u64().unwrap());
+        let purge = store
+            .permanently_delete_conversation(DesktopConversationPurgeArgs {
+                workspace_id: C13_ACCEPTANCE_WORKSPACE_ID.into(),
+                conversation_id: recycle["id"].as_str().unwrap().to_owned(),
+                expected_revision: recycle["revision"].as_u64().unwrap(),
+            })
+            .unwrap();
+        assert_eq!(purge.conversation_id, recycle["id"].as_str().unwrap());
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(root).unwrap();
+        seed_c13_conversation_lifecycle_acceptance(&reopened).unwrap();
+        let readback = reopened
+            .workspace_projection(C13_ACCEPTANCE_WORKSPACE_ID)
+            .unwrap();
+        let conversations = readback.exchange["conversations"].as_array().unwrap();
+        assert_eq!(
+            conversations.len(),
+            2,
+            "reopen must not reseed the purged fixture"
+        );
+        assert_eq!(
+            conversations
+                .iter()
+                .find(|item| item["title"] == "C13 Archived")
+                .unwrap()["archived"],
+            Value::Bool(false),
+            "restore must survive reopen"
+        );
+        assert!(conversations
+            .iter()
+            .all(|item| item["title"] != "C13 Recycle"));
+        assert_eq!(
+            reopened
+                .connection()
+                .unwrap()
+                .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0),)
+                .unwrap(),
+            "ok"
+        );
+    }
+
+    #[test]
+    fn c14_acceptance_root_requires_a_unique_scoped_tmp_root() {
+        assert_eq!(
+            validate_c14_acceptance_root(PathBuf::from(
+                "/tmp/nanfeng-ai-desktop-c14-acceptance.fixture/app-home",
+            ))
+            .unwrap(),
+            PathBuf::from("/tmp/nanfeng-ai-desktop-c14-acceptance.fixture/app-home")
+        );
+        assert!(validate_c14_acceptance_root(PathBuf::from("relative-root")).is_err());
+        assert!(validate_c14_acceptance_root(PathBuf::from(
+            "/tmp/nanfeng-ai-desktop-c14-acceptance"
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn c14_fixture_owns_local_data_and_preserves_cleanup_on_reopen() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("app-data");
+        let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        seed_c14_local_data_acceptance(&store).unwrap();
+
+        let inventory = store.read_desktop_privacy_inventory().unwrap();
+        assert!(inventory.total_bytes > 0);
+        let failed = store
+            .preview_desktop_privacy_deletion(DesktopPrivacyPreviewArgs {
+                scope: "TEMPORARY_FAILED_TASK_ASSETS".into(),
+                selected_task_ids: BTreeSet::new(),
+            })
+            .unwrap();
+        assert_eq!(failed.task_candidates.len(), 1);
+        let trash = store
+            .preview_desktop_privacy_deletion(DesktopPrivacyPreviewArgs {
+                scope: "KNOWLEDGE_MEMORY_TRASH".into(),
+                selected_task_ids: BTreeSet::new(),
+            })
+            .unwrap();
+        assert_eq!(
+            trash.aggregates.iter().map(|item| item.count).sum::<u64>(),
+            2
+        );
+        store
+            .delete_desktop_privacy_scope(DesktopPrivacyDeleteArgs {
+                scope: trash.scope,
+                preview_fingerprint: trash.fingerprint,
+                confirmation_phrase: String::new(),
+                selected_task_ids: BTreeSet::new(),
+            })
+            .unwrap();
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(root).unwrap();
+        seed_c14_local_data_acceptance(&reopened).unwrap();
+        let readback = reopened
+            .preview_desktop_privacy_deletion(DesktopPrivacyPreviewArgs {
+                scope: "KNOWLEDGE_MEMORY_TRASH".into(),
+                selected_task_ids: BTreeSet::new(),
+            })
+            .unwrap();
+        assert!(
+            readback.aggregates.is_empty(),
+            "reopen must not reseed trash"
+        );
+        assert_eq!(
+            reopened
+                .connection()
+                .unwrap()
+                .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0),)
+                .unwrap(),
+            "ok"
+        );
+    }
+
+    #[test]
+    fn c15_acceptance_root_requires_a_unique_scoped_tmp_root() {
+        assert_eq!(
+            validate_c15_acceptance_root(PathBuf::from(
+                "/tmp/nanfeng-ai-desktop-c15-acceptance.fixture/app-home",
+            ))
+            .unwrap(),
+            PathBuf::from("/tmp/nanfeng-ai-desktop-c15-acceptance.fixture/app-home")
+        );
+        assert!(validate_c15_acceptance_root(PathBuf::from("relative-root")).is_err());
+        assert!(validate_c15_acceptance_root(PathBuf::from(
+            "/tmp/nanfeng-ai-desktop-c15-acceptance"
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn c15_fixture_owns_workspace_records_and_does_not_reseed_on_reopen() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("app-data");
+        let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        seed_c15_workspace_acceptance(&store).unwrap();
+
+        let projection = store
+            .workspace_projection(C15_ACCEPTANCE_WORKSPACE_ID)
+            .unwrap();
+        assert_eq!(projection.exchange["projects"][0]["title"], "C15_Project");
+        assert_eq!(
+            projection.exchange["projects"][0]["description"],
+            "C15_local-only_fixture"
+        );
+        assert_eq!(
+            projection.exchange["knowledge"][0]["title"],
+            "C15_Knowledge"
+        );
+        assert_eq!(
+            projection.exchange["knowledge"][0]["body"],
+            "C15_local-only_knowledge_fixture"
+        );
+        assert_eq!(
+            projection.exchange["memory"][0]["body"],
+            "C15_local-only_memory_fixture"
+        );
+        assert_eq!(
+            projection.exchange["conversations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|item| !item["deleted"].as_bool().unwrap_or(false))
+                .count(),
+            0
+        );
+        assert_eq!(
+            projection.exchange["relations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|item| item["status"] == "ACTIVE")
+                .count(),
+            0
+        );
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(root).unwrap();
+        seed_c15_workspace_acceptance(&reopened).unwrap();
+        let readback = reopened
+            .workspace_projection(C15_ACCEPTANCE_WORKSPACE_ID)
+            .unwrap();
+        assert_eq!(readback.exchange["projects"][0]["revision"], 2);
+        assert_eq!(readback.exchange["knowledge"][0]["revision"], 2);
+        assert_eq!(readback.exchange["memory"][0]["revision"], 2);
+        assert_eq!(
+            reopened
+                .connection()
+                .unwrap()
+                .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0),)
+                .unwrap(),
+            "ok"
+        );
+    }
+
+    #[test]
+    fn ordinary_chat_acceptance_ocr_never_reads_the_normal_provider_credential_store() {
+        let api_key = resolve_ocr_api_key_for_run(true, || {
+            panic!("acceptance must not invoke the normal credential loader")
+        })
+        .unwrap();
+        assert!(api_key.is_empty());
+    }
+
+    #[test]
+    fn ui_schema_diagnostic_startup_is_explicit_process_local_and_conflict_safe() {
+        let normal = desktop_startup_mode_from_args(["nanfeng-ai"]).unwrap();
+        assert_eq!(normal, DesktopStartupMode::Normal);
+        assert!(normal.work_plan().runs_automatic_work());
+
+        let diagnostic =
+            desktop_startup_mode_from_args(["nanfeng-ai", UI_SCHEMA_DIAGNOSTIC_ARGUMENT]).unwrap();
+        assert_eq!(diagnostic, DesktopStartupMode::UiSchemaDiagnostic);
+        assert!(!diagnostic.work_plan().runs_automatic_work());
+        assert!(!diagnostic.work_plan().allows_external_access());
+        assert!(!diagnostic.work_plan().recovers_business_state());
+        assert_eq!(diagnostic.label(), "UI_SCHEMA_DIAGNOSTIC_ACCEPTANCE");
+
+        assert!(desktop_startup_mode_from_args([
+            "nanfeng-ai",
+            UI_SCHEMA_DIAGNOSTIC_ARGUMENT,
+            desktop_background_runtime_v1::BACKGROUND_CYCLE_ARGUMENT,
+        ])
+        .is_err());
+
+        // The next parse has no ambient state from the previous diagnostic launch.
+        assert_eq!(
+            desktop_startup_mode_from_args(["nanfeng-ai"]).unwrap(),
+            DesktopStartupMode::Normal
+        );
+    }
+
+    #[test]
+    fn ui_schema_diagnostic_open_migrates_without_recovering_business_state() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("app-data");
+        let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        let connection = store.connection().unwrap();
+        connection.execute_batch(
+            "UPDATE desktop_history_knowledge_schedule_v1 SET last_dispatched_at_ms=4242, updated_at_ms=4343 WHERE id=1;
+             UPDATE desktop_background_runtime_v1 SET desired_enabled=1, installed=1, safe_code='SEEDED', updated_at_ms=4444 WHERE id=1;"
+        ).unwrap();
+        let before: (Option<i64>, Option<i64>, i64, i64, String, i64, i64, i64) = connection.query_row(
+            "SELECT h.last_dispatched_at_ms,h.updated_at_ms,b.desired_enabled,b.installed,b.safe_code,b.updated_at_ms,
+                    (SELECT COUNT(*) FROM desktop_history_knowledge_candidates_v1),
+                    (SELECT COUNT(*) FROM desktop_history_knowledge_checkpoints_v1)
+             FROM desktop_history_knowledge_schedule_v1 h JOIN desktop_background_runtime_v1 b ON b.id=1 WHERE h.id=1",
+            [],
+            |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?,row.get(5)?,row.get(6)?,row.get(7)?)),
+        ).unwrap();
+        drop(connection);
+        drop(store);
+
+        let diagnostic =
+            DesktopWorkspaceStore::open_for_startup(root, DesktopStartupMode::UiSchemaDiagnostic)
+                .unwrap();
+        let after: (Option<i64>, Option<i64>, i64, i64, String, i64, i64, i64) = diagnostic.connection().unwrap().query_row(
+            "SELECT h.last_dispatched_at_ms,h.updated_at_ms,b.desired_enabled,b.installed,b.safe_code,b.updated_at_ms,
+                    (SELECT COUNT(*) FROM desktop_history_knowledge_candidates_v1),
+                    (SELECT COUNT(*) FROM desktop_history_knowledge_checkpoints_v1)
+             FROM desktop_history_knowledge_schedule_v1 h JOIN desktop_background_runtime_v1 b ON b.id=1 WHERE h.id=1",
+            [],
+            |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?,row.get(5)?,row.get(6)?,row.get(7)?)),
+        ).unwrap();
+        assert_eq!(after, before);
     }
 
     #[test]
@@ -15994,8 +20078,8 @@ mod tests {
                 .connection()
                 .unwrap()
                 .query_row(
-                    "SELECT COUNT(*) FROM desktop_conversation_attachments",
-                    [],
+                    "SELECT COUNT(*) FROM desktop_conversation_attachments WHERE workspace_id=?1 AND display_name='unmapped.png'",
+                    [&imported.summary.id],
                     |row| row.get::<_, i64>(0)
                 )
                 .unwrap(),
@@ -16024,6 +20108,171 @@ mod tests {
             .as_bool()
             .unwrap());
         assert!(!reopened.root.join(stored).exists());
+    }
+
+    #[test]
+    fn p6k_official_identity_deduplicates_across_packages_and_user_delete_never_resurrects() {
+        let (directory, store, imported) = imported_store();
+        let first = directory.path().join("fixture-identity-first.zip");
+        let second = directory.path().join("fixture-identity-second.zip");
+        let cumulative = directory.path().join("fixture-identity-cumulative.zip");
+        let conflict = directory.path().join("fixture-identity-conflict.zip");
+        let payload = br#"[{"id":"official-conversation","title":"Official","create_time":1,"update_time":2,"mapping":{"official-user":{"parent":null,"message":{"author":{"role":"user"},"content":{"parts":["fixture"]}}}}}]"#;
+        for path in [&first, &second] {
+            let file = fs::File::create(path).unwrap();
+            let mut writer = ZipWriter::new(file);
+            writer
+                .start_file("conversations.json", SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(payload).unwrap();
+            if path == &second {
+                writer
+                    .start_file("unrelated.json", SimpleFileOptions::default())
+                    .unwrap();
+                writer.write_all(b"{}").unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        {
+            let file = fs::File::create(&conflict).unwrap();
+            let mut writer = ZipWriter::new(file);
+            writer
+                .start_file("conversations.json", SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(br#"[{"id":"official-conversation","title":"Official","create_time":1,"update_time":4,"mapping":{"official-user":{"parent":null,"message":{"author":{"role":"user"},"content":{"parts":["rewritten"]}}},"official-assistant":{"parent":"official-user","message":{"author":{"role":"assistant"},"content":{"parts":["new reply"]},"create_time":3}}}}]"#).unwrap();
+            writer.finish().unwrap();
+        }
+        {
+            let file = fs::File::create(&cumulative).unwrap();
+            let mut writer = ZipWriter::new(file);
+            writer
+                .start_file("conversations.json", SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(br#"[{"id":"official-conversation","title":"Official","create_time":1,"update_time":3,"mapping":{"official-user":{"parent":null,"message":{"author":{"role":"user"},"content":{"parts":["fixture"]}}},"official-assistant":{"parent":"official-user","message":{"author":{"role":"assistant"},"content":{"parts":["new reply"]},"create_time":3}}}}]"#).unwrap();
+            writer.finish().unwrap();
+        }
+
+        let first_task = store
+            .stage_p6k_zip_import_selected(P6kZipImportSelectionArgs {
+                workspace_id: imported.summary.id.clone(),
+                provider: "CHATGPT".into(),
+                selected_path: first.to_string_lossy().into_owned(),
+            })
+            .unwrap();
+        assert_eq!(first_task.imported_count, 1);
+        let conversation_id = first_task.items[0].conversation_id.clone().unwrap();
+
+        let duplicate_task = store
+            .stage_p6k_zip_import_selected(P6kZipImportSelectionArgs {
+                workspace_id: imported.summary.id.clone(),
+                provider: "CHATGPT".into(),
+                selected_path: second.to_string_lossy().into_owned(),
+            })
+            .unwrap();
+        assert_eq!(duplicate_task.imported_count, 0);
+        assert_eq!(duplicate_task.skipped_count, 1);
+        assert_eq!(
+            duplicate_task.items[0].failure.as_deref(),
+            Some("ALREADY_IMPORTED")
+        );
+        assert_eq!(
+            duplicate_task.items[0].conversation_id.as_deref(),
+            Some(conversation_id.as_str())
+        );
+
+        let cumulative_task = store
+            .stage_p6k_zip_import_selected(P6kZipImportSelectionArgs {
+                workspace_id: imported.summary.id.clone(),
+                provider: "CHATGPT".into(),
+                selected_path: cumulative.to_string_lossy().into_owned(),
+            })
+            .unwrap();
+        assert_eq!(cumulative_task.imported_count, 1);
+        let merged = store
+            .workspace_projection(&imported.summary.id)
+            .unwrap()
+            .exchange;
+        assert_eq!(
+            merged["conversations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|value| value["id"] == conversation_id)
+                .unwrap()["messages"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            merged["conversations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|value| value["id"] == conversation_id)
+                .count(),
+            1
+        );
+        let conflict_task = store
+            .stage_p6k_zip_import_selected(P6kZipImportSelectionArgs {
+                workspace_id: imported.summary.id.clone(),
+                provider: "CHATGPT".into(),
+                selected_path: conflict.to_string_lossy().into_owned(),
+            })
+            .unwrap();
+        assert_eq!(conflict_task.imported_count, 0);
+        assert_eq!(conflict_task.failed_count, 1);
+        assert!(conflict_task.items[0]
+            .failure
+            .as_deref()
+            .unwrap()
+            .contains("OFFICIAL_IDENTITY_CONFLICT"));
+        let after_conflict = store
+            .workspace_projection(&imported.summary.id)
+            .unwrap()
+            .exchange;
+        assert!(after_conflict["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|value| value["id"] == conversation_id)
+            .unwrap()["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|message| message["blocks"][0]["text"] == "fixture"));
+
+        store
+            .delete_p6k_zip_import_batch(&cumulative_task.id)
+            .unwrap();
+        let deleted_task = store
+            .stage_p6k_zip_import_selected(P6kZipImportSelectionArgs {
+                workspace_id: imported.summary.id.clone(),
+                provider: "CHATGPT".into(),
+                selected_path: first.to_string_lossy().into_owned(),
+            })
+            .unwrap();
+        assert_eq!(deleted_task.imported_count, 0);
+        assert_eq!(deleted_task.skipped_count, 1);
+        assert_eq!(
+            deleted_task.items[0].failure.as_deref(),
+            Some("USER_DELETED")
+        );
+        let exchange = store
+            .workspace_projection(&imported.summary.id)
+            .unwrap()
+            .exchange;
+        assert_eq!(
+            exchange["conversations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|value| {
+                    value["id"] == conversation_id && !value["deleted"].as_bool().unwrap_or(false)
+                })
+                .count(),
+            0
+        );
     }
 
     #[test]
@@ -16143,6 +20392,38 @@ mod tests {
                 )
                 .unwrap(),
             3
+        );
+        let removed_attachment_id: String = store.connection().unwrap().query_row(
+            "SELECT attachment_id FROM p6k_zip_asset_link_receipts WHERE task_id=?1 AND ordinal=0",
+            [&task.id],
+            |row| row.get(0),
+        ).unwrap();
+        let revision = linked_projection.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|value| value["id"] == conversation_id)
+            .unwrap()["revision"]
+            .as_u64()
+            .unwrap();
+        store
+            .mutate_domain(DomainMutationArgs {
+                intent_id: "intent-remove-p6k-attachment".into(),
+                workspace_id: imported.summary.id.clone(),
+                entity: "conversation".into(),
+                action: "removeAttachment".into(),
+                object_id: Some(conversation_id.clone()),
+                expected_revision: Some(revision),
+                fields: json!({"messageId":user_message,"attachmentId":removed_attachment_id}),
+            })
+            .unwrap();
+        assert_eq!(
+            store.connection().unwrap().query_row(
+                "SELECT state FROM p6k_zip_official_identity_ledger WHERE entity_kind='ATTACHMENT' AND local_object_id=?1",
+                [&removed_attachment_id],
+                |row| row.get::<_, String>(0),
+            ).unwrap(),
+            "USER_DELETED"
         );
         let stored: String = store
             .connection()
@@ -16425,8 +20706,8 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
                 .unwrap(),
-            // Schema 34 adds the macOS background wake-up owner after read watermarks.
-            34
+            // Schema 38 adds the content-free ordinary-send authorization receipt.
+            38
         );
         assert_eq!(
             reopened
@@ -16469,6 +20750,22 @@ mod tests {
             desktop_attachment_kind(b"\0\0\0\x18ftypM4A \0\0\0\0M4A ", Some("mp4")),
             None
         );
+    }
+
+    #[test]
+    fn clipboard_tiff_is_normalized_to_a_private_png_before_attachment_import() {
+        let image = image::DynamicImage::ImageRgba8(
+            image::RgbaImage::from_raw(2, 1, vec![0x12, 0x34, 0x56, 0xff, 0x65, 0x43, 0x21, 0xff])
+                .unwrap(),
+        );
+        let mut encoded = Cursor::new(Vec::new());
+        image.write_to(&mut encoded, ImageFormat::Tiff).unwrap();
+
+        let (normalized, extension) =
+            normalize_desktop_clipboard_raster(encoded.into_inner(), Some("tiff")).unwrap();
+
+        assert_eq!(extension, Some("png"));
+        assert_eq!(desktop_attachment_kind(&normalized, extension), Some(("image/png", ".png")));
     }
 
     #[test]
@@ -16527,7 +20824,7 @@ mod tests {
 
     #[test]
     fn p6f2e_audio_and_text_previews_are_private_bounded_and_owner_checked() {
-        let (_directory, store, imported) = imported_store();
+        let (directory, store, imported) = imported_store();
 
         let audio = b"RIFF\x10\0\0\0WAVEfmt ";
         assert_eq!(
@@ -16594,6 +20891,15 @@ mod tests {
         assert!(preview.truncated);
         assert_eq!(preview.text.len(), MAX_INERT_TEXT_PREVIEW_BYTES - 3);
         assert!(!preview.text.starts_with('\u{feff}'));
+        let exported = directory.path().join("exported-local.md");
+        store
+            .export_attachment_to_selected_path(&DesktopAttachmentExportArgs {
+                workspace_id: imported.summary.id.clone(),
+                attachment_id: "attachment-text".into(),
+                selected_path: exported.to_string_lossy().into_owned(),
+            })
+            .unwrap();
+        assert_eq!(fs::read(&exported).unwrap(), text);
         fs::write(store.root.join("assets").join(&text_hash), b"tampered").unwrap();
         assert!(store
             .text_preview(&DesktopTextPreviewArgs {
@@ -16938,6 +21244,100 @@ mod tests {
     }
 
     #[test]
+    fn imported_workspace_assets_are_immediately_available_to_preview_owners() {
+        let (_directory, store, imported) = imported_store();
+        let preview = store
+            .text_preview(&DesktopTextPreviewArgs {
+                workspace_id: imported.summary.id,
+                attachment_id: "asset-p6a-01".into(),
+            })
+            .unwrap();
+        assert_eq!(preview.display_name, "golden-note.txt");
+        assert_eq!(preview.byte_count, 43);
+        assert!(!preview.truncated);
+    }
+
+    #[test]
+    fn isolated_acceptance_direct_commit_persists_private_assets_before_preview_metadata() {
+        let directory = tempdir().unwrap();
+        let store = DesktopWorkspaceStore::open(directory.path().join("acceptance-root")).unwrap();
+        let preflight = preflight_package(golden()).unwrap();
+        store.persist_preflight_assets(&preflight).unwrap();
+        let mut connection = store.connection().unwrap();
+        let transaction = connection.transaction().unwrap();
+        store
+            .commit_import(
+                &transaction,
+                "workspace-c08-acceptance",
+                "C08 Acceptance",
+                &preflight,
+                false,
+            )
+            .unwrap();
+        transaction.commit().unwrap();
+        let preview = store
+            .text_preview(&DesktopTextPreviewArgs {
+                workspace_id: "workspace-c08-acceptance".into(),
+                attachment_id: "asset-p6a-01".into(),
+            })
+            .unwrap();
+        assert_eq!(preview.text.as_bytes().len(), 43);
+        assert_eq!(preview.mime_type, "text/plain");
+    }
+
+    #[test]
+    fn workspace_preflight_rejects_asset_metadata_that_lies_about_real_bytes() {
+        let package = preflight_package(golden()).unwrap();
+        let mut exchange = package.exchange;
+        let asset = exchange["conversations"][0]["messages"][1]["blocks"][0]["asset"]
+            .as_object_mut()
+            .unwrap();
+        asset.insert("byteCount".into(), json!(42));
+        refresh_exchange_hash(&mut exchange).unwrap();
+        let bytes = package_exchange(&exchange, &package.assets).unwrap();
+        assert!(preflight_package(bytes)
+            .err()
+            .unwrap()
+            .contains("真实大小不符"));
+    }
+
+    #[test]
+    fn office_system_open_uses_a_verified_extension_bearing_private_reference() {
+        let (_directory, store, imported) = imported_store();
+        let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+        writer
+            .start_file("[Content_Types].xml", SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(b"<Types/>").unwrap();
+        writer
+            .start_file("word/document.xml", SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(b"<document>local</document>").unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        let digest = sha256(&bytes);
+        fs::write(store.root.join("assets").join(&digest), &bytes).unwrap();
+        store.connection().unwrap().execute(
+            "INSERT INTO desktop_conversation_attachments(workspace_id,attachment_id,mime_type,display_name,byte_count,sha256,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            params![imported.summary.id, "attachment-office", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "local.docx", bytes.len() as u64, digest, local_now()],
+        ).unwrap();
+        let presentation = store
+            .prepare_attachment_for_system_open(&DesktopSystemOpenAttachmentArgs {
+                workspace_id: imported.summary.id,
+                attachment_id: "attachment-office".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            presentation.extension().and_then(|value| value.to_str()),
+            Some("docx")
+        );
+        assert!(fs::symlink_metadata(&presentation)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read(presentation).unwrap(), bytes);
+    }
+
+    #[test]
     fn p6g_owner_reopens_rejects_stale_revision_and_fails_closed_on_catalog_corruption() {
         let (directory, store, imported) = imported_store();
         let conversation = store.mutate_domain(DomainMutationArgs {
@@ -17010,6 +21410,29 @@ mod tests {
                 .revision,
             1
         );
+        assert_eq!(
+            store
+                .set_conversation_preferences(DesktopConversationPreferencesArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: conversation.object_id.clone(),
+                    expected_revision: 1,
+                    tone_override: Some("efficient".into()),
+                    web_search_override: Some(true),
+                })
+                .unwrap()
+                .revision,
+            2
+        );
+        assert!(store
+            .set_conversation_preferences(DesktopConversationPreferencesArgs {
+                workspace_id: imported.summary.id.clone(),
+                conversation_id: conversation.object_id.clone(),
+                expected_revision: 1,
+                tone_override: Some("default".into()),
+                web_search_override: None,
+            })
+            .unwrap_err()
+            .contains("五个当前可见风格"));
         let decision = store
             .p6g_evaluate(P6gEvaluateArgs {
                 workspace_id: imported.summary.id.clone(),
@@ -17038,15 +21461,20 @@ mod tests {
         );
         drop(store);
         let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let reopened_override = reopened
+            .p6g_selection(&imported.summary.id, &conversation.object_id)
+            .unwrap()
+            .conversation_override;
         assert_eq!(
-            reopened
-                .p6g_selection(&imported.summary.id, &conversation.object_id)
-                .unwrap()
-                .conversation_override
-                .model_id
-                .as_deref(),
+            reopened_override.model_id.as_deref(),
             Some("anthropic.fixture")
         );
+        assert_eq!(
+            reopened_override.tone_override.as_deref(),
+            Some("efficient")
+        );
+        assert_eq!(reopened_override.web_search_override, Some(true));
+        assert_eq!(reopened_override.revision, 2);
         reopened
             .connection()
             .unwrap()
@@ -17507,6 +21935,30 @@ mod tests {
     }
 
     #[test]
+    fn clipboard_attachment_import_uses_the_existing_private_owner_without_accepting_paths() {
+        let (directory, store, imported) = imported_store();
+        let bytes = b"pasted plain text attachment";
+        let attachment = store
+            .import_conversation_clipboard_attachment(DesktopClipboardAttachmentImportArgs {
+                workspace_id: imported.summary.id.clone(),
+                display_name: "pasted.txt".into(),
+                bytes_base64: BASE64.encode(bytes),
+            })
+            .unwrap();
+        assert_eq!(attachment.display_name, "pasted.txt");
+        assert_eq!(attachment.mime_type, "text/plain");
+        assert!(directory.path().join("app-data/assets").join(&attachment.sha256).exists());
+        assert!(store
+            .import_conversation_clipboard_attachment(DesktopClipboardAttachmentImportArgs {
+                workspace_id: imported.summary.id,
+                display_name: "/private/source.txt".into(),
+                bytes_base64: BASE64.encode(b"different clipboard bytes"),
+            })
+            .unwrap_err()
+            .contains("显示名无效"));
+    }
+
+    #[test]
     fn temporary_conversation_is_isolated_recoverable_and_clear_removes_its_private_asset() {
         let directory = tempdir().unwrap();
         let root = directory.path().join("app-data");
@@ -17578,6 +22030,42 @@ mod tests {
                 .unwrap(),
             0
         );
+    }
+
+    #[test]
+    fn camera_capture_accepts_only_window_png_and_reuses_private_attachment_owners() {
+        let (directory, store, imported) = imported_store();
+        let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+        let ordinary = store
+            .import_camera_capture(DesktopCameraCaptureImportArgs {
+                workspace_id: imported.summary.id.clone(),
+                data_url: png.into(),
+            })
+            .unwrap();
+        assert_eq!(ordinary.mime_type, "image/png");
+        assert!(ordinary.display_name.starts_with("相机照片-"));
+        assert!(ordinary.display_name.ends_with(".png"));
+        assert_eq!(
+            fs::read(directory.path().join("app-data/assets").join(&ordinary.sha256)).unwrap(),
+            BASE64.decode(png.split_once(',').unwrap().1).unwrap()
+        );
+
+        let temporary = store.enter_or_restore_temporary(None).unwrap();
+        let recovered = store
+            .import_temporary_camera_capture(DesktopTemporaryCameraCaptureImportArgs {
+                temporary_id: temporary.temporary_id,
+                data_url: png.into(),
+            })
+            .unwrap();
+        assert_eq!(recovered.draft_attachment_ids.len(), 1);
+        assert_eq!(recovered.attachments[0].sha256, ordinary.sha256);
+        assert!(store
+            .import_camera_capture(DesktopCameraCaptureImportArgs {
+                workspace_id: imported.summary.id,
+                data_url: "data:image/jpeg;base64,AA==".into(),
+            })
+            .is_err());
+        assert!(decode_camera_capture("data:image/png;base64,dGV4dA==").is_err());
     }
 
     #[test]
@@ -17708,7 +22196,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            34
+            38
         );
     }
 
@@ -17832,7 +22320,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            34
+            38
         );
         assert!(reopened
             .retry_nanfeng_knowledge_import_task(&task.id)
@@ -18128,7 +22616,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u64>(0))
                 .unwrap(),
-            34
+            38
         );
         assert_eq!(
             fs::read_dir(directory.path())
@@ -18214,7 +22702,7 @@ mod tests {
         conversation["importedFrom"] = Value::String("CHATGPT_EXPORT".into());
         conversation["messages"].as_array_mut().unwrap().extend([
             json!({"id":"message-visible-leaf","parentId":root_id,"ordinal":1,"role":"assistant","delivery":"COMPLETE","revision":1,"createdAt":"2026-08-20T01:00:00Z","blocks":[{"kind":"TEXT","ordinal":0,"text":"visible leaf"}]}),
-            json!({"id":"message-hidden-leaf","parentId":root_id,"ordinal":2,"role":"assistant","delivery":"COMPLETE","revision":1,"createdAt":"2026-08-21T02:00:00Z","blocks":[{"kind":"TEXT","ordinal":0,"text":"hidden branch searchable body"},{"kind":"ASSET_REF","ordinal":1,"asset":{"id":attachment.id,"mimeType":attachment.mime_type,"displayName":attachment.display_name,"byteCount":attachment.byte_count,"sha256":attachment.sha256}}]}),
+            json!({"id":"message-hidden-leaf","parentId":root_id,"ordinal":2,"role":"assistant","delivery":"COMPLETE","revision":1,"createdAt":"2026-08-21T02:00:00Z","blocks":[{"kind":"TEXT","ordinal":0,"text":"hidden branch searchable body"},{"kind":"MARKDOWN","ordinal":1,"text":"markdown searchable heading"},{"kind":"ASSET_REF","ordinal":2,"asset":{"id":attachment.id,"mimeType":attachment.mime_type,"displayName":attachment.display_name,"byteCount":attachment.byte_count,"sha256":attachment.sha256}}]}),
         ]);
         conversation["currentLeafId"] = Value::String("message-visible-leaf".into());
         let hash = refresh_exchange_hash(&mut exchange).unwrap();
@@ -18263,8 +22751,26 @@ mod tests {
         );
         assert_eq!(
             hidden_hit.byte_count,
-            "hidden branch searchable body".as_bytes().len() as u64
+            "hidden branch searchable body\nmarkdown searchable heading"
+                .as_bytes()
+                .len() as u64
         );
+        assert!(store
+            .query_local_index(
+                &DesktopLocalSearchQueryArgs {
+                    query: "markdown searchable heading".into(),
+                    category: "text".into(),
+                    sort_mode: "default".into(),
+                    file_type: "all".into(),
+                    record_history: false,
+                    history_workspace_id: None,
+                },
+                None,
+            )
+            .unwrap()
+            .hits
+            .iter()
+            .any(|hit| hit.message_id.as_deref() == Some("message-hidden-leaf")));
 
         let files = store
             .query_local_index(
@@ -18532,9 +23038,14 @@ mod tests {
                 DesktopOrdinaryChatSubmitArgs {
                     workspace_id: imported.summary.id.clone(),
                     conversation_id: Some(conversation_id.clone()),
+                    project_id: None,
                     expected_revision: conversation["revision"].as_u64(),
                     text: "same text".into(),
                     attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
                 },
                 Some("http://127.0.0.1:1/chat/completions"),
             )
@@ -18552,9 +23063,14 @@ mod tests {
                 DesktopOrdinaryChatSubmitArgs {
                     workspace_id: imported.summary.id.clone(),
                     conversation_id: Some(conversation_id.clone()),
+                    project_id: None,
                     expected_revision: revision,
                     text: "same text".into(),
                     attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
                 },
                 Some("http://127.0.0.1:1/chat/completions"),
             )
@@ -18657,9 +23173,14 @@ mod tests {
                 DesktopOrdinaryChatSubmitArgs {
                     workspace_id: imported.summary.id.clone(),
                     conversation_id: Some(conversation["id"].as_str().unwrap().into()),
+                    project_id: None,
                     expected_revision: conversation["revision"].as_u64(),
                     text: "请结合协议知识和该数据给结论".into(),
                     attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
                 },
                 Some("http://127.0.0.1:1/chat/completions"),
             )
@@ -18744,35 +23265,249 @@ mod tests {
     }
 
     #[test]
+    fn enabled_web_search_matches_android_for_ordinary_wording_and_projected_attachments() {
+        assert_eq!(
+            ordinary_chat_web_search_route("OPENROUTER", "openai/gpt-5.6-terra", true, false),
+            "OPENROUTER_SERVER_TOOL"
+        );
+        assert_eq!(
+            ordinary_chat_web_search_route("QWEN", "qwen3.7-plus", true, false),
+            "QWEN_RESPONSES"
+        );
+        assert_eq!(
+            ordinary_chat_web_search_route("QWEN", "qwen3.8-max", true, false),
+            "QWEN_CHAT_COMPLETIONS"
+        );
+        assert_eq!(
+            ordinary_chat_web_search_route("DEEPSEEK", "deepseek-v4-pro", true, true),
+            "DEEPSEEK_RESPONSES"
+        );
+        assert_eq!(
+            ordinary_chat_web_search_route("ZHIPU", "glm-5.3", true, true),
+            "ZHIPU_CHAT_COMPLETIONS"
+        );
+        assert_eq!(
+            ordinary_chat_web_search_route("OPENROUTER", "openai/gpt-5.6-terra", false, false),
+            "NONE"
+        );
+    }
+
+    #[test]
+    fn ordinary_chat_and_retry_reread_conversation_style_and_web_search_preferences() {
+        let (directory, store, imported) = imported_store();
+        store
+            .connection()
+            .unwrap()
+            .execute(
+                "UPDATE desktop_app_settings SET tone='friendly',web_search_enabled=0 WHERE id=1",
+                [],
+            )
+            .unwrap();
+        let conversation = imported.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap();
+        let conversation_id = conversation["id"].as_str().unwrap().to_owned();
+        store
+            .set_conversation_preferences(DesktopConversationPreferencesArgs {
+                workspace_id: imported.summary.id.clone(),
+                conversation_id: conversation_id.clone(),
+                expected_revision: 0,
+                tone_override: Some("professional".into()),
+                web_search_override: Some(true),
+            })
+            .unwrap();
+        let prepared = store
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: Some(conversation_id.clone()),
+                    project_id: None,
+                    expected_revision: conversation["revision"].as_u64(),
+                    text: "请查最新信息".into(),
+                    attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        assert!(prepared.messages.to_string().contains("专业可靠"));
+        assert_eq!(prepared.web_search_route, "OPENROUTER_SERVER_TOOL");
+        store
+            .update_ordinary_chat_message(
+                &prepared.projection.attempt_id,
+                "",
+                "FAILED",
+                None,
+                None,
+                Some("NETWORK"),
+            )
+            .unwrap();
+        store
+            .set_conversation_preferences(DesktopConversationPreferencesArgs {
+                workspace_id: imported.summary.id.clone(),
+                conversation_id: conversation_id.clone(),
+                expected_revision: 1,
+                tone_override: Some("efficient".into()),
+                web_search_override: Some(false),
+            })
+            .unwrap();
+
+        let retried = store
+            .prepare_ordinary_chat_retry(
+                &prepared.projection.attempt_id,
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        assert_eq!(retried.idempotency_key, prepared.idempotency_key);
+        assert!(retried.messages.to_string().contains("高效务实"));
+        assert_eq!(retried.web_search_route, "NONE");
+        let source_id: String = store.connection().unwrap().query_row(
+            "SELECT source_id FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1 AND source_kind='对话风格'",
+            [&prepared.projection.attempt_id],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(source_id, "tone:efficient");
+        drop(store);
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let preferences = reopened
+            .p6g_selection(&imported.summary.id, &conversation_id)
+            .unwrap()
+            .conversation_override;
+        assert_eq!(preferences.tone_override.as_deref(), Some("efficient"));
+        assert_eq!(preferences.web_search_override, Some(false));
+    }
+
+    #[test]
+    fn ordinary_chat_without_an_enabled_provider_still_prepares_a_persisted_failed_reply_owner() {
+        let (_directory, store, imported) = imported_store();
+        let conversation = imported.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap();
+        let prepared = store
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: Some(conversation["id"].as_str().unwrap().into()),
+                    project_id: None,
+                    expected_revision: conversation["revision"].as_u64(),
+                    text: "查看最新信息".into(),
+                    attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
+                },
+                None,
+            )
+            .unwrap();
+        assert_eq!(prepared.provider_id, "UNAVAILABLE");
+        assert_eq!(
+            prepared.projection.model_display_name.as_deref(),
+            Some("未启用聊天模型")
+        );
+        assert!(prepared.endpoint.is_empty());
+        let failed = store
+            .update_ordinary_chat_message(
+                &prepared.projection.attempt_id,
+                "",
+                "FAILED",
+                None,
+                None,
+                Some("PROVIDER_NOT_ENABLED"),
+            )
+            .unwrap();
+        assert_eq!(failed.state, "FAILED");
+        let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
+        let workspace = reopened.workspace_projection(&imported.summary.id).unwrap();
+        let assistant = workspace.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == prepared.projection.conversation_id)
+            .unwrap()["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == prepared.projection.assistant_message_id)
+            .unwrap();
+        assert_eq!(assistant["delivery"], "FAILED");
+        assert_eq!(assistant["safeErrorCode"], "PROVIDER_NOT_ENABLED");
+        let retried = reopened
+            .prepare_ordinary_chat_retry(&prepared.projection.attempt_id, None)
+            .unwrap();
+        assert_eq!(retried.provider_id, "UNAVAILABLE");
+        assert_eq!(
+            retried.preflight_failure_code.as_deref(),
+            Some("PROVIDER_NOT_ENABLED")
+        );
+        assert!(retried.endpoint.is_empty());
+    }
+
+    #[test]
     fn ordinary_chat_first_reply_uses_provider_independent_nickname_fallback() {
         let (_directory, store, imported) = imported_store();
-        store.connection().unwrap().execute(
-            "UPDATE desktop_app_settings SET memory_enabled=1,nickname='南烛枫' WHERE id=1",
-            [],
-        ).unwrap();
-        let prepared = store.prepare_ordinary_chat(
-            DesktopOrdinaryChatSubmitArgs {
-                workspace_id: imported.summary.id.clone(),
-                conversation_id: None,
-                expected_revision: None,
-                text: "给我一个结论".into(),
-                attachment_ids: vec![],
-            },
-            Some("http://127.0.0.1:1/chat/completions"),
-        ).unwrap();
+        store
+            .connection()
+            .unwrap()
+            .execute(
+                "UPDATE desktop_app_settings SET memory_enabled=1,nickname='南烛枫' WHERE id=1",
+                [],
+            )
+            .unwrap();
+        let prepared = store
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: None,
+                    project_id: None,
+                    expected_revision: None,
+                    text: "给我一个结论".into(),
+                    attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
         let completed = desktop_ordinary_chat_v1::Completed {
-            text: "结论。".into(), reasoning: None,
+            text: "结论。".into(),
+            reasoning: None,
             usage: desktop_ordinary_chat_v1::Usage::default(),
-            reported_cost_micros: None, actual_model_id: Some("fixture-actual".into()), elapsed_ms: 1,
+            reported_cost_micros: None,
+            actual_model_id: Some("fixture-actual".into()),
+            elapsed_ms: 1,
         };
-        store.update_ordinary_chat_message(
-            &prepared.projection.attempt_id, &completed.text, "COMPLETE", None, Some(&completed), None,
-        ).unwrap();
+        store
+            .update_ordinary_chat_message(
+                &prepared.projection.attempt_id,
+                &completed.text,
+                "COMPLETE",
+                None,
+                Some(&completed),
+                None,
+            )
+            .unwrap();
         let workspace = store.workspace_projection(&imported.summary.id).unwrap();
-        let text = workspace.exchange["conversations"].as_array().unwrap().iter()
+        let text = workspace.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
             .flat_map(|conversation| conversation["messages"].as_array().unwrap())
-            .find(|message| message["id"].as_str() == Some(prepared.projection.assistant_message_id.as_str()))
-            .unwrap()["blocks"][0]["text"].as_str().unwrap();
+            .find(|message| {
+                message["id"].as_str() == Some(prepared.projection.assistant_message_id.as_str())
+            })
+            .unwrap()["blocks"][0]["text"]
+            .as_str()
+            .unwrap();
         assert_eq!(text, "南烛枫，结论。");
     }
 
@@ -18798,9 +23533,14 @@ mod tests {
                 DesktopOrdinaryChatSubmitArgs {
                     workspace_id: imported.summary.id.clone(),
                     conversation_id: Some(conversation_id),
+                    project_id: None,
                     expected_revision: conversation["revision"].as_u64(),
                     text: "read attachment".into(),
                     attachment_ids: vec![attachment.id.clone()],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
                 },
                 Some("http://127.0.0.1:1/chat/completions"),
             )
@@ -18841,6 +23581,7 @@ mod tests {
                     .workspace_projection(&imported.summary.id)
                     .unwrap()
                     .exchange,
+                &imported.summary.id,
                 &retry.projection.conversation_id,
                 &retry.projection.assistant_message_id,
                 &retry.provider_id
@@ -18856,9 +23597,14 @@ mod tests {
                 DesktopOrdinaryChatSubmitArgs {
                     workspace_id: imported.summary.id.clone(),
                     conversation_id: None,
+                    project_id: None,
                     expected_revision: None,
                     text: "new ordinary conversation".into(),
                     attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
                 },
                 Some("http://127.0.0.1:1/chat/completions"),
             )
@@ -18886,6 +23632,112 @@ mod tests {
     }
 
     #[test]
+    fn c15_project_work_chat_commits_project_owner_with_the_first_message() {
+        let (_directory, store, imported) = imported_store();
+        let project_id = imported.exchange["projects"]
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let prepared = store
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: None,
+                    project_id: Some(project_id.clone()),
+                    expected_revision: None,
+                    text: "C15 project first message".into(),
+                    attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        let projection = store.workspace_projection(&imported.summary.id).unwrap();
+        let conversation = projection.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == prepared.projection.conversation_id)
+            .unwrap();
+        assert_eq!(conversation["projectId"], project_id);
+    }
+
+    #[test]
+    fn new_conversation_model_choice_is_committed_with_the_first_message() {
+        let (_directory, store, imported) = imported_store();
+        let prepared = store
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: None,
+                    project_id: None,
+                    expected_revision: None,
+                    text: "new conversation with an exact model".into(),
+                    attachment_ids: vec![],
+                    model_id: Some("GLM_5_3".into()),
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        let stored: (u64, String) = store.connection().unwrap().query_row(
+            "SELECT revision,model_id FROM p6g_conversation_override WHERE workspace_id=?1 AND conversation_id=?2",
+            params![imported.summary.id, prepared.projection.conversation_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap();
+        assert_eq!(stored, (1, "GLM_5_3".into()));
+    }
+
+    #[test]
+    fn new_conversation_preferences_are_committed_before_the_first_request_is_built() {
+        let (directory, store, imported) = imported_store();
+        let prepared = store
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: None,
+                    project_id: None,
+                    expected_revision: None,
+                    text: "请查最新信息".into(),
+                    attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: Some("professional".into()),
+                    web_search_override: Some(true),
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        assert!(prepared.messages.to_string().contains("专业可靠"));
+        assert_eq!(prepared.web_search_route, "OPENROUTER_SERVER_TOOL");
+        let conversation_id = prepared.projection.conversation_id.clone();
+        let stored = store
+            .p6g_selection(&imported.summary.id, &conversation_id)
+            .unwrap()
+            .conversation_override;
+        assert_eq!(stored.revision, 1);
+        assert_eq!(stored.tone_override.as_deref(), Some("professional"));
+        assert_eq!(stored.web_search_override, Some(true));
+        drop(store);
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let reopened_preferences = reopened
+            .p6g_selection(&imported.summary.id, &conversation_id)
+            .unwrap()
+            .conversation_override;
+        assert_eq!(reopened_preferences.tone_override.as_deref(), Some("professional"));
+        assert_eq!(reopened_preferences.web_search_override, Some(true));
+    }
+
+    #[test]
     fn compare_prepares_two_real_ordinary_branches_with_shared_context_attachment_and_independent_receipts(
     ) {
         let (directory, store, imported) = imported_store();
@@ -18895,25 +23747,62 @@ mod tests {
         ).unwrap();
         let source = directory.path().join("compare-context.txt");
         fs::write(&source, b"compare attachment body").unwrap();
-        let attachment = store.import_conversation_attachment(DesktopAttachmentImportArgs {
-            workspace_id: imported.summary.id.clone(),
-            selected_path: source.to_string_lossy().into_owned(),
-        }).unwrap();
-        let conversation = imported.exchange["conversations"].as_array().unwrap().first().unwrap();
-        let prepared = store.prepare_compare(DesktopCompareSubmitArgs {
-            workspace_id: imported.summary.id.clone(),
-            conversation_id: Some(conversation["id"].as_str().unwrap().into()),
-            expected_revision: conversation["revision"].as_u64(),
-            text: "请结合协议知识和该数据做对比".into(),
-            attachment_ids: vec![attachment.id.clone()],
-        }, Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let attachment = store
+            .import_conversation_attachment(DesktopAttachmentImportArgs {
+                workspace_id: imported.summary.id.clone(),
+                selected_path: source.to_string_lossy().into_owned(),
+            })
+            .unwrap();
+        let conversation = imported.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap();
+        let prepared = store
+            .prepare_compare(
+                DesktopCompareSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: Some(conversation["id"].as_str().unwrap().into()),
+                    expected_revision: conversation["revision"].as_u64(),
+                    text: "请结合协议知识和该数据做对比".into(),
+                    attachment_ids: vec![attachment.id.clone()],
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
         assert_eq!(prepared.branches.len(), 2);
         assert_eq!(prepared.projection.state, "PENDING");
-        assert_eq!(prepared.projection.branches.iter().map(|branch| branch.compare_logical_model.as_deref().unwrap()).collect::<Vec<_>>(), ["CHATGPT", "CLAUDE"]);
-        assert_eq!(prepared.projection.branches.iter().map(|branch| branch.requested_model_id.as_deref().unwrap()).collect::<Vec<_>>(), ["openai/gpt-5.6-terra", "anthropic/claude-sonnet-5"]);
-        assert_ne!(prepared.branches[0].projection.attempt_id, prepared.branches[1].projection.attempt_id);
-        assert_ne!(prepared.branches[0].projection.assistant_message_id, prepared.branches[1].projection.assistant_message_id);
-        assert_eq!(prepared.branches[0].projection.user_message_id, prepared.branches[1].projection.user_message_id);
+        assert_eq!(
+            prepared
+                .projection
+                .branches
+                .iter()
+                .map(|branch| branch.compare_logical_model.as_deref().unwrap())
+                .collect::<Vec<_>>(),
+            ["CHATGPT", "CLAUDE"]
+        );
+        assert_eq!(
+            prepared
+                .projection
+                .branches
+                .iter()
+                .map(|branch| branch.requested_model_id.as_deref().unwrap())
+                .collect::<Vec<_>>(),
+            ["openai/gpt-5.6-terra", "anthropic/claude-sonnet-5"]
+        );
+        assert_ne!(
+            prepared.branches[0].projection.attempt_id,
+            prepared.branches[1].projection.attempt_id
+        );
+        assert_ne!(
+            prepared.branches[0].projection.assistant_message_id,
+            prepared.branches[1].projection.assistant_message_id
+        );
+        assert_eq!(
+            prepared.branches[0].projection.user_message_id,
+            prepared.branches[1].projection.user_message_id
+        );
         for branch in &prepared.branches {
             let request = branch.messages.to_string();
             assert!(request.contains("compare attachment body"));
@@ -18921,95 +23810,279 @@ mod tests {
             assert!(request.contains("资料库"));
             assert!(request.contains("Memory"));
         }
-        let exchange = store.workspace_projection(&imported.summary.id).unwrap().exchange;
-        let branch_messages = exchange["conversations"].as_array().unwrap().iter()
-            .find(|item| item["id"] == prepared.projection.conversation_id).unwrap()["messages"].as_array().unwrap()
-            .iter().filter(|message| message["compareExecutionId"] == prepared.projection.execution_id).collect::<Vec<_>>();
+        let exchange = store
+            .workspace_projection(&imported.summary.id)
+            .unwrap()
+            .exchange;
+        let branch_messages = exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == prepared.projection.conversation_id)
+            .unwrap()["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|message| message["compareExecutionId"] == prepared.projection.execution_id)
+            .collect::<Vec<_>>();
         assert_eq!(branch_messages.len(), 2);
-        assert!(branch_messages.iter().all(|message| message["source"] == "PROVIDER"));
+        assert!(branch_messages
+            .iter()
+            .all(|message| message["source"] == "PROVIDER"));
 
         let completed = desktop_ordinary_chat_v1::Completed {
-            text: "chatgpt answer".into(), reasoning: None,
-            usage: desktop_ordinary_chat_v1::Usage { input_tokens: Some(11), output_tokens: Some(7), cached_input_tokens: Some(2), reasoning_tokens: None },
-            reported_cost_micros: Some(9), actual_model_id: Some("openai/gpt-5.6-terra:actual".into()), elapsed_ms: 14,
+            text: "chatgpt answer".into(),
+            reasoning: None,
+            usage: desktop_ordinary_chat_v1::Usage {
+                input_tokens: Some(11),
+                output_tokens: Some(7),
+                cached_input_tokens: Some(2),
+                reasoning_tokens: None,
+            },
+            reported_cost_micros: Some(9),
+            actual_model_id: Some("openai/gpt-5.6-terra:actual".into()),
+            elapsed_ms: 14,
         };
-        store.update_ordinary_chat_message(&prepared.branches[0].projection.attempt_id, &completed.text, "COMPLETE", None, Some(&completed), None).unwrap();
-        store.complete_ordinary_chat_accounting(&prepared.branches[0].projection.attempt_id, &completed).unwrap();
-        store.update_ordinary_chat_message(&prepared.branches[1].projection.attempt_id, "", "FAILED", None, None, Some("RATE_LIMIT")).unwrap();
-        let mixed = store.refresh_compare_execution_state(&prepared.projection.execution_id).unwrap();
+        store
+            .update_ordinary_chat_message(
+                &prepared.branches[0].projection.attempt_id,
+                &completed.text,
+                "COMPLETE",
+                None,
+                Some(&completed),
+                None,
+            )
+            .unwrap();
+        store
+            .complete_ordinary_chat_accounting(
+                &prepared.branches[0].projection.attempt_id,
+                &completed,
+            )
+            .unwrap();
+        store
+            .update_ordinary_chat_message(
+                &prepared.branches[1].projection.attempt_id,
+                "",
+                "FAILED",
+                None,
+                None,
+                Some("RATE_LIMIT"),
+            )
+            .unwrap();
+        let mixed = store
+            .refresh_compare_execution_state(&prepared.projection.execution_id)
+            .unwrap();
         assert_eq!(mixed.state, "COMPLETED_WITH_FAILURE");
         assert_eq!(mixed.branches[0].charge_micros, Some(9));
-        assert_eq!(mixed.branches[0].actual_model_id.as_deref(), Some("openai/gpt-5.6-terra:actual"));
-        assert_eq!(mixed.branches[1].safe_error_code.as_deref(), Some("RATE_LIMIT"));
-        let retry = store.prepare_ordinary_chat_retry(&prepared.branches[1].projection.attempt_id, Some("http://127.0.0.1:1/chat/completions")).unwrap();
-        assert_eq!(retry.projection.compare_execution_id.as_deref(), Some(prepared.projection.execution_id.as_str()));
-        assert_eq!(retry.projection.compare_logical_model.as_deref(), Some("CLAUDE"));
+        assert_eq!(
+            mixed.branches[0].actual_model_id.as_deref(),
+            Some("openai/gpt-5.6-terra:actual")
+        );
+        assert_eq!(
+            mixed.branches[1].safe_error_code.as_deref(),
+            Some("RATE_LIMIT")
+        );
+        let retry = store
+            .prepare_ordinary_chat_retry(
+                &prepared.branches[1].projection.attempt_id,
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        assert_eq!(
+            retry.projection.compare_execution_id.as_deref(),
+            Some(prepared.projection.execution_id.as_str())
+        );
+        assert_eq!(
+            retry.projection.compare_logical_model.as_deref(),
+            Some("CLAUDE")
+        );
         assert_eq!(retry.projection.retry_count, 1);
 
-        let columns = store.connection().unwrap().prepare("SELECT name FROM pragma_table_info('desktop_compare_executions') ORDER BY cid").unwrap()
-            .query_map([], |row| row.get::<_, String>(0)).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
-        assert_eq!(columns, ["execution_id","workspace_id","conversation_id","user_message_id","chatgpt_attempt_id","claude_attempt_id","state","created_at_ms","updated_at_ms","terminal_at_ms"]);
-        assert!(columns.iter().all(|column| !matches!(column.as_str(), "text" | "prompt" | "response" | "credential" | "attachment")));
+        let columns = store
+            .connection()
+            .unwrap()
+            .prepare(
+                "SELECT name FROM pragma_table_info('desktop_compare_executions') ORDER BY cid",
+            )
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            columns,
+            [
+                "execution_id",
+                "workspace_id",
+                "conversation_id",
+                "user_message_id",
+                "chatgpt_attempt_id",
+                "claude_attempt_id",
+                "state",
+                "created_at_ms",
+                "updated_at_ms",
+                "terminal_at_ms"
+            ]
+        );
+        assert!(columns.iter().all(|column| !matches!(
+            column.as_str(),
+            "text" | "prompt" | "response" | "credential" | "attachment"
+        )));
     }
 
     #[test]
     fn compare_same_text_is_a_new_execution_and_restart_marks_both_interrupted_branches_unknown() {
         let (_directory, store, imported) = imported_store();
-        let conversation = imported.exchange["conversations"].as_array().unwrap().first().unwrap();
-        let first = store.prepare_compare(DesktopCompareSubmitArgs {
-            workspace_id: imported.summary.id.clone(), conversation_id: Some(conversation["id"].as_str().unwrap().into()),
-            expected_revision: conversation["revision"].as_u64(), text: "repeat compare".into(), attachment_ids: vec![],
-        }, Some("http://127.0.0.1:1/chat/completions")).unwrap();
-        store.update_ordinary_chat_message(&first.branches[0].projection.attempt_id, "durable compare partial", "PARTIAL", None, None, None).unwrap();
+        let conversation = imported.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap();
+        let first = store
+            .prepare_compare(
+                DesktopCompareSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: Some(conversation["id"].as_str().unwrap().into()),
+                    expected_revision: conversation["revision"].as_u64(),
+                    text: "repeat compare".into(),
+                    attachment_ids: vec![],
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        store
+            .update_ordinary_chat_message(
+                &first.branches[0].projection.attempt_id,
+                "durable compare partial",
+                "PARTIAL",
+                None,
+                None,
+                None,
+            )
+            .unwrap();
         let root = store.root.clone();
         drop(store);
         let reopened = DesktopWorkspaceStore::open(root).unwrap();
-        let recovered = reopened.compare_execution_projection(&first.projection.execution_id).unwrap();
+        let recovered = reopened
+            .compare_execution_projection(&first.projection.execution_id)
+            .unwrap();
         assert_eq!(recovered.state, "UNKNOWN");
-        assert!(recovered.branches.iter().all(|branch| branch.state == "UNKNOWN" && branch.safe_error_code.as_deref() == Some("PROCESS_INTERRUPTED")));
-        let exchange = reopened.workspace_projection(&imported.summary.id).unwrap().exchange;
-        assert!(exchange["conversations"].as_array().unwrap().iter().flat_map(|item| item["messages"].as_array().unwrap())
-            .any(|message| ordinary_chat_message_text(message) == "durable compare partial" && message["delivery"] == "UNKNOWN"));
-        let conversation = exchange["conversations"].as_array().unwrap().iter().find(|item| item["id"] == recovered.conversation_id).unwrap();
-        let second = reopened.prepare_compare(DesktopCompareSubmitArgs {
-            workspace_id: imported.summary.id.clone(), conversation_id: Some(recovered.conversation_id.clone()),
-            expected_revision: conversation["revision"].as_u64(), text: "repeat compare".into(), attachment_ids: vec![],
-        }, Some("http://127.0.0.1:1/chat/completions")).unwrap();
-        assert_ne!(first.projection.execution_id, second.projection.execution_id);
-        assert_ne!(first.projection.user_message_id, second.projection.user_message_id);
-        assert!(first.projection.branches.iter().zip(second.projection.branches.iter()).all(|(left, right)| left.attempt_id != right.attempt_id));
+        assert!(recovered
+            .branches
+            .iter()
+            .all(|branch| branch.state == "UNKNOWN"
+                && branch.safe_error_code.as_deref() == Some("PROCESS_INTERRUPTED")));
+        let exchange = reopened
+            .workspace_projection(&imported.summary.id)
+            .unwrap()
+            .exchange;
+        assert!(exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|item| item["messages"].as_array().unwrap())
+            .any(
+                |message| ordinary_chat_message_text(message) == "durable compare partial"
+                    && message["delivery"] == "UNKNOWN"
+            ));
+        let conversation = exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == recovered.conversation_id)
+            .unwrap();
+        let second = reopened
+            .prepare_compare(
+                DesktopCompareSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: Some(recovered.conversation_id.clone()),
+                    expected_revision: conversation["revision"].as_u64(),
+                    text: "repeat compare".into(),
+                    attachment_ids: vec![],
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        assert_ne!(
+            first.projection.execution_id,
+            second.projection.execution_id
+        );
+        assert_ne!(
+            first.projection.user_message_id,
+            second.projection.user_message_id
+        );
+        assert!(first
+            .projection
+            .branches
+            .iter()
+            .zip(second.projection.branches.iter())
+            .all(|(left, right)| left.attempt_id != right.attempt_id));
     }
 
     #[test]
     fn compare_cancelled_branches_keep_partial_text_and_aggregate_cancelled() {
         let (_directory, store, imported) = imported_store();
-        let conversation = imported.exchange["conversations"].as_array().unwrap().first().unwrap();
-        let prepared = store.prepare_compare(DesktopCompareSubmitArgs {
-            workspace_id: imported.summary.id.clone(),
-            conversation_id: Some(conversation["id"].as_str().unwrap().into()),
-            expected_revision: conversation["revision"].as_u64(),
-            text: "cancel compare".into(),
-            attachment_ids: vec![],
-        }, Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let conversation = imported.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .first()
+            .unwrap();
+        let prepared = store
+            .prepare_compare(
+                DesktopCompareSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: Some(conversation["id"].as_str().unwrap().into()),
+                    expected_revision: conversation["revision"].as_u64(),
+                    text: "cancel compare".into(),
+                    attachment_ids: vec![],
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
         for branch in &prepared.branches {
-            let partial = format!("{} partial", branch.projection.compare_logical_model.as_deref().unwrap());
-            store.update_ordinary_chat_message(
-                &branch.projection.attempt_id,
-                &partial,
-                "CANCELLED",
-                None,
-                None,
-                Some("CANCELLED"),
-            ).unwrap();
+            let partial = format!(
+                "{} partial",
+                branch.projection.compare_logical_model.as_deref().unwrap()
+            );
+            store
+                .update_ordinary_chat_message(
+                    &branch.projection.attempt_id,
+                    &partial,
+                    "CANCELLED",
+                    None,
+                    None,
+                    Some("CANCELLED"),
+                )
+                .unwrap();
         }
-        let cancelled = store.refresh_compare_execution_state(&prepared.projection.execution_id).unwrap();
+        let cancelled = store
+            .refresh_compare_execution_state(&prepared.projection.execution_id)
+            .unwrap();
         assert_eq!(cancelled.state, "CANCELLED");
-        assert!(cancelled.branches.iter().all(|branch| branch.state == "CANCELLED"));
-        let exchange = store.workspace_projection(&imported.summary.id).unwrap().exchange;
-        let messages = exchange["conversations"].as_array().unwrap().iter()
-            .find(|item| item["id"] == prepared.projection.conversation_id).unwrap()["messages"].as_array().unwrap();
-        assert!(messages.iter().filter(|message| message["compareExecutionId"] == prepared.projection.execution_id)
-            .all(|message| message["delivery"] == "CANCELLED" && !ordinary_chat_message_text(message).is_empty()));
+        assert!(cancelled
+            .branches
+            .iter()
+            .all(|branch| branch.state == "CANCELLED"));
+        let exchange = store
+            .workspace_projection(&imported.summary.id)
+            .unwrap()
+            .exchange;
+        let messages = exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == prepared.projection.conversation_id)
+            .unwrap()["messages"]
+            .as_array()
+            .unwrap();
+        assert!(messages
+            .iter()
+            .filter(|message| message["compareExecutionId"] == prepared.projection.execution_id)
+            .all(|message| message["delivery"] == "CANCELLED"
+                && !ordinary_chat_message_text(message).is_empty()));
     }
 
     #[test]
@@ -19025,13 +24098,27 @@ mod tests {
                 DesktopOrdinaryChatSubmitArgs {
                     workspace_id: imported.summary.id.clone(),
                     conversation_id: Some(conversation["id"].as_str().unwrap().into()),
+                    project_id: None,
                     expected_revision: conversation["revision"].as_u64(),
                     text: "restart fixture".into(),
                     attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
                 },
                 Some("http://127.0.0.1:1/chat/completions"),
             )
             .unwrap();
+        let live_projection = store.workspace_projection(&imported.summary.id).unwrap();
+        let live_message = live_projection.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|item| item["messages"].as_array().unwrap())
+            .find(|item| item["id"] == prepared.projection.assistant_message_id)
+            .unwrap();
+        assert_eq!(live_message["runtimeState"], "RUNNING");
         store
             .update_ordinary_chat_message(
                 &prepared.projection.attempt_id,
@@ -19069,5 +24156,41 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].summary.contains("未自动重发"));
         assert!(!diagnostics[0].conversation_title.is_empty());
+    }
+
+    #[test]
+    fn local_now_tracks_the_system_clock_for_user_visible_mutations() {
+        let before = system_now_millis();
+        let observed = local_now();
+        let after = system_now_millis();
+        assert!(observed >= rfc3339_from_unix_millis(before));
+        assert!(observed <= rfc3339_from_unix_millis(after));
+        assert_ne!(observed, "2026-08-13T00:00:00Z");
+    }
+
+    #[test]
+    fn replacing_memory_summary_is_atomic_for_active_global_memories_only() {
+        let mut exchange = json!({
+            "projects": [], "conversations": [], "knowledge": [], "relations": [],
+            "memory": [
+                {"id":"memory-current","body":"旧摘要","scope":"GLOBAL","scopeId":null,"status":"ACTIVE","revision":4,"contentHash":"old","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z","classification":"NORMAL"},
+                {"id":"memory-old","body":"旧条目","scope":"GLOBAL","scopeId":null,"status":"ACTIVE","revision":2,"contentHash":"old-two","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z","classification":"NORMAL"},
+                {"id":"memory-project","body":"项目记忆","scope":"PROJECT","scopeId":"project-1","status":"ACTIVE","revision":1,"contentHash":"project","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z","classification":"NORMAL"}
+            ]
+        });
+        let receipt = apply_domain_mutation(&mut exchange, &DomainMutationArgs {
+            intent_id: "memory-replace-unit".into(), workspace_id: "workspace-memory-editor".into(),
+            entity: "memory".into(), action: "replaceMemorySummary".into(),
+            object_id: Some("memory-current".into()), expected_revision: Some(4),
+            fields: json!({"body":"完整替换后的摘要"}),
+        }).unwrap();
+
+        assert_eq!(receipt, ("memory-current".into(), 5));
+        let memories = exchange["memory"].as_array().unwrap();
+        assert_eq!(memories[0]["body"], "完整替换后的摘要");
+        assert_eq!(memories[0]["revision"], 5);
+        assert_eq!(memories[1]["status"], "DELETED");
+        assert_eq!(memories[2]["status"], "ACTIVE");
+        assert_eq!(memories[2]["body"], "项目记忆");
     }
 }

@@ -3,7 +3,8 @@ const root = resolve(import.meta.dirname, '..'); const [source, chatShell, p8Ins
 for (const expected of ['stage_preflight_selected_exchange', 'import_staged_exchange_as_new_workspace', 'export_desktop_workspace_to_selected_path', 'window.__TAURI_INTERNALS__', 'plugin:dialog|', "event.key.toLowerCase() === 'o'"]) if (!source.includes(expected)) throw new Error(`desktop P6-B boundary missing ${expected}`);
 for (const expected of ['inspect_p8_agent_runs', 'show-p8-inspect']) if (!source.includes(expected)) throw new Error(`desktop P8-C inspect boundary missing ${expected}`);
 for (const expected of ["pane: 'chat'", 'renderChatFirstShell', 'saveLocalMessage', 'appendMessage']) if (!source.includes(expected)) throw new Error(`desktop chat-first boundary missing ${expected}`);
-for (const expected of ['今天想一起做什么？', '模型选择与自动路由', '本地可用', 'chat-composer']) if (!chatShell.includes(expected)) throw new Error(`desktop chat-first UI missing ${expected}`);
+for (const expected of ['chat-empty-canvas', 'chat-composer-controls', '选择模型：', 'toggle-p6g-model-picker', '本地可用', 'chat-composer']) if (!chatShell.includes(expected)) throw new Error(`desktop chat-first UI missing ${expected}`);
+for (const stale of ['今天想一起做什么？', '发送会先原子写入本地消息与 Attempt']) if (chatShell.includes(stale)) throw new Error(`desktop chat-first UI retains stale empty-state copy ${stale}`);
 for (const expected of ["from './icon-source.mjs'", "'icon-source.mjs'"]) if (!(chatShell.includes(expected) || buildScript.includes(expected))) throw new Error(`desktop static module packaging missing ${expected}`);
 if (chatShell.includes("from './icon-source.mjs'") && !buildScript.includes("'icon-source.mjs'")) throw new Error('desktop build must copy chat-shell static dependency icon-source.mjs');
 for (const expected of ['READ_ONLY · LOCAL_READ · NONE', '未连接模型与外部工具']) if (!p8Inspect.includes(expected)) throw new Error(`desktop P8-C inspect copy missing ${expected}`);

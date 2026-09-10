@@ -21,6 +21,7 @@ const VALID_TONES: &[&str] = &[
     "efficient",
     "humorous",
 ];
+const CUSTOM_INSTRUCTIONS_MAX_CHARS: usize = 8_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -283,7 +284,7 @@ fn validate(args: &SaveArgs) -> Result<(), String> {
     if args.product.nickname.chars().count() > 80
         || args.product.occupation.chars().count() > 120
         || args.product.interests.chars().count() > 500
-        || args.product.custom_instructions.chars().count() > 6000
+        || args.product.custom_instructions.chars().count() > CUSTOM_INSTRUCTIONS_MAX_CHARS
         || args.product.nickname.contains('\0')
         || args.product.occupation.contains('\0')
         || args.product.interests.contains('\0')
@@ -348,6 +349,38 @@ mod tests {
     }
 
     #[test]
+    fn every_setting_survives_database_close_and_reopen() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("settings.sqlite");
+        let mut connection = Connection::open(&path).unwrap();
+        let transaction = connection.transaction().unwrap();
+        migrate(&transaction).unwrap();
+        migrate_portable_personalization(&transaction).unwrap();
+        transaction.commit().unwrap();
+        let mut initial = read(&connection).unwrap();
+        initial.appearance.mode = "dark".into();
+        initial.appearance.font_size = "large".into();
+        initial.appearance.theme_color = "purple".into();
+        initial.product.nickname = "retention-test".into();
+        initial.product.occupation = "test occupation".into();
+        initial.product.custom_instructions = "test instructions\nsecond line".into();
+        initial.product.tone = "direct".into();
+        initial.product.memory_enabled = !initial.product.memory_enabled;
+        initial.product.history_library_enabled = !initial.product.history_library_enabled;
+        initial.product.monitor_notifications = !initial.product.monitor_notifications;
+        initial.product.reminder_suggestions = !initial.product.reminder_suggestions;
+        initial.product.unread_indicators = !initial.product.unread_indicators;
+        initial.product.web_search_enabled = !initial.product.web_search_enabled;
+        let saved = save(&mut connection, SaveArgs { appearance: initial.appearance, product: initial.product, expected_revision: initial.revision }).unwrap();
+        drop(connection);
+        let reopened = Connection::open(&path).unwrap();
+        let restored = read(&reopened).unwrap();
+        assert_eq!(restored.appearance, saved.appearance);
+        assert_eq!(restored.product, saved.product);
+        assert_eq!(restored.revision, saved.revision);
+    }
+
+    #[test]
     fn defaults_are_native_and_capabilities_match_real_consumers() {
         let projection = read(&database()).unwrap();
         assert_eq!(projection.appearance.mode, "system");
@@ -397,6 +430,38 @@ mod tests {
         .unwrap_err();
         assert!(error.contains("无效选项"));
         assert_eq!(read(&connection).unwrap().revision, 0);
+    }
+
+    #[test]
+    fn custom_instructions_match_the_current_android_eight_thousand_character_contract() {
+        let mut accepted = database();
+        let mut current = read(&accepted).unwrap();
+        current.product.custom_instructions = "字".repeat(CUSTOM_INSTRUCTIONS_MAX_CHARS);
+        let saved = save(
+            &mut accepted,
+            SaveArgs {
+                appearance: current.appearance,
+                product: current.product,
+                expected_revision: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(saved.product.custom_instructions.chars().count(), 8_000);
+
+        let mut rejected = database();
+        let mut current = read(&rejected).unwrap();
+        current.product.custom_instructions = "字".repeat(CUSTOM_INSTRUCTIONS_MAX_CHARS + 1);
+        let error = save(
+            &mut rejected,
+            SaveArgs {
+                appearance: current.appearance,
+                product: current.product,
+                expected_revision: 0,
+            },
+        )
+        .unwrap_err();
+        assert!(error.contains("超过可保存范围"));
+        assert_eq!(read(&rejected).unwrap().revision, 0);
     }
 
     #[test]

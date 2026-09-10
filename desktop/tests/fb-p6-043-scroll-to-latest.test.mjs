@@ -24,7 +24,7 @@ test('FB-P6-043 renders the latest control only away from the end and docks it a
   const awayFromLatest = renderChatFirstShell({ data, native: true, selectedConversationId: 'fb-p6-043-conversation', pane: 'chat', status: '', error: '', connection: {}, showScrollToLatest: true });
   assert.ok(!atLatest.includes('data-action="scroll-to-latest"'));
   assert.match(awayFromLatest, /chat-composer-dock[\s\S]*data-action="scroll-to-latest"[\s\S]*data-anchor="composer-top"[\s\S]*chat-composer-wrap/);
-  for (const token of ['.chat-composer-dock { position: relative; }', '.chat-composer-wrap { width: min(760px, calc(100% - 40px)); margin: 0 auto;', 'bottom: calc(100% + 12px)', 'left: 50%', 'transform: translateX(-50%)']) assert.ok(css.includes(token), token);
+  for (const token of ['.chat-composer-dock { position: absolute;', 'pointer-events: none;', '.chat-composer-dock .chat-composer-wrap, .chat-composer-dock .chat-scroll-to-latest { pointer-events: auto;', '.chat-transcript-stage > .chat-scroll { grid-column: 2; grid-row: 1; padding-bottom: 190px;', '.chat-composer-wrap { width: min(760px, calc(100% - 40px)); margin: 0 auto;', 'bottom: calc(100% + 12px)', 'left: 50%', 'transform: translateX(-50%)']) assert.ok(css.includes(token), token);
   assert.ok(!css.includes('.chat-scroll-to-latest { position: absolute; z-index: 4; right:'));
 });
 

@@ -42,7 +42,9 @@ struct GlmOcrJsonBody {
 impl GlmOcrJsonBody {
     fn new(source: fs::File, mime_type: &str) -> Self {
         Self {
-            prefix: std::io::Cursor::new(format!("{{\"model\":\"glm-ocr\",\"file\":\"data:{mime_type};base64,").into_bytes()),
+            prefix: std::io::Cursor::new(
+                format!("{{\"model\":\"glm-ocr\",\"file\":\"data:{mime_type};base64,").into_bytes(),
+            ),
             source,
             encoded: std::io::Cursor::new(Vec::new()),
             suffix: std::io::Cursor::new(b"\"}".to_vec()),
@@ -66,14 +68,17 @@ impl Read for GlmOcrJsonBody {
                         let mut raw_count = 0;
                         while raw_count < raw.len() {
                             let next = self.source.read(&mut raw[raw_count..])?;
-                            if next == 0 { break; }
+                            if next == 0 {
+                                break;
+                            }
                             raw_count += next;
                         }
                         if raw_count == 0 {
                             self.phase = 2;
                             continue;
                         }
-                        self.encoded = std::io::Cursor::new(BASE64.encode(&raw[..raw_count]).into_bytes());
+                        self.encoded =
+                            std::io::Cursor::new(BASE64.encode(&raw[..raw_count]).into_bytes());
                         continue;
                     }
                 }
@@ -247,7 +252,10 @@ pub fn migrate(connection: &Connection) -> Result<(), String> {
             |row| row.get(0),
         ).map_err(|_| "语音转写数据库列无法检查".to_owned())?;
         if present == 0 {
-            connection.execute_batch(&format!("ALTER TABLE desktop_transcription_tasks ADD COLUMN {name} {definition};"))
+            connection
+                .execute_batch(&format!(
+                    "ALTER TABLE desktop_transcription_tasks ADD COLUMN {name} {definition};"
+                ))
                 .map_err(|_| "语音转写数据库列迁移失败".to_owned())?;
         }
     }
@@ -438,22 +446,37 @@ pub fn import_document_source(
     if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
         return Err("只接受普通图片或 PDF 文件，不接受符号链接".to_owned());
     }
-    let extension = source.extension().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
     let mime_type = match extension.as_str() {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
         "pdf" => "application/pdf",
         _ => return Err("GLM-OCR 只支持 JPG、PNG 和 PDF".to_owned()),
     };
-    let max_bytes = if mime_type == "application/pdf" { GLM_OCR_PDF_MAX_BYTES } else { GLM_OCR_IMAGE_MAX_BYTES };
+    let max_bytes = if mime_type == "application/pdf" {
+        GLM_OCR_PDF_MAX_BYTES
+    } else {
+        GLM_OCR_IMAGE_MAX_BYTES
+    };
     if metadata.len() == 0 || metadata.len() > max_bytes {
-        return Err(if mime_type == "application/pdf" { "PDF 必须大于 0 且不超过 50 MB" } else { "图片必须大于 0 且不超过 10 MB" }.to_owned());
+        return Err(if mime_type == "application/pdf" {
+            "PDF 必须大于 0 且不超过 50 MB"
+        } else {
+            "图片必须大于 0 且不超过 10 MB"
+        }
+        .to_owned());
     }
     let display_name = safe_display_name(&source)?;
     let now = now_millis();
     fs::create_dir_all(root.join("assets")).map_err(|_| "无法创建私有附件目录".to_owned())?;
     fs::create_dir_all(root.join("staging")).map_err(|_| "无法创建私有暂存目录".to_owned())?;
-    let pending = root.join("staging").join(format!("ocr-{}.pending", random_hex(16)?));
+    let pending = root
+        .join("staging")
+        .join(format!("ocr-{}.pending", random_hex(16)?));
     let (digest, byte_count) = copy_and_hash(&source, &pending)?;
     if byte_count != metadata.len() {
         let _ = fs::remove_file(&pending);
@@ -470,13 +493,23 @@ pub fn import_document_source(
     let workspace_id = if requested_workspace.is_empty() {
         TRANSCRIPTION_WORKSPACE_ID.to_owned()
     } else {
-        let workspace_exists: bool = connection.query_row("SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)", [requested_workspace], |row| row.get(0)).map_err(|_| "无法确认工作区".to_owned())?;
-        if !workspace_exists { return Err("工作区不存在".to_owned()); }
+        let workspace_exists: bool = connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
+                [requested_workspace],
+                |row| row.get(0),
+            )
+            .map_err(|_| "无法确认工作区".to_owned())?;
+        if !workspace_exists {
+            return Err("工作区不存在".to_owned());
+        }
         requested_workspace.to_owned()
     };
     let attachment_id = format!("attachment-{}", &digest[..24]);
     let task_id = format!("transcription-{}", random_hex(16)?);
-    let transaction = connection.transaction().map_err(|_| "无法开启南枫转写导入事务".to_owned())?;
+    let transaction = connection
+        .transaction()
+        .map_err(|_| "无法开启南枫转写导入事务".to_owned())?;
     if workspace_id == TRANSCRIPTION_WORKSPACE_ID {
         transaction.execute("INSERT OR IGNORE INTO workspaces(id,title,semantic_hash,package_hash,created_at) VALUES(?1,'南枫转写（本地）','','',datetime(?2/1000,'unixepoch'))", params![TRANSCRIPTION_WORKSPACE_ID,now]).map_err(|_| "无法建立南枫转写本地空间".to_owned())?;
     }
@@ -485,7 +518,9 @@ pub fn import_document_source(
     let actual_attachment_id: String = transaction.query_row("SELECT attachment_id FROM desktop_conversation_attachments WHERE workspace_id=?1 AND sha256=?2", params![workspace_id,digest], |row| row.get(0)).map_err(|_| "文档附件无法回读".to_owned())?;
     transaction.execute("INSERT INTO desktop_transcription_tasks(id,workspace_id,source_attachment_id,source_sha256,source_mime_type,source_display_name,source_byte_count,model_id,language_code,state,created_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,NULL,'QUEUED',?9,?9)", params![task_id,workspace_id,actual_attachment_id,digest,mime_type,display_name,byte_count,GLM_OCR_MODEL_ID,now]).map_err(|_| "南枫转写文档任务未保存".to_owned())?;
     index_task_source(&transaction, &task_id)?;
-    transaction.commit().map_err(|_| "南枫转写文档任务未提交；已回滚".to_owned())?;
+    transaction
+        .commit()
+        .map_err(|_| "南枫转写文档任务未提交；已回滚".to_owned())?;
     read_task(&connection, &task_id)
 }
 
@@ -670,36 +705,84 @@ pub fn run_ocr_task(
     task_id: &str,
     api_key: &[u8],
 ) -> Result<TaskProjection, String> {
-    if api_key.is_empty() {
-        fail_task(database, task_id, "ZHIPU_API_KEY_MISSING", "智谱 GLM-OCR 未配置 API Key，请在设置中保存后重试", "credential owner returned empty secret")?;
-        return Err("智谱 GLM-OCR 未配置 API Key，请在设置中保存后重试".to_owned());
-    }
     let connection = open(database)?;
     let task = read_task(&connection, task_id)?;
     if task.model_id != GLM_OCR_MODEL_ID {
         return Err("当前任务不是图片/PDF 转写任务".to_owned());
     }
-    if !matches!(task.state.as_str(), "QUEUED" | "FAILED" | "RECOVERY_REQUIRED") {
+    if !matches!(
+        task.state.as_str(),
+        "QUEUED" | "FAILED" | "RECOVERY_REQUIRED"
+    ) {
         return Err("当前任务状态不可执行".to_owned());
     }
-    connection.execute("UPDATE desktop_transcription_tasks SET state='TRANSCRIBING',attempt_count=attempt_count+1,error_code=NULL,user_message=NULL,technical_detail=NULL,updated_at_ms=?1 WHERE id=?2", params![now_millis(),task_id]).map_err(|_| "文档转写状态未保存".to_owned())?;
-    let source_sha: String = connection.query_row("SELECT source_sha256 FROM desktop_transcription_tasks WHERE id=?1", [task_id], |row| row.get(0)).map_err(|_| "图片/PDF 引用不可用".to_owned())?;
+    connection.execute("UPDATE desktop_transcription_tasks SET attempt_count=attempt_count+1,error_code=NULL,user_message=NULL,technical_detail=NULL,updated_at_ms=?1 WHERE id=?2", params![now_millis(),task_id]).map_err(|_| "GLM-OCR Attempt 未保存".to_owned())?;
+    if api_key.is_empty() {
+        fail_task(
+            database,
+            task_id,
+            "ZHIPU_API_KEY_MISSING",
+            "智谱 GLM-OCR 未配置 API Key，请在设置中保存后重试",
+            "credential owner returned empty secret",
+        )?;
+        return Err("智谱 GLM-OCR 未配置 API Key，请在设置中保存后重试".to_owned());
+    }
+    connection.execute("UPDATE desktop_transcription_tasks SET state='TRANSCRIBING',updated_at_ms=?1 WHERE id=?2", params![now_millis(),task_id]).map_err(|_| "文档转写状态未保存".to_owned())?;
+    let source_sha: String = connection
+        .query_row(
+            "SELECT source_sha256 FROM desktop_transcription_tasks WHERE id=?1",
+            [task_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "图片/PDF 引用不可用".to_owned())?;
     let source = root.join("assets").join(&source_sha);
     let source_bytes = fs::read(&source).map_err(|_| "图片/PDF 私有副本不可读".to_owned())?;
-    let max_bytes = if task.source_mime_type == "application/pdf" { GLM_OCR_PDF_MAX_BYTES } else { GLM_OCR_IMAGE_MAX_BYTES };
-    if source_bytes.is_empty() || source_bytes.len() as u64 > max_bytes || hex_digest(&source_bytes) != source_sha {
-        fail_task(database, task_id, "SOURCE_INTEGRITY", "图片/PDF 私有副本校验失败，请重新选择", "source byte count or sha256 mismatch")?;
+    let max_bytes = if task.source_mime_type == "application/pdf" {
+        GLM_OCR_PDF_MAX_BYTES
+    } else {
+        GLM_OCR_IMAGE_MAX_BYTES
+    };
+    if source_bytes.is_empty()
+        || source_bytes.len() as u64 > max_bytes
+        || hex_digest(&source_bytes) != source_sha
+    {
+        fail_task(
+            database,
+            task_id,
+            "SOURCE_INTEGRITY",
+            "图片/PDF 私有副本校验失败，请重新选择",
+            "source byte count or sha256 mismatch",
+        )?;
         return Err("图片/PDF 私有副本校验失败，请重新选择".to_owned());
     }
-    let key = std::str::from_utf8(api_key).map_err(|_| "智谱 API Key 格式无效，请重新保存".to_owned())?;
-    let client = reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(300)).build().map_err(|_| "无法创建 GLM-OCR 请求客户端".to_owned())?;
+    let key =
+        std::str::from_utf8(api_key).map_err(|_| "智谱 API Key 格式无效，请重新保存".to_owned())?;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|_| "无法创建 GLM-OCR 请求客户端".to_owned())?;
     drop(source_bytes);
-    let payload = GlmOcrJsonBody::new(fs::File::open(&source).map_err(|_| "图片/PDF 私有副本不可读".to_owned())?, &task.source_mime_type);
+    let payload = GlmOcrJsonBody::new(
+        fs::File::open(&source).map_err(|_| "图片/PDF 私有副本不可读".to_owned())?,
+        &task.source_mime_type,
+    );
     connection.execute("UPDATE desktop_transcription_tasks SET provider_request_count=provider_request_count+1,updated_at_ms=?1 WHERE id=?2", params![now_millis(),task_id]).map_err(|_| "GLM-OCR Attempt 未保存".to_owned())?;
-    let response = match client.post(GLM_OCR_ENDPOINT).bearer_auth(key).header(reqwest::header::CONTENT_TYPE, "application/json").body(reqwest::blocking::Body::new(payload)).send() {
+    let response = match client
+        .post(GLM_OCR_ENDPOINT)
+        .bearer_auth(key)
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .body(reqwest::blocking::Body::new(payload))
+        .send()
+    {
         Ok(response) => response,
         Err(error) => {
-            fail_task(database, task_id, "NETWORK_UNKNOWN", "GLM-OCR 连接失败，请检查网络后显式重试", &format!("request failed: {}", error.without_url()))?;
+            fail_task(
+                database,
+                task_id,
+                "NETWORK_UNKNOWN",
+                "GLM-OCR 连接失败，请检查网络后显式重试",
+                &format!("request failed: {}", error.without_url()),
+            )?;
             return Err("GLM-OCR 连接失败，请检查网络后显式重试".to_owned());
         }
     };
@@ -713,41 +796,97 @@ pub fn run_ocr_task(
             value if value >= 500 => format!("HTTP_{value}_UNKNOWN"),
             value => format!("HTTP_{value}"),
         };
-        let message = if matches!(status.as_u16(), 401 | 403) { "智谱 API Key 无效或没有 GLM-OCR 权限" } else if status.as_u16() == 429 { "GLM-OCR 请求过于频繁，请稍后显式重试" } else { "GLM-OCR 请求失败，请稍后显式重试" };
-        fail_task(database, task_id, &code, message, &format!("HTTP {}", status.as_u16()))?;
+        let message = if matches!(status.as_u16(), 401 | 403) {
+            "智谱 API Key 无效或没有 GLM-OCR 权限"
+        } else if status.as_u16() == 429 {
+            "GLM-OCR 请求过于频繁，请稍后显式重试"
+        } else {
+            "GLM-OCR 请求失败，请稍后显式重试"
+        };
+        fail_task(
+            database,
+            task_id,
+            &code,
+            message,
+            &format!("HTTP {}", status.as_u16()),
+        )?;
         return Err(message.to_owned());
     }
     let response_bytes = match response.bytes() {
         Ok(bytes) => bytes,
         Err(_) => {
-            fail_task(database, task_id, "RESPONSE_UNREADABLE_UNKNOWN", "GLM-OCR 返回内容不可读，请显式重试", "response body read failed")?;
+            fail_task(
+                database,
+                task_id,
+                "RESPONSE_UNREADABLE_UNKNOWN",
+                "GLM-OCR 返回内容不可读，请显式重试",
+                "response body read failed",
+            )?;
             return Err("GLM-OCR 返回内容不可读，请显式重试".to_owned());
         }
     };
     if response_bytes.len() > 32 * 1024 * 1024 {
-        fail_task(database, task_id, "RESPONSE_TOO_LARGE", "GLM-OCR 返回内容过大，未保存", "response exceeded 64 MiB")?;
+        fail_task(
+            database,
+            task_id,
+            "RESPONSE_TOO_LARGE",
+            "GLM-OCR 返回内容过大，未保存",
+            "response exceeded 32 MiB",
+        )?;
         return Err("GLM-OCR 返回内容过大，未保存".to_owned());
     }
     let value: Value = match serde_json::from_slice(&response_bytes) {
         Ok(value) => value,
         Err(_) => {
-            fail_task(database, task_id, "RESPONSE_FORMAT", "GLM-OCR 返回格式异常，请显式重试", "invalid JSON response")?;
+            fail_task(
+                database,
+                task_id,
+                "RESPONSE_FORMAT",
+                "GLM-OCR 返回格式异常，请显式重试",
+                "invalid JSON response",
+            )?;
             return Err("GLM-OCR 返回格式异常，请显式重试".to_owned());
         }
     };
     let markdown = glm_ocr_markdown(&value);
     if markdown.trim().is_empty() {
-        fail_task(database, task_id, "EMPTY_MARKDOWN", "GLM-OCR 未返回可用 Markdown", "md_results was empty")?;
+        fail_task(
+            database,
+            task_id,
+            "EMPTY_MARKDOWN",
+            "GLM-OCR 未返回可用 Markdown",
+            "md_results was empty",
+        )?;
         return Err("GLM-OCR 未返回可用 Markdown".to_owned());
     }
     if current_state(database, task_id)? == "CANCELLED" {
         return read_task(&open(database)?, task_id);
     }
-    let input_tokens = value.pointer("/usage/prompt_tokens").and_then(Value::as_u64).or_else(|| value.pointer("/usage/input_tokens").and_then(Value::as_u64));
-    let output_tokens = value.pointer("/usage/completion_tokens").and_then(Value::as_u64).or_else(|| value.pointer("/usage/output_tokens").and_then(Value::as_u64));
-    let provider_request_id = value.get("request_id").or_else(|| value.get("id")).and_then(Value::as_str).map(str::trim).filter(|item| !item.is_empty()).map(|item| item.chars().take(200).collect::<String>());
-    let page_count = value.pointer("/data_info/num_pages").and_then(Value::as_u64);
-    let total_tokens = input_tokens.unwrap_or(0).saturating_add(output_tokens.unwrap_or(0));
+    let input_tokens = value
+        .pointer("/usage/prompt_tokens")
+        .and_then(Value::as_u64)
+        .or_else(|| value.pointer("/usage/input_tokens").and_then(Value::as_u64));
+    let output_tokens = value
+        .pointer("/usage/completion_tokens")
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            value
+                .pointer("/usage/output_tokens")
+                .and_then(Value::as_u64)
+        });
+    let provider_request_id = value
+        .get("request_id")
+        .or_else(|| value.get("id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(|item| item.chars().take(200).collect::<String>());
+    let page_count = value
+        .pointer("/data_info/num_pages")
+        .and_then(Value::as_u64);
+    let total_tokens = input_tokens
+        .unwrap_or(0)
+        .saturating_add(output_tokens.unwrap_or(0));
     let cost_micros = total_tokens.saturating_mul(200_000).saturating_add(999_999) / 1_000_000;
     open(database)?.execute("UPDATE desktop_transcription_tasks SET provider_request_id=?1,page_count=?2,input_tokens=?3,output_tokens=?4,estimated_charge_micros=?5,updated_at_ms=?6 WHERE id=?7", params![provider_request_id,page_count,input_tokens,output_tokens,cost_micros,now_millis(),task_id]).map_err(|_| "GLM-OCR 用量未保存".to_owned())?;
     complete_ocr_task(root, database, task_id, &markdown)
@@ -756,12 +895,25 @@ pub fn run_ocr_task(
 fn glm_ocr_markdown(value: &Value) -> String {
     match value.get("md_results") {
         Some(Value::String(text)) => text.clone(),
-        Some(Value::Array(items)) => items.iter().filter_map(|item| match item {
-            Value::String(text) => Some(text.clone()),
-            Value::Object(map) => map.get("markdown").or_else(|| map.get("content")).and_then(Value::as_str).map(str::to_owned),
-            _ => None,
-        }).collect::<Vec<_>>().join("\n\n"),
-        Some(Value::Object(map)) => map.get("markdown").or_else(|| map.get("content")).and_then(Value::as_str).unwrap_or("").to_owned(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|item| match item {
+                Value::String(text) => Some(text.clone()),
+                Value::Object(map) => map
+                    .get("markdown")
+                    .or_else(|| map.get("content"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n"),
+        Some(Value::Object(map)) => map
+            .get("markdown")
+            .or_else(|| map.get("content"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_owned(),
         _ => String::new(),
     }
 }
@@ -915,27 +1067,53 @@ fn complete_task(root: &Path, database: &Path, task_id: &str) -> Result<TaskProj
     read_task(&open(database)?, task_id)
 }
 
-fn complete_ocr_task(root: &Path, database: &Path, task_id: &str, markdown: &str) -> Result<TaskProjection, String> {
+fn complete_ocr_task(
+    root: &Path,
+    database: &Path,
+    task_id: &str,
+    markdown: &str,
+) -> Result<TaskProjection, String> {
     let mut connection = open(database)?;
     let task = read_task(&connection, task_id)?;
-    connection.execute("UPDATE desktop_transcription_tasks SET state='EXPORTING',updated_at_ms=?1 WHERE id=?2", params![now_millis(),task_id]).map_err(|_| "GLM-OCR 结果生成状态未保存".to_owned())?;
+    connection
+        .execute(
+            "UPDATE desktop_transcription_tasks SET state='EXPORTING',updated_at_ms=?1 WHERE id=?2",
+            params![now_millis(), task_id],
+        )
+        .map_err(|_| "GLM-OCR 结果生成状态未保存".to_owned())?;
     let bytes = markdown.as_bytes();
     let digest = hex_digest(bytes);
     let attachment_id = format!("attachment-{}", &digest[..24]);
     let target = root.join("assets").join(&digest);
-    if !target.exists() { write_atomic(&target, bytes)?; }
-    let stem = task.source_display_name.rsplit_once('.').map(|(value, _)| value).unwrap_or(&task.source_display_name).trim();
+    if !target.exists() {
+        write_atomic(&target, bytes)?;
+    }
+    let stem = task
+        .source_display_name
+        .rsplit_once('.')
+        .map(|(value, _)| value)
+        .unwrap_or(&task.source_display_name)
+        .trim();
     let result_name = format!("{}-OCR.md", if stem.is_empty() { "GLM-OCR" } else { stem });
     let now = now_millis();
-    let transaction = connection.transaction().map_err(|_| "无法开启 GLM-OCR 结果事务".to_owned())?;
-    transaction.execute("DELETE FROM desktop_transcription_segments WHERE task_id=?1", [task_id]).map_err(|_| "旧 GLM-OCR 结果未清理".to_owned())?;
+    let transaction = connection
+        .transaction()
+        .map_err(|_| "无法开启 GLM-OCR 结果事务".to_owned())?;
+    transaction
+        .execute(
+            "DELETE FROM desktop_transcription_segments WHERE task_id=?1",
+            [task_id],
+        )
+        .map_err(|_| "旧 GLM-OCR 结果未清理".to_owned())?;
     transaction.execute("INSERT INTO desktop_transcription_segments(task_id,ordinal,start_millis,end_millis,text) VALUES(?1,0,0,0,?2)", params![task_id,markdown]).map_err(|_| "GLM-OCR Markdown 未保存".to_owned())?;
     transaction.execute("INSERT INTO desktop_attachment_assets(sha256,byte_count,created_at_ms,last_referenced_at_ms,last_unreferenced_at_ms,reference_count) VALUES(?1,?2,?3,?3,?3,1) ON CONFLICT(sha256) DO UPDATE SET last_referenced_at_ms=excluded.last_referenced_at_ms", params![digest,bytes.len() as u64,now]).map_err(|_| "GLM-OCR 结果资产未保存".to_owned())?;
     transaction.execute("INSERT INTO desktop_conversation_attachments(workspace_id,attachment_id,mime_type,display_name,byte_count,sha256,created_at) VALUES(?1,?2,'text/markdown',?3,?4,?5,datetime(?6/1000,'unixepoch')) ON CONFLICT(workspace_id,sha256) DO NOTHING", params![task.workspace_id,attachment_id,result_name,bytes.len() as u64,digest,now]).map_err(|_| "GLM-OCR 结果附件未保存".to_owned())?;
     let actual_id: String = transaction.query_row("SELECT attachment_id FROM desktop_conversation_attachments WHERE workspace_id=?1 AND sha256=?2", params![task.workspace_id,digest], |row| row.get(0)).map_err(|_| "GLM-OCR 结果附件无法回读".to_owned())?;
     transaction.execute("UPDATE desktop_transcription_tasks SET state='COMPLETED',progress_millis=0,total_duration_millis=NULL,result_attachment_id=?1,result_sha256=?2,result_byte_count=?3,error_code=NULL,user_message=NULL,technical_detail=NULL,updated_at_ms=?4 WHERE id=?5", params![actual_id,digest,bytes.len() as u64,now,task_id]).map_err(|_| "GLM-OCR 完成状态未保存".to_owned())?;
     index_task_result(&transaction, task_id)?;
-    transaction.commit().map_err(|_| "GLM-OCR 结果未提交；已回滚".to_owned())?;
+    transaction
+        .commit()
+        .map_err(|_| "GLM-OCR 结果未提交；已回滚".to_owned())?;
     read_task(&open(database)?, task_id)
 }
 
@@ -1136,7 +1314,12 @@ fn current_state(database: &Path, task_id: &str) -> Result<String, String> {
 
 fn render_markdown(task: &TaskProjection) -> String {
     if task.model_id == GLM_OCR_MODEL_ID {
-        return task.segments.iter().map(|item| item.text.as_str()).collect::<Vec<_>>().join("\n\n");
+        return task
+            .segments
+            .iter()
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
     }
     let mut out = format!("# {}\n\n- 模型：{}\n- 语言：{}\n- 计费音频：{} ms\n- 费用：¥{:.6}（估算）\n\n## 转写正文\n\n{}\n\n## 时间轴\n\n", task.source_display_name,task.model_id,task.language_code.as_deref().unwrap_or("自动识别"),task.billable_audio_millis,task.estimated_charge_micros as f64/1_000_000.0,task.segments.iter().map(|item| item.text.as_str()).collect::<Vec<_>>().join("\n\n"));
     for segment in &task.segments {
@@ -1224,8 +1407,16 @@ fn index_task_source(transaction: &Transaction<'_>, task_id: &str) -> Result<(),
     } else {
         "FILE"
     };
-    let source_label = if model_id == GLM_OCR_MODEL_ID { "南枫转写 · 原始文件" } else { "南枫转写 · 语音" };
-    let file_type = if mime == "application/pdf" { "pdf" } else { "other" };
+    let source_label = if model_id == GLM_OCR_MODEL_ID {
+        "南枫转写 · 原始文件"
+    } else {
+        "南枫转写 · 语音"
+    };
+    let file_type = if mime == "application/pdf" {
+        "pdf"
+    } else {
+        "other"
+    };
     transaction.execute("INSERT OR REPLACE INTO desktop_local_search_index(workspace_id,entry_id,conversation_id,message_id,attachment_id,content_kind,title,normalized_text,snippet,timestamp,mime_type,display_name,file_type,byte_count,branch_leaf_id,source_label,archived,conversation_revision,title_match) VALUES(?1,?2,?3,NULL,?4,?5,?6,?7,?8,datetime(?9/1000,'unixepoch'),?10,?6,?11,?12,NULL,?13,0,0,0)", params![workspace,format!("{task_id}:source"),search_owner_id(task_id),attachment,kind,name,format!("{} {} {}",name,mime,state).to_lowercase(),format!("{} · {}",name,state),created,mime,file_type,bytes,source_label]).map_err(|_| "南枫转写源索引未保存".to_owned())?;
     Ok(())
 }
@@ -1236,7 +1427,11 @@ fn index_task_result(transaction: &Transaction<'_>, task_id: &str) -> Result<(),
         return Ok(());
     };
     let text: String=transaction.query_row("SELECT COALESCE(GROUP_CONCAT(text,' '),'') FROM desktop_transcription_segments WHERE task_id=?1",[task_id],|row|row.get(0)).map_err(|_|"无法读取转写正文索引".to_owned())?;
-    let source_label = if model_id == GLM_OCR_MODEL_ID { "南枫转写 · Markdown" } else { "南枫转写 · 语音" };
+    let source_label = if model_id == GLM_OCR_MODEL_ID {
+        "南枫转写 · Markdown"
+    } else {
+        "南枫转写 · 语音"
+    };
     transaction.execute("INSERT OR REPLACE INTO desktop_local_search_index(workspace_id,entry_id,conversation_id,message_id,attachment_id,content_kind,title,normalized_text,snippet,timestamp,mime_type,display_name,file_type,byte_count,branch_leaf_id,source_label,archived,conversation_revision,title_match) SELECT ?1,?2,?3,NULL,?4,'TEXT',?5,?6,?7,datetime(?8/1000,'unixepoch'),'text/markdown',display_name,'markdown',byte_count,NULL,?9,0,0,0 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?4", params![workspace,format!("{task_id}:result"),search_owner_id(task_id),attachment,name,text.to_lowercase(),text.chars().take(240).collect::<String>(),updated,source_label]).map_err(|_| "南枫转写结果索引未保存".to_owned())?;
     Ok(())
 }
@@ -1437,7 +1632,15 @@ mod tests {
         let (dir, root, db) = database();
         let source = dir.path().join("receipt.png");
         fs::write(&source, b"safe png fixture").unwrap();
-        let task = import_document_source(&root, &db, ImportArgs { workspace_id: "workspace-test".into(), selected_path: source.to_string_lossy().into_owned() }).unwrap();
+        let task = import_document_source(
+            &root,
+            &db,
+            ImportArgs {
+                workspace_id: "workspace-test".into(),
+                selected_path: source.to_string_lossy().into_owned(),
+            },
+        )
+        .unwrap();
         assert_eq!(task.model_id, GLM_OCR_MODEL_ID);
         assert_eq!(task.source_mime_type, "image/png");
         assert_eq!(task.state, "QUEUED");
@@ -1447,24 +1650,114 @@ mod tests {
     }
 
     #[test]
+    fn document_missing_credential_attempt_is_persistent_recoverable_and_never_reaches_provider() {
+        let (dir, root, db) = database();
+        for (name, bytes) in [
+            ("receipt.png", b"real-local-png-fixture".as_slice()),
+            (
+                "statement.pdf",
+                b"%PDF-1.4\nreal-local-pdf-fixture\n%%EOF".as_slice(),
+            ),
+        ] {
+            let source = dir.path().join(name);
+            fs::write(&source, bytes).unwrap();
+            let task = import_document_source(
+                &root,
+                &db,
+                ImportArgs {
+                    workspace_id: "workspace-test".into(),
+                    selected_path: source.to_string_lossy().into_owned(),
+                },
+            )
+            .unwrap();
+
+            assert_eq!(
+                run_ocr_task(&root, &db, &task.id, &[]).unwrap_err(),
+                "智谱 GLM-OCR 未配置 API Key，请在设置中保存后重试"
+            );
+            let failed = read_state(&db, Some("workspace-test"))
+                .unwrap()
+                .tasks
+                .into_iter()
+                .find(|candidate| candidate.id == task.id)
+                .unwrap();
+            assert_eq!(failed.state, "FAILED");
+            assert_eq!(failed.error_code.as_deref(), Some("ZHIPU_API_KEY_MISSING"));
+            assert_eq!(failed.attempt_count, 1);
+            assert_eq!(failed.provider_request_count, 0);
+            assert_eq!(
+                fs::read(root.join("assets").join(hex_digest(bytes))).unwrap(),
+                bytes
+            );
+
+            assert_eq!(retry_task(&db, &task.id).unwrap().state, "QUEUED");
+            assert_eq!(cancel_task(&db, &task.id).unwrap().state, "CANCELLED");
+            assert_eq!(retry_task(&db, &task.id).unwrap().state, "QUEUED");
+        }
+    }
+
+    #[test]
     fn glm_ocr_response_variants_keep_exact_markdown_and_raw_markdown_export() {
         let response = json!({"md_results":[{"markdown":"# 第一页"},{"content":"第二页"}]});
         assert_eq!(glm_ocr_markdown(&response), "# 第一页\n\n第二页");
-        let mut task = TaskProjection { id:"ocr-test".into(),workspace_id:"workspace-test".into(),source_attachment_id:"attachment-a".into(),source_mime_type:"application/pdf".into(),source_display_name:"资料.pdf".into(),source_byte_count:1,model_id:GLM_OCR_MODEL_ID.into(),language_code:None,state:"COMPLETED".into(),progress_millis:0,total_duration_millis:None,error_code:None,user_message:None,technical_detail:None,attempt_count:1,result_attachment_id:None,provider_request_count:1,provider_request_id:Some("request-safe".into()),page_count:Some(2),billable_audio_millis:0,input_tokens:Some(2),output_tokens:Some(3),estimated_charge_micros:1,created_at_millis:1,updated_at_millis:2,segments:Vec::new() };
-        task.segments.push(SegmentProjection { ordinal:0,start_millis:0,end_millis:0,text:"# 原样 Markdown".into() });
-        assert_eq!(String::from_utf8(render_export(&task, "md").unwrap()).unwrap(), "# 原样 Markdown");
+        let mut task = TaskProjection {
+            id: "ocr-test".into(),
+            workspace_id: "workspace-test".into(),
+            source_attachment_id: "attachment-a".into(),
+            source_mime_type: "application/pdf".into(),
+            source_display_name: "资料.pdf".into(),
+            source_byte_count: 1,
+            model_id: GLM_OCR_MODEL_ID.into(),
+            language_code: None,
+            state: "COMPLETED".into(),
+            progress_millis: 0,
+            total_duration_millis: None,
+            error_code: None,
+            user_message: None,
+            technical_detail: None,
+            attempt_count: 1,
+            result_attachment_id: None,
+            provider_request_count: 1,
+            provider_request_id: Some("request-safe".into()),
+            page_count: Some(2),
+            billable_audio_millis: 0,
+            input_tokens: Some(2),
+            output_tokens: Some(3),
+            estimated_charge_micros: 1,
+            created_at_millis: 1,
+            updated_at_millis: 2,
+            segments: Vec::new(),
+        };
+        task.segments.push(SegmentProjection {
+            ordinal: 0,
+            start_millis: 0,
+            end_millis: 0,
+            text: "# 原样 Markdown".into(),
+        });
+        assert_eq!(
+            String::from_utf8(render_export(&task, "md").unwrap()).unwrap(),
+            "# 原样 Markdown"
+        );
     }
 
     #[test]
     fn glm_ocr_request_body_streams_exact_segmented_base64_json() {
         let dir = tempdir().unwrap();
         let source = dir.path().join("source.bin");
-        let bytes = (0..24_581).map(|index| (index % 251) as u8).collect::<Vec<_>>();
+        let bytes = (0..24_581)
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
         fs::write(&source, &bytes).unwrap();
         let mut body = GlmOcrJsonBody::new(fs::File::open(source).unwrap(), "application/pdf");
         let mut output = String::new();
         body.read_to_string(&mut output).unwrap();
-        assert_eq!(output, format!("{{\"model\":\"glm-ocr\",\"file\":\"data:application/pdf;base64,{}\"}}", BASE64.encode(bytes)));
+        assert_eq!(
+            output,
+            format!(
+                "{{\"model\":\"glm-ocr\",\"file\":\"data:application/pdf;base64,{}\"}}",
+                BASE64.encode(bytes)
+            )
+        );
     }
 
     #[test]

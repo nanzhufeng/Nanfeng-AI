@@ -5,13 +5,21 @@
   "type": "module",
   "scripts": {
     "protocol:test": "node ../protocol/scripts/run-golden.mjs",
-    "lint": "node --check src/app.mjs && node --check src/chat-shell.mjs && node --check src/desktop-search-page.mjs && node --check src/desktop-transcription-page.mjs && node --check src/android-settings-shell.mjs && node --check src/desktop-parity-preferences.mjs && node --check src/p8-inspect.mjs && node --check src/pwa-boundaries.mjs && node --check scripts/build.mjs && node --check scripts/bundle-macos.mjs && node --check scripts/prepare-p6-v2-picker-acceptance.mjs && node --check scripts/prepare-desktop-compare-acceptance.mjs",
+    "inventory:audit": "node scripts/audit-completion-inventory.mjs",
+    "theme:computed-style": "node scripts/check-theme-color-computed-style.mjs",
+    "lint": "node --check src/app.mjs && node --check src/chat-shell.mjs && node --check src/conversation-long-press.mjs && node --check src/conversation-lifecycle-view.mjs && node --check src/local-data-view.mjs && node --check src/desktop-search-page.mjs && node --check src/desktop-attachment-preview-owner.mjs && node --check src/c08-search-preview-fixture.mjs && node --check src/c09-reminder-preview-fixture.mjs && node --check src/c10-transcription-preview-fixture.mjs && node --check src/c12-model-network-preview-fixture.mjs && node --check src/c13-conversation-lifecycle-preview-fixture.mjs && node --check src/c14-local-data-preview-fixture.mjs && node --check src/c15-workspace-preview-fixture.mjs && node --check src/c16-theme-matrix-fixture.mjs && node --check src/desktop-theme-owner.mjs && node --check src/workspace-view.mjs && node --check src/desktop-transcription-page.mjs && node --check src/android-settings-shell.mjs && node --check src/desktop-parity-preferences.mjs && node --check src/p8-inspect.mjs && node --check src/pwa-boundaries.mjs && node --check scripts/build.mjs && node --check scripts/bundle-macos.mjs && node --check scripts/check-theme-color-computed-style.mjs && node --check scripts/c16-evidence-manifest.mjs && node --check scripts/capture-c16-tauri-matrix.mjs && node --check scripts/prepare-p6-v2-picker-acceptance.mjs && node --check scripts/prepare-desktop-compare-acceptance.mjs && node --check scripts/prepare-c02-c06-visual-acceptance.mjs && node --check scripts/prepare-c07-c12-offline-acceptance.mjs && node --check scripts/prepare-c13-conversation-lifecycle-acceptance.mjs && node --check scripts/prepare-c14-local-data-acceptance.mjs && node --check scripts/prepare-c16-theme-visual-acceptance.mjs && node --check scripts/audit-completion-inventory.mjs",
     "typecheck": "node scripts/typecheck.mjs",
     "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build.mjs",
     "bundle:macos": "node scripts/bundle-macos.mjs",
     "prepare:p6-v2-picker-acceptance": "node scripts/prepare-p6-v2-picker-acceptance.mjs",
     "prepare:desktop-compare-acceptance": "node scripts/prepare-desktop-compare-acceptance.mjs",
+    "prepare:c02-c06-acceptance": "node scripts/prepare-c02-c06-visual-acceptance.mjs",
+    "prepare:c07-c12-acceptance": "node scripts/prepare-c07-c12-offline-acceptance.mjs",
+    "prepare:c13-acceptance": "node scripts/prepare-c13-conversation-lifecycle-acceptance.mjs",
+    "prepare:c14-acceptance": "node scripts/prepare-c14-local-data-acceptance.mjs",
+    "prepare:c16-acceptance": "node scripts/prepare-c16-theme-visual-acceptance.mjs",
+    "c16:evidence": "node scripts/c16-evidence-manifest.mjs",
     "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml"
   }
 }

@@ -108,6 +108,10 @@ pub struct ConversationOverride {
     pub conversation_id: String,
     pub revision: u64,
     pub model_id: Option<String>,
+    #[serde(default)]
+    pub tone_override: Option<String>,
+    #[serde(default)]
+    pub web_search_override: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

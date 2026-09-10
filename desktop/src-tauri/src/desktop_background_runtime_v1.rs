@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const BACKGROUND_CYCLE_ARGUMENT: &str = "--nanfeng-background-cycle-v1";
+pub const BACKGROUND_APP_ROOT_ENV: &str = "NANFENG_AI_DESKTOP_BACKGROUND_ROOT_V1";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -170,20 +171,27 @@ pub fn render_launch_agent(spec: &LaunchAgentSpec) -> Result<String, String> {
             return Err("后台验收端点只能配合 /tmp 数据根".to_owned());
         }
     }
-    let environment = spec
-        .acceptance_endpoint
-        .as_deref()
-        .map_or_else(String::new, |endpoint| {
-            format!(
-                "<key>EnvironmentVariables</key><dict>\
-             <key>NANFENG_AI_DESKTOP_ORDINARY_CHAT_ACCEPTANCE</key><string>1</string>\
+    let acceptance_environment =
+        spec.acceptance_endpoint
+            .as_deref()
+            .map_or_else(String::new, |endpoint| {
+                format!(
+                    "<key>NANFENG_AI_DESKTOP_ORDINARY_CHAT_ACCEPTANCE</key><string>1</string>\
              <key>NANFENG_AI_DESKTOP_ORDINARY_CHAT_ACCEPTANCE_ROOT</key><string>{}</string>\
-             <key>NANFENG_AI_DESKTOP_ORDINARY_CHAT_MOCK_ENDPOINT</key><string>{}</string>\
-             </dict>",
-                xml(app_root),
-                xml(endpoint),
-            )
-        });
+             <key>NANFENG_AI_DESKTOP_ORDINARY_CHAT_MOCK_ENDPOINT</key><string>{}</string>",
+                    xml(app_root),
+                    xml(endpoint),
+                )
+            });
+    let environment = format!(
+        "<key>EnvironmentVariables</key><dict>\
+         <key>{}</key><string>{}</string>\
+         {}\
+         </dict>",
+        BACKGROUND_APP_ROOT_ENV,
+        xml(app_root),
+        acceptance_environment,
+    );
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
@@ -315,6 +323,27 @@ mod tests {
         let mut unsafe_spec = spec.clone();
         unsafe_spec.app_root = PathBuf::from("/Users/example/data");
         assert!(render_launch_agent(&unsafe_spec).is_err());
+    }
+
+    #[test]
+    fn launch_agent_without_mock_endpoint_keeps_the_exact_workspace_root() {
+        let spec = LaunchAgentSpec {
+            label: "com.nanzhufeng.ai.production.background-v1".into(),
+            executable: PathBuf::from(
+                "/Applications/Nanfeng AI.app/Contents/MacOS/nanfeng-ai-desktop",
+            ),
+            app_root: PathBuf::from(
+                "/Users/example/Library/Application Support/com.nanzhufeng.ai.desktop/p6b-workspace",
+            ),
+            acceptance_endpoint: None,
+        };
+
+        let plist = render_launch_agent(&spec).unwrap();
+        assert!(plist.contains("NANFENG_AI_DESKTOP_BACKGROUND_ROOT_V1"));
+        assert!(plist.contains(
+            "/Users/example/Library/Application Support/com.nanzhufeng.ai.desktop/p6b-workspace"
+        ));
+        assert!(!plist.contains("NANFENG_AI_DESKTOP_ORDINARY_CHAT_ACCEPTANCE"));
     }
 
     #[test]

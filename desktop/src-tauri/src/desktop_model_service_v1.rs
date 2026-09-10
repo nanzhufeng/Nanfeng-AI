@@ -5,7 +5,13 @@
 
 use serde::Serialize;
 use serde_json::json;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
+use std::sync::Mutex;
+static DENIED_PROVIDERS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+pub fn allow_user_credential_retry(provider_id: &str) {
+    if let Ok(mut denied) = DENIED_PROVIDERS.lock() { denied.retain(|id| id != provider_id); }
+}
 
 pub const KEYCHAIN_ACCOUNT: &str = "api-key";
 
@@ -13,6 +19,7 @@ pub const KEYCHAIN_ACCOUNT: &str = "api-key";
 pub enum CredentialPresence {
     Stored,
     MissingOrUnavailable,
+    Unavailable,
 }
 
 pub trait ProviderCredentialStore {
@@ -31,18 +38,19 @@ pub struct MacSecurityFrameworkProviderCredentialStore;
 
 impl ProviderCredentialStore for MacSecurityFrameworkProviderCredentialStore {
     fn presence(&self, provider_id: &str) -> CredentialPresence {
-        match self.read_secret(provider_id) {
-            Ok(mut secret) => {
-                secret.zeroize();
-                CredentialPresence::Stored
-            }
-            Err(_) => CredentialPresence::MissingOrUnavailable,
+        #[cfg(target_os = "macos")]
+        {
+            let Ok(service) = keychain_service(provider_id) else { return CredentialPresence::Unavailable; };
+            return credential_presence_from_status(keychain_presence_status(&service));
         }
+        #[cfg(not(target_os = "macos"))]
+        { CredentialPresence::Unavailable }
     }
 
     fn save_user_provided_secret(&self, provider_id: &str, secret: &[u8]) -> Result<(), String> {
         validate_provider(provider_id)?;
         validate_secret(secret)?;
+        allow_user_credential_retry(provider_id);
         #[cfg(target_os = "macos")]
         {
             security_framework::passwords::set_generic_password(
@@ -69,6 +77,7 @@ impl ProviderCredentialStore for MacSecurityFrameworkProviderCredentialStore {
     }
 
     fn reveal_user_requested_secret(&self, provider_id: &str) -> Result<Zeroizing<String>, String> {
+        allow_user_credential_retry(provider_id);
         let bytes = Zeroizing::new(self.read_secret(provider_id)?);
         let value = String::from_utf8(bytes.to_vec())
             .map_err(|_| "本机 API Key 格式无效；请重新保存。".to_owned())?;
@@ -98,16 +107,60 @@ impl ProviderCredentialStore for MacSecurityFrameworkProviderCredentialStore {
     }
 }
 
+fn credential_presence_from_status(status: i32) -> CredentialPresence {
+    match status {
+        0 => CredentialPresence::Stored,
+        -25300 => CredentialPresence::MissingOrUnavailable,
+        _ => CredentialPresence::Unavailable,
+    }
+}
+
+fn credential_read_error(status: i32) -> &'static str {
+    match status {
+        -25300 => "本机尚未保存该服务商的 API Key。",
+        -128 | -25293 => "系统未准许读取此密钥；现有记录保留，应用不会弹出系统授权框。",
+        -25308 => "系统暂不允许无弹窗访问此密钥；请解锁钥匙串后重试，现有记录保留。",
+        _ => "暂时无法读取钥匙串；现有密钥状态未知，请主动重试。",
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_presence_status(service: &str) -> i32 {
+    use core_foundation::{base::TCFType, boolean::CFBoolean, dictionary::CFDictionary, string::CFString};
+    use security_framework_sys::{item::*, keychain_item::SecItemCopyMatching};
+    unsafe extern "C" { static kSecUseAuthenticationUIFail: core_foundation::string::CFStringRef; }
+    unsafe {
+        let string = |value| CFString::wrap_under_get_rule(value).into_CFType();
+        let query = CFDictionary::from_CFType_pairs(&[
+            (string(kSecClass), string(kSecClassGenericPassword)),
+            (string(kSecAttrService), CFString::new(service).into_CFType()),
+            (string(kSecAttrAccount), CFString::new(KEYCHAIN_ACCOUNT).into_CFType()),
+            (string(kSecReturnAttributes), CFBoolean::true_value().into_CFType()),
+            (string(kSecReturnData), CFBoolean::false_value().into_CFType()),
+            (string(kSecUseAuthenticationUI), string(kSecUseAuthenticationUIFail)),
+        ]);
+        let mut result = std::ptr::null();
+        let status = SecItemCopyMatching(query.as_concrete_TypeRef(), &mut result);
+        if !result.is_null() { let _owned = core_foundation::base::CFType::wrap_under_create_rule(result); }
+        status
+    }
+}
+
 impl MacSecurityFrameworkProviderCredentialStore {
     fn read_secret(&self, provider_id: &str) -> Result<Vec<u8>, String> {
         validate_provider(provider_id)?;
+        let mut denied = DENIED_PROVIDERS.lock().map_err(|_| "密钥读取状态忙，请重试。".to_owned())?;
+        if denied.iter().any(|id| id == provider_id) { return Err(credential_read_error(-128).to_owned()); }
         #[cfg(target_os = "macos")]
         {
             security_framework::passwords::get_generic_password(
                 keychain_service(provider_id)?.as_str(),
                 KEYCHAIN_ACCOUNT,
             )
-            .map_err(|_| "本机尚未保存该服务商的 API Key。".to_owned())
+            .map_err(|error| {
+                if matches!(error.code(), -128 | -25293 | -25308) { denied.push(provider_id.to_owned()); }
+                credential_read_error(error.code()).to_owned()
+            })
         }
         #[cfg(not(target_os = "macos"))]
         {
@@ -163,7 +216,9 @@ pub struct PresetDescriptor {
     pub chat_selectable: bool,
 }
 
-pub const PRESETS: [PresetDescriptor; 15] = [
+pub const PRESETS: [PresetDescriptor; 17] = [
+    PresetDescriptor { id: "CLAUDE_FABLE_5_1", provider_id: "OPENROUTER", model_id: "anthropic/claude-fable-5.1-20260831", display_name: "Claude Fable 5.1", description: "适合长程代码、研究与复杂知识工作。", family: "Anthropic · OpenRouter", chat_selectable: true },
+    PresetDescriptor { id: "GPT_6_ASTRA", provider_id: "OPENROUTER", model_id: "openai/gpt-6-astra", display_name: "GPT-6 Astra", description: "适合高难分析、工程与长程复杂任务。", family: "OpenAI · OpenRouter", chat_selectable: true },
     PresetDescriptor {
         id: "CLAUDE_FABLE_5",
         provider_id: "OPENROUTER",
@@ -525,7 +580,7 @@ mod tests {
     }
 
     #[test]
-    fn qwen_asr_is_visible_capability_but_never_chat_selectable() {
+    fn legacy_qwen_asr_definition_remains_non_chat_selectable_for_saved_tasks() {
         assert_eq!(QWEN_ASR.provider_id, "QWEN");
         assert_eq!(QWEN_ASR.model_id, "qwen3-asr-flash");
         assert!(!QWEN_ASR.chat_selectable);
@@ -570,5 +625,28 @@ mod tests {
             store.presence("OPENROUTER"),
             CredentialPresence::MissingOrUnavailable
         );
+    }
+}
+
+#[cfg(test)]
+mod keychain_status_tests {
+    use super::*;
+    #[test]
+    fn permission_failure_never_means_deleted() {
+        assert_eq!(credential_presence_from_status(0), CredentialPresence::Stored);
+        assert_eq!(credential_presence_from_status(-25300), CredentialPresence::MissingOrUnavailable);
+        for status in [-128, -25293, -25308, -50] {
+            assert_eq!(credential_presence_from_status(status), CredentialPresence::Unavailable);
+            assert!(!credential_read_error(status).contains("尚未保存"));
+        }
+    }
+    #[test]
+    fn denied_provider_stays_blocked_until_user_retry() {
+        let id = "KEYCHAIN_TEST_ONLY_DENIED";
+        DENIED_PROVIDERS.lock().unwrap().push(id.into());
+        allow_user_credential_retry("KEYCHAIN_TEST_OTHER_PROVIDER");
+        assert!(DENIED_PROVIDERS.lock().unwrap().iter().any(|p| p == id));
+        allow_user_credential_retry(id);
+        assert!(!DENIED_PROVIDERS.lock().unwrap().iter().any(|p| p == id));
     }
 }

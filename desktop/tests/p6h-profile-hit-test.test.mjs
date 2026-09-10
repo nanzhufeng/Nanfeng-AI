@@ -9,6 +9,6 @@ test('FB-P6-026 footer has one Settings route and the old profile overlay is abs
   assert.match(css, /\.chat-sidebar-footer\s*\{[^}]*z-index:\s*40[^}]*isolation:\s*isolate/s);
   assert.ok(shell.includes('data-action="show-settings"'));
   assert.ok(!shell.includes('chat-profile-menu'));
-  assert.ok(icons.includes('Vendored Lucide icon nodes (MIT)'));
+  assert.ok(icons.includes('Vendored Lucide icon nodes (ISC)'));
   assert.ok(!css.includes('.chat-profile-menu'));
 });

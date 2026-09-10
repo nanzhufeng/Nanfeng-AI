@@ -23,7 +23,7 @@ test('hidden interests survives normalization without adding a visible field', (
   assert.doesNotMatch(html, /personalization-interests|长期关注方向|关注方向[^<]*<input/);
 });
 
-test('narrow settings uses one recoverable pane instead of clipping the detail page', () => {
+test('settings always renders the same primary and detail hierarchy without a narrow-window IA', () => {
   const common = {
     data: null,
     native: true,
@@ -32,11 +32,11 @@ test('narrow settings uses one recoverable pane instead of clipping the detail p
     settingsCapabilities: { ordinaryChatPersonalization: true, historyLibrary: true },
     status: '', error: '', connection: {},
   };
-  const home = renderChatFirstShell({ ...common, settingsMobileHome: true });
-  const detail = renderChatFirstShell({ ...common, settingsMobileHome: false });
-  assert.match(home, /android-settings-layout mobile-home/);
-  assert.match(detail, /android-settings-layout mobile-detail/);
-  assert.match(detail, /data-action="show-settings-home"/);
+  const html = renderChatFirstShell(common);
+  assert.match(html, /android-settings-layout/);
+  assert.match(html, /android-settings-primary/);
+  assert.match(html, /android-settings-secondary/);
+  assert.doesNotMatch(html, /mobile-home|mobile-detail|data-action="show-settings-home"/);
 });
 
 test('history library commands and review states are least-privilege wired', async () => {

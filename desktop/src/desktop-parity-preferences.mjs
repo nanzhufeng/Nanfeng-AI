@@ -2,14 +2,34 @@ const APPEARANCE_KEY = 'nanfeng-ai.desktop.appearance.v1';
 const FAVORITES_PREFIX = 'nanfeng-ai.desktop.favorite-conversations.v1:';
 const PRODUCT_SETTINGS_KEY = 'nanfeng-ai.desktop.product-settings.v1';
 
+export const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 8_000;
+
+/** Browser QA uses the same implemented-consumer projection that native SQLite returns. */
+export const DESKTOP_SETTINGS_CAPABILITIES = Object.freeze({
+  ordinaryChatPersonalization: true,
+  historyLibrary: true,
+  monitorNotifications: true,
+  reminderSuggestions: true,
+  unreadIndicators: true,
+  webSearch: true,
+  googleAccountSync: true,
+  updateService: false,
+});
+
 export const CONVERSATION_TONES = Object.freeze([
-  { id: 'default', label: '默认', detail: '自然、清晰地完成当前任务。' },
-  { id: 'professional', label: '专业可靠', detail: '结构严谨，优先说明依据与风险。' },
-  { id: 'friendly', label: '亲和友善', detail: '语气温和，但不牺牲准确性。' },
-  { id: 'direct', label: '直言不讳', detail: '直接指出问题与现实约束。' },
-  { id: 'efficient', label: '高效务实', detail: '先给结论和可执行动作。' },
-  { id: 'humorous', label: '风趣搞笑', detail: '适度幽默，严肃场景保持克制。' },
+  { id: 'default', label: '默认', detail: '自然、清晰地回答，按问题复杂度调整详略；先解决当前问题，不刻意强化某一种表达风格。' },
+  { id: 'direct', label: '直言不讳', detail: '先说结论，直接指出问题，减少铺垫。事实、证据和现实约束优先；发现错误、情绪化、过度自信或悲观时明确纠正。可以反驳和讨论不同观点，不因用户立场强烈而迎合或妥协，但不羞辱、不武断。' },
+  { id: 'professional', label: '专业可靠', detail: '像严谨的专业顾问。先核对事实与条件，结构化说明依据、推理、风险和限制；不编造确定性。' },
+  { id: 'friendly', label: '亲和友善', detail: '先理解你的处境和情绪，用温和、耐心的方式解释并给出支持；仍会纠正明显错误，不用安慰替代事实。' },
+  { id: 'efficient', label: '高效务实', detail: '回答精简。先给结论、优先级和下一步，只保留影响决策的内容；主动指出关键阻碍、取舍、成本和停止条件。' },
+  { id: 'humorous', label: '风趣搞笑', detail: '在事实准确和任务完成不受影响时，用适度幽默和类比降低阅读压力；严肃、高风险或负面情绪场景会自动收敛。' },
 ]);
+
+const DEFAULT_CONVERSATION_TONE = CONVERSATION_TONES[0];
+
+export function conversationToneDefinition(value) {
+  return CONVERSATION_TONES.find(item => item.id === value) || DEFAULT_CONVERSATION_TONE;
+}
 
 export const DEFAULT_PRODUCT_SETTINGS = Object.freeze({
   memoryEnabled: true,
@@ -69,13 +89,13 @@ export function normalizeProductSettings(value = {}) {
   return {
     memoryEnabled: boolean('memoryEnabled'),
     historyLibraryEnabled: boolean('historyLibraryEnabled'),
-    tone: CONVERSATION_TONES.some(item => item.id === value.tone) ? value.tone : DEFAULT_PRODUCT_SETTINGS.tone,
+    tone: value.tone === 'default' || CONVERSATION_TONES.some(item => item.id === value.tone) ? value.tone : DEFAULT_PRODUCT_SETTINGS.tone,
     nickname: normalizedText(value.nickname, 80),
     occupation: normalizedText(value.occupation, 120),
     // Android still owns this hidden compatibility value even though the current UI has no
     // visible input. Keeping it in normalization prevents old imports from erasing it on save.
     interests: normalizedText(value.interests, 500),
-    customInstructions: normalizedText(value.customInstructions, 6000),
+    customInstructions: normalizedText(value.customInstructions, CUSTOM_INSTRUCTIONS_MAX_LENGTH),
     monitorNotifications: boolean('monitorNotifications'),
     reminderSuggestions: boolean('reminderSuggestions'),
     unreadIndicators: boolean('unreadIndicators'),
@@ -142,7 +162,8 @@ const visibleAttachments = message => (message?.blocks || [])
   .map(block => `- ${String(block.asset.displayName || '本地附件')}（${String(block.asset.mimeType || '未知类型')}）`);
 
 function markdownMessage(message) {
-  const role = message?.role === 'assistant' ? '南枫AI' : message?.role === 'user' ? '用户' : '工具记录';
+  const canonicalRole = String(message?.role || '').trim().toLocaleLowerCase();
+  const role = canonicalRole === 'assistant' ? '南枫AI' : canonicalRole === 'user' ? '用户' : '工具记录';
   const timestamp = message?.createdAt ? ` · ${message.createdAt}` : '';
   const text = visibleText(message);
   const attachments = visibleAttachments(message);
@@ -159,7 +180,7 @@ export function conversationMarkdown(conversation) {
 }
 
 export function assistantMessageMarkdown(conversation, messageId) {
-  const message = (conversation?.messages || []).find(item => item?.id === messageId && item?.role === 'assistant');
+  const message = (conversation?.messages || []).find(item => item?.id === messageId && String(item?.role || '').trim().toLocaleLowerCase() === 'assistant');
   if (!message) return null;
   const title = String(conversation?.title || '未命名会话').replaceAll(/[\r\n]+/g, ' ').trim();
   return [`# ${title}`, '', markdownMessage(message), ''].join('\n');

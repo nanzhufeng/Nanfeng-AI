@@ -1,4 +1,5 @@
 import { icon, icons } from './icon-source.mjs';
+import { attachmentPreviewCapability } from './desktop-attachment-preview-owner.mjs';
 
 const escapeHtml = value => String(value ?? '').replace(
   /[&<>"']/g,
@@ -85,20 +86,16 @@ function attachmentGlyph(hit, thumbnails) {
   return `<span class="desktop-search-file-preview kind-${kind}" aria-hidden="true">${icon(glyph, label)}<b>${escapeHtml(label)}</b></span>`;
 }
 
-function attachmentOpenLabel(hit) {
-  const mime = String(hit.mimeType || '').toLowerCase();
-  return ['IMAGE', 'VIDEO', 'AUDIO'].includes(hit.contentKind) || ['application/pdf', 'text/plain', 'text/markdown', 'application/json', 'text/csv'].includes(mime) ? '预览' : '系统打开';
-}
-
 function attachmentCard(hit, query, thumbnails) {
   const entryId = escapeHtml(hit.entryId);
   const preview = hit.contentKind === 'IMAGE' ? ` data-image-thumbnail="${escapeHtml(hit.attachmentId)}" data-thumbnail-workspace-id="${escapeHtml(hit.workspaceId)}"` : '';
+  const capability = attachmentPreviewCapability(hit);
   return `<article class="desktop-search-attachment-card" data-search-entry-id="${entryId}"${preview}>
-    <button class="desktop-search-attachment-open" data-action="open-search-attachment" data-entry-id="${entryId}" aria-label="预览${escapeHtml(hit.displayName || '附件')}">${attachmentGlyph(hit, thumbnails)}<span><strong>${highlightSearchText(hit.displayName || hit.title, query)}</strong><small>${escapeHtml(hit.mimeType || '未知类型')}</small></span></button>
+    <button class="desktop-search-attachment-open" data-action="open-search-attachment" data-entry-id="${entryId}" aria-label="${escapeHtml(capability.label)}：${escapeHtml(hit.displayName || '附件')}">${attachmentGlyph(hit, thumbnails)}<span><strong>${highlightSearchText(hit.displayName || hit.title, query)}</strong><small>${escapeHtml(hit.mimeType || '未知类型')}</small><small class="desktop-search-preview-capability">${escapeHtml(capability.label)}</small></span></button>
     <button class="desktop-search-card-menu" data-action="open-search-attachment-menu" data-entry-id="${entryId}" aria-label="附件操作" title="附件操作">${icon(icons.more, '附件操作')}</button>
     ${hit.sourceLabel ? `<small class="desktop-search-source">${escapeHtml(hit.sourceLabel)}</small>` : ''}
     <p>${highlightSearchText(hit.snippet, query)}</p>
-    <footer><span><small>${formatSearchBytes(hit.byteCount)}</small><small>${formatSearchTimestamp(hit.timestamp)}</small></span><button data-action="open-search-attachment" data-entry-id="${entryId}" aria-label="${attachmentOpenLabel(hit)}${escapeHtml(hit.displayName || '附件')}">${attachmentOpenLabel(hit)}</button></footer>
+    <footer><span><small>${formatSearchBytes(hit.byteCount)}</small><small>${formatSearchTimestamp(hit.timestamp)}</small></span></footer>
   </article>`;
 }
 
@@ -124,7 +121,7 @@ function historyPanel(history, highlighted) {
   return `<section class="desktop-search-history-panel" role="dialog" aria-label="最近搜索"><header><strong>最近搜索</strong><button data-action="clear-search-history" ${history.length ? '' : 'disabled'}>清空</button><button data-action="close-search-history" aria-label="关闭历史">${icon(icons.close, '关闭')}</button></header>${history.length ? history.map(query => `<button class="${query === highlighted ? 'selected' : ''}" data-action="fill-search-history" data-query="${escapeHtml(query)}">${icon(icons.history, '历史')}<span>${escapeHtml(query)}</span></button>`).join('') : '<p>暂无已提交的本地搜索。</p>'}</section>`;
 }
 
-export function renderDesktopSearchPage({ query = '', category = 'all', sortMode = 'default', fileType = 'all', fileTypeOpen = false, page = { hits: [], textCount: 0, attachmentCount: 0, truncated: false }, loading = false, error = '', history = [], historyOpen = false, historyHighlighted = null, thumbnails = {} } = {}) {
+export function renderDesktopSearchPage({ query = '', category = 'all', sortMode = 'default', fileType = 'all', fileTypeOpen = false, page = { hits: [], textCount: 0, attachmentCount: 0, truncated: false }, loading = false, error = '', evidenceLabel = '', history = [], historyOpen = false, historyHighlighted = null, thumbnails = {} } = {}) {
   const hits = page?.hits || [];
   const textHits = hits.filter(hit => hit.contentKind === 'TEXT' || hit.contentKind === 'TITLE');
   const attachmentHits = hits.filter(hit => ['IMAGE', 'VIDEO', 'AUDIO', 'FILE'].includes(hit.contentKind));
@@ -138,7 +135,7 @@ export function renderDesktopSearchPage({ query = '', category = 'all', sortMode
     <header class="desktop-search-header"><button data-action="close-search" aria-label="退出搜索">${icon(icons.close, '退出搜索')}</button><h1>搜索</h1></header>
     <nav class="desktop-search-tabs" role="tablist" aria-label="搜索类型">${SEARCH_CATEGORIES.map(([id, label]) => `<button data-action="set-search-category" data-category="${id}" role="tab" aria-selected="${id === category}" class="${id === category ? 'selected' : ''}">${label}</button>`).join('')}</nav>
     <div class="desktop-search-sortbar">${category === 'file' ? `<div class="desktop-search-file-type"><button data-action="toggle-search-file-types" aria-expanded="${fileTypeOpen}"><span>${escapeHtml(SEARCH_FILE_TYPES.find(([id]) => id === fileType)?.[1] || '全部类型')}</span>${icon(icons.chevronDown, '展开')}</button>${fileTypeOpen ? `<div role="menu">${SEARCH_FILE_TYPES.map(([id, label]) => `<button data-action="set-search-file-type" data-file-type="${id}" class="${id === fileType ? 'selected' : ''}">${label}${id === fileType ? icon(icons.check, '当前类型') : ''}</button>`).join('')}</div>` : ''}</div>` : '<span></span>'}<div class="desktop-search-sort-controls">${sortButton('时间', 'time', sortMode)}${sortButton('大小', 'size', sortMode)}<button class="${sortMode === 'default' ? 'selected' : ''}" data-action="set-search-sort" data-sort-column="default">还原</button></div></div>
-    <div class="desktop-search-results" data-search-scroll-owner tabindex="0">${results}</div>
+    <div class="desktop-search-results" data-search-scroll-owner tabindex="0">${evidenceLabel ? `<p class="desktop-search-evidence" role="status">${escapeHtml(evidenceLabel)}</p>` : ''}${results}</div>
     <div class="desktop-search-bottom-fade" aria-hidden="true"></div>
     ${historyOpen ? `<button class="desktop-search-history-backdrop" data-action="close-search-history" aria-label="关闭历史"></button>${historyPanel(history, historyHighlighted)}` : ''}
     <footer class="desktop-search-dock"><label>${icon(icons.search, '搜索')}<input id="full-search-input" type="search" value="${escapeHtml(query)}" placeholder="${escapeHtml(placeholder)}" aria-label="搜索${categoryLabel}"><button data-action="clear-full-search" aria-label="清空搜索" ${query ? '' : 'disabled'}>${icon(icons.close, '清空')}</button></label><button data-action="open-search-history" aria-expanded="${historyOpen}">${icon(icons.history, '历史')}<span>历史</span></button></footer>

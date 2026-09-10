@@ -11,6 +11,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+data class MemorySummaryEditorState(
+    val text: String = "",
+    val originalText: String = "",
+    val expectedRevisions: Map<MemoryId, Int> = emptyMap(),
+    val loading: Boolean = true,
+    val saving: Boolean = false,
+    val error: String? = null,
+)
+
 data class MemoryUiState(
     val memories: List<MemorySnapshot> = emptyList(),
     val scopeFilter: MemoryScopeKind? = null,
@@ -21,6 +30,7 @@ data class MemoryUiState(
     val selectedForBatch: Set<MemoryId> = emptySet(),
     val pendingConflict: MemoryConflict? = null,
     val notice: String? = null,
+    val summaryEditor: MemorySummaryEditorState? = null,
 )
 
 /** UI adapter for explicit user-owned Memory actions. It never reads ContextSelection or memorySources. */
@@ -70,6 +80,60 @@ class MemoryViewModel(private val manage: ManageMemoryUseCase) : ViewModel() {
             )
         }
     }
+    fun editSummary() {
+        if (state.summaryEditor != null) return
+        val loadingEditor = MemorySummaryEditorState()
+        state = state.copy(summaryEditor = loadingEditor)
+        viewModelScope.launch {
+            try {
+                // Never seed a replacement from the currently filtered search results.
+                val all = withContext(Dispatchers.IO) { manage.list(MemoryScopeKind.GLOBAL, MemoryStatus.ACTIVE, "") }
+                if (state.summaryEditor !== loadingEditor) return@launch
+                val text = if (all.size == 1) all.single().memory.body else
+                    all.joinToString("\n\n") { "${it.memory.title}\n${it.memory.body}" }
+                state = state.copy(summaryEditor = MemorySummaryEditorState(text, text,
+                    all.associate { it.memory.id to (it.revisions.maxOfOrNull { revision -> revision.revision } ?: 0) }, loading = false))
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                if (state.summaryEditor === loadingEditor) state = state.copy(summaryEditor =
+                    loadingEditor.copy(error = "记忆摘要读取失败，请返回后重试。"))
+            }
+        }
+    }
+    fun updateSummaryEditor(text: String) {
+        val editor = state.summaryEditor ?: return
+        if (editor.loading || editor.saving) return
+        state = state.copy(summaryEditor = editor.copy(text = text, error = null))
+    }
+    fun dismissSummaryEditor() {
+        if (state.summaryEditor?.saving != true) state = state.copy(summaryEditor = null)
+    }
+    fun saveSummaryEditor() {
+        val editor = state.summaryEditor ?: return
+        if (editor.loading || editor.saving || editor.text.isBlank()) return
+        state = state.copy(summaryEditor = editor.copy(saving = true, error = null))
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    manage.replaceSummary(MemorySummaryReplacement(MemoryIntentId.new(), MemoryId.new(),
+                        editor.text, editor.expectedRevisions))
+                }
+                when (result) {
+                    is MemoryMutationResult.Applied, is MemoryMutationResult.Replayed -> {
+                        state = state.copy(summaryEditor = null, search = "", scopeFilter = MemoryScopeKind.GLOBAL,
+                            statusFilter = MemoryStatus.ACTIVE, notice = "记忆摘要已保存，后续检索使用修改后的内容。")
+                        reload()
+                    }
+                    is MemoryMutationResult.Rejected -> state = state.copy(summaryEditor = editor.copy(error = rejectionText(result.code)))
+                    else -> state = state.copy(summaryEditor = editor.copy(error = "保存未完成，编辑内容已保留。"))
+                }
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                state = state.copy(summaryEditor = editor.copy(error = "保存未完成，编辑内容已保留，请重试。"))
+            }
+        }
+    }
+
     /** Confirmation has already happened in the UI. Deleting a summary never changes its use setting. */
     fun clearSummary() = viewModelScope.launch {
         val ids = state.memories.filter { it.memory.status == MemoryStatus.ACTIVE }.map { it.memory.id }
@@ -132,6 +196,7 @@ class MemoryViewModel(private val manage: ManageMemoryUseCase) : ViewModel() {
 private fun rejectionText(code: MemoryRejectionCode): String = when (code) {
     MemoryRejectionCode.HIGH_SENSITIVITY_PASSWORD, MemoryRejectionCode.HIGH_SENSITIVITY_API_KEY, MemoryRejectionCode.HIGH_SENSITIVITY_AUTHORIZATION, MemoryRejectionCode.HIGH_SENSITIVITY_RECOVERY_CODE, MemoryRejectionCode.HIGH_SENSITIVITY_PAYMENT_CARD -> "已拒绝高敏感内容；正文未写入本地 Memory。"
     MemoryRejectionCode.INVALID_SCOPE_REFERENCE -> "关联的 Project 或 Conversation 不存在，未保存。"
+    MemoryRejectionCode.STALE_SUMMARY -> "摘要已被其他操作更新，未覆盖；请复制你的修改，再返回重新打开编辑。"
     MemoryRejectionCode.EMPTY_TITLE -> "请填写记忆标题。"
     MemoryRejectionCode.BODY_EMPTY -> "请填写记忆正文。"
     MemoryRejectionCode.TITLE_TOO_LONG, MemoryRejectionCode.BODY_TOO_LONG -> "内容超过本地 Memory 边界。"

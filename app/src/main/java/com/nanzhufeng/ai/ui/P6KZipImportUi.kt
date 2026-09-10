@@ -90,6 +90,11 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
 ) {
     var pendingDeleteZipId by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (showZip) Text(
+            "重复导入会按官方身份去重；你主动删除的对话或附件会保留删除标记，之后不会被 ZIP 重新导入。",
+            style = MaterialTheme.typography.bodySmall,
+            color = SecondaryText,
+        )
         if (showZip && zipState.revokeFailure) Text("导入批次尚未完全撤销，已保留任务与私有副本；请重试删除。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         if ((showJson && chatGptState.tasks.isEmpty() && claudeState.tasks.isEmpty()) || (showZip && zipState.tasks.isEmpty())) {
             Text("还没有导入记录。", style = MaterialTheme.typography.bodyMedium, color = SecondaryText)
@@ -156,7 +161,7 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
         AlertDialog(
             onDismissRequest = { pendingDeleteZipId = null },
             title = { Text("删除本批次？") },
-            text = { Text("仅删除本批次导入的对话。") },
+            text = { Text("将删除本批次导入的对话，并永久记录为用户主动删除；以后导入同一或更新的 ZIP 时，这些对话和附件都不会被重新导入。") },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingDeleteZipId = null }) { Text("取消") } },
             confirmButton = {
                 Button(onClick = { onClearZipBatch(taskId); pendingDeleteZipId = null }, shape = P5AInteractiveShape) { Text("删除本批次") }

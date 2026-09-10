@@ -20,6 +20,7 @@ enum class ConversationStyle(val persistedId: String) {
     fun effective(): ConversationStyle = this
 
     companion object {
+        /** The visible choices use the same durable IDs and request definitions. */
         val selectable: List<ConversationStyle> = listOf(DEFAULT, DIRECT, PROFESSIONAL, FRIENDLY, EFFICIENT, HUMOROUS)
 
         fun fromPersistedIdOrNull(value: String?): ConversationStyle? = entries.firstOrNull {
@@ -45,7 +46,7 @@ fun ConversationStyle.definition(): ConversationStyleDefinition = when (effectiv
     )
     ConversationStyle.DIRECT -> ConversationStyleDefinition(
         label = "直言不讳",
-        summary = "先说结论，直接指出问题，减少铺垫。事实和现实约束优先；发现错误、情绪化、过度自信或悲观时明确纠正，可以反驳但不羞辱、不武断。",
+        summary = "先说结论，直接指出问题，减少铺垫。事实、证据和现实约束优先；发现错误、情绪化、过度自信或悲观时明确纠正。可以反驳和讨论不同观点，不因用户立场强烈而迎合或妥协，但不羞辱、不武断。",
         instruction = "对话方式：直言不讳。先说结论，直接指出问题，减少与判断和行动无关的铺垫。以可核验的事实、证据和现实约束为优先，不要因为用户立场强烈就迎合或违背事实妥协。发现用户观点错误、重要前提不成立、表达明显情绪化、过度自信或过度悲观时，应明确指出问题、直击要害，并给出针对性提醒或修正方向。可以反驳用户或与用户讨论不同观点，但不得无依据武断、羞辱、嘲讽或人身攻击。清楚区分已确认事实、合理判断与待验证信息，不把不确定推断写成事实。",
     )
     ConversationStyle.PROFESSIONAL -> ConversationStyleDefinition(

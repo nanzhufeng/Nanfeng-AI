@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
+  CONVERSATION_TONES,
   DesktopParityPreferences,
+  THEME_COLORS,
   appearanceProjection,
   assistantMessageMarkdown,
   conversationFindMatches,
   conversationMarkdown,
 } from '../src/desktop-parity-preferences.mjs';
 import { renderChatFirstShell } from '../src/chat-shell.mjs';
+import { renderLocalDataCleanupScopeDialog } from '../src/local-data-view.mjs';
 
 class MemoryStorage {
   #items = new Map();
@@ -40,6 +43,51 @@ test('appearance and favorite preferences are normalized and device-local', () =
   assert.deepEqual(preferences.readAppearance(), { mode: 'system', fontSize: 'standard', themeColor: 'orange' });
 });
 
+test('conversation style picker exposes the default choice before the five explicit styles', () => {
+  assert.deepEqual(CONVERSATION_TONES.map(item => item.label), ['默认', '直言不讳', '专业可靠', '亲和友善', '高效务实', '风趣搞笑']);
+  const html = renderChatFirstShell({
+    data, native: true, pane: 'settings', settingsSection: 'personalization', status: '', error: '', connection: {},
+    settingsPicker: 'tone', productSettings: { tone: 'default' }, personalizationDraft: { tone: 'default' },
+    settingsCapabilities: { ordinaryChatPersonalization: true },
+  });
+  for (const label of ['默认', '直言不讳', '专业可靠', '亲和友善', '高效务实', '风趣搞笑']) assert.ok(html.includes(`>${label}</strong>`), label);
+  assert.equal((html.match(/data-picker="tone" data-value=/g) || []).length, 6);
+  assert.ok(html.includes('data-value="default"'));
+  assert.ok(html.includes('不因用户立场强烈而迎合或妥协'));
+  assert.ok(html.includes('android-settings-picker android-settings-tone-picker'));
+});
+
+test('conversation style picker uses a spacious Desktop dialog while giving every choice an Android-matched card state', async () => {
+  const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
+  const toneCss = css.slice(css.indexOf('.android-settings-tone-picker'), css.indexOf('.settings-conversation-management'));
+  for (const token of ['width: min(600px, calc(100vw - 56px))', 'gap: 10px', 'height: min(620px, calc(100vh - 112px))', 'grid-auto-rows: max-content', 'align-content: start', 'background: #f3f4f3', 'border: 1px solid transparent', 'font-size: calc(13px * var(--app-font-scale, 1))', '[aria-pressed="true"]', 'background: #fff3ea', 'border-color: #ff9a57']) assert.ok(toneCss.includes(token), token);
+  assert.ok(!toneCss.includes('max-height:'));
+});
+
+test('theme color picker renders every preview from the real theme token owner', () => {
+  const html = renderChatFirstShell({
+    data, native: true, pane: 'settings', settingsSection: 'personalization', status: '', error: '', connection: {},
+    settingsPicker: 'themeColor', appearance: { mode: 'system', fontSize: 'standard', themeColor: 'green' },
+  });
+
+  const pickerHtml = html.slice(html.indexOf('<section class="android-settings-picker'));
+  assert.equal((pickerHtml.match(/class="android-settings-color-preview\s/g) || []).length, THEME_COLORS.length);
+  for (const item of THEME_COLORS) {
+    assert.ok(html.includes(`data-picker="themeColor" data-value="${item.id}"`), item.id);
+    assert.ok(html.includes(`android-settings-color-preview-${item.id}`), item.id);
+  }
+  assert.match(html, /data-value="green" aria-pressed="true"[^>]*>[\s\S]*?<title>已选中<\/title>/);
+});
+
+test('theme color preview has one shared native-safe surface and literal token values at render time', async () => {
+  const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
+  const start = css.indexOf('.android-settings-color-preview { display');
+  const rule = css.slice(start, css.indexOf('}', start) + 1);
+  assert.match(rule, /background-image: none !important;/);
+  assert.doesNotMatch(rule, /\bbackground:/);
+  for (const item of THEME_COLORS) assert.match(css, new RegExp(`\\.android-settings-color-preview-${item.id} \\{ background-color: ${item.accent} !important; \\}`));
+});
+
 test('markdown export contains visible text and safe attachment metadata only', () => {
   const whole = conversationMarkdown(conversation);
   const answer = assistantMessageMarkdown(conversation, 'assistant-1');
@@ -60,10 +108,40 @@ test('conversation find is case-insensitive, bounded, and renders the active mat
     favoriteConversationIds: new Set([conversation.id]), conversationFindOpen: true, conversationFindQuery: '手机',
     conversationFindMatches: conversationFindMatches(conversation, '手机'), conversationFindIndex: 1,
   });
-  for (const token of ['conversation-find-input', '2 / 2', '<mark>手机</mark>', 'find-active', 'export-conversation-markdown', 'export-assistant-markdown', 'chat-history-favorite']) assert.ok(html.includes(token));
+  for (const token of ['conversation-find-input', '2 / 2', '<mark>手机</mark>', 'find-active', 'open-conversation-header-menu', 'open-assistant-message-menu', 'chat-history-favorite']) assert.ok(html.includes(token), token);
 });
 
-test('completed assistant answers expose only content-free local context audit metadata', () => {
+test('conversation header branches from visible transcript content like Android', () => {
+  const mainHeader = html => html.slice(html.indexOf('<header class="chat-main-header">'), html.indexOf('</header>', html.indexOf('<header class="chat-main-header">')) + 9);
+  const emptyConversation = { ...conversation, id: 'empty-conversation', messages: [] };
+  const emptyHtml = mainHeader(renderChatFirstShell({
+    data: { summary: data.summary, exchange: { conversations: [emptyConversation] } }, native: true,
+    selectedConversationId: emptyConversation.id, pane: 'chat', status: '', error: '', connection: {},
+  }));
+  assert.match(emptyHtml, /class="chat-mode-switch"/);
+  assert.match(emptyHtml, /data-action="toggle-temporary-chat"/);
+  assert.doesNotMatch(emptyHtml, /data-action="new-chat"[^>]*aria-label="新对话"/);
+  assert.doesNotMatch(emptyHtml, /data-action="open-conversation-header-menu"/);
+
+  const contentHtml = mainHeader(renderChatFirstShell({
+    data, native: true, selectedConversationId: conversation.id, pane: 'chat', status: '', error: '', connection: {},
+  }));
+  assert.doesNotMatch(contentHtml, /class="chat-mode-switch"/);
+  assert.doesNotMatch(contentHtml, /data-action="toggle-temporary-chat"/);
+  assert.match(contentHtml, /class="chat-header-content-actions"/);
+  assert.match(contentHtml, /data-action="new-chat"[^>]*aria-label="新对话"/);
+  assert.match(contentHtml, /data-action="open-conversation-header-menu"[^>]*aria-label="对话更多操作"/);
+  assert.ok(contentHtml.indexOf('data-action="new-chat"') < contentHtml.indexOf('data-action="open-conversation-header-menu"'));
+
+  const menuHtml = renderChatFirstShell({
+    data, native: true, selectedConversationId: conversation.id, pane: 'chat', status: '', error: '', connection: {},
+    contextMenu: { id: conversation.id, revision: conversation.revision, pinned: false, favorite: false, archived: false, source: 'header' },
+  });
+  for (const token of ['context-menu-share', 'context-menu-find', 'context-menu-pin', 'context-menu-archive', 'context-menu-delete']) assert.ok(menuHtml.includes(token), token);
+  assert.ok(!menuHtml.includes('context-menu-rename'));
+});
+
+test('completed assistant answers expose answer information only through the more menu', () => {
   const html = renderChatFirstShell({
     data, native: true, selectedConversationId: conversation.id, pane: 'chat', status: '', error: '', connection: {},
     contextSelectionRecords: [{
@@ -71,12 +149,12 @@ test('completed assistant answers expose only content-free local context audit m
       selectedSources: [{ kind: 'MEMORY', title: '长期记忆' }, { kind: 'CURRENT_PATH', title: '当前会话路径' }],
     }],
   });
-  assert.ok(html.includes('data-action="show-answer-context"'));
-  assert.ok(html.includes('查看回答上下文 · 2'));
+  assert.ok(html.includes('data-action="open-assistant-message-menu"'));
+  assert.ok(!html.includes('data-action="show-answer-context"'));
   assert.ok(!html.includes('private/secret'));
 });
 
-test('settings expose the latest phone values in the desktop primary and secondary split', () => {
+test('settings expose the latest phone values in the desktop primary and secondary split', async () => {
   const appearance = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'personalization', status: '', error: '', connection: {}, appearance: { mode: 'dark', fontSize: 'large', themeColor: 'green' } });
   for (const token of ['aria-label="设置一级菜单"', 'aria-label="设置二级页面"', '外观', '深色', '字体大小', '大', '主题色', '绿色', 'open-settings-picker']) assert.ok(appearance.includes(token));
   const favorites = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'favorites', status: '', error: '', connection: {}, favoriteConversationIds: new Set([conversation.id]) });
@@ -84,6 +162,9 @@ test('settings expose the latest phone values in the desktop primary and seconda
   const about = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo: { version: '0.0.1', platform: 'macos', arch: 'aarch64' } });
   for (const token of ['Desktop 版 0.0.1', 'macos', 'aarch64']) assert.ok(about.includes(token));
   assert.ok(!about.includes('读取中'));
+  const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
+  assert.match(css, /\.android-settings-about > div:not\(\.android-settings-divider\)/);
+  assert.match(css, /\.android-settings-about > \.android-settings-divider \{ height: 1px; min-height: 1px; padding: 0;/);
 });
 
 test('native settings enable only implemented consumers and keep remaining owners fail closed', () => {
@@ -96,10 +177,10 @@ test('native settings enable only implemented consumers and keep remaining owner
   const reminders = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'reminders', status: '', error: '', connection: {}, settingsCapabilities: capabilities });
   for (const token of ['Desktop 尚无系统通知与计划监控消费者', 'Desktop 普通对话尚无提醒建议 owner']) assert.ok(reminders.includes(token));
   assert.ok(!reminders.includes('Desktop 尚无未读水位与列表消费者'));
-  assert.equal((reminders.match(/role="switch" disabled/g) || []).length, 2);
-  assert.equal((reminders.match(/aria-pressed="false" role="switch" disabled/g) || []).length, 2);
+  assert.equal((reminders.match(/role="switch"[^>]*disabled/g) || []).length, 2);
+  assert.equal((reminders.match(/role="switch" aria-checked="false" disabled/g) || []).length, 2);
   const model = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'model', status: '', error: '', connection: {}, settingsCapabilities: capabilities });
-  assert.ok(model.includes('需要当前信息时自动检索公开网页并标注来源'));
+  assert.ok(model.includes('开启后每次普通对话均检索公开网页并标注来源'));
   assert.doesNotMatch(model, /data-key="webSearchEnabled"[^>]*disabled/);
   const development = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'development', status: '', error: '', connection: {}, settingsCapabilities: capabilities });
   assert.ok(!development.includes('功能审阅 · 南枫转写'));
@@ -132,7 +213,7 @@ test('native parity commands are explicitly least-privilege allowed for the main
   assert.match(permissions, /commands\.allow = \["permanently_delete_desktop_conversation"\]/);
 });
 
-test('current Android model catalog keeps GLM-OCR visible but outside chat selection', () => {
+test('current Android model catalog keeps GLM-OCR visible but outside chat selection', async () => {
   const zhipu = renderChatFirstShell({
     data, native: true, pane: 'settings', settingsSection: 'model-configuration', status: '', error: '', connection: {},
     settingsPicker: 'modelPreset', modelProviderId: 'ZHIPU',
@@ -140,6 +221,15 @@ test('current Android model catalog keeps GLM-OCR visible but outside chat selec
   for (const token of ['GLM-5.3', 'GLM-5.3 Flash', 'GLM-OCR', '图片与 PDF 转 Markdown · 使用同一智谱 API Key', '仅在左侧栏“南枫转写”中调用，不加入聊天模型选择。']) assert.ok(zhipu.includes(token));
   assert.ok(!zhipu.includes('data-preset-id="GLM_OCR"'));
   for (const retired of ['Grok 4.1', 'Grok 4.5', 'Grok 4.6']) assert.ok(!zhipu.includes(retired));
+
+  const qwen = renderChatFirstShell({
+    data, native: true, pane: 'settings', settingsSection: 'model-configuration', status: '', error: '', connection: {},
+    settingsPicker: 'modelPreset', modelProviderId: 'QWEN',
+  });
+  assert.ok(!qwen.includes('Qwen3-ASR'));
+  assert.ok(!qwen.includes('音频与视频转文字'));
+  const nativeBridge = await readFile(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8');
+  assert.doesNotMatch(nativeBridge, /"QWEN" => vec!\[desktop_model_service_v1::QWEN_ASR\]/);
 });
 
 test('model record pages use the latest Android empty states and real usage projection', () => {
@@ -162,6 +252,7 @@ test('local data page renders aggregate-only all-workspace inventory in Android 
     data, native: true, pane: 'settings', settingsSection: 'privacy', status: '', error: '', connection: {},
     privacyInventory: { totalBytes: 15360, aggregates: [
       { id: 'search_text', count: 2, byteCount: 1200 },
+      { id: 'messages', count: 2, byteCount: 1200 },
       { id: 'memory', count: 1, byteCount: 240 },
       { id: 'knowledge', count: 3, byteCount: 2048 },
       { id: 'projects', count: 1, byteCount: 512 },
@@ -173,20 +264,25 @@ test('local data page renders aggregate-only all-workspace inventory in Android 
   for (const forbidden of ['workspace-safe-1', '双端同步', '证明.pdf', 'private/secret']) assert.ok(!html.includes(forbidden));
 });
 
-test('local data cleanup keeps exact confirmation gates and routes conversation trash to conversation management', async () => {
-  const appSource = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
+test('local data cleanup keeps the current Android scopes and exact confirmation gates', async () => {
+  const [appSource, ownerSource] = await Promise.all([
+    readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8'),
+    readFile(resolve(import.meta.dirname, '../src/local-data-view.mjs'), 'utf8'),
+  ]);
+  const renderedSource = `${appSource}\n${ownerSource}`;
   for (const token of [
     '清理失败任务',
     '选择后可逐项清理失败任务的附件。',
-    '已归档与回收站对话统一在“对话管理”中清理。',
+    '清空知识与记忆回收站',
+    '只清空已放入知识与记忆回收站的内容。',
     '删除全部本地数据',
     '删除全部本机业务数据，需输入确认文字。',
     '预览已选 ${selected.size} 项',
     '已确认清理范围。',
     '输入：删除全部本地业务数据',
     '确认删除全部本地业务数据',
-  ]) assert.ok(appSource.includes(token));
-  assert.doesNotMatch(appSource, /data-scope="KNOWLEDGE_MEMORY_TRASH"/);
+  ]) assert.ok(renderedSource.includes(token));
+  assert.match(renderLocalDataCleanupScopeDialog(), /data-scope="KNOWLEDGE_MEMORY_TRASH"/);
   assert.match(appSource, /invoke\('preview_desktop_privacy_deletion'/);
   assert.match(appSource, /invoke\('delete_desktop_privacy_data'/);
   assert.match(appSource, /previewFingerprint: current\.preview\.fingerprint/);
@@ -219,7 +315,7 @@ test('archived and recycle settings mirror Android single and bulk cleanup gates
   for (const token of ['归档会话不会出现在日常列表；恢复后会回到普通对话列表。', '清空已归档', 'restore-conversation', 'open-archived-conversation-delete', '已归档会话']) assert.ok(archived.includes(token));
   assert.ok(!archived.includes('永久删除会话'));
   const recycle = renderChatFirstShell({ data: lifecycleData, native: true, pane: 'settings', settingsSection: 'recycle', status: '', error: '', connection: {} });
-  for (const token of ['会话消息树尚未物理删除；恢复后会回到普通对话列表。', '清空回收站', 'restore-deleted-conversation', 'open-conversation-permanent-delete', '永久删除会话', '回收站会话']) assert.ok(recycle.includes(token));
+  for (const token of ['会话消息树尚未物理删除；恢复后会回到普通对话列表。', '清空回收站', 'restore-deleted-conversation', 'open-conversation-permanent-delete', '<title>永久删除</title>', '回收站会话']) assert.ok(recycle.includes(token));
   const appSource = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   assert.match(appSource, /invoke\('permanently_delete_desktop_conversation'/);
   assert.match(appSource, /conversation-bulk-recycle/);

@@ -20,7 +20,7 @@ const data = {
 test('lifecycle settings list uses creation time and opens a read-only conversation with exact return owner', () => {
   const list = renderAndroidSettingsShell({ page: 'archived', data, native: true });
   assert.match(list, /data-action="select-chat" data-id="archived-one"/);
-  assert.match(list, /创建于 2026-08-01T00:00:00Z/);
+  assert.match(list, /创建于 2026-08-01 08:00/);
   assert.doesNotMatch(list, /更新于 2026-09-01/);
   const conversation = renderChatFirstShell({
     data,
@@ -41,7 +41,7 @@ test('lifecycle settings list uses creation time and opens a read-only conversat
   assert.doesNotMatch(conversation, /data-action="save-local-message"/);
 });
 
-test('memory overview is a real local summary page with explicit query, append and destructive confirmations', () => {
+test('memory overview matches the Android summary owner with explicit query, full editing, and destructive confirmations', async () => {
   const html = renderAndroidSettingsShell({
     page: 'memory-overview',
     data,
@@ -51,8 +51,19 @@ test('memory overview is a real local summary page with explicit query, append a
     memorySummaryComposer: '继续保留真实证据',
     memorySummaryNotice: '本机筛选完成',
   });
-  for (const token of ['偏好真实、可追溯的交付。', '询问或更新', 'submit-memory-summary', 'refresh-memory-summary', 'ask-delete-memory-summary', 'ask-disable-memory-summary', '本机筛选完成']) assert.ok(html.includes(token));
+  for (const token of ['偏好真实、可追溯的交付。', '询问或更新', 'submit-memory-summary', 'edit-memory-summary', 'refresh-memory-summary', 'ask-delete-memory-summary', 'ask-disable-memory-summary', '本机筛选完成']) assert.ok(html.includes(token));
   assert.ok(!html.includes('data-action="show-memory"'));
+  const empty = renderAndroidSettingsShell({ page: 'memory-overview', data: { ...data, exchange: { ...data.exchange, memory: [] } }, native: true, settings: { memoryEnabled: true } });
+  assert.ok(empty.includes('还没有记忆摘要。'));
+  assert.doesNotMatch(empty, /data-action="edit-memory-summary"[^>]*disabled/);
+  const [app, rust] = await Promise.all([
+    readFile(new URL('../src/app.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src-tauri/src/lib.rs', import.meta.url), 'utf8'),
+  ]);
+  assert.match(app, /action: editor\.memoryId \? 'replaceMemorySummary' : 'create'/);
+  assert.match(app, /id="memory-summary-editor"/);
+  assert.match(rust, /args\.action == "replaceMemorySummary" && args\.entity == "memory"/);
+  assert.match(rust, /item\.insert\("status"\.into\(\), Value::String\("DELETED"\.into\(\)\)\)/);
 });
 
 test('personalization exposes the shared full-screen custom-instructions draft editor', () => {
@@ -65,6 +76,8 @@ test('personalization exposes the shared full-screen custom-instructions draft e
   });
   assert.match(html, /data-action="open-custom-instructions-fullscreen"/);
   assert.match(html, /自定义指令/);
+  assert.match(html, /class="android-settings-fullscreen-editor"[^>]*aria-label="全屏编辑自定义指令"[^>]*><svg/);
+  assert.doesNotMatch(html, />全屏编辑<\/button>/);
 });
 
 test('GLM-OCR detail projects persisted page, token, attempt, request id, cost and safe error facts', () => {

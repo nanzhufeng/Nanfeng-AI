@@ -33,12 +33,12 @@ test('manual unread sorts first only inside the pinned or recent partition', () 
   );
 });
 
-test('conversation rows render one theme dot and stable pin-dot-progress-title order', () => {
+test('conversation rows render one theme dot and stable conversation-dot-progress-title order', () => {
   const runningData = {
     ...data,
     exchange: {
       conversations: conversations.map(item => item.id === 'pinned-manual'
-        ? { ...item, messages: [{ id: 'assistant-running', role: 'assistant', delivery: 'PARTIAL' }] }
+        ? { ...item, messages: [{ id: 'assistant-running', role: 'assistant', delivery: 'PARTIAL', runtimeState: 'RUNNING' }] }
         : item),
     },
   };
@@ -56,10 +56,15 @@ test('conversation rows render one theme dot and stable pin-dot-progress-title o
   const row = html.match(/<div class="chat-history-row[^>]*data-id="pinned-manual"[\s\S]*?<\/div>\s*<\/div>/)?.[0] || '';
   assert.ok(row);
   assert.equal((row.match(/chat-history-unread/g) || []).length, 1);
-  const order = ['class="chat-history-pin"', 'class="chat-history-unread"', 'class="chat-history-running"', 'class="chat-history-title"'];
+  const order = ['class="chat-history-conversation-icon"', 'class="chat-history-unread"', 'class="chat-history-running"', 'class="chat-history-title"'];
   for (let index = 1; index < order.length; index += 1) {
     assert.ok(row.indexOf(order[index - 1]) < row.indexOf(order[index]), `${order[index - 1]} must precede ${order[index]}`);
   }
+});
+
+test('pinned rows reserve a phone conversation glyph before the unread state and title', async () => {
+  const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
+  for (const token of ['.chat-history-conversation-icon { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px;', '.chat-history-conversation-icon svg { width: 17px; height: 17px;', '.chat-history-select .chat-history-title-line { display: flex; min-width: 0; align-items: center; gap: 8px;', '.chat-history-row.selected .chat-history-conversation-icon { color: var(--accent-orange); }']) assert.ok(css.includes(token), token);
 });
 
 test('conversation menu places unread directly after pin and settings enable its real consumer', () => {

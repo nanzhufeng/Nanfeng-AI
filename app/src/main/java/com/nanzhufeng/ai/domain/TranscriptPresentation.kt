@@ -28,6 +28,8 @@ data class TranscriptMessageMetadata(
      * placeholder opportunity.
      */
     val workDurationLabel: String?,
+    /** Persisted, content-free Provider/runtime failure code for an incomplete assistant node. */
+    val safeErrorCode: String? = null,
     /** Local-only progress copy for an empty, persisted PARTIAL assistant node. */
     val waitingPreview: AssistantWaitingPreview? = null,
 ) {
@@ -164,6 +166,13 @@ class ConversationTranscriptPresentation(
                             it.messageId == node.id
                     }
                     ?.let { runtime -> formatPersistedWorkDuration(runtime.startedAt, runtime.updatedAt) },
+            safeErrorCode = runtime
+                ?.takeIf {
+                    node.role == MessageRole.ASSISTANT &&
+                        node.deliveryState == MessageDeliveryState.FAILED &&
+                        it.messageId == node.id
+                }
+                ?.safeErrorCode,
         )
     }
 }

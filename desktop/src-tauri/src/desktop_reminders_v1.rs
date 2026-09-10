@@ -452,7 +452,7 @@ pub fn create_manual_draft(
         &format!("{}-manual", args.workspace_id),
     );
     connection.execute(
-        "INSERT INTO desktop_reminder_drafts_v1(draft_id,workspace_id,conversation_id,status,title,instruction,schedule_kind,anchor_local,timezone_id,missed_policy,retry_count,created_at_ms,updated_at_ms) VALUES(?1,?2,?3,'PENDING_REVIEW','新的提醒','','ONCE',?4,?5,'RUN_ONCE',0,?6,?6)",
+        "INSERT INTO desktop_reminder_drafts_v1(draft_id,workspace_id,conversation_id,status,title,instruction,schedule_kind,anchor_local,timezone_id,missed_policy,retry_count,created_at_ms,updated_at_ms) VALUES(?1,?2,?3,'PENDING_REVIEW','新的监控','','ONCE',?4,?5,'RUN_ONCE',0,?6,?6)",
         params![draft_id,args.workspace_id,args.conversation_id,default_anchor_local(&args.timezone_id,now_ms)?,args.timezone_id,now_ms],
     ).map_err(|_|"提醒草案未保存".to_owned())?;
     read_projection(connection)
@@ -1341,6 +1341,7 @@ mod tests {
     fn draft_never_creates_plan_until_confirmed_and_rejection_is_terminal() {
         let mut connection = database();
         let draft = manual(&connection, 1_700_000_000_000);
+        assert_eq!(draft.title, "新的监控");
         assert!(read_projection(&connection).unwrap().plans.is_empty());
         reject_draft(&connection, &draft.draft_id, 1_700_000_000_001).unwrap();
         assert!(read_projection(&connection).unwrap().plans.is_empty());

@@ -62,7 +62,7 @@ class SettingsUiSimplificationContractsTest {
         val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val normalChat = File("src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt").readText()
 
-        for (token in listOf("个性化", "启用记忆", "记忆摘要", "提醒", "模型与联网", "项目与知识", "导入与导出", "数据管理", "本机数据", "关于", "Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}")) {
+        for (token in listOf("个性化", "启用记忆", "记忆摘要", "提醒", "模型与联网", "项目与知识", "Google 账号与同步", "导入与导出", "数据管理", "本机数据", "关于", "Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}")) {
             assertTrue("missing reorganized setting $token", app.contains(token))
         }
         assertFalse(app.substring(app.indexOf("private fun SettingsCategoryList"), app.indexOf("private fun SettingsSwitchRow")).contains("更多本地控制面"))
@@ -133,7 +133,7 @@ class SettingsUiSimplificationContractsTest {
             assertFalse("selector must not stack title and selected value", row.contains("Column(modifier = Modifier.weight(1f)"))
         }
         val stylePicker = styleRow.substringAfter("private fun ConversationStylePickerDialog")
-        for (token in listOf("ConversationStyle.selectable", "definition.summary", "SettingsPageBackground", "BorderStroke(", "verticalScroll(rememberScrollState())", "MaterialTheme.typography.bodyLarge", "maxLines = 3", "Icons.Rounded.Check")) {
+        for (token in listOf("ConversationStyle.selectable", "definition.summary", "SettingsPageBackground", "BorderStroke(", "verticalScroll(rememberScrollState())", "MaterialTheme.typography.bodyMedium", "Icons.Rounded.Check")) {
             assertTrue("missing conversation-style picker contract: $token", stylePicker.contains(token))
         }
         assertFalse(stylePicker.contains("ConversationStyle.entries"))

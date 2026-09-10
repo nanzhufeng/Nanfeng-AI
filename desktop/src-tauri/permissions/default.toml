@@ -50,18 +50,18 @@ commands.allow = ["submit_desktop_ordinary_chat", "retry_desktop_ordinary_chat",
 
 [[permission]]
 identifier = "allow-desktop-compare"
-description = "Allows one explicit Composer Compare action to create exactly one user message plus independent GPT-5.6 Terra and Claude Sonnet 5 ordinary-chat branches through the existing OpenRouter credential, context, attachment, streaming, usage and error owners. Stop affects the active pair; retry is explicit per branch; no arbitrary provider, model, URL, credential projection, silent fallback or automatic resend is exposed."
-commands.allow = ["submit_desktop_compare", "retry_desktop_compare_branch", "cancel_desktop_compare", "read_desktop_compare_execution"]
+description = "Allows only stopping an already-running historical Compare execution so partial content remains recoverable. New Compare submission and branch retry are intentionally unavailable; no arbitrary provider, model, URL, credential projection or automatic resend is exposed."
+commands.allow = ["cancel_desktop_compare"]
 
 [[permission]]
 identifier = "allow-import-desktop-conversation-attachment"
-description = "Allows only user-mediated local attachment import; it grants no filesystem API, transport, or credential access."
-commands.allow = ["import_desktop_conversation_attachment"]
+description = "Allows only a user-mediated native-picker selection, focused-Composer clipboard File bytes, or a current-window PNG camera frame into the same private content-addressed owner; it grants no clipboard path or URI, arbitrary camera control, filesystem API, transport, or credential access."
+commands.allow = ["import_desktop_conversation_attachment", "import_desktop_conversation_clipboard_attachment", "import_desktop_camera_capture"]
 
 [[permission]]
 identifier = "allow-desktop-temporary-conversation"
-description = "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, private attachment binding/removal, and irreversible clear. It grants no normal Conversation, workspace, search, export, cache, credential, or transport command."
-commands.allow = ["enter_or_restore_desktop_temporary_conversation", "read_desktop_temporary_conversation", "update_desktop_temporary_conversation", "append_desktop_temporary_message", "import_desktop_temporary_attachment", "clear_desktop_temporary_conversation", "remove_desktop_temporary_attachment"]
+description = "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, native-picker or focused-Composer clipboard File attachment binding/removal, and irreversible clear. It grants no clipboard path or URI, normal Conversation, workspace, search, export, cache, credential, or transport command."
+commands.allow = ["enter_or_restore_desktop_temporary_conversation", "read_desktop_temporary_conversation", "update_desktop_temporary_conversation", "append_desktop_temporary_message", "import_desktop_temporary_attachment", "import_desktop_temporary_clipboard_attachment", "import_desktop_temporary_camera_capture", "clear_desktop_temporary_conversation", "remove_desktop_temporary_attachment"]
 
 [[permission]]
 identifier = "allow-desktop-domain-history"
@@ -75,8 +75,8 @@ commands.allow = ["upsert_desktop_model_metadata"]
 
 [[permission]]
 identifier = "allow-desktop-p6g-model-selection"
-description = "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual override, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access."
-commands.allow = ["read_desktop_p6g_catalog", "read_desktop_p6g_global_default", "upsert_desktop_p6g_catalog_candidate", "remove_desktop_p6g_catalog_candidate", "read_desktop_p6g_selection", "set_desktop_p6g_global_default", "set_desktop_p6g_conversation_override", "clear_desktop_p6g_conversation_override", "evaluate_desktop_p6g_auto_route"]
+description = "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual model override, conversation-local style/web-search preferences, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access."
+commands.allow = ["read_desktop_p6g_catalog", "read_desktop_p6g_global_default", "upsert_desktop_p6g_catalog_candidate", "remove_desktop_p6g_catalog_candidate", "read_desktop_p6g_selection", "set_desktop_p6g_global_default", "set_desktop_p6g_conversation_override", "clear_desktop_p6g_conversation_override", "set_desktop_conversation_preferences", "evaluate_desktop_p6g_auto_route"]
 
 [[permission]]
 identifier = "allow-inspect-p8-agent-runs"
@@ -111,7 +111,7 @@ commands.allow = ["stage_nanfeng_knowledge_export_selected", "confirm_nanfeng_kn
 [[permission]]
 identifier = "allow-p6k-zip-import"
 description = "Allows only P6-K user-selected ChatGPT or Claude ZIP imports: private staging, bounded strict adapter, receipt-backed direct commit, recovery, and soft-delete. It grants no arbitrary filesystem read, credential, transport, Provider, model or tool invocation access."
-commands.allow = ["stage_p6k_zip_import_selected", "retry_p6k_zip_import_task", "skip_p6k_zip_import_failures", "delete_p6k_zip_import_batch", "read_latest_p6k_zip_import_task"]
+commands.allow = ["stage_p6k_zip_import_selected", "retry_p6k_zip_import_task", "skip_p6k_zip_import_failures", "delete_p6k_zip_import_batch", "read_latest_p6k_zip_import_task", "link_p6k_zip_manual_asset"]
 
 [[permission]]
 identifier = "allow-search-desktop-local-index"
@@ -164,9 +164,19 @@ description = "Allows an explicit user gesture to open only a workspace-owned, h
 commands.allow = ["open_desktop_attachment_with_system"]
 
 [[permission]]
+identifier = "allow-export-desktop-attachment-to-selected-path"
+description = "Allows one explicit native-save-picker action to copy only a workspace-owned, hash-verified attachment to that selected absolute file and verify the written bytes. It grants no path discovery, arbitrary source read, directory export, transport, credential or automatic share access."
+commands.allow = ["export_desktop_attachment_to_selected_path"]
+
+[[permission]]
 identifier = "allow-read-desktop-runtime-info"
 description = "Allows only the current packaged application version, operating-system family and CPU architecture to be shown in About. It grants no path, environment, device identifier, credential or network access."
 commands.allow = ["read_desktop_runtime_info"]
+
+[[permission]]
+identifier = "allow-read-desktop-c16-visual-acceptance-state"
+description = "Allows only the validated C16 appearance, font and layer tuple selected by the diagnostic-only isolated acceptance gate. Normal startup returns no tuple; this grants no path, environment, data, credential, provider or network access."
+commands.allow = ["read_desktop_c16_visual_acceptance_state"]
 
 [[permission]]
 identifier = "allow-write-desktop-markdown-to-selected-path"

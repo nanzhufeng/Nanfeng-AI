@@ -23,10 +23,14 @@ data class NormalChatSendAttempt(
     val safeErrorCode: String? = null,
     /** Null only for rows created before explicit hosted-model receiver provenance existed. */
     val egressProviderId: ProviderId? = null,
+    /** Null only for attempts created before the single-send authorization contract existed. */
+    val egressAuthorizedAt: Instant? = null,
+    val egressDisclosureVersion: String? = null,
 ) {
     init {
         require(modelId.isNotBlank() && idempotencyKey.isNotBlank())
         require(safeErrorCode == null || safeErrorCode.matches(Regex("[A-Z0-9_]{1,64}")))
+        require(egressDisclosureVersion == null || egressDisclosureVersion == NormalChatEgressAuthorization.DISCLOSURE_VERSION)
     }
 }
 

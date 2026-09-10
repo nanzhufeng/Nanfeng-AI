@@ -9,7 +9,7 @@ const fixture = {
   exchange: { conversations: [{ id: 'conversation-safe', title: '安全对话', revision: 4, messages: [] }] },
 };
 
-test('account settings expose honest recovery, selected-only sync and safe diagnostics states', () => {
+test('account settings follow the phone identity, management and selected-only sync hierarchy', () => {
   const rendered = renderChatFirstShell({
     data: fixture,
     native: true,
@@ -33,8 +33,19 @@ test('account settings expose honest recovery, selected-only sync and safe diagn
       remoteDocuments: [{ documentId: 'conversation-cloud-safe', revision: 2, payloadHashPrefix: 'abcdef123456' }],
     },
   });
-  for (const token of ['Google 账号与同步', 'safe@example.invalid', '选择首次同步方向', 'data-action="choose-selected-local-sync-start"', '仅上传您在会话右键菜单选中', '恢复码更换与丢失处理', 'data-action="create-account-recovery-rotation"', '从南枫云恢复', 'data-action="restore-account-cloud-conversation"', '<span>恢复码</span><input', '运行诊断', 'SYNC_RECONCILE']) assert.ok(rendered.includes(token));
+  for (const token of ['Google 账号与同步', '安全账号，您好！', 'safe@example.invalid', '账号管理', '切换 Google 账号', '退出登录', '选择首次同步方向', 'data-action="choose-selected-local-sync-start"', '对话同步', '仅包含你手动同步过的对话。', '恢复码更换与丢失处理', 'data-action="create-account-recovery-rotation"', '从南枫云恢复', 'data-action="restore-account-cloud-conversation"', '<span>恢复码</span><input']) assert.ok(rendered.includes(token));
+  for (const token of ['同步通知', '运行诊断', 'SYNC_RECONCILE', '已选 1 个']) assert.ok(!rendered.includes(token));
   for (const forbidden of ['access_token', 'refresh_token', 'privatePath', '恢复码明文']) assert.ok(!rendered.includes(forbidden));
+});
+
+test('signed-out account page keeps sync controls unavailable until identity and recovery are ready', () => {
+  const rendered = renderChatFirstShell({
+    data: fixture, native: true, pane: 'settings', settingsSection: 'account', status: '', error: '', connection: {},
+    settingsCapabilities: { googleAccountSync: true },
+    accountSync: { configured: true, state: 'SIGNED_OUT', recoveryState: 'UNAVAILABLE' },
+  });
+  for (const token of ['android-account-hero', '未登录', '使用 Google 登录']) assert.ok(rendered.includes(token));
+  for (const token of ['android-account-periodic', 'android-account-notifications', 'android-account-diagnostics']) assert.ok(!rendered.includes(token));
 });
 
 test('recovery code is rendered once with an explicit save confirmation action', () => {
@@ -69,7 +80,7 @@ test('conversation context menu owns the selected encrypted sync entry and app u
     accountSync: { state: 'READY' },
   });
   assert.ok(rendered.includes('data-action="context-menu-sync"'));
-  assert.ok(rendered.includes('加密同步此会话'));
+  assert.ok(rendered.includes('同步到南枫云'));
   assert.ok(!rendered.includes('data-action="save-local-message">\n'));
 
   const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');

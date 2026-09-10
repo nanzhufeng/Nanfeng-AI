@@ -1,5 +1,13 @@
 package com.nanzhufeng.ai.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,7 +76,15 @@ fun MemorySummaryPage(
     onDisableMemorySummaryGenerationAndUse: () -> Unit,
     onQuerySummary: (String) -> Unit,
     onAppendSummaryUpdate: (String) -> Unit,
+    onEditSummary: () -> Unit,
+    onUpdateSummaryEditor: (String) -> Unit,
+    onSaveSummaryEditor: () -> Unit,
+    onDismissSummaryEditor: () -> Unit,
 ) {
+    state.summaryEditor?.let { editor ->
+        MemorySummaryEditorPage(editor, onUpdateSummaryEditor, onSaveSummaryEditor, onDismissSummaryEditor)
+        return
+    }
     var menuVisible by rememberSaveable { mutableStateOf(false) }
     var aboutVisible by rememberSaveable { mutableStateOf(false) }
     var deleteConfirmationVisible by rememberSaveable { mutableStateOf(false) }
@@ -107,6 +123,11 @@ fun MemorySummaryPage(
                         text = { Text("关于记忆") },
                         onClick = { menuVisible = false; aboutVisible = true },
                         leadingIcon = { Icon(Icons.Rounded.Info, contentDescription = null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("编辑摘要") },
+                        onClick = { menuVisible = false; onEditSummary() },
+                        leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
                     )
                     DropdownMenuItem(
                         text = { Text("刷新摘要") },
@@ -259,6 +280,80 @@ fun MemorySummaryPage(
                 onDisableMemorySummaryGenerationAndUse()
             },
             onDismiss = { disableConfirmationVisible = false },
+        )
+    }
+}
+
+@Composable
+private fun MemorySummaryEditorPage(
+    editor: MemorySummaryEditorState,
+    onTextChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var discardVisible by rememberSaveable { mutableStateOf(false) }
+    var field by rememberSaveable(editor.loading, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(editor.text))
+    }
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val exit = {
+        if (!editor.saving) {
+            if (editor.text != editor.originalText) discardVisible = true else onDismiss()
+        }
+    }
+    BackHandler(onBack = exit)
+    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(horizontal = 16.dp)) {
+        Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = exit, enabled = !editor.saving) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回摘要")
+            }
+            Text("编辑摘要", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onSave, enabled = !editor.loading && !editor.saving && editor.text.isNotBlank()) {
+                Text(if (editor.saving) "保存中…" else "保存")
+            }
+        }
+        Text("可直接修改全文，也可以全选后粘贴整篇替换。保存后生效。", style = MaterialTheme.typography.bodySmall, color = SecondaryText)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = {
+                field = field.copy(selection = TextRange(0, field.text.length))
+                focusRequester.requestFocus()
+                keyboard?.show()
+            }, enabled = !editor.loading && !editor.saving && field.text.isNotEmpty()) { Text("全选") }
+            TextButton(onClick = {
+                field = TextFieldValue("")
+                onTextChange("")
+                focusRequester.requestFocus()
+            }, enabled = !editor.loading && !editor.saving && field.text.isNotEmpty()) { Text("清空重写") }
+        }
+        editor.error?.let { Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
+        if (editor.loading) {
+            Text(if (editor.error == null) "正在读取完整摘要…" else "请返回重试", Modifier.padding(vertical = 16.dp))
+        } else {
+            OutlinedTextField(
+                value = field,
+                onValueChange = { field = it; onTextChange(it.text) },
+                readOnly = editor.saving,
+                modifier = Modifier.weight(1f).fillMaxWidth().focusRequester(focusRequester),
+                placeholder = { Text("输入或粘贴新的记忆摘要") },
+                textStyle = MaterialTheme.typography.bodyLarge,
+                shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = ForegroundSurface,
+                    unfocusedContainerColor = ForegroundSurface,
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                ),
+            )
+            Text("仅保存到本机，不调用模型。清空所有记忆请返回使用“删除记忆”。",
+                Modifier.padding(vertical = 12.dp), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    if (discardVisible) {
+        ConfirmDeleteDialog(
+            title = "放弃本次修改？", body = "尚未保存的修改将丢弃，已保存的摘要保持不变。",
+            onConfirm = { discardVisible = false; onDismiss() },
+            onDismiss = { discardVisible = false },
         )
     }
 }

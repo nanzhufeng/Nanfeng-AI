@@ -26,7 +26,8 @@ data class ComposerModelChoice(
 
 object ComposerModelRoutingCatalog {
     private const val PREFIX = "logical:"
-    private const val LEGACY_QWEN_MAX_DEEP_ID = "logical:deep:qwen-max"
+    private const val LEGACY_KIMI_K3_DEEP_ID = "logical:deep:kimi-k3"
+    private const val LEGACY_CLAUDE_FABLE_5_DEEP_ID = "logical:deep:claude-fable"
     private const val LEGACY_GROK_4_1_FAST_ID = "logical:daily:grok-4.1-fast"
     private const val LEGACY_GROK_4_5_ID = "logical:daily:grok-4.5"
     private const val LEGACY_GROK_4_6_HIGH_ID = "logical:deep:grok-4.6-high"
@@ -40,12 +41,13 @@ object ComposerModelRoutingCatalog {
         ComposerModelChoice("${PREFIX}daily:gemini-flash", ComposerModelSlot.DAILY, "Gemini 3.7 Flash", listOf(ModelPresetId.GEMINI_3_7_FLASH)),
     )
     val deep = listOf(
-        ComposerModelChoice("${PREFIX}deep:claude-fable", ComposerModelSlot.DEEP, "Claude Fable 5", listOf(ModelPresetId.CLAUDE_FABLE_5)),
+        ComposerModelChoice("${PREFIX}deep:claude-fable-5.1", ComposerModelSlot.DEEP, "Claude Fable 5.1", listOf(ModelPresetId.CLAUDE_FABLE_5_1)),
         ComposerModelChoice("${PREFIX}deep:claude-opus", ComposerModelSlot.DEEP, "Claude Opus 5", listOf(ModelPresetId.CLAUDE_OPUS_5)),
+        ComposerModelChoice("${PREFIX}deep:gpt-astra", ComposerModelSlot.DEEP, "GPT-6 Astra", listOf(ModelPresetId.GPT_6_ASTRA)),
         ComposerModelChoice("${PREFIX}deep:deepseek-pro", ComposerModelSlot.DEEP, "DeepSeek V4 Pro", listOf(ModelPresetId.DEEPSEEK_V4_PRO)),
         ComposerModelChoice("${PREFIX}deep:gpt-sol", ComposerModelSlot.DEEP, "GPT-5.6 Sol", listOf(ModelPresetId.GPT_5_6_SOL)),
         ComposerModelChoice("${PREFIX}deep:glm-5.3", ComposerModelSlot.DEEP, "GLM-5.3", listOf(ModelPresetId.GLM_5_3)),
-        ComposerModelChoice("${PREFIX}deep:kimi-k3", ComposerModelSlot.DEEP, "Kimi K3", listOf(ModelPresetId.KIMI_K3)),
+        ComposerModelChoice("${PREFIX}deep:qwen-max", ComposerModelSlot.DEEP, "Qwen3.8-Max", listOf(ModelPresetId.QWEN_3_8_MAX)),
     )
     val groups: Map<ComposerModelSlot, List<ComposerModelChoice>> = mapOf(
         ComposerModelSlot.DAILY to daily,
@@ -54,6 +56,8 @@ object ComposerModelRoutingCatalog {
     // Preserve the persisted legacy ID so it fails visibly at the exact-model gate instead of
     // silently falling through to Auto and sending the user's message to another model.
     private val retired = listOf(
+        ComposerModelChoice(LEGACY_CLAUDE_FABLE_5_DEEP_ID, ComposerModelSlot.DEEP, "Claude Fable 5（已升级）", listOf(ModelPresetId.CLAUDE_FABLE_5)),
+        ComposerModelChoice(LEGACY_KIMI_K3_DEEP_ID, ComposerModelSlot.DEEP, "Kimi K3（已移出选择）", listOf(ModelPresetId.KIMI_K3)),
         ComposerModelChoice(LEGACY_GROK_4_1_FAST_ID, ComposerModelSlot.DAILY, "Grok 4.1 Fast（已下线）", listOf(ModelPresetId.GROK_4_1_FAST)),
         ComposerModelChoice(LEGACY_GROK_4_5_ID, ComposerModelSlot.DAILY, "Grok 4.5（已移除）", listOf(ModelPresetId.GROK_4_5)),
         ComposerModelChoice(LEGACY_GROK_4_6_HIGH_ID, ComposerModelSlot.DEEP, "Grok 4.6 High（已移除）", listOf(ModelPresetId.GROK_4_6_HIGH)),
@@ -63,10 +67,7 @@ object ComposerModelRoutingCatalog {
 
     fun isRetired(id: String?): Boolean = retired.any { it.id == id }
 
-    fun choice(id: String?): ComposerModelChoice = when (id) {
-        LEGACY_QWEN_MAX_DEEP_ID -> deep.first { ModelPresetId.KIMI_K3 in it.routes }
-        else -> (choices + retired).firstOrNull { it.id == id } ?: auto
-    }
+    fun choice(id: String?): ComposerModelChoice = (choices + retired).firstOrNull { it.id == id } ?: auto
     fun label(id: String?): String = if (id == null || id == auto.id) auto.label else choice(id).label
 }
 

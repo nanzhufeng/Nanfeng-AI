@@ -127,6 +127,7 @@ class NanfengAiActivity : ComponentActivity() {
     private lateinit var appEntryPreferences: android.content.SharedPreferences
     private var hasStartedOnce = false
     private var startWithFreshChat = false
+    private var entryConversationId: ConversationId? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -136,6 +137,12 @@ class NanfengAiActivity : ComponentActivity() {
         )
         applyLightSystemBars()
         appEntryPreferences = getSharedPreferences(APP_ENTRY_PREFERENCES, MODE_PRIVATE)
+        entryConversationId = com.nanzhufeng.ai.domain.ConversationAppEntryPolicy.retainedId(
+            appEntryPreferences.getString(APP_ENTRY_LAST_CONVERSATION_ID, null),
+            appEntryPreferences.getLong(APP_ENTRY_LAST_BACKGROUND_AT_MILLIS, 0L),
+            System.currentTimeMillis(),
+            appEntryPreferences.getBoolean(APP_ENTRY_HAD_RUNNING_GENERATION, false),
+        )
         startWithFreshChat = shouldStartWithFreshChat(intent)
         container = AppContainer(applicationContext)
         textShareGate = AndroidTextShareIntentGate(savedInstanceState?.getString(TEXT_SHARE_FINGERPRINT))
@@ -244,6 +251,7 @@ class NanfengAiActivity : ComponentActivity() {
                 container.normalChatOpenRouterExecutor,
                 container.normalChatBackgroundExecution,
                 startWithFreshChat,
+                entryConversationId = entryConversationId.takeUnless { isExplicitAppLaunch(intent) },
             ),
         )[ConversationFoundationViewModel::class.java]
         // Normal generation recovery belongs to GenerationForegroundService.  This Activity
@@ -384,8 +392,15 @@ class NanfengAiActivity : ComponentActivity() {
             unregisterReceiver(normalChatExecutionReceiver)
             normalChatExecutionReceiverRegistered = false
         }
-        conversationFoundationViewModel.onAppBackground(SystemClock.elapsedRealtime())
-        appEntryPreferences.edit().putLong(APP_ENTRY_LAST_BACKGROUND_AT_MILLIS, System.currentTimeMillis()).apply()
+        if (!isChangingConfigurations) {
+            conversationFoundationViewModel.onAppBackground(SystemClock.elapsedRealtime())
+            appEntryPreferences.edit()
+                .putLong(APP_ENTRY_LAST_BACKGROUND_AT_MILLIS, System.currentTimeMillis())
+                .putString(APP_ENTRY_LAST_CONVERSATION_ID, conversationFoundationViewModel.state.selectedConversationId?.value)
+                .putBoolean(APP_ENTRY_HAD_RUNNING_GENERATION,
+                    conversationFoundationViewModel.hasRunningGenerationForAppEntry())
+                .apply()
+        }
         super.onStop()
     }
 
@@ -409,9 +424,7 @@ class NanfengAiActivity : ComponentActivity() {
 
     private fun shouldStartWithFreshChat(intent: android.content.Intent?): Boolean {
         if (isExplicitAppLaunch(intent)) return false
-        val lastBackgroundAt = appEntryPreferences.getLong(APP_ENTRY_LAST_BACKGROUND_AT_MILLIS, 0L)
-        val elapsed = System.currentTimeMillis() - lastBackgroundAt
-        return lastBackgroundAt <= 0L || elapsed !in 0 until FRESH_CHAT_AFTER_BACKGROUND_MS
+        return entryConversationId == null
     }
 
     private fun isExplicitAppLaunch(intent: android.content.Intent?): Boolean = when {
@@ -488,8 +501,10 @@ class NanfengAiActivity : ComponentActivity() {
     companion object {
         const val TEXT_SHARE_FINGERPRINT = "handled_text_share_fingerprint"
         const val APP_ENTRY_PREFERENCES = "conversation_app_entry"
+        const val APP_ENTRY_LAST_CONVERSATION_ID = "last_conversation_id"
+        const val APP_ENTRY_HAD_RUNNING_GENERATION = "had_running_generation"
         const val APP_ENTRY_LAST_BACKGROUND_AT_MILLIS = "last_background_at_millis"
-        const val FRESH_CHAT_AFTER_BACKGROUND_MS = 15L * 60L * 1_000L
+        const val FRESH_CHAT_AFTER_BACKGROUND_MS = com.nanzhufeng.ai.domain.ConversationAppEntryPolicy.RETENTION_MILLIS
         const val ACTION_OPEN_SCHEDULED_MONITOR = "com.nanzhufeng.ai.action.OPEN_SCHEDULED_MONITOR"
         const val EXTRA_SCHEDULED_MONITOR_TASK_ID = "com.nanzhufeng.ai.extra.SCHEDULED_MONITOR_TASK_ID"
     }

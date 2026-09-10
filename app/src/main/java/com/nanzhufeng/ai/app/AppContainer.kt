@@ -327,11 +327,13 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_62_63,
         NanfengAiDatabase.MIGRATION_63_64,
         NanfengAiDatabase.MIGRATION_64_65,
+        NanfengAiDatabase.MIGRATION_65_66,
     ).build()
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
     val privateAttachmentRepository = RoomPrivateAttachmentRepository(database)
-    private val glmOcrTasks = com.nanzhufeng.ai.data.local.RoomGlmOcrTaskRepository(database)
+    /** Module-internal so the separately installed, offline acceptance source set can seed typed states. */
+    internal val glmOcrTasks = com.nanzhufeng.ai.data.local.RoomGlmOcrTaskRepository(database)
     val glmOcrScheduler = com.nanzhufeng.ai.data.AndroidGlmOcrScheduler(context)
     private val temporaryConversationRecoveryStore = RoomTemporaryConversationRecoveryStore(database)
     val temporaryConversationDomain = com.nanzhufeng.ai.domain.TemporaryConversationDomain(temporaryConversationRecoveryStore, clock)

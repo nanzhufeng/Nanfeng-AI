@@ -1,32 +1,50 @@
-.desktop-reminders-page { display: grid; min-height: 100%; grid-template-rows: auto auto minmax(0,1fr) auto; color: #202823; background: #f4f5f4; }
-.desktop-work-page-header { display: grid; min-height: 78px; grid-template-columns: 44px minmax(0,1fr) 44px; align-items: center; padding: 12px 28px; border-bottom: 1px solid #e4e8e4; background: rgb(255 255 255 / 88%); }
-.desktop-work-page-header > button { display: grid; width: 40px; min-width: 40px; height: 40px; place-items: center; padding: 0; border: 1px solid #e1e5e1; border-radius: 50%; background: #fff; }
-.desktop-work-page-header svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.9; }
-.desktop-work-page-header > div { text-align: center; }
-.desktop-work-page-header p { margin: 0 0 2px; color: #7a837d; font-size: 11px; font-weight: 650; }
-.desktop-work-page-header h1 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
-.desktop-reminder-notification { display: grid; grid-template-columns: 40px minmax(0,1fr) auto; align-items: center; gap: 12px; margin: 20px 28px 0; padding: 15px 18px; border: 1px solid #e1e5e1; border-radius: 18px; background: #fff; box-shadow: 0 7px 22px rgb(31 45 36 / 5%); }
-.desktop-reminder-notification > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 12px; background: var(--accent-orange-soft); color: var(--accent-orange); }
-.desktop-reminder-notification svg, .desktop-reminders-page footer svg, .desktop-reminder-empty > svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
-.desktop-reminder-notification strong, .desktop-reminder-notification p { display: block; margin: 0; }
-.desktop-reminder-notification p { margin-top: 3px; color: #727c76; font-size: 12px; }
-.desktop-reminder-content { min-height: 0; overflow: auto; padding: 22px 28px; }
-.desktop-reminder-empty { display: grid; min-height: 360px; place-content: center; justify-items: center; text-align: center; }
-.desktop-reminder-empty > svg { width: 38px; height: 38px; color: #8c958f; }
-.desktop-reminder-empty h2 { margin: 18px 0 5px; font-size: 18px; }
-.desktop-reminder-empty p { max-width: 420px; margin: 0; color: #778079; font-size: 13px; line-height: 1.65; }
-.desktop-reminder-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(290px,1fr)); gap: 14px; }
-.desktop-reminder-card { padding: 18px; border: 1px solid #e1e5e1; border-radius: 20px; background: #fff; box-shadow: 0 7px 22px rgb(31 45 36 / 5%); }
+.desktop-reminders-page { min-height: 100%; color: #202823; background: #f4f5f4; }
+.desktop-work-page-header { display: grid; min-height: 72px; grid-template-columns: 44px minmax(0,1fr) 44px; align-items: center; padding: 8px 28px; border-bottom: 1px solid #e4e8e4; background: rgb(255 255 255 / 88%); }
+.desktop-work-page-header h1 { margin: 0; text-align: center; font-size: 20px; letter-spacing: -.02em; }
+.desktop-work-page-header > button { display: grid; width: 40px; min-width: 40px; height: 40px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; }
+.desktop-work-page-header > button:hover { background: #eef1ee; }
+.desktop-work-page-header svg, .desktop-reminder-notification svg, .desktop-reminder-add svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.desktop-reminder-content { width: min(820px, calc(100% - 56px)); margin: 0 auto; padding: 24px 0 36px; }
+.desktop-reminder-evidence { margin: 0 0 12px; color: #68736c; font-size: 12px; text-align: center; }
+.chat-first .desktop-reminder-notification { display: flex; width: 100%; min-height: 56px; align-items: center; gap: 12px; padding: 10px 16px; text-align: left; border: 1px solid #dce2dd; border-radius: 16px; background: #fff; color: inherit; }
+.desktop-reminder-notification:disabled { cursor: default; opacity: 1; }
+.desktop-reminder-notification > span:first-child { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: var(--accent-orange-soft); color: var(--accent-orange); }
+.desktop-reminder-notification strong, .desktop-reminder-notification small { display: block; }
+.desktop-reminder-notification small { margin-top: 2px; color: #727c76; font-size: 12px; font-weight: 400; }
+.desktop-reminder-empty { margin: 28px 4px 18px; color: #747d77; font-size: 14px; line-height: 1.65; text-align: center; }
+.chat-first .desktop-reminder-add { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; border: 1px solid var(--accent-orange); border-radius: 15px; background: var(--accent-orange); color: #fff; }
+.chat-first .desktop-reminder-add:hover { border-color: var(--accent-orange); background: var(--accent-orange-hover); color: #fff; }
+.desktop-reminder-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap: 14px; margin-top: 18px; }
+.desktop-reminder-card { padding: 18px; border: 1px solid #e1e5e1; border-radius: 18px; background: #fff; box-shadow: 0 7px 22px rgb(31 45 36 / 5%); }
 .desktop-reminder-card header { display: flex; justify-content: space-between; gap: 14px; }
 .desktop-reminder-card strong, .desktop-reminder-card small { display: block; }
-.desktop-reminder-card small, .desktop-reminder-card p { color: #717b74; }
-.desktop-reminder-card p { line-height: 1.55; }
-.desktop-reminder-card > div { display: flex; gap: 8px; margin-top: 15px; }
-.desktop-reminders-page > footer { display: flex; justify-content: center; padding: 14px 28px 24px; }
-.desktop-reminders-page > footer button { display: inline-flex; min-height: 46px; align-items: center; gap: 8px; padding: 0 22px; border-radius: 23px; }
+.desktop-reminder-card small, .desktop-reminder-card > p, .desktop-reminder-next { color: #717b74; }
+.desktop-reminder-card > p { line-height: 1.55; }
+.desktop-reminder-result { margin: 14px 0; padding: 12px 14px; border-radius: 13px; background: #f3f6f3; }
+.desktop-reminder-result p { margin: 4px 0 0; line-height: 1.5; }
+.desktop-reminder-error { color: #a54b3d !important; font-size: 12px; }
+.desktop-reminder-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+.desktop-reminder-editor { min-height: 100%; }
+.desktop-reminder-editor-form { display: grid; width: min(760px, calc(100% - 56px)); margin: 0 auto; gap: 18px; padding: 24px 0 40px; }
+.desktop-reminder-editor-form label, .desktop-reminder-editor-form fieldset { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; color: #39433d; font-size: 13px; font-weight: 650; }
+.desktop-reminder-editor-form input, .desktop-reminder-editor-form textarea, .desktop-reminder-editor-form select { width: 100%; box-sizing: border-box; border: 1px solid #dce2dd; border-radius: 14px; background: #fff; color: inherit; }
+.desktop-reminder-editor-form input, .desktop-reminder-editor-form select { min-height: 46px; padding: 0 14px; }
+.desktop-reminder-editor-form textarea { min-height: 150px; resize: vertical; padding: 13px 14px; line-height: 1.55; }
+.desktop-reminder-privacy { margin: 0; padding: 11px 14px; border-radius: 13px; background: #eaefeb; color: #657069; font-size: 12px; line-height: 1.5; }
+.desktop-reminder-mode, .desktop-reminder-cadence > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.desktop-reminder-cadence > div { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.desktop-reminder-cadence[hidden] { display: none; }
+.desktop-reminder-mode button, .desktop-reminder-cadence button { min-height: 42px; border: 1px solid #dce2dd; border-radius: 13px; background: #fff; color: #47524b; }
+.desktop-reminder-mode button.selected, .desktop-reminder-cadence button.selected { border-color: var(--accent-orange); background: var(--accent-orange-soft); color: var(--accent-orange); }
+.desktop-reminder-advanced { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.desktop-reminder-editor-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; padding-top: 4px; }
+.chat-first .desktop-reminder-editor-actions button { min-height: 48px; border: 1px solid #dce2dd; border-radius: 15px; background: #fff; }
+.chat-first .desktop-reminder-editor-actions .primary { border-color: var(--accent-orange); background: var(--accent-orange); color: #fff; }
+.chat-first .desktop-reminder-editor-actions .primary:hover { border-color: var(--accent-orange); background: var(--accent-orange-hover); color: #fff; }
 .standalone-work-main { grid-template-rows: 0 minmax(0,1fr); }
 .standalone-work-main > .chat-status { padding: 0; }
-.standalone-work-main .chat-work-panel { height: 100%; padding: 0; overflow: hidden; }
+.standalone-work-main .chat-work-panel { height: 100%; padding: 0; overflow: auto; }
 :root[data-appearance-mode="dark"] .desktop-reminders-page { background: #181b19; color: #edf1ed; }
-:root[data-appearance-mode="dark"] .desktop-work-page-header,:root[data-appearance-mode="dark"] .desktop-reminder-notification,:root[data-appearance-mode="dark"] .desktop-reminder-card { border-color: #3b423d; background: #242925; }
-@media (max-width: 700px) { .desktop-work-page-header { padding-inline: 16px; }.desktop-reminder-notification { margin-inline: 16px; }.desktop-reminder-content { padding-inline: 16px; } }
+:root[data-appearance-mode="dark"] .desktop-work-page-header, :root[data-appearance-mode="dark"] .desktop-reminder-notification, :root[data-appearance-mode="dark"] .desktop-reminder-card, :root[data-appearance-mode="dark"] .desktop-reminder-editor-form input, :root[data-appearance-mode="dark"] .desktop-reminder-editor-form textarea, :root[data-appearance-mode="dark"] .desktop-reminder-editor-form select, :root[data-appearance-mode="dark"] .desktop-reminder-mode button, :root[data-appearance-mode="dark"] .desktop-reminder-cadence button { border-color: #3b423d; background: #242925; color: #edf1ed; }
+:root[data-appearance-mode="dark"] .desktop-reminder-result, :root[data-appearance-mode="dark"] .desktop-reminder-privacy { background: #2b312d; }
+@media (max-width: 700px) { .desktop-work-page-header { padding-inline: 16px; } .desktop-reminder-content, .desktop-reminder-editor-form { width: calc(100% - 32px); } .desktop-reminder-advanced { grid-template-columns: 1fr; } }

@@ -120,6 +120,7 @@ import com.nanzhufeng.ai.domain.LoadAssistantExperienceSettingsUseCase
 import com.nanzhufeng.ai.domain.P6GProviderFamily
 import com.nanzhufeng.ai.domain.P6GRouteRequest
 import com.nanzhufeng.ai.domain.P6GSelectionMutationResult
+import com.nanzhufeng.ai.domain.NormalChatEgressAuthorization
 import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
 import com.nanzhufeng.ai.background.NoopNormalChatBackgroundExecution
 import com.nanzhufeng.ai.background.NormalChatBackgroundExecution
@@ -143,7 +144,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** Returning after this gap is treated like a fresh chat entry, never a resume of old prose. */
-private const val FRESH_CHAT_AFTER_BACKGROUND_MS = 15L * 60L * 1_000L
+private const val FRESH_CHAT_AFTER_BACKGROUND_MS = com.nanzhufeng.ai.domain.ConversationAppEntryPolicy.RETENTION_MILLIS
 private const val PDF_PAGE_CACHE_MAX_ENTRIES = 4
 private const val PDF_PAGE_CACHE_MAX_BYTES = 24L * 1024L * 1024L
 private const val PDF_NEIGHBOUR_PREFETCH_DELAY_MS = 90L
@@ -331,6 +332,7 @@ class ConversationFoundationViewModel(
     private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
     private val normalChatBackgroundExecution: NormalChatBackgroundExecution = NoopNormalChatBackgroundExecution,
     private val startWithFreshChat: Boolean = false,
+    private val entryConversationId: com.nanzhufeng.ai.domain.ConversationId? = null,
 ) : ViewModel() {
     private var streamJob: Job? = null
     private var searchDebounceJob: Job? = null
@@ -373,8 +375,38 @@ class ConversationFoundationViewModel(
                 temporary.readRecovery()
             }
         }
-        if (startWithFreshChat) openFreshChatForAppEntry() else reload()
+        when {
+            startWithFreshChat -> openFreshChatForAppEntry()
+            entryConversationId != null -> restoreConversationForAppEntry(entryConversationId)
+            else -> reload() // Explicit navigation resolves its own target after Activity creation.
+        }
     }
+
+    private fun restoreConversationForAppEntry(id: com.nanzhufeng.ai.domain.ConversationId) {
+        val initialReloadGeneration = reloadGeneration
+        viewModelScope.launch {
+            val conversation = withContext(Dispatchers.IO) {
+                com.nanzhufeng.ai.domain.ConversationAppEntryPolicy.restorableConversation(
+                    repository.findById(id)?.conversation,
+                )
+            }
+            // A shortcut or user navigation issued while reading takes precedence.
+            if (reloadGeneration != initialReloadGeneration) return@launch
+            if (conversation == null) {
+                openFreshChatForAppEntry()
+                return@launch
+            }
+            when (conversation.surface) {
+                ConversationSurface.CHAT -> selectedChatConversationId = id
+                ConversationSurface.WORK -> selectedWorkConversationId = id
+            }
+            state = state.copy(surface = conversation.surface, selectedConversationId = id)
+            reload(targetSurface = conversation.surface, selectedBefore = id)
+        }
+    }
+
+    fun hasRunningGenerationForAppEntry(): Boolean =
+        state.runningConversationIds.isNotEmpty() || normalChatBackgroundExecution.runningConversationIds().isNotEmpty()
 
     /** Process start always lands on a reusable blank chat or creates one; history stays in the drawer. */
     private fun openFreshChatForAppEntry() {
@@ -393,7 +425,11 @@ class ConversationFoundationViewModel(
                     .asSequence()
                     .filter { it.surface == ConversationSurface.CHAT }
                     .sortedByDescending { it.updatedAt }
-                    .firstOrNull { chat -> repository.findById(chat.id)?.nodes?.isEmpty() == true }
+                    .firstOrNull { chat ->
+                        repository.findById(chat.id)?.let(
+                            com.nanzhufeng.ai.domain.ConversationAppEntryPolicy::isReusableBlank,
+                        ) == true
+                    }
             }
             val selected = reusableEmpty?.id ?: when (val result = withContext(Dispatchers.IO) {
                 createConversation.execute(surface = ConversationSurface.CHAT)
@@ -1845,6 +1881,12 @@ class ConversationFoundationViewModel(
         val id = state.selectedConversationId ?: return
         val draft = state.draft ?: return
         if (state.isSending) return
+        // The visible send button is the one explicit approval action.  Keep a content-free
+        // receipt bound to this exact draft so a stale/background request cannot open a socket.
+        val egressAuthorization = NormalChatEgressAuthorization.forUserSend(
+            draft = draft,
+            approvedAtEpochMs = System.currentTimeMillis(),
+        )
         // Older text-save jobs may already be running. The mutex makes them finish before this
         // exact visible draft is persisted, so clicking send cannot submit an older empty draft.
         ++draftSaveGeneration
@@ -1877,7 +1919,7 @@ class ConversationFoundationViewModel(
                 // Android production transfers the entire actual request to the foreground
                 // service. The ViewModel never owns its socket or stream callbacks.
                 if (normalChatBackgroundExecution.ownsExecution()) {
-                    if (!normalChatBackgroundExecution.begin(id, NormalChatBackgroundOperation.SEND)) {
+                    if (!normalChatBackgroundExecution.begin(id, NormalChatBackgroundOperation.SEND, egressAuthorization)) {
                         state = state.copy(
                             isSending = false,
                             runningConversationIds = state.runningConversationIds - id,
@@ -1892,6 +1934,7 @@ class ConversationFoundationViewModel(
                 val result = withContext(Dispatchers.IO) {
                             normalChatOpenRouterExecutor.execute(
                                 id,
+                                authorization = egressAuthorization,
                                 onLocalSubmission = {
                                     // User and assistant placeholder are durable before the first
                                     // SSE chunk, so a failed send has a stable in-place target.
@@ -2277,16 +2320,17 @@ class ConversationFoundationViewModel(
         private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
         private val normalChatBackgroundExecution: NormalChatBackgroundExecution,
         private val startWithFreshChat: Boolean = false,
+        private val entryConversationId: com.nanzhufeng.ai.domain.ConversationId? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ConversationFoundationViewModel::class.java))
-            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, glmOcr, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, deletePersistedAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, conversationStyleOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat) as T
+            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, glmOcr, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, deletePersistedAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, conversationStyleOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat, entryConversationId) as T
         }
     }
 }
 
-private fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent: Boolean): String = when (code) {
+internal fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent: Boolean): String = when (code) {
     NormalChatOpenRouterExecutor.Code.SERVICE_DISABLED -> "本次实际接收服务商未启用：请在设置中启用后再发送。"
     NormalChatOpenRouterExecutor.Code.CREDENTIAL_MISSING -> "本次实际接收服务商未保存 API Key：请在设置中保存后再发送。"
     NormalChatOpenRouterExecutor.Code.REGISTRY_UNVERIFIED -> "模型目录尚未核验：请在设置中先核验公开目录。"
@@ -2309,6 +2353,7 @@ private fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent:
     NormalChatOpenRouterExecutor.Code.TOOL_CALL_UNSUPPORTED -> "服务要求执行工具调用；普通聊天未执行该工具，也没有伪造回答。"
     NormalChatOpenRouterExecutor.Code.WEB_SEARCH_UNAVAILABLE -> "当前模型没有可验证的官方实时网页搜索路由，本次未改用模型记忆回答。请更换支持联网的模型后重试。"
     NormalChatOpenRouterExecutor.Code.WEB_SEARCH_NO_SOURCES -> "已请求实时网页搜索，但服务商没有返回可验证的公开来源；本次未保存为完整回答。请显式重试或更换支持联网的模型。"
+    NormalChatOpenRouterExecutor.Code.EGRESS_AUTHORIZATION_REQUIRED -> "本次发送授权与当前内容不一致，未向服务商发送任何内容；请在当前草稿上再次点击发送。"
     NormalChatOpenRouterExecutor.Code.LOCAL_RESPONSE_PERSISTENCE -> if (sent) "服务已返回，但本机未能确认本条回复已完整保存；不会自动重发。你仍可正常发送新问题或同题新请求。" else "本机未能创建可保存的回复。"
     NormalChatOpenRouterExecutor.Code.LOCAL_ACCOUNTING_PERSISTENCE -> "回复已保存，但本机未能保存本次费用、Token 与回答执行信息；不会影响继续提问。"
     NormalChatOpenRouterExecutor.Code.LOCAL_ATTEMPT_PERSISTENCE -> "本机未能保存本次发送记录，未继续请求服务商。"

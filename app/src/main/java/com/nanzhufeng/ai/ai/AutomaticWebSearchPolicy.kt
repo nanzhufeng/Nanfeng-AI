@@ -18,23 +18,23 @@ internal object AutomaticWebSearchPolicy {
         attachments: List<ChatAttachment>,
         modelId: String? = null,
     ): ChatRequestOptions {
-        if (!enabled) return ChatRequestOptions.Standard
+        if (!enabled) return current.copy(webSearchRoute = OfficialWebSearchRoute.NONE)
         if (current.liveWebSearch) return current
         return when (providerId) {
-            ProviderId.OPENROUTER -> ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)
+            ProviderId.OPENROUTER -> current.copy(webSearchRoute = OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)
             // Qwen3.8-Max Responses has repeatedly kept emitting search/tool progress without a
             // final answer until the five-minute hard deadline. Its official Chat Completions
             // search route is bounded to three minutes and already buffers provider tool frames.
             // Other text-only Qwen models retain Responses; attachments still require Chat.
-            ProviderId.QWEN -> ChatRequestOptions(
-                if (attachments.isEmpty() && modelId != QWEN_3_8_MAX_MODEL_ID) OfficialWebSearchRoute.QWEN_RESPONSES
+            ProviderId.QWEN -> current.copy(
+                webSearchRoute = if (attachments.isEmpty() && modelId != QWEN_3_8_MAX_MODEL_ID) OfficialWebSearchRoute.QWEN_RESPONSES
                 else OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS,
             )
             // The shared attachment bridge projects Markdown/OCR/PDF/media to text before these
             // text-only official search routes are serialized. An attachment is not permission to
             // silently remove the user's explicit web-search requirement.
-            ProviderId.DEEPSEEK -> ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
-            ProviderId.ZHIPU -> ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)
+            ProviderId.DEEPSEEK -> current.copy(webSearchRoute = OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
+            ProviderId.ZHIPU -> current.copy(webSearchRoute = OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)
             ProviderId.MOCK -> current
         }
     }

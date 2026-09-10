@@ -468,13 +468,26 @@ class ProviderAdapterContractsTest {
         assertTrue(zhipuGrounded.jsonBody.contains("\"reasoning_effort\":\"max\""))
     }
 
-    @Test fun `a deep model selection alone never adds a web tool`() {
-        val openRouter = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER)
-        val deepChoice = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.deep.first { it.label == "Claude Opus 5" }
+    @Test fun `Claude and ChatGPT deep selections request High without adding a web tool`() {
+        val adapter = OpenRouterChatAdapter()
+        val deepChoices = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.deep.filter { choice ->
+            choice.label in setOf("Claude Fable 5.1", "Claude Opus 5", "GPT-6 Astra", "GPT-5.6 Sol")
+        }
 
-        assertEquals(ChatRequestOptions.Standard, OpenRouterChatAdapter().requestOptions(openRouter, deepChoice))
-        assertEquals(ChatRequestOptions.Standard, QwenChatAdapter().requestOptions(model(), deepChoice))
-        assertEquals(ChatRequestOptions.Standard, DeepSeekChatAdapter().requestOptions(model(), deepChoice))
+        assertEquals(4, deepChoices.size)
+        deepChoices.forEach { choice ->
+            val options = adapter.requestOptions(model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER), choice)
+            assertEquals(ReasoningEffort.HIGH, options.reasoningEffort)
+            assertFalse(options.liveWebSearch)
+        }
+        val text = adapter.prepare(
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER),
+            listOf("user" to "深入分析"), emptyList(), stream = false,
+            options = ChatRequestOptions(reasoningEffort = ReasoningEffort.HIGH),
+        ) as ChatAdapterPrepareResult.Ready
+        assertTrue(text.jsonBody.contains("\"reasoning\":{\"effort\":\"high\"}"))
+        assertEquals(ChatRequestOptions.Standard, QwenChatAdapter().requestOptions(model(), deepChoices.first()))
+        assertEquals(ChatRequestOptions.Standard, DeepSeekChatAdapter().requestOptions(model(), deepChoices.first()))
     }
 
     @Test fun `DeepSeek Responses result keeps final text and structured public search sources`() {

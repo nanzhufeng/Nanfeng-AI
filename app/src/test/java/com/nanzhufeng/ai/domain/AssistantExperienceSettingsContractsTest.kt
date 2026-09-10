@@ -63,7 +63,7 @@ class AssistantExperienceSettingsContractsTest {
     }
 
     @Test
-    fun `conversation style picker exposes default first and six stable user choices`() {
+    fun `conversation style picker exposes default before the five explicit choices`() {
         assertEquals(
             listOf(
                 ConversationStyle.DEFAULT,
@@ -78,6 +78,7 @@ class AssistantExperienceSettingsContractsTest {
         assertEquals(ConversationStyle.DEFAULT, ConversationStyle.DEFAULT.effective())
         assertEquals(ConversationStyle.DEFAULT, ConversationStyle.fromPersistedId("removed-style"))
         assertEquals(ConversationStyle.PROFESSIONAL, ConversationStyle.fromPersistedId("professional"))
+        assertTrue(ConversationStyle.selectable.contains(ConversationStyle.DEFAULT))
     }
 
     @Test
@@ -112,7 +113,7 @@ class AssistantExperienceSettingsContractsTest {
         emitted.forEach { instruction ->
             assertEquals(1, instruction.split("对话方式：").size - 1)
         }
-        assertTrue(emitted[0].contains("对话方式：默认") && emitted[0].contains("按问题复杂度"))
+        assertTrue(emitted[0].contains("自然、清晰地回答") && emitted[0].contains("不刻意强化"))
         assertTrue(emitted[1].contains("先说结论") && emitted[1].contains("减少与判断和行动无关的铺垫"))
         assertTrue(emitted[1].contains("现实约束") && emitted[1].contains("可以反驳用户"))
         assertTrue(emitted[2].contains("专业顾问") && emitted[2].contains("适用范围"))

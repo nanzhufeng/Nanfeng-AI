@@ -48,6 +48,8 @@ class ConversationStyleRequestContractsTest {
         assertTrue(requestOne.contains("val globalExperience = loadAssistantExperienceSettings()"))
         assertTrue(requestOne.contains("resolveConversationStyle(conversationId, globalExperience.conversationStyle)"))
         assertTrue(requestOne.contains("AutomaticWebSearchPolicy.requestOptions("))
+        assertTrue(requestOne.contains("adapter.requestOptions(resolvedModel, choice)"))
+        assertTrue(requestOne.contains("OpenRouterDeepReasoningPolicy.forPreset(preset, automaticOptions)"))
         assertTrue(requestOne.contains("attachmentBridge.resolve("))
         assertTrue(requestOne.contains("systemFactForRequest(requestOptions, experience"))
         assertTrue(requestOne.contains("listOf(ChatHistoryMessage(\"system\", systemFact))"))

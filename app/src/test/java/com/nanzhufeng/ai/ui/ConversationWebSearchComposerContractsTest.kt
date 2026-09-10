@@ -23,6 +23,13 @@ class ConversationWebSearchComposerContractsTest {
         val composerEntry = workspace.substringAfter("private fun ComposerModelEntry(").substringBefore("private fun ConversationComposerDock")
         assertTrue("composer must not add a persistent web-search status label", !composerEntry.contains("实时联网") && !composerEntry.contains("未联网"))
         assertTrue("model picker must show the current conversation state", workspace.contains("if (enabled) \"实时联网\" else \"未联网\""))
+        val modelPicker = workspace.substringAfter("private fun ComposerMenuOverlay(").substringBefore("private fun ComposerModelPickerHeader(")
+        assertTrue("daily and deep candidates must share runtime Provider plus conversation state", !modelPicker.contains("choice.slot.takeIf"))
+        for (token in listOf(
+            "ProviderId.OPENROUTER -> \"OpenRouter · \$webSearchStateLabel\"",
+            "ProviderId.QWEN -> \"千问 · \$webSearchStateLabel\"",
+            "ProviderId.ZHIPU -> \"智谱 · \$webSearchStateLabel\"",
+        )) assertTrue("missing model-picker runtime detail $token", modelPicker.contains(token))
         assertTrue("Composer must reuse the shared switch instead of owning its dimensions", !workspace.contains("SettingsSwitchTrackWidth"))
         val action = workspace.substringAfter("private fun ComposerConversationWebSearchAction(").substringBefore("/** The mobile composer")
         assertTrue("composer control must not add a duplicate supporting label", !action.contains("仅影响本对话"))

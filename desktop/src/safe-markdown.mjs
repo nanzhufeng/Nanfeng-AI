@@ -58,15 +58,20 @@ function inlineMarkdown(value, query = '') {
   return highlightHtml(html, query);
 }
 
+const tableCells = line => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
+const tableDivider = line => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line || '');
+const tableRow = line => {
+  const trimmed = String(line || '').trim();
+  return trimmed.includes('|') && tableCells(trimmed).length >= 2;
+};
+const tableStart = (lines, index) => tableRow(lines[index]) && (tableDivider(lines[index + 1]) || tableRow(lines[index + 1]));
+
 const blockStart = (lines, index) => {
   const line = lines[index] || '';
-  const next = lines[index + 1] || '';
   return /^\s*```/.test(line) || /^\s{0,3}#{1,6}\s+/.test(line) || /^\s*>/.test(line)
     || /^\s*([-+*]|\d+[.)])\s+/.test(line) || /^\s*((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})\s*$/.test(line)
-    || (line.includes('|') && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(next));
+    || tableStart(lines, index);
 };
-
-const tableCells = line => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
 
 /**
  * Small, dependency-free Markdown projection for persisted Assistant and OCR text.
@@ -96,12 +101,15 @@ export function renderSafeMarkdown(value, { query = '' } = {}) {
       index += 1;
       continue;
     }
-    if (line.includes('|') && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1] || '')) {
-      const headers = tableCells(line);
-      index += 2;
-      const rows = [];
-      while (index < lines.length && lines[index].includes('|') && lines[index].trim()) rows.push(tableCells(lines[index++]));
-      output.push(`<div class="chat-markdown-table-wrap"><table><thead><tr>${headers.map(cell => `<th>${inlineMarkdown(cell, query)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, cellIndex) => `<td>${inlineMarkdown(row[cellIndex] || '', query)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+    if (tableStart(lines, index)) {
+      const rawRows = [];
+      while (index < lines.length && tableRow(lines[index]) && lines[index].trim()) rawRows.push(tableCells(lines[index++]));
+      const hasHeader = rawRows.length > 1 && tableDivider(lines[index - rawRows.length + 1]);
+      const rows = hasHeader ? rawRows.slice(2) : rawRows;
+      const columnCount = Math.max(...rawRows.map(row => row.length));
+      const cells = row => Array.from({ length: columnCount }, (_, cellIndex) => inlineMarkdown(row[cellIndex] || '', query));
+      const header = hasHeader ? `<thead><tr>${cells(rawRows[0]).map(cell => `<th>${cell}</th>`).join('')}</tr></thead>` : '';
+      output.push(`<div class="chat-markdown-table-wrap"><table>${header}<tbody>${rows.map(row => `<tr>${cells(row).map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
       continue;
     }
     if (/^\s*>/.test(line)) {
