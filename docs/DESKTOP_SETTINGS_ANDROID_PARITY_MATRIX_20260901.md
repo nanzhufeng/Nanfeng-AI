@@ -10,6 +10,13 @@
 - 未在 Desktop 建立业务消费者的 Android 设置保留对齐位置，但禁用控件并写明原因；不得用可点开关、Toast 或 `localStorage` 冒充完成。
 - 字段标题位于输入框上方；不使用 floating label。页面继续使用灰底、亮白卡、统一胶囊／圆角轮廓和同轮廓的 hover／pressed／focus 反馈。
 
+## 2026-09-02 宽屏密度补充
+
+- 24 张问题截图已归并为共享设置密度 owner；详见 [24 张问题截图矩阵](DESKTOP_24_SCREENSHOT_PARITY_MATRIX_20260902.md)。
+- 当前宽屏一级栏为 `clamp(320px, 30vw, 420px)`，设置主行 68px，详情内容上限 880px、页面间距 20px；原有 20px 白卡圆角、灰底 canvas 和整行选中态不变。
+- 外观／字体大小／主题色共用 `minmax(108px, auto)` 右值列和同一个 `justify-self:end` 值组；主题色色点在文字左侧，色点和文字整体右对齐，三段文字右边缘仍严格共线。1440px 与 700px 浏览器几何回读 spread 均为 0px。
+- 700×900 浏览器实测为 `300px + 400px` 两栏、无整页横向溢出；五风格弹窗为 600×620、5 张最小 94px 卡片。该变化没有放大 Composer，也没有改变任何 SQLite／Keychain owner。
+
 ## 逐项矩阵
 
 | Android 一级 → 二/三/四级条目 | Desktop 显示位置／文案／顺序 | 控件 | 真实 owner | 持久化 | 验证状态 | 当前缺口／裁决 |

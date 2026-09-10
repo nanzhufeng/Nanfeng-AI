@@ -1,43 +1,130 @@
-# Android → Desktop Visual Sync QA · 2026-09-01
+# Android → Desktop Visual Sync QA · 2026-09-02
+
+## 2026-09-02 compact settings navigation and model hierarchy — LOCAL PASS
+
+- Findings fixed: Desktop now has one product design only—the latest `1440×900` wide screen. Model Settings is the emphasized primary entry from current Android source; Cost & Usage, Context Records and Runtime Diagnostics remain the grouped records beneath it.
+- Responsive contract: `1000×800` and `700×900` are internal overflow/minimum-usable gates only. They never define compact, narrow, mobile-home/detail, or a second product IA. The former `width ≤ 1180 CSS px` / `height ≤ 820 CSS px` density branch has been removed.
+- Geometry proof: Browser-rendered `1440×900`, `1000×800`, and `700×900` all measured primary rows at `68px`; both settings panes remained rendered and page-level horizontal overflow stayed `0`. Public visual evidence is generated only at `1440×900`.
+- Hierarchy proof: the Model Settings primary card uses the shared Key glyph in a 44px accent surface and has its own Provider/API Key subtitle and route. Cost & Usage, Context Records and Runtime Diagnostics now live under a separate `调用记录` heading. Clicking the primary card reached the real `模型设置` page and exposed Provider, API Key and `测试连接`; it is not a decorative card.
+- Browser checks: `http://127.0.0.1:4173/`, title `南枫 AI Desktop`, meaningful nonblank DOM, no framework overlay, console error/warn count `0`, and Settings → Model & Network → Model Settings interaction passed. The one-shot server, tab and temporary viewport override were closed/reset after QA.
+- Evidence: `/Users/nanzhufeng/.codex/visualizations/2026/09/02/01a060eb-322b-7dd2-b8da-1664f33e02de/nanfeng-ai-wide-only-20260902/`; all 13 public screenshots are `1440×900`. `contact-sheet-wide-only.jpg` SHA-256 is `5af2c675c75be5626065aca026272612a73a9c66efc6be839884951dd46b1de0`.
+- Gates and boundary: current correction passed Node `161/161`, Rust `181/181`, Android settings/model `24/24`, lint, typecheck, inventory, protocol golden, static build, and `cargo check`. This correction did not rebuild or resign a macOS bundle. No formal Desktop data root, Provider, account, notification, OPPO or `connected*AndroidTest` was used.
+
+## 2026-09-02 24 张问题截图深层密度与 Markdown 收口 — LOCAL PASS
+
+- Outcome: 18 张首轮问题图与 6 张补充间距图已归并到共享设置密度和 Assistant Markdown 两个 owner；没有逐页堆叠独立缩放，也没有放大 Desktop 底部 Composer。24 项逐图裁决见 [Desktop 24 张问题截图对齐矩阵](docs/DESKTOP_24_SCREENSHOT_PARITY_MATRIX_20260902.md)。
+- Settings geometry: 一级栏为 `clamp(320px, 30vw, 420px)`，共享设置行实测 `68px`，右侧详情上限 `880px`、页面间距 `20px`；原有 20px 白卡圆角和灰底保持不变。`700×900` 的双栏和零溢出结果仅作内部最小可用门禁。
+- Appearance value alignment: “系统（默认）／标准／橙色”共用 `minmax(108px, auto)` 右值列和 `android-settings-row-value`；主题色色点与文字作为同一值组整体右对齐。对外只以 `1440×900` 宽屏结果作为产品视觉证据。
+- Tone and copy: 五风格弹窗实测 `600×620`，恰好 5 项、每项最小 `94px`；说明明确“只改变表达方式，不改变模型、联网、记忆或资料库功能”，不再把请求风格和能力事实混写。
+- Markdown: Assistant 正文为 `15px / 1.72`、阅读宽度 `880px`；表格单元格最小 `140px`，只在表格容器横向滚动，4 列夹具没有整页溢出。User 文本仍不执行 Markdown／HTML。
+- Evidence: 11 张浏览器独立 PNG、2 张隔离原生 PNG 与 `contact-sheet-final.jpg` 位于 `/Users/nanzhufeng/.codex/visualizations/2026/09/02/01a06048-b547-73d2-8863-9fbf7aea5ef5/desktop-deep-parity-after/`；联系表 SHA-256 `c1a58ed5db106a394413d119caff26a45dfe096cc4ceafbb8f6110081be77cec`，只是审阅板，不是 App 单一画面。
+- Native isolation: 唯一 Bundle ID `com.nanzhufeng.ai.desktop.compareacceptance.63406.mtjle8e1`、新鲜根 `/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.mJpHnp`、显式 diagnostic mode；原生 `tauri://localhost` 设置与五风格弹窗实看，SQLite `quick_check=ok`、schema 37，PID 63732 无子进程、无已建立 TCP，验收后只结束该 PID。
+- Gates and boundary: Node `155/155`、lint、typecheck、protocol golden、static build、macOS bundle 与 strict codesign 通过；最终主程序 SHA-256 `074ba61f27f20072d7765b1971314d41704a263cbb203aec29ba0c272bc254d3`。当前正式 PID 58143 未停止／重启，正式库未读写；未调用 Provider／账号／通知，未操作 OPPO，未运行 `connected*AndroidTest`。
+
+## 2026-09-02 formal schema-37 production-root acceptance — LOCAL PASS
+
+- Outcome: the formal production-root UI rendered across main/chat navigation, Composer, model picker, six-category search, reminders, transcription, all four settings groups, personalization, model/network, usage, context, diagnostics, conversation management, account, import/export, local data, workspace and development diagnostics. Together with the healthy schema-37 readback, this passes the local formal-root scope; real Provider/account/notification behavior remains separately untested.
+- Crash diagnosis and fix: the user-visible crash reports came from stale isolated-QA LaunchAgents whose plists omitted the isolated root when no mock endpoint was configured. Their older binaries fell back to the formal root, rejected its newer schema as `desktop SQLite unavailable`, and aborted in the Tauri setup callback. Background plists now always carry the exact app root; the new regression failed before the change and passes after it.
+- Safety evidence: the explicit diagnostic PID had no child process or TCP connection and created no new crash report. Node `151/151`, Rust `180/180`, lint, typecheck, protocol golden, static build, `cargo check`, bundle and strict codesign pass. The executable is `30,942,016` bytes, SHA-256 `8683046f14df8924c90a76ee9a167564703906998a4c02b655e08bef85c408c9`; signing remains ad-hoc with no Team ID.
+- Data audit: the user confirmed operating Desktop after the evidence backup and does not want recovery. All 20 new archive intents are distinct, revision-correct foreground lifecycle mutations whose only conversation changes are `archived` and revision; content hashes remain unchanged, and their contiguous bottom-to-top row order matches normal conversation cleanup. SQLite has no actor column, so the exact person is not claimed as database-proven, but there is no contrary evidence or automatic-start archive path.
+- Visual evidence: 14 independent PNGs and `contact-sheet.png` are retained at `/Users/nanzhufeng/.codex/visualizations/2026/09/02/01a06014-85d8-7901-b462-a3ef1f15e8e7/desktop-formal-schema37-acceptance/`; contact-sheet SHA-256 is `32db57c583b77da516787d60c01c99b8055f8450325ca465e8fffa3a07e58c2f`. The contact sheet is a review board, not one application screen.
+- Runtime boundary: the user later resumed normal Desktop use; this QA run did not start or terminate that instance. A pre-diagnostic online backup remains evidence-only and was not restored. No conversation recovery, Provider/account/notification action, OPPO operation or `connected*AndroidTest` has been performed.
+
+## 2026-09-02 icon／control／card audit addendum
+
+- Outcome: the previous “icons were visible but not compared control-by-control” weakness is closed. The new audit maps main, model, Composer `+`, search, reminders, transcription, four settings groups, personalization/five styles, model web search and ZIP import from current Android source/contracts into Desktop shared icon, surface, whole-container selection, typography and scroll owners.
+- Findings fixed: Desktop `外观` used palette instead of brightness/appearance, `导入与导出` used a one-way import file, `开发与诊断` used a generic gear, and model-page `实时网页搜索` used a magnifier. They now use vendored Lucide sun-moon, arrow-right-left, sliders-horizontal and globe nodes. No emoji, placeholder glyph or launcher/Dock icon changed.
+- Contract correction: `ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md` now matches the live five-style source and both latest screenshot sets: exactly five visible styles; `default` is internal fallback only.
+- Red/green and gates: the new focused test failed 2/3 before the implementation and passes 3/3 after it. Correcting the stale Lucide license label from MIT to ISC exposed one old hard-coded test assertion (`150/151`); that factual assertion was corrected and the final Node rerun is `151/151`. Rust is `179/179`; lint, typecheck, protocol golden, static build, `cargo check`, macOS bundle and strict codesign pass.
+- Rendered browser QA: `http://127.0.0.1:41739/`, explicit `1440×900`, flow `main → Settings → four groups → Model & Network → Model Settings → deep pages → Search → Scheduled Tasks → Transcription`; page identity, nonblank DOM and interactions passed with no framework overlay and console error/warn count 0. Internal `1000×800` and `700×900` checks measured the same two-pane IA and `68px` rows; no compact product layout is claimed.
+- Native QA: unique ad-hoc Bundle ID `com.nanzhufeng.ai.desktop.compareacceptance.25946.mtj1d970`, isolated root `/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.njB4u2`, diagnostic mode. Settings and Model & Network were independently captured; SQLite was `quick_check=ok`, schema 37, history/background/read-marker/reminder state unchanged, and PID 25996 had no child or network socket. Only PID 25996 was stopped; PID 97950 remained running.
+- Evidence: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05db4-50d5-7131-ae92-29041ef03ac9/icon-control-audit-20260902/`. `AFTER-PREVIEW-COMPARISON-BOARD-NOT-A-SINGLE-SCREEN.jpg` is a preview board, not one App screen; SHA-256 `394927a8fc6cbfce08644b59914d3662fa7a0d84ae0151141e54ace8e0ae7768`.
+- Artifact: executable `30,941,152` bytes, SHA-256 `427500aa45679918992a67ba26551e2308304c82f8fee3696e406bcc9b5c9891`; ad-hoc, `TeamIdentifier=not set`. No formal root, Provider/account/cloud/notification action, OPPO or `connected*AndroidTest` was used.
+
+## 2026-09-02 UI/schema diagnostic startup-gate addendum
+
+- Outcome: `--diagnostic-ui-schema-acceptance` is now a one-process, default-off startup mode for opening the normal Desktop UI and applying schema migrations without automatic background work. Normal no-argument startup behavior is unchanged; the mode is not persisted and conflicts with the background-cycle argument fail closed.
+- Native isolation: the final bundle was opened only against `/tmp/nanfeng-ai-p6-v2-picker-acceptance.ui-schema-final.9Ynaex/app-home`, never the formal root. The empty-root UI rendered normally; SQLite readback was `quick_check=ok`, schema 37, unchanged default app/history/background projections, and zero read markers, reminder plans and reminder runs. The diagnostic PID had no child process and no network socket.
+- Credential/notification boundary: startup page reads use diagnostic no-credential projections for Provider and account state; the notification plugin and bridge are not initialized. The webview also skips legacy settings migration, read-marker maintenance, notification permission/listener/flush and history `runDue`. Rust rejects external commands if invoked directly during this mode.
+- Visual caveat: macOS Notification Center banners remained visible while the same-bundle pre-existing PID 97950 continued running. They are not attributed to the diagnostic PID and are excluded from acceptance evidence; code/process/SQLite evidence, not the ambiguous banners, proves the suppression boundary.
+- Final gates: lint, typecheck, protocol golden, Node `148/148`, static build, Rust `179/179`, `cargo check`, macOS bundle and strict codesign passed. The executable is `30,941,152` bytes, SHA-256 `bddbae703ca2fcf35787dacaa5685f0dd8335c8ab030a55138c758141f6c0b1c`; signature remains ad-hoc with `TeamIdentifier=not set`.
+- Boundary: PID 97950 was not stopped or operated; no formal Desktop root, Provider, account, cloud service, notification action, OPPO or `connected*AndroidTest` was used.
+
+## 2026-09-02 final local weak-point addendum
+
+- Outcome: the two remaining no-external-service weak points are now closed in a fresh root. The GLM-OCR acceptance path cannot read the normal provider credential store, missing credentials produce a durable first Attempt rather than `Attempt 0`, and document failures use document-specific copy. A deterministic large-history package now covers 800 conversations, 10,188 messages and a 600-message conversation without deleting content or changing layout.
+- GLM-OCR native evidence: real 26,672-byte PNG and 18,107-byte PDF files entered through the macOS picker. Both task cards showed GLM-OCR, real size, Attempt and provider-request facts. Starting without credentials persisted `FAILED`, `ZHIPU_API_KEY_MISSING`, `Attempt 1`, `请求 0`; cancel/retry remained actionable and restart restored both tasks. Private-copy hashes matched the sources, and the acceptance process had no established TCP connection.
+- Large-history evidence: package SHA-256 `316f6c7f0ebacdc450f5b0339080b29a858181bb023b73ad9bbd3ffb4f6ba1db`, semantic hash `fe5b591513d9db3d29eff0f95161c2c69afa56bc6515175ee4de0f58688578b0`; SQLite readback was 800 conversations, 10,188 messages, max 600 messages and 10,988 local-search rows. The drawer rendered deterministic titles, exact global search opened conversation 0617 at its unique target, and in-conversation find opened/closed at message 0250. `Large-history-draft-preserved` survived scroll away, jump to message 0599, search round-trip and exact middle return.
+- Observed native timings include Computer Use action plus post-action capture wait: import 2.345s, workspace open 1.762s, 600-message conversation open 2.774s, jump-latest 2.179s, exact query 2.019s, result open 1.939s and return-to-search 1.519s. Every action completed without crash or visible freeze; these are acceptance observations, not cross-machine benchmarks.
+- Visual evidence: seven independent PNGs plus `contact-sheet.jpg` are retained in `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05db4-50d5-7131-ae92-29041ef03ac9/desktop-local-final-gaps-20260902/`. The contact sheet SHA-256 is `e52cbea5106a248e8c29339ba7f4f59f65b4a1450367c86f03062d65648c5970`; it is a preview comparison board, not one App screen.
+- Final gates: lint, typecheck, protocol golden, Node `147/147`, static build, Rust `176/176`, `cargo check`, macOS bundle and strict codesign passed. The executable is `30,864,416` bytes, SHA-256 `7ad08a763fd9c90c6c09105139fb17cf24f7708b113c991db3d15c06e15052a6`; signature remains ad-hoc with `TeamIdentifier=not set`.
+- Boundary: no Provider, normal credential, account, notification, formal Desktop root, OPPO or `connected*AndroidTest` was touched. The large-history package contains deterministic synthetic text only.
+
+## 2026-09-02 real local-fixture deep QA addendum
+
+- Outcome: the 17-item local Desktop matrix now has a real local multi-format pass. Four genuine gaps were reproduced red and fixed: settings once routed active-workspace import only through the v2 private-archive picker; v1 import copied bytes without creating preview-owner rows; full-text search omitted Markdown/Code attachment bodies; and DOCX system-open used an extensionless content-addressed path.
+- Fixture: `/tmp/nanfeng-ai-desktop-local-qa-fixture.20260902` contains a 2,799-byte long Markdown file plus real PNG, one-page PDF, MP4, DOCX, v1 workspace package and strict v2 exchange package. The source sizes and SHA-256 values were checked again after native import.
+- Native readback: unique QA app `/tmp/nanfeng-ai-desktop-compare-bundle.vl7r2i/南枫 AI Compare 验收.app`, Bundle ID `com.nanzhufeng.ai.desktop.compareacceptance.13889.mtiyb0gu`, isolated root `/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.IFhQM5`. SQLite is `quick_check=ok`, schema 37; imported Markdown/PNG/PDF/MP4/DOCX sizes and hashes exactly match the source fixture. No normal Desktop data root was read or started.
+- Visual/interaction evidence: long Markdown rendered through `LOCAL-QA-END` with executable HTML inert; Markdown, PNG, PDF and MP4 opened in-app; verified DOCX opened in TextEdit with exact fixture text. Search found Markdown body text, reported real sizes, and restored the exact query/result state after preview. The long-conversation title, position and `Draft-preserved-local` survived jump/return and Standard→Large font persistence.
+- Responsive evidence: `1440×900` retains the 256px sidebar and 760px large Composer and is the only product design. Smaller window checks verify fallback accessibility and overflow only; they are not screenshots, variants, or narrow-window product evidence.
+- Screenshots: 20 independent PNGs are retained in `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05db4-50d5-7131-ae92-29041ef03ac9/desktop-local-deep-qa-20260902/`. `contact-sheet-preview-not-single-app-screen.jpg` (SHA-256 `99833fd701a0b776e25b0cf1cd538a62a559f3e01437fea68cd2a62b5bfc4d4e`) selects 11 final-state screenshots and is explicitly labelled as a preview comparison board, not one App screen. Pre-fix failure screenshots remain separate and are not used as final evidence.
+- ZIP durability: the isolated Rust integration seam covers first import, duplicate package, cumulative append, identity conflict, batch-delete tombstone and re-import without resurrection. Destructive delete was intentionally not clicked in the native UI.
+- Final gates: lint, typecheck, protocol golden, Node `147/147`, static build, Rust `174/174`, `cargo check`, macOS bundle and strict codesign passed with 0 failed and 0 skipped/ignored. The executable is `30,864,368` bytes, SHA-256 `2821dafcff08a845763412bc08cb849c4f2802dd0164fb64640638a74d102b74`; signature is ad-hoc and `TeamIdentifier=not set`. Repository-wide `cargo fmt --check` still reports broad pre-existing formatting drift, so no bulk format rewrite was made.
+- Boundary: no Provider request, credential/account flow, Google/Supabase call, notification click, formal Desktop data root, OPPO access, or `connected*AndroidTest` was performed.
 
 ## Comparison target
 
-- Android live-source reference screenshots: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05b3f-bf39-7580-97c0-0c60854681f3/android-current/`.
-- Desktop implementation screenshots: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05b3f-bf39-7580-97c0-0c60854681f3/desktop-current/`.
+- Current Android release reference screenshots: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05b3f-bf39-7580-97c0-0c60854681f3/android-current-final-20260901/`; primary contact sheet: `contact-sheet-primary.png`.
+- Latest five-style Android reference: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05b3f-bf39-7580-97c0-0c60854681f3/android-current-five-style/android-five-style-final-unclipped-20260901.png`.
+- Current Android deep-flow evidence: `12-search-file-result.png` and `13-search-file-preview.png` in the current release reference directory.
+- Desktop implementation screenshots: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05d54-b892-77d3-96f6-edfa5bb8c362/`.
+- Fresh 2026-09-02 multipage contact sheets inspected together: `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05db4-50d5-7131-ae92-29041ef03ac9/desktop-android-parity-20260902/android-current-multipage-contact.jpg` and `desktop-current-multipage-contact.jpg`.
 - Combined comparison inputs inspected at original resolution:
   - `android-desktop-compare-1-20260901.png` — main, model root, plus menu, search.
   - `android-desktop-compare-2-20260901.png` — scheduled tasks, 南枫转写, settings.
+  - `android-desktop-five-style-card-comparison-final-20260901.png` — same selected five-style state, Android card stack beside the final fixed-size Desktop scroll dialog.
 - Desktop evidence comes from the latest 2026-09-01 release bundle copied to a unique acceptance Bundle ID and a fresh `/tmp` data root. It does not read the normal Desktop data root.
 
 ## Desktop adaptation rule
 
 - Synchronize capability, information hierarchy, icon meaning, card language, state wording, model grouping, and owner behavior.
-- Preserve Desktop-only geometry: the large multiline Composer, persistent left navigation, wide search canvas, two-pane settings, two-pane transcription workbench, pointer/keyboard density, and resizable navigation.
-- Do not add a fake camera item on Desktop. The plus menu keeps image, file, and live web search because those are the applicable Desktop capabilities.
+- Preserve Desktop-only geometry: the large multiline Composer, persistent left navigation, wide search canvas, two-pane settings, transcription list/detail workbench, pointer/keyboard density, and resizable navigation.
+- Camera is now a real Desktop capability rather than a placeholder: the plus menu follows Camera → Image → File → Tone → Web Search, and capture is written only after explicit confirmation through the private attachment owners. Cancel or permission failure does not change the draft.
 
 ## Visible comparison result
 
 - Main: Chat/Work identity, short `V4 Flash` model label, warm user bubble, fixed bottom Composer, and shared orange/gray/white design language align. The Desktop Composer remains deliberately larger.
-- Model picker: root is `Auto / Daily / Deep`; Daily and Deep enter complete candidate lists instead of silently selecting the first model. The obsolete visible Compare entry is absent.
-- Plus menu: image, file, and live web search use the matching icon/card language and real Desktop handlers.
+- Model picker: root is `Auto / Daily / Deep`; Daily and Deep enter complete candidate lists instead of silently selecting the first model. Compare is no longer executable or retryable from the webview; historical Compare records remain readable and an already running historical job remains stoppable.
+- Plus menu: camera, image, file, per-conversation `基础风格和语气`, and per-conversation live web search use the matching icon/card language and real Desktop handlers. The tone subpage exposes exactly the current five Android choices; global defaults remain an internal fallback, not a sixth visible choice.
 - Search: shared categories, sort/reset controls, bottom search field, file-type preview tile, real size/time, and explicit `预览`/`系统打开` action are present.
 - Scheduled tasks: the mobile hierarchy is retained while Desktop uses a wide status canvas and persistent navigation.
-- 南枫转写: GLM-OCR image/PDF is the default mode; Qwen audio/video remains a separate tab. Desktop keeps the task list/detail split and settings row needed for wide-screen operation.
-- Settings: the same grouped IA and white-card language is presented as a Desktop two-pane settings workbench.
+- 南枫转写: the current root is the Android-aligned GLM-OCR image/PDF picker. New audio/video task creation and speech settings are absent; saved legacy audio/video tasks remain visible under a clearly marked read-only-compatible history section so existing data is not orphaned.
+- Settings: the current Android `SettingsDestination` source has four primary groups—对话、外观、数据管理、工作区. Desktop presents the same four groups and white-card language in a two-pane workbench; 项目与知识 and 开发与诊断 remain inside 工作区.
+- Five styles: Desktop exposes only the same five choices and exact descriptions. Each choice is an independent gray rounded card; the selected card uses a pale-orange surface, orange border/title/check. The existing Desktop dialog dimensions stay fixed and the complete, normally sized copy scrolls inside it.
+- Failed answer: a fresh attachment-free isolated conversation was sent with no enabled Provider. The persisted User message and Assistant placeholder render an inline `回答未完成` card with a safe Chinese action and explicit Attempt retry; the same card remained after forced process termination and relaunch.
 
 ## Interaction and implementation evidence
 
-- Native Computer Use opened and captured main, model root, Daily candidates, plus menu, search, scheduled tasks, both transcription modes, and settings.
+- Native Computer Use opened the final isolated bundle and checked the complete four-group settings navigation plus its 个性化 secondary page, Composer preference popup, reminder/transcription empty states, search result/empty states, and a fail-closed local text-preview state. Earlier deep evidence still covers model candidates, reminder lifecycle, settings deeper pages, and return restoration.
 - Model availability in screenshots is provided by an app-private local catalog fixture with no credential, endpoint, HTTP request, or provider call.
-- Final gate: lint, typecheck, Node `141/141`, static build, Rust `165/165`, macOS bundle, and strict codesign passed with no final failed or ignored tests.
+- Final gate: lint, typecheck, protocol golden, Node `147/147`, static build, Rust `171/171`, `cargo check`, macOS bundle, and strict codesign passed with no final failed, skipped, or ignored tests.
 - macOS release bundle and strict codesign verification passed. The development bundle is still ad-hoc and is not a Developer ID/notarized distribution build.
 - No `connected*AndroidTest`, OPPO access, real Provider request, Google/Supabase request, or real billing/notification click was performed for this visual pass.
 
 ## Deep parity closure
 
 - The revoked first-level judgment has been replaced by a code-level Android/Desktop route matrix and native deep-flow evidence.
-- Native Computer Use exercised model roots, add/search paths, reminder create/edit/pause/resume/delete-confirmation, both transcription modes and picker cancellation, settings second/third-level pages, fullscreen custom instructions, local Memory actions, archived/recycle lifecycle, read-only conversation return, import picker, account/local-data/about/diagnostics pages, and search filtering/history/attachment location.
+- Native Computer Use evidence across the current and immediately preceding isolated passes covers model roots, add/search paths, reminder create/edit/pause/resume/delete-confirmation, the current GLM-OCR picker, settings second/third-level pages, fullscreen custom instructions, local Memory actions, archived/recycle lifecycle, read-only conversation return, import picker, account/local-data/about pages, and search filtering/history/attachment location. Previous Qwen-ASR and extra settings-group screenshots are historical evidence, not current UI truth.
 - The final ACL rebuild was rechecked in a unique bundle and strict ordinary-chat acceptance root: create a plan, reopen its confirmed edit form, change the title, save, and read back `最终 ACL 隔离复验计划` from the list.
+- The renewed five-style and failed-answer pass used a fresh ad-hoc acceptance Bundle ID and `/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.Z9F04w`. SQLite readback confirmed one `FAILED / PROVIDER_NOT_ENABLED` Attempt whose `user_message_id` and `assistant_message_id` both exist in the committed conversation JSON before the restart screenshot was taken.
 - Real Provider content, Google/Supabase accounts, OS notification authorization/clicks, destructive confirmations, and Developer ID/notarization remain separate external acceptance boundaries.
 
-final result: passed for local Android → Desktop deep parity; external boundaries remain unverified
+## 2026-09-02 isolated native readback
+
+- Release bundle: `desktop/src-tauri/target/release/bundle/macos/南枫 AI Desktop.app`; executable `30,826,656` bytes, SHA-256 `bac2deb5e345285d3485a439b49795938783bebe77858cd0ce3c142a59ccd9aa`; strict codesign passed, ad-hoc, `TeamIdentifier=not set`.
+- Unique QA copy: `/tmp/nanfeng-ai-desktop-compare-bundle.TxB0Kb/南枫 AI Compare 验收.app`; Bundle ID `com.nanzhufeng.ai.desktop.compareacceptance.7776.mtiwriyu`; isolated root `/tmp/nanfeng-ai-desktop-ordinary-chat-acceptance.vAfRY7`.
+- The native window was a real `tauri://localhost` app. Settings exposed the current four-group primary IA; 南枫转写 exposed only `图片 / PDF 转 Markdown`, `全部转写`, the current empty-state copy, and `选择图片或 PDF`.
+- Isolated SQLite readback: `quick_check=ok`, schema `37`, `tone_override=efficient`, `web_search_override=1`, zero reminder plans, and zero transcription tasks. The same root was closed and relaunched before the Composer preferences were read back. The QA copy also passed strict codesign verification.
+- Current-run screenshots and two native contact sheets are in `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05db4-50d5-7131-ae92-29041ef03ac9/desktop-requirement-audit-20260902/`.
+
+final result: blocked for full production-root Android → Desktop acceptance. The fresh current-Android code, visual, automatic, bundle, and isolated-native audit is complete. This audit deliberately did not cold-start the new release against the normal Desktop data root because startup can run due reminder/history jobs and this task forbids real Provider/account activity. A formal-bundle process observed at 23:58 predates this thread and was neither operated nor terminated; it does not prove current-executable acceptance. Real Provider, account/sync, OS-notification click, Developer ID/notarization, and the new release's production-root startup remain separate boundaries.

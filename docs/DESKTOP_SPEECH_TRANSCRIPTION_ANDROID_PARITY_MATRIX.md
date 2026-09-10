@@ -2,6 +2,8 @@
 
 > 范围：本文只描述 `NanfengTranscriber-Android` 当前源码已经存在的语音转写能力，以及它们迁移到 `Nanfeng_AI/desktop` 时的桌面化转换。`Nanfeng_AI` 现有“南枫转写（GLM-OCR）”仍是图片／PDF → Markdown 的文档转写能力，不改名、不合并为 ASR。
 
+> **状态：历史兼容合同。** 当前 `Nanfeng_AI` C-10 产品行为只读取 [Android 南枫转写当前界面合同](ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md)。本文只解释已存在的旧音频／视频任务为何继续可读，不授权恢复新建、设置、重试或录音入口。
+
 | 能力 | Android 当前事实 | Desktop 本增量 | 状态／边界 |
 | --- | --- | --- | --- |
 | 输入 | 文件、分享、文件夹中的音频／视频 | 原生文件选择；按扩展名、普通文件、非符号链接、大小与媒体时长做门禁；没有旧工作区时自动使用不进入普通列表的本地转写空间 | Android 当前没有录音入口，Desktop 不伪造录音，也不要求先导入旧工作区 |

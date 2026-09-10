@@ -2,7 +2,7 @@
 
 ## 事实源与范围
 
-- 每次先读本文件、当前工作树、`docs/CURRENT_HANDOFF.md` 顶部和受影响领域的一份现行合同。会话／搜索／文件、设置、普通上下文分别读取 `docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md`、`docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md`、`docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md`；模型、OCR、ZIP、费用读取对应专项合同。
+- 每次先读本文件、当前工作树、`docs/CURRENT_HANDOFF.md` 顶部和受影响领域的一份现行合同。会话／搜索／文件、设置、普通上下文、南枫转写分别读取 `docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md`、`docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md`、`docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md`、`docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md`；模型、OCR、ZIP、费用读取对应专项合同。
 - 事实优先级为源码／可复现验证 → 当前合同 → 交接 → 历史文档。冲突必须记录裁决；旧 P 阶段的“当前”、截图、Schema、APK、测试数或设备记录不得反向定义现在。
 - Android、Desktop、协议、云端和网关独立验证；不得用一端结果声称其他端已同步或验收。
 

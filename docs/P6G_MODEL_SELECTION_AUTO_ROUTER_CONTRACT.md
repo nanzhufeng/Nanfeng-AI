@@ -2,16 +2,16 @@
 
 状态：本地 UI/重启读回退出已完成（2026-08-14）；不等于真实模型服务。P6-F2-E 后的 P6-G 仅实现本地、纯领域的路由合同；不读取 Key、不发 HTTP、不执行 Provider 调用。最新证据与阶段切换以 `CURRENT_HANDOFF.md` 的 2026-08-14 当前权威状态为准。
 
-> **当前 Android UI 路由（2026-08-24）：** 本文仍是 Auto、手动 override、持久化与实际模型归因的领域合同；Android Composer 的显示名、固定宽度、模型面位置、激活视觉、遮罩点按和滑动返回，统一以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为准。本文的早期“Dialog/菜单”视觉措辞不构成第二套 UI 规则。
+> **当前 Android UI 路由（2026-09-02）：** 本文仍是 Auto、手动 override、持久化与实际模型归因的领域合同；Android Composer 的显示名、固定宽度、模型面位置、激活视觉、遮罩点按和滑动返回，统一以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为准。本文的早期“Dialog/菜单”视觉措辞不构成第二套 UI 规则。
 
 ## 优先级与目录
 
 - 会话手动 override > 全局默认 > Auto；手动选择绝不经过自动路由。
-- Kimi K3 是深度模式中的显式选择，替代该选择面的 Qwen3.8-Max；它不加入 Auto。选择后沿用现有会话 override 与下一会话默认值，首次从其他模型切入时由 K3 Adapter 从当前用户轮建立独立 Provider 上下文。
+- “深度”手动选择固定为 `Claude Fable 5.1 → Claude Opus 5 → GPT-6 Astra → DeepSeek V4 Pro → GPT-5.6 Sol → GLM-5.3 → Qwen3.8-Max`。Fable 5.1 位于首项；历史 `logical:deep:claude-fable` 保留为旧版 Fable 5 的精确路由，不能静默升级。`Qwen3.8-Max` 为第七项；`Kimi K3` 不再进入 Composer 选择面或 Auto。历史 `logical:deep:kimi-k3` 只保留为已移出选择的精确旧值，发送前失败关闭，不静默改成 Qwen、Auto 或其他模型；既有消息继续保留当时实际模型归因。
 - `Grok 4.1 Fast`（`x-ai/grok-4.1-fast`）已从 OpenRouter 当前公开目录下线：保留其逻辑 ID 仅用于旧会话识别与归因，不出现在选择器、Auto 候选或重试发送中。旧选择必须在读取 Key、外发正文前以“模型已不在服务商目录”失败，绝不静默替换。
 - `Grok 4.5`（`x-ai/grok-4.5`）与 `Grok 4.6 High`（`x-ai/grok-4.6`）都已从产品模型列表与 Auto 候选移除；持久化旧选择只能失败关闭，不能回退、近似替换或继续外发。历史消息仍保留当时实际模型归因。
 - Auto 在合格候选中优先 Claude/Anthropic，OpenAI/ChatGPT API 是明确 fallback/特长候选：Claude 不可用、限流/超时、能力/上下文/工具/结构化输出不匹配、成本/延迟越界或用户手选时才可切换。
-- Domain 只持久化稳定层级 `FAST / BALANCED / DEEP / APEX_REVIEW`；catalog snapshot 在接入时动态映射真实 model ID/display name/capability/price/context/status。Haiku 4.5、Sonnet 5、Opus 5、Fable 5 等用户目标名不是当前 AVAILABLE 模型或 fake preset。
+- 选中或 Auto 实际路由到 `Claude Fable 5.1`、`Claude Opus 5`、`GPT-6 Astra`、`GPT-5.6 Sol` 时，OpenRouter 请求必须明确带 `reasoning.effort=high`；联网路由只能添加官方搜索工具，不能清除该参数。其他深度模型不因这一规则被强加 High。Domain 只持久化稳定层级 `FAST / BALANCED / DEEP / APEX_REVIEW`；catalog snapshot 在接入时动态映射真实 model ID/display name/capability/price/context/status，未通过精确映射即不可外发。
 
 ## 路由顺序与安全门
 

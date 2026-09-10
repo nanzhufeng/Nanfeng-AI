@@ -4,7 +4,16 @@
 > 本文主体归档基线：`09f519f6f96e195583a04a03d689d7cbabeaeb64`（`docs: refresh current master control gate`）；代码冻结点：`b7e1c2f`；测试／合同收口点：`1f7f356`。
 > 本档案依据当前跟踪文件清单、源码结构扫描、关键 owner 全文／定向读取、全部 JVM 测试结果、正式构建结果和完整 Git 提交主题生成。历史计划、截图、旧 APK 与旧测试数字只作为发生时证据；与当前代码或本轮验证冲突时，以代码和本轮验证为准。
 
-## 0. 2026-09-01 正式增量沉淀
+## 0. 2026-09-10 正式增量沉淀
+
+- **读取门：** 本轮同时覆盖 Android 与 Desktop；当前 checkpoint 与各层验收只读 [当前交接](CURRENT_HANDOFF.md)。下方 2026-09-01／08-31 是历史复盘，旧 Schema、测试数、签名和设备信息不再定义当前状态。
+- **启动与记忆 owner：** `ConversationAppEntryPolicy` 依据退出 ID／时间／生成状态恢复；空会话复用必须确实无正文、附件、标题及置顶内容。`MemoryViewModel → ManageMemoryUseCase → RoomMemoryRepository` 支持整篇摘要替换，在事务边界检查修订集合，保留旧摘要历史与失败草稿。
+- **数据演进：** Room 已到 Schema 66，连续迁移 65→66 只加可空的发送授权时间和披露版本；旧数据不伪造授权。当前普通发送仍以本次准确正文／附件和可见接收方为边界。
+- **Desktop 持久化：** 通用设置按 patch 串行写入当前 revision，避免旧草稿覆盖其他字段；数据位置配置独立于选定数据根，迁移使用旧目录锁、暂存复制和 SQLite 校验，源目录保留。真实用户迁移与跨安装升级尚未验收。
+- **跨端可见增量：** Android 六风格设置使用全屏选择页；Desktop 共享动作矢量可从 AndroidX 原始路径重复生成，Composer 的测量 owner 独立于按钮行。完整图标一致性与最新原生显示仍需另行验收。
+- **回归修复经验：** 主题色门禁改用生产设置渲染器与完整 CSS，让浏览器检查七色实际结果及背景图覆盖，避免基于旧内联实现的假红灯。
+
+## 0.1 2026-09-01 正式增量沉淀（历史）
 
 - **当前冻结点：** `242ed1ec82002aabbad7f923f447f134ac84c867` 是本轮 Android、Desktop、网关、Room schema 64／65、测试和核心新增文件的本地代码 checkpoint；此前 `09f519f` 主体复盘继续作为 2026-08-31 的历史结构快照，不再承担当前版本、Schema、测试数或设备状态。
 - **Android 新增长期事实：** 对话风格由“设置里当前选定值”提供全局默认，当前会话只保存可缺省的显式覆盖；覆盖高于设置且只影响后续回答。完整 Assistant 回复随既有归因冻结生成时风格和实际联网结果，只有官方联网路由返回可验证 HTTP(S) 来源才能记为已实际联网。Composer 与回复页脚的短模型名只是显示投影，目录全名、路由和历史归因不被改写。
@@ -13,7 +22,7 @@
 - **Desktop 与网关：** Desktop 已形成独立 Tauri owner 的对话、模型设置、搜索、转写、提醒、历史资料、账号同步和本机备份路径；Node `141/141`、Rust `165/165`、lint、typecheck、协议 golden、静态 build 和 macOS bundle 通过。`.app` 仍是 ad-hoc，不是 Developer ID／公证包。Go 网关 `go test -count=1 ./...` 通过，但生产部署仍未验证。
 - **证据边界：** 本轮没有用真实 Provider／Google／Supabase 或真实 ZIP opt-in 扩大声明；已完成且源码未变化的模拟器／视觉流程未重复执行。下面第 1–12 节保留 2026-08-31 复盘正文，出现的旧 HEAD、Schema、测试数和风险只按历史日期读取。
 
-## 0.1 2026-08-31 checkpoint 增量（历史）
+## 0.2 2026-08-31 checkpoint 增量（历史）
 
 - **当前覆盖事实：** 归档基线之后，草稿附件与对话附件统一复用本地预览投影；Grok 退役选择保留历史归因但在请求边界以 `MODEL_NOT_FOUND` 失败关闭；图片查看恢复完整图缩放和按真实溢出的平移。这些行为的唯一现行正文仍是当前会话／设置／运行时合同及领域 Provider 合同。
 - **最终验证：** `:app:testDebugUnitTest` 为 `1042 tests / 0 failures / 3 skipped`；`:app:assembleRelease`（含 `lintVitalRelease`）通过。Release APK 为 `28,017,564` bytes，SHA-256 `8279335eef23b7aff39fbf08ff367e2a7d3ec8b0325f04f5d0e3062aabe95593`，正式证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
@@ -337,3 +346,13 @@ JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' \
 | Git | `e56d666`、`1ded3da`、`af218e1`、`6d68ba7`、`c1c9ae0`、`2fec04c`、`b7e1c2f`、`1f7f356`、`09f519f` |
 
 本轮只修改文档、根项目规则和 `.agents/skills/`，没有修改 Android／Desktop／网关业务代码、Room Schema、配置值或测试行为。
+
+
+## 2026-09-09 启动恢复修复记录
+
+Android 退出选择与启动列表排序的修复及验证边界见 [当前交接](CURRENT_HANDOFF.md) 的 2026-09-09 记录；当前行为仅由 [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md#普通启动与短时恢复) 定义。
+
+
+## 2026-09-09 记忆摘要全文编辑记录
+
+全文编辑、原子替换与分层验证结果见 [当前交接](CURRENT_HANDOFF.md) 的同日记录；用户行为以 [设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md) 为准。完整编辑输入不能从过滤后的列表投影生成，替换必须校验打开编辑时的完整修订集合。
