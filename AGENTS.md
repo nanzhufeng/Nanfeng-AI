@@ -1,32 +1,29 @@
-# 南枫 AI 长期项目规则
+# 南枫 AI 长期开发规则
 
-## 事实源与范围
+## 事实与范围
 
-- 每次先读本文件、当前工作树、`docs/CURRENT_HANDOFF.md` 顶部和受影响领域的一份现行合同。会话／搜索／文件、设置、普通上下文、南枫转写分别读取 `docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md`、`docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md`、`docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md`、`docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md`；模型、OCR、ZIP、费用读取对应专项合同。
-- 事实优先级为源码／可复现验证 → 当前合同 → 交接 → 历史文档。冲突必须记录裁决；旧 P 阶段的“当前”、截图、Schema、APK、测试数或设备记录不得反向定义现在。
-- Android、Desktop、协议、云端和网关独立验证；不得用一端结果声称其他端已同步或验收。
+- 先确认当前 checkout、工作树和 `docs/CURRENT_HANDOFF.md`；历史资料不证明当前状态。源码／可复现验证优先，冲突记录依据。
+- 会话／搜索／文件读取 `docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md`；设置读取 `docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md`；普通上下文读取 `docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md`；转写读取 `docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md`。Desktop、协议与服务读取对应 owner 的合同；入口索引见完整开发档案。
+- Android、Desktop、协议、Supabase 与附件网关分别确认实现及证据，各层证据不能互相替代。
 
-## 架构与数据
+## 数据与执行边界
 
-- 先扩展现有 owner：UI 负责交互与投影，ViewModel 负责页面状态，domain 负责策略，data 负责 Room／私有文件／系统适配，ai 负责 Provider 协议，background 负责可恢复长任务；禁止复制业务真相。
-- 本机数据 owner 与联网能力并列。选择、预览、编辑阶段不外发；用户点击普通发送即授权把准确提交的正文、附件或必要解析材料交给界面明确显示的接收方，不增加重复确认，也不得静默换 Provider／模型或扩大材料范围。
-- Key、恢复码、附件字节、正文、原始 Provider payload 和私有路径不得进入源码、Git、Room 审计字段、日志、截图、文档或导出；审计只留安全元数据、实际接收方／模型和去敏状态。
-- 修改 Room entity、DAO、导入、恢复、同步或会话持久化时，必须增加连续前向迁移、导出 schema 和定向升级测试；禁止 destructive migration、删库、数据库注入或用新装 fixture 冒充真实升级。
-- 发送、重试、桥接、上传与导入保留 Attempt／receipt／provenance／幂等事实；未知结果不得静默重发，最后真实引用消失前不得删除共享附件字节。
-- 新模型必须接入目录、凭据、Direct／Compare／Auto、附件桥、预算、归因、费用、错误、设置、测试和文档；能力不足时用可审计材料桥，不伪造原生全格式支持。
+- 扩展既有 owner：Android UI／ViewModel 投影状态，domain 管策略，data 管 Room／私有文件／系统适配，ai 管 Provider，后台 owner 管持久任务；Desktop 前端经受控 Tauri IPC 调用 Rust／SQLite owner，不另造业务真相。
+- 本机数据与联网能力并列。选择、编辑、预览不外发；普通发送授权本次准确材料交给已披露接收方，不增加逐消息重复确认，不静默更换 Provider／模型或扩大材料范围。后台任务仅在既有明确授权范围内执行。
+- 授权业务正文和附件只进入其业务存储／导出 owner；凭据、恢复秘密、原始 Provider payload、无关正文和私人路径不得进入 Git、诊断日志或无正文审计。凭据 presence 只查状态，实际执行／测试连接／明确显示才读 secret；拒绝不等于未保存，不自动删密钥或后台重试。
+- 数据结构变化必须有连续前向迁移、版本化 schema 和定向升级验证；不改结构的持久化变化验证事务、并发、失败和关闭重开，不无故增加 schema。禁止 destructive fallback、删库或新装夹具冒充真实升级。
+- 外部动作保留 Attempt／receipt／provenance／幂等和真实归因；UNKNOWN 不静默重发。字节身份与 occurrence 分开，最后真实引用消失前不得删除共享附件。
+- 导入、备份、语义交换和加密同步使用各自严格格式与 owner；未知／歧义字段、来源或路径显式拒绝，不猜配、不把 Android 数据库当 Desktop 协议。
+- 模型变更贯通目录、凭据、路由、材料桥、预算、归因、费用与入口；原生能力、请求意图和实际结果分别记录。
 
-## 产品与交互
+## 交互、验收与交付
 
-- 用户可见增量先检查既有入口与共享组件；未经产品决定，不新增主页、Composer、会话详情或设置首页常驻按键，也不恢复已删除的功能审阅页面。
-- 会话、搜索、导入和南枫转写复用统一文件 owner、内部预览、操作、排序、引用与删除；网页可进浏览器，本地媒体不得因入口不同跳第三方查看器。
-- 弹窗、操作带、返回手势、皮肤、形状、反馈与可访问性服从当前合同和共享令牌；关闭浮层的输入只关闭并消费，不穿透触发业务动作。
+- 用户可见增量复用现有入口和共享组件，去留及按键建议按当前产品决定登记；未经判断不新增常驻按钮。控件表面、阴影、反馈与焦点服从同一轮廓，关闭浮层须消费输入，不穿透触发业务动作。
+- 设备与正式签名遵守全局契约：永久禁止任何 `connected*AndroidTest`；主设备禁止 Debug／仪器测试、自动部署、卸载和清数据。明确授权后只可验签正式包保数据覆盖，并前后核对身份及数据指纹。Debug 与正式包可能同 ID／同签名，不能据签名相同部署主设备。
+- Android 签名只从完整环境变量或用户级 App 专属 Gradle 属性解析，不读取 macOS Keychain、不输出秘密、不生成替代身份。Desktop 隔离验收必须确认独立根及 bundle 身份。
+- 验收分开报告代码／静态、行为测试、构建、视觉、隔离原生、主设备和真实服务；列明失败、skip、覆盖缺口及未运行层。测试 LaunchAgent 遵守全局唯一 label、精确清理及残留核验门。
 
-## 验证与交付
+## 文档与可复用流程
 
-- 按“代码审查 → 定向 JVM → 构建 → 完整 JVM → 视觉 → 真机 → 真实服务”分层报告，写明失败、skip 与未运行层；构建、安装、截图和真实业务互不替代。
-- 设备与正式签名门禁继承全局契约。OPPO 覆盖仍须用户明确授权，并在覆盖前后只读核对包级身份、正式签名和数据指纹；产物、设备、视觉与真实服务分别交付证据。
-
-## 文档与流程
-
-- 当前行为写唯一现行合同；checkpoint／构建／设备只写交接顶部，旧交接移入 `docs/archive/`；长期取舍写决策日志；完整事实与跨项目经验分别写两份档案。禁止复制多份“当前”规则。
-- 使用 `.agents/skills/` 的五类流程。Skill 只放可重复方法，临时版本、测试数、APK hash、设备状态和下一任务不得写入长期规则。
+- 当前行为写唯一领域合同，动态证据写当前交接，历史交接归档，长期取舍写决策日志；完整开发档案和可迁移经验不再维护第二套“当前状态”。版本、测试数、hash、临时设备状态不写入本文件或 Skill。
+- 使用 `.agents/skills/` 下独立开发、排错、测试交付、代码审查和文档同步流程；流程只放重复方法，不修改生成记忆。文档任务结束核对业务文件未变，保护范围外工作。

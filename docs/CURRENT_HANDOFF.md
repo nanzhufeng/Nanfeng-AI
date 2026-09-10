@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-09-10：完整复盘与边界审查续验
+
+- 已更新完整开发档案、可迁移经验、长期 AGENTS 与五个项目 Skill；全量文件与 Git 清单见 [审计记录](review/20260910/verification.json)。本阶段复盘材料纳入独立本地文档 checkpoint（提交主题 `docs: consolidate full project retrospective and boundary evidence`），业务 checkpoint 仍为 `c4aad94`；未推送或发布。
+- [边界复核](review/20260910/BOUNDARY_REVIEW.md)：隔离 Rust 探针 4 通过／2 红灯，确认恢复锁顺序与已配置目录缺库问题；模拟头像 handler 两例均确认超限响应完整读取后才拒绝。Android 接收方授权缺少绑定为源码发现，真实调度未验。
+- 本阶段没有修复业务代码、部署或接触真实用户数据。既有全套通过不覆盖上述新增红灯；后续修复应逐项建立行为回归。
+
 ## 2026-09-10：最终回归与正式增量固化
 
 - **代码 checkpoint：** `c4aad94`，覆盖上次 `dd3a445` 后累积的 Android／Desktop 源码、测试、Room Schema 66、依赖与验收工具；本地提交，未推送或发布。临时截图、测试报告、APK 与 bundle 不进入代码提交。

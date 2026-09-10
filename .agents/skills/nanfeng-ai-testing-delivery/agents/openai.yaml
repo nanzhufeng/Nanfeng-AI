@@ -1,4 +1,4 @@
 interface:
   display_name: "南枫 AI 测试交付"
-  short_description: "分层验证变更并安全交付 Android 正式签名包"
-  default_prompt: "Use $nanfeng-ai-testing-delivery to validate and deliver this Nanfeng AI change."
+  short_description: "分层验证双端、协议与服务并安全交付产物"
+  default_prompt: "Use $nanfeng-ai-testing-delivery for this Nanfeng AI task and report source-backed results and verification gaps."
