@@ -19,16 +19,23 @@ const data = {
   }] },
 };
 
-test('FB-P6-043 renders the latest control only away from the end and docks it above the fixed composer', () => {
+test('FB-P6-043 keeps a stable latest control and only reveals it away from the end', () => {
   const atLatest = renderChatFirstShell({ data, native: true, selectedConversationId: 'fb-p6-043-conversation', pane: 'chat', status: '', error: '', connection: {}, showScrollToLatest: false });
   const awayFromLatest = renderChatFirstShell({ data, native: true, selectedConversationId: 'fb-p6-043-conversation', pane: 'chat', status: '', error: '', connection: {}, showScrollToLatest: true });
-  assert.ok(!atLatest.includes('data-action="scroll-to-latest"'));
+  assert.match(atLatest, /data-action="scroll-to-latest"[^>]*hidden/);
   assert.match(awayFromLatest, /chat-composer-dock[\s\S]*data-action="scroll-to-latest"[\s\S]*data-anchor="composer-top"[\s\S]*chat-composer-wrap/);
-  for (const token of ['.chat-composer-dock { position: absolute;', 'pointer-events: none;', '.chat-composer-dock .chat-composer-wrap, .chat-composer-dock .chat-scroll-to-latest { pointer-events: auto;', '.chat-transcript-stage > .chat-scroll { grid-column: 2; grid-row: 1; padding-bottom: 190px;', '.chat-composer-wrap { width: min(760px, calc(100% - 40px)); margin: 0 auto;', 'bottom: calc(100% + 12px)', 'left: 50%', 'transform: translateX(-50%)']) assert.ok(css.includes(token), token);
+  assert.doesNotMatch(awayFromLatest, /data-action="scroll-to-latest"[^>]*hidden/);
+  for (const token of ['.chat-composer-dock { position: absolute;', 'pointer-events: none;', '.chat-composer-dock .chat-composer-wrap, .chat-composer-dock .chat-scroll-to-latest { pointer-events: auto;', '.chat-transcript-stage > .chat-scroll { grid-column: 1 / -1; grid-row: 1; padding-top: 80px; padding-bottom: 190px;', '.chat-composer-wrap { width: min(var(--chat-composer-width), calc(100% - 40px)); margin: 0 auto;', 'bottom: calc(100% + 12px)', 'left: 50%', 'transform: translateX(-50%)']) assert.ok(css.includes(token), token);
+  const latestControlStyles = css.slice(css.indexOf('.chat-scroll-to-latest {'), css.indexOf('.chat-scroll-to-latest svg {'));
+  assert.match(latestControlStyles, /border:\s*0\s*!important/);
+  assert.doesNotMatch(latestControlStyles, /border:\s*1px/);
   assert.ok(!css.includes('.chat-scroll-to-latest { position: absolute; z-index: 4; right:'));
 });
 
 test('FB-P6-043 scrolls through the sole message-list owner without an intermediate render interrupting the animation', () => {
+  const scrollHandlerStart = source.indexOf("app.addEventListener('scroll'");
+  const scrollHandlerEnd = source.indexOf("}, true);", scrollHandlerStart) + "}, true);".length;
+  const scrollHandler = source.slice(scrollHandlerStart, scrollHandlerEnd);
   for (const token of [
     "event.target.closest?.('.chat-scroll[data-conversation-id]')",
     'state.chatAtLatest = atLatest',
@@ -43,4 +50,6 @@ test('FB-P6-043 scrolls through the sole message-list owner without an intermedi
     'if (restoreLatest)',
     "document.querySelector('#chat-composer')?.focus({ preventScroll: true })",
   ]) assert.ok(source.includes(token), token);
+  assert.match(scrollHandler, /syncScrollToLatestControl\(scroll, atLatest\)/);
+  assert.doesNotMatch(scrollHandler, /render\(\)/);
 });

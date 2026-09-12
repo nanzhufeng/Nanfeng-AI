@@ -48,6 +48,17 @@ test('C14 import and export uses the current Android user-facing hierarchy witho
   }
 });
 
+test('C14 local backup identifies only the operation that is running', () => {
+  const exporting = renderAndroidSettingsShell({ page: 'data', data: workspace, native: true, localBackup: { working: true, operation: 'EXPORT' } });
+  assert.match(exporting, /data-action="export-local-backup"[^>]*aria-busy="true"/);
+  assert.doesNotMatch(exporting, /data-action="import-local-backup"[^>]*aria-busy="true"/);
+  assert.ok(exporting.includes('正在备份…'));
+  const restoring = renderAndroidSettingsShell({ page: 'data', data: workspace, native: true, localBackup: { working: true, operation: 'RESTORE' } });
+  assert.match(restoring, /data-action="import-local-backup"[^>]*aria-busy="true"/);
+  assert.doesNotMatch(restoring, /data-action="export-local-backup"[^>]*aria-busy="true"/);
+  assert.ok(restoring.includes('正在恢复…'));
+});
+
 test('C14 local data keeps the Android inventory groups, safe drill-downs, and cleanup entry', () => {
   const html = render('privacy');
   for (const token of ['本机数据', '对话与内容', '全部', '3 条正文 · 2 项附件', '正文', '记忆', '知识库', '项目', '附件', '图片', '文件', '其他导入资料', '导入概况', '已导入个性化资料', '南枫转写', '选择清理范围']) {
@@ -87,4 +98,11 @@ test('C14 browser fixture is read-only and C14 native fixture requires the diagn
     'seed_c14_local_data_acceptance',
     'DesktopStartupMode::UiSchemaDiagnostic',
   ]) assert.ok(native.includes(token), token);
+});
+
+test('C14 category changes paint the selected category before its local search completes', async () => {
+  const app = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const loadingStart = app.slice(app.indexOf('async function runFullSearch('), app.indexOf('if (!native)', app.indexOf('async function runFullSearch(')));
+  assert.match(loadingStart, /state\.searchLoading = !cachedPage/);
+  assert.match(loadingStart, /render\(\)/);
 });

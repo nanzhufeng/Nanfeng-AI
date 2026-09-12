@@ -31,7 +31,7 @@ test('Desktop settings use one spacious wide-screen density owner without scalin
     '.chat-first .android-settings-row',
     'min-height: var(--settings-desktop-row-height)',
     '.android-settings-tone-picker',
-    'width: min(600px, calc(100vw - 56px))',
+    'width: min(760px, calc(100vw - 48px))',
   ]) assert.ok(settings.includes(token), token);
 
   assert.ok(!settings.includes('.chat-composer-wrap { width: min(880px'));
@@ -99,14 +99,18 @@ test('model settings is the emphasized Android primary entry and operational rec
 test('assistant Markdown owns a desktop reading measure and stable scrollable table geometry', async () => {
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   for (const token of [
-    '--chat-reading-width: 880px',
+    '--chat-reading-width: 1040px',
+    '--chat-composer-width: 920px',
     'max-width: var(--chat-reading-width)',
     'font-size: 15px',
     'line-height: 1.72',
     'min-width: 140px',
     'overflow-x: auto',
   ]) assert.ok(css.includes(token), token);
+  assert.match(css, /\.chat-scroll \{[^}]*scrollbar-gutter: stable both-edges;[^}]*padding: 0 max\(24px, calc\(\(100% - var\(--chat-reading-width\)\) \/ 2\)\) 24px;/s);
+  assert.match(css, /\.chat-transcript-stage > \.chat-scroll \{ grid-column: 1 \/ -1; grid-row: 1;/);
+  assert.match(css, /\.chat-composer-wrap \{ width: min\(var\(--chat-composer-width\), calc\(100% - 40px\)\); margin: 0 auto;/);
 
   const html = renderChatFirstShell({ data, native: true, pane: 'chat', selectedConversationId: 'conversation-deep-visual-parity', status: '', error: '', connection: {} });
-  for (const token of ['chat-markdown-body', '<h3>结论</h3>', '<ul>', 'chat-markdown-table-wrap', '<th>项目</th>', '<td>已同步</td>']) assert.ok(html.includes(token), token);
+  for (const token of ['chat-markdown-body', '<h3>结论</h3>', 'chat-markdown-list chat-markdown-unordered', 'chat-markdown-table-wrap', '<th>项目</th>', '<td>已同步</td>']) assert.ok(html.includes(token), token);
 });

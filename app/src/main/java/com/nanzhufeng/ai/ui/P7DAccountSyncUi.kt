@@ -52,6 +52,7 @@ data class P7DAccountSyncUiState(
     val lastSyncedAtEpochMs: Long? = null,
     val recoveryReady: Boolean = false,
     val periodicEnabled: Boolean = false,
+    val cloudDocuments: List<P7FCloudConversationDocument>? = null,
 )
 
 /** Opening the page is presentation-only. Network work starts only from an explicit button. */
@@ -72,6 +73,62 @@ class P7DAccountSyncViewModel(
     fun signIn(activityContext: Context) = runAccountAction(activityContext, switch = false)
     fun switchAccount(activityContext: Context) = runAccountAction(activityContext, switch = true)
     suspend fun loadAvatar(avatarUrl: String): ByteArray? = accountOwner.loadGoogleAvatar(avatarUrl)
+
+    fun readCloudDocuments() {
+        if (state.working || state.session == null) return
+        val userId = state.session?.userId
+        state = state.copy(working = true, notice = null, cloudDocuments = null)
+        viewModelScope.launch {
+            try {
+                val documents = withContext(Dispatchers.IO) { manualSync.listRemoteConversationDocuments() }
+                if (state.session?.userId == userId) state = state.copy(working = false, cloudDocuments = documents)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                val notice = when (error.message) {
+                    "REMOTE_401", "REMOTE_403", "SIGNED_OUT" -> "登录已失效，请重新登录后再读取。"
+                    "REMOTE_404" -> "云端列表服务暂不可用，请稍后重试。"
+                    "REMOTE_429" -> "读取太频繁，请稍后重试。"
+                    "REMOTE_DOCUMENT_INVALID" -> "云端返回的数据无法校验，未导入任何内容。"
+                    else -> "云端列表读取失败，请重试。"
+                }
+                if (state.session?.userId == userId) state = state.copy(working = false, notice = notice)
+            }
+        }
+    }
+
+    fun restoreCloudConversation(documentId: String) {
+        if (state.working || state.session == null || !state.recoveryReady) return
+        state = state.copy(working = true, notice = null)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { manualSync.restoreRemoteConversation(documentId) }
+            state = when (result) {
+                is P7FCloudConversationRestoreResult.Restored -> state.copy(working = false, notice = "已恢复「${result.title}」。")
+                is P7FCloudConversationRestoreResult.AlreadyPresent -> state.copy(working = false, notice = "本机已有「${result.title}」，未覆盖。")
+                is P7FCloudConversationRestoreResult.Rejected -> state.copy(working = false, notice = result.message)
+            }
+        }
+    }
+
+    fun changeRecoveryCode(recoveryCode: String) {
+        if (state.working || state.session == null) return
+        val secret = recoveryCode.toCharArray()
+        state = state.copy(working = true, notice = null)
+        viewModelScope.launch {
+            val result = try {
+                withContext(Dispatchers.IO) { manualSync.changeRecoveryCode(secret) }
+            } finally {
+                secret.fill('\u0000')
+            }
+            state = loadState().copy(
+                detailVisible = true,
+                notice = when (result) {
+                    is P7FRecoveryCodeRotationResult.Changed -> "恢复码已更换。"
+                    is P7FRecoveryCodeRotationResult.Rejected -> result.message
+                },
+            )
+        }
+    }
 
     fun signOut() {
         if (state.working) return
@@ -200,12 +257,17 @@ internal fun P7DAccountSyncScreen(
     onSwitchAccount: () -> Unit,
     onSignOut: () -> Unit,
     onPrepareRecovery: (String, Boolean) -> Unit,
+    onChangeRecovery: (String) -> Unit,
     onPeriodicChanged: (Boolean) -> Unit,
+    onReadCloudDocuments: () -> Unit,
+    onRestoreCloudConversation: (String) -> Unit,
     loadAvatar: suspend (String) -> ByteArray?,
 ) {
     BackHandler(onBack = onBack)
-    var recoveryCode by rememberSaveable(state.session?.userId) { mutableStateOf("") }
+    var recoveryCode by remember(state.session?.userId) { mutableStateOf("") }
     var recoverySaved by rememberSaveable(state.session?.userId) { mutableStateOf(false) }
+    var changingRecoveryCode by rememberSaveable(state.session?.userId) { mutableStateOf(false) }
+    var replacementRecoveryCode by remember(state.session?.userId) { mutableStateOf("") }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -287,13 +349,10 @@ internal fun P7DAccountSyncScreen(
             Text("仅包含你手动同步过的对话。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             if (state.session != null && !state.recoveryReady) {
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
+                P7DRecoveryCodeField(
+                    title = "恢复码",
                     value = recoveryCode,
                     onValueChange = { recoveryCode = it.take(128) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("恢复码") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
                     enabled = !state.working,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -320,11 +379,105 @@ internal fun P7DAccountSyncScreen(
             }
             state.lastSyncedAtEpochMs?.let { Spacer(Modifier.height(8.dp)); Text("上次同步  ${formatSyncTime(it)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall) }
         }
+        if (state.session != null) WhiteCard(Modifier.fillMaxWidth()) {
+            Text("恢复与安全", style = MaterialTheme.typography.titleMedium)
+            if (state.recoveryReady) {
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = { changingRecoveryCode = !changingRecoveryCode },
+                    enabled = !state.working,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = P5AInteractiveShape,
+                    border = null,
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText),
+                ) { Text("更换恢复码 / 已丢失") }
+                if (changingRecoveryCode) {
+                    Spacer(Modifier.height(10.dp))
+                    P7DRecoveryCodeField(
+                        title = "新恢复码",
+                        value = replacementRecoveryCode,
+                        onValueChange = { replacementRecoveryCode = it.take(128) },
+                        enabled = !state.working,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = {
+                            onChangeRecovery(replacementRecoveryCode)
+                            replacementRecoveryCode = ""
+                            changingRecoveryCode = false
+                        },
+                        enabled = replacementRecoveryCode.length >= 12 && !state.working,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = P5AInteractiveShape,
+                    ) { Text("确认更换恢复码") }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onReadCloudDocuments,
+                enabled = !state.working,
+                modifier = Modifier.fillMaxWidth(),
+                shape = P5AInteractiveShape,
+                border = null,
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText),
+            ) {
+                Text("读取云端列表")
+            }
+            state.cloudDocuments?.let { documents ->
+                if (documents.isEmpty()) Text("暂无可恢复的云端对话", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                else {
+                    Spacer(Modifier.height(10.dp))
+                    Text("选择一条加密对话恢复；不会覆盖本机同 ID 对话。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                    documents.forEach { document ->
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { onRestoreCloudConversation(document.documentId) },
+                            enabled = state.recoveryReady && !state.working,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = P5AInteractiveShape,
+                            border = null,
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText),
+                        ) {
+                            Icon(Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.size(8.dp))
+                            Text("恢复加密对话 · ${document.documentId.takeLast(8)}")
+                        }
+                    }
+                }
+            }
+        }
         if (!state.configured) Text("Google 登录与云端服务尚未配置。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         state.notice?.let {
             val isSuccess = it.startsWith("已") || it.endsWith("已启用。") || it.endsWith("已关闭。")
             Text(it, color = if (isSuccess) MaterialTheme.colorScheme.primary else ErrorRed, style = MaterialTheme.typography.bodySmall)
         }
+    }
+}
+
+@Composable
+private fun P7DRecoveryCodeField(
+    title: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    enabled: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("输入恢复码") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            enabled = enabled,
+            shape = P5AInteractiveShape,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = SettingsPageBackground,
+                unfocusedContainerColor = SettingsPageBackground,
+                disabledContainerColor = SettingsPageBackground,
+            ),
+        )
     }
 }
 

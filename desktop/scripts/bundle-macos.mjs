@@ -1,9 +1,26 @@
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 
 const desktopRoot = resolve(import.meta.dirname, '..');
 const appBundle = resolve(desktopRoot, 'src-tauri/target/release/bundle/macos/南枫 AI Desktop.app');
+
+async function androidPublicCloudConfig() {
+  const raw = await readFile(resolve(desktopRoot, '..', 'local.properties'), 'utf8');
+  const values = new Map(raw.split(/\r?\n/u).map(line => {
+    const marker = line.indexOf('=');
+    return marker < 0 ? ['', ''] : [line.slice(0, marker).trim(), line.slice(marker + 1).trim()];
+  }));
+  const required = [
+    ['NANFENG_DESKTOP_BUNDLED_SUPABASE_URL', 'nanfeng.ai.cloud.url'],
+    ['NANFENG_DESKTOP_BUNDLED_SUPABASE_PUBLISHABLE_KEY', 'nanfeng.ai.cloud.publishableKey'],
+  ];
+  const config = Object.fromEntries(required.map(([target, source]) => [target, values.get(source) || '']));
+  if (Object.values(config).some(value => !value || /[\r\n]/u.test(value))) {
+    throw new Error('本机南枫云公开配置不完整；停止打包，避免生成无法登录的 Desktop 包。');
+  }
+  return config;
+}
 
 function run(command, args, options = {}) {
   return new Promise((resolveRun, reject) => {
@@ -13,9 +30,10 @@ function run(command, args, options = {}) {
   });
 }
 
+const publicCloudConfig = await androidPublicCloudConfig();
 await run(process.execPath, ['scripts/build.mjs']);
 await run('cargo', ['tauri', 'build', '--bundles', 'app'], {
-  env: { ...process.env, CARGO_NET_OFFLINE: 'true' },
+  env: { ...process.env, ...publicCloudConfig, CARGO_NET_OFFLINE: 'true' },
 });
 await access(appBundle);
 const available = execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });

@@ -207,6 +207,12 @@
           "markdownDescription": "Allows only stopping an already-running historical Compare execution so partial content remains recoverable. New Compare submission and branch retry are intentionally unavailable; no arbitrary provider, model, URL, credential projection or automatic resend is exposed."
         },
         {
+          "description": "Allows only the current ordinary Composer to read or replace its own workspace and conversation scoped local recovery draft, referencing existing private attachment IDs. It grants no attachment bytes, paths, transport, credentials, automatic send, history, or access to another workspace.",
+          "type": "string",
+          "const": "allow-desktop-conversation-draft-recovery",
+          "markdownDescription": "Allows only the current ordinary Composer to read or replace its own workspace and conversation scoped local recovery draft, referencing existing private attachment IDs. It grants no attachment bytes, paths, transport, credentials, automatic send, history, or access to another workspace."
+        },
+        {
           "description": "Allows only opaque workspace/conversation read watermarks, manual unread marking, and true-open clearing in device-local SQLite. It grants no title, message body, prompt, attachment, path, credential, transport, export or account-sync access.",
           "type": "string",
           "const": "allow-desktop-conversation-read-state",
@@ -327,6 +333,12 @@
           "markdownDescription": "Allows an explicit user gesture to open only a workspace-owned, hash-verified private attachment through the macOS system opener. The webview never receives its path and no arbitrary path is accepted."
         },
         {
+          "description": "Allows an explicit user gesture to hand off a validated public HTTP or HTTPS source URL to the macOS system browser.",
+          "type": "string",
+          "const": "allow-open-desktop-source-link",
+          "markdownDescription": "Allows an explicit user gesture to hand off a validated public HTTP or HTTPS source URL to the macOS system browser."
+        },
+        {
           "description": "Allows only the no-argument P6-E acceptance status and fixed owner-maintenance fixture. Rust rejects both unless the explicit acceptance environment marker selected the isolated /tmp app-private root.",
           "type": "string",
           "const": "allow-p6e-temporary-maintenance-acceptance",
@@ -411,6 +423,12 @@
           "markdownDescription": "Allows only the current packaged application version, operating-system family and CPU architecture to be shown in About. It grants no path, environment, device identifier, credential or network access."
         },
         {
+          "description": "Allows only a workspace-owned, hash-verified attachment ID to return one bounded inert search-card preview: PDF first-page pixels, UTF-8 text excerpt, or audio duration. It grants no path, media payload, playback, script, transport, export, or arbitrary file read.",
+          "type": "string",
+          "const": "allow-read-desktop-search-attachment-preview",
+          "markdownDescription": "Allows only a workspace-owned, hash-verified attachment ID to return one bounded inert search-card preview: PDF first-page pixels, UTF-8 text excerpt, or audio duration. It grants no path, media payload, playback, script, transport, export, or arbitrary file read."
+        },
+        {
           "description": "Allows only a workspace-owned verified text attachment ID to return bounded inert UTF-8 text; no path, URI, HTML, script, transport, or arbitrary file read is granted.",
           "type": "string",
           "const": "allow-read-desktop-text-preview",
@@ -423,10 +441,16 @@
           "markdownDescription": "Allows only a safe read projection of final measured token and amount facts from the local append-only Usage Ledger. It grants no prompt, response, credential, attachment, path, mutation or provider access."
         },
         {
-          "description": "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce an owner-verified local video payload; no path, URI, transport, decoder control, or arbitrary file read is granted.",
+          "description": "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce owner-verified metadata and a private range-readable media URL; no path, transport, decoder control, or arbitrary file read is granted.",
           "type": "string",
           "const": "allow-read-desktop-video-preview",
-          "markdownDescription": "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce an owner-verified local video payload; no path, URI, transport, decoder control, or arbitrary file read is granted."
+          "markdownDescription": "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce owner-verified metadata and a private range-readable media URL; no path, transport, decoder control, or arbitrary file read is granted."
+        },
+        {
+          "description": "Allows only a workspace-owned, hash-verified MP4 attachment ID to return one bounded raster poster frame; no video payload, path, URI, decoder control, or arbitrary file read is granted.",
+          "type": "string",
+          "const": "allow-read-desktop-video-thumbnail",
+          "markdownDescription": "Allows only a workspace-owned, hash-verified MP4 attachment ID to return one bounded raster poster frame; no video payload, path, URI, decoder control, or arbitrary file read is granted."
         },
         {
           "description": "Allows one typed workspace ID to be projected from Rust-owned SQLite.",
@@ -447,10 +471,28 @@
           "markdownDescription": "Allows listing committed private v2 exchange records and re-exporting exactly one UI-selected committed v2 owner only to a native-save-picker-selected .nfai-exchange target. It grants no v1 workspace, path projection, arbitrary filesystem API, credential, transport, Provider or model access."
         },
         {
+          "description": "Allows only a workspace-owned verified audio attachment ID and its local resume position to be recorded; it returns no audio bytes, path, URI, transport, or arbitrary file read.",
+          "type": "string",
+          "const": "allow-save-desktop-audio-preview-position",
+          "markdownDescription": "Allows only a workspace-owned verified audio attachment ID and its local resume position to be recorded; it returns no audio bytes, path, URI, transport, or arbitrary file read."
+        },
+        {
+          "description": "Allows only a workspace-owned verified MP4 attachment ID and its local resume position to be recorded; it returns no video bytes, path, URI, transport, or arbitrary file read.",
+          "type": "string",
+          "const": "allow-save-desktop-video-preview-position",
+          "markdownDescription": "Allows only a workspace-owned verified MP4 attachment ID and its local resume position to be recorded; it returns no video bytes, path, URI, transport, or arbitrary file read."
+        },
+        {
           "description": "Allows one normalized local query to read the Rust-owned safe search index and records history only for an explicit submitted query. It grants no filesystem, transport, credential, export, or media access.",
           "type": "string",
           "const": "allow-search-desktop-local-index",
           "markdownDescription": "Allows one normalized local query to read the Rust-owned safe search index and records history only for an explicit submitted query. It grants no filesystem, transport, credential, export, or media access."
+        },
+        {
+          "description": "Allows an explicit preview action to present the native macOS share picker for one workspace-owned, hash-verified attachment; no file path or bytes are returned to the renderer.",
+          "type": "string",
+          "const": "allow-share-desktop-attachment",
+          "markdownDescription": "Allows an explicit preview action to present the native macOS share picker for one workspace-owned, hash-verified attachment; no file path or bytes are returned to the renderer."
         },
         {
           "description": "Allows only a user-selected .nfai-exchange file to be bounded and copied into private app data staging.",

@@ -102,10 +102,17 @@ object NanfengModelServiceCatalog {
             usage = ModelPresetUsage.RETIRED,
         ),
         ModelPresetDescriptor(
-            id = ModelPresetId.GEMINI_3_7_FLASH,
-            displayName = "Gemini 3.7 Flash",
+            id = ModelPresetId.GEMINI_3_8_FLASH,
+            displayName = "Gemini 3.8 Flash",
             description = "快速处理文字、图片和文件任务。",
             modelFamilyHint = "Google · OpenRouter",
+        ),
+        ModelPresetDescriptor(
+            id = ModelPresetId.GEMINI_3_7_FLASH,
+            displayName = "Gemini 3.7 Flash",
+            description = "已由 Gemini 3.8 Flash 替换；保留仅为识别历史记录。",
+            modelFamilyHint = "Google · OpenRouter",
+            usage = ModelPresetUsage.RETIRED,
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.KIMI_K3,
@@ -139,8 +146,8 @@ object NanfengModelServiceCatalog {
         ),
         ModelPresetDescriptor(
             id = ModelPresetId.DEEPSEEK_V4_FLASH,
-            displayName = "DeepSeek V4 Flash",
-            description = "适合快速问答与高频文本任务。",
+            displayName = "DeepSeek V4.1 Flash",
+            description = "适合快速问答、高频任务与图片理解。",
             modelFamilyHint = "DeepSeek · 官方直连",
         ),
         ModelPresetDescriptor(
@@ -203,7 +210,7 @@ object NanfengModelServiceCatalog {
             ModelPresetId.CLAUDE_SONNET_5,
             ModelPresetId.GLM_5_3_FLASH,
             ModelPresetId.QWEN_3_7_PLUS,
-            ModelPresetId.GEMINI_3_7_FLASH,
+            ModelPresetId.GEMINI_3_8_FLASH,
             ModelPresetId.QWEN_3_6_FLASH,
             ModelPresetId.GPT_5_6_LUNA,
             ModelPresetId.CLAUDE_HAIKU_4_5,
@@ -228,7 +235,7 @@ object NanfengModelServiceCatalog {
             ModelPresetId.DEEPSEEK_V4_FLASH,
             ModelPresetId.QWEN_3_7_PLUS,
             ModelPresetId.GLM_5_3_FLASH,
-            ModelPresetId.GEMINI_3_7_FLASH,
+            ModelPresetId.GEMINI_3_8_FLASH,
             ModelPresetId.QWEN_3_6_FLASH,
             ModelPresetId.GPT_5_6_LUNA,
             ModelPresetId.CLAUDE_HAIKU_4_5,
@@ -249,7 +256,7 @@ object NanfengModelServiceCatalog {
             ModelPresetId.CLAUDE_HAIKU_4_5,
             ModelPresetId.CLAUDE_FABLE_5_1,
             ModelPresetId.GPT_6_ASTRA,
-            ModelPresetId.GEMINI_3_7_FLASH,
+            ModelPresetId.GEMINI_3_8_FLASH,
         ),
     )
 
@@ -300,11 +307,13 @@ fun composerModelShortNameForUser(displayName: String): String = when (modelDisp
     "Grok 4.1 Fast" -> "4.1 Fast"
     "Grok 4.6 High" -> "4.6 High"
     "Gemini 3.7 Flash" -> "Gemini 3.7"
+    "Gemini 3.8 Flash" -> "Gemini 3.8"
     "Qwen3.7-Plus" -> "Qwen 3.7"
     "Qwen3.8-Max" -> "Qwen 3.8"
     "Qwen3.6 Flash" -> "Qwen 3.6"
     "DeepSeek V4 Pro" -> "DS V4"
     "DeepSeek V4 Flash" -> "DS V4"
+    "DeepSeek V4.1 Flash" -> "DS V4.1"
     "GLM-5.3" -> "GLM 5.3"
     "GLM-5.3 Flash" -> "GLM 5.3"
     "GLM-OCR" -> "GLM-OCR"

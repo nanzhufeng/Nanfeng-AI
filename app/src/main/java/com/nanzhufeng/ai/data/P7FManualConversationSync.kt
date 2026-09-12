@@ -26,10 +26,27 @@ data class P7FConversationSyncPreview(
     val reason: String?,
 )
 
+/** A decrypted-title-free projection: listing cloud documents must not expose their content. */
+data class P7FCloudConversationDocument(
+    val documentId: String,
+    val remoteRevision: Long,
+)
+
 sealed interface P7FManualConversationSyncResult {
     data class Synced(val title: String, val syncedAtEpochMs: Long) : P7FManualConversationSyncResult
     data class Rejected(val message: String) : P7FManualConversationSyncResult
     data object Conflict : P7FManualConversationSyncResult
+}
+
+sealed interface P7FCloudConversationRestoreResult {
+    data class Restored(val title: String) : P7FCloudConversationRestoreResult
+    data class AlreadyPresent(val title: String) : P7FCloudConversationRestoreResult
+    data class Rejected(val message: String) : P7FCloudConversationRestoreResult
+}
+
+sealed interface P7FRecoveryCodeRotationResult {
+    data class Changed(val conversationCount: Int) : P7FRecoveryCodeRotationResult
+    data class Rejected(val message: String) : P7FRecoveryCodeRotationResult
 }
 
 /**
@@ -80,11 +97,129 @@ class P7FManualConversationSyncOwner(
         }
     }
 
+    /**
+     * Re-encrypts every locally selected cloud document with pending material and only promotes
+     * that material after every remote commit has been read back. The recovery code is never
+     * stored; retry state contains only Keystore-encrypted derived material.
+     */
+    fun changeRecoveryCode(recoveryCode: CharArray): P7FRecoveryCodeRotationResult = runCatching {
+        rotateRecoveryCodeInternal(recoveryCode)
+    }.getOrElse { P7FRecoveryCodeRotationResult.Rejected("更换恢复码失败，请稍后重试。") }
+
+    private fun rotateRecoveryCodeInternal(recoveryCode: CharArray): P7FRecoveryCodeRotationResult {
+        if (recoveryCode.size !in 12..128 || recoveryCode.any(Char::isISOControl)) {
+            return P7FRecoveryCodeRotationResult.Rejected("恢复码需要 12 至 128 个字符，且不能包含控制字符。")
+        }
+        if (!accountOwner.configured) return P7FRecoveryCodeRotationResult.Rejected("尚未配置 Google 登录与云端服务。")
+        val session = accountOwner.cachedSession() ?: return P7FRecoveryCodeRotationResult.Rejected("请先登录 Google 账号。")
+        if (!accountOwner.recoveryReady(session.userId)) return P7FRecoveryCodeRotationResult.Rejected("请先完成恢复保护。")
+        onAuthenticated(session)
+        val accountRef = P7BAccountStateMachine.accountRef(session.userId)
+        val metadata = accounts.metadata(accountRef) ?: return P7FRecoveryCodeRotationResult.Rejected("账号密钥尚未准备。")
+        if (metadata.state != P7BSyncState.READY) return P7FRecoveryCodeRotationResult.Rejected("账号同步状态需要先处理。")
+        val states = database.manualConversationSyncStateDao().listForAccount(accountRef)
+        val configured = P7CAndroidCloudGateway.availability() as? com.nanzhufeng.ai.domain.P7CServiceAvailability.Configured
+            ?: return P7FRecoveryCodeRotationResult.Rejected("云端服务尚未配置。")
+        val gateway = P7CSupabaseEnvelopeGateway(configured.config, accountOwner.authenticatedTransport())
+        accountOwner.preparePendingRecoveryMaterial(session.userId, recoveryCode)
+
+        states.forEach { ledger ->
+            val snapshot = conversations.findById(ConversationId(ledger.conversationId))
+                ?: return P7FRecoveryCodeRotationResult.Rejected("新恢复码已暂存；存在无法读取的已同步对话，请使用同一新码重试。")
+            eligibilityFailure(snapshot)?.let {
+                return P7FRecoveryCodeRotationResult.Rejected("新恢复码已暂存；存在当前不能同步的对话，请使用同一新码重试。")
+            }
+            val remote = (gateway.read(ledger.documentId, 0) as? P7CCloudResult.Value)?.value
+                ?: return P7FRecoveryCodeRotationResult.Rejected("新恢复码已暂存；无法读取云端对话，请使用同一新码重试。")
+            if (remote.revision != ledger.remoteRevision || remote.payloadHash != ledger.payloadHash) {
+                return P7FRecoveryCodeRotationResult.Rejected("新恢复码已暂存；云端对话已变化，请使用同一新码重试。")
+            }
+            val (prepared, localHash) = preparedSnapshot(snapshot, ledger.documentId, remote.revision + 1)
+            val sealed = accountOwner.withPendingWrappingMaterial(session.userId) { material ->
+                accounts.withReadyDataKey(accountRef) { dataKey ->
+                    NfaiSyncV1Gateway.sealWithAccountWrappingMaterial(prepared, dataKey, material)
+                }
+            } as? NfaiSyncResult.Sealed
+                ?: return P7FRecoveryCodeRotationResult.Rejected("新恢复码已暂存；无法重新加密已同步对话，请使用同一新码重试。")
+            val preflight = NfaiSyncV1Gateway.preflight(sealed.canonicalEnvelope) as? NfaiSyncResult.Preflighted
+                ?: return P7FRecoveryCodeRotationResult.Rejected("新恢复码校验失败。")
+            val committed = gateway.commit(remote.revision, sealed.canonicalEnvelope) as? P7CCloudResult.Value
+                ?: return P7FRecoveryCodeRotationResult.Rejected("云端未接受新的恢复保护。")
+            val readBack = gateway.read(ledger.documentId, committed.value.revision) as? P7CCloudResult.Value
+                ?: return P7FRecoveryCodeRotationResult.Rejected("新恢复码已暂存；云端回读失败，请使用同一新码重试。")
+            if (readBack.value.revision != preflight.value.revision || readBack.value.payloadHash != preflight.value.payloadHash) {
+                return P7FRecoveryCodeRotationResult.Rejected("新恢复码已暂存；云端回读校验失败，请使用同一新码重试。")
+            }
+            database.manualConversationSyncStateDao().save(
+                ledger.copy(
+                    remoteRevision = readBack.value.revision,
+                    payloadHash = readBack.value.payloadHash,
+                    localContentHash = localHash,
+                    lastSyncedAtEpochMs = now(),
+                ),
+            )
+        }
+        accountOwner.promotePendingRecoveryMaterial(session.userId)
+        return P7FRecoveryCodeRotationResult.Changed(states.size)
+    }
+
     fun preview(conversationId: ConversationId): P7FConversationSyncPreview {
         val snapshot = conversations.findById(conversationId)
             ?: return P7FConversationSyncPreview(conversationId.value, "对话", false, "该对话已不存在。")
         val reason = eligibilityFailure(snapshot)
         return P7FConversationSyncPreview(conversationId.value, snapshot.conversation.title, reason == null, reason)
+    }
+
+    /**
+     * Reads only authenticated, preflighted document headers. No conversation text is decrypted
+     * while listing, and callers receive no mutable remote envelope.
+     */
+    fun listRemoteConversationDocuments(): List<P7FCloudConversationDocument> {
+        if (!accountOwner.configured) return emptyList()
+        val session = accountOwner.cachedSession() ?: return emptyList()
+        return accountOwner.listCloudDocuments().mapNotNull { envelope ->
+            val preflight = (NfaiSyncV1Gateway.preflight(envelope) as? NfaiSyncResult.Preflighted)?.value
+                ?: return@mapNotNull null
+            preflight.takeIf { it.appId == "com.nanzhufeng.ai" && it.documentId.startsWith("conversation-") }
+                ?.let { P7FCloudConversationDocument(it.documentId, it.revision) }
+        }.distinctBy { it.documentId }.sortedBy { it.documentId }.also {
+            require(session.userId == accountOwner.cachedSession()?.userId) { "登录状态已变化。" }
+        }
+    }
+
+    /**
+     * Restores exactly one encrypted text conversation. A pre-existing local ID is never
+     * overwritten, and unrelated safe-settings/reminder records are deliberately ignored.
+     */
+    fun restoreRemoteConversation(documentId: String): P7FCloudConversationRestoreResult = runCatching {
+        restoreRemoteConversationInternal(documentId)
+    }.getOrElse { P7FCloudConversationRestoreResult.Rejected("云端对话恢复失败，未改动本机数据。") }
+
+    private fun restoreRemoteConversationInternal(documentId: String): P7FCloudConversationRestoreResult {
+        if (!documentId.matches(Regex("conversation-[a-f0-9]{40}"))) {
+            return P7FCloudConversationRestoreResult.Rejected("云端对话标识无效。")
+        }
+        if (!accountOwner.configured) return P7FCloudConversationRestoreResult.Rejected("尚未配置 Google 登录与云端服务。")
+        val session = accountOwner.cachedSession() ?: return P7FCloudConversationRestoreResult.Rejected("请先登录 Google 账号。")
+        if (!accountOwner.recoveryReady(session.userId)) return P7FCloudConversationRestoreResult.Rejected("请先用恢复码完成恢复保护。")
+        val configured = P7CAndroidCloudGateway.availability() as? com.nanzhufeng.ai.domain.P7CServiceAvailability.Configured
+            ?: return P7FCloudConversationRestoreResult.Rejected("云端服务尚未配置。")
+        val remote = when (val read = P7CSupabaseEnvelopeGateway(configured.config, accountOwner.authenticatedTransport()).read(documentId, 0)) {
+            is P7CCloudResult.Value -> read.value
+            is P7CCloudResult.Rejected -> return P7FCloudConversationRestoreResult.Rejected("云端对话无法读取。")
+            P7CCloudResult.Disabled -> return P7FCloudConversationRestoreResult.Rejected("云端服务尚未配置。")
+        }
+        val opened = accountOwner.withWrappingMaterial(session.userId) { material ->
+            NfaiSyncV1Gateway.openWithAccountWrappingMaterial(
+                remote.canonicalEnvelope, material, "com.nanzhufeng.ai", documentId, remote.revision,
+            )
+        } as? NfaiSyncResult.Opened
+            ?: return P7FCloudConversationRestoreResult.Rejected("恢复保护与云端密文不匹配。")
+        val restored = P7FConversationSyncWireFormat.decode(opened.value.snapshot)
+        val existing = conversations.findById(restored.conversation.id)
+        if (existing != null) return P7FCloudConversationRestoreResult.AlreadyPresent(existing.conversation.title)
+        conversations.save(restored)
+        return P7FCloudConversationRestoreResult.Restored(restored.conversation.title)
     }
 
     fun sync(conversationId: ConversationId): P7FManualConversationSyncResult =

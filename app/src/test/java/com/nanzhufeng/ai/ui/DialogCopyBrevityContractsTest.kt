@@ -15,7 +15,6 @@ class DialogCopyBrevityContractsTest {
                 "无法恢复。",
             ),
             "MemoryWorkspace.kt" to listOf(
-                "“询问摘要”查找已有记忆；“补充记忆”保存这条内容。",
                 "停止生成和使用记忆摘要；已保存内容不会删除。",
             ),
             "PrivacyDataUi.kt" to listOf("此操作不可撤销。"),

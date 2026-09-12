@@ -89,7 +89,7 @@ class AutomaticHistoryKnowledgeCurationOwnerTest {
                     body = "这是用户在历史对话中明确确认的长期决策方法。使用时需先核对当前条件，再按已确认的优先级执行；如果关键假设发生变化，应暂停并重新评估。",
                     tags = setOf("长期规则"),
                     providerId = ProviderId.DEEPSEEK,
-                    modelId = "deepseek-v4-flash",
+                    modelId = "deepseek-flash",
                     confidence = 0.93,
                 ),
             )

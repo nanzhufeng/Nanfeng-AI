@@ -175,12 +175,12 @@ function markdownMessage(message) {
 
 export function conversationMarkdown(conversation) {
   const title = String(conversation?.title || '未命名会话').replaceAll(/[\r\n]+/g, ' ').trim();
-  const messages = (conversation?.messages || []).map(markdownMessage).filter(Boolean);
+  const messages = orderedConversationMessages(conversation).map(markdownMessage).filter(Boolean);
   return [`# ${title}`, '', ...messages.flatMap((item, index) => index ? ['', '---', '', item] : [item]), ''].join('\n');
 }
 
 export function assistantMessageMarkdown(conversation, messageId) {
-  const message = (conversation?.messages || []).find(item => item?.id === messageId && String(item?.role || '').trim().toLocaleLowerCase() === 'assistant');
+  const message = orderedConversationMessages(conversation).find(item => item?.id === messageId && String(item?.role || '').trim().toLocaleLowerCase() === 'assistant');
   if (!message) return null;
   const title = String(conversation?.title || '未命名会话').replaceAll(/[\r\n]+/g, ' ').trim();
   return [`# ${title}`, '', markdownMessage(message), ''].join('\n');
@@ -189,7 +189,7 @@ export function assistantMessageMarkdown(conversation, messageId) {
 export function conversationFindMatches(conversation, query) {
   const needle = String(query || '').trim().toLocaleLowerCase();
   if (!needle) return [];
-  return (conversation?.messages || []).flatMap(message => {
+  return orderedConversationMessages(conversation).flatMap(message => {
     const haystack = visibleText(message).toLocaleLowerCase();
     const matches = [];
     let offset = 0;
@@ -202,3 +202,4 @@ export function conversationFindMatches(conversation, query) {
     return matches;
   });
 }
+import { orderedConversationMessages } from './conversation-message-order.mjs';

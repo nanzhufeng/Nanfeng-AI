@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
 import com.nanzhufeng.ai.domain.LocalBackupResult
+import com.nanzhufeng.ai.domain.LocalBackupFormat
 import java.io.File
 import java.util.UUID
 import java.util.zip.ZipFile
@@ -19,6 +20,10 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P5DLocalBackupRestoreContractsTest {
+    @Test fun `local backup capacity covers a full attachment library`() {
+        assertEquals(32L * 1024L * 1024L * 1024L, LocalBackupFormat.MAX_ARCHIVE_BYTES)
+    }
+
     @Test fun `runtime backup and privacy owners use the actual build version`() {
         val container = File("src/main/java/com/nanzhufeng/ai/app/AppContainer.kt").readText()
         assertTrue(container.contains("import com.nanzhufeng.ai.BuildConfig"))
@@ -48,13 +53,26 @@ class P5DLocalBackupRestoreContractsTest {
         } finally { database.close(); context.deleteDatabase("nanfeng-ai.db"); attachment.delete(); target.delete() }
     }
 
-    @Test fun `high sensitive database content rejects entire backup`() {
+    @Test fun `user selected business text survives local backup`() {
         val context = ApplicationProvider.getApplicationContext<Context>(); context.deleteDatabase("nanfeng-ai.db")
         val database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, "nanfeng-ai.db").build()
         val target = File(context.cacheDir, "p5d-secret-${UUID.randomUUID()}.nfai-backup")
         try {
             database.openHelper.writableDatabase.execSQL("INSERT INTO capture_drafts (id,text,createdAtEpochMs,schemaVersion) VALUES ('p5d-secret','api_key=abcdefghijklmnop',0,1)")
-            assertTrue(AndroidLocalBackupRestoreManager(context, database, "test").export(Uri.fromFile(target)) is LocalBackupResult.Rejected)
+            assertTrue(AndroidLocalBackupRestoreManager(context, database, "test").export(Uri.fromFile(target)) is LocalBackupResult.Exported)
+            ZipFile(target).use { zip ->
+                val snapshot = File(context.cacheDir, "p5d-secret-snapshot-${UUID.randomUUID()}")
+                try {
+                    zip.getInputStream(zip.getEntry("database/nanfeng-ai.snapshot")).use { input -> snapshot.outputStream().use(input::copyTo) }
+                    val copy = android.database.sqlite.SQLiteDatabase.openDatabase(snapshot.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                    try {
+                        copy.rawQuery("SELECT text FROM capture_drafts WHERE id='p5d-secret'", null).use { rows ->
+                            assertTrue(rows.moveToFirst())
+                            assertEquals("api_key=abcdefghijklmnop", rows.getString(0))
+                        }
+                    } finally { copy.close() }
+                } finally { snapshot.delete() }
+            }
         } finally { database.close(); context.deleteDatabase("nanfeng-ai.db"); target.delete() }
     }
 

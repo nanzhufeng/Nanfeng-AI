@@ -8,7 +8,6 @@ import com.nanzhufeng.ai.domain.LocalBackupFormat
 import com.nanzhufeng.ai.domain.LocalBackupPreflight
 import com.nanzhufeng.ai.domain.LocalBackupRestoreManager
 import com.nanzhufeng.ai.domain.LocalBackupResult
-import com.nanzhufeng.ai.domain.MemoryDomain
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -41,13 +40,14 @@ class AndroidLocalBackupRestoreManager(
         try {
             val snapshot = File(stage, "nanfeng-ai.snapshot")
             snapshotDatabase(snapshot)
-            if (containsSensitiveText(snapshot)) return LocalBackupResult.Rejected("发现疑似凭据或高敏内容；为避免不安全副本，已拒绝整个备份。")
             val assets = snapshotAssets(stage)
             val counts = tableCounts(snapshot)
             val packageFile = File(stage, "backup.nfai-backup")
             writePackage(packageFile, snapshot, assets, counts)
             val hash = sha256(packageFile)
-            verifyPackage(packageFile) ?: return LocalBackupResult.Rejected("备份包回读校验失败；未写入所选位置。")
+            verifyPackage(packageFile).getOrElse { failure ->
+                return LocalBackupResult.Rejected("备份包本机校验失败：${safePackageFailure(failure)}；未写入所选位置。")
+            }
             app.contentResolver.openOutputStream(destination, "w")?.use { output -> packageFile.inputStream().use { it.copyTo(output) }; output.flush() }
                 ?: return LocalBackupResult.Failed("无法写入所选位置。", false)
             val written = app.contentResolver.openInputStream(destination)?.use(::sha256) ?: return LocalBackupResult.Failed("无法回读所选位置。", false)
@@ -60,7 +60,7 @@ class AndroidLocalBackupRestoreManager(
         inbox.parentFile?.mkdirs()
         app.contentResolver.openInputStream(source)?.use { input -> FileOutputStream(inbox).use { output -> copyBounded(input, output, LocalBackupFormat.MAX_ARCHIVE_BYTES) } }
             ?: return LocalBackupResult.Rejected("无法读取所选备份包。")
-        val parsed = verifyPackage(inbox) ?: return LocalBackupResult.Rejected("备份包不受支持、已损坏或包含不安全内容。")
+        val parsed = verifyPackage(inbox).getOrNull() ?: return LocalBackupResult.Rejected("备份包不受支持、已损坏或包含不安全内容。")
         val nonEmpty = tableCounts(dbFile).values.any { it > 0 } || allowedRoots().any { root -> File(files, root).exists() }
         val p = parsed.copy(conflicts = if (nonEmpty) listOf("本地已有业务数据；只能明确选择替换本地或取消，不支持合并。") else emptyList())
         state.edit().putString(PREF_FINGERPRINT, p.fingerprint).apply()
@@ -68,7 +68,7 @@ class AndroidLocalBackupRestoreManager(
     }.getOrElse { LocalBackupResult.Rejected("预检失败：${it.javaClass.simpleName}") }
 
     override fun restore(preflightFingerprint: String, replaceLocal: Boolean): LocalBackupResult = runCatching {
-        val current = verifyPackage(inbox) ?: return LocalBackupResult.Rejected("没有已通过预检的隔离备份包。")
+        val current = verifyPackage(inbox).getOrNull() ?: return LocalBackupResult.Rejected("没有已通过预检的隔离备份包。")
         if (state.getString(PREF_FINGERPRINT, null) != preflightFingerprint || current.fingerprint != preflightFingerprint) return LocalBackupResult.Rejected("备份包或本地预检已变化，请重新选择并预检。")
         val nonEmpty = tableCounts(dbFile).values.any { it > 0 } || allowedRoots().any { File(files, it).exists() }
         if (nonEmpty && !replaceLocal) return LocalBackupResult.Rejected("本地已有数据：请明确选择替换本地或取消。")
@@ -79,7 +79,6 @@ class AndroidLocalBackupRestoreManager(
         try {
             extractVerified(inbox, root)
             val stagedDb = File(root, LocalBackupFormat.DATABASE_ENTRY)
-            if (containsSensitiveText(stagedDb)) return LocalBackupResult.Rejected("备份包包含疑似凭据或高敏内容；恢复已整体拒绝。")
             if (!sqliteHealthy(stagedDb) || schemaVersion(stagedDb) != currentSchema || tableCounts(stagedDb) != current.tableCounts) return LocalBackupResult.Rejected("候选数据库完整性、Schema 或计数不匹配。")
             checkpointDatabase(File(checkpoint, "nanfeng-ai.snapshot"))
             checkpointAssets(checkpoint)
@@ -118,7 +117,6 @@ class AndroidLocalBackupRestoreManager(
     private fun writePackage(out: File, snapshot: File, assets: List<File>, counts: Map<String, Long>) {
         val entries = mutableListOf<Pair<String, File>>(LocalBackupFormat.DATABASE_ENTRY to snapshot)
         assets.forEach { entries += it.relativeTo(requireNotNull(snapshot.parentFile)).invariantSeparatorsPath to it }
-        require(entries.none { (_, f) -> MemoryDomain.sensitiveRejection(f.name) != null }) { "sensitive file name" }
         val list = JSONArray(entries.sortedBy { it.first }.map { (path, file) -> JSONObject().put("path", path).put("bytes", file.length()).put("sha256", sha256(file)) })
         val manifest = JSONObject().put("format", LocalBackupFormat.FORMAT).put("version", LocalBackupFormat.VERSION).put("appVersion", appVersion).put("schemaVersion", currentSchema).put("scope", "room_and_private_assets").put("excluded", JSONArray(EXCLUDED)).put("tableCounts", JSONObject(counts)).put("entries", list)
         manifest.put("manifestSha256", sha256(manifest.toString().toByteArray()))
@@ -127,7 +125,7 @@ class AndroidLocalBackupRestoreManager(
             entries.sortedBy { it.first }.forEach { (path, file) -> zip.putNextEntry(ZipEntry(path)); file.inputStream().use { it.copyTo(zip) }; zip.closeEntry() }
         }
     }
-    private fun verifyPackage(file: File): LocalBackupPreflight? = runCatching {
+    private fun verifyPackage(file: File): Result<LocalBackupPreflight> = runCatching {
         ZipFile(file).use { zip ->
             val seen = mutableSetOf<String>(); var total = 0L; var entries = 0
             val all = zip.entries().toList()
@@ -147,7 +145,14 @@ class AndroidLocalBackupRestoreManager(
             val assetBytes = (0 until listed.length()).asSequence().map { listed.getJSONObject(it) }.filter { it.getString("path").startsWith("assets/") }.sumOf { it.getLong("bytes") }
             LocalBackupPreflight(LocalBackupFormat.FORMAT, LocalBackupFormat.VERSION, currentSchema, counts, assetBytes, emptyList(), emptyList(), emptyList(), sha256(file))
         }
-    }.getOrNull()
+    }
+    private fun safePackageFailure(failure: Throwable): String = when (failure.message) {
+        "zip bomb" -> "未压缩内容超过 32 GiB 上限"
+        "unsafe zip" -> "包路径或条目不安全"
+        "manifest hash", "entry hash", "entry count" -> "包结构或哈希不一致"
+        "schema", "version" -> "包版本或 Schema 不匹配"
+        else -> "包结构不受支持"
+    }
     private fun extractVerified(zipFile: File, root: File) { ZipFile(zipFile).use { zip -> zip.entries().toList().filter { it.name != LocalBackupFormat.MANIFEST_ENTRY }.forEach { entry -> val target = File(root, entry.name); require(safeChild(root, target)); target.parentFile?.mkdirs(); zip.getInputStream(entry).use { input -> FileOutputStream(target).use(input::copyTo) } } } }
     private fun replaceFile(source: File, target: File) { target.parentFile?.mkdirs(); val old = File(target.parentFile, ".${target.name}.p5d-old"); if (target.exists()) target.renameTo(old); if (!source.renameTo(target)) source.copyTo(target, overwrite = true); old.delete() }
     private fun replaceAssets(root: File) { allowedRoots().forEach { key -> val destination = File(files, key); destination.deleteRecursively(); val source = File(root, "assets/$key"); if (source.exists()) source.copyRecursively(destination, overwrite = true) } }
@@ -155,15 +160,6 @@ class AndroidLocalBackupRestoreManager(
     private fun tableCounts(file: File): Map<String, Long> { if (!file.isFile || file.length() == 0L) return emptyMap(); val sql = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY); return try { sql.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('android_metadata','room_master_table') ORDER BY name", null).use { c -> buildMap { while (c.moveToNext()) { val name = c.getString(0); sql.rawQuery("SELECT COUNT(*) FROM `" + name.replace("`", "``") + "`", null).use { n -> n.moveToFirst(); put(name, n.getLong(0)) } } } } } finally { sql.close() } }
     private fun schemaVersion(file: File): Int = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY).use { it.version }
     private fun sqliteHealthy(file: File): Boolean = runCatching { val sql = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY); try { sql.rawQuery("PRAGMA integrity_check", null).use { it.moveToFirst() && it.getString(0) == "ok" } } finally { sql.close() } }.getOrDefault(false)
-    private fun containsSensitiveText(file: File): Boolean = runCatching {
-        val sql = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
-        try {
-            tableCounts(file).keys.any { table ->
-                val columns = sql.rawQuery("PRAGMA table_info(`$table`)", null).use { cursor -> buildList { while (cursor.moveToNext()) if (cursor.getString(2).equals("TEXT", true)) add(cursor.getString(1)) } }
-                columns.any { column -> sql.rawQuery("SELECT `$column` FROM `$table` WHERE `$column` IS NOT NULL", null).use { rows -> while (rows.moveToNext()) if (MemoryDomain.sensitiveRejection(rows.getString(0)) != null) return@any true; false } }
-            }
-        } finally { sql.close() }
-    }.getOrDefault(true)
     private fun allowedRoots() = listOf("attachments/v1", "markdown-import-assets/v1", "json-knowledge-import-assets/v1", "pdf-text-import-assets/v1", "web-text-snapshots/v1")
     private fun safeEntry(name: String) = name == LocalBackupFormat.MANIFEST_ENTRY || (name.matches(Regex("[A-Za-z0-9._/-]+")) && !name.startsWith('/') && !name.contains(".."))
     private fun safeChild(root: File, child: File) = child.canonicalFile.path.startsWith(root.canonicalFile.path + File.separator) && !child.isDirectory

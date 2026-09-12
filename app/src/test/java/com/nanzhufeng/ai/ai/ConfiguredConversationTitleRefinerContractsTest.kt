@@ -34,19 +34,19 @@ class ConfiguredConversationTitleRefinerContractsTest {
     private val clock = Clock.fixed(Instant.parse("2026-08-27T00:00:00Z"), ZoneOffset.UTC)
     private val source = ConversationTitleSource("请整理 Android 设置页面层级", "可以按入口和使用频率重新组织设置页面。")
 
-    @Test fun `DeepSeek V4 Flash is the shared first choice when all background providers are available`() {
+    @Test fun `DeepSeek V4 point 1 Flash is the shared first choice when all background providers are available`() {
         val transport = RecordingTransport(listOf(success("Android设置规划")))
         val records = Records()
         val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), records, transport).refine(ConversationId("conversation"), source)
 
         assertEquals(ConversationTitleRefinementResult.Title("Android设置规划"), result)
-        assertEquals(listOf("deepseek-v4-flash"), transport.modelIds())
+        assertEquals(listOf("deepseek-flash"), transport.modelIds())
         assertFalse(transport.requestBodies.single().contains("gpt-5.6-sol"))
         assertFalse(transport.requestBodies.single().contains("claude-opus-5"))
         assertTrue(transport.requestBodies.single().contains("汉字、英文字母或阿拉伯数字"))
         assertEquals(ConversationTitleGenerationStatus.SUCCEEDED, records.values.single().status)
         assertEquals(ProviderId.DEEPSEEK, records.values.single().providerId)
-        assertEquals("deepseek-v4-flash", records.values.single().modelId)
+        assertEquals("deepseek-flash", records.values.single().modelId)
         assertEquals(ConversationCostSource.LOCAL_ESTIMATE, records.values.single().costSource)
     }
 
@@ -56,7 +56,7 @@ class ConfiguredConversationTitleRefinerContractsTest {
         val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), records, transport).refine(ConversationId("conversation"), source)
 
         assertEquals(ConversationTitleRefinementResult.Title("标题整理模型规则"), result)
-        assertEquals(listOf("deepseek-v4-flash", "glm-5.3-flash"), transport.modelIds())
+        assertEquals(listOf("deepseek-flash", "glm-5.3-flash"), transport.modelIds())
         assertEquals(listOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU), records.values.map { it.providerId })
     }
 
@@ -70,7 +70,7 @@ class ConfiguredConversationTitleRefinerContractsTest {
         val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), records, transport).refine(ConversationId("conversation"), source)
 
         assertEquals(ConversationTitleRefinementResult.Title("千问末位兜底标题"), result)
-        assertEquals(listOf("deepseek-v4-flash", "glm-5.3-flash", "qwen3.6-flash"), transport.modelIds())
+        assertEquals(listOf("deepseek-flash", "glm-5.3-flash", "qwen3.6-flash"), transport.modelIds())
         assertEquals(listOf(ConversationTitleGenerationStatus.FAILED, ConversationTitleGenerationStatus.FAILED, ConversationTitleGenerationStatus.SUCCEEDED), records.values.map { it.status })
         assertEquals("HTTP_503", records.values.first().safeErrorCode)
     }
@@ -98,7 +98,7 @@ class ConfiguredConversationTitleRefinerContractsTest {
     private fun model(preset: ModelPresetId): ResolvedModel = ResolvedModel(
         providerId = NanfengModelServiceCatalog.providerFor(preset),
         modelId = when (preset) {
-            ModelPresetId.DEEPSEEK_V4_FLASH -> "deepseek-v4-flash"
+            ModelPresetId.DEEPSEEK_V4_FLASH -> "deepseek-flash"
             ModelPresetId.GLM_5_3_FLASH -> "glm-5.3-flash"
             ModelPresetId.QWEN_3_6_FLASH -> "qwen3.6-flash"
             else -> error("Unexpected title preset $preset")

@@ -100,7 +100,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
-import androidx.compose.material.icons.automirrored.outlined.CallSplit
+import androidx.compose.material.icons.automirrored.rounded.CallSplit
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Pause
@@ -336,7 +336,9 @@ private data class TranscriptScrollObservation(
 private const val ConversationModalOverlayZIndex = 2f
 // Show the full concrete model number in the Composer.  The fixed width admits
 // "5.6 Terra" without ellipsis while keeping the input lane usable on phones.
-private val ComposerModelDisplayWidth = 88.dp
+private val ComposerModelCompactDisplayWidth = 88.dp
+private val ComposerModelExpandedDisplayWidth = 200.dp
+private val ComposerModelExpandedBreakpoint = 600.dp
 // Conversation chrome is intentionally neutral: the canvas recedes while white controls remain
 // bright, and their boundaries never rely on harsh black outlines.
 private val ConversationControlBorder: Color get() = NeutralBorder
@@ -470,11 +472,17 @@ private val ComposerModelRoundedBoldFontFamily = FontFamily(
     android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD),
 )
 
-/** Composer alone uses compact names; its picker keeps the catalog's full concrete names. */
+/** Compact outer-display labels keep the phone composer usable; the picker and inner display use catalog names. */
 private fun composerModelDisplayLabel(presets: List<ModelPresetId>): String =
     presets.joinToString(" / ") { preset ->
         com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName
             .let { com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
+    }
+
+/** Wide inner displays have room to disclose the selected catalog name without abbreviation. */
+private fun composerModelFullDisplayLabel(presets: List<ModelPresetId>): String =
+    presets.joinToString(" / ") { preset ->
+        com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName
     }
 
 @Composable
@@ -762,6 +770,21 @@ internal fun ConversationWorkspaceDialog(
     var composerAddAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var composerModelAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val density = LocalDensity.current
+    var copiedAssistantMessageId by remember { mutableStateOf<String?>(null) }
+    var copiedContextMessageId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(copiedAssistantMessageId) {
+        val copiedMessageId = copiedAssistantMessageId ?: return@LaunchedEffect
+        delay(1_200)
+        if (copiedAssistantMessageId == copiedMessageId) copiedAssistantMessageId = null
+    }
+    LaunchedEffect(copiedContextMessageId) {
+        val copiedMessageId = copiedContextMessageId ?: return@LaunchedEffect
+        delay(1_200)
+        if (copiedContextMessageId == copiedMessageId) {
+            copiedContextMessageId = null
+            messageActionTarget = null
+        }
+    }
     val copyText = rememberConversationCopyTextAction()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
@@ -1057,7 +1080,7 @@ internal fun ConversationWorkspaceDialog(
             if (state.temporaryRecovery != null) {
                 TemporaryConversationPane(
                     recovery = state.temporaryRecovery,
-                    modelOptions = listOf(null to "Auto · DeepSeek V4 Flash"),
+                    modelOptions = listOf(null to "Auto · DeepSeek V4.1 Flash"),
                     onDraftChanged = onUpdateTemporaryDraft,
                     onModelOverrideChanged = onUpdateTemporaryModelOverride,
                     onSubmit = onSubmitTemporaryDraft,
@@ -1177,7 +1200,8 @@ internal fun ConversationWorkspaceDialog(
                             sentFromMessageCount = workSentFromMessageCount,
                             onSentToLatestConsumed = { workSentFromMessageCount = null },
                             onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
-                            onCopyAssistant = { copyText(presentedMessagePlainText(it.message)) },
+                            copiedAssistantMessageId = copiedAssistantMessageId,
+                            onCopyAssistant = { transcript -> copyText(presentedMessagePlainText(transcript.message)) { copiedAssistantMessageId = transcript.message.messageId.value } },
                             onShareAssistant = exportAssistantMarkdown,
                             onBranchAssistant = onBranchFromMessage,
                             onEnsureAttachmentPreview = onEnsureAttachmentPreview,
@@ -1291,7 +1315,8 @@ internal fun ConversationWorkspaceDialog(
                                     searchAnchorAttachmentId = state.searchAnchorAttachmentId,
                                     searchAnchorRequestId = state.searchAnchorRequestId,
                                     onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
-                                    onCopyAssistant = { copyText(presentedMessagePlainText(it.message)) },
+                                    copiedAssistantMessageId = copiedAssistantMessageId,
+                                    onCopyAssistant = { transcript -> copyText(presentedMessagePlainText(transcript.message)) { copiedAssistantMessageId = transcript.message.messageId.value } },
                                     onShareAssistant = exportAssistantMarkdown,
                                     onBranchAssistant = onBranchFromMessage,
                                     onEnsureAttachmentPreview = onEnsureAttachmentPreview,
@@ -1879,9 +1904,13 @@ internal fun ConversationWorkspaceDialog(
             editable = transcript.message.role == com.nanzhufeng.ai.domain.MessageRole.USER && editableForMenu[transcript.message.messageId] != null,
             onDismiss = { messageActionTarget = null },
         ) {
-            MessageContextAction(Icons.Rounded.ContentCopy, "复制") {
-                copyText(presentedMessagePlainText(transcript.message))
-                messageActionTarget = null
+            val copied = copiedContextMessageId == rawId
+            MessageContextAction(
+                if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
+                if (copied) "已复制" else "复制",
+                iconOnly = true,
+            ) {
+                copyText(presentedMessagePlainText(transcript.message)) { copiedContextMessageId = rawId }
             }
             MessageContextAction(Icons.Rounded.SelectAll, "选择文本") {
                 selectingTextMessageId = rawId
@@ -2177,6 +2206,7 @@ private fun ConversationWorkScope(
     sentFromMessageCount: Int?,
     onSentToLatestConsumed: () -> Unit,
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
+    copiedAssistantMessageId: String?,
     onCopyAssistant: (PresentedTranscriptMessage) -> Unit,
     onShareAssistant: (PresentedTranscriptMessage) -> Unit,
     onBranchAssistant: (MessageNodeId) -> Unit,
@@ -2249,6 +2279,7 @@ private fun ConversationWorkScope(
                         state.normalSendRetryInProgress && transcript.message.messageId == state.currentLeafId
                     ) "南枫AI 继续生成…" else null,
                     onLongPress = onLongPress,
+                    copiedAssistantMessageId = copiedAssistantMessageId,
                     onCopyAssistant = onCopyAssistant,
                     onShareAssistant = onShareAssistant,
                     onBranchAssistant = onBranchAssistant,
@@ -3846,6 +3877,7 @@ private fun ConversationSearchPage(
         ConversationSearchCategory.ALL -> "搜索全部内容"
         else -> "搜索${state.searchCategory.label}"
     }
+    val searchControlShape = RoundedCornerShape(50)
     val imeVisible = WindowInsets.isImeVisible
     val attachmentGridHits = remember(state.searchCategory, state.attachmentSearchResults, attachmentFileType) {
         if (state.searchCategory == ConversationSearchCategory.FILE) {
@@ -4015,7 +4047,7 @@ private fun ConversationSearchPage(
                         // icon is only 18dp and the text receives the full remaining width.
                         Surface(
                             color = SearchControlSurface,
-                            shape = RoundedCornerShape(21.dp),
+                            shape = searchControlShape,
                             modifier = Modifier.weight(1f).height(42.dp),
                         ) {
                             Row(
@@ -4055,8 +4087,8 @@ private fun ConversationSearchPage(
                             }
                         }
                         Surface(
-                            color = SearchControlSurface, shape = RoundedCornerShape(21.dp),
-                            modifier = Modifier.width(76.dp).height(42.dp).clip(RoundedCornerShape(21.dp)).combinedClickable(onClick = onOpenHistory),
+                            color = SearchControlSurface, shape = searchControlShape,
+                            modifier = Modifier.width(152.dp).height(42.dp).clip(searchControlShape).combinedClickable(onClick = onOpenHistory),
                         ) {
                             Row(Modifier.fillMaxSize().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                                 Icon(Icons.Rounded.History, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText)
@@ -5823,6 +5855,7 @@ private fun MessageBubble(
     searchAnchorAttachmentId: AttachmentId? = null,
     searchAnchorRequestId: Long = 0L,
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
+    copiedAssistantMessageId: String?,
     onCopyAssistant: (PresentedTranscriptMessage) -> Unit,
     onShareAssistant: (PresentedTranscriptMessage) -> Unit,
     onBranchAssistant: (MessageNodeId) -> Unit,
@@ -5979,7 +6012,7 @@ private fun MessageBubble(
             }
             if (textBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth()) { textContent() }
             if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { assistantAttachmentContent() }
-            AssistantMessageActionRow(transcript, contextSelections, responseAttributions, onCopyAssistant, onShareAssistant, onBranchAssistant)
+            AssistantMessageActionRow(transcript, copiedAssistantMessageId, contextSelections, responseAttributions, onCopyAssistant, onShareAssistant, onBranchAssistant)
         }
         else -> Surface(color = roleVisual.surface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { textContent(); attachmentContent() }
@@ -6150,12 +6183,14 @@ private fun BranchCreationFeedback(
 @Composable
 private fun AssistantMessageActionRow(
     transcript: PresentedTranscriptMessage,
+    copiedAssistantMessageId: String?,
     contextSelections: List<ContextSelectionAuditRecord>,
     responseAttributions: List<AssistantResponseModelAttribution>,
     onCopy: (PresentedTranscriptMessage) -> Unit,
     onShare: (PresentedTranscriptMessage) -> Unit,
     onBranch: (MessageNodeId) -> Unit,
 ) {
+    val copied = copiedAssistantMessageId == transcript.message.messageId.value
     val time = formatTranscriptTimeOrNull(transcript.metadata.createdAt)
     val model = assistantFooterModelName(transcript.metadata.modelSnapshotLabel)
     var moreActionsExpanded by remember(transcript.message.messageId) { mutableStateOf(false) }
@@ -6184,8 +6219,8 @@ private fun AssistantMessageActionRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AssistantMessageAction(
-                icon = Icons.Rounded.ContentCopy,
-                contentDescription = "复制",
+                icon = if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
+                contentDescription = if (copied) "已复制" else "复制",
                 onClick = { onCopy(transcript) },
                 iconSize = 16.dp,
             )
@@ -6217,7 +6252,14 @@ private fun AssistantMessageActionRow(
                     )
                     DropdownMenuItem(
                         text = { Text("创建分支") },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.CallSplit,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = BodyText,
+                            )
+                        },
                         onClick = {
                             moreActionsExpanded = false
                             onBranch(transcript.message.messageId)
@@ -6274,25 +6316,29 @@ private fun AnswerInformationDialog(
         title = { Text("本次回答信息") },
         text = {
             Column(
-                modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                AnswerInformationFact(
-                    label = "基础风格和语气",
-                    value = disclosure.styleLabel ?: "未记录（旧回答）",
-                )
-                AnswerInformationFact(
-                    label = "实时网络",
-                    value = when (disclosure.webSearchUsed) {
-                        true -> "已实际使用"
-                        false -> "本次未使用"
-                        null -> "未记录（旧回答）"
-                    },
-                    emphasized = disclosure.webSearchUsed == true,
-                )
+                AnswerInformationSection(title = "回答设置") {
+                    AnswerInformationFact(
+                        label = "基础风格和语气",
+                        value = disclosure.styleLabel ?: "未记录（旧回答）",
+                    )
+                    HorizontalDivider(color = SecondaryText.copy(alpha = 0.12f))
+                    AnswerInformationFact(
+                        label = "实时网络",
+                        value = when (disclosure.webSearchUsed) {
+                            true -> "已实际使用"
+                            false -> "本次未使用"
+                            null -> "未记录（旧回答）"
+                        },
+                        emphasized = disclosure.webSearchUsed == true,
+                    )
+                }
                 if (disclosure.sources.isNotEmpty()) {
-                    Text("本次上下文来源", color = SecondaryText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
-                    disclosure.sources.forEach { source -> AnswerContextSourceRow(source) }
+                    AnswerInformationSection(title = "本次上下文来源") {
+                        disclosure.sources.forEach { source -> AnswerContextSourceRow(source) }
+                    }
                 }
             }
         },
@@ -6302,21 +6348,49 @@ private fun AnswerInformationDialog(
 }
 
 @Composable
-private fun AnswerInformationFact(label: String, value: String, emphasized: Boolean = false) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.weight(1f), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+private fun AnswerInformationSection(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            value,
-            color = if (emphasized) AccentOrange else BodyText,
-            style = MaterialTheme.typography.bodyMedium,
+            text = title,
+            color = SecondaryText,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
         )
+        content()
+    }
+}
+
+@Composable
+private fun AnswerInformationFact(label: String, value: String, emphasized: Boolean = false) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(label, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        if (value != label) {
+            Text(
+                value,
+                color = if (emphasized) AccentOrange else BodyText,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }
 
 @Composable
 private fun AnswerContextSourceRow(source: AnswerContextSourceDisclosure) {
-    Text(answerContextSourceTitle(source), color = BodyText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text("•", color = AccentOrange, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        Text(
+            text = answerContextSourceTitle(source),
+            modifier = Modifier.weight(1f),
+            color = BodyText,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
 }
 
 private fun answerContextSourceTitle(source: AnswerContextSourceDisclosure): String = when (source.kind) {
@@ -6512,35 +6586,50 @@ private fun EditUserMessageDialog(
 
 /** Clipboard writes are synchronous here; only a completed write receives the system confirmation haptic. */
 @Composable
-private fun rememberConversationCopyTextAction(): (String) -> Unit {
+private fun rememberConversationCopyTextAction(): (String, () -> Unit) -> Unit {
     val clipboard = LocalClipboardManager.current
     val view = LocalView.current
     return remember(clipboard, view) {
-        { text ->
-            clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
-            val feedback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                HapticFeedbackConstants.CONFIRM
-            } else {
-                HapticFeedbackConstants.KEYBOARD_TAP
+        { text, onCopied ->
+            runCatching {
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+            }.onSuccess {
+                val feedback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    HapticFeedbackConstants.CONFIRM
+                } else {
+                    HapticFeedbackConstants.KEYBOARD_TAP
+                }
+                view.performHapticFeedback(feedback)
+                onCopied()
             }
-            view.performHapticFeedback(feedback)
         }
     }
 }
 
 @Composable
-private fun MessageContextAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun MessageContextAction(
+    icon: ImageVector,
+    label: String,
+    iconOnly: Boolean = false,
+    onClick: () -> Unit,
+) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 6.dp),
+        modifier = if (iconOnly) Modifier.size(46.dp) else Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 6.dp),
         shape = RoundedCornerShape(12.dp),
         color = Color.Transparent,
         contentColor = BodyText,
     ) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(16.dp))
-            Text(label, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = if (iconOnly) 0.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (iconOnly) Arrangement.Center else Arrangement.Start,
+        ) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp))
+            if (!iconOnly) {
+                Spacer(Modifier.width(16.dp))
+                Text(label, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+            }
         }
     }
 }
@@ -7223,6 +7312,13 @@ private fun ImportedChatGptAutomationSuggestion(label: String) {
 @Composable
 private fun CopyableInformationSurface(label: String, value: String, content: @Composable () -> Unit) {
     val copyText = rememberConversationCopyTextAction()
+    var copied by remember(value) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(1_200)
+            copied = false
+        }
+    }
     Surface(
             color = NeutralAssistantSurface,
         shape = RoundedCornerShape(10.dp),
@@ -7232,8 +7328,13 @@ private fun CopyableInformationSurface(label: String, value: String, content: @C
         Column(Modifier.padding(start = 14.dp, top = 10.dp, end = 6.dp, bottom = 12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(label, color = SecondaryText, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                IconButton(onClick = { copyText(value) }) {
-                    Icon(Icons.Rounded.ContentCopy, contentDescription = "复制$label", tint = BodyText, modifier = Modifier.size(20.dp))
+                IconButton(onClick = { copyText(value) { copied = true } }) {
+                    Icon(
+                        if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
+                        contentDescription = if (copied) "已复制" else "复制$label",
+                        tint = if (copied) BrandGreen else BodyText,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
             content()
@@ -7245,6 +7346,13 @@ private fun CopyableInformationSurface(label: String, value: String, content: @C
 private fun MarkdownTable(block: PresentationBlock.Table, findBlockIndex: Int? = null) {
     val scrollState = rememberScrollState()
     val copyTable = rememberConversationCopyTextAction()
+    var copied by remember(block.identity) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(1_200)
+            copied = false
+        }
+    }
     val darkTable = ForegroundSurface.red < 0.5f
     val tableSurface = if (darkTable) Color(0xFF34383A) else Color(0xFFFBFCFD)
     val tableHeaderSurface = if (darkTable) Color(0xFF42484A) else Color(0xFFF0F3F6)
@@ -7299,15 +7407,19 @@ private fun MarkdownTable(block: PresentationBlock.Table, findBlockIndex: Int? =
                 }
             }
             Surface(
-                onClick = { copyTable(tableMarkdownText(block)) },
+                onClick = { copyTable(tableMarkdownText(block)) { copied = true } },
                 color = tableCopySurface,
-                contentColor = tableCopyContent,
+                contentColor = if (copied) BrandGreen else tableCopyContent,
                 shape = CircleShape,
                 shadowElevation = 1.dp,
                 modifier = Modifier.align(Alignment.TopEnd).padding(3.dp).size(30.dp),
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.ContentCopy, contentDescription = "复制表格（保留 Markdown 格式）", modifier = Modifier.size(16.dp))
+                    Icon(
+                        if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
+                        contentDescription = if (copied) "已复制" else "复制表格（保留 Markdown 格式）",
+                        modifier = Modifier.size(16.dp),
+                    )
                 }
             }
         }
@@ -7681,19 +7793,34 @@ private fun InlinePresentation.Link.sourceHost(): String =
     Uri.parse(url).host?.removePrefix("www.").orEmpty()
 
 private fun InlinePresentation.Link.sourceSiteName(): String {
-    return when (sourceHost().substringBefore('.')) {
+    val host = sourceHost()
+    return when {
+        host.endsWith("eastmoney.com") -> "东方财富"
+        host == "etf.run" -> "ETF 数据"
+        host.endsWith("whatsid.me") -> "ETF 估值"
+        host.endsWith("lixinger.com") -> "理杏仁"
+        host.endsWith("goodmoney.club") -> "好买基金"
+        host.endsWith("hangyan.co") -> "行研社"
+        else -> when (host.substringBefore('.')) {
         "openai" -> "OpenAI"
         "anthropic" -> "Anthropic"
         "github" -> "GitHub"
         "google" -> "Google"
-        else -> sourceHost().ifBlank { "网站" }
+            else -> "外部网站"
+        }
     }
 }
 
 private fun InlinePresentation.Link.sourceDisplayTitle(): String {
     val candidate = label.trim()
-    return if (candidate.isNotBlank() && !candidate.startsWith("http://") && !candidate.startsWith("https://")) candidate else sourceSiteName()
+    return if (candidate.isNotBlank() && !candidate.isWebsiteAddressLabel()) candidate else sourceSiteName()
 }
+
+/** A URL or bare domain is never a useful first-line source title. */
+private fun String.isWebsiteAddressLabel(): Boolean =
+    startsWith("http://", ignoreCase = true) ||
+        startsWith("https://", ignoreCase = true) ||
+        matches(Regex("^[a-z0-9-]+(?:\\.[a-z0-9-]+)+(?:/.*)?$", RegexOption.IGNORE_CASE))
 
 private fun InlinePresentation.Link.sourceSiteColor(): Color = when (sourceHost().substringBefore('.')) {
     "openai" -> Color(0xFF10A37F)
@@ -7791,10 +7918,16 @@ private fun SourceLinksDialog(sources: List<InlinePresentation.Link>, onDismiss:
                                     SourceWebsiteGlyph(source, size = 24.dp)
                                     Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(source.sourceDisplayTitle(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            source.sourceDisplayTitle(),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
                                         Text(source.url, style = MaterialTheme.typography.bodySmall, color = SecondaryText, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
-                                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在系统浏览器打开${source.label}", modifier = Modifier.size(18.dp), tint = SecondaryText)
+                                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "在系统浏览器打开${source.sourceDisplayTitle()}", modifier = Modifier.size(18.dp), tint = SecondaryText)
                                 }
                             }
                         }
@@ -7876,7 +8009,12 @@ private fun DraftComposer(
     val manualId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId
     val selectedPresets = state.normalChatRouting?.presets(draft, manualId)
         ?: com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(manualId).routes
-    val modelLabel = composerModelDisplayLabel(selectedPresets)
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val modelLabel = if (windowWidth >= ComposerModelExpandedBreakpoint) {
+        composerModelFullDisplayLabel(selectedPresets)
+    } else {
+        composerModelDisplayLabel(selectedPresets)
+    }
     val recipientLabel = selectedPresets.joinToString("、") { preset ->
         val provider = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(preset)
         "${com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.provider(provider)?.displayName} · ${com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName}"
@@ -7945,7 +8083,7 @@ private fun DraftComposer(
     ) {
         if (canSubmit && !canStopRuntime) {
             Text(
-                text = "点击发送即授权将本条内容${if (draft.attachments.isEmpty()) "" else "及附件"}交给 $recipientLabel。费用：服务商按实际用量计费，当前无本地预估。",
+                text = "发送即授权给 $recipientLabel · 按量计费",
                 color = SecondaryText,
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
@@ -7972,8 +8110,14 @@ private fun ComposerModelEntry(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val shape = RoundedCornerShape(50)
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val modelWidth = if (windowWidth >= ComposerModelExpandedBreakpoint) {
+        ComposerModelExpandedDisplayWidth
+    } else {
+        ComposerModelCompactDisplayWidth
+    }
     Box(
-        modifier = Modifier.width(ComposerModelDisplayWidth).height(48.dp)
+        modifier = Modifier.width(modelWidth).height(48.dp)
             .onGloballyPositioned { onAnchorChanged(it.boundsInRoot()) }
             .clip(shape)
             .combinedClickable(
@@ -8389,7 +8533,7 @@ private fun ComposerMenuOverlay(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                 if (selectedSlot == null) {
-                    val autoDetail = modelOptions.firstOrNull()?.second ?: "Auto · DeepSeek V4 Flash"
+                    val autoDetail = modelOptions.firstOrNull()?.second ?: "Auto · DeepSeek V4.1 Flash"
                     ComposerModelPickerSectionLabel("自动选择")
                     ComposerModelOverlayRow(
                         label = "自动",
@@ -9405,9 +9549,16 @@ private fun AudioPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShar
 
 /** Text reading keeps a smaller persistent action group so the full-screen title still breathes. */
 @Composable
-private fun TextPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit, onClose: () -> Unit, showTransferActions: Boolean = true, showCopy: Boolean = true) {
+private fun TextPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare: () -> Unit, onCopy: () -> Boolean, onClose: () -> Unit, showTransferActions: Boolean = true, showCopy: Boolean = true) {
     val container = if (dark) Color.White.copy(alpha = 0.16f) else Color(0xFFF1F4F2)
     val content = if (dark) Color.White else BodyText
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(1_200)
+            copied = false
+        }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (showTransferActions) {
             IconButton(onClick = onDownload, modifier = Modifier.size(40.dp)) {
@@ -9424,9 +9575,14 @@ private fun TextPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare
             ) { Text("分享", style = MaterialTheme.typography.labelMedium) }
         }
         if (showCopy) {
-            IconButton(onClick = onCopy, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = { if (onCopy()) copied = true }, modifier = Modifier.size(40.dp)) {
                 Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
-                    Icon(Icons.Rounded.ContentCopy, contentDescription = "复制全文", tint = content, modifier = Modifier.padding(10.dp).size(20.dp))
+                    Icon(
+                        if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
+                        contentDescription = if (copied) "已复制" else "复制全文",
+                        tint = if (copied) BrandGreen else content,
+                        modifier = Modifier.padding(10.dp).size(20.dp),
+                    )
                 }
             }
         }
@@ -10130,8 +10286,8 @@ internal fun SharedTextPreviewDialog(
                         onCopy = {
                             preview.text?.let { text ->
                                 clipboard.setText(AnnotatedString(text))
-                                Toast.makeText(context, "已复制全文", Toast.LENGTH_SHORT).show()
-                            }
+                                true
+                            } ?: false
                         },
                         onClose = onClose,
                         showTransferActions = preview.canTransfer,
@@ -10235,7 +10391,7 @@ private fun ArchivePreviewDialog(
                         dark = darkPreview,
                         onDownload = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
                         onShare = { requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
-                        onCopy = {},
+                        onCopy = { false },
                         onClose = onClose,
                         showCopy = false,
                     )
@@ -10428,9 +10584,18 @@ private fun ImagePreviewDialog(
                         val placedY = if (renderedHeightPx <= viewportHeightPx) (viewportHeightPx - renderedHeightPx) / 2f else offsetY.coerceIn(viewportHeightPx - renderedHeightPx, 0f)
                         val density = LocalDensity.current
                         val swipeThresholdPx = with(density) { 56.dp.toPx() }
-                        val currentImageIndex = generatedImageIds.indexOf(preview.id)
                         val currentPlacedX = rememberUpdatedState(placedX)
                         val currentPlacedY = rememberUpdatedState(placedY)
+                        // A touchpad can keep the same horizontal contact alive while the next
+                        // image is composed. Keep the viewport recognizer alive too; each new
+                        // gesture snapshots these current values instead of restarting midway
+                        // through a swipe and treating its remaining movement as another swipe.
+                        val currentPreviewId = rememberUpdatedState(preview.id)
+                        val currentGeneratedImageIds = rememberUpdatedState(generatedImageIds)
+                        val currentFittedWidthPx = rememberUpdatedState(fittedWidthPx)
+                        val currentFittedHeightPx = rememberUpdatedState(fittedHeightPx)
+                        val currentMaximumZoom = rememberUpdatedState(maximumZoom)
+                        val currentSwipeThresholdPx = rememberUpdatedState(swipeThresholdPx)
                         Box(
                             Modifier
                                 .fillMaxSize()
@@ -10439,13 +10604,8 @@ private fun ImagePreviewDialog(
                                 // recognizers to it can invalidate the hit target mid-gesture and
                                 // makes independent tap/transform detectors race each other.
                                 .pointerInput(
-                                    preview.id,
-                                    generatedImageIds,
                                     viewportWidthPx,
                                     viewportHeightPx,
-                                    fittedWidthPx,
-                                    fittedHeightPx,
-                                    maximumZoom,
                                 ) {
                                     var lastImageTapUptime = 0L
                                     var lastImageTapPosition = Offset.Unspecified
@@ -10456,6 +10616,13 @@ private fun ImagePreviewDialog(
                                     val doubleTapSlopPx = touchSlopPx * 2f
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false)
+                                        val gesturePreviewId = currentPreviewId.value
+                                        val gestureGeneratedImageIds = currentGeneratedImageIds.value
+                                        val gestureFittedWidthPx = currentFittedWidthPx.value
+                                        val gestureFittedHeightPx = currentFittedHeightPx.value
+                                        val gestureMaximumZoom = currentMaximumZoom.value
+                                        val gestureSwipeThresholdPx = currentSwipeThresholdPx.value
+                                        val currentImageIndex = gestureGeneratedImageIds.indexOf(gesturePreviewId)
                                         val nativeZoomAtStart = currentPreviewZoom.value <= 1.001f
                                         val startZoom = currentPreviewZoom.value
                                         val startPlacedX = currentPlacedX.value
@@ -10463,8 +10630,8 @@ private fun ImagePreviewDialog(
                                         var gestureZoom = startZoom
                                         var gesturePlacedX = startPlacedX
                                         var gesturePlacedY = startPlacedY
-                                        val startRenderedWidth = fittedWidthPx * startZoom
-                                        val startRenderedHeight = fittedHeightPx * startZoom
+                                        val startRenderedWidth = gestureFittedWidthPx * startZoom
+                                        val startRenderedHeight = gestureFittedHeightPx * startZoom
                                         val startedInsideImage =
                                             down.position.x >= startPlacedX &&
                                             down.position.x <= startPlacedX + startRenderedWidth &&
@@ -10515,18 +10682,18 @@ private fun ImagePreviewDialog(
                                                         focusY = centroid.y,
                                                         placedX = gesturePlacedX,
                                                         placedY = gesturePlacedY,
-                                                        fittedWidthPx = fittedWidthPx,
-                                                        fittedHeightPx = fittedHeightPx,
+                                                        fittedWidthPx = gestureFittedWidthPx,
+                                                        fittedHeightPx = gestureFittedHeightPx,
                                                         viewportWidthPx = viewportWidthPx,
                                                         viewportHeightPx = viewportHeightPx,
-                                                        maximumZoom = maximumZoom,
+                                                        maximumZoom = gestureMaximumZoom,
                                                     )
                                                     zoom = next.zoom
                                                     offsetX = next.offsetX
                                                     offsetY = next.offsetY
                                                     gestureZoom = next.zoom
-                                                    val nextRenderedWidth = fittedWidthPx * next.zoom
-                                                    val nextRenderedHeight = fittedHeightPx * next.zoom
+                                                    val nextRenderedWidth = gestureFittedWidthPx * next.zoom
+                                                    val nextRenderedHeight = gestureFittedHeightPx * next.zoom
                                                     gesturePlacedX = if (nextRenderedWidth <= viewportWidthPx) {
                                                         (viewportWidthPx - nextRenderedWidth) / 2f
                                                     } else next.offsetX
@@ -10540,8 +10707,8 @@ private fun ImagePreviewDialog(
                                                 startedInsideImage &&
                                                 change.pressed &&
                                                 change.positionChanged() &&
-                                                (fittedWidthPx * gestureZoom > viewportWidthPx ||
-                                                    fittedHeightPx * gestureZoom > viewportHeightPx)
+                                                (gestureFittedWidthPx * gestureZoom > viewportWidthPx ||
+                                                    gestureFittedHeightPx * gestureZoom > viewportHeightPx)
                                             ) {
                                                 val next = imagePreviewGestureTransform(
                                                     currentZoom = gestureZoom,
@@ -10552,18 +10719,18 @@ private fun ImagePreviewDialog(
                                                     focusY = change.position.y,
                                                     placedX = gesturePlacedX,
                                                     placedY = gesturePlacedY,
-                                                    fittedWidthPx = fittedWidthPx,
-                                                    fittedHeightPx = fittedHeightPx,
+                                                    fittedWidthPx = gestureFittedWidthPx,
+                                                    fittedHeightPx = gestureFittedHeightPx,
                                                     viewportWidthPx = viewportWidthPx,
                                                     viewportHeightPx = viewportHeightPx,
-                                                    maximumZoom = maximumZoom,
+                                                    maximumZoom = gestureMaximumZoom,
                                                 )
                                                 zoom = next.zoom
                                                 offsetX = next.offsetX
                                                 offsetY = next.offsetY
                                                 gestureZoom = next.zoom
-                                                val nextRenderedWidth = fittedWidthPx * next.zoom
-                                                val nextRenderedHeight = fittedHeightPx * next.zoom
+                                                val nextRenderedWidth = gestureFittedWidthPx * next.zoom
+                                                val nextRenderedHeight = gestureFittedHeightPx * next.zoom
                                                 gesturePlacedX = if (nextRenderedWidth <= viewportWidthPx) {
                                                     (viewportWidthPx - nextRenderedWidth) / 2f
                                                 } else next.offsetX
@@ -10585,18 +10752,18 @@ private fun ImagePreviewDialog(
                                         if (travelled > touchSlopPx) {
                                             if (
                                                 startedInsideImage &&
-                                                hasMultipleGeneratedImages &&
+                                                gestureGeneratedImageIds.size > 1 &&
                                                 nativeZoomAtStart &&
                                                 gestureZoom <= 1.001f &&
                                                 abs(horizontalDistancePx) > abs(verticalDistancePx) * 1.25f
                                             ) {
                                                 val targetIndex = when {
-                                                    horizontalDistancePx <= -swipeThresholdPx -> currentImageIndex + 1
-                                                    horizontalDistancePx >= swipeThresholdPx -> currentImageIndex - 1
+                                                    horizontalDistancePx <= -gestureSwipeThresholdPx -> currentImageIndex + 1
+                                                    horizontalDistancePx >= gestureSwipeThresholdPx -> currentImageIndex - 1
                                                     else -> currentImageIndex
                                                 }
-                                                generatedImageIds.getOrNull(targetIndex)
-                                                    ?.takeIf { target -> target != preview.id }
+                                                gestureGeneratedImageIds.getOrNull(targetIndex)
+                                                    ?.takeIf { target -> target != gesturePreviewId }
                                                     ?.let(onOpenImagePreview)
                                             }
                                             return@awaitEachGesture
@@ -11031,7 +11198,12 @@ private fun TemporaryConversationPane(
     val selectedPresets = recovery.modelOverrideId
         ?.let { id -> com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(id).routes }
         ?: listOf(com.nanzhufeng.ai.domain.AutoModelRouter.resolve(temporaryAutoFacts))
-    val modelLabel = composerModelDisplayLabel(selectedPresets)
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val modelLabel = if (windowWidth >= ComposerModelExpandedBreakpoint) {
+        composerModelFullDisplayLabel(selectedPresets)
+    } else {
+        composerModelDisplayLabel(selectedPresets)
+    }
     Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().padding(horizontal = ConversationTranscriptPageGutter, vertical = 18.dp),

@@ -89,6 +89,7 @@ test('C03 sidebar preserves Android information order and uses floating settings
   const html = render({ data: activeData, selectedConversationId: 'conversation-c02' });
   const order = [
     'class="chat-brand"',
+    'class="chat-sidebar-fixed-tools"',
     'class="chat-search-wrap"',
     'data-action="show-reminders"',
     'data-action="show-transcription"',
@@ -109,6 +110,21 @@ test('C03 sidebar preserves Android information order and uses floating settings
   ]) assert.ok(html.includes(token), token);
 });
 
+test('C03 keeps search, reminders, and transcription outside the conversation scroll owner', async () => {
+  const html = render({ data: activeData, selectedConversationId: 'conversation-c02' });
+  const fixedStart = html.indexOf('class="chat-sidebar-fixed-tools"');
+  const fixedEnd = html.indexOf('</section>', fixedStart);
+  const scrollStart = html.indexOf('class="chat-sidebar-scroll"');
+  assert.ok(fixedStart >= 0 && fixedEnd > fixedStart && scrollStart > fixedEnd);
+  const fixedTools = html.slice(fixedStart, fixedEnd);
+  for (const token of ['id="chat-search"', 'data-action="show-reminders"', 'data-action="show-transcription"']) assert.ok(fixedTools.includes(token), token);
+  assert.ok(!fixedTools.includes('class="chat-history"'));
+  assert.ok(html.indexOf('class="chat-history"') > scrollStart);
+  const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
+  assert.match(css, /\.chat-sidebar-fixed-tools \{[^}]*flex: 0 0 auto;/s);
+  assert.match(css, /\.chat-sidebar-scroll \{[^}]*flex: 1 1 auto;[^}]*overflow-y: auto;/s);
+});
+
 test('C01-C03 CSS keeps one floating shell geometry owner without bottom trays', async () => {
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
 
@@ -122,6 +138,13 @@ test('C01-C03 CSS keeps one floating shell geometry owner without bottom trays',
     'grid-template-columns: 48px minmax(0, 1fr) auto;',
     '.chat-empty-canvas {',
   ]) assert.ok(css.includes(token), token);
+
+  assert.match(css, /\.app-shell\.chat-first:not\(\.settings-mode\) > \.chat-main:not\(\.work-main\):not\(\.connections-main\) \{[^}]*grid-template-rows: minmax\(0, 1fr\);[^}]*background: var\(--foreground-surface, #fff\);/s);
+  assert.match(css, /--chat-sidebar: #f5f5f5;/);
+  assert.match(css, /\.chat-sidebar \{[^}]*background: var\(--chat-sidebar\);/s);
+  assert.match(css, /> \.chat-main-header \{[^}]*position: absolute;[^}]*background: transparent;[^}]*pointer-events: none;/s);
+  assert.match(css, /\.chat-header-content-actions \{[^}]*border-radius: 999px;[^}]*background: var\(--foreground-surface, #fff\);[^}]*box-shadow: 0 3px 54px rgb\(0 0 0 \/ 5\.295%\);/s);
+  assert.match(css, /\.chat-header-content-actions > button \{[^}]*border-radius: 50% !important;/s);
 
   assert.ok(!css.includes('.chat-empty-logo'));
   assert.ok(!css.includes('.chat-empty h1'));

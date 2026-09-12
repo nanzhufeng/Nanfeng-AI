@@ -52,11 +52,11 @@ test('C05 daily candidates show the section title and runtime Provider plus live
   for (const token of [
     '选择具体模型',
     'Claude Sonnet 5',
-    'DeepSeek V4 Flash',
+    'DeepSeek V4.1 Flash',
     'GPT-5.6 Terra',
     'GLM-5.3 Flash',
     'Qwen3.7-Plus',
-    'Gemini 3.7 Flash',
+    'Gemini 3.8 Flash',
     'OpenRouter · 实时联网',
     '当前高峰 · 实时联网',
     '智谱 · 实时联网',

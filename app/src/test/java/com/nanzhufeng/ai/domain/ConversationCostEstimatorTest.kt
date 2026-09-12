@@ -7,6 +7,16 @@ import org.junit.Test
 import java.time.Instant
 
 class ConversationCostEstimatorTest {
+    @Test fun `Flash current prices include weekday peaks and weekend cache discount`() {
+        val usage = ProviderUsage(inputTokens = 1_000_000, outputTokens = 1_000_000, cachedInputTokens = 400_000)
+        val peak = requireNotNull(ConversationCostEstimator.estimate("deepseek-flash", usage, Instant.parse("2026-09-10T01:00:00Z")))
+        val weekend = requireNotNull(ConversationCostEstimator.estimate("deepseek-flash", usage, Instant.parse("2026-09-12T01:00:00Z")))
+        assertEquals(1_382_400L, peak.totalMicros)
+        assertEquals(691_200L, weekend.totalMicros)
+        assertEquals("USD", peak.currencyCode)
+        assertNull(ConversationCostEstimator.estimate("deepseek-v4-flash", usage, Instant.parse("2026-09-10T01:00:00Z")))
+    }
+
     @Test fun `every model with a verified local price has a token-only local estimate`() {
         val usage = ProviderUsage(inputTokens = 1_443, outputTokens = 2_405)
         val modelIds = listOf(
@@ -19,6 +29,7 @@ class ConversationCostEstimatorTest {
             "openai/gpt-5.6-luna",
             "x-ai/grok-4.6",
             "google/gemini-3.7-flash",
+            "google/gemini-3.8-flash",
             "qwen3.7-plus",
             "qwen3.8-max",
             "qwen3.6-flash",
@@ -28,7 +39,7 @@ class ConversationCostEstimatorTest {
         )
 
         modelIds.forEach { modelId ->
-            assertNotNull("missing local estimate for $modelId", ConversationCostEstimator.estimate(modelId, usage))
+            assertNotNull("missing local estimate for $modelId", ConversationCostEstimator.estimate(modelId, usage, Instant.parse("2026-08-29T00:00:00Z")))
         }
         assertNull(ConversationCostEstimator.estimate("x-ai/grok-4.1-fast", usage))
     }

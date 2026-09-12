@@ -28,13 +28,13 @@ class CapabilityAwareAutoModelRouterTest {
 
     @Test fun `unavailable model is not selected even when it advertises the required capability`() {
         val resolver = fixtureResolver(
-            ModelPresetId.GEMINI_3_7_FLASH to profile(ModelPresetId.GEMINI_3_7_FLASH, ProviderId.OPENROUTER, video = true, health = ModelHealth.UNAVAILABLE),
+            ModelPresetId.GEMINI_3_8_FLASH to profile(ModelPresetId.GEMINI_3_8_FLASH, ProviderId.OPENROUTER, video = true, health = ModelHealth.UNAVAILABLE),
             ModelPresetId.QWEN_3_7_PLUS to profile(ModelPresetId.QWEN_3_7_PLUS, ProviderId.QWEN, video = true),
         )
 
         val result = CapabilityAwareAutoModelRouter(resolver).resolve(
             AutoRoutingFacts(hasAttachment = true, requiresVideo = true),
-        ) { it == ModelPresetId.GEMINI_3_7_FLASH || it == ModelPresetId.QWEN_3_7_PLUS }
+        ) { it == ModelPresetId.GEMINI_3_8_FLASH || it == ModelPresetId.QWEN_3_7_PLUS }
 
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, result)
     }

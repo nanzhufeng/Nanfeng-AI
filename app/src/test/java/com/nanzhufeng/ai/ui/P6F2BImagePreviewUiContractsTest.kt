@@ -29,6 +29,20 @@ class P6F2BImagePreviewUiContractsTest {
         assertFalse("a moving image node must never own pointer input", viewer.substring(viewer.lastIndexOf("Image(")).contains("pointerInput"))
     }
 
+    @Test fun `one horizontal gesture keeps its viewport owner while it opens the next image`() {
+        val viewer = workspace.substring(workspace.indexOf("private fun ImagePreviewDialog"), workspace.indexOf("private fun ComposerSendButton"))
+        val gestureOwner = viewer.substring(viewer.indexOf(".pointerInput("), viewer.indexOf("awaitEachGesture"))
+        assertTrue(viewer.contains("val currentPreviewId = rememberUpdatedState(preview.id)"))
+        assertTrue(viewer.contains("val currentGeneratedImageIds = rememberUpdatedState(generatedImageIds)"))
+        assertTrue(viewer.contains("val gesturePreviewId = currentPreviewId.value"))
+        assertTrue(viewer.contains("val gestureGeneratedImageIds = currentGeneratedImageIds.value"))
+        assertTrue(viewer.contains("gestureGeneratedImageIds.getOrNull(targetIndex)"))
+        assertFalse("switching an image must not recreate the active gesture owner", gestureOwner.contains("preview.id"))
+        assertFalse("changing image dimensions must not split one touchpad swipe into two", gestureOwner.contains("fittedWidthPx"))
+        assertFalse("changing image dimensions must not split one touchpad swipe into two", gestureOwner.contains("fittedHeightPx"))
+        assertFalse("switching an image must not recreate the active gesture owner", gestureOwner.contains("generatedImageIds"))
+    }
+
     @Test fun `manual pinch accumulates and enlarged image pans inside viewport bounds`() {
         val firstPinch = imagePreviewGestureTransform(
             currentZoom = 1f,
@@ -115,7 +129,7 @@ class P6F2BImagePreviewUiContractsTest {
         assertEquals(-300f, panned.offsetY, 0f)
 
         val viewer = workspace.substring(workspace.indexOf("private fun ImagePreviewDialog"), workspace.indexOf("private fun ComposerSendButton"))
-        assertTrue(viewer.contains("fittedHeightPx * gestureZoom > viewportHeightPx"))
+        assertTrue(viewer.contains("gestureFittedHeightPx * gestureZoom > viewportHeightPx"))
         assertFalse(viewer.contains("gestureZoom > 1.001f &&\n                                                change.pressed"))
     }
 

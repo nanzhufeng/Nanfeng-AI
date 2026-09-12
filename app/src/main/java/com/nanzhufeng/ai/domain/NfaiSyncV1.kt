@@ -84,12 +84,34 @@ object NfaiSyncV1Gateway {
     fun preflight(envelopeJson: String): NfaiSyncResult = runCatching { NfaiSyncResult.Preflighted(parseEnvelope(envelopeJson).first) }
         .getOrElse { NfaiSyncResult.Rejected("PREFLIGHT_REJECTED") }
 
-    fun open(envelopeJson: String, recoveryCode: CharArray, expectedAppId: String, expectedDocumentId: String, minimumRevision: Long): NfaiSyncResult = runCatching {
+    fun open(envelopeJson: String, recoveryCode: CharArray, expectedAppId: String, expectedDocumentId: String, minimumRevision: Long): NfaiSyncResult = openInternal(
+        envelopeJson, expectedAppId, expectedDocumentId, minimumRevision,
+    ) { salt -> derive(recoveryCode, salt) }
+
+    /** Opens a locally protected envelope without ever reconstructing the recovery code. */
+    fun openWithAccountWrappingMaterial(
+        envelopeJson: String,
+        material: NfaiSyncAccountWrappingMaterial,
+        expectedAppId: String,
+        expectedDocumentId: String,
+        minimumRevision: Long,
+    ): NfaiSyncResult = openInternal(envelopeJson, expectedAppId, expectedDocumentId, minimumRevision) { salt ->
+        require(material.salt.contentEquals(salt)) { "wrapping material mismatch" }
+        material.wrappingKey.copyOf()
+    }
+
+    private fun openInternal(
+        envelopeJson: String,
+        expectedAppId: String,
+        expectedDocumentId: String,
+        minimumRevision: Long,
+        wrappingKeyForSalt: (ByteArray) -> ByteArray,
+    ): NfaiSyncResult = runCatching {
         val (preflight, envelope) = parseEnvelope(envelopeJson)
         require(preflight.appId == expectedAppId && preflight.documentId == expectedDocumentId) { "跨 App/document 拒绝" }
         require(preflight.revision >= minimumRevision) { "REVISION_ROLLBACK" }
         val aad = aad(envelope)
-        val wrappingKey = derive(recoveryCode, decode(envelope.getJSONObject("kdf").getString("salt"), 16))
+        val wrappingKey = wrappingKeyForSalt(decode(envelope.getJSONObject("kdf").getString("salt"), 16))
         val dataKey = decrypt(wrappingKey, decode(envelope.getJSONObject("wrappedDataKey").getString("nonce"), 12), decode(envelope.getJSONObject("wrappedDataKey").getString("ciphertext"), 48), aad)
         try {
             val plain = decrypt(dataKey, decode(envelope.getJSONObject("payload").getString("nonce"), 12), decodeVariable(envelope.getJSONObject("payload").getString("ciphertext"), MAX_PAYLOAD_BYTES + 16), aad)

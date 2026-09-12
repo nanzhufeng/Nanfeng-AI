@@ -45,15 +45,15 @@ class QwenHistoryKnowledgeRefinerTest {
         )
     }
 
-    @Test fun `history refinement prefers DeepSeek V4 Flash`() {
+    @Test fun `history refinement prefers DeepSeek V4 point 1 Flash`() {
         val transport = RecordingTransport(listOf(success()))
         val audit = Audit()
         val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), transport, audit).refine(source)
 
         val draft = (result as HistoryKnowledgeCurationResult.Draft).value
         assertEquals(ProviderId.DEEPSEEK, draft.providerId)
-        assertEquals("deepseek-v4-flash", draft.modelId)
-        assertEquals(listOf("deepseek-v4-flash"), transport.modelIds())
+        assertEquals("deepseek-flash", draft.modelId)
+        assertEquals(listOf("deepseek-flash"), transport.modelIds())
         assertEquals(listOf(ProviderId.DEEPSEEK), audit.values.map { it.providerId })
     }
 
@@ -68,7 +68,7 @@ class QwenHistoryKnowledgeRefinerTest {
 
         val draft = (result as HistoryKnowledgeCurationResult.Draft).value
         assertEquals(ProviderId.QWEN, draft.providerId)
-        assertEquals(listOf("deepseek-v4-flash", "glm-5.3-flash", "qwen3.6-flash"), transport.modelIds())
+        assertEquals(listOf("deepseek-flash", "glm-5.3-flash", "qwen3.6-flash"), transport.modelIds())
         assertEquals(listOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), audit.values.map { it.providerId })
         assertEquals(listOf("low", "max", "low"), audit.values.map { it.reasoningLevel })
     }
@@ -114,7 +114,7 @@ class QwenHistoryKnowledgeRefinerTest {
         val result = parseHistoryKnowledgeCuration(
             """{"eligible":true,"title":"长期投资决策原则","body":"长期投资应区分资产质量和当前价格，优先关注安全边际、分批建仓与风险控制。遇到估值明显偏高时，不因害怕错过而追高；当基本假设变化时重新评估。该规则只适用于计划配置给权益资产的长期资金，现金储备与短期支出必须独立管理，并在关键假设变化后重新核验。","tags":["投资","安全边际"],"confidence":0.93}""",
             ProviderId.DEEPSEEK,
-            "deepseek-v4-flash",
+            "deepseek-flash",
         )
         assertTrue(result.toString(), result is HistoryKnowledgeCurationResult.Draft)
         val draft = (result as HistoryKnowledgeCurationResult.Draft).value
@@ -144,7 +144,7 @@ class QwenHistoryKnowledgeRefinerTest {
     private fun model(preset: ModelPresetId): ResolvedModel = ResolvedModel(
         providerId = NanfengModelServiceCatalog.providerFor(preset),
         modelId = when (preset) {
-            ModelPresetId.DEEPSEEK_V4_FLASH -> "deepseek-v4-flash"
+            ModelPresetId.DEEPSEEK_V4_FLASH -> "deepseek-flash"
             ModelPresetId.GLM_5_3_FLASH -> "glm-5.3-flash"
             ModelPresetId.QWEN_3_6_FLASH -> "qwen3.6-flash"
             else -> error("Unexpected history preset $preset")

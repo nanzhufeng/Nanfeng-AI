@@ -53,18 +53,18 @@ class ModelProfileAssetContractsTest {
         assertFalse(profile.contains("\"video\": true"))
     }
 
-    @Test fun `DeepSeek V4 Flash profile retains its official direct identity and text capabilities`() {
+    @Test fun `DeepSeek V4 point 1 Flash profile retains its official direct identity and text capabilities`() {
         val raw = File("src/main/assets/model_profiles.json").readText()
         val profile = raw.substringAfter("\"presetId\": \"DEEPSEEK_V4_FLASH\"").substringBefore("\n    }")
 
         assertTrue("missing DEEPSEEK_V4_FLASH", profile.isNotBlank())
         assertTrue(profile.contains("\"providerId\": \"DEEPSEEK\""))
-        assertTrue(profile.contains("\"modelId\": \"deepseek-v4-flash\""))
+        assertTrue(profile.contains("\"modelId\": \"deepseek-flash\""))
         assertTrue(profile.contains("\"contextWindowTokens\": 1000000"))
         assertTrue(profile.contains("\"maxOutputTokens\": 384000"))
         assertTrue(profile.contains("\"tools\": true"))
         assertTrue(profile.contains("\"reasoning\": true"))
-        assertFalse(profile.contains("\"image\": true"))
+        assertTrue(profile.contains("\"image\": true"))
         assertFalse(profile.contains("\"pdf\": true"))
         assertFalse(profile.contains("\"video\": true"))
     }

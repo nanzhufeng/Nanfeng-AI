@@ -23,6 +23,8 @@ test('current transcription root keeps legacy speech results readable without ex
     },
   });
   for (const action of ['preview-transcription-source', 'copy-transcription-result', 'continue-chat-with-transcription', 'export-transcription-task', 'ask-delete-transcription-task']) assert.match(html, new RegExp(`data-action="${action}"`));
+  assert.match(html, /class="transcription-copy-action" data-action="copy-transcription-result" data-copy-action/);
+  assert.doesNotMatch(html, />复制全文<\/button>/);
   assert.doesNotMatch(html, /data-action="(?:record|pause)-transcription/);
   assert.doesNotMatch(html, /data-action="(?:select-transcription-mode|pick-transcription-source|save-transcription-settings)"/);
   assert.doesNotMatch(html, /SenseVoice|音视频默认设置/);

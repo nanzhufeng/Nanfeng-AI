@@ -118,9 +118,6 @@ fn random_urlsafe(bytes: usize) -> Result<String, String> {
 pub struct ServiceConfig {
     pub supabase_url: Url,
     pub publishable_key: String,
-    pub google_client_id: String,
-    pub google_authorize_url: Url,
-    pub google_token_url: Url,
     pub localhost_mock: bool,
 }
 
@@ -130,51 +127,52 @@ pub enum Availability {
     Configured,
 }
 
+fn first_non_blank<'a>(values: impl IntoIterator<Item = Option<&'a str>>) -> String {
+    values
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn runtime_or_bundled(runtime_key: &str, bundled_value: Option<&'static str>) -> String {
+    let runtime_value = std::env::var(runtime_key).ok();
+    first_non_blank([runtime_value.as_deref(), bundled_value])
+}
+
 pub fn resolve_config(
     localhost_mock: bool,
 ) -> Result<(Availability, Option<ServiceConfig>), String> {
-    let url = std::env::var("NANFENG_SUPABASE_URL").unwrap_or_default();
-    let key = std::env::var("NANFENG_SUPABASE_PUBLISHABLE_KEY").unwrap_or_default();
-    let client_id = std::env::var("NANFENG_GOOGLE_DESKTOP_CLIENT_ID")
-        .or_else(|_| std::env::var("NANFENG_GOOGLE_WEB_CLIENT_ID"))
-        .unwrap_or_default();
-    if url.trim().is_empty() || key.trim().is_empty() || client_id.trim().is_empty() {
+    let url = runtime_or_bundled(
+        "NANFENG_SUPABASE_URL",
+        option_env!("NANFENG_DESKTOP_BUNDLED_SUPABASE_URL"),
+    );
+    let key = runtime_or_bundled(
+        "NANFENG_SUPABASE_PUBLISHABLE_KEY",
+        option_env!("NANFENG_DESKTOP_BUNDLED_SUPABASE_PUBLISHABLE_KEY"),
+    );
+    if url.trim().is_empty() || key.trim().is_empty() {
         return Ok((Availability::Disabled, None));
     }
     let supabase_url = Url::parse(url.trim()).map_err(|_| safe_error("南枫云地址无效"))?;
-    let authorize = std::env::var("NANFENG_GOOGLE_AUTHORIZE_URL")
-        .unwrap_or_else(|_| "https://accounts.google.com/o/oauth2/v2/auth".into());
-    let token = std::env::var("NANFENG_GOOGLE_TOKEN_URL")
-        .unwrap_or_else(|_| "https://oauth2.googleapis.com/token".into());
-    let google_authorize_url =
-        Url::parse(&authorize).map_err(|_| safe_error("Google 授权地址无效"))?;
-    let google_token_url = Url::parse(&token).map_err(|_| safe_error("Google Token 地址无效"))?;
     let valid_remote = |value: &Url| {
         value.scheme() == "https" && value.username().is_empty() && value.password().is_none()
     };
     let valid_mock = |value: &Url| matches!(value.host_str(), Some("127.0.0.1" | "localhost"));
     if localhost_mock {
-        if ![&supabase_url, &google_authorize_url, &google_token_url]
-            .into_iter()
-            .all(valid_mock)
-        {
+        if !valid_mock(&supabase_url) {
             return Err(safe_error("隔离 Mock 只允许 localhost"));
         }
-    } else if ![&supabase_url, &google_authorize_url, &google_token_url]
-        .into_iter()
-        .all(valid_remote)
-        || !client_id.trim().ends_with(".apps.googleusercontent.com")
-    {
-        return Err(safe_error("Google 与南枫云配置未通过安全校验"));
+    } else if !valid_remote(&supabase_url) {
+        return Err(safe_error("南枫云配置未通过安全校验"));
     }
     Ok((
         Availability::Configured,
         Some(ServiceConfig {
             supabase_url,
             publishable_key: key.trim().into(),
-            google_client_id: client_id.trim().into(),
-            google_authorize_url,
-            google_token_url,
             localhost_mock,
         }),
     ))
@@ -380,12 +378,27 @@ fn callback_code(listener: TcpListener, expected_state: &str) -> Result<String, 
     if !peer.ip().is_loopback() {
         return Err(safe_error("OAuth callback 来源无效"));
     }
-    stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
-    let mut bytes = [0u8; 16 * 1024];
-    let count = stream
-        .read(&mut bytes)
+    // `TcpListener` is non-blocking only while we wait for a browser to
+    // connect. Its accepted stream can inherit that mode, which would turn a
+    // perfectly valid callback into an intermittent `WouldBlock` before the
+    // browser has written its request. Restore bounded blocking reads on the
+    // trusted loopback stream before parsing the callback.
+    stream
+        .set_nonblocking(false)
         .map_err(|_| safe_error("OAuth callback 无法读取"))?;
-    let first = std::str::from_utf8(&bytes[..count])
+    stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
+    let mut bytes = Vec::with_capacity(16 * 1024);
+    while !bytes.windows(2).any(|value| value == b"\r\n") && bytes.len() < 16 * 1024 {
+        let mut chunk = [0u8; 1024];
+        let count = stream
+            .read(&mut chunk)
+            .map_err(|_| safe_error("OAuth callback 无法读取"))?;
+        if count == 0 {
+            return Err(safe_error("OAuth callback 无法读取"));
+        }
+        bytes.extend_from_slice(&chunk[..count]);
+    }
+    let first = std::str::from_utf8(&bytes)
         .ok()
         .and_then(|value| value.lines().next())
         .ok_or_else(|| safe_error("OAuth callback 无效"))?;
@@ -415,15 +428,13 @@ fn callback_code(listener: TcpListener, expected_state: &str) -> Result<String, 
     code.ok_or_else(|| safe_error("Google 授权未完成或状态校验失败"))
 }
 
-pub fn sign_in_with_system_browser<C: CredentialStore, B: Browser>(
-    connection: &mut Connection,
-    credentials: &C,
+pub fn authorize_with_system_browser<B: Browser>(
     config: &ServiceConfig,
     browser: &B,
 ) -> Result<Session, String> {
     let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0))
         .map_err(|_| safe_error("无法创建 OAuth callback"))?;
-    let callback = format!(
+    let callback_base = format!(
         "http://127.0.0.1:{}/oauth/callback",
         listener
             .local_addr()
@@ -433,19 +444,19 @@ pub fn sign_in_with_system_browser<C: CredentialStore, B: Browser>(
     let state = random_urlsafe(24)?;
     let verifier = Zeroizing::new(random_urlsafe(48)?);
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-    let nonce = Zeroizing::new(random_urlsafe(32)?);
-    let nonce_hash = URL_SAFE_NO_PAD.encode(Sha256::digest(nonce.as_bytes()));
-    let mut authorize = config.google_authorize_url.clone();
+    let mut callback = Url::parse(&callback_base).map_err(|_| safe_error("OAuth callback 无效"))?;
+    callback.query_pairs_mut().append_pair("state", &state);
+    let mut authorize = config
+        .supabase_url
+        .join("auth/v1/authorize")
+        .map_err(|_| safe_error("南枫云认证地址无效"))?;
     authorize
         .query_pairs_mut()
-        .append_pair("client_id", &config.google_client_id)
-        .append_pair("redirect_uri", &callback)
-        .append_pair("response_type", "code")
-        .append_pair("scope", "openid email profile")
+        .append_pair("provider", "google")
+        .append_pair("redirect_to", callback.as_str())
+        .append_pair("scopes", "openid email profile")
         .append_pair("code_challenge", &challenge)
-        .append_pair("code_challenge_method", "S256")
-        .append_pair("state", &state)
-        .append_pair("nonce", &nonce_hash)
+        .append_pair("code_challenge_method", "s256")
         .append_pair("access_type", "offline")
         .append_pair("prompt", "select_account");
     browser.open(&authorize)?;
@@ -455,36 +466,14 @@ pub fn sign_in_with_system_browser<C: CredentialStore, B: Browser>(
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|_| safe_error("OAuth 网络客户端不可用"))?;
-    let google: Value = client
-        .post(config.google_token_url.clone())
-        .form(&[
-            ("code", code.as_str()),
-            ("client_id", config.google_client_id.as_str()),
-            ("redirect_uri", callback.as_str()),
-            ("grant_type", "authorization_code"),
-            ("code_verifier", verifier.as_str()),
-        ])
-        .send()
-        .map_err(|_| safe_error("Google Token 交换失败"))?
-        .error_for_status()
-        .map_err(|_| safe_error("Google Token 被拒绝"))?
-        .json()
-        .map_err(|_| safe_error("Google Token 响应无效"))?;
-    let id_token = Zeroizing::new(
-        google
-            .get("id_token")
-            .and_then(Value::as_str)
-            .ok_or_else(|| safe_error("Google 未返回可验证身份"))?
-            .to_owned(),
-    );
     let endpoint = config
         .supabase_url
-        .join("auth/v1/token?grant_type=id_token")
+        .join("auth/v1/token?grant_type=pkce")
         .map_err(|_| safe_error("南枫云认证地址无效"))?;
     let response: Value = client
         .post(endpoint)
         .header("apikey", &config.publishable_key)
-        .json(&json!({"provider":"google","id_token":id_token.as_str(),"nonce":nonce.as_str()}))
+        .json(&json!({"auth_code":code,"code_verifier":verifier.as_str()}))
         .send()
         .map_err(|_| safe_error("南枫云登录失败"))?
         .error_for_status()
@@ -536,7 +525,15 @@ pub fn sign_in_with_system_browser<C: CredentialStore, B: Browser>(
                 .unwrap_or(3600)
                 .clamp(60, 86_400),
     };
-    save_session(credentials, &session)?;
+    Ok(session)
+}
+
+pub fn persist_authenticated_session<C: CredentialStore>(
+    connection: &mut Connection,
+    credentials: &C,
+    session: &Session,
+) -> Result<(), String> {
+    save_session(credentials, session)?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
     let device_id = connection
         .query_row(
@@ -565,6 +562,17 @@ pub fn sign_in_with_system_browser<C: CredentialStore, B: Browser>(
         "SUCCESS",
         None,
     );
+    Ok(())
+}
+
+pub fn sign_in_with_system_browser<C: CredentialStore, B: Browser>(
+    connection: &mut Connection,
+    credentials: &C,
+    config: &ServiceConfig,
+    browser: &B,
+) -> Result<Session, String> {
+    let session = authorize_with_system_browser(config, browser)?;
+    persist_authenticated_session(connection, credentials, &session)?;
     Ok(session)
 }
 
@@ -656,10 +664,14 @@ pub fn confirm_recovery<C: CredentialStore>(
     Ok(())
 }
 
-pub fn create_recovery_rotation<C: CredentialStore>(
+pub fn prepare_custom_recovery_rotation<C: CredentialStore>(
     connection: &Connection,
     credentials: &C,
+    code: &str,
 ) -> Result<(RecoveryCodeProjection, PendingRecovery), String> {
+    if code.chars().count() < 12 || code.len() > 128 || code.trim() != code || code.chars().any(char::is_control) {
+        return Err(safe_error("恢复码需为 12–128 字节，且不能包含首尾空格或控制字符"));
+    }
     let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
     let confirmed: i64 = connection
@@ -675,13 +687,6 @@ pub fn create_recovery_rotation<C: CredentialStore>(
     {
         return Err(safe_error("当前设备无法解锁现有云端数据"));
     }
-    let code = format!(
-        "NF-{}-{}-{}-{}",
-        random_urlsafe(6)?,
-        random_urlsafe(6)?,
-        random_urlsafe(6)?,
-        random_urlsafe(6)?
-    );
     let material = sync_v1::create_account_wrapping_material(&code)
         .map_err(|_| safe_error("新恢复码无法创建"))?;
     let confirmation_hash = sha256(code.as_bytes());
@@ -694,7 +699,7 @@ pub fn create_recovery_rotation<C: CredentialStore>(
     );
     Ok((
         RecoveryCodeProjection {
-            recovery_code: code,
+            recovery_code: code.to_owned(),
             confirmation_hash: confirmation_hash.clone(),
         },
         PendingRecovery {
@@ -1218,6 +1223,7 @@ pub fn restore_remote_conversation<C: CredentialStore, G: CloudGateway>(
         .and_then(Value::as_object)
         .cloned()
         .ok_or_else(|| safe_error("云端对话内容无效"))?;
+    normalize_android_selected_conversation(&mut conversation)?;
     let messages = conversation
         .get("messages")
         .and_then(Value::as_array)
@@ -1401,6 +1407,89 @@ pub fn restore_remote_conversation<C: CredentialStore, G: CloudGateway>(
         conversation_id,
         remote_revision: remote.revision,
     })
+}
+
+/// Android's selected-conversation wire shape is intentionally text-only but names tree fields
+/// differently from Desktop's older local exchange shape. Normalize it at the encrypted boundary
+/// so neither the restore writer nor user-visible history needs a second schema.
+fn normalize_android_selected_conversation(
+    conversation: &mut serde_json::Map<String, Value>,
+) -> Result<(), String> {
+    let Some(nodes) = conversation.get("nodes").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    if nodes.is_empty() || nodes.len() > 1_000 {
+        return Err(safe_error("云端对话消息数量无效"));
+    }
+    let timestamp = |value: Option<&Value>| -> Result<String, String> {
+        value
+            .and_then(Value::as_i64)
+            .filter(|millis| *millis >= 0)
+            .map(crate::rfc3339_from_unix_millis)
+            .ok_or_else(|| safe_error("云端对话时间无效"))
+    };
+    let mut messages = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        let object = node
+            .as_object()
+            .ok_or_else(|| safe_error("云端对话消息无效"))?;
+        let id = object
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty() && value.len() <= 128)
+            .ok_or_else(|| safe_error("云端消息标识无效"))?;
+        let role = object
+            .get("role")
+            .and_then(Value::as_str)
+            .map(str::to_ascii_lowercase)
+            .filter(|value| matches!(value.as_str(), "user" | "assistant" | "system"))
+            .ok_or_else(|| safe_error("云端消息角色无效"))?;
+        let delivery = object
+            .get("deliveryState")
+            .and_then(Value::as_str)
+            .filter(|value| *value == "COMPLETE")
+            .ok_or_else(|| safe_error("未完成的回复不会恢复"))?;
+        let text = object
+            .get("text")
+            .and_then(Value::as_array)
+            .filter(|items| !items.is_empty() && items.len() <= 64)
+            .ok_or_else(|| safe_error("云端消息文本无效"))?;
+        let blocks = text
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .filter(|value| !value.is_empty() && value.len() <= 32 * 1024)
+                    .map(|value| json!({"kind":"TEXT","text":value}))
+                    .ok_or_else(|| safe_error("云端消息文本无效"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        messages.push(json!({
+            "id":id,
+            "parentId":object.get("parentMessageId").cloned().unwrap_or(Value::Null),
+            "ordinal":object.get("siblingPosition").and_then(Value::as_u64).unwrap_or(0),
+            "role":role,
+            "createdAt":timestamp(object.get("createdAtEpochMs"))?,
+            "revision":object.get("revision").and_then(Value::as_u64).unwrap_or(1),
+            "delivery":delivery,
+            "blocks":blocks,
+        }));
+    }
+    let created = timestamp(conversation.get("createdAtEpochMs"))?;
+    let updated = timestamp(conversation.get("updatedAtEpochMs"))?;
+    let leaf = conversation
+        .get("currentLeafMessageId")
+        .cloned()
+        .unwrap_or_else(|| messages.last().and_then(|message| message.get("id")).cloned().unwrap_or(Value::Null));
+    conversation.remove("nodes");
+    conversation.remove("currentLeafMessageId");
+    conversation.remove("createdAtEpochMs");
+    conversation.remove("updatedAtEpochMs");
+    conversation.remove("surface");
+    conversation.insert("createdAt".into(), Value::String(created));
+    conversation.insert("updatedAt".into(), Value::String(updated));
+    conversation.insert("currentLeafId".into(), leaf);
+    conversation.insert("messages".into(), Value::Array(messages));
+    Ok(())
 }
 
 fn portable_reminder_plans(
@@ -2079,6 +2168,28 @@ pub fn projection<C: CredentialStore>(
 mod tests {
     use super::*;
     use std::{cell::RefCell, collections::BTreeMap};
+
+    #[test]
+    fn android_selected_conversation_wire_shape_normalizes_to_desktop_text_tree() {
+        let mut content = json!({
+            "title":"Android 对话","currentLeafMessageId":"m2","createdAtEpochMs":1000,"updatedAtEpochMs":2000,"surface":"CHAT",
+            "nodes":[
+                {"id":"m1","parentMessageId":null,"siblingPosition":0,"role":"USER","createdAtEpochMs":1000,"deliveryState":"COMPLETE","revision":1,"revisesMessageId":null,"text":["你好"]},
+                {"id":"m2","parentMessageId":"m1","siblingPosition":0,"role":"ASSISTANT","createdAtEpochMs":2000,"deliveryState":"COMPLETE","revision":1,"revisesMessageId":null,"text":["你好，我在。"]}
+            ]
+        })
+        .as_object()
+        .cloned()
+        .unwrap();
+
+        normalize_android_selected_conversation(&mut content).unwrap();
+
+        assert_eq!(content["currentLeafId"], "m2");
+        assert_eq!(content["messages"][1]["role"], "assistant");
+        assert_eq!(content["messages"][1]["blocks"][0]["text"], "你好，我在。");
+        assert!(content.get("nodes").is_none());
+    }
+
     struct Mem(RefCell<BTreeMap<(String, String), Vec<u8>>>);
     impl CredentialStore for Mem {
         fn save(&self, s: &str, a: &str, v: &[u8]) -> Result<(), String> {
@@ -2379,7 +2490,8 @@ mod tests {
         )
         .is_ok());
         let (new_code, new_pending) =
-            create_recovery_rotation(source_store.connection, &source_keys).unwrap();
+            prepare_custom_recovery_rotation(source_store.connection, &source_keys, "Fixture-custom-recovery-2026").unwrap();
+        assert_eq!(new_code.recovery_code, "Fixture-custom-recovery-2026");
         let rotated = rotate_recovery_material(
             source_store.connection,
             &source_keys,
@@ -2489,16 +2601,35 @@ mod tests {
         client.join().unwrap();
     }
     #[test]
-    fn localhost_oauth_mock_establishes_google_to_app_session_without_external_requests() {
+    fn localhost_oauth_mock_uses_supabase_pkce_and_establishes_app_session_without_google_secret() {
         use std::{net::TcpStream, thread};
         struct CallbackBrowser;
         impl Browser for CallbackBrowser {
             fn open(&self, url: &Url) -> Result<(), String> {
+                assert_eq!(url.path(), "/auth/v1/authorize");
                 let values = url
                     .query_pairs()
                     .collect::<std::collections::BTreeMap<_, _>>();
-                let callback = Url::parse(values.get("redirect_uri").unwrap()).unwrap();
-                let state = values.get("state").unwrap().to_string();
+                assert_eq!(
+                    values.get("provider").map(|value| value.as_ref()),
+                    Some("google")
+                );
+                assert_eq!(
+                    values
+                        .get("code_challenge_method")
+                        .map(|value| value.as_ref()),
+                    Some("s256")
+                );
+                assert!(values
+                    .get("code_challenge")
+                    .is_some_and(|value| value.len() == 43));
+                assert!(values.get("client_id").is_none());
+                assert!(values.get("client_secret").is_none());
+                let callback = Url::parse(values.get("redirect_to").unwrap()).unwrap();
+                let state = callback
+                    .query_pairs()
+                    .find_map(|(key, value)| (key == "state").then(|| value.to_string()))
+                    .unwrap();
                 thread::spawn(move || {
                     let mut stream = TcpStream::connect((
                         callback.host_str().unwrap(),
@@ -2506,7 +2637,7 @@ mod tests {
                     ))
                     .unwrap();
                     let request = format!(
-                        "GET {}?state={}&code=localhost-code HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+                        "GET {}?state={}&code=009e5066-fc11-4eca-8c8c-6fd82aa263f2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
                         callback.path(),
                         state
                     );
@@ -2518,24 +2649,27 @@ mod tests {
         let server = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = server.local_addr().unwrap();
         let mock = thread::spawn(move || {
-            for index in 0..2 {
-                let (mut stream, _) = server.accept().unwrap();
-                stream
-                    .set_read_timeout(Some(Duration::from_secs(2)))
-                    .unwrap();
-                let mut request = [0u8; 8192];
-                let count = stream.read(&mut request).unwrap();
-                let first = String::from_utf8_lossy(&request[..count]);
-                let body = if index == 0 {
-                    assert!(first.starts_with("POST /token "));
-                    json!({"id_token":"localhost-id-token"}).to_string()
-                } else {
-                    assert!(first.starts_with("POST /auth/v1/token?grant_type=id_token "));
-                    json!({"access_token":"localhost-access","refresh_token":"localhost-refresh","expires_in":3600,"user":{"id":"localhost-user","email":"localhost@example.invalid","user_metadata":{"name":"Localhost User"}}}).to_string()
-                };
-                let response=format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body);
-                stream.write_all(response.as_bytes()).unwrap();
-            }
+            let (mut stream, _) = server.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0u8; 8192];
+            let count = stream.read(&mut request).unwrap();
+            let first = String::from_utf8_lossy(&request[..count]);
+            assert!(first.starts_with("POST /auth/v1/token?grant_type=pkce "));
+            assert!(first.contains("apikey: localhost-publishable"));
+            let request_body = first.split_once("\r\n\r\n").unwrap().1;
+            let request_json = serde_json::from_str::<Value>(request_body).unwrap();
+            assert_eq!(
+                request_json["auth_code"].as_str(),
+                Some("009e5066-fc11-4eca-8c8c-6fd82aa263f2")
+            );
+            assert!(request_json["code_verifier"]
+                .as_str()
+                .is_some_and(|value| (43..=128).contains(&value.len())));
+            let body = json!({"access_token":"localhost-access","refresh_token":"localhost-refresh","expires_in":3600,"user":{"id":"localhost-user","email":"localhost@example.invalid","user_metadata":{"name":"Localhost User"}}}).to_string();
+            let response=format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body);
+            stream.write_all(response.as_bytes()).unwrap();
         });
         let mut connection = database();
         let credentials = Mem(RefCell::new(BTreeMap::new()));
@@ -2543,16 +2677,13 @@ mod tests {
         let config = ServiceConfig {
             supabase_url: base.clone(),
             publishable_key: "localhost-publishable".into(),
-            google_client_id: "localhost-client".into(),
-            google_authorize_url: base.join("authorize").unwrap(),
-            google_token_url: base.join("token").unwrap(),
             localhost_mock: true,
         };
-        let session =
-            sign_in_with_system_browser(&mut connection, &credentials, &config, &CallbackBrowser)
-                .unwrap();
+        let session = authorize_with_system_browser(&config, &CallbackBrowser).unwrap();
         mock.join().unwrap();
         assert_eq!(session.email, "localhost@example.invalid");
+        assert!(read_session(&credentials).unwrap().is_none());
+        persist_authenticated_session(&mut connection, &credentials, &session).unwrap();
         assert_eq!(
             read_session(&credentials).unwrap().unwrap().user_id,
             "localhost-user"

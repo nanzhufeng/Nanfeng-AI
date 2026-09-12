@@ -213,3 +213,9 @@ Desktop `app.mjs` 负责页面／事件，`lib.rs` 注册 IPC、装配应用状�
 ## 13. 后续维护入口
 
 [AGENTS](../AGENTS.md) 只保存长期硬规则；开发、排错、测试、代码审查、文档同步分别读取 [.agents/skills](../.agents/skills)。可跨项目复用的方法及适用限制见 [可迁移开发经验](可迁移开发经验.md)。本轮业务文件不变性、测试来源与格式异常由 verification.json 固化；本轮前文件可从 ef76fc4 恢复，新增 review 目录与 Skill 脚本可独立移除。
+
+## 14. 2026-09-13 增量沉淀：模型目录事实与响应式显示
+
+本轮将 Composer 模型名称的“完整事实”与“紧凑呈现”分开：Desktop 和 Android 内屏／展开宽度消费目录 `displayName`，仅 Android 外屏使用单一紧凑投影以保护草稿输入空间；助手历史页脚继续使用独立的紧凑归因。该规则不改模型 ID、Provider、费用、路由、历史记录或跨端协议。
+
+交付证据不从构建推断：Android 正式同签名包已在 OPPO 保数据覆盖并拉回 base APK 比对；macOS bundle 已在相同 Bundle ID／团队身份下替换、旧包保留，SQLite 完整性与核心计数保持。具体产物哈希、设备身份、测试与未验的折叠内屏视觉见[当前交接](CURRENT_HANDOFF.md)顶部；稳定取舍见[决策日志](decision-log.md)，可复用原则见[可迁移开发经验](可迁移开发经验.md)。

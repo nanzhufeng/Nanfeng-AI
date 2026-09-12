@@ -15,16 +15,17 @@ const storageBytes = value => {
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 };
 
-const actionRow = ({ title, action = 'open-settings-page', page = '', disabled = false }) => `<button class="android-settings-action-row" data-action="${action}" ${page ? `data-page="${page}"` : ''} ${disabled ? 'disabled' : ''}><span>${escapeHtml(title)}</span>${page ? icon(icons.chevronRight, `进入${title}`) : ''}</button>`;
+const actionRow = ({ title, action = 'open-settings-page', page = '', disabled = false, working = false }) => `<button class="android-settings-action-row" data-action="${action}" ${page ? `data-page="${page}"` : ''} ${disabled ? 'disabled' : ''} ${working ? 'aria-busy="true"' : ''}><span>${escapeHtml(title)}</span>${working ? '<i class="android-settings-spinner" aria-label="正在处理"></i>' : page ? icon(icons.chevronRight, `进入${title}`) : ''}</button>`;
 const actionGroup = (title, rows) => `<section class="android-settings-data-group"><h2>${escapeHtml(title)}</h2><div class="android-settings-card">${rows.join(divider)}</div></section>`;
 
 function localBackupGroup(context) {
   const backup = context.localBackup || {};
   const preflight = backup.preflight;
   const disabled = !context.native || backup.working || backup.restartRequired;
+  const operation = backup.operation;
   const actions = actionGroup('本机备份与恢复', [
-    actionRow({ title: backup.working ? '正在处理…' : '备份', action: 'export-local-backup', disabled }),
-    actionRow({ title: backup.working ? '正在处理…' : '恢复', action: 'import-local-backup', disabled }),
+    actionRow({ title: operation === 'EXPORT' ? '正在备份…' : '备份', action: 'export-local-backup', disabled, working: operation === 'EXPORT' }),
+    actionRow({ title: operation === 'RESTORE' ? '正在恢复…' : '恢复', action: 'import-local-backup', disabled, working: operation === 'RESTORE' }),
   ]);
   if (backup.restartRequired) return `${actions}<section class="android-settings-card android-settings-status-card"><strong>恢复已完成</strong><p>为避免旧 SQLite 与页面引用，现请手动完全退出并重新打开 App；不会自动继续任何任务。</p></section>`;
   if (!preflight) return `${actions}${backup.notice ? `<p class="android-settings-helper success" role="status">${escapeHtml(backup.notice)}</p>` : ''}${backup.error ? `<p class="android-settings-helper error" role="alert">${escapeHtml(backup.error)}</p>` : ''}`;
@@ -102,7 +103,7 @@ export function renderLocalDataInventoryPage(context) {
   ];
   const totalBytes = ['conversations', 'messages', 'memory', 'knowledge', 'projects', 'attachment_images', 'attachment_videos', 'attachment_audio', 'attachment_files', 'import_source_assets']
     .reduce((sum, id) => sum + Number(value(id).byteCount || 0), 0) || Number(inventory.totalBytes || 0);
-  return `<div class="android-settings-page android-settings-privacy"><section class="android-settings-card storage-location-card"><strong>数据保存路径</strong><p>${escapeHtml(inventory.storagePath || '读取中…')}</p><small>对话、附件和本机设置保存在此目录，覆盖安装不会删除。</small><button data-action="choose-storage-location">更改保存路径</button></section><section class="android-settings-card android-settings-privacy-summary"><header><strong>本机数据</strong><b>${storageBytes(totalBytes)}</b></header>${rows('对话与内容', contentRows)}${rows('附件', attachmentRows)}${importSummary(values)}</section><button class="android-settings-privacy-cleanup" data-action="open-privacy-cleanup">选择清理范围</button></div>`;
+  return `<div class="android-settings-page android-settings-privacy"><section class="android-settings-card android-settings-privacy-summary"><header><strong>本机数据</strong><b>${storageBytes(totalBytes)}</b></header>${rows('对话与内容', contentRows)}${rows('附件', attachmentRows)}${importSummary(values)}</section><section class="android-settings-card storage-location-card"><header><strong>数据保存路径</strong><button type="button" class="storage-location-change" data-action="choose-storage-location">更改路径</button></header><p class="storage-location-path">${escapeHtml(inventory.storagePath || '读取中…')}</p></section><button class="android-settings-privacy-cleanup" data-action="open-privacy-cleanup">选择清理范围</button></div>`;
 }
 
 export function renderLocalDataCleanupScopeDialog() {

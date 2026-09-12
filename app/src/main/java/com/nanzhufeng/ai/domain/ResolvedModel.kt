@@ -150,7 +150,7 @@ private object OpenRouterColdStartTextFallback {
         ModelPresetId.GPT_6_ASTRA to "openai/gpt-6-astra",
         ModelPresetId.GROK_4_1_FAST to "x-ai/grok-4.1-fast",
         ModelPresetId.GROK_4_6_HIGH to "x-ai/grok-4.6",
-        ModelPresetId.GEMINI_3_7_FLASH to "google/gemini-3.7-flash",
+        ModelPresetId.GEMINI_3_8_FLASH to "google/gemini-3.8-flash",
         ModelPresetId.KIMI_K3 to "moonshotai/kimi-k3",
     )
 

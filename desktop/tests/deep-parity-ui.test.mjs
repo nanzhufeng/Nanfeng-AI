@@ -51,7 +51,9 @@ test('memory overview matches the Android summary owner with explicit query, ful
     memorySummaryComposer: '继续保留真实证据',
     memorySummaryNotice: '本机筛选完成',
   });
-  for (const token of ['偏好真实、可追溯的交付。', '询问或更新', 'submit-memory-summary', 'edit-memory-summary', 'refresh-memory-summary', 'ask-delete-memory-summary', 'ask-disable-memory-summary', '本机筛选完成']) assert.ok(html.includes(token));
+  for (const token of ['偏好真实、可追溯的交付。', 'edit-memory-summary', 'refresh-memory-summary', 'ask-delete-memory-summary', 'ask-disable-memory-summary', '本机筛选完成']) assert.ok(html.includes(token));
+  assert.ok(!html.includes('询问或更新'));
+  assert.ok(!html.includes('submit-memory-summary'));
   assert.ok(!html.includes('data-action="show-memory"'));
   const empty = renderAndroidSettingsShell({ page: 'memory-overview', data: { ...data, exchange: { ...data.exchange, memory: [] } }, native: true, settings: { memoryEnabled: true } });
   assert.ok(empty.includes('还没有记忆摘要。'));

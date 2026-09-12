@@ -57,11 +57,23 @@ test('conversation style picker exposes the default choice before the five expli
   assert.ok(html.includes('android-settings-picker android-settings-tone-picker'));
 });
 
-test('conversation style picker uses a spacious Desktop dialog while giving every choice an Android-matched card state', async () => {
+test('global tone selection persists immediately instead of waiting for an unrelated personalization save', async () => {
+  const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
+  const owner = source.slice(source.indexOf("else if (picker === 'tone')"), source.indexOf("} else if (action === 'toggle-product-setting')"));
+  assert.match(owner, /state\.personalizationDraft = \{ \.\.\.state\.personalizationDraft, tone: value \};/);
+  assert.match(owner, /writeProductSettings\(\{ tone: value \}\);/);
+  assert.doesNotMatch(owner, /state\.personalizationDirty = true;/);
+});
+
+test('favorites settings page does not render a generic startup status below the list', async () => {
+  const source = await readFile(resolve(import.meta.dirname, '../src/chat-shell.mjs'), 'utf8');
+  assert.match(source, /status: error \|\| \(settingsSection === 'favorites' \|\| String\(status\)\.startsWith\('本地工作区已就绪'\) \? '' : status\)/);
+});
+
+test('conversation style picker uses a viewport-sized Desktop dialog with stable card text layout', async () => {
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   const toneCss = css.slice(css.indexOf('.android-settings-tone-picker'), css.indexOf('.settings-conversation-management'));
-  for (const token of ['width: min(600px, calc(100vw - 56px))', 'gap: 10px', 'height: min(620px, calc(100vh - 112px))', 'grid-auto-rows: max-content', 'align-content: start', 'background: #f3f4f3', 'border: 1px solid transparent', 'font-size: calc(13px * var(--app-font-scale, 1))', '[aria-pressed="true"]', 'background: #fff3ea', 'border-color: #ff9a57']) assert.ok(toneCss.includes(token), token);
-  assert.ok(!toneCss.includes('max-height:'));
+  for (const token of ['box-sizing: border-box', 'width: min(760px, calc(100vw - 48px))', 'height: min(820px, calc(100dvh - 48px))', 'overflow-y: auto', 'scrollbar-gutter: stable', 'gap: 10px', 'grid-template-columns: minmax(0, 1fr) 22px', 'grid-auto-rows: max-content', 'align-content: start', 'background: #f3f4f3', 'border: 1px solid transparent', 'min-height: 1.55em', 'font-size: calc(13px * var(--app-font-scale, 1))', '[aria-pressed="true"]', 'background: #fff3ea', 'border-color: #ff9a57']) assert.ok(toneCss.includes(token), token);
 });
 
 test('theme color picker renders every preview from the real theme token owner', () => {
@@ -108,7 +120,8 @@ test('conversation find is case-insensitive, bounded, and renders the active mat
     favoriteConversationIds: new Set([conversation.id]), conversationFindOpen: true, conversationFindQuery: '手机',
     conversationFindMatches: conversationFindMatches(conversation, '手机'), conversationFindIndex: 1,
   });
-  for (const token of ['conversation-find-input', '2 / 2', '<mark>手机</mark>', 'find-active', 'open-conversation-header-menu', 'open-assistant-message-menu', 'chat-history-favorite']) assert.ok(html.includes(token), token);
+  for (const token of ['conversation-find-input', '2 / 2', '<mark>手机</mark>', 'find-active', 'open-conversation-header-menu', 'open-assistant-message-menu']) assert.ok(html.includes(token), token);
+  assert.ok(!html.includes('chat-history-favorite'));
 });
 
 test('conversation header branches from visible transcript content like Android', () => {
@@ -151,6 +164,7 @@ test('completed assistant answers expose answer information only through the mor
   });
   assert.ok(html.includes('data-action="open-assistant-message-menu"'));
   assert.ok(!html.includes('data-action="show-answer-context"'));
+  assert.ok(!html.includes('data-action="message-provenance"'));
   assert.ok(!html.includes('private/secret'));
 });
 
@@ -190,6 +204,24 @@ test('static Desktop build ships every startup module including the full-search 
   const buildSource = await readFile(resolve(import.meta.dirname, '../scripts/build.mjs'), 'utf8');
   assert.match(buildSource, /'desktop-parity-preferences\.mjs'/);
   assert.match(buildSource, /'desktop-search-page\.mjs'/);
+  assert.match(buildSource, /'desktop-cost-estimator\.mjs'/);
+});
+
+test('static Desktop build ships the complete local import graph rooted at app.mjs', async () => {
+  const buildSource = await readFile(resolve(import.meta.dirname, '../scripts/build.mjs'), 'utf8');
+  const sourceRoot = resolve(import.meta.dirname, '../src');
+  const pending = ['app.mjs'];
+  const required = new Set();
+  while (pending.length) {
+    const moduleName = pending.pop();
+    if (required.has(moduleName)) continue;
+    required.add(moduleName);
+    const moduleSource = await readFile(resolve(sourceRoot, moduleName), 'utf8');
+    for (const match of moduleSource.matchAll(/from\s+['"]\.\/([^'"]+\.mjs)['"]/g)) {
+      pending.push(match[1]);
+    }
+  }
+  for (const moduleName of required) assert.ok(buildSource.includes(`'${moduleName}'`), moduleName);
 });
 
 test('native parity commands are explicitly least-privilege allowed for the main window', async () => {
@@ -244,7 +276,7 @@ test('model record pages use the latest Android empty states and real usage proj
     data, native: true, pane: 'settings', settingsSection: 'conversation-cost', status: '', error: '', connection: {},
     usageLedger: { records: [{ entryId: 'entry-1', conversationId: conversation.id, modelId: 'gpt-5.6-terra', factGrade: 'PROVIDER_REPORTED', inputTokens: 1200, outputTokens: 320, cachedInputTokens: 0, chargeMicros: 12500, currencyCode: 'USD', occurredAtMs: 1788172800000 }], inputTokens: 1200, outputTokens: 320, cachedInputTokens: 0 },
   });
-  for (const token of ['本机累计', '服务商实际金额', '$0.0125', '1,200', '会话标题整理', '历史资料整理', '南枫转写', 'gpt-5.6-terra']) assert.ok(cost.includes(token));
+  for (const token of ['本机累计', '服务商实际金额', '本地估算', '¥0.084004', '1,200', '会话标题整理', '历史资料整理', '南枫转写', 'gpt-5.6-terra', '服务商实际金额']) assert.ok(cost.includes(token));
 });
 
 test('local data page renders aggregate-only all-workspace inventory in Android order', () => {
@@ -262,6 +294,13 @@ test('local data page renders aggregate-only all-workspace inventory in Android 
   });
   for (const token of ['本机数据', '15.0 KB', '对话与内容', '全部', '2 条正文 · 3 项附件', '记忆', '知识库', '项目', '附件', '图片', '文件', '选择清理范围']) assert.ok(html.includes(token));
   for (const forbidden of ['workspace-safe-1', '双端同步', '证明.pdf', 'private/secret']) assert.ok(!html.includes(forbidden));
+});
+
+test('local data category rows retain half of their former neutral gray contrast in the light desktop theme', async () => {
+  const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
+  assert.match(css, /\.android-settings-privacy-rows > button \{[^}]*background: #f9f9f9 !important;/);
+  assert.match(css, /\.android-settings-privacy-rows > button:hover \{ background: #f5f6f5 !important; \}/);
+  assert.match(css, /:root:not\(\[data-appearance-mode="dark"\]\) \.android-settings-privacy-rows > button:not\(\.primary\):not\(\.selected\):not\(\[aria-pressed="true"\]\) \{ background: #f9f9f9 !important; \}/);
 });
 
 test('local data cleanup keeps the current Android scopes and exact confirmation gates', async () => {
@@ -299,7 +338,8 @@ test('local data categories open the shared cross-workspace safe search catalogu
     data, native: true, pane: 'chat', searchPanel: true, searchCategory: 'file', chatSearch: '', status: '', error: '', connection: {},
     searchPage: { hits: [hit], textCount: 0, attachmentCount: 1, truncated: false },
   });
-  for (const token of ['全屏搜索', 'role="tablist"', 'aria-selected="true" class="selected">文件', 'data-entry-id="search-workspace-safe-2-message-safe-2-attachment"', '资料.pdf', 'application/pdf']) assert.ok(html.includes(token));
+  for (const token of ['全屏搜索', 'role="tablist"', 'aria-selected="true" class="selected">文件', 'data-entry-id="search-workspace-safe-2-message-safe-2-attachment"', '资料.pdf', '4.0 KB']) assert.ok(html.includes(token));
+  assert.ok(!html.includes('application/pdf'));
   const appSource = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   assert.match(appSource, /invoke\('query_desktop_local_index'/);
   assert.match(appSource, /recordHistory: Boolean\(recordHistory/);

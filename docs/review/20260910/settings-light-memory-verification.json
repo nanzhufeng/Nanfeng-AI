@@ -1,0 +1,35 @@
+{
+  "desktop_node": 255,
+  "android_targeted_jvm": 23,
+  "surface_readback": [
+    {
+      "mode": "light",
+      "tone": "rgb(251, 252, 251)",
+      "selected": "rgb(255, 243, 234)",
+      "backup": "rgb(251, 252, 251)",
+      "primary": "rgb(233, 113, 40)",
+      "path": "color(srgb 0.117647 0.160784 0.145098 / 0.015)"
+    },
+    {
+      "mode": "dark",
+      "tone": "rgb(43, 46, 43)",
+      "selected": "rgb(73, 54, 42)",
+      "backup": "rgb(243, 244, 242)",
+      "primary": "rgb(233, 113, 40)",
+      "path": "color(srgb 0.960784 0.960784 0.94902 / 0.05)"
+    }
+  ],
+  "phone": {
+    "result": "Success",
+    "same_data_identity": true,
+    "same_installed_bytes": true,
+    "sha256": "e4b0b15a5f17f2cdd48aadb4166248388620bd8da227a26ac1fac91ecf94aa67",
+    "version": "0.3.0-p10j",
+    "versionCode": 66
+  },
+  "desktop_memory_native_ax": {
+    "summary_visible": true,
+    "composer_present": false,
+    "text_inputs": 0
+  }
+}

@@ -37,7 +37,9 @@ test('C16 production theme owner emits the current Android surface and typograph
       const projection = owner.desktopThemeProjection({ mode: appearance.mode, fontSize: font.id, themeColor: 'orange' }, appearance.prefersDark);
       assert.equal(projection.resolvedMode, appearance.resolved, appearance.id);
       assert.equal(projection.fontScale, font.scale, font.id);
-      assert.deepEqual(projection.surfaces, C16_ANDROID_SURFACES[appearance.resolved], appearance.id);
+      // Desktop sidebar has an explicitly requested light-gray platform surface.
+      const expected = { ...C16_ANDROID_SURFACES[appearance.resolved], ...(appearance.resolved === 'light' ? { drawerBase: '#f5f5f5', settingsPage: '#fafafa' } : {}) };
+      assert.deepEqual(projection.surfaces, expected, appearance.id);
     }
   }
 });

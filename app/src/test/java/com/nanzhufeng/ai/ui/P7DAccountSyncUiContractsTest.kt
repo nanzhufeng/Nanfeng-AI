@@ -48,4 +48,24 @@ class P7DAccountSyncUiContractsTest {
         assertTrue(management.split("containerColor = SettingsPageBackground").size - 1 == 2)
         assertFalse(management.contains("containerColor = ForegroundSurface"))
     }
+
+    @Test fun `recovery screen exposes a real replacement flow rather than removing the entry`() {
+        val source = File("src/main/java/com/nanzhufeng/ai/ui/P7DAccountSyncUi.kt").readText()
+        assertTrue(source.contains("Text(\"更换恢复码 / 已丢失\")"))
+        assertTrue(source.contains("Text(\"确认更换恢复码\")"))
+        assertTrue(source.contains("manualSync.changeRecoveryCode(secret)"))
+    }
+
+    @Test fun `recovery replacement uses one gray pill input with its title above it`() {
+        val source = File("src/main/java/com/nanzhufeng/ai/ui/P7DAccountSyncUi.kt").readText()
+        val replacement = source.substringAfter("if (changingRecoveryCode)").substringBefore("Spacer(Modifier.height(10.dp))\n            OutlinedButton")
+        assertTrue(replacement.contains("P7DRecoveryCodeField(\n                        title = \"新恢复码\""))
+        assertFalse(replacement.contains("再次输入新恢复码"))
+        assertFalse(source.contains("replacementRecoveryConfirmation"))
+        assertTrue(source.contains("shape = P5AInteractiveShape"))
+        assertTrue(source.contains("unfocusedContainerColor = SettingsPageBackground"))
+        assertTrue(source.contains("Text(title, style = MaterialTheme.typography.titleSmall"))
+        val recoveryAndCloud = source.substringAfter("Text(\"恢复与安全\"").substringBefore("if (!state.configured)")
+        assertTrue(recoveryAndCloud.split("containerColor = SettingsPageBackground").size - 1 >= 2)
+    }
 }

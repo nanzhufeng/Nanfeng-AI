@@ -27,7 +27,8 @@ function draftCard(item) {
   return `<article class="desktop-reminder-card draft"><header><div><strong>${escapeHtml(item.title || '提醒草案')}</strong><small>${escapeHtml(statusLabel(item.status))}</small></div></header><p>${escapeHtml(item.instruction || '模型尚未产生可审阅内容。')}</p><div class="desktop-reminder-actions">${item.status === 'PENDING_REVIEW' ? `<button class="primary" data-action="review-reminder-draft" data-id="${escapeHtml(item.draftId)}">审阅编辑</button><button data-action="reject-reminder-draft" data-id="${escapeHtml(item.draftId)}">拒绝</button>` : `<button data-action="retry-reminder-draft" data-id="${escapeHtml(item.draftId)}">重试</button>`}</div></article>`;
 }
 
-function pageHeader(title, action = 'show-chat', label = '关闭定时任务') {
+function pageHeader(title, action = 'show-chat', label = '关闭定时任务', { embedded = false } = {}) {
+  if (embedded) return `<header class="desktop-utility-panel-header"><h1>${escapeHtml(title)}</h1></header>`;
   return `<header class="desktop-work-page-header"><span></span><h1>${escapeHtml(title)}</h1><button data-action="${action}" aria-label="${escapeHtml(label)}">${icon(icons.close, '关闭')}</button></header>`;
 }
 
@@ -56,7 +57,7 @@ function renderEditor(editor) {
   </section>`;
 }
 
-export function renderDesktopRemindersPage({ projection = { drafts: [], plans: [] }, notificationEnabled = false, notificationPermission = 'default', native = false, previewInteractive = false, evidenceLabel = '', editor = null } = {}) {
+export function renderDesktopRemindersPage({ projection = { drafts: [], plans: [] }, notificationEnabled = false, notificationPermission = 'default', native = false, previewInteractive = false, evidenceLabel = '', editor = null, embedded = false } = {}) {
   if (editor) return renderEditor(editor);
   const plans = projection?.plans || [];
   const drafts = (projection?.drafts || []).filter(item => ['PENDING_REVIEW', 'FAILED', 'UNKNOWN'].includes(item.status));
@@ -66,7 +67,7 @@ export function renderDesktopRemindersPage({ projection = { drafts: [], plans: [
     : '计划会照常执行，结果只保存在本机。';
   const createEnabled = native || previewInteractive;
   return `<section class="desktop-reminders-page" aria-label="定时任务">
-    ${pageHeader('已计划')}
+    ${pageHeader('已计划', 'show-chat', '关闭定时任务', { embedded })}
     <main class="desktop-reminder-content">
       ${evidenceLabel ? `<p class="desktop-reminder-evidence">${escapeHtml(evidenceLabel)}</p>` : ''}
       <button class="desktop-reminder-notification" data-action="request-reminder-notification-permission" ${native ? '' : 'disabled'}><span>${icon(icons.bell, '通知')}</span><span><strong>开启结果通知</strong><small>${escapeHtml(notificationHint)}</small></span></button>

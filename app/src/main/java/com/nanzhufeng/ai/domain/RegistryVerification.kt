@@ -118,7 +118,7 @@ class OpenRouterRegistrySnapshotVerifier {
         val astra = standardGpt(listOf("gpt-6-astra"))
         val grok41Fast = candidates.firstOrNull { it.id == "x-ai/grok-4.1-fast" }
         val grok46 = candidates.firstOrNull { it.id == "x-ai/grok-4.6" }
-        val gemini = exact(listOf("gemini-3.7-flash", "gemini-3-7-flash")) ?: return null
+        val gemini = exact(listOf("gemini-3.8-flash", "gemini-3-8-flash")) ?: return null
         val kimiK3 = candidates.firstOrNull { it.id == "moonshotai/kimi-k3" }
         val mappings = buildList {
             fable?.let { add(ModelPresetMapping(ModelPresetId.CLAUDE_FABLE_5, it.id)) }
@@ -132,7 +132,7 @@ class OpenRouterRegistrySnapshotVerifier {
             astra?.let { add(ModelPresetMapping(ModelPresetId.GPT_6_ASTRA, it.id)) }
             grok41Fast?.let { add(ModelPresetMapping(ModelPresetId.GROK_4_1_FAST, it.id)) }
             grok46?.let { add(ModelPresetMapping(ModelPresetId.GROK_4_6_HIGH, it.id)) }
-            add(ModelPresetMapping(ModelPresetId.GEMINI_3_7_FLASH, gemini.id))
+            add(ModelPresetMapping(ModelPresetId.GEMINI_3_8_FLASH, gemini.id))
             kimiK3?.let { add(ModelPresetMapping(ModelPresetId.KIMI_K3, it.id)) }
         }
         return Mapping(mappings, usesFallback = false)

@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+test('PDF navigation respects loading and first/last page boundaries', async () => {
+  const source = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf('function navigatePdfPage(step)'), source.indexOf('let pdfSwipe'));
+  const calls = [];
+  const state = {pdfPreview:{attachmentId:'fixture',workspaceId:'workspace',pageNumber:1,pageCount:3}};
+  const ctx = vm.createContext({state,openPdfPreview:(...args)=>calls.push(args)});
+  vm.runInContext(body,ctx);
+  ctx.navigatePdfPage(-1);
+  assert.equal(calls.length,0);
+  ctx.navigatePdfPage(1);
+  assert.deepEqual(calls[0],['fixture',2,'workspace']);
+  state.pdfPreview.pageNumber=3;
+  ctx.navigatePdfPage(1);
+  state.pdfPreview.loading=true;
+  ctx.navigatePdfPage(-1);
+  assert.equal(calls.length,1);
+});

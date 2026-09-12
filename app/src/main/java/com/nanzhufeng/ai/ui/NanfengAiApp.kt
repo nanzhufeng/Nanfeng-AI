@@ -516,6 +516,7 @@ internal fun NanfengAiApp(
     offlineEvalViewModel: OfflineEvalViewModel,
     privacyDataViewModel: PrivacyDataViewModel,
     localBackupRestoreViewModel: LocalBackupRestoreViewModel,
+    dataStorageLocationViewModel: DataStorageLocationViewModel,
     conversationExchangeExportViewModel: ConversationExchangeExportViewModel,
     workspaceExchangeV2ExportViewModel: WorkspaceExchangeV2ExportViewModel,
     workspaceExchangeV2RestoreViewModel: WorkspaceExchangeV2RestoreViewModel,
@@ -529,6 +530,7 @@ internal fun NanfengAiApp(
     onExitSettingsToConversationDrawer: () -> Unit,
 ) {
     val context = LocalContext.current
+    val dataStorageLocationState = dataStorageLocationViewModel.state
     val pickerIoScope = rememberCoroutineScope()
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -770,7 +772,10 @@ internal fun NanfengAiApp(
                     onSwitchAccount = { accountSyncViewModel.switchAccount(activity ?: context) },
                     onSignOut = accountSyncViewModel::signOut,
                     onPrepareRecovery = accountSyncViewModel::prepareRecoveryProtection,
+                    onChangeRecovery = accountSyncViewModel::changeRecoveryCode,
                     onPeriodicChanged = accountSyncViewModel::setPeriodicEnabled,
+                    onReadCloudDocuments = accountSyncViewModel::readCloudDocuments,
+                    onRestoreCloudConversation = accountSyncViewModel::restoreCloudConversation,
                     loadAvatar = accountSyncViewModel::loadAvatar,
                 )
                 return@Surface
@@ -815,6 +820,11 @@ internal fun NanfengAiApp(
                 onOpenPrivacyData = privacyDataViewModel::show,
                 localBackupState = localBackupRestoreViewModel.state,
                 localBackupViewModel = localBackupRestoreViewModel,
+                dataStorageLocationState = dataStorageLocationState,
+                onShowDataStorageLocations = dataStorageLocationViewModel::showChoices,
+                onSelectDataStorageLocation = dataStorageLocationViewModel::select,
+                onMoveDataStorageLocation = dataStorageLocationViewModel::move,
+                onCancelDataStorageLocation = dataStorageLocationViewModel::cancel,
                 onExportLocalBackup = { localBackupExportPicker.launch("nanfeng-ai-local-backup.nfai-backup") },
                 onImportLocalBackup = { localBackupImportPicker.launch(arrayOf("application/zip", "application/octet-stream")) },
                 workspaceExchangeV2ExportState = workspaceExchangeV2ExportViewModel.state,
@@ -1019,6 +1029,11 @@ private fun CaptureScreen(
     onOpenPrivacyData: () -> Unit,
     localBackupState: LocalBackupUiState,
     localBackupViewModel: LocalBackupRestoreViewModel,
+    dataStorageLocationState: DataStorageLocationUiState,
+    onShowDataStorageLocations: () -> Unit,
+    onSelectDataStorageLocation: (com.nanzhufeng.ai.data.AndroidDataStorageLocation) -> Unit,
+    onMoveDataStorageLocation: () -> Unit,
+    onCancelDataStorageLocation: () -> Unit,
     onExportLocalBackup: () -> Unit,
     onImportLocalBackup: () -> Unit,
     workspaceExchangeV2ExportState: WorkspaceExchangeV2ExportUiState,
@@ -1267,8 +1282,6 @@ private fun CaptureScreen(
                     }
                     memoryViewModel.markSummaryGenerationAndUseDisabled()
                 },
-                onQuerySummary = memoryViewModel::querySummary,
-                onAppendSummaryUpdate = memoryViewModel::appendSummaryUpdate,
                 onEditSummary = memoryViewModel::editSummary,
                 onUpdateSummaryEditor = memoryViewModel::updateSummaryEditor,
                 onSaveSummaryEditor = memoryViewModel::saveSummaryEditor,
@@ -1299,6 +1312,7 @@ private fun CaptureScreen(
             .then(if (settingsOwnsCurrentRoute) Modifier.systemGestureExclusion() else Modifier)
             .then(if (settingsOwnsCurrentRoute) Modifier.settingsEdgeExit(returnFromCurrentPage) else Modifier)
             .verticalScroll(settingsScrollState)
+            .navigationBarsPadding()
             .padding(start = if (expanded) 32.dp else 20.dp, end = if (expanded) 32.dp else 20.dp, top = 24.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -1497,6 +1511,11 @@ private fun CaptureScreen(
                 },
                 localBackupState = localBackupState,
                 localBackupViewModel = localBackupViewModel,
+                dataStorageLocationState = dataStorageLocationState,
+                onShowDataStorageLocations = onShowDataStorageLocations,
+                onSelectDataStorageLocation = onSelectDataStorageLocation,
+                onMoveDataStorageLocation = onMoveDataStorageLocation,
+                onCancelDataStorageLocation = onCancelDataStorageLocation,
                 onExportLocalBackup = onExportLocalBackup,
                 onImportLocalBackup = onImportLocalBackup,
                 onSelect = { destination -> openSettingsLevel(P5ARoute.SETTINGS, destination) },
@@ -1841,6 +1860,11 @@ private fun SettingsHierarchy(
     zipImportResultsContent: @Composable () -> Unit,
     localBackupState: LocalBackupUiState,
     localBackupViewModel: LocalBackupRestoreViewModel,
+    dataStorageLocationState: DataStorageLocationUiState,
+    onShowDataStorageLocations: () -> Unit,
+    onSelectDataStorageLocation: (com.nanzhufeng.ai.data.AndroidDataStorageLocation) -> Unit,
+    onMoveDataStorageLocation: () -> Unit,
+    onCancelDataStorageLocation: () -> Unit,
     onExportLocalBackup: () -> Unit,
     onImportLocalBackup: () -> Unit,
     onSelect: (SettingsDestination) -> Unit,
@@ -2005,6 +2029,13 @@ private fun SettingsHierarchy(
                         onOpenMemory = { onSelect(SettingsDestination.MEMORY_OVERVIEW) },
                         onOpenKnowledge = onOpenKnowledgeLibrary,
                         onOpenProjects = onOpenProjectManager,
+                    )
+                    DataStorageLocationCard(
+                        state = dataStorageLocationState,
+                        onShowChoices = onShowDataStorageLocations,
+                        onSelect = onSelectDataStorageLocation,
+                        onMove = onMoveDataStorageLocation,
+                        onCancel = onCancelDataStorageLocation,
                     )
                     PrivacyDataPage(
                         state = privacyDataState,
@@ -2526,7 +2557,7 @@ private fun ConversationStylePickerDialog(
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text(
                                         definition.label,
-                                        style = MaterialTheme.typography.titleLarge,
+                                        style = MaterialTheme.typography.titleMedium,
                                         color = if (isSelected) AccentOrange else BodyText,
                                         fontWeight = FontWeight.Bold,
                                     )

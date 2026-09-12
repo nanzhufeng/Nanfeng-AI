@@ -1,0 +1,648 @@
+{
+  "date": "2026-09-10",
+  "scope": "Desktop full viewport previews and layer boundaries",
+  "node": {
+    "passed": 255,
+    "failed": 0
+  },
+  "rust": {
+    "passed": 221,
+    "failed": 0
+  },
+  "chromium": {
+    "checks": 39,
+    "results": [
+      {
+        "kind": "image",
+        "phase": "ready",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "image",
+        "phase": "loading",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "image",
+        "phase": "error",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "pdf",
+        "phase": "ready",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "pdf",
+        "phase": "loading",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "pdf",
+        "phase": "error",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "video",
+        "phase": "ready",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "video",
+        "phase": "loading",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "video",
+        "phase": "error",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "audio",
+        "phase": "ready",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "audio",
+        "phase": "loading",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "audio",
+        "phase": "error",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "text",
+        "phase": "ready",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "text",
+        "phase": "loading",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "text",
+        "phase": "error",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "boundary",
+        "phase": "ready",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "boundary",
+        "phase": "loading",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "boundary",
+        "phase": "error",
+        "width": 1280,
+        "height": 800,
+        "passed": true
+      },
+      {
+        "kind": "image",
+        "phase": "ready",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "image",
+        "phase": "loading",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "image",
+        "phase": "error",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "pdf",
+        "phase": "ready",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "pdf",
+        "phase": "loading",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "pdf",
+        "phase": "error",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "video",
+        "phase": "ready",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "video",
+        "phase": "loading",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "video",
+        "phase": "error",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "audio",
+        "phase": "ready",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "audio",
+        "phase": "loading",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "audio",
+        "phase": "error",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "text",
+        "phase": "ready",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "text",
+        "phase": "loading",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "text",
+        "phase": "error",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "boundary",
+        "phase": "ready",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "boundary",
+        "phase": "loading",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "boundary",
+        "phase": "error",
+        "width": 640,
+        "height": 480,
+        "passed": true
+      },
+      {
+        "kind": "context-menu-over-divider-and-footer",
+        "passed": true
+      },
+      {
+        "kind": "nested-settings-picker-input-boundary",
+        "passed": true
+      },
+      {
+        "kind": "bottom-action-menu-escapes-scroll-clipping",
+        "passed": true
+      }
+    ]
+  },
+  "native_wkwebview": [
+    {
+      "bodyFits": true,
+      "height": 800,
+      "imageReady": true,
+      "kind": "image",
+      "mediaDuration": 0,
+      "mediaReady": true,
+      "overflow": false,
+      "overlayOnTop": true,
+      "passed": true,
+      "viewHeight": 800,
+      "viewWidth": 1280,
+      "width": 1280,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "bodyFits": true,
+      "height": 800,
+      "imageReady": true,
+      "kind": "pdf",
+      "mediaDuration": 0,
+      "mediaReady": true,
+      "overflow": false,
+      "overlayOnTop": true,
+      "passed": true,
+      "viewHeight": 800,
+      "viewWidth": 1280,
+      "width": 1280,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "bodyFits": true,
+      "height": 800,
+      "imageReady": true,
+      "kind": "video",
+      "mediaDuration": 2,
+      "mediaReady": true,
+      "overflow": false,
+      "overlayOnTop": true,
+      "passed": true,
+      "viewHeight": 800,
+      "viewWidth": 1280,
+      "width": 1280,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "bodyFits": true,
+      "height": 800,
+      "imageReady": true,
+      "kind": "audio",
+      "mediaDuration": 2,
+      "mediaReady": true,
+      "overflow": false,
+      "overlayOnTop": true,
+      "passed": true,
+      "viewHeight": 800,
+      "viewWidth": 1280,
+      "width": 1280,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "bodyFits": true,
+      "height": 800,
+      "imageReady": true,
+      "kind": "text",
+      "mediaDuration": 0,
+      "mediaReady": true,
+      "overflow": false,
+      "overlayOnTop": true,
+      "passed": true,
+      "viewHeight": 800,
+      "viewWidth": 1280,
+      "width": 1280,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "bodyFits": true,
+      "height": 800,
+      "imageReady": true,
+      "kind": "boundary",
+      "mediaDuration": 0,
+      "mediaReady": true,
+      "overflow": false,
+      "overlayOnTop": true,
+      "passed": true,
+      "viewHeight": 800,
+      "viewWidth": 1280,
+      "width": 1280,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "kind": "menu",
+      "menuVisible": true,
+      "passed": true
+    }
+  ],
+  "layers": [
+    {
+      "file": "desktop/src/styles.css",
+      "selector": ".scrim",
+      "z": [
+        "1000"
+      ]
+    },
+    {
+      "file": "desktop/src/styles.css",
+      "selector": ".sidebar",
+      "z": [
+        "15"
+      ]
+    },
+    {
+      "file": "desktop/src/desktop-transcription-page.css",
+      "selector": ".transcription-page-footer",
+      "z": [
+        "2"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".app-shell > .scrim",
+      "z": [
+        "1000"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".desktop-search-page",
+      "z": [
+        "40"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".desktop-search-file-type",
+      "z": [
+        "4"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".desktop-search-dock",
+      "z": [
+        "7"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".desktop-search-history-backdrop",
+      "z": [
+        "8"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".desktop-search-history-panel",
+      "z": [
+        "9"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-sidebar-divider",
+      "z": [
+        "25"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-search-glyph",
+      "z": [
+        "1"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-sidebar-footer",
+      "z": [
+        "40"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-row-actions",
+      "z": [
+        "1"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-context-menu",
+      "z": [
+        "100"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".composer-transient-sheet-dismiss",
+      "z": [
+        "7"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".composer-transient-sheet",
+      "z": [
+        "8"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".p6g-model-trigger::before",
+      "z": [
+        "-1"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".composer-add-row:focus-visible",
+      "z": [
+        "1"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-transcript-rail",
+      "z": [
+        "2"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-transcript-rail em",
+      "z": [
+        "3"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-composer-dock",
+      "z": [
+        "4"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-scroll-to-latest",
+      "z": [
+        "4"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-composer-actions .chat-send svg",
+      "z": [
+        "1"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-send-stop-mark",
+      "z": [
+        "1"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-sidebar",
+      "z": [
+        "20"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".chat-sidebar-scrim",
+      "z": [
+        "19"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".conversation-find",
+      "z": [
+        "5"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".conversation-lifecycle-actions > span",
+      "z": [
+        "30"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".android-settings-picker-scrim",
+      "z": [
+        "400"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".memory-reference-header",
+      "z": [
+        "5"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".desktop-search-page .desktop-search-dock",
+      "z": [
+        "10"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".desktop-search-attachment-open::after",
+      "z": [
+        "1"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": ".desktop-search-attachment-card > .desktop-search-card-menu",
+      "z": [
+        "2"
+      ]
+    },
+    {
+      "file": "desktop/src/chat-shell.css",
+      "selector": "/* A transient composer sheet must cover navigation chrome without lifting normal content. */\n.chat-composer-dock:has(.composer-transient-sheet)",
+      "z": [
+        "100"
+      ]
+    },
+    {
+      "file": "desktop/src/image-preview.css",
+      "selector": ".attachment-preview-overlay .image-preview-dialog > .close",
+      "z": [
+        "2"
+      ]
+    }
+  ],
+  "bundle": "build and strict signature verification passed; not installed or launched against user data",
+  "limitations": [
+    "WKWebView harness is not installed Tauri IPC end-to-end acceptance",
+    "Android and real user files not exercised",
+    "Synthetic media; not an exhaustive codec or malformed file corpus"
+  ],
+  "sources": {
+    "desktop/src/modal-layer-owner.mjs": "920023b8ead62e12d884d0cfec7894918465522aa83477d7c7a073745fb76b4b",
+    "desktop/src/image-preview.css": "a7a174f7b414678c0a3892c061c8d452790bcfd43cfa2f7b1d95ee5f999f28e9",
+    "desktop/src/app.mjs": "1050e4fdf7689e4a9b30adbb47b9967f46b37c77c51ed03ddd058b6f6c3049bd",
+    "desktop/src/chat-shell.css": "910620a16cd9b354b92f8a3c6aec7bf00abbf74d8491484c0913c4efe8860a76",
+    "desktop/src/styles.css": "f336e172ab996ecfd593d6553b90a6732527dfa075af5caccdeee73f53f67459",
+    "desktop/src-tauri/src/desktop_pdf_page_render.rs": "e7f6560fd95d9fa84956c49bf79d23de54800db2d20b4abd842cdb333a0b37ac",
+    "desktop/src-tauri/src/lib.rs": "01b00a3bea0760c25212ea33e671216758494e8130e27229a2c362c993063e13",
+    "desktop/scripts/check-preview-layer-layout.mjs": "9a1c030aba79847cc439727939c59b94d77d216d88ea2e97267060e8b248ab06",
+    "desktop/scripts/check-preview-webkit.swift": "1cffd4e4d039b43a6255617d1a7d7ff3616865009fb8ed5138a38f3258b1ec49"
+  }
+}

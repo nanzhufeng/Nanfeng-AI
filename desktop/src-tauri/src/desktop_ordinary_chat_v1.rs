@@ -121,10 +121,14 @@ pub fn migrate_egress_authorization(connection: &rusqlite::Connection) -> Result
         .map_err(|_| "Desktop 普通聊天外发授权表状态无法读取".to_owned())?;
     // Focused migration fixtures may intentionally model only a later subsystem. They must not
     // invent an absent ordinary-chat table merely to advance the global schema marker.
-    if !exists { return Ok(()); }
-    let mut statement = connection.prepare("SELECT name FROM pragma_table_info('desktop_ordinary_chat_attempts')")
+    if !exists {
+        return Ok(());
+    }
+    let mut statement = connection
+        .prepare("SELECT name FROM pragma_table_info('desktop_ordinary_chat_attempts')")
         .map_err(|_| "Desktop 普通聊天外发授权字段无法读取".to_owned())?;
-    let columns = statement.query_map([], |row| row.get::<_, String>(0))
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(0))
         .map_err(|_| "Desktop 普通聊天外发授权字段无法枚举".to_owned())?
         .collect::<Result<std::collections::BTreeSet<_>, _>>()
         .map_err(|_| "Desktop 普通聊天外发授权字段无效".to_owned())?;
@@ -250,28 +254,38 @@ fn reasoning_delta(value: &Value) -> Option<&str> {
         .as_str()
 }
 
+/// Some OpenAI-compatible gateways close an SSE response after an explicit choice
+/// terminal reason but before emitting the optional `[DONE]` sentinel. The terminal
+/// choice is sufficient completion evidence; a missing/empty/null value is not.
+fn has_explicit_choice_finish_reason(value: &Value) -> bool {
+    value
+        .get("choices")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .any(|choice| {
+            choice
+                .get("finish_reason")
+                .and_then(Value::as_str)
+                .is_some_and(|reason| !reason.trim().is_empty() && reason != "null")
+        })
+}
+
 fn responses_input(messages: &Value) -> Value {
-    Value::Array(
-        messages
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|message| {
-                let role = message.get("role")?.as_str()?;
-                let content = message.get("content")?;
-                let text = content.as_str().map(ToOwned::to_owned).or_else(|| {
-                    content.as_array().map(|parts| {
-                        parts
-                            .iter()
-                            .filter_map(|part| part.get("text").and_then(Value::as_str))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    })
-                })?;
-                Some(json!({"role":role,"content":[{"type":"input_text","text":text}]}))
-            })
-            .collect(),
-    )
+    Value::Array(messages.as_array().into_iter().flatten().filter_map(|message| {
+        let role = message.get("role")?.as_str()?;
+        let content = message.get("content")?;
+        let parts = if let Some(text) = content.as_str() {
+            vec![json!({"type":"input_text","text":text})]
+        } else {
+            content.as_array()?.iter().filter_map(|part| match part.get("type")?.as_str()? {
+                "text" => Some(json!({"type":"input_text","text":part.get("text")?})),
+                "image_url" => Some(json!({"type":"input_image","image_url":part.get("image_url")?.get("url")?})),
+                _ => None,
+            }).collect()
+        };
+        Some(json!({"role":role,"content":parts}))
+    }).collect())
 }
 
 fn transport_body(request: &TransportRequest) -> Value {
@@ -307,6 +321,29 @@ fn transport_body(request: &TransportRequest) -> Value {
             body
         }
     }
+}
+
+/// Background title generation is deliberately a normal JSON request.  It shares the hardened
+/// provider decoder with ordinary chat but never opens a streaming UI lifecycle.
+pub async fn execute_non_streaming(
+    request: TransportRequest,
+    mut secret: Zeroizing<Vec<u8>>,
+) -> Result<Completed, Failure> {
+    let authorization = Zeroizing::new(String::from_utf8(secret.to_vec()).map_err(|_| Failure::Explicit { code: "CREDENTIAL_FORMAT", http_status: None })?);
+    secret.zeroize();
+    let mut body = transport_body(&request);
+    body["stream"] = Value::Bool(false);
+    body.as_object_mut().map(|object| object.remove("stream_options"));
+    let started = Instant::now();
+    let response = Client::builder().connect_timeout(Duration::from_secs(15)).timeout(Duration::from_secs(90)).build()
+        .map_err(|_| Failure::Unknown { code: "CLIENT" })?
+        .post(&request.endpoint).bearer_auth(authorization.as_str())
+        .header("Idempotency-Key", &request.idempotency_key).header("Accept", "application/json")
+        .json(&body).send().await.map_err(|error| if error.is_timeout() { Failure::Unknown { code: "TIMEOUT" } } else { Failure::Unknown { code: "NETWORK" } })?;
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) { return Err(Failure::Explicit { code: safe_http_code(status), http_status: Some(status) }); }
+    let bytes = response.bytes().await.map_err(|error| if error.is_timeout() { Failure::Unknown { code: "TIMEOUT" } } else { Failure::Unknown { code: "NETWORK" } })?;
+    decode_non_streaming(&bytes, started.elapsed().as_millis().min(i64::MAX as u128) as i64)
 }
 
 fn response_sources(value: &Value) -> Vec<(String, String)> {
@@ -604,21 +641,16 @@ pub async fn execute_streaming(
                 Failure::Unknown { code: "NETWORK" }
             }
         })?;
-        let provider_sources = serde_json::from_slice::<Value>(&bytes)
-            .ok()
-            .map(|value| response_sources(&value))
-            .unwrap_or_default();
-        if provider_sources.is_empty() {
-            return Err(Failure::Explicit {
-                code: "WEB_SEARCH_NO_SOURCES",
-                http_status: Some(status),
-            });
-        }
+        // Android keeps a valid DeepSeek answer even when the provider does not
+        // return citation metadata. `decode_responses_non_streaming` appends only
+        // provider-owned, safe sources when they are present.
+        // DeepSeek's Android adapter declares this Responses route non-streaming.
+        // Do not publish a partial delta from a fully-buffered JSON reply: the
+        // workspace owner must receive one terminal `Completed` result.
         let completed = decode_responses_non_streaming(
             &bytes,
             started.elapsed().as_millis().min(i64::MAX as u128) as i64,
         )?;
-        on_delta(&completed.text)?;
         return Ok(completed);
     }
     let responses_stream = request.web_search_route == "QWEN_RESPONSES";
@@ -786,6 +818,9 @@ pub async fn execute_streaming(
             if let Some(model) = value.get("model").and_then(Value::as_str) {
                 actual_model_id = Some(model.to_owned());
             }
+            if has_explicit_choice_finish_reason(&value) {
+                completed = true;
+            }
         }
         if completed {
             break;
@@ -793,6 +828,12 @@ pub async fn execute_streaming(
     }
     if cancelled.load(Ordering::SeqCst) {
         return Err(Failure::Cancelled);
+    }
+    // Keep every Chat Completions provider aligned with Android: a clean EOF after
+    // visible answer text is terminal even if that provider omitted `[DONE]` and
+    // `finish_reason`. Responses API routes retain their explicit terminal-event rule.
+    if !completed && !responses_stream && !text.trim().is_empty() {
+        completed = true;
     }
     if !completed {
         return Err(Failure::Unknown {
@@ -806,12 +847,8 @@ pub async fn execute_streaming(
             http_status: Some(status),
         });
     }
-    if request.web_search_route != "NONE" && sources.is_empty() {
-        return Err(Failure::Explicit {
-            code: "WEB_SEARCH_NO_SOURCES",
-            http_status: Some(status),
-        });
-    }
+    // Provider citations are optional metadata on Android. Preserve a valid answer when
+    // a search provider did not return them; append only verified provider-owned sources.
     append_sources(&mut text, &sources);
     Ok(Completed {
         text,
@@ -833,6 +870,10 @@ mod tests {
     };
 
     fn mock_server(response: &'static [u8]) -> String {
+        mock_server_with_stream(response, true)
+    }
+
+    fn mock_server_with_stream(response: &'static [u8], expects_stream: bool) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         thread::spawn(move || {
@@ -843,7 +884,7 @@ mod tests {
             assert!(request
                 .to_ascii_lowercase()
                 .contains("idempotency-key: attempt-fixture"));
-            assert!(request.contains("\"stream\":true"));
+            assert_eq!(request.contains("\"stream\":true"), expects_stream);
             socket.write_all(response).unwrap();
         });
         format!("http://{address}/chat/completions")
@@ -899,6 +940,23 @@ mod tests {
     }
 
     #[test]
+    fn deepseek_flash_responses_preserves_images_and_requested_identity() {
+        let mut fixture = request("http://127.0.0.1:1".into());
+        fixture.model_id = "deepseek-flash".into();
+        fixture.messages = json!([{"role":"user","content":[{"type":"text","text":"look"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AQID"}}]}]);
+        fixture.web_search_route = "DEEPSEEK_RESPONSES".into();
+        let body = transport_body(&fixture);
+        assert_eq!(body["model"], "deepseek-flash");
+        assert_eq!(
+            body["input"][0]["content"][1],
+            json!({"type":"input_image","image_url":"data:image/png;base64,AQID"})
+        );
+        assert_eq!(body["stream"], false);
+        fixture.web_search_route = "NONE".into();
+        assert_eq!(transport_body(&fixture)["messages"], fixture.messages);
+    }
+
+    #[test]
     fn responses_decoder_keeps_usage_and_appends_safe_deduplicated_sources() {
         let result = decode_responses_non_streaming(
             br#"{"model":"deepseek-chat","output_text":"answer","output":[{"type":"web_search_call","action":{"sources":[{"title":"Official","url":"https://example.com/a"},{"title":"Duplicate","url":"https://example.com/a"},{"title":"Unsafe","url":"file:///tmp/a"}]}}],"usage":{"input_tokens":5,"output_tokens":7,"input_tokens_details":{"cached_tokens":2},"output_tokens_details":{"reasoning_tokens":3},"cost":0.000009}}"#,
@@ -917,25 +975,62 @@ mod tests {
     }
 
     #[test]
-    fn chat_completions_web_search_requires_provider_sources_and_keeps_safe_citations() {
-        let without_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"memory-only answer\"}}]}\n\ndata: [DONE]\n\n";
+    fn deepseek_responses_keeps_valid_answer_without_search_sources() {
+        let result = decode_responses_non_streaming(
+            br#"{"model":"deepseek-chat","output_text":"provider answer","usage":{"input_tokens":3,"output_tokens":2}}"#,
+            12,
+        )
+        .expect("Android parity keeps a valid DeepSeek answer without citation metadata");
+        assert_eq!(result.text, "provider answer");
+        assert_eq!(result.usage.input_tokens, Some(3));
+        assert_eq!(result.usage.output_tokens, Some(2));
+    }
+
+    #[test]
+    fn deepseek_responses_commits_once_without_stream_deltas() {
+        let body = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"model\":\"deepseek-chat\",\"output_text\":\"provider answer\"}";
+        let mut request = request(mock_server_with_stream(body, false));
+        request.web_search_route = "DEEPSEEK_RESPONSES".into();
+        let mut deltas = Vec::new();
+        let completed = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(execute_streaming(
+                request,
+                Zeroizing::new(b"fixture-secret-123".to_vec()),
+                Arc::new(AtomicBool::new(false)),
+                |delta| {
+                    deltas.push(delta.to_owned());
+                    Ok(())
+                },
+            ))
+            .expect("DeepSeek Responses must return one terminal result");
+        assert_eq!(completed.text, "provider answer");
+        assert!(deltas.is_empty());
+    }
+
+    #[test]
+    fn title_transport_is_a_non_streaming_json_request() {
+        let body = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"choices\":[{\"message\":{\"content\":\"{\\\"title\\\":\\\"KFKPlan\\\"}\"}}]}";
+        let request = request(mock_server_with_stream(body, false));
+        let completed = tokio::runtime::Runtime::new().unwrap().block_on(execute_non_streaming(request, Zeroizing::new(b"fixture-secret-123".to_vec()))).unwrap();
+        assert_eq!(completed.text, "{\"title\":\"KFKPlan\"}");
+    }
+
+    #[test]
+    fn chat_completions_web_search_keeps_answers_without_sources_and_appends_safe_citations() {
+        let without_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"provider answer\"}}]}\n\ndata: [DONE]\n\n";
         let mut missing = request(mock_server(without_sources));
         missing.web_search_route = "OPENROUTER_SERVER_TOOL".into();
-        let failure = tokio::runtime::Runtime::new()
+        let completed_without_sources = tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(execute_streaming(
                 missing,
                 Zeroizing::new(b"fixture-secret-123".to_vec()),
                 Arc::new(AtomicBool::new(false)),
                 |_| Ok(()),
-            ));
-        assert_eq!(
-            failure,
-            Err(Failure::Explicit {
-                code: "WEB_SEARCH_NO_SOURCES",
-                http_status: Some(200),
-            })
-        );
+            ))
+            .expect("Android parity preserves a valid answer when citations are absent");
+        assert_eq!(completed_without_sources.text, "provider answer");
 
         let with_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"grounded answer\",\"annotations\":[{\"url_citation\":{\"title\":\"Official\",\"url\":\"https://example.com/source\"}},{\"url_citation\":{\"title\":\"Unsafe\",\"url\":\"https://user@example.com/private\"}}]}}]}\n\ndata: [DONE]\n\n";
         let mut grounded = request(mock_server(with_sources));
@@ -944,6 +1039,26 @@ mod tests {
             .unwrap()
             .block_on(execute_streaming(
                 grounded,
+                Zeroizing::new(b"fixture-secret-123".to_vec()),
+                Arc::new(AtomicBool::new(false)),
+                |_| Ok(()),
+            ))
+            .unwrap();
+        assert_eq!(
+            completed.text,
+            "grounded answer\n\n来源：\n- [Official](https://example.com/source)"
+        );
+    }
+
+    #[test]
+    fn chat_completions_providers_accept_android_parity_eof_after_answer() {
+        let body = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"grounded answer\",\"annotations\":[{\"url_citation\":{\"title\":\"Official\",\"url\":\"https://example.com/source\"}}]}}]}\n\n";
+        let mut request = request(mock_server(body));
+        request.web_search_route = "OPENROUTER_SERVER_TOOL".into();
+        let completed = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(execute_streaming(
+                request,
                 Zeroizing::new(b"fixture-secret-123".to_vec()),
                 Arc::new(AtomicBool::new(false)),
                 |_| Ok(()),
@@ -978,6 +1093,40 @@ mod tests {
         assert_eq!(completed.usage.input_tokens, Some(3));
         assert_eq!(completed.reported_cost_micros, Some(4));
         assert_eq!(completed.actual_model_id.as_deref(), Some("fixture-actual"));
+    }
+
+    #[test]
+    fn openai_terminal_finish_reason_completes_when_done_frame_is_absent() {
+        let body = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"model\":\"anthropic/claude-sonnet-5\",\"choices\":[{\"delta\":{\"content\":\"completed before socket close\"},\"finish_reason\":\"stop\"}]}\n\n";
+        let completed = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(execute_streaming(
+                request(mock_server(body)),
+                Zeroizing::new(b"fixture-secret-123".to_vec()),
+                Arc::new(AtomicBool::new(false)),
+                |_| Ok(()),
+            ))
+            .expect("an explicit OpenAI finish_reason is a completed provider result");
+        assert_eq!(completed.text, "completed before socket close");
+        assert_eq!(
+            completed.actual_model_id.as_deref(),
+            Some("anthropic/claude-sonnet-5")
+        );
+    }
+
+    #[test]
+    fn chat_completions_eof_after_text_completes_without_finish_reason() {
+        let body = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"completed at clean EOF\"},\"finish_reason\":null}]}\n\n";
+        let completed = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(execute_streaming(
+                request(mock_server(body)),
+                Zeroizing::new(b"fixture-secret-123".to_vec()),
+                Arc::new(AtomicBool::new(false)),
+                |_| Ok(()),
+            ))
+            .expect("Android-parity Chat Completions EOF must complete visible text");
+        assert_eq!(completed.text, "completed at clean EOF");
     }
 
     #[test]

@@ -1,0 +1,62 @@
+[
+  {
+    "page": "personalization",
+    "mode": "light",
+    "width": 1280,
+    "inputs": 3,
+    "shadows": true
+  },
+  {
+    "page": "model-configuration",
+    "mode": "light",
+    "width": 1280,
+    "labels": 4,
+    "notClipped": true,
+    "noNestedShadow": true
+  },
+  {
+    "page": "personalization",
+    "mode": "light",
+    "width": 780,
+    "inputs": 3,
+    "shadows": true
+  },
+  {
+    "page": "model-configuration",
+    "mode": "light",
+    "width": 780,
+    "labels": 4,
+    "notClipped": true,
+    "noNestedShadow": true
+  },
+  {
+    "page": "personalization",
+    "mode": "dark",
+    "width": 1280,
+    "inputs": 3,
+    "shadows": true
+  },
+  {
+    "page": "model-configuration",
+    "mode": "dark",
+    "width": 1280,
+    "labels": 4,
+    "notClipped": true,
+    "noNestedShadow": true
+  },
+  {
+    "page": "personalization",
+    "mode": "dark",
+    "width": 780,
+    "inputs": 3,
+    "shadows": true
+  },
+  {
+    "page": "model-configuration",
+    "mode": "dark",
+    "width": 780,
+    "labels": 4,
+    "notClipped": true,
+    "noNestedShadow": true
+  }
+]

@@ -1,4 +1,5 @@
 import { icon, icons, settingsIcons } from './icon-source.mjs';
+import { cnyCostLabel, projectedCost } from './desktop-cost-estimator.mjs';
 import { APPEARANCE_MODES, CONVERSATION_TONES, CUSTOM_INSTRUCTIONS_MAX_LENGTH, DESKTOP_SETTINGS_CAPABILITIES, FONT_SIZES, THEME_COLORS, conversationToneDefinition, normalizeAppearance, normalizeProductSettings } from './desktop-parity-preferences.mjs';
 import { renderConversationLifecyclePage } from './conversation-lifecycle-view.mjs';
 import { renderLocalDataImportExportPage, renderLocalDataInventoryPage } from './local-data-view.mjs';
@@ -20,12 +21,12 @@ export const MODEL_SERVICE_PREVIEW_SETTINGS = Object.freeze([
     modelPreset('GPT_5_6_SOL', 'GPT-5.6 Sol', '前沿能力，适合专业复杂任务。', 'OpenAI · OpenRouter'),
     modelPreset('GPT_5_6_TERRA', 'GPT-5.6 Terra', '能力与成本更均衡。', 'OpenAI · OpenRouter'),
     modelPreset('GPT_5_6_LUNA', 'GPT-5.6 Luna', '适合高频、轻量任务。', 'OpenAI · OpenRouter'),
-    modelPreset('GEMINI_3_7_FLASH', 'Gemini 3.7 Flash', '快速处理文字、图片和文件任务。', 'Google · OpenRouter'),
+    modelPreset('GEMINI_3_8_FLASH', 'Gemini 3.8 Flash', '快速处理文字、图片和文件任务。', 'Google · OpenRouter'),
     modelPreset('KIMI_K3', 'Kimi K3', '复杂分析 · Agent · 长上下文', 'Moonshot AI · OpenRouter'),
   ], nonChatCapabilities: [] },
   { providerId: 'DEEPSEEK', providerDisplayName: 'DeepSeek 官方直连', enabled: false, presetId: 'DEEPSEEK_V4_PRO', presetDisplayName: 'DeepSeek V4 Pro', credentialStored: false, revision: 0, presets: [
     modelPreset('DEEPSEEK_V4_PRO', 'DeepSeek V4 Pro', '适合深度推理与专业分析。', 'DeepSeek · 官方直连'),
-    modelPreset('DEEPSEEK_V4_FLASH', 'DeepSeek V4 Flash', '适合快速问答与高频文本任务。', 'DeepSeek · 官方直连'),
+    modelPreset('DEEPSEEK_V4_FLASH', 'DeepSeek V4.1 Flash', '适合快速问答、高频任务与图片理解。', 'DeepSeek · 官方直连'),
   ], nonChatCapabilities: [] },
   { providerId: 'ZHIPU', providerDisplayName: '智谱 BigModel 官方直连', enabled: false, presetId: 'GLM_5_3_FLASH', presetDisplayName: 'GLM-5.3 Flash', credentialStored: false, revision: 0, presets: [
     modelPreset('GLM_5_3', 'GLM-5.3', '适合深度推理、复杂分析与 Agent 任务。', '智谱 · 官方直连'),
@@ -142,26 +143,31 @@ function accountSyncPage(context) {
     SYNCING: '正在同步', CONFLICT: '存在版本冲突', FAILED: '同步需要处理',
   };
   const stateLabel = stateLabels[account.state] || account.state || '未读取';
+  const accountStatusCard = (title, description, actions) => `<section class="android-settings-card android-settings-status-card android-account-status-card"><div class="android-account-status-content"><strong>${title}</strong><p>${description}</p></div><div class="android-account-status-actions">${actions}</div></section>`;
   const identity = signedIn
     ? `<section class="android-settings-card android-account-hero signed-in"><div class="android-account-identity">${account.avatarDataUrl ? `<img src="${escapeHtml(account.avatarDataUrl)}" alt="Google 账号头像">` : `<span aria-hidden="true">${escapeHtml((account.displayName || account.email || '南').slice(0, 1))}</span>`}</div><strong>${escapeHtml(account.displayName || 'Google 用户')}，您好！</strong><p>${escapeHtml(account.email)}</p></section>`
-    : `<section class="android-settings-card android-account-hero"><span class="android-account-hero-icon" aria-hidden="true">${icon(icons.account, 'Google 账号')}</span><strong>未登录</strong><p>${account.configured ? '登录后可管理账号与已选对话同步。' : 'Google 登录与云端服务尚未配置。'}</p><button class="primary" data-action="sign-in-google-account" ${!context.native || !account.configured ? 'disabled' : ''}>使用 Google 登录</button></section>`;
+    : `<section class="android-settings-card android-account-hero"><span class="android-account-hero-icon" aria-hidden="true">${icon(icons.account, 'Google 账号')}</span><strong>未登录</strong><p>${account.configured ? '登录后可管理账号与已选对话同步。' : '此 Desktop 尚未写入南枫云地址或公开访问密钥；不会打开浏览器、读取账号或上传数据。'}</p><button class="primary" data-action="${account.configured ? 'sign-in-google-account' : 'show-google-login-requirements'}" ${!context.native ? 'disabled' : ''}>${account.configured ? '使用 Google 登录' : '查看 Google 登录条件'}</button></section>`;
   const accountManagement = `<section class="android-settings-card android-account-management"><strong>账号管理</strong><button data-action="sign-in-google-account" ${signedIn && context.native ? '' : 'disabled'}>${icon(settingsIcons.syncAlt, '切换 Google 账号')}<span>切换 Google 账号</span></button><button data-action="sign-out-google-account" ${signedIn && context.native ? '' : 'disabled'}>${icon(settingsIcons.accountLogout, '退出登录')}<span>退出登录</span></button></section>`;
   const syncControl = `<section class="android-settings-card android-account-conversation-sync"><div class="android-account-sync-heading">${icon(account.lastSuccessAtMs ? settingsIcons.accountCloudDone : settingsIcons.accountCloudOff, '对话同步')}<strong>对话同步</strong></div><p>仅包含你手动同步过的对话。</p>${signedIn && !recoveryReady && !recovery ? '<p class="android-account-sync-notice">请先完成恢复保护，确认前不会上传任何对话。</p>' : ''}${recoveryReady ? `<div class="android-account-periodic"><span><strong>定期同步</strong><small>每 12 小时更新已选对话</small></span><button type="button" class="android-settings-switch" data-action="toggle-periodic-account-sync" role="switch" aria-checked="${Boolean(account.periodicEnabled)}" ${ready ? '' : 'disabled'}><span></span></button></div>` : ''}${account.lastSuccessAtMs ? `<small>上次同步 ${new Date(Number(account.lastSuccessAtMs)).toLocaleString('zh-CN')}</small>` : (['SYNCING', 'CONFLICT', 'FAILED'].includes(account.state) ? `<small role="status">${escapeHtml(stateLabel)}</small>` : '')}</section>`;
-  const recoveryCard = recovery
-    ? `<section class="android-settings-card android-account-recovery" aria-label="恢复码"><strong>${recovery.rotation ? '新恢复码只显示这一次' : '恢复码只显示这一次'}</strong><output>${escapeHtml(recovery.recoveryCode)}</output><p>请存入密码管理器或离线安全位置。南枫云不保存明文恢复码。${recovery.rotation ? '确认后将逐个重加密已选云端对话，全部回读成功后才激活新恢复码。' : ''}</p><button class="primary" data-action="${recovery.rotation ? 'confirm-account-recovery-rotation' : 'confirm-account-recovery'}" data-confirmation-hash="${escapeHtml(recovery.confirmationHash)}">我已安全保存，完成确认</button></section>`
+  const recoveryCard = recovery?.rotation
+    ? `<section class="android-settings-card android-account-recovery" aria-label="更换恢复码"><strong>更换恢复码</strong><label class="android-settings-field"><span>新恢复码</span><input id="new-recovery-code" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="至少 12 个字符"></label><button class="primary" data-action="confirm-account-recovery-rotation">确认更换</button></section>`
+    : recovery
+    ? `<section class="android-settings-card android-account-recovery" aria-label="恢复码"><strong>${recovery.rotation ? '新恢复码只显示这一次' : '恢复码只显示这一次'}</strong><div class="android-account-recovery-code"><output>${escapeHtml(recovery.recoveryCode)}</output><button type="button" class="android-account-recovery-copy" data-action="copy-account-recovery-code" data-copy-action aria-label="复制恢复码" title="复制恢复码">${icon(icons.copy, '复制')}</button></div><p>请存入密码管理器或离线安全位置。南枫云不保存明文恢复码。${recovery.rotation ? '确认后将逐个重加密已选云端对话，全部回读成功后才激活新恢复码。' : ''}</p><button class="primary" data-action="${recovery.rotation ? 'confirm-account-recovery-rotation' : 'confirm-account-recovery'}" data-confirmation-hash="${escapeHtml(recovery.confirmationHash)}">我已安全保存，完成确认</button></section>`
     : '';
+  const remoteDocuments = Array.isArray(account.remoteDocuments) ? account.remoteDocuments : null;
+  const cloudRestore = signedIn ? `<section class="android-settings-card android-account-cloud-restore"><strong>${recoveryReady ? '从南枫云恢复' : '使用手机端已有恢复码'}</strong><p>${recoveryReady ? '只在您点击“读取云端列表”后联网。恢复会新建独立本机工作区，不覆盖现有数据。' : '请先读取手机端已上传的对话，再输入原恢复码。系统会用该密文校验恢复码并保存与手机端一致的恢复材料；不会新建恢复码，也不会覆盖本机数据。'}</p><button data-action="load-account-cloud-documents">读取云端列表</button>${remoteDocuments?.length ? `<label class="android-settings-field"><span>云端文档</span><select id="account-cloud-document">${remoteDocuments.map(item => `<option value="${escapeHtml(item.documentId)}">${escapeHtml(item.documentId)} · r${Number(item.revision)}</option>`).join('')}</select></label><label class="android-settings-field"><span>原恢复码</span><input id="account-cloud-recovery-code" type="password" autocomplete="off" spellcheck="false" placeholder="输入手机端正在使用的恢复码"></label><button class="primary" data-action="restore-account-cloud-conversation">${recoveryReady ? '恢复为新工作区' : '验证并连接此设备'}</button>` : remoteDocuments ? '<p class="android-account-cloud-empty">未找到可用云端对话。请先在手机端手动同步一条对话，再回到这里读取。</p>' : ''}</section>` : '';
   return `<div class="android-settings-page android-account-sync-page">
     ${identity}
     ${accountManagement}
-    ${signedIn && !recoveryReady && !recovery ? '<section class="android-settings-card android-settings-status-card"><strong>先建立恢复保护</strong><p>恢复码确认前不会上传任何对话。</p><button class="primary" data-action="create-account-recovery">创建恢复码</button></section>' : ''}
+    ${signedIn && !recoveryReady && !recovery ? cloudRestore : ''}
     ${recoveryCard}
-    ${account.state === 'DIRECTION_REQUIRED' ? '<section class="android-settings-card android-settings-status-card"><strong>选择首次同步方向</strong><p>以本机显式选中的对话为起点；每次上传前仍会回读云端。若云端已有未知版本，立即转为冲突，不覆盖。</p><button class="primary" data-action="choose-selected-local-sync-start">以本机所选对话开始</button></section>' : ''}
+    ${account.state === 'DIRECTION_REQUIRED' ? accountStatusCard('选择首次同步方向', '以本机显式选中的对话为起点；每次上传前仍会回读云端。若云端已有未知版本，立即转为冲突，不覆盖。', '<button class="primary" data-action="choose-selected-local-sync-start">以本机所选对话开始</button>') : ''}
     ${syncControl}
     ${signedIn ? '<details class="android-account-tools"><summary>恢复与安全</summary>' : ''}
-    ${recoveryReady ? `<section class="android-settings-card android-settings-status-card"><strong>恢复码更换与丢失处理</strong><p>只有当前设备仍可解锁现有密钥时，才能创建新恢复码并重加密云端数据。</p><button data-action="create-account-recovery-rotation">更换恢复码／已丢失</button>${account.rotationPending ? `<button data-action="retry-account-recovery-rotation">继续未完成的重加密</button>` : ''}</section>` : ''}
-    ${signedIn ? `<section class="android-settings-card android-account-cloud-restore"><strong>从南枫云恢复</strong><p>只在您点击“读取云端列表”后联网。恢复会新建独立本机工作区，不覆盖现有数据。</p><button data-action="load-account-cloud-documents">读取云端列表</button>${(account.remoteDocuments || []).length ? `<label class="android-settings-field"><span>云端文档</span><select id="account-cloud-document">${account.remoteDocuments.map(item => `<option value="${escapeHtml(item.documentId)}">${escapeHtml(item.documentId)} · r${Number(item.revision)}</option>`).join('')}</select></label><label class="android-settings-field"><span>恢复码</span><input id="account-cloud-recovery-code" type="password" autocomplete="off" spellcheck="false" placeholder="输入 NF- 恢复码"></label><button class="primary" data-action="restore-account-cloud-conversation">恢复为新工作区</button>` : ''}</section>` : ''}
+    ${recoveryReady ? accountStatusCard('恢复码', '更换前请保存新恢复码；其他设备需要使用新恢复码重新连接。', account.rotationPending ? '<button data-action="retry-account-recovery-rotation">继续更换恢复码</button>' : '<button data-action="create-account-recovery-rotation">更换恢复码 / 已丢失</button>') : ''}
+    ${signedIn && recoveryReady ? cloudRestore : ''}
     ${signedIn ? '</details>' : ''}
-    ${account.pendingUnknown ? `<section class="android-settings-card android-settings-status-card"><strong>上次提交结果未知</strong><p>先只读回读云端版本；不会直接重复上传。</p><button data-action="reconcile-account-sync" data-workspace-id="${escapeHtml(account.pendingUnknown.workspaceId)}" data-conversation-id="${escapeHtml(account.pendingUnknown.conversationId)}">核对云端结果</button></section>` : ''}
+    ${account.pendingUnknown ? accountStatusCard('上次提交结果未知', '先只读回读云端版本；不会直接重复上传。', `<button data-action="reconcile-account-sync" data-workspace-id="${escapeHtml(account.pendingUnknown.workspaceId)}" data-conversation-id="${escapeHtml(account.pendingUnknown.conversationId)}">核对云端结果</button>`) : ''}
   </div>`;
 }
 
@@ -193,17 +199,23 @@ function importResultCard(title, task, kind) {
   return `<section class="android-settings-card android-settings-import-result"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(task.status || '已记录')} · 已导入 ${imported} · 失败 ${failed} · 跳过 ${skipped}</p>${kind === 'zip' ? `<p class="android-settings-helper">按 ChatGPT / Claude 官方身份去重；同一导出内容不会重复导入。你主动删除的对话会保留删除标记，以后再导入也不会复活。</p><div class="android-settings-result-actions"><button data-action="retry-p6k-zip">重试</button><button data-action="skip-p6k-zip-failures" ${failed ? '' : 'disabled'}>跳过失败项</button><button class="danger" data-action="delete-p6k-zip-batch">删除导入批次</button></div>` : ''}</section>`;
 }
 
-const usageAmount = records => {
-  const totals = new Map();
-  for (const record of records) {
-    if (!Number.isFinite(record.chargeMicros) || !record.currencyCode) continue;
-    totals.set(record.currencyCode, (totals.get(record.currencyCode) || 0) + record.chargeMicros);
-  }
-  if (!totals.size) return '金额未知';
-  return [...totals].map(([currency, micros]) => {
-    const symbol = currency === 'CNY' ? '¥' : currency === 'USD' ? '$' : `${currency} `;
-    return `${symbol}${(micros / 1_000_000).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}`;
-  }).join(' + ');
+const recordCost = record => projectedCost({
+  modelId: record.actualModelId || record.modelId,
+  inputTokens: record.inputTokens,
+  outputTokens: record.outputTokens,
+  cachedInputTokens: record.cachedInputTokens,
+  occurredAtMs: record.occurredAtMs,
+  chargeMicros: record.chargeMicros,
+  currencyCode: record.currencyCode,
+  costSource: record.costSource,
+});
+
+const usageAmount = (records, source = null) => {
+  const costs = records.map(recordCost).filter(Boolean).filter(cost => !source || cost.costSource === source);
+  if (!costs.length) return '金额未知';
+  const cnyMicros = costs.reduce((total, cost) => total + Math.round(cost.chargeMicros * (cost.currencyCode === 'CNY' ? 1 : cost.currencyCode === 'USD' ? 6.720309145556033 : 0)), 0);
+  const costSource = costs.every(cost => cost.costSource === 'LOCAL_ESTIMATE') ? 'LOCAL_ESTIMATE' : 'PROVIDER_RESPONSE';
+  return cnyCostLabel({ chargeMicros: cnyMicros, currencyCode: 'CNY', costSource }, { estimatedLabel: costSource === 'LOCAL_ESTIMATE', maximumFractionDigits: 6 }) || '金额未知';
 };
 
 const localDateTime = value => {
@@ -228,10 +240,13 @@ function usageLedgerPage(context) {
   const automaticRows = records.filter(record => category(record) === 'reminder');
   const ledgerRow = (record, fallbackTitle, preferFallback = false) => {
     const conversation = (context.data?.exchange?.conversations || []).find(item => item.id === record.conversationId);
-    return `<section class="android-settings-card android-settings-ledger-row"><div><strong>${escapeHtml(preferFallback ? fallbackTitle : conversation?.title || fallbackTitle)}</strong><b>${escapeHtml(usageAmount([record]))}</b></div><p>${escapeHtml(record.modelId)} · 输入 ${Number(record.inputTokens || 0).toLocaleString('zh-CN')} / 输出 ${Number(record.outputTokens || 0).toLocaleString('zh-CN')} Token</p><small>${escapeHtml(localDateTime(record.occurredAtMs))}</small></section>`;
+    const cost = recordCost(record);
+    const amount = cnyCostLabel(cost, { estimatedLabel: true, maximumFractionDigits: 6 }) || '金额未知';
+    const source = cost?.costSource === 'PROVIDER_RESPONSE' ? '服务商实际金额' : cost?.costSource === 'LOCAL_ESTIMATE' ? '本地价目表估算' : '缺少可用估算价目表';
+    return `<section class="android-settings-card android-settings-ledger-row"><div><strong>${escapeHtml(preferFallback ? fallbackTitle : conversation?.title || fallbackTitle)}</strong><b>${escapeHtml(amount)}</b></div><p>${escapeHtml(record.modelId)} · 输入 ${Number(record.inputTokens || 0).toLocaleString('zh-CN')} / 输出 ${Number(record.outputTokens || 0).toLocaleString('zh-CN')} Token · ${source}</p><small>${escapeHtml(localDateTime(record.occurredAtMs))}</small></section>`;
   };
   return `<div class="android-settings-page android-settings-ledger">
-    <section class="android-settings-card android-settings-ledger-summary"><strong>本机累计</strong><div><span>服务商实际金额</span><b>${escapeHtml(usageAmount(records))}</b></div><div><span>输入 Token</span><b>${Number(context.usageLedger?.inputTokens || 0).toLocaleString('zh-CN')}</b></div><div><span>输出 Token</span><b>${Number(context.usageLedger?.outputTokens || 0).toLocaleString('zh-CN')}</b></div></section>
+    <section class="android-settings-card android-settings-ledger-summary"><strong>本机累计</strong><div><span>服务商实际金额</span><b>${escapeHtml(usageAmount(records, 'PROVIDER_RESPONSE'))}</b></div><div><span>本地估算</span><b>${escapeHtml(usageAmount(records, 'LOCAL_ESTIMATE'))}</b></div><div><span>输入 Token</span><b>${Number(context.usageLedger?.inputTokens || 0).toLocaleString('zh-CN')}</b></div><div><span>输出 Token</span><b>${Number(context.usageLedger?.outputTokens || 0).toLocaleString('zh-CN')}</b></div></section>
     <section class="android-settings-card android-settings-ledger-grid">${sections.map(([id, label]) => { const items = records.filter(record => category(record) === id); return `<div><strong>${label}</strong><span>次数 <b>${items.length} 次</b></span><span>费用 <b>${items.length ? escapeHtml(usageAmount(items)) : '金额未知'}</b></span></div>`; }).join('')}</section>
     <div class="android-settings-ledger-segments">${sections.map(([id, label]) => `<button data-action="select-usage-section" data-section="${id}" class="${selected === id ? 'selected' : ''}">${label}</button>`).join('')}</div>
     ${rows.length ? rows.map(record => ledgerRow(record, '已删除的对话')).join('') : `<p class="android-settings-empty">还没有${escapeHtml(sections.find(([id]) => id === selected)?.[1] || '')}费用记录。</p>`}
@@ -279,13 +294,10 @@ function simplePage(page, context) {
   if (page === 'about') return `<div class="android-settings-page"><section class="android-settings-card android-settings-about"><div><strong>南枫 AI</strong><p>本机对话、项目与知识工作区。</p></div>${divider}<div><strong>版本信息</strong><p>Desktop 版 ${escapeHtml(runtimeInfo.version || '读取中')}</p><small>${escapeHtml(runtimeInfo.platform || 'Desktop')} · ${escapeHtml(runtimeInfo.arch || '本机架构')}</small></div></section></div>`;
   if (page === 'memory-overview') {
     const memories = (data?.exchange?.memory || []).filter(item => (item.status || 'ACTIVE') === 'ACTIVE' && !item.deleted && (item.scope || 'GLOBAL') === 'GLOBAL' && !item.scopeId);
-    const query = String(context.memorySummaryQuery || '').trim().toLocaleLowerCase('zh-CN');
-    const visible = query ? memories.filter(item => String(item.body || '').toLocaleLowerCase('zh-CN').includes(query)) : memories;
     const updatedAt = memories.map(item => item.updatedAt || item.createdAt || '').filter(Boolean).sort().at(-1);
     return `<div class="android-settings-page android-memory-summary-page">
       ${context.memorySummaryNotice ? `<p class="android-settings-helper" role="status">${escapeHtml(context.memorySummaryNotice)}</p>` : ''}
-      <section class="android-memory-summary-content">${visible.map((item, index) => `<article><h2>${escapeHtml(item.title || (index === 0 ? '概览' : `记忆 ${index + 1}`))}</h2><p>${escapeHtml(item.body || '')}</p></article>`).join('') || `<p class="android-settings-empty android-memory-summary-empty">${query ? '没有匹配的本机记忆。' : '还没有记忆摘要。'}</p>`}</section>
-      <div class="android-memory-summary-composer"><input id="memory-summary-composer" maxlength="2000000" placeholder="询问或更新" value="${escapeHtml(context.memorySummaryComposer || '')}"><button data-action="submit-memory-summary" ${String(context.memorySummaryComposer || '').trim() && native ? '' : 'disabled'} aria-label="提交记忆问题或更新">${icon(icons.arrowUp, '提交')}</button></div>
+      <section class="android-memory-summary-content">${memories.map((item, index) => `<article><h2>${escapeHtml(item.title || (index === 0 ? '概览' : `记忆 ${index + 1}`))}</h2><p>${escapeHtml(item.body || '')}</p></article>`).join('') || `<p class="android-settings-empty android-memory-summary-empty">还没有记忆摘要。</p>`}</section>
     </div>`;
   }
   if (page === 'workspace') return `<div class="android-settings-page">${group('', [row({ glyph: icons.folder, title: `管理 Projects`, action: 'show-projects' }), row({ glyph: icons.knowledge, title: '管理知识库', action: 'show-knowledge' })])}</div>`;

@@ -1,16 +1,20 @@
-mod desktop_storage_location;
 pub mod conversation_real_text_execution_v1;
 pub mod desktop_account_sync_v1;
 pub mod desktop_app_settings_v1;
 pub mod desktop_background_runtime_v1;
 pub mod desktop_conversation_read_state_v1;
+pub mod desktop_conversation_title_v1;
 pub mod desktop_history_knowledge_v1;
 pub mod desktop_local_backup_v1;
 pub mod desktop_model_service_v1;
 pub mod desktop_ordinary_chat_v1;
+mod desktop_pdf_page_render;
+mod desktop_docx_preview;
 pub mod desktop_reminder_notification_v1;
 pub mod desktop_reminders_v1;
+mod desktop_storage_location;
 pub mod desktop_transcription_v1;
+pub mod desktop_window_state_v1;
 pub mod dual_path_contract_v1;
 pub mod local_exact_reuse_v1;
 #[allow(
@@ -37,6 +41,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use fs2::FileExt;
 use image::{ImageFormat, ImageReader};
 use lopdf::Document;
+use reqwest::Url;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -44,8 +49,9 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fs,
-    io::{Cursor, Read, Write},
+    io::{Cursor, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
+    process::{Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -54,6 +60,13 @@ use std::{
 use tauri::{Emitter, Manager, State};
 use zeroize::Zeroizing;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
+
+#[cfg(target_os = "macos")]
+use objc2::{rc::Retained, runtime::AnyObject, AnyThread};
+#[cfg(target_os = "macos")]
+use objc2_app_kit::{NSSharingServicePicker, NSView};
+#[cfg(target_os = "macos")]
+use objc2_foundation::{NSArray, NSRectEdge, NSString, NSURL};
 
 const MAX_PACKAGE_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_CONVERSATION_ATTACHMENT_BYTES: u64 = 20 * 1024 * 1024;
@@ -461,6 +474,10 @@ struct DesktopLocalSearchQueryArgs {
     category: String,
     sort_mode: String,
     file_type: String,
+    // Read legacy renderer payloads without restoring pagination behavior.
+    #[serde(default)]
+    #[allow(dead_code)]
+    offset: u64,
     record_history: bool,
     history_workspace_id: Option<String>,
 }
@@ -471,7 +488,6 @@ struct DesktopLocalSearchPage {
     hits: Vec<DesktopLocalSearchHit>,
     text_count: u64,
     attachment_count: u64,
-    truncated: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -585,6 +601,15 @@ struct DesktopVideoPreviewArgs {
     position_millis: Option<u64>,
 }
 
+/// The UI can name only a workspace-owned MP4 whose private bytes are verified before a bounded
+/// poster frame is produced. No video path, URI, or media payload crosses this boundary.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopVideoThumbnailArgs {
+    workspace_id: String,
+    attachment_id: String,
+}
+
 /// The UI can only name an owned audio attachment and an optional local resume position.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -608,6 +633,13 @@ struct DesktopTextPreviewArgs {
 struct DesktopSystemOpenAttachmentArgs {
     workspace_id: String,
     attachment_id: String,
+}
+
+/// Explicit user gesture to open an answer source in the system browser.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopSourceLinkArgs {
+    href: String,
 }
 
 /// Explicit native-save-picker target for one workspace-owned verified attachment.
@@ -696,6 +728,27 @@ struct DesktopAttachmentMetadata {
     sha256: String,
 }
 
+const NEW_CONVERSATION_DRAFT_KEY: &str = "new-conversation-draft";
+
+/// The normal Composer owns this recovery record.  It is intentionally separate from a
+/// message: closing or restarting the app must not manufacture a conversation/message, while
+/// an explicit send consumes it atomically with the real user message.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopConversationDraft {
+    text: String,
+    attachments: Vec<DesktopAttachmentMetadata>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopConversationDraftArgs {
+    workspace_id: String,
+    conversation_id: Option<String>,
+    text: String,
+    attachment_ids: Vec<String>,
+}
+
 /// Bounded display bytes for a thumbnail or a user-requested original; no path, URI or source
 /// selection detail crosses the Tauri boundary.
 #[derive(Debug, Serialize)]
@@ -724,7 +777,8 @@ struct DesktopPdfPreview {
     data_url: String,
 }
 
-/// Display payload for a verified local MP4. No path, URI, source metadata or provider data crosses IPC.
+/// Display metadata for a verified local MP4. The byte payload stays behind the owner-scoped
+/// media protocol so opening a large file never base64-copies it through the renderer IPC.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopVideoPreview {
@@ -733,6 +787,13 @@ struct DesktopVideoPreview {
     byte_count: u64,
     duration_millis: u64,
     position_millis: u64,
+    media_url: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopVideoThumbnail {
+    attachment_id: String,
     data_url: String,
 }
 
@@ -744,7 +805,7 @@ struct DesktopAudioPreview {
     mime_type: String,
     byte_count: u64,
     position_millis: u64,
-    data_url: String,
+    media_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -756,6 +817,17 @@ struct DesktopTextPreview {
     byte_count: u64,
     text: String,
     truncated: bool,
+}
+
+/// Search cards receive only bounded inert display material. No source path, media payload,
+/// executable document content or playback capability crosses this projection.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopSearchAttachmentPreview {
+    attachment_id: String,
+    data_url: Option<String>,
+    text: Option<String>,
+    duration_millis: Option<u64>,
 }
 
 /// Acceptance-only aggregate. It has no clock, path, content or user-data inputs and is persisted
@@ -1046,6 +1118,17 @@ struct DesktopOrdinaryChatPrepared {
 }
 
 #[derive(Debug, Clone)]
+struct DesktopConversationTitlePrepared {
+    workspace_id: String,
+    conversation_id: String,
+    endpoint: String,
+    provider_id: String,
+    model_id: String,
+    messages: Value,
+    idempotency_key: String,
+}
+
+#[derive(Debug, Clone)]
 struct DesktopHistoryKnowledgePrepared {
     reservation: desktop_history_knowledge_v1::RunReservation,
     endpoint: String,
@@ -1140,6 +1223,7 @@ struct DesktopUsageLedgerRecordProjection {
     cached_input_tokens: Option<i64>,
     charge_micros: Option<i64>,
     currency_code: Option<String>,
+    cost_source: Option<String>,
     occurred_at_ms: i64,
 }
 
@@ -1335,9 +1419,18 @@ struct DesktopWorkspaceStore {
     p8_agent_ledger: p8_agent_ledger_v1::AgentLedgerStore,
 }
 
+#[derive(Clone)]
+struct DesktopStoreReadPaths {
+    root: PathBuf,
+    database: PathBuf,
+}
+
 struct AppState {
     _process_lock: fs::File,
     store: Mutex<DesktopWorkspaceStore>,
+    /// Immutable for the lifetime of a running app. Read-only previews and
+    /// search must not wait behind a writer that temporarily owns `store`.
+    store_paths: DesktopStoreReadPaths,
     ordinary_chat_cancellations: Mutex<BTreeMap<String, Vec<Arc<AtomicBool>>>>,
     ordinary_chat_mock_endpoint: Option<String>,
     ordinary_chat_acceptance_enabled: bool,
@@ -1757,6 +1850,13 @@ fn is_stable_id(value: &str) -> bool {
         })
 }
 
+fn desktop_media_url(kind: &str, workspace_id: &str, attachment_id: &str) -> String {
+    #[cfg(any(target_os = "windows", target_os = "android"))]
+    return format!("http://nfai-media.localhost/{kind}/{workspace_id}/{attachment_id}");
+    #[cfg(not(any(target_os = "windows", target_os = "android")))]
+    format!("nfai-media://localhost/{kind}/{workspace_id}/{attachment_id}")
+}
+
 /// P6-E model overrides are opaque local identifiers, not entity IDs. Keep this in lockstep with
 /// Android's `TemporaryConversationRecovery` contract; it never accepts a URI, path, Key or URL.
 fn is_temporary_model_override_id(value: &str) -> bool {
@@ -1767,7 +1867,16 @@ fn is_temporary_model_override_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(*byte, b'.' | b'_' | b':' | b'-'))
 }
 
+fn canonical_desktop_model_choice(value: &str) -> &str {
+    match value {
+        "deepseek-v4-flash" | "deepseek-v4-flash-vision-exp" => "DEEPSEEK_V4_FLASH",
+        "GEMINI_3_7_FLASH" | "google/gemini-3.7-flash" => "GEMINI_3_8_FLASH",
+        _ => value,
+    }
+}
+
 fn is_desktop_chat_model_id(value: &str) -> bool {
+    let value = canonical_desktop_model_choice(value);
     desktop_model_service_v1::chat_presets()
         .iter()
         .any(|preset| preset.chat_selectable && (preset.id == value || preset.model_id == value))
@@ -1994,7 +2103,10 @@ fn normalize_desktop_clipboard_raster<'a>(
     if let Some(standard_extension) = standard_extension {
         return Ok((bytes, Some(standard_extension)));
     }
-    if !matches!(format, ImageFormat::Tiff | ImageFormat::Gif | ImageFormat::Bmp) {
+    if !matches!(
+        format,
+        ImageFormat::Tiff | ImageFormat::Gif | ImageFormat::Bmp
+    ) {
         return Ok((bytes, extension));
     }
     let reader = ImageReader::new(Cursor::new(&bytes))
@@ -2149,6 +2261,118 @@ fn mp4_duration_millis(bytes: &[u8]) -> Option<u64> {
     boxes(bytes, 0)
 }
 
+#[cfg(target_os = "macos")]
+fn macos_video_thumbnail(asset_path: &Path) -> Result<Vec<u8>, String> {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| json_error("本地视频缩略图时间无效"))?
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!(
+        "nanfeng-ai-video-thumbnail-{}-{}",
+        std::process::id(),
+        nonce
+    ));
+    fs::create_dir(&directory).map_err(|_| json_error("无法准备本地视频缩略图"))?;
+    let result = (|| {
+        let output = directory.join("thumbnail.png");
+        let ffmpeg = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
+            .iter()
+            .map(Path::new)
+            .find(|path| path.is_file());
+        if let Some(ffmpeg) = ffmpeg {
+            let mut child = Command::new(ffmpeg)
+                .args([
+                    "-nostdin",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-ss",
+                    "0.2",
+                    "-i",
+                ])
+                .arg(asset_path)
+                .args([
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "scale=640:640:force_original_aspect_ratio=decrease",
+                    "-y",
+                ])
+                .arg(&output)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|_| json_error("本地视频缩略图解码器不可用"))?;
+            let status = wait_thumbnail_child(&mut child, std::time::Duration::from_secs(8))?;
+            if !status.success() {
+                return Err(json_error("无法解码本地视频缩略图"));
+            }
+        } else {
+            let source = directory.join("source.mp4");
+            std::os::unix::fs::symlink(asset_path, &source)
+                .map_err(|_| json_error("无法准备本地视频缩略图"))?;
+            let mut child = Command::new("/usr/bin/qlmanage")
+                .args(["-t", "-s", "640", "-o"])
+                .arg(&directory)
+                .arg(&source)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|_| json_error("macOS 视频缩略图服务不可用"))?;
+            let status = wait_thumbnail_child(&mut child, std::time::Duration::from_secs(6))?;
+            if !status.success() {
+                return Err(json_error("无法生成本地视频缩略图"));
+            }
+        }
+        let png_path = if output.is_file() {
+            output
+        } else {
+            fs::read_dir(&directory)
+                .map_err(|_| json_error("无法读取本地视频缩略图"))?
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .find(|path| path.extension().and_then(|value| value.to_str()) == Some("png"))
+                .ok_or_else(|| json_error("本地视频缩略图不可用"))?
+        };
+        let bytes = fs::read(png_path).map_err(|_| json_error("无法读取本地视频缩略图"))?;
+        if bytes.len() > 4 * 1024 * 1024 || image::load_from_memory(&bytes).is_err() {
+            return Err(json_error("本地视频缩略图无效"));
+        }
+        Ok(bytes)
+    })();
+    let _ = fs::remove_dir_all(&directory);
+    result
+}
+
+#[cfg(target_os = "macos")]
+fn wait_thumbnail_child(
+    child: &mut std::process::Child,
+    timeout: std::time::Duration,
+) -> Result<std::process::ExitStatus, String> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|_| json_error("本地视频缩略图进程状态不可用"))?
+        {
+            return Ok(status);
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(json_error("本地视频缩略图生成超时"));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn macos_video_thumbnail(_asset_path: &Path) -> Result<Vec<u8>, String> {
+    Err(json_error("当前系统不支持本地视频缩略图"))
+}
+
 fn message_blocks(fields: &Map<String, Value>, text_key: &str) -> Result<Vec<Value>, String> {
     let text = fields
         .get(text_key)
@@ -2284,7 +2508,7 @@ fn apply_domain_mutation(
             "conversation" => {
                 allowed_keys(
                     fields,
-                    &["title", "projectId", "firstMessage", "attachmentBlocks"],
+                    &["title", "projectId", "firstMessage", "attachmentBlocks", "autoTitlePending"],
                 )?;
                 let project_id = fields.get("projectId").cloned().unwrap_or(Value::Null);
                 if !project_id.is_null()
@@ -2299,7 +2523,7 @@ fn apply_domain_mutation(
                     &args.intent_id[..args.intent_id.len().min(30)]
                 );
                 let blocks = message_blocks(fields, "firstMessage")?;
-                json!({"id":id, "projectId":project_id, "title":require_short_text(fields.get("title").unwrap_or(&Value::Null), "title",120,false)?, "currentLeafId":message_id, "pinned":false,"archived":false,"revision":1,"createdAt":now,"updatedAt":now,"messages":[{"id":message_id,"parentId":Value::Null,"ordinal":0,"role":"user","delivery":"COMPLETE","revision":1,"createdAt":now,"blocks":blocks}]})
+                json!({"id":id, "projectId":project_id, "title":require_short_text(fields.get("title").unwrap_or(&Value::Null), "title",120,false)?, "currentLeafId":message_id, "pinned":false,"archived":false,"revision":1,"createdAt":now,"updatedAt":now,"autoTitlePending":fields.get("autoTitlePending").and_then(Value::as_bool).unwrap_or(false),"messages":[{"id":message_id,"parentId":Value::Null,"ordinal":0,"role":"user","delivery":"COMPLETE","revision":1,"createdAt":now,"blocks":blocks}]})
             }
             "relation" => {
                 allowed_keys(fields, &["fromId", "toId", "kind"])?;
@@ -2399,7 +2623,8 @@ fn apply_domain_mutation(
             .position(|item| item.get("id").and_then(Value::as_str) == Some(id))
             .ok_or_else(|| json_error("记忆摘要不存在"))?;
         let primary = object(&items[primary_index], "memory")?;
-        let primary_is_active_global = primary.get("status").and_then(Value::as_str) == Some("ACTIVE")
+        let primary_is_active_global = primary.get("status").and_then(Value::as_str)
+            == Some("ACTIVE")
             && primary.get("scope").and_then(Value::as_str) == Some("GLOBAL")
             && primary.get("scopeId").map_or(true, Value::is_null);
         if !primary_is_active_global {
@@ -2610,6 +2835,8 @@ fn apply_domain_mutation(
                         false,
                     )?),
                 );
+                // Android parity: a deliberate rename always beats an in-flight automatic title.
+                item.insert("autoTitlePending".into(), Value::Bool(false));
             }
             "knowledge" => {
                 allowed_keys(fields, &["title", "body", "tags"])?;
@@ -4754,6 +4981,23 @@ fn parse_nanfeng_knowledge_export(
         .collect())
 }
 
+fn open_desktop_workspace_connection(root: &Path, database: &Path) -> Result<Connection, String> {
+    if desktop_local_backup_v1::requires_restart(root) {
+        return Err(json_error(
+            "本机恢复已完成，请完全重启 App；不会自动继续任务",
+        ));
+    }
+    let connection =
+        Connection::open(database).map_err(|_| json_error("无法打开 SQLite 工作区"))?;
+    connection
+        .pragma_update(None, "foreign_keys", "ON")
+        .map_err(|_| json_error("无法启用 SQLite foreign keys"))?;
+    connection
+        .busy_timeout(std::time::Duration::from_secs(3))
+        .map_err(|_| json_error("无法设置 SQLite busy timeout"))?;
+    Ok(connection)
+}
+
 impl DesktopWorkspaceStore {
     fn open(root: PathBuf) -> Result<Self, String> {
         Self::open_for_startup(root, DesktopStartupMode::Normal)
@@ -4982,20 +5226,7 @@ impl DesktopWorkspaceStore {
     }
 
     fn connection(&self) -> Result<Connection, String> {
-        if desktop_local_backup_v1::requires_restart(&self.root) {
-            return Err(json_error(
-                "本机恢复已完成，请完全重启 App；不会自动继续任务",
-            ));
-        }
-        let connection =
-            Connection::open(&self.database).map_err(|_| json_error("无法打开 SQLite 工作区"))?;
-        connection
-            .pragma_update(None, "foreign_keys", "ON")
-            .map_err(|_| json_error("无法启用 SQLite foreign keys"))?;
-        connection
-            .busy_timeout(std::time::Duration::from_secs(3))
-            .map_err(|_| json_error("无法设置 SQLite busy timeout"))?;
-        Ok(connection)
+        open_desktop_workspace_connection(&self.root, &self.database)
     }
 
     /// Reads exactly one picker-selected v2 package. The selected path is never persisted,
@@ -5160,12 +5391,23 @@ impl DesktopWorkspaceStore {
                     )
                     .optional()
                     .map_err(|_| json_error("无法读取模型服务设置"))?;
-                let record = stored.unwrap_or_else(|| DesktopModelServiceSettingRecord {
+                let mut record = stored.unwrap_or_else(|| DesktopModelServiceSettingRecord {
                     provider_id: provider.id.to_owned(),
                     enabled: false,
                     preset_id: provider.default_preset_id.to_owned(),
                     revision: 0,
                 });
+                let canonical_preset_id = canonical_desktop_model_choice(&record.preset_id).to_owned();
+                if canonical_preset_id != record.preset_id {
+                    connection
+                        .execute(
+                            "UPDATE desktop_provider_settings SET preset_id=?2, revision=revision+1, updated_at_ms=?3 WHERE provider_id=?1",
+                            params![provider.id, canonical_preset_id, local_now_millis()],
+                        )
+                        .map_err(|_| json_error("无法迁移模型服务设置"))?;
+                    record.preset_id = canonical_preset_id;
+                    record.revision = record.revision.saturating_add(1);
+                }
                 desktop_model_service_v1::validate_configuration(
                     &record.provider_id,
                     &record.preset_id,
@@ -6225,7 +6467,7 @@ impl DesktopWorkspaceStore {
         let current: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|_| json_error("无法读取 SQLite schema version"))?;
-        if current > 38 {
+        if current > 39 {
             return Err(json_error("SQLite schema 版本比当前客户端更新"));
         }
         if current == 0 {
@@ -6790,6 +7032,19 @@ impl DesktopWorkspaceStore {
                 .commit()
                 .map_err(|_| json_error("SQLite migration 38 无法提交"))?;
         }
+        if current < 39 {
+            let transaction = connection
+                .transaction()
+                .map_err(|_| json_error("无法开启 SQLite migration 39"))?;
+            transaction.execute_batch("CREATE TABLE IF NOT EXISTS desktop_conversation_drafts_v1 (workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, conversation_key TEXT NOT NULL, text TEXT NOT NULL, updated_at_ms INTEGER NOT NULL, PRIMARY KEY(workspace_id,conversation_key)); CREATE TABLE IF NOT EXISTS desktop_conversation_draft_attachments_v1 (workspace_id TEXT NOT NULL, conversation_key TEXT NOT NULL, position INTEGER NOT NULL, attachment_id TEXT NOT NULL, PRIMARY KEY(workspace_id,conversation_key,position), FOREIGN KEY(workspace_id,conversation_key) REFERENCES desktop_conversation_drafts_v1(workspace_id,conversation_key) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS desktop_conversation_draft_attachments_v1_attachment ON desktop_conversation_draft_attachments_v1(workspace_id,attachment_id);")
+                .map_err(|_| json_error("SQLite migration 39 普通草稿失败"))?;
+            transaction
+                .pragma_update(None, "user_version", 39)
+                .map_err(|_| json_error("无法写入 SQLite schema version 39"))?;
+            transaction
+                .commit()
+                .map_err(|_| json_error("SQLite migration 39 无法提交"))?;
+        }
         Ok(())
     }
 
@@ -6863,7 +7118,6 @@ impl DesktopWorkspaceStore {
     }
 
     fn rebuild_local_search_index_v2(
-        &self,
         transaction: &Transaction<'_>,
         workspace_id: &str,
         exchange: &Value,
@@ -7039,7 +7293,7 @@ impl DesktopWorkspaceStore {
         workspace_id: &str,
         exchange: &Value,
     ) -> Result<(), String> {
-        return self.rebuild_local_search_index_v2(transaction, workspace_id, exchange);
+        return Self::rebuild_local_search_index_v2(transaction, workspace_id, exchange);
         #[allow(unreachable_code)]
         {
             transaction
@@ -7214,39 +7468,57 @@ impl DesktopWorkspaceStore {
     }
 
     fn ensure_all_local_search_indexes_current(
-        &self,
         transaction: &Transaction<'_>,
     ) -> Result<(), String> {
         const INDEX_VERSION: i64 = 2;
-        let workspaces = transaction
+        // `workspaces.semantic_hash` is committed with every supported exchange
+        // mutation.  Search filtering therefore only needs to read the durable
+        // index-state projection in the common case.  Deserializing and hashing
+        // every full exchange here used to run on every category click.
+        let stale_workspace_ids = transaction
             .prepare(
-                "SELECT workspace_id,exchange_json FROM workspace_exchange ORDER BY workspace_id",
+                "SELECT exchange_row.workspace_id FROM workspace_exchange AS exchange_row \
+                 LEFT JOIN workspaces AS workspace ON workspace.id=exchange_row.workspace_id \
+                 LEFT JOIN desktop_local_search_index_state AS index_state ON index_state.workspace_id=exchange_row.workspace_id \
+                 WHERE workspace.id IS NULL \
+                    OR index_state.workspace_id IS NULL \
+                    OR index_state.index_version<>?1 \
+                    OR index_state.semantic_hash<>workspace.semantic_hash \
+                 ORDER BY exchange_row.workspace_id",
             )
             .map_err(|_| json_error("无法读取本机搜索工作区"))?
-            .query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            .query_map([INDEX_VERSION], |row| {
+                row.get::<_, String>(0)
             })
             .map_err(|_| json_error("无法读取本机搜索工作区"))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| json_error("本机搜索工作区无效"))?;
-        for (workspace_id, exchange_text) in workspaces {
+        for workspace_id in stale_workspace_ids {
+            let exchange_text: String = transaction
+                .query_row(
+                    "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1",
+                    [&workspace_id],
+                    |row| row.get(0),
+                )
+                .map_err(|_| json_error("无法读取过期本机搜索工作区"))?;
             let exchange: Value = serde_json::from_str(&exchange_text)
                 .map_err(|_| json_error("本机搜索工作区无法解析"))?;
-            let expected_hash = semantic_hash(&exchange)?;
-            let current = transaction.query_row("SELECT index_version,semantic_hash FROM desktop_local_search_index_state WHERE workspace_id=?1", [&workspace_id], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))).optional()
-                .map_err(|_| json_error("无法检查本机搜索索引版本"))?;
-            if current
-                .as_ref()
-                .is_none_or(|(version, hash)| *version != INDEX_VERSION || hash != &expected_hash)
-            {
-                self.rebuild_local_search_index_v2(transaction, &workspace_id, &exchange)?;
-            }
+            Self::rebuild_local_search_index_v2(transaction, &workspace_id, &exchange)?;
         }
         Ok(())
     }
 
     fn query_local_index(
         &self,
+        args: &DesktopLocalSearchQueryArgs,
+        workspace_scope: Option<&str>,
+    ) -> Result<DesktopLocalSearchPage, String> {
+        Self::query_local_index_at(&self.root, &self.database, args, workspace_scope)
+    }
+
+    fn query_local_index_at(
+        root: &Path,
+        database: &Path,
         args: &DesktopLocalSearchQueryArgs,
         workspace_scope: Option<&str>,
     ) -> Result<DesktopLocalSearchPage, String> {
@@ -7274,11 +7546,11 @@ impl DesktopWorkspaceStore {
         ) {
             return Err(json_error("本机搜索文件类型无效"));
         }
-        let mut connection = self.connection()?;
+        let mut connection = open_desktop_workspace_connection(root, database)?;
         let transaction = connection
             .transaction()
             .map_err(|_| json_error("无法开启统一本机搜索 transaction"))?;
-        self.ensure_all_local_search_indexes_current(&transaction)?;
+        Self::ensure_all_local_search_indexes_current(&transaction)?;
         if args.record_history && !normalized.is_empty() {
             let workspace_id = args
                 .history_workspace_id
@@ -7288,9 +7560,9 @@ impl DesktopWorkspaceStore {
             transaction.execute("INSERT INTO desktop_local_search_history(workspace_id,scope,normalized_query,last_used_ms) VALUES(?1,'CHAT',?2,?3) ON CONFLICT(workspace_id,scope,normalized_query) DO UPDATE SET last_used_ms=excluded.last_used_ms", params![workspace_id, normalized, system_now_millis()]).map_err(|_| json_error("无法写入本地搜索历史"))?;
             transaction.execute("DELETE FROM desktop_local_search_history WHERE workspace_id=?1 AND scope='CHAT' AND normalized_query NOT IN (SELECT normalized_query FROM desktop_local_search_history WHERE workspace_id=?1 AND scope='CHAT' ORDER BY last_used_ms DESC,normalized_query ASC LIMIT 10)", [workspace_id]).map_err(|_| json_error("无法裁剪本地搜索历史"))?;
         }
-        const FILTER: &str = "(?6 IS NULL OR workspace_id=?6) AND (?1='' OR instr(normalized_text,?1)>0) AND ((?2='all' AND (?1<>'' OR content_kind<>'TITLE')) OR (?2='text' AND (content_kind='TEXT' OR (?1<>'' AND content_kind='TITLE'))) OR (?2='image' AND content_kind='IMAGE') OR (?2='video' AND content_kind='VIDEO') OR (?2='audio' AND content_kind='AUDIO') OR (?2='file' AND content_kind='FILE')) AND (?2<>'file' OR ?3='all' OR file_type=?3)";
-        let count_sql = format!("SELECT COALESCE(SUM(CASE WHEN content_kind='TEXT' THEN 1 ELSE 0 END),0),COALESCE(SUM(CASE WHEN content_kind IN ('IMAGE','VIDEO','AUDIO','FILE') THEN 1 ELSE 0 END),0),COUNT(*) FROM desktop_local_search_index WHERE {FILTER}");
-        let (text_count, attachment_count, total_count): (u64, u64, u64) = transaction
+        const FILTER: &str = "(?5 IS NULL OR workspace_id=?5) AND (?1='' OR instr(normalized_text,?1)>0) AND ((?2='all' AND (?1<>'' OR content_kind<>'TITLE')) OR (?2='text' AND (content_kind='TEXT' OR (?1<>'' AND content_kind='TITLE'))) OR (?2='image' AND content_kind='IMAGE') OR (?2='video' AND content_kind='VIDEO') OR (?2='audio' AND content_kind='AUDIO') OR (?2='file' AND content_kind='FILE')) AND (?2<>'file' OR ?3='all' OR file_type=?3)";
+        let count_sql = format!("SELECT COALESCE(SUM(CASE WHEN content_kind='TEXT' THEN 1 ELSE 0 END),0),COALESCE(SUM(CASE WHEN content_kind IN ('IMAGE','VIDEO','AUDIO','FILE') THEN 1 ELSE 0 END),0) FROM desktop_local_search_index WHERE {FILTER}");
+        let (text_count, attachment_count): (u64, u64) = transaction
             .query_row(
                 &count_sql,
                 params![
@@ -7298,13 +7570,12 @@ impl DesktopWorkspaceStore {
                     args.category,
                     args.file_type,
                     args.sort_mode,
-                    2000i64,
                     workspace_scope
                 ],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .map_err(|_| json_error("无法统计本机搜索结果"))?;
-        let sql = format!("SELECT entry_id,workspace_id,conversation_id,message_id,attachment_id,title,snippet,content_kind,timestamp,mime_type,display_name,file_type,byte_count,branch_leaf_id,source_label,archived,conversation_revision,title_match FROM desktop_local_search_index WHERE {FILTER} ORDER BY CASE WHEN ?4='timeAscending' THEN timestamp END ASC,CASE WHEN ?4='timeDescending' THEN timestamp END DESC,CASE WHEN ?4='sizeAscending' THEN byte_count END ASC,CASE WHEN ?4='sizeDescending' THEN byte_count END DESC,CASE WHEN ?4='default' AND ?1<>'' THEN title_match END DESC,CASE WHEN ?4='default' AND ?1<>'' THEN CASE content_kind WHEN 'TEXT' THEN 1 WHEN 'TITLE' THEN 0 ELSE 2 END END ASC,CASE WHEN ?4='default' THEN timestamp END DESC,workspace_id ASC,conversation_id ASC,COALESCE(message_id,'') ASC,COALESCE(attachment_id,'') ASC LIMIT ?5");
+        let sql = format!("SELECT entry_id,workspace_id,conversation_id,message_id,attachment_id,title,snippet,content_kind,timestamp,mime_type,display_name,file_type,byte_count,branch_leaf_id,source_label,archived,conversation_revision,title_match FROM desktop_local_search_index WHERE {FILTER} ORDER BY CASE WHEN ?4='timeAscending' THEN timestamp END ASC,CASE WHEN ?4='timeDescending' THEN timestamp END DESC,CASE WHEN ?4='sizeAscending' THEN byte_count END ASC,CASE WHEN ?4='sizeDescending' THEN byte_count END DESC,CASE WHEN ?4='default' AND ?1<>'' THEN title_match END DESC,CASE WHEN ?4='default' AND ?1<>'' THEN CASE content_kind WHEN 'TEXT' THEN 1 WHEN 'TITLE' THEN 0 ELSE 2 END END ASC,CASE WHEN ?4='default' THEN timestamp END DESC,workspace_id ASC,conversation_id ASC,COALESCE(message_id,'') ASC,COALESCE(attachment_id,'') ASC");
         let mut statement = transaction
             .prepare(&sql)
             .map_err(|_| json_error("无法读取统一本机搜索索引"))?;
@@ -7315,7 +7586,6 @@ impl DesktopWorkspaceStore {
                     args.category,
                     args.file_type,
                     args.sort_mode,
-                    2000i64,
                     workspace_scope
                 ],
                 |row| {
@@ -7349,7 +7619,6 @@ impl DesktopWorkspaceStore {
             .commit()
             .map_err(|_| json_error("统一本机搜索未提交；已回滚"))?;
         Ok(DesktopLocalSearchPage {
-            truncated: total_count > hits.len() as u64,
             hits,
             text_count,
             attachment_count,
@@ -7368,6 +7637,7 @@ impl DesktopWorkspaceStore {
                     category: "all".into(),
                     sort_mode: "default".into(),
                     file_type: "all".into(),
+                    offset: 0,
                     record_history: true,
                     history_workspace_id: Some(workspace_id.to_owned()),
                 },
@@ -7463,6 +7733,7 @@ impl DesktopWorkspaceStore {
                     category: category.to_owned(),
                     sort_mode: "default".into(),
                     file_type: "all".into(),
+                    offset: 0,
                     record_history: false,
                     history_workspace_id: None,
                 },
@@ -7588,77 +7859,13 @@ impl DesktopWorkspaceStore {
     /// The sole Desktop image-reader adapter.  It resolves a workspace-owned attachment ID,
     /// rechecks its private-copy hash and returns display bytes only; callers never receive a
     /// filesystem path, URI or arbitrary file-reading capability.
+    #[cfg(test)]
     fn image_preview(&self, args: &DesktopImagePreviewArgs) -> Result<DesktopImagePreview, String> {
-        if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
-            return Err(json_error("图片预览引用无效"));
-        }
-        let connection = self.connection()?;
-        let metadata = connection.query_row(
-            "SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
-            params![args.workspace_id, args.attachment_id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, u64>(2)?, row.get::<_, String>(3)?)),
-        ).map_err(|_| json_error("本地图片附件不可用"))?;
-        if !matches!(
-            metadata.0.as_str(),
-            "image/jpeg" | "image/png" | "image/webp"
-        ) || !is_sha256(&metadata.3)
-        {
-            return Err(json_error("该本地附件不是受支持的图片"));
-        }
-        let asset = self.root.join("assets").join(&metadata.3);
-        let bytes = fs::read(&asset).map_err(|_| json_error("本地图片附件缺失"))?;
-        if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
-            return Err(json_error("本地图片附件校验不一致"));
-        }
-        let reader = ImageReader::new(Cursor::new(&bytes))
-            .with_guessed_format()
-            .map_err(|_| json_error("本地图片格式无效"))?;
-        let image = reader
-            .decode()
-            .map_err(|_| json_error("本地图片已损坏，无法预览"))?;
-        let width = image.width();
-        let height = image.height();
-        if width == 0
-            || height == 0
-            || u64::from(width) * u64::from(height) > MAX_CONVERSATION_IMAGE_PIXELS
-        {
-            return Err(json_error("图片像素超过本地安全预览上限"));
-        }
-        let (mime_type, image_bytes, is_thumbnail) = if args.full_size {
-            (metadata.0.clone(), bytes, false)
-        } else {
-            let thumbnail = image.thumbnail(
-                MAX_DESKTOP_IMAGE_THUMBNAIL_EDGE,
-                MAX_DESKTOP_IMAGE_THUMBNAIL_EDGE,
-            );
-            let mut output = Cursor::new(Vec::new());
-            thumbnail
-                .write_to(&mut output, ImageFormat::Png)
-                .map_err(|_| json_error("本地缩略图生成失败"))?;
-            ("image/png".to_owned(), output.into_inner(), true)
-        };
-        Ok(DesktopImagePreview {
-            attachment_id: args.attachment_id.clone(),
-            mime_type,
-            display_name: metadata.1,
-            byte_count: metadata.2,
-            width,
-            height,
-            data_url: format!(
-                "data:{};base64,{}",
-                if is_thumbnail {
-                    "image/png"
-                } else {
-                    &metadata.0
-                },
-                BASE64.encode(image_bytes)
-            ),
-            is_thumbnail,
-        })
+        read_desktop_image_preview_from_paths(&self.root, &self.database, args)
     }
 
     /// The sole Desktop PDF reader adapter. It validates the workspace-owned private copy and
-    /// parses page count locally before returning an inert data URL to a sandboxed reader view.
+    /// parses page count locally before returning only a rasterized PNG page to the reader.
     fn pdf_preview(&self, args: &DesktopPdfPreviewArgs) -> Result<DesktopPdfPreview, String> {
         if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
             return Err(json_error("PDF 预览引用无效"));
@@ -7694,6 +7901,7 @@ impl DesktopWorkspaceStore {
             .or(persisted)
             .unwrap_or(1)
             .clamp(1, page_count);
+        let page_png = desktop_pdf_page_render::render_page(&bytes, page_number)?;
         connection.execute(
             "INSERT INTO desktop_pdf_preview_positions(workspace_id,attachment_id,page_number,updated_at_ms) VALUES(?1,?2,?3,?4) ON CONFLICT(workspace_id,attachment_id) DO UPDATE SET page_number=excluded.page_number,updated_at_ms=excluded.updated_at_ms",
             params![args.workspace_id, args.attachment_id, page_number, local_now_millis()],
@@ -7704,11 +7912,12 @@ impl DesktopWorkspaceStore {
             byte_count: metadata.2,
             page_number,
             page_count,
-            data_url: format!("data:application/pdf;base64,{}", BASE64.encode(bytes)),
+            data_url: format!("data:image/png;base64,{}", BASE64.encode(page_png)),
         })
     }
 
-    /// The only Desktop video reader. Browser playback receives a verified data URL, never a filesystem capability.
+    /// The only Desktop video reader. Browser playback receives an owner-scoped media URL, never
+    /// a filesystem capability or a base64 copy of the full file.
     fn video_preview(&self, args: &DesktopVideoPreviewArgs) -> Result<DesktopVideoPreview, String> {
         if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
             return Err(json_error("视频预览引用无效"));
@@ -7742,8 +7951,28 @@ impl DesktopWorkspaceStore {
             byte_count: metadata.2,
             duration_millis,
             position_millis,
-            data_url: format!("data:video/mp4;base64,{}", BASE64.encode(bytes)),
+            media_url: desktop_media_url("video", &args.workspace_id, &args.attachment_id),
         })
+    }
+
+    fn save_video_preview_position(&self, args: &DesktopVideoPreviewArgs) -> Result<(), String> {
+        if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
+            return Err(json_error("视频预览引用无效"));
+        }
+        let connection = self.connection()?;
+        let metadata = connection.query_row(
+            "SELECT mime_type,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+            params![args.workspace_id, args.attachment_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        ).map_err(|_| json_error("本地视频附件不可用"))?;
+        if metadata.0 != "video/mp4" || !is_sha256(&metadata.1) {
+            return Err(json_error("该本地附件不是受支持的视频"));
+        }
+        connection.execute(
+            "INSERT INTO desktop_video_preview_positions(workspace_id,attachment_id,position_millis,updated_at_ms) VALUES(?1,?2,?3,?4) ON CONFLICT(workspace_id,attachment_id) DO UPDATE SET position_millis=excluded.position_millis,updated_at_ms=excluded.updated_at_ms",
+            params![args.workspace_id, args.attachment_id, args.position_millis.unwrap_or(0), local_now_millis()],
+        ).map_err(|_| json_error("本地视频播放位置未保存"))?;
+        Ok(())
     }
 
     /// The only Desktop audio reader. It verifies the workspace-owned private copy before a data URL exists.
@@ -7778,8 +8007,43 @@ impl DesktopWorkspaceStore {
             mime_type: metadata.0.clone(),
             byte_count: metadata.2,
             position_millis,
-            data_url: format!("data:{};base64,{}", metadata.0, BASE64.encode(bytes)),
+            media_url: desktop_media_url("audio", &args.workspace_id, &args.attachment_id),
         })
+    }
+
+    /// Saves only a resume position for an already owned audio attachment. Unlike `audio_preview`,
+    /// this never reads or serializes the audio bytes, so closing a large local player cannot be
+    /// blocked behind a second base64 payload.
+    fn save_audio_preview_position(&self, args: &DesktopAudioPreviewArgs) -> Result<(), String> {
+        if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
+            return Err(json_error("音频预览引用无效"));
+        }
+        let connection = self.connection()?;
+        let metadata = connection.query_row(
+            "SELECT mime_type,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+            params![args.workspace_id, args.attachment_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?, row.get::<_, String>(2)?)),
+        ).map_err(|_| json_error("本地音频附件不可用"))?;
+        if !matches!(
+            metadata.0.as_str(),
+            "audio/mpeg" | "audio/wav" | "audio/mp4"
+        ) || !is_sha256(&metadata.2)
+        {
+            return Err(json_error("该本地附件不是受支持的音频"));
+        }
+        let asset = self.root.join("assets").join(&metadata.2);
+        if fs::metadata(asset)
+            .map(|entry| entry.len() != metadata.1)
+            .unwrap_or(true)
+        {
+            return Err(json_error("本地音频附件缺失或大小不一致"));
+        }
+        let position_millis = args.position_millis.unwrap_or(0);
+        connection.execute(
+            "INSERT INTO desktop_audio_preview_positions(workspace_id,attachment_id,position_millis,updated_at_ms) VALUES(?1,?2,?3,?4) ON CONFLICT(workspace_id,attachment_id) DO UPDATE SET position_millis=excluded.position_millis,updated_at_ms=excluded.updated_at_ms",
+            params![args.workspace_id, args.attachment_id, position_millis, local_now_millis()],
+        ).map_err(|_| json_error("本地音频播放位置未保存"))?;
+        Ok(())
     }
 
     fn text_preview(&self, args: &DesktopTextPreviewArgs) -> Result<DesktopTextPreview, String> {
@@ -7788,10 +8052,15 @@ impl DesktopWorkspaceStore {
         }
         let connection = self.connection()?;
         let metadata = connection.query_row("SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2", params![args.workspace_id, args.attachment_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, u64>(2)?, row.get::<_, String>(3)?))).map_err(|_| json_error("本地文本附件不可用"))?;
-        if !matches!(
+        let extension = metadata.1.rsplit(['.', '。']).next().unwrap_or("").trim().to_ascii_lowercase();
+        let inferred_text = matches!(metadata.0.trim(), "" | "application/octet-stream")
+            && matches!(extension.as_str(), "md" | "markdown" | "txt" | "json" | "csv");
+        let is_docx = metadata.0 == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || (metadata.0 == "application/octet-stream" && extension == "docx");
+        let is_zip = matches!(metadata.0.as_str(), "application/zip" | "application/x-zip-compressed") || (metadata.0 == "application/octet-stream" && extension == "zip");
+        if !(is_docx || is_zip || matches!(
             metadata.0.as_str(),
             "text/plain" | "text/markdown" | "application/json" | "text/csv"
-        ) || !is_sha256(&metadata.3)
+        ) || inferred_text) || !is_sha256(&metadata.3)
         {
             return Err(json_error("该本地附件不是可安全预览的文本"));
         }
@@ -7800,12 +8069,15 @@ impl DesktopWorkspaceStore {
         if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
             return Err(json_error("本地文本附件校验不一致"));
         }
+        let bytes = if is_docx { desktop_docx_preview::extract(&bytes)?.into_bytes() } else if is_zip { desktop_docx_preview::archive_directory(&bytes)?.into_bytes() } else { bytes };
         let truncated = bytes.len() > MAX_INERT_TEXT_PREVIEW_BYTES;
-        let text = std::str::from_utf8(&bytes[..bytes.len().min(MAX_INERT_TEXT_PREVIEW_BYTES)])
+        let mut end = bytes.len().min(MAX_INERT_TEXT_PREVIEW_BYTES);
+        while end > 0 && end < bytes.len() && bytes[end] & 0xc0 == 0x80 { end -= 1; }
+        let text = std::str::from_utf8(&bytes[..end])
             .map_err(|_| json_error("文件不是可安全解码的 UTF-8 文本"))?
             .strip_prefix('\u{feff}')
             .unwrap_or_else(|| {
-                std::str::from_utf8(&bytes[..bytes.len().min(MAX_INERT_TEXT_PREVIEW_BYTES)])
+                std::str::from_utf8(&bytes[..end])
                     .unwrap()
             })
             .to_owned();
@@ -7881,6 +8153,61 @@ impl DesktopWorkspaceStore {
                 .map_err(|_| json_error("无法建立本机系统打开引用"))?;
             #[cfg(not(unix))]
             return Err(json_error("当前平台尚未提供受控系统打开适配器"));
+        }
+        Ok(presentation)
+    }
+
+    fn prepare_attachment_for_share(
+        &self,
+        args: &DesktopSystemOpenAttachmentArgs,
+    ) -> Result<PathBuf, String> {
+        if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
+            return Err(json_error("附件分享引用无效"));
+        }
+        let connection = self.connection()?;
+        let (display_name, byte_count, digest): (String, u64, String) = connection.query_row(
+            "SELECT display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+            params![args.workspace_id, args.attachment_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).map_err(|_| json_error("本地附件不可用"))?;
+        if !is_sha256(&digest) {
+            return Err(json_error("本地附件 hash 无效"));
+        }
+        let source = self.root.join("assets").join(&digest);
+        if fs::metadata(&source).ok().map(|metadata| metadata.len()) != Some(byte_count)
+            || sha256_file(&source)? != digest
+        {
+            return Err(json_error("本地附件校验不一致"));
+        }
+        let leaf = Path::new(&display_name)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty() && *value != "." && *value != "..")
+            .unwrap_or("附件");
+        let safe_name = leaf
+            .chars()
+            .map(|character| {
+                if character == ':' || character.is_control() {
+                    '-'
+                } else {
+                    character
+                }
+            })
+            .take(180)
+            .collect::<String>();
+        let directory = self.root.join("share-outbox").join(&digest[..16]);
+        fs::create_dir_all(&directory).map_err(|_| json_error("无法准备本机分享目录"))?;
+        let presentation = directory.join(if safe_name.is_empty() {
+            "附件"
+        } else {
+            &safe_name
+        });
+        if !presentation.exists() {
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&source, &presentation)
+                .map_err(|_| json_error("无法建立本机分享引用"))?;
+            #[cfg(not(unix))]
+            fs::copy(&source, &presentation).map_err(|_| json_error("无法建立本机分享副本"))?;
         }
         Ok(presentation)
     }
@@ -8002,6 +8329,26 @@ impl DesktopWorkspaceStore {
                 .map_err(|_| json_error("无法读取临时附件引用"))?;
             for value in values {
                 let (sha256, count) = value.map_err(|_| json_error("临时附件引用无效"))?;
+                *reference_counts.entry(sha256).or_insert(0u64) += count;
+            }
+        }
+        {
+            let mut rows = transaction
+                .prepare(
+                    "SELECT asset.sha256,COUNT(*)
+                     FROM desktop_conversation_draft_attachments_v1 draft
+                     JOIN desktop_conversation_attachments asset
+                       ON asset.workspace_id=draft.workspace_id AND asset.attachment_id=draft.attachment_id
+                     GROUP BY asset.sha256",
+                )
+                .map_err(|_| json_error("无法读取普通会话草稿附件引用"))?;
+            let values = rows
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
+                })
+                .map_err(|_| json_error("无法读取普通会话草稿附件引用"))?;
+            for value in values {
+                let (sha256, count) = value.map_err(|_| json_error("普通会话草稿附件引用无效"))?;
                 *reference_counts.entry(sha256).or_insert(0u64) += count;
             }
         }
@@ -8690,6 +9037,128 @@ impl DesktopWorkspaceStore {
             .map_err(|_| json_error("附件元数据未保存"))?;
         connection.query_row("SELECT attachment_id,mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND sha256=?2", params![workspace_id, metadata.sha256], |row| Ok(DesktopAttachmentMetadata { id: row.get(0)?, mime_type: row.get(1)?, display_name: row.get(2)?, byte_count: row.get(3)?, sha256: row.get(4)? }))
             .map_err(|_| json_error("附件元数据无法回读"))
+    }
+
+    fn conversation_draft_key(conversation_id: Option<&str>) -> Result<&str, String> {
+        match conversation_id {
+            Some(value) if is_stable_id(value) => Ok(value),
+            Some(_) => Err(json_error("会话草稿 ID 无效")),
+            None => Ok(NEW_CONVERSATION_DRAFT_KEY),
+        }
+    }
+
+    fn read_conversation_draft(
+        &self,
+        workspace_id: &str,
+        conversation_id: Option<&str>,
+    ) -> Result<Option<DesktopConversationDraft>, String> {
+        if !is_stable_id(workspace_id) {
+            return Err(json_error("workspace ID 无效"));
+        }
+        let key = Self::conversation_draft_key(conversation_id)?;
+        let connection = self.connection()?;
+        let text = connection
+            .query_row(
+                "SELECT text FROM desktop_conversation_drafts_v1 WHERE workspace_id=?1 AND conversation_key=?2",
+                params![workspace_id, key],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|_| json_error("普通会话草稿无法读取"))?;
+        let Some(text) = text else {
+            return Ok(None);
+        };
+        let attachments = connection
+            .prepare(
+                "SELECT asset.attachment_id,asset.mime_type,asset.display_name,asset.byte_count,asset.sha256
+                 FROM desktop_conversation_draft_attachments_v1 draft
+                 JOIN desktop_conversation_attachments asset
+                   ON asset.workspace_id=draft.workspace_id AND asset.attachment_id=draft.attachment_id
+                 WHERE draft.workspace_id=?1 AND draft.conversation_key=?2
+                 ORDER BY draft.position",
+            )
+            .map_err(|_| json_error("普通会话草稿附件无法读取"))?
+            .query_map(params![workspace_id, key], |row| {
+                Ok(DesktopAttachmentMetadata {
+                    id: row.get(0)?, mime_type: row.get(1)?, display_name: row.get(2)?,
+                    byte_count: row.get(3)?, sha256: row.get(4)?,
+                })
+            })
+            .map_err(|_| json_error("普通会话草稿附件无法读取"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| json_error("普通会话草稿附件无效"))?;
+        Ok(Some(DesktopConversationDraft { text, attachments }))
+    }
+
+    fn save_conversation_draft(
+        &self,
+        args: DesktopConversationDraftArgs,
+    ) -> Result<Option<DesktopConversationDraft>, String> {
+        if !is_stable_id(&args.workspace_id) {
+            return Err(json_error("workspace ID 无效"));
+        }
+        let key = Self::conversation_draft_key(args.conversation_id.as_deref())?.to_owned();
+        if args.text.chars().count() > 120_000
+            || args.attachment_ids.len() > MAX_CONVERSATION_ATTACHMENT_COUNT
+        {
+            return Err(json_error("普通会话草稿超出文字或附件上限"));
+        }
+        let mut attachment_ids = Vec::new();
+        for id in args.attachment_ids {
+            if !is_stable_id(&id) || attachment_ids.contains(&id) {
+                return Err(json_error("普通会话草稿附件 ID 无效"));
+            }
+            attachment_ids.push(id);
+        }
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|_| json_error("无法开启普通会话草稿 transaction"))?;
+        if args.text.is_empty() && attachment_ids.is_empty() {
+            transaction.execute(
+                "DELETE FROM desktop_conversation_drafts_v1 WHERE workspace_id=?1 AND conversation_key=?2",
+                params![args.workspace_id, key],
+            ).map_err(|_| json_error("普通会话草稿无法清除"))?;
+        } else {
+            for id in &attachment_ids {
+                transaction.query_row(
+                    "SELECT attachment_id FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+                    params![args.workspace_id, id],
+                    |row| row.get::<_, String>(0),
+                ).map_err(|_| json_error("草稿附件未在当前私有工作区注册"))?;
+            }
+            transaction.execute(
+                "INSERT INTO desktop_conversation_drafts_v1(workspace_id,conversation_key,text,updated_at_ms) VALUES(?1,?2,?3,?4) ON CONFLICT(workspace_id,conversation_key) DO UPDATE SET text=excluded.text,updated_at_ms=excluded.updated_at_ms",
+                params![args.workspace_id, key, args.text, system_now_millis()],
+            ).map_err(|_| json_error("普通会话草稿无法保存"))?;
+            transaction.execute(
+                "DELETE FROM desktop_conversation_draft_attachments_v1 WHERE workspace_id=?1 AND conversation_key=?2",
+                params![args.workspace_id, key],
+            ).map_err(|_| json_error("普通会话草稿附件无法更新"))?;
+            for (position, id) in attachment_ids.iter().enumerate() {
+                transaction.execute(
+                    "INSERT INTO desktop_conversation_draft_attachments_v1(workspace_id,conversation_key,position,attachment_id) VALUES(?1,?2,?3,?4)",
+                    params![args.workspace_id, key, position as i64, id],
+                ).map_err(|_| json_error("普通会话草稿附件无法保存"))?;
+            }
+        }
+        transaction
+            .commit()
+            .map_err(|_| json_error("普通会话草稿未提交；已回滚"))?;
+        self.read_conversation_draft(&args.workspace_id, args.conversation_id.as_deref())
+    }
+
+    fn clear_conversation_draft_in_transaction(
+        transaction: &Transaction<'_>,
+        workspace_id: &str,
+        conversation_id: Option<&str>,
+    ) -> Result<(), String> {
+        let key = Self::conversation_draft_key(conversation_id)?;
+        transaction.execute(
+            "DELETE FROM desktop_conversation_drafts_v1 WHERE workspace_id=?1 AND conversation_key=?2",
+            params![workspace_id, key],
+        ).map_err(|_| json_error("已发送的普通会话草稿无法清除"))?;
+        Ok(())
     }
 
     fn stage_selected_file(&self, selected_path: &str) -> Result<PreflightReceipt, String> {
@@ -10754,7 +11223,7 @@ impl DesktopWorkspaceStore {
         // A PARTIAL label is only a transcript fact. The attempt owner decides whether work is
         // still live, so a stale or legacy partial can never trap the user in “正在生成”.
         let mut attempts = connection.prepare(
-            "SELECT assistant_message_id,user_message_id,state,safe_error_code,created_at_ms FROM desktop_ordinary_chat_attempts WHERE workspace_id=?1",
+            "SELECT assistant_message_id,user_message_id,state,safe_error_code,created_at_ms,input_tokens,output_tokens,cached_input_tokens,latency_ms FROM desktop_ordinary_chat_attempts WHERE workspace_id=?1",
         ).map_err(|_| json_error("无法读取聊天运行状态"))?;
         let attempts = attempts
             .query_map([workspace_id], |row| {
@@ -10764,32 +11233,125 @@ impl DesktopWorkspaceStore {
                     row.get::<_, String>(2)?,
                     row.get::<_, Option<String>>(3)?,
                     row.get::<_, i64>(4)?,
+                    row.get::<_, Option<i64>>(5)?,
+                    row.get::<_, Option<i64>>(6)?,
+                    row.get::<_, Option<i64>>(7)?,
+                    row.get::<_, Option<i64>>(8)?,
                 ))
             })
             .map_err(|_| json_error("无法读取聊天运行状态"))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| json_error("聊天运行状态无效"))?;
-        let runtime_by_message = attempts.iter().map(|(assistant_id, _, state, code, created_at_ms)| (
-            assistant_id.clone(), (state.clone(), code.clone(), *created_at_ms),
-        )).collect::<HashMap<_, _>>();
-        let created_by_user_message = attempts.iter().map(|(_, user_id, _, _, created_at_ms)| (
-            user_id.clone(), *created_at_ms,
-        )).collect::<HashMap<_, _>>();
-        if let Some(conversations) = exchange.get_mut("conversations").and_then(Value::as_array_mut) {
+        let runtime_by_message = attempts
+            .iter()
+            .map(
+                |(
+                    assistant_id,
+                    _,
+                    state,
+                    code,
+                    created_at_ms,
+                    input_tokens,
+                    output_tokens,
+                    cached_input_tokens,
+                    latency_ms,
+                )| {
+                    (
+                        assistant_id.clone(),
+                        (
+                            state.clone(),
+                            code.clone(),
+                            *created_at_ms,
+                            *input_tokens,
+                            *output_tokens,
+                            *cached_input_tokens,
+                            *latency_ms,
+                        ),
+                    )
+                },
+            )
+            .collect::<HashMap<_, _>>();
+        let created_by_user_message = attempts
+            .iter()
+            .map(|(_, user_id, _, _, created_at_ms, _, _, _, _)| (user_id.clone(), *created_at_ms))
+            .collect::<HashMap<_, _>>();
+        if let Some(conversations) = exchange
+            .get_mut("conversations")
+            .and_then(Value::as_array_mut)
+        {
             for conversation in conversations {
-                if let Some(messages) = conversation.get_mut("messages").and_then(Value::as_array_mut) {
+                let estimated_usage_by_message = conversation
+                    .get("messages")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|message| {
+                        let id = message.get("id").and_then(Value::as_str)?;
+                        let (_, _, _, input_tokens, output_tokens, _, _) =
+                            runtime_by_message.get(id)?;
+                        (input_tokens.is_none() || output_tokens.is_none()).then(|| {
+                            (
+                                id.to_owned(),
+                                ordinary_chat_estimated_usage(conversation, id),
+                            )
+                        })
+                    })
+                    .collect::<HashMap<_, _>>();
+                if let Some(messages) = conversation
+                    .get_mut("messages")
+                    .and_then(Value::as_array_mut)
+                {
                     for message in messages {
-                        let message_id = message.get("id").and_then(Value::as_str).unwrap_or_default();
+                        let message_id = message
+                            .get("id")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned();
                         // Pre-2026-09 desktop builds wrote a fixed display timestamp. Preserve
                         // imported/static timestamps, but recover ordinary-chat timestamps from
                         // the local Attempt when that durable fact exists.
-                        if message.get("createdAt").and_then(Value::as_str) == Some("2026-08-13T00:00:00Z") {
+                        if message.get("createdAt").and_then(Value::as_str)
+                            == Some("2026-08-13T00:00:00Z")
+                        {
                             let recorded_at = runtime_by_message
-                                .get(message_id)
-                                .map(|(_, _, created_at_ms)| *created_at_ms)
-                                .or_else(|| created_by_user_message.get(message_id).copied());
+                                .get(&message_id)
+                                .map(|(_, _, created_at_ms, _, _, _, _)| *created_at_ms)
+                                .or_else(|| created_by_user_message.get(&message_id).copied());
                             if let Some(recorded_at) = recorded_at.filter(|value| *value > 0) {
-                                message["createdAt"] = Value::String(rfc3339_from_unix_millis(recorded_at));
+                                message["createdAt"] =
+                                    Value::String(rfc3339_from_unix_millis(recorded_at));
+                            }
+                        }
+                        if let Some((
+                            state,
+                            _,
+                            _,
+                            input_tokens,
+                            output_tokens,
+                            cached_input_tokens,
+                            latency_ms,
+                        )) = runtime_by_message.get(&message_id)
+                        {
+                            if state == "COMPLETED" {
+                                if message.get("run").is_none() {
+                                    if let Some(latency_ms) = latency_ms.filter(|value| *value > 0)
+                                    {
+                                        message["run"] = json!({"durationMs":latency_ms});
+                                    }
+                                }
+                                let provider_usage_missing =
+                                    input_tokens.is_none() || output_tokens.is_none();
+                                if provider_usage_missing && message.get("estimatedUsage").is_none()
+                                {
+                                    if let Some(estimated) =
+                                        estimated_usage_by_message.get(&message_id)
+                                    {
+                                        message["estimatedUsage"] = estimated.clone();
+                                    }
+                                } else if !provider_usage_missing && message.get("usage").is_none()
+                                {
+                                    message["usage"] = json!({"inputTokens":input_tokens,"outputTokens":output_tokens,"cachedInputTokens":cached_input_tokens});
+                                }
                             }
                         }
                         if message.get("delivery").and_then(Value::as_str) != Some("PARTIAL") {
@@ -10799,7 +11361,7 @@ impl DesktopWorkspaceStore {
                             .get("id")
                             .and_then(Value::as_str)
                             .and_then(|id| runtime_by_message.get(id))
-                            .map(|(state, code, _)| {
+                            .map(|(state, code, _, _, _, _, _)| {
                                 if matches!(state.as_str(), "PENDING" | "RUNNING") {
                                     ("RUNNING", None)
                                 } else {
@@ -11722,6 +12284,63 @@ fn ordinary_chat_message_text(message: &Value) -> String {
         .join("\n")
 }
 
+/// Mirrors Android LocalTokenEstimator for a clearly marked, read-only fallback when a
+/// provider completes an answer without returning usage. It never replaces provider usage.
+fn ordinary_chat_local_token_estimate(text: &str) -> i64 {
+    if text.trim().is_empty() {
+        return 0;
+    }
+    let mut units = 0_i64;
+    let mut ascii_run = 0_i64;
+    for character in text.chars() {
+        if character.is_ascii() && !character.is_whitespace() {
+            ascii_run += 1;
+        } else {
+            units += (ascii_run + 3) / 4;
+            ascii_run = 0;
+            if !character.is_whitespace() {
+                units += 1;
+            }
+        }
+    }
+    (units + (ascii_run + 3) / 4).max(1)
+}
+
+fn ordinary_chat_estimated_usage(conversation: &Value, assistant_message_id: &str) -> Value {
+    let messages = conversation
+        .get("messages")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let by_id = messages
+        .iter()
+        .filter_map(|message| {
+            message
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|id| (id, message))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut current = Some(assistant_message_id);
+    let mut path = Vec::new();
+    while let Some(id) = current {
+        let Some(message) = by_id.get(id) else { break };
+        path.push(*message);
+        current = message.get("parentId").and_then(Value::as_str);
+    }
+    path.reverse();
+    let output_tokens = path
+        .last()
+        .map(|message| ordinary_chat_local_token_estimate(&ordinary_chat_message_text(message)))
+        .unwrap_or_default();
+    let input_tokens = path
+        .iter()
+        .take(path.len().saturating_sub(1))
+        .map(|message| ordinary_chat_local_token_estimate(&ordinary_chat_message_text(message)))
+        .sum::<i64>();
+    json!({"inputTokens":input_tokens,"outputTokens":output_tokens,"cachedInputTokens":0,"source":"LOCAL_TEXT_ESTIMATE"})
+}
+
 fn ordinary_chat_context_terms(value: &str) -> BTreeSet<String> {
     let normalized = value.to_lowercase();
     let mut terms = normalized
@@ -11894,6 +12513,7 @@ impl DesktopWorkspaceStore {
                     == desktop_model_service_v1::CredentialPresence::Stored
         };
         let selected = if let Some(override_id) = override_id {
+            let override_id = canonical_desktop_model_choice(&override_id);
             presets
                 .iter()
                 .find(|preset| preset.id == override_id || preset.model_id == override_id)
@@ -11907,7 +12527,7 @@ impl DesktopWorkspaceStore {
                 "CLAUDE_SONNET_5",
                 "GLM_5_3_FLASH",
                 "QWEN_3_7_PLUS",
-                "GEMINI_3_7_FLASH",
+                "GEMINI_3_8_FLASH",
                 "QWEN_3_6_FLASH",
                 "GPT_5_6_LUNA",
                 "CLAUDE_HAIKU_4_5",
@@ -11943,6 +12563,67 @@ impl DesktopWorkspaceStore {
         ))
     }
 
+    /// Mirrors Android's title-only routing: this is independent of the chat/Auto route and
+    /// tries only the fixed low-cost direct-provider sequence.  A missing service is harmless;
+    /// `autoTitlePending` remains true for a later completed reply to retry.
+    fn prepare_desktop_conversation_title(
+        &self,
+        workspace_id: &str,
+        conversation_id: &str,
+    ) -> Result<Option<DesktopConversationTitlePrepared>, String> {
+        let connection = self.connection()?;
+        let exchange_text: String = connection.query_row(
+            "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [workspace_id], |row| row.get(0),
+        ).map_err(|_| json_error("工作区不存在"))?;
+        let exchange: Value = serde_json::from_str(&exchange_text).map_err(|_| json_error("本地交换 IR 无法读取"))?;
+        let conversation = exchange.get("conversations").and_then(Value::as_array).and_then(|items| items.iter().find(|item| item.get("id").and_then(Value::as_str) == Some(conversation_id)));
+        let Some(conversation) = conversation else { return Ok(None); };
+        if conversation.get("autoTitlePending").and_then(Value::as_bool) != Some(true) { return Ok(None); }
+        let Some(source) = desktop_conversation_title_v1::opening_source(conversation) else { return Ok(None); };
+        let settings = self.read_desktop_model_service_setting_records()?;
+        let credentials = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+        let presets = desktop_model_service_v1::chat_presets();
+        let selected = [("DEEPSEEK", "DEEPSEEK_V4_FLASH"), ("ZHIPU", "GLM_5_3_FLASH"), ("QWEN", "QWEN_3_6_FLASH")]
+            .iter().find_map(|(provider_id, preset_id)| presets.iter().find(|preset| preset.provider_id == *provider_id && preset.id == *preset_id)
+                .filter(|preset| settings.iter().any(|setting| setting.provider_id == preset.provider_id && setting.enabled)
+                    && credentials.presence(preset.provider_id) == desktop_model_service_v1::CredentialPresence::Stored).copied());
+        let Some(selected) = selected else { return Ok(None); };
+        let provider = desktop_model_service_v1::provider(selected.provider_id)?;
+        Ok(Some(DesktopConversationTitlePrepared {
+            workspace_id: workspace_id.into(), conversation_id: conversation_id.into(),
+            endpoint: format!("{}/chat/completions", provider.endpoint.trim_end_matches('/')),
+            provider_id: selected.provider_id.into(), model_id: selected.model_id.into(),
+            messages: desktop_conversation_title_v1::request_messages(&source),
+            idempotency_key: format!("conversation-title-{}-{}", system_now_millis(), conversation_id),
+        }))
+    }
+
+    /// Re-reads at commit time, exactly as Android does.  A manual rename clears the pending
+    /// bit, therefore an asynchronous response can never overwrite the user's own title.
+    fn complete_desktop_conversation_title(
+        &self,
+        prepared: &DesktopConversationTitlePrepared,
+        title: &str,
+    ) -> Result<bool, String> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction().map_err(|_| json_error("无法开启标题更新 transaction"))?;
+        let before: String = transaction.query_row("SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [&prepared.workspace_id], |row| row.get(0))
+            .map_err(|_| json_error("工作区不存在"))?;
+        let mut exchange: Value = serde_json::from_str(&before).map_err(|_| json_error("本地交换 IR 无法读取"))?;
+        let conversation = exchange.get_mut("conversations").and_then(Value::as_array_mut).and_then(|items| items.iter_mut().find(|item| item.get("id").and_then(Value::as_str) == Some(prepared.conversation_id.as_str())));
+        let Some(conversation) = conversation else { return Ok(false); };
+        if conversation.get("autoTitlePending").and_then(Value::as_bool) != Some(true) || desktop_conversation_title_v1::opening_source(conversation).is_none() { return Ok(false); }
+        let revision = revision_of(object(conversation, "conversation")?)?.checked_add(1).ok_or_else(|| json_error("revision 溢出"))?;
+        conversation["title"] = Value::String(title.into());
+        conversation["autoTitlePending"] = Value::Bool(false);
+        conversation["revision"] = Value::Number(revision.into());
+        conversation["updatedAt"] = Value::String(local_now().into());
+        transaction.execute("UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2", params![serde_json::to_string(&exchange).map_err(|_| json_error("标题交换 IR 编码失败"))?, prepared.workspace_id])
+            .map_err(|_| json_error("标题更新未能保存"))?;
+        transaction.commit().map_err(|_| json_error("标题更新未能提交"))?;
+        Ok(true)
+    }
+
     fn ordinary_chat_web_search_enabled(
         &self,
         connection: &Connection,
@@ -11966,6 +12647,7 @@ impl DesktopWorkspaceStore {
         conversation_id: &str,
         assistant_message_id: &str,
         provider_id: &str,
+        model_id: &str,
     ) -> Result<(Value, Vec<DesktopOrdinaryChatSelectedSource>), String> {
         let conversation = exchange
             .get("conversations")
@@ -12226,9 +12908,15 @@ impl DesktopWorkspaceStore {
                     let body = std::str::from_utf8(&bytes)
                         .map_err(|_| json_error("文本附件不是 UTF-8"))?;
                     content.push(json!({"type":"text","text":format!("\n\n### 附件：{display_name}\n{body}")}));
-                } else if matches!(mime, "image/jpeg" | "image/png" | "image/webp")
-                    && matches!(provider_id, "OPENROUTER" | "QWEN")
+                } else if matches!(
+                    mime,
+                    "image/jpeg" | "image/png" | "image/webp" | "image/gif"
+                ) && (matches!(provider_id, "OPENROUTER" | "QWEN")
+                    || (provider_id == "DEEPSEEK" && model_id == "deepseek-flash"))
                 {
+                    if provider_id == "DEEPSEEK" && bytes.len() > 32 * 1024 * 1024 {
+                        return Err(json_error("DeepSeek 图片超过 32 MiB 上限"));
+                    }
                     content.push(json!({"type":"image_url","image_url":{"url":format!("data:{mime};base64,{}", BASE64.encode(bytes))}}));
                 } else if mime == "application/pdf" && provider_id == "OPENROUTER" {
                     content.push(json!({"type":"file","file":{"filename":display_name,"file_data":format!("data:application/pdf;base64,{}", BASE64.encode(bytes))}}));
@@ -12239,6 +12927,14 @@ impl DesktopWorkspaceStore {
                 }
             }
             result.push(json!({"role":role,"content":content}));
+        }
+        if provider_id == "DEEPSEEK"
+            && serde_json::to_vec(&result)
+                .map_err(|_| json_error("请求编码失败"))?
+                .len()
+                > 47 * 1024 * 1024
+        {
+            return Err(json_error("DeepSeek 请求超过本机 47 MiB 安全上限"));
         }
         Ok((Value::Array(result), selected_sources))
     }
@@ -12258,7 +12954,9 @@ impl DesktopWorkspaceStore {
                 || args.tone_override.is_some()
                 || args.web_search_override.is_some())
         {
-            return Err(json_error("已有会话的模型与会话偏好必须先通过会话 owner 保存"));
+            return Err(json_error(
+                "已有会话的模型与会话偏好必须先通过会话 owner 保存",
+            ));
         }
         if args
             .model_id
@@ -12306,7 +13004,7 @@ impl DesktopWorkspaceStore {
             fields: if args.conversation_id.is_some() {
                 json!({"text":text,"role":"user","attachmentIds":args.attachment_ids})
             } else {
-                json!({"title":if text.is_empty() { "附件对话".into() } else { text.chars().take(40).collect::<String>() },"projectId":args.project_id,"firstMessage":text,"attachmentIds":args.attachment_ids})
+                json!({"title":desktop_conversation_title_v1::NEW_CONVERSATION_TITLE,"projectId":args.project_id,"firstMessage":text,"attachmentIds":args.attachment_ids,"autoTitlePending":true})
             },
         };
         self.hydrate_conversation_attachment_blocks(&transaction, &mut mutation)?;
@@ -12422,6 +13120,7 @@ impl DesktopWorkspaceStore {
             &conversation_id,
             &assistant_message_id,
             &provider_id,
+            &model_id,
         )?;
         let request_fingerprint = sha256(canonical_json(&request_messages)?.as_bytes());
         let after_hash = refresh_exchange_hash(&mut after)?;
@@ -12447,6 +13146,13 @@ impl DesktopWorkspaceStore {
                 params![attempt_id, ordinal as i64, source.kind, source.source_id, source.title],
             ).map_err(|_| json_error("无法保存本次上下文来源"))?;
         }
+        // The exact visible draft becomes the persisted user message above.  Clearing the
+        // recovery record in this same transaction prevents a restart from resurrecting it.
+        Self::clear_conversation_draft_in_transaction(
+            &transaction,
+            &args.workspace_id,
+            args.conversation_id.as_deref(),
+        )?;
         transaction
             .commit()
             .map_err(|_| json_error("普通聊天未提交；已回滚"))?;
@@ -12545,7 +13251,7 @@ impl DesktopWorkspaceStore {
             fields: if args.conversation_id.is_some() {
                 json!({"text":text,"role":"user","attachmentIds":args.attachment_ids})
             } else {
-                json!({"title":if text.is_empty() { "附件对比".into() } else { text.chars().take(40).collect::<String>() },"firstMessage":text,"attachmentIds":args.attachment_ids})
+                json!({"title":desktop_conversation_title_v1::NEW_CONVERSATION_TITLE,"firstMessage":text,"attachmentIds":args.attachment_ids,"autoTitlePending":true})
             },
         };
         self.hydrate_conversation_attachment_blocks(&transaction, &mut mutation)?;
@@ -12620,6 +13326,7 @@ impl DesktopWorkspaceStore {
                 &conversation_id,
                 assistant_message_id,
                 "OPENROUTER",
+                preset.model_id,
             )?;
             let idempotency_key = format!("compare-{execution_id}-{logical_model}");
             let request_fingerprint = sha256(canonical_json(&request_messages)?.as_bytes());
@@ -12915,6 +13622,7 @@ impl DesktopWorkspaceStore {
             &previous.conversation_id,
             &assistant_message_id,
             &provider_id,
+            &model_id,
         )?;
         let request_fingerprint = sha256(canonical_json(&request_messages)?.as_bytes());
         let hash = refresh_exchange_hash(&mut exchange)?;
@@ -12972,7 +13680,7 @@ impl DesktopWorkspaceStore {
     ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
         let mut connection = self.connection()?;
         let transaction = connection
-            .transaction()
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|_| json_error("无法开启聊天状态 transaction"))?;
         let projection = Self::ordinary_chat_projection(&transaction, attempt_id)?;
         let exchange_text: String = transaction
@@ -13069,6 +13777,23 @@ impl DesktopWorkspaceStore {
                 .reported_cost_micros
                 .map(|_| Value::String("USD".into()))
                 .unwrap_or(Value::Null);
+            message["run"] = json!({"durationMs":completed.elapsed_ms});
+        }
+        let estimated_usage = completed
+            .is_some_and(|value| {
+                value.usage.input_tokens.is_none() || value.usage.output_tokens.is_none()
+            })
+            .then(|| ordinary_chat_estimated_usage(conversation, &projection.assistant_message_id));
+        if let Some(estimated_usage) = estimated_usage {
+            conversation["messages"]
+                .as_array_mut()
+                .and_then(|items| {
+                    items.iter_mut().find(|item| {
+                        item.get("id").and_then(Value::as_str)
+                            == Some(projection.assistant_message_id.as_str())
+                    })
+                })
+                .map(|message| message["estimatedUsage"] = estimated_usage);
         }
         let hash = refresh_exchange_hash(&mut exchange)?;
         validate_exchange(&exchange)?;
@@ -13078,7 +13803,11 @@ impl DesktopWorkspaceStore {
                 params![canonical_json(&exchange)?, projection.workspace_id],
             )
             .map_err(|_| json_error("无法保存助手消息"))?;
-        self.rebuild_local_search_index(&transaction, &projection.workspace_id, &exchange)?;
+        // Streaming checkpoints persist the answer, but search is a terminal projection.
+        // Rebuilding the entire workspace index for every token blocks the next SSE read.
+        if delivery != "PARTIAL" {
+            self.rebuild_local_search_index(&transaction, &projection.workspace_id, &exchange)?;
+        }
         transaction
             .execute(
                 "UPDATE workspaces SET semantic_hash=?1 WHERE id=?2",
@@ -13318,6 +14047,9 @@ impl DesktopWorkspaceStore {
             budget_micros: None,
             adjustment_micros: None,
             currency_code: completed.reported_cost_micros.map(|_| "USD".into()),
+            cost_source: completed
+                .reported_cost_micros
+                .map(|_| "PROVIDER_RESPONSE".into()),
             reconciliation_fingerprint: None,
             reconciles_entry_id: None,
             source: usage_ledger_v1::Source::DesktopLocal,
@@ -13368,7 +14100,7 @@ impl DesktopWorkspaceStore {
                         == desktop_model_service_v1::CredentialPresence::Stored
                 })
                 .copied()
-        }).ok_or_else(|| json_error("历史资料库需要启用 DeepSeek V4 Flash、GLM-5.3 Flash 或 Qwen3.6 Flash，并保存对应凭据"))?;
+        }).ok_or_else(|| json_error("历史资料库需要启用 DeepSeek V4.1 Flash、GLM-5.3 Flash 或 Qwen3.6 Flash，并保存对应凭据"))?;
         let provider = desktop_model_service_v1::provider(selected.provider_id)?;
         Ok((
             selected.provider_id.into(),
@@ -13463,6 +14195,9 @@ impl DesktopWorkspaceStore {
             budget_micros: None,
             adjustment_micros: None,
             currency_code: completed.reported_cost_micros.map(|_| "USD".into()),
+            cost_source: completed
+                .reported_cost_micros
+                .map(|_| "PROVIDER_RESPONSE".into()),
             reconciliation_fingerprint: None,
             reconciles_entry_id: None,
             source: usage_ledger_v1::Source::DesktopLocal,
@@ -13755,6 +14490,9 @@ impl DesktopWorkspaceStore {
             budget_micros: None,
             adjustment_micros: None,
             currency_code: completed.reported_cost_micros.map(|_| "USD".into()),
+            cost_source: completed
+                .reported_cost_micros
+                .map(|_| "PROVIDER_RESPONSE".into()),
             reconciliation_fingerprint: None,
             reconciles_entry_id: None,
             source: usage_ledger_v1::Source::DesktopLocal,
@@ -14025,11 +14763,13 @@ fn read_desktop_conversation_read_state(
         )
         .map_err(|error| json_error(&error));
     }
-    let mut connection = state
+    // Keep the owner lock for the whole read-and-seed transaction. Runtime completion and the
+    // follow-up title event can otherwise start two independent SQLite write transactions here.
+    let store = state
         .store
         .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+        .map_err(|_| json_error("Desktop store 被锁定"))?;
+    let mut connection = store.connection()?;
     desktop_conversation_read_state_v1::read_projection(
         &mut connection,
         &workspace_id,
@@ -14045,11 +14785,11 @@ fn mark_desktop_conversation_opened(
     workspace_id: String,
     conversation_id: String,
 ) -> Result<desktop_conversation_read_state_v1::Projection, String> {
-    let mut connection = state
+    let store = state
         .store
         .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+        .map_err(|_| json_error("Desktop store 被锁定"))?;
+    let mut connection = store.connection()?;
     desktop_conversation_read_state_v1::mark_opened(
         &mut connection,
         &workspace_id,
@@ -14065,11 +14805,11 @@ fn mark_desktop_conversation_unread(
     workspace_id: String,
     conversation_id: String,
 ) -> Result<desktop_conversation_read_state_v1::Projection, String> {
-    let mut connection = state
+    let store = state
         .store
         .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+        .map_err(|_| json_error("Desktop store 被锁定"))?;
+    let mut connection = store.connection()?;
     desktop_conversation_read_state_v1::mark_manual_unread(
         &mut connection,
         &workspace_id,
@@ -14120,9 +14860,17 @@ fn import_desktop_transcription_source(
 }
 
 #[tauri::command]
-fn choose_desktop_storage_location(app: tauri::AppHandle, state: State<'_, AppState>, selected_path: String) -> Result<(), String> {
+fn choose_desktop_storage_location(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    selected_path: String,
+) -> Result<(), String> {
     let store = state.store.lock().map_err(|_| "数据目录繁忙")?;
-    let config = app.path().app_config_dir().map_err(|_| "配置目录不可用")?.join("storage-location.json");
+    let config = app
+        .path()
+        .app_config_dir()
+        .map_err(|_| "配置目录不可用")?
+        .join("storage-location.json");
     desktop_storage_location::schedule(&config, &store.root, Path::new(&selected_path))
 }
 
@@ -14132,18 +14880,39 @@ fn import_desktop_ocr_drop(
     args: DesktopClipboardAttachmentImportArgs,
 ) -> Result<desktop_transcription_v1::TaskProjection, String> {
     use base64::Engine as _;
-    let store = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?;
-    let name = std::path::Path::new(&args.display_name).file_name().and_then(|s| s.to_str()).ok_or("文件名无效")?;
-    if args.bytes_base64.len() > 140_000_000 { return Err("文件过大".into()); }
-    let bytes = base64::engine::general_purpose::STANDARD.decode(&args.bytes_base64).map_err(|_| "文件内容无效")?;
-    let staging = store.root.join(format!("ocr-drop-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| "时间不可用")?.as_nanos()));
+    let store = state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?;
+    let name = std::path::Path::new(&args.display_name)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or("文件名无效")?;
+    if args.bytes_base64.len() > 140_000_000 {
+        return Err("文件过大".into());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&args.bytes_base64)
+        .map_err(|_| "文件内容无效")?;
+    let staging = store.root.join(format!(
+        "ocr-drop-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "时间不可用")?
+            .as_nanos()
+    ));
     std::fs::create_dir(&staging).map_err(|_| "无法准备文件")?;
     let path = staging.join(name);
     let result = (|| {
         std::fs::write(&path, bytes).map_err(|_| "无法读取拖入文件")?;
-        desktop_transcription_v1::import_document_source(&store.root, &store.database, desktop_transcription_v1::ImportArgs {
-            workspace_id: args.workspace_id, selected_path: path.to_string_lossy().into_owned(),
-        })
+        desktop_transcription_v1::import_document_source(
+            &store.root,
+            &store.database,
+            desktop_transcription_v1::ImportArgs {
+                workspace_id: args.workspace_id,
+                selected_path: path.to_string_lossy().into_owned(),
+            },
+        )
     })();
     let _ = std::fs::remove_dir_all(&staging);
     result
@@ -14316,28 +15085,75 @@ fn save_desktop_model_service_settings(
 /// Credential plaintext crosses IPC only after the user explicitly presses the reveal control.
 #[tauri::command]
 fn reveal_desktop_model_service_credential(
+    app: tauri::AppHandle,
     provider_id: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     state.require_external_access()?;
-    let credential_store = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-    let secret = credential_store.reveal_user_requested_secret(&provider_id)?;
-    Ok(secret.to_string())
+    let secret = read_user_authorized_provider_secret(&app, &provider_id)?;
+    String::from_utf8(secret.to_vec())
+        .map_err(|_| json_error("本机 API Key 格式无效；请重新保存。"))
+}
+
+/// Reading a Keychain item that may require user interaction must happen on macOS's app main
+/// thread.  The only callers are explicit foreground actions (test, reveal, and send); automatic
+/// background work keeps using the non-interactive credential path and never prompts unexpectedly.
+fn read_user_authorized_provider_secret(
+    app: &tauri::AppHandle,
+    provider_id: &str,
+) -> Result<Zeroizing<Vec<u8>>, String> {
+    let provider_id = provider_id.to_owned();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        desktop_model_service_v1::allow_user_credential_retry(&provider_id);
+        let credential_store =
+            desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+        let result =
+            credential_store.with_secret(&provider_id, |bytes| Ok(Zeroizing::new(bytes.to_vec())));
+        let _ = sender.send(result);
+    })
+    .map_err(|_| json_error("无法请求 macOS 钥匙串授权；请保持应用在前台后重试。"))?;
+    receiver
+        .recv()
+        .map_err(|_| json_error("macOS 钥匙串授权请求未返回；请重试。"))?
+}
+
+fn ordinary_chat_credential_failure_code(error: &str) -> &'static str {
+    if error.contains("未获准") || error.contains("未授予") || error.contains("暂不允许")
+    {
+        "CREDENTIAL_DENIED"
+    } else if error.contains("尚未保存") {
+        "CREDENTIAL_MISSING"
+    } else {
+        "CREDENTIAL_UNAVAILABLE"
+    }
+}
+
+#[cfg(test)]
+mod user_authorized_credential_read_tests {
+    use super::ordinary_chat_credential_failure_code;
+
+    #[test]
+    fn keychain_authorization_failures_keep_the_precise_retry_state() {
+        assert_eq!(
+            ordinary_chat_credential_failure_code(
+                "macOS 未授予此 API Key 的钥匙串访问；请在系统授权提示中允许后重试。"
+            ),
+            "CREDENTIAL_DENIED"
+        );
+    }
 }
 
 /// Connection testing is user-triggered and can reach only the fixed endpoint/model registry.
 #[tauri::command]
 async fn test_desktop_model_service_connection(
+    app: tauri::AppHandle,
     args: DesktopModelServiceConnectionTestArgs,
     state: State<'_, AppState>,
 ) -> Result<DesktopModelServiceConnectionTestProjection, String> {
     state.require_external_access()?;
     desktop_model_service_v1::validate_configuration(&args.provider_id, &args.preset_id)?;
-    desktop_model_service_v1::allow_user_credential_retry(&args.provider_id);
-    let credential_store = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-    let secret = credential_store.with_secret(&args.provider_id, |bytes| {
-        Ok(Zeroizing::new(bytes.to_vec()))
-    })?;
+    let secret = read_user_authorized_provider_secret(&app, &args.provider_id)?;
     desktop_model_service_v1::test_saved_connection(&args.provider_id, &args.preset_id, secret)
         .await?;
     Ok(DesktopModelServiceConnectionTestProjection {
@@ -14350,56 +15166,65 @@ async fn test_desktop_model_service_connection(
 }
 
 #[tauri::command]
-fn read_desktop_usage_ledger(
-    state: State<'_, AppState>,
+async fn read_desktop_usage_ledger(
+    app: tauri::AppHandle,
 ) -> Result<DesktopUsageLedgerProjection, String> {
-    let root = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .root
-        .join("usage-ledger");
-    if !root.join("usage-ledger-v1.sqlite3").is_file() {
-        return Ok(DesktopUsageLedgerProjection {
-            records: Vec::new(),
-            input_tokens: 0,
-            output_tokens: 0,
-            cached_input_tokens: 0,
-        });
-    }
-    let entries = usage_ledger_v1::Ledger::open(&root)?.all_entries()?;
-    let records = entries
-        .into_iter()
-        .filter(|entry| entry.kind == usage_ledger_v1::Kind::FinalMeasured)
-        .map(|entry| DesktopUsageLedgerRecordProjection {
-            entry_id: entry.entry_id,
-            conversation_id: entry.conversation_id,
-            model_id: entry.actual_model_id.unwrap_or(entry.requested_model_id),
-            kind: entry.kind.as_str().to_owned(),
-            fact_grade: entry.fact_grade.as_str().to_owned(),
-            input_tokens: entry.input_tokens,
-            output_tokens: entry.output_tokens,
-            cached_input_tokens: entry.cached_input_tokens,
-            charge_micros: entry.charge_micros,
-            currency_code: entry.currency_code,
-            occurred_at_ms: entry.occurred_at_ms,
+    let root = {
+        let state = app.state::<AppState>();
+        let root = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .root
+            .join("usage-ledger");
+        root
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        if !root.join("usage-ledger-v1.sqlite3").is_file() {
+            return Ok(DesktopUsageLedgerProjection {
+                records: Vec::new(),
+                input_tokens: 0,
+                output_tokens: 0,
+                cached_input_tokens: 0,
+            });
+        }
+        let entries = usage_ledger_v1::Ledger::open(&root)?.all_entries()?;
+        let records = entries
+            .into_iter()
+            .filter(|entry| entry.kind == usage_ledger_v1::Kind::FinalMeasured)
+            .map(|entry| DesktopUsageLedgerRecordProjection {
+                entry_id: entry.entry_id,
+                conversation_id: entry.conversation_id,
+                model_id: entry.actual_model_id.unwrap_or(entry.requested_model_id),
+                kind: entry.kind.as_str().to_owned(),
+                fact_grade: entry.fact_grade.as_str().to_owned(),
+                input_tokens: entry.input_tokens,
+                output_tokens: entry.output_tokens,
+                cached_input_tokens: entry.cached_input_tokens,
+                charge_micros: entry.charge_micros,
+                currency_code: entry.currency_code,
+                cost_source: entry.cost_source,
+                occurred_at_ms: entry.occurred_at_ms,
+            })
+            .collect::<Vec<_>>();
+        Ok(DesktopUsageLedgerProjection {
+            input_tokens: records
+                .iter()
+                .filter_map(|record| record.input_tokens)
+                .sum(),
+            output_tokens: records
+                .iter()
+                .filter_map(|record| record.output_tokens)
+                .sum(),
+            cached_input_tokens: records
+                .iter()
+                .filter_map(|record| record.cached_input_tokens)
+                .sum(),
+            records,
         })
-        .collect::<Vec<_>>();
-    Ok(DesktopUsageLedgerProjection {
-        input_tokens: records
-            .iter()
-            .filter_map(|record| record.input_tokens)
-            .sum(),
-        output_tokens: records
-            .iter()
-            .filter_map(|record| record.output_tokens)
-            .sum(),
-        cached_input_tokens: records
-            .iter()
-            .filter_map(|record| record.cached_input_tokens)
-            .sum(),
-        records,
     })
+    .await
+    .map_err(|_| json_error("调用记录后台读取线程异常"))?
 }
 
 #[tauri::command]
@@ -14459,25 +15284,29 @@ fn cancel_desktop_local_restore(state: State<'_, AppState>) -> Result<(), String
 }
 
 #[tauri::command]
-fn read_desktop_local_backup_status(
-    state: State<'_, AppState>,
+async fn read_desktop_local_backup_status(
+    app: tauri::AppHandle,
 ) -> Result<desktop_local_backup_v1::BackupStatus, String> {
-    let store = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?;
-    desktop_local_backup_v1::read_status(&store.root, &store.database)
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "本地备份状态后台读取线程异常",
+        move |store| desktop_local_backup_v1::read_status(&store.root, &store.database),
+    )
+    .await
 }
 
 #[tauri::command]
-fn read_desktop_privacy_inventory(
-    state: State<'_, AppState>,
+async fn read_desktop_privacy_inventory(
+    app: tauri::AppHandle,
 ) -> Result<DesktopPrivacyInventoryProjection, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .read_desktop_privacy_inventory()
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "隐私清单后台读取线程异常",
+        move |store| store.read_desktop_privacy_inventory(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -14912,73 +15741,489 @@ fn import_staged_exchange_as_new_workspace(
 }
 
 #[tauri::command]
-fn list_desktop_workspaces(state: State<'_, AppState>) -> Result<Vec<WorkspaceSummary>, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .list_workspaces()
+async fn list_desktop_workspaces(app: tauri::AppHandle) -> Result<Vec<WorkspaceSummary>, String> {
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "工作区列表后台读取线程异常",
+        move |store| store.list_workspaces(),
+    )
+    .await
+}
+
+async fn run_desktop_store_blocking<T, F>(
+    app: tauri::AppHandle,
+    lock_error: &'static str,
+    task_error: &'static str,
+    operation: F,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce(&DesktopWorkspaceStore) -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let store = state.store.lock().map_err(|_| json_error(lock_error))?;
+        operation(&store)
+    })
+    .await
+    .map_err(|_| json_error(task_error))?
+}
+
+async fn run_desktop_store_paths_blocking<T, F>(
+    app: tauri::AppHandle,
+    _lock_error: &'static str,
+    task_error: &'static str,
+    operation: F,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce(DesktopStoreReadPaths) -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths = app.state::<AppState>().store_paths.clone();
+        operation(paths)
+    })
+    .await
+    .map_err(|_| json_error(task_error))?
+}
+
+const DESKTOP_MEDIA_RANGE_CHUNK_BYTES: u64 = 2 * 1024 * 1024;
+
+fn parse_desktop_media_range(value: &str, byte_count: u64) -> Result<(u64, u64), ()> {
+    if byte_count == 0 {
+        return Err(());
+    }
+    let range = value.strip_prefix("bytes=").ok_or(())?;
+    if range.contains(',') {
+        return Err(());
+    }
+    let (start, end) = range.split_once('-').ok_or(())?;
+    let (start, requested_end) = if start.is_empty() {
+        let suffix = end
+            .parse::<u64>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or(())?;
+        (
+            byte_count.saturating_sub(suffix.min(byte_count)),
+            byte_count - 1,
+        )
+    } else {
+        let start = start.parse::<u64>().map_err(|_| ())?;
+        if start >= byte_count {
+            return Err(());
+        }
+        let end = if end.is_empty() {
+            byte_count - 1
+        } else {
+            end.parse::<u64>().map_err(|_| ())?.min(byte_count - 1)
+        };
+        if end < start {
+            return Err(());
+        }
+        (start, end)
+    };
+    Ok((
+        start,
+        requested_end.min(start.saturating_add(DESKTOP_MEDIA_RANGE_CHUNK_BYTES - 1)),
+    ))
+}
+
+fn desktop_media_error_response(status: tauri::http::StatusCode) -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(status)
+        .header("Cache-Control", "no-store")
+        .header("Access-Control-Allow-Origin", "*")
+        .body(Vec::new())
+        .expect("static media protocol response")
+}
+
+fn desktop_media_protocol_response(
+    app: &tauri::AppHandle,
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    let parts = request
+        .uri()
+        .path()
+        .trim_matches('/')
+        .split('/')
+        .collect::<Vec<_>>();
+    if parts.len() != 3
+        || !matches!(parts[0], "video" | "audio")
+        || !is_stable_id(parts[1])
+        || !is_stable_id(parts[2])
+    {
+        return desktop_media_error_response(tauri::http::StatusCode::BAD_REQUEST);
+    }
+    let Some(state) = app.try_state::<AppState>() else {
+        return desktop_media_error_response(tauri::http::StatusCode::SERVICE_UNAVAILABLE);
+    };
+    let paths = match state.store.lock() {
+        Ok(store) => DesktopStoreReadPaths {
+            root: store.root.clone(),
+            database: store.database.clone(),
+        },
+        Err(_) => {
+            return desktop_media_error_response(tauri::http::StatusCode::SERVICE_UNAVAILABLE)
+        }
+    };
+    let connection = match open_desktop_workspace_connection(&paths.root, &paths.database) {
+        Ok(connection) => connection,
+        Err(_) => return desktop_media_error_response(tauri::http::StatusCode::NOT_FOUND),
+    };
+    let metadata = connection.query_row(
+        "SELECT mime_type,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+        params![parts[1], parts[2]],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?, row.get::<_, String>(2)?)),
+    );
+    let Ok((mime_type, byte_count, digest)) = metadata else {
+        return desktop_media_error_response(tauri::http::StatusCode::NOT_FOUND);
+    };
+    let allowed = (parts[0] == "video" && mime_type == "video/mp4")
+        || (parts[0] == "audio"
+            && matches!(mime_type.as_str(), "audio/mpeg" | "audio/wav" | "audio/mp4"));
+    if !allowed || !is_sha256(&digest) || byte_count == 0 {
+        return desktop_media_error_response(tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    }
+    let asset_path = paths.root.join("assets").join(digest);
+    if fs::metadata(&asset_path)
+        .ok()
+        .map(|metadata| metadata.len())
+        != Some(byte_count)
+    {
+        return desktop_media_error_response(tauri::http::StatusCode::NOT_FOUND);
+    }
+    let is_head = request.method() == tauri::http::Method::HEAD;
+    let range_header = request
+        .headers()
+        .get(tauri::http::header::RANGE)
+        .and_then(|value| value.to_str().ok());
+    if let Some(range_header) = range_header {
+        let (start, end) = match parse_desktop_media_range(range_header, byte_count) {
+            Ok(range) => range,
+            Err(_) => {
+                return tauri::http::Response::builder()
+                    .status(tauri::http::StatusCode::RANGE_NOT_SATISFIABLE)
+                    .header("Content-Range", format!("bytes */{byte_count}"))
+                    .header("Accept-Ranges", "bytes")
+                    .header("Cache-Control", "no-store")
+                    .body(Vec::new())
+                    .expect("static invalid range response")
+            }
+        };
+        let length = end - start + 1;
+        let body = if is_head {
+            Vec::new()
+        } else {
+            let mut file = match fs::File::open(&asset_path) {
+                Ok(file) => file,
+                Err(_) => return desktop_media_error_response(tauri::http::StatusCode::NOT_FOUND),
+            };
+            if file.seek(SeekFrom::Start(start)).is_err() {
+                return desktop_media_error_response(
+                    tauri::http::StatusCode::INTERNAL_SERVER_ERROR,
+                );
+            }
+            let mut body = Vec::with_capacity(length as usize);
+            if file.take(length).read_to_end(&mut body).is_err() || body.len() as u64 != length {
+                return desktop_media_error_response(
+                    tauri::http::StatusCode::INTERNAL_SERVER_ERROR,
+                );
+            }
+            body
+        };
+        return tauri::http::Response::builder()
+            .status(tauri::http::StatusCode::PARTIAL_CONTENT)
+            .header("Content-Type", mime_type)
+            .header("Content-Length", length.to_string())
+            .header("Content-Range", format!("bytes {start}-{end}/{byte_count}"))
+            .header("Accept-Ranges", "bytes")
+            .header("Cache-Control", "no-store")
+            .header("Access-Control-Allow-Origin", "*")
+            .body(body)
+            .expect("static media range response");
+    }
+    let body = if is_head {
+        Vec::new()
+    } else {
+        match fs::read(asset_path) {
+            Ok(bytes) => bytes,
+            Err(_) => return desktop_media_error_response(tauri::http::StatusCode::NOT_FOUND),
+        }
+    };
+    tauri::http::Response::builder()
+        .status(tauri::http::StatusCode::OK)
+        .header("Content-Type", mime_type)
+        .header("Content-Length", byte_count.to_string())
+        .header("Accept-Ranges", "bytes")
+        .header("Cache-Control", "no-store")
+        .header("Access-Control-Allow-Origin", "*")
+        .body(body)
+        .expect("static media response")
+}
+
+fn read_desktop_video_thumbnail_from_paths(
+    root: &Path,
+    database: &Path,
+    args: &DesktopVideoThumbnailArgs,
+) -> Result<DesktopVideoThumbnail, String> {
+    if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
+        return Err(json_error("视频缩略图引用无效"));
+    }
+    let connection = open_desktop_workspace_connection(root, database)?;
+    let metadata = connection
+        .query_row(
+            "SELECT mime_type,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+            params![args.workspace_id, args.attachment_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?, row.get::<_, String>(2)?)),
+        )
+        .map_err(|_| json_error("本地视频附件不可用"))?;
+    if metadata.0 != "video/mp4" || !is_sha256(&metadata.2) {
+        return Err(json_error("该本地附件不是受支持的视频"));
+    }
+    let asset_path = root.join("assets").join(&metadata.2);
+    let bytes = fs::read(&asset_path).map_err(|_| json_error("本地视频附件缺失"))?;
+    if bytes.len() as u64 != metadata.1 || sha256(&bytes) != metadata.2 {
+        return Err(json_error("本地视频附件校验不一致"));
+    }
+    let png = macos_video_thumbnail(&asset_path)?;
+    Ok(DesktopVideoThumbnail {
+        attachment_id: args.attachment_id.clone(),
+        data_url: format!("data:image/png;base64,{}", BASE64.encode(png)),
+    })
+}
+
+fn parse_afinfo_duration_millis(output: &str) -> Option<u64> {
+    let marker = "<duration units=\"sec\">";
+    let start = output.find(marker)? + marker.len();
+    let end = output[start..].find("</duration>")? + start;
+    let seconds = output[start..end].trim().parse::<f64>().ok()?;
+    (seconds.is_finite() && seconds > 0.0 && seconds <= 4.0 * 60.0 * 60.0)
+        .then(|| (seconds * 1000.0).round() as u64)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_audio_duration_millis(asset_path: &Path) -> Option<u64> {
+    let output = Command::new("/usr/bin/afinfo")
+        .args(["-x"])
+        .arg(asset_path)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    output.status.success().then_some(())?;
+    parse_afinfo_duration_millis(std::str::from_utf8(&output.stdout).ok()?)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn macos_audio_duration_millis(_asset_path: &Path) -> Option<u64> {
+    None
+}
+
+fn read_desktop_image_preview_from_paths(
+    root: &Path, database: &Path, args: &DesktopImagePreviewArgs,
+) -> Result<DesktopImagePreview, String> {
+    if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
+        return Err(json_error("图片预览引用无效"));
+    }
+    let connection = open_desktop_workspace_connection(root, database)?;
+    let metadata = connection.query_row(
+        "SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+        params![args.workspace_id, args.attachment_id],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, u64>(2)?, row.get::<_, String>(3)?)),
+    ).map_err(|_| json_error("本地图片附件不可用"))?;
+    if !matches!(
+        metadata.0.as_str(),
+        "image/jpeg" | "image/png" | "image/webp"
+    ) || !is_sha256(&metadata.3)
+    {
+        return Err(json_error("该本地附件不是受支持的图片"));
+    }
+    let asset = root.join("assets").join(&metadata.3);
+    let bytes = fs::read(&asset).map_err(|_| json_error("本地图片附件缺失"))?;
+    if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
+        return Err(json_error("本地图片附件校验不一致"));
+    }
+    let reader = ImageReader::new(Cursor::new(&bytes))
+        .with_guessed_format()
+        .map_err(|_| json_error("本地图片格式无效"))?;
+    let image = reader
+        .decode()
+        .map_err(|_| json_error("本地图片已损坏，无法预览"))?;
+    let width = image.width();
+    let height = image.height();
+    if width == 0
+        || height == 0
+        || u64::from(width) * u64::from(height) > MAX_CONVERSATION_IMAGE_PIXELS
+    {
+        return Err(json_error("图片像素超过本地安全预览上限"));
+    }
+    let (mime_type, image_bytes, is_thumbnail) = if args.full_size {
+        (metadata.0.clone(), bytes, false)
+    } else {
+        let thumbnail = image.thumbnail(
+            MAX_DESKTOP_IMAGE_THUMBNAIL_EDGE,
+            MAX_DESKTOP_IMAGE_THUMBNAIL_EDGE,
+        );
+        let mut output = Cursor::new(Vec::new());
+        thumbnail
+            .write_to(&mut output, ImageFormat::Png)
+            .map_err(|_| json_error("本地缩略图生成失败"))?;
+        ("image/png".to_owned(), output.into_inner(), true)
+    };
+    Ok(DesktopImagePreview {
+        attachment_id: args.attachment_id.clone(),
+        mime_type,
+        display_name: metadata.1,
+        byte_count: metadata.2,
+        width,
+        height,
+        data_url: format!(
+            "data:{};base64,{}",
+            if is_thumbnail {
+                "image/png"
+            } else {
+                &metadata.0
+            },
+            BASE64.encode(image_bytes)
+        ),
+        is_thumbnail,
+    })
+}
+
+
+fn read_desktop_search_attachment_preview_from_paths(
+    root: &Path,
+    database: &Path,
+    args: &DesktopTextPreviewArgs,
+) -> Result<DesktopSearchAttachmentPreview, String> {
+    if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
+        return Err(json_error("搜索附件预览引用无效"));
+    }
+    let connection = open_desktop_workspace_connection(root, database)?;
+    let (mime_type, byte_count, digest): (String, u64, String) = connection
+        .query_row(
+            "SELECT mime_type,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+            params![args.workspace_id, args.attachment_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|_| json_error("本地搜索附件不可用"))?;
+    if !is_sha256(&digest) {
+        return Err(json_error("本地搜索附件 hash 无效"));
+    }
+    let asset_path = root.join("assets").join(&digest);
+    let bytes = fs::read(&asset_path).map_err(|_| json_error("本地搜索附件缺失"))?;
+    if bytes.len() as u64 != byte_count || sha256(&bytes) != digest {
+        return Err(json_error("本地搜索附件校验不一致"));
+    }
+
+    let mut result = DesktopSearchAttachmentPreview {
+        attachment_id: args.attachment_id.clone(),
+        data_url: None,
+        text: None,
+        duration_millis: None,
+    };
+    match mime_type.as_str() {
+        "application/pdf" => {
+            let page_count = Document::load_mem(&bytes)
+                .map_err(|_| json_error("本地 PDF 已损坏，无法生成搜索预览"))?
+                .get_pages()
+                .len();
+            if page_count == 0 {
+                return Err(json_error("本地 PDF 没有可预览页面"));
+            }
+            let png = desktop_pdf_page_render::render_page(&bytes, 1)?;
+            result.data_url = Some(format!("data:image/png;base64,{}", BASE64.encode(png)));
+        }
+        "text/plain" | "text/markdown" | "application/json" | "text/csv" => {
+            let text = std::str::from_utf8(&bytes)
+                .map_err(|_| json_error("本地文本不是可安全解码的 UTF-8"))?
+                .strip_prefix('\u{feff}')
+                .unwrap_or_else(|| std::str::from_utf8(&bytes).unwrap());
+            result.text = Some(text.chars().take(640).collect());
+        }
+        "audio/mpeg" | "audio/wav" | "audio/mp4" => {
+            result.duration_millis = if mime_type == "audio/mp4" {
+                mp4_duration_millis(&bytes).or_else(|| macos_audio_duration_millis(&asset_path))
+            } else {
+                macos_audio_duration_millis(&asset_path)
+            };
+        }
+        _ => {}
+    }
+    Ok(result)
 }
 
 #[tauri::command]
-fn read_desktop_workspace(
-    state: State<'_, AppState>,
+async fn read_desktop_workspace(
+    app: tauri::AppHandle,
     workspace_id: String,
 ) -> Result<WorkspaceProjection, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .workspace_projection(&workspace_id)
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "工作区后台读取线程异常",
+        move |store| store.workspace_projection(&workspace_id),
+    )
+    .await
 }
 
 #[tauri::command]
-fn search_desktop_local_index(
-    state: State<'_, AppState>,
+async fn search_desktop_local_index(
+    app: tauri::AppHandle,
     workspace_id: String,
     query: String,
 ) -> Result<Vec<DesktopLocalSearchHit>, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .search_local_index(&workspace_id, &query)
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "本机搜索后台读取线程异常",
+        move |store| store.search_local_index(&workspace_id, &query),
+    )
+    .await
 }
 
 #[tauri::command]
-fn query_desktop_local_index(
-    state: State<'_, AppState>,
+async fn query_desktop_local_index(
+    app: tauri::AppHandle,
     args: DesktopLocalSearchQueryArgs,
 ) -> Result<DesktopLocalSearchPage, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .query_local_index(&args, None)
+    run_desktop_store_paths_blocking(
+        app,
+        "本机索引路径不可用",
+        "本机索引后台读取线程异常",
+        move |paths| DesktopWorkspaceStore::query_local_index_at(&paths.root, &paths.database, &args, None),
+    )
+    .await
 }
 
 #[tauri::command]
-fn catalog_desktop_local_index(
-    state: State<'_, AppState>,
+async fn catalog_desktop_local_index(
+    app: tauri::AppHandle,
     category: String,
 ) -> Result<Vec<DesktopLocalSearchHit>, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .catalog_local_index(&category)
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "本机分类索引后台读取线程异常",
+        move |store| store.catalog_local_index(&category),
+    )
+    .await
 }
 
 #[tauri::command]
-fn read_desktop_local_search_history(
-    state: State<'_, AppState>,
+async fn read_desktop_local_search_history(
+    app: tauri::AppHandle,
     workspace_id: String,
 ) -> Result<Vec<String>, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .local_search_history(&workspace_id)
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "搜索历史后台读取线程异常",
+        move |store| store.local_search_history(&workspace_id),
+    )
+    .await
 }
 #[tauri::command]
 fn clear_desktop_local_search_history(
@@ -14993,63 +16238,127 @@ fn clear_desktop_local_search_history(
 }
 
 #[tauri::command]
-fn read_desktop_image_preview(
-    state: State<'_, AppState>,
+async fn read_desktop_image_preview(
+    app: tauri::AppHandle,
     args: DesktopImagePreviewArgs,
 ) -> Result<DesktopImagePreview, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .image_preview(&args)
+    run_desktop_store_paths_blocking(
+        app,
+        "Desktop store 被锁定",
+        "本地图片后台读取线程异常",
+        move |paths| read_desktop_image_preview_from_paths(&paths.root, &paths.database, &args),
+    )
+    .await
 }
 
 #[tauri::command]
-fn read_desktop_pdf_preview(
-    state: State<'_, AppState>,
+async fn read_desktop_pdf_preview(
+    app: tauri::AppHandle,
     args: DesktopPdfPreviewArgs,
 ) -> Result<DesktopPdfPreview, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("本地 PDF 预览锁不可用"))?
-        .pdf_preview(&args)
+    run_desktop_store_blocking(
+        app,
+        "本地 PDF 预览锁不可用",
+        "本地 PDF 后台读取线程异常",
+        move |store| store.pdf_preview(&args),
+    )
+    .await
 }
 
 #[tauri::command]
-fn read_desktop_video_preview(
-    state: State<'_, AppState>,
+async fn read_desktop_video_preview(
+    app: tauri::AppHandle,
     args: DesktopVideoPreviewArgs,
 ) -> Result<DesktopVideoPreview, String> {
+    run_desktop_store_blocking(
+        app,
+        "本地视频预览锁不可用",
+        "本地视频后台读取线程异常",
+        move |store| store.video_preview(&args),
+    )
+    .await
+}
+
+#[tauri::command]
+fn save_desktop_video_preview_position(
+    state: State<'_, AppState>,
+    args: DesktopVideoPreviewArgs,
+) -> Result<(), String> {
     state
         .store
         .lock()
         .map_err(|_| json_error("本地视频预览锁不可用"))?
-        .video_preview(&args)
+        .save_video_preview_position(&args)
 }
 
 #[tauri::command]
-fn read_desktop_audio_preview(
-    state: State<'_, AppState>,
+async fn read_desktop_video_thumbnail(
+    app: tauri::AppHandle,
+    args: DesktopVideoThumbnailArgs,
+) -> Result<DesktopVideoThumbnail, String> {
+    run_desktop_store_paths_blocking(
+        app,
+        "本地视频缩略图锁不可用",
+        "本地视频缩略图后台读取线程异常",
+        move |paths| read_desktop_video_thumbnail_from_paths(&paths.root, &paths.database, &args),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn read_desktop_search_attachment_preview(
+    app: tauri::AppHandle,
+    args: DesktopTextPreviewArgs,
+) -> Result<DesktopSearchAttachmentPreview, String> {
+    run_desktop_store_paths_blocking(
+        app,
+        "本地搜索附件预览锁不可用",
+        "本地搜索附件预览后台线程异常",
+        move |paths| {
+            read_desktop_search_attachment_preview_from_paths(&paths.root, &paths.database, &args)
+        },
+    )
+    .await
+}
+
+#[tauri::command]
+async fn read_desktop_audio_preview(
+    app: tauri::AppHandle,
     args: DesktopAudioPreviewArgs,
 ) -> Result<DesktopAudioPreview, String> {
+    run_desktop_store_blocking(
+        app,
+        "本地音频预览锁不可用",
+        "本地音频后台读取线程异常",
+        move |store| store.audio_preview(&args),
+    )
+    .await
+}
+
+#[tauri::command]
+fn save_desktop_audio_preview_position(
+    state: State<'_, AppState>,
+    args: DesktopAudioPreviewArgs,
+) -> Result<(), String> {
     state
         .store
         .lock()
         .map_err(|_| json_error("本地音频预览锁不可用"))?
-        .audio_preview(&args)
+        .save_audio_preview_position(&args)
 }
 
 #[tauri::command]
-fn read_desktop_text_preview(
-    state: State<'_, AppState>,
+async fn read_desktop_text_preview(
+    app: tauri::AppHandle,
     args: DesktopTextPreviewArgs,
 ) -> Result<DesktopTextPreview, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("本地文本预览锁不可用"))?
-        .text_preview(&args)
+    run_desktop_store_blocking(
+        app,
+        "本地文本预览锁不可用",
+        "本地文本后台读取线程异常",
+        move |store| store.text_preview(&args),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -15063,6 +16372,83 @@ fn open_desktop_attachment_with_system(
         .lock()
         .map_err(|_| json_error("本地附件打开锁不可用"))?
         .open_attachment_with_system(&args)
+}
+
+#[tauri::command]
+fn share_desktop_attachment(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+    args: DesktopSystemOpenAttachmentArgs,
+) -> Result<(), String> {
+    let path = state
+        .store
+        .lock()
+        .map_err(|_| json_error("本地附件分享锁不可用"))?
+        .prepare_attachment_for_share(&args)?;
+    #[cfg(target_os = "macos")]
+    {
+        let view_address = window
+            .ns_view()
+            .map_err(|_| json_error("macOS 分享锚点不可用"))? as usize;
+        let path = path.to_string_lossy().to_string();
+        window
+            .run_on_main_thread(move || {
+                let path = NSString::from_str(&path);
+                let url = NSURL::fileURLWithPath(&path);
+                let item: Retained<AnyObject> = url.into();
+                let items = NSArray::from_retained_slice(&[item]);
+                let picker = unsafe {
+                    NSSharingServicePicker::initWithItems(NSSharingServicePicker::alloc(), &items)
+                };
+                let view = unsafe { &*(view_address as *const NSView) };
+                picker.showRelativeToRect_ofView_preferredEdge(
+                    view.bounds(),
+                    view,
+                    NSRectEdge::MinY,
+                );
+            })
+            .map_err(|_| json_error("macOS 分享面板未打开"))?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (window, path);
+        Err(json_error("当前平台尚未提供受控系统分享适配器"))
+    }
+}
+
+fn validated_desktop_source_link(href: &str) -> Result<Url, String> {
+    let url = Url::parse(href.trim()).map_err(|_| json_error("来源网站地址无效"))?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err(json_error("来源网站地址不受支持"));
+    }
+    Ok(url)
+}
+
+#[tauri::command]
+fn open_desktop_source_link(
+    state: State<'_, AppState>,
+    args: DesktopSourceLinkArgs,
+) -> Result<(), String> {
+    state.require_external_access()?;
+    let url = validated_desktop_source_link(&args.href)?;
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("/usr/bin/open")
+            .arg(url.as_str())
+            .spawn()
+            .map_err(|_| json_error("无法交给 macOS 浏览器打开该来源网站"))?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = url;
+        Err(json_error("当前平台尚未提供受控来源网站打开适配器"))
+    }
 }
 
 #[tauri::command]
@@ -16120,7 +17506,6 @@ async fn execute_desktop_ordinary_chat_prepared(
     app: tauri::AppHandle,
     prepared: DesktopOrdinaryChatPrepared,
 ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
-    desktop_model_service_v1::allow_user_credential_retry(&prepared.provider_id);
     let state = app.state::<AppState>();
     if let Some(code) = prepared.preflight_failure_code.as_deref() {
         let failed = state
@@ -16162,11 +17547,7 @@ async fn execute_desktop_ordinary_chat_prepared(
     let secret = if state.ordinary_chat_mock_endpoint.is_some() {
         Zeroizing::new(b"local-acceptance-mock-only".to_vec())
     } else {
-        let credential_store =
-            desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-        match credential_store.with_secret(&prepared.provider_id, |bytes| {
-            Ok(Zeroizing::new(bytes.to_vec()))
-        }) {
+        match read_user_authorized_provider_secret(&app, &prepared.provider_id) {
             Ok(secret) => secret,
             Err(error) => {
                 let failed = state
@@ -16179,7 +17560,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                         "FAILED",
                         None,
                         None,
-                        Some(if error.contains("未获准") { "CREDENTIAL_DENIED" } else if error.contains("尚未保存") { "CREDENTIAL_MISSING" } else { "CREDENTIAL_UNAVAILABLE" }),
+                        Some(ordinary_chat_credential_failure_code(&error)),
                     )?;
                 emit_ordinary_chat_event(&app, &failed);
                 if let Ok(mut values) = state.ordinary_chat_cancellations.lock() {
@@ -16265,6 +17646,28 @@ async fn execute_desktop_ordinary_chat_prepared(
                     }
                 };
                 emit_ordinary_chat_event(&worker_app, &accounted);
+                // The answer is already durable and visible.  Title generation is intentionally
+                // secondary and cannot turn a successful chat into a failed one.
+                let title_prepared = state.store.lock().ok()
+                    .and_then(|store| store.prepare_desktop_conversation_title(&accounted.workspace_id, &accounted.conversation_id).ok().flatten());
+                if let Some(title_prepared) = title_prepared {
+                    let credential_store = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
+                    let title_secret = credential_store.with_secret(&title_prepared.provider_id, |bytes| Ok(Zeroizing::new(bytes.to_vec()))).ok();
+                    if let Some(title_secret) = title_secret {
+                        let title_request = desktop_ordinary_chat_v1::TransportRequest {
+                            endpoint: title_prepared.endpoint.clone(), provider_id: title_prepared.provider_id.clone(),
+                            model_id: title_prepared.model_id.clone(), messages: title_prepared.messages.clone(),
+                            idempotency_key: title_prepared.idempotency_key.clone(), max_output_tokens: 256, web_search_route: "NONE".into(),
+                        };
+                        if let Ok(reply) = tauri::async_runtime::block_on(desktop_ordinary_chat_v1::execute_non_streaming(title_request, title_secret)) {
+                            if let Some(title) = desktop_conversation_title_v1::parse_response(&reply.text) {
+                                if state.store.lock().ok().and_then(|store| store.complete_desktop_conversation_title(&title_prepared, &title).ok()) == Some(true) {
+                                    emit_ordinary_chat_event(&worker_app, &accounted);
+                                }
+                            }
+                        }
+                    }
+                }
                 accounted
             }
             Err(failure) => {
@@ -16396,8 +17799,12 @@ async fn submit_desktop_compare(
         .egress_authorization
         .as_ref()
         .ok_or_else(|| json_error("本次 Compare 未形成外发授权事实；未向服务商建立连接"))?;
-    if authorization.approved_at_ms <= 0 || authorization.disclosure_version != "normal-chat-egress-v1" {
-        return Err(json_error("本次 Compare 外发授权事实无效；未向服务商建立连接"));
+    if authorization.approved_at_ms <= 0
+        || authorization.disclosure_version != "normal-chat-egress-v1"
+    {
+        return Err(json_error(
+            "本次 Compare 外发授权事实无效；未向服务商建立连接",
+        ));
     }
     state.require_external_access()?;
     if args
@@ -16603,6 +18010,33 @@ fn import_desktop_conversation_clipboard_attachment(
 }
 
 #[tauri::command]
+async fn read_desktop_conversation_draft(
+    app: tauri::AppHandle,
+    workspace_id: String,
+    conversation_id: Option<String>,
+) -> Result<Option<DesktopConversationDraft>, String> {
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "对话草稿后台读取线程异常",
+        move |store| store.read_conversation_draft(&workspace_id, conversation_id.as_deref()),
+    )
+    .await
+}
+
+#[tauri::command]
+fn save_desktop_conversation_draft(
+    state: State<'_, AppState>,
+    args: DesktopConversationDraftArgs,
+) -> Result<Option<DesktopConversationDraft>, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| json_error("Desktop store 被锁定"))?
+        .save_conversation_draft(args)
+}
+
+#[tauri::command]
 fn import_desktop_camera_capture(
     state: State<'_, AppState>,
     args: DesktopCameraCaptureImportArgs,
@@ -16746,15 +18180,17 @@ fn redo_desktop_domain(
 }
 
 #[tauri::command]
-fn read_desktop_workbench_history(
-    state: State<'_, AppState>,
+async fn read_desktop_workbench_history(
+    app: tauri::AppHandle,
     workspace_id: String,
 ) -> Result<WorkbenchHistory, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .workbench_history(&workspace_id)
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "工作台历史后台读取线程异常",
+        move |store| store.workbench_history(&workspace_id),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -16814,16 +18250,18 @@ fn remove_desktop_p6g_catalog_candidate(
 }
 
 #[tauri::command]
-fn read_desktop_p6g_selection(
-    state: State<'_, AppState>,
+async fn read_desktop_p6g_selection(
+    app: tauri::AppHandle,
     workspace_id: String,
     conversation_id: String,
 ) -> Result<P6gSelectionProjection, String> {
-    state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .p6g_selection(&workspace_id, &conversation_id)
+    run_desktop_store_blocking(
+        app,
+        "Desktop store 被锁定",
+        "对话模型选择后台读取线程异常",
+        move |store| store.p6g_selection(&workspace_id, &conversation_id),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -17288,30 +18726,33 @@ fn seed_c07_c12_offline_acceptance(store: &DesktopWorkspaceStore) -> Result<(), 
         "INSERT INTO desktop_ordinary_chat_diagnostics(diagnostic_id,attempt_id,provider_id,model_id,state,safe_error_code,http_status,event_count,latency_ms,created_at_ms) VALUES('c12-offline-diagnostic',?1,'OPENROUTER','openai/gpt-5.6-terra','FAILED','NETWORK',NULL,0,1450,?2)",
         params![attempt_id, now_ms],
     ).map_err(|_| "C12 diagnostic fixture unavailable")?;
-    usage_ledger_v1::Ledger::open(&store.root.join("usage-ledger"))?.append(&usage_ledger_v1::Entry {
-        entry_id: "usage-conversation-c12-offline".into(),
-        replay_token: "usage-conversation-c12-offline-replay".into(),
-        execution_id: "c12-offline-execution".into(),
-        conversation_id,
-        branch_leaf_message_id: "c12-assistant".into(),
-        invocation_id: "c12-offline-invocation".into(),
-        attempt_id: attempt_id.into(),
-        kind: usage_ledger_v1::Kind::FinalMeasured,
-        fact_grade: usage_ledger_v1::FactGrade::ProviderReported,
-        requested_model_id: "openai/gpt-5.6-terra".into(),
-        actual_model_id: Some("openai/gpt-5.6-terra".into()),
-        input_tokens: Some(1_240),
-        output_tokens: Some(680),
-        cached_input_tokens: Some(220),
-        charge_micros: Some(14_250),
-        budget_micros: None,
-        adjustment_micros: None,
-        currency_code: Some("USD".into()),
-        reconciliation_fingerprint: None,
-        reconciles_entry_id: None,
-        source: usage_ledger_v1::Source::DesktopLocal,
-        occurred_at_ms: now_ms,
-    })?;
+    usage_ledger_v1::Ledger::open(&store.root.join("usage-ledger"))?.append(
+        &usage_ledger_v1::Entry {
+            entry_id: "usage-conversation-c12-offline".into(),
+            replay_token: "usage-conversation-c12-offline-replay".into(),
+            execution_id: "c12-offline-execution".into(),
+            conversation_id,
+            branch_leaf_message_id: "c12-assistant".into(),
+            invocation_id: "c12-offline-invocation".into(),
+            attempt_id: attempt_id.into(),
+            kind: usage_ledger_v1::Kind::FinalMeasured,
+            fact_grade: usage_ledger_v1::FactGrade::ProviderReported,
+            requested_model_id: "openai/gpt-5.6-terra".into(),
+            actual_model_id: Some("openai/gpt-5.6-terra".into()),
+            input_tokens: Some(1_240),
+            output_tokens: Some(680),
+            cached_input_tokens: Some(220),
+            charge_micros: Some(14_250),
+            budget_micros: None,
+            adjustment_micros: None,
+            currency_code: Some("USD".into()),
+            cost_source: Some("PROVIDER_RESPONSE".into()),
+            reconciliation_fingerprint: None,
+            reconciles_entry_id: None,
+            source: usage_ledger_v1::Source::DesktopLocal,
+            occurred_at_ms: now_ms,
+        },
+    )?;
     Ok(())
 }
 
@@ -17776,24 +19217,41 @@ fn read_desktop_account_sync(
 }
 
 #[tauri::command]
+async fn read_desktop_google_avatar(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    state.require_external_access()?;
+    let (_, config) = desktop_account_sync_v1::resolve_config(state.account_sync_mock_enabled)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(config) = config else { return Ok(None); };
+        let Some(session) = desktop_account_sync_v1::read_session(&desktop_account_sync_v1::DesktopAccountCredentialStore)? else { return Ok(None); };
+        Ok(desktop_account_sync_v1::fetch_avatar(&config, &session))
+    }).await.map_err(|_| json_error("头像读取任务未完成"))?
+}
+
+#[tauri::command]
 fn sign_in_desktop_google_account(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
     state.require_external_access()?;
     let (_, config) = desktop_account_sync_v1::resolve_config(state.account_sync_mock_enabled)?;
     let config = config.ok_or_else(|| json_error("请先配置 Google 与南枫云服务"))?;
+    // Browser authorization and avatar lookup may wait on the user or network.
+    // Do not retain the shared SQLite owner during either operation: a rejected
+    // redirect used to leave every other local IPC waiting on this lock.
+    let session = desktop_account_sync_v1::authorize_with_system_browser(
+        &config,
+        &desktop_account_sync_v1::SystemBrowser,
+    )?;
+    let avatar = desktop_account_sync_v1::fetch_avatar(&config, &session);
     let mut connection = state
         .store
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .connection()?;
-    let session = desktop_account_sync_v1::sign_in_with_system_browser(
+    desktop_account_sync_v1::persist_authenticated_session(
         &mut connection,
         &desktop_account_sync_v1::DesktopAccountCredentialStore,
-        &config,
-        &desktop_account_sync_v1::SystemBrowser,
+        &session,
     )?;
-    let avatar = desktop_account_sync_v1::fetch_avatar(&config, &session);
     desktop_account_sync_v1::projection(
         &connection,
         &desktop_account_sync_v1::DesktopAccountCredentialStore,
@@ -17970,6 +19428,7 @@ fn choose_desktop_selected_sync_start(
 
 #[tauri::command]
 fn create_desktop_recovery_rotation(
+    recovery_code: String,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::RecoveryCodeProjection, String> {
     state.require_external_access()?;
@@ -17978,9 +19437,10 @@ fn create_desktop_recovery_rotation(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .connection()?;
-    let (projection, pending) = desktop_account_sync_v1::create_recovery_rotation(
+    let (projection, pending) = desktop_account_sync_v1::prepare_custom_recovery_rotation(
         &connection,
         &desktop_account_sync_v1::DesktopAccountCredentialStore,
+        &recovery_code,
     )?;
     state
         .pending_recovery
@@ -18321,7 +19781,8 @@ const MACOS_WINDOW_RESTORATION_DEFAULTS: [(&str, bool); 2] = [
 fn disable_macos_native_window_restoration() {
     use objc2_foundation::{NSString, NSUserDefaults};
 
-    // Tauri owns the only main window and the app restores its domain state from SQLite.
+    // Tauri owns the only main window. Domain state and the separately local window geometry
+    // are restored by explicit application owners, never by AppKit crash restoration.
     // AppKit's crash-recovery window restoration can otherwise stop the process before
     // Tauri setup and repeatedly offer a "Reopen" path that Tao cannot safely unwind.
     let defaults = NSUserDefaults::standardUserDefaults();
@@ -18341,13 +19802,35 @@ pub fn run() {
         eprintln!("无法启用无弹窗凭据访问，应用已停止启动。");
         std::process::exit(2);
     }
+    // Explicit operator-only availability probe. It reads no account session, opens no
+    // browser and prints only whether the signed bundle has all public client fields.
+    if std::env::args().any(|arg| arg == "--test-desktop-account-config") {
+        let configured = desktop_account_sync_v1::resolve_config(false)
+            .map(|(_, config)| config.is_some())
+            .unwrap_or(false);
+        if configured {
+            println!("ACCOUNT_CONFIG_OK");
+            return;
+        }
+        eprintln!("ACCOUNT_CONFIG_MISSING");
+        std::process::exit(6);
+    }
     // Explicit operator-only live probe. No workspace is opened and no private content
     // is sent; it uses the same credential owner and streaming transport as normal chat.
-    if std::env::args().any(|arg| arg == "--test-live-sonnet-connection") {
+    let live_sonnet_web_search_probe =
+        std::env::args().any(|arg| arg == "--test-live-sonnet-web-search");
+    if live_sonnet_web_search_probe
+        || std::env::args().any(|arg| arg == "--test-live-sonnet-connection")
+    {
         let credentials = desktop_model_service_v1::MacSecurityFrameworkProviderCredentialStore;
-        let secret = match credentials.with_secret("OPENROUTER", |bytes| Ok(zeroize::Zeroizing::new(bytes.to_vec()))) {
+        let secret = match credentials.with_secret("OPENROUTER", |bytes| {
+            Ok(zeroize::Zeroizing::new(bytes.to_vec()))
+        }) {
             Ok(secret) => secret,
-            Err(_) => { eprintln!("LIVE_PROBE_CREDENTIAL_UNAVAILABLE"); std::process::exit(3); }
+            Err(_) => {
+                eprintln!("LIVE_PROBE_CREDENTIAL_UNAVAILABLE");
+                std::process::exit(3);
+            }
         };
         let runtime = tokio::runtime::Runtime::new().expect("diagnostic runtime");
         let mut deltas = 0usize;
@@ -18358,15 +19841,25 @@ pub fn run() {
                     provider_id: "OPENROUTER".into(), model_id: "anthropic/claude-sonnet-5".into(),
                     messages: serde_json::json!([{"role":"user","content":"Reply with OK only."}]),
                     idempotency_key: format!("live-probe-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()), max_output_tokens: 16,
-                    web_search_route: "NONE".into(),
+                    web_search_route: if live_sonnet_web_search_probe { "OPENROUTER_SERVER_TOOL".into() } else { "NONE".into() },
                 }, secret, std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 |_| { deltas += 1; Ok(()) },
             )).await
         });
         match result {
-            Ok(Ok(reply)) => println!("LIVE_PROBE_OK deltas={deltas} reply_bytes={} elapsed_ms={}", reply.text.len(), reply.elapsed_ms),
-            Ok(Err(error)) => { eprintln!("LIVE_PROBE_FAILED {error:?}"); std::process::exit(4); }
-            Err(_) => { eprintln!("LIVE_PROBE_DEADLINE"); std::process::exit(5); }
+            Ok(Ok(reply)) => println!(
+                "LIVE_PROBE_OK deltas={deltas} reply_bytes={} elapsed_ms={}",
+                reply.text.len(),
+                reply.elapsed_ms
+            ),
+            Ok(Err(error)) => {
+                eprintln!("LIVE_PROBE_FAILED {error:?}");
+                std::process::exit(4);
+            }
+            Err(_) => {
+                eprintln!("LIVE_PROBE_DEADLINE");
+                std::process::exit(5);
+            }
         }
         return;
     }
@@ -18377,7 +19870,14 @@ pub fn run() {
     if startup_mode != DesktopStartupMode::UiSchemaDiagnostic {
         disable_macos_native_window_restoration();
     }
-    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let builder = tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("nfai-media", |context, request, responder| {
+            let app = context.app_handle().clone();
+            let _ = std::thread::Builder::new()
+                .name("nanfeng-media-range".into())
+                .spawn(move || responder.respond(desktop_media_protocol_response(&app, request)));
+        })
+        .plugin(tauri_plugin_dialog::init());
     let builder = if startup_mode == DesktopStartupMode::UiSchemaDiagnostic {
         builder
     } else {
@@ -18424,8 +19924,7 @@ pub fn run() {
                     || c02_c06_acceptance_enabled)
             {
                 return Err(
-                    "C07-C12 acceptance requires the isolated UI/schema diagnostic startup"
-                        .into(),
+                    "C07-C12 acceptance requires the isolated UI/schema diagnostic startup".into(),
                 );
             }
             let c13_acceptance_enabled =
@@ -18564,13 +20063,30 @@ pub fn run() {
             } else if fb_p6_050_acceptance_enabled {
                 PathBuf::from("/tmp").join(FB_P6_050_ACCEPTANCE_ROOT_NAME)
             } else {
-                let default_root = app.path().app_data_dir().map_err(|_| "private app data unavailable")?.join("p6b-workspace");
-                let config = app.path().app_config_dir().map_err(|_| "private config unavailable")?.join("storage-location.json");
-                desktop_storage_location::resolve_with_recovery(&config, &default_root, |selected| {
-                    if startup_mode.work_plan().recovers_business_state() {
-                        desktop_local_backup_v1::recover_interrupted_switch(selected, &selected.join("workspace.sqlite3"))
-                    } else { Ok(()) }
-                })?
+                let default_root = app
+                    .path()
+                    .app_data_dir()
+                    .map_err(|_| "private app data unavailable")?
+                    .join("p6b-workspace");
+                let config = app
+                    .path()
+                    .app_config_dir()
+                    .map_err(|_| "private config unavailable")?
+                    .join("storage-location.json");
+                desktop_storage_location::resolve_with_recovery(
+                    &config,
+                    &default_root,
+                    |selected| {
+                        if startup_mode.work_plan().recovers_business_state() {
+                            desktop_local_backup_v1::recover_interrupted_switch(
+                                selected,
+                                &selected.join("workspace.sqlite3"),
+                            )
+                        } else {
+                            Ok(())
+                        }
+                    },
+                )?
             };
             fs::create_dir_all(&root).map_err(|_| "desktop private root unavailable")?;
             let process_lock = fs::OpenOptions::new()
@@ -18596,6 +20112,10 @@ pub fn run() {
                 && desktop_local_backup_v1::pending_fresh_restart(&root);
             let store = DesktopWorkspaceStore::open_for_startup(root.clone(), startup_mode)
                 .map_err(|_| "desktop SQLite unavailable")?;
+            let store_paths = DesktopStoreReadPaths {
+                root: store.root.clone(),
+                database: store.database.clone(),
+            };
             if c02_c06_acceptance_enabled {
                 seed_c02_c06_visual_acceptance(&store)?;
             }
@@ -18656,6 +20176,7 @@ pub fn run() {
             app.manage(AppState {
                 _process_lock: process_lock,
                 store: Mutex::new(store),
+                store_paths,
                 ordinary_chat_cancellations: Mutex::new(BTreeMap::new()),
                 ordinary_chat_mock_endpoint,
                 ordinary_chat_acceptance_enabled,
@@ -18669,6 +20190,9 @@ pub fn run() {
                 deferred_exit_started: AtomicBool::new(false),
                 startup_mode,
             });
+            if startup_mode == DesktopStartupMode::Normal {
+                desktop_window_state_v1::install_desktop_window_state_persistence(app);
+            }
             if background_cycle_enabled {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.hide();
@@ -18766,6 +20290,7 @@ pub fn run() {
             delete_desktop_privacy_data,
             permanently_delete_desktop_conversation,
             read_desktop_account_sync,
+            read_desktop_google_avatar,
             sign_in_desktop_google_account,
             create_desktop_recovery_code,
             confirm_desktop_recovery_code,
@@ -18823,9 +20348,15 @@ pub fn run() {
             read_desktop_image_preview,
             read_desktop_pdf_preview,
             read_desktop_video_preview,
+            save_desktop_video_preview_position,
+            read_desktop_video_thumbnail,
+            read_desktop_search_attachment_preview,
             read_desktop_audio_preview,
+            save_desktop_audio_preview_position,
             read_desktop_text_preview,
             open_desktop_attachment_with_system,
+            share_desktop_attachment,
+            open_desktop_source_link,
             export_desktop_attachment_to_selected_path,
             export_desktop_workspace_to_selected_path,
             write_desktop_markdown_to_selected_path,
@@ -18843,6 +20374,8 @@ pub fn run() {
             read_desktop_ordinary_chat_diagnostic_records,
             import_desktop_conversation_attachment,
             import_desktop_conversation_clipboard_attachment,
+            read_desktop_conversation_draft,
+            save_desktop_conversation_draft,
             import_desktop_camera_capture,
             enter_or_restore_desktop_temporary_conversation,
             read_desktop_temporary_conversation,
@@ -18972,6 +20505,24 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    #[test]
+    fn media_protocol_ranges_are_bounded_and_reject_invalid_requests() {
+        assert_eq!(
+            parse_desktop_media_range("bytes=0-", 9_000_000),
+            Ok((0, DESKTOP_MEDIA_RANGE_CHUNK_BYTES - 1))
+        );
+        assert_eq!(
+            parse_desktop_media_range("bytes=120-240", 1_000),
+            Ok((120, 240))
+        );
+        assert_eq!(
+            parse_desktop_media_range("bytes=-50", 1_000),
+            Ok((950, 999))
+        );
+        assert!(parse_desktop_media_range("bytes=1000-", 1_000).is_err());
+        assert!(parse_desktop_media_range("bytes=0-1,3-4", 1_000).is_err());
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn macos_startup_disables_appkit_window_restoration() {
@@ -18982,6 +20533,17 @@ mod tests {
                 ("ApplePersistenceIgnoreStateQuietly", true),
             ]
         );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn video_thumbnail_worker_terminates_a_hung_native_decoder() {
+        let mut child = Command::new("/bin/sleep").arg("2").spawn().unwrap();
+        let started = std::time::Instant::now();
+        let result = wait_thumbnail_child(&mut child, std::time::Duration::from_millis(40));
+        assert!(result.is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+        assert!(child.try_wait().unwrap().is_some());
     }
 
     fn golden() -> Vec<u8> {
@@ -19027,11 +20589,11 @@ mod tests {
             .unwrap();
         assert_eq!(repaired_columns, 2);
         assert_eq!(settings_revision, 7);
-        assert_eq!(schema_version, 38);
+        assert_eq!(schema_version, 39);
         drop(connection);
         drop(reopened);
         DesktopWorkspaceStore::open(root)
-            .expect("schema 38 must reopen without a false future-version error");
+            .expect("schema 39 must reopen without a false future-version error");
     }
 
     #[test]
@@ -19064,7 +20626,7 @@ mod tests {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
         assert_eq!(preference_columns, 2);
-        assert_eq!(schema_version, 38);
+        assert_eq!(schema_version, 39);
     }
 
     #[test]
@@ -19433,7 +20995,8 @@ mod tests {
         let store = DesktopWorkspaceStore::open(root.clone()).unwrap();
         seed_c07_c12_offline_acceptance(&store).unwrap();
 
-        let reminders = desktop_reminders_v1::read_projection(&store.connection().unwrap()).unwrap();
+        let reminders =
+            desktop_reminders_v1::read_projection(&store.connection().unwrap()).unwrap();
         assert_eq!(reminders.plans.len(), 4);
         for status in ["ACTIVE", "PAUSED", "FAILED", "COMPLETED"] {
             assert!(reminders.plans.iter().any(|item| item.status == status));
@@ -19464,7 +21027,10 @@ mod tests {
             Some(C07_C12_ACCEPTANCE_WORKSPACE_ID),
         )
         .unwrap();
-        assert!(readback.tasks.iter().any(|item| item.state == "RECOVERY_REQUIRED"));
+        assert!(readback
+            .tasks
+            .iter()
+            .any(|item| item.state == "RECOVERY_REQUIRED"));
         assert!(readback.tasks.iter().any(|item| item.state == "FAILED"));
         assert!(readback.tasks.iter().any(|item| item.state == "COMPLETED"));
         assert_eq!(
@@ -20710,8 +22276,8 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
                 .unwrap(),
-            // Schema 38 adds the content-free ordinary-send authorization receipt.
-            38
+            // Schema 39 adds ordinary Composer recovery records.
+            39
         );
         assert_eq!(
             reopened
@@ -20769,7 +22335,46 @@ mod tests {
             normalize_desktop_clipboard_raster(encoded.into_inner(), Some("tiff")).unwrap();
 
         assert_eq!(extension, Some("png"));
-        assert_eq!(desktop_attachment_kind(&normalized, extension), Some(("image/png", ".png")));
+        assert_eq!(
+            desktop_attachment_kind(&normalized, extension),
+            Some(("image/png", ".png"))
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn pdf_preview_returns_only_verified_page_pixels_and_preserves_owner_boundary() {
+        let (_directory, store, imported) = imported_store();
+        let source = include_bytes!("../tests/fixtures/preview-page.pdf");
+        let digest = sha256(source);
+        fs::write(store.root.join("assets").join(&digest), source).unwrap();
+        store.connection().unwrap().execute(
+            "INSERT INTO desktop_conversation_attachments(workspace_id,attachment_id,mime_type,display_name,byte_count,sha256,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            params![imported.summary.id, "attachment-pdf", "application/pdf", "sample.pdf", source.len() as u64, digest, local_now()],
+        ).unwrap();
+        let mut args = DesktopPdfPreviewArgs {
+            workspace_id: imported.summary.id.clone(),
+            attachment_id: "attachment-pdf".into(),
+            page_number: Some(999),
+        };
+        let first = store.pdf_preview(&args).unwrap();
+        assert_eq!((first.page_number, first.page_count), (1, 1));
+        let png = BASE64
+            .decode(
+                first
+                    .data_url
+                    .strip_prefix("data:image/png;base64,")
+                    .unwrap(),
+            )
+            .unwrap();
+        assert!(image::load_from_memory(&png).is_ok());
+        args.page_number = None;
+        assert_eq!(store.pdf_preview(&args).unwrap().page_number, 1);
+        args.workspace_id = "workspace-not-owner".into();
+        assert!(store.pdf_preview(&args).is_err());
+        args.workspace_id = imported.summary.id;
+        fs::write(store.root.join("assets").join(&digest), b"tampered").unwrap();
+        assert!(store.pdf_preview(&args).is_err());
     }
 
     #[test]
@@ -20807,7 +22412,20 @@ mod tests {
             })
             .unwrap();
         assert_eq!(saved.position_millis, 1237);
-        assert!(saved.data_url.starts_with("data:video/mp4;base64,"));
+        assert_eq!(
+            saved.media_url,
+            format!(
+                "nfai-media://localhost/video/{}/attachment-video",
+                imported.summary.id
+            )
+        );
+        store
+            .save_video_preview_position(&DesktopVideoPreviewArgs {
+                workspace_id: imported.summary.id.clone(),
+                attachment_id: "attachment-video".into(),
+                position_millis: Some(2123),
+            })
+            .unwrap();
 
         let reopened = store
             .video_preview(&DesktopVideoPreviewArgs {
@@ -20816,7 +22434,7 @@ mod tests {
                 position_millis: None,
             })
             .unwrap();
-        assert_eq!(reopened.position_millis, 1237);
+        assert_eq!(reopened.position_millis, 2123);
         assert!(store
             .video_preview(&DesktopVideoPreviewArgs {
                 workspace_id: "workspace-not-owner".into(),
@@ -20849,7 +22467,20 @@ mod tests {
             })
             .unwrap();
         assert_eq!(saved_audio.position_millis, 137);
-        assert!(saved_audio.data_url.starts_with("data:audio/wav;base64,"));
+        assert_eq!(
+            saved_audio.media_url,
+            format!(
+                "nfai-media://localhost/audio/{}/attachment-audio",
+                imported.summary.id
+            )
+        );
+        store
+            .save_audio_preview_position(&DesktopAudioPreviewArgs {
+                workspace_id: imported.summary.id.clone(),
+                attachment_id: "attachment-audio".into(),
+                position_millis: Some(263),
+            })
+            .unwrap();
         assert_eq!(
             store
                 .audio_preview(&DesktopAudioPreviewArgs {
@@ -20859,8 +22490,15 @@ mod tests {
                 })
                 .unwrap()
                 .position_millis,
-            137
+            263
         );
+        assert!(store
+            .save_audio_preview_position(&DesktopAudioPreviewArgs {
+                workspace_id: "workspace-not-owner".into(),
+                attachment_id: "attachment-audio".into(),
+                position_millis: Some(263),
+            })
+            .is_err());
         assert!(store
             .audio_preview(&DesktopAudioPreviewArgs {
                 workspace_id: "workspace-not-owner".into(),
@@ -20895,6 +22533,13 @@ mod tests {
         assert!(preview.truncated);
         assert_eq!(preview.text.len(), MAX_INERT_TEXT_PREVIEW_BYTES - 3);
         assert!(!preview.text.starts_with('\u{feff}'));
+        for name in ["粘贴的 markdown (1). md", "粘贴的 markdown (1)。 md"] {
+            store.connection().unwrap().execute("UPDATE desktop_conversation_attachments SET mime_type='application/octet-stream',display_name=?1 WHERE attachment_id='attachment-text'", [name]).unwrap();
+            assert!(store.text_preview(&DesktopTextPreviewArgs {
+                workspace_id: imported.summary.id.clone(),
+                attachment_id: "attachment-text".into(),
+            }).unwrap().text.starts_with('x'));
+        }
         let exported = directory.path().join("exported-local.md");
         store
             .export_attachment_to_selected_path(&DesktopAttachmentExportArgs {
@@ -20946,13 +22591,24 @@ mod tests {
             params![imported.summary.id, "attachment-image", "image/png", "local.png", source.len() as u64, digest, local_now()],
         ).unwrap();
 
-        let thumbnail = store
-            .image_preview(&DesktopImagePreviewArgs {
-                workspace_id: imported.summary.id.clone(),
-                attachment_id: "attachment-image".into(),
-                full_size: false,
-            })
-            .unwrap();
+        // The image worker owns only paths. It must finish even while another
+        // operation holds the application store mutex (and vice versa).
+        let paths = DesktopStoreReadPaths { root: store.root.clone(), database: store.database.clone() };
+        let args = DesktopImagePreviewArgs {
+            workspace_id: imported.summary.id.clone(),
+            attachment_id: "attachment-image".into(),
+            full_size: false,
+        };
+        let store_mutex = Mutex::new(store);
+        let guard = store_mutex.lock().unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            sender.send(read_desktop_image_preview_from_paths(&paths.root, &paths.database, &args)).unwrap();
+        });
+        let thumbnail = receiver.recv_timeout(std::time::Duration::from_secs(3)).unwrap().unwrap();
+        drop(guard);
+        worker.join().unwrap();
+        let store = store_mutex.into_inner().unwrap();
         assert!(thumbnail.is_thumbnail);
         assert_eq!(thumbnail.mime_type, "image/png");
         assert_eq!((thumbnail.width, thumbnail.height), (2, 1));
@@ -21951,7 +23607,11 @@ mod tests {
             .unwrap();
         assert_eq!(attachment.display_name, "pasted.txt");
         assert_eq!(attachment.mime_type, "text/plain");
-        assert!(directory.path().join("app-data/assets").join(&attachment.sha256).exists());
+        assert!(directory
+            .path()
+            .join("app-data/assets")
+            .join(&attachment.sha256)
+            .exists());
         assert!(store
             .import_conversation_clipboard_attachment(DesktopClipboardAttachmentImportArgs {
                 workspace_id: imported.summary.id,
@@ -22050,7 +23710,13 @@ mod tests {
         assert!(ordinary.display_name.starts_with("相机照片-"));
         assert!(ordinary.display_name.ends_with(".png"));
         assert_eq!(
-            fs::read(directory.path().join("app-data/assets").join(&ordinary.sha256)).unwrap(),
+            fs::read(
+                directory
+                    .path()
+                    .join("app-data/assets")
+                    .join(&ordinary.sha256)
+            )
+            .unwrap(),
             BASE64.decode(png.split_once(',').unwrap().1).unwrap()
         );
 
@@ -22200,7 +23866,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            38
+            39
         );
     }
 
@@ -22324,7 +23990,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            38
+            39
         );
         assert!(reopened
             .retry_nanfeng_knowledge_import_task(&task.id)
@@ -22377,6 +24043,22 @@ mod tests {
         assert!(store
             .save_desktop_model_service_setting_record("OPENROUTER", true, "GROK_4_6", 0)
             .is_err());
+        store
+            .connection()
+            .unwrap()
+            .execute(
+                "INSERT INTO desktop_provider_settings(provider_id,enabled,preset_id,revision,updated_at_ms) VALUES(?1,?2,?3,?4,?5)",
+                params!["OPENROUTER", 1, "GEMINI_3_7_FLASH", 4, local_now_millis()],
+            )
+            .unwrap();
+        let openrouter = store
+            .read_desktop_model_service_setting_records()
+            .unwrap()
+            .into_iter()
+            .find(|item| item.provider_id == "OPENROUTER")
+            .unwrap();
+        assert_eq!(openrouter.preset_id, "GEMINI_3_8_FLASH");
+        assert_eq!(openrouter.revision, 5);
         let table_sql: String = store
             .connection()
             .unwrap()
@@ -22620,7 +24302,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u64>(0))
                 .unwrap(),
-            38
+            39
         );
         assert_eq!(
             fs::read_dir(directory.path())
@@ -22680,6 +24362,143 @@ mod tests {
     }
 
     #[test]
+    fn indexed_search_does_not_reparse_workspace_exchange_for_each_filter_change() {
+        let (_directory, store, imported) = imported_store();
+        let baseline = store
+            .query_local_index(
+                &DesktopLocalSearchQueryArgs {
+                    query: String::new(),
+                    category: "all".into(),
+                    sort_mode: "default".into(),
+                    file_type: "all".into(),
+                    offset: 0,
+                    record_history: false,
+                    history_workspace_id: None,
+                },
+                None,
+            )
+            .unwrap();
+        assert!(!baseline.hits.is_empty());
+
+        // The index has a matching durable workspace hash.  A filter-only read
+        // must use that read model directly instead of deserializing every full
+        // workspace exchange before it can update the selected category.
+        store
+            .connection()
+            .unwrap()
+            .execute(
+                "UPDATE workspace_exchange SET exchange_json='{malformed' WHERE workspace_id=?1",
+                [&imported.summary.id],
+            )
+            .unwrap();
+
+        let filtered = store
+            .query_local_index(
+                &DesktopLocalSearchQueryArgs {
+                    query: String::new(),
+                    category: "text".into(),
+                    sort_mode: "default".into(),
+                    file_type: "all".into(),
+                    offset: 0,
+                    record_history: false,
+                    history_workspace_id: None,
+                },
+                None,
+            )
+            .unwrap();
+        assert!(filtered.hits.iter().all(|hit| hit.content_kind == "TEXT"));
+    }
+
+    #[test]
+    fn local_index_read_uses_its_own_connection_while_the_mutable_store_is_busy() {
+        let (_directory, store, _imported) = imported_store();
+        let root = store.root.clone();
+        let database = store.database.clone();
+        let store_mutex = std::sync::Mutex::new(store);
+        let guard = store_mutex.lock().unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            sender
+                .send(DesktopWorkspaceStore::query_local_index_at(
+                    &root,
+                    &database,
+                    &DesktopLocalSearchQueryArgs {
+                        query: String::new(),
+                        category: "all".into(),
+                        sort_mode: "default".into(),
+                        file_type: "all".into(),
+                        offset: 0,
+                        record_history: false,
+                        history_workspace_id: None,
+                    },
+                    None,
+                ))
+                .unwrap();
+        });
+        let page = receiver
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .expect("local index read must not wait for the mutable store")
+            .unwrap();
+        assert!(!page.hits.is_empty());
+        drop(guard);
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn unified_search_returns_every_matching_local_index_row_without_a_page_cutoff() {
+        let (_directory, store, imported) = imported_store();
+        let query = "direct full result set";
+        let conversation_id = imported.exchange["conversations"][0]["id"]
+            .as_str()
+            .unwrap();
+
+        // Initialize the durable index state once, then add 128 safe index projections. The
+        // following read must return all of them in one result, not the former first 100 rows.
+        store
+            .query_local_index(
+                &DesktopLocalSearchQueryArgs {
+                    query: String::new(),
+                    category: "all".into(),
+                    sort_mode: "default".into(),
+                    file_type: "all".into(),
+                    offset: 0,
+                    record_history: false,
+                    history_workspace_id: None,
+                },
+                None,
+            )
+            .unwrap();
+        let connection = store.connection().unwrap();
+        for index in 0..128 {
+            let title = format!("direct result {index}");
+            connection
+                .execute(
+                    "INSERT INTO desktop_local_search_index(workspace_id,entry_id,conversation_id,message_id,attachment_id,content_kind,title,normalized_text,snippet,timestamp,mime_type,display_name,file_type,byte_count,branch_leaf_id,source_label,archived,conversation_revision,title_match) VALUES(?1,?2,?3,NULL,NULL,'TEXT',?4,?5,?4,'2026-09-12T00:00:00Z',NULL,NULL,NULL,?6,NULL,NULL,0,1,0)",
+                    params![&imported.summary.id, format!("direct-full-result-{index}"), conversation_id, title, query, title.len() as u64],
+                )
+                .unwrap();
+        }
+
+        let page = store
+            .query_local_index(
+                &DesktopLocalSearchQueryArgs {
+                    query: query.into(),
+                    category: "text".into(),
+                    sort_mode: "default".into(),
+                    file_type: "all".into(),
+                    offset: 0,
+                    record_history: false,
+                    history_workspace_id: None,
+                },
+                None,
+            )
+            .unwrap();
+        assert_eq!(page.hits.len(), 128);
+        assert_eq!(page.text_count, 128);
+        assert_eq!(page.attachment_count, 0);
+    }
+
+    #[test]
     fn unified_search_indexes_hidden_branches_and_real_attachment_facts_with_explicit_filters() {
         let (directory, store, imported) = imported_store();
         let source = directory.path().join("search-owner.txt");
@@ -22734,6 +24553,7 @@ mod tests {
                     category: "text".into(),
                     sort_mode: "default".into(),
                     file_type: "all".into(),
+                    offset: 0,
                     record_history: false,
                     history_workspace_id: None,
                 },
@@ -22766,6 +24586,7 @@ mod tests {
                     category: "text".into(),
                     sort_mode: "default".into(),
                     file_type: "all".into(),
+                    offset: 0,
                     record_history: false,
                     history_workspace_id: None,
                 },
@@ -22783,6 +24604,7 @@ mod tests {
                     category: "file".into(),
                     sort_mode: "sizeDescending".into(),
                     file_type: "txt".into(),
+                    offset: 0,
                     record_history: false,
                     history_workspace_id: None,
                 },
@@ -22807,6 +24629,7 @@ mod tests {
                     category: "all".into(),
                     sort_mode: "timeDescending".into(),
                     file_type: "all".into(),
+                    offset: 0,
                     record_history: true,
                     history_workspace_id: Some(imported.summary.id.clone()),
                 },
@@ -22877,6 +24700,7 @@ mod tests {
                     category: "file".into(),
                     sort_mode: "default".into(),
                     file_type: "all".into(),
+                    offset: 0,
                     record_history: false,
                     history_workspace_id: None,
                 },
@@ -23084,6 +24908,20 @@ mod tests {
             first.projection.user_message_id,
             second.projection.user_message_id
         );
+        // Another local owner can hold a reserved write lock. A streamed checkpoint must
+        // wait for it rather than failing a deferred read-to-write lock upgrade.
+        let database = store.database.clone();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let writer = std::thread::spawn(move || {
+            let mut connection = Connection::open(database).unwrap();
+            let transaction = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .unwrap();
+            ready_tx.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            transaction.commit().unwrap();
+        });
+        ready_rx.recv().unwrap();
         store
             .update_ordinary_chat_message(
                 &second.projection.attempt_id,
@@ -23094,6 +24932,7 @@ mod tests {
                 None,
             )
             .unwrap();
+        writer.join().unwrap();
         let completed = desktop_ordinary_chat_v1::Completed {
             text: "streamed answer".into(),
             reasoning: Some("retained after completion".into()),
@@ -23144,6 +24983,45 @@ mod tests {
             .conversations
             .iter()
             .all(|item| item.conversation_id != conversation_id || !item.unread));
+        let missing_usage = desktop_ordinary_chat_v1::Completed {
+            text: "provider omitted usage".into(),
+            reasoning: None,
+            usage: desktop_ordinary_chat_v1::Usage::default(),
+            reported_cost_micros: None,
+            actual_model_id: Some("openai/gpt-5.6-terra".into()),
+            elapsed_ms: 2_300,
+        };
+        store
+            .update_ordinary_chat_message(
+                &first.projection.attempt_id,
+                &missing_usage.text,
+                "COMPLETE",
+                None,
+                Some(&missing_usage),
+                None,
+            )
+            .unwrap();
+        let projected = store.workspace_projection(&imported.summary.id).unwrap();
+        let estimated_message = projected.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|conversation| conversation["messages"].as_array().unwrap())
+            .find(|message| message["id"] == first.projection.assistant_message_id)
+            .unwrap();
+        assert!(
+            estimated_message["estimatedUsage"]["inputTokens"]
+                .as_i64()
+                .unwrap()
+                > 0
+        );
+        assert!(
+            estimated_message["estimatedUsage"]["outputTokens"]
+                .as_i64()
+                .unwrap()
+                > 0
+        );
+        assert_eq!(estimated_message["run"]["durationMs"], 2_300);
         let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
         assert_eq!(
             reopened
@@ -23516,6 +25394,69 @@ mod tests {
     }
 
     #[test]
+    fn upgraded_flash_projects_private_image_bytes_but_pro_remains_text_only() {
+        let (directory, store, imported) = imported_store();
+        let conversation = &imported.exchange["conversations"][0];
+        let source = directory.path().join("flash.png");
+        let png = BASE64.decode("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==").unwrap();
+        fs::write(&source, &png).unwrap();
+        let attachment = store
+            .import_conversation_attachment(DesktopAttachmentImportArgs {
+                workspace_id: imported.summary.id.clone(),
+                selected_path: source.to_string_lossy().into_owned(),
+            })
+            .unwrap();
+        let prepared = store
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: Some(conversation["id"].as_str().unwrap().into()),
+                    project_id: None,
+                    expected_revision: conversation["revision"].as_u64(),
+                    text: "read image".into(),
+                    attachment_ids: vec![attachment.id],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        let exchange = store
+            .workspace_projection(&imported.summary.id)
+            .unwrap()
+            .exchange;
+        let connection = store.connection().unwrap();
+        let project = |model_id| {
+            store.ordinary_chat_request_messages(
+                &connection,
+                &exchange,
+                &imported.summary.id,
+                &prepared.projection.conversation_id,
+                &prepared.projection.assistant_message_id,
+                "DEEPSEEK",
+                model_id,
+            )
+        };
+        assert!(project("deepseek-flash")
+            .unwrap()
+            .0
+            .to_string()
+            .contains(&BASE64.encode(&png)));
+        assert!(project("deepseek-v4-pro").is_err());
+        assert_eq!(
+            canonical_desktop_model_choice("deepseek-v4-flash"),
+            "DEEPSEEK_V4_FLASH"
+        );
+        assert!(is_desktop_chat_model_id("deepseek-v4-flash"));
+        assert_eq!(
+            canonical_desktop_model_choice("deepseek-v4-pro"),
+            "deepseek-v4-pro"
+        );
+    }
+
+    #[test]
     fn ordinary_chat_text_attachment_is_hash_verified_and_retry_reuses_logical_attempt() {
         let (directory, store, imported) = imported_store();
         let conversation = imported.exchange["conversations"]
@@ -23588,7 +25529,8 @@ mod tests {
                 &imported.summary.id,
                 &retry.projection.conversation_id,
                 &retry.projection.assistant_message_id,
-                &retry.provider_id
+                &retry.provider_id,
+                &retry.model_id
             )
             .is_err());
     }
@@ -23633,6 +25575,8 @@ mod tests {
             conversation["messages"].as_array().unwrap().last().unwrap()["delivery"],
             "PARTIAL"
         );
+        assert_eq!(conversation["title"], "新对话");
+        assert_eq!(conversation["autoTitlePending"], true);
     }
 
     #[test]
@@ -23702,6 +25646,49 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_composer_draft_survives_reopen_and_is_atomically_consumed_by_send() {
+        let (directory, store, imported) = imported_store();
+        store
+            .save_conversation_draft(DesktopConversationDraftArgs {
+                workspace_id: imported.summary.id.clone(),
+                conversation_id: None,
+                text: "restart-safe draft".into(),
+                attachment_ids: vec![],
+            })
+            .unwrap();
+        drop(store);
+
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let restored = reopened
+            .read_conversation_draft(&imported.summary.id, None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(restored.text, "restart-safe draft");
+        assert!(restored.attachments.is_empty());
+        reopened
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: None,
+                    project_id: None,
+                    expected_revision: None,
+                    text: restored.text,
+                    attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        assert!(reopened
+            .read_conversation_draft(&imported.summary.id, None)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
     fn new_conversation_preferences_are_committed_before_the_first_request_is_built() {
         let (directory, store, imported) = imported_store();
         let prepared = store
@@ -23737,7 +25724,10 @@ mod tests {
             .p6g_selection(&imported.summary.id, &conversation_id)
             .unwrap()
             .conversation_override;
-        assert_eq!(reopened_preferences.tone_override.as_deref(), Some("professional"));
+        assert_eq!(
+            reopened_preferences.tone_override.as_deref(),
+            Some("professional")
+        );
         assert_eq!(reopened_preferences.web_search_override, Some(true));
     }
 
@@ -24173,6 +26163,37 @@ mod tests {
     }
 
     #[test]
+    fn source_link_opening_allows_only_hosted_http_urls_without_credentials() {
+        let accepted = validated_desktop_source_link("https://example.com/a?b=c#d").unwrap();
+        assert_eq!(accepted.scheme(), "https");
+        for value in [
+            "javascript:alert(1)",
+            "file:///private/source",
+            "https://user:pass@example.com/private",
+            "https://",
+        ] {
+            assert!(validated_desktop_source_link(value).is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn afinfo_duration_parser_accepts_only_bounded_positive_seconds() {
+        assert_eq!(
+            parse_afinfo_duration_millis(
+                "<audio_info><duration units=\"sec\">932.911020</duration></audio_info>"
+            ),
+            Some(932_911)
+        );
+        assert_eq!(
+            parse_afinfo_duration_millis(
+                "<audio_info><duration units=\"sec\">0</duration></audio_info>"
+            ),
+            None
+        );
+        assert_eq!(parse_afinfo_duration_millis("not xml"), None);
+    }
+
+    #[test]
     fn replacing_memory_summary_is_atomic_for_active_global_memories_only() {
         let mut exchange = json!({
             "projects": [], "conversations": [], "knowledge": [], "relations": [],
@@ -24182,12 +26203,19 @@ mod tests {
                 {"id":"memory-project","body":"项目记忆","scope":"PROJECT","scopeId":"project-1","status":"ACTIVE","revision":1,"contentHash":"project","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z","classification":"NORMAL"}
             ]
         });
-        let receipt = apply_domain_mutation(&mut exchange, &DomainMutationArgs {
-            intent_id: "memory-replace-unit".into(), workspace_id: "workspace-memory-editor".into(),
-            entity: "memory".into(), action: "replaceMemorySummary".into(),
-            object_id: Some("memory-current".into()), expected_revision: Some(4),
-            fields: json!({"body":"完整替换后的摘要"}),
-        }).unwrap();
+        let receipt = apply_domain_mutation(
+            &mut exchange,
+            &DomainMutationArgs {
+                intent_id: "memory-replace-unit".into(),
+                workspace_id: "workspace-memory-editor".into(),
+                entity: "memory".into(),
+                action: "replaceMemorySummary".into(),
+                object_id: Some("memory-current".into()),
+                expected_revision: Some(4),
+                fields: json!({"body":"完整替换后的摘要"}),
+            },
+        )
+        .unwrap();
 
         assert_eq!(receipt, ("memory-current".into(), 5));
         let memories = exchange["memory"].as_array().unwrap();

@@ -54,6 +54,7 @@ import com.nanzhufeng.ai.ui.P5A_CONVERSATION_DRAWER_PREFERENCE_KEY
 import com.nanzhufeng.ai.ui.P5ARoute
 import com.nanzhufeng.ai.ui.PrivacyDataViewModel
 import com.nanzhufeng.ai.ui.LocalBackupRestoreViewModel
+import com.nanzhufeng.ai.ui.DataStorageLocationViewModel
 import com.nanzhufeng.ai.ui.ConversationExchangeExportViewModel
 import com.nanzhufeng.ai.ui.WorkspaceExchangeV2ExportViewModel
 import com.nanzhufeng.ai.ui.WorkspaceExchangeV2RestoreViewModel
@@ -101,6 +102,7 @@ class NanfengAiActivity : ComponentActivity() {
     private lateinit var navigationViewModel: P5ANavigationViewModel
     private lateinit var privacyDataViewModel: PrivacyDataViewModel
     private lateinit var localBackupRestoreViewModel: LocalBackupRestoreViewModel
+    private lateinit var dataStorageLocationViewModel: DataStorageLocationViewModel
     private lateinit var conversationExchangeExportViewModel: ConversationExchangeExportViewModel
     private lateinit var workspaceExchangeV2ExportViewModel: WorkspaceExchangeV2ExportViewModel
     private lateinit var workspaceExchangeV2RestoreViewModel: WorkspaceExchangeV2RestoreViewModel
@@ -299,6 +301,7 @@ class NanfengAiActivity : ComponentActivity() {
         webTextSnapshotViewModel = ViewModelProvider(this, WebTextSnapshotViewModel.Factory(container.manageWebTextSnapshot))[WebTextSnapshotViewModel::class.java]
         privacyDataViewModel = ViewModelProvider(this, PrivacyDataViewModel.Factory(container.privacyDataManager))[PrivacyDataViewModel::class.java]
         localBackupRestoreViewModel = ViewModelProvider(this, LocalBackupRestoreViewModel.Factory(container.localBackupRestoreManager))[LocalBackupRestoreViewModel::class.java]
+        dataStorageLocationViewModel = ViewModelProvider(this, DataStorageLocationViewModel.Factory(container.dataStorageLocationManager))[DataStorageLocationViewModel::class.java]
         conversationExchangeExportViewModel = ViewModelProvider(this, ConversationExchangeExportViewModel.Factory(container.conversationExchangeExportPort))[ConversationExchangeExportViewModel::class.java]
         workspaceExchangeV2ExportViewModel = ViewModelProvider(this, WorkspaceExchangeV2ExportViewModel.Factory(container.workspaceExchangeV2ExportPort))[WorkspaceExchangeV2ExportViewModel::class.java]
         workspaceExchangeV2RestoreViewModel = ViewModelProvider(this, WorkspaceExchangeV2RestoreViewModel.Factory(container.workspaceExchangeV2OpenDocumentRestorePort))[WorkspaceExchangeV2RestoreViewModel::class.java]
@@ -354,6 +357,7 @@ class NanfengAiActivity : ComponentActivity() {
                 offlineEvalViewModel,
                 privacyDataViewModel,
                 localBackupRestoreViewModel,
+                dataStorageLocationViewModel,
                 conversationExchangeExportViewModel,
                 workspaceExchangeV2ExportViewModel,
                 workspaceExchangeV2RestoreViewModel,

@@ -36,9 +36,9 @@
       "contextWindowTokens": 1000000, "maxOutputTokens": 384000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-23T00:00:00Z"
     },
     {
-      "presetId": "DEEPSEEK_V4_FLASH", "providerId": "DEEPSEEK", "modelId": "deepseek-v4-flash", "displayName": "DeepSeek V4 Flash",
-      "capabilities": { "text": true, "image": false, "pdf": false, "video": false, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
-      "contextWindowTokens": 1000000, "maxOutputTokens": 384000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-08-29T00:00:00Z"
+      "presetId": "DEEPSEEK_V4_FLASH", "providerId": "DEEPSEEK", "modelId": "deepseek-flash", "displayName": "DeepSeek V4.1 Flash",
+      "capabilities": { "text": true, "image": true, "pdf": false, "video": false, "audio": false, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true },
+      "contextWindowTokens": 1000000, "maxOutputTokens": 384000, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "attachmentInputTokenEstimate": { "imageMinimumTokens": 1024, "imageTokensPerKiB": 4, "pdfMinimumTokens": 2048, "pdfTokensPerKiB": 8, "videoMinimumTokens": 8192, "videoTokensPerKiB": 2 }, "health": "UNKNOWN", "metadataUpdatedAt": "2026-09-10T00:00:00Z"
     },
     {
       "presetId": "GLM_5_3", "providerId": "ZHIPU", "modelId": "glm-5.3", "displayName": "GLM-5.3",

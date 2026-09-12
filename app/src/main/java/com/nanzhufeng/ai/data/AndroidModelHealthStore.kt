@@ -22,5 +22,6 @@ class AndroidModelHealthStore(context: Context) : ModelHealthStore {
         preferences.edit().putString(key(providerId, presetId), "${observation.health.name}|${observation.checkedAt.toEpochMilli()}").apply()
     }
 
-    private fun key(providerId: ProviderId, presetId: ModelPresetId) = "${providerId.name}:${presetId.name}"
+    private fun key(providerId: ProviderId, presetId: ModelPresetId) = "${providerId.name}:${presetId.name}" +
+        if (providerId == ProviderId.DEEPSEEK && presetId == ModelPresetId.DEEPSEEK_V4_FLASH) ":deepseek-flash-v4.1" else ""
 }

@@ -34,11 +34,11 @@ object ComposerModelRoutingCatalog {
     val auto = ComposerModelChoice("${PREFIX}auto", ComposerModelSlot.AUTO, "自动", listOf(ModelPresetId.DEEPSEEK_V4_FLASH))
     val daily = listOf(
         ComposerModelChoice("${PREFIX}daily:claude-sonnet", ComposerModelSlot.DAILY, "Claude Sonnet 5", listOf(ModelPresetId.CLAUDE_SONNET_5)),
-        ComposerModelChoice("${PREFIX}daily:deepseek-flash", ComposerModelSlot.DAILY, "DeepSeek V4 Flash", listOf(ModelPresetId.DEEPSEEK_V4_FLASH)),
+        ComposerModelChoice("${PREFIX}daily:deepseek-flash", ComposerModelSlot.DAILY, "DeepSeek V4.1 Flash", listOf(ModelPresetId.DEEPSEEK_V4_FLASH)),
         ComposerModelChoice("${PREFIX}daily:gpt-terra", ComposerModelSlot.DAILY, "GPT-5.6 Terra", listOf(ModelPresetId.GPT_5_6_TERRA)),
         ComposerModelChoice("${PREFIX}daily:glm-flash", ComposerModelSlot.DAILY, "GLM-5.3 Flash", listOf(ModelPresetId.GLM_5_3_FLASH)),
         ComposerModelChoice("${PREFIX}daily:qwen-plus", ComposerModelSlot.DAILY, "Qwen3.7-Plus", listOf(ModelPresetId.QWEN_3_7_PLUS)),
-        ComposerModelChoice("${PREFIX}daily:gemini-flash", ComposerModelSlot.DAILY, "Gemini 3.7 Flash", listOf(ModelPresetId.GEMINI_3_7_FLASH)),
+        ComposerModelChoice("${PREFIX}daily:gemini-flash", ComposerModelSlot.DAILY, "Gemini 3.8 Flash", listOf(ModelPresetId.GEMINI_3_8_FLASH)),
     )
     val deep = listOf(
         ComposerModelChoice("${PREFIX}deep:claude-fable-5.1", ComposerModelSlot.DEEP, "Claude Fable 5.1", listOf(ModelPresetId.CLAUDE_FABLE_5_1)),

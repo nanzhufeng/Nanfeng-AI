@@ -45,7 +45,7 @@ class UniversalChatAttachmentBridgeContractsTest {
                 }
             },
         )
-        val target = model(ProviderId.DEEPSEEK, "deepseek-v4-flash", vision = false, video = false)
+        val target = model(ProviderId.DEEPSEEK, "deepseek-flash", vision = false, video = false)
         val image = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "chart.png", byteArrayOf(1, 2, 3))
 
         val result = bridge.resolve(ConversationId("conversation-a"), target, "分析这张图", listOf(image), false) as ChatAttachmentBridgeResult.Ready
@@ -55,7 +55,7 @@ class UniversalChatAttachmentBridgeContractsTest {
         assertEquals(setOf("千问 Qwen3.7-Plus"), result.receivers)
         assertTrue(sentBody.contains("\"image_url\""))
         assertEquals("qwen3.7-plus", invocations.values.single().modelId)
-        assertEquals("deepseek-v4-flash", target.modelId)
+        assertEquals("deepseek-flash", target.modelId)
     }
 
     @Test fun `scanned PDF falls back to GLM OCR and becomes text for any target`() {

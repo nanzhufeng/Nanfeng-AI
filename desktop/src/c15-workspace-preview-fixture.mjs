@@ -6,7 +6,7 @@ export const C15_WORKSPACE_COPY = Object.freeze({
   knowledgeTitle: 'C15_Knowledge',
   knowledgeBody: 'C15_local-only_knowledge_fixture',
   emptyWorkTitle: '还没有项目工作对话',
-  emptyWorkDetail: '从左侧项目中创建或打开一条对话。',
+  emptyWorkDetail: '从“项目”页面创建或打开一条对话。',
 });
 
 /**

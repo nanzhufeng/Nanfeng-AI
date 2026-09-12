@@ -38,6 +38,7 @@ object LocalBackupFormat {
     const val VERSION = 1
     const val DATABASE_ENTRY = "database/nanfeng-ai.snapshot"
     const val MANIFEST_ENTRY = "manifest.json"
-    const val MAX_ARCHIVE_BYTES = 256L * 1024L * 1024L
+    /** Local-first archives must cover a real attachment library, while entry/hash/path checks still apply. */
+    const val MAX_ARCHIVE_BYTES = 32L * 1024L * 1024L * 1024L
     const val MAX_ENTRY_COUNT = 10_000
 }

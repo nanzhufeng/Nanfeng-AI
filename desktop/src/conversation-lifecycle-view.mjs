@@ -50,7 +50,7 @@ const lifecycleRow = ({ item, page }) => {
   return `<div class="android-settings-list-row conversation-lifecycle-row">
     <button class="android-settings-lifecycle-open" data-action="select-chat" data-id="${escapeHtml(item.id)}">
       <strong>${escapeHtml(item.title || '未命名会话')}</strong>
-      <small>${prefix} ${escapeHtml(formatConversationLifecycleTime(time))}</small>
+      ${page === 'favorites' ? '' : `<small>${prefix} ${escapeHtml(formatConversationLifecycleTime(time))}</small>`}
     </button>
     ${lifecycleActionDisclosure({ item, page })}
   </div>`;
@@ -70,7 +70,6 @@ export function renderConversationLifecyclePage({ page, conversations = [], favo
   const items = projection[page] || [];
   if (page === 'favorites') {
     return `<div class="android-settings-page android-settings-list android-settings-lifecycle">
-      <p class="android-settings-helper conversation-lifecycle-helper">收藏的会话保存在本机；取消收藏不会删除消息或附件。</p>
       ${items.map(item => lifecycleRow({ item, page })).join('') || '<p class="android-settings-empty">暂无收藏会话。</p>'}
     </div>`;
   }

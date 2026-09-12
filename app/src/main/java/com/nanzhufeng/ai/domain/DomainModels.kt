@@ -132,13 +132,15 @@ enum class ModelPresetId {
     GROK_4_1_FAST,
     GROK_4_5,
     GROK_4_6_HIGH,
+    /** Historical identity retained only so old local records remain readable. */
     GEMINI_3_7_FLASH,
+    GEMINI_3_8_FLASH,
     KIMI_K3,
     QWEN_3_7_PLUS,
     QWEN_3_8_MAX,
     QWEN_3_6_FLASH,
     DEEPSEEK_V4_PRO,
-    DEEPSEEK_V4_FLASH,
+    DEEPSEEK_V4_FLASH, // Persisted compatibility key; current descriptor is DeepSeek V4.1 Flash.
     GLM_5_3,
     GLM_5_3_FLASH,
     GLM_OCR,

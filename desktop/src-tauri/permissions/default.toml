@@ -59,6 +59,11 @@ description = "Allows only a user-mediated native-picker selection, focused-Comp
 commands.allow = ["import_desktop_conversation_attachment", "import_desktop_conversation_clipboard_attachment", "import_desktop_camera_capture"]
 
 [[permission]]
+identifier = "allow-desktop-conversation-draft-recovery"
+description = "Allows only the current ordinary Composer to read or replace its own workspace and conversation scoped local recovery draft, referencing existing private attachment IDs. It grants no attachment bytes, paths, transport, credentials, automatic send, history, or access to another workspace."
+commands.allow = ["read_desktop_conversation_draft", "save_desktop_conversation_draft"]
+
+[[permission]]
 identifier = "allow-desktop-temporary-conversation"
 description = "Allows only the isolated P6-E temporary recovery owner: local enter, draft/message update, native-picker or focused-Composer clipboard File attachment binding/removal, and irreversible clear. It grants no clipboard path or URI, normal Conversation, workspace, search, export, cache, credential, or transport command."
 commands.allow = ["enter_or_restore_desktop_temporary_conversation", "read_desktop_temporary_conversation", "update_desktop_temporary_conversation", "append_desktop_temporary_message", "import_desktop_temporary_attachment", "import_desktop_temporary_clipboard_attachment", "import_desktop_temporary_camera_capture", "clear_desktop_temporary_conversation", "remove_desktop_temporary_attachment"]
@@ -145,13 +150,33 @@ commands.allow = ["read_desktop_pdf_preview"]
 
 [[permission]]
 identifier = "allow-read-desktop-video-preview"
-description = "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce an owner-verified local video payload; no path, URI, transport, decoder control, or arbitrary file read is granted."
+description = "Allows only a workspace-owned MP4 attachment ID and an optional bounded playback position to produce owner-verified metadata and a private range-readable media URL; no path, transport, decoder control, or arbitrary file read is granted."
 commands.allow = ["read_desktop_video_preview"]
+
+[[permission]]
+identifier = "allow-save-desktop-video-preview-position"
+description = "Allows only a workspace-owned verified MP4 attachment ID and its local resume position to be recorded; it returns no video bytes, path, URI, transport, or arbitrary file read."
+commands.allow = ["save_desktop_video_preview_position"]
+
+[[permission]]
+identifier = "allow-read-desktop-video-thumbnail"
+description = "Allows only a workspace-owned, hash-verified MP4 attachment ID to return one bounded raster poster frame; no video payload, path, URI, decoder control, or arbitrary file read is granted."
+commands.allow = ["read_desktop_video_thumbnail"]
+
+[[permission]]
+identifier = "allow-read-desktop-search-attachment-preview"
+description = "Allows only a workspace-owned, hash-verified attachment ID to return one bounded inert search-card preview: PDF first-page pixels, UTF-8 text excerpt, or audio duration. It grants no path, media payload, playback, script, transport, export, or arbitrary file read."
+commands.allow = ["read_desktop_search_attachment_preview"]
 
 [[permission]]
 identifier = "allow-read-desktop-audio-preview"
 description = "Allows only a workspace-owned verified audio attachment ID and local resume position; no path, URI, transport, or arbitrary file read is granted."
 commands.allow = ["read_desktop_audio_preview"]
+
+[[permission]]
+identifier = "allow-save-desktop-audio-preview-position"
+description = "Allows only a workspace-owned verified audio attachment ID and its local resume position to be recorded; it returns no audio bytes, path, URI, transport, or arbitrary file read."
+commands.allow = ["save_desktop_audio_preview_position"]
 
 [[permission]]
 identifier = "allow-read-desktop-text-preview"
@@ -162,6 +187,16 @@ commands.allow = ["read_desktop_text_preview"]
 identifier = "allow-open-desktop-attachment-with-system"
 description = "Allows an explicit user gesture to open only a workspace-owned, hash-verified private attachment through the macOS system opener. The webview never receives its path and no arbitrary path is accepted."
 commands.allow = ["open_desktop_attachment_with_system"]
+
+[[permission]]
+identifier = "allow-share-desktop-attachment"
+description = "Allows an explicit preview action to present the native macOS share picker for one workspace-owned, hash-verified attachment; no file path or bytes are returned to the renderer."
+commands.allow = ["share_desktop_attachment"]
+
+[[permission]]
+identifier = "allow-open-desktop-source-link"
+description = "Allows an explicit user gesture to hand off a validated public HTTP or HTTPS source URL to the macOS system browser."
+commands.allow = ["open_desktop_source_link"]
 
 [[permission]]
 identifier = "allow-export-desktop-attachment-to-selected-path"
@@ -241,4 +276,4 @@ commands.allow = ["permanently_delete_desktop_conversation"]
 [[permission]]
 identifier = "allow-desktop-account-sync"
 description = "Allows explicit Google system-browser sign-in, one-time recovery-code confirmation, safe account status readback, and sign-out while retaining local data. It grants no webview credential access, arbitrary endpoint, automatic upload, recovery-code reread, local deletion or hidden account switching."
-commands.allow = ["read_desktop_account_sync", "sign_in_desktop_google_account", "create_desktop_recovery_code", "confirm_desktop_recovery_code", "sign_out_desktop_google_account", "sync_selected_desktop_conversation", "reconcile_desktop_conversation_sync", "set_desktop_periodic_sync", "choose_desktop_selected_sync_start", "create_desktop_recovery_rotation", "confirm_desktop_recovery_rotation", "retry_desktop_recovery_rotation", "list_desktop_cloud_documents", "restore_desktop_cloud_conversation"]
+commands.allow = ["read_desktop_account_sync", "read_desktop_google_avatar", "sign_in_desktop_google_account", "create_desktop_recovery_code", "confirm_desktop_recovery_code", "sign_out_desktop_google_account", "sync_selected_desktop_conversation", "reconcile_desktop_conversation_sync", "set_desktop_periodic_sync", "choose_desktop_selected_sync_start", "create_desktop_recovery_rotation", "confirm_desktop_recovery_rotation", "retry_desktop_recovery_rotation", "list_desktop_cloud_documents", "restore_desktop_cloud_conversation"]

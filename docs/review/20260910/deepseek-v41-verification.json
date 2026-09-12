@@ -1,0 +1,277 @@
+{
+  "date": "2026-09-10",
+  "baseline": "5c421e14b1e57da83a77be2ad0a068b6f5291c06",
+  "android": {
+    "tests": 1113,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "assembleDebug": "passed",
+    "assembleRelease": "passed",
+    "lintRelease": "passed",
+    "lintWarnings": 101,
+    "lintHints": 19
+  },
+  "desktop": {
+    "nodeTests": 255,
+    "rustTests": 218,
+    "failures": 0,
+    "build": "passed",
+    "lint": "passed",
+    "typecheck": "passed"
+  },
+  "artifact": {
+    "path": "app/build/outputs/apk/release/南枫AI.apk",
+    "bytes": 28263772,
+    "sha256": "989910c1da3500fd481b20905947e1a5539c723ea7febab84c706470b7a0f563",
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "debuggable": false,
+    "packagedFlash": {
+      "presetId": "DEEPSEEK_V4_FLASH",
+      "providerId": "DEEPSEEK",
+      "modelId": "deepseek-flash",
+      "displayName": "DeepSeek V4.1 Flash",
+      "capabilities": {
+        "text": true,
+        "image": true,
+        "pdf": false,
+        "video": false,
+        "audio": false,
+        "streaming": true,
+        "tools": true,
+        "reasoning": true,
+        "structuredOutput": true
+      },
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 384000,
+      "tokenizerId": "heuristic-v1",
+      "alternateModelIds": [],
+      "attachmentInputTokenEstimate": {
+        "imageMinimumTokens": 1024,
+        "imageTokensPerKiB": 4,
+        "pdfMinimumTokens": 2048,
+        "pdfTokensPerKiB": 8,
+        "videoMinimumTokens": 8192,
+        "videoTokensPerKiB": 2
+      },
+      "health": "UNKNOWN",
+      "metadataUpdatedAt": "2026-09-10T00:00:00Z"
+    }
+  },
+  "limitations": [
+    "Release initial IncrementalSplitterRunnable failure; final full command passed; root cause not reproduced",
+    "No device install, macOS bundle replacement, native visual QA or real provider calls",
+    "Pro announced 2026-09-14 transition remains outside this Flash upgrade",
+    "Legacy Flash alias exact cutover time not published; no new local estimate for alias since verification date"
+  ],
+  "files": [
+    {
+      "path": "app/src/main/assets/model_profiles.json",
+      "sha256": "da2981d4f7ccdcfa177181922bc7dbdb1c09345a7ee7c898013ab24bf69788ae",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+      "sha256": "f1ceb70e805ed359e4e52618ed4afbd48febc0af2e3be642da871fc11fe2166b",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/data/AndroidModelHealthStore.kt",
+      "sha256": "7cee081f0f2d5e6b9f1624ad1ab9849a1ce4268e3332a1be0670ef694c4352af",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/data/AndroidModelProfileDirectory.kt",
+      "sha256": "7528fa2238f710834cebbc2f7edad5f3315a5cd8b1c85dadc5f0c050d316cd20",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+      "sha256": "1d4cb4b27749e1e3c5962bbd45723b0de873c328f73b61d2db86112c0c1253f8",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+      "sha256": "2836e44a09467a8f928d0d757d58c19f05be13ae295dd776bb334af661d8e091",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/domain/DeepSeekPricingWindow.kt",
+      "sha256": "cb749f2cf6d2ebe107bd7b59f41719c1376f90905be201feb7250726f3b4d4d6",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/domain/DomainModels.kt",
+      "sha256": "f7bcb9f726746a1dc2189e263b10c6d0af328cef70249397f5921f8d9e089c0f",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/domain/ModelService.kt",
+      "sha256": "06cc34bc1698ccc7423b9bd22d0a87366c5cf5bfa04de970260593e4699a3a83",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "sha256": "33a84d893e88fd480317697033fba69a6ec2f1ce037ab3a8fbcd639c00c0a3f1",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ui/KnowledgeLibraryUi.kt",
+      "sha256": "1fabc06d66c8673f18362f4fb781428e24727d8ebb152c373014076516ab84e7",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/ConfiguredConversationTitleRefinerContractsTest.kt",
+      "sha256": "a1070b287b06bb2ee45faa83d11318c306471cedfd8cbb3a6b919d83f4c90e93",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt",
+      "sha256": "3d4dc697cac17c2e32a06ddb64d9c044130ee8e2200c75cbec6a6a6e022ec0b0",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/QwenHistoryKnowledgeRefinerTest.kt",
+      "sha256": "90b40783f0aff81e7d5a077090121e742bdc2055c4f8ba8051aad441d0431c38",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/UniversalChatAttachmentBridgeContractsTest.kt",
+      "sha256": "b2c78f222035df538fe1434f32a38734f3edeb5e0cc217aa656f2da6be25ad9c",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/data/ModelProfileAssetContractsTest.kt",
+      "sha256": "e78a5211e0cb3a75a10b86479732c5778df1482f8a17fbe4bcfea4b776e6455e",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/data/ModelProfileUpgradeTest.kt",
+      "sha256": "e286ac5c2ceefffeb6e28faff33d9738fbac70493d087986f18d149f3007de44",
+      "status": "new"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/domain/AutomaticHistoryKnowledgeCurationOwnerTest.kt",
+      "sha256": "d9421d72b12a2106d168580d4a0e3117a3ef6b4a13483109cba476b718835b15",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/domain/ConversationCostEstimatorTest.kt",
+      "sha256": "bdafc7a9316ae6bcd6a6c0349ac3f8feb7ef76f6b7dce2dca05fa84fd4bc0f21",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/domain/DeepSeekPricingWindowTest.kt",
+      "sha256": "8990a3812d5d8c1c59666366e1a191547b8f27bf7d4c6bd94e18216212820dd3",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/domain/P2ModelServiceContractsTest.kt",
+      "sha256": "6ef7e8b7791463b9f8eaee7083389cc8c6e791347b35b51ed3a9e3e5dbc3bc97",
+      "status": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/domain/P6GModelRouterContractsTest.kt",
+      "sha256": "15ddc3b87c13e08856deb26eea19a7d6b522f9eb5fedadd03d8950759df565d1",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/desktop_model_service_v1.rs",
+      "sha256": "6fd3ce10bcacd48f7214a6a89170e3ba036dd9b01cba303fb70785f724e022e0",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+      "sha256": "c3b784384cef0eb45f79f40e2e457e4e62a2d4b7878618392e990609c4995eac",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/lib.rs",
+      "sha256": "65179d8f3b5282a8ad454c0e7f668c79855440dbb47dd5b83242734b20c5c261",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/src/android-settings-shell.mjs",
+      "sha256": "0cb9e1952e97fc36a30994267a41a576dd2f2f488c6c4ac8b01cbe6e9ad9a0e7",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/src/app.mjs",
+      "sha256": "74bfa85ff22db920882980c121c265d75307db4f6e8932dd167a86c7e77964dd",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/src/chat-shell.css",
+      "sha256": "2ea88839dc01864abab52cb2a51a5bd82368f6e9ecdfd89c73429731a9ad7aa8",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/src/chat-shell.mjs",
+      "sha256": "618dc472df2ce7d3d6647e633f9288c0333fd56a05bc9147a40ec2b8aa533b3b",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/tests/c04-c06-composer-model-sheet.test.mjs",
+      "sha256": "f86ed259616cd925e2d22b065d4798cefb78ac2fadec9bc41dc8795288f1f03a",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/tests/chat-first-ui.test.mjs",
+      "sha256": "7e6e36176dfa4b7bf141f3fe3be247883658b16af08beafb72392805ddb90b42",
+      "status": "modified"
+    },
+    {
+      "path": "desktop/tests/deepseek-flash-upgrade.test.mjs",
+      "sha256": "98e263a142d02cc41471b24948a0b3ef90db5544139ffab829edcee069dba045",
+      "status": "new"
+    },
+    {
+      "path": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+      "sha256": "94f74d94de77cb7e32432fa23e612868daa72e0c226226578470302cacbd01e3",
+      "status": "modified"
+    },
+    {
+      "path": "docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md",
+      "sha256": "07ba248af6585af67f9208253421ea3a7229209ff640824becd3851894b1556c",
+      "status": "modified"
+    },
+    {
+      "path": "docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+      "sha256": "2a9fa6f80ff2a70d2781e3d27f3731866f60b748e919da6f9d9ae38e3cd4f636",
+      "status": "modified"
+    },
+    {
+      "path": "docs/CURRENT_HANDOFF.md",
+      "sha256": "0b7952aebbe3b6d9b9b3adde668765ea9d010636718784520c24caea5fb05150",
+      "status": "modified"
+    },
+    {
+      "path": "docs/DESKTOP_CHAT_FIRST_UI_CONTRACT.md",
+      "sha256": "63e14153cda54593c157d838ff0c894cfa84bb1dab32d752f32091277404a937",
+      "status": "modified"
+    },
+    {
+      "path": "docs/decision-log.md",
+      "sha256": "e2aaf5e71d01bbb474730dc0b979fa5cc6716187408b2a883eeb6a795713e342",
+      "status": "modified"
+    },
+    {
+      "path": "docs/review/20260910/DEEPSEEK_V41_UPGRADE.md",
+      "sha256": "f7c47e5550c61a910dd5e1b5d3b2ffac3526967fed920d386703dd53ddf2d93c",
+      "status": "new"
+    },
+    {
+      "path": "scripts/capture_c16_android_matrix.py",
+      "sha256": "7d37a9c7a8e446d8eaeaf2715fb13d61dce192ed30b1d96ea52f2314a0309dae",
+      "status": "modified"
+    }
+  ],
+  "logs": [
+    "/tmp/nanfeng-v41-android-final.log",
+    "/tmp/nanfeng-v41-node.log",
+    "/tmp/nanfeng-v41-rust.log",
+    "/tmp/nanfeng-v41-web-build.log",
+    "/tmp/nanfeng-v41-web-lint.log",
+    "/tmp/nanfeng-v41-web-typecheck.log"
+  ]
+}

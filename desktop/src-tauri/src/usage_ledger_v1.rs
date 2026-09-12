@@ -107,6 +107,10 @@ pub struct Entry {
     pub budget_micros: Option<i64>,
     pub adjustment_micros: Option<i64>,
     pub currency_code: Option<String>,
+    /// The source of a persisted charge.  Imported Android historical answers
+    /// can carry a local estimate, which must never be relabelled as provider
+    /// reported merely because Desktop stores the same numeric amount.
+    pub cost_source: Option<String>,
     pub reconciliation_fingerprint: Option<String>,
     pub reconciles_entry_id: Option<String>,
     pub source: Source,
@@ -146,8 +150,26 @@ impl Ledger {
             .map_err(|_| "Usage Ledger directory unavailable".to_owned())?;
         let connection = Connection::open(root.join("usage-ledger-v1.sqlite3"))
             .map_err(|_| "Usage Ledger database unavailable".to_owned())?;
-        connection.execute_batch("CREATE TABLE IF NOT EXISTS usage_ledger_entries (entry_id TEXT PRIMARY KEY NOT NULL, replay_token TEXT UNIQUE NOT NULL, execution_id TEXT NOT NULL, conversation_id TEXT NOT NULL, branch_leaf_message_id TEXT NOT NULL, invocation_id TEXT NOT NULL, attempt_id TEXT NOT NULL, kind TEXT NOT NULL, fact_grade TEXT NOT NULL, requested_model_id TEXT NOT NULL, actual_model_id TEXT, input_tokens INTEGER, output_tokens INTEGER, cached_input_tokens INTEGER, charge_micros INTEGER, budget_micros INTEGER, adjustment_micros INTEGER, currency_code TEXT, reconciliation_fingerprint TEXT, reconciles_entry_id TEXT, source TEXT NOT NULL, occurred_at_ms INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS usage_ledger_execution ON usage_ledger_entries(execution_id); CREATE INDEX IF NOT EXISTS usage_ledger_conversation ON usage_ledger_entries(conversation_id); CREATE INDEX IF NOT EXISTS usage_ledger_reconciles ON usage_ledger_entries(reconciles_entry_id); CREATE INDEX IF NOT EXISTS usage_ledger_fingerprint ON usage_ledger_entries(reconciliation_fingerprint); PRAGMA user_version=1;")
+        connection.execute_batch("CREATE TABLE IF NOT EXISTS usage_ledger_entries (entry_id TEXT PRIMARY KEY NOT NULL, replay_token TEXT UNIQUE NOT NULL, execution_id TEXT NOT NULL, conversation_id TEXT NOT NULL, branch_leaf_message_id TEXT NOT NULL, invocation_id TEXT NOT NULL, attempt_id TEXT NOT NULL, kind TEXT NOT NULL, fact_grade TEXT NOT NULL, requested_model_id TEXT NOT NULL, actual_model_id TEXT, input_tokens INTEGER, output_tokens INTEGER, cached_input_tokens INTEGER, charge_micros INTEGER, budget_micros INTEGER, adjustment_micros INTEGER, currency_code TEXT, cost_source TEXT, reconciliation_fingerprint TEXT, reconciles_entry_id TEXT, source TEXT NOT NULL, occurred_at_ms INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS usage_ledger_execution ON usage_ledger_entries(execution_id); CREATE INDEX IF NOT EXISTS usage_ledger_conversation ON usage_ledger_entries(conversation_id); CREATE INDEX IF NOT EXISTS usage_ledger_reconciles ON usage_ledger_entries(reconciles_entry_id); CREATE INDEX IF NOT EXISTS usage_ledger_fingerprint ON usage_ledger_entries(reconciliation_fingerprint); PRAGMA user_version=1;")
             .map_err(|_| "Usage Ledger migration failed".to_owned())?;
+        let has_cost_source = connection
+            .prepare("PRAGMA table_info(usage_ledger_entries)")
+            .and_then(|mut statement| {
+                statement
+                    .query_map([], |row| row.get::<_, String>(1))?
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .map_err(|_| "Usage Ledger schema read failed".to_owned())?
+            .iter()
+            .any(|column| column == "cost_source");
+        if !has_cost_source {
+            connection
+                .execute(
+                    "ALTER TABLE usage_ledger_entries ADD COLUMN cost_source TEXT",
+                    [],
+                )
+                .map_err(|_| "Usage Ledger cost-source migration failed".to_owned())?;
+        }
         Ok(Self { connection })
     }
 
@@ -184,7 +206,7 @@ impl Ledger {
                 return Ok(AppendResult::Conflict);
             }
         }
-        self.connection.execute("INSERT INTO usage_ledger_entries (entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22)", params![entry.entry_id,entry.replay_token,entry.execution_id,entry.conversation_id,entry.branch_leaf_message_id,entry.invocation_id,entry.attempt_id,entry.kind.as_str(),entry.fact_grade.as_str(),entry.requested_model_id,entry.actual_model_id,entry.input_tokens,entry.output_tokens,entry.cached_input_tokens,entry.charge_micros,entry.budget_micros,entry.adjustment_micros,entry.currency_code,entry.reconciliation_fingerprint,entry.reconciles_entry_id,entry.source.as_str(),entry.occurred_at_ms])
+        self.connection.execute("INSERT INTO usage_ledger_entries (entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,cost_source,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)", params![entry.entry_id,entry.replay_token,entry.execution_id,entry.conversation_id,entry.branch_leaf_message_id,entry.invocation_id,entry.attempt_id,entry.kind.as_str(),entry.fact_grade.as_str(),entry.requested_model_id,entry.actual_model_id,entry.input_tokens,entry.output_tokens,entry.cached_input_tokens,entry.charge_micros,entry.budget_micros,entry.adjustment_micros,entry.currency_code,entry.cost_source,entry.reconciliation_fingerprint,entry.reconciles_entry_id,entry.source.as_str(),entry.occurred_at_ms])
             .map_err(|_| "Usage Ledger append rejected".to_owned())?;
         self.by_id(&entry.entry_id)?
             .map(AppendResult::Appended)
@@ -192,7 +214,7 @@ impl Ledger {
     }
 
     pub fn entries_for_execution(&self, execution_id: &str) -> Result<Vec<Entry>, String> {
-        let mut statement = self.connection.prepare("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries WHERE execution_id=?1 ORDER BY occurred_at_ms ASC,entry_id ASC").map_err(|_| "Usage Ledger read failed".to_owned())?;
+        let mut statement = self.connection.prepare("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,cost_source,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries WHERE execution_id=?1 ORDER BY occurred_at_ms ASC,entry_id ASC").map_err(|_| "Usage Ledger read failed".to_owned())?;
         let entries = statement
             .query_map([execution_id], row)
             .map_err(|_| "Usage Ledger read failed".to_owned())?
@@ -202,7 +224,7 @@ impl Ledger {
     }
 
     pub fn all_entries(&self) -> Result<Vec<Entry>, String> {
-        let mut statement = self.connection.prepare("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries ORDER BY occurred_at_ms DESC,entry_id DESC").map_err(|_| "Usage Ledger read failed".to_owned())?;
+        let mut statement = self.connection.prepare("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,cost_source,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries ORDER BY occurred_at_ms DESC,entry_id DESC").map_err(|_| "Usage Ledger read failed".to_owned())?;
         let entries = statement
             .query_map([], row)
             .map_err(|_| "Usage Ledger read failed".to_owned())?
@@ -216,11 +238,11 @@ impl Ledger {
     }
 
     fn by_id(&self, entry_id: &str) -> Result<Option<Entry>, String> {
-        self.connection.query_row("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries WHERE entry_id=?1", [entry_id], row).optional().map_err(|_| "Usage Ledger read failed".to_owned())
+        self.connection.query_row("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,cost_source,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries WHERE entry_id=?1", [entry_id], row).optional().map_err(|_| "Usage Ledger read failed".to_owned())
     }
 
     fn by_replay_token(&self, replay_token: &str) -> Result<Option<Entry>, String> {
-        self.connection.query_row("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries WHERE replay_token=?1", [replay_token], row).optional().map_err(|_| "Usage Ledger read failed".to_owned())
+        self.connection.query_row("SELECT entry_id,replay_token,execution_id,conversation_id,branch_leaf_message_id,invocation_id,attempt_id,kind,fact_grade,requested_model_id,actual_model_id,input_tokens,output_tokens,cached_input_tokens,charge_micros,budget_micros,adjustment_micros,currency_code,cost_source,reconciliation_fingerprint,reconciles_entry_id,source,occurred_at_ms FROM usage_ledger_entries WHERE replay_token=?1", [replay_token], row).optional().map_err(|_| "Usage Ledger read failed".to_owned())
     }
 
     #[cfg(test)]
@@ -255,10 +277,11 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Entry> {
         budget_micros: row.get(15)?,
         adjustment_micros: row.get(16)?,
         currency_code: row.get(17)?,
-        reconciliation_fingerprint: row.get(18)?,
-        reconciles_entry_id: row.get(19)?,
-        source: Source::parse(row.get(20)?).map_err(|_| rusqlite::Error::InvalidQuery)?,
-        occurred_at_ms: row.get(21)?,
+        cost_source: row.get(18)?,
+        reconciliation_fingerprint: row.get(19)?,
+        reconciles_entry_id: row.get(20)?,
+        source: Source::parse(row.get(21)?).map_err(|_| rusqlite::Error::InvalidQuery)?,
+        occurred_at_ms: row.get(22)?,
     })
 }
 
@@ -335,6 +358,10 @@ fn valid_entry(entry: &Entry) -> Result<(), String> {
             .as_deref()
             .is_some_and(|value| !currency(value))
         || entry
+            .cost_source
+            .as_deref()
+            .is_some_and(|value| !matches!(value, "PROVIDER_RESPONSE" | "LOCAL_ESTIMATE"))
+        || entry
             .reconciliation_fingerprint
             .as_deref()
             .is_some_and(|value| !hash(value))
@@ -353,6 +380,7 @@ fn valid_entry(entry: &Entry) -> Result<(), String> {
             || entry.budget_micros.is_some()
             || entry.adjustment_micros.is_some())
             && entry.currency_code.is_none()
+        || entry.charge_micros.is_some() && entry.cost_source.is_none()
     {
         return Err("Usage Ledger entry invalid".into());
     }
@@ -436,6 +464,7 @@ mod tests {
             budget_micros: None,
             adjustment_micros: None,
             currency_code: None,
+            cost_source: None,
             reconciliation_fingerprint: None,
             reconciles_entry_id: None,
             source: Source::DesktopLocal,
@@ -519,6 +548,7 @@ mod tests {
             charge_micros: Some(37),
             adjustment_micros: Some(-3),
             currency_code: Some("USD".into()),
+            cost_source: Some("PROVIDER_RESPONSE".into()),
             reconciliation_fingerprint: Some("a".repeat(64)),
             reconciles_entry_id: Some(pending.entry_id.clone()),
             ..entry(
@@ -636,6 +666,7 @@ mod tests {
                 "budget_micros".into(),
                 "adjustment_micros".into(),
                 "currency_code".into(),
+                "cost_source".into(),
                 "reconciliation_fingerprint".into(),
                 "reconciles_entry_id".into(),
                 "source".into(),

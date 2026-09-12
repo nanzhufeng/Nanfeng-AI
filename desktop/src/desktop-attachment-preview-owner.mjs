@@ -26,7 +26,10 @@ export function attachmentPreviewCapability(attachment = {}) {
   if (mimeType === 'application/pdf') {
     return { kind: 'pdf', action: 'open-pdf-preview', label: '应用内 PDF 阅读', supported: true };
   }
-  if (TEXT_MIME_TYPES.has(mimeType)) {
+  const textExtension = /[.。]\s*(md|markdown|txt|json|csv)\s*$/i.test(String(attachment.displayName || ''));
+  const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || (mimeType === 'application/octet-stream' && /[.。]\s*docx\s*$/i.test(String(attachment.displayName || '')));
+  const isZip = ['application/zip', 'application/x-zip-compressed'].includes(mimeType) || (mimeType === 'application/octet-stream' && /[.。]\s*zip\s*$/i.test(String(attachment.displayName || '')));
+  if (isZip || isDocx || TEXT_MIME_TYPES.has(mimeType) || ((!mimeType || mimeType === 'application/octet-stream') && textExtension)) {
     return { kind: 'text', action: 'open-text-preview', label: '应用内安全文本预览', supported: true };
   }
   return {

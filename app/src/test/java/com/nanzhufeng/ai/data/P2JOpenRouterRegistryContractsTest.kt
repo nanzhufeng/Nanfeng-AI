@@ -70,7 +70,7 @@ class P2JOpenRouterRegistryContractsTest {
             ModelPresetId.CLAUDE_OPUS_5,
             ModelPresetId.GPT_5_6_SOL,
             ModelPresetId.GPT_5_6_TERRA,
-            ModelPresetId.GEMINI_3_7_FLASH,
+            ModelPresetId.GEMINI_3_8_FLASH,
         )))
         assertFalse(snapshot.mappingUsesFallback)
         assertTrue(snapshot.sourceUrl!!.startsWith("https://openrouter.ai/"))
@@ -236,7 +236,7 @@ class P2JOpenRouterRegistryContractsTest {
         catalogModel("anthropic/claude-haiku-test", "Claude Haiku", null, null),
         catalogModel("openai/gpt-5.6-sol", "GPT Sol", "0.000003", "0.000015"),
         catalogModel("openai/gpt-5.6-terra", "GPT Terra", "0.000002", "0.00001"),
-        catalogModel("google/gemini-3.7-flash", "Gemini Flash", "0.000001", "0.000005"),
+        catalogModel("google/gemini-3.8-flash", "Gemini Flash", "0.000001", "0.000005"),
     )
 
     private fun catalogModel(id: String, name: String, prompt: String?, completion: String?) = OpenRouterCatalogModel(

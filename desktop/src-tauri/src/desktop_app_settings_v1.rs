@@ -371,7 +371,15 @@ mod tests {
         initial.product.reminder_suggestions = !initial.product.reminder_suggestions;
         initial.product.unread_indicators = !initial.product.unread_indicators;
         initial.product.web_search_enabled = !initial.product.web_search_enabled;
-        let saved = save(&mut connection, SaveArgs { appearance: initial.appearance, product: initial.product, expected_revision: initial.revision }).unwrap();
+        let saved = save(
+            &mut connection,
+            SaveArgs {
+                appearance: initial.appearance,
+                product: initial.product,
+                expected_revision: initial.revision,
+            },
+        )
+        .unwrap();
         drop(connection);
         let reopened = Connection::open(&path).unwrap();
         let restored = read(&reopened).unwrap();

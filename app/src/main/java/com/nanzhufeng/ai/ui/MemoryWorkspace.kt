@@ -21,11 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
@@ -41,10 +39,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,8 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nanzhufeng.ai.domain.Conversation
@@ -74,8 +68,6 @@ fun MemorySummaryPage(
     onRefresh: () -> Unit,
     onDeleteMemory: () -> Unit,
     onDisableMemorySummaryGenerationAndUse: () -> Unit,
-    onQuerySummary: (String) -> Unit,
-    onAppendSummaryUpdate: (String) -> Unit,
     onEditSummary: () -> Unit,
     onUpdateSummaryEditor: (String) -> Unit,
     onSaveSummaryEditor: () -> Unit,
@@ -89,10 +81,6 @@ fun MemorySummaryPage(
     var aboutVisible by rememberSaveable { mutableStateOf(false) }
     var deleteConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     var disableConfirmationVisible by rememberSaveable { mutableStateOf(false) }
-    var pendingText by rememberSaveable { mutableStateOf("") }
-    var composerText by rememberSaveable { mutableStateOf("") }
-    var composerHeightPx by remember { mutableIntStateOf(0) }
-    val composerHeight = with(LocalDensity.current) { composerHeightPx.toDp() }
     val updated = state.memories.maxByOrNull { it.memory.updatedAt }?.memory?.updatedAt
     val updatedText = updated?.let { "更新于 ${it.atZone(java.time.ZoneId.systemDefault()).toLocalDate()}" } ?: "更新于刚刚"
 
@@ -151,10 +139,9 @@ fun MemorySummaryPage(
         Column(
             modifier = Modifier
                 .weight(1f)
+                .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
-                // The composer remains visually floating, but the final summary must be able to
-                // scroll fully above its measured height instead of ending behind it.
-                .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = composerHeight + 24.dp),
+                .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             state.notice?.let { Text(it, color = SecondaryText, style = MaterialTheme.typography.bodySmall) }
@@ -175,78 +162,8 @@ fun MemorySummaryPage(
 
         }
 
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .onSizeChanged { composerHeightPx = it.height }
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 12.dp),
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = ForegroundSurface,
-                shape = P5AInteractiveShape,
-                shadowElevation = 4.dp,
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (composerText.isBlank()) {
-                            Text("询问或更新", color = InputPlaceholderText, style = MaterialTheme.typography.bodyLarge)
-                        }
-                        BasicTextField(
-                            value = composerText,
-                            onValueChange = { composerText = it },
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = BodyText),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                        )
-                    }
-                    IconButton(
-                        onClick = { pendingText = composerText.trim() },
-                        enabled = composerText.isNotBlank(),
-                    ) {
-                        Icon(Icons.Rounded.ArrowUpward, contentDescription = "提交记忆问题或更新", tint = if (composerText.isBlank()) SecondaryText else AccentOrange)
-                    }
-                }
-            }
-        }
     }
 
-    if (pendingText.isNotBlank()) {
-        AlertDialog(
-            onDismissRequest = { pendingText = "" },
-            containerColor = ForegroundSurface,
-            shape = RoundedCornerShape(24.dp),
-            title = { Text("如何处理这条内容") },
-            text = {
-                Text(
-                    "“询问摘要”查找已有记忆；“补充记忆”保存这条内容。",
-                    color = SecondaryText,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    onAppendSummaryUpdate(pendingText)
-                    composerText = ""
-                    pendingText = ""
-                }, shape = RoundedCornerShape(14.dp)) { Text("补充记忆") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    onQuerySummary(pendingText)
-                    composerText = ""
-                    pendingText = ""
-                }) { Text("询问摘要") }
-            },
-        )
-    }
     if (aboutVisible) {
         AlertDialog(
             onDismissRequest = { aboutVisible = false },

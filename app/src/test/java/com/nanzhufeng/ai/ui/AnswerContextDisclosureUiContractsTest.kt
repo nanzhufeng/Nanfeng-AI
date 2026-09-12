@@ -12,12 +12,21 @@ class AnswerContextDisclosureUiContractsTest {
         val executor = File("src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt").readText()
         val store = File("src/main/java/com/nanzhufeng/ai/data/AndroidContextSelectionAuditStore.kt").readText()
         val disclosure = File("src/main/java/com/nanzhufeng/ai/ui/AnswerInformationDisclosure.kt").readText()
+        val branchMenuItemStart = workspace.indexOf("text = { Text(\"创建分支\") }")
+        val branchMenuItem = workspace.substring(
+            startIndex = branchMenuItemStart,
+            endIndex = workspace.indexOf("onClick = {", branchMenuItemStart),
+        )
 
         assertTrue(workspace.contains("text = { Text(\"本次回答信息\") }"))
         assertTrue(workspace.contains("leadingIcon = { Icon(Icons.Rounded.AccountTree, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) }"))
-        assertTrue(workspace.contains("leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, contentDescription = null, modifier = Modifier.size(16.dp), tint = SecondaryText.copy(alpha = 0.72f)) }"))
+        assertTrue(branchMenuItem.contains("imageVector = Icons.AutoMirrored.Rounded.CallSplit"))
+        assertTrue(branchMenuItem.contains("modifier = Modifier.size(20.dp)"))
+        assertTrue(branchMenuItem.contains("tint = BodyText"))
         assertFalse(workspace.contains("contentDescription = \"查看本次上下文来源\""))
         assertTrue(workspace.contains("AnswerInformationDialog"))
+        assertTrue(workspace.contains("AnswerInformationSection(title = \"回答设置\")"))
+        assertTrue(workspace.contains("AnswerInformationSection(title = \"本次上下文来源\")"))
         assertTrue(workspace.contains("label = \"基础风格和语气\""))
         assertTrue(workspace.contains("label = \"实时网络\""))
         assertTrue(workspace.contains("true -> \"已实际使用\""))
@@ -25,6 +34,7 @@ class AnswerContextDisclosureUiContractsTest {
         assertTrue(disclosure.contains("responseAttributions.mapNotNull { it.conversationStyle?.definition()?.label }"))
         assertTrue(disclosure.contains("responseAttributions.mapNotNull(AssistantResponseModelAttribution::webSearchUsed)"))
         assertFalse(workspace.contains("仅显示本次实际使用的本地来源。"))
+        assertFalse(workspace.contains("这里仅显示"))
         assertFalse(workspace.contains("Text(source.whyUsed"))
         assertTrue(workspace.contains("\"个性化资料\" -> source.title"))
         assertTrue(workspace.contains("\"自定义指令\" -> source.kind"))

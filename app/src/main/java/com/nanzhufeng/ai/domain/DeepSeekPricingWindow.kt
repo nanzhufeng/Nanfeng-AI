@@ -7,7 +7,7 @@ import java.time.ZoneOffset
  * The single owner for DeepSeek's official peak/off-peak billing window.
  *
  * DeepSeek publishes the schedule in UTC: peak is 01:00-04:00 and 06:00-10:00
- * every day. Using the request instant in UTC keeps the result correct even if the device
+ * Monday through Friday. Using the request instant in UTC keeps the result correct even if the device
  * timezone is changed while the model picker is open.
  */
 enum class DeepSeekPricingPeriod(val pickerLabel: String) {
@@ -16,7 +16,6 @@ enum class DeepSeekPricingPeriod(val pickerLabel: String) {
 }
 
 object DeepSeekPricingWindow {
-    private const val SecondsPerDay = 24 * 60 * 60
     private val transitionSecondsUtc = intArrayOf(
         1 * 60 * 60,
         4 * 60 * 60,
@@ -26,18 +25,21 @@ object DeepSeekPricingWindow {
 
     fun periodAt(instant: Instant): DeepSeekPricingPeriod {
         val secondOfDay = instant.atOffset(ZoneOffset.UTC).toLocalTime().toSecondOfDay()
-        val peak = secondOfDay in transitionSecondsUtc[0] until transitionSecondsUtc[1] ||
-            secondOfDay in transitionSecondsUtc[2] until transitionSecondsUtc[3]
+        val weekday = instant.atOffset(ZoneOffset.UTC).dayOfWeek.value <= 5
+        val peak = weekday && (secondOfDay in transitionSecondsUtc[0] until transitionSecondsUtc[1] ||
+            secondOfDay in transitionSecondsUtc[2] until transitionSecondsUtc[3])
         return if (peak) DeepSeekPricingPeriod.PEAK else DeepSeekPricingPeriod.OFF_PEAK
     }
 
     /** Milliseconds until the next exact schedule boundary; useful for a live picker. */
     fun millisUntilNextTransition(instant: Instant): Long {
         val utc = instant.atOffset(ZoneOffset.UTC)
-        val secondOfDay = utc.toLocalTime().toSecondOfDay()
-        val nanoOfSecond = utc.nano
-        val nextSecond = transitionSecondsUtc.firstOrNull { it > secondOfDay } ?: (SecondsPerDay + transitionSecondsUtc.first())
-        val wholeSeconds = nextSecond - secondOfDay
-        return wholeSeconds * 1_000L - nanoOfSecond / 1_000_000L
+        val next = (0L..3L).asSequence().flatMap { offset ->
+            val day = utc.toLocalDate().plusDays(offset)
+            if (day.dayOfWeek.value > 5) emptySequence() else transitionSecondsUtc.asSequence().map {
+                day.atStartOfDay().toInstant(ZoneOffset.UTC).plusSeconds(it.toLong())
+            }
+        }.first { it.isAfter(instant) }
+        return java.time.Duration.between(instant, next).toMillis()
     }
 }

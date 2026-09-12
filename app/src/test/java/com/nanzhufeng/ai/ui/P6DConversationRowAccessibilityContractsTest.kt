@@ -44,7 +44,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "val rowHeight = if (batchEditing) 44.dp else 36.dp",
             "modifier = modifier.width(176.dp).height(rowHeight)",
             "fun dismissRevealedConversation(): Boolean",
-            "private val ComposerModelDisplayWidth = 88.dp",
+            "private val ComposerModelCompactDisplayWidth = 88.dp",
             "onOverlayBack",
         )) assertTrue("current UI implementation drifted from its contract anchor $token", source.contains(token))
     }
@@ -542,9 +542,10 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(page.contains("Icons.Rounded.Search"))
         assertTrue(page.contains("Modifier.fillMaxSize().padding(start = 10.dp, end = 8.dp)"))
         assertTrue(page.contains("horizontalArrangement = Arrangement.spacedBy(7.dp)"))
-        assertTrue(page.contains("Modifier.width(76.dp).height(42.dp).clip(RoundedCornerShape(21.dp)).combinedClickable(onClick = onOpenHistory)"))
+        assertTrue(page.contains("val searchControlShape = RoundedCornerShape(50)"))
+        assertTrue(page.contains("Modifier.width(152.dp).height(42.dp).clip(searchControlShape).combinedClickable(onClick = onOpenHistory)"))
         assertTrue(page.contains("BodyText.copy(alpha = 0.80f)"))
-        assertTrue(page.contains("shape = RoundedCornerShape(21.dp)"))
+        assertTrue(page.contains("shape = searchControlShape"))
         assertTrue(page.contains("ConversationSearchCategory.ALL -> \"搜索全部内容\""))
         assertTrue(page.contains("else -> \"搜索${'$'}{state.searchCategory.label}\""))
         assertTrue(page.contains("searchPlaceholder,"))
@@ -612,26 +613,31 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
-    fun `FB-P6-040 Android gives the concrete model label enough room immediately left of send`() {
+    fun `FB-P6-040 Android keeps the compact outer label but shows the full catalog name on an inner display`() {
         val composer = source.substring(source.indexOf("private fun DraftComposer"), source.indexOf("private fun ComposerMenuOverlay"))
         assertTrue(composer.contains("val modelLabel ="))
         assertTrue(composer.contains("val selectedPresets ="))
-        assertTrue(composer.contains("val modelLabel = composerModelDisplayLabel(selectedPresets)"))
+        assertTrue(composer.contains("val modelLabel = if (windowWidth >= ComposerModelExpandedBreakpoint)"))
+        assertTrue(composer.contains("composerModelFullDisplayLabel(selectedPresets)"))
+        assertTrue(composer.contains("composerModelDisplayLabel(selectedPresets)"))
         assertFalse(composer.contains("Auto · 发送时按能力选择"))
         val modelEntry = source.substring(source.indexOf("private fun ComposerModelEntry"), source.indexOf("private fun ConversationComposerDock"))
         assertTrue(source.contains("android.graphics.Typeface.create(\"sans-serif-rounded\", android.graphics.Typeface.BOLD)"))
         assertTrue(modelEntry.contains("fontFamily = ComposerModelRoundedBoldFontFamily"))
         assertTrue(modelEntry.contains("fontWeight = FontWeight.Bold"))
         assertFalse(modelEntry.contains("fontWeight = FontWeight.Normal"))
-        assertTrue(source.contains("private val ComposerModelDisplayWidth = 88.dp"))
+        assertTrue(source.contains("private val ComposerModelCompactDisplayWidth = 88.dp"))
+        assertTrue(source.contains("private val ComposerModelExpandedDisplayWidth = 200.dp"))
+        assertTrue(source.contains("private val ComposerModelExpandedBreakpoint = 600.dp"))
         assertTrue(source.contains("private fun composerModelDisplayLabel(presets: List<ModelPresetId>)"))
+        assertTrue(source.contains("private fun composerModelFullDisplayLabel(presets: List<ModelPresetId>)"))
         assertTrue(source.contains("presets.joinToString(\" / \")"))
         assertTrue(source.contains("composerModelShortNameForUser"))
         val modelService = File("src/main/java/com/nanzhufeng/ai/domain/ModelService.kt").readText()
         assertTrue(modelService.contains("The curated model catalog is the single user-facing naming source"))
         assertTrue(modelService.contains("raw.contains(preset.displayName, ignoreCase = true)"))
         assertFalse(modelService.contains(".removePrefix(\"GPT-\")"))
-        assertTrue(modelEntry.contains("modifier = Modifier.width(ComposerModelDisplayWidth).height(48.dp)"))
+        assertTrue(modelEntry.contains("modifier = Modifier.width(modelWidth).height(48.dp)"))
         assertTrue(modelEntry.contains("modifier = Modifier.fillMaxWidth().height(36.dp)"))
         assertFalse(source.contains("if (presets.size > 1) \"对比\""))
         assertTrue(modelEntry.contains("interactionSource.collectIsPressedAsState()"))
@@ -1327,7 +1333,7 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `FB-P6-089 gives assistant information blocks local hierarchy tables and individual copy actions`() {
         val presentation = source.substring(source.indexOf("private fun PresentationBlockView"), source.indexOf("private fun inlineText"))
-        for (token in listOf("is PresentationBlock.Table -> MarkdownTable(block, findBlockIndex)", "CopyableInformationSurface", "MarkdownTable(block", "Icon(Icons.Rounded.ContentCopy", "contentDescription = \"复制\$label\"", "NeutralAssistantSurface", "horizontalScroll(scrollState)", "adaptiveTableColumnWeights(block)", "cellWidths = columnWeights.map", "trailingHeaderInset = 38.dp", "复制表格（保留 Markdown 格式）", "tableMarkdownText(block)", "VerticalDivider(", "contentAlignment = Alignment.Center", "textAlign = androidx.compose.ui.text.style.TextAlign.Center")) assertTrue("missing formatted assistant content token $token", presentation.contains(token))
+        for (token in listOf("is PresentationBlock.Table -> MarkdownTable(block, findBlockIndex)", "CopyableInformationSurface", "MarkdownTable(block", "if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy", "contentDescription = if (copied) \"已复制\" else \"复制\$label\"", "NeutralAssistantSurface", "horizontalScroll(scrollState)", "adaptiveTableColumnWeights(block)", "cellWidths = columnWeights.map", "trailingHeaderInset = 38.dp", "复制表格（保留 Markdown 格式）", "tableMarkdownText(block)", "VerticalDivider(", "contentAlignment = Alignment.Center", "textAlign = androidx.compose.ui.text.style.TextAlign.Center")) assertTrue("missing formatted assistant content token $token", presentation.contains(token))
         val inline = source.substring(source.indexOf("private fun inlineText"), source.indexOf("private fun ConversationActions"))
         assertTrue(inline.contains("appendChatGptImportedText(\"\${span.label} ↗\")"))
     }
@@ -1386,6 +1392,20 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
+    fun `FB-P6-198 source dialog uses a readable title above the canonical URL`() {
+        val sourceDialog = source.substring(source.indexOf("private fun SourceLinksDialog"), source.indexOf("private fun ConversationActions"))
+        for (siteName in listOf("东方财富", "ETF 数据", "ETF 估值", "理杏仁", "好买基金", "行研社")) {
+            assertTrue("missing readable source name: $siteName", source.contains("-> \"$siteName\""))
+        }
+        assertTrue(source.contains("private fun String.isWebsiteAddressLabel()"))
+        assertTrue(source.contains("candidate.isNotBlank() && !candidate.isWebsiteAddressLabel()"))
+        assertTrue(source.contains("else -> \"外部网站\""))
+        assertTrue(sourceDialog.contains("source.sourceDisplayTitle()"))
+        assertTrue(sourceDialog.contains("Text(source.url"))
+        assertTrue(sourceDialog.contains("maxLines = 1"))
+    }
+
+    @Test
     fun `FB-P6-082 keeps the edit branch dialog to its title editor and actions`() {
         val editDialog = source.substring(source.indexOf("editingMessageId?.let"), source.indexOf("state.imagePreview?.let"))
         for (token in listOf("EditUserMessageDialog(", "value = editingText", "onCreateBranch", "onEditUserMessage(com.nanzhufeng.ai.domain.MessageNodeId(rawId), editingText)")) assertTrue("missing edit branch route token $token", editDialog.contains(token))
@@ -1408,10 +1428,57 @@ class P6DConversationRowAccessibilityContractsTest {
         )) assertTrue("missing copy success haptic token $token", copyAction.contains(token))
         for (token in listOf(
             "val copyText = rememberConversationCopyTextAction()",
-            "onCopyAssistant = { copyText(presentedMessagePlainText(it.message)) }",
+            "onCopyAssistant = { transcript -> copyText(presentedMessagePlainText(transcript.message)) { copiedAssistantMessageId = transcript.message.messageId.value } }",
             "copyText(presentedMessagePlainText(transcript.message))",
-            "IconButton(onClick = { copyText(value) })",
+            "IconButton(onClick = { copyText(value) { copied = true } })",
         )) assertTrue("missing shared copy entry token $token", source.contains(token))
+    }
+
+    @Test
+    fun `FB-P6-179 replaces every copied icon with a transient check after a successful clipboard write`() {
+        val actionRow = source.substring(source.indexOf("private fun AssistantMessageActionRow"), source.indexOf("private fun MessageActionPopup"))
+        val copyAction = source.substring(source.indexOf("private fun rememberConversationCopyTextAction"), source.indexOf("private fun MessageContextAction"))
+        val informationSurface = source.substring(source.indexOf("private fun CopyableInformationSurface"), source.indexOf("private fun MarkdownTable"))
+        val markdownTable = source.substring(source.indexOf("private fun MarkdownTable"), source.indexOf("private fun adaptiveTableColumnWeights"))
+        val textPreviewActions = source.substring(source.indexOf("private fun TextPreviewTopActions"), source.indexOf("internal fun SharedPdfPreviewDialog"))
+        for (token in listOf(
+            "copiedAssistantMessageId",
+            "copiedContextMessageId",
+            "if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy",
+            "contentDescription = if (copied) \"已复制\"",
+            "delay(1_200)",
+        )) assertTrue("missing transient assistant copy feedback token $token", source.contains(token))
+        for (token in listOf(
+            "copiedAssistantMessageId == transcript.message.messageId.value",
+            "icon = if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy",
+        )) assertTrue("missing assistant-row-scoped copy feedback token $token", actionRow.contains(token))
+        val contextAction = source.substring(source.indexOf("private fun MessageContextAction"), source.indexOf("private val transcriptTimeFormatter"))
+        for (token in listOf(
+            "iconOnly = true",
+            "modifier = if (iconOnly) Modifier.size(46.dp)",
+            "contentDescription = label",
+            "if (!iconOnly)",
+        )) assertTrue("context copy must be an accessible icon-only control: $token", source.substring(source.indexOf("messageActionTarget?.let"), source.indexOf("selectingTextMessageId?.let")).plus(contextAction).contains(token))
+        for (surface in listOf(informationSurface, markdownTable, textPreviewActions)) {
+            assertTrue("copy control must replace its own glyph", surface.contains("if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy"))
+            assertFalse("copy control must not add a second check beside itself", surface.contains("CopySuccessIndicator"))
+        }
+        for (token in listOf(
+            "clipboard.setText",
+            "onSuccess",
+            "onCopied()",
+        )) assertTrue("copy feedback must follow a successful clipboard write: $token", copyAction.contains(token))
+    }
+
+    @Test
+    fun `FB-P6-179 does not leave an offset copy-success indicator beside any copy control`() {
+        val actionRow = source.substring(source.indexOf("private fun AssistantMessageActionRow"), source.indexOf("private fun MessageActionPopup"))
+        val informationSurface = source.substring(source.indexOf("private fun CopyableInformationSurface"), source.indexOf("private fun MarkdownTable"))
+        val markdownTable = source.substring(source.indexOf("private fun MarkdownTable"), source.indexOf("private fun adaptiveTableColumnWeights"))
+        for (surface in listOf(actionRow, informationSurface, markdownTable)) {
+            assertFalse(surface.contains("CopySuccessIndicator"))
+            assertTrue(surface.contains("Icons.Rounded.Check else Icons.Rounded.ContentCopy"))
+        }
     }
 
     @Test
@@ -1459,7 +1526,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "if (usedMultiplePointers || transformed) return@awaitEachGesture",
             "imagePreviewGestureTransform(",
             "abs(horizontalDistancePx) > abs(verticalDistancePx) * 1.25f",
-            ".takeIf { target -> target != preview.id }",
+            ".takeIf { target -> target != gesturePreviewId }",
             "onClick = { batchDownloadVisible = false }",
             "val popupSurfaceInteraction = remember { MutableInteractionSource() }",
         )) assertTrue("missing generated-image download token $token", imagePreview.contains(token))

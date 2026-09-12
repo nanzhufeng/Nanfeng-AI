@@ -10,6 +10,24 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
 
 class ProviderAdapterContractsTest {
+    @Test fun `Flash native images retain original bytes in chat and web search while Pro and PDF fail closed`() {
+        val flash = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK,
+            modelId = "deepseek-flash", capabilities = model().capabilities.copy(supportsVision = true))
+        val image = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "chart.png", byteArrayOf(1, 2, 3))
+        for (route in listOf(OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.DEEPSEEK_RESPONSES)) {
+            val ready = DeepSeekChatAdapter().prepare(flash, listOf("user" to "看图"), listOf(image), false, ChatRequestOptions(route)) as ChatAdapterPrepareResult.Ready
+            val output = java.io.ByteArrayOutputStream()
+            ready.body.writeTo(output)
+            val body = output.toString(Charsets.UTF_8)
+            assertTrue(body.contains("data:image/png;base64,AQID"))
+            assertTrue(body.contains(if (route == OfficialWebSearchRoute.NONE) "\"type\":\"image_url\"" else "\"type\":\"input_image\""))
+            assertEquals(ready.body.contentLength, output.size().toLong())
+        }
+        assertTrue(DeepSeekChatAdapter().prepare(flash.copy(modelId = "deepseek-v4-pro"), emptyList(), listOf(image), false) is ChatAdapterPrepareResult.AttachmentUnsupported)
+        val pdf = ChatAttachment(ChatAttachmentKind.PDF, "application/pdf", "file.pdf", byteArrayOf(1))
+        assertTrue(DeepSeekChatAdapter().prepare(flash, emptyList(), listOf(pdf), false) is ChatAdapterPrepareResult.AttachmentUnsupported)
+    }
+
     @Test fun `transport network diagnostics retain only a safe failure category`() {
         assertEquals(ProviderNetworkFailureKind.DNS, classifyProviderNetworkFailure(UnknownHostException("openrouter.ai")))
         assertEquals(ProviderNetworkFailureKind.TLS, classifyProviderNetworkFailure(SSLHandshakeException("certificate details stay out of diagnostics")))
@@ -202,7 +220,7 @@ class ProviderAdapterContractsTest {
     @Test fun `Markdown is a complete local text input for DeepSeek and Zhipu`() {
         val markdown = ChatAttachment(ChatAttachmentKind.FILE, "text/markdown", "notes.md", "# 标题\n正文".toByteArray())
         val deepSeek = DeepSeekChatAdapter().prepare(
-            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, modelId = "deepseek-v4-flash"),
+            model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, modelId = "deepseek-flash"),
             listOf("user" to "整理文件"), listOf(markdown), stream = true,
         ) as ChatAdapterPrepareResult.Ready
         val zhipu = ZhipuChatAdapter().prepare(
@@ -369,14 +387,14 @@ class ProviderAdapterContractsTest {
         assertFalse(ready.jsonBody.contains("stream_options"))
     }
 
-    @Test fun `DeepSeek V4 Flash uses the existing official direct chat transport`() {
+    @Test fun `DeepSeek V4 point 1 Flash uses the existing official direct chat transport`() {
         val flash = model().copy(
             providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK,
-            modelId = "deepseek-v4-flash",
+            modelId = "deepseek-flash",
         )
         val ready = DeepSeekChatAdapter().prepare(flash, listOf("user" to "你好"), emptyList(), stream = true) as ChatAdapterPrepareResult.Ready
 
-        assertTrue(ready.jsonBody.contains("\"model\":\"deepseek-v4-flash\""))
+        assertTrue(ready.jsonBody.contains("\"model\":\"deepseek-flash\""))
         assertTrue(ready.jsonBody.contains("\"stream\":true"))
         assertEquals(com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, ChatProviderAdapters().adapter(com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK)?.providerId)
     }
@@ -397,7 +415,7 @@ class ProviderAdapterContractsTest {
         assertTrue(ZhipuChatAdapter().prepare(flagship, emptyList(), listOf(image), stream = false) is ChatAdapterPrepareResult.AttachmentUnsupported)
         assertEquals(com.nanzhufeng.ai.domain.ProviderId.ZHIPU, ChatProviderAdapters().adapter(com.nanzhufeng.ai.domain.ProviderId.ZHIPU)?.providerId)
 
-        val deepSeek = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, modelId = "deepseek-v4-flash")
+        val deepSeek = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, modelId = "deepseek-flash")
         val unrelated = DeepSeekChatAdapter().prepare(deepSeek, listOf("user" to "你好"), emptyList(), stream = false) as ChatAdapterPrepareResult.Ready
         assertFalse(unrelated.jsonBody.contains("\"reasoning_effort\""))
     }

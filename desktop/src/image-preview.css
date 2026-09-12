@@ -1,1 +1,564 @@
 :root{--attachment-overlay-font-size:8px}.chat-image-attachment,.chat-document-attachment,.chat-video-attachment,.chat-audio-attachment{position:relative;display:grid;justify-items:start;max-width:260px;padding:7px;background:#fff8f1;border-color:#efcda9;text-align:left}.chat-image-attachment img{display:block;width:min(220px,100%);height:auto;max-height:180px;object-fit:contain;border-radius:7px;background:#f2f4f3}.chat-document-attachment .chat-attachment-preview-glyph{display:grid;place-items:center;width:92px;height:92px;border-radius:7px;background:#eef1ef;color:#a34d22}.chat-video-attachment .chat-attachment-preview-glyph{display:grid;place-items:center;min-width:132px;min-height:76px;max-width:220px;border-radius:7px;background:#eef1ef;color:#a34d22}.chat-audio-attachment .chat-attachment-preview-glyph{display:grid;place-items:center;width:176px;height:42px;border-radius:7px;background:#eef1ef;color:#a34d22}.chat-attachment-preview-glyph svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8}.chat-attachment-info-overlay{position:absolute;inset:auto 7px 7px;display:grid;gap:1px;max-width:calc(100% - 14px);padding:3px 4px;border-radius:5px;background:rgb(24 35 28 / .43);color:#fff;opacity:0;pointer-events:none;transition:opacity 120ms ease}.chat-attachment-info-overlay b{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(8px * var(--app-font-scale, 1));line-height:1.2}.chat-attachment-info-overlay small{color:#eef4ef;font-size:calc(8px * var(--app-font-scale, 1));line-height:1.2}.chat-image-attachment:hover .chat-attachment-info-overlay,.chat-image-attachment:focus-visible .chat-attachment-info-overlay,.chat-document-attachment:hover .chat-attachment-info-overlay,.chat-document-attachment:focus-visible .chat-attachment-info-overlay,.chat-video-attachment:hover .chat-attachment-info-overlay,.chat-video-attachment:focus-visible .chat-attachment-info-overlay,.chat-audio-attachment:hover .chat-attachment-info-overlay,.chat-audio-attachment:focus-visible .chat-attachment-info-overlay{opacity:1}.chat-image-placeholder{display:grid;place-items:center;width:150px;height:88px;border-radius:7px;background:#eef1ef;color:#63746b;font-size:calc(11px * var(--app-font-scale, 1))}.image-preview-dialog{width:min(980px,100%);max-height:calc(100vh - 44px);display:flex;flex-direction:column}.image-preview-tools,.pdf-preview-tools{display:flex;align-items:center;gap:7px;margin-bottom:8px}.image-preview-tools button,.pdf-preview-tools button{padding:5px 9px;font-size:calc(12px * var(--app-font-scale, 1))}.image-preview-tools small,.pdf-preview-tools small{margin-left:auto;color:#65776d;font-size:calc(11px * var(--app-font-scale, 1))}.image-preview-dialog figure{margin:0;min-height:0;display:grid;place-items:center;overflow:hidden;background:#f1f4f2;border-radius:10px}.image-preview-viewport{width:100%;min-height:280px;height:min(66vh,720px);display:grid;place-items:center;overflow:hidden;cursor:zoom-in;touch-action:none;user-select:none}.image-preview-viewport.zoomed{cursor:grab}.image-preview-viewport.dragging{cursor:grabbing}.image-preview-viewport img,.image-preview-dialog figure img{display:block;max-width:100%;max-height:100%;object-fit:contain;transform-origin:center;will-change:transform;transition:transform 120ms ease-out}.image-preview-viewport.dragging img{transition:none}.image-preview-dialog figcaption,.pdf-preview-note{padding:12px;color:#566a60;font-size:calc(12px * var(--app-font-scale, 1))}.pdf-preview-frame{width:100%;min-height:calc(100vh - 310px);border:0;border-radius:10px;background:#f1f4f2}.image-preview-dialog .image-preview-error{padding:32px;text-align:center;color:#6a5647}:root[data-appearance-mode="dark"] .image-preview-dialog figure,:root[data-appearance-mode="dark"] .pdf-preview-frame{background:#171a18}:root[data-appearance-mode="dark"] .image-preview-dialog figcaption,:root[data-appearance-mode="dark"] .pdf-preview-note,:root[data-appearance-mode="dark"] .image-preview-tools small,:root[data-appearance-mode="dark"] .pdf-preview-tools small{color:#aeb8b1}
+
+.image-preview-viewport{position:relative}.image-preview-nav{position:absolute;top:50%;display:inline-flex;width:42px;min-width:42px;min-height:42px;align-items:center;justify-content:center;padding:0;border-radius:50%;background:rgb(255 255 255 / .9);color:#26302a;box-shadow:0 4px 16px rgb(27 38 30 / 18%);transform:translateY(-50%)}.image-preview-nav.previous{left:14px}.image-preview-nav.next{right:14px}.image-preview-nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2}.image-preview-index{position:absolute;bottom:12px;left:50%;padding:5px 10px;border-radius:999px;background:rgb(24 31 27 / .58);color:#fff;font-size:calc(12px * var(--app-font-scale, 1));line-height:1;transform:translateX(-50%)}
+
+/* All file preview states share a viewport-sized surface above workspace chrome. */
+.scrim.attachment-preview-overlay { padding: 0; place-items: stretch; overflow: hidden; }
+.attachment-preview-overlay > .image-preview-dialog {
+  width: 100%; max-width: none; height: 100vh; height: 100dvh; max-height: none;
+  min-width: 0; min-height: 0; padding: 18px 24px; border: 0; border-radius: 0;
+  display: flex; flex-direction: column; gap: 10px; overflow: hidden; box-shadow: none;
+}
+.attachment-preview-overlay .image-preview-dialog > h2 { flex: 0 0 auto; margin: 0; padding-right: 48px; font-size: calc(20px * var(--app-font-scale, 1)); }
+.attachment-preview-overlay .image-preview-dialog > .close { top: 12px; right: 16px; z-index: 2; }
+.attachment-preview-overlay .image-preview-tools,
+.attachment-preview-overlay .pdf-preview-tools { flex: 0 0 auto; flex-wrap: wrap; margin: 0; }
+.attachment-preview-overlay .image-preview-tools small { overflow-wrap: anywhere; }
+.attachment-preview-overlay .image-preview-dialog figure { flex: 1 1 0; width: 100%; min-height: 0; display: flex; flex-direction: column; }
+.attachment-preview-overlay .image-preview-viewport { flex: 1 1 0; min-height: 0; height: auto; display: flex; align-items: center; justify-content: center; }
+.attachment-preview-overlay .image-preview-viewport img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.attachment-preview-overlay .image-preview-dialog figcaption { flex: 0 0 auto; max-height: 20vh; overflow: auto; overflow-wrap: anywhere; text-align: center; padding: 8px 12px; }
+.attachment-preview-overlay .pdf-preview-frame,
+.attachment-preview-overlay .video-preview-frame { flex: 1 1 0; width: 100%; height: 0; min-height: 0; object-fit: contain; border: 0; }
+.attachment-preview-overlay .local-text-preview { flex: 1 1 0; min-height: 0; margin: 0; padding: 16px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.attachment-preview-overlay audio { width: 100%; margin-block: auto; }
+.attachment-preview-overlay .image-preview-dialog > .pdf-preview-note { flex: 0 0 auto; margin: 0; padding: 4px 0; overflow-wrap: anywhere; }
+.attachment-preview-overlay .image-preview-dialog > .image-preview-error { min-height: 0; overflow: auto; }
+@media (max-width: 600px) { .attachment-preview-overlay > .image-preview-dialog { padding: 14px 12px; } }
+
+/* Full-screen attachment previews are a dedicated viewing surface. Keep the chrome and every
+   unused media pixel on one dark canvas; images and video frames themselves stay unfiltered. */
+.scrim.attachment-preview-overlay { background: var(--attachment-media-canvas); color-scheme: dark; }
+.attachment-preview-overlay > .image-preview-dialog { background: var(--attachment-media-canvas); color: #f2f5f2; border-color: var(--attachment-media-canvas); }
+.attachment-preview-overlay .image-preview-dialog > h2 { color: #f2f5f2; }
+.attachment-preview-overlay .image-preview-dialog > .close { color: #f2f5f2; background: transparent; border-color: transparent; }
+.attachment-preview-overlay .image-preview-dialog > .close:hover { background: rgb(255 255 255 / 10%); border-color: transparent; }
+.attachment-preview-overlay .image-preview-tools button,
+.attachment-preview-overlay .pdf-preview-tools button { background: #232824; color: #f2f5f2; border-color: #3d473f; }
+.attachment-preview-overlay .image-preview-tools button:hover,
+.attachment-preview-overlay .pdf-preview-tools button:hover { background: #2d352f; border-color: #546154; }
+.attachment-preview-overlay .image-preview-dialog figure { background: var(--attachment-media-canvas); }
+.attachment-preview-overlay .image-preview-viewport { background: var(--attachment-media-canvas); }
+.attachment-preview-overlay .video-preview-frame { background: var(--attachment-media-canvas); }
+.attachment-preview-overlay .image-preview-dialog figcaption,
+.attachment-preview-overlay .pdf-preview-note,
+.attachment-preview-overlay .image-preview-tools small,
+.attachment-preview-overlay .pdf-preview-tools small { color: #b9c3bb; }
+.attachment-preview-overlay .image-preview-dialog .image-preview-error { color: #f0c6a8; }
+
+/* Phone-parity preview actions: media has download/share/close; inert text adds copy. */
+.attachment-preview-overlay .file-preview-top-actions {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  z-index: 3;
+}
+.attachment-preview-overlay .file-preview-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 16%);
+  color: #fff;
+  box-shadow: none;
+  backdrop-filter: blur(12px);
+}
+.attachment-preview-overlay .file-preview-action:hover { background: rgb(255 255 255 / 24%); }
+.file-preview-top-actions { position: relative; }
+.preview-action-error { position: absolute; top: 100%; right: 0; padding: 8px; border-radius: 8px; background: #fff; color: #b42318; white-space: nowrap; z-index: 2; }
+.attachment-preview-overlay .file-preview-action:active { transform: scale(.96); }
+.attachment-preview-overlay .file-preview-action:disabled { opacity: .42; transform: none; }
+.attachment-preview-overlay .file-preview-action svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.attachment-preview-overlay .file-preview-share-action {
+  width: auto;
+  min-width: 78px;
+  padding: 0 18px;
+  font-size: calc(15px * var(--app-font-scale, 1));
+  font-weight: 600;
+}
+.attachment-preview-overlay .local-text-preview {
+  background: #0b0e0c;
+  color: #f2f5f2;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 12px;
+}
+.attachment-preview-overlay .text-preview-facts { padding: 0 2px; }
+
+/* Text is a reading surface, not a media lightbox. Keep it white and place its
+   identity on the same top row as the four actions. */
+.scrim.attachment-preview-overlay.text-preview-overlay {
+  background: #fff;
+  color-scheme: light;
+}
+.attachment-preview-overlay > .text-preview-surface {
+  background: #fff;
+  color: #202722;
+  border-color: #fff;
+}
+.text-preview-overlay .text-preview-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  min-height: 48px;
+}
+.text-preview-overlay .text-preview-header .text-preview-facts {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 2px;
+  overflow: hidden;
+  color: #66736c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.text-preview-overlay .text-preview-header .file-preview-top-actions {
+  flex: 0 0 auto;
+  align-self: center;
+}
+.text-preview-overlay .file-preview-action {
+  background: #f1f3f2;
+  color: #202722;
+  border-color: #e5e9e6;
+  backdrop-filter: none;
+}
+.text-preview-overlay .file-preview-action:hover { background: #e8ece9; }
+.text-preview-overlay .local-text-preview {
+  background: #fff;
+  color: #202722;
+  border-color: #e4e9e5;
+}
+
+/* Native media controls dim the whole video on hover. The app-owned strip keeps
+   the media and the surrounding canvas on the shared media canvas. */
+.attachment-preview-overlay .video-preview-stage {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  background: var(--attachment-media-canvas);
+  overflow: hidden;
+}
+.attachment-preview-overlay .video-preview-stage .video-preview-frame {
+  flex: 1 1 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--attachment-media-canvas);
+}
+.attachment-preview-overlay .preview-playback-controls {
+  --playback-control-surface: rgb(35 38 36 / 76%);
+  --playback-control-blur: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+}
+.attachment-preview-overlay .video-preview-controls {
+  position: absolute;
+  inset: auto 50% 14px auto;
+  width: min(720px, calc(100% - 32px));
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--playback-control-surface);
+  transform: translateX(50%);
+  backdrop-filter: blur(var(--playback-control-blur));
+}
+.attachment-preview-overlay .preview-playback-toggle,
+.attachment-preview-overlay .audio-preview-toggle {
+  display: grid;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 16%);
+  color: #fff;
+}
+.attachment-preview-overlay .preview-playback-toggle svg,
+.attachment-preview-overlay .audio-preview-toggle svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  stroke: none;
+}
+.attachment-preview-overlay .preview-progress-range,
+.attachment-preview-overlay .preview-volume-range {
+  --preview-progress: 0%;
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  height: 30px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+.attachment-preview-overlay .preview-progress-range {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.attachment-preview-overlay .preview-progress-range::-webkit-slider-runnable-track,
+.attachment-preview-overlay .preview-volume-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(to right, #fff 0 var(--preview-progress), rgb(255 255 255 / 34%) var(--preview-progress) 100%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 36%);
+}
+.attachment-preview-overlay .preview-progress-range::-webkit-slider-thumb,
+.attachment-preview-overlay .preview-volume-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -12px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 30%);
+}
+.attachment-preview-overlay .preview-progress-range::-moz-range-track,
+.attachment-preview-overlay .preview-volume-range::-moz-range-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 34%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 36%);
+}
+.attachment-preview-overlay .preview-progress-range::-moz-range-progress,
+.attachment-preview-overlay .preview-volume-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: #fff;
+}
+.attachment-preview-overlay .preview-progress-range::-moz-range-thumb,
+.attachment-preview-overlay .preview-volume-range::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 30%);
+}
+.attachment-preview-overlay .preview-volume-control { position: relative; display: flex; flex: 0 0 auto; align-items: center; }
+.attachment-preview-overlay .preview-volume-toggle {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+}
+.attachment-preview-overlay .preview-volume-toggle:hover,
+.attachment-preview-overlay .preview-volume-toggle:focus-visible { background: rgb(255 255 255 / 16%); outline: none; }
+.attachment-preview-overlay .preview-volume-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
+.attachment-preview-overlay .preview-volume-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  transform: translateX(-50%);
+  display: grid;
+  width: 44px;
+  min-height: 128px;
+  place-items: center;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--playback-control-surface, rgb(35 38 36 / 76%));
+  backdrop-filter: blur(var(--playback-control-blur, 12px));
+  box-shadow: none;
+}
+.attachment-preview-overlay .preview-volume-popover[hidden] { display: none; }
+.text-preview-overlay .local-markdown-preview {
+  width: 100%;
+  white-space: normal;
+  font-family: inherit;
+  font-size: calc(16px * var(--app-font-scale, 1));
+  line-height: 1.75;
+  padding: 24px max(24px, calc((100% - 980px) / 2));
+  overflow-wrap: anywhere;
+}
+.local-markdown-preview h1 { font-size: 1.8em; }
+.local-markdown-preview h2 { font-size: 1.45em; }
+.local-markdown-preview h3 { font-size: 1.2em; }
+.local-markdown-preview p { margin: 0 0 1em; }
+.local-markdown-preview pre { white-space: pre; overflow: auto; }
+.local-markdown-preview table { width: 100%; border-collapse: collapse; }
+.local-markdown-preview th, .local-markdown-preview td { padding: 8px 12px; border: 1px solid #dce1dc; }
+.attachment-preview-overlay .preview-volume-range {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 24px;
+  height: 92px;
+}
+.attachment-preview-overlay .preview-volume-range::-webkit-slider-runnable-track {
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(to top, #fff 0 var(--preview-progress), rgb(255 255 255 / 34%) var(--preview-progress) 100%);
+}
+.attachment-preview-overlay .preview-volume-range::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: 0; margin-left: -6px; }
+.attachment-preview-overlay .preview-volume-range::-moz-range-thumb { width: 16px; height: 16px; }
+.preview-volume-value { color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
+.attachment-preview-overlay .preview-playback-controls time,
+.attachment-preview-overlay .audio-preview-times time {
+  flex: 0 0 auto;
+  font-size: calc(12px * var(--app-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phone-parity audio is a compact white sheet. Audio surfaces use neutral gray,
+   never the earlier blue-gray media tint. */
+.scrim.attachment-preview-overlay.audio-preview-overlay {
+  padding: 24px;
+  place-items: center;
+  background: rgb(30 33 31 / 36%);
+  color-scheme: light;
+}
+.attachment-preview-overlay > .audio-preview-dialog {
+  width: min(560px, calc(100vw - 48px));
+  height: auto;
+  min-height: 0;
+  max-height: calc(100dvh - 48px);
+  padding: 18px 20px 20px;
+  gap: 16px;
+  border: 1px solid #e7ebe8;
+  border-radius: 24px;
+  background: #fff;
+  color: #202722;
+  box-shadow: 0 18px 52px rgb(18 23 20 / 24%);
+}
+.audio-preview-overlay .audio-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.audio-preview-overlay .audio-preview-identity {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 3px;
+}
+.audio-preview-overlay .audio-preview-identity strong {
+  overflow: hidden;
+  color: #202722;
+  font-size: calc(16px * var(--app-font-scale, 1));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audio-preview-overlay .audio-preview-identity small { color: #6b746f; }
+.audio-preview-overlay .audio-preview-header .file-preview-top-actions {
+  flex: 0 0 auto;
+  align-self: center;
+}
+.audio-preview-overlay .file-preview-action {
+  background: #f1f3f2;
+  color: #202722;
+  border-color: #e5e9e6;
+  backdrop-filter: none;
+}
+.audio-preview-overlay .file-preview-action:hover { background: #e8ece9; }
+.audio-preview-overlay .audio-preview-player {
+  display: grid;
+  place-items: center;
+  gap: 14px;
+  min-height: 210px;
+  padding: 24px 22px 20px;
+  border-radius: 20px;
+  background: var(--attachment-media-canvas);
+  color: #fff;
+}
+.audio-preview-overlay .audio-preview-player audio { display: none; }
+.audio-preview-overlay .audio-preview-toggle { width: 64px; height: 64px; }
+.audio-preview-overlay .audio-preview-progress-row { display: flex; width: 100%; align-items: center; gap: 8px; }
+.audio-preview-overlay .audio-preview-times { display: flex; justify-content: space-between; width: 100%; }
+@media (max-width: 660px) {
+  .scrim.attachment-preview-overlay.audio-preview-overlay { padding: 14px; }
+  .attachment-preview-overlay > .audio-preview-dialog { width: calc(100vw - 28px); }
+  .audio-preview-overlay .audio-preview-header { align-items: flex-start; }
+  .audio-preview-overlay .audio-preview-header .file-preview-top-actions { gap: 6px; }
+  .audio-preview-overlay .file-preview-action { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
+  .audio-preview-overlay .file-preview-share-action { width: auto; min-width: 68px; padding-inline: 14px; }
+}
+
+/* Main-thread attachment cards reuse the phone/search preview language: the file's
+   content is primary and the name/type disclosure stays secondary on hover/focus. */
+.chat-image-attachment,
+.chat-document-attachment,
+.chat-video-attachment,
+.chat-audio-attachment {
+  width: 240px;
+  max-width: 240px;
+  padding: 7px;
+  border: 1px solid #e7ded4;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+.chat-image-attachment img,
+.chat-attachment-visual {
+  display: block;
+  width: 224px;
+  max-width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  background: #eef1ef;
+  overflow: hidden;
+}
+.chat-image-attachment img,
+.chat-video-frame > img,
+.chat-pdf-content-preview > img {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  background: #eef1ef;
+}
+.chat-image-placeholder {
+  width: 224px;
+  max-width: 100%;
+  aspect-ratio: 16 / 10;
+  height: auto;
+  border-radius: 10px;
+}
+.chat-video-frame { position: relative; display: grid; place-items: center; }
+.chat-video-play {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 88%);
+  color: #27312b;
+  box-shadow: 0 3px 12px rgb(28 36 31 / 16%);
+  transform: translate(-50%, -50%);
+}
+.chat-video-play svg,
+.chat-audio-play svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.chat-file-preview-fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: #67736c;
+}
+.chat-file-preview-fallback svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.chat-file-format-label {
+  color: #4f5b54;
+  font-size: calc(12px * var(--app-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: .04em;
+}
+.chat-text-content-preview {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 6px;
+  padding: 12px;
+  text-align: left;
+}
+.chat-text-content-preview pre {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #2f3933;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-mask-image: linear-gradient(#000 72%, transparent 100%);
+  mask-image: linear-gradient(#000 72%, transparent 100%);
+}
+.chat-audio-attachment .chat-attachment-visual {
+  aspect-ratio: auto;
+  height: 92px;
+}
+.chat-audio-player {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 14px;
+  background: var(--attachment-media-canvas);
+  color: #fff;
+}
+.chat-audio-heading { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; }
+.chat-audio-heading b { font-size: calc(14px * var(--app-font-scale, 1)); font-weight: 560; }
+.chat-audio-heading time { font-size: calc(12px * var(--app-font-scale, 1)); font-variant-numeric: tabular-nums; }
+.chat-audio-play {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 18%);
+}
+.chat-audio-track { position: relative; display: block; height: 3px; border-radius: 999px; background: rgb(255 255 255 / 42%); }
+.chat-audio-track i { position: absolute; inset: 0 auto 0 0; width: 4px; border-radius: inherit; background: #fff; }
+.chat-file-format-preview { display: grid; place-items: center; }
+/* Images retain their own geometry; document/video preview mats do not apply. */
+:root .app-shell.chat-first .chat-image-attachment {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+:root .app-shell.chat-first .chat-image-attachment img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 320px;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+}
+:root[data-appearance-mode="dark"] .chat-image-attachment,
+:root[data-appearance-mode="dark"] .chat-document-attachment,
+:root[data-appearance-mode="dark"] .chat-video-attachment,
+:root[data-appearance-mode="dark"] .chat-audio-attachment { background: #202420; border-color: #343a35; }
+:root[data-appearance-mode="dark"] .chat-attachment-visual,
+:root[data-appearance-mode="dark"] .chat-image-placeholder,
+:root[data-appearance-mode="dark"] .chat-image-attachment img,
+:root[data-appearance-mode="dark"] .chat-video-frame > img,
+:root[data-appearance-mode="dark"] .chat-pdf-content-preview > img { background: #171a18; }
+:root[data-appearance-mode="dark"] .chat-text-content-preview pre { color: #e3e9e4; }
+:root[data-appearance-mode="dark"] .chat-file-format-label,
+:root[data-appearance-mode="dark"] .chat-file-preview-fallback { color: #b8c3bb; }

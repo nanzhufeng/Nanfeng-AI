@@ -56,6 +56,7 @@ class AndroidModelServiceSettingsRepository(context: Context) : ModelServiceSett
             "GPT_5_1", "GPT_5" -> ModelPresetId.GPT_5_6_SOL
             "GPT_5_MINI" -> ModelPresetId.GPT_5_6_TERRA
             "GPT_5_NANO" -> ModelPresetId.GPT_5_6_LUNA
+            "GEMINI_3_7_FLASH" -> ModelPresetId.GEMINI_3_8_FLASH
             else -> runCatching { ModelPresetId.valueOf(saved) }.getOrNull()
         }
 

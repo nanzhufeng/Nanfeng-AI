@@ -26,7 +26,7 @@ FONTS = (
 )
 LAYERS = (
     ("model-root", ("选择模型", "自动选择")),
-    ("model-daily", ("日常", "DeepSeek V4 Flash")),
+    ("model-daily", ("日常", "DeepSeek V4.1 Flash")),
     ("model-deep", ("深度", "DeepSeek V4 Pro")),
     ("add-root", ("基础风格和语气", "实时网页搜索")),
     ("style", ("基础风格和语气", "直言不讳")),

@@ -74,6 +74,23 @@ test('C07 root preserves Android order, icon semantics, current style value, and
   assert.doesNotMatch(html, /data-action="toggle-conversation-web-search"[^>]*disabled/);
 });
 
+test('C07 uses Android Rounded composer paths, never the Desktop attachment glyphs', async () => {
+  const [shell, iconSource] = await Promise.all([
+    readFile(resolve(desktopRoot, 'src/chat-shell.mjs'), 'utf8'),
+    readFile(resolve(desktopRoot, 'src/icon-source.mjs'), 'utf8'),
+  ]);
+  const composerSlice = shell.slice(shell.indexOf('const composerPreferenceRows'), shell.indexOf('const composerAddRoot') + 1200);
+  for (const token of ['icons.photoCamera', 'icons.addPhotoAlternate', 'icons.attachFile', 'icons.autoAwesome', 'icons.publicIcon']) {
+    assert.ok(composerSlice.includes(token), token);
+  }
+  for (const token of ['icons.camera', 'icons.image', 'icons.file', 'icons.sparkles', 'icons.globe']) {
+    assert.ok(!composerSlice.includes(token), token);
+  }
+  for (const token of ['photoCamera:', 'addPhotoAlternate:', 'attachFile:', 'autoAwesome:', 'publicIcon:']) {
+    assert.ok(iconSource.includes(token), token);
+  }
+});
+
 test('C07 style child contains default plus the five Android titles and only the selected check', () => {
   const html = renderAdd({ page: 'tone' });
   const labels = ['默认', '直言不讳', '专业可靠', '亲和友善', '高效务实', '风趣搞笑'];
@@ -97,8 +114,23 @@ test('C07 CSS owns one Android-derived add-sheet geometry with transparent dismi
     '.composer-add-sheet {',
     'width: min(280px, calc(100vw - 48px));',
     'border-radius: 22px;',
+    'left: 8px;',
+    'box-shadow: 0 8px 24px rgb(30 45 35 / 12%);',
+    '.composer-add-attachment-row { min-height: 52px; }',
+    '.composer-add-style-row, .composer-add-web-row { min-height: 56px;',
+    'width: 32px;',
+    'height: 32px;',
+    'background: var(--system-surface);',
+    'width: 18px;',
+    'height: 18px;',
+    'width: 58px;',
+    'height: 28px;',
+    'width: 21px;',
+    'height: 21px;',
+    'translateX(30px)',
     '.composer-add-row:focus-visible',
     '.composer-add-icon-surface.is-accent',
+    'color: #1e2925;',
   ]) assert.ok(css.includes(token), token);
   assert.ok(!css.includes('.composer-add-popover'));
 });

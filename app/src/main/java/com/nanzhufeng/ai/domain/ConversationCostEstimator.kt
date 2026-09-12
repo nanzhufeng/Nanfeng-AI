@@ -14,6 +14,7 @@ import java.time.Instant
  */
 object ConversationCostEstimator {
     const val OPENROUTER_PRICE_VERSION = "openrouter-public-prices-2026-08-v1"
+    const val GEMINI_3_8_OPENROUTER_PRICE_VERSION = "openrouter-gemini-3.8-flash-intro-2026-09-v1"
     const val QWEN_PRICE_VERSION = "qwen-cn-beijing-standard-2026-08-v2"
     const val DEEPSEEK_LEGACY_PRICE_VERSION = "deepseek-public-prices-before-2026-08-17-v1"
     const val DEEPSEEK_OFF_PEAK_PRICE_VERSION = "deepseek-off-peak-2026-08-v2"
@@ -53,6 +54,7 @@ object ConversationCostEstimator {
         "anthropic/claude-sonnet-5" to price(OPENROUTER_PRICE_VERSION, "2", "10"),
         "anthropic/claude-haiku-4.5" to price(OPENROUTER_PRICE_VERSION, "1", "5"),
         "google/gemini-3.7-flash" to price(OPENROUTER_PRICE_VERSION, "0.375", "1.875"),
+        "google/gemini-3.8-flash" to price(GEMINI_3_8_OPENROUTER_PRICE_VERSION, "0.75", "3.75", "0.075"),
         "moonshotai/kimi-k3" to price(OPENROUTER_PRICE_VERSION, "2.55", "12.75", "0.256"),
         "qwen3.8-max" to price(QWEN_PRICE_VERSION, "12", "36", "1.5", "CNY"),
     )
@@ -60,6 +62,14 @@ object ConversationCostEstimator {
     private val deepSeekPeakPricingEffectiveAt = Instant.parse("2026-08-16T16:00:00Z")
 
     private fun deepSeekPrice(modelId: String, at: Instant): Price? {
+        if (modelId == "deepseek-flash") {
+            return if (DeepSeekPricingWindow.periodAt(at) == DeepSeekPricingPeriod.PEAK)
+                price("deepseek-v4.1-flash-peak-2026-09-10-v1", "0.3", "1.2", "0.006")
+            else price("deepseek-v4.1-flash-off-peak-2026-09-10-v1", "0.15", "0.6", "0.003")
+        }
+        // The official legacy Flash alias now serves V4.1, but its exact cutover instant is unpublished.
+        // Keep past estimates and refuse to apply the retired tariff to new alias responses.
+        if (modelId == "deepseek-v4-flash" && !at.isBefore(Instant.parse("2026-09-10T00:00:00Z"))) return null
         if (modelId !in setOf("deepseek-v4-pro", "deepseek-v4-flash")) return null
         if (at.isBefore(deepSeekPeakPricingEffectiveAt)) {
             return when (modelId) {
@@ -67,7 +77,9 @@ object ConversationCostEstimator {
                 else -> price(DEEPSEEK_LEGACY_PRICE_VERSION, "0.14", "0.28", "0.0028")
             }
         }
-        val peak = DeepSeekPricingWindow.periodAt(at) == DeepSeekPricingPeriod.PEAK
+        // Preserve the previously recorded schedule for historical IDs; new Flash has its own version.
+        val hour = at.atOffset(java.time.ZoneOffset.UTC).hour
+        val peak = hour in 1 until 4 || hour in 6 until 10
         return when (modelId) {
             "deepseek-v4-pro" -> if (peak) {
                 price(DEEPSEEK_PEAK_PRICE_VERSION, "1.32", "3.96", "0.044")

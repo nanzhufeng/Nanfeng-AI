@@ -440,7 +440,7 @@ class QwenChatAdapter : OpenAiCompatibleChatAdapter() {
         return if (attachments.isEmpty()) ChatAdapterPrepareResult.Ready(textOnlyBody(model, messages, stream, options))
         else if (attachments.all { it.kind == ChatAttachmentKind.FILE }) {
             ChatAdapterPrepareResult.Ready(textOnlyBody(model, messages + ("user" to inlineTextFiles), stream, options))
-        } else ChatAdapterPrepareResult.Ready("<streamed-qwen-chat-body>", qwenMultimodalBody(model, messages, attachments, inlineTextFiles, stream, options))
+        } else ChatAdapterPrepareResult.Ready("<streamed-qwen-chat-body>", inlineMultimodalChatBody(model, messages, attachments, inlineTextFiles, stream, options))
     }
     /** Qwen PDF understanding can take up to five minutes before its first token. */
     override fun readTimeoutMillis(model: ResolvedModel, attachments: List<ChatAttachment>, stream: Boolean): Int =
@@ -480,7 +480,19 @@ class DeepSeekChatAdapter : OpenAiCompatibleChatAdapter() {
 
     override fun prepare(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): ChatAdapterPrepareResult {
         val inlineTextFiles = inlineUtf8TextFiles(attachments) ?: return ChatAdapterPrepareResult.AttachmentUnsupported
-        if (attachments.any { it.kind != ChatAttachmentKind.FILE }) return ChatAdapterPrepareResult.AttachmentUnsupported
+        val images = attachments.filter { it.kind == ChatAttachmentKind.IMAGE }
+        if (attachments.any { it.kind !in setOf(ChatAttachmentKind.FILE, ChatAttachmentKind.IMAGE) } ||
+            (images.isNotEmpty() && (model.modelId != "deepseek-flash" || !model.capabilities.supportsVision)) ||
+            images.any { it.mimeType !in setOf("image/jpeg", "image/png", "image/gif", "image/webp") || it.byteCount > 32L * 1024 * 1024 }
+        ) return ChatAdapterPrepareResult.AttachmentUnsupported
+        // Leave room for the JSON envelope within the official 48 MiB request cap.
+        if (images.sumOf { ((it.byteCount + 2) / 3) * 4 } + messages.sumOf { it.second.toByteArray().size.toLong() } + inlineTextFiles.toByteArray().size > 47L * 1024 * 1024)
+            return ChatAdapterPrepareResult.AttachmentUnsupported
+        if (images.isNotEmpty()) {
+            val body = deepSeekImageBody(model, messages, attachments, inlineTextFiles, stream, options)
+            if (body.contentLength > 48L * 1024 * 1024) return ChatAdapterPrepareResult.AttachmentUnsupported
+            return ChatAdapterPrepareResult.Ready("<streamed-deepseek-chat-body>", body)
+        }
         val effectiveMessages = if (inlineTextFiles.isBlank()) messages else messages + ("user" to inlineTextFiles)
         return if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_RESPONSES) {
             ChatAdapterPrepareResult.Ready(deepSeekResponsesWebSearchBody(model, effectiveMessages))
@@ -592,8 +604,8 @@ private fun openRouterMultimodalBody(model: ResolvedModel, messages: List<ChatHi
     return ProviderChatRequestBody.Segmented(parts)
 }
 
-/** Qwen-specific request segments keep binary content in a verified stream, never a giant String. */
-private fun qwenMultimodalBody(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, inlineTextFiles: String, stream: Boolean, options: ChatRequestOptions): ProviderChatRequestBody {
+/** Compatible inline payloads keep binary content in a verified stream, never a giant String. */
+private fun inlineMultimodalChatBody(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, inlineTextFiles: String, stream: Boolean, options: ChatRequestOptions): ProviderChatRequestBody {
     val parts = mutableListOf<ProviderChatRequestBody.Part>()
     fun text(value: String) { parts += ProviderChatRequestBody.Part.Utf8(value) }
     text("{\"model\":\"${model.modelId.escapeJson()}\",\"messages\":[")
@@ -696,6 +708,31 @@ private fun qwen38RequestOutputLimit(model: ResolvedModel): Long =
 /** DeepSeek V4's native Responses web_search is server-executed and must be forced for an
  * explicit real-time request. This is intentionally a DeepSeek /responses request, never a
  * relay of DeepSeek's model ID through another provider. */
+/** The two official image envelopes share streamed original bytes; PDFs/video remain unsupported. */
+private fun deepSeekImageBody(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, inlineTextFiles: String, stream: Boolean, options: ChatRequestOptions): ProviderChatRequestBody {
+    if (options.webSearchRoute != OfficialWebSearchRoute.DEEPSEEK_RESPONSES) {
+        return inlineMultimodalChatBody(model, messages, attachments, inlineTextFiles, stream, options)
+    }
+    val parts = mutableListOf<ProviderChatRequestBody.Part>()
+    fun text(value: String) { parts += ProviderChatRequestBody.Part.Utf8(value) }
+    text("{\"model\":\"${model.modelId.escapeJson()}\",\"input\":[")
+    messages.forEachIndexed { index, (role, content) ->
+        if (index > 0) text(",")
+        text("{\"role\":\"${role.escapeJson()}\",\"content\":[{\"type\":\"input_text\",\"text\":\"${content.escapeJson()}\"}]}")
+    }
+    if (messages.isNotEmpty()) text(",")
+    text("{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"${(attachmentReferenceInstruction(attachments) + inlineTextFiles).escapeJson()}\"}")
+    attachments.filter { it.kind == ChatAttachmentKind.IMAGE }.forEach {
+        text(",{\"type\":\"input_image\",\"image_url\":\"data:${it.mimeType};base64,")
+        parts += ProviderChatRequestBody.Part.Base64File(it.byteCount, it::open)
+        text("\"}")
+    }
+    text("]}],\"tools\":[{\"type\":\"web_search\"}],\"tool_choice\":{\"type\":\"web_search\"},\"stream\":false")
+    model.maxOutputTokens?.let { text(",\"max_output_tokens\":$it") }
+    text("}")
+    return ProviderChatRequestBody.Segmented(parts)
+}
+
 private fun deepSeekResponsesWebSearchBody(model: ResolvedModel, messages: List<Pair<String, String>>): String = buildString {
     append("{\"model\":\"").append(model.modelId.escapeJson()).append("\",\"input\":[")
     messages.forEachIndexed { index, (role, content) ->

@@ -125,7 +125,7 @@ class P6GModelRouterContractsTest {
 
     @Test fun `composer picker preserves the approved daily and deep ordering`() {
         assertEquals(
-            listOf("Claude Sonnet 5", "DeepSeek V4 Flash", "GPT-5.6 Terra", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 3.7 Flash"),
+            listOf("Claude Sonnet 5", "DeepSeek V4.1 Flash", "GPT-5.6 Terra", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 3.8 Flash"),
             ComposerModelRoutingCatalog.daily.map { it.label },
         )
         assertEquals(
@@ -147,14 +147,14 @@ class P6GModelRouterContractsTest {
         assertEquals("4.1 Fast", composerModelShortNameForUser("Grok 4.1 Fast"))
         assertEquals("4.6 High", composerModelShortNameForUser("Grok 4.6 High"))
         assertEquals("Sonnet 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.daily[0].label))
-        assertEquals("Gemini 3.7", composerModelShortNameForUser("Gemini 3.7 Flash"))
+        assertEquals("Gemini 3.8", composerModelShortNameForUser("Gemini 3.8 Flash"))
         assertEquals("Qwen 3.7", composerModelShortNameForUser("Qwen3.7-Plus"))
         assertEquals("Qwen 3.8", composerModelShortNameForUser("Qwen3.8-Max"))
         assertEquals("Qwen 3.6", composerModelShortNameForUser("Qwen3.6 Flash"))
         assertEquals("GLM 5.3", composerModelShortNameForUser("GLM-5.3"))
         assertEquals("GLM 5.3", composerModelShortNameForUser("GLM-5.3 Flash"))
         assertEquals("DS V4", composerModelShortNameForUser("DeepSeek V4 Pro"))
-        assertEquals("DS V4", composerModelShortNameForUser("DeepSeek V4 Flash"))
+        assertEquals("DS V4.1", composerModelShortNameForUser("DeepSeek V4.1 Flash"))
         assertEquals("Kimi K3", composerModelShortNameForUser("Kimi K3"))
     }
 
@@ -186,7 +186,7 @@ class P6GModelRouterContractsTest {
             assertTrue(candidates.indexOf(ModelPresetId.GLM_5_3) < candidates.indexOf(ModelPresetId.QWEN_3_8_MAX))
         }
         assertEquals(
-            ModelPresetId.GEMINI_3_7_FLASH,
+            ModelPresetId.GEMINI_3_8_FLASH,
             AutoModelRouter.candidates(AutoRoutingFacts(hasAttachment = true)).last(),
         )
     }

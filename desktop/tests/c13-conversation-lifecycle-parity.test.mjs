@@ -58,11 +58,11 @@ test('C13 management root preserves the current Android order and copy', () => {
   ]) assert.ok(html.includes(copy), copy);
 });
 
-test('C13 favorites use updated time and keep cancel-favorite inside a pointer disclosure', () => {
+test('C13 favorites keep the title-only mobile list and cancel-favorite disclosure', () => {
   const html = render('favorites');
-  assert.ok(html.includes('收藏的会话保存在本机；取消收藏不会删除消息或附件。'));
   assert.ok(html.includes('C13 Favorite'));
-  assert.ok(html.includes('更新于 2026-09-03 18:20'));
+  assert.ok(!html.includes('收藏的会话保存在本机；取消收藏不会删除消息或附件。'));
+  assert.ok(!html.includes('更新于 2026-09-03 18:20'));
   assert.match(html, /<details[^>]*data-lifecycle-action-disclosure="conversation-c13-favorite"[\s\S]*data-action="toggle-conversation-favorite"/);
   assert.ok(!html.includes('还没有收藏会话。'));
 });
@@ -90,6 +90,32 @@ test('C13 keeps destructive confirmation and list-return scroll owners intact', 
     'confirm-conversation-permanent-delete',
     'confirm-conversation-bulk-cleanup',
   ]) assert.ok(source.includes(token), token);
+});
+
+test('C13 and memory transient menus reset browser Popover viewport geometry before placement', async () => {
+  const [layer, css] = await Promise.all([
+    readFile(new URL('../src/modal-layer-owner.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/chat-shell.css', import.meta.url), 'utf8'),
+  ]);
+  for (const token of [
+    "const selector = '.conversation-lifecycle-actions, .memory-reference-menu'",
+    "panel.style.inset = 'auto'",
+    "panel.style.bottom = 'auto'",
+    "panel.style.height = 'fit-content'",
+    "panel.style.gridAutoRows = 'max-content'",
+  ]) assert.ok(layer.includes(token), token);
+  assert.match(css, /\.conversation-lifecycle-actions > span \{ position: absolute;/);
+  assert.match(css, /\.memory-reference-menu > div \{ position: absolute;/);
+  // The manual Popover UA stylesheet otherwise contributes a thick CanvasText
+  // border around the memory menu. The menu has a white surface and soft
+  // shadow only; its visible edge must come from its own component rule.
+  assert.match(css, /\.memory-reference-menu > div \{[^}]*border: 0;[^}]*outline: 0;/);
+});
+
+test('C13 lifecycle primary rows do not inherit the broad generic press fill', async () => {
+  const css = await readFile(new URL('../src/chat-shell.css', import.meta.url), 'utf8');
+  assert.match(css, /\.conversation-lifecycle-row \.android-settings-lifecycle-open:is\(:hover, :active\) \{ background: transparent !important; \}/);
+  assert.match(css, /\.conversation-lifecycle-row \.android-settings-lifecycle-open:focus-visible \{[^}]*border-radius: 14px;[^}]*outline: 2px solid var\(--accent-subtle-border\);/);
 });
 
 test('C13 native fixture is diagnostic-only and requires a unique temporary root', async () => {

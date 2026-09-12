@@ -397,7 +397,7 @@ fun KnowledgeLibraryPage(
                 if (state.historyCurationDraft == null) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("将把当前对话的文字内容发送给已启用的直连模型，按以下顺序选择：", color = SecondaryText)
-                        Text("DeepSeek V4 Flash → GLM-5.3 Flash → Qwen3.6 Flash", fontWeight = FontWeight.SemiBold)
+                        Text("DeepSeek V4.1 Flash → GLM-5.3 Flash → Qwen3.6 Flash", fontWeight = FontWeight.SemiBold)
                         Text("生成可复用的资料候选。不会发送附件，不会修改原对话；可能产生模型用量。", color = SecondaryText)
                         state.historyCurationError?.let { Text(it, color = ErrorRed) }
                     }

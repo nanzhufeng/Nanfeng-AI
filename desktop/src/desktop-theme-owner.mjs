@@ -2,7 +2,7 @@ import { appearanceProjection } from './desktop-parity-preferences.mjs';
 
 const SURFACES = Object.freeze({
   light: Object.freeze({
-    page: '#f7f7f7', settingsPage: '#ededed', drawerBase: '#ffffff', drawerQuickAction: '#ebeeec',
+    page: '#f7f7f7', settingsPage: '#fafafa', drawerBase: '#f5f5f5', drawerQuickAction: '#ebeeec',
     foreground: '#ffffff', assistant: '#f7f8f7', system: '#f2f4f3', searchPage: '#edeeee',
     searchControl: '#e1e4e2', body: '#1e2925', secondary: '#64706b', placeholder: '#a7aeaa',
     border: '#d8deda', divider: '#d8deda',

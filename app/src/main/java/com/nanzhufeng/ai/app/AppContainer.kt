@@ -243,6 +243,8 @@ import com.nanzhufeng.ai.domain.P7BAccountStateMachine
 import com.nanzhufeng.ai.data.P7FGoogleAccountOwner
 import com.nanzhufeng.ai.data.P7FManualConversationSyncOwner
 import com.nanzhufeng.ai.data.P7FSelectedConversationSyncScheduler
+import com.nanzhufeng.ai.data.AndroidDataStorageLocationOwner
+import com.nanzhufeng.ai.data.AndroidDataStorageLocationManager
 import com.nanzhufeng.ai.domain.P7EGuardedRestoreOwner
 import com.nanzhufeng.ai.domain.P7ERestorePlanCoordinator
 import com.nanzhufeng.ai.domain.P8BProductionReadOnlyAgentLedgerStatus
@@ -251,7 +253,14 @@ import java.time.Clock
 import java.io.File
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
-class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC()) {
+class AppContainer(baseContext: Context, private val clock: Clock = Clock.systemUTC()) {
+    private val dataStorageLocationOwner = AndroidDataStorageLocationOwner(baseContext.applicationContext)
+    // Android framework and third-party initializers must always receive the real application
+    // context.  The movable wrapper is deliberately limited to Room's database boundary.
+    // Passing it through the whole container made normal app bootstrap depend on a custom
+    // Context implementation and caused launch crashes on real devices.
+    private val context: Context = baseContext.applicationContext
+    private val databaseContext: Context = dataStorageLocationOwner.storageContext()
     init { PDFBoxResourceLoader.init(context.applicationContext) }
     // The established direct-provider path keeps its Android request owner.  It does not create
     // a gateway task or select a second execution mode.
@@ -259,7 +268,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
     val captureDraftFactory = CaptureDraftFactory(clock)
     private val mockAiTaskRunner = MockAiTaskRunner(clock)
     private val database = Room.databaseBuilder(
-        context.applicationContext,
+        databaseContext,
         NanfengAiDatabase::class.java,
         "nanfeng-ai.db",
     ).addMigrations(
@@ -329,6 +338,7 @@ class AppContainer(context: Context, private val clock: Clock = Clock.systemUTC(
         NanfengAiDatabase.MIGRATION_64_65,
         NanfengAiDatabase.MIGRATION_65_66,
     ).build()
+    val dataStorageLocationManager = AndroidDataStorageLocationManager(dataStorageLocationOwner) { database.close() }
     val captureDraftRepository = RoomCaptureDraftRepository(database)
     val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
     val privateAttachmentRepository = RoomPrivateAttachmentRepository(database)

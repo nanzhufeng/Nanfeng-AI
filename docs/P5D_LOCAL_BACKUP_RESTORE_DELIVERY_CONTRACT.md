@@ -11,11 +11,11 @@
 
 导出的 `.nfai-backup` 是 ZIP，根目录固定为 `manifest.json`、`database/nanfeng-ai.snapshot` 和受控 `assets/<logical-key>`。数据库文件由 SQLite `VACUUM INTO` 从已打开的数据库产生一致性快照，绝不把运行中的 `-wal/-shm` 直接复制并宣称一致。Manifest v1 记录 app/version、Room schema、范围、各表计数、资产大小、每一 entry 的 SHA-256/大小和总 manifest hash。
 
-只允许备份业务 Room 数据及 `attachments/v1`、Markdown/JSON/PDF/Web 私有资产。导出、诊断、registry、P2-M 证据/令牌、缓存、恢复工作目录、路由偏好、Provider API Key/token/credential bytes/credential reference、签名与任何 Android Keystore 身份一律不进入包。发现 credential、路径逃逸、symbolic link、未知受控根或高敏 secret 形态时整体拒绝，不做脱敏拼包。
+只允许备份业务 Room 数据及 `attachments/v1`、Markdown/JSON/PDF/Web 私有资产。导出、诊断、registry、P2-M 证据/令牌、缓存、恢复工作目录、路由偏好、Provider API Key/token/credential bytes/credential reference、签名与任何 Android Keystore 身份一律不进入包。业务正文、草稿和用户命名的附件可能包含“API Key”等普通文字，属于用户明确选择的本机业务数据，不能因此误拒绝整包；路径逃逸、symbolic link、未知受控根、格式/hash/Schema 不一致仍整体拒绝。
 
 ## 生成与 preflight
 
-备份先写 app-private staging，逐项 fsync、SHA-256、封装 ZIP，再从同一 ZIP 回读 Manifest、entry hash、重复 entry 与总大小；成功后才通过用户 SAF `CreateDocument` 写入，并从该 URI 回读全包 SHA-256。导入先由 SAF `OpenDocument` 立刻隔离复制到 app-private inbox，随后在不改库的条件下预检：版本、Schema、表计数、资产大小、缺失/冲突/不支持项、总大小/entry 上限、zip-slip/symlink/重复 entry/压缩炸弹/hash/manifest/高敏全量拒绝。
+备份先写 app-private staging，逐项 fsync、SHA-256、封装 ZIP，再从同一 ZIP 回读 Manifest、entry hash、重复 entry 与总大小；成功后才通过用户 SAF `CreateDocument` 写入，并从该 URI 回读全包 SHA-256。完整本机附件库的压缩包上限为 32 GiB，仍逐条校验路径、数量、SHA-256 与 SQLite 快照；校验失败只显示结构化原因，不显示业务内容。导入先由 SAF `OpenDocument` 立刻隔离复制到 app-private inbox，随后在不改库的条件下预检：版本、Schema、表计数、资产大小、缺失/冲突/不支持项、总大小/entry 上限、zip-slip/symlink/重复 entry/压缩炸弹/hash/manifest。
 
 ## 恢复语义
 

@@ -1,6 +1,12 @@
+import { installModalLayerOwner, installActionMenuLayerOwner } from './modal-layer-owner.mjs';
 import { resizeComposer } from './composer-size.mjs';
+import { renderSafeMarkdown } from './safe-markdown.mjs';
+import { sourceDisplayTitle } from './source-link-presentation.mjs';
+import { createSearchResultCache } from './search-result-cache.mjs';
+import { renderSearchAttachmentMenu, renderChatAttachmentMenu, attachmentMenuAnchor } from './search-attachment-menu.mjs';
+import { icon as sharedIcon, icons as sharedIcons } from './icon-source.mjs';
 import { p8InspectCanvas } from './p8-inspect.mjs';
-import { activeConversations, clampDesktopSidebarWidth, messagePlainText, millisecondsUntilDeepSeekPricingTransition, renderChatFirstShell, resolveConversation, resolveConversationMenuAnchor } from './chat-shell.mjs';
+import { activeConversations, clampDesktopSidebarWidth, messagePlainText, millisecondsUntilDeepSeekPricingTransition, orderedConversationMessages, renderChatFirstShell, resolveAssistantMessageMenuAnchor, resolveConversation, resolveConversationMenuAnchor } from './chat-shell.mjs';
 import { beginConversationRecycle, completeConversationRecycle, failConversationRecycle } from './recycle-confirmation.mjs';
 import { CUSTOM_INSTRUCTIONS_MAX_LENGTH, DESKTOP_SETTINGS_CAPABILITIES, DesktopParityPreferences, assistantMessageMarkdown, conversationFindMatches as findConversationMatches, conversationMarkdown, normalizeAppearance, normalizeProductSettings } from './desktop-parity-preferences.mjs';
 import { applyDesktopThemeToRoot } from './desktop-theme-owner.mjs';
@@ -8,6 +14,7 @@ import { parseC16Preview } from './c16-theme-matrix-fixture.mjs';
 import { MODEL_SERVICE_PREVIEW_SETTINGS } from './android-settings-shell.mjs';
 import { bestSearchHistoryMatch } from './desktop-search-page.mjs';
 import { attachmentPreviewCapability } from './desktop-attachment-preview-owner.mjs';
+import { imagePreviewNavigation, imagePreviewTargetId, relatedImageIds } from './image-preview-navigation.mjs';
 import { createC08BrowserSearchPage } from './c08-search-preview-fixture.mjs';
 import { createC09ReminderPreviewDraft, createC09ReminderPreviewProjection } from './c09-reminder-preview-fixture.mjs';
 import { createC10ImportedPreviewTask, createC10TranscriptionPreviewProjection } from './c10-transcription-preview-fixture.mjs';
@@ -20,8 +27,11 @@ import { renderDesktopTranscriptionPage, TRANSCRIPTION_PREVIEW_STATE } from './d
 import { renderDesktopRemindersPage } from './desktop-reminders-page.mjs';
 import { reminderNotificationAction, reminderNotificationExtra } from './reminder-notification-routing.mjs';
 import { createConversationLongPressController } from './conversation-long-press.mjs';
+import { isWorkspaceRoot, resolveWorkConversationState } from './workspace-view.mjs';
 
 const app = document.querySelector('#app');
+installModalLayerOwner(app);
+installActionMenuLayerOwner(app);
 window.addEventListener('error', event => { console.error('Desktop runtime error', event.error || event.message); });
 window.addEventListener('unhandledrejection', event => { console.error('Desktop async runtime error', event.reason); });
 const tauriBridge = window.__TAURI__?.core ?? window.__TAURI_INTERNALS__;
@@ -61,8 +71,9 @@ const systemDarkQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
 function readSidebarWidth() { try { return clampDesktopSidebarWidth(Number(localStorage.getItem(settingsLocalKey)), window.innerWidth); } catch { return 256; } }
 function persistSidebarWidth(width) { try { localStorage.setItem(settingsLocalKey, String(width)); } catch { /* browser preview may deny local storage */ } }
 const initialProductSettings = parityPreferences.readProductSettings();
-const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；联网模型尚未配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, truncated: false }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构' } };
+const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0 }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构' } };
 state.selectedWorkProjectId = null;
+state.assistantMessageMenu = null;
 globalThis.__nanfengDesktopWorkState = state;
 let composerModelPricingRefreshTimer = null;
 state.pendingNewConversationModelId = null;
@@ -87,11 +98,11 @@ state.appSettingsRevision = 0;
 state.settingsCapabilities = { ...DESKTOP_SETTINGS_CAPABILITIES };
 state.accountSync = { configured: false, state: 'NOT_CONFIGURED', recoveryState: 'UNAVAILABLE', periodicEnabled: false, rotationPending: false, selectedConversationCount: 0, diagnostics: [], notifications: [] };
 state.accountRecovery = null;
+let accountSignInPending = false;
 state.historyKnowledge = { enabled: false, paused: true, lastDispatchedAtMs: null, nextEligibleAtMs: null, candidates: [] };
 state.settingsScrollPositions = new Map();
 state.settingsConversationReturn = null;
-state.memorySummaryQuery = '';
-state.memorySummaryComposer = '';
+state.workspaceReturn = null;
 state.memorySummaryNotice = '';
 state.sidebarScrollTop = 0;
 state.reminders = { drafts: [], plans: [], diagnostics: [] };
@@ -354,8 +365,12 @@ app.addEventListener('click', p6hDiagnosticMarker, true);
 app.addEventListener('keydown', p6hDiagnosticMarker, true);
 state.chatSearch = '';
 let overlayFocusReturn = null;
-function rememberOverlayTrigger(target) { overlayFocusReturn = target?.dataset?.action || null; }
-function restoreOverlayFocus() { const action = overlayFocusReturn; overlayFocusReturn = null; if (action) queueMicrotask(() => document.querySelector(`[data-action="${action}"]`)?.focus()); }
+function rememberOverlayTrigger(target) {
+  overlayFocusReturn = target ? ['action', 'messageId', 'entryId', 'id', 'attachmentId']
+    .filter(key => target.dataset?.[key])
+    .map(key => `[data-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}="${CSS.escape(target.dataset[key])}"]`).join('') : null;
+}
+function restoreOverlayFocus() { const selector = overlayFocusReturn; overlayFocusReturn = null; if (selector) queueMicrotask(() => document.querySelector(selector)?.focus({ preventScroll: true })); }
 /** Single owner for app-owned transient layers; native system pickers intentionally remain outside it. */
 function closeTopOverlay({ restoreFocus = true, navigateComposerLayerBack = false } = {}) {
   if (state.dialog?.kind === 'local-backup-restart-required') return false;
@@ -365,7 +380,8 @@ function closeTopOverlay({ restoreFocus = true, navigateComposerLayerBack = fals
     queueMicrotask(() => document.querySelector('[data-action="open-composer-tone-picker"]')?.focus());
     return true;
   }
-  if (state.contextMenu) state.contextMenu = null;
+  if (state.assistantMessageMenu) state.assistantMessageMenu = null;
+  else if (state.contextMenu) state.contextMenu = null;
   else if (state.temporaryModelOpen) state.temporaryModelOpen = false;
   else if (state.p6gModelPickerOpen) {
     if (navigateComposerLayerBack && state.p6gSelection?.pickerTier) {
@@ -393,6 +409,7 @@ function closeTopOverlay({ restoreFocus = true, navigateComposerLayerBack = fals
 }
 function openTransientOverlay(kind, target, value = true) {
   state.contextMenu = kind === 'context' ? value : null;
+  state.assistantMessageMenu = kind === 'assistant-message-menu' ? value : null;
   state.composerAddOpen = kind === 'composer-add';
   if (kind === 'composer-add') state.composerAddPage = 'root';
   state.temporaryModelOpen = kind === 'temporary-model';
@@ -403,6 +420,61 @@ function openTransientOverlay(kind, target, value = true) {
   rememberOverlayTrigger(target);
   render();
 }
+// A conversation/new-chat route changes the draft scope.  Read the native owner after the
+// route handler has established that scope, then render the recovered draft once it arrives.
+app.addEventListener('click', event => {
+  const action = event.target.closest?.('[data-action]')?.dataset.action;
+  if (!['new-chat', 'select-chat', 'select-workspace'].includes(action) || !native) return;
+  // The route owner changes the current scope first. Clear its visible recovery
+  // state immediately so a draft from the previous conversation cannot linger.
+  state.composerDraft = '';
+  state.composerAttachments = [];
+  render();
+  if (action === 'new-chat') {
+    // Let the route handler switch to the generic new-conversation scope first, then erase that
+    // scope. A user-initiated new chat must never recover an old generic draft.
+    queueMicrotask(() => clearNewConversationDraft());
+    return;
+  }
+  queueMicrotask(() => loadOrdinaryComposerDraft().then(render).catch(error => {
+    state.error = `普通会话草稿未读取：${String(error)}`;
+    render();
+  }));
+});
+
+app.addEventListener('click', event => {
+  const target = event.target.closest('[data-action]');
+  const action = target?.dataset.action;
+  const workspaceAction = ['show-work', 'show-workspace', 'show-projects', 'show-knowledge', 'show-memory'].includes(action);
+  if (workspaceAction && target.closest('.android-settings-main')) state.workspaceReturn = { pane: 'settings', settingsSection: state.settingsSection, label: '返回' };
+  else if (action === 'show-work' && state.pane === 'chat') state.workspaceReturn = { pane: 'chat', conversationId: state.selectedConversationId || null, label: '返回' };
+  if (action === 'show-work' && state.pane === 'chat' && state.selectedConversationId) state.chatReturnConversationId = state.selectedConversationId;
+  if (action === 'show-chat' && !state.selectedConversationId && state.chatReturnConversationId) state.selectedConversationId = state.chatReturnConversationId;
+}, true);
+
+app.addEventListener('click', event => {
+  const target = event.target.closest?.('[data-action="select-assistant-gallery-image"]');
+  if (!target) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const messageId = String(target.dataset.messageId || '');
+  const attachmentId = String(target.dataset.attachmentId || '');
+  if (!messageId || !attachmentId) return;
+  state.assistantImageSelections.set(messageId, attachmentId);
+  setAssistantGallerySelection(target, attachmentId);
+}, true);
+
+function setAssistantGallerySelection(target, attachmentId) {
+  const gallery = target.closest?.('.chat-assistant-image-gallery');
+  if (!gallery) return;
+  gallery.querySelectorAll('[data-assistant-gallery-main-image]').forEach(surface => {
+    surface.hidden = surface.dataset.attachmentId !== attachmentId;
+  });
+  gallery.querySelectorAll('[data-action="select-assistant-gallery-image"]').forEach(control => {
+    control.setAttribute('aria-pressed', String(control.dataset.attachmentId === attachmentId));
+  });
+}
+
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   if (event.target.classList?.contains('scrim')) {
@@ -671,6 +743,13 @@ async function markConversationUnread(conversationId) {
   applyConversationReadState(await invoke('mark_desktop_conversation_unread', { workspaceId, conversationId }));
 }
 const selectedModelService = () => state.modelServiceSettings.find(item => item.providerId === state.modelProviderId) || state.modelServiceSettings[0] || null;
+function modelServiceConfigurationStatus(settings = state.modelServiceSettings) {
+  const enabled = (settings || []).filter(item => item?.enabled);
+  const configured = enabled.filter(item => item?.credentialStored);
+  if (configured.length) return `本地工作区已就绪；联网模型已配置：${configured.length} 个服务商已启用且凭据已保存，发送前仍会逐次确认。`;
+  if (enabled.length) return `本地工作区已就绪；已有 ${enabled.length} 个联网服务商启用，尚未检测到已保存凭据。`;
+  return '本地工作区已就绪；尚未启用联网模型。';
+}
 function resetModelServiceDraft(service = selectedModelService()) {
   state.modelServiceDraft = service ? { providerId: service.providerId, enabled: service.enabled, presetId: service.presetId, revision: service.revision } : null;
   state.modelCredentialDraft = '';
@@ -690,6 +769,7 @@ async function loadModelServiceSettings() {
     state.modelServiceSettings = settings;
     if (!settings.some(item => item.providerId === state.modelProviderId)) state.modelProviderId = settings[0].providerId;
     resetModelServiceDraft();
+    state.status = modelServiceConfigurationStatus(settings);
   }
 }
 async function loadDesktopAppSettings() {
@@ -729,9 +809,22 @@ async function loadDesktopAccountSync() {
   if (!native) return state.accountSync;
   const pendingUnknown = state.accountSync?.pendingUnknown || null;
   const remoteDocuments = state.accountSync?.remoteDocuments || [];
+  const previous = state.accountSync;
   state.accountSync = { ...await invoke('read_desktop_account_sync'), pendingUnknown, remoteDocuments };
+  if (previous?.email && previous.email === state.accountSync.email) state.accountSync.avatarDataUrl ||= previous.avatarDataUrl;
+  if (state.accountSync.email && !state.accountSync.avatarDataUrl && !accountAvatarPending) {
+    const email = state.accountSync.email;
+    accountAvatarPending = true;
+    invoke('read_desktop_google_avatar').then(avatar => {
+      if (avatar && state.accountSync?.email === email) {
+        state.accountSync.avatarDataUrl = avatar;
+        if (state.settingsSection === 'account') render();
+      }
+    }).catch(() => {}).finally(() => { accountAvatarPending = false; });
+  }
   return state.accountSync;
 }
+let accountAvatarPending = false;
 async function loadDesktopHistoryKnowledge({ runDue = false } = {}) {
   if (!native) return state.historyKnowledge;
   state.historyKnowledge = await invoke(runDue ? 'run_desktop_history_knowledge_due' : 'read_desktop_history_knowledge');
@@ -994,8 +1087,8 @@ app.addEventListener('click', async event => {
   if (!actions.includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  if (action === 'show-reminders') { if (!['reminders', 'transcription'].includes(state.pane)) state.utilitySidebarWorkMode = ['work', 'projects', 'knowledge', 'memory', 'p8-inspect'].includes(state.pane); state.pane = 'reminders'; state.sidebarOpen = false; state.profileOpen = false; await loadDesktopReminders().catch(error => { state.error = `定时任务未读取：${String(error)}`; }); render(); return; }
-  if (action === 'show-transcription') { if (!['reminders', 'transcription'].includes(state.pane)) state.utilitySidebarWorkMode = ['work', 'projects', 'knowledge', 'memory', 'p8-inspect'].includes(state.pane); state.pane = 'transcription'; state.sidebarOpen = false; state.profileOpen = false; await loadTranscriptionState().catch(error => { state.error = `南枫转写任务未读取：${String(error)}`; }); render(); return; }
+  if (action === 'show-reminders') { state.utilitySidebarWorkMode = false; state.pane = 'reminders'; state.sidebarOpen = false; state.profileOpen = false; await loadDesktopReminders().catch(error => { state.error = `定时任务未读取：${String(error)}`; }); render(); return; }
+  if (action === 'show-transcription') { state.utilitySidebarWorkMode = false; state.pane = 'transcription'; state.sidebarOpen = false; state.profileOpen = false; await loadTranscriptionState().catch(error => { state.error = `南枫转写任务未读取：${String(error)}`; }); render(); return; }
   if (action === 'pick-transcription-document') return pickTranscriptionDocument();
   if (action === 'select-transcription-task') { state.selectedTranscriptionTaskId = target.dataset.taskId; render(); return; }
   if (action === 'run-transcription-task') return executeTranscriptionTask(target.dataset.taskId, false);
@@ -1003,7 +1096,7 @@ app.addEventListener('click', async event => {
   if (action === 'cancel-transcription-task') { try { await invoke('cancel_desktop_transcription_task', { taskId: target.dataset.taskId }); state.status = '转写任务已取消；已保存的检查点仍保留供后续显式重试。'; state.error = ''; } catch (error) { state.error = `任务未取消：${String(error)}`; } await loadTranscriptionState().catch(() => {}); render(); return; }
   if (action === 'preview-transcription-source') return previewTranscriptionSource(target.dataset.taskId);
   if (action === 'preview-transcription-result') return previewTranscriptionResult(target.dataset.taskId);
-  if (action === 'copy-transcription-result') { const text = (transcriptionTask(target.dataset.taskId)?.segments || []).map(segment => segment.text).join('\n\n'); try { await navigator.clipboard.writeText(text); state.status = '转写全文已复制。'; state.error = ''; } catch { state.error = '系统未允许写入剪贴板。'; } render(); return; }
+  if (action === 'copy-transcription-result') { const text = (transcriptionTask(target.dataset.taskId)?.segments || []).map(segment => segment.text).join('\n\n'); try { await navigator.clipboard.writeText(text); showCopyIconFeedback(target); state.error = ''; } catch { state.error = '系统未允许写入剪贴板。'; render(); } return; }
   if (action === 'continue-chat-with-transcription') return continueChatWithTranscription(target.dataset.taskId);
   if (action === 'export-transcription-task') return exportTranscriptionTask(target.dataset.taskId, target.dataset.format);
   if (action === 'ask-delete-transcription-task') { state.dialog = { kind: 'transcription-delete', taskId: target.dataset.taskId, submitting: false, failure: '' }; render(); return; }
@@ -1031,6 +1124,7 @@ async function saveModelServiceSettings() {
       apiKey: state.modelCredentialEdited && state.modelCredentialDraft.trim() ? state.modelCredentialDraft.trim() : null,
     } });
     replaceModelService(saved);
+    state.status = modelServiceConfigurationStatus();
     state.modelServiceDraft = { providerId: saved.providerId, enabled: saved.enabled, presetId: saved.presetId, revision: saved.revision };
     if (state.modelCredentialEdited && state.modelCredentialDraft.trim()) {
       state.modelSettingsNotice = '';
@@ -1100,19 +1194,182 @@ async function testModelServiceConnection() {
 }
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const short = value => value?.length > 14 ? `${value.slice(0, 12)}…` : value || '—';
-const bytes = value => value < 1024 ? `${value} B` : `${(value / 1024).toFixed(1)} KiB`;
+const bytes = value => {
+  const count = Math.max(0, Number(value) || 0);
+  return count < 1024 ? `${count} B` : `${(count / 1024).toFixed(1)} KiB`;
+};
 const intent = prefix => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const icon = (path, label) => `<svg aria-hidden="true" viewBox="0 0 24 24"><title>${label}</title><path d="${path}"/></svg>`;
 let fullSearchDebounce = null;
 let fullSearchGeneration = 0;
+let fullSearchCategoryFrame = null;
+let settingsSearchRenderFrame = null;
+let conversationFindRenderTimer = null;
+let transcriptRailSyncFrame = null;
+let pendingTranscriptRailScroll = null;
+let renderedTranscriptRetention = null;
+let renderedAttachmentPreview = null;
 
-async function runFullSearch({ recordHistory = false, restoreScroll = false } = {}) {
+function assistantGallerySelectionKey(selections = state.assistantImageSelections) {
+  return selections instanceof Map
+    ? Array.from(selections, ([messageId, attachmentId]) => `${messageId}:${attachmentId}`).join('|')
+    : JSON.stringify(selections || {});
+}
+
+function currentTranscriptRetention(data) {
+  if (state.searchPanel || state.temporaryConversation || state.p6eAcceptance.enabled) return null;
+  const conversation = state.pane === 'work'
+    ? resolveWorkConversationState(data, state.selectedWorkProjectId, state.selectedConversationId).conversation
+    : state.pane === 'chat' ? resolveConversation(data, state.selectedConversationId) : null;
+  const messages = orderedConversationMessages(conversation);
+  if (!conversation || !messages.length) return null;
+  const last = messages.at(-1) || {};
+  return {
+    pane: state.pane,
+    readOnly: Boolean(state.settingsConversationReturn?.readOnly),
+    conversation,
+    revision: conversation.revision,
+    updatedAt: conversation.updatedAt,
+    messageCount: messages.length,
+    lastMessageId: last.id,
+    lastMessageDelivery: last.delivery,
+    lastMessageRuntimeState: last.runtimeState,
+    findOpen: state.conversationFindOpen,
+    findQuery: state.conversationFindQuery,
+    findIndex: state.conversationFindIndex,
+    imageThumbnails: state.imageThumbnails,
+    contextSelectionRecords: state.contextSelectionRecords,
+    productSettings: state.productSettings,
+    settingsCapabilities: state.settingsCapabilities,
+    reminders: state.reminders,
+    gallerySelection: assistantGallerySelectionKey(),
+  };
+}
+
+function canRetainTranscript(previous, next) {
+  return previous && next
+    && previous.pane === next.pane
+    && previous.readOnly === next.readOnly
+    && previous.conversation === next.conversation
+    && previous.revision === next.revision
+    && previous.updatedAt === next.updatedAt
+    && previous.messageCount === next.messageCount
+    && previous.lastMessageId === next.lastMessageId
+    && previous.lastMessageDelivery === next.lastMessageDelivery
+    && previous.lastMessageRuntimeState === next.lastMessageRuntimeState
+    && previous.findOpen === next.findOpen
+    && previous.findQuery === next.findQuery
+    && previous.findIndex === next.findIndex
+    && previous.imageThumbnails === next.imageThumbnails
+    && previous.contextSelectionRecords === next.contextSelectionRecords
+    && previous.productSettings === next.productSettings
+    && previous.settingsCapabilities === next.settingsCapabilities
+    && previous.reminders === next.reminders
+    && previous.gallerySelection === next.gallerySelection;
+}
+
+function scheduleSettingsSearchRender() {
+  if (settingsSearchRenderFrame !== null) cancelAnimationFrame(settingsSearchRenderFrame);
+  settingsSearchRenderFrame = requestAnimationFrame(() => {
+    settingsSearchRenderFrame = null;
+    render();
+  });
+}
+
+function cancelConversationFindRender() {
+  if (conversationFindRenderTimer !== null) window.clearTimeout(conversationFindRenderTimer);
+  conversationFindRenderTimer = null;
+}
+
+function scheduleConversationFindRender() {
+  cancelConversationFindRender();
+  // Matching and highlighted Markdown both touch every message. Keep the field
+  // native while the user types, then commit one settled query instead of
+  // rebuilding a long transcript for each individual keypress.
+  conversationFindRenderTimer = window.setTimeout(() => {
+    conversationFindRenderTimer = null;
+    if (!state.conversationFindOpen) return;
+    recomputeConversationFind({ resetIndex: true });
+    render();
+    focusCurrentFindMatch();
+  }, 120);
+}
+
+function paintSearchCategorySelection(category) {
+  const tabs = document.querySelectorAll('.desktop-search-tabs [data-action="set-search-category"]');
+  if (!tabs.length) return false;
+  for (const tab of tabs) {
+    const selected = tab.dataset.category === category;
+    tab.classList.toggle('selected', selected);
+    tab.setAttribute('aria-selected', String(selected));
+  }
+  return true;
+}
+
+function selectFullSearchCategory(category) {
+  category ||= 'all';
+  if (state.searchCategory === category && !state.searchError) return;
+  // Invalidate the previous request before yielding a frame, not afterwards.
+  fullSearchGeneration += 1;
+  state.searchCategory = category;
+  state.searchFileTypeOpen = false;
+  state.searchScrollSnapshot = null;
+  paintSearchCategorySelection(category);
+  if (fullSearchCategoryFrame !== null) cancelAnimationFrame(fullSearchCategoryFrame);
+  fullSearchCategoryFrame = requestAnimationFrame(() => {
+    fullSearchCategoryFrame = null;
+    void runFullSearch({ inPlace: true });
+  });
+}
+
+// Desktop pointer activation must not wait for a click on a node that an
+// asynchronous result can replace between pointerdown and pointerup.
+document.addEventListener('pointerdown', event => {
+  const tab = event.target.closest?.('[data-action="set-search-category"]');
+  if (!tab || event.button !== 0 || event.pointerType === 'touch') return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  selectFullSearchCategory(tab.dataset.category);
+}, true);
+
+function paintSearchLoadingState(category) {
+  if (!paintSearchCategorySelection(category)) return false;
+  const results = document.querySelector('[data-search-scroll-owner]');
+  if (!results) return false;
+  results.setAttribute('aria-busy', 'true');
+  results.innerHTML = '<div class="desktop-search-state" role="status"><span class="desktop-search-spinner"></span><strong>正在读取本机索引…</strong></div>';
+  return true;
+}
+
+function withFullSearchDeadline(promise, timeoutMillis = 8_000) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error('本机索引读取超时，请重试。')), timeoutMillis);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== null) window.clearTimeout(timer);
+  });
+}
+
+let fullSearchPending = null;
+const fullSearchResultCache = createSearchResultCache();
+let fullSearchCacheScope = '';
+async function runFullSearch({ recordHistory = false, restoreScroll = false, inPlace = false } = {}) {
   const generation = ++fullSearchGeneration;
+  const cacheScope = JSON.stringify([state.workspaces, state.current?.summary]);
+  if (cacheScope !== fullSearchCacheScope) { fullSearchResultCache.clear(); fullSearchCacheScope = cacheScope; }
+  const searchArgs = { query: state.chatSearch, category: state.searchCategory || 'all', sortMode: state.searchSortMode, fileType: state.searchCategory === 'file' ? state.searchFileType : 'all' };
+  const cachedPage = native ? fullSearchResultCache.get(searchArgs) : null;
   state.searchPanel = true;
-  state.searchLoading = true;
+  state.searchLoading = !cachedPage;
+  if (cachedPage) { state.searchPage = cachedPage; state.searchResults = cachedPage.hits; }
   state.searchError = '';
   state.searchHistoryHighlighted = bestSearchHistoryMatch(state.chatSearch, state.searchHistory);
-  render();
+  // A category is a local, immediate selection.  Keep this existing search
+  // shell alive for the first frame instead of rebuilding it before SQLite has
+  // returned, so the clicked pill can paint without DOM teardown.
+  const paintedInPlace = !cachedPage && inPlace && paintSearchLoadingState(state.searchCategory);
+  if (!paintedInPlace) render();
   if (!native) {
     state.searchLoading = false;
     state.searchPage = createC08BrowserSearchPage({
@@ -1127,13 +1384,17 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false } = 
     render();
     queueMicrotask(() => {
       const input = document.querySelector('#full-search-input');
-      if (!restoreScroll) input?.focus({ preventScroll: true });
+      if (!restoreScroll && !inPlace) input?.focus({ preventScroll: true });
       restoreFullSearchScroll();
     });
     return;
   }
   try {
-    const page = await invoke('query_desktop_local_index', { args: {
+    // Rapid filter changes replace pending intent instead of flooding the
+    // shared store mutex with queries whose results will be discarded.
+    // A slow previous category must not prevent the latest request from starting.
+    if (generation !== fullSearchGeneration) return;
+    const pending = invoke('query_desktop_local_index', { args: {
       query: state.chatSearch,
       category: state.searchCategory || 'all',
       sortMode: state.searchSortMode,
@@ -1141,25 +1402,35 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false } = 
       recordHistory: Boolean(recordHistory && state.chatSearch.trim()),
       historyWorkspaceId: state.current?.summary?.id || null,
     } });
+    fullSearchPending = pending;
+    pending.then(() => { if (fullSearchPending === pending) fullSearchPending = null; }, () => { if (fullSearchPending === pending) fullSearchPending = null; });
+    const page = await withFullSearchDeadline(pending);
+    if (cacheScope === fullSearchCacheScope) fullSearchResultCache.set(searchArgs, page);
     if (generation !== fullSearchGeneration) return;
+    if (cachedPage) rememberFullSearchScroll();
     state.searchPage = page;
     state.searchResults = page.hits || [];
     state.searchLoading = false;
     state.searchError = '';
     state.searchEvidenceLabel = '';
-    if (recordHistory && state.current && state.chatSearch.trim()) state.searchHistory = await invoke('read_desktop_local_search_history', { workspaceId: state.current.summary.id });
+    if (recordHistory && state.current && state.chatSearch.trim()) {
+      const history = await invoke('read_desktop_local_search_history', { workspaceId: state.current.summary.id });
+      if (generation !== fullSearchGeneration) return;
+      state.searchHistory = history;
+    }
     state.searchHistoryHighlighted = bestSearchHistoryMatch(state.chatSearch, state.searchHistory);
     render();
     queueMicrotask(() => {
       const input = document.querySelector('#full-search-input');
-      if (!restoreScroll) input?.focus({ preventScroll: true });
+      if (!restoreScroll && !inPlace) input?.focus({ preventScroll: true });
+      if (inPlace) document.querySelector(`.desktop-search-tabs [data-action="set-search-category"][data-category="${CSS.escape(state.searchCategory)}"]`)?.focus({ preventScroll: true });
       restoreFullSearchScroll();
     });
   } catch (error) {
     if (generation !== fullSearchGeneration) return;
     state.searchLoading = false;
-    state.searchError = String(error);
-    state.searchEvidenceLabel = '';
+    state.searchError = cachedPage ? '' : String(error);
+    state.searchEvidenceLabel = cachedPage ? '当前为上次结果，本次更新未完成。' : '';
     render();
   }
 }
@@ -1169,7 +1440,7 @@ function scheduleFullSearch() {
   fullSearchDebounce = window.setTimeout(() => { fullSearchDebounce = null; void runFullSearch(); }, state.chatSearch.trim() ? 180 : 0);
 }
 
-async function openFullSearch(category = 'all') {
+function openFullSearch(category = 'all') {
   state.searchCategory = category;
   state.searchSortMode = 'default';
   state.searchFileType = 'all';
@@ -1177,10 +1448,18 @@ async function openFullSearch(category = 'all') {
   state.searchHistoryOpen = false;
   state.searchHistoryManuallyOpened = false;
   state.searchScrollSnapshot = null;
+  const nextGeneration = fullSearchGeneration + 1;
+  void runFullSearch();
   if (native && state.current) {
-    try { state.searchHistory = await invoke('read_desktop_local_search_history', { workspaceId: state.current.summary.id }); } catch { state.searchHistory = []; }
+    void invoke('read_desktop_local_search_history', { workspaceId: state.current.summary.id })
+      .then(history => {
+        if (!state.searchPanel || fullSearchGeneration !== nextGeneration) return;
+        state.searchHistory = history;
+        state.searchHistoryHighlighted = bestSearchHistoryMatch(state.chatSearch, history);
+        render();
+      })
+      .catch(() => {});
   }
-  await runFullSearch();
 }
 
 function rememberFullSearchScroll(entryId = null) {
@@ -1269,7 +1548,7 @@ async function openSearchAttachment(hit) {
   rememberFullSearchScroll(hit.entryId);
   return openAttachmentPreview(hit, hit.workspaceId);
 }
-const icons = { check: 'M20 6 9 17l-5-5', workspace: 'M3 5.5A2.5 2.5 0 0 1 5.5 3H10l2 2h6.5A2.5 2.5 0 0 1 21 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z', conversation: 'M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11L7 20v-4H6.5A2.5 2.5 0 0 1 4 13.5z', knowledge: 'M5 3.5h11A3 3 0 0 1 19 6.5v13l-6.5-3-6.5 3v-13a3 3 0 0 1 3-3z', import: 'M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3', export: 'M12 15V3m0 0 4 4m-4-4L8 7M5 17v3h14v-3', close: 'M6 6l12 12M18 6 6 18', undo: 'M9 7 4 12l5 5M5 12h9a5 5 0 1 1 0 10', redo: 'm15 7 5 5-5 5m4-5h-9a5 5 0 1 0 0 10', trash: 'M4 7h16M10 11v6m4-6v6M9 7l1-2h4l1 2M6 7l1 14h10l1-14', plus: 'M12 5v14M5 12h14', edit: 'm4 16 9-9 3 3-9 9H4zM14 6l2-2 3 3-2 2', info: 'M12 17v-6m0-3.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', link: 'M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1m3.1 5.9a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 9 20l1.1-1.1' };
+const icons = { check: 'M20 6 9 17l-5-5', workspace: 'M3 5.5A2.5 2.5 0 0 1 5.5 3H10l2 2h6.5A2.5 2.5 0 0 1 21 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z', conversation: 'M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11L7 20v-4H6.5A2.5 2.5 0 0 1 4 13.5z', knowledge: 'M5 3.5h11A3 3 0 0 1 19 6.5v13l-6.5-3-6.5 3v-13a3 3 0 0 1 3-3z', import: 'M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3', export: 'M12 15V3m0 0 4 4m-4-4L8 7M5 17v3h14v-3', download: 'M12 3v12m0 0 4-4m-4 4-4-4M5 19h14', copy: 'M9 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3M5 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z', close: 'M6 6l12 12M18 6 6 18', chevronLeft: 'm14.5 5-7 7 7 7', chevronRight: 'm9.5 5 7 7-7 7', undo: 'M9 7 4 12l5 5M5 12h9a5 5 0 1 1 0 10', redo: 'm15 7 5 5-5 5m4-5h-9a5 5 0 1 0 0 10', trash: 'M4 7h16M10 11v6m4-6v6M9 7l1-2h4l1 2M6 7l1 14h10l1-14', plus: 'M12 5v14M5 12h14', edit: 'm4 16 9-9 3 3-9 9H4zM14 6l2-2 3 3-2 2', info: 'M12 17v-6m0-3.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', branch: 'M5 4v4c0 1.1.9 2 2 2h12m0 0-3-3m3 3-3 3M5 4v12c0 1.1.9 2 2 2h12m0 0-3-3m3 3-3 3', link: 'M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1m3.1 5.9a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 9 20l1.1-1.1' };
 function workspace() { return state.current || (!native ? fixture : null); }
 function selectWorkspaceDefaultConversation(data = workspace()) {
   state.selectedConversationId = data ? activeConversations(data)[0]?.id || null : null;
@@ -1277,6 +1556,20 @@ function selectWorkspaceDefaultConversation(data = workspace()) {
 function active(data, key) { return data.exchange[key].filter(item => key === 'relations' ? item.status === 'ACTIVE' : item.status !== 'DELETED' && !item.archived && !item.deleted); }
 function dialog() {
   if (!state.dialog) return '';
+  if (state.dialog?.kind === 'source-links') {
+    const sources = Array.isArray(state.dialog.sources) ? state.dialog.sources : [];
+    const sourceRows = sources.map(source => {
+      let href = null;
+      try {
+        const parsed = new URL(String(source?.href || ''));
+        href = ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : null;
+      } catch { /* invalid imported source is not rendered as an active destination */ }
+      if (!href) return '';
+      const label = sourceDisplayTitle({ href, label: source?.label });
+      return `<button type="button" class="source-link-row" data-action="open-source-link" data-href="${escape(href)}" aria-label="在浏览器打开来源：${escape(label)}">${sharedIcon(sharedIcons.globe, '打开来源')}<span><strong>${escape(label)}</strong><small>${escape(href)}</small></span></button>`;
+    }).filter(Boolean).join('');
+    return `<div class="scrim"><section class="dialog source-links-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">来源网站</h2><div class="source-links-list">${sourceRows || '<p class="empty-copy">没有可安全打开的来源网站。</p>'}</div><div class="dialog-actions"><button class="primary" data-action="close-dialog">关闭</button></div></section></div>`;
+  }
   if (state.dialog?.kind === 'model-credential-saved') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">API Key 已保存</h2><p>API Key 已安全保存在本机。尚未测试连接；请点击“测试连接”确认 API Key 是否可用。</p><div class="dialog-actions"><button class="primary" data-action="close-dialog">知道了</button></div></section></div>`;
   if (state.dialog === 'import') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">严格预检已通过</p><h2 id="dialog-title">导入为新的独立工作区</h2><p>不会合并或覆盖。正文仅作为不执行的文本 IR。</p><label>新工作区名称<input id="workspace-title" maxlength="120" value="导入工作区"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="confirm-import">导入</button></div></section></div>`;
   if (state.dialog.kind === 'project') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Project' : '新建 Project'}</h2><p>保存由 Rust 检查 expected revision；冲突不会覆盖现有对象。</p><label>名称<input id="project-title" maxlength="120" value="${escape(item?.title || '')}"></label><label>说明<textarea id="project-description" maxlength="2000">${escape(item?.description || '')}</textarea></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-project">保存 ⌘S</button></div></section></div>`; }
@@ -1284,9 +1577,8 @@ function dialog() {
   if (state.dialog?.kind === 'history-knowledge-review') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog history-knowledge-review" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">历史对话自动整理 · 待核对候选</p><h2 id="dialog-title">核对资料候选</h2><p>候选尚未进入长期 Memory 或 Knowledge。确认后只保存你当前看到并可编辑的内容；原对话不会改写。</p><label>标题<input id="history-candidate-title" maxlength="120" value="${escape(item.title || '')}"></label><label>候选内容<textarea id="history-candidate-body" maxlength="2000000">${escape(item.body || '')}</textarea></label><label>标签（逗号分隔）<input id="history-candidate-tags" value="${escape((item.tags || []).join(', '))}"></label><p class="security-note">来源会话 ${escape(item.conversationId)} · 消息 ${Number(item.sourceMessageIds?.length || 0)} 条 · ${escape(item.providerId || '未发送')} / ${escape(item.actualModelId || item.requestedModelId || '未知模型')} · checkpoint ${escape(short(item.checkpointId))}</p><div class="dialog-actions"><button data-action="reject-history-knowledge" data-id="${escape(item.candidateId)}">驳回</button><button class="primary" data-action="accept-history-knowledge" data-id="${escape(item.candidateId)}">确认保存为本地知识</button></div></section></div>`; }
   if (state.dialog?.kind === 'reminder-draft') { const item = state.dialog.item; const option = (value, label) => `<option value="${value}" ${item.scheduleKind === value ? 'selected' : ''}>${label}</option>`; return `<div class="scrim"><section class="dialog edit-dialog reminder-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">提醒草案 · 必须确认</p><h2 id="dialog-title">核对计划与监控</h2><p>模型只整理草案，不会替你创建计划。请核对对象、条件、频率、时区与错过策略。</p><label>计划名称<input id="reminder-title" maxlength="40" value="${escape(item.title || '')}" placeholder="例如：检查项目状态"></label><label>执行说明<textarea id="reminder-instruction" maxlength="8000" rows="5" placeholder="写清要检查什么、何时算完成">${escape(item.instruction || '')}</textarea></label><label>执行频率<select id="reminder-schedule-kind">${option('ONCE', '一次')}${option('HOURLY', '每小时')}${option('DAILY', '每天')}${option('WEEKLY', '每周')}</select></label><label>本地时间<input id="reminder-anchor-local" type="datetime-local" value="${escape(item.anchorLocal || '')}"></label><label>时区<input id="reminder-timezone" maxlength="64" value="${escape(item.timezoneId || '')}" placeholder="Asia/Shanghai"></label><label>错过执行窗口后<select id="reminder-missed-policy"><option value="RUN_ONCE" ${item.missedPolicy === 'RUN_ONCE' ? 'selected' : ''}>恢复后执行一次</option><option value="SKIP" ${item.missedPolicy === 'SKIP' ? 'selected' : ''}>跳过本次</option></select></label><p class="security-note">${escape(item.providerId || '手工草案')} · ${escape(item.actualModelId || item.requestedModelId || '未调用模型')} · ${item.chargeMicros == null ? '费用未报告' : `$${(item.chargeMicros / 1_000_000).toFixed(6)}`}</p><div class="dialog-actions"><button data-action="reject-reminder-draft" data-id="${escape(item.draftId)}">拒绝</button><button class="primary" data-action="confirm-reminder-draft">确认并创建计划</button></div></section></div>`; }
   if (state.dialog?.kind === 'reminder-plan') { const item = state.dialog.item; const option = (value, label) => `<option value="${value}" ${item.scheduleKind === value ? 'selected' : ''}>${label}</option>`; return `<div class="scrim"><section class="dialog edit-dialog reminder-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">已确认计划 · 本机更新</p><h2 id="dialog-title">编辑计划与监控</h2><p>保存会保留既有执行记录，并按新频率、时间和时区重新计算下一次执行。</p><label>计划名称<input id="reminder-title" maxlength="40" value="${escape(item.title || '')}"></label><label>执行说明<textarea id="reminder-instruction" maxlength="8000" rows="5">${escape(item.instruction || '')}</textarea></label><label>执行频率<select id="reminder-schedule-kind">${option('ONCE', '一次')}${option('HOURLY', '每小时')}${option('DAILY', '每天')}${option('WEEKLY', '每周')}</select></label><label>本地时间<input id="reminder-anchor-local" type="datetime-local" value="${escape(item.anchorLocal || '')}"></label><label>时区<input id="reminder-timezone" maxlength="64" value="${escape(item.timezoneId || '')}"></label><label>错过执行窗口后<select id="reminder-missed-policy"><option value="RUN_ONCE" ${item.missedPolicy === 'RUN_ONCE' ? 'selected' : ''}>恢复后执行一次</option><option value="SKIP" ${item.missedPolicy === 'SKIP' ? 'selected' : ''}>跳过本次</option></select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="confirm-edit-reminder-plan">保存计划</button></div></section></div>`; }
-  if (state.dialog?.kind === 'memory-summary-choice') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">如何处理这条内容</h2><p>“询问摘要”只查找已有本机记忆；“补充记忆”保存这条内容。</p><div class="dialog-actions"><button data-action="query-memory-summary">询问摘要</button><button class="primary" data-action="append-memory-summary">补充记忆</button></div></section></div>`;
   if (state.dialog?.kind === 'memory-summary-about') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">关于记忆</h2><p>这里显示已保存在本机的记忆摘要。启用后，相关内容可用于回答。</p><div class="dialog-actions"><button class="primary" data-action="close-dialog">知道了</button></div></section></div>`;
-  if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim custom-instructions-scrim"><section class="dialog memory-summary-editor" role="dialog" aria-modal="true" aria-labelledby="memory-summary-editor-title"><header><button data-action="close-dialog">取消</button><h2 id="memory-summary-editor-title">编辑记忆摘要</h2><button class="primary" data-action="save-memory-summary-editor" ${String(state.dialog.value || '').trim() ? '' : 'disabled'}>保存</button></header><label><span>完整摘要</span><textarea id="memory-summary-editor" maxlength="2000000" placeholder="输入或粘贴新的记忆摘要">${escapeHtml(state.dialog.value || '')}</textarea><small>${String(state.dialog.value || '').length} / 2000000 字</small></label></section></div>`;
+if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim custom-instructions-scrim"><section class="dialog memory-summary-editor" role="dialog" aria-modal="true" aria-labelledby="memory-summary-editor-title"><header><button data-action="close-dialog">取消</button><h2 id="memory-summary-editor-title">编辑记忆摘要</h2><button class="primary" data-action="save-memory-summary-editor" ${String(state.dialog.value || '').trim() ? '' : 'disabled'}>保存</button></header><label><span>完整摘要</span><textarea id="memory-summary-editor" maxlength="2000000" placeholder="输入或粘贴新的记忆摘要">${escape(state.dialog.value || '')}</textarea><small>${String(state.dialog.value || '').length} / 2000000 字</small></label></section></div>`;
   if (state.dialog?.kind === 'memory-summary-delete') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true"><h2>删除记忆？</h2><p>删除当前记忆摘要；聊天、文件和记忆开关不受影响。</p><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary danger" data-action="confirm-delete-memory-summary">删除</button></div></section></div>`;
   if (state.dialog?.kind === 'memory-summary-disable') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true"><h2>关闭记忆摘要生成和应用？</h2><p>停止生成和使用记忆摘要；已保存内容不会删除。</p><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary danger" data-action="confirm-disable-memory-summary">关闭</button></div></section></div>`;
   if (state.dialog?.kind === 'model-settings-feedback') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="model-feedback-title"><h2 id="model-feedback-title">${state.dialog.failed ? '操作未完成' : '操作完成'}</h2><p>${escape(state.dialog.message)}</p><div class="dialog-actions"><button class="primary" data-action="close-dialog">知道了</button></div></section></div>`;
@@ -1294,12 +1586,12 @@ function dialog() {
   if (state.dialog?.kind === 'reminder-delete') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true"><h2>删除这个提醒计划？</h2><p>将删除“${escape(item.title)}”及其本机执行记录；操作不可撤销，运行中的请求会请求停止。</p><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary danger" data-action="confirm-delete-reminder-plan" data-id="${escape(item.planId)}">删除计划</button></div></section></div>`; }
   if (state.dialog.kind === 'memory') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Memory' : '新建 Memory'}</h2><p>Memory 仅是本地文本 IR，不会进入 Prompt 或网络。</p><label>正文<textarea id="memory-body" maxlength="2000000">${escape(item?.body || '')}</textarea></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-memory">保存 ⌘S</button></div></section></div>`; }
   if (state.dialog.kind === 'relation') { const data = workspace(); const items = active(data, 'knowledge'); const options = items.map(item => `<option value="${escape(item.id)}">${escape(item.title)} · r${item.revision}</option>`).join(''); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">显式本地 relation</p><h2 id="dialog-title">建立 Knowledge 关系</h2><p>仅同一活动 scope 的两条 Knowledge 可建立；不会自动关联或去重。</p><label>来源<select id="relation-from">${options}</select></label><label>目标<select id="relation-to">${options}</select></label><label>类型<select id="relation-kind"><option value="RELATED">RELATED（对称）</option><option value="DERIVED_FROM">DERIVED_FROM</option><option value="REFERENCES">REFERENCES</option></select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-relation" ${items.length < 2 ? 'disabled' : ''}>建立关系</button></div></section></div>`; }
-  if (state.dialog?.kind === 'assistant-message-actions') { const messageId = escape(state.dialog.messageId); return `<div class="scrim"><section class="dialog assistant-message-actions" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><h2 id="dialog-title">更多操作</h2><div class="dialog-actions"><button data-action="show-assistant-answer-information" data-message-id="${messageId}">${icon(icons.info, '本次回答信息')}本次回答信息</button><button data-action="branch-from-message" data-message-id="${messageId}">${icon(icons.branch, '创建分支')}创建分支</button></div></section></div>`; }
-  if (state.dialog?.kind === 'assistant-answer-information') { const record = state.dialog.record; const sources = Array.isArray(record?.selectedSources) ? record.selectedSources : []; const styleSource = sources.find(source => ['STYLE', '对话风格'].includes(source.kind)); const nonStyleSources = sources.filter(source => !['STYLE', '对话风格'].includes(source.kind)); const webSearch = record?.webSearchUsed; const webSearchLabel = webSearch === true ? '已实际使用' : webSearch === false ? '本次未使用' : '未记录（旧回答）'; const sourceLabels = { STYLE: '回答风格', PERSONA: '称呼与职业', MEMORY: '长期记忆', KNOWLEDGE: '知识库', CURRENT_PATH: '当前对话路径' }; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">本机回答审计</p><h2 id="dialog-title">本次回答信息</h2><dl class="answer-information-list"><dt>基础风格和语气</dt><dd>${escape(styleSource?.title || '未记录（旧回答）')}</dd><dt>实时网络</dt><dd>${webSearchLabel}</dd></dl>${nonStyleSources.length ? `<h3>本次上下文来源</h3><ul>${nonStyleSources.map(source => `<li><strong>${escape(sourceLabels[source.kind] || source.kind)}</strong> · ${escape(source.title)}</li>`).join('')}</ul>` : ''}<p>这里只显示已持久化的安全事实；不会显示正文、Prompt、附件、Provider 原始请求、路径或凭据。</p><div class="dialog-actions"><button class="primary" data-action="close-dialog">完成</button></div></section></div>`; }
+  if (state.dialog?.kind === 'assistant-answer-information') { const record = state.dialog.record; const sources = Array.isArray(record?.selectedSources) ? record.selectedSources : []; const styleSource = sources.find(source => ['STYLE', '对话风格'].includes(source.kind)); const nonStyleSources = sources.filter(source => !['STYLE', '对话风格'].includes(source.kind)); const webSearch = record?.webSearchUsed; const webSearchLabel = webSearch === true ? '已实际使用' : webSearch === false ? '本次未使用' : '未记录（旧回答）'; const sourceLabels = { STYLE: '回答风格', PERSONA: '称呼与职业', MEMORY: '长期记忆', KNOWLEDGE: '知识库', CURRENT_PATH: '当前对话路径' }; return `<div class="scrim"><section class="dialog answer-information-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><h2 id="dialog-title">本次回答信息</h2><dl class="answer-information-list"><dt>基础风格和语气</dt><dd>${escape(styleSource?.title || '未记录（旧回答）')}</dd><dt>实时网络</dt><dd>${webSearchLabel}</dd></dl>${nonStyleSources.length ? `<h3>本次上下文来源</h3><ul>${nonStyleSources.map(source => `<li><strong>${escape(sourceLabels[source.kind] || source.kind)}</strong> · ${escape(source.title)}</li>`).join('')}</ul>` : ''}<div class="dialog-actions"><button class="primary" data-action="close-dialog">完成</button></div></section></div>`; }
   if (state.dialog === 'metadata') return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">仅本地安全 metadata</p><h2 id="dialog-title">模型与成本 metadata</h2><p>不存 Key、不联网取 catalog；价格仅标记为 fixture、手工或未知，绝不当作真实费用。</p><label>Provider ID<input id="provider-id" value="provider-local"></label><label>Model ID<input id="model-id" value="model-manual"></label><label>价格版本<input id="price-version" value="manual-v1"></label><label>币种<input id="price-currency" value="CNY"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-metadata">保存 metadata</button></div></section></div>`;
   if (state.dialog === 'recycle') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">本地软删除</p><h2 id="dialog-title">回收站</h2><p>此处恢复通用软删除对象；会话的恢复与永久删除在“设置 → 对话管理 → 回收站”。恢复将生成新 revision。</p><div class="recycle-list">${state.history.recycleBin.length ? state.history.recycleBin.map(item => `<div><span>${escape(item.entity)} · ${escape(item.title)}</span><button data-action="restore" data-entity="${escape(item.entity)}" data-id="${escape(item.id)}" data-revision="${item.revision}">恢复</button></div>`).join('') : '<p class="empty-copy">暂无可恢复对象。</p>'}</div><div class="dialog-actions"><button data-action="close-dialog">关闭</button></div></section></div>`;
   if (state.dialog === 'about') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">Desktop 本机交付摘要</p><h2 id="dialog-title">关于南枫 AI Desktop</h2><dl class="about-list"><dt>版本</dt><dd>0.6.0-p6d-dev</dd><dt>账号与同步</dt><dd>尚未配置 · 离线可用；无浏览器登录、无 HTTP、无同步队列</dd><dt>签名</dt><dd>ad-hoc 开发签名，未 notarized</dd><dt>最低系统</dt><dd>macOS 11 或更高</dd><dt>本地数据</dt><dd>仅 app-private 容器；此处不显示路径或数据库文件</dd><dt>更新</dt><dd>本地静态状态；未检查网络</dd></dl><p>卸载应用不会主动删除用户本地数据；清除数据必须通过未来独立的安全流程，不暴露 SQLite 文件。</p><div class="dialog-actions"><button data-action="close-dialog">关闭</button></div></section></div>`;
-  if (state.dialog?.kind === 'search-attachment-actions') { const hit = state.dialog.hit; return `<div class="scrim"><section class="dialog search-attachment-actions" role="dialog" aria-modal="true" aria-labelledby="attachment-actions-title"><header><h2 id="attachment-actions-title">附件操作</h2><button class="icon-button" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button></header><div class="attachment-actions-summary"><p class="overline">本机附件</p><h3>${escape(hit.displayName || '附件')}</h3><p class="attachment-actions-meta"><span>${escape(hit.mimeType || '未知类型')}</span><span>${bytes(Number(hit.byteCount) || 0)}</span></p></div><div class="dialog-actions"><button data-action="save-search-attachment" data-entry-id="${escape(hit.entryId)}">保存副本<span aria-hidden="true">↓</span></button><button data-action="locate-search-attachment" data-entry-id="${escape(hit.entryId)}">快速定位<span aria-hidden="true">→</span></button><button class="danger" data-action="ask-delete-search-attachment" data-entry-id="${escape(hit.entryId)}">删除此引用<span aria-hidden="true">×</span></button></div></section></div>`; }
+  if (state.dialog?.kind === 'search-attachment-actions') return renderSearchAttachmentMenu(state.dialog.hit, state.dialog.anchor);
+  if (state.dialog?.kind === 'chat-attachment-actions') return renderChatAttachmentMenu(state.dialog.item, state.dialog.anchor);
   if (state.dialog?.kind === 'transcription-delete') { const task = state.transcription.tasks.find(item => item.id === state.dialog.taskId); const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除这条转写任务？</h2><p>将删除“${escape(task?.sourceDisplayName || '转写任务')}”的任务记录与时间轴。原文件或结果仍被会话引用时，私有字节不会删除；无引用字节进入安全清理期。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-transcription-task" data-task-id="${escape(state.dialog.taskId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除任务'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'search-attachment-delete') { const hit = state.dialog.hit; const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除此附件引用？</h2><p>只会从这条消息移除“${escape(hit.displayName || '附件')}”。若其他消息仍在引用，私有副本会继续保留；最后一个引用移除后进入安全清理期。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-search-attachment" data-entry-id="${escape(hit.entryId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除此引用'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'p6k-batch-delete') { const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除这个 ZIP 导入批次？</h2><p>将移除该批次导入的本地对话与 ZIP 私有副本。对话的删除标记会长期保留，以后重新导入同一官方会话也不会复活。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-p6k-zip-batch" data-task-id="${escape(state.dialog.taskId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除批次'}</button></div></section></div>`; }
@@ -1314,7 +1606,7 @@ function dialog() {
   return '';
 }
 function tree(data) { if (!data) return '<div class="tree-empty">还没有本地工作区。<br>先从受控交换包导入。</div>'; const workspaceRows = state.workspaces.map(item => `<button class="tree-row ${item.id === data.summary.id ? 'selected' : ''}" data-action="select-workspace" data-id="${escape(item.id)}"><span>${icon(icons.workspace, '工作区')}</span><span>${escape(item.title)}</span><small>${item.id === data.summary.id ? '当前' : ''}</small></button>`).join(''); return `<div class="tree-section"><p>Workspace</p>${workspaceRows}</div><div class="tree-section"><p>Project <button class="small-add" data-action="new-project" aria-label="新建 Project">+</button></p>${data.exchange.projects.map(item => `<button class="tree-row" data-action="edit-project" data-id="${escape(item.id)}"><span>${icon(icons.workspace, '项目')}</span><span>${escape(item.title)}</span><small>r${item.revision || 0}</small></button>`).join('') || '<span class="tree-muted">暂无 Project</span>'}</div><div class="tree-section"><p>Conversation</p>${data.exchange.conversations.map(item => `<button class="tree-row ${state.pane === 'conversation' ? 'selected' : ''}" data-action="show-conversation"><span>${icon(icons.conversation, '会话')}</span><span>${escape(item.title)}</span><small>${item.messages.length}</small></button>`).join('')}</div><div class="tree-section"><p>Knowledge</p><button class="tree-row ${state.pane === 'knowledge' ? 'selected' : ''}" data-action="show-knowledge"><span>${icon(icons.knowledge, '知识')}</span><span>知识与记忆</span><small>${data.exchange.knowledge.length}</small></button></div>`; }
-function conversationCanvas(data) { const conversation = data.exchange.conversations[0]; if (!conversation) return `<section class="canvas empty-canvas"><h2>暂无会话</h2><p>新建 Conversation 会在 Rust transaction 中同时建立明确的本地 root 节点。</p></section>`; return `<section class="canvas conversation-canvas"><div class="canvas-header"><div><p class="overline">Conversation · 本地树</p><h1>${escape(conversation.title)}</h1><p>追加节点只接受明确本地文本，不构造 Prompt 或 RunSpec。</p></div><button class="subtle" data-action="show-knowledge">知识工作台</button></div><div class="message-list">${conversation.messages.map(message => `<article class="message ${escape(message.role)}"><header><span>${escape(message.role)}</span><time>${escape(short(message.createdAt))}</time></header>${message.blocks.map(block => `<pre>${escape(block.text || `附件引用 · ${block.asset?.displayName || ''}`)}</pre>`).join('')}</article>`).join('')}</div></section>`; }
+function conversationCanvas(data) { const conversation = data.exchange.conversations[0]; if (!conversation) return `<section class="canvas empty-canvas"><h2>暂无会话</h2><p>新建 Conversation 会在 Rust transaction 中同时建立明确的本地 root 节点。</p></section>`; return `<section class="canvas conversation-canvas"><div class="canvas-header"><div><p class="overline">Conversation · 本地树</p><h1>${escape(conversation.title)}</h1><p>追加节点只接受明确本地文本，不构造 Prompt 或 RunSpec。</p></div><button class="subtle" data-action="show-knowledge">知识工作台</button></div><div class="message-list">${orderedConversationMessages(conversation).map(message => `<article class="message ${escape(message.role)}"><header><span>${escape(message.role)}</span><time>${escape(short(message.createdAt))}</time></header>${message.blocks.map(block => `<pre>${escape(block.text || `附件引用 · ${block.asset?.displayName || ''}`)}</pre>`).join('')}</article>`).join('')}</div></section>`; }
 function knowledgeCanvas(data) { const knowledge = active(data, 'knowledge'); const memory = active(data, 'memory'); const relationItems = active(data, 'relations'); const name = id => data.exchange.knowledge.find(item => item.id === id)?.title || short(id); return `<section class="canvas knowledge-canvas"><div class="canvas-header"><div><p class="overline">Knowledge / Memory · 文本 IR</p><h1>知识与记忆</h1><p>保存、取消、冲突、撤销与软删除均由 Rust SQLite 真值驱动。</p></div><div class="canvas-actions"><button class="primary" data-action="new-knowledge">${icon(icons.plus, '新建')}新建 Knowledge</button><button data-action="new-memory">${icon(icons.plus, '新建')}新建 Memory</button><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>${icon(icons.link, '关系')}建立关系</button></div></div><div class="knowledge-list">${knowledge.map(item => `<article class="knowledge-item"><header><div><p class="overline">${escape(item.status)} · r${item.revision} · ${escape(item.classification)}</p><h2>${escape(item.title)}</h2></div><span>${escape((item.tags || []).join(' · '))}</span></header><pre>${escape(item.body)}</pre><div class="item-actions"><button data-action="edit-knowledge" data-id="${escape(item.id)}">${icon(icons.edit, '编辑')}编辑</button><button data-action="delete-knowledge" data-id="${escape(item.id)}" data-revision="${item.revision}">${icon(icons.trash, '软删除')}软删除</button></div></article>`).join('') || '<p class="empty-copy">尚无已保存的本地知识。</p>'}</div><section class="memory-rail"><div class="section-head"><h2>Memory</h2><button data-action="new-memory">新建</button></div><ul>${memory.map(item => `<li><span>${escape(item.scope)} · r${item.revision}</span><button class="memory-button" data-action="edit-memory" data-id="${escape(item.id)}">${escape(item.body)}</button><button data-action="delete-memory" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></li>`).join('') || '<li>暂无活动 Memory。</li>'}</ul></section><section class="memory-rail"><div class="section-head"><h2>Knowledge relation</h2><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立</button></div><ul>${relationItems.map(item => `<li><span>${escape(item.kind)} · r${item.revision}</span>${escape(name(item.fromId))} → ${escape(name(item.toId))}<button data-action="delete-relation" data-id="${escape(item.id)}" data-revision="${item.revision}">撤销</button></li>`).join('') || '<li>暂无活动 relation。</li>'}</ul></section></section>`; }
 function inspector(data) { if (!data) return `<aside class="inspector"><div class="inspector-head"><h2>Inspector</h2></div><p class="empty-copy">导入后显示本地工作区。</p></aside>`; const meta = state.history.modelMetadata; return `<aside class="inspector"><div class="inspector-head"><div><p class="overline">本地事实</p><h2>Inspector</h2></div><button class="icon-button" data-action="toggle-inspector" aria-label="收起">${icon(icons.close, '收起')}</button></div><section><h3>revision 与恢复</h3><div class="inspector-actions"><button data-action="undo" ${state.history.canUndo && native ? '' : 'disabled'}>${icon(icons.undo, '撤销')}撤销</button><button data-action="redo" ${state.history.canRedo && native ? '' : 'disabled'}>${icon(icons.redo, '重做')}重做</button><button data-action="recycle">${icon(icons.trash, '回收站')}回收站 ${state.history.recycleBin.length}</button></div><p class="security-note">动作栈持久化；重启后仍可恢复。冲突会保留当前 revision，绝不静默覆盖。</p></section><section><h3>模型与成本 metadata</h3>${meta.length ? meta.map(item => `<p class="metadata-row"><b>${escape(item.providerId)} / ${escape(item.modelId)}</b><br>${escape(item.metadata?.pricingStatus || 'UNKNOWN')} · ${escape(item.metadata?.priceVersion || '未配置')} · ${escape(item.metadata?.currency || '—')}</p>`).join('') : '<p class="empty-copy">未配置。无网络 catalog、无 Key、无真实费用。</p>'}<button data-action="metadata">${icon(icons.plus, '配置')}配置本地 metadata</button></section><section><h3>工作区</h3><dl><dt>状态</dt><dd>离线 · Rust SQLite</dd><dt>语义 hash</dt><dd title="${escape(data.summary.semanticHash)}">${escape(short(data.summary.semanticHash))}</dd><dt>项目 / 知识</dt><dd>${data.summary.projectCount} / ${data.summary.knowledgeCount}</dd><dt>关系 / 资产</dt><dd>${data.summary.relationCount} / ${data.summary.assetCount}</dd><dt>资产字节</dt><dd>${bytes(data.summary.assetByteCount)}</dd></dl></section><section class="security-note"><h3>安全边界</h3><p>无账号、无网络、无 Provider、无 Prompt/RunSpec。正文不执行。</p></section></aside>`; }
 function scheduleComposerModelPricingRefresh() {
@@ -1324,7 +1616,7 @@ function scheduleComposerModelPricingRefresh() {
     : null;
 }
 
-function render() { const data = workspace(); if (state.pane === 'chat' || state.pane === 'connections') { app.className = 'app-shell chat-first'; app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, composerDraft: state.composerDraft, profileOpen: state.profileOpen, pane: state.pane, status: state.status, error: state.error, connection: state.connection }); scheduleComposerModelPricingRefresh(); return; } const canvas = state.pane === 'p8-inspect' ? p8InspectCanvas({ agentRuns: state.agentRuns, native, escape, short }) : data ? (state.pane === 'conversation' ? conversationCanvas(data) : knowledgeCanvas(data)) : `<section class="canvas empty-canvas"><p class="overline">P6-D · 离线 Desktop</p><h1>从受控交换包开始</h1><p>导入后可在 Rust 本地领域链中明确创建、编辑、撤销与软删除。</p><button class="primary" data-action="start-import">选择交换包</button></section>`; app.className = `app-shell scale-${state.scale === 2 ? '2' : '1'}`; app.innerHTML = `<aside class="sidebar ${state.treeOpen ? 'mobile-open' : ''}"><header class="brand"><span class="brand-mark">南</span><span><strong>南枫 AI</strong><small>本地工作台</small></span><button class="icon-button mobile-close" data-action="toggle-tree" aria-label="关闭导航">${icon(icons.close, '关闭')}</button></header><nav class="primary-nav"><button data-action="show-chat"><span>${icon(icons.conversation, '聊天')}</span>返回聊天</button><button class="nav-active"><span>${icon(icons.workspace, '工作区')}</span>工作区</button><button data-action="show-conversation"><span>${icon(icons.conversation, '会话')}</span>会话</button><button data-action="show-knowledge"><span>${icon(icons.knowledge, '知识')}</span>知识</button><button data-action="show-p8-inspect"><span>${icon(icons.info, '本地受控记录')}</span>本地受控记录</button></nav><section class="tree"><div class="tree-label"><span>Workspace</span><button class="icon-button" data-action="start-import" aria-label="导入">${icon(icons.import, '导入')}</button></div>${tree(data)}</section><footer><span class="offline-dot"></span>本地可用 · 联网需配置</footer></aside><section class="main-area"><header class="topbar"><button class="icon-button tree-toggle" data-action="toggle-tree" aria-label="打开导航">${icon(icons.workspace, '导航')}</button><div class="topbar-status"><span class="offline-dot"></span><span>${native ? 'Rust SQLite 本地所有权' : 'Web 预览（不写入）'}</span></div><div class="topbar-actions"><button data-action="undo" ${data && state.history.canUndo && native ? '' : 'disabled'}>${icon(icons.undo, '撤销')}撤销</button><button data-action="redo" ${data && state.history.canRedo && native ? '' : 'disabled'}>${icon(icons.redo, '重做')}重做</button><button data-action="start-export" ${data && native ? '' : 'disabled'}>${icon(icons.export, '导出')}导出</button><button data-action="toggle-scale" aria-label="切换应用缩放">${state.scale.toFixed(1)}×</button><button class="icon-button" data-action="about" aria-label="关于">${icon(icons.info, '关于')}</button><button class="icon-button" data-action="toggle-inspector" aria-label="${state.inspectorOpen ? '收起' : '展开'} Inspector">${icon(icons.knowledge, 'Inspector')}</button></div></header><p class="status ${state.error ? 'error' : ''}" role="status">${escape(state.error || state.status)}</p><div class="workbench ${state.inspectorOpen ? '' : 'inspector-collapsed'}">${canvas}${state.inspectorOpen ? inspector(data) : ''}</div></section>${dialog()}`; if (state.dialog) queueMicrotask(() => document.querySelector('.dialog input, .dialog textarea, .dialog select, .dialog button')?.focus()); }
+function render() { const data = workspace(); if (state.pane === 'chat' || state.pane === 'connections') { app.className = 'app-shell chat-first'; app.innerHTML = `${renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, composerDraft: state.composerDraft, profileOpen: state.profileOpen, pane: state.pane, status: state.status, error: state.error, connection: state.connection })}${dialog()}`; scheduleComposerModelPricingRefresh(); return; } const canvas = state.pane === 'p8-inspect' ? p8InspectCanvas({ agentRuns: state.agentRuns, native, escape, short }) : data ? (state.pane === 'conversation' ? conversationCanvas(data) : knowledgeCanvas(data)) : `<section class="canvas empty-canvas"><p class="overline">P6-D · 离线 Desktop</p><h1>从受控交换包开始</h1><p>导入后可在 Rust 本地领域链中明确创建、编辑、撤销与软删除。</p><button class="primary" data-action="start-import">选择交换包</button></section>`; app.className = `app-shell scale-${state.scale === 2 ? '2' : '1'}`; app.innerHTML = `<aside class="sidebar ${state.treeOpen ? 'mobile-open' : ''}"><header class="brand"><span class="brand-mark">南</span><span><strong>南枫 AI</strong><small>本地工作台</small></span><button class="icon-button mobile-close" data-action="toggle-tree" aria-label="关闭导航">${icon(icons.close, '关闭')}</button></header><nav class="primary-nav"><button data-action="show-chat"><span>${icon(icons.conversation, '聊天')}</span>返回聊天</button><button class="nav-active"><span>${icon(icons.workspace, '工作区')}</span>工作区</button><button data-action="show-conversation"><span>${icon(icons.conversation, '会话')}</span>会话</button><button data-action="show-knowledge"><span>${icon(icons.knowledge, '知识')}</span>知识</button><button data-action="show-p8-inspect"><span>${icon(icons.info, '本地受控记录')}</span>本地受控记录</button></nav><section class="tree"><div class="tree-label"><span>Workspace</span><button class="icon-button" data-action="start-import" aria-label="导入">${icon(icons.import, '导入')}</button></div>${tree(data)}</section><footer><span class="offline-dot"></span>本地可用 · 联网需配置</footer></aside><section class="main-area"><header class="topbar"><button class="icon-button tree-toggle" data-action="toggle-tree" aria-label="打开导航">${icon(icons.workspace, '导航')}</button><div class="topbar-status"><span class="offline-dot"></span><span>${native ? 'Rust SQLite 本地所有权' : 'Web 预览（不写入）'}</span></div><div class="topbar-actions"><button data-action="undo" ${data && state.history.canUndo && native ? '' : 'disabled'}>${icon(icons.undo, '撤销')}撤销</button><button data-action="redo" ${data && state.history.canRedo && native ? '' : 'disabled'}>${icon(icons.redo, '重做')}重做</button><button data-action="start-export" ${data && native ? '' : 'disabled'}>${icon(icons.export, '导出')}导出</button><button data-action="toggle-scale" aria-label="切换应用缩放">${state.scale.toFixed(1)}×</button><button class="icon-button" data-action="about" aria-label="关于">${icon(icons.info, '关于')}</button><button class="icon-button" data-action="toggle-inspector" aria-label="${state.inspectorOpen ? '收起' : '展开'} Inspector">${icon(icons.knowledge, 'Inspector')}</button></div></header><p class="status ${state.error ? 'error' : ''}" role="status">${escape(state.error || state.status)}</p><div class="workbench ${state.inspectorOpen ? '' : 'inspector-collapsed'}">${canvas}${state.inspectorOpen ? inspector(data) : ''}</div></section>${dialog()}`; if (state.dialog) queueMicrotask(() => document.querySelector('.dialog input, .dialog textarea, .dialog select, .dialog button')?.focus()); }
 async function refresh() {
   if (!native) {
     const browserWorkspace = c15WorkspacePreview
@@ -1576,7 +1868,9 @@ app.addEventListener('click', event => {
     state.profileOpen = false;
     state.error = '';
   } else if (action === 'open-settings-page') {
-    state.settingsSection = target.dataset.page || 'personalization';
+    const nextSettingsSection = target.dataset.page || 'personalization';
+    if (nextSettingsSection !== 'account' && state.accountRecovery?.rotation === true) state.accountRecovery = null;
+    state.settingsSection = nextSettingsSection;
     state.settingsPicker = null;
     if (state.settingsSection === 'personalization') {
       state.personalizationDraft = { ...state.productSettings };
@@ -1591,10 +1885,12 @@ app.addEventListener('click', event => {
     if (state.settingsSection === 'account' && native) loadDesktopAccountSync().then(render).catch(error => { state.error = `账号同步状态读取失败：${String(error)}`; render(); });
     state.error = '';
   } else if (action === 'settings-back') {
+    if (state.accountRecovery?.rotation === true) state.accountRecovery = null;
     state.settingsSection = settingsParent(state.settingsSection) || 'personalization';
     state.settingsPicker = null;
     state.error = '';
   } else if (action === 'return-to-settings-conversation-list') {
+    if (state.accountRecovery?.rotation === true) state.accountRecovery = null;
     const destination = state.settingsConversationReturn;
     state.pane = 'settings';
     state.settingsSection = destination?.page || 'conversations';
@@ -1614,7 +1910,10 @@ app.addEventListener('click', event => {
     else if (picker === 'themeColor') updateAppearance('themeColor', value);
     else if (picker === 'tone') {
       state.personalizationDraft = { ...state.personalizationDraft, tone: value };
-      state.personalizationDirty = true;
+      // Android commits the global tone as soon as the user chooses it. Keeping
+      // it only in the personalization draft meant any render re-read SQLite's
+      // old `default` value and made the selected style appear to jump back.
+      writeProductSettings({ tone: value });
     }
     state.settingsPicker = null;
   } else if (action === 'toggle-product-setting') {
@@ -1745,12 +2044,8 @@ async function confirmPrivacyCleanup() {
 app.addEventListener('input', event => {
   if (event.target?.id !== 'privacy-confirmation' || state.dialog?.kind !== 'privacy-cleanup-preview') return;
   state.dialog = { ...state.dialog, confirmation: event.target.value };
-  render();
-  queueMicrotask(() => {
-    const field = document.querySelector('#privacy-confirmation');
-    field?.focus({ preventScroll: true });
-    field?.setSelectionRange(field.value.length, field.value.length);
-  });
+  const confirm = document.querySelector('[data-action="confirm-privacy-cleanup"]');
+  if (confirm) confirm.disabled = event.target.value !== '删除全部本地业务数据';
 }, true);
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
@@ -1823,13 +2118,13 @@ async function exportLocalBackup() {
   if (!native || state.localBackup.working || state.localBackup.restartRequired) return;
   const selectedPath = await dialogInvoke('save', { defaultPath: 'nanfeng-ai-local-backup.nfai-backup', filters: [{ name: '南枫 AI 本机备份', extensions: ['nfai-backup'] }] });
   if (!selectedPath) return;
-  state.localBackup = { ...state.localBackup, working: true, notice: '', error: '' };
+  state.localBackup = { ...state.localBackup, working: true, operation: 'EXPORT', notice: '', error: '' };
   render();
   try {
     const artifact = await invoke('export_desktop_local_backup', { selectedPath });
-    state.localBackup = { ...state.localBackup, working: false, notice: `备份已系统位置回读校验：${artifact.sha256.slice(0, 12)}… · Schema ${artifact.schemaVersion}`, error: '' };
+    state.localBackup = { ...state.localBackup, working: false, operation: null, notice: `备份已系统位置回读校验：${artifact.sha256.slice(0, 12)}… · Schema ${artifact.schemaVersion}`, error: '' };
   } catch (error) {
-    state.localBackup = { ...state.localBackup, working: false, notice: '', error: `备份失败：${String(error)}` };
+    state.localBackup = { ...state.localBackup, working: false, operation: null, notice: '', error: `备份失败：${String(error)}` };
   }
   render();
 }
@@ -1837,39 +2132,39 @@ async function importLocalBackup() {
   if (!native || state.localBackup.working || state.localBackup.restartRequired) return;
   const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 本机备份', extensions: ['nfai-backup'] }] });
   if (!selectedPath) return;
-  state.localBackup = { ...state.localBackup, working: true, preflight: null, replaceLocal: false, notice: '', error: '' };
+  state.localBackup = { ...state.localBackup, working: true, operation: 'RESTORE', preflight: null, replaceLocal: false, notice: '', error: '' };
   render();
   try {
     const preflight = await invoke('preflight_desktop_local_backup', { selectedPath });
-    state.localBackup = { ...state.localBackup, working: false, preflight, replaceLocal: !(preflight.conflicts || []).length, notice: `预检通过：Schema ${preflight.schemaVersion}，请确认恢复方式。`, error: '' };
+    state.localBackup = { ...state.localBackup, working: false, operation: null, preflight, replaceLocal: !(preflight.conflicts || []).length, notice: `预检通过：Schema ${preflight.schemaVersion}，请确认恢复方式。`, error: '' };
   } catch (error) {
-    state.localBackup = { ...state.localBackup, working: false, preflight: null, notice: '', error: `预检失败：${String(error)}` };
+    state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, notice: '', error: `预检失败：${String(error)}` };
   }
   render();
 }
 async function restoreLocalBackup() {
   const preflight = state.localBackup.preflight;
   if (!native || !preflight || state.localBackup.working) return;
-  state.localBackup = { ...state.localBackup, working: true, notice: '', error: '' };
+  state.localBackup = { ...state.localBackup, working: true, operation: 'RESTORE', notice: '', error: '' };
   render();
   try {
     const receipt = await invoke('restore_desktop_local_backup', { fingerprint: preflight.fingerprint, replaceLocal: Boolean(state.localBackup.replaceLocal) });
-    state.localBackup = { ...state.localBackup, working: false, preflight: null, notice: '替换已完成。为避免旧 SQLite 与页面引用，现请手动完全重启 App；不会自动继续任务。', error: '', restartRequired: Boolean(receipt.restartRequired) };
+    state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, notice: '替换已完成。为避免旧 SQLite 与页面引用，现请手动完全重启 App；不会自动继续任务。', error: '', restartRequired: Boolean(receipt.restartRequired) };
     if (receipt.restartRequired) state.dialog = { kind: 'local-backup-restart-required' };
   } catch (error) {
-    state.localBackup = { ...state.localBackup, working: false, notice: '', error: `恢复失败：${String(error)}` };
+    state.localBackup = { ...state.localBackup, working: false, operation: null, notice: '', error: `恢复失败：${String(error)}` };
   }
   render();
 }
 async function cancelLocalRestore() {
   if (!native || state.localBackup.working || state.localBackup.restartRequired) return;
-  state.localBackup = { ...state.localBackup, working: true, notice: '', error: '' };
+  state.localBackup = { ...state.localBackup, working: true, operation: 'RESTORE', notice: '', error: '' };
   render();
   try {
     await invoke('cancel_desktop_local_restore');
-    state.localBackup = { ...state.localBackup, working: false, preflight: null, replaceLocal: false, notice: '已取消；未改动本地数据。', error: '', interrupted: false };
+    state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, replaceLocal: false, notice: '已取消；未改动本地数据。', error: '', interrupted: false };
   } catch (error) {
-    state.localBackup = { ...state.localBackup, working: false, error: `取消未完成：${String(error)}` };
+    state.localBackup = { ...state.localBackup, working: false, operation: null, error: `取消未完成：${String(error)}` };
   }
   render();
 }
@@ -1879,11 +2174,34 @@ app.addEventListener('click', event => {
   state.pendingNewConversationModelId = null;
   if (action === 'new-chat') state.p6gSelection = null;
 }, true);
+app.addEventListener('click', event => {
+  const target = event.target.closest?.('[data-action="select-chat"]');
+  // Search-result drill-down owns an optional return route, but a deliberate
+  // sidebar selection starts a normal conversation navigation instead.
+  if (!target?.closest('.chat-sidebar')) return;
+  state.searchPanel = false;
+  state.searchReturnActive = false;
+  state.searchLocatedArchivedConversationId = null;
+  state.searchAnchorMessageId = null;
+  state.searchAnchorAttachmentId = null;
+}, true);
 async function saveLocalMessage() { const text = state.composerDraft.trim(); if (!text) { state.error = '请输入非空内容。'; render(); return; } if (!native || !state.current) { state.error = native ? '先导入一个本地工作区。' : 'Web 预览不会写入 Desktop SQLite。'; render(); return; } const conversation = resolveConversation(state.current, state.selectedConversationId); try { if (conversation) { await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-message'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'appendMessage', objectId: conversation.id, expectedRevision: conversation.revision, fields: { text, role: 'user' } } }); } else { const receipt = await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-create'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'create', fields: { title: text.replace(/\s+/g, ' ').slice(0, 36), projectId: state.pane === 'work' ? state.selectedWorkProjectId : null, firstMessage: text } } }); state.selectedConversationId = receipt.objectId; } state.composerDraft = ''; state.error = ''; state.status = '已保存为本地记录；没有调用模型。'; await refresh(); } catch (error) { state.error = `本地保存被拒绝：${String(error)}`; render(); } }
 app.addEventListener('click', async event => { const target = event.target.closest('[data-action]'); const action = target?.dataset.action; if (!action) return; const data = workspace(); if (action === 'new-chat') { state.settingsConversationReturn = null; state.pane = 'chat'; state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; state.composerDraft = ''; state.profileOpen = false; state.error = ''; state.status = '新对话将先保存到本地；联网回答需另行配置并确认。'; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); render(); } else if (action === 'select-chat') { const settingsPage = target.closest('.android-settings-main') ? state.settingsSection : null; if (settingsPage && ['favorites', 'archived', 'recycle'].includes(settingsPage)) state.settingsConversationReturn = { page: settingsPage, label: settingsPage === 'favorites' ? '收藏' : settingsPage === 'archived' ? '已归档' : '回收站', readOnly: ['archived', 'recycle'].includes(settingsPage) }; else state.settingsConversationReturn = null; state.pane = 'chat'; state.selectedConversationId = target.dataset.id; if (native && state.current) { state.p6gSelection = await invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId }); state.conversationPreferences = state.p6gSelection.conversationOverride; } else { state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; } if (!state.chatScrollPositions.has(target.dataset.id)) state.pendingChatScrollToLatestId = target.dataset.id; state.profileOpen = false; state.error = ''; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); if (!state.settingsConversationReturn?.readOnly) await markConversationOpened(target.dataset.id); render(); } else if (action === 'show-chat') { state.settingsConversationReturn = null; state.pane = 'chat'; state.profileOpen = false; render(); } else if (action === 'show-work') { state.settingsConversationReturn = null; state.pane = 'work'; state.selectedConversationId = null; state.selectedWorkProjectId = null; state.profileOpen = false; render(); } else if (action === 'show-connections') { state.pane = 'connections'; state.profileOpen = false; render(); } else if (action === 'toggle-profile') { state.profileOpen = !state.profileOpen; render(); } else if (action === 'save-local-message') saveLocalMessage(); else if (action === 'start-import') pickExchange(); else if (action === 'confirm-import') importPreflighted(); else if (action === 'close-dialog') { if (state.dialog?.kind === 'custom-instructions-fullscreen') { state.personalizationDraft = { ...state.dialog.previousDraft }; state.personalizationDirty = state.dialog.previousDirty; } state.dialog = null; render(); } else if (action === 'select-workspace') { state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.id }); state.history = await invoke('read_desktop_workbench_history', { workspaceId: target.dataset.id }); state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; reloadFavoriteConversationIds(); await loadConversationReadState({ observeSelected: false }); state.status = '已切换到独立本地工作区。'; state.error = ''; render(); } else if (action === 'show-conversation') { state.pane = 'conversation'; state.treeOpen = false; render(); } else if (action === 'show-knowledge') { state.pane = 'knowledge'; state.treeOpen = false; render(); } else if (action === 'toggle-inspector') { state.inspectorOpen = !state.inspectorOpen; render(); } else if (action === 'toggle-tree') { state.treeOpen = !state.treeOpen; render(); } else if (action === 'toggle-scale') { state.scale = state.scale === 1 ? 2 : 1; state.status = `应用缩放已切换为 ${state.scale.toFixed(1)}×。`; render(); } else if (action === 'about') { state.dialog = 'about'; render(); } else if (action === 'new-project') { state.dialog = { kind: 'project', item: null }; render(); } else if (action === 'edit-project') { state.dialog = { kind: 'project', item: data.exchange.projects.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-project') saveProject(); else if (action === 'new-knowledge') { state.dialog = { kind: 'knowledge', item: null }; render(); } else if (action === 'edit-knowledge') { state.dialog = { kind: 'knowledge', item: data.exchange.knowledge.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-knowledge') saveKnowledge(); else if (action === 'new-memory') { state.dialog = { kind: 'memory', item: null }; render(); } else if (action === 'edit-memory') { state.dialog = { kind: 'memory', item: data.exchange.memory.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-memory') saveMemory(); else if (action === 'new-relation') { state.dialog = { kind: 'relation' }; render(); } else if (action === 'save-relation') saveRelation(); else if (action === 'delete-knowledge') mutate({ entity: 'knowledge', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Knowledge 已软删除；可在回收站恢复。'); else if (action === 'delete-memory') mutate({ entity: 'memory', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Memory 已软删除；可在回收站恢复。'); else if (action === 'delete-relation') mutate({ entity: 'relation', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'relation 已撤销；可在回收站恢复。'); else if (action === 'restore') mutate({ entity: target.dataset.entity, action: 'restore', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, '对象已恢复为新的 revision。'); else if (action === 'undo') undo(); else if (action === 'redo') undo(true); else if (action === 'recycle') { state.dialog = 'recycle'; render(); } else if (action === 'metadata') { state.dialog = 'metadata'; render(); } else if (action === 'save-metadata') saveMetadata(); else if (action === 'start-export') exportCurrent(); });
 app.addEventListener('click', event => {
   const action = event.target.closest('[data-action]')?.dataset.action;
-  if (action === 'show-work') {
+  if (action === 'return-workspace-origin') {
+    const destination = state.workspaceReturn;
+    state.workspaceReturn = null;
+    state.profileOpen = false;
+    state.error = '';
+    state.selectedWorkProjectId = null;
+    state.selectedConversationId = destination?.conversationId || null;
+    if (destination?.pane === 'settings') {
+      state.pane = 'settings';
+      state.settingsSection = destination.settingsSection || 'workspace';
+      state.settingsPicker = null;
+    } else state.pane = 'chat';
+  } else if (action === 'show-work') {
     state.status = '已选择 LOCAL_OFFLINE / LOCAL_ONLY：继续本地工作；没有调用模型或同步。';
     state.error = '';
     render();
@@ -1903,11 +2221,7 @@ app.addEventListener('input', event => {
     if (send) send.disabled = (!state.composerDraft.trim() && !attachmentCount) || !native || (!state.current && !state.temporaryConversation);
   } else if (event.target.id === 'settings-search') {
     state.settingsSearch = event.target.value;
-    render();
-  } else if (event.target.id === 'memory-summary-composer') {
-    state.memorySummaryComposer = event.target.value;
-    const submit = document.querySelector('[data-action="submit-memory-summary"]');
-    if (submit) submit.disabled = !native || !state.memorySummaryComposer.trim();
+    scheduleSettingsSearchRender();
   } else if (event.target.id === 'memory-summary-editor' && state.dialog?.kind === 'memory-summary-editor') {
     state.dialog = { ...state.dialog, value: event.target.value };
     const save = document.querySelector('[data-action="save-memory-summary-editor"]');
@@ -1916,9 +2230,7 @@ app.addEventListener('input', event => {
     if (counter) counter.textContent = `${event.target.value.length} / 2000000 字`;
   } else if (event.target.id === 'conversation-find-input') {
     state.conversationFindQuery = event.target.value;
-    recomputeConversationFind({ resetIndex: true });
-    render();
-    focusCurrentFindMatch();
+    scheduleConversationFindRender();
   } else if (event.target.id === 'personalization-nickname' || event.target.id === 'personalization-occupation' || event.target.id === 'personalization-instructions' || event.target.id === 'personalization-instructions-fullscreen') {
     const key = event.target.id === 'personalization-nickname' ? 'nickname' : event.target.id === 'personalization-occupation' ? 'occupation' : 'customInstructions';
     state.personalizationDraft = { ...state.personalizationDraft, [key]: event.target.value };
@@ -1992,7 +2304,6 @@ async function clearMemorySummary() {
       removed += 1;
     }
     state.dialog = null;
-    state.memorySummaryQuery = '';
     state.memorySummaryNotice = memories.length ? '记忆摘要已删除。' : '没有可删除的记忆摘要。';
     state.error = '';
   } catch (error) {
@@ -2005,28 +2316,10 @@ async function clearMemorySummary() {
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   const action = target?.dataset.action;
-  if (!['submit-memory-summary', 'query-memory-summary', 'append-memory-summary', 'edit-memory-summary', 'save-memory-summary-editor', 'show-memory-summary-about', 'refresh-memory-summary', 'ask-delete-memory-summary', 'confirm-delete-memory-summary', 'ask-disable-memory-summary', 'confirm-disable-memory-summary'].includes(action)) return;
+  if (!['edit-memory-summary', 'save-memory-summary-editor', 'show-memory-summary-about', 'refresh-memory-summary', 'ask-delete-memory-summary', 'confirm-delete-memory-summary', 'ask-disable-memory-summary', 'confirm-disable-memory-summary'].includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  if (action === 'submit-memory-summary') {
-    const text = state.memorySummaryComposer.trim();
-    if (text) state.dialog = { kind: 'memory-summary-choice', text };
-  } else if (action === 'query-memory-summary') {
-    const text = state.dialog?.text || '';
-    state.memorySummaryQuery = text;
-    state.memorySummaryComposer = '';
-    state.memorySummaryNotice = `已显示与“${text}”相关的本机记忆；没有调用模型或网络。`;
-    state.dialog = null;
-  } else if (action === 'append-memory-summary') {
-    const text = state.dialog?.text || '';
-    const memories = active(workspace(), 'memory').filter(item => (item.status || 'ACTIVE') === 'ACTIVE' && (item.scope || 'GLOBAL') === 'GLOBAL' && !item.scopeId);
-    const latest = [...memories].sort((left, right) => String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')))[0];
-    state.memorySummaryComposer = '';
-    state.memorySummaryQuery = '';
-    state.memorySummaryNotice = '';
-    void mutate({ entity: 'memory', action: latest ? 'update' : 'create', objectId: latest?.id, expectedRevision: latest?.revision, fields: latest ? { body: `${String(latest.body || '').trim()}\n\n${text}` } : { body: text, scope: 'GLOBAL', scopeId: null } }, latest ? '已追加新的本地记忆修订。' : '记忆已在本机确认并保存。');
-    return;
-  } else if (action === 'edit-memory-summary') {
+  if (action === 'edit-memory-summary') {
     const memories = active(workspace(), 'memory').filter(item => (item.status || 'ACTIVE') === 'ACTIVE' && (item.scope || 'GLOBAL') === 'GLOBAL' && !item.scopeId);
     const latest = [...memories].sort((left, right) => String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')))[0];
     state.dialog = { kind: 'memory-summary-editor', memoryId: latest?.id, expectedRevision: latest?.revision, value: memories.map(item => String(item.body || '').trim()).filter(Boolean).join('\n\n') };
@@ -2039,7 +2332,6 @@ app.addEventListener('click', event => {
   } else if (action === 'show-memory-summary-about') {
     state.dialog = { kind: 'memory-summary-about' };
   } else if (action === 'refresh-memory-summary') {
-    state.memorySummaryQuery = '';
     state.memorySummaryNotice = '已刷新本机记忆摘要。';
   } else if (action === 'ask-delete-memory-summary') {
     state.dialog = { kind: 'memory-summary-delete' };
@@ -2058,6 +2350,8 @@ app.addEventListener('click', event => {
 function applyTranscriptRailPosition(rail, target, { emphasize = false } = {}) {
   const currentSlot = Number(target?.dataset.railSlot);
   if (!rail || !Number.isInteger(currentSlot)) return;
+  if (!emphasize && rail.dataset.activeRailSlot === String(currentSlot)) return;
+  rail.dataset.activeRailSlot = String(currentSlot);
   rail.querySelectorAll('button[data-rail-slot]').forEach(item => {
     const distance = Math.abs(Number(item.dataset.railSlot) - currentSlot);
     if (emphasize) item.dataset.railDistance = String(Math.min(6, distance));
@@ -2068,19 +2362,48 @@ function applyTranscriptRailPosition(rail, target, { emphasize = false } = {}) {
   });
 }
 function clearTranscriptRailEmphasis(rail) {
+  delete rail?.dataset.activeRailSlot;
   rail?.querySelectorAll('button[data-rail-slot]').forEach(item => {
     delete item.dataset.railDistance;
     item.classList.remove('is-active');
   });
 }
+function syncScrollToLatestControl(scroll, atLatest) {
+  const control = scroll.closest('.chat-main')?.querySelector('[data-action="scroll-to-latest"]');
+  if (!control) return;
+  control.hidden = atLatest;
+}
 function syncTranscriptRailToScroll(scroll) {
   const rail = scroll.parentElement?.querySelector('.chat-transcript-rail');
-  const messages = [...scroll.querySelectorAll('.chat-message')];
-  if (!rail || !messages.length) return;
-  const viewportCenter = scroll.scrollTop + scroll.clientHeight / 2;
-  const nearestIndex = messages.reduce((best, message, index) => Math.abs(message.offsetTop + message.offsetHeight / 2 - viewportCenter) < Math.abs(messages[best].offsetTop + messages[best].offsetHeight / 2 - viewportCenter) ? index : best, 0);
+  if (!rail) return;
+  const bounds = scroll.getBoundingClientRect();
+  const centerY = bounds.top + bounds.height / 2;
+  const centerTarget = [0.5, 0.78, 0.22]
+    .map(fraction => document.elementFromPoint(bounds.left + bounds.width * fraction, centerY)?.closest?.('.chat-message'))
+    .find(message => message && scroll.contains(message));
+  let nearestIndex = Number(centerTarget?.dataset.messageIndex);
+  // A date divider or a gap can occupy the center point. That uncommon case
+  // keeps the exact previous fallback, while ordinary scroll frames perform
+  // one hit-test rather than forcing layout on every message in the transcript.
+  if (!Number.isInteger(nearestIndex) || !scroll.contains(centerTarget)) {
+    const messages = [...scroll.querySelectorAll('.chat-message')];
+    if (!messages.length) return;
+    const viewportCenter = scroll.scrollTop + scroll.clientHeight / 2;
+    nearestIndex = messages.reduce((best, message, index) => Math.abs(message.offsetTop + message.offsetHeight / 2 - viewportCenter) < Math.abs(messages[best].offsetTop + messages[best].offsetHeight / 2 - viewportCenter) ? index : best, 0);
+  }
   const target = [...rail.querySelectorAll('button[data-index]')].reduce((best, item) => !best || Math.abs(Number(item.dataset.index) - nearestIndex) < Math.abs(Number(best.dataset.index) - nearestIndex) ? item : best, null);
   applyTranscriptRailPosition(rail, target);
+}
+
+function scheduleTranscriptRailSync(scroll) {
+  pendingTranscriptRailScroll = scroll;
+  if (transcriptRailSyncFrame !== null) return;
+  transcriptRailSyncFrame = requestAnimationFrame(() => {
+    transcriptRailSyncFrame = null;
+    const pending = pendingTranscriptRailScroll;
+    pendingTranscriptRailScroll = null;
+    if (pending?.isConnected) syncTranscriptRailToScroll(pending);
+  });
 }
 app.addEventListener('pointerover', event => {
   const target = event.target.closest?.('[data-action="jump-transcript-position"]');
@@ -2103,7 +2426,7 @@ app.addEventListener('scroll', event => {
   if (!scroll) return;
   if (scroll.scrollTop > 1 || state.transcriptRailTrackingConversationId === scroll.dataset.conversationId) {
     state.transcriptRailTrackingConversationId = scroll.dataset.conversationId;
-    syncTranscriptRailToScroll(scroll);
+    scheduleTranscriptRailSync(scroll);
   }
   const atLatest = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 24;
   if (state.scrollToLatestAnimationId === scroll.dataset.conversationId) {
@@ -2115,14 +2438,15 @@ app.addEventListener('scroll', event => {
   }
   if (atLatest !== state.chatAtLatest) {
     state.chatAtLatest = atLatest;
-    render();
+    syncScrollToLatestControl(scroll, atLatest);
   }
 }, true);
 
 let sidebarDragPointerId = null;
 function updateSidebarWidth(width) {
+  const persist = Boolean(arguments[1]?.persist);
   state.sidebarWidth = clampDesktopSidebarWidth(width, window.innerWidth);
-  persistSidebarWidth(state.sidebarWidth);
+  if (persist) persistSidebarWidth(state.sidebarWidth);
   app.style.setProperty('--chat-sidebar-width', `${state.sidebarWidth}px`);
   const divider = document.querySelector('.chat-sidebar-divider');
   divider?.setAttribute('aria-valuenow', String(state.sidebarWidth));
@@ -2139,16 +2463,23 @@ app.addEventListener('pointerdown', event => {
   event.preventDefault();
 });
 app.addEventListener('pointermove', event => { if (sidebarDragPointerId === event.pointerId) updateSidebarWidth(event.clientX); });
-app.addEventListener('pointerup', event => { if (sidebarDragPointerId !== event.pointerId) return; sidebarDragPointerId = null; document.querySelector('.chat-sidebar-divider')?.classList.remove('dragging'); });
-app.addEventListener('dblclick', event => { if (!event.target.closest?.('.chat-sidebar-divider')) return; updateSidebarWidth(256); render(); });
+function finishSidebarDrag(event) {
+  if (sidebarDragPointerId !== event.pointerId) return;
+  sidebarDragPointerId = null;
+  persistSidebarWidth(state.sidebarWidth);
+  document.querySelector('.chat-sidebar-divider')?.classList.remove('dragging');
+}
+app.addEventListener('pointerup', finishSidebarDrag);
+app.addEventListener('pointercancel', finishSidebarDrag);
+app.addEventListener('dblclick', event => { if (!event.target.closest?.('.chat-sidebar-divider')) return; updateSidebarWidth(256, { persist: true }); render(); });
 app.addEventListener('keydown', event => {
   const divider = event.target.closest?.('.chat-sidebar-divider');
   if (!divider || window.innerWidth <= 900) return;
   const step = event.shiftKey ? 32 : 12;
-  if (event.key === 'ArrowLeft') updateSidebarWidth(state.sidebarWidth - step);
-  else if (event.key === 'ArrowRight') updateSidebarWidth(state.sidebarWidth + step);
-  else if (event.key === 'Home') updateSidebarWidth(220);
-  else if (event.key === 'End') updateSidebarWidth(440);
+  if (event.key === 'ArrowLeft') updateSidebarWidth(state.sidebarWidth - step, { persist: true });
+  else if (event.key === 'ArrowRight') updateSidebarWidth(state.sidebarWidth + step, { persist: true });
+  else if (event.key === 'Home') updateSidebarWidth(220, { persist: true });
+  else if (event.key === 'End') updateSidebarWidth(440, { persist: true });
   else return;
   event.preventDefault();
 });
@@ -2181,10 +2512,56 @@ app.addEventListener('click', event => {
   if (event.detail === 0) target.focus({ preventScroll: true });
   else target.blur();
 });
-function openConversationContextMenu(row) {
-  // The render below replaces this row. Keep only its identity, then measure
-  // the replacement title after the new root DOM exists.
-  openTransientOverlay('context', row, { id: row.dataset.id, revision: Number(row.dataset.revision), pinned: row.dataset.pinned === 'true', favorite: row.dataset.favorite === 'true', archived: row.dataset.archived === 'true', source: 'sidebar', title: row.querySelector('.chat-history-select > span')?.textContent || '' });
+function menuAnchorRect(target) {
+  const rect = target?.getBoundingClientRect?.();
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
+  return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+}
+
+// Imported mobile conversations are often long enough to be opened while the
+// transcript still has inertial momentum. WebKit can suppress the later click
+// in that state, so primary-pointer activation belongs to pointerdown. Keep a
+// keyboard-only click fallback for accessibility.
+const assistantMessageMenuTriggers = new WeakSet();
+function toggleAssistantMessageMenu(trigger) {
+  const messageId = String(trigger?.dataset?.messageId || '');
+  if (!messageId) return;
+  state.error = '';
+  if (state.assistantMessageMenu?.messageId === messageId) closeTopOverlay();
+  else openTransientOverlay('assistant-message-menu', trigger, { messageId, anchorRect: menuAnchorRect(trigger) });
+}
+function bindAssistantMessageMenuTriggers() {
+  document.querySelectorAll('[data-action="open-assistant-message-menu"]').forEach(button => {
+    if (assistantMessageMenuTriggers.has(button)) return;
+    assistantMessageMenuTriggers.add(button);
+    button.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      toggleAssistantMessageMenu(button);
+    });
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.detail === 0) toggleAssistantMessageMenu(button);
+    });
+  });
+}
+
+function openConversationContextMenu(row, trigger = row) {
+  // Rendering replaces sidebar rows. Preserve the actual trigger rectangle at
+  // click time so every row menu stays attached to the clicked three-dot
+  // button instead of being re-anchored to a similarly named replacement row.
+  openTransientOverlay('context', trigger, {
+    id: row.dataset.id,
+    revision: Number(row.dataset.revision),
+    pinned: row.dataset.pinned === 'true',
+    favorite: row.dataset.favorite === 'true',
+    archived: row.dataset.archived === 'true',
+    source: 'sidebar',
+    anchorRect: menuAnchorRect(trigger),
+    title: row.querySelector('.chat-history-select > span')?.textContent || '',
+  });
 }
 
 function openConversationHeaderMenu(trigger) {
@@ -2197,6 +2574,7 @@ function openConversationHeaderMenu(trigger) {
     favorite: state.favoriteConversationIds.has(conversation.id),
     archived: Boolean(conversation.archived),
     source: 'header',
+    anchorRect: menuAnchorRect(trigger),
     title: conversation.title,
   });
 }
@@ -2206,11 +2584,12 @@ function positionConversationContextMenu() {
   if (!menu || !state.contextMenu) return;
   const row = [...document.querySelectorAll('[data-conversation-row]')].find(item => item.dataset.id === state.contextMenu.id);
   const headerTrigger = state.contextMenu.source === 'header' ? document.querySelector('.chat-header-more') : null;
-  if (!row && !headerTrigger) return;
-  // The title, rather than date/action controls or a stale pre-render row,
-  // is the only visual anchor for a conversation menu.
-  const anchor = headerTrigger?.getBoundingClientRect() ?? row.querySelector('.chat-history-select > span')?.getBoundingClientRect() ?? row.getBoundingClientRect();
-  const sidebar = row?.closest('.chat-sidebar')?.getBoundingClientRect();
+  const storedAnchor = state.contextMenu.anchorRect;
+  if (!storedAnchor && (state.contextMenu.source === 'header' ? !headerTrigger : !row)) return;
+  // Both header and sidebar menus use the trigger captured before render. The
+  // live-node fallback only covers keyboard and legacy callers without one.
+  const anchor = storedAnchor ?? headerTrigger?.getBoundingClientRect() ?? row.querySelector('.chat-history-select > span')?.getBoundingClientRect() ?? row.getBoundingClientRect();
+  const sidebar = row?.closest('.chat-sidebar')?.getBoundingClientRect() ?? document.querySelector('.chat-sidebar')?.getBoundingClientRect();
   const appBounds = app.getBoundingClientRect();
   const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement.clientWidth || 0, Math.ceil(appBounds.right));
   const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0, Math.ceil(appBounds.bottom));
@@ -2219,8 +2598,29 @@ function positionConversationContextMenu() {
     viewportWidth,
     viewportHeight,
     sidebarRect: sidebar,
+    source: state.contextMenu.source,
     menuWidth: menuBounds.width || 192,
     menuHeight: menuBounds.height || 204,
+  });
+  menu.style.left = `${position.x}px`;
+  menu.style.top = `${position.y}px`;
+  menu.style.right = 'auto';
+  menu.dataset.positioned = 'true';
+}
+
+function positionAssistantMessageMenu() {
+  const menu = document.querySelector('.assistant-message-menu');
+  const anchor = state.assistantMessageMenu?.anchorRect;
+  if (!menu || !anchor) return;
+  const appBounds = app.getBoundingClientRect();
+  const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement.clientWidth || 0, Math.ceil(appBounds.right));
+  const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0, Math.ceil(appBounds.bottom));
+  const menuBounds = menu.getBoundingClientRect();
+  const position = resolveAssistantMessageMenuAnchor(anchor, {
+    viewportWidth,
+    viewportHeight,
+    menuWidth: menuBounds.width || 208,
+    menuHeight: menuBounds.height || 112,
   });
   menu.style.left = `${position.x}px`;
   menu.style.top = `${position.y}px`;
@@ -2235,6 +2635,11 @@ const conversationLongPress = createConversationLongPressController({
 });
 document.addEventListener('pointerdown', event => {
   const row = event.target.closest?.('[data-conversation-row]');
+  if (state.pdfPreview && !editing && !modifier && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+    event.preventDefault();
+    if (!event.repeat) navigatePdfPage(event.key === 'ArrowRight' ? 1 : -1);
+    return;
+  }
   if (event.target.closest?.('.chat-row-actions')) return;
   if (!row) return;
   conversationLongPress.pointerDown(event, row.dataset.id);
@@ -2254,18 +2659,33 @@ function closeConversationContextMenu() {
   render();
 }
 document.addEventListener('pointerdown', event => {
-  if (event.target.closest?.('.dialog, .chat-context-menu, .chat-profile-menu, .composer-transient-sheet, [data-overlay-trigger]')) return;
+  if (event.target.closest?.('.dialog, .chat-context-menu, .assistant-message-menu, .chat-profile-menu, .composer-transient-sheet, [data-overlay-trigger], [data-action="open-assistant-message-menu"]')) return;
+  if (state.assistantMessageMenu) { event.preventDefault(); event.stopImmediatePropagation(); closeTopOverlay(); return; }
   if (state.videoPreview) { void closeVideoPreview(); return; }
   if (state.audioPreview) { void closeAudioPreview(); return; }
   if (state.textPreview) { state.textPreview = null; render(); return; }
   closeTopOverlay();
 }, true);
+document.addEventListener('wheel', event => {
+  if (!state.assistantMessageMenu) return;
+  if (!event.target.closest?.('.chat-scroll[data-conversation-id]')) return;
+  closeTopOverlay({ restoreFocus: false });
+}, true);
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.videoPreview) { event.preventDefault(); void closeVideoPreview(); } else if (event.key === 'Escape' && state.audioPreview) { event.preventDefault(); void closeAudioPreview(); } else if (event.key === 'Escape' && state.textPreview) { event.preventDefault(); state.textPreview = null; render(); } else if (event.key === 'Escape' && closeTopOverlay({ navigateComposerLayerBack: true })) event.preventDefault(); }, true);
+function navigateImagePreview(direction) {
+  const preview = state.imagePreview;
+  if (!preview || preview.loading) return false;
+  const targetId = imagePreviewTargetId(preview.imageIds, preview.attachmentId, direction);
+  if (!targetId) return false;
+  void openImagePreview(targetId, preview.workspaceId, preview.imageIds);
+  return true;
+}
 window.addEventListener('keydown', event => {
   const modifier = event.metaKey || event.ctrlKey;
   const editing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
   const row = event.target.closest?.('[data-conversation-row]');
-  if ((event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) && row) { event.preventDefault(); openConversationContextMenu(row); }
+  if (state.imagePreview && !editing && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) { event.preventDefault(); if (!event.repeat) navigateImagePreview(event.key === 'ArrowRight' ? 'next' : 'previous'); }
+  else if ((event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) && row) { event.preventDefault(); openConversationContextMenu(row); }
   else if (event.target.id === 'chat-composer' && event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); saveLocalMessage(); }
   else if (modifier && event.key.toLowerCase() === 'f' && currentConversation() && !state.temporaryConversation) { event.preventDefault(); state.conversationFindOpen = true; recomputeConversationFind(); render(); focusCurrentFindMatch(); }
   else if (modifier && event.key.toLowerCase() === 's' && state.dialog?.kind) { event.preventDefault(); if (state.dialog.kind === 'project') saveProject(); else if (state.dialog.kind === 'knowledge') saveKnowledge(); else if (state.dialog.kind === 'memory') saveMemory(); }
@@ -2273,10 +2693,15 @@ window.addEventListener('keydown', event => {
   else if (modifier && event.key.toLowerCase() === 'o') { event.preventDefault(); pickExchange(); }
   else if (modifier && event.key.toLowerCase() === 'e') { event.preventDefault(); exportCurrent(); }
   else if (modifier && event.key === '\\') { event.preventDefault(); state.inspectorOpen = !state.inspectorOpen; render(); }
-  else if (event.key === 'Escape' && (state.contextMenu || state.dialog || state.treeOpen || state.profileOpen || state.sidebarOpen)) { state.contextMenu = null; state.dialog = null; state.treeOpen = false; state.profileOpen = false; state.sidebarOpen = false; render(); }
+  else if (event.key === 'Escape' && (state.assistantMessageMenu || state.contextMenu || state.dialog || state.treeOpen || state.profileOpen || state.sidebarOpen)) { state.assistantMessageMenu = null; state.contextMenu = null; state.dialog = null; state.treeOpen = false; state.profileOpen = false; state.sidebarOpen = false; render(); }
 });
-window.addEventListener('resize', () => { if (state.contextMenu) { state.contextMenu = null; render(); } });
-window.addEventListener('scroll', () => { if (state.contextMenu) positionConversationContextMenu(); else conversationLongPress.cancel('scroll'); }, true);
+window.addEventListener('resize', () => { if (state.contextMenu || state.assistantMessageMenu) { state.contextMenu = null; state.assistantMessageMenu = null; render(); } });
+window.addEventListener('scroll', () => {
+  // A residual momentum/programmatic scroll is not a fresh dismissal intent.
+  // Fresh transcript wheel gestures are handled above before scrolling begins.
+  if (state.contextMenu) positionConversationContextMenu();
+  else conversationLongPress.cancel('scroll');
+}, true);
 restoreTemporaryChat().then(refresh).catch(error => { state.error = `无法打开本地工作区：${String(error)}`; render(); });
 app.addEventListener('click', event => {
   if (event.target.closest('[data-action]')?.dataset.action !== 'show-p8-inspect') return;
@@ -2299,7 +2724,7 @@ app.addEventListener('click', async event => {
   render();
 }, true);
 
-function connectionCanvas() { const item = state.connection || previewConnection; return `<section class="canvas knowledge-canvas"><div class="canvas-header"><div><p class="overline">双路径 · 状态与配置边界</p><h1>连接与数据路径</h1><p>本地离线是安全底座；Provider 与加密同步必须分别配置、分别同意。</p></div></div><section class="knowledge-grid"><section><h2>本地离线</h2><p><b>LOCAL_OFFLINE / LOCAL_ONLY</b></p><p>始终可用。断网、取消或联网失败时，本地工作不丢失。</p></section><section><h2>联网模型</h2><p>配置：<b>${escape(item.providerConfiguration)}</b></p><p>Key presence：<b>${escape(item.credentialPresence)}</b>（仅存在性，不读取或显示 Key）</p><p>目录：${escape(item.catalogFreshness)} · consent：${escape(item.egressConsent)}</p><p>当前未配置或未验证，联网请求不会被标为本地成功。</p></section><section class="memory-rail"><h2>账号同步</h2><p><b>ENCRYPTED_SYNC</b> · ${escape(item.syncCapability)}</p><p>同步与 Provider 独立；不会因模型设置自动上传本地数据。</p><p>当前原因：${item.degradedReasons.map(escape).join(' · ')}</p></section></section></section>`; }
+function connectionCanvas() { const item = state.connection || previewConnection; return `<section class="canvas knowledge-canvas"><div class="canvas-header"><div><p class="overline">双路径 · 状态与配置边界</p><h1>连接与数据路径</h1><p>本地离线是安全底座；Provider 与加密同步必须分别配置、分别同意。</p></div></div><section class="knowledge-grid"><section><h2>本地离线</h2><p><b>LOCAL_OFFLINE / LOCAL_ONLY</b></p><p>始终可用。断网、取消或联网失败时，本地工作不丢失。</p></section><section><h2>联网模型</h2><p>配置：<b>${escape(item.providerConfiguration)}</b></p><p>Key presence：<b>${escape(item.credentialPresence)}</b>（仅存在性，不读取或显示 Key）</p><p>目录：${escape(item.catalogFreshness)} · consent：${escape(item.egressConsent)}</p><p>此处只显示双路径安全合同；实际模型设置会按服务商和凭据存在性另行读取。无论设置状态，联网请求仍需逐次确认，未经验证不会标记成功。</p></section><section class="memory-rail"><h2>账号同步</h2><p><b>ENCRYPTED_SYNC</b> · ${escape(item.syncCapability)}</p><p>同步与 Provider 独立；不会因模型设置自动上传本地数据。</p><p>当前原因：${item.degradedReasons.map(escape).join(' · ')}</p></section></section></section>`; }
 
 if (native) invoke('read_dual_path_status').then(value => { state.connection = value; render(); }).catch(() => {});
 
@@ -2310,7 +2735,7 @@ function workHomeCanvas(data) {
 
 function projectsCanvas(data) {
   const projects = data?.exchange?.projects ?? [];
-  return `<section class="canvas work-projects-canvas"><div class="canvas-header"><div><p class="overline">项目</p><h1>项目</h1><p>项目指令、会话与知识范围隔离由 Projects 统一管理。</p></div><button class="primary" data-action="new-project">新建</button></div><div class="knowledge-list">${projects.map(item => `<article class="knowledge-item"><header><div><p class="overline">${item.archived ? 'ARCHIVED' : 'ACTIVE'} · r${item.revision}</p><h2>${escape(item.title)}</h2></div></header><p>${escape(item.description || '暂无说明。')}</p><div class="item-actions"><button data-action="edit-project" data-id="${escape(item.id)}">编辑</button></div></article>`).join('') || '<p class="empty-copy">暂无活动项目。</p>'}</div></section>`;
+  return `<section class="canvas work-projects-canvas"><div class="workspace-content-actions"><button class="primary" data-action="new-project">新建项目</button></div><div class="knowledge-list">${projects.map(item => `<article class="knowledge-item"><header><div><p class="overline">${item.archived ? 'ARCHIVED' : 'ACTIVE'} · r${item.revision}</p><h2>${escape(item.title)}</h2></div></header><p>${escape(item.description || '暂无说明。')}</p><div class="item-actions"><button data-action="select-work-project" data-project-id="${escape(item.id)}">打开工作对话</button><button data-action="new-work-chat" data-project-id="${escape(item.id)}">新建工作对话</button><button data-action="edit-project" data-id="${escape(item.id)}">编辑</button></div></article>`).join('') || '<p class="empty-copy">暂无活动项目。</p>'}</div></section>`;
 }
 
 function knowledgeOnlyCanvas(data) {
@@ -2328,12 +2753,12 @@ function knowledgeOnlyCanvas(data) {
     return `<article class="knowledge-item history-knowledge-candidate"><header><div><p class="overline">${escape(statusText[item.status] || item.status)} · 历史对话自动整理</p><h2>${escape(item.title || '没有生成可采纳候选')}</h2></div><span>${escape(item.providerId || '本机检查')} · ${escape(model)}</span></header>${item.body ? `<pre>${escape(item.body)}</pre>` : ''}<p class="security-note">来源会话 ${escape(item.conversationId)} · 消息 ${Number(item.sourceMessageIds?.length || 0)} 条 · ${escape(usage)} · checkpoint ${escape(short(item.checkpointId))}${item.safeErrorCode ? ` · 失败原因 ${escape(item.safeErrorCode)}` : ''}</p><div class="item-actions">${actions}</div></article>`;
   }).join('');
   const autoSection = `<section class="history-knowledge-review-list"><div class="section-head"><div><h2>资料候选</h2><p>只显示自动整理的审阅记录；未经采纳不会混入下方本地知识。</p></div></div>${candidateCards || '<p class="empty-copy">暂无资料候选。开启“历史资料库”后，每 12 小时最多整理一条成功完成的当前对话分支。</p>'}</section>`;
-  return `<section class="canvas work-knowledge-canvas"><div class="canvas-header"><div><p class="overline">知识</p><h1>知识</h1><p>候选确认保存后会进入本地知识；编辑、关系、撤销与软删除继续由 Rust SQLite 真值驱动。</p></div><div class="canvas-actions"><button class="primary" data-action="new-knowledge">新建知识</button><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立关系</button></div></div>${autoSection}<div class="knowledge-list">${knowledge.map(item => `<article class="knowledge-item"><header><div><p class="overline">${escape(item.status)} · r${item.revision} · ${escape(item.classification)}</p><h2>${escape(item.title)}</h2></div><span>${escape((item.tags || []).join(' · '))}</span></header><pre>${escape(item.body)}</pre><div class="item-actions"><button data-action="edit-knowledge" data-id="${escape(item.id)}">编辑</button><button data-action="delete-knowledge" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></div></article>`).join('') || '<p class="empty-copy">尚无已保存的本地知识。</p>'}</div><section class="memory-rail"><div class="section-head"><h2>Knowledge relation</h2><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立</button></div><ul>${relations.map(item => `<li><span>${escape(item.kind)} · r${item.revision}</span>${escape(name(item.fromId))} → ${escape(name(item.toId))}<button data-action="delete-relation" data-id="${escape(item.id)}" data-revision="${item.revision}">撤销</button></li>`).join('') || '<li>暂无活动 relation。</li>'}</ul></section></section>`;
+  return `<section class="canvas work-knowledge-canvas"><div class="workspace-content-actions"><button class="primary" data-action="new-knowledge">新建知识</button><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立关系</button></div>${autoSection}<div class="knowledge-list">${knowledge.map(item => `<article class="knowledge-item"><header><div><p class="overline">${escape(item.status)} · r${item.revision} · ${escape(item.classification)}</p><h2>${escape(item.title)}</h2></div><span>${escape((item.tags || []).join(' · '))}</span></header><pre>${escape(item.body)}</pre><div class="item-actions"><button data-action="edit-knowledge" data-id="${escape(item.id)}">编辑</button><button data-action="delete-knowledge" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></div></article>`).join('') || '<p class="empty-copy">尚无已保存的本地知识。</p>'}</div><section class="memory-rail"><div class="section-head"><h2>Knowledge relation</h2><button data-action="new-relation" ${knowledge.length < 2 ? 'disabled' : ''}>建立</button></div><ul>${relations.map(item => `<li><span>${escape(item.kind)} · r${item.revision}</span>${escape(name(item.fromId))} → ${escape(name(item.toId))}<button data-action="delete-relation" data-id="${escape(item.id)}" data-revision="${item.revision}">撤销</button></li>`).join('') || '<li>暂无活动 relation。</li>'}</ul></section></section>`;
 }
 
 function memoryCanvas(data) {
   const memory = active(data || { exchange: { memory: [] } }, 'memory');
-  return `<section class="canvas work-memory-canvas"><div class="canvas-header"><div><p class="overline">记忆</p><h1>本地 Memory</h1><p>仅用户明确创建、编辑、暂停或软删除；不会自动进入对话上下文或联网请求。</p></div><button class="primary" data-action="new-memory">新建 Memory</button></div><section class="memory-rail"><ul>${memory.map(item => `<li><span>${escape(item.scope)} · r${item.revision}</span><button class="memory-button" data-action="edit-memory" data-id="${escape(item.id)}">${escape(item.body)}</button><button data-action="delete-memory" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></li>`).join('') || '<li>暂无活动 Memory。</li>'}</ul></section></section>`;
+  return `<section class="canvas work-memory-canvas"><div class="workspace-content-actions"><button class="primary" data-action="new-memory">新建 Memory</button></div><section class="memory-rail"><ul>${memory.map(item => `<li><span>${escape(item.scope)} · r${item.revision}</span><button class="memory-button" data-action="edit-memory" data-id="${escape(item.id)}">${escape(item.body)}</button><button data-action="delete-memory" data-id="${escape(item.id)}" data-revision="${item.revision}">软删除</button></li>`).join('') || '<li>暂无活动 Memory。</li>'}</ul></section></section>`;
 }
 
 function rememberChatScroll() {
@@ -2401,7 +2826,7 @@ function renderUnified() {
   const focusedComposer = document.activeElement?.id === 'chat-composer' ? document.activeElement : null;
   const composerSelection = focusedComposer ? [focusedComposer.selectionStart, focusedComposer.selectionEnd] : null;
   if (composerSelection) queueMicrotask(() => {
-    if (state.dialog || state.contextMenu || state.composerAddOpen || state.p6gModelPickerOpen) return;
+    if (state.dialog || state.contextMenu || state.assistantMessageMenu || state.composerAddOpen || state.p6gModelPickerOpen) return;
     const replacement = document.getElementById('chat-composer');
     if (replacement && !replacement.isSameNode(focusedComposer)) {
       replacement.focus({ preventScroll: true });
@@ -2420,36 +2845,85 @@ function renderUnified() {
   globalThis.__nanfengDesktopSearchState = state;
   const visiblePane = state.p6eAcceptance.enabled ? 'settings' : state.pane;
   document.title = state.p6eAcceptance.enabled ? '南枫 AI Desktop · P6-E 验收' : '南枫 AI Desktop';
-  if (state.pane === 'chat' && !state.temporaryConversation && !state.composerDraft) state.composerDraft = readChatDraft();
-  if (state.pane === 'chat' && !state.composerAttachments.length) state.composerAttachments = readComposerAttachments();
   const workPanes = new Set(['work', 'projects', 'knowledge', 'memory', 'p8-inspect']);
-  const sidebarWorkMode = ['reminders', 'transcription'].includes(visiblePane) ? Boolean(state.utilitySidebarWorkMode) : workPanes.has(visiblePane);
+  const utilityPane = ['reminders', 'transcription'].includes(visiblePane);
+  const sidebarWorkMode = utilityPane ? false : workPanes.has(visiblePane);
   // Work is a scope of the selected conversation, not a dashboard.  Let the shared
   // chat shell render its transcript and Composer; only the selected mode changes.
   const workPanel = state.pane === 'projects' ? projectsCanvas(data)
     : state.pane === 'knowledge' ? knowledgeOnlyCanvas(data)
         : state.pane === 'memory' ? memoryCanvas(data)
-          : state.pane === 'reminders' ? renderDesktopRemindersPage({ projection: state.reminders, notificationEnabled: Boolean(state.productSettings.monitorNotifications), notificationPermission: state.reminderNotificationPermission, native, previewInteractive: Boolean(c09ReminderPreview), evidenceLabel: c09ReminderPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', editor: state.reminderEditor })
-            : state.pane === 'transcription' ? renderDesktopTranscriptionPage({ projection: state.transcription, selectedTaskId: state.selectedTranscriptionTaskId, native, busyTaskId: state.transcriptionBusyTaskId, previewInteractive: Boolean(c10TranscriptionPreview), evidenceLabel: c10TranscriptionPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '' })
+          : state.pane === 'reminders' ? renderDesktopRemindersPage({ projection: state.reminders, notificationEnabled: Boolean(state.productSettings.monitorNotifications), notificationPermission: state.reminderNotificationPermission, native, previewInteractive: Boolean(c09ReminderPreview), evidenceLabel: c09ReminderPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', editor: state.reminderEditor, embedded: true })
+            : state.pane === 'transcription' ? renderDesktopTranscriptionPage({ projection: state.transcription, selectedTaskId: state.selectedTranscriptionTaskId, native, busyTaskId: state.transcriptionBusyTaskId, previewInteractive: Boolean(c10TranscriptionPreview), evidenceLabel: c10TranscriptionPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', embedded: true })
           : state.pane === 'p8-inspect' ? p8InspectCanvas({ agentRuns: state.agentRuns, native, escape, short })
             : null;
-  app.className = `app-shell chat-first ${visiblePane === 'settings' ? 'settings-mode' : ''} ${sidebarWorkMode ? 'work-mode' : ''} ${state.sidebarOpen ? 'fallback-sidebar-open' : ''} ${state.searchPanel ? 'search-mode' : ''}`;
-  app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryQuery: state.memorySummaryQuery, memorySummaryComposer: state.memorySummaryComposer, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo });
+  const standaloneWorkspacePage = (!utilityPane && Boolean(workPanel)) || isWorkspaceRoot(data, visiblePane, state.selectedWorkProjectId, state.selectedConversationId);
+  const nextTranscriptRetention = currentTranscriptRetention(data);
+  const existingTranscript = document.querySelector('.chat-scroll[data-conversation-id]');
+  const preserveTranscript = canRetainTranscript(renderedTranscriptRetention, nextTranscriptRetention)
+    && existingTranscript?.dataset.conversationId === nextTranscriptRetention.conversation.id;
+  // Most shell interactions (menus, sidebar, dialogs and header controls) do
+  // not change a transcript. Move that existing scroll owner out before the
+  // shell commit and place it back into the new slot, so a long conversation is
+  // neither serialized nor parsed again just because a surrounding control changed.
+  const retainedTranscript = preserveTranscript ? existingTranscript : null;
+  const retainedTranscriptTop = retainedTranscript?.scrollTop;
+  const previewIdentity = state.imagePreview || state.pdfPreview || state.videoPreview || state.audioPreview || state.textPreview;
+  const retainedPreview = !state.dialog && !state.cameraCaptureOpen && previewIdentity && previewIdentity === renderedAttachmentPreview
+    ? app.querySelector('.attachment-preview-overlay') : null;
+  const previewScrolls = retainedPreview ? [retainedPreview, ...retainedPreview.querySelectorAll('*')]
+    .filter(node => node.scrollTop || node.scrollLeft)
+    .map(node => ({ node, top: node.scrollTop, left: node.scrollLeft })) : [];
+  if (retainedPreview) retainedPreview.remove();
+  if (retainedTranscript) retainedTranscript.replaceWith(document.createComment('retained-transcript'));
+  app.className = `app-shell chat-first ${standaloneWorkspacePage ? 'workspace-standalone-shell' : ''} ${visiblePane === 'settings' ? 'settings-mode' : ''} ${sidebarWorkMode ? 'work-mode' : ''} ${state.sidebarOpen ? 'fallback-sidebar-open' : ''} ${state.searchPanel ? 'search-mode' : ''}`;
+  app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript) });
+  if (retainedTranscript) {
+    const slot = app.querySelector('[data-preserved-transcript-slot]');
+    if (slot) slot.replaceWith(retainedTranscript);
+    retainedTranscript.scrollTop = retainedTranscriptTop;
+  }
+  bindAssistantMessageMenuTriggers();
+  renderedTranscriptRetention = nextTranscriptRetention;
   app.style.setProperty('--chat-sidebar-width', `${state.sidebarWidth}px`);
   positionConversationContextMenu();
+  positionAssistantMessageMenu();
+  if (state.contextMenu?.source === 'header') requestAnimationFrame(() => {
+    if (state.contextMenu?.source === 'header') positionConversationContextMenu();
+  });
   const modal = cameraCaptureDialog() || dialog() || imagePreviewDialog() || pdfPreviewDialog() || videoPreviewDialog() || audioPreviewDialog() || textPreviewDialog() || previewBoundaryDialog();
-  if (modal) app.insertAdjacentHTML('beforeend', modal);
+  if (retainedPreview) app.append(retainedPreview);
+  else if (modal) app.insertAdjacentHTML('beforeend', modal);
+  const attachmentMenu = app.querySelector('.search-attachment-menu');
+  if (attachmentMenu && state.dialog?.anchor) {
+    const bounds = attachmentMenu.getBoundingClientRect();
+    const { x, y } = state.dialog.anchor;
+    attachmentMenu.style.left = `${Math.max(12, Math.min(window.innerWidth - bounds.width - 12, x))}px`;
+    attachmentMenu.style.top = `${Math.max(12, Math.min(window.innerHeight - bounds.height - 12, y))}px`;
+  }
+  for (const saved of previewScrolls) { saved.node.scrollTop = saved.top; saved.node.scrollLeft = saved.left; }
+  renderedAttachmentPreview = previewIdentity;
   if (state.dialog?.kind === 'chatgpt-import' && !document.querySelector('[data-action="retry-chatgpt-task"]')) {
     document.querySelector('.dialog-actions')?.insertAdjacentHTML('afterbegin', '<button data-action="retry-chatgpt-task">重试解析</button>');
   }
   queueMicrotask(() => {
-    restoreChatScroll();
+    // Reinserted scroll nodes may lose their scroll offset in WebKit.
+    // Restore synchronously above; fresh nodes use the conversation owner here.
+    // Explicit navigation must run after reinsertion, which cancels WebKit's
+    // in-flight smooth scroll. Passive rerenders still preserve the viewport.
+    if (!retainedTranscript || state.pendingChatScrollToLatestId || state.pendingChatSendScrollToLatestId) restoreChatScroll();
     restoreSidebarScroll();
     restoreSettingsScroll();
     if (state.searchPanel) restoreFullSearchScroll();
-    if (state.dialog) document.querySelector('.dialog input, .dialog textarea, .dialog select, .dialog button')?.focus();
+    if (state.dialog) document.querySelector('.dialog input, .dialog textarea, .dialog select, .dialog button')?.focus({ preventScroll: true });
+    // The menu is rendered after the retained transcript.  WebKit's default
+    // focus scroll can otherwise move the surrounding document to the menu's
+    // DOM position even though the visible menu itself is fixed.
+    else if (state.assistantMessageMenu) document.querySelector('.assistant-message-menu [role="menuitem"]')?.focus({ preventScroll: true });
     attachComposerCameraStream();
     scheduleImageThumbnailReads();
+    scheduleVideoThumbnailReads();
+    scheduleAttachmentCardPreviewReads();
   });
 }
 
@@ -2461,56 +2935,93 @@ function cameraCaptureDialog() {
   return `<div class="scrim"><section class="dialog camera-capture-dialog" role="dialog" aria-modal="true" aria-label="相机"><button class="icon-button close" data-action="close-composer-camera" aria-label="停止相机并关闭">${icon(icons.close, '停止相机')}</button><h2>相机</h2><p>只有点击“拍照并加入草稿”后，当前画面才会私有保存；不会自动发送。</p>${body}<div class="dialog-actions"><button data-action="close-composer-camera">取消</button><button class="primary" data-action="capture-composer-camera" ${state.cameraCaptureReady && !state.cameraCaptureBusy ? '' : 'disabled'}>${state.cameraCaptureBusy ? '正在私有保存…' : '拍照并加入草稿'}</button></div></section></div>`;
 }
 
+function previewTopActions(kind, preview, { copy = false } = {}) {
+  const closeAction = {
+    image: 'close-image-preview',
+    pdf: 'close-pdf-preview',
+    video: 'close-video-preview',
+    audio: 'close-audio-preview',
+    text: 'close-text-preview',
+  }[kind];
+  const ready = Boolean(preview?.attachmentId && preview?.workspaceId && !preview?.loading && !preview?.error);
+  return `<div class="file-preview-top-actions ${copy ? 'text-preview-actions' : 'media-preview-actions'}" aria-label="附件操作"><button class="file-preview-action" data-action="save-preview-attachment" data-preview-kind="${kind}" aria-label="下载文件" title="下载文件" ${ready ? '' : 'disabled'}>${icon(icons.download, '下载')}</button><button class="file-preview-action file-preview-share-action" data-action="share-preview-attachment" data-preview-kind="${kind}" aria-label="分享文件" title="分享文件" ${ready ? '' : 'disabled'}><span>分享</span></button>${copy ? `<button class="file-preview-action" data-action="copy-text-preview" data-copy-action aria-label="复制文本" title="复制文本" ${ready ? '' : 'disabled'}>${icon(icons.copy, '复制')}</button>` : ''}<button class="file-preview-action" data-action="${closeAction}" aria-label="关闭预览" title="关闭预览">${icon(icons.close, '关闭')}</button></div>`;
+}
+
 function imagePreviewDialog() {
   const preview = state.imagePreview;
   if (!preview) return '';
   const zoom = Math.max(1, Math.min(4, Number(preview.zoom) || 1));
+  const navigation = imagePreviewNavigation(preview.imageIds, preview.attachmentId);
+  const imageCount = (preview.imageIds || []).length;
+  const galleryControls = imageCount > 1
+    ? `<button class="image-preview-nav previous" data-action="image-preview-previous" ${navigation.previousId ? '' : 'disabled'} aria-label="上一张图片">${icon(icons.chevronLeft, '上一张')}</button><span class="image-preview-index" aria-live="polite">${navigation.index + 1} / ${imageCount}</span><button class="image-preview-nav next" data-action="image-preview-next" ${navigation.nextId ? '' : 'disabled'} aria-label="下一张图片">${icon(icons.chevronRight, '下一张')}</button>`
+    : '';
   const content = preview.loading
-    ? '<p class="image-preview-error">正在从本机私有副本读取原图；不会外发。</p>'
+    ? '<div class="media-preview-loading" role="status" aria-label="正在读取图片"></div>'
     : preview.error
       ? `<p class="image-preview-error">${escape(preview.error)}</p>`
-      : `<div class="image-preview-tools" aria-label="图片视口控制"><button data-action="image-zoom-out" ${zoom <= 1 ? 'disabled' : ''}>缩小</button><button data-action="image-zoom-reset" ${zoom === 1 ? 'disabled' : ''}>适应</button><button data-action="image-zoom-in" ${zoom >= 4 ? 'disabled' : ''}>放大</button><small>缩放和滚动只改变当前视口 · ${zoom === 1 ? '完整适应／双击 2.5×' : `${zoom.toFixed(2)}×／拖动查看／双击恢复`}</small></div><figure><div class="image-preview-viewport ${zoom > 1 ? 'zoomed' : ''}" data-image-preview-viewport><img data-image-preview-content draggable="false" src="${escape(preview.dataUrl)}" alt="${escape(preview.displayName)} 原图预览" style="transform:translate(${Number(preview.panX) || 0}px, ${Number(preview.panY) || 0}px) scale(${zoom})"></div><figcaption>${escape(preview.displayName)} · ${preview.width} × ${preview.height} · ${bytes(preview.byteCount)} · 仅本地原图</figcaption></figure>`;
-  return `<div class="scrim"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="本地图片预览"><button class="icon-button close" data-action="close-image-preview" aria-label="关闭图片预览">${icon(icons.close, '关闭')}</button><h2>本地图片预览</h2>${content}</section></div>`;
+      : `<figure><div class="image-preview-viewport ${zoom > 1 ? 'zoomed' : ''}" data-image-preview-viewport><img data-image-preview-content draggable="false" src="${escape(preview.dataUrl)}" alt="${escape(preview.displayName)} 原图预览" style="transform:translate(${Number(preview.panX) || 0}px, ${Number(preview.panY) || 0}px) scale(${zoom})">${galleryControls}</div></figure>`;
+  return `<div class="scrim attachment-preview-overlay"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="图片预览">${previewTopActions('image', preview)}${content}</section></div>`;
 }
 
 function pdfPreviewDialog() {
   const preview = state.pdfPreview;
   if (!preview) return '';
   const content = preview.loading
-    ? '<p class="image-preview-error">正在从本机私有副本验证 PDF；不会外发。</p>'
+    ? '<div class="media-preview-loading" role="status" aria-label="正在读取 PDF"></div>'
     : preview.error
       ? `<p class="image-preview-error">${escape(preview.error)}</p>`
-      : `<div class="pdf-preview-tools" aria-label="PDF 页码控制"><button data-action="pdf-page-previous" ${preview.pageNumber <= 1 ? 'disabled' : ''}>上一页</button><small>第 ${preview.pageNumber} / ${preview.pageCount} 页</small><button data-action="pdf-page-next" ${preview.pageNumber >= preview.pageCount ? 'disabled' : ''}>下一页</button></div><iframe class="pdf-preview-frame" sandbox="" referrerpolicy="no-referrer" src="${escape(preview.dataUrl)}#page=${preview.pageNumber}" title="${escape(preview.displayName)} 本地 PDF 第 ${preview.pageNumber} 页"></iframe><p class="pdf-preview-note">仅从本机私有副本读取；脚本、表单动作、外部资源和自动链接均不执行。</p>`;
-  return `<div class="scrim"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="本地 PDF 阅读"><button class="icon-button close" data-action="close-pdf-preview" aria-label="关闭本地 PDF 阅读">${icon(icons.close, '关闭')}</button><h2>本地 PDF 阅读</h2>${content}</section></div>`;
+      : `<div class="pdf-preview-tools" aria-label="PDF 页码控制"><button data-action="pdf-page-previous" ${preview.pageNumber <= 1 ? 'disabled' : ''}>上一页</button><small>第 ${preview.pageNumber} / ${preview.pageCount} 页</small><button data-action="pdf-page-next" ${preview.pageNumber >= preview.pageCount ? 'disabled' : ''}>下一页</button></div><img class="pdf-preview-frame" src="${escape(preview.dataUrl)}" alt="${escape(preview.displayName)} 第 ${preview.pageNumber} 页">`;
+  return `<div class="scrim attachment-preview-overlay"><section class="dialog image-preview-dialog pdf-preview-dialog" role="dialog" aria-modal="true" aria-label="PDF 阅读">${previewTopActions('pdf', preview)}${content}</section></div>`;
+}
+
+function previewProgressRange(kind, preview, label) {
+  const duration = Math.max(1, Number(preview.durationMillis) || 1);
+  const position = Math.max(0, Math.min(duration, Number(preview.positionMillis) || 0));
+  const progress = Math.round((position / duration) * 10000) / 100;
+  return `<input class="preview-progress-range" data-${kind}-preview-range type="range" min="0" max="${duration}" value="${position}" style="--preview-progress: ${progress}%" aria-label="${label}">`;
+}
+
+function previewVolumeControl(kind) {
+  const label = kind === 'audio' ? '音频' : '视频';
+  return `<span class="preview-volume-control"><button class="preview-volume-toggle" data-action="toggle-${kind}-volume" aria-label="调节${label}音量" aria-expanded="false" aria-controls="${kind}-preview-volume">${sharedIcon(sharedIcons.audio, '音量')}</button><span class="preview-volume-popover" id="${kind}-preview-volume" hidden><output class="preview-volume-value" data-${kind}-preview-volume-value>100%</output><input class="preview-volume-range" aria-orientation="vertical" data-${kind}-preview-volume type="range" min="0" max="100" value="100" style="--preview-progress: 100%" aria-label="${label}音量"></span></span>`;
 }
 
 function videoPreviewDialog() {
   const preview = state.videoPreview;
   if (!preview) return '';
   const content = preview.loading
-    ? '<p class="image-preview-error">正在从本机私有副本验证视频；不会外发。</p>'
+    ? '<div class="media-preview-loading" role="status" aria-label="正在读取视频"></div>'
     : preview.error
       ? `<p class="image-preview-error">${escape(preview.error)}</p>`
-      : `<div class="pdf-preview-tools" aria-label="本地视频播放控制"><button data-action="start-video-preview">开始本地播放</button><small>仅在明确点击后播放</small></div><video class="video-preview-frame" controls preload="metadata" data-video-preview src="${escape(preview.objectUrl)}" aria-label="${escape(preview.displayName)} 本地视频播放器"></video>${preview.positionMillis > 0 ? `<p class="pdf-preview-note">将从 ${formatDuration(preview.positionMillis)} 继续播放</p>` : ''}<p class="pdf-preview-note">${escape(preview.displayName)} · ${bytes(preview.byteCount)} · ${formatDuration(preview.durationMillis)}。仅从本机私有副本播放；不会自动播放、上传或外发。</p>`;
-  return `<div class="scrim"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="本地视频预览"><button class="icon-button close" data-action="close-video-preview" aria-label="关闭本地视频预览">${icon(icons.close, '关闭')}</button><h2>本地视频预览</h2>${content}</section></div>`;
+      : `<div class="video-preview-stage"><video class="video-preview-frame" autoplay playsinline preload="auto" data-video-preview data-action="toggle-video-playback" src="${escape(preview.mediaUrl)}" aria-label="${escape(preview.displayName)} 视频播放器"></video><div class="preview-playback-controls video-preview-controls" aria-label="视频播放控制"><button class="preview-playback-toggle" data-action="toggle-video-playback" aria-label="暂停视频">${icon('M7 5h3v14H7zM14 5h3v14h-3z', '暂停')}</button><time data-video-preview-elapsed>${formatDuration(preview.positionMillis || 0)}</time>${previewProgressRange('video', preview, '视频播放进度')}${previewVolumeControl('video')}<time data-video-preview-duration>${formatDuration(preview.durationMillis)}</time></div></div><p class="pdf-preview-note">${escape(preview.displayName)} · ${bytes(preview.byteCount)} · ${formatDuration(preview.durationMillis)}</p>`;
+  return `<div class="scrim attachment-preview-overlay"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="视频预览">${previewTopActions('video', preview)}${content}</section></div>`;
 }
 
 function audioPreviewDialog() {
   const preview = state.audioPreview;
   if (!preview) return '';
-  const content = preview.loading ? '<p class="image-preview-error">正在从本机私有副本验证音频；不会外发。</p>'
+  const content = preview.loading ? '<div class="media-preview-loading" role="status" aria-label="正在读取本地音频"></div>'
     : preview.error ? `<p class="image-preview-error">${escape(preview.error)}</p>`
-      : `<div class="pdf-preview-tools" aria-label="本地音频播放控制"><button data-action="start-audio-preview">开始本地播放</button><small>仅在明确点击后播放</small></div><audio controls preload="metadata" data-audio-preview src="${escape(preview.dataUrl)}" aria-label="${escape(preview.displayName)} 本地音频播放器"></audio>${preview.positionMillis > 0 ? `<p class="pdf-preview-note">将从 ${formatDuration(preview.positionMillis)} 继续播放</p>` : ''}<p class="pdf-preview-note">${escape(preview.displayName)} · ${escape(preview.mimeType)} · ${bytes(preview.byteCount)} · 时长由本地播放器读取。仅从本机私有副本播放；不会自动播放、上传或外发。</p>`;
-  return `<div class="scrim"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="本地音频播放"><button class="icon-button close" data-action="close-audio-preview" aria-label="关闭本地音频播放">${icon(icons.close, '关闭')}</button><h2>本地音频播放</h2>${content}</section></div>`;
+      : `<div class="audio-preview-player"><audio autoplay preload="auto" data-audio-preview src="${escape(preview.mediaUrl)}" aria-label="${escape(preview.displayName)} 音频播放器"></audio><button class="audio-preview-toggle" data-action="toggle-audio-playback" aria-label="暂停音频">${icon('M7 5h3v14H7zM14 5h3v14h-3z', '暂停')}</button><div class="audio-preview-progress-row">${previewProgressRange('audio', preview, '音频播放进度')}${previewVolumeControl('audio')}</div><div class="audio-preview-times"><time data-audio-preview-elapsed>${formatDuration(preview.positionMillis || 0)}</time><time data-audio-preview-duration>${formatDuration(preview.durationMillis || 0)}</time></div></div>`;
+  const identity = !preview.loading && !preview.error
+    ? `<div class="audio-preview-identity"><strong>${escape(preview.displayName)}</strong><small>${escape(String(preview.mimeType || '').split('/').pop()?.toUpperCase() || '音频')} · ${bytes(preview.byteCount)}</small></div>`
+    : '';
+  return `<div class="scrim attachment-preview-overlay audio-preview-overlay"><section class="dialog image-preview-dialog audio-preview-dialog" role="dialog" aria-modal="true" aria-label="音频播放"><header class="audio-preview-header">${identity}${previewTopActions('audio', preview)}</header>${content}</section></div>`;
 }
 
 function textPreviewDialog() {
   const preview = state.textPreview;
   if (!preview) return '';
-  const content = preview.loading ? '<p class="image-preview-error">正在从本机私有副本验证 UTF-8 文本；不会执行内容。</p>'
+  const facts = !preview.loading && !preview.error
+    ? `<p class="pdf-preview-note text-preview-facts">${escape(preview.displayName)} · ${escape(preview.mimeType)} · ${bytes(preview.byteCount)}${preview.truncated ? ' · 仅显示前 128 KiB' : ''}</p>`
+    : '';
+  const content = preview.loading ? '<div class="media-preview-loading" role="status" aria-label="正在读取文本"></div>'
     : preview.error ? `<p class="image-preview-error">${escape(preview.error)}</p>`
-      : `<p class="pdf-preview-note">${escape(preview.displayName)} · ${escape(preview.mimeType)} · ${bytes(preview.byteCount)}${preview.truncated ? ' · 仅显示前 128 KiB' : ''}</p><div class="pdf-preview-tools" aria-label="文本附件操作"><button data-action="copy-text-preview">复制</button><button data-action="save-text-preview">保存副本</button><button data-action="share-text-preview">分享文本</button></div><pre class="local-text-preview">${escape(preview.text)}</pre><p class="pdf-preview-note">内容按 inert 纯文本显示；不会渲染 HTML、执行链接、脚本或 Markdown 指令。</p>`;
-  return `<div class="scrim"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="本地安全文本预览"><button class="icon-button close" data-action="close-text-preview" aria-label="关闭本地安全文本预览">${icon(icons.close, '关闭')}</button><h2>本地安全文本预览</h2>${content}</section></div>`;
+      : /[.。]\s*zip\s*$/i.test(preview.displayName || '') || ['application/zip', 'application/x-zip-compressed'].includes(preview.mimeType)
+        ? `<article class="local-text-preview" aria-label="压缩包目录"><pre>${escape(preview.text)}</pre></article>`
+        : `<article class="local-text-preview local-markdown-preview chat-markdown">${renderSafeMarkdown(preview.text, { inert: true })}</article>`;
+  return `<div class="scrim attachment-preview-overlay text-preview-overlay"><section class="dialog image-preview-dialog text-preview-surface" role="dialog" aria-modal="true" aria-label="文本预览"><header class="text-preview-header">${facts}${previewTopActions('text', preview, { copy: true })}</header>${content}</section></div>`;
 }
 
 function previewBoundaryDialog() {
@@ -2519,24 +3030,276 @@ function previewBoundaryDialog() {
   const browserBoundary = preview.source === 'browser'
     ? '浏览器只验证搜索、分类、排序、应用内入口和返回状态；没有读取或伪造附件字节。原生预览须由隔离 Tauri 数据根验证。'
     : preview.reason;
-  return `<div class="scrim"><section class="dialog image-preview-dialog preview-boundary-dialog" role="dialog" aria-modal="true" aria-label="应用内安全预览边界"><button class="icon-button close" data-action="close-preview-boundary" aria-label="关闭应用内安全预览边界">${icon(icons.close, '关闭')}</button><h2>应用内安全预览边界</h2><p class="pdf-preview-note"><strong>${escape(preview.displayName || '本地附件')}</strong>${preview.mimeType ? ` · ${escape(preview.mimeType)}` : ''}</p><p class="image-preview-error">${escape(browserBoundary || '当前无法安全预览；文件留在应用内且未外发。')}</p><p class="pdf-preview-note">关闭后返回原搜索分类、关键词、排序与结果位置。</p></section></div>`;
+  return `<div class="scrim attachment-preview-overlay"><section class="dialog image-preview-dialog preview-boundary-dialog" role="dialog" aria-modal="true" aria-label="应用内安全预览边界"><button class="icon-button close" data-action="close-preview-boundary" aria-label="关闭应用内安全预览边界">${icon(icons.close, '关闭')}</button><h2>应用内安全预览边界</h2><p class="pdf-preview-note"><strong>${escape(preview.displayName || '本地附件')}</strong>${preview.mimeType ? ` · ${escape(preview.mimeType)}` : ''}</p><p class="image-preview-error">${escape(browserBoundary || '当前无法安全预览；文件留在应用内且未外发。')}</p><p class="pdf-preview-note">关闭后返回原搜索分类、关键词、排序与结果位置。</p></section></div>`;
 }
 
 function formatDuration(milliseconds) { const seconds = Math.max(0, Math.floor((Number(milliseconds) || 0) / 1000)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
 
-function scheduleImageThumbnailReads() {
+let imageThumbnailObserver = null;
+let imageThumbnailQueue = [];
+let imageThumbnailInFlight = 0;
+function pumpImageThumbnailReads() {
+  while (imageThumbnailInFlight < 2 && imageThumbnailQueue.length) {
+    const job = imageThumbnailQueue.shift();
+    imageThumbnailInFlight += 1;
+    job().finally(() => { imageThumbnailInFlight -= 1; pumpImageThumbnailReads(); });
+  }
+}
+function scheduleImageThumbnailReads({ composerOnly = false } = {}) {
+  imageThumbnailObserver?.disconnect();
+  imageThumbnailQueue.forEach(job => state.imageThumbnailPending.delete(job.thumbnailKey));
+  imageThumbnailQueue = [];
   if (!native || state.imagePreview) return;
-  document.querySelectorAll('[data-image-thumbnail]').forEach(element => {
+  const selector = composerOnly ? '.chat-composer [data-image-thumbnail]' : '[data-image-thumbnail]';
+  const enqueue = element => {
     const attachmentId = element.dataset.imageThumbnail;
     const workspaceId = element.dataset.thumbnailWorkspaceId || state.current?.summary?.id;
     const thumbnailKey = `${workspaceId || 'unknown'}:${attachmentId || 'unknown'}`;
-    if (!workspaceId || !attachmentId || state.imageThumbnails[attachmentId] || state.imageThumbnailPending.has(thumbnailKey)) return;
+    if (!workspaceId || !attachmentId) return;
+    if (state.imageThumbnails[attachmentId]) { hydrateImageThumbnail(attachmentId, state.imageThumbnails[attachmentId]); return; }
+    if (state.imageThumbnailPending.has(thumbnailKey)) return;
     state.imageThumbnailPending.add(thumbnailKey);
-    invoke('read_desktop_image_preview', { args: { workspaceId, attachmentId, fullSize: false } })
-      .then(preview => { state.imageThumbnails = { ...state.imageThumbnails, [attachmentId]: preview }; })
-      .catch(() => { state.imageThumbnails = { ...state.imageThumbnails, [attachmentId]: { error: '本地缩略图不可用' } }; })
-      .finally(() => { state.imageThumbnailPending.delete(thumbnailKey); render(); });
+    const job = () => {
+      if (!element.isConnected) { state.imageThumbnailPending.delete(thumbnailKey); return Promise.resolve(); }
+      return withFullSearchDeadline(invoke('read_desktop_image_preview', { args: { workspaceId, attachmentId, fullSize: false } }))
+      .then(preview => {
+        state.imageThumbnails = { ...state.imageThumbnails, [attachmentId]: preview };
+        hydrateImageThumbnail(attachmentId, preview);
+      })
+      .catch(() => {
+        const preview = { error: '本地缩略图不可用' };
+        state.imageThumbnails = { ...state.imageThumbnails, [attachmentId]: preview };
+        hydrateImageThumbnail(attachmentId, preview);
+      })
+      .finally(() => { state.imageThumbnailPending.delete(thumbnailKey); });
+    };
+    job.thumbnailKey = thumbnailKey;
+    imageThumbnailQueue.push(job);
+    pumpImageThumbnailReads();
+  };
+  const elements = [...document.querySelectorAll(selector)];
+  if (!('IntersectionObserver' in globalThis)) { elements.slice(0, 12).forEach(enqueue); return; }
+  imageThumbnailObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.isIntersecting) {
+      imageThumbnailObserver.unobserve(entry.target);
+      enqueue(entry.target);
+    }
+  }, { root: state.searchPanel ? document.querySelector('[data-search-scroll-owner]') : null, rootMargin: '160px' });
+  elements.forEach(element => imageThumbnailObserver.observe(element));
+}
+
+function hydrateImageThumbnail(attachmentId, preview) {
+  if (!preview) return;
+  document.querySelectorAll('[data-image-thumbnail]').forEach(element => {
+    if (element.dataset.imageThumbnail !== String(attachmentId)) return;
+    const placeholder = element.querySelector('.chat-image-placeholder, .chat-assistant-image-gallery-placeholder, .chat-composer-image-placeholder, .desktop-search-image-preview > .desktop-search-file-preview');
+    if (!placeholder) return;
+    if (preview.error) {
+      placeholder.textContent = '图片读取失败，点击重试';
+      element.dataset.retryImageThumbnail = String(attachmentId);
+      return;
+    }
+    if (!preview.dataUrl) return;
+    delete element.dataset.retryImageThumbnail;
+    const image = document.createElement('img');
+    image.src = preview.dataUrl;
+    image.alt = element.classList.contains('chat-assistant-image-gallery-thumb') ? '' : (element.getAttribute('aria-label') || '本地图片预览');
+    placeholder.replaceWith(image);
   });
+}
+
+app.addEventListener('click', event => {
+  const element = event.target.closest?.('[data-retry-image-thumbnail]');
+  if (!element) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  delete state.imageThumbnails[element.dataset.retryImageThumbnail];
+  delete element.dataset.retryImageThumbnail;
+  const placeholder = element.querySelector('.chat-image-placeholder, .chat-assistant-image-gallery-placeholder, .chat-composer-image-placeholder');
+  if (placeholder) placeholder.textContent = '正在读取本地缩略图';
+  scheduleImageThumbnailReads();
+}, true);
+
+let videoThumbnailObserver = null;
+const MAX_VIDEO_THUMBNAIL_READS = 2;
+let videoThumbnailReadQueue = [];
+let videoThumbnailReadsInFlight = 0;
+let videoThumbnailGeneration = 0;
+
+function pumpVideoThumbnailReads() {
+  while (videoThumbnailReadsInFlight < MAX_VIDEO_THUMBNAIL_READS && videoThumbnailReadQueue.length) {
+    const job = videoThumbnailReadQueue.shift();
+    if (job.generation !== videoThumbnailGeneration) {
+      state.videoThumbnailPending.delete(job.thumbnailKey);
+      continue;
+    }
+    videoThumbnailReadsInFlight += 1;
+    invoke('read_desktop_video_thumbnail', { args: { workspaceId: job.workspaceId, attachmentId: job.attachmentId } })
+      .then(preview => {
+        state.videoThumbnails = { ...state.videoThumbnails, [job.attachmentId]: preview };
+        hydrateVideoThumbnail(job.attachmentId, preview);
+      })
+      .catch(() => {
+        state.videoThumbnails = { ...state.videoThumbnails, [job.attachmentId]: { error: '本地视频缩略图不可用' } };
+      })
+      .finally(() => {
+        videoThumbnailReadsInFlight = Math.max(0, videoThumbnailReadsInFlight - 1);
+        state.videoThumbnailPending.delete(job.thumbnailKey);
+        pumpVideoThumbnailReads();
+      });
+  }
+}
+
+function scheduleVideoThumbnailReads() {
+  videoThumbnailObserver?.disconnect();
+  videoThumbnailObserver = null;
+  videoThumbnailGeneration += 1;
+  videoThumbnailReadQueue.forEach(job => state.videoThumbnailPending.delete(job.thumbnailKey));
+  videoThumbnailReadQueue = [];
+  if (!native || state.videoPreview) return;
+  const cards = [...document.querySelectorAll('[data-video-thumbnail]')];
+  if (!cards.length) return;
+  const generation = videoThumbnailGeneration;
+  const enqueue = element => {
+    const attachmentId = element.dataset.videoThumbnail;
+    const workspaceId = element.dataset.thumbnailWorkspaceId || state.current?.summary?.id;
+    const thumbnailKey = `${workspaceId || 'unknown'}:${attachmentId || 'unknown'}`;
+    if (!workspaceId || !attachmentId || state.videoThumbnails[attachmentId] || state.videoThumbnailPending.has(thumbnailKey)) return;
+    state.videoThumbnailPending.add(thumbnailKey);
+    videoThumbnailReadQueue.push({ attachmentId, workspaceId, thumbnailKey, generation });
+    pumpVideoThumbnailReads();
+  };
+  if (!('IntersectionObserver' in globalThis)) {
+    cards.slice(0, 9).forEach(enqueue);
+    return;
+  }
+  const root = state.searchPanel
+    ? document.querySelector('[data-search-scroll-owner]')
+    : document.querySelector('.chat-scroll[data-scroll-owner="message-list"]');
+  videoThumbnailObserver = new IntersectionObserver(entries => {
+    entries.filter(entry => entry.isIntersecting).forEach(entry => {
+      videoThumbnailObserver?.unobserve(entry.target);
+      enqueue(entry.target);
+    });
+  }, { root, rootMargin: '160px 0px' });
+  cards.forEach(card => videoThumbnailObserver.observe(card));
+}
+
+function hydrateVideoThumbnail(attachmentId, preview) {
+  if (!preview?.dataUrl) return;
+  document.querySelectorAll('[data-video-thumbnail]').forEach(element => {
+    if (element.dataset.videoThumbnail !== String(attachmentId)) return;
+    const placeholder = element.querySelector('.desktop-search-video-preview > .desktop-search-file-preview, .chat-video-frame > .chat-file-preview-fallback');
+    if (!placeholder) return;
+    const image = document.createElement('img');
+    image.src = preview.dataUrl;
+    image.alt = element.getAttribute('aria-label') || `${element.querySelector('.desktop-search-video-facts strong')?.textContent || '视频'}预览图`;
+    placeholder.replaceWith(image);
+  });
+}
+
+let searchAttachmentPreviewObserver = null;
+let searchAttachmentPreviewQueue = [];
+let searchAttachmentPreviewReadsInFlight = 0;
+let searchAttachmentPreviewGeneration = 0;
+const MAX_SEARCH_ATTACHMENT_PREVIEW_READS = 2;
+
+function hydrateAttachmentCardPreview(attachmentId, preview) {
+  document.querySelectorAll('[data-search-attachment-preview], [data-chat-attachment-preview]').forEach(element => {
+    const requestedId = element.dataset.searchAttachmentPreview || element.dataset.chatAttachmentPreview;
+    if (requestedId !== String(attachmentId)) return;
+    if (Number(preview?.durationMillis) > 0) {
+      const duration = Math.floor(Number(preview.durationMillis) / 1000);
+      const time = element.querySelector('.desktop-search-audio-heading time, .chat-audio-heading time');
+      if (time) time.textContent = `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')}`;
+    }
+    const container = element.querySelector('.desktop-search-text-file-preview, .desktop-search-pdf-preview, .desktop-search-generic-file-preview, .chat-text-content-preview, .chat-pdf-content-preview, .chat-file-format-preview');
+    if (!container) return;
+    if (preview?.dataUrl) {
+      const isMainCard = container.classList.contains('chat-attachment-visual');
+      container.className = isMainCard
+        ? 'chat-attachment-visual chat-pdf-content-preview'
+        : 'desktop-search-visual-preview desktop-search-pdf-preview';
+      const image = document.createElement('img');
+      image.src = preview.dataUrl;
+      image.alt = element.getAttribute('aria-label') || `${element.querySelector('.desktop-search-card-details strong')?.textContent || 'PDF'}首页预览`;
+      container.replaceChildren(image);
+      return;
+    }
+    if (preview?.text) {
+      const existingFormat = container.querySelector('.chat-file-format-label')?.textContent || '';
+      const name = element.dataset.attachmentName || element.querySelector('.desktop-search-card-details strong')?.textContent || '';
+      const extension = existingFormat || name.split('.').pop()?.toUpperCase() || 'TXT';
+      const isMainCard = container.classList.contains('chat-attachment-visual');
+      container.className = isMainCard
+        ? 'chat-attachment-visual chat-text-content-preview'
+        : 'desktop-search-visual-preview desktop-search-text-file-preview';
+      const label = document.createElement('b');
+      if (isMainCard) label.className = 'chat-file-format-label';
+      label.textContent = extension === 'MARKDOWN' ? 'MD' : extension.slice(0, 5);
+      const content = document.createElement('pre');
+      content.textContent = preview.text;
+      container.replaceChildren(label, content);
+    }
+  });
+}
+
+function pumpSearchAttachmentPreviewReads() {
+  while (searchAttachmentPreviewReadsInFlight < MAX_SEARCH_ATTACHMENT_PREVIEW_READS && searchAttachmentPreviewQueue.length) {
+    const job = searchAttachmentPreviewQueue.shift();
+    if (job.generation !== searchAttachmentPreviewGeneration) {
+      state.searchAttachmentPreviewPending.delete(job.previewKey);
+      continue;
+    }
+    searchAttachmentPreviewReadsInFlight += 1;
+    invoke('read_desktop_search_attachment_preview', { args: { workspaceId: job.workspaceId, attachmentId: job.attachmentId } })
+      .then(preview => {
+        state.searchAttachmentPreviews = { ...state.searchAttachmentPreviews, [job.attachmentId]: preview };
+        hydrateAttachmentCardPreview(job.attachmentId, preview);
+      })
+      .catch(() => {
+        state.searchAttachmentPreviews = { ...state.searchAttachmentPreviews, [job.attachmentId]: { error: '本地附件预览不可用' } };
+      })
+      .finally(() => {
+        searchAttachmentPreviewReadsInFlight = Math.max(0, searchAttachmentPreviewReadsInFlight - 1);
+        state.searchAttachmentPreviewPending.delete(job.previewKey);
+        pumpSearchAttachmentPreviewReads();
+      });
+  }
+}
+
+function scheduleAttachmentCardPreviewReads() {
+  searchAttachmentPreviewObserver?.disconnect();
+  searchAttachmentPreviewObserver = null;
+  searchAttachmentPreviewGeneration += 1;
+  searchAttachmentPreviewQueue.forEach(job => state.searchAttachmentPreviewPending.delete(job.previewKey));
+  searchAttachmentPreviewQueue = [];
+  if (!native) return;
+  const cards = [...document.querySelectorAll('[data-search-attachment-preview], [data-chat-attachment-preview]')];
+  if (!cards.length) return;
+  const generation = searchAttachmentPreviewGeneration;
+  const enqueue = element => {
+    const attachmentId = element.dataset.searchAttachmentPreview || element.dataset.chatAttachmentPreview;
+    const workspaceId = element.dataset.thumbnailWorkspaceId || state.current?.summary?.id;
+    const previewKey = `${workspaceId || 'unknown'}:${attachmentId || 'unknown'}`;
+    if (!workspaceId || !attachmentId || state.searchAttachmentPreviews[attachmentId] || state.searchAttachmentPreviewPending.has(previewKey)) return;
+    state.searchAttachmentPreviewPending.add(previewKey);
+    searchAttachmentPreviewQueue.push({ attachmentId, workspaceId, previewKey, generation });
+    pumpSearchAttachmentPreviewReads();
+  };
+  if (!('IntersectionObserver' in globalThis)) {
+    cards.slice(0, 12).forEach(enqueue);
+    return;
+  }
+  const root = state.searchPanel
+    ? document.querySelector('[data-search-scroll-owner]')
+    : document.querySelector('.chat-scroll[data-scroll-owner="message-list"]');
+  searchAttachmentPreviewObserver = new IntersectionObserver(entries => {
+    entries.filter(entry => entry.isIntersecting).forEach(entry => {
+      searchAttachmentPreviewObserver?.unobserve(entry.target);
+      enqueue(entry.target);
+    });
+  }, { root, rootMargin: '160px 0px' });
+  cards.forEach(card => searchAttachmentPreviewObserver.observe(card));
 }
 
 async function openAttachmentPreview(attachment, workspaceId = state.current?.summary?.id) {
@@ -2562,18 +3325,25 @@ async function openAttachmentPreview(attachment, workspaceId = state.current?.su
   if (capability.kind === 'text') return openTextPreview(attachmentId, workspaceId);
 }
 
-async function openImagePreview(attachmentId, workspaceId = state.current?.summary?.id) {
+async function openImagePreview(attachmentId, workspaceId = state.current?.summary?.id, imageIds = relatedImageIds(currentConversation(), attachmentId)) {
   if (!native || !workspaceId || !attachmentId) return;
-  state.imagePreview = { loading: true }; render();
+  const safeImageIds = imageIds.includes(String(attachmentId)) ? imageIds : [String(attachmentId)];
+  const request = { loading: true, attachmentId, workspaceId, imageIds: safeImageIds };
+  state.imagePreview = request; render();
   try {
-    state.imagePreview = { ...await invoke('read_desktop_image_preview', { args: { workspaceId, attachmentId, fullSize: true } }), workspaceId, zoom: 1, panX: 0, panY: 0 };
+    const result = await invoke('read_desktop_image_preview', { args: { workspaceId, attachmentId, fullSize: true } });
+    if (state.imagePreview !== request) return;
+    state.imagePreview = { ...result, attachmentId, workspaceId, imageIds: safeImageIds, zoom: 1, panX: 0, panY: 0 };
   } catch (error) {
-    state.imagePreview = { error: '本地原图不可用或校验失败。' };
+    if (state.imagePreview !== request) return;
+    state.imagePreview = { error: '本地原图不可用或校验失败。', attachmentId, workspaceId, imageIds: safeImageIds };
   }
   render();
 }
 
 let imagePanGesture = null;
+let imagePreviewHorizontalSwipe = { attachmentId: '', deltaX: 0, lastAt: 0, lockUntil: 0 };
+const imagePreviewHorizontalSwipeThreshold = 56;
 function clampImagePreviewPan(viewport, zoom, panX, panY) {
   const image = viewport?.querySelector('[data-image-preview-content]');
   if (!viewport || !image || zoom <= 1) return { panX: 0, panY: 0 };
@@ -2617,14 +3387,34 @@ app.addEventListener('dblclick', event => {
   state.imagePreview = { ...state.imagePreview, zoom, panX: 0, panY: 0 };
   render();
 });
-app.addEventListener('wheel', event => {
-  const viewport = event.target.closest?.('[data-image-preview-viewport]');
-  if (!viewport || !state.imagePreview?.dataUrl) return;
+function consumeImagePreviewHorizontalSwipe(event, viewport) {
+  const preview = state.imagePreview;
+  if (!preview || (Number(preview.zoom) || 1) > 1 || Math.abs(event.deltaX) <= Math.abs(event.deltaY) || Math.abs(event.deltaX) < 1) return false;
   event.preventDefault();
+  const now = performance.now();
+  if (now - imagePreviewHorizontalSwipe.lastAt > 500) {
+    imagePreviewHorizontalSwipe = { attachmentId: preview.attachmentId, deltaX: 0, lastAt: now, lockUntil: 0 };
+  }
+  imagePreviewHorizontalSwipe.lastAt = now;
+  if (imagePreviewHorizontalSwipe.lockUntil > 0) return true;
+  imagePreviewHorizontalSwipe.deltaX += event.deltaX;
+  if (Math.abs(imagePreviewHorizontalSwipe.deltaX) < imagePreviewHorizontalSwipeThreshold) return true;
+  const direction = imagePreviewHorizontalSwipe.deltaX > 0 ? 'next' : 'previous';
+  imagePreviewHorizontalSwipe.deltaX = 0;
+  imagePreviewHorizontalSwipe.lockUntil = now + 280;
+  navigateImagePreview(direction);
+  return true;
+}
+app.addEventListener('wheel', event => {
+  const viewport = event.target.closest?.('[data-image-preview-viewport], .image-preview-dialog');
+  if (!viewport || !state.imagePreview) return;
+  if (consumeImagePreviewHorizontalSwipe(event, viewport)) return;
+  event.preventDefault();
+  if (!state.imagePreview.dataUrl) return;
   const current = Number(state.imagePreview.zoom) || 1;
   const zoom = Math.max(1, Math.min(4, current + (event.deltaY < 0 ? 0.25 : -0.25)));
   state.imagePreview = { ...state.imagePreview, zoom, panX: zoom === 1 ? 0 : state.imagePreview.panX || 0, panY: zoom === 1 ? 0 : state.imagePreview.panY || 0 };
-  render();
+  applyImagePreviewTransform(viewport);
 }, { passive: false });
 
 async function openPdfPreview(attachmentId, pageNumber = undefined, workspaceId = state.current?.summary?.id) {
@@ -2638,80 +3428,161 @@ async function openPdfPreview(attachmentId, pageNumber = undefined, workspaceId 
   render();
 }
 
+function navigatePdfPage(step) {
+  const preview = state.pdfPreview;
+  if (!preview?.attachmentId || preview.loading) return;
+  const page = preview.pageNumber + step;
+  if (page < 1 || page > preview.pageCount) return;
+  void openPdfPreview(preview.attachmentId, page, preview.workspaceId);
+}
+let pdfSwipe = { lastAt: 0, delta: 0, consumed: false };
+app.addEventListener('wheel', event => {
+  if (!state.pdfPreview || !event.target.closest?.('.pdf-preview-surface, .pdf-preview-dialog') || event.ctrlKey || Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+  event.preventDefault();
+  const now = performance.now();
+  if (now - pdfSwipe.lastAt > 250) pdfSwipe = { lastAt: now, delta: 0, consumed: false };
+  pdfSwipe.lastAt = now;
+  if (pdfSwipe.consumed) return;
+  pdfSwipe.delta += event.deltaX;
+  if (Math.abs(pdfSwipe.delta) >= 60) {
+    pdfSwipe.consumed = true;
+    navigatePdfPage(pdfSwipe.delta > 0 ? 1 : -1);
+  }
+}, { passive: false });
+
 async function openVideoPreview(attachmentId, positionMillis = undefined, workspaceId = state.current?.summary?.id) {
   if (!native || !workspaceId || !attachmentId) return;
-  state.videoPreview = { loading: true }; render();
+  const request = {};
+  state.videoPreview = { loading: true, request }; render();
   try {
     const preview = await invoke('read_desktop_video_preview', { args: { workspaceId, attachmentId, positionMillis } });
-    state.videoPreview = { ...preview, workspaceId, objectUrl: localVideoBlobUrl(preview.dataUrl) };
+    if (state.videoPreview?.request !== request) return;
+    if (!preview?.attachmentId || !preview?.mediaUrl || !Number.isFinite(Number(preview.byteCount)) || !Number.isFinite(Number(preview.durationMillis))) throw new Error('本地视频预览状态无效');
+    state.videoPreview = { ...preview, workspaceId };
   }
-  catch (error) { state.videoPreview = { error: '本地视频不可用、已损坏或校验失败。' }; }
+  catch (error) { if (state.videoPreview?.request !== request) return; state.videoPreview = { error: '本地视频不可用、已损坏或校验失败。' }; }
   render();
   const restorePosition = Math.max(0, Number(state.videoPreview?.positionMillis) || 0) / 1000;
-  if (restorePosition > 0) queueMicrotask(() => {
-    const video = document.querySelector('[data-video-preview]');
-    const seek = () => { if (video) video.currentTime = Math.min(restorePosition, Math.max(0, video.duration || restorePosition)); };
-    if (video?.readyState >= 1) seek(); else video?.addEventListener('loadedmetadata', seek, { once: true });
-  });
   queueMicrotask(() => {
     const video = document.querySelector('[data-video-preview]');
+    if (!video) return;
+    const syncVideoUi = () => syncPreviewPlaybackUi('video', video);
+    const restoreAndPlay = async () => {
+      if (restorePosition > 0) video.currentTime = Math.min(restorePosition, Math.max(0, video.duration || restorePosition));
+      try { await video.play(); }
+      catch (_) { video.dataset.autoplayFailed = 'true'; }
+      syncVideoUi();
+    };
+    if (video.readyState >= 1) void restoreAndPlay();
+    else video.addEventListener('loadedmetadata', () => { void restoreAndPlay(); }, { once: true });
     video?.addEventListener('timeupdate', () => {
+      if (!video.isConnected || state.videoPreview?.attachmentId !== attachmentId || state.videoPreview?.workspaceId !== workspaceId) return;
       const milliseconds = Math.round(video.currentTime * 1000);
+      syncVideoUi();
       if (milliseconds > 0 && milliseconds < Math.round(video.duration * 1000)) {
         state.videoPreview = { ...state.videoPreview, lastPlaybackPositionMillis: milliseconds };
       }
     });
+    video.addEventListener('play', syncVideoUi);
+    video.addEventListener('pause', syncVideoUi);
   });
-}
-
-function localVideoBlobUrl(dataUrl) {
-  const encoded = String(dataUrl || '').split(',', 2)[1];
-  if (!encoded) throw new Error('本地视频 payload 无效');
-  const raw = atob(encoded);
-  const bytes = Uint8Array.from(raw, value => value.charCodeAt(0));
-  return URL.createObjectURL(new Blob([bytes], { type: 'video/mp4' }));
 }
 
 async function closeVideoPreview() {
   const video = document.querySelector('[data-video-preview]');
   const preview = state.videoPreview;
-  if (!preview?.attachmentId || !preview.workspaceId) return;
   const currentPosition = Math.round((video?.currentTime || 0) * 1000);
-  const positionMillis = preview.lastPlaybackPositionMillis || currentPosition;
-  try {
-    const owner = await invoke('read_desktop_video_preview', {
-      args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis },
-    });
-    if (!owner || Number(owner.positionMillis) !== positionMillis) throw new Error('本地视频位置未确认');
-    state.videoPreview = null;
-    if (preview.objectUrl) URL.revokeObjectURL(preview.objectUrl);
-    render();
-  } catch (_) {
-    state.error = '本地视频位置未保存；预览保持打开，未丢弃当前进度。';
-    render();
-  }
+  const positionMillis = preview?.lastPlaybackPositionMillis || currentPosition;
+  state.videoPreview = null;
+  render();
+  if (!preview?.attachmentId || !preview.workspaceId) return;
+  try { await invoke('save_desktop_video_preview_position', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis } }); }
+  catch (_) { /* Closing an overlay never waits for a non-critical resume write. */ }
 }
 
 async function openAudioPreview(attachmentId, positionMillis = undefined, workspaceId = state.current?.summary?.id) {
   if (!native || !workspaceId || !attachmentId) return;
-  state.audioPreview = { loading: true }; render();
-  try { state.audioPreview = { ...await invoke('read_desktop_audio_preview', { args: { workspaceId, attachmentId, positionMillis } }), workspaceId }; }
-  catch (_) { state.audioPreview = { error: '本地音频不可用、已损坏或校验失败。' }; }
+  const request = {};
+  state.audioPreview = { loading: true, request }; render();
+  try {
+    const preview = await invoke('read_desktop_audio_preview', { args: { workspaceId, attachmentId, positionMillis } });
+    if (state.audioPreview?.request !== request) return;
+    if (!preview?.attachmentId || !preview?.mediaUrl) throw new Error('本地音频预览状态无效');
+    state.audioPreview = { ...preview, workspaceId };
+  }
+  catch (_) { if (state.audioPreview?.request !== request) return; state.audioPreview = { error: '本地音频不可用、已损坏或校验失败。' }; }
   render();
   queueMicrotask(() => {
     const audio = document.querySelector('[data-audio-preview]');
-    const seek = () => { if (audio) audio.currentTime = Math.min(Math.max(0, Number(state.audioPreview?.positionMillis) || 0) / 1000, Math.max(0, audio.duration || 0)); };
-    if (audio?.readyState >= 1) seek(); else audio?.addEventListener('loadedmetadata', seek, { once: true });
-    audio?.addEventListener('timeupdate', () => { const ms = Math.round(audio.currentTime * 1000); if (ms > 0 && ms < Math.round(audio.duration * 1000)) state.audioPreview = { ...state.audioPreview, lastPlaybackPositionMillis: ms }; });
+    const syncAudioUi = () => syncPreviewPlaybackUi('audio', audio);
+    const seekAndPlay = async () => {
+      if (!audio) return;
+      audio.currentTime = Math.min(Math.max(0, Number(state.audioPreview?.positionMillis) || 0) / 1000, Math.max(0, audio.duration || 0));
+      try { await audio.play(); }
+      catch (_) { audio.dataset.autoplayFailed = 'true'; }
+      syncAudioUi();
+    };
+    if (audio?.readyState >= 1) void seekAndPlay(); else audio?.addEventListener('loadedmetadata', () => { void seekAndPlay(); }, { once: true });
+    audio?.addEventListener('timeupdate', () => { if (!audio.isConnected || state.audioPreview?.attachmentId !== attachmentId || state.audioPreview?.workspaceId !== workspaceId) return; const ms = Math.round(audio.currentTime * 1000); syncAudioUi(); if (ms > 0 && ms < Math.round(audio.duration * 1000)) state.audioPreview = { ...state.audioPreview, lastPlaybackPositionMillis: ms }; });
+    audio?.addEventListener('play', syncAudioUi);
+    audio?.addEventListener('pause', syncAudioUi);
+    audio?.addEventListener('error', () => {
+      const active = state.audioPreview;
+      if (!active || active.attachmentId !== attachmentId) return;
+      state.audioPreview = { ...active, mediaUrl: '', error: '当前系统无法解码此音频。' };
+      render();
+    }, { once: true });
   });
+}
+
+function syncPreviewPlaybackUi(kind, media) {
+  if (!media || !media.isConnected || document.querySelector(`[data-${kind}-preview]`) !== media) return;
+  const currentMillis = Math.max(0, Math.round((Number(media.currentTime) || 0) * 1000));
+  const durationMillis = Math.max(1, Math.round((Number(media.duration) || 0) * 1000));
+  const range = document.querySelector(`[data-${kind}-preview-range]`);
+  const elapsed = document.querySelector(`[data-${kind}-preview-elapsed]`);
+  const duration = document.querySelector(`[data-${kind}-preview-duration]`);
+  const toggle = document.querySelector(`button[data-action="toggle-${kind}-playback"]`);
+  if (range) {
+    const positionMillis = Math.min(currentMillis, durationMillis);
+    range.max = String(durationMillis);
+    range.value = String(positionMillis);
+    range.style.setProperty('--preview-progress', `${Math.round((positionMillis / durationMillis) * 10000) / 100}%`);
+  }
+  const volumeRange = document.querySelector(`[data-${kind}-preview-volume]`);
+  if (volumeRange) {
+    const volume = Math.round(Math.max(0, Math.min(1, Number(media.volume) || 0)) * 100);
+    volumeRange.value = String(media.muted ? 0 : volume);
+    const volumeValue = document.querySelector(`[data-${kind}-preview-volume-value]`);
+    if (volumeValue) volumeValue.textContent = `${media.muted ? 0 : volume}%`;
+    volumeRange.style.setProperty('--preview-progress', `${media.muted ? 0 : volume}%`);
+  }
+  if (elapsed) elapsed.textContent = formatDuration(currentMillis);
+  if (duration) duration.textContent = formatDuration(durationMillis);
+  if (toggle) {
+    const paused = media.paused;
+    toggle.setAttribute('aria-label', paused ? `播放${kind === 'audio' ? '音频' : '视频'}` : `暂停${kind === 'audio' ? '音频' : '视频'}`);
+    toggle.innerHTML = paused ? icon('M7 5v14l11-7z', '播放') : icon('M7 5h3v14H7zM14 5h3v14h-3z', '暂停');
+  }
+}
+
+async function togglePreviewPlayback(kind) {
+  const media = document.querySelector(`[data-${kind}-preview]`);
+  if (!media) return;
+  if (media.paused) { try { await media.play(); } catch (_) { media.dataset.autoplayFailed = 'true'; } }
+  else media.pause();
+  syncPreviewPlaybackUi(kind, media);
 }
 
 async function closeAudioPreview() {
   const audio = document.querySelector('[data-audio-preview]'); const preview = state.audioPreview;
-  if (!preview?.attachmentId || !preview.workspaceId) return;
+  if (!preview) return;
   const positionMillis = preview.lastPlaybackPositionMillis || Math.round((audio?.currentTime || 0) * 1000);
-  try { const owner = await invoke('read_desktop_audio_preview', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis } }); if (!owner || Number(owner.positionMillis) !== positionMillis) throw new Error('本地音频位置未确认'); state.audioPreview = null; render(); }
-  catch (_) { state.error = '本地音频位置未保存；预览保持打开，未丢弃当前进度。'; render(); }
+  state.audioPreview = null;
+  render();
+  if (!preview.attachmentId || !preview.workspaceId) return;
+  try { await invoke('save_desktop_audio_preview_position', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis } }); }
+  catch (_) { /* Closing an overlay never depends on a non-critical resume write. */ }
 }
 
 async function openTextPreview(attachmentId, workspaceId = state.current?.summary?.id) {
@@ -2739,6 +3610,20 @@ async function saveAttachmentCopy({ workspaceId, attachmentId, displayName }) {
   return true;
 }
 
+function activePreviewForKind(kind) {
+  return ({ image: state.imagePreview, pdf: state.pdfPreview, video: state.videoPreview, audio: state.audioPreview, text: state.textPreview })[kind] || null;
+}
+
+async function sharePreviewAttachment(preview) {
+  if (!preview?.workspaceId || !preview?.attachmentId) throw new Error('附件引用无效');
+  if (native) {
+    await invoke('share_desktop_attachment', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId } });
+    return;
+  }
+  if (typeof navigator.share !== 'function') throw new Error('当前预览环境不支持系统分享');
+  await navigator.share({ title: preview.displayName, ...(preview.text ? { text: preview.text } : {}) });
+}
+
 function focusSearchAfterHistoryDismissal() {
   queueMicrotask(() => {
     document.querySelector('#full-search-input, #chat-search')?.focus();
@@ -2759,16 +3644,107 @@ function focusSearchAfterHistoryClear() {
   });
 }
 
+const COPY_SUCCESS_DURATION_MS = 1200;
+
+function showMessageCopyFeedback(button) {
+  showCopyIconFeedback(button);
+}
+
+function showPreviewActionError(button, message) {
+  if (!button?.isConnected) return;
+  const owner = button.closest('.file-preview-top-actions');
+  if (!owner) return;
+  owner.querySelector('.preview-action-error')?.remove();
+  const notice = document.createElement('span');
+  notice.className = 'preview-action-error';
+  notice.setAttribute('role', 'alert');
+  notice.textContent = message;
+  owner.append(notice);
+}
+
+function showCopyIconFeedback(button) {
+  if (!button?.isConnected) return;
+  const prior = button.__copyIconFeedback || {
+    html: button.innerHTML,
+    ariaLabel: button.getAttribute('aria-label'),
+    title: button.getAttribute('title'),
+  };
+  const token = Symbol('copy-success');
+  button.__copyIconFeedback = prior;
+  button.__copyIconFeedbackToken = token;
+  button.classList.add('is-copy-success');
+  button.setAttribute('aria-label', '已复制');
+  button.setAttribute('title', '已复制');
+  button.innerHTML = icon(icons.check, '已复制');
+  window.setTimeout(() => {
+    if (!button.isConnected || button.__copyIconFeedbackToken !== token) return;
+    button.innerHTML = prior.html;
+    if (prior.ariaLabel == null) button.removeAttribute('aria-label'); else button.setAttribute('aria-label', prior.ariaLabel);
+    if (prior.title == null) button.removeAttribute('title'); else button.setAttribute('title', prior.title);
+    button.classList.remove('is-copy-success');
+    delete button.__copyIconFeedback;
+    delete button.__copyIconFeedbackToken;
+  }, COPY_SUCCESS_DURATION_MS);
+}
+
+let chatAttachmentMenuSuppressUntil = 0;
+app.addEventListener('click', event => {
+  if (!event.target.matches?.('.search-attachment-menu-backdrop')) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  state.dialog = null; render();
+}, true);
+function openChatAttachmentMenu(card) {
+  const attachmentId = card.dataset.attachmentId;
+  const messageId = card.closest('[data-message-id]')?.dataset.messageId;
+  const message = currentConversation()?.messages?.find(item => item.id === messageId);
+  const asset = message?.blocks?.map(block => block.asset).find(item => item?.id === attachmentId);
+  if (!asset) return;
+  const mime = asset.mimeType || '';
+  const category = mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'file';
+  const duration = state.videoThumbnails?.[attachmentId]?.durationMillis || state.searchAttachmentPreviews?.[attachmentId]?.durationMillis;
+  const item = { workspaceId: state.current.summary.id, attachmentId, displayName: asset.displayName || '附件', category,
+    details: [({ image: '图片', video: '视频', audio: '音频', file: '文件' })[category], duration ? formatDuration(duration) : '', bytes(Number(asset.byteCount) || 0)].filter(Boolean).join(' · '),
+    sentAt: message.createdAt ? `发送于 ${new Date(message.createdAt).toLocaleString('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '' };
+  state.dialog = { kind: 'chat-attachment-actions', item, anchor: attachmentMenuAnchor(card) };
+  render();
+}
+app.addEventListener('click', event => {
+  if (Date.now() < chatAttachmentMenuSuppressUntil && event.target.closest?.('[data-attachment-id]')) { event.preventDefault(); event.stopImmediatePropagation(); }
+}, true);
 let searchAttachmentLongPressTimer = null;
 let searchAttachmentLongPressTriggered = null;
+let searchAttachmentPressOrigin = null;
+app.addEventListener('contextmenu', event => {
+  const chatCard = event.target.closest?.('.chat-message [data-attachment-id][data-action]');
+  if (chatCard) { event.preventDefault(); event.stopPropagation(); cancelSearchAttachmentLongPress(); openChatAttachmentMenu(chatCard); return; }
+  const card = event.target.closest?.('.desktop-search-attachment-card');
+  if (!card) return;
+  event.preventDefault();
+  event.stopPropagation();
+  cancelSearchAttachmentLongPress();
+  const entryId = card.dataset.searchEntryId;
+  const hit = fullSearchHit(entryId);
+  if (!hit) return;
+  rememberFullSearchScroll(entryId);
+  state.dialog = { kind: 'search-attachment-actions', hit, anchor: attachmentMenuAnchor(card) };
+  render();
+});
 function cancelSearchAttachmentLongPress() {
   if (searchAttachmentLongPressTimer !== null) window.clearTimeout(searchAttachmentLongPressTimer);
   searchAttachmentLongPressTimer = null;
 }
 app.addEventListener('pointerdown', event => {
+  const chatCard = event.target.closest?.('.chat-message [data-attachment-id][data-action]');
+  if (chatCard && event.button === 0) {
+    cancelSearchAttachmentLongPress();
+    searchAttachmentPressOrigin = { x: event.clientX, y: event.clientY };
+    searchAttachmentLongPressTimer = window.setTimeout(() => { searchAttachmentLongPressTimer = null; chatAttachmentMenuSuppressUntil = Date.now() + 800; openChatAttachmentMenu(chatCard); }, 520);
+    return;
+  }
   const card = event.target.closest?.('.desktop-search-attachment-card');
   if (!card || event.button !== 0 || event.target.closest('.desktop-search-card-menu')) return;
   cancelSearchAttachmentLongPress();
+  searchAttachmentPressOrigin = { x: event.clientX, y: event.clientY };
   const entryId = card.dataset.searchEntryId;
   searchAttachmentLongPressTimer = window.setTimeout(() => {
     searchAttachmentLongPressTimer = null;
@@ -2776,12 +3752,15 @@ app.addEventListener('pointerdown', event => {
     if (!hit) return;
     searchAttachmentLongPressTriggered = entryId;
     rememberFullSearchScroll(entryId);
-    state.dialog = { kind: 'search-attachment-actions', hit };
+    state.dialog = { kind: 'search-attachment-actions', hit, anchor: attachmentMenuAnchor(card) };
     render();
   }, 520);
 });
 app.addEventListener('pointerup', cancelSearchAttachmentLongPress);
 app.addEventListener('pointercancel', cancelSearchAttachmentLongPress);
+app.addEventListener('pointermove', event => {
+  if (searchAttachmentPressOrigin && Math.hypot(event.clientX - searchAttachmentPressOrigin.x, event.clientY - searchAttachmentPressOrigin.y) > 10) cancelSearchAttachmentLongPress();
+});
 
 render = renderUnified;
 
@@ -2798,7 +3777,84 @@ function readChatDraft() {
 }
 function attachmentDraftKey() { const key = chatDraftKey(); return key ? `${key}:attachments` : null; }
 function readComposerAttachments() { const key = attachmentDraftKey(); if (!key) return []; try { const value = JSON.parse(window.localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value.filter(item => item?.id && item?.sha256 && item?.mimeType && item?.displayName) : []; } catch { return []; } }
-function writeComposerAttachments() { const key = attachmentDraftKey(); if (!key) return; try { if (state.composerAttachments.length) window.localStorage.setItem(key, JSON.stringify(state.composerAttachments)); else window.localStorage.removeItem(key); } catch {} }
+let ordinaryComposerDraftQueue = Promise.resolve();
+let ordinaryComposerDraftTimer = null;
+let scheduledOrdinaryComposerDraft = null;
+function ordinaryComposerDraftArgs() {
+  if (!native || state.temporaryConversation || !state.current) return null;
+  return {
+    workspaceId: state.current.summary.id,
+    conversationId: state.selectedConversationId || null,
+    text: state.composerDraft,
+    attachmentIds: state.composerAttachments.map(item => item.id),
+  };
+}
+function persistOrdinaryComposerDraft() {
+  const args = arguments.length ? arguments[0] : ordinaryComposerDraftArgs();
+  if (!args) return Promise.resolve();
+  const save = ordinaryComposerDraftQueue.catch(() => {}).then(() => invoke('save_desktop_conversation_draft', { args }));
+  ordinaryComposerDraftQueue = save;
+  return save;
+}
+function persistLegacyOrdinaryDraft(args) {
+  if (!args) return;
+  const key = `nanfeng-ai.desktop.chat-draft.v1:${args.workspaceId}:${args.conversationId || 'new'}`;
+  try { if (args.text) window.localStorage.setItem(key, args.text); else window.localStorage.removeItem(key); } catch {}
+}
+function clearNewConversationDraft() {
+  const args = ordinaryComposerDraftArgs();
+  if (!args || args.conversationId) return;
+  // Browser storage is only a migration bridge. Starting a new conversation explicitly revokes
+  // its generic-draft value in both storage owners.
+  persistLegacyOrdinaryDraft({ ...args, text: '', attachmentIds: [] });
+  void persistOrdinaryComposerDraft({ ...args, text: '', attachmentIds: [] }).catch(error => {
+    state.error = `新对话草稿未清除：${String(error)}`;
+    render();
+  });
+}
+function scheduleOrdinaryComposerDraft() {
+  const args = ordinaryComposerDraftArgs();
+  if (!args) return;
+  scheduledOrdinaryComposerDraft = args;
+  if (ordinaryComposerDraftTimer) clearTimeout(ordinaryComposerDraftTimer);
+  ordinaryComposerDraftTimer = setTimeout(() => {
+    ordinaryComposerDraftTimer = null;
+    const scheduled = scheduledOrdinaryComposerDraft;
+    scheduledOrdinaryComposerDraft = null;
+    persistLegacyOrdinaryDraft(scheduled);
+    void persistOrdinaryComposerDraft(scheduled);
+  }, 180);
+}
+async function flushOrdinaryComposerDraft() {
+  if (ordinaryComposerDraftTimer) {
+    clearTimeout(ordinaryComposerDraftTimer);
+    ordinaryComposerDraftTimer = null;
+  }
+  const scheduled = scheduledOrdinaryComposerDraft;
+  scheduledOrdinaryComposerDraft = null;
+  if (scheduled) {
+    persistLegacyOrdinaryDraft(scheduled);
+    await persistOrdinaryComposerDraft(scheduled);
+  }
+  await ordinaryComposerDraftQueue;
+}
+async function loadOrdinaryComposerDraft() {
+  const args = ordinaryComposerDraftArgs();
+  if (!args) return;
+  const draft = await invoke('read_desktop_conversation_draft', { workspaceId: args.workspaceId, conversationId: args.conversationId });
+  if (state.current?.summary?.id !== args.workspaceId || (state.selectedConversationId || null) !== args.conversationId) return;
+  if (!draft) {
+    // One-time bridge for drafts created by older Desktop bundles. Afterwards
+    // SQLite is the recovery owner, rather than the browser cache.
+    state.composerDraft = readChatDraft();
+    state.composerAttachments = readComposerAttachments();
+    if (state.composerDraft || state.composerAttachments.length) await persistOrdinaryComposerDraft();
+    return;
+  }
+  state.composerDraft = draft.text || '';
+  state.composerAttachments = Array.isArray(draft.attachments) ? draft.attachments : [];
+}
+function writeComposerAttachments() { const key = attachmentDraftKey(); if (key) { try { if (state.composerAttachments.length) window.localStorage.setItem(key, JSON.stringify(state.composerAttachments)); else window.localStorage.removeItem(key); } catch {} } scheduleOrdinaryComposerDraft(); }
 
 const MAX_COMPOSER_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const PREFERRED_CLIPBOARD_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -2893,12 +3949,9 @@ async function importComposerClipboardFiles(files) {
 }
 
 function writeChatDraft(value) {
-  const key = chatDraftKey();
-  if (!key) return;
-  try {
-    if (value) window.localStorage.setItem(key, value);
-    else window.localStorage.removeItem(key);
-  } catch {}
+  // Keystrokes must not synchronously touch localStorage or enqueue an IPC call.
+  // SQLite remains the recovery owner; submit flushes this short debounce window.
+  scheduleOrdinaryComposerDraft();
 }
 
 async function enterTemporaryChat() {
@@ -2920,13 +3973,55 @@ async function restoreTemporaryChat() {
   state.status = '发现可恢复的临时聊天；点击右上角“临时聊天”可在 24 小时内继续。';
 }
 
-async function updateTemporaryDraft(value) {
-  if (!state.temporaryConversation) return;
-  state.composerDraft = value;
-  try {
-    state.temporaryConversation = await invoke('update_desktop_temporary_conversation', { args: { temporaryId: state.temporaryConversation.temporaryId, draft: value, modelOverrideId: state.temporaryConversation.modelOverrideId || null } });
-  } catch (error) { state.error = `临时草稿未保存：${String(error)}`; render(); }
+let temporaryDraftQueue = Promise.resolve();
+let temporaryDraftTimer = null;
+let scheduledTemporaryDraft = null;
+function temporaryDraftArgs(value = state.composerDraft) {
+  if (!state.temporaryConversation) return null;
+  return { temporaryId: state.temporaryConversation.temporaryId, draft: value, modelOverrideId: state.temporaryConversation.modelOverrideId || null };
 }
+function persistTemporaryDraft(args) {
+  if (!args) return Promise.resolve();
+  const save = temporaryDraftQueue.catch(() => {}).then(async () => {
+    const updated = await invoke('update_desktop_temporary_conversation', { args });
+    // A delayed response must never replace newer in-memory input.
+    if (state.temporaryConversation?.temporaryId === args.temporaryId && state.composerDraft === args.draft) state.temporaryConversation = updated;
+  });
+  temporaryDraftQueue = save;
+  return save;
+}
+function scheduleTemporaryDraft(value) {
+  const args = temporaryDraftArgs(value);
+  if (!args) return;
+  state.composerDraft = value;
+  scheduledTemporaryDraft = args;
+  if (temporaryDraftTimer) clearTimeout(temporaryDraftTimer);
+  temporaryDraftTimer = setTimeout(() => {
+    temporaryDraftTimer = null;
+    const scheduled = scheduledTemporaryDraft;
+    scheduledTemporaryDraft = null;
+    void persistTemporaryDraft(scheduled);
+  }, 180);
+}
+async function flushTemporaryDraft() {
+  if (temporaryDraftTimer) {
+    clearTimeout(temporaryDraftTimer);
+    temporaryDraftTimer = null;
+  }
+  const scheduled = scheduledTemporaryDraft || temporaryDraftArgs();
+  scheduledTemporaryDraft = null;
+  if (scheduled) await persistTemporaryDraft(scheduled);
+  await temporaryDraftQueue;
+}
+async function updateTemporaryDraft(value) {
+  scheduleTemporaryDraft(value);
+  try { await flushTemporaryDraft(); } catch (error) { state.error = `临时草稿未保存：${String(error)}`; render(); throw error; }
+}
+window.addEventListener('pagehide', () => {
+  // Best-effort final flush; normal submit already awaits the same queues.
+  void flushOrdinaryComposerDraft();
+  void flushTemporaryDraft();
+});
 
 async function updateTemporaryModelOverride(value) {
   if (!state.temporaryConversation) return;
@@ -3056,6 +4151,11 @@ async function sendLocalMessage() {
   }
   if (!native || !state.current) {
     state.error = native ? '先导入一个本地工作区。' : 'Web 预览不会写入 Desktop SQLite。';
+    render();
+    return;
+  }
+  try { await flushOrdinaryComposerDraft(); } catch (error) {
+    state.error = `草稿未写入本机：${String(error)}`;
     render();
     return;
   }
@@ -3362,7 +4462,7 @@ app.addEventListener('contextmenu', event => {
   if (!row) return;
   conversationLongPress.cancel('contextmenu');
   event.preventDefault();
-  openConversationContextMenu(row);
+  openConversationContextMenu(row, event.target);
 });
 
 app.addEventListener('click', async event => {
@@ -3379,13 +4479,28 @@ app.addEventListener('click', async event => {
     } catch (error) { state.dialog = { kind: 'model-settings-feedback', failed: true, message: String(error) }; }
     render(); return;
   }
-  if (action === 'open-conversation-row-menu') { openConversationContextMenu(target.closest('[data-conversation-row]')); return; }
+  if (action === 'open-conversation-row-menu') { openConversationContextMenu(target.closest('[data-conversation-row]'), target); return; }
   if (action === 'open-conversation-header-menu') { openConversationHeaderMenu(target); return; }
   if (action === 'open-image-preview') { event.preventDefault(); await openImagePreview(target.dataset.attachmentId); return; }
   if (action === 'open-pdf-preview') { event.preventDefault(); await openPdfPreview(target.dataset.attachmentId); return; }
   if (action === 'open-video-preview') { event.preventDefault(); await openVideoPreview(target.dataset.attachmentId); return; }
   if (action === 'open-audio-preview') { event.preventDefault(); await openAudioPreview(target.dataset.attachmentId); return; }
   if (action === 'open-text-preview') { event.preventDefault(); await openTextPreview(target.dataset.attachmentId); return; }
+  if (action === 'toggle-video-playback') { event.preventDefault(); await togglePreviewPlayback('video'); return; }
+  if (action === 'toggle-video-volume' || action === 'toggle-audio-volume') {
+    event.preventDefault();
+    const kind = action === 'toggle-video-volume' ? 'video' : 'audio';
+    const control = target.closest('.preview-volume-control');
+    const volumeRange = control?.querySelector(`[data-${kind}-preview-volume]`);
+    const popover = control?.querySelector('.preview-volume-popover');
+    if (!volumeRange || !popover) return;
+    const opening = popover.hidden;
+    popover.hidden = !opening;
+    target.setAttribute('aria-expanded', String(opening));
+    if (opening) volumeRange.focus({ preventScroll: true });
+    return;
+  }
+  if (action === 'toggle-audio-playback') { event.preventDefault(); await togglePreviewPlayback('audio'); return; }
   if (action === 'open-preview-boundary') {
     event.preventDefault();
     await openAttachmentPreview({
@@ -3395,51 +4510,60 @@ app.addEventListener('click', async event => {
     });
     return;
   }
-  if (action === 'copy-text-preview' || action === 'share-text-preview') {
+  if (action === 'copy-text-preview') {
     event.preventDefault();
     const preview = state.textPreview;
     if (!preview?.text) return;
     try {
-      if (action === 'share-text-preview' && !native && typeof navigator.share === 'function') await navigator.share({ title: preview.displayName, text: preview.text });
-      else await navigator.clipboard.writeText(preview.text);
-      state.status = action === 'share-text-preview'
-        ? `${native ? '已复制可分享文本；请在目标应用中粘贴' : '系统分享已打开'}${preview.truncated ? '（仅当前可见的前 128 KiB）' : ''}。`
-        : `已复制${preview.truncated ? '当前可见的前 128 KiB' : '完整文本'}。`;
+      await navigator.clipboard.writeText(preview.text);
+      showCopyIconFeedback(target);
       state.error = '';
     } catch (error) {
-      if (error?.name !== 'AbortError') state.error = '复制或分享未完成。';
+      if (error?.name !== 'AbortError') showPreviewActionError(target, '复制未完成。');
     }
-    render();
     return;
   }
-  if (action === 'save-text-preview') {
+  if (action === 'chat-attachment-search') {
     event.preventDefault();
-    try { await saveAttachmentCopy(state.textPreview); }
-    catch (error) { state.error = `文本附件副本未保存：${String(error)}`; }
-    render();
+    const item = state.dialog?.item;
+    if (!item) return;
+    state.dialog = null;
+    state.chatSearch = item.displayName;
+    openFullSearch(item.category);
     return;
   }
-  if (action === 'start-video-preview') {
+  if (action === 'chat-attachment-save' || action === 'chat-attachment-share') {
     event.preventDefault();
-    const video = document.querySelector('[data-video-preview]');
-    if (!video) return;
-    try { await video.play(); }
-    catch (_) { state.error = '本地视频无法开始播放；私有副本仍未外发。'; render(); }
+    const item = state.dialog?.item;
+    if (!item) return;
+    try {
+      if (action === 'chat-attachment-save') await saveAttachmentCopy(item);
+      else await sharePreviewAttachment(item);
+    } catch (error) { if (error?.name !== 'AbortError') showPreviewActionError(target, action === 'chat-attachment-save' ? '附件副本未保存。' : '分享未打开。'); }
     return;
   }
-  if (action === 'start-audio-preview') {
-    event.preventDefault(); const audio = document.querySelector('[data-audio-preview]'); if (!audio) return;
-    try { await audio.play(); } catch (_) { state.error = '本地音频无法开始播放；私有副本仍未外发。'; render(); }
+  if (action === 'save-preview-attachment') {
+    event.preventDefault();
+    const preview = activePreviewForKind(target.dataset.previewKind);
+    try { await saveAttachmentCopy(preview || {}); }
+    catch (error) { showPreviewActionError(target, '附件副本未保存。'); }
+    return;
+  }
+  if (action === 'share-preview-attachment') {
+    event.preventDefault();
+    const preview = activePreviewForKind(target.dataset.previewKind);
+    try { await sharePreviewAttachment(preview); state.error = ''; }
+    catch (error) { if (error?.name !== 'AbortError') showPreviewActionError(target, '分享未打开。'); }
     return;
   }
   if (action === 'close-image-preview') { event.preventDefault(); state.imagePreview = null; render(); return; }
+  if (action === 'image-preview-previous' || action === 'image-preview-next') { event.preventDefault(); const preview = state.imagePreview; if (!preview) return; const navigation = imagePreviewNavigation(preview.imageIds, preview.attachmentId); const targetId = action === 'image-preview-next' ? navigation.nextId : navigation.previousId; if (targetId) await openImagePreview(targetId, preview.workspaceId, preview.imageIds); return; }
   if (action === 'close-pdf-preview') { event.preventDefault(); state.pdfPreview = null; render(); return; }
   if (action === 'close-video-preview') { event.preventDefault(); await closeVideoPreview(); return; }
   if (action === 'close-audio-preview') { event.preventDefault(); await closeAudioPreview(); return; }
   if (action === 'close-text-preview') { event.preventDefault(); state.textPreview = null; render(); return; }
   if (action === 'close-preview-boundary') { event.preventDefault(); state.previewBoundary = null; render(); return; }
   if (action === 'pdf-page-previous' || action === 'pdf-page-next') { event.preventDefault(); if (!state.pdfPreview?.attachmentId) return; await openPdfPreview(state.pdfPreview.attachmentId, state.pdfPreview.pageNumber + (action === 'pdf-page-next' ? 1 : -1), state.pdfPreview.workspaceId); return; }
-  if (action === 'image-zoom-in' || action === 'image-zoom-out' || action === 'image-zoom-reset') { event.preventDefault(); if (!state.imagePreview?.dataUrl) return; const current = Number(state.imagePreview.zoom) || 1; const zoom = action === 'image-zoom-in' ? Math.min(4, current + 0.25) : action === 'image-zoom-out' ? Math.max(1, current - 0.25) : 1; state.imagePreview = { ...state.imagePreview, zoom, panX: zoom === 1 ? 0 : state.imagePreview.panX || 0, panY: zoom === 1 ? 0 : state.imagePreview.panY || 0 }; render(); return; }
   if (action === 'toggle-composer-add') {
     if (state.composerAddOpen) closeTopOverlay(); else openTransientOverlay('composer-add', target);
     return;
@@ -3521,22 +4645,57 @@ app.addEventListener('click', async event => {
     if (!payload) { state.error = '该消息没有可复制的安全正文。'; render(); return; }
     try {
       await navigator.clipboard.writeText(payload);
-      state.status = '已复制纯文本；未包含路径、URI 或隐藏 metadata。';
+      showMessageCopyFeedback(target);
       state.error = '';
     } catch (error) {
       state.error = `复制失败：${String(error)}`;
+      render();
     }
-    render();
+    return;
+  }
+  if (action === 'copy-markdown-block') {
+    event.preventDefault();
+    const payload = String(target.dataset.copyText || '');
+    const label = String(target.dataset.copyLabel || '内容');
+    if (!payload) { state.error = '该内容块没有可复制文本。'; render(); return; }
+    try {
+      await navigator.clipboard.writeText(payload);
+      showCopyIconFeedback(target);
+      state.error = '';
+    } catch (error) {
+      state.error = `复制失败：${String(error)}`;
+      render();
+    }
     return;
   }
   if (action === 'open-assistant-message-menu') {
-    state.dialog = { kind: 'assistant-message-actions', messageId: target.dataset.messageId };
+    event.preventDefault();
+    toggleAssistantMessageMenu(target);
+    return;
+  }
+  if (action === 'open-source-links') {
+    event.preventDefault();
+    let sources = [];
+    try { sources = JSON.parse(target.dataset.sources || '[]'); } catch { /* malformed imported metadata remains inert */ }
+    state.dialog = { kind: 'source-links', sources: Array.isArray(sources) ? sources.slice(0, 32) : [] };
     state.error = '';
     render();
     return;
   }
+  if (action === 'open-source-link') {
+    event.preventDefault();
+    try {
+      await invoke('open_desktop_source_link', { args: { href: String(target.dataset.href || '') } });
+      state.error = '';
+    } catch (error) {
+      state.error = `无法打开来源网站：${String(error)}`;
+      render();
+    }
+    return;
+  }
   if (action === 'show-assistant-answer-information' || action === 'show-answer-context') {
     const record = state.contextSelectionRecords.find(item => item.assistantMessageId === target.dataset.messageId) || null;
+    state.assistantMessageMenu = null;
     state.dialog = { kind: 'assistant-answer-information', record };
     state.error = '';
     render();
@@ -3550,7 +4709,7 @@ app.addEventListener('click', async event => {
     if (!payload) { state.error = '该消息没有可分享的安全正文。'; render(); return; }
     try {
       if (String(message?.role || '').trim().toLocaleLowerCase() === 'assistant') {
-        const sequence = String(Math.max(1, (conversation.messages || []).findIndex(item => item.id === message.id) + 1)).padStart(2, '0');
+        const sequence = String(Math.max(1, orderedConversationMessages(conversation).findIndex(item => item.id === message.id) + 1)).padStart(2, '0');
         await saveMarkdown(assistantMessageMarkdown(conversation, message.id), safeMarkdownName(`${conversation.title || '南枫 AI'}-${sequence}`), '当前回答');
         return;
       }
@@ -3570,13 +4729,8 @@ app.addEventListener('click', async event => {
     render();
     return;
   }
-  if (action === 'message-provenance') {
-    state.status = '该消息来源已保存在本地审计记录中；不会显示 URI、文件路径或密钥。';
-    state.error = '';
-    render();
-    return;
-  }
   if (action === 'branch-from-message') {
+    state.assistantMessageMenu = null;
     state.dialog = null;
     const conversation = resolveConversation(state.current, state.selectedConversationId);
     if (!native || !state.current || !conversation) { state.error = '当前没有可分支的本地会话。'; render(); return; }
@@ -3606,6 +4760,7 @@ app.addEventListener('click', async event => {
   if (action === 'set-theme-color') { updateAppearance('themeColor', target.dataset.value); return; }
   if (action === 'toggle-conversation-favorite' || action === 'context-menu-favorite') { toggleFavoriteConversation(target.dataset.id); return; }
   if (action === 'toggle-conversation-find') {
+    cancelConversationFindRender();
     state.conversationFindOpen = !state.conversationFindOpen;
     recomputeConversationFind({ resetIndex: true });
     render();
@@ -3613,6 +4768,7 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-find') {
+    cancelConversationFindRender();
     state.selectedConversationId = target.dataset.id;
     state.contextMenu = null;
     state.conversationFindOpen = true;
@@ -3622,6 +4778,7 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'close-conversation-find') {
+    cancelConversationFindRender();
     state.conversationFindOpen = false;
     state.conversationFindQuery = '';
     recomputeConversationFind({ resetIndex: true });
@@ -3629,6 +4786,8 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'conversation-find-previous' || action === 'conversation-find-next') {
+    cancelConversationFindRender();
+    recomputeConversationFind();
     if (!state.conversationFindMatches.length) return;
     const delta = action === 'conversation-find-next' ? 1 : -1;
     state.conversationFindIndex = (state.conversationFindIndex + delta + state.conversationFindMatches.length) % state.conversationFindMatches.length;
@@ -3764,7 +4923,7 @@ app.addEventListener('click', async event => {
     state.pane = 'chat';
     state.profileOpen = false;
   }
-  if (['show-work', 'show-workspace', 'select-work-project', 'new-work-chat', 'select-work-conversation', 'show-projects', 'show-knowledge', 'show-memory', 'show-conversation'].includes(action)) {
+  if (['return-workspace-origin', 'show-work', 'show-workspace', 'select-work-project', 'new-work-chat', 'select-work-conversation', 'show-projects', 'show-knowledge', 'show-memory', 'show-conversation'].includes(action)) {
     state.sidebarOpen = false;
     render();
   }
@@ -3791,7 +4950,7 @@ app.addEventListener('click', async event => {
   const target = event.target.closest('[data-action]');
   const action = target?.dataset.action;
   if (action === 'submit-search') { event.preventDefault(); void submitLocalSearch(); return; }
-  if (action === 'set-search-category') { event.preventDefault(); state.searchCategory = target.dataset.category || 'all'; state.searchFileTypeOpen = false; state.searchScrollSnapshot = null; void runFullSearch(); return; }
+  if (action === 'set-search-category') { event.preventDefault(); selectFullSearchCategory(target.dataset.category); return; }
   if (action === 'set-search-sort') { event.preventDefault(); const column = target.dataset.sortColumn || 'default'; state.searchSortMode = column === 'default' ? 'default' : state.searchSortMode === `${column}Descending` ? `${column}Ascending` : `${column}Descending`; state.searchScrollSnapshot = null; void runFullSearch(); return; }
   if (action === 'toggle-search-file-types') { event.preventDefault(); state.searchFileTypeOpen = !state.searchFileTypeOpen; render(); return; }
   if (action === 'set-search-file-type') { event.preventDefault(); state.searchFileType = target.dataset.fileType || 'all'; state.searchFileTypeOpen = false; state.searchScrollSnapshot = null; void runFullSearch(); return; }
@@ -3801,14 +4960,15 @@ app.addEventListener('click', async event => {
   if (action === 'fill-search-history') { event.preventDefault(); state.chatSearch = target.dataset.query || ''; state.searchHistoryOpen = false; state.searchHistoryManuallyOpened = false; state.suppressSearchHistoryFocus = true; void submitLocalSearch(); return; }
   if (action === 'close-search-history') { event.preventDefault(); state.searchHistoryOpen = false; state.suppressSearchHistoryFocus = true; render(); focusSearchAfterHistoryDismissal(); return; }
   if (action === 'clear-search-history') { event.preventDefault(); if (native && state.current) invoke('clear_desktop_local_search_history', { workspaceId: state.current.summary.id }).then(() => { state.searchHistory = []; state.searchHistoryHighlighted = null; focusSearchAfterHistoryClear(); }).catch(() => { state.searchError = '本地搜索历史清除未完成。'; render(); }); return; }
-  if (action === 'close-search') { event.preventDefault(); state.searchPanel = false; state.searchReturnActive = false; state.searchLocatedArchivedConversationId = null; render(); return; }
+  if (action === 'close-search') { event.preventDefault(); if (fullSearchCategoryFrame !== null) { cancelAnimationFrame(fullSearchCategoryFrame); fullSearchCategoryFrame = null; } fullSearchGeneration += 1; state.searchLoading = false; state.searchPanel = false; state.searchReturnActive = false; state.searchLocatedArchivedConversationId = null; render(); return; }
   if (action === 'return-to-search') { event.preventDefault(); state.searchPanel = true; state.searchReturnActive = false; state.searchLocatedArchivedConversationId = null; render(); queueMicrotask(restoreFullSearchScroll); return; }
   if (action === 'open-search-result') {
     event.preventDefault();
     await locateSearchHit(fullSearchHit(target.dataset.entryId)); return;
   }
   if (action === 'open-search-attachment') { event.preventDefault(); if (searchAttachmentLongPressTriggered === target.dataset.entryId) { searchAttachmentLongPressTriggered = null; return; } await openSearchAttachment(fullSearchHit(target.dataset.entryId)); return; }
-  if (action === 'open-search-attachment-menu') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId); if (hit) { rememberFullSearchScroll(hit.entryId); state.dialog = { kind: 'search-attachment-actions', hit }; render(); } return; }
+  if (action === 'open-search-attachment-menu') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId); if (hit) { rememberFullSearchScroll(hit.entryId); state.dialog = { kind: 'search-attachment-actions', hit, anchor: attachmentMenuAnchor(target.closest('.desktop-search-attachment-card') || target) }; render(); } return; }
+  if (action === 'preview-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; state.dialog = null; await openSearchAttachment(hit); return; }
   if (action === 'save-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; try { if (await saveAttachmentCopy(hit)) state.dialog = null; } catch (error) { state.error = `附件副本未保存：${String(error)}`; } render(); return; }
   if (action === 'locate-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; state.dialog = null; await locateSearchHit(hit); return; }
   if (action === 'ask-delete-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (hit) { state.dialog = { kind: 'search-attachment-delete', hit }; render(); } return; }
@@ -3851,7 +5011,7 @@ app.addEventListener('click', async event => {
 
 app.addEventListener('input', event => {
   if (event.target.id === 'chat-composer') {
-    if (state.temporaryConversation) updateTemporaryDraft(state.composerDraft); else writeChatDraft(state.composerDraft);
+    if (state.temporaryConversation) scheduleTemporaryDraft(state.composerDraft); else writeChatDraft(state.composerDraft);
   }
   if (event.target.id === 'chat-search') {
     state.chatSearch = event.target.value;
@@ -3871,6 +5031,22 @@ app.addEventListener('input', event => {
     state.modelCredentialEdited = true;
     state.modelSettingsNotice = '';
     state.modelSettingsError = '';
+  }
+  const previewRange = event.target.closest?.('[data-video-preview-range], [data-audio-preview-range]');
+  if (previewRange) {
+    const kind = previewRange.hasAttribute('data-video-preview-range') ? 'video' : 'audio';
+    const media = document.querySelector(`[data-${kind}-preview]`);
+    if (media) { media.currentTime = Math.max(0, Number(previewRange.value) || 0) / 1000; syncPreviewPlaybackUi(kind, media); }
+  }
+  const volumeRange = event.target.closest?.('[data-video-preview-volume], [data-audio-preview-volume]');
+  if (volumeRange) {
+    const kind = volumeRange.hasAttribute('data-video-preview-volume') ? 'video' : 'audio';
+    const media = document.querySelector(`[data-${kind}-preview]`);
+    if (media) {
+      media.muted = false;
+      media.volume = Math.max(0, Math.min(1, (Number(volumeRange.value) || 0) / 100));
+      syncPreviewPlaybackUi(kind, media);
+    }
   }
 });
 
@@ -3893,7 +5069,7 @@ app.addEventListener('pointerdown', event => {
 app.addEventListener('keydown', event => {
   if ((event.target.id === 'chat-search' || event.target.id === 'full-search-input') && event.key === 'Enter') { event.preventDefault(); void submitLocalSearch(); }
   if (event.key === 'Escape' && state.searchHistoryOpen) { state.searchHistoryOpen = false; state.suppressSearchHistoryFocus = true; render(); focusSearchAfterHistoryDismissal(); }
-  else if (event.key === 'Escape' && state.searchPanel) { state.searchPanel = false; render(); }
+  else if (event.key === 'Escape' && state.searchPanel) { fullSearchGeneration += 1; state.searchLoading = false; state.searchPanel = false; render(); }
 });
 
 app.addEventListener('click', event => {
@@ -3937,7 +5113,7 @@ app.addEventListener('click', event => {
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   const action = target?.dataset.action;
-  if (!['sign-in-google-account', 'sign-out-google-account', 'create-account-recovery', 'confirm-account-recovery', 'create-account-recovery-rotation', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'load-account-cloud-documents', 'restore-account-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
+  if (!['show-google-login-requirements', 'sign-in-google-account', 'sign-out-google-account', 'create-account-recovery', 'confirm-account-recovery', 'copy-account-recovery-code', 'create-account-recovery-rotation', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'load-account-cloud-documents', 'restore-account-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   void (async () => {
@@ -3982,7 +5158,14 @@ app.addEventListener('click', event => {
         }
         notifyAccountSync(['SYNCED', 'UP_TO_DATE'].includes(receipt.status) ? 'success' : 'attention');
         await loadDesktopAccountSync();
+      } else if (action === 'show-google-login-requirements') {
+        state.status = '此 Desktop 尚未写入南枫云地址或公开访问密钥；不会打开浏览器、读取账号或上传数据。';
       } else if (action === 'sign-in-google-account') {
+        if (accountSignInPending) {
+          state.status = '仍在等待系统浏览器的 Google 授权；未重复打开登录窗口。';
+          return;
+        }
+        accountSignInPending = true;
         state.status = '等待系统浏览器完成 Google 授权…';
         render();
         state.accountSync = await invoke('sign_in_desktop_google_account');
@@ -3995,15 +5178,25 @@ app.addEventListener('click', event => {
       } else if (action === 'create-account-recovery') {
         state.accountRecovery = { ...await invoke('create_desktop_recovery_code'), rotation: false };
         state.status = '恢复码只显示这一次；安全保存后再确认。';
+      } else if (action === 'copy-account-recovery-code') {
+        const recoveryCode = document.querySelector('.android-account-recovery output')?.textContent || '';
+        if (!recoveryCode) throw new Error('恢复码已隐藏，无法复制');
+        if (!navigator.clipboard?.writeText) throw new Error('当前环境无法使用系统剪贴板');
+        await navigator.clipboard.writeText(recoveryCode);
+        showCopyIconFeedback(target);
+        state.status = '';
       } else if (action === 'confirm-account-recovery') {
         state.accountSync = await invoke('confirm_desktop_recovery_code', { confirmationHash: target.dataset.confirmationHash });
         state.accountRecovery = null;
         state.status = '恢复保护已确认；请再明确选择首次同步方向。';
       } else if (action === 'create-account-recovery-rotation') {
-        state.accountRecovery = { ...await invoke('create_desktop_recovery_rotation'), rotation: true };
-        state.status = '新恢复码只显示这一次；确认后才会开始重加密已选云端对话。';
+        state.accountRecovery = { rotation: true };
+        state.status = '';
       } else if (action === 'confirm-account-recovery-rotation') {
-        const receipt = await invoke('confirm_desktop_recovery_rotation', { confirmationHash: target.dataset.confirmationHash });
+        const recoveryCode = document.getElementById('new-recovery-code')?.value || '';
+        if ([...recoveryCode].length < 12 || new TextEncoder().encode(recoveryCode).length > 128 || recoveryCode.trim() !== recoveryCode || /[\u0000-\u001f\u007f]/.test(recoveryCode)) throw new Error('恢复码至少 12 个字符，最多 128 字节，不能包含首尾空格或控制字符');
+        const pending = await invoke('create_desktop_recovery_rotation', { recoveryCode });
+        const receipt = await invoke('confirm_desktop_recovery_rotation', { confirmationHash: pending.confirmationHash });
         state.accountRecovery = null;
         state.accountSync = { ...state.accountSync, rotationPending: receipt.status !== 'ROTATED' };
         state.status = receipt.status === 'ROTATED' ? `新恢复码已激活；${receipt.completedDocuments} 个云端对话已重加密并回读。` : `恢复码轮换暂停于 ${receipt.status}；已完成 ${receipt.completedDocuments}/${receipt.totalDocuments}，未静默重发。`;
@@ -4035,7 +5228,7 @@ app.addEventListener('click', event => {
         state.status = '已选择以本机所选对话为起点；云端非空时仍会停下并报冲突。';
       } else if (action === 'toggle-periodic-account-sync') {
         state.accountSync = await invoke('set_desktop_periodic_sync', { enabled: !state.accountSync.periodicEnabled });
-        state.status = state.accountSync.periodicEnabled ? '已开启定期同步，仅处理已选对话。' : '已关闭定期同步。';
+        state.status = '';
       } else if (action === 'reconcile-account-sync') {
         const receipt = await invoke('reconcile_desktop_conversation_sync', { workspaceId: target.dataset.workspaceId, conversationId: target.dataset.conversationId });
         if (receipt.status === 'SYNCED_AFTER_RECONCILE') state.accountSync = { ...state.accountSync, pendingUnknown: null };
@@ -4046,9 +5239,13 @@ app.addEventListener('click', event => {
       state.error = '';
     } catch (error) {
       state.error = `账号与同步操作未完成：${String(error)}`;
+      if (action === 'sign-in-google-account') state.status = 'Google 授权未完成；本机数据与云端均未改变，可检查配置后重试。';
       if (['context-menu-sync', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'restore-account-cloud-conversation', 'reconcile-account-sync'].includes(action)) notifyAccountSync('attention');
+    } finally {
+      if (action === 'sign-in-google-account') accountSignInPending = false;
+      if (action === 'copy-account-recovery-code' && target?.__copyIconFeedback) window.setTimeout(render, COPY_SUCCESS_DURATION_MS);
+      else render();
     }
-    render();
   })();
 }, true);
 
@@ -4056,6 +5253,8 @@ async function bootDesktopShell() {
   let startupStage = 'WORKSPACE_READBACK';
   try {
     await refresh();
+    startupStage = 'ORDINARY_DRAFT_READBACK';
+    await loadOrdinaryComposerDraft();
     if (native) {
       startupStage = 'C16_VISUAL_ACCEPTANCE_GATE';
       c16ThemePreview = await invoke('read_desktop_c16_visual_acceptance_state') || '';

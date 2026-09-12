@@ -174,15 +174,28 @@ class P2ModelServiceContractsTest {
     }
 
     @Test
+    fun `settings repository upgrades persisted Gemini 3_7 selection to Gemini 3_8`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences("model_service_settings_v1", Context.MODE_PRIVATE)
+            .edit()
+            .putString("OPENROUTER.preset", "GEMINI_3_7_FLASH")
+            .commit()
+
+        val restored = AndroidModelServiceSettingsRepository(context).load(ProviderId.OPENROUTER)
+
+        assertEquals(ModelPresetId.GEMINI_3_8_FLASH, restored.presetId)
+    }
+
+    @Test
     fun `catalog contains the approved logical provider models`() {
         assertEquals(
-            listOf("Gemini 3.7 Flash", "Qwen3.7-Plus", "Qwen3.8-Max", "Qwen3.6 Flash", "DeepSeek V4 Pro", "DeepSeek V4 Flash", "GLM-5.3", "GLM-5.3 Flash"),
-            NanfengModelServiceCatalog.presets.filter { it.id in setOf(ModelPresetId.GEMINI_3_7_FLASH, ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH, ModelPresetId.DEEPSEEK_V4_PRO, ModelPresetId.DEEPSEEK_V4_FLASH, ModelPresetId.GLM_5_3, ModelPresetId.GLM_5_3_FLASH) }.map { it.displayName },
+            listOf("Gemini 3.8 Flash", "Qwen3.7-Plus", "Qwen3.8-Max", "Qwen3.6 Flash", "DeepSeek V4 Pro", "DeepSeek V4.1 Flash", "GLM-5.3", "GLM-5.3 Flash"),
+            NanfengModelServiceCatalog.presets.filter { it.id in setOf(ModelPresetId.GEMINI_3_8_FLASH, ModelPresetId.QWEN_3_7_PLUS, ModelPresetId.QWEN_3_8_MAX, ModelPresetId.QWEN_3_6_FLASH, ModelPresetId.DEEPSEEK_V4_PRO, ModelPresetId.DEEPSEEK_V4_FLASH, ModelPresetId.GLM_5_3, ModelPresetId.GLM_5_3_FLASH) }.map { it.displayName },
         )
     }
 
     @Test fun `provider catalog keeps OpenRouter and official direct endpoints separate`() {
-        assertEquals(ProviderId.OPENROUTER, NanfengModelServiceCatalog.providerFor(ModelPresetId.GEMINI_3_7_FLASH))
+        assertEquals(ProviderId.OPENROUTER, NanfengModelServiceCatalog.providerFor(ModelPresetId.GEMINI_3_8_FLASH))
         assertEquals(ProviderId.QWEN, NanfengModelServiceCatalog.providerFor(ModelPresetId.QWEN_3_7_PLUS))
         assertEquals(ProviderId.DEEPSEEK, NanfengModelServiceCatalog.providerFor(ModelPresetId.DEEPSEEK_V4_PRO))
         assertEquals(ProviderId.DEEPSEEK, NanfengModelServiceCatalog.providerFor(ModelPresetId.DEEPSEEK_V4_FLASH))

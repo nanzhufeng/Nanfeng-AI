@@ -266,6 +266,20 @@ class SettingsUiSimplificationContractsTest {
         assertFalse(exchange.contains("Text(\"导出\""))
         assertFalse(backup.contains("Row(modifier = Modifier.fillMaxWidth()"))
         assertTrue(backup.countOccurrences("Modifier.fillMaxWidth().heightIn(min = 48.dp)") >= 2)
+        assertTrue(backup.contains("workingOperation == LocalBackupOperation.EXPORT"))
+        assertTrue(backup.contains("workingOperation == LocalBackupOperation.RESTORE"))
+        assertTrue(backup.contains("MaterialTheme.typography.labelSmall"))
+        assertTrue(backup.contains("备份完成，已确认保存的文件可以正常打开。"))
+        assertTrue(backup.contains("LocalBackupStatusMessage(state, LocalBackupOperation.EXPORT)"))
+        assertTrue(backup.contains("LocalBackupStatusMessage(state, LocalBackupOperation.RESTORE)"))
+    }
+
+    @Test
+    fun `settings content keeps status hints above the system navigation area`() {
+        val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
+        val start = app.indexOf("Column(\n        modifier = Modifier\n            .widthIn(max = 1280.dp)")
+        val settings = app.substring(start, app.indexOf("SettingsTextScale {", start))
+        assertTrue(settings.contains(".verticalScroll(settingsScrollState)\n            .navigationBarsPadding()"))
     }
 
     @Test

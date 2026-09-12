@@ -43,27 +43,6 @@ class AndroidModelProfileDirectory(context: Context) : ModelProfileDirectory {
         }.getOrDefault(false)
     }
 
-    /**
-     * A provider list only validates ID availability; it does not prove multimodal capability
-     * or token limits.  Therefore cached dynamic fields are retained, while every safety and
-     * planning field comes from the current verified bundled profile.
-     */
-    private fun mergeCachedProfiles(bundled: Map<ModelPresetId, ResolvedModel>, cached: Map<ModelPresetId, ResolvedModel>?): Map<ModelPresetId, ResolvedModel> {
-        if (cached == null) return bundled
-        return bundled.mapValues { (preset, seed) ->
-            cached[preset]?.copy(
-                providerId = seed.providerId,
-                displayName = seed.displayName,
-                capabilities = seed.capabilities,
-                contextWindowTokens = seed.contextWindowTokens,
-                maxOutputTokens = seed.maxOutputTokens,
-                tokenizerId = seed.tokenizerId,
-                alternateModelIds = seed.alternateModelIds,
-                attachmentInputTokenEstimate = seed.attachmentInputTokenEstimate,
-            ) ?: seed
-        }
-    }
-
     private fun load(raw: String?): Map<ModelPresetId, ResolvedModel>? = runCatching {
         val items = JSONObject(raw ?: return null).getJSONArray("profiles")
         buildMap {
@@ -112,5 +91,30 @@ class AndroidModelProfileDirectory(context: Context) : ModelProfileDirectory {
                 })
             }) }
         })
+    }
+}
+
+/**
+ * A provider list only validates ID availability; it does not prove multimodal capability
+ * or token limits.  Therefore cached dynamic fields are retained, while every safety and
+ * planning field comes from the current verified bundled profile.
+ */
+internal fun mergeCachedProfiles(bundled: Map<ModelPresetId, ResolvedModel>, cached: Map<ModelPresetId, ResolvedModel>?): Map<ModelPresetId, ResolvedModel> {
+    if (cached == null) return bundled
+    return bundled.mapValues { (preset, seed) ->
+        // Stable preset identity survives upgrades; a retired API ID must not override the seed.
+        val cachedProfile = cached[preset]?.takeUnless {
+            preset == ModelPresetId.DEEPSEEK_V4_FLASH && it.modelId != seed.modelId
+        }
+        cachedProfile?.copy(
+            providerId = seed.providerId,
+            displayName = seed.displayName,
+            capabilities = seed.capabilities,
+            contextWindowTokens = seed.contextWindowTokens,
+            maxOutputTokens = seed.maxOutputTokens,
+            tokenizerId = seed.tokenizerId,
+            alternateModelIds = seed.alternateModelIds,
+            attachmentInputTokenEstimate = seed.attachmentInputTokenEstimate,
+        ) ?: seed
     }
 }

@@ -69,4 +69,22 @@ class P7ASyncContractsTest {
             dataKey.fill(0)
         }
     }
+
+    @Test fun `stored wrapping material opens its envelope without reusing the recovery code`() {
+        val fixture = fixture()
+        val code = "changed-recovery-code".toCharArray()
+        val wrapping = NfaiSyncV1Gateway.createAccountWrappingMaterial(code)
+        val wrong = NfaiSyncV1Gateway.createAccountWrappingMaterial("different-recovery-code".toCharArray())
+        val dataKey = ByteArray(32) { (it + 11).toByte() }
+        try {
+            val sealed = NfaiSyncV1Gateway.sealWithAccountWrappingMaterial(snapshot(fixture), dataKey, wrapping) as NfaiSyncResult.Sealed
+            assertTrue(NfaiSyncV1Gateway.openWithAccountWrappingMaterial(sealed.canonicalEnvelope, wrapping, "com.nanzhufeng.ai", "sync-fixture-v1", 7) is NfaiSyncResult.Opened)
+            assertTrue(NfaiSyncV1Gateway.openWithAccountWrappingMaterial(sealed.canonicalEnvelope, wrong, "com.nanzhufeng.ai", "sync-fixture-v1", 7) is NfaiSyncResult.Rejected)
+        } finally {
+            code.fill('\u0000')
+            wrapping.wrappingKey.fill(0); wrapping.salt.fill(0)
+            wrong.wrappingKey.fill(0); wrong.salt.fill(0)
+            dataKey.fill(0)
+        }
+    }
 }

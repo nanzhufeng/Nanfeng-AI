@@ -24,7 +24,7 @@ test('FB-P6-050 desktop rail previews only on hover or keyboard focus and jumps 
   assert.ok(css.includes('.chat-transcript-rail button:hover em'));
   assert.ok(css.includes('.chat-transcript-rail button:focus-visible em'));
   assert.ok(!css.includes('.chat-transcript-rail button.is-active em'));
-  for (const token of ['justify-content: center', 'gap: 3.5px', 'width: 5.33px', 'width: 20px', 'width: 14px', 'width: 10px', 'width: 7px', 'left: 44px', 'data-rail-distance="1"', 'data-rail-distance="6"']) assert.ok(css.includes(token));
+  for (const token of ['justify-content: center', 'gap: 3.5px', 'width: 5.33px', 'height: 2px', 'width: 20px', 'width: 14px', 'width: 10px', 'width: 7px', 'left: 44px', 'data-rail-distance="1"', 'data-rail-distance="6"']) assert.ok(css.includes(token));
   assert.ok(css.includes('.chat-transcript-rail button.is-active > span { width: 28px'));
   for (const token of ['width: min(320px, calc(100vw - 132px))', 'max-height: 72px', 'border-radius: 16px']) assert.ok(css.includes(token));
   assert.ok(app.includes("item.classList.toggle('is-active', emphasize && item === target)"));

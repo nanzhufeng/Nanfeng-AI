@@ -33,6 +33,21 @@ class P3AConversationDomainContractsTest {
     }
 
     @Test
+    fun `current branch is parent first even when persisted nodes arrive child first`() {
+        val service = ConversationTreeService(clock)
+        val asked = service.append(service.create("导入顺序合同"), message(MessageRole.USER, "提问"))
+        val answered = service.append(asked, message(MessageRole.ASSISTANT, "回答"))
+
+        val reloadedOutOfOrder = answered.nodes.asReversed()
+        assertEquals(
+            listOf("提问", "回答"),
+            MessageTree(answered.conversation, reloadedOutOfOrder)
+                .contextPath()
+                .map { (it.content.single() as ContentBlock.Text).text },
+        )
+    }
+
+    @Test
     fun `message role and partial output invariants reject invalid future tool or user states`() {
         val conversation = ConversationTreeService(clock).create("角色合同").conversation
         assertThrows(IllegalArgumentException::class.java) {

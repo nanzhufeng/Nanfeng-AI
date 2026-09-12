@@ -24,24 +24,27 @@ const c08DocxHit = {
   conversationRevision: 1,
 };
 
-test('C08 attachment result has one direct in-app preview owner and never advertises system open', () => {
+test('C08 attachment result has one direct in-app preview action and never advertises system open', () => {
   const html = renderDesktopSearchPage({
     category: 'file',
     page: { hits: [c08DocxHit], textCount: 0, attachmentCount: 1, truncated: false },
   });
   assert.doesNotMatch(html, /系统打开/);
   assert.equal((html.match(/data-action="open-search-attachment"/g) || []).length, 1);
-  assert.match(html, /应用内安全预览边界/);
+  assert.match(html, /aria-label="预览附件：C08-验收\.docx"/);
+  assert.doesNotMatch(html, /application\/vnd\.openxmlformats/);
+  assert.doesNotMatch(html, /Office 文件必须留在应用内/);
 });
 
-test('C08 search routes through the shared preview owner and removes the external-open fallback', async () => {
+test('C08 search routes through the shared preview owner without surfacing implementation labels', async () => {
   const root = resolve(import.meta.dirname, '..');
   const [app, search, chat] = await Promise.all([
     readFile(resolve(root, 'src/app.mjs'), 'utf8'),
     readFile(resolve(root, 'src/desktop-search-page.mjs'), 'utf8'),
     readFile(resolve(root, 'src/chat-shell.mjs'), 'utf8'),
   ]);
-  for (const source of [app, search, chat]) assert.match(source, /desktop-attachment-preview-owner\.mjs/);
+  for (const source of [app, chat]) assert.match(source, /desktop-attachment-preview-owner\.mjs/);
+  assert.match(search, /desktop-attachment-preview-owner\.mjs/);
   const searchOpenOwner = app.slice(app.indexOf('async function openSearchAttachment'), app.indexOf('const icons ='));
   assert.match(searchOpenOwner, /openAttachmentPreview/);
   assert.doesNotMatch(searchOpenOwner, /open_desktop_attachment_with_system|已交给系统打开/);
@@ -85,5 +88,5 @@ test('C08 read-only browser fixture covers every synthetic attachment contract a
 
 test('C08 app-owned preview layer paints above the full-screen search owner', async () => {
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
-  assert.match(css, /\.app-shell\.search-mode\s*>\s*\.scrim\s*\{[^}]*z-index:\s*(?:[5-9]\d|\d{3,})/s);
+  assert.match(css, /\.app-shell\s*>\s*\.scrim\s*\{[^}]*z-index:\s*(?:[5-9]\d|\d{3,})/s);
 });

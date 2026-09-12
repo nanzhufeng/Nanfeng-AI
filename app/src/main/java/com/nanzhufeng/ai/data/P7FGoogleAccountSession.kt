@@ -129,16 +129,41 @@ class P7FEncryptedSessionStore(context: Context) {
     fun hasWrappingMaterial(userId: String): Boolean = preferences.contains(wrappingStateKey(userId))
 
     fun saveWrappingMaterial(userId: String, material: NfaiSyncAccountWrappingMaterial) {
+        saveMaterial(wrappingStateKey(userId), userId, material)
+    }
+
+    fun savePendingWrappingMaterial(userId: String, material: NfaiSyncAccountWrappingMaterial) {
+        saveMaterial(pendingWrappingStateKey(userId), userId, material)
+    }
+
+    fun promotePendingWrappingMaterial(userId: String) {
+        val pending = preferences.getString(pendingWrappingStateKey(userId), null) ?: error("RECOVERY_ROTATION_NOT_READY")
+        check(
+            preferences.edit()
+                .putString(wrappingStateKey(userId), pending)
+                .remove(pendingWrappingStateKey(userId))
+                .commit(),
+        ) { "RECOVERY_ROTATION_PROMOTE_FAILED" }
+    }
+
+    fun <T> withWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T {
+        return withMaterial(wrappingStateKey(userId), userId, block)
+    }
+
+    fun <T> withPendingWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T =
+        withMaterial(pendingWrappingStateKey(userId), userId, block)
+
+    private fun saveMaterial(key: String, userId: String, material: NfaiSyncAccountWrappingMaterial) {
         val payload = JSONObject()
             .put("userId", userId)
             .put("wrappingKey", Base64.encodeToString(material.wrappingKey, Base64.NO_WRAP))
             .put("salt", Base64.encodeToString(material.salt, Base64.NO_WRAP))
             .toString()
-        check(preferences.edit().putString(wrappingStateKey(userId), encrypt(payload)).commit()) { "WRAPPING_MATERIAL_WRITE_FAILED" }
+        check(preferences.edit().putString(key, encrypt(payload)).commit()) { "WRAPPING_MATERIAL_WRITE_FAILED" }
     }
 
-    fun <T> withWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T {
-        val encrypted = preferences.getString(wrappingStateKey(userId), null) ?: error("RECOVERY_SETUP_REQUIRED")
+    private fun <T> withMaterial(keyName: String, userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T {
+        val encrypted = preferences.getString(keyName, null) ?: error("RECOVERY_SETUP_REQUIRED")
         val root = JSONObject(decrypt(encrypted))
         require(root.getString("userId") == userId)
         val key = Base64.decode(root.getString("wrappingKey"), Base64.NO_WRAP)
@@ -197,6 +222,8 @@ class P7FEncryptedSessionStore(context: Context) {
         val digest = MessageDigest.getInstance("SHA-256").digest(userId.toByteArray())
         return "encrypted_wrap_${digest.joinToString("") { "%02x".format(it) }.take(32)}"
     }
+
+    private fun pendingWrappingStateKey(userId: String): String = "${wrappingStateKey(userId)}_pending"
 
     private companion object {
         const val PREFERENCES = "nanfeng_ai_google_account"
@@ -343,8 +370,21 @@ class P7FGoogleAccountOwner(context: Context) {
         finally { material.wrappingKey.fill(0); material.salt.fill(0) }
     }
 
+    fun preparePendingRecoveryMaterial(userId: String, recoveryCode: CharArray) {
+        require(cachedSession()?.userId == userId) { "SIGNED_OUT" }
+        require(recoveryReady(userId)) { "RECOVERY_SETUP_REQUIRED" }
+        val material = NfaiSyncV1Gateway.createAccountWrappingMaterial(recoveryCode)
+        try { store.savePendingWrappingMaterial(userId, material) }
+        finally { material.wrappingKey.fill(0); material.salt.fill(0) }
+    }
+
+    fun promotePendingRecoveryMaterial(userId: String) = store.promotePendingWrappingMaterial(userId)
+
     fun <T> withWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T =
         store.withWrappingMaterial(userId, block)
+
+    fun <T> withPendingWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T =
+        store.withPendingWrappingMaterial(userId, block)
 
     suspend fun signIn(activityContext: Context): Result<P7FCloudSession> {
         if (!configured) return Result.failure(IllegalStateException("尚未配置 Google 登录与云端服务。"))
@@ -389,6 +429,29 @@ class P7FGoogleAccountOwner(context: Context) {
                 client!!.refresh(current.refreshToken).also(store::write)
             } else current
             return client!!.rpc(function, body, session.accessToken).let(::unwrapRpcResult)
+        }
+    }
+
+    /** List responses are arrays: do not use the single-document RPC unwrapping path. */
+    fun listCloudDocuments(): List<String> {
+        val current = store.read() ?: error("请先登录 Google 账号。")
+        val session = if (current.expiresAtEpochSeconds <= System.currentTimeMillis() / 1000L + 60L) {
+            client!!.refresh(current.refreshToken).also(store::write)
+        } else current
+        val response = client!!.rpc("nanfeng_sync_list_documents", JSONObject().put("p_app_id", "com.nanzhufeng.ai").toString(), session.accessToken)
+        val rows = JSONArray(response)
+        require(rows.length() <= 10000) { "云端列表过大，请缩小恢复范围。" }
+        return List(rows.length()) { index ->
+            val row = rows.getJSONObject(index)
+            val envelope = when (val raw = row.get("envelope")) {
+                is JSONObject -> raw.toString()
+                is String -> raw
+                else -> error("REMOTE_DOCUMENT_INVALID")
+            }
+            val checked = NfaiSyncV1Gateway.preflight(envelope) as? com.nanzhufeng.ai.domain.NfaiSyncResult.Preflighted
+                ?: error("云端文档校验失败。")
+            require(checked.value.appId == "com.nanzhufeng.ai") { "云端文档不属于本应用。" }
+            envelope
         }
     }
 

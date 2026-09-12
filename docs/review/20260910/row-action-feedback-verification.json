@@ -1,0 +1,56 @@
+{
+  "cases": 6,
+  "checks": 24,
+  "results": [
+    {
+      "mode": "light",
+      "button": 0,
+      "hover": true,
+      "pressed": true,
+      "keyboardFocus": true,
+      "siblingsUnlit": true
+    },
+    {
+      "mode": "light",
+      "button": 1,
+      "hover": true,
+      "pressed": true,
+      "keyboardFocus": true,
+      "siblingsUnlit": true
+    },
+    {
+      "mode": "light",
+      "button": 2,
+      "hover": true,
+      "pressed": true,
+      "keyboardFocus": true,
+      "siblingsUnlit": true
+    },
+    {
+      "mode": "dark",
+      "button": 0,
+      "hover": true,
+      "pressed": true,
+      "keyboardFocus": true,
+      "siblingsUnlit": true
+    },
+    {
+      "mode": "dark",
+      "button": 1,
+      "hover": true,
+      "pressed": true,
+      "keyboardFocus": true,
+      "siblingsUnlit": true
+    },
+    {
+      "mode": "dark",
+      "button": 2,
+      "hover": true,
+      "pressed": true,
+      "keyboardFocus": true,
+      "siblingsUnlit": true
+    }
+  ],
+  "source_sha256": "597d577e288a7bdb762553bf0c7a2279eec673377fe38929f9616260d1aed356",
+  "scope": "Chromium: production row renderer and full CSS, light/dark; not a native screenshot claim"
+}

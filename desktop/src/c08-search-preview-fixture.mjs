@@ -106,6 +106,5 @@ export function createC08BrowserSearchPage({ query = '', category = 'all', sortM
     hits,
     textCount: hits.filter(hit => ['TEXT', 'TITLE'].includes(hit.contentKind)).length,
     attachmentCount: hits.filter(hit => ['IMAGE', 'VIDEO', 'AUDIO', 'FILE'].includes(hit.contentKind)).length,
-    truncated: false,
   };
 }

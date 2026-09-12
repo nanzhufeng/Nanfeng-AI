@@ -14,11 +14,11 @@ class MemorySummaryUiContractsTest {
 
         for (token in listOf(
             "Text(\"记忆摘要\"", "updatedText", "Icons.Rounded.MoreVert", "关于记忆", "刷新摘要",
-            "编辑摘要", "全选", "清空重写", "MemorySummaryEditorPage", "删除记忆", "关闭记忆摘要生成和应用", "询问或更新", "BasicTextField", "询问摘要", "补充记忆",
+            "编辑摘要", "全选", "清空重写", "MemorySummaryEditorPage", "删除记忆", "关闭记忆摘要生成和应用",
             "style = MaterialTheme.typography.titleLarge", "style = MaterialTheme.typography.bodyLarge",
-            ".align(Alignment.BottomCenter)", "onSizeChanged { composerHeightPx = it.height }",
-            "imePadding()", "bottom = composerHeight + 24.dp",
+            "bottom = 24.dp", "navigationBarsPadding()",
         )) assertTrue("missing memory-summary UI token: $token", page.contains(token))
+        assertTrue("summary reading page must not have a bottom composer", !page.contains("询问或更新") && !page.contains("composerHeight"))
         assertTrue("legacy combined action must be removed", !page.contains("删除并关闭记忆"))
         for (token in listOf("fun refreshSummary()", "fun querySummary(query: String)", "fun appendSummaryUpdate(raw: String)", "fun clearSummary()", "fun markSummaryGenerationAndUseDisabled()")) {
             assertTrue("missing explicit memory action: $token", model.contains(token))

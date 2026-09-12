@@ -128,3 +128,23 @@
 - Current-run screenshots and two native contact sheets are in `/Users/nanzhufeng/.codex/visualizations/2026/09/01/01a05db4-50d5-7131-ae92-29041ef03ac9/desktop-requirement-audit-20260902/`.
 
 final result: blocked for full production-root Android → Desktop acceptance. The fresh current-Android code, visual, automatic, bundle, and isolated-native audit is complete. This audit deliberately did not cold-start the new release against the normal Desktop data root because startup can run due reminder/history jobs and this task forbids real Provider/account activity. A formal-bundle process observed at 23:58 predates this thread and was neither operated nor terminated; it does not prove current-executable acceptance. Real Provider, account/sync, OS-notification click, Developer ID/notarization, and the new release's production-root startup remain separate boundaries.
+
+## 2026-09-12 main-conversation attachment previews — NATIVE PASS
+
+- Reference inspected: the five current phone search screenshots for text, image, video, audio and files were compared together in `/tmp/nanfeng-main-attachment-qa.LiOUqB/reference-contact.jpg`. The target was the same content hierarchy, adapted to the existing Desktop conversation column rather than copying the phone grid geometry.
+- Fixed discrepancy: the former main-chat card exposed a generic gray upload glyph for every non-image attachment. The final shared card now renders real image pixels, an extracted video frame plus play affordance, PDF first page, Markdown/text excerpt, MP3 duration and track, or a truthful format label such as DOCX.
+- Native same-state readback: the installed signed app opened the real imported conversations `视频分析说明`, `已确认事实（通话内容逐句梳理）`, and `Codex秒退根因分析`. Their top cards visibly showed respectively a real `1000159306.mp4` frame, a dark `MP3 / 0:49` player with track, and an `MD` content excerpt; the generic gray upload glyph was absent.
+- Deep root-cause readback: Quick Look did not merely fail to generate the video frame—`qlmanage` remained alive indefinitely for the imported MP4. The final owner prefers local FFmpeg and bounds both decoder paths with kill-and-wait timeouts. A real 4,971,570-byte imported MP4 produced a valid `360×640` PNG, and no thumbnail worker remained after the readback.
+- Non-regression: image/PDF/text/audio/format fallbacks are covered together in `FB-P6-181`; decoder termination is covered in Rust. Node 326/326, Rust 234/234, lint, typecheck, build, bundle, strict signature verification and formal-root SQLite integrity all passed.
+- Scope boundary: this passes the requested Desktop main-conversation attachment presentation. It does not claim Google account completion, Provider calls, cloud sync, notification behavior, Android device installation, or Developer ID notarization.
+
+final result: passed
+
+## 2026-09-12 video preview immediate playback cleanup — NATIVE PASS
+
+- Screenshot target: opening a local video already expresses playback intent, so the upper-left `开始本地播放` chip was redundant and visually competed with the media.
+- Final hierarchy: title and close action remain above the dark media surface; the native video controls remain inside the player; filename, size and duration remain the only supporting facts below it. The redundant upper-left play chip is absent.
+- Native same-file readback: the installed signed app opened `1000160003.mp4`, restored the saved `0:02` position and advanced to `0:05`; the exposed native control read `Pause`, proving active playback rather than only the presence of an autoplay attribute.
+- Non-regression: Node 326/326, lint, typecheck, static build, macOS bundle, strict codesign and production-root SQLite integrity all passed.
+
+final result: passed
