@@ -1,6 +1,7 @@
 package com.nanzhufeng.ai.ai
 
 import com.nanzhufeng.ai.domain.ConversationId
+import com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog
 import com.nanzhufeng.ai.domain.DirectChatCallAuditRecord
 import com.nanzhufeng.ai.domain.DirectChatCallAuditStore
 import com.nanzhufeng.ai.domain.DirectChatCallAuditSummary
@@ -42,6 +43,10 @@ class QwenHistoryKnowledgeRefinerTest {
                 ProviderId.QWEN to ModelPresetId.QWEN_3_6_FLASH,
             ),
             TitleAndHistoryRefinementRouting.candidates.map { it.providerId to it.preset },
+        )
+        assertEquals(
+            ComposerModelRoutingCatalog.dailyDeepSeekFlash.routes.single(),
+            TitleAndHistoryRefinementRouting.candidates.first().preset,
         )
     }
 

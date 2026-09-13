@@ -96,7 +96,7 @@ test('restored Android local estimates retain their estimate disclosure instead 
   });
 
   assert.deepEqual(cost, { chargeMicros: 420, currencyCode: 'CNY', costSource: 'LOCAL_ESTIMATE' });
-  assert.equal(cnyCostLabel(cost, { estimatedLabel: true, maximumFractionDigits: 6 }), '≈ ¥0.00042（估算）');
+  assert.equal(cnyCostLabel(cost, { estimatedLabel: true, maximumFractionDigits: 6 }), '¥0.00042');
 });
 
 test('only Assistant text is rendered as Markdown in the conversation', () => {

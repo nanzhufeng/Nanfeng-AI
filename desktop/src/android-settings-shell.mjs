@@ -185,7 +185,7 @@ function modelConfiguration(context) {
     <button class="android-settings-model-preset" data-action="open-settings-picker" data-picker="modelPreset" ${busy ? 'disabled' : ''}><span><strong>${escapeHtml(preset?.displayName || draft.presetDisplayName || '')}</strong><small>${escapeHtml(preset?.family || '')}</small></span>${icon(icons.chevronDown, '展开模型预设')}</button>
     <button class="android-settings-model-test" data-action="test-model-service-connection" ${busy || !selected.credentialStored ? 'disabled' : ''}>${context.modelSettingsTesting ? '<span class="android-settings-spinner" aria-hidden="true"></span>正在测试…' : '测试连接'}</button>
     ${context.modelSettingsTesting ? '<p class="android-settings-model-feedback">正在检查连接，请稍候。</p>' : ''}
-    ${selected.credentialStatus === 'Unavailable' ? '<p class="android-settings-model-feedback error">钥匙串暂不可用，无法确认密钥状态；现有密钥未删除。解锁后重新打开设置。</p>' : ''}
+    ${selected.credentialStatus === 'Unavailable' ? '<p class="android-settings-model-feedback error">应用私有凭据记录无法读取；请重新保存该服务商 API Key。</p>' : ''}
     <label class="android-settings-field android-settings-model-key"><span>API Key</span><div><span aria-hidden="true">${icon(icons.key, '')}</span><input id="model-service-api-key" type="${context.modelCredentialVisible ? 'text' : 'password'}" autocomplete="off" spellcheck="false" value="${escapeHtml(keyValue)}" ${busy ? 'disabled' : ''}><button data-action="reveal-model-service-credential" aria-label="${context.modelCredentialVisible ? '隐藏 API Key' : '显示 API Key'}" ${busy || (!selected.credentialStored && !context.modelCredentialDraft) ? 'disabled' : ''}>${icon(context.modelCredentialVisible ? icons.visibilityOff : icons.visibility, context.modelCredentialVisible ? '隐藏 API Key' : '显示 API Key')}</button></div></label>
     <div class="android-settings-model-save"><button data-action="save-model-service-settings" ${busy ? 'disabled' : ''}>${context.modelSettingsSaving ? '<span class="android-settings-spinner" aria-hidden="true"></span>正在保存…' : '保存'}</button></div>
   </div>`;
@@ -215,7 +215,7 @@ const usageAmount = (records, source = null) => {
   if (!costs.length) return '金额未知';
   const cnyMicros = costs.reduce((total, cost) => total + Math.round(cost.chargeMicros * (cost.currencyCode === 'CNY' ? 1 : cost.currencyCode === 'USD' ? 6.720309145556033 : 0)), 0);
   const costSource = costs.every(cost => cost.costSource === 'LOCAL_ESTIMATE') ? 'LOCAL_ESTIMATE' : 'PROVIDER_RESPONSE';
-  return cnyCostLabel({ chargeMicros: cnyMicros, currencyCode: 'CNY', costSource }, { estimatedLabel: costSource === 'LOCAL_ESTIMATE', maximumFractionDigits: 6 }) || '金额未知';
+  return cnyCostLabel({ chargeMicros: cnyMicros, currencyCode: 'CNY', costSource }, { maximumFractionDigits: 6 }) || '金额未知';
 };
 
 const localDateTime = value => {
@@ -232,7 +232,7 @@ const elapsedTime = value => {
 
 function usageLedgerPage(context) {
   const records = context.usageLedger?.records || [];
-  if (!records.length) return `<div class="android-settings-page android-settings-ledger-empty">${icon(icons.data, '')}<strong>尚无可用费用记录</strong><p>已返回输入和输出 Token 的调用会显示服务商金额或本地估算。</p></div>`;
+  if (!records.length) return `<div class="android-settings-page android-settings-ledger-empty">${icon(icons.data, '')}<strong>尚无可用费用记录</strong><p>已返回输入和输出 Token 的调用会显示费用与用量。</p></div>`;
   const sections = [['conversation', '会话'], ['title', '会话标题整理'], ['history', '历史资料整理'], ['ocr', '南枫转写']];
   const selected = context.usageSection || 'conversation';
   const category = record => record.entryId?.startsWith('usage-reminder-') ? 'reminder' : record.entryId?.includes('history') ? 'history' : record.entryId?.includes('title') ? 'title' : record.entryId?.includes('transcription') ? 'ocr' : 'conversation';
@@ -241,12 +241,15 @@ function usageLedgerPage(context) {
   const ledgerRow = (record, fallbackTitle, preferFallback = false) => {
     const conversation = (context.data?.exchange?.conversations || []).find(item => item.id === record.conversationId);
     const cost = recordCost(record);
-    const amount = cnyCostLabel(cost, { estimatedLabel: true, maximumFractionDigits: 6 }) || '金额未知';
-    const source = cost?.costSource === 'PROVIDER_RESPONSE' ? '服务商实际金额' : cost?.costSource === 'LOCAL_ESTIMATE' ? '本地价目表估算' : '缺少可用估算价目表';
-    return `<section class="android-settings-card android-settings-ledger-row"><div><strong>${escapeHtml(preferFallback ? fallbackTitle : conversation?.title || fallbackTitle)}</strong><b>${escapeHtml(amount)}</b></div><p>${escapeHtml(record.modelId)} · 输入 ${Number(record.inputTokens || 0).toLocaleString('zh-CN')} / 输出 ${Number(record.outputTokens || 0).toLocaleString('zh-CN')} Token · ${source}</p><small>${escapeHtml(localDateTime(record.occurredAtMs))}</small></section>`;
+    const hasProviderUsage = Number.isSafeInteger(record.inputTokens) && Number.isSafeInteger(record.outputTokens);
+    const amount = cnyCostLabel(cost, { maximumFractionDigits: 6 }) || '金额未知';
+    const usage = hasProviderUsage
+      ? `输入 ${record.inputTokens.toLocaleString('zh-CN')} / 输出 ${record.outputTokens.toLocaleString('zh-CN')} Token`
+      : 'Token 用量未返回';
+    return `<section class="android-settings-card android-settings-ledger-row"><div><strong>${escapeHtml(preferFallback ? fallbackTitle : conversation?.title || fallbackTitle)}</strong><b>${escapeHtml(amount)}</b></div><p>${escapeHtml(record.modelId)} · ${usage}</p><small>${escapeHtml(localDateTime(record.occurredAtMs))}</small></section>`;
   };
   return `<div class="android-settings-page android-settings-ledger">
-    <section class="android-settings-card android-settings-ledger-summary"><strong>本机累计</strong><div><span>服务商实际金额</span><b>${escapeHtml(usageAmount(records, 'PROVIDER_RESPONSE'))}</b></div><div><span>本地估算</span><b>${escapeHtml(usageAmount(records, 'LOCAL_ESTIMATE'))}</b></div><div><span>输入 Token</span><b>${Number(context.usageLedger?.inputTokens || 0).toLocaleString('zh-CN')}</b></div><div><span>输出 Token</span><b>${Number(context.usageLedger?.outputTokens || 0).toLocaleString('zh-CN')}</b></div></section>
+    <section class="android-settings-card android-settings-ledger-summary"><strong>本机累计</strong><div><span>费用</span><b>${escapeHtml(usageAmount(records))}</b></div><div><span>输入 Token</span><b>${Number(context.usageLedger?.inputTokens || 0).toLocaleString('zh-CN')}</b></div><div><span>输出 Token</span><b>${Number(context.usageLedger?.outputTokens || 0).toLocaleString('zh-CN')}</b></div></section>
     <section class="android-settings-card android-settings-ledger-grid">${sections.map(([id, label]) => { const items = records.filter(record => category(record) === id); return `<div><strong>${label}</strong><span>次数 <b>${items.length} 次</b></span><span>费用 <b>${items.length ? escapeHtml(usageAmount(items)) : '金额未知'}</b></span></div>`; }).join('')}</section>
     <div class="android-settings-ledger-segments">${sections.map(([id, label]) => `<button data-action="select-usage-section" data-section="${id}" class="${selected === id ? 'selected' : ''}">${label}</button>`).join('')}</div>
     ${rows.length ? rows.map(record => ledgerRow(record, '已删除的对话')).join('') : `<p class="android-settings-empty">还没有${escapeHtml(sections.find(([id]) => id === selected)?.[1] || '')}费用记录。</p>`}

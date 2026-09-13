@@ -169,6 +169,9 @@
   outline: none;
 }
 .desktop-search-evidence { margin: 0 4px 14px; color: var(--search-muted); font-size: calc(11px * var(--app-font-scale, 1)); text-align: center; }
+.desktop-search-load-more { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 24px 0 4px; color: var(--search-muted); font-size: calc(12px * var(--app-font-scale, 1)); }
+.desktop-search-load-more button { min-height: 36px; padding: 0 16px; border: 1px solid var(--search-line); border-radius: 999px; background: var(--foreground-surface); color: var(--search-ink); font: inherit; font-weight: 700; }
+.desktop-search-load-more button:disabled { opacity: .55; }
 .desktop-search-section + .desktop-search-section { margin-top: 28px; }
 .desktop-search-section > h2,
 .desktop-search-month > h3 { margin: 0 0 11px 4px; font-size: calc(13px * var(--app-font-scale, 1)); color: var(--search-muted); font-weight: 700; }
@@ -521,7 +524,6 @@
 .composer-add-web-row[aria-checked="true"] .composer-web-switch { background: var(--accent-orange); }
 .composer-add-web-row[aria-checked="true"] .composer-web-switch > i { transform: translateX(30px); }
 .chat-composer-attachments { display: flex; gap: 6px; flex-wrap: wrap; }
-.chat-composer-egress-disclosure { margin: 2px 4px 6px; color: #4c554f; font-size: 11px; line-height: 16px; }
 .chat-attachment-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 4px 7px; border-radius: 9px; background: var(--accent-orange-soft); color: #5a2b04; font-size: 11px; }
 .chat-attachment-chip button { min-width: 18px; min-height: 18px; padding: 0; color: inherit; }
 .chat-composer-image-preview { position: relative; display: inline-flex; width: 62px; height: 62px; align-items: flex-end; overflow: hidden; border-radius: 12px; background: #eef0ee; }
@@ -583,9 +585,9 @@
    rectangular vertical seam at either edge. */
 .app-shell.chat-first:not(.settings-mode) > .chat-main:not(.work-main):not(.connections-main)::before,
 .app-shell.chat-first:not(.settings-mode) > .chat-main:not(.work-main):not(.connections-main)::after { position: absolute; z-index: 3; right: 0; left: 0; content: ''; pointer-events: none; }
-/* The header is already positioned above the transcript. A foreground fade here
-   turns the first generated lines white, so it must never paint over the body. */
-.app-shell.chat-first:not(.settings-mode) > .chat-main:not(.work-main):not(.connections-main)::before { display: none; }
+/* The title floats above the transcript. Mask the first scrolling lines with the
+   same page-gray edge fade as Android, rather than letting them cross the title. */
+.app-shell.chat-first:not(.settings-mode) > .chat-main:not(.work-main):not(.connections-main)::before { top: 0; height: min(112px, 40%); background: linear-gradient(to bottom, color-mix(in srgb, var(--conversation-edge-color) 98%, transparent) 0%, color-mix(in srgb, var(--conversation-edge-color) 82.7%, transparent) 25%, color-mix(in srgb, var(--conversation-edge-color) 49%, transparent) 50%, color-mix(in srgb, var(--conversation-edge-color) 15.3%, transparent) 75%, transparent 100%); }
 .app-shell.chat-first:not(.settings-mode) > .chat-main:not(.work-main):not(.connections-main)::after { bottom: 0; height: min(112px, 40%); background: linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--conversation-edge-color) 15.3%, transparent) 25%, color-mix(in srgb, var(--conversation-edge-color) 49%, transparent) 50%, color-mix(in srgb, var(--conversation-edge-color) 82.7%, transparent) 75%, color-mix(in srgb, var(--conversation-edge-color) 98%, transparent) 100%); }
 .app-shell.chat-first:not(.settings-mode) > .chat-main:not(.work-main):not(.connections-main) > .chat-main-header { position: absolute; z-index: 6; inset: 16px 20px auto; padding: 0; background: transparent; pointer-events: none; }
 .app-shell.chat-first:not(.settings-mode) > .chat-main:not(.work-main):not(.connections-main) > .chat-main-header > * { pointer-events: auto; }
@@ -1296,6 +1298,7 @@
 }
 :root[data-appearance-mode="dark"] .app-shell.chat-first,
 :root[data-appearance-mode="dark"] .chat-main { background: #181b19; color: var(--chat-text); }
+:root[data-appearance-mode="dark"] .app-shell.chat-first:not(.settings-mode) > .chat-main:not(.work-main):not(.connections-main) { --conversation-edge-color: #181b19; }
 :root[data-appearance-mode="dark"] .chat-first button { color: #e8ece9; }
 :root[data-appearance-mode="dark"] .chat-first button:hover { background: #303531; }
 :root[data-appearance-mode="dark"] .chat-first button:active { background: #383e39; }

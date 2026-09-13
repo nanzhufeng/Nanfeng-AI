@@ -147,6 +147,39 @@
   border-color: #e4e9e5;
 }
 
+/* ZIP uses the same white reading surface, but its primary content is a real
+   navigable directory rather than a monospaced text dump. */
+.scrim.attachment-preview-overlay.archive-preview-overlay { background: #fff; color-scheme: light; }
+.archive-preview-overlay .archive-preview-surface { background: #fff; color: #202722; border-color: #fff; }
+.archive-preview-overlay .text-preview-header { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; min-width: 0; min-height: 48px; }
+.archive-preview-overlay .text-preview-facts { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; color: #66736c; text-overflow: ellipsis; white-space: nowrap; }
+.archive-preview-overlay .file-preview-action { background: #f1f3f2; color: #202722; border-color: #e5e9e6; backdrop-filter: none; }
+.archive-preview-overlay .file-preview-action:hover { background: #e8ece9; }
+.archive-preview-directory-header, .archive-preview-entry-header { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; min-height: 38px; }
+.archive-preview-directory-header > small { color: #748078; font-size: 12px; }
+.archive-preview-entry-header > button { display: inline-flex; width: 34px; height: 34px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; border: 1px solid #e4e9e5; border-radius: 10px; background: #fff; color: #455047; }
+.archive-preview-entry-header > button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.archive-preview-breadcrumb { display: flex; min-width: 0; align-items: center; gap: 7px; overflow: auto; color: #66736c; white-space: nowrap; }
+.archive-preview-breadcrumb button { overflow: hidden; padding: 4px 2px; border: 0; background: transparent; color: #455047; font: inherit; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.archive-preview-breadcrumb button:hover { color: var(--accent-orange, #de6f2b); }
+.archive-preview-list { flex: 1 1 0; min-height: 0; overflow: auto; padding: 4px 0 18px; }
+.archive-preview-row { display: grid; width: 100%; grid-template-columns: 34px minmax(0, 1fr) 18px; align-items: center; gap: 10px; min-height: 58px; padding: 8px 12px; border: 0; border-bottom: 1px solid #edf0ed; border-radius: 10px; background: transparent; color: #202722; text-align: left; }
+.archive-preview-row:hover { background: #f3f6f3; }
+.archive-preview-row > svg { width: 17px; height: 17px; fill: none; stroke: #8b948d; stroke-width: 1.8; }
+.archive-preview-row-icon { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 10px; background: #f1f4f1; color: #68756b; }
+.archive-directory-row .archive-preview-row-icon { background: #fff0e3; color: #a6521a; }
+.archive-preview-row-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.65; }
+.archive-preview-row > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
+.archive-preview-row strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.archive-preview-row small, .archive-entry-facts { color: #748078; font-size: 11px; }
+.archive-preview-empty { margin: 24px 0; color: #748078; text-align: center; }
+.archive-preview-overlay .archive-text-preview { overflow: auto; white-space: pre; overflow-wrap: normal; }
+.archive-preview-overlay .archive-text-preview pre { margin: 0; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.archive-preview-overlay .archive-image-preview { flex: 1 1 0; min-height: 0; margin: 0; display: flex; }
+.archive-preview-overlay .archive-image-preview .image-preview-viewport { background: #f4f6f4; border: 1px solid #e4e9e5; border-radius: 12px; }
+.archive-preview-overlay .archive-preview-unsupported { max-width: 620px; margin: 28px auto; padding: 20px; border: 1px solid #e4e9e5; border-radius: 16px; background: #f8faf8; color: #566259; }
+.archive-preview-overlay .archive-preview-unsupported p { margin: 8px 0 0; line-height: 1.6; }
+
 /* Native media controls dim the whole video on hover. The app-owned strip keeps
    the media and the surrounding canvas on the shared media canvas. */
 .attachment-preview-overlay .video-preview-stage {

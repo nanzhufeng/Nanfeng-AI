@@ -40,6 +40,10 @@ object ComposerModelRoutingCatalog {
         ComposerModelChoice("${PREFIX}daily:qwen-plus", ComposerModelSlot.DAILY, "Qwen3.7-Plus", listOf(ModelPresetId.QWEN_3_7_PLUS)),
         ComposerModelChoice("${PREFIX}daily:gemini-flash", ComposerModelSlot.DAILY, "Gemini 3.8 Flash", listOf(ModelPresetId.GEMINI_3_8_FLASH)),
     )
+    /** The canonical 日常 DeepSeek route.  Background title/history jobs consume this value
+     * instead of carrying their own model preset, so a menu update follows automatically. */
+    val dailyDeepSeekFlash: ComposerModelChoice
+        get() = daily.single { it.id == "${PREFIX}daily:deepseek-flash" }
     val deep = listOf(
         ComposerModelChoice("${PREFIX}deep:claude-fable-5.1", ComposerModelSlot.DEEP, "Claude Fable 5.1", listOf(ModelPresetId.CLAUDE_FABLE_5_1)),
         ComposerModelChoice("${PREFIX}deep:claude-opus", ComposerModelSlot.DEEP, "Claude Opus 5", listOf(ModelPresetId.CLAUDE_OPUS_5)),

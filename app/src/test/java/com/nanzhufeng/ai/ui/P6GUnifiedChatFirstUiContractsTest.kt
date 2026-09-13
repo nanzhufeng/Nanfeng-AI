@@ -101,7 +101,7 @@ class P6GUnifiedChatFirstUiContractsTest {
         for (token in listOf(
             "targetSurface: ConversationSurface = state.surface",
             "requestedSurfaceGeneration: Long? = null",
-            "if (reloadRequest != reloadGeneration",
+            "if (reloadRequest != projectionGeneration",
             "surface = surface,",
             "reload(targetSurface = surface, selectedBefore = selectedBefore, requestedSurfaceGeneration = request)",
         )) assertTrue("missing $token", "$reload\n$switch".contains(token))

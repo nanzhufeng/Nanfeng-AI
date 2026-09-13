@@ -18,7 +18,7 @@ const stateLabel = task => (isDocumentTask(task) ? DOCUMENT_STATE_LABELS : STATE
 const formatBytes = value => Number(value || 0) < 1024 * 1024 ? `${Math.max(1, Math.round(Number(value || 0) / 1024))} KB` : `${(Number(value || 0) / 1024 / 1024).toFixed(1)} MB`;
 const formatTime = value => { const total = Math.max(0, Number(value || 0)); const hours = Math.floor(total / 3600000); const minutes = Math.floor(total / 60000) % 60; const seconds = Math.floor(total / 1000) % 60; return `${hours ? `${String(hours).padStart(2, '0')}:` : ''}${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; };
 const tokenSummary = task => task.inputTokens == null && task.outputTokens == null ? 'Token 未返回' : `${Number(task.inputTokens || 0)} / ${Number(task.outputTokens || 0)} Token`;
-const costSummary = task => task.inputTokens == null && task.outputTokens == null ? '费用未返回' : `¥${(Number(task.estimatedChargeMicros || 0) / 1000000).toFixed(6)}（估算）`;
+const costSummary = task => task.inputTokens == null && task.outputTokens == null ? '费用未返回' : `¥${(Number(task.estimatedChargeMicros || 0) / 1000000).toFixed(6)}`;
 const copyResultAction = taskId => `<button class="transcription-copy-action" data-action="copy-transcription-result" data-copy-action data-task-id="${escapeHtml(taskId)}" aria-label="复制全文" title="复制全文">${icon(icons.copy, '复制全文')}</button>`;
 // Older persisted transcription task markup is retained below; normalize it at the
 // single render seam so both legacy audio/video and current document results use

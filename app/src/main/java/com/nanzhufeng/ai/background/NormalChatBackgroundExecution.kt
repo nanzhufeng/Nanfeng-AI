@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import com.nanzhufeng.ai.R
 import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
 import com.nanzhufeng.ai.app.AppContainer
@@ -89,6 +90,8 @@ object NormalChatGenerationRegistry {
 class NormalChatGenerationForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val jobs = ConcurrentHashMap<ConversationId, Job>()
+    /** UI wake-ups are metadata-only and coalesced; an SSE provider can emit many tiny chunks. */
+    private val lastProgressPublishedAtMs = ConcurrentHashMap<ConversationId, Long>()
     private val container by lazy { AppContainer(applicationContext) }
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -146,12 +149,21 @@ class NormalChatGenerationForegroundService : Service() {
                             conversationId,
                             authorization = authorization,
                             onLocalSubmission = { publishExecutionState(conversationId, running = true) },
+                            onStreamProgress = { publishStreamProgress(conversationId) },
                         )
-                        NormalChatBackgroundOperation.RETRY -> container.normalChatOpenRouterExecutor.retryLatestAttempt(conversationId)
+                        NormalChatBackgroundOperation.RETRY -> container.normalChatOpenRouterExecutor.retryLatestAttempt(
+                            conversationId,
+                            // The first running broadcast can precede the durable retry
+                            // placeholder. Publish again after it is persisted so the visible
+                            // conversation redraws in-place before provider output arrives.
+                            onLocalSubmission = { publishExecutionState(conversationId, running = true) },
+                            onStreamProgress = { publishStreamProgress(conversationId) },
+                        )
                     }
                     safeResult = result.toSafeResult()
                 } finally {
                     jobs.remove(conversationId)
+                    lastProgressPublishedAtMs.remove(conversationId)
                     NormalChatGenerationRegistry.markFinished(conversationId)
                     // Publish terminal state only after the registry changes, so a simultaneous
                     // UI reload cannot resurrect a just-completed spinner from a stale snapshot.
@@ -176,12 +188,22 @@ class NormalChatGenerationForegroundService : Service() {
         container.normalChatOpenRouterExecutor.cancelActive(conversationId)
     }
 
-    private fun publishExecutionState(conversationId: ConversationId, running: Boolean, safeResult: String? = null) {
+    /** Deliberately carries no streamed text: Compose reloads the durable local projection. */
+    private fun publishStreamProgress(conversationId: ConversationId) {
+        val now = SystemClock.elapsedRealtime()
+        val previous = lastProgressPublishedAtMs[conversationId]
+        if (previous != null && now - previous < STREAM_PROGRESS_COALESCE_MS) return
+        lastProgressPublishedAtMs[conversationId] = now
+        publishExecutionState(conversationId, running = true, progress = true)
+    }
+
+    private fun publishExecutionState(conversationId: ConversationId, running: Boolean, safeResult: String? = null, progress: Boolean = false) {
         sendBroadcast(
             Intent(ACTION_EXECUTION_STATE_CHANGED)
                 .setPackage(packageName)
                 .putExtra(EXTRA_CONVERSATION_ID, conversationId.value)
                 .putExtra(EXTRA_RUNNING, running)
+                .putExtra(EXTRA_PROGRESS, progress)
                 .apply { safeResult?.let { putExtra(EXTRA_SAFE_RESULT, it) } },
         )
     }
@@ -262,9 +284,11 @@ class NormalChatGenerationForegroundService : Service() {
         const val EXTRA_EGRESS_PRESETS = "egressRecipientPresets"
         const val EXTRA_EGRESS_DISCLOSURE_VERSION = "egressDisclosureVersion"
         const val EXTRA_RUNNING = "running"
+        const val EXTRA_PROGRESS = "progress"
         const val EXTRA_SAFE_RESULT = "safeResult"
         private const val CHANNEL_ID = "normal_chat_generation"
         private const val NOTIFICATION_ID = 4107
+        private const val STREAM_PROGRESS_COALESCE_MS = 120L
     }
 }
 

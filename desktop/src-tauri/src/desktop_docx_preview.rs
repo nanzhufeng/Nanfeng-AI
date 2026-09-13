@@ -1,16 +1,55 @@
 use std::io::{Cursor, Read};
 use quick_xml::{Reader, events::Event};
 
-pub fn archive_directory(bytes: &[u8]) -> Result<String, String> {
+pub const MAX_ARCHIVE_ENTRIES: usize = 2000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArchiveEntry {
+    pub path: String,
+    pub is_directory: bool,
+    pub byte_count: u64,
+}
+
+pub fn archive_entries(bytes: &[u8]) -> Result<Vec<ArchiveEntry>, String> {
     let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| "ZIP 文件结构无效")?;
-    if zip.len() > 2000 { return Err("ZIP 条目超过预览限制".into()); }
-    let mut lines = Vec::new();
+    if zip.len() > MAX_ARCHIVE_ENTRIES { return Err("ZIP 条目超过预览限制".into()); }
+    let mut entries = Vec::with_capacity(zip.len());
     for index in 0..zip.len() {
         let item = zip.by_index(index).map_err(|_| "ZIP 目录读取失败")?;
-        if item.enclosed_name().is_none() { return Err("ZIP 包含不安全路径".into()); }
-        lines.push(format!("{}{}", item.name(), if item.is_dir() { String::new() } else { format!("  ({} bytes)", item.size()) }));
+        let safe_path = item.enclosed_name().ok_or_else(|| "ZIP 包含不安全路径".to_owned())?.to_string_lossy().into_owned();
+        entries.push(ArchiveEntry {
+            path: safe_path,
+            is_directory: item.is_dir(),
+            byte_count: item.size(),
+        });
     }
-    lines.sort();
+    entries.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(entries)
+}
+
+pub fn read_archive_entry(bytes: &[u8], requested_path: &str, maximum_bytes: u64) -> Result<(ArchiveEntry, Vec<u8>), String> {
+    if requested_path.is_empty() || requested_path.len() > 1024 || requested_path.contains('\0') {
+        return Err("ZIP 内文件引用无效".into());
+    }
+    let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| "ZIP 文件结构无效")?;
+    if zip.len() > MAX_ARCHIVE_ENTRIES { return Err("ZIP 条目超过预览限制".into()); }
+    for index in 0..zip.len() {
+        let item = zip.by_index(index).map_err(|_| "ZIP 目录读取失败")?;
+        let safe_path = item.enclosed_name().ok_or_else(|| "ZIP 包含不安全路径".to_owned())?.to_string_lossy().into_owned();
+        if safe_path != requested_path { continue; }
+        if item.is_dir() { return Err("ZIP 内目录不能直接预览".into()); }
+        if item.size() > maximum_bytes { return Err("ZIP 内文件超出安全预览上限".into()); }
+        let entry = ArchiveEntry { path: safe_path, is_directory: false, byte_count: item.size() };
+        let mut output = Vec::with_capacity(item.size() as usize);
+        item.take(maximum_bytes.saturating_add(1)).read_to_end(&mut output).map_err(|_| "ZIP 内文件读取失败")?;
+        if output.len() as u64 > maximum_bytes { return Err("ZIP 内文件超出安全预览上限".into()); }
+        return Ok((entry, output));
+    }
+    Err("ZIP 内文件不存在或已变化".into())
+}
+
+pub fn archive_directory(bytes: &[u8]) -> Result<String, String> {
+    let lines = archive_entries(bytes)?.into_iter().map(|item| format!("{}{}", item.path, if item.is_directory { String::new() } else { format!("  ({} bytes)", item.byte_count) })).collect::<Vec<_>>();
     Ok(lines.join("\n"))
 }
 
@@ -70,5 +109,15 @@ mod tests {
         assert!(archive_directory(&bytes).unwrap().contains("word/document.xml"));
         assert!(extract(&archive("<!DOCTYPE x SYSTEM 'file:///etc/passwd'><x/>" )).is_err());
         assert!(extract(b"not a zip").is_err());
+    }
+
+    #[test]
+    fn archive_entries_keep_safe_paths_and_bound_entry_reads() {
+        let bytes = archive("local");
+        let entries = archive_entries(&bytes).unwrap();
+        assert_eq!(entries[0].path, "word/document.xml");
+        assert_eq!(read_archive_entry(&bytes, "word/document.xml", 5).unwrap().1, b"local");
+        assert!(read_archive_entry(&bytes, "word/document.xml", 4).unwrap_err().contains("上限"));
+        assert!(read_archive_entry(&bytes, "../word/document.xml", 8).is_err());
     }
 }

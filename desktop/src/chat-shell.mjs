@@ -407,6 +407,9 @@ function localAttachmentDisplay(asset, imageThumbnails = {}, videoThumbnails = {
     const duration = attachmentDurationLabel(preview?.durationMillis);
     return `<button class="chat-audio-attachment" data-action="open-audio-preview" data-attachment-id="${escapeHtml(id)}" data-chat-attachment-preview="${escapeHtml(id)}" aria-label="播放音频：${name}" title="播放音频"><span class="chat-attachment-visual chat-audio-player"><span class="chat-audio-heading"><span class="chat-audio-play" aria-hidden="true">${icon(icons.play, '播放')}</span><b>${format}</b><time>${duration}</time></span><span class="chat-audio-track" aria-hidden="true"><i></i></span></span>${info}</button>`;
   }
+  if (id && capability.kind === 'archive') {
+    return `<button class="chat-document-attachment" data-action="open-archive-preview" data-attachment-id="${escapeHtml(id)}" aria-label="浏览压缩包：${name}" title="浏览压缩包"><span class="chat-attachment-visual chat-file-format-preview"><span class="chat-file-preview-fallback" aria-hidden="true">${icon(icons.archive, 'ZIP')}<b class="chat-file-format-label">ZIP</b></span></span>${info}</button>`;
+  }
   if (id && capability.kind === 'text') {
     const content = preview?.text
       ? `<b class="chat-file-format-label">${format}</b><pre>${escapeHtml(preview.text)}</pre>`
@@ -510,10 +513,10 @@ function ordinaryChatFailureCopy(code) {
   return ({
     PROVIDER_NOT_ENABLED: '本次实际接收服务商未启用。请在“设置 → 模型与联网”启用服务商并配置凭据后重试。',
     SELECTED_MODEL_UNAVAILABLE: '当前会话指定的模型未启用或缺少凭据；未自动换模型。',
-    CREDENTIAL: '本次无法读取服务商凭据，请检查钥匙串授权后重试。',
-    CREDENTIAL_DENIED: '未获准读取密钥，已停止。现有密钥未删除；可主动重试授权。',
+    CREDENTIAL: '本次无法读取服务商 API Key；请在模型设置中重新保存后重试。',
+    CREDENTIAL_DENIED: '本次无法读取服务商 API Key；请在模型设置中重新保存后重试。',
     CREDENTIAL_MISSING: '尚未保存该服务商密钥，请在模型设置中保存。',
-    CREDENTIAL_UNAVAILABLE: '钥匙串暂不可用，请解锁后重试。现有密钥未删除。',
+    CREDENTIAL_UNAVAILABLE: '应用私有凭据不可用；请在模型设置中重新保存 API Key 后重试。',
     WEB_SEARCH_NO_VERIFIED_SOURCES: '服务商未返回可验证的公开来源，本次没有保存为完整回答。',
   })[String(code || '')] || '本次没有形成完整回答。请检查模型与网络设置后显式重试。';
 }
@@ -521,6 +524,9 @@ function ordinaryChatFailureCopy(code) {
 function ordinaryChatUnknownCopy(code) {
   return ({
     TIMEOUT: '连接或流式响应超过等待时间，结果未确认。',
+    FIRST_RESPONSE_TIMEOUT: '服务商在等待期内没有返回连接响应，未自动重发。',
+    FIRST_VISIBLE_TIMEOUT: '服务商连接已建立，但在等待期内没有返回可显示正文，未自动重发。',
+    STREAM_IDLE_TIMEOUT: '已开始接收正文后连接长时间无新内容，现有内容已保留。',
     NETWORK: '未能建立连接或连接中断，结果未确认。',
     MISSING_COMPLETION: '连接结束但没有收到明确完成事件，结果未确认。',
     PROCESS_INTERRUPTED: '应用中断前没有收到明确完成结果。',
@@ -587,6 +593,10 @@ function messageList(conversation, options = {}) {
         const isRunning = delivery === 'PARTIAL' && runtimeState === 'RUNNING';
         const effectiveDelivery = delivery === 'PARTIAL' && !isRunning ? 'UNKNOWN' : delivery;
         const runtimeSafeErrorCode = message.runtimeSafeErrorCode || message.safeErrorCode || (delivery === 'PARTIAL' && !isRunning ? 'LOCAL_RUNTIME_STATE_MISSING' : '');
+        const continuationState = String(message.continuationState || '');
+        const continuingFromSavedText = Boolean(message.continuationOf);
+        const hasPreservedText = textBlocks.some(block => String(block.text || '').trim());
+        const recoveryActionLabel = hasPreservedText ? '从断点继续' : '重新生成';
         const compareExecutionId = typeof message.compareExecutionId === 'string' ? message.compareExecutionId : '';
         const compareLogicalModel = message.compareLogicalModel === 'CHATGPT' ? 'ChatGPT' : message.compareLogicalModel === 'CLAUDE' ? 'Claude' : '';
         const sourceUser = index > 0 ? messages[index - 1] : null;
@@ -594,15 +604,16 @@ function messageList(conversation, options = {}) {
           ? `<button class="chat-reminder-suggestion" data-action="generate-reminder-draft" data-user-message-id="${escapeHtml(sourceUser.id)}" data-assistant-message-id="${escapeHtml(message.id)}">添加提醒 / 监控</button>`
           : '';
         const runtimeStatus = !isAssistant || effectiveDelivery === 'COMPLETE' ? ''
-          : isRunning ? `<div class="chat-runtime-state running" role="status" aria-live="polite"><i class="chat-runtime-spinner" aria-hidden="true"></i><span><strong>正在生成回复</strong><small>正在接收模型输出；已生成内容会持续保存。</small></span><button data-action="${compareExecutionId ? 'stop-desktop-compare' : 'stop-ordinary-chat'}" ${compareExecutionId ? `data-execution-id="${escapeHtml(compareExecutionId)}"` : ''}>停止生成</button></div>`
+          : continuationState === 'CONTINUED' ? `<div class="chat-runtime-state cancelled" role="status"><strong>此处已保存内容；正在从断点继续</strong></div>`
+          : isRunning ? `<div class="chat-runtime-state running" role="status" aria-live="polite"><i class="chat-runtime-spinner" aria-hidden="true"></i><span><strong>${continuingFromSavedText ? '正在从断点继续生成' : '正在生成回复'}</strong><small>${continuingFromSavedText ? '已保留前段内容，仅生成缺失部分。' : '正在接收模型输出；已生成内容会持续保存。'}</small></span><button data-action="${compareExecutionId ? 'stop-desktop-compare' : 'stop-ordinary-chat'}" ${compareExecutionId ? `data-execution-id="${escapeHtml(compareExecutionId)}"` : ''}>停止生成</button></div>`
           : effectiveDelivery === 'UNKNOWN' ? compareExecutionId
             ? `<div class="chat-runtime-state unknown" role="status"><span><strong>连接结果未知，未自动重发${runtimeSafeErrorCode ? ` · ${escapeHtml(runtimeSafeErrorCode)}` : ''}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))} 历史 Compare 不再提供重试；内容与归因保持只读。</small></span></div>`
-            : message.attemptId ? `<div class="chat-runtime-state unknown" role="status"><span><strong>连接结果未知，未自动重发${runtimeSafeErrorCode ? ` · ${escapeHtml(runtimeSafeErrorCode)}` : ''}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))} 已保留现有内容；请明确重试。</small></span><button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId)}">重试原 Attempt</button></div>`
+            : message.attemptId ? `<div class="chat-runtime-state unknown" role="status"><span><strong>连接结果未知，未自动重发${runtimeSafeErrorCode ? ` · ${escapeHtml(runtimeSafeErrorCode)}` : ''}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))} 已保留现有内容；请明确恢复。</small></span><button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId)}">${recoveryActionLabel}</button></div>`
             : `<div class="chat-runtime-state unknown" role="status"><span><strong>生成已中断，未收到明确完成结果 · ${escapeHtml(runtimeSafeErrorCode || 'LOCAL_RUNTIME_STATE_MISSING')}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))}</small></span></div>`
           : effectiveDelivery === 'CANCELLED' ? `<div class="chat-runtime-state cancelled" role="status"><strong>已停止，已生成内容已保留</strong></div>`
           : compareExecutionId
             ? `<div class="chat-runtime-state failed" role="status"><span><strong>回答未完成</strong><small>${escapeHtml(ordinaryChatFailureCopy(message.safeErrorCode))} · 历史 Compare 不再提供重试。</small></span></div>`
-            : `<div class="chat-runtime-state failed" role="status"><span><strong>回答未完成</strong><small>${escapeHtml(ordinaryChatFailureCopy(message.safeErrorCode))}</small></span><button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId || '')}">重试原 Attempt</button></div>`;
+            : `<div class="chat-runtime-state failed" role="status"><span><strong>回答未完成</strong><small>${escapeHtml(ordinaryChatFailureCopy(message.safeErrorCode))}</small></span><button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId || '')}">${recoveryActionLabel}</button></div>`;
         const cost = isAssistant ? (cnyCostLabel(projectedMessageCost(message), { maximumFractionDigits: 4, trimTrailingZeros: false }) || '金额未知') : null;
         if (metadata.model) metadata.model = compactModelName(metadata.model);
         const metadataPrimary = [
@@ -678,6 +689,7 @@ export function renderChatFirstShell({
   searchFileType = globalThis.__nanfengDesktopSearchState?.searchFileType || 'all',
   searchFileTypeOpen = Boolean(globalThis.__nanfengDesktopSearchState?.searchFileTypeOpen),
   searchLoading = Boolean(globalThis.__nanfengDesktopSearchState?.searchLoading),
+  searchLoadingMore = Boolean(globalThis.__nanfengDesktopSearchState?.searchLoadingMore),
   searchError = globalThis.__nanfengDesktopSearchState?.searchError || '',
   searchEvidenceLabel = globalThis.__nanfengDesktopSearchState?.searchEvidenceLabel || '',
   searchHistoryHighlighted = globalThis.__nanfengDesktopSearchState?.searchHistoryHighlighted || null,
@@ -760,6 +772,7 @@ export function renderChatFirstShell({
   reminderNotificationBridge = { supported: false, initialized: false, listenerReady: false, safeCode: 'NOT_READ', pendingActionCount: 0 },
   backgroundRuntime = { desiredEnabled: false, installed: false, safeCode: 'NOT_READ' },
   preserveTranscript = false,
+  preserveSidebar = false,
 }) {
   if (searchPanel) return renderDesktopSearchPage({
     query: chatSearch,
@@ -769,6 +782,7 @@ export function renderChatFirstShell({
     fileTypeOpen: searchFileTypeOpen,
     page: searchPage,
     loading: searchLoading,
+    loadingMore: searchLoadingMore,
     error: searchError,
     evidenceLabel: searchEvidenceLabel,
     history: searchHistory,
@@ -878,21 +892,23 @@ export function renderChatFirstShell({
     ariaLabel: '选择临时模型标识',
     body: `${composerModelSheetSection('仅用于本机恢复标识')}${renderComposerModelSheetCard({ action: 'select-temporary-auto', label: '自动', selected: !temporaryModelId })}${p6gCandidates.filter(item => item.available).map(item => renderComposerModelSheetCard({ action: 'select-temporary-model', attributes: `data-model-id="${escapeHtml(item.modelId)}"`, label: item.displayName, selected: item.modelId === temporaryModelId })).join('')}`,
   });
-  // Pinning stays in one continuous scroll owner, but must remain visibly
-  // distinguishable from the recency list.
-  const visibleUnreadIds = productSettings.unreadIndicators === false ? new Set() : unreadConversationIds;
-  const visibleManualUnreadAtMs = productSettings.unreadIndicators === false ? new Map() : manualUnreadAtMs;
-  const listed = activeConversations(data, visibleManualUnreadAtMs);
-  const pinned = pinnedConversations(data, visibleManualUnreadAtMs);
-  const recent = listed.filter(item => !item.pinned);
-  const conversationList = listed.length
-    ? `${pinned.length ? `<div class="chat-history-group" role="group" aria-label="置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(pinned, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs })}</div>` : ''}${recent.length ? `<div class="chat-history-group" role="group" aria-label="最近会话"><p class="chat-history-label">最近</p>${conversationRows(recent, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs })}</div>` : ''}`
-    : conversationRows([], selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs });
+  // The retained sidebar is reinserted unchanged by the app owner. Do not
+  // still sort and serialize every historical conversation merely to discard
+  // the string immediately afterwards.
+  const conversationList = preserveSidebar ? '' : (() => {
+    const visibleUnreadIds = productSettings.unreadIndicators === false ? new Set() : unreadConversationIds;
+    const visibleManualUnreadAtMs = productSettings.unreadIndicators === false ? new Map() : manualUnreadAtMs;
+    const listed = activeConversations(data, visibleManualUnreadAtMs);
+    const pinned = pinnedConversations(data, visibleManualUnreadAtMs);
+    const recent = listed.filter(item => !item.pinned);
+    return listed.length
+      ? `${pinned.length ? `<div class="chat-history-group" role="group" aria-label="置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(pinned, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs })}</div>` : ''}${recent.length ? `<div class="chat-history-group" role="group" aria-label="最近会话"><p class="chat-history-label">最近</p>${conversationRows(recent, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs })}</div>` : ''}`
+      : conversationRows([], selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs });
+  })();
   const composer = `
     <section class="chat-composer-wrap" aria-label="消息输入">
       <div class="chat-composer">
         ${visibleAttachments.length ? `<div class="chat-composer-attachments" aria-label="本地附件">${visibleAttachments.map(item => composerAttachmentDisplay(item, imageThumbnails, videoThumbnails, searchAttachmentPreviews, { canReadThumbnail: !temporaryConversation })).join('')}</div>` : ''}
-        ${!temporaryConversation && (String(composerDraft || '').trim() || visibleAttachments.length) ? `<p class="chat-composer-egress-disclosure">发送即授权给 ${escapeHtml(p6gLabel)} · 按量计费</p>` : ''}
         <div class="chat-composer-actions">
           <div class="chat-composer-controls">
             <span class="composer-add-anchor"><button class="chat-composer-icon chat-composer-add" data-action="toggle-composer-add" data-overlay-trigger aria-label="添加到草稿" title="添加到草稿" aria-expanded="${composerAddOpen}">${icon(icons.plus, '添加到草稿')}</button>${composerAddOpen ? renderComposerAddSheetFrame({ page: composerAddPage, body: composerAddPage === 'tone' && !temporaryConversation ? composerTonePicker : composerAddRoot }) : ''}</span>
@@ -1030,7 +1046,7 @@ export function renderChatFirstShell({
   `;
 
   const chatNavigation = pane === 'settings' ? '' : `
-    <aside class="chat-sidebar ${profileOpen ? 'profile-open' : ''} ${railCollapsed ? 'rail-collapsed' : ''}" aria-label="${activeWorkMode ? '工作导航' : '对话导航'}">
+    ${preserveSidebar ? '<div data-preserved-sidebar-slot aria-hidden="true"></div>' : `<aside class="chat-sidebar ${profileOpen ? 'profile-open' : ''} ${railCollapsed ? 'rail-collapsed' : ''}" aria-label="${activeWorkMode ? '工作导航' : '对话导航'}">
       <header class="chat-brand">
         ${activeWorkMode ? '' : railCollapsed
           ? '<button class="chat-rail-toggle chat-rail-brand-toggle" data-action="toggle-rail" aria-label="展开导航栏" aria-expanded="false" title="展开导航栏"><img src="./nanfeng-ai-icon.png" alt=""></button>'
@@ -1047,7 +1063,7 @@ export function renderChatFirstShell({
         ${activeWorkMode ? '' : `<section class="chat-history" aria-label="本地会话列表">${conversationList}</section>`}
       </div>
       ${activeWorkMode ? '' : `<footer class="chat-sidebar-footer"><div class="chat-sidebar-bottom-actions"><button class="chat-profile chat-sidebar-settings" data-action="show-settings" aria-label="设置" title="设置"><span aria-hidden="true">${icon(icons.settings, '设置')}</span></button><button class="chat-sidebar-function" data-action="new-chat" aria-label="新对话"><span aria-hidden="true">${icon(icons.edit, '新对话')}</span><span class="rail-label">新对话</span></button></div></footer>`}
-    </aside>
+    </aside>`}
     <button type="button" class="chat-sidebar-divider" role="separator" aria-label="调整对话导航宽度" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="440" aria-valuenow="${Math.max(220, Math.min(440, Number(sidebarWidth) || 256))}" title="拖拽调整导航宽度；双击恢复默认"></button>
     <button class="chat-sidebar-scrim" data-action="toggle-chat-sidebar" aria-label="关闭导航"></button>`;
   return `

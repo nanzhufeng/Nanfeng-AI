@@ -1,6 +1,7 @@
 package com.nanzhufeng.ai.ui
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,6 +14,8 @@ class ConversationSendErrorIsolationContractsTest {
         assertTrue(viewModel.contains("state.sendErrorConversationId == snapshot?.conversation?.id"))
         assertTrue(viewModel.contains("sendErrorConversationId = id"))
         assertTrue(workspace.contains("state.sendErrorConversationId == state.selectedConversationId"))
-        assertTrue(workspace.contains("本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR"))
+        // Provider bridging is no longer exposed as composer microcopy. The configured model
+        // is the only visible recipient; unsupported attachments fail honestly instead.
+        assertFalse(workspace.contains("本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR"))
     }
 }

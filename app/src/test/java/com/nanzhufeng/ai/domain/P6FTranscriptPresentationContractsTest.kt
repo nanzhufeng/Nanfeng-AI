@@ -74,7 +74,7 @@ class P6FTranscriptPresentationContractsTest {
         assertEquals("Claude Opus 5", projected.metadata.modelSnapshotLabel)
     }
 
-    @Test fun `provider response amount is shown after the model while fallback keeps its estimate label`() {
+    @Test fun `provider response amount is shown after the model without an estimate annotation`() {
         val node = message("provider-cost", MessageRole.ASSISTANT)
         val exact = AssistantResponseModelAttribution(
             assistantMessageId = node.id, attemptId = NormalChatSendAttemptId("p6f-cost-exact"),
@@ -87,12 +87,12 @@ class P6FTranscriptPresentationContractsTest {
             cost = ProviderCost("local-calibrated-openrouter-v1", "USD", 5_340L), costSource = ConversationCostSource.LOCAL_ESTIMATE,
         )
 
-        assertEquals("约 ¥0.035013", exact.footerCostLabel())
-        assertEquals("≈ ¥0.035886（估算）", estimated.footerCostLabel())
+        assertEquals("¥0.035013", exact.footerCostLabel())
+        assertEquals("¥0.035886", estimated.footerCostLabel())
         val projected = ConversationTranscriptPresentation(MessagePresentationRenderer())
             .render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(exact)))
             .single()
-        assertEquals("约 ¥0.035013", projected.metadata.costLabel)
+        assertEquals("¥0.035013", projected.metadata.costLabel)
     }
 
     @Test fun `hosted DeepSeek search footer stays a model name while route remains persisted`() {

@@ -29,7 +29,10 @@ export function attachmentPreviewCapability(attachment = {}) {
   const textExtension = /[.。]\s*(md|markdown|txt|json|csv)\s*$/i.test(String(attachment.displayName || ''));
   const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || (mimeType === 'application/octet-stream' && /[.。]\s*docx\s*$/i.test(String(attachment.displayName || '')));
   const isZip = ['application/zip', 'application/x-zip-compressed'].includes(mimeType) || (mimeType === 'application/octet-stream' && /[.。]\s*zip\s*$/i.test(String(attachment.displayName || '')));
-  if (isZip || isDocx || TEXT_MIME_TYPES.has(mimeType) || ((!mimeType || mimeType === 'application/octet-stream') && textExtension)) {
+  if (isZip) {
+    return { kind: 'archive', action: 'open-archive-preview', label: '应用内压缩包浏览', supported: true };
+  }
+  if (isDocx || TEXT_MIME_TYPES.has(mimeType) || ((!mimeType || mimeType === 'application/octet-stream') && textExtension)) {
     return { kind: 'text', action: 'open-text-preview', label: '应用内安全文本预览', supported: true };
   }
   return {

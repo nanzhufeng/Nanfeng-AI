@@ -5,6 +5,7 @@ import { renderChatFirstShell } from '../src/chat-shell.mjs';
 
 const root = new URL('../', import.meta.url);
 const app = await readFile(new URL('src/app.mjs', root), 'utf8');
+const chatShell = await readFile(new URL('src/chat-shell.mjs', root), 'utf8');
 const rust = await readFile(new URL('src-tauri/src/lib.rs', root), 'utf8');
 
 function rustCommand(name) {
@@ -36,6 +37,21 @@ test('steady shell interactions retain an unchanged transcript instead of serial
   assert.match(retained, /chat-transcript-rail/);
 });
 
+test('steady shell interactions retain an unchanged sidebar instead of serializing every history row again', () => {
+  const retained = renderChatFirstShell({ data, native: true, selectedConversationId: 'long-chat', pane: 'chat', status: '', error: '', connection: {}, preserveSidebar: true });
+  assert.match(retained, /data-preserved-sidebar-slot/);
+  assert.doesNotMatch(retained, /data-conversation-row/);
+  assert.match(app, /function currentSidebarRetention/);
+  assert.match(app, /function canRetainSidebar/);
+  assert.match(app, /function sameSetExceptId/);
+  assert.match(app, /function patchRetainedSidebarRows/);
+  assert.match(app, /sameSetExceptId\(previous\.unreadConversationIds, next\.unreadConversationIds, next\.selectedConversationId\)/);
+  assert.match(app, /sameMapEntries\(previous\.manualUnreadAtMs, next\.manualUnreadAtMs\)/);
+  assert.match(app, /retained-sidebar/);
+  assert.match(app, /preserveSidebar: Boolean\(retainedSidebar\)/);
+  assert.match(chatShell, /const conversationList = preserveSidebar \? '' : \(\(\) => \{/);
+});
+
 test('high-frequency inputs and transcript tracking avoid a full render per native event', () => {
   const inputOwner = app.slice(app.lastIndexOf("app.addEventListener('input'", app.indexOf('function composerHasFileTransfer')), app.indexOf('function composerHasFileTransfer'));
   assert.match(app, /let settingsSearchRenderFrame = null/);
@@ -46,7 +62,11 @@ test('high-frequency inputs and transcript tracking avoid a full render per nati
   assert.match(app, /function canRetainTranscript/);
   assert.match(app, /retained-transcript/);
   assert.match(app, /preserveTranscript: Boolean\(retainedTranscript\)/);
+  assert.match(app, /scheduleImageThumbnailReads\(\{ composerOnly: Boolean\(retainedTranscript\), retainObserved: Boolean\(retainedTranscript\) \}\)/);
+  assert.match(app, /if \(!retainedTranscript\) \{\s*scheduleVideoThumbnailReads\(\);\s*scheduleAttachmentCardPreviewReads\(\);/);
   assert.match(app, /function scheduleTranscriptRailSync/);
+  const retentionOwner = app.slice(app.indexOf('function currentTranscriptRetention'), app.indexOf('function canRetainTranscript'));
+  assert.doesNotMatch(retentionOwner, /imageThumbnails/);
   const scrollOwner = app.slice(app.indexOf("app.addEventListener('scroll'"), app.indexOf('let sidebarDragPointerId'));
   assert.match(scrollOwner, /scheduleTranscriptRailSync\(scroll\)/);
   assert.doesNotMatch(scrollOwner, /syncTranscriptRailToScroll\(scroll\)/);
@@ -64,8 +84,8 @@ test('destructive confirmation, sidebar drag, image zoom and retained shells sta
   const wheelOwner = app.slice(app.indexOf("app.addEventListener('wheel'"), app.indexOf('async function openPdfPreview'));
   assert.match(wheelOwner, /applyImagePreviewTransform\(viewport\)/);
   assert.doesNotMatch(wheelOwner, /render\(\)/);
-  assert.doesNotMatch(app, /scheduleImageThumbnailReads\(\{ composerOnly: Boolean\(retainedTranscript\) \}\)/);
-  assert.match(app, /scheduleImageThumbnailReads\(\);\s*scheduleVideoThumbnailReads/);
+  assert.match(app, /function scheduleImageThumbnailReads\(\{ composerOnly = false, retainObserved = false \} = \{\}\)/);
+  assert.match(app, /if \(!retainObserved\) \{\s*imageThumbnailObserver\?\.disconnect\(\);/);
 });
 
 test('composer typing batches local persistence and preserves the current draft before submit', () => {
@@ -146,7 +166,7 @@ test('search, startup projections and preview reads never run blocking work on t
   const localIndexQuery = rustCommand('query_desktop_local_index');
   assert.match(localIndexQuery, /run_desktop_store_paths_blocking/);
   assert.doesNotMatch(localIndexQuery, /run_desktop_store_blocking\(/);
-  assert.match(localIndexQuery, /query_local_index_at\(&paths\.root, &paths\.database/);
+  assert.match(localIndexQuery, /query_local_index_at_cancellable\(\s*&paths\.root,\s*&paths\.database/);
   assert.match(rustCommand('read_desktop_usage_ledger'), /async fn read_desktop_usage_ledger[\s\S]*spawn_blocking/);
   for (const name of [
     'read_desktop_conversation_draft',
@@ -166,7 +186,12 @@ test('search, startup projections and preview reads never run blocking work on t
   assert.match(videoThumbnail, /run_desktop_store_paths_blocking/);
   assert.doesNotMatch(videoThumbnail, /run_desktop_store_blocking\(/);
   const searchOwner = app.slice(app.indexOf('async function runFullSearch('), app.indexOf('function scheduleFullSearch()'));
-  assert.match(searchOwner, /withFullSearchDeadline\(pending\)/);
+  assert.match(searchOwner, /withFullSearchDeadline\(pending, requestId\)/);
+  const refreshOwner = app.slice(app.indexOf('async function refresh()'), app.indexOf('async function runP6eTemporaryMaintenanceAcceptance'));
+  assert.match(refreshOwner, /const \[\s*,\s*p6gCatalog,\s*p6gGlobalDefault,/);
+  assert.match(refreshOwner, /await Promise\.all\(\[/);
+  assert.match(refreshOwner, /loadConversationReadState\(/);
+  assert.match(refreshOwner, /loadTranscriptionState\(\)/);
 });
 
 test('video thumbnail hydration is bounded so background previews cannot starve imported chat actions', () => {

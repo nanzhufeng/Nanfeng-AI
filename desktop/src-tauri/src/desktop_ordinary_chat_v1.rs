@@ -18,6 +18,9 @@ use zeroize::{Zeroize, Zeroizing};
 
 const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(75);
+// A provider may send SSE heartbeats or reasoning frames without any user-visible text.
+// Those frames must not leave an empty answer looking like it is generating forever.
+const STREAM_FIRST_VISIBLE_DELTA_TIMEOUT: Duration = Duration::from_secs(75);
 
 pub fn migrate(connection: &rusqlite::Connection) -> Result<(), String> {
     connection.execute_batch(
@@ -607,18 +610,25 @@ pub async fn execute_streaming(
     secret.zeroize();
     let body = transport_body(&request);
     let started = Instant::now();
-    let response = Client::builder()
+    let client = Client::builder()
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(600))
         .build()
-        .map_err(|_| Failure::Unknown { code: "CLIENT" })?
-        .post(&request.endpoint)
-        .bearer_auth(authorization.as_str())
-        .header("Idempotency-Key", &request.idempotency_key)
-        .header("Accept", "text/event-stream")
-        .json(&body)
-        .send()
-        .await
+        .map_err(|_| Failure::Unknown { code: "CLIENT" })?;
+    let response = tokio::time::timeout(
+        STREAM_FIRST_VISIBLE_DELTA_TIMEOUT,
+        client
+            .post(&request.endpoint)
+            .bearer_auth(authorization.as_str())
+            .header("Idempotency-Key", &request.idempotency_key)
+            .header("Accept", "text/event-stream")
+            .json(&body)
+            .send(),
+    )
+    .await
+    .map_err(|_| Failure::Unknown {
+        code: "FIRST_RESPONSE_TIMEOUT",
+    })?
         .map_err(|error| {
             if error.is_timeout() {
                 Failure::Unknown { code: "TIMEOUT" }
@@ -634,7 +644,12 @@ pub async fn execute_streaming(
         });
     }
     if request.web_search_route == "DEEPSEEK_RESPONSES" {
-        let bytes = response.bytes().await.map_err(|error| {
+        let bytes = tokio::time::timeout(STREAM_FIRST_VISIBLE_DELTA_TIMEOUT, response.bytes())
+            .await
+            .map_err(|_| Failure::Unknown {
+                code: "FIRST_VISIBLE_TIMEOUT",
+            })?
+            .map_err(|error| {
             if error.is_timeout() {
                 Failure::Unknown { code: "TIMEOUT" }
             } else {
@@ -662,24 +677,38 @@ pub async fn execute_streaming(
     let mut actual_model_id = None;
     let mut bytes_read = 0usize;
     let mut completed = false;
+    let first_visible_deadline = Instant::now() + STREAM_FIRST_VISIBLE_DELTA_TIMEOUT;
     let mut stream = response.bytes_stream();
     let mut pending = Vec::<u8>::new();
     loop {
         if cancelled.load(Ordering::SeqCst) {
             return Err(Failure::Cancelled);
         }
-        // A provider may take time to reason, but a silent socket cannot remain a fake
-        // “正在生成” forever. Keep polling cancellation while one `next()` future is alive;
-        // each actual SSE chunk resets the idle window.
+        // A provider may take time to reason, but heartbeats/non-visible frames cannot keep an
+        // empty answer in a fake “正在生成” state. Once visible text exists, retain the normal
+        // per-chunk idle limit for every provider.
         let next = {
             let next_chunk = stream.next();
             tokio::pin!(next_chunk);
-            let idle = tokio::time::sleep(STREAM_IDLE_TIMEOUT);
+            let wait_for = if text.is_empty() {
+                let remaining = first_visible_deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(Failure::Unknown {
+                        code: "FIRST_VISIBLE_TIMEOUT",
+                    });
+                }
+                remaining.min(STREAM_IDLE_TIMEOUT)
+            } else {
+                STREAM_IDLE_TIMEOUT
+            };
+            let idle = tokio::time::sleep(wait_for);
             tokio::pin!(idle);
             loop {
                 tokio::select! {
                     value = &mut next_chunk => break value,
-                    _ = &mut idle => return Err(Failure::Unknown { code: "TIMEOUT" }),
+                    _ = &mut idle => return Err(Failure::Unknown {
+                        code: if text.is_empty() { "FIRST_VISIBLE_TIMEOUT" } else { "STREAM_IDLE_TIMEOUT" },
+                    }),
                     _ = tokio::time::sleep(Duration::from_millis(100)) => {
                         if cancelled.load(Ordering::SeqCst) {
                             return Err(Failure::Cancelled);
@@ -905,6 +934,9 @@ mod tests {
     #[test]
     fn web_search_request_shapes_match_android_provider_contracts() {
         let mut fixture = request("https://provider.invalid/chat/completions".into());
+        let ordinary = transport_body(&fixture);
+        assert_eq!(ordinary["stream"], true);
+        assert_eq!(ordinary["stream_options"]["include_usage"], true);
 
         fixture.web_search_route = "OPENROUTER_SERVER_TOOL".into();
         let body = transport_body(&fixture);

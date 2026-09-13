@@ -24,7 +24,7 @@ class AutomaticWebSearchPolicyTest {
         val source = ProviderWebSource.fromProvider(" https://example.test/policy ", " 政策原文 ")
         assertEquals(ProviderWebSource("https://example.test/policy", "政策原文"), source)
         assertTrue(WebSearchGroundingPolicy.hasRequiredSources(
-            ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES),
+            ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES),
             listOf(requireNotNull(source)),
         ))
     }
@@ -171,16 +171,25 @@ class AutomaticWebSearchPolicyTest {
     }
 
     @Test
-    fun `grounded completion requires provider-returned public sources`() {
-        val live = ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
-        assertEquals(false, WebSearchGroundingPolicy.hasRequiredSources(live, emptyList()))
-        assertEquals(
-            true,
-            WebSearchGroundingPolicy.hasRequiredSources(
-                live,
-                listOf(ProviderWebSource("https://example.test/policy", "政策原文")),
-            ),
+    fun `DeepSeek Responses accepts its documented server-side search action without public URLs`() {
+        val deepSeek = ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
+        val urlReportingRoutes = listOf(
+            OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL,
+            OfficialWebSearchRoute.QWEN_RESPONSES,
+            OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS,
+            OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS,
         )
+        assertEquals(true, WebSearchGroundingPolicy.hasRequiredSources(deepSeek, emptyList()))
+        urlReportingRoutes.forEach { route ->
+            assertEquals(false, WebSearchGroundingPolicy.hasRequiredSources(ChatRequestOptions(route), emptyList()))
+            assertEquals(
+                true,
+                WebSearchGroundingPolicy.hasRequiredSources(
+                    ChatRequestOptions(route),
+                    listOf(ProviderWebSource("https://example.test/policy", "政策原文")),
+                ),
+            )
+        }
         assertEquals(true, WebSearchGroundingPolicy.hasRequiredSources(ChatRequestOptions.Standard, emptyList()))
     }
 }

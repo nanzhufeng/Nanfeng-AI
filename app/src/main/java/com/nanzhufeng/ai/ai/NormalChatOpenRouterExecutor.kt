@@ -182,7 +182,11 @@ class NormalChatOpenRouterExecutor(
         }
 
     /** Explicit user action only. It retries the original direct request. */
-    fun retryLatestAttempt(conversationId: ConversationId): Result {
+    fun retryLatestAttempt(
+        conversationId: ConversationId,
+        onLocalSubmission: () -> Unit = {},
+        onStreamProgress: () -> Unit = {},
+    ): Result {
         cancellationRequested -= conversationId
         val attempt = sendAttempts.findLatestForConversation(conversationId) ?: return Result.Blocked(Code.RECOVERY_UNAVAILABLE)
         val resumableStatuses = setOf(NormalChatSendAttemptStatus.UNKNOWN, NormalChatSendAttemptStatus.FAILED)
@@ -206,6 +210,10 @@ class NormalChatOpenRouterExecutor(
             is ProviderRuntimeRetryResult.Started -> result
             is ProviderRuntimeRetryResult.Rejected -> return Result.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
         }
+        // The retry owns a newly persisted PARTIAL assistant message before any network work.
+        // Notify the UI at this exact boundary; waiting for requestOne() to return would leave
+        // the transcript on the old failure card for the entire provider round trip.
+        onLocalSubmission()
         val cancellation = ProviderChatCancellation().also { call ->
             activeCalls[conversationId] = call
             if (cancellationRequested.remove(conversationId)) call.cancel()
@@ -221,7 +229,7 @@ class NormalChatOpenRouterExecutor(
                 attachments = attachments,
                 choice = ComposerModelRoutingCatalog.auto,
                 runtime = resumedRuntime,
-                onStreamProgress = {},
+                onStreamProgress = onStreamProgress,
                 cancellation = cancellation,
                 existingAttempt = attempt,
             )
@@ -580,11 +588,10 @@ class NormalChatOpenRouterExecutor(
             forceTextProjection = requestOptions.liveWebSearch,
         )) {
             is ChatAttachmentBridgeResult.Ready -> result
-            is ChatAttachmentBridgeResult.Failed -> return OneResult.Blocked(Code.ATTACHMENT_BRIDGE_UNAVAILABLE)
+            is ChatAttachmentBridgeResult.Failed -> return OneResult.Blocked(Code.ATTACHMENT_MODEL_UNSUPPORTED)
         }
         val providerAttachments = bridged.providerAttachments
-        val attachmentFact = attachmentReferenceInstruction(attachments) + if (bridged.receivers.isEmpty()) "" else
-            "\n其中当前模型不能原生读取的内容已由${bridged.receivers.joinToString("、")}转为文本；请基于转换结果回答，不要声称当前模型直接看到了原始二进制文件。"
+        val attachmentFact = attachmentReferenceInstruction(attachments)
         val systemFact = listOfNotNull(
             systemFactForRequest(requestOptions, experience, fulfilledAnalysisMode, userMessage, isFirstAssistantReply),
             attachmentFact.takeIf { attachments.isNotEmpty() },

@@ -71,7 +71,7 @@ const systemDarkQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
 function readSidebarWidth() { try { return clampDesktopSidebarWidth(Number(localStorage.getItem(settingsLocalKey)), window.innerWidth); } catch { return 256; } }
 function persistSidebarWidth(width) { try { localStorage.setItem(settingsLocalKey, String(width)); } catch { /* browser preview may deny local storage */ } }
 const initialProductSettings = parityPreferences.readProductSettings();
-const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0 }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构' } };
+const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构' } };
 state.selectedWorkProjectId = null;
 state.assistantMessageMenu = null;
 globalThis.__nanfengDesktopWorkState = state;
@@ -116,26 +116,54 @@ state.unreadConversationIds = new Set();
 state.manualUnreadAtMs = new Map();
 state.pendingCreatedConversationRouteWorkspaceId = null;
 
+const ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS = 80;
+let ordinaryChatRuntimeRefreshPending = null;
+let ordinaryChatRuntimeRefreshTimer = null;
+let ordinaryChatRuntimeRefreshInFlight = false;
+
+function scheduleOrdinaryChatRuntimeRefresh() {
+  if (ordinaryChatRuntimeRefreshTimer !== null || ordinaryChatRuntimeRefreshInFlight) return;
+  ordinaryChatRuntimeRefreshTimer = window.setTimeout(() => {
+    ordinaryChatRuntimeRefreshTimer = null;
+    void flushOrdinaryChatRuntimeRefresh();
+  }, ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS);
+}
+
+function queueOrdinaryChatRuntimeRefresh(payload) {
+  if (!payload?.workspaceId || state.current?.summary?.id !== payload.workspaceId) return;
+  ordinaryChatRuntimeRefreshPending = payload;
+  scheduleOrdinaryChatRuntimeRefresh();
+}
+
+async function flushOrdinaryChatRuntimeRefresh() {
+  if (ordinaryChatRuntimeRefreshInFlight) return;
+  const payload = ordinaryChatRuntimeRefreshPending;
+  ordinaryChatRuntimeRefreshPending = null;
+  if (!payload) return;
+  if (state.current?.summary?.id !== payload.workspaceId) return;
+  ordinaryChatRuntimeRefreshInFlight = true;
+  try {
+    state.current = await invoke('read_desktop_workspace', { workspaceId: payload.workspaceId });
+    if (!state.selectedConversationId && state.pendingCreatedConversationRouteWorkspaceId === payload.workspaceId) {
+      state.selectedConversationId = payload.conversationId || null;
+      state.pendingCreatedConversationRouteWorkspaceId = null;
+    }
+    if (state.selectedConversationId === payload.conversationId) state.pendingChatSendScrollToLatestId = payload.conversationId || null;
+    await loadConversationReadState({ observeSelected: true });
+    state.error = '';
+    render();
+  } catch (error) {
+    state.error = `聊天增量已持久化，但界面刷新失败：${String(error)}`;
+    render();
+  } finally {
+    ordinaryChatRuntimeRefreshInFlight = false;
+    if (ordinaryChatRuntimeRefreshPending) scheduleOrdinaryChatRuntimeRefresh();
+  }
+}
+
 const tauriEvents = window.__TAURI__?.event;
 if (native && tauriEvents?.listen) {
-  void tauriEvents.listen('desktop-ordinary-chat-runtime-v1', async event => {
-    const payload = event?.payload || {};
-    if (!payload.workspaceId || state.current?.summary?.id !== payload.workspaceId) return;
-    try {
-      state.current = await invoke('read_desktop_workspace', { workspaceId: payload.workspaceId });
-      if (!state.selectedConversationId && state.pendingCreatedConversationRouteWorkspaceId === payload.workspaceId) {
-        state.selectedConversationId = payload.conversationId || null;
-        state.pendingCreatedConversationRouteWorkspaceId = null;
-      }
-      if (state.selectedConversationId === payload.conversationId) state.pendingChatSendScrollToLatestId = payload.conversationId || null;
-      await loadConversationReadState({ observeSelected: true });
-      state.error = '';
-      render();
-    } catch (error) {
-      state.error = `聊天增量已持久化，但界面刷新失败：${String(error)}`;
-      render();
-    }
-  });
+  void tauriEvents.listen('desktop-ordinary-chat-runtime-v1', event => queueOrdinaryChatRuntimeRefresh(event?.payload || {}));
   void tauriEvents.listen('desktop-reminder-runtime-v1', async () => {
     try {
       await loadDesktopReminders();
@@ -341,6 +369,7 @@ function removeFavoriteConversation(conversationId) {
   }
 }
 
+state.archivePreview = null;
 applyAppearance();
 systemDarkQuery?.addEventListener?.('change', () => { if (state.appearance.mode === 'system') { applyAppearance(); render(); } });
 state.v2CommittedExchanges = [];
@@ -400,6 +429,7 @@ function closeTopOverlay({ restoreFocus = true, navigateComposerLayerBack = fals
   else if (state.dialog) state.dialog = null;
   else if (state.imagePreview) state.imagePreview = null;
   else if (state.pdfPreview) state.pdfPreview = null;
+  else if (state.archivePreview) state.archivePreview = null;
   else if (state.previewBoundary) state.previewBoundary = null;
   else if (state.sidebarOpen) state.sidebarOpen = false;
   else return false;
@@ -1013,7 +1043,7 @@ async function executeTranscriptionTask(taskId, retry = false) {
   try {
     if (retry) await invoke('retry_desktop_transcription_task', { taskId });
     await invoke(documentTask ? 'run_desktop_ocr_task' : 'run_desktop_transcription_task', { taskId });
-    state.status = documentTask ? '图片/PDF 已转换为 Markdown，来源、结果与费用已保存。' : '语音转写已完成，结果、时间轴与费用估算已保存。';
+    state.status = documentTask ? '图片/PDF 已转换为 Markdown，来源、结果与费用已保存。' : '语音转写已完成，结果、时间轴与费用已保存。';
   } catch (error) {
     state.error = `${documentTask ? '图片/PDF 转写' : '语音转写'}未完成：${String(error)}`;
   } finally {
@@ -1202,12 +1232,14 @@ const intent = prefix => `${prefix}-${Date.now().toString(36)}-${Math.random().t
 const icon = (path, label) => `<svg aria-hidden="true" viewBox="0 0 24 24"><title>${label}</title><path d="${path}"/></svg>`;
 let fullSearchDebounce = null;
 let fullSearchGeneration = 0;
+let fullSearchRequestId = 0;
 let fullSearchCategoryFrame = null;
 let settingsSearchRenderFrame = null;
 let conversationFindRenderTimer = null;
 let transcriptRailSyncFrame = null;
 let pendingTranscriptRailScroll = null;
 let renderedTranscriptRetention = null;
+let renderedSidebarRetention = null;
 let renderedAttachmentPreview = null;
 
 function assistantGallerySelectionKey(selections = state.assistantImageSelections) {
@@ -1237,7 +1269,6 @@ function currentTranscriptRetention(data) {
     findOpen: state.conversationFindOpen,
     findQuery: state.conversationFindQuery,
     findIndex: state.conversationFindIndex,
-    imageThumbnails: state.imageThumbnails,
     contextSelectionRecords: state.contextSelectionRecords,
     productSettings: state.productSettings,
     settingsCapabilities: state.settingsCapabilities,
@@ -1260,12 +1291,85 @@ function canRetainTranscript(previous, next) {
     && previous.findOpen === next.findOpen
     && previous.findQuery === next.findQuery
     && previous.findIndex === next.findIndex
-    && previous.imageThumbnails === next.imageThumbnails
     && previous.contextSelectionRecords === next.contextSelectionRecords
     && previous.productSettings === next.productSettings
     && previous.settingsCapabilities === next.settingsCapabilities
     && previous.reminders === next.reminders
     && previous.gallerySelection === next.gallerySelection;
+}
+
+function currentSidebarRetention(data) {
+  if (state.pane !== 'chat' || state.searchPanel || state.temporaryConversation || state.p6eAcceptance.enabled) return null;
+  return {
+    data,
+    selectedConversationId: state.selectedConversationId,
+    sidebarOpen: state.sidebarOpen,
+    railCollapsed: state.railCollapsed,
+    profileOpen: state.profileOpen,
+    chatSearch: state.chatSearch,
+    searchHistory: state.searchHistory,
+    searchHistoryOpen: state.searchHistoryOpen,
+    favoriteConversationIds: state.favoriteConversationIds,
+    unreadConversationIds: state.unreadConversationIds,
+    manualUnreadAtMs: state.manualUnreadAtMs,
+  };
+}
+
+function sameSetExceptId(previous, next, exceptId) {
+  const left = previous || new Set();
+  const right = next || new Set();
+  for (const value of left) if (value !== exceptId && !right.has(value)) return false;
+  for (const value of right) if (value !== exceptId && !left.has(value)) return false;
+  return true;
+}
+
+function sameMapEntries(previous, next) {
+  if (previous === next) return true;
+  if (!previous || !next || previous.size !== next.size) return false;
+  for (const [key, value] of previous) if (next.get(key) !== value) return false;
+  return true;
+}
+
+function canRetainSidebar(previous, next) {
+  return previous && next
+    && previous.data === next.data
+    && previous.sidebarOpen === next.sidebarOpen
+    && previous.railCollapsed === next.railCollapsed
+    && previous.profileOpen === next.profileOpen
+    && previous.chatSearch === next.chatSearch
+    && previous.searchHistory === next.searchHistory
+    && previous.searchHistoryOpen === next.searchHistoryOpen
+    && previous.favoriteConversationIds === next.favoriteConversationIds
+    // Opening a conversation clears only its automatic unread dot. That is a
+    // local row patch, not a reason to sort and recreate every sidebar row.
+    && sameSetExceptId(previous.unreadConversationIds, next.unreadConversationIds, next.selectedConversationId)
+    // Manual unread changes ordering, so it deliberately remains a full list
+    // update instead of risking a stale recency order.
+    && sameMapEntries(previous.manualUnreadAtMs, next.manualUnreadAtMs);
+}
+
+function patchRetainedSidebarRows() {
+  const showUnread = state.productSettings.unreadIndicators !== false;
+  document.querySelectorAll('.chat-history-row[data-conversation-row]').forEach(row => {
+    const conversationId = row.dataset.id;
+    row.classList.toggle('selected', conversationId === state.selectedConversationId);
+    const line = row.querySelector('.chat-history-title-line');
+    const manualUnread = Number(state.manualUnreadAtMs?.get?.(conversationId) || 0) > 0;
+    const unread = showUnread && (manualUnread || state.unreadConversationIds.has(conversationId));
+    const indicator = line?.querySelector('.chat-history-unread');
+    if (!unread) {
+      indicator?.remove();
+      return;
+    }
+    if (indicator) {
+      indicator.setAttribute('aria-label', manualUnread ? '已标记未读' : '有未查看的新内容');
+      return;
+    }
+    const marker = document.createElement('i');
+    marker.className = 'chat-history-unread';
+    marker.setAttribute('aria-label', manualUnread ? '已标记未读' : '有未查看的新内容');
+    line?.insertBefore(marker, line.querySelector('.chat-history-running, .chat-history-title') || null);
+  });
 }
 
 function scheduleSettingsSearchRender() {
@@ -1309,8 +1413,9 @@ function paintSearchCategorySelection(category) {
 function selectFullSearchCategory(category) {
   category ||= 'all';
   if (state.searchCategory === category && !state.searchError) return;
-  // Invalidate the previous request before yielding a frame, not afterwards.
-  fullSearchGeneration += 1;
+  // Cancel the native SQLite statement before yielding a frame, not merely
+  // its renderer result after it has already finished.
+  supersedeFullSearch();
   state.searchCategory = category;
   state.searchFileTypeOpen = false;
   state.searchScrollSnapshot = null;
@@ -1341,34 +1446,57 @@ function paintSearchLoadingState(category) {
   return true;
 }
 
-function withFullSearchDeadline(promise, timeoutMillis = 8_000) {
+function cancelDesktopLocalSearch(requestId) {
+  if (native && requestId > 0) void invoke('cancel_desktop_local_search', { requestId }).catch(() => {});
+}
+
+function supersedeFullSearch() {
+  fullSearchGeneration += 1;
+  const requestId = ++fullSearchRequestId;
+  cancelDesktopLocalSearch(requestId);
+  return requestId;
+}
+
+function withFullSearchDeadline(promise, requestId, timeoutMillis = 8_000) {
   let timer = null;
   const timeout = new Promise((_, reject) => {
-    timer = window.setTimeout(() => reject(new Error('本机索引读取超时，请重试。')), timeoutMillis);
+    timer = window.setTimeout(() => {
+      cancelDesktopLocalSearch(requestId);
+      reject(new Error('本机索引读取超时，请重试。'));
+    }, timeoutMillis);
   });
   return Promise.race([promise, timeout]).finally(() => {
     if (timer !== null) window.clearTimeout(timer);
   });
 }
 
-let fullSearchPending = null;
+let fullSearchRepairPending = false;
 const fullSearchResultCache = createSearchResultCache();
 let fullSearchCacheScope = '';
-async function runFullSearch({ recordHistory = false, restoreScroll = false, inPlace = false } = {}) {
+async function runFullSearch({ recordHistory = false, restoreScroll = false, inPlace = false, append = false } = {}) {
   const generation = ++fullSearchGeneration;
+  const requestId = ++fullSearchRequestId;
+  // This command may arrive after the query command. Cancel only older
+  // requests so that out-of-order IPC can never abort this request itself.
+  cancelDesktopLocalSearch(requestId - 1);
   const cacheScope = JSON.stringify([state.workspaces, state.current?.summary]);
   if (cacheScope !== fullSearchCacheScope) { fullSearchResultCache.clear(); fullSearchCacheScope = cacheScope; }
-  const searchArgs = { query: state.chatSearch, category: state.searchCategory || 'all', sortMode: state.searchSortMode, fileType: state.searchCategory === 'file' ? state.searchFileType : 'all' };
+  const offset = append ? (state.searchPage?.hits?.length || 0) : 0;
+  const searchArgs = { query: state.chatSearch, category: state.searchCategory || 'all', sortMode: state.searchSortMode, fileType: state.searchCategory === 'file' ? state.searchFileType : 'all', offset };
   const cachedPage = native ? fullSearchResultCache.get(searchArgs) : null;
   state.searchPanel = true;
-  state.searchLoading = !cachedPage;
-  if (cachedPage) { state.searchPage = cachedPage; state.searchResults = cachedPage.hits; }
+  state.searchLoading = !append && !cachedPage;
+  state.searchLoadingMore = append && !cachedPage;
+  if (cachedPage) {
+    state.searchPage = append ? { ...cachedPage, hits: [...(state.searchPage?.hits || []), ...(cachedPage.hits || [])] } : cachedPage;
+    state.searchResults = state.searchPage.hits;
+  }
   state.searchError = '';
   state.searchHistoryHighlighted = bestSearchHistoryMatch(state.chatSearch, state.searchHistory);
   // A category is a local, immediate selection.  Keep this existing search
   // shell alive for the first frame instead of rebuilding it before SQLite has
   // returned, so the clicked pill can paint without DOM teardown.
-  const paintedInPlace = !cachedPage && inPlace && paintSearchLoadingState(state.searchCategory);
+  const paintedInPlace = !append && !cachedPage && inPlace && paintSearchLoadingState(state.searchCategory);
   if (!paintedInPlace) render();
   if (!native) {
     state.searchLoading = false;
@@ -1390,34 +1518,28 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false, inP
     return;
   }
   try {
-    // Rapid filter changes replace pending intent instead of flooding the
-    // shared store mutex with queries whose results will be discarded.
-    // A slow previous category must not prevent the latest request from starting.
+    // The native request id cancels any older SQLite statement. Generation is
+    // retained only as a UI guard for already-delivered renderer work.
     if (generation !== fullSearchGeneration) return;
     const pending = invoke('query_desktop_local_index', { args: {
       query: state.chatSearch,
       category: state.searchCategory || 'all',
       sortMode: state.searchSortMode,
       fileType: state.searchCategory === 'file' ? state.searchFileType : 'all',
-      recordHistory: Boolean(recordHistory && state.chatSearch.trim()),
-      historyWorkspaceId: state.current?.summary?.id || null,
-    } });
-    fullSearchPending = pending;
-    pending.then(() => { if (fullSearchPending === pending) fullSearchPending = null; }, () => { if (fullSearchPending === pending) fullSearchPending = null; });
-    const page = await withFullSearchDeadline(pending);
+      offset,
+      recordHistory: false,
+      historyWorkspaceId: null,
+    }, requestId });
+    const page = await withFullSearchDeadline(pending, requestId);
     if (cacheScope === fullSearchCacheScope) fullSearchResultCache.set(searchArgs, page);
     if (generation !== fullSearchGeneration) return;
-    if (cachedPage) rememberFullSearchScroll();
-    state.searchPage = page;
-    state.searchResults = page.hits || [];
+    if (cachedPage || append) rememberFullSearchScroll();
+    state.searchPage = append ? { ...page, hits: [...(state.searchPage?.hits || []), ...(page.hits || [])] } : page;
+    state.searchResults = state.searchPage.hits || [];
     state.searchLoading = false;
+    state.searchLoadingMore = false;
     state.searchError = '';
-    state.searchEvidenceLabel = '';
-    if (recordHistory && state.current && state.chatSearch.trim()) {
-      const history = await invoke('read_desktop_local_search_history', { workspaceId: state.current.summary.id });
-      if (generation !== fullSearchGeneration) return;
-      state.searchHistory = history;
-    }
+    state.searchEvidenceLabel = page.indexCurrent === false ? '本机索引正在后台恢复；当前显示的是已就绪的结果。' : '';
     state.searchHistoryHighlighted = bestSearchHistoryMatch(state.chatSearch, state.searchHistory);
     render();
     queueMicrotask(() => {
@@ -1426,9 +1548,24 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false, inP
       if (inPlace) document.querySelector(`.desktop-search-tabs [data-action="set-search-category"][data-category="${CSS.escape(state.searchCategory)}"]`)?.focus({ preventScroll: true });
       restoreFullSearchScroll();
     });
+    if (recordHistory && !append && state.current && state.chatSearch.trim()) {
+      void invoke('record_desktop_local_search_history', { workspaceId: state.current.summary.id, query: state.chatSearch }).then(history => {
+        if (generation !== fullSearchGeneration) return;
+        state.searchHistory = history;
+        state.searchHistoryHighlighted = bestSearchHistoryMatch(state.chatSearch, history);
+        render();
+      }).catch(() => {});
+    }
+    if (page.indexCurrent === false && !fullSearchRepairPending) {
+      fullSearchRepairPending = true;
+      void invoke('repair_desktop_local_search_index_if_stale').then(repaired => {
+        if (repaired && generation === fullSearchGeneration && state.searchPanel) void runFullSearch({ restoreScroll: true, inPlace: true });
+      }).catch(() => {}).finally(() => { fullSearchRepairPending = false; });
+    }
   } catch (error) {
     if (generation !== fullSearchGeneration) return;
     state.searchLoading = false;
+    state.searchLoadingMore = false;
     state.searchError = cachedPage ? '' : String(error);
     state.searchEvidenceLabel = cachedPage ? '当前为上次结果，本次更新未完成。' : '';
     render();
@@ -1436,6 +1573,7 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false, inP
 }
 
 function scheduleFullSearch() {
+  supersedeFullSearch();
   if (fullSearchDebounce !== null) window.clearTimeout(fullSearchDebounce);
   fullSearchDebounce = window.setTimeout(() => { fullSearchDebounce = null; void runFullSearch(); }, state.chatSearch.trim() ? 180 : 0);
 }
@@ -1695,16 +1833,37 @@ async function refresh() {
   state.current = state.workspaces.length ? await invoke('read_desktop_workspace', { workspaceId: state.current?.summary?.id || state.workspaces[0].id }) : null;
   if (state.current && !resolveConversation(state.current, state.selectedConversationId)) selectWorkspaceDefaultConversation(state.current);
   reloadFavoriteConversationIds();
-  await loadConversationReadState({ observeSelected: !state.runtimeInfo?.automaticWorkSuppressed });
+  // These are independent read projections after the workspace and selected
+  // conversation are known. Waiting for each IPC receipt serially delayed the
+  // first usable Desktop frame even though no mutation depends on another.
+  const [
+    ,
+    p6gCatalog,
+    p6gGlobalDefault,
+    p6gSelection,
+    history,
+    agentRuns,
+    p6eAcceptance,
+    transcription,
+  ] = await Promise.all([
+    loadConversationReadState({ observeSelected: !state.runtimeInfo?.automaticWorkSuppressed }),
+    invoke('read_desktop_p6g_catalog'),
+    invoke('read_desktop_p6g_global_default'),
+    state.current && state.selectedConversationId ? invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId }) : Promise.resolve(null),
+    state.current ? invoke('read_desktop_workbench_history', { workspaceId: state.current.summary.id }) : Promise.resolve({ canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }),
+    invoke('inspect_p8_agent_runs'),
+    invoke('read_p6e_temporary_maintenance_acceptance_status'),
+    loadTranscriptionState(),
+  ]);
   recomputeConversationFind();
-  state.p6gCatalog = await invoke('read_desktop_p6g_catalog');
-  state.p6gGlobalDefault = await invoke('read_desktop_p6g_global_default');
-  state.p6gSelection = state.current && state.selectedConversationId ? await invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId }) : null;
+  state.p6gCatalog = p6gCatalog;
+  state.p6gGlobalDefault = p6gGlobalDefault;
+  state.p6gSelection = p6gSelection;
   state.conversationPreferences = state.p6gSelection?.conversationOverride || { revision: 0, toneOverride: null, webSearchOverride: null };
-  state.history = state.current ? await invoke('read_desktop_workbench_history', { workspaceId: state.current.summary.id }) : { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] };
-  state.agentRuns = await invoke('inspect_p8_agent_runs');
-  state.p6eAcceptance = await invoke('read_p6e_temporary_maintenance_acceptance_status');
-  await loadTranscriptionState();
+  state.history = history;
+  state.agentRuns = agentRuns;
+  state.p6eAcceptance = p6eAcceptance;
+  state.transcription = transcription;
   if (state.p6eAcceptance.enabled && state.pane === 'chat') state.pane = 'connections';
   render();
 }
@@ -2027,7 +2186,7 @@ async function confirmPrivacyCleanup() {
     state.dialog = null;
     state.error = '';
     state.status = result.credentialCleanupPending
-      ? '本机业务数据已删除；部分钥匙串凭据未能清理，请重试全部本地数据清理。'
+      ? '本机业务数据已删除；部分应用私有凭据未能清理，请重试全部本地数据清理。'
       : result.cleanupPending
         ? '清理已提交；删除隔离区仍有待完成文件。'
         : '本机数据清理完成。';
@@ -2664,6 +2823,7 @@ document.addEventListener('pointerdown', event => {
   if (state.videoPreview) { void closeVideoPreview(); return; }
   if (state.audioPreview) { void closeAudioPreview(); return; }
   if (state.textPreview) { state.textPreview = null; render(); return; }
+  if (state.archivePreview) { state.archivePreview = null; render(); return; }
   closeTopOverlay();
 }, true);
 document.addEventListener('wheel', event => {
@@ -2671,7 +2831,7 @@ document.addEventListener('wheel', event => {
   if (!event.target.closest?.('.chat-scroll[data-conversation-id]')) return;
   closeTopOverlay({ restoreFocus: false });
 }, true);
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.videoPreview) { event.preventDefault(); void closeVideoPreview(); } else if (event.key === 'Escape' && state.audioPreview) { event.preventDefault(); void closeAudioPreview(); } else if (event.key === 'Escape' && state.textPreview) { event.preventDefault(); state.textPreview = null; render(); } else if (event.key === 'Escape' && closeTopOverlay({ navigateComposerLayerBack: true })) event.preventDefault(); }, true);
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.videoPreview) { event.preventDefault(); void closeVideoPreview(); } else if (event.key === 'Escape' && state.audioPreview) { event.preventDefault(); void closeAudioPreview(); } else if (event.key === 'Escape' && state.textPreview) { event.preventDefault(); state.textPreview = null; render(); } else if (event.key === 'Escape' && state.archivePreview?.entry) { event.preventDefault(); state.archivePreview = { ...state.archivePreview, entry: null }; render(); } else if (event.key === 'Escape' && state.archivePreview) { event.preventDefault(); state.archivePreview = null; render(); } else if (event.key === 'Escape' && closeTopOverlay({ navigateComposerLayerBack: true })) event.preventDefault(); }, true);
 function navigateImagePreview(direction) {
   const preview = state.imagePreview;
   if (!preview || preview.loading) return false;
@@ -2868,7 +3028,14 @@ function renderUnified() {
   // neither serialized nor parsed again just because a surrounding control changed.
   const retainedTranscript = preserveTranscript ? existingTranscript : null;
   const retainedTranscriptTop = retainedTranscript?.scrollTop;
-  const previewIdentity = state.imagePreview || state.pdfPreview || state.videoPreview || state.audioPreview || state.textPreview;
+  const nextSidebarRetention = currentSidebarRetention(data);
+  const existingSidebar = document.querySelector('.chat-sidebar');
+  const preserveSidebar = canRetainSidebar(renderedSidebarRetention, nextSidebarRetention) && Boolean(existingSidebar);
+  // A long imported history can contain hundreds of sidebar rows. Menus,
+  // Composer sheets and dialogs do not alter those rows, so keep this owner in
+  // place instead of serializing and parsing the whole list on every overlay.
+  const retainedSidebar = preserveSidebar ? existingSidebar : null;
+  const previewIdentity = state.imagePreview || state.pdfPreview || state.videoPreview || state.audioPreview || state.textPreview || state.archivePreview;
   const retainedPreview = !state.dialog && !state.cameraCaptureOpen && previewIdentity && previewIdentity === renderedAttachmentPreview
     ? app.querySelector('.attachment-preview-overlay') : null;
   const previewScrolls = retainedPreview ? [retainedPreview, ...retainedPreview.querySelectorAll('*')]
@@ -2876,22 +3043,28 @@ function renderUnified() {
     .map(node => ({ node, top: node.scrollTop, left: node.scrollLeft })) : [];
   if (retainedPreview) retainedPreview.remove();
   if (retainedTranscript) retainedTranscript.replaceWith(document.createComment('retained-transcript'));
+  if (retainedSidebar) retainedSidebar.replaceWith(document.createComment('retained-sidebar'));
   app.className = `app-shell chat-first ${standaloneWorkspacePage ? 'workspace-standalone-shell' : ''} ${visiblePane === 'settings' ? 'settings-mode' : ''} ${sidebarWorkMode ? 'work-mode' : ''} ${state.sidebarOpen ? 'fallback-sidebar-open' : ''} ${state.searchPanel ? 'search-mode' : ''}`;
-  app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript) });
+  app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
   if (retainedTranscript) {
     const slot = app.querySelector('[data-preserved-transcript-slot]');
     if (slot) slot.replaceWith(retainedTranscript);
     retainedTranscript.scrollTop = retainedTranscriptTop;
   }
+  if (retainedSidebar) {
+    app.querySelector('[data-preserved-sidebar-slot]')?.replaceWith(retainedSidebar);
+    patchRetainedSidebarRows();
+  }
   bindAssistantMessageMenuTriggers();
   renderedTranscriptRetention = nextTranscriptRetention;
+  renderedSidebarRetention = nextSidebarRetention;
   app.style.setProperty('--chat-sidebar-width', `${state.sidebarWidth}px`);
   positionConversationContextMenu();
   positionAssistantMessageMenu();
   if (state.contextMenu?.source === 'header') requestAnimationFrame(() => {
     if (state.contextMenu?.source === 'header') positionConversationContextMenu();
   });
-  const modal = cameraCaptureDialog() || dialog() || imagePreviewDialog() || pdfPreviewDialog() || videoPreviewDialog() || audioPreviewDialog() || textPreviewDialog() || previewBoundaryDialog();
+  const modal = cameraCaptureDialog() || dialog() || imagePreviewDialog() || pdfPreviewDialog() || videoPreviewDialog() || audioPreviewDialog() || textPreviewDialog() || archivePreviewDialog() || previewBoundaryDialog();
   if (retainedPreview) app.append(retainedPreview);
   else if (modal) app.insertAdjacentHTML('beforeend', modal);
   const attachmentMenu = app.querySelector('.search-attachment-menu');
@@ -2921,9 +3094,14 @@ function renderUnified() {
     // DOM position even though the visible menu itself is fixed.
     else if (state.assistantMessageMenu) document.querySelector('.assistant-message-menu [role="menuitem"]')?.focus({ preventScroll: true });
     attachComposerCameraStream();
-    scheduleImageThumbnailReads();
-    scheduleVideoThumbnailReads();
-    scheduleAttachmentCardPreviewReads();
+    scheduleImageThumbnailReads({ composerOnly: Boolean(retainedTranscript), retainObserved: Boolean(retainedTranscript) });
+    // Retained transcript cards already belong to the active observers. The
+    // Composer only has image cards; re-querying all video/document cards here
+    // made opening a menu or sheet scale with the entire conversation length.
+    if (!retainedTranscript) {
+      scheduleVideoThumbnailReads();
+      scheduleAttachmentCardPreviewReads();
+    }
   });
 }
 
@@ -2942,6 +3120,7 @@ function previewTopActions(kind, preview, { copy = false } = {}) {
     video: 'close-video-preview',
     audio: 'close-audio-preview',
     text: 'close-text-preview',
+    archive: 'close-archive-preview',
   }[kind];
   const ready = Boolean(preview?.attachmentId && preview?.workspaceId && !preview?.loading && !preview?.error);
   return `<div class="file-preview-top-actions ${copy ? 'text-preview-actions' : 'media-preview-actions'}" aria-label="附件操作"><button class="file-preview-action" data-action="save-preview-attachment" data-preview-kind="${kind}" aria-label="下载文件" title="下载文件" ${ready ? '' : 'disabled'}>${icon(icons.download, '下载')}</button><button class="file-preview-action file-preview-share-action" data-action="share-preview-attachment" data-preview-kind="${kind}" aria-label="分享文件" title="分享文件" ${ready ? '' : 'disabled'}><span>分享</span></button>${copy ? `<button class="file-preview-action" data-action="copy-text-preview" data-copy-action aria-label="复制文本" title="复制文本" ${ready ? '' : 'disabled'}>${icon(icons.copy, '复制')}</button>` : ''}<button class="file-preview-action" data-action="${closeAction}" aria-label="关闭预览" title="关闭预览">${icon(icons.close, '关闭')}</button></div>`;
@@ -3024,6 +3203,58 @@ function textPreviewDialog() {
   return `<div class="scrim attachment-preview-overlay text-preview-overlay"><section class="dialog image-preview-dialog text-preview-surface" role="dialog" aria-modal="true" aria-label="文本预览"><header class="text-preview-header">${facts}${previewTopActions('text', preview, { copy: true })}</header>${content}</section></div>`;
 }
 
+function archiveDirectoryRows(entries, directory = '') {
+  const prefix = directory ? `${directory.replace(/\/+$/, '')}/` : '';
+  const children = new Map();
+  for (const entry of entries || []) {
+    const path = String(entry.path || '');
+    if (!path.startsWith(prefix)) continue;
+    const remaining = path.slice(prefix.length);
+    if (!remaining) continue;
+    const slash = remaining.indexOf('/');
+    if (slash >= 0) {
+      const name = remaining.slice(0, slash);
+      const childPath = `${prefix}${name}/`;
+      if (!children.has(childPath)) children.set(childPath, { path: childPath, displayName: name, isDirectory: true, byteCount: 0, previewKind: 'directory' });
+    } else {
+      children.set(path, entry);
+    }
+  }
+  return [...children.values()].sort((left, right) => Number(Boolean(right.isDirectory)) - Number(Boolean(left.isDirectory)) || String(left.displayName).localeCompare(String(right.displayName), 'zh-Hans-CN'));
+}
+
+function archiveBreadcrumb(directory) {
+  const parts = String(directory || '').split('/').filter(Boolean);
+  let path = '';
+  const crumbs = [`<button data-action="open-archive-directory" data-archive-path="">压缩包</button>`];
+  for (const part of parts) { path += `${part}/`; crumbs.push(`<span aria-hidden="true">/</span><button data-action="open-archive-directory" data-archive-path="${escape(path)}">${escape(part)}</button>`); }
+  return `<nav class="archive-preview-breadcrumb" aria-label="压缩包路径">${crumbs.join('')}</nav>`;
+}
+
+function archiveEntryContent(entry) {
+  if (entry.loading) return '<div class="media-preview-loading" role="status" aria-label="正在读取压缩包内文件"></div>';
+  if (entry.error) return `<p class="image-preview-error">${escape(entry.error)}</p>`;
+  const facts = `<p class="pdf-preview-note archive-entry-facts">${escape(entry.displayName)} · ${escape(entry.mimeType || '未知类型')} · ${bytes(entry.byteCount)}${entry.truncated ? ' · 仅显示前 128 KiB' : ''}</p>`;
+  if (entry.kind === 'text') return `${facts}<article class="local-text-preview archive-text-preview" aria-label="${escape(entry.displayName)}"><pre>${escape(entry.text || '')}</pre></article>`;
+  if (entry.kind === 'image') return `${facts}<figure class="archive-image-preview"><div class="image-preview-viewport"><img src="${escape(entry.dataUrl || '')}" alt="${escape(entry.displayName)}"></div></figure>`;
+  if (entry.kind === 'pdf') return `${facts}<div class="pdf-preview-tools" aria-label="ZIP 内 PDF 页码控制"><button data-action="archive-pdf-page-previous" ${entry.pageNumber <= 1 ? 'disabled' : ''}>上一页</button><small>第 ${entry.pageNumber} / ${entry.pageCount} 页</small><button data-action="archive-pdf-page-next" ${entry.pageNumber >= entry.pageCount ? 'disabled' : ''}>下一页</button></div><img class="pdf-preview-frame" src="${escape(entry.dataUrl || '')}" alt="${escape(entry.displayName)} 第 ${entry.pageNumber} 页">`;
+  return `${facts}<section class="archive-preview-unsupported"><strong>此文件已保留在压缩包中</strong><p>当前类型没有经过验证的应用内预览器，未解压到磁盘、未交给系统应用，也未上传。</p></section>`;
+}
+
+function archivePreviewDialog() {
+  const preview = state.archivePreview;
+  if (!preview) return '';
+  const facts = !preview.loading && !preview.error ? `<p class="pdf-preview-note text-preview-facts">${escape(preview.displayName)} · ${escape(preview.mimeType)} · ${bytes(preview.byteCount)}</p>` : '';
+  const content = preview.loading ? '<div class="media-preview-loading" role="status" aria-label="正在读取压缩包目录"></div>'
+    : preview.error ? `<p class="image-preview-error">${escape(preview.error)}</p>`
+      : preview.entry ? `<header class="archive-preview-entry-header"><button data-action="archive-preview-back" aria-label="返回压缩包目录">${icon(icons.chevronLeft, '返回')}</button>${archiveBreadcrumb(preview.directory)}</header>${archiveEntryContent(preview.entry)}`
+        : (() => {
+          const rows = archiveDirectoryRows(preview.entries, preview.directory);
+          return `<header class="archive-preview-directory-header">${archiveBreadcrumb(preview.directory)}<small>${rows.length} 项</small></header><section class="archive-preview-list" aria-label="ZIP 文件列表">${rows.map(entry => entry.isDirectory ? `<button class="archive-preview-row archive-directory-row" data-action="open-archive-directory" data-archive-path="${escape(entry.path)}"><span class="archive-preview-row-icon">${icon(icons.workspace, '目录')}</span><span><strong>${escape(entry.displayName)}</strong><small>文件夹</small></span>${icon(icons.chevronRight, '进入')}</button>` : `<button class="archive-preview-row" data-action="open-archive-entry-preview" data-archive-entry-path="${escape(entry.path)}"><span class="archive-preview-row-icon">${icon(icons.knowledge, '文件')}</span><span><strong>${escape(entry.displayName)}</strong><small>${escape(entry.previewKind === 'unsupported' ? '暂不支持预览' : entry.previewKind.toUpperCase())} · ${bytes(entry.byteCount)}</small></span>${icon(icons.chevronRight, '预览')}</button>`).join('') || '<p class="archive-preview-empty">此目录为空。</p>'}</section>`;
+        })();
+  return `<div class="scrim attachment-preview-overlay archive-preview-overlay"><section class="dialog image-preview-dialog text-preview-surface archive-preview-surface" role="dialog" aria-modal="true" aria-label="压缩包浏览"><header class="text-preview-header">${facts}${previewTopActions('archive', preview)}</header>${content}</section></div>`;
+}
+
 function previewBoundaryDialog() {
   const preview = state.previewBoundary;
   if (!preview) return '';
@@ -3045,10 +3276,16 @@ function pumpImageThumbnailReads() {
     job().finally(() => { imageThumbnailInFlight -= 1; pumpImageThumbnailReads(); });
   }
 }
-function scheduleImageThumbnailReads({ composerOnly = false } = {}) {
-  imageThumbnailObserver?.disconnect();
-  imageThumbnailQueue.forEach(job => state.imageThumbnailPending.delete(job.thumbnailKey));
-  imageThumbnailQueue = [];
+function scheduleImageThumbnailReads({ composerOnly = false, retainObserved = false } = {}) {
+  // A retained transcript keeps both its cards and this observer alive. A
+  // surrounding menu/dialog render may only create a fresh Composer; do not
+  // rescan several hundred preserved attachment nodes just to observe it.
+  if (!retainObserved) {
+    imageThumbnailObserver?.disconnect();
+    imageThumbnailObserver = null;
+    imageThumbnailQueue.forEach(job => state.imageThumbnailPending.delete(job.thumbnailKey));
+    imageThumbnailQueue = [];
+  }
   if (!native || state.imagePreview) return;
   const selector = composerOnly ? '.chat-composer [data-image-thumbnail]' : '[data-image-thumbnail]';
   const enqueue = element => {
@@ -3079,12 +3316,14 @@ function scheduleImageThumbnailReads({ composerOnly = false } = {}) {
   };
   const elements = [...document.querySelectorAll(selector)];
   if (!('IntersectionObserver' in globalThis)) { elements.slice(0, 12).forEach(enqueue); return; }
-  imageThumbnailObserver = new IntersectionObserver(entries => {
-    for (const entry of entries) if (entry.isIntersecting) {
-      imageThumbnailObserver.unobserve(entry.target);
-      enqueue(entry.target);
-    }
-  }, { root: state.searchPanel ? document.querySelector('[data-search-scroll-owner]') : null, rootMargin: '160px' });
+  if (!imageThumbnailObserver) {
+    imageThumbnailObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        imageThumbnailObserver?.unobserve(entry.target);
+        enqueue(entry.target);
+      }
+    }, { root: state.searchPanel ? document.querySelector('[data-search-scroll-owner]') : null, rootMargin: '160px' });
+  }
   elements.forEach(element => imageThumbnailObserver.observe(element));
 }
 
@@ -3323,6 +3562,7 @@ async function openAttachmentPreview(attachment, workspaceId = state.current?.su
   if (capability.kind === 'audio') return openAudioPreview(attachmentId, undefined, workspaceId);
   if (capability.kind === 'pdf') return openPdfPreview(attachmentId, undefined, workspaceId);
   if (capability.kind === 'text') return openTextPreview(attachmentId, workspaceId);
+  if (capability.kind === 'archive') return openArchivePreview(attachmentId, workspaceId);
 }
 
 async function openImagePreview(attachmentId, workspaceId = state.current?.summary?.id, imageIds = relatedImageIds(currentConversation(), attachmentId)) {
@@ -3593,6 +3833,27 @@ async function openTextPreview(attachmentId, workspaceId = state.current?.summar
   render();
 }
 
+async function openArchivePreview(attachmentId, workspaceId = state.current?.summary?.id) {
+  if (!native || !workspaceId || !attachmentId) return;
+  state.archivePreview = { loading: true, attachmentId, workspaceId, directory: '', entry: null }; render();
+  try { state.archivePreview = { ...await invoke('read_desktop_archive_preview', { args: { workspaceId, attachmentId } }), workspaceId, directory: '', entry: null }; }
+  catch (_) { state.archivePreview = { error: '本地压缩包不可用、结构无效或校验失败。' }; }
+  render();
+}
+
+async function openArchiveEntryPreview(entryPath, pageNumber = 1) {
+  const preview = state.archivePreview;
+  if (!native || !preview?.workspaceId || !preview?.attachmentId || !entryPath) return;
+  state.archivePreview = { ...preview, entry: { loading: true } }; render();
+  try {
+    const entry = await invoke('read_desktop_archive_entry_preview', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, entryPath, pageNumber } });
+    state.archivePreview = { ...state.archivePreview, entry };
+  } catch (_) {
+    state.archivePreview = { ...state.archivePreview, entry: { error: 'ZIP 内文件不可用、路径不安全、内容损坏或超过预览上限。' } };
+  }
+  render();
+}
+
 function safeAttachmentSaveName(value) {
   const leaf = String(value || '附件').split(/[\\/]/).pop() || '附件';
   return leaf.replace(/[\u0000-\u001f:]/g, '-').slice(0, 180) || '附件';
@@ -3611,7 +3872,7 @@ async function saveAttachmentCopy({ workspaceId, attachmentId, displayName }) {
 }
 
 function activePreviewForKind(kind) {
-  return ({ image: state.imagePreview, pdf: state.pdfPreview, video: state.videoPreview, audio: state.audioPreview, text: state.textPreview })[kind] || null;
+  return ({ image: state.imagePreview, pdf: state.pdfPreview, video: state.videoPreview, audio: state.audioPreview, text: state.textPreview, archive: state.archivePreview })[kind] || null;
 }
 
 async function sharePreviewAttachment(preview) {
@@ -4486,6 +4747,11 @@ app.addEventListener('click', async event => {
   if (action === 'open-video-preview') { event.preventDefault(); await openVideoPreview(target.dataset.attachmentId); return; }
   if (action === 'open-audio-preview') { event.preventDefault(); await openAudioPreview(target.dataset.attachmentId); return; }
   if (action === 'open-text-preview') { event.preventDefault(); await openTextPreview(target.dataset.attachmentId); return; }
+  if (action === 'open-archive-preview') { event.preventDefault(); await openArchivePreview(target.dataset.attachmentId); return; }
+  if (action === 'open-archive-directory') { event.preventDefault(); if (state.archivePreview) { state.archivePreview = { ...state.archivePreview, directory: target.dataset.archivePath || '', entry: null }; render(); } return; }
+  if (action === 'open-archive-entry-preview') { event.preventDefault(); await openArchiveEntryPreview(target.dataset.archiveEntryPath); return; }
+  if (action === 'archive-preview-back') { event.preventDefault(); if (state.archivePreview) { state.archivePreview = { ...state.archivePreview, entry: null }; render(); } return; }
+  if (action === 'archive-pdf-page-previous' || action === 'archive-pdf-page-next') { event.preventDefault(); const entry = state.archivePreview?.entry; if (entry?.entryPath) await openArchiveEntryPreview(entry.entryPath, Number(entry.pageNumber) + (action === 'archive-pdf-page-next' ? 1 : -1)); return; }
   if (action === 'toggle-video-playback') { event.preventDefault(); await togglePreviewPlayback('video'); return; }
   if (action === 'toggle-video-volume' || action === 'toggle-audio-volume') {
     event.preventDefault();
@@ -4562,6 +4828,7 @@ app.addEventListener('click', async event => {
   if (action === 'close-video-preview') { event.preventDefault(); await closeVideoPreview(); return; }
   if (action === 'close-audio-preview') { event.preventDefault(); await closeAudioPreview(); return; }
   if (action === 'close-text-preview') { event.preventDefault(); state.textPreview = null; render(); return; }
+  if (action === 'close-archive-preview') { event.preventDefault(); state.archivePreview = null; render(); return; }
   if (action === 'close-preview-boundary') { event.preventDefault(); state.previewBoundary = null; render(); return; }
   if (action === 'pdf-page-previous' || action === 'pdf-page-next') { event.preventDefault(); if (!state.pdfPreview?.attachmentId) return; await openPdfPreview(state.pdfPreview.attachmentId, state.pdfPreview.pageNumber + (action === 'pdf-page-next' ? 1 : -1), state.pdfPreview.workspaceId); return; }
   if (action === 'toggle-composer-add') {
@@ -4955,12 +5222,13 @@ app.addEventListener('click', async event => {
   if (action === 'toggle-search-file-types') { event.preventDefault(); state.searchFileTypeOpen = !state.searchFileTypeOpen; render(); return; }
   if (action === 'set-search-file-type') { event.preventDefault(); state.searchFileType = target.dataset.fileType || 'all'; state.searchFileTypeOpen = false; state.searchScrollSnapshot = null; void runFullSearch(); return; }
   if (action === 'retry-full-search') { event.preventDefault(); void runFullSearch({ restoreScroll: true }); return; }
+  if (action === 'load-more-search-results') { event.preventDefault(); void runFullSearch({ restoreScroll: true, append: true }); return; }
   if (action === 'clear-full-search') { event.preventDefault(); state.chatSearch = ''; state.searchHistoryHighlighted = null; state.searchHistoryOpen = false; state.searchScrollSnapshot = null; void runFullSearch(); return; }
   if (action === 'open-search-history') { event.preventDefault(); state.searchHistoryOpen = !state.searchHistoryOpen; state.searchHistoryManuallyOpened = state.searchHistoryOpen; state.suppressSearchHistoryFocus = !state.searchHistoryOpen; render(); return; }
   if (action === 'fill-search-history') { event.preventDefault(); state.chatSearch = target.dataset.query || ''; state.searchHistoryOpen = false; state.searchHistoryManuallyOpened = false; state.suppressSearchHistoryFocus = true; void submitLocalSearch(); return; }
   if (action === 'close-search-history') { event.preventDefault(); state.searchHistoryOpen = false; state.suppressSearchHistoryFocus = true; render(); focusSearchAfterHistoryDismissal(); return; }
   if (action === 'clear-search-history') { event.preventDefault(); if (native && state.current) invoke('clear_desktop_local_search_history', { workspaceId: state.current.summary.id }).then(() => { state.searchHistory = []; state.searchHistoryHighlighted = null; focusSearchAfterHistoryClear(); }).catch(() => { state.searchError = '本地搜索历史清除未完成。'; render(); }); return; }
-  if (action === 'close-search') { event.preventDefault(); if (fullSearchCategoryFrame !== null) { cancelAnimationFrame(fullSearchCategoryFrame); fullSearchCategoryFrame = null; } fullSearchGeneration += 1; state.searchLoading = false; state.searchPanel = false; state.searchReturnActive = false; state.searchLocatedArchivedConversationId = null; render(); return; }
+  if (action === 'close-search') { event.preventDefault(); if (fullSearchCategoryFrame !== null) { cancelAnimationFrame(fullSearchCategoryFrame); fullSearchCategoryFrame = null; } supersedeFullSearch(); state.searchLoading = false; state.searchPanel = false; state.searchReturnActive = false; state.searchLocatedArchivedConversationId = null; render(); return; }
   if (action === 'return-to-search') { event.preventDefault(); state.searchPanel = true; state.searchReturnActive = false; state.searchLocatedArchivedConversationId = null; render(); queueMicrotask(restoreFullSearchScroll); return; }
   if (action === 'open-search-result') {
     event.preventDefault();
@@ -5069,7 +5337,7 @@ app.addEventListener('pointerdown', event => {
 app.addEventListener('keydown', event => {
   if ((event.target.id === 'chat-search' || event.target.id === 'full-search-input') && event.key === 'Enter') { event.preventDefault(); void submitLocalSearch(); }
   if (event.key === 'Escape' && state.searchHistoryOpen) { state.searchHistoryOpen = false; state.suppressSearchHistoryFocus = true; render(); focusSearchAfterHistoryDismissal(); }
-  else if (event.key === 'Escape' && state.searchPanel) { fullSearchGeneration += 1; state.searchLoading = false; state.searchPanel = false; render(); }
+  else if (event.key === 'Escape' && state.searchPanel) { supersedeFullSearch(); state.searchLoading = false; state.searchPanel = false; render(); }
 });
 
 app.addEventListener('click', event => {

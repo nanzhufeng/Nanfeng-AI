@@ -1311,7 +1311,8 @@ internal fun ConversationWorkspaceDialog(
                                     responseAttributions = state.answerResponseAttributions[message.message.messageId].orEmpty(),
                                     assistantGenerationPhaseOverride = if (
                                         state.normalSendRetryInProgress && message.message.messageId == state.currentLeafId
-                                    ) "南枫AI 继续生成…" else null,
+                                    ) "正在重新生成…" else null,
+                                    assistantGenerationIsRetry = state.normalSendRetryInProgress && message.message.messageId == state.currentLeafId,
                                     searchAnchorAttachmentId = state.searchAnchorAttachmentId,
                                     searchAnchorRequestId = state.searchAnchorRequestId,
                                     onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
@@ -2277,7 +2278,8 @@ private fun ConversationWorkScope(
                     responseAttributions = state.answerResponseAttributions[transcript.message.messageId].orEmpty(),
                     assistantGenerationPhaseOverride = if (
                         state.normalSendRetryInProgress && transcript.message.messageId == state.currentLeafId
-                    ) "南枫AI 继续生成…" else null,
+                    ) "正在重新生成…" else null,
+                    assistantGenerationIsRetry = state.normalSendRetryInProgress && transcript.message.messageId == state.currentLeafId,
                     onLongPress = onLongPress,
                     copiedAssistantMessageId = copiedAssistantMessageId,
                     onCopyAssistant = onCopyAssistant,
@@ -5852,6 +5854,7 @@ private fun MessageBubble(
     contextSelections: List<ContextSelectionAuditRecord>,
     responseAttributions: List<AssistantResponseModelAttribution>,
     assistantGenerationPhaseOverride: String? = null,
+    assistantGenerationIsRetry: Boolean = false,
     searchAnchorAttachmentId: AttachmentId? = null,
     searchAnchorRequestId: Long = 0L,
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
@@ -6005,6 +6008,7 @@ private fun MessageBubble(
                         assistantGenerationPhaseOverride?.let { preview.copy(phase = it) } ?: preview
                     },
                     hasPartialText = textBlocks.isNotEmpty(),
+                    isRetrying = assistantGenerationIsRetry,
                 )
             }
             if (message.deliveryState == com.nanzhufeng.ai.domain.MessageDeliveryState.FAILED) {
@@ -6066,7 +6070,11 @@ private fun RightAlignedUserBubble(
 
 /** Honest, transient feedback for the persisted assistant message that is still receiving output. */
 @Composable
-private fun AssistantGenerationStatus(waitingPreview: com.nanzhufeng.ai.domain.AssistantWaitingPreview?, hasPartialText: Boolean) {
+private fun AssistantGenerationStatus(
+    waitingPreview: com.nanzhufeng.ai.domain.AssistantWaitingPreview?,
+    hasPartialText: Boolean,
+    isRetrying: Boolean,
+) {
     val pulse by rememberInfiniteTransition(label = "assistant-generation").animateFloat(
         initialValue = 0.55f,
         targetValue = 1f,
@@ -6087,6 +6095,14 @@ private fun AssistantGenerationStatus(waitingPreview: com.nanzhufeng.ai.domain.A
             ).semantics { liveRegion = LiveRegionMode.Polite },
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (isRetrying) {
+                Text(
+                    "正在重新生成",
+                    color = AccentOrange,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Text(
                 preview.preface,
                 color = BodyText,
@@ -6114,7 +6130,11 @@ private fun AssistantGenerationStatus(waitingPreview: com.nanzhufeng.ai.domain.A
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CircularProgressIndicator(color = AccentOrange, strokeWidth = 2.dp, modifier = Modifier.size(14.dp).graphicsLayer(alpha = pulse))
-        Text("南枫 AI 正在继续生成…", color = SecondaryText.copy(alpha = pulse), style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (isRetrying) "正在重新生成…" else "南枫 AI 正在继续生成…",
+            color = SecondaryText.copy(alpha = pulse),
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
@@ -8015,30 +8035,6 @@ private fun DraftComposer(
     } else {
         composerModelDisplayLabel(selectedPresets)
     }
-    val recipientLabel = selectedPresets.joinToString("、") { preset ->
-        val provider = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(preset)
-        "${com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.provider(provider)?.displayName} · ${com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName}"
-    }
-    val selectedPreset = selectedPresets.first()
-    val hasBinaryMaterial = draft.attachments.any { reference ->
-        reference.mimeType !in com.nanzhufeng.ai.domain.TEXT_ATTACHMENT_MIME_TYPES
-    }
-    val attachmentRecipient = if (manualId == null) {
-        AnnotatedString(
-            if (hasBinaryMaterial) "本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR，再交给下方已披露模型"
-            else "本机先统一解析，再交给下方已披露模型",
-        )
-    } else {
-        val selectedProvider = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(selectedPreset)
-        val providerName = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.provider(selectedProvider)?.displayName.orEmpty()
-        val bridgePrefix = if (hasBinaryMaterial && selectedProvider != com.nanzhufeng.ai.domain.ProviderId.OPENROUTER) {
-            "本机先解析；必要时经千问 Qwen3.7-Plus／智谱 GLM-OCR，再交给 "
-        } else ""
-        modelNameAnnotatedText(
-            prefix = "$bridgePrefix$providerName · ",
-            modelName = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(selectedPreset).displayName,
-        )
-    }
     ConversationComposerDock(
         value = draft.text,
         onValueChange = onDraftChanged,
@@ -8048,17 +8044,7 @@ private fun DraftComposer(
         onAttachmentAnchorChanged = onAddAnchorChanged,
         attachmentPreview = if (draft.attachments.isNotEmpty()) {
             {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        buildAnnotatedString {
-                            append("点击发送后，本次附件将发送至：")
-                            append(attachmentRecipient)
-                        },
-                        color = SecondaryText,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
-                    )
-                    Row(
+                Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
@@ -8077,18 +8063,9 @@ private fun DraftComposer(
                             )
                         }
                     }
-                }
             }
         } else null,
     ) {
-        if (canSubmit && !canStopRuntime) {
-            Text(
-                text = "发送即授权给 $recipientLabel · 按量计费",
-                color = SecondaryText,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
-            )
-        }
         ComposerModelEntry(
             label = modelLabel,
             enabled = !state.isSending,

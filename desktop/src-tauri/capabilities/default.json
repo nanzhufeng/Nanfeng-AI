@@ -41,6 +41,7 @@
     "allow-read-desktop-audio-preview",
     "allow-save-desktop-audio-preview-position",
     "allow-read-desktop-text-preview",
+    "allow-read-desktop-archive-preview",
     "allow-open-desktop-attachment-with-system",
     "allow-share-desktop-attachment",
     "allow-open-desktop-source-link",

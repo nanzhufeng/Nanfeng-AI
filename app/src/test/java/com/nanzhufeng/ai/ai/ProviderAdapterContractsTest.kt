@@ -520,6 +520,21 @@ class ProviderAdapterContractsTest {
         assertEquals(listOf(ProviderWebSource("https://example.test/notice", "官方公告")), decoded?.webSources)
     }
 
+    @Test fun `DeepSeek Responses keeps a completed server search without inventing public URLs`() {
+        val decoded = DeepSeekChatAdapter().decodeNonStreaming(
+            """{"output":[{"type":"web_search_call","action":{"type":"search","query":"最新汇率"}},{"type":"message","content":[{"type":"output_text","text":"南烛枫，美元汇率请以银行实时报价为准。"}]}],"usage":{"input_tokens":8,"output_tokens":5}}""",
+        ) as? ChatAdapterDecodedResult.Text
+
+        assertEquals("南烛枫，美元汇率请以银行实时报价为准。", decoded?.text)
+        assertTrue(decoded?.webSources.isNullOrEmpty())
+        assertTrue(
+            WebSearchGroundingPolicy.hasRequiredSources(
+                ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES),
+                decoded?.webSources.orEmpty(),
+            ),
+        )
+    }
+
     @Test fun `Responses reasoning is retained separately and never concatenated into final reply`() {
         val decoded = DeepSeekChatAdapter().decodeNonStreaming(
             """{"output":[{"type":"reasoning","content":[{"type":"reasoning_text","text":"Let me search the latest index data first."}]},{"type":"message","content":[{"type":"output_text","text":"南烛枫，结论如下。"}]}],"usage":{"input_tokens":8,"output_tokens":5}}""",

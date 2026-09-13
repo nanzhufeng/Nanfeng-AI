@@ -57,6 +57,7 @@ private val LOCAL_BUSINESS_PREFERENCE_FILES = setOf(
     "p7e_restore_receipts_v1",
     "privacy_inventory_cache_v1",
     "provider_credentials_v1",
+    "provider_credentials_v2",
 )
 
 /** P5-C Android owner. It only queries aggregate SQL and never selects a user-content column. */
@@ -99,7 +100,7 @@ class AndroidPrivacyDataManager(
         cleanupOrphanedAttachmentFilesSilently()
         return PrivacyInventory(
             aggregates = inventoryAggregates(),
-            credentialReferencePresent = context.getSharedPreferences("provider_credentials_v1", Context.MODE_PRIVATE).contains("OPENROUTER"),
+            credentialReferencePresent = context.getSharedPreferences("provider_credentials_v2", Context.MODE_PRIVATE).contains("OPENROUTER"),
             internetPermissionPresent = context.packageManager.checkPermission(android.Manifest.permission.INTERNET, context.packageName) == PackageManager.PERMISSION_GRANTED,
             importedZipCleanup = importedZipCleanup.status(),
         ).also(::cacheInventory)
@@ -520,6 +521,10 @@ class AndroidPrivacyDataManager(
             check(context.getSharedPreferences(file, Context.MODE_PRIVATE).edit().clear().commit()) {
                 "LOCAL_BUSINESS_PREFERENCE_CLEAR_FAILED:$file"
             }
+        }
+        val credentialRoot = File(context.noBackupFilesDir, "provider-credentials-v2")
+        if (credentialRoot.exists()) {
+            check(credentialRoot.deleteRecursively()) { "APP_PRIVATE_CREDENTIAL_CLEAR_FAILED" }
         }
     }
     private fun deleteStaged(pending: File): Int = pending.walkBottomUp().count { file -> file.exists() && !fileDeleter(file) }

@@ -764,15 +764,7 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         resolveConversationStyle = conversationStyleOverrides::effectiveStyle,
         applyRuntimeEvent = applyConversationRuntimeEvent,
         runtimeRepository = conversationRepository,
-        attachmentBridge = com.nanzhufeng.ai.ai.UniversalChatAttachmentBridge(
-            configuration = loadModelServiceConfiguration,
-            credentials = providerCredentialStore,
-            modelResolver = modelResolver,
-            providerTransport = com.nanzhufeng.ai.ai.OfficialProviderChatTransport(),
-            glmOcrTransport = com.nanzhufeng.ai.ai.OfficialGlmOcrTransport(),
-            invocations = invocationRepository,
-            clock = clock,
-        ),
+        attachmentBridge = com.nanzhufeng.ai.ai.UniversalChatAttachmentBridge(),
         saveMemorySummary = { conversationId, draft ->
             manageMemory.execute(
                 MemoryIntent(

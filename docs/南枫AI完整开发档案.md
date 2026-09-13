@@ -1,6 +1,6 @@
 # 南枫 AI 完整开发档案
 
-> 复盘日期：2026-09-10。事实基线：`ef76fc4797e3d86c319ae84bef18ed48e48dd5b3`，业务代码 checkpoint `c4aad94`。范围为整个 Nanfeng_AI 仓库，包括 Android、Desktop、协议、Supabase、附件网关和开发交付工具。本文是架构与过程档案；当前产品行为由领域合同定义，最新执行／产物状态读取 [当前交接](CURRENT_HANDOFF.md)。复盘阶段未修改业务代码、数据库、配置值或测试逻辑；随后经用户授权修复四项边界问题，见[修复记录](review/20260910/BOUNDARY_FIXES.md)。
+> 首次复盘日期：2026-09-10，历史事实基线为 `ef76fc4797e3d86c319ae84bef18ed48e48dd5b3`，业务代码 checkpoint 为 `c4aad94`。2026-09-13 已做只读增量复盘，当前 `HEAD` 为 `662ad71c51be92533c43358d4c9cc5457903b8b6`。范围为整个 Nanfeng_AI 仓库，包括 Android、Desktop、协议、Supabase、附件网关和开发交付工具。本文是架构与过程档案；当前产品行为由领域合同定义，动态执行／产物状态读取 [当前交接](CURRENT_HANDOFF.md)。两次复盘均不修改业务代码、数据库、配置值或测试逻辑；9 月 10 日之后经用户授权的边界修复另见[修复记录](review/20260910/BOUNDARY_FIXES.md)。
 
 ## 1. 复盘方法与证据范围
 
@@ -8,7 +8,13 @@
 
 **范围限制：** 全量结构扫描不等于对每一行历史实现作形式证明，也不等于全部功能端到端验收。忽略的 build／target／dist、运行数据库、凭据及两组未跟踪的历史截图／Playwright 输出不纳入业务源码；不读取用户正文或真实附件。没有运行线上 API、设备部署或数据库迁移。
 
-证据清单见 [全库文件清单](review/20260910/files.json)、[完整 Git 主题及变更统计](review/20260910/history.json)、[复盘验证摘要](review/20260910/verification.json)。清单记录复盘开始时的基线，故不包含本轮随后新增的复盘文档与 Skill 脚本。代码链接指向工作树，历史断言用 commit 固定；网页出现在旧文档中仅是当时资料，不视为本轮外部核验。
+证据清单见 [2026-09-10 全库文件清单](review/20260910/files.json)、[2026-09-10 完整 Git 主题及变更统计](review/20260910/history.json)、[2026-09-10 复盘验证摘要](review/20260910/verification.json)，以及本次的 [2026-09-13 文件清单](review/20260913-project-retrospective/files.json)、[完整 Git 历史](review/20260913-project-retrospective/history.json) 与 [摘要](review/20260913-project-retrospective/summary.json)。清单记录各自生成时的跟踪工作树，故不自包含随后新增的复盘文档。代码链接指向工作树，历史断言用 commit 固定；网页出现在旧文档中仅是当时资料，不视为本轮外部核验。
+
+### 1.1 2026-09-13 只读全库复盘快照
+
+本次枚举 `HEAD` 的 1,309 个 Git 跟踪文件（63,504,848 bytes，其中 1,236 个文本、73 个二进制），并统计全部 149 条本地可达提交。语义抽查覆盖 Android 组合根、普通发送／Attempt、Room 持久化，Desktop ESM／Tauri／SQLite 普通聊天路径，协议 golden，Supabase SQL／头像函数及 Go 附件网关；构建、签名、测试和部署配置按各自入口核对。此范围是“全文件身份＋分组语义审查”，不是对每一行、所有二进制视觉效果、真实设备、线上 Provider、Supabase 或网关的形式证明。
+
+本次没有重新运行 Android、Desktop、协议、Go 或服务测试，也没有访问用户数据、凭据、忽略文件或既有未跟踪的视觉输出；因此第 10 节已有测试结果仍是其记录时点的验证证据，而非 2026-09-13 的重跑结论。工作树中这次新增的 `docs/review/20260913-project-retrospective/` 是只含路径、类型、字节数、SHA-256 和提交元数据的证据，不复制业务正文或秘密。
 
 ## 2. 项目目标与边界
 
@@ -124,7 +130,7 @@ Desktop `app.mjs` 负责页面／事件，`lib.rs` 注册 IPC、装配应用状�
 
 ## 8. 开发过程与 Git 证据
 
-本地提交日期覆盖 2026-08-20 至 2026-09-10。文档中 8 月 12–19 日阶段是较早记录，基线提交已一次性纳入；不能从后来 commit 日期反推每天实际开发起止。9 月 2–9 日工作集中在 9 月 10 日 checkpoint 入库，提交频率不是工作量指标。
+本地提交日期覆盖 2026-08-20 至 2026-09-13。文档中 8 月 12–19 日阶段是较早记录，基线提交已一次性纳入；不能从后来 commit 日期反推每天实际开发起止。9 月 2–9 日工作集中在 9 月 10 日 checkpoint 入库，提交频率不是工作量指标。
 
 | 阶段 | 仓库记录与演进 | 定位提交 |
 | --- | --- | --- |
@@ -135,6 +141,7 @@ Desktop `app.mjs` 负责页面／事件，`lib.rs` 注册 IPC、装配应用状�
 | 导入与媒体整合 | 全量 JVM 基线、ZIP 后台续跑、服务类型、非主线程恢复、预览寿命、完整原图与搜索 | `6d68ba7`、`c1c9ae0`、`ab22433`、`c34756a`、`48a4c9b`、`ea4654c`、`2fec04c` |
 | 集成与合同收口 | 模型、媒体、主题／设置、双端统一 checkpoint | `b7e1c2f`、`1f7f356`、`d6db5bf`、`f596b8b`、`242ed1e`、`dd3a445` |
 | 最新冻结 | 累积 Android／Desktop 代码、路径与设置保存、启动／记忆、图标／Composer；最终回归与文档 | `c4aad94`、`ef76fc4` |
+| 跨端会话与交付增量 | 侧栏／Composer、复制反馈、模型目录与显示、发送与标题生命周期，以及正式交付记录 | `662ad71` |
 
 本地没有 remote／upstream、tag 或可核实远端 Release；这些 checkpoint 是回滚点，不是商店／GitHub 发布证明。旧档案正文可从 `ef76fc4:docs/南枫AI完整开发档案.md` 追溯。
 
@@ -157,7 +164,7 @@ Desktop `app.mjs` 负责页面／事件，`lib.rs` 注册 IPC、装配应用状�
 
 ### 10.1 可复核结果
 
-同一任务上一阶段已在当前业务 checkpoint 执行完整回归；本轮读取日志与 XML、核对业务文件 hash，没有把历史 1013／4 失败的结果当现状。此次补充全库格式和独立组件检查，结果固化于 verification.json。
+下表是 2026-09-10 基线回归的可复核历史结果，不是本次 2026-09-13 重跑结果；本次只读检查确认了测试目录、脚本和配置仍在工作树，未执行任何测试命令。不能把旧通过数用于覆盖 `662ad71` 之后未被同一报告明确覆盖的行为变更。基线结果固化于 [verification.json](review/20260910/verification.json)，当前运行层和产物事实以 [当前交接](CURRENT_HANDOFF.md) 的具体记录为准。
 
 | 验证层 | 结果 | 边界 |
 | --- | --- | --- |
@@ -193,10 +200,11 @@ Desktop `app.mjs` 负责页面／事件，`lib.rs` 注册 IPC、装配应用状�
 | 旧 AGENTS 要求所有 DAO／持久化编辑均新增迁移 | 摘要替换未改表，已有事务回归；表结构变化才需要新版本迁移 | 规则拆为结构迁移和行为回归两类 |
 | 初始用 bash 检查 zsh 图标脚本报错 | shebang 为 zsh，`zsh -n` 通过 | 分类为核验器选错解释器，不修改脚本 |
 | 7 份历史 UI XML 可视为完整 XML | 全文件有尾随内容；hierarchy 前缀可解析 | 记录证据包装缺陷，保留原件，不伪称解析全绿 |
+| 本档案 9 月 10 日的 1,227 文件／146 提交和大文件行数 | 2026-09-13 清单为 1,309 文件／149 提交；`lib.rs` 26,228 行、`ConversationWorkspace.kt` 11,314 行、`app.mjs` 5,361 行 | 旧数字保留为历史基线，在本节和第 1.1 节标注新快照；不把时点差异误报为代码冲突 |
 
 ## 12. 已知问题、未确认事项与后续路线
 
-**已确认维护债务：** `desktop/src-tauri/src/lib.rs` 24,196 行；Android `ConversationWorkspace.kt` 11,129 行、`NanfengAiApp.kt` 3,722 行、数据库文件 3,553 行、会话 ViewModel 2,383 行。规模意味着审查面集中，不独立证明性能故障。Release 未启用 minify；Lint 警告尚存；43 个 invoke 无直接测试引用；历史文档与注释仍有上述漂移；7 份 XML 证据格式不纯。依据为文件清单、配置、inventory 和语法检查。
+**已确认维护债务：** 2026-09-13 清单中 `desktop/src-tauri/src/lib.rs` 26,228 行；Android `ConversationWorkspace.kt` 11,314 行、`NanfengAiApp.kt` 3,753 行、数据库文件 3,553 行、会话 ViewModel 2,389 行；Desktop `app.mjs` 5,361 行。规模意味着审查面集中，不独立证明性能故障。Release 未启用 minify；Lint 警告尚存；基线审计发现的 43 个 invoke 无直接测试引用、历史文档与注释漂移、7 份 XML 证据格式不纯仍未由本次只读复盘逐项消除。依据为文件清单、配置、inventory 和基线验证摘要。
 
 **仍未确认：** 最新 UI 原生显示／全部图标一致性，Desktop 全设置 owner 的跨安装保留、真实数据路径切换及中断恢复，3 项真实 ZIP opt-in，真实 Provider／OCR／搜索的完成率与实际账单，Google／Supabase 部署和跨用户隔离，系统通知投递、Windows 正式凭据／安装包、公网网关。旧 Sonnet 短消息和旧设备安装成功不能覆盖这些场景。
 
@@ -212,10 +220,16 @@ Desktop `app.mjs` 负责页面／事件，`lib.rs` 注册 IPC、装配应用状�
 
 ## 13. 后续维护入口
 
-[AGENTS](../AGENTS.md) 只保存长期硬规则；开发、排错、测试、代码审查、文档同步分别读取 [.agents/skills](../.agents/skills)。可跨项目复用的方法及适用限制见 [可迁移开发经验](可迁移开发经验.md)。本轮业务文件不变性、测试来源与格式异常由 verification.json 固化；本轮前文件可从 ef76fc4 恢复，新增 review 目录与 Skill 脚本可独立移除。
+[AGENTS](../AGENTS.md) 只保存长期硬规则；开发、排错、测试、代码审查、文档同步分别读取 [.agents/skills](../.agents/skills)。可跨项目复用的方法及适用限制见 [可迁移开发经验](可迁移开发经验.md)。2026-09-13 的全库身份与历史检查由 [review/20260913-project-retrospective](review/20260913-project-retrospective/) 固化；本次只新增文档证据，不修改业务文件、配置、schema 或测试逻辑。历史 9 月 10 日基线可由 `ef76fc4` 回读。
 
 ## 14. 2026-09-13 增量沉淀：模型目录事实与响应式显示
 
 本轮将 Composer 模型名称的“完整事实”与“紧凑呈现”分开：Desktop 和 Android 内屏／展开宽度消费目录 `displayName`，仅 Android 外屏使用单一紧凑投影以保护草稿输入空间；助手历史页脚继续使用独立的紧凑归因。该规则不改模型 ID、Provider、费用、路由、历史记录或跨端协议。
 
 交付证据不从构建推断：Android 正式同签名包已在 OPPO 保数据覆盖并拉回 base APK 比对；macOS bundle 已在相同 Bundle ID／团队身份下替换、旧包保留，SQLite 完整性与核心计数保持。具体产物哈希、设备身份、测试与未验的折叠内屏视觉见[当前交接](CURRENT_HANDOFF.md)顶部；稳定取舍见[决策日志](decision-log.md)，可复用原则见[可迁移开发经验](可迁移开发经验.md)。
+
+## 15. 2026-09-13 最终增量：流式回复必须是轻量投影
+
+Android 的生产普通聊天原先只把提交和终态交给前台服务，执行器已经持久化的流式增量没有抵达 UI；因此表现为等待完整回复后才出现。修复不是把正文塞进广播，也不是按固定间隔全页重载：前台服务仅节流通知会话进度，当前选中会话读取已持久化的 transcript 投影；抽屉、设置、模型目录和其他历史状态留在终态完整刷新。完整重载和流式投影共用代际栅栏，避免慢重载回写覆盖较新的增量。
+
+最终回归覆盖 Android JVM 1,133 项（0 failures／0 errors／3 skipped）、release lint／构建、Desktop Node 378/378、Rust 253/253 和协议 golden；本地清单证据见 [final checkpoint](review/20260913-final-checkpoint/)。同签名 Android 保数据覆盖与相同签名 Desktop 覆盖的具体哈希、设备／bundle 身份及未验层以 [当前交接](CURRENT_HANDOFF.md) 顶部为准。自动回归和覆盖安装不证明真实 Provider、账号同步或人工逐帧视觉状态，仍需在相应授权条件下单列验收。

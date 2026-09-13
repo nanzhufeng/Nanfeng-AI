@@ -205,7 +205,7 @@ fun ConversationCostLedgerPage(state: ConversationCostLedgerUiState) {
 ) {
     Icon(Icons.AutoMirrored.Outlined.ReceiptLong, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(scaledAppIconSize(36.dp)))
     Text("尚无可用费用记录", fontWeight = FontWeight.Medium)
-    Text("已返回输入和输出 Token 的调用会显示服务商金额或本地估算。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    Text("已返回输入和输出 Token 的调用会显示费用与用量。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
 }
 
 private fun ConversationCostLedgerUiState.isEmpty() = records.isEmpty() && reminderDraftRecords.isEmpty() && titleGenerationRecords.isEmpty() && scheduledMonitorRuns.isEmpty() && historyCurationCalls.isEmpty() && historyCurationRun == null && glmOcrCalls.isEmpty()
@@ -233,28 +233,19 @@ private fun ConversationCostLedgerUiState.isEmpty() = records.isEmpty() && remin
 }
 
 @Composable private fun ConversationCostSummary(state: ConversationCostLedgerUiState) {
-    val exact = state.records.filter { it.costSource == ConversationCostSource.PROVIDER_RESPONSE }.map { it.cost }
-    val estimated = state.records.filter { it.costSource == ConversationCostSource.LOCAL_ESTIMATE }.map { it.cost } +
+    val costs = state.records.map { it.cost } +
         state.reminderDraftRecords.map { it.cost } + state.titleGenerationRecords.map { it.cost } +
         state.scheduledMonitorRuns.mapNotNull(ScheduledMonitorRun::estimatedCost) +
         state.historyCurationCalls.mapNotNull(DirectChatCallAuditRecord::estimatedCost) +
         state.glmOcrCalls.map { it.cost }
     ConversationCostSummarySection(title = "本机累计") {
-        if (exact.isEmpty() && estimated.isEmpty()) {
+        if (costs.isEmpty()) {
             ConversationCostSummaryMetric(label = "计费调用", value = "暂无")
         }
-        if (exact.isNotEmpty()) {
-            CnyMoneyDisplay.summaryLabel(exact)?.let { amount ->
-                ConversationCostSummaryMetric(label = "OpenRouter 实际金额", value = amount, emphasizeValue = true)
+        if (costs.isNotEmpty()) {
+            CnyMoneyDisplay.summaryLabel(costs)?.let { amount ->
+                ConversationCostSummaryMetric(label = "费用", value = amount, emphasizeValue = true)
             }
-        }
-        if (estimated.isNotEmpty()) {
-            CnyMoneyDisplay.summaryLabel(estimated)?.let { amount ->
-                ConversationCostSummaryMetric(label = "本地估算", value = amount, emphasizeValue = true)
-            }
-        }
-        if ((exact + estimated).any { it.currencyCode == "USD" }) {
-            Text(CnyMoneyDisplay.USD_REFERENCE_LABEL, color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -398,7 +389,7 @@ private fun ConversationCostCategoryCell(
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         HorizontalDivider(color = NeutralBorder)
         Text("提醒草案整理", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-        Text(modelNameAnnotatedText(modelName = "千问", suffix = "整理调用：${records.size} 次 · 本地估算：$estimated"), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        Text(modelNameAnnotatedText(modelName = "千问", suffix = "整理调用：${records.size} 次 · 费用：$estimated"), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -408,7 +399,7 @@ private fun ConversationCostCategoryCell(
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         HorizontalDivider(color = NeutralBorder)
         Text("定时监控", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-        Text("已返回 Token 的执行：${records.size} 次 · 本地估算：$estimated", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        Text("已返回 Token 的执行：${records.size} 次 · 费用：$estimated", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -492,10 +483,7 @@ private fun ConversationCostCategoryCell(
         Text(record.recordedAt.costTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
     }
     Text(record.footerCostLabel() ?: "Token 已返回，但此模型暂无本机价目表", color = if (record.cost.totalMicros == null) SecondaryText else AccentOrange, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-    Text(
-        "输入 ${record.usage.inputTokens ?: "未知"} · ${record.usage.outputBreakdownLabel()} · ${when (record.costSource) { ConversationCostSource.PROVIDER_RESPONSE -> "OpenRouter 实际金额"; ConversationCostSource.LOCAL_ESTIMATE -> "本地价目表估算"; null -> "缺少可用估算价目表" }}",
-        color = SecondaryText, style = MaterialTheme.typography.bodySmall,
-    )
+    Text("输入 ${record.usage.inputTokens ?: "未知"} · ${record.usage.outputBreakdownLabel()}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     Text(record.modelDurationLabel(), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
 }
 

@@ -12,8 +12,6 @@ import java.math.RoundingMode
  */
 object CnyMoneyDisplay {
     const val REFERENCE_DATE = "2026-08-27"
-    const val USD_REFERENCE_LABEL = "美元按 1 美元 ≈ ¥6.7203 换算（2026-08-27）"
-
     private val microsPerUnit = BigDecimal("1000000")
     private val usdToCny = BigDecimal("6.7203091455560326320")
 
@@ -33,13 +31,7 @@ object CnyMoneyDisplay {
         maximumFractionDigits: Int = 6,
     ): String? {
         val amount = amountText(totalMicros, currencyCode, maximumFractionDigits) ?: return null
-        val prefix = when {
-            estimated -> "≈ "
-            currencyCode != "CNY" -> "约 "
-            else -> ""
-        }
-        val suffix = if (estimated) "（估算）" else ""
-        return "$prefix¥$amount$suffix"
+        return "¥$amount"
     }
 
     fun totalLabel(
@@ -56,20 +48,10 @@ object CnyMoneyDisplay {
             .setScale(maximumFractionDigits, RoundingMode.HALF_UP)
             .stripTrailingZeros()
             .toPlainString()
-        val prefix = when {
-            estimated -> "≈ "
-            known.any { it.currencyCode != "CNY" } -> "约 "
-            else -> ""
-        }
-        val suffix = if (estimated) "（估算）" else ""
-        return "$prefix¥$amount$suffix"
+        return "¥$amount"
     }
 
-    /**
-     * Compact summary cards intentionally show one blended RMB total. The source remains in the
-     * left-hand label or the detail ledger, so repeating an estimate suffix beside every amount
-     * makes the summary harder to scan without adding accounting information.
-     */
+    /** Compact summary cards show one blended RMB total without extra accounting annotations. */
     fun summaryLabel(
         costs: List<ProviderCost>,
         maximumFractionDigits: Int = 6,
@@ -83,7 +65,7 @@ object CnyMoneyDisplay {
             .setScale(maximumFractionDigits, RoundingMode.HALF_UP)
             .stripTrailingZeros()
             .toPlainString()
-        return "约 ¥$amount"
+        return "¥$amount"
     }
 
     private fun amountInYuan(totalMicros: Long, currencyCode: String?): BigDecimal? {

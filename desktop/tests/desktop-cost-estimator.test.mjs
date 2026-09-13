@@ -5,7 +5,7 @@ import { cnyCostLabel, projectedCost, projectedMessageCost } from '../src/deskto
 test('Desktop mirrors Android fallback pricing only when provider settlement is absent', () => {
   const deepSeek = projectedCost({ modelId: 'deepseek-flash', inputTokens: 1063, outputTokens: 157, cachedInputTokens: 0, occurredAtMs: Date.UTC(2026, 8, 10, 2) });
   assert.deepEqual(deepSeek, { chargeMicros: 507, currencyCode: 'USD', costSource: 'LOCAL_ESTIMATE', priceVersion: 'deepseek-v4.1-flash-peak-2026-09-10-v1' });
-  assert.equal(cnyCostLabel(deepSeek, { estimatedLabel: true, maximumFractionDigits: 6 }), '≈ ¥0.003407（估算）');
+  assert.equal(cnyCostLabel(deepSeek, { estimatedLabel: true, maximumFractionDigits: 6 }), '¥0.003407');
   const settled = projectedCost({ modelId: 'deepseek-flash', inputTokens: 1063, outputTokens: 157, occurredAtMs: Date.UTC(2026, 8, 10, 2), chargeMicros: 9, currencyCode: 'USD' });
   assert.deepEqual(settled, { chargeMicros: 9, currencyCode: 'USD', costSource: 'PROVIDER_RESPONSE' });
 });

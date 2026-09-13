@@ -472,7 +472,7 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue(assistantBranch.contains("message.deliveryState == com.nanzhufeng.ai.domain.MessageDeliveryState.PARTIAL"))
         assertTrue(assistantBranch.contains("AssistantGenerationStatus("))
         assertTrue(assistantBranch.contains("hasPartialText = textBlocks.isNotEmpty()"))
-        for (token in listOf("CircularProgressIndicator", "南枫 AI 正在继续生成…", "waitingPreview", "rememberInfiniteTransition", "RepeatMode.Reverse")) {
+        for (token in listOf("CircularProgressIndicator", "南枫 AI 正在继续生成…", "正在重新生成", "isRetrying", "waitingPreview", "rememberInfiniteTransition", "RepeatMode.Reverse")) {
             assertTrue("missing $token", generation.contains(token))
         }
         assertFalse(generation.contains("正式回答生成后将自动替换此提示"))

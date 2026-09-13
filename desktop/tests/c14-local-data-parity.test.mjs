@@ -103,6 +103,6 @@ test('C14 browser fixture is read-only and C14 native fixture requires the diagn
 test('C14 category changes paint the selected category before its local search completes', async () => {
   const app = await readFile(new URL('../src/app.mjs', import.meta.url), 'utf8');
   const loadingStart = app.slice(app.indexOf('async function runFullSearch('), app.indexOf('if (!native)', app.indexOf('async function runFullSearch(')));
-  assert.match(loadingStart, /state\.searchLoading = !cachedPage/);
+  assert.match(loadingStart, /state\.searchLoading = !append && !cachedPage/);
   assert.match(loadingStart, /render\(\)/);
 });

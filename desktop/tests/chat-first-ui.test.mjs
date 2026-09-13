@@ -652,7 +652,7 @@ test('chat-first work mode directly imports a selected typed exchange after stri
 
 test('ordinary send durably submits one native streaming attempt and retains the draft only on pre-submit rejection', () => {
   for (const token of ['function chatDraftKey', 'window.localStorage', 'function sendLocalMessage', "invoke('submit_desktop_ordinary_chat'", 'egressAuthorization', "disclosureVersion: 'normal-chat-egress-v1'", 'sentDraft', 'sentAttachments', '正在等待模型回复', "result.state === 'UNKNOWN'", '未自动重发']) assert.ok(source.includes(token), token);
-  for (const token of ['发送即授权给', '按量计费', 'chat-composer-egress-disclosure']) assert.ok(`${shell}\n${css}`.includes(token), token);
+  for (const token of ['发送即授权给', '按量计费', 'chat-composer-egress-disclosure']) assert.ok(!`${shell}\n${css}`.includes(token), token);
   for (const forbidden of ["action: 'appendMessage'", "action: 'create'", '消息已本地记录。']) assert.ok(!source.slice(source.indexOf('async function sendLocalMessage()'), source.indexOf('saveLocalMessage = sendLocalMessage')).includes(forbidden), forbidden);
 });
 
@@ -670,7 +670,7 @@ test('FB-P6-068 Desktop composer send restores the transcript directly to its ne
 
 test('ordinary assistant messages expose persisted running stop failure unknown retry and provider cost facts', () => {
   const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'runtime', title: '流式', revision: 2, messages: [{ id: 'assistant-runtime', role: 'assistant', delivery: 'UNKNOWN', attemptId: 'attempt-runtime', source: 'PROVIDER', modelSnapshot: { displayName: 'GPT-5.6 Terra' }, chargeMicros: 8, blocks: [{ kind: 'TEXT', text: '已保留增量' }] }] }] } }, native: true, selectedConversationId: 'runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
-  for (const token of ['chat-runtime-state unknown', '连接结果未知', 'retry-ordinary-chat', 'attempt-runtime', '5.6 Terra', '¥0.0001']) assert.ok(rendered.includes(token), token);
+  for (const token of ['chat-runtime-state unknown', '连接结果未知', 'retry-ordinary-chat', 'attempt-runtime', '从断点继续', '5.6 Terra', '¥0.0001']) assert.ok(rendered.includes(token), token);
   for (const token of ["action === 'stop-ordinary-chat'", "invoke('cancel_desktop_ordinary_chat'", "action === 'retry-ordinary-chat'", "invoke('retry_desktop_ordinary_chat'"]) assert.ok(source.includes(token), token);
   for (const token of ['allow-desktop-ordinary-chat', 'submit_desktop_ordinary_chat', 'retry_desktop_ordinary_chat', 'cancel_desktop_ordinary_chat', 'read_latest_desktop_ordinary_chat_attempt']) assert.ok(`${temporaryPermission}\n${capability}`.includes(token), token);
 });
@@ -687,8 +687,35 @@ test('only a live Attempt can show generating controls; stale PARTIAL is rendere
 
 test('failed ordinary replies remain as an actionable answer-incomplete card after reload', () => {
   const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'failed-runtime', title: '联网失败', revision: 2, messages: [{ id: 'assistant-failed', role: 'assistant', delivery: 'FAILED', attemptId: 'attempt-failed', source: 'PROVIDER', safeErrorCode: 'PROVIDER_NOT_ENABLED', blocks: [{ kind: 'TEXT', text: '' }] }] }] } }, native: true, selectedConversationId: 'failed-runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
-  for (const token of ['chat-runtime-state failed', '回答未完成', '本次实际接收服务商未启用', '重试原 Attempt', 'attempt-failed']) assert.ok(rendered.includes(token), token);
+  for (const token of ['chat-runtime-state failed', '回答未完成', '本次实际接收服务商未启用', '重新生成', 'attempt-failed']) assert.ok(rendered.includes(token), token);
   assert.ok(!rendered.includes('>PROVIDER_NOT_ENABLED<'));
+});
+
+test('usage ledger does not mislabel absent provider usage as a missing price table', () => {
+  const rendered = renderChatFirstShell({
+    data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'ledger-conversation', title: '原始用量缺失', revision: 1, messages: [] }] } },
+    native: true,
+    pane: 'settings',
+    settingsSection: 'conversation-cost',
+    usageLedger: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, records: [{
+      entryId: 'usage-absent-provider-usage', conversationId: 'ledger-conversation', modelId: 'openai/gpt-5.6-terra',
+      inputTokens: null, outputTokens: null, cachedInputTokens: null, chargeMicros: null, currencyCode: null, costSource: null, occurredAtMs: 1789240000000,
+    }] },
+    status: '', error: '', connection: {},
+  });
+  assert.ok(rendered.includes('Token 用量未返回'));
+  assert.ok(!rendered.includes('服务商未返回可核验 Token 用量，不能估算'));
+  assert.ok(!rendered.includes('输入 0 / 输出 0 Token · 缺少可用估算价目表'));
+});
+
+test('partial ordinary replies continue from the durable answer instead of replacing it with an empty retry branch', () => {
+  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'continued-runtime', title: '续写', revision: 3, messages: [
+    { id: 'user', role: 'user', blocks: [{ kind: 'TEXT', text: '请完整说明' }] },
+    { id: 'partial', parentId: 'user', role: 'assistant', delivery: 'UNKNOWN', attemptId: 'attempt-partial', continuationState: 'CONTINUED', blocks: [{ kind: 'TEXT', text: '已保存的前半段。' }] },
+    { id: 'continuation', parentId: 'partial', continuationOf: 'partial', role: 'assistant', delivery: 'PARTIAL', runtimeState: 'RUNNING', attemptId: 'attempt-partial', blocks: [{ kind: 'TEXT', text: '' }] },
+  ] }] } }, native: true, selectedConversationId: 'continued-runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
+  for (const token of ['此处已保存内容；正在从断点继续', '正在从断点继续生成', '已保留前段内容，仅生成缺失部分。']) assert.ok(rendered.includes(token), token);
+  for (const token of ['ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS', 'queueOrdinaryChatRuntimeRefresh', 'ordinaryChatRuntimeRefreshInFlight']) assert.ok(source.includes(token), token);
 });
 
 test('temporary chat uses the isolated owner and the Ghost directly toggles back to NORMAL', () => {
@@ -900,9 +927,10 @@ test('assistant footer keeps Android’s time, short model, and RMB amount on on
   assert.match(css, /\.chat-message-action-more svg \{[^}]*width: 18px;[^}]*height: 18px;[^}]*fill: currentColor;[^}]*stroke: none;/s);
 });
 
-test('Desktop gives the header action capsule half-strength shadow without changing its geometry', () => {
+test('Desktop keeps the header capsule geometry and full-width conversation edge fades', () => {
   for (const token of ['.chat-header-content-actions { position: relative;', 'box-shadow: 0 3px 54px rgb(0 0 0 / 5.295%)', 'left: 44px;', 'width: 22px; height: 22px;']) assert.ok(css.includes(token), token);
-  for (const token of ['--conversation-edge-color: var(--page-background)', '::before { display: none; }', 'height: min(112px, 40%)', 'var(--conversation-edge-color) 15.3%', 'var(--conversation-edge-color) 49%', 'var(--conversation-edge-color) 82.7%', 'var(--conversation-edge-color) 98%', '.chat-sidebar::after']) assert.ok(css.includes(token), token);
+  for (const token of ['--conversation-edge-color: var(--page-background)', '::before { top: 0; height: min(112px, 40%);', 'height: min(112px, 40%)', 'var(--conversation-edge-color) 15.3%', 'var(--conversation-edge-color) 49%', 'var(--conversation-edge-color) 82.7%', 'var(--conversation-edge-color) 98%', '.chat-sidebar::after']) assert.ok(css.includes(token), token);
+  assert.doesNotMatch(css, /::before \{ display: none; \}/);
   assert.doesNotMatch(css, /\.chat-transcript-stage::before|\.chat-transcript-stage::after|\.chat-sidebar-footer::before/);
   assert.match(css, /\.chat-transcript-stage > \.chat-scroll \{[^}]*padding-top: 80px;[^}]*padding-bottom: 190px;/s);
 });

@@ -122,6 +122,7 @@ class NanfengAiActivity : ComponentActivity() {
                 conversationId,
                 intent.getBooleanExtra(NormalChatGenerationForegroundService.EXTRA_RUNNING, false),
                 intent.getStringExtra(NormalChatGenerationForegroundService.EXTRA_SAFE_RESULT),
+                intent.getBooleanExtra(NormalChatGenerationForegroundService.EXTRA_PROGRESS, false),
             )
         }
     }

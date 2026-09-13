@@ -2,6 +2,28 @@
 
 > **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
 
+## 2026-09-13：流式会话投影、最终回归与双端保数据覆盖
+
+- **Android 流式修复：** 正常聊天前台服务现在把执行器的 `onStreamProgress` 透传为仅含会话 ID／状态的节流进度事件；ViewModel 对当前选中会话只投影已持久化的 transcript、runtime、lineage 与 attribution，不再每个增量完整重载抽屉、设置、模型目录和历史。完整重载与流式投影共享同一代际栅栏，避免旧重载覆盖新文本；终态仍做一次完整刷新。这样与 Desktop 的逐字显示保持同一可见行为，同时不把正文放进广播。
+- **最终回归：** Android `:app:testDebugUnitTest :app:lintVitalRelease :app:assembleRelease` 通过；JVM 为 1,133 项、0 failures、0 errors、3 skipped。Desktop lint、typecheck、Node 378/378、Rust `cargo test` 253/253 及协议 golden 均通过；Desktop inventory 没有未处理渲染动作、未实现 Rust command 或未注册 command。91 个动作、41 个 invoke 尚无直接测试引用，属于覆盖缺口而非本轮观察到的功能故障。
+- **本地 checkpoint 证据：** 跟踪文件／历史清单固化于 [review/20260913-final-checkpoint](review/20260913-final-checkpoint/)，其范围只涵盖 Git 跟踪文件和本地历史，不读取用户正文、凭据或未跟踪资产。
+- **Android 覆盖：** 正式候选为 `com.nanzhufeng.ai` 66／`0.3.0-p10j`，v2／v3 验签有效、证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`、APK SHA-256 `e6807858b472ce395325729d37f484bc453ba61e14ff65f4a7b10ef74b236df8`。OPPO `3B157F009E800000` 只执行一次 `pm install -r --user 0` 并返回 `Success`；拉回 base APK 与候选逐字节一致，首次安装时间仍为 `2026-08-20 15:15:31`。未卸载、清数据、安装 Debug／测试包或运行任何 `connected*AndroidTest`。
+- **Desktop 覆盖：** `/Users/nanzhufeng/Applications/南枫 AI Desktop.app` 已以相同 Bundle ID `com.nanzhufeng.ai.desktop`、版本 `0.6.0-p6d-dev`、Team `457B263L9J` 严格验签覆盖；候选及安装后主程序 SHA-256 均为 `d5c1de2bb352e476f473ae1616a4bed8f52b3d1f6012528281db44f832cf6919`。覆盖前旧包保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-stream-audit-20260913-1202.app`；正在运行的窗口须由用户自行退出后重开才会加载新二进制。
+- **仍需真实边界验收：** 本轮未触发真实 Provider、Google／Supabase 账号同步或人工原生逐帧视觉验收；3 项 Android opt-in 仍 skipped。这些缺口不被构建、安装或自动测试替代。
+
+## 2026-09-13：双端 Composer 去冗余说明与单模型附件路由（未安装）
+
+- **行为：** Android 与 Desktop Composer 均移除发送授权／计费及附件接收方的小字，附件预览只保留可操作的内容卡；底部模型与发送动作行不再被说明文字挤出可视区域。Android 普通聊天附件路径改为：仅本机 UTF-8／PDF 文本层投影，或原始附件直达当前选中模型；当前模型不支持时不发送并提示更换支持该附件的模型。删除千问 Qwen3.7-Plus／智谱 GLM-OCR 的普通聊天中转调用；独立“南枫转写”能力不受影响。
+- **验证：** Desktop Node `chat-first-ui.test.mjs` 95/95、lint、typecheck、静态 build 通过。Android `UniversalChatAttachmentBridgeContractsTest` 与 `P3JNormalChatExplicitEgressContractsTest` 定向 JVM 测试通过，`:app:assembleRelease`（含 `lintVitalRelease`）通过。
+- **未替代：** 本轮没有覆盖安装 Android 或 Desktop 正式应用，也未发起真实 Provider 请求；需要在新包覆盖后，以实际图片／PDF草稿确认发送键可见、当前模型直达和不支持附件的原位拦截。
+
+## 2026-09-13：Desktop 长会话交互性能修复与保数据覆盖
+
+- **性能修复：** Desktop 长会话的轻量操作现在原位保留正文和侧栏，不再在菜单、弹层、模型选择等操作中重复序列化／解析整个消息树和会话列表；切换会话时保留侧栏并仅更新选中态与自动已读点。保留正文时，图片缩略图观察器不再因缩略图对象变化而失效，视频／文件预览观察器也不再重复扫描既有正文卡片。工作区确定后，独立的只读启动投影改为并行 IPC 读取。
+- **自动验证：** Desktop Node `374/374`、Rust `cargo test --lib` `244/244`、lint、typecheck、静态 build 与 `git diff --check` 通过。845 个会话／500 条消息的纯渲染基准中，完整壳平均约 `133 ms`，正文与侧栏均保留的轻操作约 `0.23 ms`；该数值不替代原生端到端帧率。
+- **Desktop 覆盖：** 候选严格验签后覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`；Bundle ID `com.nanzhufeng.ai.desktop`、版本 `0.6.0-p6d-dev`、Apple Development Team `457B263L9J` 与旧包一致。候选及安装后主程序 SHA-256 均为 `5f4f475da68d69ac2a1a308c3729bab04d26f625bb2c477221b33a28097a4fe5`。旧包完整保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-performance-20260913-0040.app`。替换前后、启动前常规 workspace SQLite SHA-256 均为 `fd23cc8a08ca83251f806ac7c4020a4a14eb87d10dd0096531a5459169311ac7`；启动新包后 `quick_check=ok`／`integrity_check=ok`、86 张表、1 个工作区、7,310 条索引，原生窗口已回读既有长会话、附件与 Composer。
+- **尚未替代：** 本次覆盖与数据回读不替代长会话实际人工操作的帧时间验收，也没有触发真实 Provider；两项仍须独立按正式原生窗口与账号条件验证。
+
 ## 2026-09-13：模型完整名称的响应式跨端显示与双端保数据覆盖
 
 - **行为：** Desktop Composer 的普通会话与临时会话均直接显示模型目录 `displayName`，不再套用 `compactModelName`；模型触发器最小宽度为 `176px`，悬停／焦点胶囊跟随完整命中区，当前目录名称的可视上限为 `224px`。Android 外屏仍使用紧凑标签与 `88dp` 控件；内屏／展开宽度从 `600dp` 起改为目录完整名称与 `200dp` 控件。消息页脚继续使用紧凑归因，不与 Composer 的选择事实混为一谈。

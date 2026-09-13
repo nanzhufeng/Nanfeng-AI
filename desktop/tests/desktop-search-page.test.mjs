@@ -241,9 +241,9 @@ test('loading, empty and error are honest distinct states', () => {
 test('category selection renders immediately while its next local-index page is loading', async () => {
   const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   const searchOwner = source.slice(source.indexOf('async function runFullSearch('), source.indexOf('function scheduleFullSearch()'));
-  assert.match(searchOwner, /state\.searchLoading = !cachedPage;[\s\S]*render\(\);/);
+  assert.match(searchOwner, /state\.searchLoading = !append && !cachedPage;[\s\S]*render\(\);/);
   assert.match(searchOwner, /render\(\);[\s\S]*query_desktop_local_index/);
-  assert.match(source, /if \(generation !== fullSearchGeneration\) return;[\s\S]{0,420}state\.searchPage = page/);
+  assert.match(source, /if \(generation !== fullSearchGeneration\) return;[\s\S]{0,520}state\.searchPage = append/);
   assert.match(source, /function openFullSearch\(category = 'all'\)[\s\S]*void runFullSearch\(\);[\s\S]*read_desktop_local_search_history/);
 });
 
@@ -256,13 +256,30 @@ test('category click paints the selected pill before scheduling its local-index 
   assert.match(closeOwner, /cancelAnimationFrame\(fullSearchCategoryFrame\)/);
 });
 
-test('large local-data drill-down renders every local result without pagination controls', () => {
+test('rapid search changes cancel the native SQLite statement instead of only dropping its result', async () => {
+  const app = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
+  const rust = await readFile(resolve(import.meta.dirname, '../src-tauri/src/lib.rs'), 'utf8');
+  const searchOwner = app.slice(app.indexOf('function cancelDesktopLocalSearch('), app.indexOf('function openFullSearch('));
+
+  assert.match(app, /let fullSearchRequestId = 0;/);
+  assert.match(searchOwner, /invoke\('cancel_desktop_local_search', \{ requestId \}\)/);
+  assert.match(searchOwner, /const requestId = \+\+fullSearchRequestId;[\s\S]{0,180}cancelDesktopLocalSearch\(requestId - 1\);/);
+  assert.match(searchOwner, /function scheduleFullSearch\(\) \{\s*supersedeFullSearch\(\);/);
+  assert.match(searchOwner, /invoke\('query_desktop_local_index',[\s\S]*requestId/);
+  assert.match(searchOwner, /withFullSearchDeadline\(pending, requestId\)/);
+  assert.match(rust, /fn cancel_desktop_local_search\(state: State<'_, AppState>, request_id: u64\)/);
+  assert.match(rust, /get_interrupt_handle\(\)/);
+  assert.match(rust, /interrupt\.interrupt\(\)/);
+});
+
+test('large local-data drill-down uses an explicit progressive page instead of rendering every row', () => {
   const html = renderDesktopSearchPage({
     category: 'all',
-    page: { hits: Array.from({ length: 128 }, (_, index) => ({ ...textHit, entryId: `${textHit.entryId}-${index}` })), textCount: 128, attachmentCount: 0 },
+    page: { hits: Array.from({ length: 48 }, (_, index) => ({ ...textHit, entryId: `${textHit.entryId}-${index}` })), textCount: 128, attachmentCount: 0, totalCount: 128, hasMore: true },
   });
-  assert.equal((html.match(/desktop-search-text-card/g) || []).length, 128);
-  assert.doesNotMatch(html, /搜索结果分页|已显示 .* 项|上一页|下一页|previous-search-page|next-search-page/);
+  assert.equal((html.match(/desktop-search-text-card/g) || []).length, 48);
+  assert.match(html, /已显示 48 \/ 128 条/);
+  assert.match(html, /data-action="load-more-search-results"/);
 });
 
 test('attachment cards expose both direct preview and a bounded long-press action owner', async () => {

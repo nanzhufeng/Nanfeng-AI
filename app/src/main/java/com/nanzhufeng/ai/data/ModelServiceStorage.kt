@@ -13,11 +13,15 @@ import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.ProviderSettings
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
+import java.io.File
+import java.io.FileOutputStream
 import java.security.KeyStore
+import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class AndroidModelServiceSettingsRepository(context: Context) : ModelServiceSettingsRepository {
     private val preferences = context.applicationContext.getSharedPreferences(SETTINGS_FILE, Context.MODE_PRIVATE)
@@ -151,7 +155,9 @@ class SharedPreferencesCredentialPayloadStorage(context: Context) : CredentialPa
     }
 
     private companion object {
-        const val CREDENTIAL_FILE = "provider_credentials_v1"
+        // v2 deliberately does not read entries encrypted under the retired system-keystore
+        // owner. Users save each provider key once in the app after the migration.
+        const val CREDENTIAL_FILE = "provider_credentials_v2"
         const val PAYLOAD_VERSION = 1
     }
 }
@@ -195,8 +201,65 @@ class AndroidKeystoreCredentialCipher : CredentialCipher {
     }
 }
 
+/**
+ * App-owned model credential cipher. The random AES key is held under the app's private,
+ * no-backup directory rather than Android Keystore, so saving or using an API Key never asks a
+ * system credential service for authorization. The encrypted payload remains in private prefs.
+ */
+class AppPrivateCredentialCipher(context: Context) : CredentialCipher {
+    private val keyFile = File(context.applicationContext.noBackupFilesDir, "provider-credentials-v2/local.key")
+    private val random = SecureRandom()
+
+    override fun encrypt(providerId: ProviderId, plaintext: ByteArray): EncryptedCredentialPayload {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, key(createIfMissing = true))
+        cipher.updateAAD(providerId.name.toByteArray(Charsets.UTF_8))
+        return EncryptedCredentialPayload(cipher.iv, cipher.doFinal(plaintext))
+    }
+
+    override fun decrypt(providerId: ProviderId, payload: EncryptedCredentialPayload): ByteArray {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, key(createIfMissing = false), GCMParameterSpec(128, payload.iv))
+        cipher.updateAAD(providerId.name.toByteArray(Charsets.UTF_8))
+        return cipher.doFinal(payload.ciphertext)
+    }
+
+    @Synchronized
+    private fun key(createIfMissing: Boolean): SecretKey {
+        if (keyFile.isFile) {
+            val encoded = keyFile.readBytes()
+            try {
+                require(encoded.size == KEY_BYTES) { "APP_PRIVATE_CREDENTIAL_KEY_INVALID" }
+                return SecretKeySpec(encoded, "AES")
+            } finally {
+                encoded.fill(0)
+            }
+        }
+        require(createIfMissing) { "APP_PRIVATE_CREDENTIAL_KEY_MISSING" }
+        check(keyFile.parentFile?.let { it.exists() || it.mkdirs() } == true) { "APP_PRIVATE_CREDENTIAL_DIRECTORY_UNAVAILABLE" }
+        val encoded = ByteArray(KEY_BYTES).also(random::nextBytes)
+        val temporary = File(keyFile.parentFile, ".local-${System.nanoTime()}.tmp")
+        try {
+            FileOutputStream(temporary).use { stream ->
+                stream.write(encoded)
+                stream.fd.sync()
+            }
+            check(temporary.renameTo(keyFile)) { "APP_PRIVATE_CREDENTIAL_KEY_WRITE_FAILED" }
+            return SecretKeySpec(encoded, "AES")
+        } finally {
+            encoded.fill(0)
+            if (temporary.exists()) temporary.delete()
+        }
+    }
+
+    private companion object {
+        const val KEY_BYTES = 32
+        const val TRANSFORMATION = "AES/GCM/NoPadding"
+    }
+}
+
 fun createAndroidProviderCredentialStore(context: Context): ProviderCredentialStore =
     EncryptedProviderCredentialStore(
-        cipher = AndroidKeystoreCredentialCipher(),
+        cipher = AppPrivateCredentialCipher(context),
         storage = SharedPreferencesCredentialPayloadStorage(context),
     )

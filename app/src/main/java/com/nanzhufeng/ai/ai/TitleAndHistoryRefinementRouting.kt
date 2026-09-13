@@ -2,6 +2,8 @@ package com.nanzhufeng.ai.ai
 
 import com.nanzhufeng.ai.domain.ModelPresetId
 import com.nanzhufeng.ai.domain.ProviderId
+import com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog
+import com.nanzhufeng.ai.domain.NanfengModelServiceCatalog
 
 /**
  * The two low-cost background text refiners deliberately share one product-owned order.
@@ -10,7 +12,10 @@ import com.nanzhufeng.ai.domain.ProviderId
  */
 internal object TitleAndHistoryRefinementRouting {
     val candidates = listOf(
-        Candidate(ProviderId.DEEPSEEK, ModelPresetId.DEEPSEEK_V4_FLASH),
+        Candidate(
+            NanfengModelServiceCatalog.providerFor(ComposerModelRoutingCatalog.dailyDeepSeekFlash.routes.single()),
+            ComposerModelRoutingCatalog.dailyDeepSeekFlash.routes.single(),
+        ),
         Candidate(ProviderId.ZHIPU, ModelPresetId.GLM_5_3_FLASH),
         Candidate(ProviderId.QWEN, ModelPresetId.QWEN_3_6_FLASH),
     )

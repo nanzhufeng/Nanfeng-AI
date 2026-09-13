@@ -783,7 +783,7 @@ private fun OcrTaskRow(task: GlmOcrTask, onClick: () -> Unit, onLongPress: () ->
                 val accounting = buildList {
                     task.pageCount?.let { add("$it 页") }
                     (listOfNotNull(task.inputTokens, task.outputTokens).sum().takeIf { it > 0 })?.let { add("$it Token") }
-                    task.costCnyMicros?.let { add("≈ ¥%.4f".format(it / 1_000_000.0)) }
+                    task.costCnyMicros?.let { add("¥%.4f".format(it / 1_000_000.0)) }
                     add(task.updatedAt.timestampLabel())
                 }.joinToString(" · ")
                 Text("$status · $accounting", color = if (task.status == GlmOcrTaskStatus.FAILED) ErrorRed else SecondaryText, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)

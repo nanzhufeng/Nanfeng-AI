@@ -266,7 +266,7 @@ test('current Android model catalog keeps GLM-OCR visible but outside chat selec
 
 test('model record pages use the latest Android empty states and real usage projection', () => {
   const emptyCost = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'conversation-cost', status: '', error: '', connection: {} });
-  for (const token of ['尚无可用费用记录', '已返回输入和输出 Token 的调用会显示服务商金额或本地估算。']) assert.ok(emptyCost.includes(token));
+  for (const token of ['尚无可用费用记录', '已返回输入和输出 Token 的调用会显示费用与用量。']) assert.ok(emptyCost.includes(token));
   const context = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'context-selections', status: '', error: '', connection: {} });
   assert.ok(context.includes('还没有上下文记录。'));
   const diagnostics = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'diagnostics', status: '', error: '', connection: {} });
@@ -276,7 +276,7 @@ test('model record pages use the latest Android empty states and real usage proj
     data, native: true, pane: 'settings', settingsSection: 'conversation-cost', status: '', error: '', connection: {},
     usageLedger: { records: [{ entryId: 'entry-1', conversationId: conversation.id, modelId: 'gpt-5.6-terra', factGrade: 'PROVIDER_REPORTED', inputTokens: 1200, outputTokens: 320, cachedInputTokens: 0, chargeMicros: 12500, currencyCode: 'USD', occurredAtMs: 1788172800000 }], inputTokens: 1200, outputTokens: 320, cachedInputTokens: 0 },
   });
-  for (const token of ['本机累计', '服务商实际金额', '本地估算', '¥0.084004', '1,200', '会话标题整理', '历史资料整理', '南枫转写', 'gpt-5.6-terra', '服务商实际金额']) assert.ok(cost.includes(token));
+  for (const token of ['本机累计', '费用', '¥0.084004', '1,200', '会话标题整理', '历史资料整理', '南枫转写', 'gpt-5.6-terra']) assert.ok(cost.includes(token));
 });
 
 test('local data page renders aggregate-only all-workspace inventory in Android order', () => {
@@ -342,7 +342,7 @@ test('local data categories open the shared cross-workspace safe search catalogu
   assert.ok(!html.includes('application/pdf'));
   const appSource = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   assert.match(appSource, /invoke\('query_desktop_local_index'/);
-  assert.match(appSource, /recordHistory: Boolean\(recordHistory/);
+  assert.match(appSource, /invoke\('record_desktop_local_search_history'/);
   assert.match(appSource, /loadSearchWorkspace\(hit\.workspaceId\)/);
 });
 

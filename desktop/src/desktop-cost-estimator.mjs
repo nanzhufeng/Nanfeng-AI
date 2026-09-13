@@ -91,5 +91,6 @@ export function cnyCostLabel(cost, { estimatedLabel = false, maximumFractionDigi
   if (rate == null) return null;
   const amount = cost.chargeMicros * rate / 1_000_000;
   const text = trimTrailingZeros ? amount.toFixed(maximumFractionDigits).replace(/0+$/, '').replace(/\.$/, '') : amount.toFixed(maximumFractionDigits);
-  return `${estimatedLabel && cost.costSource === 'LOCAL_ESTIMATE' ? '≈ ' : ''}¥${text}${estimatedLabel && cost.costSource === 'LOCAL_ESTIMATE' ? '（估算）' : ''}`;
+  void estimatedLabel;
+  return `¥${text}`;
 }

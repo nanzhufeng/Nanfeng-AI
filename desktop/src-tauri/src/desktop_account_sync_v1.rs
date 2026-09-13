@@ -825,10 +825,14 @@ impl CloudGateway for SupabaseGateway {
             "nanfeng_sync_read_document",
             json!({"p_app_id":APP_ID,"p_document_id":document_id}),
         )?;
-        let value = response
-            .as_array()
-            .and_then(|items| items.first())
-            .unwrap_or(&response);
+        // PostgREST serializes a SECURITY DEFINER function returning no rows as
+        // `[]`. That is the expected first-sync state, not a malformed cloud
+        // response. Any non-empty array remains a single row contract.
+        let value = match &response {
+            Value::Array(items) if items.is_empty() => return Ok(None),
+            Value::Array(items) => items.first().ok_or(CloudFailure::Known)?,
+            _ => &response,
+        };
         if value.get("missing").and_then(Value::as_bool) == Some(true) || value.is_null() {
             return Ok(None);
         }
@@ -2599,6 +2603,42 @@ mod tests {
         });
         assert_eq!(callback_code(listener, "state-safe").unwrap(), "code-safe");
         client.join().unwrap();
+    }
+    #[test]
+    fn supabase_empty_read_result_means_document_is_not_yet_in_the_cloud() {
+        use std::thread;
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = server.local_addr().unwrap();
+        let mock = thread::spawn(move || {
+            let (mut stream, _) = server.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+            let mut request = [0u8; 8192];
+            let count = stream.read(&mut request).unwrap();
+            let request = String::from_utf8_lossy(&request[..count]);
+            assert!(request.starts_with("POST /rest/v1/rpc/nanfeng_sync_read_document "));
+            assert!(request.contains("\"p_document_id\":\"conversation-safe\""));
+            let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]";
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+        let gateway = SupabaseGateway::new(
+            ServiceConfig {
+                supabase_url: Url::parse(&format!("http://{address}/")).unwrap(),
+                publishable_key: "localhost-publishable".into(),
+                localhost_mock: true,
+            },
+            &Session {
+                user_id: "localhost-user".into(),
+                email: "localhost@example.invalid".into(),
+                display_name: None,
+                avatar_url: None,
+                access_token: "localhost-access".into(),
+                refresh_token: "localhost-refresh".into(),
+                expires_at_epoch_seconds: 9_999_999_999,
+            },
+        )
+        .unwrap();
+        assert!(gateway.read("conversation-safe").unwrap().is_none());
+        mock.join().unwrap();
     }
     #[test]
     fn localhost_oauth_mock_uses_supabase_pkce_and_establishes_app_session_without_google_secret() {

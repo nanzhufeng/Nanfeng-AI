@@ -28,7 +28,7 @@ test('current transcription root keeps legacy speech results readable without ex
   assert.doesNotMatch(html, /data-action="(?:record|pause)-transcription/);
   assert.doesNotMatch(html, /data-action="(?:select-transcription-mode|pick-transcription-source|save-transcription-settings)"/);
   assert.doesNotMatch(html, /SenseVoice|音视频默认设置/);
-  assert.match(html, /¥0\.013420（估算）/);
+  assert.match(html, /¥0\.013420/);
   assert.match(html, /切片级时间轴/);
   assert.match(html, /旧版音视频任务/);
 });

@@ -21,8 +21,8 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertTrue(executor.contains("authorization: NormalChatEgressAuthorization?"))
         assertTrue(executor.contains("Code.EGRESS_AUTHORIZATION_REQUIRED"))
         assertTrue(executor.contains("requireEgressAuthorization"))
-        assertTrue(workspace.contains("发送即授权给"))
-        assertTrue(workspace.contains("按量计费"))
+        assertFalse(workspace.contains("发送即授权给"))
+        assertFalse(workspace.contains("按量计费"))
         assertTrue(viewModel.contains("reload(keepSending = true)"))
         assertFalse(workspace.contains("NormalChatExplicitEgressConfirmationDialog"))
         assertFalse(workspace.contains("externalSendConfirmation"))
@@ -66,7 +66,7 @@ class P3JNormalChatExplicitEgressContractsTest {
     }
 
     @Test fun `unknown provider result keeps the original key internally while showing one plain retry action`() {
-        assertTrue(executor.contains("fun retryLatestAttempt(conversationId: ConversationId)"))
+        assertTrue(executor.contains("fun retryLatestAttempt("))
         assertTrue(executor.contains("existingAttempt = attempt"))
         assertTrue(executor.contains("attempt.idempotencyKey"))
         assertTrue(executor.contains("failureReason = recoveryFailureReason"))
@@ -76,7 +76,7 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertFalse(workspace.contains("标记失败"))
         assertFalse(workspace.contains("原接收方："))
         assertFalse(workspace.contains("可能重复调用或扣费"))
-        val retry = executor.substringAfter("fun retryLatestAttempt(conversationId: ConversationId)").substringBefore("fun markLatestAttemptFailed")
+        val retry = executor.substringAfter("fun retryLatestAttempt(").substringBefore("fun markLatestAttemptFailed")
         assertTrue(retry.contains("ProviderChatCancellation().also { call ->"))
         assertTrue(retry.contains("activeCalls[conversationId] = call"))
         assertTrue(retry.contains("if (cancellationRequested.remove(conversationId)) call.cancel()"))
@@ -84,13 +84,16 @@ class P3JNormalChatExplicitEgressContractsTest {
     }
 
     @Test fun `retry immediately closes the failure decision and restores a durable generation placeholder`() {
-        val retry = executor.substringAfter("fun retryLatestAttempt(conversationId: ConversationId)").substringBefore("fun markLatestAttemptFailed")
+        val retry = executor.substringAfter("fun retryLatestAttempt(").substringBefore("fun markLatestAttemptFailed")
         assertTrue(viewModel.contains("normalSendRecovery = null"))
         assertTrue(viewModel.contains("normalSendRetryInProgress = true"))
         assertTrue(workspace.contains("state.normalSendRecovery?.takeIf { !state.isSending }"))
         assertTrue(retry.contains("startProviderRuntimeForExistingUser.execute(conversationId, user.id)"))
         assertTrue(retry.contains("val resumedRuntime = ActiveProviderRuntime(restarted.runtime)"))
-        assertTrue(workspace.contains("南枫AI 继续生成…"))
+        assertTrue(retry.contains("onLocalSubmission()"))
+        assertTrue(retry.contains("onStreamProgress = onStreamProgress"))
+        assertTrue(viewModel.contains("onLocalSubmission = {"))
+        assertTrue(workspace.contains("正在重新生成"))
     }
 
     @Test fun `mixed non streaming text and tool call never claims a completed answer`() {

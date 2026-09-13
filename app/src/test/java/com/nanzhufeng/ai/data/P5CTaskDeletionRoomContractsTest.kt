@@ -129,6 +129,7 @@ class P5CTaskDeletionRoomContractsTest {
             "p7e_restore_receipts_v1",
             "privacy_inventory_cache_v1",
             "provider_credentials_v1",
+            "provider_credentials_v2",
         )
         preferenceFiles.forEach { file ->
             assertTrue(context.getSharedPreferences(file, Context.MODE_PRIVATE).edit().putString("deletion-proof", file).commit())

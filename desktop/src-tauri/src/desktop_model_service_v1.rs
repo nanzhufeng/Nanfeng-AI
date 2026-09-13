@@ -1,21 +1,32 @@
 //! Desktop model-service settings shared by Settings and the future ordinary-chat executor.
-//! Provider endpoints, preset ownership, and Keychain service names are product constants.
+//! Provider endpoints and preset ownership are product constants.
 //! Safe projections expose credential presence only; a secret is returned only by the explicit
 //! user-triggered reveal command.
 
-use serde::Serialize;
+use aes_gcm::{aead::{Aead, KeyInit}, Aes256Gcm, Nonce};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::Mutex;
+use std::{collections::BTreeMap, fs, path::{Path, PathBuf}, sync::Mutex};
 use zeroize::Zeroizing;
+/// Serialize read/write operations across chat, settings and background jobs.
+static CREDENTIAL_ACCESS_LOCK: Mutex<()> = Mutex::new(());
+// Legacy reader retained only so existing local build artifacts remain source-compatible.
+// No product path constructs this type; all settings and model calls use
+// `AppPrivateProviderCredentialStore` below.
+#[allow(dead_code)]
+pub struct MacSecurityFrameworkProviderCredentialStore;
+#[allow(dead_code)]
 static DENIED_PROVIDERS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+#[allow(dead_code)]
+pub const KEYCHAIN_ACCOUNT: &str = "api-key";
 
+#[allow(dead_code)]
 pub fn allow_user_credential_retry(provider_id: &str) {
     if let Ok(mut denied) = DENIED_PROVIDERS.lock() {
         denied.retain(|id| id != provider_id);
     }
 }
-
-pub const KEYCHAIN_ACCOUNT: &str = "api-key";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CredentialPresence {
@@ -36,7 +47,184 @@ pub trait ProviderCredentialStore {
     fn delete_user_secret(&self, provider_id: &str) -> Result<(), String>;
 }
 
-pub struct MacSecurityFrameworkProviderCredentialStore;
+/// App-owned credential storage. API keys stay outside SQLite, backups, sync payloads and logs;
+/// the encrypted payload plus its install-local key live only in the app's private data root.
+/// This deliberately avoids macOS Keychain and any system authorization UI.
+#[derive(Clone)]
+pub struct AppPrivateProviderCredentialStore {
+    root: PathBuf,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct PrivateCredentialDocument {
+    version: u8,
+    #[serde(default)]
+    providers: BTreeMap<String, PrivateCredentialRecord>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PrivateCredentialRecord {
+    nonce: String,
+    ciphertext: String,
+}
+
+impl AppPrivateProviderCredentialStore {
+    pub fn at(workspace_root: impl AsRef<Path>) -> Self {
+        Self { root: workspace_root.as_ref().join("provider-credentials-v1") }
+    }
+
+    fn key_path(&self) -> PathBuf { self.root.join("local.key") }
+    fn document_path(&self) -> PathBuf { self.root.join("credentials.json") }
+
+    fn ensure_private_root(&self) -> Result<(), String> {
+        fs::create_dir_all(&self.root)
+            .map_err(|_| "应用私有凭据目录无法创建；未保存 API Key。".to_owned())?;
+        set_owner_only(&self.root, true)
+    }
+
+    fn load_key(&self, create_if_missing: bool) -> Result<[u8; 32], String> {
+        let path = self.key_path();
+        match fs::read(&path) {
+            Ok(bytes) => {
+                let key: [u8; 32] = bytes.try_into().map_err(|_| "应用私有凭据密钥无效；请重新保存 API Key。".to_owned())?;
+                set_owner_only(&path, false)?;
+                Ok(key)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && create_if_missing => {
+                self.ensure_private_root()?;
+                let mut key = [0u8; 32];
+                getrandom::fill(&mut key).map_err(|_| "无法生成应用私有凭据密钥；未保存 API Key。".to_owned())?;
+                let mut options = fs::OpenOptions::new();
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    options.mode(0o600);
+                }
+                match options.open(&path) {
+                    Ok(mut file) => {
+                        use std::io::Write as _;
+                        file.write_all(&key).map_err(|_| "应用私有凭据密钥无法写入；未保存 API Key。".to_owned())?;
+                        file.sync_all().map_err(|_| "应用私有凭据密钥无法提交；未保存 API Key。".to_owned())?;
+                        set_owner_only(&path, false)?;
+                        Ok(key)
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => self.load_key(false),
+                    Err(_) => Err("应用私有凭据密钥无法写入；未保存 API Key。".to_owned()),
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err("本机尚未保存该服务商的 API Key。".to_owned()),
+            Err(_) => Err("应用私有凭据无法读取；请重新保存 API Key。".to_owned()),
+        }
+    }
+
+    fn read_document(&self) -> Result<PrivateCredentialDocument, String> {
+        match fs::read(self.document_path()) {
+            Ok(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|_| "应用私有凭据记录无效；请重新保存 API Key。".to_owned()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(PrivateCredentialDocument { version: 1, ..Default::default() }),
+            Err(_) => Err("应用私有凭据无法读取；请重新保存 API Key。".to_owned()),
+        }
+    }
+
+    fn write_document(&self, document: &PrivateCredentialDocument) -> Result<(), String> {
+        self.ensure_private_root()?;
+        let encoded = serde_json::to_vec(document)
+            .map_err(|_| "应用私有凭据无法编码；未保存 API Key。".to_owned())?;
+        let temporary = self.root.join(format!(".credentials-{}.tmp", std::process::id()));
+        fs::write(&temporary, encoded).map_err(|_| "应用私有凭据无法写入；未保存 API Key。".to_owned())?;
+        set_owner_only(&temporary, false)?;
+        fs::rename(&temporary, self.document_path())
+            .map_err(|_| "应用私有凭据无法提交；未保存 API Key。".to_owned())?;
+        set_owner_only(&self.document_path(), false)
+    }
+
+    fn decrypt(&self, record: &PrivateCredentialRecord, key: &[u8; 32]) -> Result<Vec<u8>, String> {
+        let nonce = BASE64.decode(&record.nonce).map_err(|_| "应用私有凭据记录无效；请重新保存 API Key。".to_owned())?;
+        let ciphertext = BASE64.decode(&record.ciphertext).map_err(|_| "应用私有凭据记录无效；请重新保存 API Key。".to_owned())?;
+        if nonce.len() != 12 { return Err("应用私有凭据记录无效；请重新保存 API Key。".to_owned()); }
+        Aes256Gcm::new_from_slice(key)
+            .map_err(|_| "应用私有凭据密钥无效；请重新保存 API Key。".to_owned())?
+            .decrypt(Nonce::from_slice(&nonce), ciphertext.as_ref())
+            .map_err(|_| "应用私有凭据无法解密；请重新保存 API Key。".to_owned())
+    }
+
+    /// Full local-data deletion removes both ciphertext and its install-local key.
+    pub fn delete_all(&self) -> Result<(), String> {
+        let _access = CREDENTIAL_ACCESS_LOCK.lock().map_err(|_| "应用私有凭据状态忙，请重试。".to_owned())?;
+        if self.root.exists() {
+            fs::remove_dir_all(&self.root)
+                .map_err(|_| "应用私有凭据无法清理；请重试全部本地数据清理。".to_owned())?;
+        }
+        Ok(())
+    }
+}
+
+impl ProviderCredentialStore for AppPrivateProviderCredentialStore {
+    fn presence(&self, provider_id: &str) -> CredentialPresence {
+        if validate_provider(provider_id).is_err() { return CredentialPresence::Unavailable; }
+        match self.read_document() {
+            Ok(document) if document.providers.contains_key(provider_id) => CredentialPresence::Stored,
+            Ok(_) => CredentialPresence::MissingOrUnavailable,
+            Err(_) => CredentialPresence::Unavailable,
+        }
+    }
+
+    fn save_user_provided_secret(&self, provider_id: &str, secret: &[u8]) -> Result<(), String> {
+        validate_provider(provider_id)?;
+        validate_secret(secret)?;
+        let _access = CREDENTIAL_ACCESS_LOCK.lock().map_err(|_| "应用私有凭据状态忙，请重试。".to_owned())?;
+        let key = self.load_key(true)?;
+        let mut nonce = [0u8; 12];
+        getrandom::fill(&mut nonce).map_err(|_| "无法生成应用私有凭据随机数；未保存 API Key。".to_owned())?;
+        let ciphertext = Aes256Gcm::new_from_slice(&key)
+            .map_err(|_| "应用私有凭据密钥无效；未保存 API Key。".to_owned())?
+            .encrypt(Nonce::from_slice(&nonce), secret)
+            .map_err(|_| "应用私有凭据无法加密；未保存 API Key。".to_owned())?;
+        let mut document = self.read_document()?;
+        document.version = 1;
+        document.providers.insert(provider_id.to_owned(), PrivateCredentialRecord {
+            nonce: BASE64.encode(nonce), ciphertext: BASE64.encode(ciphertext),
+        });
+        self.write_document(&document)
+    }
+
+    fn with_secret<T>(&self, provider_id: &str, operation: impl FnOnce(&[u8]) -> Result<T, String>) -> Result<T, String> {
+        validate_provider(provider_id)?;
+        let _access = CREDENTIAL_ACCESS_LOCK.lock().map_err(|_| "应用私有凭据状态忙，请重试。".to_owned())?;
+        let key = self.load_key(false)?;
+        let document = self.read_document()?;
+        let record = document.providers.get(provider_id).ok_or_else(|| "本机尚未保存该服务商的 API Key。".to_owned())?;
+        let secret = Zeroizing::new(self.decrypt(record, &key)?);
+        operation(secret.as_slice())
+    }
+
+    fn reveal_user_requested_secret(&self, provider_id: &str) -> Result<Zeroizing<String>, String> {
+        self.with_secret(provider_id, |bytes| String::from_utf8(bytes.to_vec())
+            .map(Zeroizing::new)
+            .map_err(|_| "本机 API Key 格式无效；请重新保存。".to_owned()))
+    }
+
+    fn delete_user_secret(&self, provider_id: &str) -> Result<(), String> {
+        validate_provider(provider_id)?;
+        let _access = CREDENTIAL_ACCESS_LOCK.lock().map_err(|_| "应用私有凭据状态忙，请重试。".to_owned())?;
+        let mut document = self.read_document()?;
+        document.providers.remove(provider_id);
+        self.write_document(&document)
+    }
+}
+
+fn set_owner_only(path: &Path, directory: bool) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(if directory { 0o700 } else { 0o600 }))
+            .map_err(|_| "应用私有凭据权限无法收紧；未保存 API Key。".to_owned())?;
+    }
+    #[cfg(not(unix))]
+    { let _ = (path, directory); }
+    Ok(())
+}
 
 impl ProviderCredentialStore for MacSecurityFrameworkProviderCredentialStore {
     fn presence(&self, provider_id: &str) -> CredentialPresence {
@@ -78,6 +266,9 @@ impl ProviderCredentialStore for MacSecurityFrameworkProviderCredentialStore {
         provider_id: &str,
         operation: impl FnOnce(&[u8]) -> Result<T, String>,
     ) -> Result<T, String> {
+        let _access = CREDENTIAL_ACCESS_LOCK
+            .lock()
+            .map_err(|_| "钥匙串访问状态忙，请重试。".to_owned())?;
         let secret = Zeroizing::new(self.read_secret(provider_id)?);
         operation(secret.as_slice())
     }
@@ -110,6 +301,63 @@ impl ProviderCredentialStore for MacSecurityFrameworkProviderCredentialStore {
         {
             Ok(())
         }
+    }
+}
+
+impl MacSecurityFrameworkProviderCredentialStore {
+    /// Reads a saved secret only from an explicit foreground action. The process normally keeps
+    /// Keychain UI disabled so background title/refinement work can never prompt. This narrow
+    /// scope re-enables it on the app main thread long enough for macOS to present its access
+    /// decision, then restores the non-interactive default before releasing the lock.
+    pub fn with_user_authorized_secret<T>(
+        &self,
+        provider_id: &str,
+        operation: impl FnOnce(&[u8]) -> Result<T, String>,
+    ) -> Result<T, String> {
+        allow_user_credential_retry(provider_id);
+        let _access = CREDENTIAL_ACCESS_LOCK
+            .lock()
+            .map_err(|_| "钥匙串访问状态忙，请重试。".to_owned())?;
+        #[cfg(target_os = "macos")]
+        {
+            with_temporary_keychain_interaction(
+                |allowed| {
+                    let status = unsafe {
+                        security_framework_sys::keychain::SecKeychainSetUserInteractionAllowed(
+                            u8::from(allowed),
+                        )
+                    };
+                    if status == 0 {
+                        Ok(())
+                    } else {
+                        Err("无法请求 macOS 钥匙串授权；请保持应用在前台后重试。".to_owned())
+                    }
+                },
+                || {
+                    let secret = Zeroizing::new(self.read_secret(provider_id)?);
+                    operation(secret.as_slice())
+                },
+            )
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let secret = Zeroizing::new(self.read_secret(provider_id)?);
+            operation(secret.as_slice())
+        }
+    }
+}
+
+fn with_temporary_keychain_interaction<T>(
+    mut set_interaction_allowed: impl FnMut(bool) -> Result<(), String>,
+    operation: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    set_interaction_allowed(true)?;
+    let result = operation();
+    let restore = set_interaction_allowed(false);
+    match (result, restore) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(error), Ok(())) => Err(error),
+        (_, Err(_)) => Err("无法恢复 macOS 钥匙串的后台访问保护；请重启应用后重试。".to_owned()),
     }
 }
 
@@ -442,6 +690,19 @@ pub fn provider(provider_id: &str) -> Result<&'static ProviderDescriptor, String
         .ok_or_else(|| "模型服务商无效。".to_owned())
 }
 
+/// Product-level identity of the DeepSeek entry shown in the 日常 model menu.  Background
+/// text jobs must refer to this semantic preset rather than carrying a second model-id copy.
+pub const DAILY_DEEPSEEK_PRESET_ID: &str = "DEEPSEEK_V4_FLASH";
+
+/// Title and history refinement share the same low-cost provider fallback order.  The first
+/// item is deliberately the 日常 DeepSeek preset above, so changing that descriptor updates
+/// ordinary chat, titles and history together.
+pub const BACKGROUND_TEXT_REFINEMENT_PRESET_IDS: [&str; 3] = [
+    DAILY_DEEPSEEK_PRESET_ID,
+    "GLM_5_3_FLASH",
+    "QWEN_3_6_FLASH",
+];
+
 pub fn presets_for(provider_id: &str) -> Result<Vec<PresetDescriptor>, String> {
     validate_provider(provider_id)?;
     let mut items = PRESETS
@@ -542,6 +803,20 @@ mod tests {
     use super::*;
     use std::{cell::RefCell, collections::BTreeMap};
 
+    #[test]
+    fn background_text_jobs_start_with_the_same_daily_deepseek_preset() {
+        assert_eq!(
+            BACKGROUND_TEXT_REFINEMENT_PRESET_IDS.first(),
+            Some(&DAILY_DEEPSEEK_PRESET_ID),
+        );
+        let daily = chat_presets()
+            .into_iter()
+            .find(|preset| preset.id == DAILY_DEEPSEEK_PRESET_ID)
+            .unwrap();
+        assert_eq!(daily.display_name, "DeepSeek V4.1 Flash");
+        assert_eq!(daily.model_id, "deepseek-flash");
+    }
+
     struct MemoryCredentials(RefCell<BTreeMap<String, Vec<u8>>>);
     impl ProviderCredentialStore for MemoryCredentials {
         fn presence(&self, provider_id: &str) -> CredentialPresence {
@@ -594,6 +869,25 @@ mod tests {
             self.0.borrow_mut().remove(provider_id);
             Ok(())
         }
+    }
+
+    #[test]
+    fn app_private_credentials_are_provider_scoped_encrypted_and_deletable() {
+        let root = tempfile::tempdir().unwrap();
+        let store = AppPrivateProviderCredentialStore::at(root.path());
+        let secret = b"abcdefghijklmnop";
+        store.save_user_provided_secret("ZHIPU", secret).unwrap();
+        assert_eq!(store.presence("ZHIPU"), CredentialPresence::Stored);
+        assert_eq!(
+            store.with_secret("ZHIPU", |value| Ok(value.to_vec())).unwrap(),
+            secret
+        );
+        let document = fs::read_to_string(store.document_path()).unwrap();
+        assert!(!document.contains("abcdefghijklmnop"));
+        store.delete_user_secret("ZHIPU").unwrap();
+        assert_eq!(store.presence("ZHIPU"), CredentialPresence::MissingOrUnavailable);
+        store.delete_all().unwrap();
+        assert!(!store.root.exists());
     }
 
     #[test]

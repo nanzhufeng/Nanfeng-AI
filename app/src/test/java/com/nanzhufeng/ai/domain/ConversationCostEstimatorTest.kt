@@ -144,7 +144,7 @@ class ConversationCostEstimatorTest {
 
         assertEquals(ConversationCostSource.LOCAL_ESTIMATE, projected.costSource)
         assertEquals(3_046L, projected.cost.totalMicros)
-        assertEquals("≈ ¥0.02047（估算）", projected.footerCostLabel())
+        assertEquals("¥0.02047", projected.footerCostLabel())
     }
 
     @Test fun `an existing GLM reply is backfilled with the rate from its recorded time`() {
@@ -162,6 +162,6 @@ class ConversationCostEstimatorTest {
         assertEquals(ConversationCostEstimator.ZHIPU_GLM_5_3_FLASH_PROMOTION_PRICE_VERSION, projected.cost.priceVersion)
         assertEquals("CNY", projected.cost.currencyCode)
         assertEquals(3_944L, projected.cost.totalMicros)
-        assertEquals("≈ ¥0.003944（估算）", projected.footerCostLabel())
+        assertEquals("¥0.003944", projected.footerCostLabel())
     }
 }

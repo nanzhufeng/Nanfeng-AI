@@ -184,6 +184,11 @@ description = "Allows only a workspace-owned verified text attachment ID to retu
 commands.allow = ["read_desktop_text_preview"]
 
 [[permission]]
+identifier = "allow-read-desktop-archive-preview"
+description = "Allows only a workspace-owned, hash-verified ZIP attachment ID to return a bounded safe directory projection and one explicitly selected safe relative entry as inert text, image pixels, or PDF page pixels. It grants no path, extraction, executable content, transport, or arbitrary file read."
+commands.allow = ["read_desktop_archive_preview", "read_desktop_archive_entry_preview"]
+
+[[permission]]
 identifier = "allow-open-desktop-attachment-with-system"
 description = "Allows an explicit user gesture to open only a workspace-owned, hash-verified private attachment through the macOS system opener. The webview never receives its path and no arbitrary path is accepted."
 commands.allow = ["open_desktop_attachment_with_system"]

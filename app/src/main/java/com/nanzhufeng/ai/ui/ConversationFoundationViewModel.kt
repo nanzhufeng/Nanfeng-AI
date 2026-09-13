@@ -289,6 +289,13 @@ private data class LoadedConversation(
     val watchLaterAtEpochMs: Map<com.nanzhufeng.ai.domain.ConversationId, Long>,
 )
 
+/** The high-frequency stream path deliberately avoids reloading the conversation directory. */
+private data class StreamTranscriptProjection(
+    val runtime: ConversationRuntimeState?,
+    val messages: List<PresentedTranscriptMessage>,
+    val draft: ConversationDraft?,
+)
+
 /** P3-D observes persisted snapshots; it neither parses chunks nor owns drafts or runtime truth. */
 class ConversationFoundationViewModel(
     private val repository: ConversationRepository,
@@ -359,7 +366,8 @@ class ConversationFoundationViewModel(
     private var draftSaveGeneration = 0L
     /** Serializes draft writes and send so the text under the send button is the text committed. */
     private val draftMutationMutex = Mutex()
-    private var reloadGeneration = 0L
+    /** Full reloads and stream deltas share one fence so stale work cannot replace a newer route. */
+    private var projectionGeneration = 0L
     private var surfaceRequestGeneration = 0L
     private var selectedChatConversationId: com.nanzhufeng.ai.domain.ConversationId? = null
     private var selectedWorkConversationId: com.nanzhufeng.ai.domain.ConversationId? = null
@@ -384,7 +392,7 @@ class ConversationFoundationViewModel(
     }
 
     private fun restoreConversationForAppEntry(id: com.nanzhufeng.ai.domain.ConversationId) {
-        val initialReloadGeneration = reloadGeneration
+        val initialProjectionGeneration = projectionGeneration
         viewModelScope.launch {
             val conversation = withContext(Dispatchers.IO) {
                 com.nanzhufeng.ai.domain.ConversationAppEntryPolicy.restorableConversation(
@@ -392,7 +400,7 @@ class ConversationFoundationViewModel(
                 )
             }
             // A shortcut or user navigation issued while reading takes precedence.
-            if (reloadGeneration != initialReloadGeneration) return@launch
+            if (projectionGeneration != initialProjectionGeneration) return@launch
             if (conversation == null) {
                 openFreshChatForAppEntry()
                 return@launch
@@ -482,7 +490,7 @@ class ConversationFoundationViewModel(
         },
         requestedSurfaceGeneration: Long? = null,
     ) {
-        val reloadRequest = ++reloadGeneration
+        val reloadRequest = ++projectionGeneration
         val surface = targetSurface
         val selectedIdBeforeLoad = selectedBefore
         state = state.copy(isLoading = true, notice = notice ?: state.notice)
@@ -578,7 +586,7 @@ class ConversationFoundationViewModel(
             }
             val attachmentIds = attachmentReferences.asSequence().map { it.id }.toSet()
             val attachmentPreviews = state.attachmentPreviews.filterKeys { it in attachmentIds || it in temporaryAttachmentReferences }
-            if (reloadRequest != reloadGeneration || (requestedSurfaceGeneration != null && requestedSurfaceGeneration != surfaceRequestGeneration)) return@launch
+            if (reloadRequest != projectionGeneration || (requestedSurfaceGeneration != null && requestedSurfaceGeneration != surfaceRequestGeneration)) return@launch
             currentAttachmentReferences = attachmentReferences.distinctBy { it.id }.associateBy { it.id }
             attachmentPreviewRequests.retainAll(currentAttachmentReferences.keys + temporaryAttachmentReferences.keys)
             val currentLeaf = snapshot?.conversation?.currentLeafMessageId
@@ -665,6 +673,7 @@ class ConversationFoundationViewModel(
         conversationId: com.nanzhufeng.ai.domain.ConversationId,
         running: Boolean,
         safeResult: String? = null,
+        progress: Boolean = false,
     ) {
         val runningConversationIds = if (running) {
             state.runningConversationIds + conversationId
@@ -673,6 +682,9 @@ class ConversationFoundationViewModel(
         }
         if (conversationId != state.selectedConversationId) {
             state = state.copy(runningConversationIds = runningConversationIds)
+            // A background delta must never force the user away from their current transcript
+            // or repeatedly reload unrelated pages. Completion still performs one full refresh.
+            if (progress) return
             // Completion refreshes timestamps and unread state, but never steals the route the
             // user is currently reading.
             reload(keepSending = state.selectedConversationId in runningConversationIds)
@@ -688,7 +700,67 @@ class ConversationFoundationViewModel(
             notice = notice ?: state.notice,
             normalSendRetryInProgress = if (running) state.normalSendRetryInProgress else false,
         )
-        reload(keepSending = running)
+        if (progress) {
+            refreshSelectedTranscriptFromStream(conversationId)
+        } else {
+            reload(keepSending = running)
+        }
+    }
+
+    /**
+     * A provider can deliver several chunks per second. Re-running [reload] here used to read
+     * the entire drawer, model catalog, settings, attempt history and attachment projection for
+     * every chunk. On a long local history those loads outran the next chunk and were continually
+     * discarded by the generation guard, so text could remain invisible until the stream stopped.
+     * This path reads only the durable selected transcript; terminal broadcasts still use the full
+     * reload path to refresh completion-only facts.
+     */
+    private fun refreshSelectedTranscriptFromStream(conversationId: com.nanzhufeng.ai.domain.ConversationId) {
+        val projectionRequest = ++projectionGeneration
+        viewModelScope.launch {
+            val projection = withContext(Dispatchers.IO) {
+                val snapshot = repository.findById(conversationId) ?: return@withContext null
+                val persistedRuntime = (repository as? ConversationRuntimeRepository)?.stateFor(conversationId)
+                val runtime = persistedRuntime?.takeIf { active ->
+                    snapshot.conversation.currentLeafMessageId == active.messageId
+                }
+                val lineages = (repository as? ConversationActionRepository)
+                    ?.lineagesForConversation(conversationId)
+                    .orEmpty()
+                val path = ConversationBranchHistory.project(snapshot).path
+                val invocationById = path.mapNotNull { node ->
+                    node.invocation?.invocationId?.let { invocationId ->
+                        invocations.findById(invocationId)?.let { invocationId to it }
+                    }
+                }.toMap()
+                val responseAttributions = responseModelAttributions.forMessages(path.map(MessageNode::id))
+                val runtimeByMessage = runtime?.let { persisted -> mapOf(persisted.messageId to persisted) }.orEmpty()
+                StreamTranscriptProjection(
+                    runtime = runtime,
+                    messages = ConversationTranscriptPresentation(renderer).render(
+                        path,
+                        lineages,
+                        invocationById,
+                        runtimeByMessage,
+                        responseAttributions,
+                    ),
+                    draft = snapshot.draft,
+                )
+            } ?: return@launch
+            // A terminal update, route change or newer delta supersedes this projection.
+            if (
+                projectionRequest != projectionGeneration ||
+                state.selectedConversationId != conversationId ||
+                conversationId !in state.runningConversationIds
+            ) return@launch
+            state = state.copy(
+                isLoading = false,
+                isSending = true,
+                runtime = projection.runtime,
+                messages = projection.messages,
+                draft = projection.draft,
+            )
+        }
     }
 
     fun openImagePreview(id: AttachmentId) {
@@ -1905,7 +1977,7 @@ class ConversationFoundationViewModel(
             sendErrorConversationId = null,
             notice = null,
             normalSendRecovery = null,
-            normalSendRetryInProgress = true,
+            normalSendRetryInProgress = false,
         )
         viewModelScope.launch {
             if (state.surface == ConversationSurface.CHAT) {
@@ -1999,6 +2071,11 @@ class ConversationFoundationViewModel(
             sendError = null,
             sendErrorConversationId = null,
             notice = null,
+            // The failure decision is superseded by a new durable assistant placeholder.
+            // Keep this state through the first local projection so the transcript labels the
+            // attempt as a regeneration rather than a generic send.
+            normalSendRecovery = null,
+            normalSendRetryInProgress = true,
         )
         if (normalChatBackgroundExecution.ownsExecution()) {
             if (!normalChatBackgroundExecution.begin(id, NormalChatBackgroundOperation.RETRY)) {
@@ -2015,7 +2092,23 @@ class ConversationFoundationViewModel(
             return
         }
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { normalChatOpenRouterExecutor.retryLatestAttempt(id) }
+            val result = withContext(Dispatchers.IO) {
+                normalChatOpenRouterExecutor.retryLatestAttempt(
+                    id,
+                    onLocalSubmission = {
+                        // `retryLatestAttempt` has committed its PARTIAL assistant node.
+                        // Reload now, not after the network request completes.
+                        viewModelScope.launch {
+                            if (state.isSending && state.selectedConversationId == id) reload(keepSending = true)
+                        }
+                    },
+                    onStreamProgress = {
+                        viewModelScope.launch {
+                            if (state.isSending && state.selectedConversationId == id) reload(keepSending = true)
+                        }
+                    },
+                )
+            }
             when (result) {
                 NormalChatOpenRouterExecutor.Result.Sent -> {
                     state = state.copy(normalSendRetryInProgress = false)
@@ -2342,8 +2435,8 @@ internal fun normalChatResultLabel(code: NormalChatOpenRouterExecutor.Code, sent
     NormalChatOpenRouterExecutor.Code.REGISTRY_UNVERIFIED -> "模型目录尚未核验：请在设置中先核验公开目录。"
     NormalChatOpenRouterExecutor.Code.MODEL_UNAVAILABLE -> "当前预设模型不可用：请在设置中重新选择并核验。"
     NormalChatOpenRouterExecutor.Code.ATTACHMENTS_UNSUPPORTED -> "本次附件未能安全读取或超过数量／大小上限，未发送任何内容。"
-    NormalChatOpenRouterExecutor.Code.ATTACHMENT_MODEL_UNSUPPORTED -> "附件已安全保留，但完整解析本次未能完成；未向模型发送封面、首页或空材料，请在当前对话重试。"
-    NormalChatOpenRouterExecutor.Code.ATTACHMENT_BRIDGE_UNAVAILABLE -> "附件已安全保留，但统一解析服务本次未能完成转换，所选模型尚未收到内容；请检查千问／智谱设置后重试。"
+    NormalChatOpenRouterExecutor.Code.ATTACHMENT_MODEL_UNSUPPORTED -> "附件已安全保留；当前模型不能直接处理该附件，本次未发送。请更换支持该附件的模型后重试。"
+    NormalChatOpenRouterExecutor.Code.ATTACHMENT_BRIDGE_UNAVAILABLE -> "附件已安全保留；当前模型不能直接处理该附件，本次未发送。请更换支持该附件的模型后重试。"
     NormalChatOpenRouterExecutor.Code.CONTEXT_LIMIT -> "当前消息与完整附件超过所选模型的上下文容量，本次没有外发；请改用更大上下文模型或减少本次附件。"
     NormalChatOpenRouterExecutor.Code.DRAFT_UNAVAILABLE -> "草稿未能安全提交，本次没有外发。"
     NormalChatOpenRouterExecutor.Code.AUTHENTICATION -> "服务商拒绝鉴权：请检查本机保存的 API Key。"
