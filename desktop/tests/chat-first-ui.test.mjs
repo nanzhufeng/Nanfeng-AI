@@ -651,9 +651,11 @@ test('chat-first work mode directly imports a selected typed exchange after stri
 });
 
 test('ordinary send durably submits one native streaming attempt and retains the draft only on pre-submit rejection', () => {
-  for (const token of ['function chatDraftKey', 'window.localStorage', 'function sendLocalMessage', "invoke('submit_desktop_ordinary_chat'", 'egressAuthorization', "disclosureVersion: 'normal-chat-egress-v1'", 'sentDraft', 'sentAttachments', '正在等待模型回复', "result.state === 'UNKNOWN'", '未自动重发']) assert.ok(source.includes(token), token);
+  for (const token of ['function sendLocalMessage', "invoke('submit_desktop_ordinary_chat'", 'egressAuthorization', "disclosureVersion: 'normal-chat-egress-v1'", 'sentDraft', 'sentAttachments', '正在等待模型回复', "result.state === 'UNKNOWN'", '未自动重发']) assert.ok(source.includes(token), token);
+  const ordinarySend = source.slice(source.indexOf('async function sendLocalMessage()'), source.indexOf('saveLocalMessage = sendLocalMessage'));
+  assert.ok(!ordinarySend.includes('localStorage'), 'ordinary send must clear only the native draft transaction');
   for (const token of ['发送即授权给', '按量计费', 'chat-composer-egress-disclosure']) assert.ok(!`${shell}\n${css}`.includes(token), token);
-  for (const forbidden of ["action: 'appendMessage'", "action: 'create'", '消息已本地记录。']) assert.ok(!source.slice(source.indexOf('async function sendLocalMessage()'), source.indexOf('saveLocalMessage = sendLocalMessage')).includes(forbidden), forbidden);
+  for (const forbidden of ["action: 'appendMessage'", "action: 'create'", '消息已本地记录。']) assert.ok(!ordinarySend.includes(forbidden), forbidden);
 });
 
 test('ordinary Composer recovery is owned by native SQLite and cleared only by the committed send transaction', async () => {

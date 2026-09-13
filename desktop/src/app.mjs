@@ -450,28 +450,6 @@ function openTransientOverlay(kind, target, value = true) {
   rememberOverlayTrigger(target);
   render();
 }
-// A conversation/new-chat route changes the draft scope.  Read the native owner after the
-// route handler has established that scope, then render the recovered draft once it arrives.
-app.addEventListener('click', event => {
-  const action = event.target.closest?.('[data-action]')?.dataset.action;
-  if (!['new-chat', 'select-chat', 'select-workspace'].includes(action) || !native) return;
-  // The route owner changes the current scope first. Clear its visible recovery
-  // state immediately so a draft from the previous conversation cannot linger.
-  state.composerDraft = '';
-  state.composerAttachments = [];
-  render();
-  if (action === 'new-chat') {
-    // Let the route handler switch to the generic new-conversation scope first, then erase that
-    // scope. A user-initiated new chat must never recover an old generic draft.
-    queueMicrotask(() => clearNewConversationDraft());
-    return;
-  }
-  queueMicrotask(() => loadOrdinaryComposerDraft().then(render).catch(error => {
-    state.error = `普通会话草稿未读取：${String(error)}`;
-    render();
-  }));
-});
-
 app.addEventListener('click', event => {
   const target = event.target.closest('[data-action]');
   const action = target?.dataset.action;
@@ -738,8 +716,8 @@ app.addEventListener('click', event => {
   recomputeConversationFind({ resetIndex: true });
   state.profileOpen = false;
   state.error = '';
-  state.composerDraft = readChatDraft();
-  void markConversationOpened(target.dataset.id).finally(render);
+  resetComposerPresentation();
+  void Promise.all([markConversationOpened(target.dataset.id), loadOrdinaryComposerDraft()]).finally(render);
 }, true);
 const invoke = (command, args = {}) => tauriBridge.invoke(command, args);
 const dialogInvoke = (command, options) => invoke(`plugin:dialog|${command}`, { options });
@@ -4025,22 +4003,10 @@ app.addEventListener('pointermove', event => {
 
 render = renderUnified;
 
-function chatDraftKey() {
-  const workspaceId = workspace()?.summary?.id;
-  if (!workspaceId) return null;
-  return `nanfeng-ai.desktop.chat-draft.v1:${workspaceId}:${state.selectedConversationId || 'new'}`;
-}
-
-function readChatDraft() {
-  const key = chatDraftKey();
-  if (!key) return '';
-  try { return window.localStorage.getItem(key) || ''; } catch { return ''; }
-}
-function attachmentDraftKey() { const key = chatDraftKey(); return key ? `${key}:attachments` : null; }
-function readComposerAttachments() { const key = attachmentDraftKey(); if (!key) return []; try { const value = JSON.parse(window.localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value.filter(item => item?.id && item?.sha256 && item?.mimeType && item?.displayName) : []; } catch { return []; } }
 let ordinaryComposerDraftQueue = Promise.resolve();
 let ordinaryComposerDraftTimer = null;
 let scheduledOrdinaryComposerDraft = null;
+let composerDraftRouteGeneration = 0;
 function ordinaryComposerDraftArgs() {
   if (!native || state.temporaryConversation || !state.current) return null;
   return {
@@ -4057,18 +4023,18 @@ function persistOrdinaryComposerDraft() {
   ordinaryComposerDraftQueue = save;
   return save;
 }
-function persistLegacyOrdinaryDraft(args) {
-  if (!args) return;
-  const key = `nanfeng-ai.desktop.chat-draft.v1:${args.workspaceId}:${args.conversationId || 'new'}`;
-  try { if (args.text) window.localStorage.setItem(key, args.text); else window.localStorage.removeItem(key); } catch {}
+function resetComposerPresentation() {
+  composerDraftRouteGeneration += 1;
+  state.composerDraft = '';
+  state.composerAttachments = [];
 }
-function clearNewConversationDraft() {
-  const args = ordinaryComposerDraftArgs();
-  if (!args || args.conversationId) return;
-  // Browser storage is only a migration bridge. Starting a new conversation explicitly revokes
-  // its generic-draft value in both storage owners.
-  persistLegacyOrdinaryDraft({ ...args, text: '', attachmentIds: [] });
-  void persistOrdinaryComposerDraft({ ...args, text: '', attachmentIds: [] }).catch(error => {
+function resetNewConversationComposer() {
+  resetComposerPresentation();
+  const workspaceId = workspace()?.summary?.id;
+  if (!native || !workspaceId || state.temporaryConversation || state.selectedConversationId) return;
+  // A user explicitly entering a new chat abandons only the unbound native draft. Browser
+  // storage is deliberately not a recovery owner, so it cannot repopulate this route later.
+  void persistOrdinaryComposerDraft({ workspaceId, conversationId: null, text: '', attachmentIds: [] }).catch(error => {
     state.error = `新对话草稿未清除：${String(error)}`;
     render();
   });
@@ -4082,7 +4048,6 @@ function scheduleOrdinaryComposerDraft() {
     ordinaryComposerDraftTimer = null;
     const scheduled = scheduledOrdinaryComposerDraft;
     scheduledOrdinaryComposerDraft = null;
-    persistLegacyOrdinaryDraft(scheduled);
     void persistOrdinaryComposerDraft(scheduled);
   }, 180);
 }
@@ -4094,7 +4059,6 @@ async function flushOrdinaryComposerDraft() {
   const scheduled = scheduledOrdinaryComposerDraft;
   scheduledOrdinaryComposerDraft = null;
   if (scheduled) {
-    persistLegacyOrdinaryDraft(scheduled);
     await persistOrdinaryComposerDraft(scheduled);
   }
   await ordinaryComposerDraftQueue;
@@ -4102,20 +4066,37 @@ async function flushOrdinaryComposerDraft() {
 async function loadOrdinaryComposerDraft() {
   const args = ordinaryComposerDraftArgs();
   if (!args) return;
+  const routeGeneration = ++composerDraftRouteGeneration;
   const draft = await invoke('read_desktop_conversation_draft', { workspaceId: args.workspaceId, conversationId: args.conversationId });
-  if (state.current?.summary?.id !== args.workspaceId || (state.selectedConversationId || null) !== args.conversationId) return;
+  if (routeGeneration !== composerDraftRouteGeneration || state.current?.summary?.id !== args.workspaceId || (state.selectedConversationId || null) !== args.conversationId) return;
   if (!draft) {
-    // One-time bridge for drafts created by older Desktop bundles. Afterwards
-    // SQLite is the recovery owner, rather than the browser cache.
-    state.composerDraft = readChatDraft();
-    state.composerAttachments = readComposerAttachments();
-    if (state.composerDraft || state.composerAttachments.length) await persistOrdinaryComposerDraft();
+    state.composerDraft = '';
+    state.composerAttachments = [];
     return;
   }
   state.composerDraft = draft.text || '';
   state.composerAttachments = Array.isArray(draft.attachments) ? draft.attachments : [];
 }
-function writeComposerAttachments() { const key = attachmentDraftKey(); if (key) { try { if (state.composerAttachments.length) window.localStorage.setItem(key, JSON.stringify(state.composerAttachments)); else window.localStorage.removeItem(key); } catch {} } scheduleOrdinaryComposerDraft(); }
+function writeComposerAttachments() { scheduleOrdinaryComposerDraft(); }
+
+// Composer drafts have exactly one route owner. This listener runs after the route action has
+// selected its destination and never consults browser storage, eliminating click-order races.
+app.addEventListener('click', event => {
+  const action = event.target.closest?.('[data-action]')?.dataset.action;
+  if (action === 'new-chat') {
+    void flushOrdinaryComposerDraft();
+    resetNewConversationComposer();
+    render();
+    return;
+  }
+  if (action !== 'select-chat') return;
+  resetComposerPresentation();
+  render();
+  void loadOrdinaryComposerDraft().then(render).catch(error => {
+    state.error = `普通会话草稿未读取：${String(error)}`;
+    render();
+  });
+});
 
 const MAX_COMPOSER_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const PREFERRED_CLIPBOARD_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -4385,14 +4366,14 @@ async function saveP6GGlobalDefault() {
 function leaveTemporaryChat() {
   if (!state.temporaryConversation) return;
   state.temporaryConversation = null;
-  state.composerDraft = readChatDraft();
-  state.composerAttachments = [];
+  resetComposerPresentation();
   state.temporaryModelOpen = false;
   state.selectedConversationId = null;
   state.pane = 'chat';
   state.status = '已返回普通聊天；临时内容仍在隔离恢复记录中，24 小时内可继续。';
   state.error = '';
   render();
+  void loadOrdinaryComposerDraft().then(render).catch(error => { state.error = `普通会话草稿未读取：${String(error)}`; render(); });
 }
 
 async function sendLocalMessage() {
@@ -4420,7 +4401,6 @@ async function sendLocalMessage() {
     render();
     return;
   }
-  const draftKey = chatDraftKey();
   const conversation = resolveConversation(state.current, state.selectedConversationId);
   const routeAtSubmit = state.selectedConversationId;
   const sentDraft = state.composerDraft;
@@ -4444,7 +4424,6 @@ async function sendLocalMessage() {
       // to construct a provider request without this short, content-free receipt.
       egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: 'normal-chat-egress-v1' },
     } });
-    if (draftKey) window.localStorage.removeItem(draftKey);
     state.composerAttachments = []; writeComposerAttachments();
     state.composerDraft = '';
     state.error = '';
@@ -5199,9 +5178,6 @@ app.addEventListener('click', async event => {
 app.addEventListener('click', event => {
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'new-chat' || action === 'select-chat') {
-    state.composerDraft = readChatDraft();
-    state.composerAttachments = readComposerAttachments();
-    if (action === 'new-chat') state.status = '';
     state.sidebarOpen = false;
     render();
   }

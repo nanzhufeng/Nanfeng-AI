@@ -2,6 +2,13 @@
 
 > **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
 
+## 2026-09-13：Desktop 新对话草稿单 owner 修复与保数据覆盖
+
+- **根因与新方案：** “新对话”动作虽先清空可见输入，但另一条旧事件监听器会在同次点击结束前从 WebView `localStorage` 的通用 `new` 草稿键重新写回文本，形成依赖监听顺序的回填竞态。现在移除 Composer 草稿的浏览器缓存读写与迁移回读；SQLite 是唯一草稿 owner。新对话由单一路由同步清空未绑定 SQLite 草稿，只有选择既有会话才异步恢复该会话的 SQLite 草稿，并以 route generation 丢弃迟到结果。
+- **回归：** 先以旧源码观察“单 owner／无浏览器缓存”断言失败，再完成修复；Desktop lint、typecheck、Node 378/378、静态 build 与 `git diff --check` 通过。发送路径同步移除了已废弃浏览器草稿键的引用，避免成功提交后抛出 `ReferenceError`。
+- **Desktop 覆盖：** 候选和安装后主程序 SHA-256 均为 `ba02b3b0f5654aebf3ea914662706587246893156b0e536f58249214c6d2e826`，Bundle ID `com.nanzhufeng.ai.desktop`、版本 `0.6.0-p6d-dev`、Team `457B263L9J` 与旧包一致，严格验签通过。覆盖前后 workspace SQLite SHA-256 均为 `e5efe43fc5ee94d3fde7bbe9f9e892f17152c4bc57a1e6b4d36c83a83e24d907`；启动后 `quick_check`／`integrity_check=ok`、87 张表、1 个工作区、7,316 条搜索索引。旧包保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-native-draft-owner-20260913-1315.app`。
+- **未替代：** 为保护现有真实草稿，本轮未在正式数据上代用户点击“新对话”；需要由用户手动点击一次确认输入框为空。该缺口不由自动测试、验签或启动回读替代。
+
 ## 2026-09-13：流式会话投影、最终回归与双端保数据覆盖
 
 - **Android 流式修复：** 正常聊天前台服务现在把执行器的 `onStreamProgress` 透传为仅含会话 ID／状态的节流进度事件；ViewModel 对当前选中会话只投影已持久化的 transcript、runtime、lineage 与 attribution，不再每个增量完整重载抽屉、设置、模型目录和历史。完整重载与流式投影共享同一代际栅栏，避免旧重载覆盖新文本；终态仍做一次完整刷新。这样与 Desktop 的逐字显示保持同一可见行为，同时不把正文放进广播。
