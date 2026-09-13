@@ -2,6 +2,13 @@
 
 > **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
 
+## 2026-09-13：Desktop 自动会话标题与 Android 规则对齐修复与保数据覆盖
+
+- **真实证据：** 用户新建会话的标题调用账本显示 DeepSeek `deepseek-flash` 已成功返回并计入 `2,463/256` Token，却被记成笼统的 `TITLE_NOT_APPLIED`，会话仍为“新对话”且 `autoTitlePending=true`。该旧状态证明不是模型未调用、不是标题合同不一致；旧 `.ok()` 链把本地提交失败、合同不合格与用户手动改名全部吞成同一个结果，无法诊断或恢复。
+- **修复：** Desktop 写连接改为 WAL，使前端运行时快照不再阻塞标题写入；标题提交以 `IMMEDIATE` 事务重读会话并原子保存。它沿用 Android 的首条 root user + 首条完整 assistant 成对资格、日常 DeepSeek V4.1 Flash→GLM 5.3 Flash→Qwen 3.6 Flash 的固定后台路由、手动改名优先和失败保留 pending 规则。标题提交同步更新语义 hash 与本地搜索索引，避免界面、搜索和跨端交换版本分叉。
+- **诊断语义：** 只有 `TITLE_MANUAL_OVERRIDE` 才表示用户改名优先；服务商 JSON 不符合合同为 `TITLE_CONTRACT`；本机写入异常为 `TITLE_LOCAL_PERSISTENCE`。不再把三者伪装为“未应用”。旧请求正文／返回标题不落审计库，因此已经被旧包丢弃的那一次不能凭空恢复；pending 保留，下一次符合 Android 时机的完整回复会按同一规则再次生成。
+- **回归与覆盖：** Desktop Node 378/378、Rust `cargo test --lib` 253/253、标题定向持久化／WAL／语义 hash／搜索索引回归、lint、typecheck、静态 build 与 `git diff --check` 通过。候选和安装后主程序 SHA-256 均为 `d232c1c5e47537d83596782fb3624e4722b8611f51b0eba9e531fbcf771e11e2`；Bundle ID `com.nanzhufeng.ai.desktop`、版本 `0.6.0-p6d-dev`、Team `457B263L9J` 严格验签通过。旧包保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-title-wal-20260913-1242.app`。覆盖前数据库为 rollback journal，启动新包后实测 `journal_mode=wal`；`quick_check`／`integrity_check=ok`、87 张表、1 工作区、7,316 条搜索索引，原生窗口已回读既有对话与 Composer。未触发新的真实 Provider 请求。
+
 ## 2026-09-13：Desktop 新对话草稿单 owner 修复与保数据覆盖
 
 - **根因与新方案：** “新对话”动作虽先清空可见输入，但另一条旧事件监听器会在同次点击结束前从 WebView `localStorage` 的通用 `new` 草稿键重新写回文本，形成依赖监听顺序的回填竞态。现在移除 Composer 草稿的浏览器缓存读写与迁移回读；SQLite 是唯一草稿 owner。新对话由单一路由同步清空未绑定 SQLite 草稿，只有选择既有会话才异步恢复该会话的 SQLite 草稿，并以 route generation 丢弃迟到结果。

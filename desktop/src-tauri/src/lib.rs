@@ -5153,6 +5153,12 @@ fn open_desktop_workspace_connection(root: &Path, database: &Path) -> Result<Con
     connection
         .pragma_update(None, "foreign_keys", "ON")
         .map_err(|_| json_error("无法启用 SQLite foreign keys"))?;
+    // Runtime projections use independent, short-lived read connections while a chat is
+    // writing. WAL preserves one exchange writer but prevents those reads from blocking a
+    // successful secondary title commit after the answer has become visible.
+    connection
+        .pragma_update(None, "journal_mode", "WAL")
+        .map_err(|_| json_error("无法启用 SQLite WAL 并发模式"))?;
     connection
         .busy_timeout(std::time::Duration::from_secs(3))
         .map_err(|_| json_error("无法设置 SQLite busy timeout"))?;
@@ -13076,7 +13082,10 @@ impl DesktopWorkspaceStore {
         title: &str,
     ) -> Result<bool, String> {
         let mut connection = self.connection()?;
-        let transaction = connection.transaction().map_err(|_| json_error("无法开启标题更新 transaction"))?;
+        // Take the sole writer before reading the pending flag. This keeps the Android-parity
+        // re-read/commit atomic without forcing UI snapshots to stop during title generation.
+        let transaction = connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(|_| json_error("无法开启标题更新 transaction"))?;
         let before: String = transaction.query_row("SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [&prepared.workspace_id], |row| row.get(0))
             .map_err(|_| json_error("工作区不存在"))?;
         let mut exchange: Value = serde_json::from_str(&before).map_err(|_| json_error("本地交换 IR 无法读取"))?;
@@ -13088,8 +13097,13 @@ impl DesktopWorkspaceStore {
         conversation["autoTitlePending"] = Value::Bool(false);
         conversation["revision"] = Value::Number(revision.into());
         conversation["updatedAt"] = Value::String(local_now().into());
-        transaction.execute("UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2", params![serde_json::to_string(&exchange).map_err(|_| json_error("标题交换 IR 编码失败"))?, prepared.workspace_id])
+        let semantic_hash = refresh_exchange_hash(&mut exchange)?;
+        validate_exchange(&exchange)?;
+        transaction.execute("UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2", params![canonical_json(&exchange)?, prepared.workspace_id])
             .map_err(|_| json_error("标题更新未能保存"))?;
+        self.rebuild_local_search_index(&transaction, &prepared.workspace_id, &exchange)?;
+        transaction.execute("UPDATE workspaces SET semantic_hash=?1 WHERE id=?2", params![semantic_hash, prepared.workspace_id])
+            .map_err(|_| json_error("标题更新未能同步工作区 hash"))?;
         transaction.commit().map_err(|_| json_error("标题更新未能提交"))?;
         Ok(true)
     }
@@ -18363,21 +18377,29 @@ async fn execute_desktop_ordinary_chat_prepared(
                         };
                         match tauri::async_runtime::block_on(desktop_ordinary_chat_v1::execute_non_streaming(title_request, title_secret)) {
                             Ok(reply) => {
-                                let title_applied = desktop_conversation_title_v1::parse_response(&reply.text)
-                                    .and_then(|title| state.store.lock().ok().and_then(|store| {
-                                        store.complete_desktop_conversation_title(&title_prepared, &title).ok()
-                                    }))
-                                    .unwrap_or(false);
+                                // Do not collapse an intentional manual rename, an invalid title
+                                // and a local write failure into TITLE_NOT_APPLIED. The old `.ok()`
+                                // chain hid the real recovery path and discarded valid titles.
+                                let (title_applied, title_outcome) = match desktop_conversation_title_v1::parse_response(&reply.text) {
+                                    None => (false, Some("TITLE_CONTRACT")),
+                                    Some(title) => match state.store.lock() {
+                                        Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
+                                        Ok(store) => match store.complete_desktop_conversation_title(&title_prepared, &title) {
+                                            Ok(true) => (true, None),
+                                            Ok(false) => (false, Some("TITLE_MANUAL_OVERRIDE")),
+                                            Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
+                                        },
+                                    },
+                                };
                                 if let Ok(store) = state.store.lock() {
                                     // A provider response can still be chargeable even if a manual rename won
                                     // the race.  Record the invocation fact; do not overwrite the user's title.
-                                    let outcome = if title_applied { None } else { Some("TITLE_NOT_APPLIED") };
                                     let _ = store.update_desktop_conversation_title_attempt(
-                                        &title_prepared, "RESPONSE_COMMITTED", outcome, Some(&reply),
+                                        &title_prepared, "RESPONSE_COMMITTED", title_outcome, Some(&reply),
                                     );
                                     if store.complete_desktop_conversation_title_accounting(&title_prepared, &reply).is_ok() {
                                         let _ = store.update_desktop_conversation_title_attempt(
-                                            &title_prepared, "COMPLETED", outcome, Some(&reply),
+                                            &title_prepared, "COMPLETED", title_outcome, Some(&reply),
                                         );
                                     } else {
                                         let _ = store.update_desktop_conversation_title_attempt(
@@ -26432,6 +26454,8 @@ mod tests {
     #[test]
     fn completed_auto_title_writes_its_own_usage_receipt_without_retaining_title_content() {
         let (_directory, store, imported) = imported_store();
+        let journal_mode: String = store.connection().unwrap().query_row("PRAGMA journal_mode", [], |row| row.get(0)).unwrap();
+        assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
         let prepared = store
             .prepare_ordinary_chat(
                 DesktopOrdinaryChatSubmitArgs {
@@ -26472,6 +26496,7 @@ mod tests {
                 None,
             )
             .unwrap();
+        let before_title = store.workspace_projection(&imported.summary.id).unwrap();
         let title = DesktopConversationTitlePrepared {
             attempt_id: "title-test-receipt".into(),
             workspace_id: imported.summary.id.clone(),
@@ -26487,6 +26512,19 @@ mod tests {
         assert!(store
             .complete_desktop_conversation_title(&title, "KFK资料整理方案")
             .unwrap());
+        let after_title = store.workspace_projection(&imported.summary.id).unwrap();
+        let conversation = after_title.exchange["conversations"].as_array().unwrap().iter()
+            .find(|item| item["id"] == title.conversation_id).unwrap();
+        assert_eq!(conversation["title"], "KFK资料整理方案");
+        assert_eq!(conversation["autoTitlePending"], false);
+        assert_ne!(before_title.summary.semantic_hash, after_title.summary.semantic_hash, "automatic titles must advance the workspace identity");
+        let (indexed_title, indexed_revision): (String, i64) = store.connection().unwrap().query_row(
+            "SELECT title,conversation_revision FROM desktop_local_search_index WHERE workspace_id=?1 AND entry_id=?2",
+            params![imported.summary.id, format!("{}:title", title.conversation_id)],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap();
+        assert_eq!(indexed_title, "KFK资料整理方案");
+        assert_eq!(indexed_revision, conversation["revision"].as_i64().unwrap());
         store
             .complete_desktop_conversation_title_accounting(&title, &completed)
             .unwrap();
