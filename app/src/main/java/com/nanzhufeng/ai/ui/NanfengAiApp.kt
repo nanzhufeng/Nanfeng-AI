@@ -3054,6 +3054,18 @@ private fun AboutSettingsCard() = Surface(
             Spacer(Modifier.height(3.dp))
             Text("开发时间 ${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         }
+        SettingsCategoryDivider()
+        AboutSettingsSection {
+            Text("开发者信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text("开发者：席瑞", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(3.dp))
+            Text("联系邮箱：nanzhufeng.studio@gmail.com", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(3.dp))
+            Text("源码与更新：GitHub · nanzhufeng/Nanfeng-AI", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(3.dp))
+            Text("版权所有 © 2026 席瑞", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 

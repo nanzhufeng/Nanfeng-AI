@@ -62,7 +62,7 @@ class SettingsUiSimplificationContractsTest {
         val app = File("src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt").readText()
         val normalChat = File("src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt").readText()
 
-        for (token in listOf("个性化", "启用记忆", "记忆摘要", "提醒", "模型与联网", "项目与知识", "Google 账号与同步", "导入与导出", "数据管理", "本机数据", "关于", "Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}", "开发时间 \${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}")) {
+        for (token in listOf("个性化", "启用记忆", "记忆摘要", "提醒", "模型与联网", "项目与知识", "Google 账号与同步", "导入与导出", "数据管理", "本机数据", "关于", "Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}", "开发时间 \${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}", "开发者信息", "开发者：席瑞", "联系邮箱：nanzhufeng.studio@gmail.com", "源码与更新：GitHub · nanzhufeng/Nanfeng-AI", "版权所有 © 2026 席瑞")) {
             assertTrue("missing reorganized setting $token", app.contains(token))
         }
         assertFalse(app.substring(app.indexOf("private fun SettingsCategoryList"), app.indexOf("private fun SettingsSwitchRow")).contains("更多本地控制面"))

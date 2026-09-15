@@ -12,10 +12,9 @@ const escapeHtml = value => String(value ?? '').replace(
 const formatDevelopmentTime = epochSeconds => {
   const epoch = Number(epochSeconds);
   if (!Number.isFinite(epoch) || epoch <= 0) return '未记录';
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(new Date(epoch * 1000));
+  const date = new Date(epoch * 1000);
+  const part = value => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}`;
 };
 
 const modelPreset = (id, displayName, description, family) => ({ id, displayName, description, family, chatSelectable: true });
@@ -293,7 +292,7 @@ function simplePage(page, context) {
   if (page === 'conversation-cost') return usageLedgerPage(context);
   if (page === 'context-selections') return contextSelectionsPage(context);
   if (page === 'diagnostics') return diagnosticsPage(context);
-  if (page === 'about') return `<div class="android-settings-page"><section class="android-settings-card android-settings-about"><div><strong>南枫 AI</strong><p>本机对话、项目与知识工作区。</p></div>${divider}<div><strong>版本信息</strong><p>Desktop 版 ${escapeHtml(runtimeInfo.version || '读取中')}</p><small>${escapeHtml(runtimeInfo.platform || 'Desktop')} · ${escapeHtml(runtimeInfo.arch || '本机架构')}</small><small>开发时间 ${escapeHtml(formatDevelopmentTime(runtimeInfo.buildEpochSeconds))}</small></div></section></div>`;
+  if (page === 'about') return `<div class="android-settings-page"><section class="android-settings-card android-settings-about"><div><strong>南枫 AI</strong><p>本机对话、项目与知识工作区。</p></div>${divider}<div><strong>版本信息</strong><p>Desktop 版 ${escapeHtml(runtimeInfo.version || '读取中')}</p><small>开发时间 ${escapeHtml(formatDevelopmentTime(runtimeInfo.buildEpochSeconds))}</small></div>${divider}<div><strong>开发者信息</strong><small>开发者：席瑞</small><small>联系邮箱：nanzhufeng.studio@gmail.com</small><small>源码与更新：GitHub · nanzhufeng/Nanfeng-AI</small><small>版权所有 © 2026 席瑞</small></div></section></div>`;
   if (page === 'memory-overview') {
     const memories = (data?.exchange?.memory || []).filter(item => (item.status || 'ACTIVE') === 'ACTIVE' && !item.deleted && (item.scope || 'GLOBAL') === 'GLOBAL' && !item.scopeId);
     const updatedAt = memories.map(item => item.updatedAt || item.createdAt || '').filter(Boolean).sort().at(-1);

@@ -186,7 +186,9 @@ test('settings expose the latest phone values in the desktop primary and seconda
   const favorites = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'favorites', status: '', error: '', connection: {}, favoriteConversationIds: new Set([conversation.id]) });
   for (const token of ['收藏', 'toggle-conversation-favorite', '双端同步']) assert.ok(favorites.includes(token));
   const about = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo: { version: '0.0.1', platform: 'macos', arch: 'aarch64', buildEpochSeconds: 1767225600 } });
-  for (const token of ['Desktop 版 0.0.1', 'macos', 'aarch64', '开发时间']) assert.ok(about.includes(token));
+  for (const token of ['Desktop 版 0.0.1', '开发者信息', '开发者：席瑞', 'nanzhufeng.studio@gmail.com', 'GitHub · nanzhufeng/Nanfeng-AI', '版权所有 © 2026 席瑞']) assert.ok(about.includes(token));
+  assert.match(about, /开发时间 2026-01-01 \d{2}:\d{2}/u);
+  assert.ok(!about.includes('aarch64'));
   assert.ok(!about.includes('读取中'));
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   assert.match(css, /\.android-settings-about small \{ display: block; margin-top: 6px; \}/);
