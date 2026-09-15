@@ -1,5 +1,12 @@
 # 南枫 AI 当前交接
 
+## 2026-09-15：首次 GitHub 发布
+
+- 私有仓库：[Nanfeng-AI](https://github.com/nanzhufeng/Nanfeng-AI)，主线 `0089fdf`。
+- 预发布：[v2026.09.15-initial](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v2026.09.15-initial)：Android `0.3.0-p10j` APK、macOS `0.6.0-p6d-dev` ZIP 和 `SHA256SUMS.txt` 已回下载校验。
+- Android 图为本次候选包在隔离模拟器重新采集；Mac 未截图，避免误拍已有数据。
+- GitHub Actions `34954792798` 三项源码检查通过；不代表 Windows 构建、macOS 公证、主设备或真实服务验收。
+
 ## 2026-09-15：用户要求的完整项目复盘（仅文档／流程）
 
 - 基线 `ff9fd33`，全量清单 1,344 路径／154 本地提交；结构检查和定向语义核查见 [复盘报告](review/20260915-project-retrospective/REVIEW.md)。更新开发档案、长期 AGENTS、五类项目 Skill、可迁移经验，新增逐文件结构检查脚本；未改业务／配置／测试，未重新安装或访问真实服务，未提交。
