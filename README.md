@@ -28,3 +28,10 @@ docs/             合同、决策、开发档案与交接
 ## 自动验证
 
 `.github/workflows/source-verification.yml` 只执行不需要签名、设备或真实服务的源码验证。正式 Android、macOS 与未来 Windows 发布均须走各自的签名、产物、数据保留和真实环境验收门；不能以 CI 绿灯替代这些证据。
+
+## 当前界面预览
+
+以下为 `v2026.09.15-initial` 的 Android `0.3.0-p10j` 正式签名候选包，在隔离 Android 15 模拟器（1600 × 1800）中重新采集的界面；候选包 SHA-256、安装回拉哈希和截图哈希均在本次 Release manifest 中核验。macOS 包本轮未采集预览图，以免同 Bundle ID 的现有本机应用数据被误拍。
+
+<img src="docs/release-previews/v2026.09.15-initial/android-emulator-home.png" alt="南枫 AI Android 空白对话与 Composer" width="360">
+<img src="docs/release-previews/v2026.09.15-initial/android-emulator-navigation.png" alt="南枫 AI Android 导航抽屉" width="360">

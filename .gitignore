@@ -36,3 +36,8 @@ signing.properties
 desktop/output/
 output/
 supabase/.temp/
+
+# Per-release manifests live beside the frozen candidate packages locally.
+# The checked-in example remains the only source-tree entry in this directory.
+release-evidence/*/
+!release-evidence/manifest.example.json

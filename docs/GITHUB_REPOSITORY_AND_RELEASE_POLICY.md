@@ -21,18 +21,18 @@
 
 1. 截图在候选包完成构建、签名与 SHA-256 固定之后采集；
 2. 截图所在设备已安装或启动该**同一哈希**的候选包，不能以源码日期、文件名或“刚构建过”代替身份校验；
-3. 每张截图随同一个 `release-evidence/<tag>/manifest.json` 记录平台、包名/Bundle ID、版本、候选包 SHA-256、Git commit、采集时间、设备/系统和截图 SHA-256；
+3. 每张截图随同一个与冻结候选包放在一起的本地 `release-evidence/<tag>/manifest.json` 记录平台、包名/Bundle ID、版本、候选包 SHA-256、Git commit、采集时间、设备/系统和截图 SHA-256；
 4. 上传前由发布者逐项比对 manifest、Release tag 和附件哈希；没有 manifest 的截图一律不上传。
 
 复制 [manifest 示例](../release-evidence/manifest.example.json) 到本次候选包所在目录，填入最终值后，在仓库根目录运行：
 
 ```sh
-python3 scripts/verify_release_evidence_manifest.py --manifest release-evidence/<tag>/manifest.json
+python3 scripts/verify_release_evidence_manifest.py --manifest /absolute/release-evidence/<tag>/manifest.json
 ```
 
 校验会拒绝哈希不匹配、截图早于候选包、候选包与安装包哈希不同、不是当前最终 commit 或路径逃逸的清单。它不代替人工确认真实设备确实运行了该包。
 
-旧截图若有追溯价值可继续留在历史证据目录，但必须保留其历史定位，不得移动、改名或重用为最新 Release 截图。每次新 Release 都重新采集，不复用上次的“通过”截图。
+旧截图若有追溯价值可继续留在历史证据目录，但必须保留其历史定位，不得移动、改名或重用为最新 Release 截图。每次新 Release 都重新采集，不复用上次的“通过”截图。已核验且无隐私内容的 README 预览图可复制到 `docs/release-previews/<tag>/`；候选包、回拉包和 manifest 本身不进入源码 Git。
 
 ## 版本与 GitHub Release
 
