@@ -55,6 +55,7 @@ jobs:
         run: |
           npm run lint
           npm run typecheck
+          npm run build
       - name: Run Desktop Rust library tests
         working-directory: desktop/src-tauri
         run: cargo test --lib
@@ -64,11 +65,9 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Select Android Studio JBR
-        shell: bash
-        run: |
-          task_jbr_path="$(find /Applications -path '*/Android Studio.app/Contents/jbr/Contents/Home' -type d -print -quit)"
-          test -n "$task_jbr_path"
-          echo "JAVA_HOME=$task_jbr_path" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Compile Android sources without an installable package
         run: ./gradlew --no-daemon :app:compileDebugKotlin
