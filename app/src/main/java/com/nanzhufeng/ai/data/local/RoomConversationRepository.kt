@@ -80,6 +80,10 @@ class RoomConversationRepository(
         persistSnapshot(database.conversationDao(), snapshot)
     }
 
+    override fun saveVerifiedCloudMerge(snapshot: ConversationSnapshot): ConversationSnapshot = database.inConversationTransaction {
+        persistVerifiedCloudSnapshot(database.conversationDao(), snapshot)
+    }
+
     override fun unlinkMessageAttachment(
         conversationId: ConversationId,
         messageNodeId: MessageNodeId,
@@ -321,8 +325,14 @@ class RoomConversationRepository(
 
     private fun persistSnapshot(dao: ConversationDao, snapshot: ConversationSnapshot): ConversationSnapshot {
         val existing = dao.findConversation(snapshot.conversation.id.value)
-        if (existing == null) dao.insertConversation(snapshot.conversation.toEntity())
-        else dao.update(snapshot.conversation.toEntity())
+        val entity = snapshot.conversation.toEntity().let { incoming ->
+            if (existing != null && existing.title != incoming.title) incoming.copy(
+                titleRevision = maxOf(incoming.titleRevision ?: 0L, Math.addExact(existing.titleRevision ?: 0L, 1L)))
+            else if (existing != null) incoming.copy(titleRevision = maxOf(incoming.titleRevision ?: 0L, existing.titleRevision ?: 0L).takeIf { it > 0 })
+            else incoming
+        }
+        if (existing == null) dao.insertConversation(entity)
+        else dao.update(entity)
 
         snapshot.nodes.forEach { node ->
             val stored = dao.findNode(node.id.value)
@@ -347,6 +357,64 @@ class RoomConversationRepository(
         replaceSafeSearchIndex(dao, snapshot)
 
         return dao.loadSnapshot(snapshot.conversation.id) ?: error("会话写入后无法回读：${snapshot.conversation.id.value}")
+    }
+
+    /**
+     * A verified cloud record is allowed to refresh the portable text of an
+     * existing message ID. Ordinary local writes keep the stricter immutable
+     * `persistSnapshot` behavior above, so this narrow exception cannot be
+     * reached by UI or provider runtime paths.
+     */
+    private fun persistVerifiedCloudSnapshot(dao: ConversationDao, snapshot: ConversationSnapshot): ConversationSnapshot {
+        // Validate the final graph before temporarily freeing its sibling slots.
+        MessageTree(snapshot.conversation, snapshot.nodes)
+        val existing = dao.findConversation(snapshot.conversation.id.value)
+        if (existing == null) dao.insertConversation(snapshot.conversation.toEntity())
+        else dao.update(snapshot.conversation.toEntity())
+
+        // SQLite checks uniqueness on every UPDATE, even inside a transaction.
+        // A valid A:0/B:1 -> A:1/B:0 reorder otherwise fails on the first row.
+        // NULL parents free the slots transactionally without deleting nodes,
+        // blocks, attachment references, or accounting records.
+        snapshot.nodes.forEach { node ->
+            dao.findNode(node.id.value)?.let { stored ->
+                require(stored.conversationId == snapshot.conversation.id.value)
+                check(dao.updateImportedMessageStructure(node.id.value, stored.conversationId, null, stored.siblingPosition) == 1)
+            }
+        }
+        snapshot.nodes.forEach { node ->
+            val stored = dao.findNode(node.id.value)
+            if (stored == null) {
+                dao.insertNode(node.toEntity())
+                dao.insertBlocks(node.content.mapIndexed { position, block -> block.toEntity(node.id, position) })
+            } else {
+                require(stored.conversationId == snapshot.conversation.id.value) {
+                    "云端消息标识属于其他对话：${node.id.value}"
+                }
+                val portableNode = node.toEntity().copy(
+                    // Runtime invocation/checkpoint state is device-local and
+                    // must survive a cloud text refresh.
+                    invocationId = stored.invocationId,
+                    lastPersistedSequence = stored.lastPersistedSequence,
+                    resumableFromSequence = stored.resumableFromSequence,
+                    schemaVersion = maxOf(stored.schemaVersion, node.schemaVersion),
+                )
+                check(dao.updateNode(portableNode) == 1) { "云端消息更新未完成：${node.id.value}" }
+                dao.deleteBlocks(node.id.value)
+                dao.insertBlocks(node.content.mapIndexed { position, block -> block.toEntity(node.id, position) })
+            }
+        }
+        dao.upsertDraft(snapshot.draft.toEntity(snapshot.conversation.id))
+        dao.deleteDraftAttachments(snapshot.conversation.id.value)
+        dao.insertDraftAttachments(snapshot.draft.attachments.mapIndexed { position, attachment ->
+            attachment.toDraftEntity(snapshot.conversation.id, position)
+        })
+        dao.deleteMemorySources(snapshot.conversation.id.value)
+        dao.insertMemorySources(snapshot.conversation.settings.memorySources.mapIndexed { position, source ->
+            ConversationMemorySourceEntity(snapshot.conversation.id.value, position, source.memoryId, source.sourceKind, source.sourceVersion)
+        })
+        replaceSafeSearchIndex(dao, snapshot)
+        return dao.loadSnapshot(snapshot.conversation.id) ?: error("云端会话写入后无法回读：${snapshot.conversation.id.value}")
     }
 
     private fun replaceSafeSearchIndex(dao: ConversationDao, snapshot: ConversationSnapshot) {
@@ -763,6 +831,7 @@ private fun ConversationAttemptLineageEntity.toDomain() = ConversationAttemptLin
 private fun ConversationDao.update(entity: ConversationEntity): Int = updateConversation(
     id = entity.id,
     title = entity.title,
+    titleRevision = entity.titleRevision,
     surface = entity.surface,
     projectId = entity.projectId,
     currentLeafMessageId = entity.currentLeafMessageId,
@@ -834,6 +903,7 @@ private const val ROOM_IN_QUERY_BATCH_SIZE = 900
 private fun Conversation.toEntity() = ConversationEntity(
     id = id.value,
     title = title,
+    titleRevision = titleRevision,
     surface = surface.name,
     projectId = projectId,
     currentLeafMessageId = currentLeafMessageId?.value,
@@ -856,6 +926,7 @@ private fun Conversation.toEntity() = ConversationEntity(
 private fun ConversationEntity.toDomain(memorySources: List<ConversationMemorySourceEntity>) = Conversation(
     id = ConversationId(id),
     title = title,
+    titleRevision = titleRevision,
     surface = ConversationSurface.valueOf(surface),
     projectId = projectId,
     currentLeafMessageId = currentLeafMessageId?.let(::MessageNodeId),

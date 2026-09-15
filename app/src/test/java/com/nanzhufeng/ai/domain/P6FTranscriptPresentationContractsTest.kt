@@ -95,6 +95,30 @@ class P6FTranscriptPresentationContractsTest {
         assertEquals("¥0.035013", projected.metadata.costLabel)
     }
 
+    @Test fun `verified cloud model and amount replace a stale local attempt footer`() {
+        val node = message("cloud-settled", MessageRole.ASSISTANT)
+        val local = AssistantResponseModelAttribution(
+            assistantMessageId = node.id, attemptId = NormalChatSendAttemptId("p6f-stale-local"),
+            providerId = ProviderId.DEEPSEEK, receiverProviderId = ProviderId.DEEPSEEK,
+            modelId = "deepseek-v4-flash", modelDisplayName = "DeepSeek V4.1 Flash", recordedAt = Instant.EPOCH,
+        )
+        val cloud = CloudResponseModelUsage(
+            assistantMessageId = node.id, modelId = "deepseek-v4.1", modelDisplayName = "DS V4.1",
+            cost = ProviderCost("desktop-settled-v1", "CNY", 18_700L), costSource = ConversationCostSource.PROVIDER_RESPONSE,
+        )
+
+        val projected = ConversationTranscriptPresentation(MessagePresentationRenderer())
+            .render(
+                listOf(node), emptyList(),
+                responseModelAttributions = mapOf(node.id to listOf(local)),
+                cloudResponseModelUsages = mapOf(node.id to listOf(cloud)),
+            )
+            .single()
+
+        assertEquals("DS V4.1", projected.metadata.modelSnapshotLabel)
+        assertEquals("¥0.0187", projected.metadata.costLabel)
+    }
+
     @Test fun `hosted DeepSeek search footer stays a model name while route remains persisted`() {
         val node = message("deepseek-qwen-search", MessageRole.ASSISTANT)
         val attribution = AssistantResponseModelAttribution(

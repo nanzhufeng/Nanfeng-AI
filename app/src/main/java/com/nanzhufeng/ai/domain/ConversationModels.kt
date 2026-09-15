@@ -271,8 +271,10 @@ data class Conversation(
     /** Only a newly-created empty conversation may consume its first user message as a title. */
     val autoTitlePending: Boolean = false,
     val surface: ConversationSurface = ConversationSurface.CHAT,
+    /** Title-only logical revision. Null marks legacy history without title ordering evidence. */
+    val titleRevision: Long? = null,
 ) {
-    init { require(title.isNotBlank()) { "会话标题不能为空。" }; require(revision > 0) { "会话 revision 必须为正数。" } }
+    init { require(title.isNotBlank()) { "会话标题不能为空。" }; require(revision > 0) { "会话 revision 必须为正数。" }; require(titleRevision == null || titleRevision > 0) { "标题版本必须为正数。" } }
 }
 
 data class Branch(
@@ -464,6 +466,7 @@ class ConversationTreeService(private val clock: Clock) {
         val title = ConversationAutoTitle.titleForFirstCompletedAssistantReply(appended, node.id) ?: return appended
         return appended.copy(conversation = appended.conversation.copy(
             title = title,
+            titleRevision = Math.addExact(appended.conversation.titleRevision ?: 0L, 1L),
             autoTitlePending = false,
             revision = appended.conversation.revision + 1,
         ))

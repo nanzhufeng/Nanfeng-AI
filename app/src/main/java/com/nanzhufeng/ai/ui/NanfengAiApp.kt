@@ -759,11 +759,6 @@ internal fun NanfengAiApp(
             contentColor = BodyText,
             modifier = Modifier.fillMaxSize(),
         ) {
-            LaunchedEffect(accountSyncViewModel.state.notice, accountSyncViewModel.state.detailVisible) {
-                accountSyncViewModel.state.notice?.takeIf { !accountSyncViewModel.state.detailVisible }?.let { message ->
-                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
-                }
-            }
             if (accountSyncViewModel.state.detailVisible) {
                 P7DAccountSyncScreen(
                     state = accountSyncViewModel.state,
@@ -771,11 +766,9 @@ internal fun NanfengAiApp(
                     onSignIn = { accountSyncViewModel.signIn(activity ?: context) },
                     onSwitchAccount = { accountSyncViewModel.switchAccount(activity ?: context) },
                     onSignOut = accountSyncViewModel::signOut,
-                    onPrepareRecovery = accountSyncViewModel::prepareRecoveryProtection,
-                    onChangeRecovery = accountSyncViewModel::changeRecoveryCode,
                     onPeriodicChanged = accountSyncViewModel::setPeriodicEnabled,
+                    onResetRecoveryMaterial = accountSyncViewModel::resetRetiredRecoveryMaterial,
                     onReadCloudDocuments = accountSyncViewModel::readCloudDocuments,
-                    onRestoreCloudConversation = accountSyncViewModel::restoreCloudConversation,
                     loadAvatar = accountSyncViewModel::loadAvatar,
                 )
                 return@Surface
@@ -836,6 +829,12 @@ internal fun NanfengAiApp(
                 accountSyncState = accountSyncViewModel.state,
                 onOpenAccountSync = accountSyncViewModel::open,
                 onSyncConversation = accountSyncViewModel::requestConversationSync,
+                onCancelConversationSync = accountSyncViewModel::cancelConversationSync,
+                onReadCloudConversations = accountSyncViewModel::readCloudDocuments,
+                onToggleCloudConversationPinned = accountSyncViewModel::setCloudConversationPinned,
+                syncNotice = accountSyncViewModel.state.notice,
+                syncOperation = accountSyncViewModel.state.activeOperation,
+                syncCompletedFeedback = accountSyncViewModel.state.completedOperationFeedback,
                 dualPathState = dualPathConnectionViewModel.state,
                 onOpenDualPath = dualPathConnectionViewModel::open,
                 onOpenP8ControlledAgent = p8ControlledAgentViewModel::show,
@@ -1043,6 +1042,12 @@ private fun CaptureScreen(
     accountSyncState: P7DAccountSyncUiState,
     onOpenAccountSync: () -> Unit,
     onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onCancelConversationSync: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onReadCloudConversations: () -> Unit,
+    onToggleCloudConversationPinned: (com.nanzhufeng.ai.domain.Conversation, Boolean) -> Unit,
+    syncNotice: String?,
+    syncOperation: P7DAccountSyncOperation?,
+    syncCompletedFeedback: P7DAccountSyncFeedback?,
     dualPathState: DualPathConnectionUiState,
     onOpenDualPath: () -> Unit,
     onOpenP8ControlledAgent: () -> Unit,
@@ -1250,6 +1255,15 @@ private fun CaptureScreen(
             scheduledMonitorViewModel,
             notificationReminderSettingsState.settings,
             onSyncConversation,
+            onCancelConversationSync,
+            onReadCloudConversations,
+            syncNotice,
+            syncOperation,
+            syncCompletedFeedback,
+            accountSyncState.syncedConversationIds,
+            accountSyncState.cloudConversations,
+            accountSyncState.cloudPinnedConversationIds,
+            onToggleCloudConversationPinned,
             onRouteSelected,
             conversationDrawerOpen,
             onConversationDrawerChanged,
@@ -3183,6 +3197,15 @@ private fun ConversationFoundationCard(
     scheduledMonitorViewModel: ScheduledMonitorViewModel,
     notificationReminderSettings: com.nanzhufeng.ai.domain.NotificationReminderSettings,
     onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onCancelConversationSync: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onReadCloudConversations: () -> Unit,
+    syncNotice: String?,
+    syncOperation: P7DAccountSyncOperation?,
+    syncCompletedFeedback: P7DAccountSyncFeedback?,
+    syncedConversationIds: Set<String>,
+    cloudConversations: List<com.nanzhufeng.ai.domain.Conversation>,
+    cloudPinnedConversationIds: Set<String>,
+    onToggleCloudConversationPinned: (com.nanzhufeng.ai.domain.Conversation, Boolean) -> Unit,
     onRouteSelected: (P5ARoute) -> Unit,
     drawerOpen: Boolean,
     onDrawerOpenChanged: (Boolean) -> Unit,
@@ -3249,6 +3272,15 @@ private fun ConversationFoundationCard(
         onListScope = viewModel::setListScope, onSearchChanged = viewModel::updateSearchQuery, onSearchCategoryChanged = viewModel::selectSearchCategory, onSearchRequested = viewModel::submitSearch, onSearchFocus = viewModel::openSearchHistory, onCloseSearchHistory = viewModel::closeSearchHistory, onFillSearchHistory = viewModel::fillSearchHistory, onClearSearchHistory = viewModel::clearSearchHistory, onCloseSearch = viewModel::closeSearchPanel, onOpenSearchHit = viewModel::openSearchHit, onOpenSearchAttachment = viewModel::openSearchAttachment, onOpenGlmOcrSearchHit = onOpenGlmOcrSearchHit, onDeleteGlmOcrSearchHit = viewModel::deleteGlmOcrSearchDocument, onLocateSearchAttachment = viewModel::locateSearchAttachment, onDeleteSearchAttachment = viewModel::deleteSearchAttachment, onEnsureSearchAttachmentPreview = viewModel::ensureSearchAttachmentPreview, onEnsureAttachmentPreview = viewModel::ensureAttachmentPreview,
         onManage = viewModel::manage, onMarkWatchLater = viewModel::markConversationWatchLater, onBatchSoftDelete = viewModel::softDeleteConversations, onExport = viewModel::exportCurrentConversation,
         onSyncConversation = onSyncConversation,
+        onCancelConversationSync = onCancelConversationSync,
+        onReadCloudConversations = onReadCloudConversations,
+        syncNotice = syncNotice,
+        syncOperation = syncOperation,
+        syncCompletedFeedback = syncCompletedFeedback,
+        syncedConversationIds = syncedConversationIds,
+        cloudConversations = cloudConversations,
+        cloudPinnedConversationIds = cloudPinnedConversationIds,
+        onToggleCloudConversationPinned = onToggleCloudConversationPinned,
         onAddCamera = {
             createCameraCaptureUri(context, "conversation")?.let { uri ->
                 conversationCameraUri = uri.toString()

@@ -46,6 +46,12 @@ interface CaptureDraftRepository {
  */
 interface ConversationRepository {
     fun save(snapshot: ConversationSnapshot): ConversationSnapshot
+    /**
+     * A verified cloud read may update portable text already stored under the
+     * same message ID. Implementations keep ordinary local writes immutable by
+     * default; the sync owner opts into this narrow, text-only merge path.
+     */
+    fun saveVerifiedCloudMerge(snapshot: ConversationSnapshot): ConversationSnapshot = save(snapshot)
     fun findById(id: ConversationId): ConversationSnapshot?
     fun listActive(): List<Conversation>
     /** A recycle-bin purge is explicit and irreversible; implementations must remove the local conversation tree atomically. */

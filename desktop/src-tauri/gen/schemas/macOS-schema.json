@@ -189,10 +189,10 @@
           "markdownDescription": "Allows clearing only normalized owner-local search history; it cannot clear conversations, index rows, or workspace content."
         },
         {
-          "description": "Allows explicit Google system-browser sign-in, one-time recovery-code confirmation, safe account status readback, and sign-out while retaining local data. It grants no webview credential access, arbitrary endpoint, automatic upload, recovery-code reread, local deletion or hidden account switching.",
+          "description": "Allows explicit Google system-browser sign-in, safe account status readback, direct selected-conversation sync, an explicit cloud-list read, and changing only the account-owned cloud-list pin projection for an authenticated listed conversation. It grants no webview credential access, arbitrary endpoint, hidden account switching, local deletion or broad filesystem access.",
           "type": "string",
           "const": "allow-desktop-account-sync",
-          "markdownDescription": "Allows explicit Google system-browser sign-in, one-time recovery-code confirmation, safe account status readback, and sign-out while retaining local data. It grants no webview credential access, arbitrary endpoint, automatic upload, recovery-code reread, local deletion or hidden account switching."
+          "markdownDescription": "Allows explicit Google system-browser sign-in, safe account status readback, direct selected-conversation sync, an explicit cloud-list read, and changing only the account-owned cloud-list pin projection for an authenticated listed conversation. It grants no webview credential access, arbitrary endpoint, hidden account switching, local deletion or broad filesystem access."
         },
         {
           "description": "Allows the native settings surface to read and revision-save only non-secret appearance and Android-parity preferences in Rust-owned SQLite. Runtime capability flags remain fail-closed; this grants no credential, notification, account, update, model, prompt, attachment, path or network access.",

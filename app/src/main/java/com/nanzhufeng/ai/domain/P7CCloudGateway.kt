@@ -58,11 +58,14 @@ interface P7CAuthenticatedRpcTransport {
 interface P7CCloudGateway {
     fun read(documentId: String, minimumRevision: Long): P7CCloudResult<P7CRemoteEnvelope>
     fun commit(expectedRevision: Long, canonicalEnvelope: String): P7CCloudResult<P7CCommitReceipt>
+    /** Deletes exactly one caller-owned document after an optimistic revision check. */
+    fun delete(documentId: String, expectedRevision: Long): P7CCloudResult<Boolean>
 }
 
 object P7CDisabledCloudGateway : P7CCloudGateway {
     override fun read(documentId: String, minimumRevision: Long) = P7CCloudResult.Disabled
     override fun commit(expectedRevision: Long, canonicalEnvelope: String) = P7CCloudResult.Disabled
+    override fun delete(documentId: String, expectedRevision: Long) = P7CCloudResult.Disabled
 }
 
 /**
@@ -98,6 +101,17 @@ class P7CSupabaseEnvelopeGateway(
         if (revision != preflight.revision || hash != preflight.payloadHash) P7CCloudResult.Rejected("REMOTE_RECEIPT_REJECTED")
         else P7CCloudResult.Value(P7CCommitReceipt(revision, hash))
     }.getOrElse { P7CCloudResult.Rejected("REMOTE_COMMIT_REJECTED") }
+
+    override fun delete(documentId: String, expectedRevision: Long): P7CCloudResult<Boolean> = runCatching {
+        requireId(documentId); require(expectedRevision >= 1)
+        val body = JSONObject()
+            .put("p_app_id", APP_ID)
+            .put("p_document_id", documentId)
+            .put("p_expected_revision", expectedRevision)
+        val response = JSONObject(transport.call("nanfeng_sync_delete_document", body.toString()))
+        val value = response.optBoolean("deleted", false)
+        P7CCloudResult.Value(value)
+    }.getOrElse { P7CCloudResult.Rejected("REMOTE_DELETE_REJECTED") }
 
     private fun requireId(value: String) = require(value.matches(Regex("[A-Za-z0-9._-]{2,128}")))
     private companion object { const val APP_ID = "com.nanzhufeng.ai" }

@@ -839,7 +839,7 @@ mod tests {
         let version: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 40);
+        assert_eq!(version, 42);
         let package = fixture();
         import(root.path(), &mut connection, &package, None).unwrap();
         let v1_rows: i64 = connection

@@ -168,6 +168,18 @@ test('completed assistant answers expose answer information only through the mor
   assert.ok(!html.includes('private/secret'));
 });
 
+test('answer information groups repeated source classes and states network evidence precisely', async () => {
+  const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
+  const dialog = source.slice(source.indexOf("state.dialog?.kind === 'assistant-answer-information'"), source.indexOf("if (state.dialog === 'metadata')"));
+  assert.match(dialog, /const groupedSources = new Map\(\)/);
+  assert.match(dialog, /!titles\.includes\(title\)/);
+  assert.match(dialog, /titles\.join\('；'\)/);
+  assert.match(dialog, /本次未启用联网/);
+  assert.match(dialog, /已实际联网（服务商返回核验依据）/);
+  assert.match(dialog, /已请求联网（服务商未返回核验依据）/);
+  assert.doesNotMatch(dialog, /未记录（旧回答）'; const sourceLabels/);
+});
+
 test('settings expose the latest phone values in the desktop primary and secondary split', async () => {
   const appearance = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'personalization', status: '', error: '', connection: {}, appearance: { mode: 'dark', fontSize: 'large', themeColor: 'green' } });
   for (const token of ['aria-label="设置一级菜单"', 'aria-label="设置二级页面"', '外观', '深色', '字体大小', '大', '主题色', '绿色', 'open-settings-picker']) assert.ok(appearance.includes(token));

@@ -24,6 +24,7 @@ import com.nanzhufeng.ai.data.local.RoomScheduledMonitorRepository
 import com.nanzhufeng.ai.data.local.RoomReminderDraftGenerationRecordStore
 import com.nanzhufeng.ai.data.local.RoomConversationTitleGenerationRecordStore
 import com.nanzhufeng.ai.data.local.RoomAssistantResponseModelAttributionStore
+import com.nanzhufeng.ai.data.local.RoomCloudResponseModelUsageStore
 import com.nanzhufeng.ai.ai.OpenRouterEgressPolicy
 import com.nanzhufeng.ai.ai.OpenRouterInferenceAdapter
 import com.nanzhufeng.ai.ai.LoadRealServiceAcceptanceUiStatusUseCase
@@ -243,6 +244,7 @@ import com.nanzhufeng.ai.domain.P7BAccountStateMachine
 import com.nanzhufeng.ai.data.P7FGoogleAccountOwner
 import com.nanzhufeng.ai.data.P7FManualConversationSyncOwner
 import com.nanzhufeng.ai.data.P7FSelectedConversationSyncScheduler
+import com.nanzhufeng.ai.data.P7FSelectedConversationMutationObserver
 import com.nanzhufeng.ai.data.AndroidDataStorageLocationOwner
 import com.nanzhufeng.ai.data.AndroidDataStorageLocationManager
 import com.nanzhufeng.ai.domain.P7EGuardedRestoreOwner
@@ -337,6 +339,9 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         NanfengAiDatabase.MIGRATION_63_64,
         NanfengAiDatabase.MIGRATION_64_65,
         NanfengAiDatabase.MIGRATION_65_66,
+        NanfengAiDatabase.MIGRATION_66_67,
+        NanfengAiDatabase.MIGRATION_67_68,
+        NanfengAiDatabase.MIGRATION_68_69,
     ).build()
     val dataStorageLocationManager = AndroidDataStorageLocationManager(dataStorageLocationOwner) { database.close() }
     val captureDraftRepository = RoomCaptureDraftRepository(database)
@@ -475,6 +480,12 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         accountOwner = p7fGoogleAccountOwner,
     )
     val p7fSelectedConversationSyncScheduler = P7FSelectedConversationSyncScheduler(context.applicationContext)
+    // Process-local observer: all actual conversation writes converge on the same delayed
+    // selected-conversation queue, while the receipt table itself remains outside its scope.
+    private val p7fSelectedConversationMutationObserver = P7FSelectedConversationMutationObserver(
+        database,
+        p7fSelectedConversationSyncScheduler,
+    )
     private val p7dStateStore = RoomP7DStateStore(database)
     private val p7eRestoreWriter = AndroidP7ESemanticAtomicRestoreWriter(context.applicationContext, database)
     val p7eGuardedRestoreOwner = P7EGuardedRestoreOwner(
@@ -597,6 +608,7 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     val reminderDraftGenerationRecords = RoomReminderDraftGenerationRecordStore(database)
     val conversationTitleGenerationRecords = RoomConversationTitleGenerationRecordStore(database)
     val assistantResponseModelAttributions = RoomAssistantResponseModelAttributionStore(database)
+    val cloudResponseModelUsages = RoomCloudResponseModelUsageStore(database)
     private val localContextBroker = LocalContextBroker(RoomLocalContextIndex(database))
     private val modelRegistrySnapshotStore = AndroidModelRegistrySnapshotStore(context)
     private val modelProfileDirectory = AndroidModelProfileDirectory(context)

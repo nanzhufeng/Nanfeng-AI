@@ -1,0 +1,8 @@
+[
+  {"name":"later pin cannot overwrite rename","local":{"title":"Renamed","titleRevision":1,"updatedAt":"2026-01-01T00:00:00Z"},"remote":{"title":"Original","titleRevision":null,"updatedAt":"2036-01-01T00:00:00Z"},"expectedTitle":"Renamed","expectedRevision":1},
+  {"name":"reverse direction ignores wall clock","local":{"title":"Original","titleRevision":null,"updatedAt":"2036-01-01T00:00:00Z"},"remote":{"title":"Renamed","titleRevision":1,"updatedAt":"2020-01-01T00:00:00Z"},"expectedTitle":"Renamed","expectedRevision":1},
+  {"name":"older title revision cannot win with newer conversation","local":{"title":"Second edit","titleRevision":2,"updatedAt":"2026-01-01T00:00:00Z"},"remote":{"title":"First edit","titleRevision":1,"updatedAt":"2036-01-01T00:00:00Z"},"expectedTitle":"Second edit","expectedRevision":2},
+  {"name":"concurrent renames require resolution","local":{"title":"Choice A","titleRevision":1,"updatedAt":"2026-01-01T00:00:00Z"},"remote":{"title":"Choice B","titleRevision":1,"updatedAt":"2036-01-01T00:00:00Z"},"conflict":true},
+  {"name":"legacy disagreement has no causal evidence","local":{"title":"Legacy A","titleRevision":null,"updatedAt":"2026-01-01T00:00:00Z"},"remote":{"title":"Legacy B","titleRevision":null,"updatedAt":"2036-01-01T00:00:00Z"},"conflict":true},
+  {"name":"same text still advances title revision","local":{"title":"Same","titleRevision":1,"updatedAt":"2026-01-01T00:00:00Z"},"remote":{"title":"Same","titleRevision":2,"updatedAt":"2020-01-01T00:00:00Z"},"expectedTitle":"Same","expectedRevision":2}
+]

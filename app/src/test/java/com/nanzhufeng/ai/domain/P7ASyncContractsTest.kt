@@ -7,9 +7,25 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 @RunWith(RobolectricTestRunner::class)
 class P7ASyncContractsTest {
+    @Test fun `portable accounting passes envelope validation while credentials remain rejected`() {
+        val usage = JSONObject("""{"modelId":"deepseek-flash","modelDisplayName":"DS V4.1","inputTokens":12,"outputTokens":34,"totalTokens":46,"cachedInputTokens":null,"reasoningTokens":null,"costPriceVersion":"settled-v1","costCurrencyCode":"CNY","costTotalMicros":18700,"costSource":"PROVIDER_RESPONSE"}""")
+        fun prepared() = NfaiSyncPreparedSnapshot("com.nanzhufeng.ai", "conversation-accounting", 1,
+            listOf(NfaiSyncRecord("conversation", "accounting-1", 1, "NORMAL", JSONObject().put("modelUsage", usage).toString())))
+        val sealed = NfaiSyncV1Gateway.sealDirect(prepared())
+        assertTrue("Accounting must pass the real envelope boundary: $sealed", sealed is NfaiSyncResult.Sealed)
+        val opened = NfaiSyncV1Gateway.openDirect((sealed as NfaiSyncResult.Sealed).canonicalEnvelope, "com.nanzhufeng.ai", "conversation-accounting", 1)
+        assertTrue(opened is NfaiSyncResult.Opened)
+        usage.put("accessToken", "fixture-secret")
+        assertTrue(NfaiSyncV1Gateway.sealDirect(prepared()) is NfaiSyncResult.Rejected)
+        usage.remove("accessToken")
+        usage.put("inputTokens", "fixture-secret")
+        assertTrue(NfaiSyncV1Gateway.sealDirect(prepared()) is NfaiSyncResult.Rejected)
+    }
     private fun fixture(): JSONObject {
         val root = sequenceOf(File("../protocol"), File("protocol"), File("../../protocol")).first { it.isDirectory }
         return JSONObject(File(root, "fixtures/nfai.sync.v1.golden.json").readText())
@@ -32,6 +48,34 @@ class P7ASyncContractsTest {
         val opened = NfaiSyncV1Gateway.open(sealed.canonicalEnvelope, fixture.getString("recoveryCode").toCharArray(), "com.nanzhufeng.ai", "sync-fixture-v1", 7)
         assertTrue(opened is NfaiSyncResult.Opened)
         assertEquals(2, (opened as NfaiSyncResult.Opened).value.snapshot.records.size)
+    }
+
+    @Test fun `direct Google account envelope round trips without recovery material`() {
+        val sealed = NfaiSyncV1Gateway.sealDirect(snapshot(fixture())) as NfaiSyncResult.Sealed
+        val root = JSONObject(sealed.canonicalEnvelope)
+        assertEquals("nfai.sync.direct", root.getString("format"))
+        assertTrue(!root.has("kdf") && !root.has("wrappedDataKey"))
+        assertTrue(NfaiSyncV1Gateway.openDirect(sealed.canonicalEnvelope, "com.nanzhufeng.ai", "sync-fixture-v1", 7) is NfaiSyncResult.Opened)
+        assertTrue(NfaiSyncV1Gateway.openDirect(sealed.canonicalEnvelope, "other.app", "sync-fixture-v1", 7) is NfaiSyncResult.Rejected)
+    }
+
+    @Test fun `Desktop direct spelling with closing tags and Unicode separators verifies on Android`() {
+        // serde_json keeps both `</` and U+2028 literal. JSONObject.quote changes them, which
+        // previously made Desktop-produced direct documents fail only after reaching Android.
+        val desktopCanonicalPayload = """{"appId":"com.nanzhufeng.ai","documentId":"sync-fixture-v1","format":"nfai.sync.payload","protocolVersion":1,"records":[{"classification":"NORMAL","content":{"note":"</script> 中文"},"id":"record-1","kind":"conversation","revision":7}],"revision":7,"schemaVersion":1}"""
+        val bytes = desktopCanonicalPayload.toByteArray(StandardCharsets.UTF_8)
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        val envelope = JSONObject()
+            .put("format", "nfai.sync.direct")
+            .put("protocolVersion", 1)
+            .put("schemaVersion", 1)
+            .put("appId", "com.nanzhufeng.ai")
+            .put("documentId", "sync-fixture-v1")
+            .put("revision", 7)
+            .put("payloadHash", digest)
+            .put("payloadByteCount", bytes.size)
+            .put("payload", JSONObject(desktopCanonicalPayload))
+        assertTrue(NfaiSyncV1Gateway.openDirect(envelope.toString(), "com.nanzhufeng.ai", "sync-fixture-v1", 7) is NfaiSyncResult.Opened)
     }
 
     @Test fun `wrong code tamper unknown duplicate truncation binding rollback and sensitive content fail closed`() {

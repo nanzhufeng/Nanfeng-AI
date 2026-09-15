@@ -79,6 +79,7 @@ class ConversationTranscriptPresentation(
         invocations: Map<InvocationId, InvocationRecord> = emptyMap(),
         runtimeByMessage: Map<MessageNodeId, ConversationRuntimeState> = emptyMap(),
         responseModelAttributions: Map<MessageNodeId, List<AssistantResponseModelAttribution>> = emptyMap(),
+        cloudResponseModelUsages: Map<MessageNodeId, List<CloudResponseModelUsage>> = emptyMap(),
     ): List<PresentedTranscriptMessage> {
         val localLineageByInvocation = lineages.associateBy { it.invocationId }
         return renderer.render(path).map { presented ->
@@ -92,6 +93,7 @@ class ConversationTranscriptPresentation(
                     node.invocation?.invocationId?.let(invocations::get),
                     runtimeByMessage[node.id],
                     responseModelAttributions[node.id].orEmpty(),
+                    cloudResponseModelUsages[node.id].orEmpty(),
                 ).copy(waitingPreview = waitingPreviewFor(path, node)),
             )
         }
@@ -128,18 +130,27 @@ class ConversationTranscriptPresentation(
         invocation: InvocationRecord?,
         runtime: ConversationRuntimeState?,
         responseAttributions: List<AssistantResponseModelAttribution>,
+        cloudModelUsages: List<CloudResponseModelUsage>,
     ): TranscriptMessageMetadata {
         // Ordinary Provider results use their assistant-message owned Attempt attribution.  A
         // later Composer change, model-directory refresh or retry may not overwrite that fact.
         // P3-C fixture lineage remains the legacy local-only source for fixture answers.
         val isLocalFixture = lineage?.selection?.providerId == ProviderId.MOCK
-        val responseModel = responseAttributions
-            .distinctBy { it.attemptId }
-            .joinToString(" / ") { it.footerLabel() }
+        // A verified cloud envelope is the portable source of truth for a restored answer.
+        // The current Composer route and a stale local Attempt must not relabel its model or
+        // conceal its settled amount.  Local attribution remains the source for answers that
+        // have never carried a cloud response fact.
+        val responseModel = (if (cloudModelUsages.isNotEmpty()) {
+            cloudModelUsages.distinctBy(CloudResponseModelUsage::assistantMessageId).map(CloudResponseModelUsage::footerLabel)
+        } else {
+            responseAttributions.distinctBy { it.attemptId }.map(AssistantResponseModelAttribution::footerLabel)
+        }).joinToString(" / ")
             .takeIf { it.isNotBlank() }
-        val responseCost = responseAttributions
-            .mapNotNull(AssistantResponseModelAttribution::footerCostLabel)
-            .distinct()
+        val responseCost = (if (cloudModelUsages.isNotEmpty()) {
+            cloudModelUsages.mapNotNull(CloudResponseModelUsage::footerCostLabel)
+        } else {
+            responseAttributions.mapNotNull(AssistantResponseModelAttribution::footerCostLabel)
+        }).distinct()
             .joinToString(" / ")
             .takeIf { it.isNotBlank() }
         val fixtureModel = lineage?.selection?.takeIf { isLocalFixture }?.let { selection ->

@@ -35,6 +35,7 @@ import com.nanzhufeng.ai.domain.ConversationSurfaceRepository
 import com.nanzhufeng.ai.domain.ImportedConversationProvenanceReader
 import com.nanzhufeng.ai.domain.InvocationRepository
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttributionStore
+import com.nanzhufeng.ai.domain.CloudResponseModelUsageStore
 import com.nanzhufeng.ai.domain.AssistantResponseModelAttribution
 import com.nanzhufeng.ai.domain.ContextSelectionAuditRecord
 import com.nanzhufeng.ai.domain.ContextSelectionAuditStore
@@ -336,6 +337,7 @@ class ConversationFoundationViewModel(
     private val loadAssistantExperienceSettings: LoadAssistantExperienceSettingsUseCase,
     private val invocations: InvocationRepository,
     private val responseModelAttributions: AssistantResponseModelAttributionStore,
+    private val cloudResponseModelUsages: CloudResponseModelUsageStore,
     private val contextSelectionAudits: ContextSelectionAuditStore,
     private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
     private val normalChatBackgroundExecution: NormalChatBackgroundExecution = NoopNormalChatBackgroundExecution,
@@ -568,6 +570,9 @@ class ConversationFoundationViewModel(
             val responseAttributions = withContext(Dispatchers.IO) {
                 responseModelAttributions.forMessages(path.map(MessageNode::id))
             }
+            val cloudModelUsages = withContext(Dispatchers.IO) {
+                cloudResponseModelUsages.forMessages(path.map(MessageNode::id))
+            }
             val answerContextSelections = withContext(Dispatchers.IO) {
                 contextSelectionAudits.forAssistantMessages(path.map(MessageNode::id))
             }
@@ -580,6 +585,7 @@ class ConversationFoundationViewModel(
                 invocationById,
                 runtimeByMessage,
                 responseAttributions,
+                cloudModelUsages,
             )
             val attachmentReferences = snapshot?.draft?.attachments.orEmpty() + path.flatMap { node ->
                 node.content.filterIsInstance<ContentBlock.Attachment>().map { it.attachment }
@@ -734,6 +740,7 @@ class ConversationFoundationViewModel(
                     }
                 }.toMap()
                 val responseAttributions = responseModelAttributions.forMessages(path.map(MessageNode::id))
+                val cloudModelUsages = cloudResponseModelUsages.forMessages(path.map(MessageNode::id))
                 val runtimeByMessage = runtime?.let { persisted -> mapOf(persisted.messageId to persisted) }.orEmpty()
                 StreamTranscriptProjection(
                     runtime = runtime,
@@ -743,6 +750,7 @@ class ConversationFoundationViewModel(
                         invocationById,
                         runtimeByMessage,
                         responseAttributions,
+                        cloudModelUsages,
                     ),
                     draft = snapshot.draft,
                 )
@@ -2415,6 +2423,7 @@ class ConversationFoundationViewModel(
         private val loadAssistantExperienceSettings: LoadAssistantExperienceSettingsUseCase,
         private val invocations: InvocationRepository,
         private val responseModelAttributions: AssistantResponseModelAttributionStore,
+        private val cloudResponseModelUsages: CloudResponseModelUsageStore,
         private val contextSelectionAudits: ContextSelectionAuditStore,
         private val normalChatOpenRouterExecutor: NormalChatOpenRouterExecutor,
         private val normalChatBackgroundExecution: NormalChatBackgroundExecution,
@@ -2424,7 +2433,7 @@ class ConversationFoundationViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ConversationFoundationViewModel::class.java))
-            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, glmOcr, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, deletePersistedAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, conversationStyleOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat, entryConversationId) as T
+            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, glmOcr, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, deletePersistedAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, conversationStyleOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, cloudResponseModelUsages, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat, entryConversationId) as T
         }
     }
 }

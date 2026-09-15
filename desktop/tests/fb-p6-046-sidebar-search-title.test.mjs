@@ -20,6 +20,8 @@ test('sidebar search has no static title or duplicate button while preserving it
 test('located conversation header puts its title before the optional return-to-search action', () => {
   const header = shell.slice(shell.indexOf('const header = `'), shell.indexOf('const workspacePageHeader'));
   assert.ok(header.indexOf('<div class="chat-title">') < header.indexOf('data-action="return-to-search"'));
+  assert.doesNotMatch(header, /<div class="chat-title"><p>南枫 AI<\/p>/);
+  assert.match(header, /<div class="chat-title"><h1>\$\{escapeHtml\(title\)\}<\/h1><\/div>/);
 });
 
 test('selecting a left-sidebar conversation exits search drill-down instead of preserving its return route', () => {
@@ -32,4 +34,11 @@ test('selecting a left-sidebar conversation exits search drill-down instead of p
     'state.searchAnchorMessageId = null',
     'state.searchAnchorAttachmentId = null',
   ]) assert.ok(owner.includes(token), token);
+});
+
+test('sidebar conversation titles stay on one clipped line while the row keeps its date and actions', () => {
+  assert.match(css, /\.chat-history-select \{[^}]*white-space: nowrap;/);
+  assert.match(css, /\.chat-history-select \.chat-history-title-line \{[^}]*align-items: center;[^}]*overflow: hidden;/);
+  assert.match(css, /\.chat-history-select \.chat-history-title \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/);
+  assert.doesNotMatch(css, /\.chat-history-select \.chat-history-title \{[^}]*white-space: normal;/);
 });

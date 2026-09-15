@@ -152,8 +152,8 @@ data class ProviderSseEvent(
     val reasoning: String? = null,
     val inputTokens: Long? = null,
     val outputTokens: Long? = null,
-    /** The final OpenRouter SSE event carries this authoritative amount when available. */
-    val reportedCostUsdMicros: Long? = null,
+    /** The final provider SSE event may carry this authoritative amount. */
+    val reportedProviderCost: ProviderReportedCost? = null,
     /** Normal chat never runs tools; retaining this fact prevents a false empty-answer success. */
     val toolCallEncountered: Boolean = false,
     val toolCallDeltas: List<ChatToolCallDelta> = emptyList(),
@@ -195,7 +195,7 @@ sealed interface ProviderChatOutcome {
         val reasoning: String?,
         val inputTokens: Long?,
         val outputTokens: Long?,
-        val reportedCostUsdMicros: Long?,
+        val reportedProviderCost: ProviderReportedCost?,
         val toolCallEncountered: Boolean,
         val toolCalls: List<ChatToolCall> = emptyList(),
         val cachedInputTokens: Long? = null,
@@ -266,7 +266,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
                     )
                 }
                 return ProviderChatOutcome.StreamedResponse(
-                    status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedCostUsdMicros, streamed.toolCallEncountered, streamed.toolCalls, streamed.cachedInputTokens, streamed.reasoningTokens,
+                    status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedProviderCost, streamed.toolCallEncountered, streamed.toolCalls, streamed.cachedInputTokens, streamed.reasoningTokens,
                     webSources = streamed.webSources,
                     finishReason = streamed.finishReason,
                 )
@@ -303,7 +303,7 @@ internal object ProviderSseDecoder {
         val reasoning: String?,
         val inputTokens: Long?,
         val outputTokens: Long?,
-        val reportedCostUsdMicros: Long?,
+        val reportedProviderCost: ProviderReportedCost?,
         val toolCallEncountered: Boolean,
         val toolCalls: List<ChatToolCall>,
         val cachedInputTokens: Long? = null,
@@ -325,7 +325,7 @@ internal object ProviderSseDecoder {
         var outputTokens: Long? = null
         var cachedInputTokens: Long? = null
         var reasoningTokens: Long? = null
-        var reportedCostUsdMicros: Long? = null
+        var reportedProviderCost: ProviderReportedCost? = null
         var toolCallEncountered = false
         data class PendingToolCall(var id: String? = null, var name: String? = null, val arguments: StringBuilder = StringBuilder())
         val pendingToolCalls = linkedMapOf<Int, PendingToolCall>()
@@ -362,7 +362,7 @@ internal object ProviderSseDecoder {
                     event.outputTokens?.let { outputTokens = it }
                     event.cachedInputTokens?.let { cachedInputTokens = it }
                     event.reasoningTokens?.let { reasoningTokens = it }
-                    event.reportedCostUsdMicros?.let { reportedCostUsdMicros = it }
+                    event.reportedProviderCost?.let { reportedProviderCost = it }
                     toolCallEncountered = toolCallEncountered || event.toolCallEncountered
                     event.toolCallDeltas.forEach { delta ->
                         val pending = pendingToolCalls.getOrPut(delta.index) { PendingToolCall() }
@@ -404,7 +404,7 @@ internal object ProviderSseDecoder {
         }
         return Result(
             output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens,
-            reportedCostUsdMicros, toolCallEncountered,
+            reportedProviderCost, toolCallEncountered,
             pendingToolCalls.values.mapNotNull { pending -> pending.name?.let { ChatToolCall(pending.id, it, pending.arguments.toString().ifBlank { "{}" }) } },
             cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason,
         )

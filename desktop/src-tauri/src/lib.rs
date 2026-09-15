@@ -4,12 +4,12 @@ pub mod desktop_app_settings_v1;
 pub mod desktop_background_runtime_v1;
 pub mod desktop_conversation_read_state_v1;
 pub mod desktop_conversation_title_v1;
+mod desktop_docx_preview;
 pub mod desktop_history_knowledge_v1;
 pub mod desktop_local_backup_v1;
 pub mod desktop_model_service_v1;
 pub mod desktop_ordinary_chat_v1;
 mod desktop_pdf_page_render;
-mod desktop_docx_preview;
 pub mod desktop_reminder_notification_v1;
 pub mod desktop_reminders_v1;
 mod desktop_storage_location;
@@ -83,14 +83,26 @@ const P6E_ACCEPTANCE_ENV: &str = "NANFENG_AI_P6E_ACCEPTANCE";
 const P6E_ACCEPTANCE_ROOT_NAME: &str = "nanfeng-ai-p6e-acceptance";
 
 fn archive_entry_display_name(path: &str) -> String {
-    path.trim_end_matches('/').rsplit('/').next().filter(|name| !name.is_empty()).unwrap_or("文件").to_owned()
+    path.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("文件")
+        .to_owned()
 }
 
 fn archive_entry_preview_type(path: &str) -> (&'static str, &'static str) {
-    let extension = path.rsplit('.').next().unwrap_or("").trim().to_ascii_lowercase();
+    let extension = path
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
     match extension.as_str() {
         "md" | "markdown" => ("text", "text/markdown"),
-        "txt" | "kt" | "kts" | "java" | "py" | "rs" | "js" | "mjs" | "ts" | "tsx" | "css" | "html" | "xml" | "yml" | "yaml" | "toml" | "ini" | "properties" | "sql" | "sh" | "gradle" | "csv" => ("text", "text/plain"),
+        "txt" | "kt" | "kts" | "java" | "py" | "rs" | "js" | "mjs" | "ts" | "tsx" | "css"
+        | "html" | "xml" | "yml" | "yaml" | "toml" | "ini" | "properties" | "sql" | "sh"
+        | "gradle" | "csv" => ("text", "text/plain"),
         "json" => ("text", "application/json"),
         "pdf" => ("pdf", "application/pdf"),
         "png" => ("image", "image/png"),
@@ -1098,6 +1110,9 @@ struct DesktopOrdinaryChatSubmitArgs {
 struct DesktopOrdinaryChatEgressAuthorization {
     approved_at_ms: i64,
     disclosure_version: String,
+    /// Content-free UI receipt used only to bind runtime events to this Send.
+    #[serde(default)]
+    client_submission_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1161,6 +1176,7 @@ struct DesktopOrdinaryChatAttemptProjection {
     latency_ms: Option<i64>,
     retry_count: u64,
     web_search_route: String,
+    web_search_verified: Option<bool>,
     compare_execution_id: Option<String>,
     compare_logical_model: Option<String>,
     updated_at_ms: i64,
@@ -1174,6 +1190,7 @@ struct DesktopOrdinaryChatRuntimeEvent {
     attempt_id: String,
     assistant_message_id: String,
     state: String,
+    client_submission_id: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1195,6 +1212,7 @@ struct DesktopOrdinaryChatPrepared {
     idempotency_key: String,
     web_search_route: String,
     preflight_failure_code: Option<String>,
+    client_submission_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -1278,6 +1296,8 @@ struct DesktopOrdinaryChatContextRecordProjection {
     provider_label: String,
     model_id: String,
     fixed_input_tokens: u64,
+    web_search_requested: bool,
+    web_search_verified: Option<bool>,
     selected_sources: Vec<DesktopOrdinaryChatContextSourceProjection>,
     created_at_ms: i64,
 }
@@ -1509,6 +1529,20 @@ struct DesktopStoreReadPaths {
     database: PathBuf,
 }
 
+impl DesktopStoreReadPaths {
+    /// Startup shell data is presentation-only. It must not wait for a reminder or chat writer
+    /// holding the mutable workspace store mutex.
+    fn list_workspaces(&self) -> Result<Vec<WorkspaceSummary>, String> {
+        let connection = open_desktop_workspace_readonly_connection(&self.root, &self.database)?;
+        DesktopWorkspaceStore::list_workspaces_at(&self.root, &connection)
+    }
+
+    fn workspace_projection(&self, workspace_id: &str) -> Result<WorkspaceProjection, String> {
+        let connection = open_desktop_workspace_readonly_connection(&self.root, &self.database)?;
+        DesktopWorkspaceStore::workspace_projection_at(&self.root, &connection, workspace_id)
+    }
+}
+
 struct DesktopLocalSearchRequest {
     request_id: u64,
     cancellation: Arc<AtomicBool>,
@@ -1602,6 +1636,7 @@ struct AppState {
     account_sync_mock_enabled: bool,
     c16_visual_acceptance_state: Option<String>,
     pending_recovery: Mutex<BTreeMap<String, desktop_account_sync_v1::PendingRecovery>>,
+    recovery_confirmations_in_flight: Mutex<BTreeSet<String>>,
     deferred_exit_started: AtomicBool,
     startup_mode: DesktopStartupMode,
 }
@@ -2669,7 +2704,13 @@ fn apply_domain_mutation(
             "conversation" => {
                 allowed_keys(
                     fields,
-                    &["title", "projectId", "firstMessage", "attachmentBlocks", "autoTitlePending"],
+                    &[
+                        "title",
+                        "projectId",
+                        "firstMessage",
+                        "attachmentBlocks",
+                        "autoTitlePending",
+                    ],
                 )?;
                 let project_id = fields.get("projectId").cloned().unwrap_or(Value::Null);
                 if !project_id.is_null()
@@ -2987,6 +3028,9 @@ fn apply_domain_mutation(
             }
             "conversation" => {
                 allowed_keys(fields, &["title"])?;
+                let title_revision = item.get("titleRevision").and_then(Value::as_u64).unwrap_or(0)
+                    .checked_add(1).filter(|v| *v <= i64::MAX as u64).ok_or_else(|| json_error("标题版本溢出"))?;
+                item.insert("titleRevision".into(), json!(title_revision));
                 item.insert(
                     "title".into(),
                     Value::String(require_short_text(
@@ -3713,7 +3757,7 @@ pub(crate) fn validate_exchange_v2_ir(exchange: &Value) -> Result<String, String
         ]
         .into_iter()
         .collect();
-        if item.keys().map(String::as_str).collect::<BTreeSet<_>>() != expected
+        if item.keys().map(String::as_str).filter(|key| *key != "titleRevision").collect::<BTreeSet<_>>() != expected
             || item.get("surface").and_then(Value::as_str) != Some("CHAT")
         {
             return Err(json_error("v2 conversation 字段或 surface 无效"));
@@ -5167,7 +5211,10 @@ fn open_desktop_workspace_connection(root: &Path, database: &Path) -> Result<Con
 
 /// Search is a read path, not a deferred maintenance task. It must never
 /// acquire a write transaction merely to show the first screen of results.
-fn open_desktop_workspace_readonly_connection(root: &Path, database: &Path) -> Result<Connection, String> {
+fn open_desktop_workspace_readonly_connection(
+    root: &Path,
+    database: &Path,
+) -> Result<Connection, String> {
     if desktop_local_backup_v1::requires_restart(root) {
         return Err(json_error(
             "本机恢复已完成，请完全重启 App；不会自动继续任务",
@@ -6525,6 +6572,7 @@ impl DesktopWorkspaceStore {
                     params![canonical_json(&after)?, args.workspace_id],
                 )
                 .map_err(|_| json_error("会话永久删除未写入"))?;
+            desktop_account_sync_v1::queue_selected_deletion(&transaction, &args.workspace_id, &args.conversation_id)?;
             transaction
                 .execute(
                     "UPDATE workspaces SET semantic_hash=?1 WHERE id=?2",
@@ -6656,7 +6704,7 @@ impl DesktopWorkspaceStore {
         let current: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|_| json_error("无法读取 SQLite schema version"))?;
-        if current > 40 {
+        if current > 42 {
             return Err(json_error("SQLite schema 版本比当前客户端更新"));
         }
         if current == 0 {
@@ -7241,8 +7289,9 @@ impl DesktopWorkspaceStore {
             // Title generation is an independent provider invocation.  Keep a content-free
             // recovery envelope in the workspace DB because the quantitative usage ledger is a
             // separate SQLite owner and cannot share this transaction.
-            transaction.execute_batch(
-                "CREATE TABLE IF NOT EXISTS desktop_conversation_title_attempts (
+            transaction
+                .execute_batch(
+                    "CREATE TABLE IF NOT EXISTS desktop_conversation_title_attempts (
                     attempt_id TEXT PRIMARY KEY NOT NULL,
                     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
                     conversation_id TEXT NOT NULL,
@@ -7263,14 +7312,40 @@ impl DesktopWorkspaceStore {
                 );
                 CREATE INDEX IF NOT EXISTS desktop_conversation_title_attempt_recovery
                     ON desktop_conversation_title_attempts(state, occurred_at_ms);",
-            )
-            .map_err(|_| json_error("SQLite migration 40 标题调用恢复账本失败"))?;
+                )
+                .map_err(|_| json_error("SQLite migration 40 标题调用恢复账本失败"))?;
             transaction
                 .pragma_update(None, "user_version", 40)
                 .map_err(|_| json_error("无法写入 SQLite schema version 40"))?;
             transaction
                 .commit()
                 .map_err(|_| json_error("SQLite migration 40 无法提交"))?;
+        }
+        if current < 41 {
+            let transaction = connection
+                .transaction()
+                .map_err(|_| json_error("无法开启 SQLite migration 41"))?;
+            desktop_ordinary_chat_v1::migrate_web_search_provenance(&transaction)
+                .map_err(|_| json_error("SQLite migration 41 联网事实字段失败"))?;
+            transaction
+                .pragma_update(None, "user_version", 41)
+                .map_err(|_| json_error("无法写入 SQLite schema version 41"))?;
+            transaction
+                .commit()
+                .map_err(|_| json_error("SQLite migration 41 无法提交"))?;
+        }
+        if current < 42 {
+            let transaction = connection
+                .transaction()
+                .map_err(|_| json_error("无法开启 SQLite migration 42"))?;
+            desktop_account_sync_v1::migrate_pending_recovery_confirmation(&transaction)
+                .map_err(|_| json_error("SQLite migration 42 恢复码待确认状态失败"))?;
+            transaction
+                .pragma_update(None, "user_version", 42)
+                .map_err(|_| json_error("无法写入 SQLite schema version 42"))?;
+            transaction
+                .commit()
+                .map_err(|_| json_error("SQLite migration 42 无法提交"))?;
         }
         Ok(())
     }
@@ -8135,10 +8210,22 @@ impl DesktopWorkspaceStore {
             .map_err(|_| json_error("本地搜索历史无法读取"));
         result
     }
-    fn record_local_search_history(&self, workspace_id: &str, query: &str) -> Result<Vec<String>, String> {
-        let normalized = query.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
-        if normalized.is_empty() { return self.local_search_history(workspace_id); }
-        if !is_stable_id(workspace_id) { return Err(json_error("搜索历史工作区无效")); }
+    fn record_local_search_history(
+        &self,
+        workspace_id: &str,
+        query: &str,
+    ) -> Result<Vec<String>, String> {
+        let normalized = query
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase();
+        if normalized.is_empty() {
+            return self.local_search_history(workspace_id);
+        }
+        if !is_stable_id(workspace_id) {
+            return Err(json_error("搜索历史工作区无效"));
+        }
         let connection = self.connection()?;
         connection.execute("INSERT INTO desktop_local_search_history(workspace_id,scope,normalized_query,last_used_ms) VALUES(?1,'CHAT',?2,?3) ON CONFLICT(workspace_id,scope,normalized_query) DO UPDATE SET last_used_ms=excluded.last_used_ms", params![workspace_id, normalized, system_now_millis()]).map_err(|_| json_error("无法写入本地搜索历史"))?;
         connection.execute("DELETE FROM desktop_local_search_history WHERE workspace_id=?1 AND scope='CHAT' AND normalized_query NOT IN (SELECT normalized_query FROM desktop_local_search_history WHERE workspace_id=?1 AND scope='CHAT' ORDER BY last_used_ms DESC,normalized_query ASC LIMIT 10)", [workspace_id]).map_err(|_| json_error("无法裁剪本地搜索历史"))?;
@@ -8214,43 +8301,10 @@ impl DesktopWorkspaceStore {
         })
     }
 
-    /// The only Desktop video reader. Browser playback receives an owner-scoped media URL, never
-    /// a filesystem capability or a base64 copy of the full file.
+    /// Compatibility owner for tests and synchronous call sites. The actual preview reader is a
+    /// short-lived, read-only path so opening a large video never waits behind the mutable store.
     fn video_preview(&self, args: &DesktopVideoPreviewArgs) -> Result<DesktopVideoPreview, String> {
-        if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
-            return Err(json_error("视频预览引用无效"));
-        }
-        let connection = self.connection()?;
-        let metadata = connection.query_row(
-            "SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
-            params![args.workspace_id, args.attachment_id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, u64>(2)?, row.get::<_, String>(3)?)),
-        ).map_err(|_| json_error("本地视频附件不可用"))?;
-        if metadata.0 != "video/mp4" || !is_sha256(&metadata.3) {
-            return Err(json_error("该本地附件不是受支持的视频"));
-        }
-        let bytes = fs::read(self.root.join("assets").join(&metadata.3))
-            .map_err(|_| json_error("本地视频附件缺失"))?;
-        if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
-            return Err(json_error("本地视频附件校验不一致"));
-        }
-        let duration_millis = mp4_duration_millis(&bytes)
-            .ok_or_else(|| json_error("本地视频 metadata 无效或超过安全时长"))?;
-        let persisted = connection.query_row("SELECT position_millis FROM desktop_video_preview_positions WHERE workspace_id=?1 AND attachment_id=?2", params![args.workspace_id, args.attachment_id], |row| row.get::<_, u64>(0)).ok();
-        let position_millis = args
-            .position_millis
-            .or(persisted)
-            .unwrap_or(0)
-            .min(duration_millis);
-        connection.execute("INSERT INTO desktop_video_preview_positions(workspace_id,attachment_id,position_millis,updated_at_ms) VALUES(?1,?2,?3,?4) ON CONFLICT(workspace_id,attachment_id) DO UPDATE SET position_millis=excluded.position_millis,updated_at_ms=excluded.updated_at_ms", params![args.workspace_id, args.attachment_id, position_millis, local_now_millis()]).map_err(|_| json_error("本地视频播放位置未保存"))?;
-        Ok(DesktopVideoPreview {
-            attachment_id: args.attachment_id.clone(),
-            display_name: metadata.1,
-            byte_count: metadata.2,
-            duration_millis,
-            position_millis,
-            media_url: desktop_media_url("video", &args.workspace_id, &args.attachment_id),
-        })
+        read_desktop_video_preview_from_paths(&self.root, &self.database, args)
     }
 
     fn save_video_preview_position(&self, args: &DesktopVideoPreviewArgs) -> Result<(), String> {
@@ -8344,7 +8398,11 @@ impl DesktopWorkspaceStore {
         Ok(())
     }
 
-    fn archive_attachment_bytes(&self, workspace_id: &str, attachment_id: &str) -> Result<(String, String, u64, Vec<u8>), String> {
+    fn archive_attachment_bytes(
+        &self,
+        workspace_id: &str,
+        attachment_id: &str,
+    ) -> Result<(String, String, u64, Vec<u8>), String> {
         if !is_stable_id(workspace_id) || !is_stable_id(attachment_id) {
             return Err(json_error("压缩包预览引用无效"));
         }
@@ -8354,33 +8412,76 @@ impl DesktopWorkspaceStore {
             params![workspace_id, attachment_id],
             |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, u64>(2)?, row.get::<_, String>(3)?)),
         ).map_err(|_| json_error("本地压缩包附件不可用"))?;
-        let extension = metadata.1.rsplit(['.', '。']).next().unwrap_or("").trim().to_ascii_lowercase();
-        let is_zip = matches!(metadata.0.as_str(), "application/zip" | "application/x-zip-compressed") || (metadata.0 == "application/octet-stream" && extension == "zip");
-        if !is_zip || !is_sha256(&metadata.3) { return Err(json_error("该本地附件不是可安全浏览的 ZIP")); }
-        let bytes = fs::read(self.root.join("assets").join(&metadata.3)).map_err(|_| json_error("本地压缩包附件缺失"))?;
-        if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 { return Err(json_error("本地压缩包附件校验不一致")); }
+        let extension = metadata
+            .1
+            .rsplit(['.', '。'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
+        let is_zip = matches!(
+            metadata.0.as_str(),
+            "application/zip" | "application/x-zip-compressed"
+        ) || (metadata.0 == "application/octet-stream" && extension == "zip");
+        if !is_zip || !is_sha256(&metadata.3) {
+            return Err(json_error("该本地附件不是可安全浏览的 ZIP"));
+        }
+        let bytes = fs::read(self.root.join("assets").join(&metadata.3))
+            .map_err(|_| json_error("本地压缩包附件缺失"))?;
+        if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
+            return Err(json_error("本地压缩包附件校验不一致"));
+        }
         Ok((metadata.0, metadata.1, metadata.2, bytes))
     }
 
-    fn archive_preview(&self, args: &DesktopArchivePreviewArgs) -> Result<DesktopArchivePreview, String> {
-        let (mime_type, display_name, byte_count, bytes) = self.archive_attachment_bytes(&args.workspace_id, &args.attachment_id)?;
-        let entries = desktop_docx_preview::archive_entries(&bytes)?.into_iter().map(|entry| {
-            let path = if entry.is_directory { format!("{}/", entry.path.trim_end_matches('/')) } else { entry.path };
-            let (preview_kind, _) = if entry.is_directory { ("directory", "") } else { archive_entry_preview_type(&path) };
-            DesktopArchiveEntry {
-                display_name: archive_entry_display_name(&path),
-                path,
-                is_directory: entry.is_directory,
-                byte_count: entry.byte_count,
-                preview_kind: preview_kind.to_owned(),
-            }
-        }).collect();
-        Ok(DesktopArchivePreview { attachment_id: args.attachment_id.clone(), display_name, mime_type, byte_count, entries })
+    fn archive_preview(
+        &self,
+        args: &DesktopArchivePreviewArgs,
+    ) -> Result<DesktopArchivePreview, String> {
+        let (mime_type, display_name, byte_count, bytes) =
+            self.archive_attachment_bytes(&args.workspace_id, &args.attachment_id)?;
+        let entries = desktop_docx_preview::archive_entries(&bytes)?
+            .into_iter()
+            .map(|entry| {
+                let path = if entry.is_directory {
+                    format!("{}/", entry.path.trim_end_matches('/'))
+                } else {
+                    entry.path
+                };
+                let (preview_kind, _) = if entry.is_directory {
+                    ("directory", "")
+                } else {
+                    archive_entry_preview_type(&path)
+                };
+                DesktopArchiveEntry {
+                    display_name: archive_entry_display_name(&path),
+                    path,
+                    is_directory: entry.is_directory,
+                    byte_count: entry.byte_count,
+                    preview_kind: preview_kind.to_owned(),
+                }
+            })
+            .collect();
+        Ok(DesktopArchivePreview {
+            attachment_id: args.attachment_id.clone(),
+            display_name,
+            mime_type,
+            byte_count,
+            entries,
+        })
     }
 
-    fn archive_entry_preview(&self, args: &DesktopArchiveEntryPreviewArgs) -> Result<DesktopArchiveEntryPreview, String> {
-        let (_, _, _, archive_bytes) = self.archive_attachment_bytes(&args.workspace_id, &args.attachment_id)?;
-        let (entry, bytes) = desktop_docx_preview::read_archive_entry(&archive_bytes, &args.entry_path, MAX_ARCHIVE_ENTRY_PREVIEW_BYTES)?;
+    fn archive_entry_preview(
+        &self,
+        args: &DesktopArchiveEntryPreviewArgs,
+    ) -> Result<DesktopArchiveEntryPreview, String> {
+        let (_, _, _, archive_bytes) =
+            self.archive_attachment_bytes(&args.workspace_id, &args.attachment_id)?;
+        let (entry, bytes) = desktop_docx_preview::read_archive_entry(
+            &archive_bytes,
+            &args.entry_path,
+            MAX_ARCHIVE_ENTRY_PREVIEW_BYTES,
+        )?;
         let (kind, mime_type) = archive_entry_preview_type(&entry.path);
         let display_name = archive_entry_display_name(&entry.path);
         let mut result = DesktopArchiveEntryPreview {
@@ -8400,28 +8501,59 @@ impl DesktopWorkspaceStore {
             "text" => {
                 result.truncated = bytes.len() > MAX_INERT_TEXT_PREVIEW_BYTES;
                 let mut end = bytes.len().min(MAX_INERT_TEXT_PREVIEW_BYTES);
-                while end > 0 && end < bytes.len() && bytes[end] & 0xc0 == 0x80 { end -= 1; }
-                result.text = Some(std::str::from_utf8(&bytes[..end]).map_err(|_| json_error("ZIP 内文本不是可安全解码的 UTF-8"))?.strip_prefix('\u{feff}').unwrap_or_else(|| std::str::from_utf8(&bytes[..end]).unwrap()).to_owned());
+                while end > 0 && end < bytes.len() && bytes[end] & 0xc0 == 0x80 {
+                    end -= 1;
+                }
+                result.text = Some(
+                    std::str::from_utf8(&bytes[..end])
+                        .map_err(|_| json_error("ZIP 内文本不是可安全解码的 UTF-8"))?
+                        .strip_prefix('\u{feff}')
+                        .unwrap_or_else(|| std::str::from_utf8(&bytes[..end]).unwrap())
+                        .to_owned(),
+                );
             }
             "image" => {
-                let reader = ImageReader::new(Cursor::new(&bytes)).with_guessed_format().map_err(|_| json_error("ZIP 内图片格式无效"))?;
-                let image = reader.decode().map_err(|_| json_error("ZIP 内图片已损坏，无法预览"))?;
-                if image.width() == 0 || image.height() == 0 || u64::from(image.width()) * u64::from(image.height()) > MAX_CONVERSATION_IMAGE_PIXELS { return Err(json_error("ZIP 内图片像素超过本地安全预览上限")); }
+                let reader = ImageReader::new(Cursor::new(&bytes))
+                    .with_guessed_format()
+                    .map_err(|_| json_error("ZIP 内图片格式无效"))?;
+                let image = reader
+                    .decode()
+                    .map_err(|_| json_error("ZIP 内图片已损坏，无法预览"))?;
+                if image.width() == 0
+                    || image.height() == 0
+                    || u64::from(image.width()) * u64::from(image.height())
+                        > MAX_CONVERSATION_IMAGE_PIXELS
+                {
+                    return Err(json_error("ZIP 内图片像素超过本地安全预览上限"));
+                }
                 let thumbnail = image.thumbnail(1440, 1440);
                 let mut output = Cursor::new(Vec::new());
-                thumbnail.write_to(&mut output, ImageFormat::Png).map_err(|_| json_error("ZIP 内图片预览生成失败"))?;
-                result.data_url = Some(format!("data:image/png;base64,{}", BASE64.encode(output.into_inner())));
+                thumbnail
+                    .write_to(&mut output, ImageFormat::Png)
+                    .map_err(|_| json_error("ZIP 内图片预览生成失败"))?;
+                result.data_url = Some(format!(
+                    "data:image/png;base64,{}",
+                    BASE64.encode(output.into_inner())
+                ));
                 result.mime_type = "image/png".to_owned();
             }
             "pdf" => {
-                let page_count = Document::load_mem(&bytes).map_err(|_| json_error("ZIP 内 PDF 已损坏，无法预览"))?.get_pages().len() as u32;
-                if page_count == 0 { return Err(json_error("ZIP 内 PDF 没有可预览页面")); }
+                let page_count = Document::load_mem(&bytes)
+                    .map_err(|_| json_error("ZIP 内 PDF 已损坏，无法预览"))?
+                    .get_pages()
+                    .len() as u32;
+                if page_count == 0 {
+                    return Err(json_error("ZIP 内 PDF 没有可预览页面"));
+                }
                 let page_number = args.page_number.unwrap_or(1).clamp(1, page_count);
-                result.data_url = Some(format!("data:image/png;base64,{}", BASE64.encode(desktop_pdf_page_render::render_page(&bytes, page_number)?)));
+                result.data_url = Some(format!(
+                    "data:image/png;base64,{}",
+                    BASE64.encode(desktop_pdf_page_render::render_page(&bytes, page_number)?)
+                ));
                 result.page_number = Some(page_number);
                 result.page_count = Some(page_count);
             }
-            _ => {},
+            _ => {}
         }
         Ok(result)
     }
@@ -8432,15 +8564,33 @@ impl DesktopWorkspaceStore {
         }
         let connection = self.connection()?;
         let metadata = connection.query_row("SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2", params![args.workspace_id, args.attachment_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, u64>(2)?, row.get::<_, String>(3)?))).map_err(|_| json_error("本地文本附件不可用"))?;
-        let extension = metadata.1.rsplit(['.', '。']).next().unwrap_or("").trim().to_ascii_lowercase();
+        let extension = metadata
+            .1
+            .rsplit(['.', '。'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
         let inferred_text = matches!(metadata.0.trim(), "" | "application/octet-stream")
-            && matches!(extension.as_str(), "md" | "markdown" | "txt" | "json" | "csv");
-        let is_docx = metadata.0 == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || (metadata.0 == "application/octet-stream" && extension == "docx");
-        let is_zip = matches!(metadata.0.as_str(), "application/zip" | "application/x-zip-compressed") || (metadata.0 == "application/octet-stream" && extension == "zip");
-        if !(is_docx || is_zip || matches!(
+            && matches!(
+                extension.as_str(),
+                "md" | "markdown" | "txt" | "json" | "csv"
+            );
+        let is_docx = metadata.0
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            || (metadata.0 == "application/octet-stream" && extension == "docx");
+        let is_zip = matches!(
             metadata.0.as_str(),
-            "text/plain" | "text/markdown" | "application/json" | "text/csv"
-        ) || inferred_text) || !is_sha256(&metadata.3)
+            "application/zip" | "application/x-zip-compressed"
+        ) || (metadata.0 == "application/octet-stream" && extension == "zip");
+        if !(is_docx
+            || is_zip
+            || matches!(
+                metadata.0.as_str(),
+                "text/plain" | "text/markdown" | "application/json" | "text/csv"
+            )
+            || inferred_text)
+            || !is_sha256(&metadata.3)
         {
             return Err(json_error("该本地附件不是可安全预览的文本"));
         }
@@ -8449,17 +8599,22 @@ impl DesktopWorkspaceStore {
         if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
             return Err(json_error("本地文本附件校验不一致"));
         }
-        let bytes = if is_docx { desktop_docx_preview::extract(&bytes)?.into_bytes() } else if is_zip { desktop_docx_preview::archive_directory(&bytes)?.into_bytes() } else { bytes };
+        let bytes = if is_docx {
+            desktop_docx_preview::extract(&bytes)?.into_bytes()
+        } else if is_zip {
+            desktop_docx_preview::archive_directory(&bytes)?.into_bytes()
+        } else {
+            bytes
+        };
         let truncated = bytes.len() > MAX_INERT_TEXT_PREVIEW_BYTES;
         let mut end = bytes.len().min(MAX_INERT_TEXT_PREVIEW_BYTES);
-        while end > 0 && end < bytes.len() && bytes[end] & 0xc0 == 0x80 { end -= 1; }
+        while end > 0 && end < bytes.len() && bytes[end] & 0xc0 == 0x80 {
+            end -= 1;
+        }
         let text = std::str::from_utf8(&bytes[..end])
             .map_err(|_| json_error("文件不是可安全解码的 UTF-8 文本"))?
             .strip_prefix('\u{feff}')
-            .unwrap_or_else(|| {
-                std::str::from_utf8(&bytes[..end])
-                    .unwrap()
-            })
+            .unwrap_or_else(|| std::str::from_utf8(&bytes[..end]).unwrap())
             .to_owned();
         Ok(DesktopTextPreview {
             attachment_id: args.attachment_id.clone(),
@@ -11597,6 +11752,14 @@ impl DesktopWorkspaceStore {
 
     fn workspace_projection(&self, workspace_id: &str) -> Result<WorkspaceProjection, String> {
         let connection = self.connection()?;
+        Self::workspace_projection_at(&self.root, &connection, workspace_id)
+    }
+
+    fn workspace_projection_at(
+        root: &Path,
+        connection: &Connection,
+        workspace_id: &str,
+    ) -> Result<WorkspaceProjection, String> {
         let row: (String, String, String, String) = connection.query_row("SELECT w.title, w.semantic_hash, w.package_hash, x.exchange_json FROM workspaces w JOIN workspace_exchange x ON x.workspace_id=w.id WHERE w.id=?1", [workspace_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))).map_err(|_| json_error("工作区不存在"))?;
         let mut exchange: Value =
             serde_json::from_str(&row.3).map_err(|_| json_error("本地交换 IR 无法读取"))?;
@@ -11757,11 +11920,36 @@ impl DesktopWorkspaceStore {
                 }
             }
         }
-        self.projection_from_exchange(workspace_id.to_owned(), row.0, row.1, row.2, exchange)
+        Self::projection_from_exchange_at(
+            root,
+            workspace_id.to_owned(),
+            row.0,
+            row.1,
+            row.2,
+            exchange,
+        )
     }
 
     fn projection_from_exchange(
         &self,
+        id: String,
+        title: String,
+        semantic_hash: String,
+        package_hash: String,
+        exchange: Value,
+    ) -> Result<WorkspaceProjection, String> {
+        Self::projection_from_exchange_at(
+            &self.root,
+            id,
+            title,
+            semantic_hash,
+            package_hash,
+            exchange,
+        )
+    }
+
+    fn projection_from_exchange_at(
+        root_path: &Path,
         id: String,
         title: String,
         semantic_hash: String,
@@ -11773,7 +11961,7 @@ impl DesktopWorkspaceStore {
         let mut asset_byte_count = 0;
         for entry in &assets {
             let hash = entry.strip_prefix("assets/").unwrap_or_default();
-            asset_byte_count += fs::metadata(self.root.join("assets").join(hash))
+            asset_byte_count += fs::metadata(root_path.join("assets").join(hash))
                 .map(|metadata| metadata.len())
                 .unwrap_or(0);
         }
@@ -11799,6 +11987,13 @@ impl DesktopWorkspaceStore {
 
     fn list_workspaces(&self) -> Result<Vec<WorkspaceSummary>, String> {
         let connection = self.connection()?;
+        Self::list_workspaces_at(&self.root, &connection)
+    }
+
+    fn list_workspaces_at(
+        root: &Path,
+        connection: &Connection,
+    ) -> Result<Vec<WorkspaceSummary>, String> {
         let mut statement = connection.prepare("SELECT id, title, semantic_hash, package_hash, exchange_json FROM workspaces JOIN workspace_exchange ON workspaces.id=workspace_exchange.workspace_id ORDER BY title COLLATE NOCASE, id").map_err(|_| json_error("无法读取 workspace 列表"))?;
         let rows = statement
             .query_map([], |row| {
@@ -11814,16 +12009,16 @@ impl DesktopWorkspaceStore {
         rows.map(|row| {
             let (id, title, semantic_hash, package_hash, exchange_json) =
                 row.map_err(|_| json_error("workspace 行无效"))?;
-            Ok(self
-                .projection_from_exchange(
-                    id,
-                    title,
-                    semantic_hash,
-                    package_hash,
-                    serde_json::from_str(&exchange_json)
-                        .map_err(|_| json_error("workspace JSON 无效"))?,
-                )?
-                .summary)
+            Ok(Self::projection_from_exchange_at(
+                root,
+                id,
+                title,
+                semantic_hash,
+                package_hash,
+                serde_json::from_str(&exchange_json)
+                    .map_err(|_| json_error("workspace JSON 无效"))?,
+            )?
+            .summary)
         })
         .collect()
     }
@@ -11897,6 +12092,12 @@ impl DesktopWorkspaceStore {
                 params![after_text, args.workspace_id],
             )
             .map_err(|_| json_error("无法保存领域修订"))?;
+        if args.entity == "conversation" && args.action == "update" && args.fields.get("title").is_some() {
+            desktop_account_sync_v1::queue_selected_title_change(&transaction, &args.workspace_id, &object_id)?;
+        }
+        if args.entity == "conversation" && args.action == "softDelete" {
+            desktop_account_sync_v1::queue_selected_deletion(&transaction, &args.workspace_id, &object_id)?;
+        }
         self.rebuild_local_search_index(&transaction, &args.workspace_id, &after)?;
         transaction
             .execute(
@@ -12056,6 +12257,24 @@ impl DesktopWorkspaceStore {
             serde_json::from_str(&current_text).map_err(|_| json_error("当前 IR 无效"))?;
         let mut target: Value = serde_json::from_str(if redo { &row.3 } else { &row.2 })
             .map_err(|_| json_error("历史 IR 无效"))?;
+        let original_before: Value = serde_json::from_str(&row.2).map_err(|_| json_error("历史 IR 无效"))?;
+        let original_after: Value = serde_json::from_str(&row.3).map_err(|_| json_error("历史 IR 无效"))?;
+        let find_title = |value: &Value| value["conversations"].as_array().and_then(|items| items.iter().find(|c| c["id"] == row.1)).and_then(|c| c.get("title")).cloned();
+        let history_changed_title = row.0 == "conversation" && find_title(&original_before) != find_title(&original_after);
+        let mut title_changed = false;
+        if let Some(items) = target.get_mut("conversations").and_then(Value::as_array_mut) {
+            for item in items {
+                let Some(existing) = current["conversations"].as_array().and_then(|items| items.iter().find(|c| c["id"] == item["id"])) else { continue; };
+                if history_changed_title && item["id"] == row.1 && item["title"] != existing["title"] {
+                    item["titleRevision"] = json!(existing["titleRevision"].as_u64().unwrap_or(0).checked_add(1).filter(|v| *v <= i64::MAX as u64).ok_or_else(|| json_error("标题版本溢出"))?);
+                    title_changed = true;
+                } else {
+                    item["title"] = existing["title"].clone();
+                    if let Some(version) = existing.get("titleRevision") { item["titleRevision"] = version.clone(); }
+                    else { item.as_object_mut().unwrap().remove("titleRevision"); }
+                }
+            }
+        }
         let revision = Self::adjust_snapshot_revision(&mut target, &current, &row.0, &row.1)?;
         let next_hash = refresh_exchange_hash(&mut target)?;
         validate_exchange(&target)?;
@@ -12065,6 +12284,7 @@ impl DesktopWorkspaceStore {
                 params![canonical_json(&target)?, args.workspace_id],
             )
             .map_err(|_| json_error("无法保存历史 revision"))?;
+        if title_changed { desktop_account_sync_v1::queue_selected_title_change(&transaction, &args.workspace_id, &row.1)?; }
         transaction
             .execute(
                 "UPDATE workspaces SET semantic_hash=?1 WHERE id=?2",
@@ -12646,6 +12866,18 @@ fn ordinary_chat_random_id(prefix: &str) -> Result<String, String> {
     ))
 }
 
+fn ordinary_chat_client_submission_id(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    if !(12..=128).contains(&trimmed.len())
+        || !trimmed
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(json_error("发送回执无效；未向服务商建立连接"));
+    }
+    Ok(trimmed.to_owned())
+}
+
 fn ordinary_chat_message_text(message: &Value) -> String {
     message
         .get("blocks")
@@ -12829,7 +13061,7 @@ impl DesktopWorkspaceStore {
         attempt_id: &str,
     ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
         connection.query_row(
-            "SELECT attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,provider_id,requested_model_id,actual_model_id,model_display_name,state,safe_error_code,input_tokens,output_tokens,cached_input_tokens,reasoning_tokens,charge_micros,currency_code,cost_source,latency_ms,retry_count,web_search_route,compare_execution_id,compare_logical_model,updated_at_ms FROM desktop_ordinary_chat_attempts WHERE attempt_id=?1",
+            "SELECT attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,provider_id,requested_model_id,actual_model_id,model_display_name,state,safe_error_code,input_tokens,output_tokens,cached_input_tokens,reasoning_tokens,charge_micros,currency_code,cost_source,latency_ms,retry_count,web_search_route,web_search_verified,compare_execution_id,compare_logical_model,updated_at_ms FROM desktop_ordinary_chat_attempts WHERE attempt_id=?1",
             [attempt_id],
             |row| Ok(DesktopOrdinaryChatAttemptProjection {
                 attempt_id: row.get(0)?, workspace_id: row.get(1)?, conversation_id: row.get(2)?,
@@ -12839,8 +13071,8 @@ impl DesktopWorkspaceStore {
                 output_tokens: row.get(12)?, cached_input_tokens: row.get(13)?, reasoning_tokens: row.get(14)?,
                 charge_micros: row.get(15)?, currency_code: row.get(16)?, cost_source: row.get(17)?,
                 latency_ms: row.get(18)?, retry_count: row.get::<_, i64>(19)?.max(0) as u64,
-                web_search_route: row.get(20)?, compare_execution_id: row.get(21)?,
-                compare_logical_model: row.get(22)?, updated_at_ms: row.get(23)?,
+                web_search_route: row.get(20)?, web_search_verified: row.get::<_, Option<i64>>(21)?.map(|value| value != 0), compare_execution_id: row.get(22)?,
+                compare_logical_model: row.get(23)?, updated_at_ms: row.get(24)?,
             }),
         ).map_err(|_| json_error("普通聊天 Attempt 不存在"))
     }
@@ -12995,16 +13227,39 @@ impl DesktopWorkspaceStore {
         &self,
         workspace_id: &str,
         conversation_id: &str,
+        excluded_provider_ids: &[String],
     ) -> Result<Option<DesktopConversationTitlePrepared>, String> {
         let connection = self.connection()?;
-        let exchange_text: String = connection.query_row(
-            "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [workspace_id], |row| row.get(0),
-        ).map_err(|_| json_error("工作区不存在"))?;
-        let exchange: Value = serde_json::from_str(&exchange_text).map_err(|_| json_error("本地交换 IR 无法读取"))?;
-        let conversation = exchange.get("conversations").and_then(Value::as_array).and_then(|items| items.iter().find(|item| item.get("id").and_then(Value::as_str) == Some(conversation_id)));
-        let Some(conversation) = conversation else { return Ok(None); };
-        if conversation.get("autoTitlePending").and_then(Value::as_bool) != Some(true) { return Ok(None); }
-        let Some(source) = desktop_conversation_title_v1::opening_source(conversation) else { return Ok(None); };
+        let exchange_text: String = connection
+            .query_row(
+                "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1",
+                [workspace_id],
+                |row| row.get(0),
+            )
+            .map_err(|_| json_error("工作区不存在"))?;
+        let exchange: Value =
+            serde_json::from_str(&exchange_text).map_err(|_| json_error("本地交换 IR 无法读取"))?;
+        let conversation = exchange
+            .get("conversations")
+            .and_then(Value::as_array)
+            .and_then(|items| {
+                items
+                    .iter()
+                    .find(|item| item.get("id").and_then(Value::as_str) == Some(conversation_id))
+            });
+        let Some(conversation) = conversation else {
+            return Ok(None);
+        };
+        if conversation
+            .get("autoTitlePending")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return Ok(None);
+        }
+        let Some(source) = desktop_conversation_title_v1::opening_source(conversation) else {
+            return Ok(None);
+        };
         let settings = self.read_desktop_model_service_setting_records()?;
         let credentials = &self.credentials;
         let presets = desktop_model_service_v1::chat_presets();
@@ -13015,16 +13270,26 @@ impl DesktopWorkspaceStore {
                     .iter()
                     .find(|preset| preset.id == *preset_id)
                     .filter(|preset| {
-                        settings.iter().any(|setting| setting.provider_id == preset.provider_id && setting.enabled)
+                        !excluded_provider_ids
+                            .iter()
+                            .any(|provider_id| provider_id == preset.provider_id)
+                            && settings.iter().any(|setting| {
+                                setting.provider_id == preset.provider_id && setting.enabled
+                            })
                             && credentials.presence(preset.provider_id)
                                 == desktop_model_service_v1::CredentialPresence::Stored
                     })
                     .copied()
             });
-        let Some(selected) = selected else { return Ok(None); };
+        let Some(selected) = selected else {
+            return Ok(None);
+        };
         let provider = desktop_model_service_v1::provider(selected.provider_id)?;
         let occurred_at_ms = system_now_millis();
-        let idempotency_key = format!("conversation-title-{occurred_at_ms}-{conversation_id}");
+        let idempotency_key = format!(
+            "conversation-title-{occurred_at_ms}-{conversation_id}-{}",
+            selected.id
+        );
         let attempt_id = format!("title-{}", sha256(idempotency_key.as_bytes()));
         connection.execute(
             "INSERT INTO desktop_conversation_title_attempts(attempt_id,workspace_id,conversation_id,assistant_message_id,provider_id,requested_model_id,state,occurred_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,'PENDING',?7,?7)",
@@ -13032,10 +13297,15 @@ impl DesktopWorkspaceStore {
         ).map_err(|_| json_error("无法记录会话标题调用"))?;
         Ok(Some(DesktopConversationTitlePrepared {
             attempt_id,
-            workspace_id: workspace_id.into(), conversation_id: conversation_id.into(),
+            workspace_id: workspace_id.into(),
+            conversation_id: conversation_id.into(),
             assistant_message_id: source.assistant_message_id.clone(),
-            endpoint: format!("{}/chat/completions", provider.endpoint.trim_end_matches('/')),
-            provider_id: selected.provider_id.into(), model_id: selected.model_id.into(),
+            endpoint: format!(
+                "{}/chat/completions",
+                provider.endpoint.trim_end_matches('/')
+            ),
+            provider_id: selected.provider_id.into(),
+            model_id: selected.model_id.into(),
             messages: desktop_conversation_title_v1::request_messages(&source),
             idempotency_key,
             occurred_at_ms,
@@ -13051,26 +13321,28 @@ impl DesktopWorkspaceStore {
         safe_error_code: Option<&str>,
         completed: Option<&desktop_ordinary_chat_v1::Completed>,
     ) -> Result<(), String> {
-        self.connection()?.execute(
-            "UPDATE desktop_conversation_title_attempts
+        self.connection()?
+            .execute(
+                "UPDATE desktop_conversation_title_attempts
              SET state=?1,safe_error_code=?2,actual_model_id=?3,input_tokens=?4,output_tokens=?5,
                  cached_input_tokens=?6,charge_micros=?7,
                  currency_code=CASE WHEN ?7 IS NULL THEN NULL ELSE 'USD' END,
                  cost_source=CASE WHEN ?7 IS NULL THEN NULL ELSE 'PROVIDER_RESPONSE' END,
                  updated_at_ms=?8
              WHERE attempt_id=?9",
-            params![
-                state,
-                safe_error_code,
-                completed.and_then(|value| value.actual_model_id.as_deref()),
-                completed.and_then(|value| value.usage.input_tokens),
-                completed.and_then(|value| value.usage.output_tokens),
-                completed.and_then(|value| value.usage.cached_input_tokens),
-                completed.and_then(|value| value.reported_cost_micros),
-                system_now_millis(),
-                prepared.attempt_id,
-            ],
-        ).map_err(|_| json_error("无法更新会话标题调用状态"))?;
+                params![
+                    state,
+                    safe_error_code,
+                    completed.and_then(|value| value.actual_model_id.as_deref()),
+                    completed.and_then(|value| value.usage.input_tokens),
+                    completed.and_then(|value| value.usage.output_tokens),
+                    completed.and_then(|value| value.usage.cached_input_tokens),
+                    completed.and_then(|value| value.reported_cost_micros),
+                    system_now_millis(),
+                    prepared.attempt_id,
+                ],
+            )
+            .map_err(|_| json_error("无法更新会话标题调用状态"))?;
         Ok(())
     }
 
@@ -13084,27 +13356,66 @@ impl DesktopWorkspaceStore {
         let mut connection = self.connection()?;
         // Take the sole writer before reading the pending flag. This keeps the Android-parity
         // re-read/commit atomic without forcing UI snapshots to stop during title generation.
-        let transaction = connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        let transaction = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|_| json_error("无法开启标题更新 transaction"))?;
-        let before: String = transaction.query_row("SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1", [&prepared.workspace_id], |row| row.get(0))
+        let before: String = transaction
+            .query_row(
+                "SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1",
+                [&prepared.workspace_id],
+                |row| row.get(0),
+            )
             .map_err(|_| json_error("工作区不存在"))?;
-        let mut exchange: Value = serde_json::from_str(&before).map_err(|_| json_error("本地交换 IR 无法读取"))?;
-        let conversation = exchange.get_mut("conversations").and_then(Value::as_array_mut).and_then(|items| items.iter_mut().find(|item| item.get("id").and_then(Value::as_str) == Some(prepared.conversation_id.as_str())));
-        let Some(conversation) = conversation else { return Ok(false); };
-        if conversation.get("autoTitlePending").and_then(Value::as_bool) != Some(true) || desktop_conversation_title_v1::opening_source(conversation).is_none() { return Ok(false); }
-        let revision = revision_of(object(conversation, "conversation")?)?.checked_add(1).ok_or_else(|| json_error("revision 溢出"))?;
+        let mut exchange: Value =
+            serde_json::from_str(&before).map_err(|_| json_error("本地交换 IR 无法读取"))?;
+        let conversation = exchange
+            .get_mut("conversations")
+            .and_then(Value::as_array_mut)
+            .and_then(|items| {
+                items.iter_mut().find(|item| {
+                    item.get("id").and_then(Value::as_str)
+                        == Some(prepared.conversation_id.as_str())
+                })
+            });
+        let Some(conversation) = conversation else {
+            return Ok(false);
+        };
+        if conversation
+            .get("autoTitlePending")
+            .and_then(Value::as_bool)
+            != Some(true)
+            || desktop_conversation_title_v1::opening_source(conversation).is_none()
+        {
+            return Ok(false);
+        }
+        let revision = revision_of(object(conversation, "conversation")?)?
+            .checked_add(1)
+            .ok_or_else(|| json_error("revision 溢出"))?;
         conversation["title"] = Value::String(title.into());
+        conversation["titleRevision"] = json!(conversation.get("titleRevision").and_then(Value::as_u64).unwrap_or(0)
+            .checked_add(1).filter(|v| *v <= i64::MAX as u64).ok_or_else(|| json_error("标题版本溢出"))?);
         conversation["autoTitlePending"] = Value::Bool(false);
         conversation["revision"] = Value::Number(revision.into());
         conversation["updatedAt"] = Value::String(local_now().into());
         let semantic_hash = refresh_exchange_hash(&mut exchange)?;
         validate_exchange(&exchange)?;
-        transaction.execute("UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2", params![canonical_json(&exchange)?, prepared.workspace_id])
+        transaction
+            .execute(
+                "UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2",
+                params![canonical_json(&exchange)?, prepared.workspace_id],
+            )
             .map_err(|_| json_error("标题更新未能保存"))?;
+        desktop_account_sync_v1::queue_selected_title_change(&transaction, &prepared.workspace_id, &prepared.conversation_id)?;
         self.rebuild_local_search_index(&transaction, &prepared.workspace_id, &exchange)?;
-        transaction.execute("UPDATE workspaces SET semantic_hash=?1 WHERE id=?2", params![semantic_hash, prepared.workspace_id])
+        transaction
+            .execute(
+                "UPDATE workspaces SET semantic_hash=?1 WHERE id=?2",
+                params![semantic_hash, prepared.workspace_id],
+            )
             .map_err(|_| json_error("标题更新未能同步工作区 hash"))?;
-        transaction.commit().map_err(|_| json_error("标题更新未能提交"))?;
+        transaction
+            .commit()
+            .map_err(|_| json_error("标题更新未能提交"))?;
         Ok(true)
     }
 
@@ -13143,7 +13454,9 @@ impl DesktopWorkspaceStore {
             budget_micros: None,
             adjustment_micros: None,
             currency_code: completed.reported_cost_micros.map(|_| "USD".into()),
-            cost_source: completed.reported_cost_micros.map(|_| "PROVIDER_RESPONSE".into()),
+            cost_source: completed
+                .reported_cost_micros
+                .map(|_| "PROVIDER_RESPONSE".into()),
             reconciliation_fingerprint: None,
             reconciles_entry_id: None,
             source: usage_ledger_v1::Source::DesktopLocal,
@@ -13151,7 +13464,8 @@ impl DesktopWorkspaceStore {
         };
         match ledger.append(&entry)? {
             usage_ledger_v1::AppendResult::Conflict => Err(json_error("会话标题用量账本幂等冲突")),
-            usage_ledger_v1::AppendResult::Appended(_) | usage_ledger_v1::AppendResult::Replayed(_) => Ok(()),
+            usage_ledger_v1::AppendResult::Appended(_)
+            | usage_ledger_v1::AppendResult::Replayed(_) => Ok(()),
         }
     }
 
@@ -13165,34 +13479,86 @@ impl DesktopWorkspaceStore {
                  FROM desktop_conversation_title_attempts
                  WHERE state IN ('RESPONSE_COMMITTED','COMPLETED_ACCOUNTING_PENDING')",
             ).map_err(|_| json_error("无法读取待恢复的会话标题调用"))?;
-            let rows = statement.query_map([], |row| Ok((
-                row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, String>(5)?,
-                row.get::<_, Option<String>>(6)?, row.get::<_, Option<i64>>(7)?,
-                row.get::<_, Option<i64>>(8)?, row.get::<_, Option<i64>>(9)?,
-                row.get::<_, Option<i64>>(10)?, row.get::<_, i64>(11)?,
-            ))).map_err(|_| json_error("待恢复会话标题调用无效"))?
-                .collect::<Result<Vec<_>, _>>().map_err(|_| json_error("无法枚举待恢复的会话标题调用"))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                        row.get::<_, Option<i64>>(7)?,
+                        row.get::<_, Option<i64>>(8)?,
+                        row.get::<_, Option<i64>>(9)?,
+                        row.get::<_, Option<i64>>(10)?,
+                        row.get::<_, i64>(11)?,
+                    ))
+                })
+                .map_err(|_| json_error("待恢复会话标题调用无效"))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| json_error("无法枚举待恢复的会话标题调用"))?;
             rows
         };
-        for (attempt_id, workspace_id, conversation_id, assistant_message_id, provider_id, model_id, actual_model_id, input_tokens, output_tokens, cached_input_tokens, charge_micros, occurred_at_ms) in rows {
+        for (
+            attempt_id,
+            workspace_id,
+            conversation_id,
+            assistant_message_id,
+            provider_id,
+            model_id,
+            actual_model_id,
+            input_tokens,
+            output_tokens,
+            cached_input_tokens,
+            charge_micros,
+            occurred_at_ms,
+        ) in rows
+        {
             let prepared = DesktopConversationTitlePrepared {
                 attempt_id,
                 workspace_id,
                 conversation_id,
                 assistant_message_id,
-                endpoint: String::new(), provider_id, model_id: model_id.clone(), messages: Value::Null,
-                idempotency_key: String::new(), occurred_at_ms,
+                endpoint: String::new(),
+                provider_id,
+                model_id: model_id.clone(),
+                messages: Value::Null,
+                idempotency_key: String::new(),
+                occurred_at_ms,
             };
             let completed = desktop_ordinary_chat_v1::Completed {
-                text: String::new(), reasoning: None,
-                usage: desktop_ordinary_chat_v1::Usage { input_tokens, output_tokens, cached_input_tokens, reasoning_tokens: None },
-                reported_cost_micros: charge_micros, actual_model_id, elapsed_ms: 0,
+                text: String::new(),
+                reasoning: None,
+                usage: desktop_ordinary_chat_v1::Usage {
+                    input_tokens,
+                    output_tokens,
+                    cached_input_tokens,
+                    reasoning_tokens: None,
+                },
+                reported_cost_micros: charge_micros,
+                actual_model_id,
+                web_search_verified: false,
+                elapsed_ms: 0,
             };
-            if self.complete_desktop_conversation_title_accounting(&prepared, &completed).is_ok() {
-                self.update_desktop_conversation_title_attempt(&prepared, "COMPLETED", None, Some(&completed))?;
+            if self
+                .complete_desktop_conversation_title_accounting(&prepared, &completed)
+                .is_ok()
+            {
+                self.update_desktop_conversation_title_attempt(
+                    &prepared,
+                    "COMPLETED",
+                    None,
+                    Some(&completed),
+                )?;
             } else {
-                self.update_desktop_conversation_title_attempt(&prepared, "COMPLETED_ACCOUNTING_PENDING", Some("LOCAL_ACCOUNTING_PERSISTENCE"), Some(&completed))?;
+                self.update_desktop_conversation_title_attempt(
+                    &prepared,
+                    "COMPLETED_ACCOUNTING_PENDING",
+                    Some("LOCAL_ACCOUNTING_PERSISTENCE"),
+                    Some(&completed),
+                )?;
             }
         }
         Ok(())
@@ -13361,7 +13727,15 @@ impl DesktopWorkspaceStore {
                 .collect::<Vec<_>>();
             candidates
                 .sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(right.1)));
+            let mut selected_memory_content = BTreeSet::new();
             for (_, id, title, body) in candidates.into_iter().take(6) {
+                // A sync retry or legacy import can retain two IDs for the same Memory body.
+                // Never spend prompt budget twice on the same text merely because its local ID
+                // differs. Different Memory bodies with the default title remain distinct facts.
+                let content_identity = format!("{}\u{0}{body}", title.trim());
+                if !selected_memory_content.insert(content_identity) {
+                    continue;
+                }
                 let count = body.chars().count();
                 if count > remaining_chars {
                     continue;
@@ -13405,7 +13779,14 @@ impl DesktopWorkspaceStore {
                 .collect::<Vec<_>>();
             candidates
                 .sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(right.1)));
+            let mut selected_knowledge_content = BTreeSet::new();
             for (_, id, title, body) in candidates.into_iter().take(8) {
+                // Same rule for imported Knowledge: IDs may diverge across a historical merge,
+                // but the same title/body pair is one source, not two prompt injections.
+                let content_identity = format!("{}\u{0}{body}", title.trim());
+                if !selected_knowledge_content.insert(content_identity) {
+                    continue;
+                }
                 let count = body.chars().count();
                 if count > remaining_chars {
                     continue;
@@ -13525,6 +13906,13 @@ impl DesktopWorkspaceStore {
         args: DesktopOrdinaryChatSubmitArgs,
         mock_endpoint: Option<&str>,
     ) -> Result<DesktopOrdinaryChatPrepared, String> {
+        let client_submission_id = args
+            .egress_authorization
+            .as_ref()
+            .and_then(|authorization| authorization.client_submission_id.as_deref())
+            .map(ordinary_chat_client_submission_id)
+            .transpose()?
+            .unwrap_or(ordinary_chat_random_id("chat-client")?);
         let text = args.text.trim();
         if (text.is_empty() && args.attachment_ids.is_empty()) || text.chars().count() > 120_000 {
             return Err(json_error("请输入文字或保留附件，且正文不得超过上限"));
@@ -13747,6 +14135,7 @@ impl DesktopWorkspaceStore {
             idempotency_key,
             web_search_route,
             preflight_failure_code,
+            client_submission_id,
         })
     }
 
@@ -13944,6 +14333,7 @@ impl DesktopWorkspaceStore {
                     latency_ms: None,
                     retry_count: 0,
                     web_search_route: web_search_route.clone(),
+                    web_search_verified: None,
                     compare_execution_id: Some(execution_id.clone()),
                     compare_logical_model: Some(logical_model.clone()),
                     updated_at_ms: now,
@@ -13955,6 +14345,7 @@ impl DesktopWorkspaceStore {
                 idempotency_key,
                 web_search_route,
                 preflight_failure_code: None,
+                client_submission_id: ordinary_chat_random_id("compare-client")?,
             });
         }
         let after_hash = refresh_exchange_hash(&mut after)?;
@@ -14247,7 +14638,7 @@ impl DesktopWorkspaceStore {
                 params![hash, previous.workspace_id],
             )
             .map_err(|_| json_error("无法更新重试 hash"))?;
-        transaction.execute("UPDATE desktop_ordinary_chat_attempts SET assistant_message_id=?1,retry_count=retry_count+1,state='PENDING',safe_error_code=NULL,actual_model_id=NULL,input_tokens=NULL,output_tokens=NULL,cached_input_tokens=NULL,reasoning_tokens=NULL,charge_micros=NULL,currency_code=NULL,cost_source=NULL,latency_ms=NULL,request_fingerprint=?2,web_search_route=?3,updated_at_ms=?4,terminal_at_ms=NULL WHERE attempt_id=?5",params![assistant_message_id,request_fingerprint,web_search_route,system_now_millis(),attempt_id]).map_err(|_|json_error("无法重置 Attempt"))?;
+        transaction.execute("UPDATE desktop_ordinary_chat_attempts SET assistant_message_id=?1,retry_count=retry_count+1,state='PENDING',safe_error_code=NULL,actual_model_id=NULL,input_tokens=NULL,output_tokens=NULL,cached_input_tokens=NULL,reasoning_tokens=NULL,charge_micros=NULL,currency_code=NULL,cost_source=NULL,latency_ms=NULL,web_search_verified=NULL,request_fingerprint=?2,web_search_route=?3,updated_at_ms=?4,terminal_at_ms=NULL WHERE attempt_id=?5",params![assistant_message_id,request_fingerprint,web_search_route,system_now_millis(),attempt_id]).map_err(|_|json_error("无法重置 Attempt"))?;
         transaction
             .execute(
                 "DELETE FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1",
@@ -14273,6 +14664,7 @@ impl DesktopWorkspaceStore {
             idempotency_key,
             web_search_route,
             preflight_failure_code,
+            client_submission_id: ordinary_chat_random_id("chat-retry")?,
         })
     }
 
@@ -14429,7 +14821,7 @@ impl DesktopWorkspaceStore {
             "UNKNOWN" => ("UNKNOWN", Some(terminal_at_ms)),
             _ => ("FAILED", Some(terminal_at_ms)),
         };
-        transaction.execute("UPDATE desktop_ordinary_chat_attempts SET state=?1,safe_error_code=?2,actual_model_id=?3,input_tokens=?4,output_tokens=?5,cached_input_tokens=?6,reasoning_tokens=?7,charge_micros=?8,currency_code=CASE WHEN ?8 IS NULL THEN currency_code ELSE 'USD' END,cost_source=CASE WHEN ?8 IS NULL THEN cost_source ELSE 'PROVIDER_REPORTED' END,latency_ms=?9,updated_at_ms=?10,terminal_at_ms=?11 WHERE attempt_id=?12", params![state,safe_error_code,completed.and_then(|v|v.actual_model_id.as_deref()),completed.and_then(|v|v.usage.input_tokens),completed.and_then(|v|v.usage.output_tokens),completed.and_then(|v|v.usage.cached_input_tokens),completed.and_then(|v|v.usage.reasoning_tokens),completed.and_then(|v|v.reported_cost_micros),completed.map(|v|v.elapsed_ms),system_now_millis(),terminal,attempt_id]).map_err(|_| json_error("无法更新 Attempt"))?;
+        transaction.execute("UPDATE desktop_ordinary_chat_attempts SET state=?1,safe_error_code=?2,actual_model_id=?3,input_tokens=?4,output_tokens=?5,cached_input_tokens=?6,reasoning_tokens=?7,charge_micros=?8,currency_code=CASE WHEN ?8 IS NULL THEN currency_code ELSE 'USD' END,cost_source=CASE WHEN ?8 IS NULL THEN cost_source ELSE 'PROVIDER_REPORTED' END,latency_ms=?9,web_search_verified=?10,updated_at_ms=?11,terminal_at_ms=?12 WHERE attempt_id=?13", params![state,safe_error_code,completed.and_then(|v|v.actual_model_id.as_deref()),completed.and_then(|v|v.usage.input_tokens),completed.and_then(|v|v.usage.output_tokens),completed.and_then(|v|v.usage.cached_input_tokens),completed.and_then(|v|v.usage.reasoning_tokens),completed.and_then(|v|v.reported_cost_micros),completed.map(|v|v.elapsed_ms),completed.map(|value| i64::from(value.web_search_verified)),system_now_millis(),terminal,attempt_id]).map_err(|_| json_error("无法更新 Attempt"))?;
         if terminal.is_some() {
             transaction.execute("INSERT INTO desktop_ordinary_chat_diagnostics(diagnostic_id,attempt_id,provider_id,model_id,state,safe_error_code,http_status,event_count,latency_ms,created_at_ms) VALUES(?1,?2,?3,?4,?5,?6,NULL,0,?7,?8)",params![ordinary_chat_random_id("chat-diagnostic")?,attempt_id,projection.provider_id,projection.requested_model_id,state,safe_error_code,completed.map(|value|value.elapsed_ms),system_now_millis()]).map_err(|_|json_error("无法写入聊天诊断摘要"))?;
         }
@@ -14464,10 +14856,9 @@ impl DesktopWorkspaceStore {
     ) -> Result<Vec<DesktopOrdinaryChatContextRecordProjection>, String> {
         let connection = self.connection()?;
         let mut attempts = connection.prepare(
-            "SELECT attempt_id,conversation_id,assistant_message_id,COALESCE(provider_id,''),COALESCE(requested_model_id,''),COALESCE(input_tokens,0),created_at_ms
+            "SELECT attempt_id,conversation_id,assistant_message_id,COALESCE(provider_id,''),COALESCE(requested_model_id,''),COALESCE(input_tokens,0),web_search_route,web_search_verified,created_at_ms
              FROM desktop_ordinary_chat_attempts
              WHERE state IN ('COMPLETED','COMPLETED_ACCOUNTING_PENDING','RESPONSE_COMMITTED')
-               AND EXISTS (SELECT 1 FROM desktop_ordinary_chat_context_sources source WHERE source.attempt_id=desktop_ordinary_chat_attempts.attempt_id)
              ORDER BY created_at_ms DESC LIMIT 200"
         ).map_err(|_| json_error("无法读取上下文记录"))?;
         let rows = attempts
@@ -14479,7 +14870,9 @@ impl DesktopWorkspaceStore {
                     row.get::<_, String>(3)?,
                     row.get::<_, String>(4)?,
                     row.get::<_, i64>(5)?,
-                    row.get::<_, i64>(6)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, Option<i64>>(7)?.map(|value| value != 0),
+                    row.get::<_, i64>(8)?,
                 ))
             })
             .map_err(|_| json_error("无法读取上下文记录"))?
@@ -14494,6 +14887,8 @@ impl DesktopWorkspaceStore {
             provider_id,
             model_id,
             input_tokens,
+            web_search_route,
+            web_search_verified,
             created_at_ms,
         ) in rows
         {
@@ -14526,6 +14921,8 @@ impl DesktopWorkspaceStore {
                 provider_label,
                 model_id,
                 fixed_input_tokens: input_tokens.max(0) as u64,
+                web_search_requested: web_search_route != "NONE",
+                web_search_verified,
                 selected_sources,
                 created_at_ms,
             });
@@ -15290,11 +15687,8 @@ fn save_desktop_app_settings(
     args: desktop_app_settings_v1::SaveArgs,
 ) -> Result<desktop_app_settings_v1::Projection, String> {
     let state = app.state::<AppState>();
-    let mut connection = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+    let mut connection =
+        open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
     let projection =
         desktop_app_settings_v1::save(&mut connection, args).map_err(|error| json_error(&error))?;
     desktop_history_knowledge_v1::set_enabled(
@@ -15336,11 +15730,8 @@ fn set_desktop_conversation_favorite(
     conversation_id: String,
     favorite: bool,
 ) -> Result<Vec<String>, String> {
-    let mut connection = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+    let mut connection =
+        open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
     desktop_app_settings_v1::set_conversation_favorite(
         &mut connection,
         &workspace_id,
@@ -15618,7 +16009,9 @@ async fn run_desktop_ocr_task(
         (store.root.clone(), store.database.clone())
     };
     let api_key = resolve_ocr_api_key_for_run(state.ordinary_chat_acceptance_enabled, || {
-        state.credentials.with_secret("ZHIPU", |bytes| Ok(bytes.to_vec()))
+        state
+            .credentials
+            .with_secret("ZHIPU", |bytes| Ok(bytes.to_vec()))
     })
     .map_err(|error| {
         let _ = desktop_transcription_v1::run_ocr_task(&root, &database, &task_id, &[]);
@@ -15721,9 +16114,7 @@ mod user_authorized_credential_read_tests {
     #[test]
     fn app_private_credential_failures_keep_the_precise_retry_state() {
         assert_eq!(
-            ordinary_chat_credential_failure_code(
-                "应用私有凭据无法解密；请重新保存 API Key。"
-            ),
+            ordinary_chat_credential_failure_code("应用私有凭据无法解密；请重新保存 API Key。"),
             "CREDENTIAL_UNAVAILABLE"
         );
     }
@@ -15800,9 +16191,9 @@ async fn read_desktop_usage_ledger(
                         .or(entry.cached_input_tokens),
                     charge_micros: entry.charge_micros,
                     currency_code: entry.currency_code,
-                    cost_source: entry.cost_source.or_else(|| {
-                        local_estimate.then(|| "LOCAL_ESTIMATE".to_owned())
-                    }),
+                    cost_source: entry
+                        .cost_source
+                        .or_else(|| local_estimate.then(|| "LOCAL_ESTIMATE".to_owned())),
                     occurred_at_ms: entry.occurred_at_ms,
                 }
             })
@@ -16340,11 +16731,11 @@ fn import_staged_exchange_as_new_workspace(
 
 #[tauri::command]
 async fn list_desktop_workspaces(app: tauri::AppHandle) -> Result<Vec<WorkspaceSummary>, String> {
-    run_desktop_store_blocking(
+    run_desktop_store_paths_blocking(
         app,
-        "Desktop store 被锁定",
+        "Desktop 只读路径不可用",
         "工作区列表后台读取线程异常",
-        move |store| store.list_workspaces(),
+        move |paths| paths.list_workspaces(),
     )
     .await
 }
@@ -16457,16 +16848,11 @@ fn desktop_media_protocol_response(
     let Some(state) = app.try_state::<AppState>() else {
         return desktop_media_error_response(tauri::http::StatusCode::SERVICE_UNAVAILABLE);
     };
-    let paths = match state.store.lock() {
-        Ok(store) => DesktopStoreReadPaths {
-            root: store.root.clone(),
-            database: store.database.clone(),
-        },
-        Err(_) => {
-            return desktop_media_error_response(tauri::http::StatusCode::SERVICE_UNAVAILABLE)
-        }
-    };
-    let connection = match open_desktop_workspace_connection(&paths.root, &paths.database) {
+    // Media fetches happen while WebKit is waiting for its first frame. They must not queue
+    // behind an unrelated workspace writer just to discover immutable paths.
+    let paths = state.store_paths.clone();
+    let connection = match open_desktop_workspace_readonly_connection(&paths.root, &paths.database)
+    {
         Ok(connection) => connection,
         Err(_) => return desktop_media_error_response(tauri::http::StatusCode::NOT_FOUND),
     };
@@ -16542,14 +16928,32 @@ fn desktop_media_protocol_response(
             .body(body)
             .expect("static media range response");
     }
-    let body = if is_head {
-        Vec::new()
-    } else {
-        match fs::read(asset_path) {
-            Ok(bytes) => bytes,
+    // Some WebKit builds start the media probe without a Range header. Returning the complete
+    // movie here used to allocate and copy tens of MiB before the first frame. Serve the same
+    // bounded initial window as a regular range response; WebKit requests later windows on demand.
+    if !is_head {
+        let start = 0u64;
+        let end = byte_count.min(DESKTOP_MEDIA_RANGE_CHUNK_BYTES) - 1;
+        let length = end - start + 1;
+        let file = match fs::File::open(&asset_path) {
+            Ok(file) => file,
             Err(_) => return desktop_media_error_response(tauri::http::StatusCode::NOT_FOUND),
+        };
+        let mut body = Vec::with_capacity(length as usize);
+        if file.take(length).read_to_end(&mut body).is_err() || body.len() as u64 != length {
+            return desktop_media_error_response(tauri::http::StatusCode::INTERNAL_SERVER_ERROR);
         }
-    };
+        return tauri::http::Response::builder()
+            .status(tauri::http::StatusCode::PARTIAL_CONTENT)
+            .header("Content-Type", mime_type)
+            .header("Content-Length", length.to_string())
+            .header("Content-Range", format!("bytes {start}-{end}/{byte_count}"))
+            .header("Accept-Ranges", "bytes")
+            .header("Cache-Control", "no-store")
+            .header("Access-Control-Allow-Origin", "*")
+            .body(body)
+            .expect("static initial media range response");
+    }
     tauri::http::Response::builder()
         .status(tauri::http::StatusCode::OK)
         .header("Content-Type", mime_type)
@@ -16557,7 +16961,7 @@ fn desktop_media_protocol_response(
         .header("Accept-Ranges", "bytes")
         .header("Cache-Control", "no-store")
         .header("Access-Control-Allow-Origin", "*")
-        .body(body)
+        .body(Vec::new())
         .expect("static media response")
 }
 
@@ -16620,7 +17024,9 @@ fn macos_audio_duration_millis(_asset_path: &Path) -> Option<u64> {
 }
 
 fn read_desktop_image_preview_from_paths(
-    root: &Path, database: &Path, args: &DesktopImagePreviewArgs,
+    root: &Path,
+    database: &Path,
+    args: &DesktopImagePreviewArgs,
 ) -> Result<DesktopImagePreview, String> {
     if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
         return Err(json_error("图片预览引用无效"));
@@ -16690,7 +17096,6 @@ fn read_desktop_image_preview_from_paths(
     })
 }
 
-
 fn read_desktop_search_attachment_preview_from_paths(
     root: &Path,
     database: &Path,
@@ -16758,11 +17163,11 @@ async fn read_desktop_workspace(
     app: tauri::AppHandle,
     workspace_id: String,
 ) -> Result<WorkspaceProjection, String> {
-    run_desktop_store_blocking(
+    run_desktop_store_paths_blocking(
         app,
-        "Desktop store 被锁定",
+        "Desktop 只读路径不可用",
         "工作区后台读取线程异常",
-        move |store| store.workspace_projection(&workspace_id),
+        move |paths| paths.workspace_projection(&workspace_id),
     )
     .await
 }
@@ -16811,16 +17216,10 @@ async fn query_desktop_local_index(
                 None,
                 worker_cancellation,
                 move |interrupt| {
-                    if let Ok(mut requests) = worker_app
-                        .state::<AppState>()
-                        .local_search_requests
-                        .lock()
+                    if let Ok(mut requests) =
+                        worker_app.state::<AppState>().local_search_requests.lock()
                     {
-                        requests.register_interrupt(
-                            request_id,
-                            &worker_registration,
-                            interrupt,
-                        );
+                        requests.register_interrupt(request_id, &worker_registration, interrupt);
                     } else {
                         interrupt.interrupt();
                     }
@@ -16829,11 +17228,7 @@ async fn query_desktop_local_index(
         },
     )
     .await;
-    if let Ok(mut requests) = app
-        .state::<AppState>()
-        .local_search_requests
-        .lock()
-    {
+    if let Ok(mut requests) = app.state::<AppState>().local_search_requests.lock() {
         requests.finish(request_id, &cancellation);
     }
     result
@@ -16847,9 +17242,7 @@ fn cancel_desktop_local_search(state: State<'_, AppState>, request_id: u64) {
 }
 
 #[tauri::command]
-async fn repair_desktop_local_search_index_if_stale(
-    app: tauri::AppHandle,
-) -> Result<bool, String> {
+async fn repair_desktop_local_search_index_if_stale(app: tauri::AppHandle) -> Result<bool, String> {
     run_desktop_store_blocking(
         app,
         "Desktop store 被锁定",
@@ -16941,16 +17334,81 @@ async fn read_desktop_pdf_preview(
     .await
 }
 
+const DESKTOP_VIDEO_PREVIEW_HEADER_BYTES: usize = 64 * 1024;
+const DESKTOP_VIDEO_MAX_RESUME_MILLIS: u64 = 4 * 60 * 60 * 1000;
+
+/// Resolves only a workspace-owned private MP4 and its bounded container header. The importer
+/// already writes the digest after validating the full private copy; rescanning a 70 MiB movie on
+/// every user gesture delays the first frame without improving that ownership guarantee. This
+/// read path therefore checks the immutable owner row, digest-shaped private filename, exact file
+/// length and MP4 signature before WebKit receives its scoped, range-only URL.
+fn read_desktop_video_preview_from_paths(
+    root: &Path,
+    database: &Path,
+    args: &DesktopVideoPreviewArgs,
+) -> Result<DesktopVideoPreview, String> {
+    if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
+        return Err(json_error("视频预览引用无效"));
+    }
+    let connection = open_desktop_workspace_readonly_connection(root, database)?;
+    let metadata = connection
+        .query_row(
+            "SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
+            params![args.workspace_id, args.attachment_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, u64>(2)?, row.get::<_, String>(3)?)),
+        )
+        .map_err(|_| json_error("本地视频附件不可用"))?;
+    if metadata.0 != "video/mp4" || !is_sha256(&metadata.3) || metadata.2 == 0 {
+        return Err(json_error("该本地附件不是受支持的视频"));
+    }
+    let asset_path = root.join("assets").join(&metadata.3);
+    if fs::metadata(&asset_path).ok().map(|file| file.len()) != Some(metadata.2) {
+        return Err(json_error("本地视频附件缺失或长度不一致"));
+    }
+    let mut file = fs::File::open(&asset_path).map_err(|_| json_error("本地视频附件缺失"))?;
+    let header_length = metadata.2.min(DESKTOP_VIDEO_PREVIEW_HEADER_BYTES as u64) as usize;
+    let mut header = vec![0u8; header_length];
+    file.read_exact(&mut header)
+        .map_err(|_| json_error("本地视频附件读取失败"))?;
+    if !is_mp4_video_iso_bmff(&header) {
+        return Err(json_error("本地视频 metadata 无效"));
+    }
+    // Fast-start MP4s expose mvhd in this header. For tail-moov files WebKit learns duration from
+    // bounded range reads, while playback starts immediately instead of waiting for a full scan.
+    let duration_millis = mp4_duration_millis(&header).unwrap_or(0);
+    let persisted = connection
+        .query_row(
+            "SELECT position_millis FROM desktop_video_preview_positions WHERE workspace_id=?1 AND attachment_id=?2",
+            params![args.workspace_id, args.attachment_id],
+            |row| row.get::<_, u64>(0),
+        )
+        .ok();
+    let requested_position = args.position_millis.or(persisted).unwrap_or(0);
+    let position_millis = if duration_millis > 0 {
+        requested_position.min(duration_millis)
+    } else {
+        requested_position.min(DESKTOP_VIDEO_MAX_RESUME_MILLIS)
+    };
+    Ok(DesktopVideoPreview {
+        attachment_id: args.attachment_id.clone(),
+        display_name: metadata.1,
+        byte_count: metadata.2,
+        duration_millis,
+        position_millis,
+        media_url: desktop_media_url("video", &args.workspace_id, &args.attachment_id),
+    })
+}
+
 #[tauri::command]
 async fn read_desktop_video_preview(
     app: tauri::AppHandle,
     args: DesktopVideoPreviewArgs,
 ) -> Result<DesktopVideoPreview, String> {
-    run_desktop_store_blocking(
+    run_desktop_store_paths_blocking(
         app,
         "本地视频预览锁不可用",
         "本地视频后台读取线程异常",
-        move |store| store.video_preview(&args),
+        move |paths| read_desktop_video_preview_from_paths(&paths.root, &paths.database, &args),
     )
     .await
 }
@@ -17327,6 +17785,8 @@ async fn execute_desktop_history_knowledge_prepared(
         idempotency_key: prepared.reservation.attempt_id.clone(),
         max_output_tokens: 768,
         web_search_route: "NONE".into(),
+        structured_json: false,
+        disable_thinking: false,
     };
     let worker_app = app.clone();
     let worker_prepared = prepared.clone();
@@ -17569,6 +18029,8 @@ async fn execute_desktop_reminder_draft_prepared(
         idempotency_key: prepared.reservation.attempt_id.clone(),
         max_output_tokens: 1024,
         web_search_route: "NONE".into(),
+        structured_json: false,
+        disable_thinking: false,
     };
     let worker = prepared.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -17685,6 +18147,8 @@ async fn execute_desktop_reminder_run_prepared(
         idempotency_key: prepared.reservation.attempt_id.clone(),
         max_output_tokens: 4096,
         web_search_route: "OPENROUTER_SERVER_TOOL".into(),
+        structured_json: false,
+        disable_thinking: false,
     };
     let worker = prepared.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -18192,6 +18656,7 @@ async fn send_pending_desktop_reminder_notification(
 fn emit_ordinary_chat_event(
     app: &tauri::AppHandle,
     projection: &DesktopOrdinaryChatAttemptProjection,
+    client_submission_id: &str,
 ) {
     let _ = app.emit(
         "desktop-ordinary-chat-runtime-v1",
@@ -18201,6 +18666,7 @@ fn emit_ordinary_chat_event(
             attempt_id: projection.attempt_id.clone(),
             assistant_message_id: projection.assistant_message_id.clone(),
             state: projection.state.clone(),
+            client_submission_id: client_submission_id.to_owned(),
         },
     );
 }
@@ -18210,6 +18676,7 @@ async fn execute_desktop_ordinary_chat_prepared(
     prepared: DesktopOrdinaryChatPrepared,
 ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
     let state = app.state::<AppState>();
+    let client_submission_id = prepared.client_submission_id.clone();
     if let Some(code) = prepared.preflight_failure_code.as_deref() {
         let failed = state
             .store
@@ -18223,7 +18690,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                 None,
                 Some(code),
             )?;
-        emit_ordinary_chat_event(&app, &failed);
+        emit_ordinary_chat_event(&app, &failed, &client_submission_id);
         return Ok(failed);
     }
     let signal = Arc::new(AtomicBool::new(false));
@@ -18246,7 +18713,7 @@ async fn execute_desktop_ordinary_chat_prepared(
             None,
             None,
         )?;
-    emit_ordinary_chat_event(&app, &running);
+    emit_ordinary_chat_event(&app, &running, &client_submission_id);
     let secret = if state.ordinary_chat_mock_endpoint.is_some() {
         Zeroizing::new(b"local-acceptance-mock-only".to_vec())
     } else {
@@ -18265,7 +18732,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                         None,
                         Some(ordinary_chat_credential_failure_code(&error)),
                     )?;
-                emit_ordinary_chat_event(&app, &failed);
+                emit_ordinary_chat_event(&app, &failed, &client_submission_id);
                 if let Ok(mut values) = state.ordinary_chat_cancellations.lock() {
                     let remove_key = values
                         .get_mut(&prepared.projection.conversation_id)
@@ -18290,6 +18757,8 @@ async fn execute_desktop_ordinary_chat_prepared(
         idempotency_key: prepared.idempotency_key.clone(),
         max_output_tokens: 8192,
         web_search_route: prepared.web_search_route.clone(),
+        structured_json: false,
+        disable_thinking: false,
     };
     let attempt_id = prepared.projection.attempt_id.clone();
     let conversation_id = prepared.projection.conversation_id.clone();
@@ -18331,7 +18800,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                     })?;
                 persisted_visible_bytes = visible.len();
                 last_checkpoint = std::time::Instant::now();
-                emit_ordinary_chat_event(&worker_app, &projection);
+                emit_ordinary_chat_event(&worker_app, &projection, &client_submission_id);
                 Ok(())
             }),
         );
@@ -18350,7 +18819,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                         Some(&completed),
                         None,
                     )?;
-                emit_ordinary_chat_event(&worker_app, &committed);
+                emit_ordinary_chat_event(&worker_app, &committed, &client_submission_id);
                 let accounted = {
                     let store = state
                         .store
@@ -18361,70 +18830,149 @@ async fn execute_desktop_ordinary_chat_prepared(
                         Err(_) => store.mark_ordinary_chat_accounting_pending(&attempt_id)?,
                     }
                 };
-                emit_ordinary_chat_event(&worker_app, &accounted);
+                emit_ordinary_chat_event(&worker_app, &accounted, &client_submission_id);
                 // The answer is already durable and visible.  Title generation is intentionally
                 // secondary and cannot turn a successful chat into a failed one.
-                let title_prepared = state.store.lock().ok()
-                    .and_then(|store| store.prepare_desktop_conversation_title(&accounted.workspace_id, &accounted.conversation_id).ok().flatten());
-                if let Some(title_prepared) = title_prepared {
+                let mut attempted_title_providers = Vec::new();
+                loop {
+                    let title_prepared = state.store.lock().ok().and_then(|store| {
+                        store
+                            .prepare_desktop_conversation_title(
+                                &accounted.workspace_id,
+                                &accounted.conversation_id,
+                                &attempted_title_providers,
+                            )
+                            .ok()
+                            .flatten()
+                    });
+                    let Some(title_prepared) = title_prepared else {
+                        break;
+                    };
+                    attempted_title_providers.push(title_prepared.provider_id.clone());
                     let credential_store = &state.credentials;
-                    let title_secret = credential_store.with_secret(&title_prepared.provider_id, |bytes| Ok(Zeroizing::new(bytes.to_vec()))).ok();
+                    let title_secret = credential_store
+                        .with_secret(&title_prepared.provider_id, |bytes| {
+                            Ok(Zeroizing::new(bytes.to_vec()))
+                        })
+                        .ok();
                     if let Some(title_secret) = title_secret {
                         let title_request = desktop_ordinary_chat_v1::TransportRequest {
-                            endpoint: title_prepared.endpoint.clone(), provider_id: title_prepared.provider_id.clone(),
-                            model_id: title_prepared.model_id.clone(), messages: title_prepared.messages.clone(),
-                            idempotency_key: title_prepared.idempotency_key.clone(), max_output_tokens: 256, web_search_route: "NONE".into(),
+                            endpoint: title_prepared.endpoint.clone(),
+                            provider_id: title_prepared.provider_id.clone(),
+                            model_id: title_prepared.model_id.clone(),
+                            messages: title_prepared.messages.clone(),
+                            idempotency_key: title_prepared.idempotency_key.clone(),
+                            max_output_tokens: 256,
+                            web_search_route: "NONE".into(),
+                            structured_json: title_prepared.provider_id == "DEEPSEEK",
+                            disable_thinking: title_prepared.provider_id == "DEEPSEEK",
                         };
-                        match tauri::async_runtime::block_on(desktop_ordinary_chat_v1::execute_non_streaming(title_request, title_secret)) {
+                        match tauri::async_runtime::block_on(
+                            desktop_ordinary_chat_v1::execute_non_streaming(
+                                title_request,
+                                title_secret,
+                            ),
+                        ) {
                             Ok(reply) => {
                                 // Do not collapse an intentional manual rename, an invalid title
                                 // and a local write failure into TITLE_NOT_APPLIED. The old `.ok()`
                                 // chain hid the real recovery path and discarded valid titles.
-                                let (title_applied, title_outcome) = match desktop_conversation_title_v1::parse_response(&reply.text) {
-                                    None => (false, Some("TITLE_CONTRACT")),
-                                    Some(title) => match state.store.lock() {
-                                        Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
-                                        Ok(store) => match store.complete_desktop_conversation_title(&title_prepared, &title) {
-                                            Ok(true) => (true, None),
-                                            Ok(false) => (false, Some("TITLE_MANUAL_OVERRIDE")),
+                                let (title_applied, title_outcome) =
+                                    match desktop_conversation_title_v1::parse_response(&reply.text)
+                                    {
+                                        None => (false, Some("TITLE_CONTRACT")),
+                                        Some(title) => match state.store.lock() {
                                             Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
+                                            Ok(store) => match store
+                                                .complete_desktop_conversation_title(
+                                                    &title_prepared,
+                                                    &title,
+                                                ) {
+                                                Ok(true) => (true, None),
+                                                Ok(false) => (false, Some("TITLE_MANUAL_OVERRIDE")),
+                                                Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
+                                            },
                                         },
-                                    },
-                                };
+                                    };
                                 if let Ok(store) = state.store.lock() {
                                     // A provider response can still be chargeable even if a manual rename won
                                     // the race.  Record the invocation fact; do not overwrite the user's title.
                                     let _ = store.update_desktop_conversation_title_attempt(
-                                        &title_prepared, "RESPONSE_COMMITTED", title_outcome, Some(&reply),
+                                        &title_prepared,
+                                        "RESPONSE_COMMITTED",
+                                        title_outcome,
+                                        Some(&reply),
                                     );
-                                    if store.complete_desktop_conversation_title_accounting(&title_prepared, &reply).is_ok() {
+                                    if store
+                                        .complete_desktop_conversation_title_accounting(
+                                            &title_prepared,
+                                            &reply,
+                                        )
+                                        .is_ok()
+                                    {
                                         let _ = store.update_desktop_conversation_title_attempt(
-                                            &title_prepared, "COMPLETED", title_outcome, Some(&reply),
+                                            &title_prepared,
+                                            "COMPLETED",
+                                            title_outcome,
+                                            Some(&reply),
                                         );
                                     } else {
                                         let _ = store.update_desktop_conversation_title_attempt(
-                                            &title_prepared, "COMPLETED_ACCOUNTING_PENDING", Some("LOCAL_ACCOUNTING_PERSISTENCE"), Some(&reply),
+                                            &title_prepared,
+                                            "COMPLETED_ACCOUNTING_PENDING",
+                                            Some("LOCAL_ACCOUNTING_PERSISTENCE"),
+                                            Some(&reply),
                                         );
                                     }
-                                    if title_applied { emit_ordinary_chat_event(&worker_app, &accounted); }
+                                    if title_applied {
+                                        emit_ordinary_chat_event(
+                                            &worker_app,
+                                            &accounted,
+                                            &client_submission_id,
+                                        );
+                                    }
+                                }
+                                // Android advances to the next configured direct provider only
+                                // when this provider returned no contract-valid title. Local
+                                // persistence or an intentional manual rename must never trigger
+                                // another external request.
+                                if title_applied
+                                    || matches!(
+                                        title_outcome,
+                                        Some("TITLE_MANUAL_OVERRIDE" | "TITLE_LOCAL_PERSISTENCE")
+                                    )
+                                {
+                                    break;
                                 }
                             }
                             Err(failure) => {
                                 let (state_name, code) = match failure {
-                                    desktop_ordinary_chat_v1::Failure::Cancelled => ("CANCELLED", "CANCELLED"),
-                                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => ("FAILED", code),
-                                    desktop_ordinary_chat_v1::Failure::Unknown { code } => ("UNKNOWN", code),
+                                    desktop_ordinary_chat_v1::Failure::Cancelled => {
+                                        ("CANCELLED", "CANCELLED")
+                                    }
+                                    desktop_ordinary_chat_v1::Failure::Explicit {
+                                        code, ..
+                                    } => ("FAILED", code),
+                                    desktop_ordinary_chat_v1::Failure::Unknown { code } => {
+                                        ("UNKNOWN", code)
+                                    }
                                 };
                                 if let Ok(store) = state.store.lock() {
                                     let _ = store.update_desktop_conversation_title_attempt(
-                                        &title_prepared, state_name, Some(code), None,
+                                        &title_prepared,
+                                        state_name,
+                                        Some(code),
+                                        None,
                                     );
                                 }
                             }
                         }
                     } else if let Ok(store) = state.store.lock() {
                         let _ = store.update_desktop_conversation_title_attempt(
-                            &title_prepared, "FAILED", Some("CREDENTIAL_UNAVAILABLE"), None,
+                            &title_prepared,
+                            "FAILED",
+                            Some("CREDENTIAL_UNAVAILABLE"),
+                            None,
                         );
                     }
                 }
@@ -18448,7 +18996,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                         None,
                         Some(code),
                     )?;
-                emit_ordinary_chat_event(&worker_app, &failed);
+                emit_ordinary_chat_event(&worker_app, &failed, &client_submission_id);
                 failed
             }
         };
@@ -19947,6 +20495,12 @@ fn account_sync_acceptance_root() -> Result<Option<PathBuf>, String> {
         .transpose()
 }
 
+fn desktop_account_credentials(
+    state: &AppState,
+) -> desktop_account_sync_v1::AppPrivateAccountCredentialStore {
+    desktop_account_sync_v1::AppPrivateAccountCredentialStore::at(&state.store_paths.root)
+}
+
 #[tauri::command]
 fn read_desktop_account_sync(
     state: State<'_, AppState>,
@@ -19954,6 +20508,7 @@ fn read_desktop_account_sync(
     let configured = desktop_account_sync_v1::resolve_config(state.account_sync_mock_enabled)?
         .1
         .is_some();
+    let credentials = desktop_account_credentials(&state);
     let connection = state
         .store
         .lock()
@@ -19967,12 +20522,7 @@ fn read_desktop_account_sync(
             None,
         )
     } else {
-        desktop_account_sync_v1::projection(
-            &connection,
-            &desktop_account_sync_v1::DesktopAccountCredentialStore,
-            configured,
-            None,
-        )
+        desktop_account_sync_v1::projection(&connection, &credentials, configured, None)
     }
 }
 
@@ -19980,11 +20530,18 @@ fn read_desktop_account_sync(
 async fn read_desktop_google_avatar(state: State<'_, AppState>) -> Result<Option<String>, String> {
     state.require_external_access()?;
     let (_, config) = desktop_account_sync_v1::resolve_config(state.account_sync_mock_enabled)?;
+    let credentials = desktop_account_credentials(&state);
     tauri::async_runtime::spawn_blocking(move || {
-        let Some(config) = config else { return Ok(None); };
-        let Some(session) = desktop_account_sync_v1::read_session(&desktop_account_sync_v1::DesktopAccountCredentialStore)? else { return Ok(None); };
+        let Some(config) = config else {
+            return Ok(None);
+        };
+        let Some(session) = desktop_account_sync_v1::read_session(&credentials)? else {
+            return Ok(None);
+        };
         Ok(desktop_account_sync_v1::fetch_avatar(&config, &session))
-    }).await.map_err(|_| json_error("头像读取任务未完成"))?
+    })
+    .await
+    .map_err(|_| json_error("头像读取任务未完成"))?
 }
 
 #[tauri::command]
@@ -20002,22 +20559,15 @@ fn sign_in_desktop_google_account(
         &desktop_account_sync_v1::SystemBrowser,
     )?;
     let avatar = desktop_account_sync_v1::fetch_avatar(&config, &session);
-    let mut connection = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+    let credentials = desktop_account_credentials(&state);
+    let mut connection =
+        open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
     desktop_account_sync_v1::persist_authenticated_session(
         &mut connection,
-        &desktop_account_sync_v1::DesktopAccountCredentialStore,
+        &credentials,
         &session,
     )?;
-    desktop_account_sync_v1::projection(
-        &connection,
-        &desktop_account_sync_v1::DesktopAccountCredentialStore,
-        true,
-        avatar,
-    )
+    desktop_account_sync_v1::projection(&connection, &credentials, true, avatar)
 }
 
 #[tauri::command]
@@ -20030,10 +20580,9 @@ fn create_desktop_recovery_code(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .connection()?;
-    let (projection, pending) = desktop_account_sync_v1::create_recovery_code(
-        &connection,
-        &desktop_account_sync_v1::DesktopAccountCredentialStore,
-    )?;
+    let credentials = desktop_account_credentials(&state);
+    let (projection, pending) =
+        desktop_account_sync_v1::create_recovery_code(&connection, &credentials)?;
     state
         .pending_recovery
         .lock()
@@ -20044,32 +20593,77 @@ fn create_desktop_recovery_code(
 
 #[tauri::command]
 fn confirm_desktop_recovery_code(
-    confirmation_hash: String,
+    confirmation_hash: Option<String>,
+    recovery_code: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
     state.require_external_access()?;
-    let credentials = desktop_account_sync_v1::DesktopAccountCredentialStore;
+    let credentials = desktop_account_credentials(&state);
+    let recovery_code = recovery_code.map(Zeroizing::new);
     let session = desktop_account_sync_v1::read_session(&credentials)?
         .ok_or_else(|| json_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
-    let pending = state
-        .pending_recovery
+    {
+        let mut in_flight = state
+            .recovery_confirmations_in_flight
+            .lock()
+            .map_err(|_| json_error("恢复码确认状态不可用"))?;
+        if !in_flight.insert(account.clone()) {
+            return Err(json_error("恢复码正在确认，请稍候"));
+        }
+    }
+    let result = (|| {
+        let mut connection = state
+            .store
+            .lock()
+            .map_err(|_| json_error("Desktop store 被锁定"))?
+            .connection()?;
+        let memory_pending = state
+            .pending_recovery
+            .lock()
+            .map_err(|_| json_error("恢复码确认状态不可用"))?
+            .remove(&account);
+        let pending = match memory_pending {
+            Some(value) => value,
+            None => match desktop_account_sync_v1::load_pending_recovery(
+                &connection,
+                &credentials,
+                &account,
+            )? {
+                Some(value) => value,
+                None => {
+                    let code = recovery_code.as_ref().ok_or_else(|| {
+                        json_error("恢复码待确认状态已丢失；请粘贴刚保存的恢复码继续确认")
+                    })?;
+                    desktop_account_sync_v1::pending_recovery_from_visible_code(
+                        &account,
+                        code.as_str(),
+                    )?
+                }
+            },
+        };
+        let expected_hash = confirmation_hash.unwrap_or_else(|| pending.code_hash.clone());
+        let confirm_result = desktop_account_sync_v1::confirm_recovery(
+            &mut connection,
+            &credentials,
+            pending.clone(),
+            &expected_hash,
+        );
+        if confirm_result.is_err() {
+            state
+                .pending_recovery
+                .lock()
+                .map_err(|_| json_error("恢复码确认状态不可用"))?
+                .insert(account.clone(), pending);
+        }
+        confirm_result?;
+        desktop_account_sync_v1::projection(&connection, &credentials, true, None)
+    })();
+    let _ = state
+        .recovery_confirmations_in_flight
         .lock()
-        .map_err(|_| json_error("恢复码确认状态不可用"))?
-        .remove(&account)
-        .ok_or_else(|| json_error("恢复码已隐藏，请重新创建"))?;
-    let mut connection = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
-    desktop_account_sync_v1::confirm_recovery(
-        &mut connection,
-        &credentials,
-        pending,
-        &confirmation_hash,
-    )?;
-    desktop_account_sync_v1::projection(&connection, &credentials, true, None)
+        .map(|mut value| value.remove(&account));
+    result
 }
 
 #[tauri::command]
@@ -20080,30 +20674,26 @@ fn sign_out_desktop_google_account(
     let configured = desktop_account_sync_v1::resolve_config(state.account_sync_mock_enabled)?
         .1
         .is_some();
-    let credentials = desktop_account_sync_v1::DesktopAccountCredentialStore;
-    let mut connection = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+    let credentials = desktop_account_credentials(&state);
+    let mut connection =
+        open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
     desktop_account_sync_v1::sign_out_keep_local(&mut connection, &credentials)?;
     desktop_account_sync_v1::projection(&connection, &credentials, configured, None)
 }
 
 fn desktop_account_cloud_gateway(
+    credentials: desktop_account_sync_v1::AppPrivateAccountCredentialStore,
     localhost_mock: bool,
 ) -> Result<
     (
-        desktop_account_sync_v1::DesktopAccountCredentialStore,
+        desktop_account_sync_v1::AppPrivateAccountCredentialStore,
         desktop_account_sync_v1::SupabaseGateway,
     ),
     String,
 > {
-    let credentials = desktop_account_sync_v1::DesktopAccountCredentialStore;
     let (_, config) = desktop_account_sync_v1::resolve_config(localhost_mock)?;
     let config = config.ok_or_else(|| json_error("请先配置 Google 与南枫云服务"))?;
-    let session = desktop_account_sync_v1::read_session(&credentials)?
-        .ok_or_else(|| json_error("请先登录 Google 账号"))?;
+    let session = desktop_account_sync_v1::active_session(&credentials, &config)?;
     let gateway = desktop_account_sync_v1::SupabaseGateway::new(config, &session)?;
     Ok((credentials, gateway))
 }
@@ -20112,16 +20702,44 @@ fn desktop_account_cloud_gateway(
 fn sync_selected_desktop_conversation(
     workspace_id: String,
     conversation_id: String,
+    continuation: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::SyncReceipt, String> {
     state.require_external_access()?;
-    let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
-    let mut connection = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
-    desktop_account_sync_v1::sync_selected_conversation(
+    let (credentials, gateway) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    )?;
+    let mut connection =
+        open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
+    let sync = if continuation.unwrap_or(false) {
+        desktop_account_sync_v1::continue_selected_conversation
+    } else {
+        desktop_account_sync_v1::sync_selected_conversation
+    };
+    sync(
+        &mut connection,
+        &credentials,
+        &gateway,
+        &workspace_id,
+        &conversation_id,
+    )
+}
+
+#[tauri::command]
+fn cancel_desktop_conversation_sync(
+    workspace_id: String,
+    conversation_id: String,
+    state: State<'_, AppState>,
+) -> Result<desktop_account_sync_v1::CancelSyncReceipt, String> {
+    state.require_external_access()?;
+    let (credentials, gateway) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    )?;
+    let mut connection =
+        open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
+    desktop_account_sync_v1::cancel_remote_conversation(
         &mut connection,
         &credentials,
         &gateway,
@@ -20137,12 +20755,12 @@ fn reconcile_desktop_conversation_sync(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::SyncReceipt, String> {
     state.require_external_access()?;
-    let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
-    let mut connection = state
-        .store
-        .lock()
-        .map_err(|_| json_error("Desktop store 被锁定"))?
-        .connection()?;
+    let (credentials, gateway) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    )?;
+    let mut connection =
+        open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
     desktop_account_sync_v1::reconcile_unknown_commit(
         &mut connection,
         &credentials,
@@ -20158,7 +20776,7 @@ fn set_desktop_periodic_sync(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
     state.require_external_access()?;
-    let credentials = desktop_account_sync_v1::DesktopAccountCredentialStore;
+    let credentials = desktop_account_credentials(&state);
     let connection = state
         .store
         .lock()
@@ -20176,7 +20794,7 @@ fn choose_desktop_selected_sync_start(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
     state.require_external_access()?;
-    let credentials = desktop_account_sync_v1::DesktopAccountCredentialStore;
+    let credentials = desktop_account_credentials(&state);
     let mut connection = state
         .store
         .lock()
@@ -20197,9 +20815,10 @@ fn create_desktop_recovery_rotation(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .connection()?;
+    let credentials = desktop_account_credentials(&state);
     let (projection, pending) = desktop_account_sync_v1::prepare_custom_recovery_rotation(
         &connection,
-        &desktop_account_sync_v1::DesktopAccountCredentialStore,
+        &credentials,
         &recovery_code,
     )?;
     state
@@ -20216,7 +20835,10 @@ fn confirm_desktop_recovery_rotation(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::RotationReceipt, String> {
     state.require_external_access()?;
-    let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
+    let (credentials, gateway) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    )?;
     let session = desktop_account_sync_v1::read_session(&credentials)?
         .ok_or_else(|| json_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
@@ -20245,7 +20867,10 @@ fn retry_desktop_recovery_rotation(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::RotationReceipt, String> {
     state.require_external_access()?;
-    let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
+    let (credentials, gateway) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    )?;
     let mut connection = state
         .store
         .lock()
@@ -20261,48 +20886,92 @@ fn retry_desktop_recovery_rotation(
 }
 
 #[tauri::command]
-fn list_desktop_cloud_documents(
+fn bootstrap_desktop_empty_cloud_recovery(
     state: State<'_, AppState>,
-) -> Result<Vec<desktop_account_sync_v1::RemoteDocumentProjection>, String> {
+) -> Result<desktop_account_sync_v1::AccountProjection, String> {
     state.require_external_access()?;
-    let (_, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
-    desktop_account_sync_v1::list_remote_documents(&gateway)
-}
-
-#[tauri::command]
-fn restore_desktop_cloud_conversation(
-    document_id: String,
-    recovery_code: String,
-    state: State<'_, AppState>,
-) -> Result<desktop_account_sync_v1::RestoreReceipt, String> {
-    state.require_external_access()?;
-    let recovery_code = Zeroizing::new(recovery_code);
-    let (credentials, gateway) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)?;
+    let (credentials, gateway) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    )?;
     let mut connection = state
         .store
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .connection()?;
-    desktop_account_sync_v1::restore_remote_conversation(
+    desktop_account_sync_v1::bootstrap_empty_remote_recovery(
         &mut connection,
         &credentials,
         &gateway,
-        &document_id,
-        recovery_code.as_str(),
-    )
+    )?;
+    desktop_account_sync_v1::projection(&connection, &credentials, true, None)
+}
+
+#[tauri::command]
+async fn restore_all_desktop_cloud_conversations(
+    app: tauri::AppHandle,
+) -> Result<desktop_account_sync_v1::RestoreAllReceipt, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        state.require_external_access()?;
+        let (credentials, gateway) = desktop_account_cloud_gateway(
+            desktop_account_credentials(&state),
+            state.account_sync_mock_enabled,
+        )?;
+        let mut connection =
+            open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
+        desktop_account_sync_v1::restore_all_remote_conversations(
+            &mut connection,
+            &credentials,
+            &gateway,
+        )
+    })
+    .await
+    .map_err(|_| json_error("云端列表读取任务未完成"))?
+}
+
+/// Cloud-list pinning is account presentation data.  It deliberately does not
+/// open or mutate a Desktop workspace conversation.
+#[tauri::command]
+fn set_desktop_cloud_list_pinned(
+    conversation_id: String,
+    pinned: bool,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    state.require_external_access()?;
+    let (credentials, gateway) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    )?;
+    desktop_account_sync_v1::set_cloud_list_pinned(&credentials, &gateway, &conversation_id, pinned)
+}
+
+fn run_desktop_pending_title_sync_cycle(app: &tauri::AppHandle) {
+    let state = app.state::<AppState>();
+    let credentials = desktop_account_credentials(&state);
+    let Ok(mut connection) = open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database) else { return; };
+    let Ok(targets) = desktop_account_sync_v1::pending_title_targets(&connection, &credentials) else { return; };
+    if targets.is_empty() { return; }
+    let Ok((credentials, gateway)) = desktop_account_cloud_gateway(credentials, state.account_sync_mock_enabled) else { return; };
+    for (job, workspace, conversation, marker) in targets {
+        let mut result = desktop_account_sync_v1::continue_selected_conversation(&mut connection, &credentials, &gateway, &workspace, &conversation);
+        if result.as_ref().is_ok_and(|r| r.status == "UNKNOWN") {
+            result = desktop_account_sync_v1::reconcile_unknown_commit(&mut connection, &credentials, &gateway, &workspace, &conversation);
+        }
+        let _ = desktop_account_sync_v1::finish_pending_title_attempt(&connection, &job, &marker, &result);
+    }
 }
 
 fn run_desktop_periodic_sync_cycle(app: &tauri::AppHandle) {
     let state = app.state::<AppState>();
-    let Ok((credentials, gateway)) = desktop_account_cloud_gateway(state.account_sync_mock_enabled)
-    else {
+    let Ok((credentials, gateway)) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    ) else {
         return;
     };
-    let Ok(mut connection) = state
-        .store
-        .lock()
-        .map_err(|_| ())
-        .and_then(|store| store.connection().map_err(|_| ()))
+    let Ok(mut connection) =
+        open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)
     else {
         return;
     };
@@ -20310,7 +20979,7 @@ fn run_desktop_periodic_sync_cycle(app: &tauri::AppHandle) {
         return;
     };
     for (workspace_id, conversation_id) in targets {
-        let _ = desktop_account_sync_v1::sync_selected_conversation(
+        let _ = desktop_account_sync_v1::continue_selected_conversation(
             &mut connection,
             &credentials,
             &gateway,
@@ -20571,7 +21240,10 @@ pub fn run() {
     // Live-provider probing is intentionally performed from Settings. It uses the same
     // app-private credential owner as normal chat and never falls back to a system keychain.
     if std::env::args().any(|arg| {
-        matches!(arg.as_str(), "--test-live-sonnet-web-search" | "--test-live-sonnet-connection")
+        matches!(
+            arg.as_str(),
+            "--test-live-sonnet-web-search" | "--test-live-sonnet-connection"
+        )
     }) {
         eprintln!("LIVE_PROBE_USE_SETTINGS_CONNECTION_TEST");
         std::process::exit(2);
@@ -20824,7 +21496,7 @@ pub fn run() {
             let pending_fresh_restore = startup_mode.work_plan().recovers_business_state()
                 && desktop_local_backup_v1::pending_fresh_restart(&root);
             let store = DesktopWorkspaceStore::open_for_startup(root.clone(), startup_mode)
-                .map_err(|_| "desktop SQLite unavailable")?;
+                .map_err(|error| format!("desktop SQLite unavailable: {error}"))?;
             let store_paths = DesktopStoreReadPaths {
                 root: store.root.clone(),
                 database: store.database.clone(),
@@ -20903,6 +21575,7 @@ pub fn run() {
                 account_sync_mock_enabled,
                 c16_visual_acceptance_state,
                 pending_recovery: Mutex::new(BTreeMap::new()),
+                recovery_confirmations_in_flight: Mutex::new(BTreeSet::new()),
                 deferred_exit_started: AtomicBool::new(false),
                 startup_mode,
             });
@@ -20933,6 +21606,11 @@ pub fn run() {
                     wake_desktop_reminder_cycle(&reminder_app);
                 });
             let periodic_app = app.handle().clone();
+            let title_sync_app = app.handle().clone();
+            let _ = std::thread::Builder::new().name("nanfeng-title-sync-pending".into()).spawn(move || loop {
+                run_desktop_pending_title_sync_cycle(&title_sync_app);
+                std::thread::sleep(std::time::Duration::from_secs(30));
+            });
             let _ = std::thread::Builder::new()
                 .name("nanfeng-account-sync-periodic".into())
                 .spawn(move || loop {
@@ -21012,14 +21690,16 @@ pub fn run() {
             confirm_desktop_recovery_code,
             sign_out_desktop_google_account,
             sync_selected_desktop_conversation,
+            cancel_desktop_conversation_sync,
             reconcile_desktop_conversation_sync,
             set_desktop_periodic_sync,
             choose_desktop_selected_sync_start,
             create_desktop_recovery_rotation,
             confirm_desktop_recovery_rotation,
             retry_desktop_recovery_rotation,
-            list_desktop_cloud_documents,
-            restore_desktop_cloud_conversation,
+            bootstrap_desktop_empty_cloud_recovery,
+            restore_all_desktop_cloud_conversations,
+            set_desktop_cloud_list_pinned,
             stage_preflight_selected_exchange,
             import_desktop_workspace_exchange_v2_selected,
             list_desktop_workspace_exchange_v2_committed,
@@ -21227,6 +21907,17 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
+    fn ordinary_chat_runtime_receipt_is_content_free_and_strictly_validated() {
+        assert_eq!(
+            ordinary_chat_client_submission_id("desktop-send-7df4c52b-556c-4df1-b84d-3ace5d09f217")
+                .unwrap(),
+            "desktop-send-7df4c52b-556c-4df1-b84d-3ace5d09f217"
+        );
+        assert!(ordinary_chat_client_submission_id("too short").is_err());
+        assert!(ordinary_chat_client_submission_id("valid-id-but space").is_err());
+    }
+
+    #[test]
     fn newer_local_search_request_cancels_the_older_sqlite_work() {
         let mut requests = DesktopLocalSearchRequestState::default();
         let first = requests.begin(41).unwrap();
@@ -21345,11 +22036,11 @@ mod tests {
             .unwrap();
         assert_eq!(repaired_columns, 2);
         assert_eq!(settings_revision, 7);
-        assert_eq!(schema_version, 40);
+        assert_eq!(schema_version, 42);
         drop(connection);
         drop(reopened);
         DesktopWorkspaceStore::open(root)
-            .expect("schema 40 must reopen without a false future-version error");
+            .expect("schema 41 must reopen without a false future-version error");
     }
 
     #[test]
@@ -21382,7 +22073,7 @@ mod tests {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
         assert_eq!(preference_columns, 2);
-        assert_eq!(schema_version, 40);
+        assert_eq!(schema_version, 42);
     }
 
     #[test]
@@ -23032,8 +23723,8 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
                 .unwrap(),
-            // Schema 40 adds durable title-accounting recovery records.
-            40
+            // Schema 42 adds durable recovery-confirmation metadata.
+            42
         );
         assert_eq!(
             reopened
@@ -23291,10 +23982,14 @@ mod tests {
         assert!(!preview.text.starts_with('\u{feff}'));
         for name in ["粘贴的 markdown (1). md", "粘贴的 markdown (1)。 md"] {
             store.connection().unwrap().execute("UPDATE desktop_conversation_attachments SET mime_type='application/octet-stream',display_name=?1 WHERE attachment_id='attachment-text'", [name]).unwrap();
-            assert!(store.text_preview(&DesktopTextPreviewArgs {
-                workspace_id: imported.summary.id.clone(),
-                attachment_id: "attachment-text".into(),
-            }).unwrap().text.starts_with('x'));
+            assert!(store
+                .text_preview(&DesktopTextPreviewArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    attachment_id: "attachment-text".into(),
+                })
+                .unwrap()
+                .text
+                .starts_with('x'));
         }
         let exported = directory.path().join("exported-local.md");
         store
@@ -23349,7 +24044,10 @@ mod tests {
 
         // The image worker owns only paths. It must finish even while another
         // operation holds the application store mutex (and vice versa).
-        let paths = DesktopStoreReadPaths { root: store.root.clone(), database: store.database.clone() };
+        let paths = DesktopStoreReadPaths {
+            root: store.root.clone(),
+            database: store.database.clone(),
+        };
         let args = DesktopImagePreviewArgs {
             workspace_id: imported.summary.id.clone(),
             attachment_id: "attachment-image".into(),
@@ -23359,9 +24057,18 @@ mod tests {
         let guard = store_mutex.lock().unwrap();
         let (sender, receiver) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
-            sender.send(read_desktop_image_preview_from_paths(&paths.root, &paths.database, &args)).unwrap();
+            sender
+                .send(read_desktop_image_preview_from_paths(
+                    &paths.root,
+                    &paths.database,
+                    &args,
+                ))
+                .unwrap();
         });
-        let thumbnail = receiver.recv_timeout(std::time::Duration::from_secs(3)).unwrap().unwrap();
+        let thumbnail = receiver
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .unwrap()
+            .unwrap();
         drop(guard);
         worker.join().unwrap();
         let store = store_mutex.into_inner().unwrap();
@@ -24029,6 +24736,63 @@ mod tests {
     }
 
     #[test]
+    fn selected_title_rename_persists_revision_and_retry_across_restart() {
+        let (directory, store, imported) = imported_store();
+        let conversation = &imported.exchange["conversations"][0];
+        let id = conversation["id"].as_str().unwrap();
+        let rename = |intent: &str, revision: u64, title: &str| store.mutate_domain(DomainMutationArgs {
+            intent_id: intent.into(),workspace_id: imported.summary.id.clone(),entity: "conversation".into(),action: "update".into(),
+            object_id: Some(id.into()),expected_revision: Some(revision),fields: json!({"title":title}),
+        }).unwrap();
+        let first = rename("title-local", conversation["revision"].as_u64().unwrap(), "第一次改名");
+        let count: i64 = store.connection().unwrap().query_row("SELECT count(*) FROM desktop_sync_jobs WHERE stage='TITLE_PENDING'",[],|r| r.get(0)).unwrap();
+        assert_eq!(count,0);
+        store.connection().unwrap().execute("INSERT INTO desktop_selected_conversation_sync VALUES('fixture-account',?1,?2,'fixture-document',1,'remote','local',1)",params![imported.summary.id,id]).unwrap();
+        rename("title-selected",first.revision,"第二次改名");
+        let old: (String,String) = store.connection().unwrap().query_row("SELECT job_id,payload_hash FROM desktop_sync_jobs WHERE stage='TITLE_PENDING'",[],|r| Ok((r.get(0)?,r.get(1)?))).unwrap();
+        let second = store.workspace_projection(&imported.summary.id).unwrap();
+        let row = second.exchange["conversations"].as_array().unwrap().iter().find(|c|c["id"]==id).unwrap();
+        assert_eq!(row["titleRevision"],2);
+        rename("title-during-upload",row["revision"].as_u64().unwrap(),"第三次改名");
+        store.apply_history(HistoryArgs{intent_id:"undo-title".into(),workspace_id:imported.summary.id.clone()},false).unwrap();
+        store.apply_history(HistoryArgs{intent_id:"redo-title".into(),workspace_id:imported.summary.id.clone()},true).unwrap();
+        let after_redo = store.workspace_projection(&imported.summary.id).unwrap();
+        let title = after_redo.exchange["conversations"].as_array().unwrap().iter().find(|c|c["id"]==id).unwrap();
+        assert_eq!(title["titleRevision"],5);
+        assert_eq!(title["title"],"第三次改名");
+        desktop_account_sync_v1::finish_pending_title_attempt(&store.connection().unwrap(),&old.0,&old.1,
+            &Ok(desktop_account_sync_v1::SyncReceipt{status:"SYNCED".into(),safe_code:None,synced_at_ms:Some(1)})).unwrap();
+        drop(store);
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let row: (String,String) = reopened.connection().unwrap().query_row("SELECT stage,payload_hash FROM desktop_sync_jobs WHERE job_id=?1",[&old.0],|r| Ok((r.get(0)?,r.get(1)?))).unwrap();
+        assert_eq!(row.0,"TITLE_PENDING");
+        assert_ne!(row.1,old.1,"old upload must not acknowledge a later rename");
+    }
+
+    #[test]
+    fn selected_soft_and_permanent_deletion_keep_a_durable_cloud_cleanup_job() {
+        let (directory, store, imported) = imported_store();
+        let conversation = &imported.exchange["conversations"][0];
+        let id = conversation["id"].as_str().unwrap();
+        store.connection().unwrap().execute("INSERT INTO desktop_selected_conversation_sync VALUES('fixture-account',?1,?2,'fixture-document',1,'remote','local',1)",params![imported.summary.id,id]).unwrap();
+        let deleted = store.mutate_domain(DomainMutationArgs {
+            intent_id: "delete-selected".into(), workspace_id: imported.summary.id.clone(), entity: "conversation".into(), action: "softDelete".into(),
+            object_id: Some(id.into()), expected_revision: conversation["revision"].as_u64(), fields: json!({}),
+        }).unwrap();
+        let count = || store.connection().unwrap().query_row("SELECT count(*) FROM desktop_sync_jobs WHERE stage='DELETE_PENDING'",[],|r|r.get::<_,i64>(0)).unwrap();
+        assert_eq!(count(),1);
+        let job: (String,String) = store.connection().unwrap().query_row("SELECT job_id,payload_hash FROM desktop_sync_jobs WHERE stage='DELETE_PENDING'",[],|r|Ok((r.get(0)?,r.get(1)?))).unwrap();
+        desktop_account_sync_v1::finish_pending_title_attempt(&store.connection().unwrap(), &job.0, &job.1, &Err("network unavailable".into())).unwrap();
+        assert_eq!(count(),1,"failed deletion retains deletion intent rather than becoming an upload");
+        store.permanently_delete_conversation(DesktopConversationPurgeArgs { workspace_id: imported.summary.id.clone(), conversation_id: id.into(), expected_revision: deleted.revision }).unwrap();
+        assert_eq!(count(),1);
+        drop(store);
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let pending: i64 = reopened.connection().unwrap().query_row("SELECT count(*) FROM desktop_sync_jobs WHERE stage='DELETE_PENDING'",[],|r|r.get(0)).unwrap();
+        assert_eq!(pending,1,"permanent local deletion cannot lose the cloud cleanup intent");
+    }
+
+    #[test]
     fn domain_intent_conflict_idempotency_undo_redo_and_export_are_persistent() {
         let (directory, store, imported) = imported_store();
         let create = DomainMutationArgs {
@@ -24622,7 +25386,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            40
+            42
         );
     }
 
@@ -24746,7 +25510,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            40
+            42
         );
         assert!(reopened
             .retry_nanfeng_knowledge_import_task(&task.id)
@@ -25058,7 +25822,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u64>(0))
                 .unwrap(),
-            40
+            42
         );
         assert_eq!(
             fs::read_dir(directory.path())
@@ -25316,7 +26080,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(state_rows, 0);
-        assert!(store.local_search_history(&imported.summary.id).unwrap().is_empty());
+        assert!(store
+            .local_search_history(&imported.summary.id)
+            .unwrap()
+            .is_empty());
         assert!(store.repair_local_search_indexes_if_stale().unwrap());
         assert!(store
             .record_local_search_history(&imported.summary.id, "read only search")
@@ -25774,6 +26541,7 @@ mod tests {
             },
             reported_cost_micros: Some(8),
             actual_model_id: Some("fixture-actual".into()),
+            web_search_verified: false,
             elapsed_ms: 12,
         };
         store
@@ -25819,6 +26587,7 @@ mod tests {
             usage: desktop_ordinary_chat_v1::Usage::default(),
             reported_cost_micros: None,
             actual_model_id: Some("openai/gpt-5.6-terra".into()),
+            web_search_verified: false,
             elapsed_ms: 2_300,
         };
         store
@@ -25949,6 +26718,7 @@ mod tests {
             },
             reported_cost_micros: None,
             actual_model_id: Some("fixture-actual".into()),
+            web_search_verified: true,
             elapsed_ms: 12,
         };
         store
@@ -25983,6 +26753,8 @@ mod tests {
             prepared.projection.assistant_message_id
         );
         assert_eq!(records[0].fixed_input_tokens, 42);
+        assert!(records[0].web_search_requested);
+        assert_eq!(records[0].web_search_verified, Some(true));
         assert!(records[0]
             .selected_sources
             .iter()
@@ -26213,6 +26985,7 @@ mod tests {
             usage: desktop_ordinary_chat_v1::Usage::default(),
             reported_cost_micros: None,
             actual_model_id: Some("fixture-actual".into()),
+            web_search_verified: false,
             elapsed_ms: 1,
         };
         store
@@ -26366,7 +27139,10 @@ mod tests {
             .messages
             .to_string()
             .contains("只从上面已生成内容的末尾自然继续"));
-        let retry_exchange = store.workspace_projection(&imported.summary.id).unwrap().exchange;
+        let retry_exchange = store
+            .workspace_projection(&imported.summary.id)
+            .unwrap()
+            .exchange;
         let retry_messages = retry_exchange["conversations"]
             .as_array()
             .unwrap()
@@ -26384,8 +27160,14 @@ mod tests {
             .iter()
             .find(|message| message["id"] == retry.projection.assistant_message_id)
             .unwrap();
-        assert_eq!(continuation["parentId"], prepared.projection.assistant_message_id);
-        assert_eq!(continuation["continuationOf"], prepared.projection.assistant_message_id);
+        assert_eq!(
+            continuation["parentId"],
+            prepared.projection.assistant_message_id
+        );
+        assert_eq!(
+            continuation["continuationOf"],
+            prepared.projection.assistant_message_id
+        );
         fs::write(
             store.root.join("assets").join(attachment.sha256),
             b"tampered",
@@ -26454,7 +27236,11 @@ mod tests {
     #[test]
     fn completed_auto_title_writes_its_own_usage_receipt_without_retaining_title_content() {
         let (_directory, store, imported) = imported_store();
-        let journal_mode: String = store.connection().unwrap().query_row("PRAGMA journal_mode", [], |row| row.get(0)).unwrap();
+        let journal_mode: String = store
+            .connection()
+            .unwrap()
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
         assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
         let prepared = store
             .prepare_ordinary_chat(
@@ -26484,6 +27270,7 @@ mod tests {
             },
             reported_cost_micros: None,
             actual_model_id: Some("deepseek-v4.1-flash".into()),
+            web_search_verified: false,
             elapsed_ms: 10,
         };
         store
@@ -26513,11 +27300,19 @@ mod tests {
             .complete_desktop_conversation_title(&title, "KFK资料整理方案")
             .unwrap());
         let after_title = store.workspace_projection(&imported.summary.id).unwrap();
-        let conversation = after_title.exchange["conversations"].as_array().unwrap().iter()
-            .find(|item| item["id"] == title.conversation_id).unwrap();
+        let conversation = after_title.exchange["conversations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == title.conversation_id)
+            .unwrap();
         assert_eq!(conversation["title"], "KFK资料整理方案");
+        assert_eq!(conversation["titleRevision"], 1);
         assert_eq!(conversation["autoTitlePending"], false);
-        assert_ne!(before_title.summary.semantic_hash, after_title.summary.semantic_hash, "automatic titles must advance the workspace identity");
+        assert_ne!(
+            before_title.summary.semantic_hash, after_title.summary.semantic_hash,
+            "automatic titles must advance the workspace identity"
+        );
         let (indexed_title, indexed_revision): (String, i64) = store.connection().unwrap().query_row(
             "SELECT title,conversation_revision FROM desktop_local_search_index WHERE workspace_id=?1 AND entry_id=?2",
             params![imported.summary.id, format!("{}:title", title.conversation_id)],
@@ -26552,6 +27347,79 @@ mod tests {
     }
 
     #[test]
+    fn auto_title_uses_the_next_android_candidate_after_the_first_provider_fails() {
+        let (_directory, store, imported) = imported_store();
+        store
+            .save_desktop_model_service_setting_record("DEEPSEEK", true, "DEEPSEEK_V4_FLASH", 0)
+            .unwrap();
+        store
+            .save_desktop_model_service_setting_record("ZHIPU", true, "GLM_5_3_FLASH", 0)
+            .unwrap();
+        store
+            .credentials
+            .save_user_provided_secret("DEEPSEEK", b"fixture-secret-123")
+            .unwrap();
+        store
+            .credentials
+            .save_user_provided_secret("ZHIPU", b"fixture-secret-456")
+            .unwrap();
+        let prepared_chat = store
+            .prepare_ordinary_chat(
+                DesktopOrdinaryChatSubmitArgs {
+                    workspace_id: imported.summary.id.clone(),
+                    conversation_id: None,
+                    project_id: None,
+                    expected_revision: None,
+                    text: "请整理 KFK 的资料".into(),
+                    attachment_ids: vec![],
+                    model_id: None,
+                    tone_override: None,
+                    web_search_override: None,
+                    egress_authorization: None,
+                },
+                Some("http://127.0.0.1:1/chat/completions"),
+            )
+            .unwrap();
+        store
+            .update_ordinary_chat_message(
+                &prepared_chat.projection.attempt_id,
+                "已完成 KFK 资料整理。",
+                "COMPLETE",
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let first = store
+            .prepare_desktop_conversation_title(
+                &imported.summary.id,
+                &prepared_chat.projection.conversation_id,
+                &[],
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.provider_id, "DEEPSEEK");
+        store
+            .update_desktop_conversation_title_attempt(
+                &first,
+                "FAILED",
+                Some("RESPONSE_FORMAT"),
+                None,
+            )
+            .unwrap();
+        let second = store
+            .prepare_desktop_conversation_title(
+                &imported.summary.id,
+                &prepared_chat.projection.conversation_id,
+                &[first.provider_id.clone()],
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(second.provider_id, "ZHIPU");
+        assert_eq!(second.model_id, "glm-5.3-flash");
+    }
+
+    #[test]
     fn committed_title_usage_is_recovered_without_repeating_the_provider_request() {
         let (_directory, store, imported) = imported_store();
         let prepared = DesktopConversationTitlePrepared {
@@ -26559,21 +27427,38 @@ mod tests {
             workspace_id: imported.summary.id.clone(),
             conversation_id: "conversation-1".into(),
             assistant_message_id: "message-assistant-1".into(),
-            endpoint: String::new(), provider_id: "DEEPSEEK".into(),
-            model_id: "deepseek-flash".into(), messages: Value::Null,
-            idempotency_key: "unused-after-commit".into(), occurred_at_ms: 1_789_240_001_000,
+            endpoint: String::new(),
+            provider_id: "DEEPSEEK".into(),
+            model_id: "deepseek-flash".into(),
+            messages: Value::Null,
+            idempotency_key: "unused-after-commit".into(),
+            occurred_at_ms: 1_789_240_001_000,
         };
         store.connection().unwrap().execute(
             "INSERT INTO desktop_conversation_title_attempts(attempt_id,workspace_id,conversation_id,assistant_message_id,provider_id,requested_model_id,actual_model_id,state,input_tokens,output_tokens,cached_input_tokens,charge_micros,occurred_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,'RESPONSE_COMMITTED',?8,?9,?10,?11,?12,?12)",
             params![prepared.attempt_id, prepared.workspace_id, prepared.conversation_id, prepared.assistant_message_id, prepared.provider_id, prepared.model_id, "deepseek-flash", 31_i64, 9_i64, 2_i64, 77_i64, prepared.occurred_at_ms],
         ).unwrap();
-        store.recover_desktop_conversation_title_accounting().unwrap();
-        let state: String = store.connection().unwrap().query_row(
-            "SELECT state FROM desktop_conversation_title_attempts WHERE attempt_id=?1", [&prepared.attempt_id], |row| row.get(0),
-        ).unwrap();
+        store
+            .recover_desktop_conversation_title_accounting()
+            .unwrap();
+        let state: String = store
+            .connection()
+            .unwrap()
+            .query_row(
+                "SELECT state FROM desktop_conversation_title_attempts WHERE attempt_id=?1",
+                [&prepared.attempt_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(state, "COMPLETED");
-        let entries = usage_ledger_v1::Ledger::open(&store.root.join("usage-ledger")).unwrap().all_entries().unwrap();
-        let entry = entries.iter().find(|entry| entry.attempt_id == prepared.attempt_id).unwrap();
+        let entries = usage_ledger_v1::Ledger::open(&store.root.join("usage-ledger"))
+            .unwrap()
+            .all_entries()
+            .unwrap();
+        let entry = entries
+            .iter()
+            .find(|entry| entry.attempt_id == prepared.attempt_id)
+            .unwrap();
         assert_eq!(entry.input_tokens, Some(31));
         assert_eq!(entry.output_tokens, Some(9));
         assert_eq!(entry.charge_micros, Some(77));
@@ -26835,6 +27720,7 @@ mod tests {
             },
             reported_cost_micros: Some(9),
             actual_model_id: Some("openai/gpt-5.6-terra:actual".into()),
+            web_search_verified: false,
             elapsed_ms: 14,
         };
         store
@@ -27224,5 +28110,25 @@ mod tests {
         assert_eq!(memories[1]["status"], "DELETED");
         assert_eq!(memories[2]["status"], "ACTIVE");
         assert_eq!(memories[2]["body"], "项目记忆");
+    }
+
+    #[test]
+    fn startup_workspace_reads_use_an_independent_readonly_connection() {
+        let (_directory, store, imported) = imported_store();
+        let paths = DesktopStoreReadPaths {
+            root: store.root.clone(),
+            database: store.database.clone(),
+        };
+
+        let workspaces = paths.list_workspaces().unwrap();
+        assert_eq!(workspaces.len(), 1);
+        assert_eq!(workspaces[0].id, imported.summary.id);
+
+        let projection = paths.workspace_projection(&imported.summary.id).unwrap();
+        assert_eq!(projection.summary.id, imported.summary.id);
+        assert_eq!(
+            projection.summary.conversation_count,
+            imported.summary.conversation_count
+        );
     }
 }

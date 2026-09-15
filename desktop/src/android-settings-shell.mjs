@@ -135,12 +135,11 @@ function accountSyncPage(context) {
   const account = context.accountSync || {};
   const recovery = context.accountRecovery;
   const signedIn = Boolean(account.email);
-  const recoveryReady = account.recoveryState === 'CONFIRMED';
-  const ready = recoveryReady && !['NOT_CONFIGURED', 'SIGNED_OUT', 'SIGNED_OUT_KEEP_LOCAL'].includes(account.state);
+  const ready = signedIn && !['NOT_CONFIGURED', 'SIGNED_OUT', 'SIGNED_OUT_KEEP_LOCAL'].includes(account.state);
   const stateLabels = {
     NOT_CONFIGURED: '服务未配置', SIGNED_OUT: '未登录', SIGNED_OUT_KEEP_LOCAL: '已退出，本机数据保留',
-    AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION: '待确认恢复码', DIRECTION_REQUIRED: '待选择同步方向', READY: '已就绪',
-    SYNCING: '正在同步', CONFLICT: '存在版本冲突', FAILED: '同步需要处理',
+    DIRECTION_REQUIRED: '待选择同步方向', READY: '已就绪',
+    SYNCING: '正在同步', VERIFYING: '正在核对云端提交', CONFLICT: '存在版本冲突', FAILED: '同步需要处理',
   };
   const stateLabel = stateLabels[account.state] || account.state || '未读取';
   const accountStatusCard = (title, description, actions) => `<section class="android-settings-card android-settings-status-card android-account-status-card"><div class="android-account-status-content"><strong>${title}</strong><p>${description}</p></div><div class="android-account-status-actions">${actions}</div></section>`;
@@ -148,25 +147,16 @@ function accountSyncPage(context) {
     ? `<section class="android-settings-card android-account-hero signed-in"><div class="android-account-identity">${account.avatarDataUrl ? `<img src="${escapeHtml(account.avatarDataUrl)}" alt="Google 账号头像">` : `<span aria-hidden="true">${escapeHtml((account.displayName || account.email || '南').slice(0, 1))}</span>`}</div><strong>${escapeHtml(account.displayName || 'Google 用户')}，您好！</strong><p>${escapeHtml(account.email)}</p></section>`
     : `<section class="android-settings-card android-account-hero"><span class="android-account-hero-icon" aria-hidden="true">${icon(icons.account, 'Google 账号')}</span><strong>未登录</strong><p>${account.configured ? '登录后可管理账号与已选对话同步。' : '此 Desktop 尚未写入南枫云地址或公开访问密钥；不会打开浏览器、读取账号或上传数据。'}</p><button class="primary" data-action="${account.configured ? 'sign-in-google-account' : 'show-google-login-requirements'}" ${!context.native ? 'disabled' : ''}>${account.configured ? '使用 Google 登录' : '查看 Google 登录条件'}</button></section>`;
   const accountManagement = `<section class="android-settings-card android-account-management"><strong>账号管理</strong><button data-action="sign-in-google-account" ${signedIn && context.native ? '' : 'disabled'}>${icon(settingsIcons.syncAlt, '切换 Google 账号')}<span>切换 Google 账号</span></button><button data-action="sign-out-google-account" ${signedIn && context.native ? '' : 'disabled'}>${icon(settingsIcons.accountLogout, '退出登录')}<span>退出登录</span></button></section>`;
-  const syncControl = `<section class="android-settings-card android-account-conversation-sync"><div class="android-account-sync-heading">${icon(account.lastSuccessAtMs ? settingsIcons.accountCloudDone : settingsIcons.accountCloudOff, '对话同步')}<strong>对话同步</strong></div><p>仅包含你手动同步过的对话。</p>${signedIn && !recoveryReady && !recovery ? '<p class="android-account-sync-notice">请先完成恢复保护，确认前不会上传任何对话。</p>' : ''}${recoveryReady ? `<div class="android-account-periodic"><span><strong>定期同步</strong><small>每 12 小时更新已选对话</small></span><button type="button" class="android-settings-switch" data-action="toggle-periodic-account-sync" role="switch" aria-checked="${Boolean(account.periodicEnabled)}" ${ready ? '' : 'disabled'}><span></span></button></div>` : ''}${account.lastSuccessAtMs ? `<small>上次同步 ${new Date(Number(account.lastSuccessAtMs)).toLocaleString('zh-CN')}</small>` : (['SYNCING', 'CONFLICT', 'FAILED'].includes(account.state) ? `<small role="status">${escapeHtml(stateLabel)}</small>` : '')}</section>`;
-  const recoveryCard = recovery?.rotation
-    ? `<section class="android-settings-card android-account-recovery" aria-label="更换恢复码"><strong>更换恢复码</strong><label class="android-settings-field"><span>新恢复码</span><input id="new-recovery-code" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="至少 12 个字符"></label><button class="primary" data-action="confirm-account-recovery-rotation">确认更换</button></section>`
-    : recovery
-    ? `<section class="android-settings-card android-account-recovery" aria-label="恢复码"><strong>${recovery.rotation ? '新恢复码只显示这一次' : '恢复码只显示这一次'}</strong><div class="android-account-recovery-code"><output>${escapeHtml(recovery.recoveryCode)}</output><button type="button" class="android-account-recovery-copy" data-action="copy-account-recovery-code" data-copy-action aria-label="复制恢复码" title="复制恢复码">${icon(icons.copy, '复制')}</button></div><p>请存入密码管理器或离线安全位置。南枫云不保存明文恢复码。${recovery.rotation ? '确认后将逐个重加密已选云端对话，全部回读成功后才激活新恢复码。' : ''}</p><button class="primary" data-action="${recovery.rotation ? 'confirm-account-recovery-rotation' : 'confirm-account-recovery'}" data-confirmation-hash="${escapeHtml(recovery.confirmationHash)}">我已安全保存，完成确认</button></section>`
-    : '';
-  const remoteDocuments = Array.isArray(account.remoteDocuments) ? account.remoteDocuments : null;
-  const cloudRestore = signedIn ? `<section class="android-settings-card android-account-cloud-restore"><strong>${recoveryReady ? '从南枫云恢复' : '使用手机端已有恢复码'}</strong><p>${recoveryReady ? '只在您点击“读取云端列表”后联网。恢复会新建独立本机工作区，不覆盖现有数据。' : '请先读取手机端已上传的对话，再输入原恢复码。系统会用该密文校验恢复码并保存与手机端一致的恢复材料；不会新建恢复码，也不会覆盖本机数据。'}</p><button data-action="load-account-cloud-documents">读取云端列表</button>${remoteDocuments?.length ? `<label class="android-settings-field"><span>云端文档</span><select id="account-cloud-document">${remoteDocuments.map(item => `<option value="${escapeHtml(item.documentId)}">${escapeHtml(item.documentId)} · r${Number(item.revision)}</option>`).join('')}</select></label><label class="android-settings-field"><span>原恢复码</span><input id="account-cloud-recovery-code" type="password" autocomplete="off" spellcheck="false" placeholder="输入手机端正在使用的恢复码"></label><button class="primary" data-action="restore-account-cloud-conversation">${recoveryReady ? '恢复为新工作区' : '验证并连接此设备'}</button>` : remoteDocuments ? '<p class="android-account-cloud-empty">未找到可用云端对话。请先在手机端手动同步一条对话，再回到这里读取。</p>' : ''}</section>` : '';
+  const syncControl = `<section class="android-settings-card android-account-conversation-sync"><div class="android-account-sync-heading">${icon(account.lastSuccessAtMs ? settingsIcons.accountCloudDone : settingsIcons.accountCloudOff, '对话同步')}<strong>对话同步</strong></div>${signedIn ? `<div class="android-account-periodic"><strong>定期同步</strong><button type="button" class="android-settings-switch" data-action="toggle-periodic-account-sync" role="switch" aria-checked="${Boolean(account.periodicEnabled)}" ${ready ? '' : 'disabled'}><span></span></button></div>` : ''}${account.lastSuccessAtMs ? `<small>上次同步 ${new Date(Number(account.lastSuccessAtMs)).toLocaleString('zh-CN')}</small>` : ''}</section>`;
+  const recoveryCard = recovery?.rotation ? `<section class="android-settings-card android-account-recovery" aria-label="更换恢复码"><strong>更换恢复码</strong><label class="android-settings-field"><span>新恢复码</span><input id="new-recovery-code" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="至少 12 个字符"></label><button class="primary" data-action="confirm-account-recovery-rotation">确认更换</button></section>` : '';
+  const recoveryAndCloud = signedIn ? `<section class="android-settings-card android-account-cloud-restore android-account-phone-recovery"><strong>恢复与安全</strong><button data-action="create-account-recovery-rotation">更换恢复码 / 已丢失</button><button data-action="load-account-cloud-documents">${icon(icons.cloudDownloadSolid, '读取云端列表')}<span>读取云端列表</span></button></section>` : '';
   return `<div class="android-settings-page android-account-sync-page">
     ${identity}
     ${accountManagement}
-    ${signedIn && !recoveryReady && !recovery ? cloudRestore : ''}
-    ${recoveryCard}
     ${account.state === 'DIRECTION_REQUIRED' ? accountStatusCard('选择首次同步方向', '以本机显式选中的对话为起点；每次上传前仍会回读云端。若云端已有未知版本，立即转为冲突，不覆盖。', '<button class="primary" data-action="choose-selected-local-sync-start">以本机所选对话开始</button>') : ''}
     ${syncControl}
-    ${signedIn ? '<details class="android-account-tools"><summary>恢复与安全</summary>' : ''}
-    ${recoveryReady ? accountStatusCard('恢复码', '更换前请保存新恢复码；其他设备需要使用新恢复码重新连接。', account.rotationPending ? '<button data-action="retry-account-recovery-rotation">继续更换恢复码</button>' : '<button data-action="create-account-recovery-rotation">更换恢复码 / 已丢失</button>') : ''}
-    ${signedIn && recoveryReady ? cloudRestore : ''}
-    ${signedIn ? '</details>' : ''}
+    ${recoveryAndCloud}
+    ${recoveryCard}
     ${account.pendingUnknown ? accountStatusCard('上次提交结果未知', '先只读回读云端版本；不会直接重复上传。', `<button data-action="reconcile-account-sync" data-workspace-id="${escapeHtml(account.pendingUnknown.workspaceId)}" data-conversation-id="${escapeHtml(account.pendingUnknown.conversationId)}">核对云端结果</button>`) : ''}
   </div>`;
 }

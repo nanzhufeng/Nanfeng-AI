@@ -43,3 +43,13 @@ test('a single assistant image uses the same natural-size gallery surface withou
   assert.match(css, /\.chat-assistant-image-gallery-main \.chat-image-attachment \{[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent/);
   assert.match(css, /\.chat-assistant-image-gallery-main \.chat-image-attachment img \{[^}]*aspect-ratio:\s*auto;[^}]*background:\s*transparent/);
 });
+
+test('a selected assistant-image thumbnail keeps its theme outline while hovered or keyboard focused', () => {
+  const selected = css.slice(css.indexOf('.chat-assistant-image-gallery-thumb[aria-pressed="true"]'), css.indexOf('.chat-assistant-image-gallery-thumb img'));
+  assert.match(selected, /\[aria-pressed="true"\]:hover/);
+  assert.match(selected, /\[aria-pressed="true"\]:focus-visible/);
+  assert.match(selected, /border:\s*2px solid var\(--accent-orange\) !important/);
+  assert.match(selected, /box-shadow:\s*0 0 0 1px/);
+  assert.match(selected, /0 4px 10px rgb\(222 111 43 \/ \.22\)/);
+  assert.match(selected, /transform:\s*translateY\(-1px\)/);
+});

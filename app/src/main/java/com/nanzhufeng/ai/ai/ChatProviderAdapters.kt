@@ -56,6 +56,23 @@ interface ChatProviderAdapter {
 }
 
 /**
+ * A charge explicitly returned by the provider for this one response.  It is deliberately
+ * distinct from catalogue pricing: callers may persist and sync this fact, but must never
+ * synthesize it from token counts.
+ */
+data class ProviderReportedCost(
+    val totalMicros: Long,
+    val currencyCode: String,
+    val priceVersion: String,
+) {
+    init {
+        require(totalMicros >= 0) { "服务端结算金额不能为负数。" }
+        require(currencyCode.matches(Regex("[A-Z]{3}"))) { "服务端结算币种必须是 ISO 大写三字码。" }
+        require(priceVersion.isNotBlank()) { "服务端结算必须保留来源版本。" }
+    }
+}
+
+/**
  * Request-scoped, provider-owned augmentation. It is intentionally not a model ID heuristic:
  * OpenRouter's server tool is available to any compatible routed model, while direct providers
  * must opt in through their own adapters before the UI can describe a request as web-grounded.
@@ -123,8 +140,8 @@ sealed interface ChatAdapterDecodedResult {
         val toolCallEncountered: Boolean = false,
         /** Provider-returned public sources; never infer them from the model's prose. */
         val webSources: List<ProviderWebSource> = emptyList(),
-        /** OpenRouter's authoritative `usage.cost`, projected as USD micro-units. */
-        val reportedCostUsdMicros: Long? = null,
+        /** A provider-settled amount.  This is not a local token-price estimate. */
+        val reportedProviderCost: ProviderReportedCost? = null,
         /** Provider-reported input cache hits; used only by a local estimate when no cost arrives. */
         val cachedInputTokens: Long? = null,
         /** Provider-reported subset of output tokens spent on hidden reasoning. */
@@ -267,7 +284,7 @@ abstract class OpenAiCompatibleChatAdapter : ChatProviderAdapter {
                 toolCalls = decoded.toolCalls,
                 toolCallEncountered = decoded.toolCallEncountered,
                 webSources = decoded.webSources,
-                reportedCostUsdMicros = decoded.reportedCostUsdMicros,
+                reportedProviderCost = decoded.providerReportedCost(providerId),
                 cachedInputTokens = decoded.cachedInputTokens,
                 reasoningTokens = decoded.reasoningTokens,
             )
@@ -275,6 +292,10 @@ abstract class OpenAiCompatibleChatAdapter : ChatProviderAdapter {
             ChatAdapterDecodedResult.ToolCalls(decoded.reasoning, it, decoded.inputTokens, decoded.outputTokens)
         } ?: ChatAdapterDecodedResult.EmptyOrMalformed
     }
+    /** One provider-neutral parser feeds every direct OpenAI-compatible service. */
+    protected fun decodeOpenAiCompatibleStreamingEvent(body: String): ProviderSseEvent? =
+        OpenAiCompatibleJsonCodec.decodeStream(body, providerId)
+
     override fun classifyHttpFailure(status: Int, responseBody: String) = classifyProviderFailure(status, ErrorBodyRedactor.redact(responseBody))
     protected fun textOnlyBody(model: ResolvedModel, messages: List<Pair<String, String>>, stream: Boolean, options: ChatRequestOptions) = buildString {
         append("{\"model\":\""); append(model.modelId.escapeJson()); append("\",\"messages\":[")
@@ -343,7 +364,7 @@ open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
     // Prefer that authoritative final envelope over a stream that only exposes generated prose.
     override fun supportsStreaming(model: ResolvedModel, options: ChatRequestOptions): Boolean =
         !options.liveWebSearch && super.supportsStreaming(model, options)
-    override fun decodeStreamingEvent(body: String) = OpenAiCompatibleJsonCodec.decodeStream(body)
+    override fun decodeStreamingEvent(body: String) = decodeOpenAiCompatibleStreamingEvent(body)
 }
 
 internal const val KIMI_K3_MODEL_ID = "moonshotai/kimi-k3"
@@ -459,7 +480,7 @@ class QwenChatAdapter : OpenAiCompatibleChatAdapter() {
             OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS -> ProviderStreamTextMode.BUFFER_QWEN_WEB_SEARCH
             else -> super.streamTextMode(options)
         }
-    override fun decodeStreamingEvent(body: String) = OpenAiCompatibleJsonCodec.decodeStream(body)
+    override fun decodeStreamingEvent(body: String) = decodeOpenAiCompatibleStreamingEvent(body)
     override fun decodeStreamingEvent(body: String, options: ChatRequestOptions): ProviderSseEvent? =
         if (options.webSearchRoute == OfficialWebSearchRoute.QWEN_RESPONSES) ResponsesSseJsonCodec.decode(body)
         else decodeStreamingEvent(body)
@@ -498,7 +519,7 @@ class DeepSeekChatAdapter : OpenAiCompatibleChatAdapter() {
             ChatAdapterPrepareResult.Ready(deepSeekResponsesWebSearchBody(model, effectiveMessages))
         } else ChatAdapterPrepareResult.Ready(textOnlyBody(model, effectiveMessages, stream, options))
     }
-    override fun decodeStreamingEvent(body: String) = OpenAiCompatibleJsonCodec.decodeStream(body)
+    override fun decodeStreamingEvent(body: String) = decodeOpenAiCompatibleStreamingEvent(body)
     override fun decodeNonStreaming(body: String): ChatAdapterDecodedResult =
         ResponsesWebSearchJsonCodec.decode(body) ?: super.decodeNonStreaming(body)
 }
@@ -524,7 +545,7 @@ class ZhipuChatAdapter : OpenAiCompatibleChatAdapter() {
         return ChatAdapterPrepareResult.Ready(textOnlyBody(model, effectiveMessages, stream, options))
     }
 
-    override fun decodeStreamingEvent(body: String) = OpenAiCompatibleJsonCodec.decodeStream(body)
+    override fun decodeStreamingEvent(body: String) = decodeOpenAiCompatibleStreamingEvent(body)
 }
 
 class ChatProviderAdapters(adapters: Set<ChatProviderAdapter> = setOf(OpenRouterChatAdapter(), QwenChatAdapter(), DeepSeekChatAdapter(), ZhipuChatAdapter())) {
@@ -885,7 +906,24 @@ private object ResponsesSseJsonCodec {
 
 /** OpenAI-compatible JSON projection; it intentionally has no OpenRouter-specific dependency. */
 private object OpenAiCompatibleJsonCodec {
-    data class Decoded(val text: String, val reasoning: String?, val toolCalls: List<ChatToolCall>, val toolCallEncountered: Boolean, val inputTokens: Long?, val outputTokens: Long?, val webSources: List<ProviderWebSource>, val reportedCostUsdMicros: Long?, val cachedInputTokens: Long?, val reasoningTokens: Long?)
+    data class Decoded(
+        val text: String,
+        val reasoning: String?,
+        val toolCalls: List<ChatToolCall>,
+        val toolCallEncountered: Boolean,
+        val inputTokens: Long?,
+        val outputTokens: Long?,
+        val webSources: List<ProviderWebSource>,
+        val reportedCostMicros: Long?,
+        val reportedCostCurrencyCode: String?,
+        val reportedCostPriceVersion: String?,
+        val cachedInputTokens: Long?,
+        val reasoningTokens: Long?,
+    ) {
+        fun providerReportedCost(providerId: ProviderId): ProviderReportedCost? = providerReportedCost(
+            providerId, reportedCostMicros, reportedCostCurrencyCode, reportedCostPriceVersion,
+        )
+    }
 
     fun decode(raw: String): Decoded? = runCatching {
         val root = StrictJson.parse(raw).objectValue() ?: return null
@@ -902,13 +940,15 @@ private object OpenAiCompatibleJsonCodec {
             usage?.long("prompt_tokens", "input_tokens"), usage?.long("completion_tokens", "output_tokens"),
             root.webSources(message),
             usage?.decimalMicros("cost"),
+            usage?.stringValue("currency"),
+            usage?.stringValue("price_version"),
             usage?.objectValue("input_tokens_details")?.long("cached_tokens")
                 ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens"),
             usage?.reasoningTokens(),
         )
     }.getOrNull()
 
-    fun decodeStream(raw: String): ProviderSseEvent? = runCatching {
+    fun decodeStream(raw: String, providerId: ProviderId): ProviderSseEvent? = runCatching {
         val root = StrictJson.parse(raw).objectValue() ?: return null
         val choice = root.arrayValue("choices")?.firstOrNull().objectValue()
         val delta = choice?.objectValue("delta")
@@ -922,6 +962,7 @@ private object OpenAiCompatibleJsonCodec {
         val input = usage?.long("prompt_tokens", "input_tokens")
         val output = usage?.long("completion_tokens", "output_tokens")
         val cost = usage?.decimalMicros("cost")
+        val providerCost = providerReportedCost(providerId, cost, usage?.stringValue("currency"), usage?.stringValue("price_version"))
         val cachedInput = usage?.objectValue("input_tokens_details")?.long("cached_tokens")
             ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens")
         val reasoningTokens = usage?.reasoningTokens()
@@ -929,7 +970,7 @@ private object OpenAiCompatibleJsonCodec {
         if (text == null && reasoning == null && toolDeltas.isEmpty() && input == null && output == null && cost == null && reasoningTokens == null && webSources.isEmpty()) null
         else ProviderSseEvent(
             text, reasoning, input, output,
-            reportedCostUsdMicros = cost,
+            reportedProviderCost = providerCost,
             toolCallEncountered = rawTools?.isNotEmpty() == true,
             webSources = webSources,
             toolCallDeltas = toolDeltas,
@@ -1026,4 +1067,30 @@ private object OpenAiCompatibleJsonCodec {
     private fun Map<String, Any?>.objectValue(key: String): Map<String, Any?>? = this[key].objectValue()
     @Suppress("UNCHECKED_CAST") private fun Map<String, Any?>.arrayValue(key: String): List<Any?>? = this[key] as? List<Any?>
     private fun Map<String, Any?>.stringValue(key: String): String? = this[key] as? String
+}
+
+/**
+ * The wire field is provider-neutral.  A response-declared currency wins; the fallback is only
+ * the official billing currency for direct endpoints that omit it, never a calculated amount.
+ */
+private fun providerReportedCost(
+    providerId: ProviderId,
+    totalMicros: Long?,
+    reportedCurrencyCode: String?,
+    reportedPriceVersion: String?,
+): ProviderReportedCost? {
+    val amount = totalMicros?.takeIf { it >= 0 } ?: return null
+    val currency = reportedCurrencyCode?.trim()?.uppercase(java.util.Locale.ROOT)
+        ?.takeIf { it.matches(Regex("[A-Z]{3}")) }
+        ?: providerId.directProviderBillingCurrency()
+        ?: return null
+    val version = reportedPriceVersion?.trim()?.takeIf(String::isNotBlank)
+        ?: "${providerId.name.lowercase(java.util.Locale.ROOT)}-provider-response"
+    return ProviderReportedCost(amount, currency, version)
+}
+
+private fun ProviderId.directProviderBillingCurrency(): String? = when (this) {
+    ProviderId.OPENROUTER -> "USD"
+    ProviderId.QWEN, ProviderId.DEEPSEEK, ProviderId.ZHIPU -> "CNY"
+    ProviderId.MOCK -> null
 }

@@ -82,6 +82,13 @@ import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
+/** The executor accepts a settled fact from any adapter; provider identity never gates it. */
+internal fun providerSettledConversationCost(
+    reportedCost: ProviderReportedCost?,
+): Pair<ProviderCost, ConversationCostSource?>? = reportedCost?.let {
+    ProviderCost(it.priceVersion, it.currencyCode, it.totalMicros) to ConversationCostSource.PROVIDER_RESPONSE
+}
+
 /** Ordinary composer send. The chosen logical slot determines the concrete provider/model. */
 class NormalChatOpenRouterExecutor(
     private val configuration: LoadModelServiceConfigurationUseCase,
@@ -782,7 +789,7 @@ class NormalChatOpenRouterExecutor(
                             cachedInputTokens = reply.cachedInputTokens,
                             reasoningTokens = reply.reasoningTokens,
                         )
-                        val (cost, source) = resolvedConversationCost(executionProviderId, modelId, usage, reply.reportedCostUsdMicros)
+                        val (cost, source) = resolvedConversationCost(modelId, usage, reply.reportedProviderCost)
                         val k3Tools = if (modelId == KIMI_K3_MODEL_ID) reply.toolCalls else emptyList()
                         val notice = when {
                             !reasoningRetained -> CompletionNotice.REASONING_NOT_SAVED
@@ -865,7 +872,7 @@ class NormalChatOpenRouterExecutor(
                         cachedInputTokens = outcome.cachedInputTokens,
                         reasoningTokens = outcome.reasoningTokens,
                     )
-                    val (cost, source) = resolvedConversationCost(executionProviderId, modelId, usage, outcome.reportedCostUsdMicros)
+                    val (cost, source) = resolvedConversationCost(modelId, usage, outcome.reportedProviderCost)
                     val k3Tools = if (modelId == KIMI_K3_MODEL_ID) outcome.toolCalls else emptyList()
                     val notice = when {
                         !reasoningRetained -> CompletionNotice.REASONING_NOT_SAVED
@@ -946,16 +953,13 @@ class NormalChatOpenRouterExecutor(
         )
     }.isSuccess
 
-    /** OpenRouter's response amount settles the request; the calibrated table is fallback only. */
+    /** A service-settled response amount wins over catalogue estimation for every provider. */
     private fun resolvedConversationCost(
-        receiverProviderId: ProviderId,
         modelId: String,
         usage: ProviderUsage,
-        reportedCostUsdMicros: Long?,
+        reportedProviderCost: ProviderReportedCost?,
     ): Pair<ProviderCost, ConversationCostSource?> {
-        if (receiverProviderId == ProviderId.OPENROUTER && reportedCostUsdMicros != null) {
-            return ProviderCost("openrouter-provider-response", "USD", reportedCostUsdMicros) to ConversationCostSource.PROVIDER_RESPONSE
-        }
+        providerSettledConversationCost(reportedProviderCost)?.let { return it }
         return ConversationCostEstimator.estimate(modelId, usage, clock.instant())?.let { it to ConversationCostSource.LOCAL_ESTIMATE }
             ?: (ProviderCost() to null)
     }

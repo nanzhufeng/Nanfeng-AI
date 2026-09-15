@@ -108,7 +108,8 @@ test('runtime wiring preserves the route and keeps read markers device-local', a
     'mark_desktop_conversation_opened',
     'mark_desktop_conversation_unread',
     'pendingCreatedConversationRouteWorkspaceId',
-    'routeStillOwned',
+    'pendingChatSubmission',
+    'clientSubmissionId',
   ]) assert.ok(appSource.includes(token));
   assert.match(backupSource, /PRESERVED_DEVICE_TABLES[\s\S]*desktop_conversation_read_markers_v1/);
   assert.doesNotMatch(syncSource, /desktop_conversation_read_markers_v1/);

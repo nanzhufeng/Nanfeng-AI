@@ -67,45 +67,10 @@ pub trait CredentialStore {
     fn read(&self, service: &str, account: &str) -> Result<Vec<u8>, String>;
     fn delete(&self, service: &str, account: &str) -> Result<(), String>;
 }
-/// macOS-only credential adapter. It never lists keychain entries; callers provide the app-owned service/account exactly.
-pub struct MacKeychainCredentialStore;
-impl CredentialStore for MacKeychainCredentialStore {
-    fn save(&self, service: &str, account: &str, secret: &[u8]) -> Result<(), String> {
-        if !cfg!(target_os = "macos") || secret.len() != 32 {
-            return Err(err());
-        }
-        #[cfg(target_os = "macos")]
-        return security_framework::passwords::set_generic_password(service, account, secret)
-            .map_err(|_| err());
-        #[cfg(not(target_os = "macos"))]
-        Err(err())
-    }
-    fn read(&self, service: &str, account: &str) -> Result<Vec<u8>, String> {
-        if !cfg!(target_os = "macos") {
-            return Err(err());
-        }
-        #[cfg(target_os = "macos")]
-        return security_framework::passwords::get_generic_password(service, account)
-            .map_err(|_| err());
-        #[cfg(not(target_os = "macos"))]
-        Err(err())
-    }
-    fn delete(&self, service: &str, account: &str) -> Result<(), String> {
-        if !cfg!(target_os = "macos") {
-            return Err(err());
-        }
-        #[cfg(target_os = "macos")]
-        return security_framework::passwords::delete_generic_password(service, account)
-            .map_err(|_| err());
-        #[cfg(not(target_os = "macos"))]
-        Err(err())
-    }
-}
-
 pub struct SqliteMetadataStore<'a> {
     pub connection: &'a mut Connection,
 }
-const KEYCHAIN_SERVICE: &str = "com.nanzhufeng.ai.p7b.v1";
+const APP_PRIVATE_KEY_ALIAS: &str = "com.nanzhufeng.ai.app-private-sync.v2";
 /// P7-B desktop transition owner. No HTTP or Tauri command may call it in this phase.
 pub fn authenticate<C: CredentialStore>(
     store: &mut SqliteMetadataStore<'_>,
@@ -130,14 +95,14 @@ pub fn authenticate<C: CredentialStore>(
             let mut key = [0u8; 32];
             OsRng.fill_bytes(&mut key);
             let fingerprint = format!("{:x}", Sha256::digest(key));
-            credential.save(KEYCHAIN_SERVICE, &account, &key)?;
+            credential.save(APP_PRIVATE_KEY_ALIAS, &account, &key)?;
             key.zeroize();
             Metadata {
                 account_ref: account.clone(),
                 state: State::NeedsRecoveryConfirmation,
                 revision: 1,
-                key_alias_ref: Some(KEYCHAIN_SERVICE.into()),
-                wrapped_key_ref: Some(format!("keychain/{account}")),
+                key_alias_ref: Some(APP_PRIVATE_KEY_ALIAS.into()),
+                wrapped_key_ref: Some(format!("app-private/{account}")),
                 wrapped_key_sha256: Some(fingerprint),
                 direction_fact: None,
                 last_error: None,
@@ -145,7 +110,7 @@ pub fn authenticate<C: CredentialStore>(
         }
         Some(current)
             if !credential
-                .read(KEYCHAIN_SERVICE, &account)
+                .read(APP_PRIVATE_KEY_ALIAS, &account)
                 .is_ok_and(|key| key.len() == 32) =>
         {
             Metadata {
@@ -193,6 +158,33 @@ pub fn confirm_recovery_saved(
             Ok(Metadata {
                 state: State::DirectionRequired,
                 revision: current.revision + 1,
+                ..current
+            })
+        },
+    )
+}
+
+/// Re-open recovery setup only after the caller has independently proved that
+/// the account has no remote documents and no selected local sync receipts.
+/// This is deliberately a narrow migration escape hatch: it does not create
+/// key material, upload data, or weaken the normal existing-code path.
+pub fn restart_recovery_setup_for_empty_remote(
+    store: &mut SqliteMetadataStore<'_>,
+    intent_id: &str,
+    account: &str,
+    expected_revision: u64,
+) -> Result<Receipt, String> {
+    transition(
+        store,
+        intent_id,
+        account,
+        Some(expected_revision),
+        |current| {
+            Ok(Metadata {
+                state: State::NeedsRecoveryConfirmation,
+                revision: current.revision + 1,
+                direction_fact: None,
+                last_error: None,
                 ..current
             })
         },
@@ -335,7 +327,7 @@ pub fn with_key<C: CredentialStore, T>(
     account_ref: &str,
     callback: impl FnOnce(&[u8]) -> T,
 ) -> Result<T, String> {
-    let service = "com.nanzhufeng.ai.p7b.v1";
+    let service = APP_PRIVATE_KEY_ALIAS;
     let mut key = store.read(service, account_ref)?;
     if key.len() != 32 {
         return Err(err());
@@ -372,10 +364,9 @@ mod tests {
         let ref_a = account_ref("verified-account-a").unwrap();
         assert_ne!(ref_a, account_ref("verified-account-b").unwrap());
         let m = Mem(RefCell::new(BTreeMap::new()));
-        m.save("com.nanzhufeng.ai.p7b.v1", &ref_a, &[7; 32])
-            .unwrap();
+        m.save(APP_PRIVATE_KEY_ALIAS, &ref_a, &[7; 32]).unwrap();
         assert_eq!(with_key(&m, &ref_a, |key| key.len()).unwrap(), 32);
-        m.delete("com.nanzhufeng.ai.p7b.v1", &ref_a).unwrap();
+        m.delete(APP_PRIVATE_KEY_ALIAS, &ref_a).unwrap();
         assert!(with_key(&m, &ref_a, |_| ()).is_err());
     }
     #[test]
@@ -390,8 +381,8 @@ mod tests {
             account_ref: account.clone(),
             state: State::NeedsRecoveryConfirmation,
             revision: 1,
-            key_alias_ref: Some("keychain-alias-ref".into()),
-            wrapped_key_ref: Some("keychain-ref".into()),
+            key_alias_ref: Some("app-private-alias-ref".into()),
+            wrapped_key_ref: Some("app-private-ref".into()),
             wrapped_key_sha256: Some("safe-hash".into()),
             direction_fact: None,
             last_error: None,

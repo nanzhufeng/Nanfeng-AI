@@ -108,7 +108,7 @@ class ProviderAdapterContractsTest {
         assertEquals(4L, decoded?.outputTokens)
     }
 
-    @Test fun `OpenRouter usage cost is converted to persisted USD micro units without losing a valid zero`() {
+    @Test fun `provider usage cost is retained as a settled amount without losing a valid zero`() {
         val charged = OpenRouterChatAdapter().decodeNonStreaming(
             """{"choices":[{"message":{"content":"完成"}}],"usage":{"prompt_tokens":12,"completion_tokens":4,"cost":0.00521}}""",
         ) as? ChatAdapterDecodedResult.Text
@@ -116,8 +116,28 @@ class ProviderAdapterContractsTest {
             """{"choices":[{"message":{"content":"免费"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"cost":0}}""",
         ) as? ChatAdapterDecodedResult.Text
 
-        assertEquals(5_210L, charged?.reportedCostUsdMicros)
-        assertEquals(0L, free?.reportedCostUsdMicros)
+        assertEquals(ProviderReportedCost(5_210L, "USD", "openrouter-provider-response"), charged?.reportedProviderCost)
+        assertEquals(ProviderReportedCost(0L, "USD", "openrouter-provider-response"), free?.reportedProviderCost)
+    }
+
+    @Test fun `Qwen and Zhipu settled response amounts use the same attribution contract`() {
+        val qwen = QwenChatAdapter().decodeNonStreaming(
+            """{"choices":[{"message":{"content":"千问完成"}}],"usage":{"prompt_tokens":12,"completion_tokens":4,"cost":0.0187}}""",
+        ) as? ChatAdapterDecodedResult.Text
+        val zhipu = ZhipuChatAdapter().decodeNonStreaming(
+            """{"choices":[{"message":{"content":"智谱完成"}}],"usage":{"prompt_tokens":9,"completion_tokens":3,"cost":0.1424}}""",
+        ) as? ChatAdapterDecodedResult.Text
+
+        assertEquals(ProviderReportedCost(18_700L, "CNY", "qwen-provider-response"), qwen?.reportedProviderCost)
+        assertEquals(ProviderReportedCost(142_400L, "CNY", "zhipu-provider-response"), zhipu?.reportedProviderCost)
+        assertEquals(
+            com.nanzhufeng.ai.domain.ConversationCostSource.PROVIDER_RESPONSE,
+            providerSettledConversationCost(qwen?.reportedProviderCost)?.second,
+        )
+        assertEquals(
+            com.nanzhufeng.ai.domain.ProviderCost("zhipu-provider-response", "CNY", 142_400L),
+            providerSettledConversationCost(zhipu?.reportedProviderCost)?.first,
+        )
     }
 
     @Test fun `OpenRouter citations are retained as provider sources and become source chips later`() {

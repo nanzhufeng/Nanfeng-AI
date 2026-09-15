@@ -57,6 +57,7 @@ class ConversationManagementDomain(private val clock: Clock) {
         val next = when (intent.action) {
             ConversationManagementAction.RENAME -> before.copy(
                 title = normalizeTitle(requireNotNull(intent.title)),
+                titleRevision = Math.addExact(before.titleRevision ?: 0L, 1L),
                 autoTitlePending = false,
             )
             ConversationManagementAction.PIN -> {

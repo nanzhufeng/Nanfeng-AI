@@ -50,6 +50,18 @@ export function favoriteConversations(data, favoriteIds = new Set()) {
   return activeConversations(data).filter(item => favoriteIds.has(item.id));
 }
 
+// The cloud list is not allowed to inherit either the local pin or a
+// device-local cache order. Android projects the same cloud receipts by the
+// persisted conversation update timestamp with the stable ID tie-breaker; use
+// that exact ordering here before the separate cloud-presentation pin groups
+// are rendered.
+export function activeCloudConversations(rows = []) {
+  return [...rows]
+    .filter(item => !item.archived && !item.deleted)
+    .sort((left, right) => String(right.updatedAt ?? '').localeCompare(String(left.updatedAt ?? ''))
+      || String(left.id ?? '').localeCompare(String(right.id ?? '')));
+}
+
 export function resolveConversation(data, selectedConversationId) {
   const conversations = activeConversations(data);
   if (!selectedConversationId) return null;
@@ -117,16 +129,26 @@ export function deriveDesktopDualPathState({ connection } = {}) {
   };
 }
 
-function conversationRows(conversations, selectedConversationId, { archived = false, favoriteIds = new Set(), unreadIds = new Set(), manualUnreadAtMs = new Map() } = {}) {
+function conversationRows(conversations, selectedConversationId, { archived = false, favoriteIds = new Set(), unreadIds = new Set(), manualUnreadAtMs = new Map(), batchEditing = false, batchSelectedKeys = new Set(), syncedConversationKeys = new Set(), localWorkspaceId = null } = {}) {
   if (!conversations.length) return `<p class="chat-history-empty">${archived ? '还没有已归档会话' : '还没有本地会话'}</p>`;
   return conversations.map(item => {
     const manuallyUnread = manualUnreadTimestamp(manualUnreadAtMs, item.id) > 0;
+    const favorite = favoriteIds.has(item.id) || Boolean(item.favorite);
     const unread = unreadIds.has(item.id) || manuallyUnread;
     const running = (item.messages || []).some(message => String(message.delivery || '').toUpperCase() === 'PARTIAL' && message.runtimeState === 'RUNNING');
+    const workspaceId = item.workspaceId ? ` data-workspace-id="${escapeHtml(item.workspaceId)}"` : '';
+    const cloud = item.workspaceId ? 'true' : 'false';
+    const batchKey = `${item.workspaceId || 'local'}:${item.id}`;
+    const syncKey = `${item.workspaceId || localWorkspaceId || 'local'}:${item.id}`;
+    const syncedToCloud = syncedConversationKeys.has(syncKey);
+    const batchSelected = batchSelectedKeys.has(batchKey);
+    const rowAction = batchEditing ? 'toggle-batch-conversation' : 'select-chat';
     return `
-    <div class="chat-history-row ${item.id === selectedConversationId ? 'selected' : ''}" data-conversation-row data-id="${escapeHtml(item.id)}" data-revision="${item.revision}" data-pinned="${Boolean(item.pinned)}" data-favorite="${favoriteIds.has(item.id)}" data-archived="${Boolean(item.archived)}">
-      <button class="chat-history-select" data-action="select-chat" data-id="${escapeHtml(item.id)}" title="${escapeHtml(item.title || '未命名会话')} · ${escapeHtml(conversationLocalDate(item))}">
+    <div class="chat-history-row ${item.id === selectedConversationId ? 'selected' : ''} ${batchEditing ? 'batch-editing' : ''}" data-conversation-row data-id="${escapeHtml(item.id)}" data-revision="${item.revision}" data-pinned="${Boolean(item.pinned)}" data-favorite="${favorite}" data-archived="${Boolean(item.archived)}" data-cloud-conversation="${cloud}" data-batch-key="${escapeHtml(batchKey)}"${workspaceId}>
+      ${batchEditing ? `<button class="chat-batch-select" data-action="toggle-batch-conversation" data-batch-key="${escapeHtml(batchKey)}" data-id="${escapeHtml(item.id)}" data-revision="${item.revision}"${workspaceId} role="checkbox" aria-checked="${batchSelected}" aria-label="${batchSelected ? '取消选择' : '选择'}${escapeHtml(item.title || '未命名会话')}">${batchSelected ? icon(icons.check, '已选择') : ''}</button>` : ''}
+      <button class="chat-history-select" data-action="${rowAction}" data-id="${escapeHtml(item.id)}"${workspaceId} data-batch-key="${escapeHtml(batchKey)}" data-revision="${item.revision}" ${batchEditing ? `aria-pressed="${batchSelected}"` : ''} title="${escapeHtml(item.title || '未命名会话')} · ${escapeHtml(conversationLocalDate(item))}">
         <span class="chat-history-title-line">
+          ${syncedToCloud ? `<i class="chat-history-cloud-sync" aria-label="已同步到云端">${icon(icons.cloudDone, '已同步到云端')}</i>` : ''}
           ${item.pinned ? `<i class="chat-history-conversation-icon" aria-label="已置顶">${icon(settingsIcons.conversation, '对话')}</i>` : ''}
           ${unread ? `<i class="chat-history-unread" aria-label="${manuallyUnread ? '已标记未读' : '有未查看的新内容'}"></i>` : ''}
           ${running ? '<i class="chat-history-running" aria-label="正在生成"></i>' : ''}
@@ -134,12 +156,12 @@ function conversationRows(conversations, selectedConversationId, { archived = fa
         </span>
       </button>
       <small class="chat-history-date">${escapeHtml(conversationLocalDate(item))}</small>
-      <div class="chat-row-actions" aria-label="${escapeHtml(item.title || '未命名会话')}的操作">
+      ${batchEditing ? '' : `<div class="chat-row-actions" aria-label="${escapeHtml(item.title || '未命名会话')}的操作">
         ${archived
           ? `<button class="chat-row-action-icon" data-action="restore-conversation" data-id="${escapeHtml(item.id)}" data-revision="${item.revision}" aria-label="恢复会话" title="恢复会话">${icon(icons.restore, '恢复')}</button>`
-          : `<button class="chat-row-action-icon" data-action="set-conversation-pinned" data-id="${escapeHtml(item.id)}" data-revision="${item.revision}" data-pinned="${!item.pinned}" aria-label="${item.pinned ? '取消置顶会话' : '置顶会话'}" title="${item.pinned ? '取消置顶会话' : '置顶会话'}">${icon(item.pinned ? icons.pushPinOff : icons.pushPin, item.pinned ? '取消置顶' : '置顶')}</button><button class="chat-row-action-icon" data-action="toggle-conversation-favorite" data-id="${escapeHtml(item.id)}" aria-label="${favoriteIds.has(item.id) ? '取消收藏' : '收藏'}" title="${favoriteIds.has(item.id) ? '取消收藏' : '收藏'}">${icon(favoriteIds.has(item.id) ? icons.bookmark : icons.bookmarkBorder, favoriteIds.has(item.id) ? '取消收藏' : '收藏')}</button>`}
+          : `<button class="chat-row-action-icon" data-action="set-conversation-pinned" data-id="${escapeHtml(item.id)}" data-revision="${item.revision}" data-pinned="${!item.pinned}"${workspaceId} aria-label="${item.pinned ? '取消置顶会话' : '置顶会话'}" title="${item.pinned ? '取消置顶会话' : '置顶会话'}">${icon(item.pinned ? icons.pushPinOff : icons.pushPin, item.pinned ? '取消置顶' : '置顶')}</button><button class="chat-row-action-icon" data-action="open-conversation-rename" data-id="${escapeHtml(item.id)}" data-revision="${item.revision}"${workspaceId} aria-label="重命名" title="重命名">${icon(icons.edit, '重命名')}</button>`}
         <button class="chat-row-action-icon" data-action="open-conversation-row-menu" data-overlay-trigger aria-label="对话更多操作">${icon(icons.more, '更多')}</button>
-      </div>
+      </div>`}
     </div>
   `;
   }).join('');
@@ -649,10 +671,13 @@ function messageList(conversation, options = {}) {
 
 function conversationContextMenu(menu, workMode, accountSync = {}) {
   if (!menu) return '';
-  const data = `data-id="${escapeHtml(menu.id)}" data-revision="${menu.revision}" data-pinned="${menu.pinned}" data-favorite="${Boolean(menu.favorite)}"`;
+  const workspace = menu.workspaceId ? ` data-workspace-id="${escapeHtml(menu.workspaceId)}"` : '';
+  const data = `data-id="${escapeHtml(menu.id)}" data-revision="${menu.revision}" data-pinned="${menu.pinned}" data-favorite="${Boolean(menu.favorite)}"${workspace}`;
   const item = (action, glyph, label, { extra = '', trailing = false, danger = false } = {}) => `<button class="chat-context-menu-item${danger ? ' danger' : ''}" role="menuitem" data-action="${action}" ${data} ${extra}><span class="chat-menu-action-icon" aria-hidden="true">${glyph}</span><span class="chat-menu-action-label">${label}</span>${trailing ? `<span class="chat-menu-action-trailing" aria-hidden="true">${icon(icons.chevronRight, '展开')}</span>` : ''}</button>`;
-  const syncLabel = '同步到南枫云';
-  const common = `${item('context-menu-pin', icon(menu.pinned ? icons.pushPinOff : icons.pushPin, menu.pinned ? '取消置顶' : '置顶'), menu.pinned ? '取消置顶' : '置顶')}${item('context-menu-unread', icon(icons.visibility, '未读'), '未读')}${item('context-menu-favorite', icon(menu.favorite ? icons.bookmark : icons.bookmarkBorder, menu.favorite ? '取消收藏' : '收藏'), menu.favorite ? '取消收藏' : '收藏')}${item('context-menu-share', icon(icons.share, '分享'), '分享')}${item('context-menu-sync', icon(icons.cloudUpload, syncLabel), syncLabel)}${item('context-menu-find', icon(icons.search, '在聊天中查找'), '在聊天中查找')}`;
+  const cloudConversation = Boolean(menu.workspaceId);
+  const syncLabel = cloudConversation ? '取消同步' : '同步到南枫云';
+  const syncAction = cloudConversation ? 'context-menu-cancel-sync' : 'context-menu-sync';
+  const common = `${item('context-menu-pin', icon(menu.pinned ? icons.pushPinOff : icons.pushPin, menu.pinned ? '取消置顶' : '置顶'), menu.pinned ? '取消置顶' : '置顶')}${item('context-menu-unread', icon(icons.visibility, '未读'), '未读')}${item('context-menu-favorite', icon(menu.favorite ? icons.bookmark : icons.bookmarkBorder, menu.favorite ? '取消收藏' : '收藏'), menu.favorite ? '取消收藏' : '收藏')}${item('context-menu-rename', icon(icons.edit, '重命名'), '重命名')}${item('context-menu-share', icon(icons.share, '分享'), '分享')}${item(syncAction, icon(cloudConversation ? icons.cloudOff : icons.cloudUploadSolid, syncLabel), syncLabel)}${item('context-menu-find', icon(icons.search, '在聊天中查找'), '在聊天中查找')}`;
   const archive = item('context-menu-archive', icon(menu.archived ? icons.restore : icons.archive, menu.archived ? '恢复' : '归档'), menu.archived ? '恢复' : '归档', { extra: `data-archived="${menu.archived}"` });
   const remove = item('context-menu-delete', icon(icons.trash, '删除'), '删除', { danger: true });
   return `<div class="chat-context-menu" role="menu" aria-label="${workMode ? '工作会话菜单' : '对话会话菜单'}" data-menu-source="${menu.source === 'header' ? 'header' : 'sidebar'}" data-positioned="false"><div class="chat-context-menu-title">${escapeHtml(menu.title || '对话操作')}</div>${common}${archive}${remove}</div>`;
@@ -698,6 +723,11 @@ export function renderChatFirstShell({
   railCollapsed,
   showArchived,
   showDeleted,
+  sidebarConversationList = globalThis.__nanfengDesktopWorkState?.sidebarConversationList || 'recent',
+  cloudConversations = globalThis.__nanfengDesktopWorkState?.cloudConversations || [],
+  cloudConversationOpening = globalThis.__nanfengDesktopWorkState?.cloudConversationOpening || null,
+  batchEditing = Boolean(globalThis.__nanfengDesktopWorkState?.batchEditing),
+  batchSelectedConversationKeys = globalThis.__nanfengDesktopWorkState?.batchSelectedConversationKeys || new Set(),
   contextMenu,
   assistantMessageMenu: activeAssistantMessageMenu = globalThis.__nanfengDesktopWorkState?.assistantMessageMenu || null,
   composerAddOpen,
@@ -735,6 +765,7 @@ export function renderChatFirstShell({
   favoriteConversationIds = new Set(),
   unreadConversationIds = new Set(),
   manualUnreadAtMs = new Map(),
+  syncedConversationKeys = new Set(),
   conversationFindOpen = false,
   conversationFindQuery = '',
   conversationFindMatches = [],
@@ -817,7 +848,7 @@ export function renderChatFirstShell({
   const workPaneTitle = ({ work: '工作', projects: '项目', knowledge: '知识', memory: '记忆', 'p8-inspect': '本地受控记录', reminders: '定时任务', transcription: '南枫转写' })[pane];
   const title = temporaryConversation ? '临时聊天' : pane === 'work'
     ? (conversation?.title || workState.project?.title || '工作')
-    : workPaneTitle || (conversation?.title || '新对话');
+    : workPaneTitle || (cloudConversationOpening?.title || conversation?.title || '新对话');
   const visibleAttachments = temporaryConversation
     ? (temporaryConversation.attachments || []).filter(item => (temporaryConversation.draftAttachmentIds || []).includes(item.id))
     : composerAttachments;
@@ -901,10 +932,29 @@ export function renderChatFirstShell({
     const listed = activeConversations(data, visibleManualUnreadAtMs);
     const pinned = pinnedConversations(data, visibleManualUnreadAtMs);
     const recent = listed.filter(item => !item.pinned);
-    return listed.length
-      ? `${pinned.length ? `<div class="chat-history-group" role="group" aria-label="置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(pinned, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs })}</div>` : ''}${recent.length ? `<div class="chat-history-group" role="group" aria-label="最近会话"><p class="chat-history-label">最近</p>${conversationRows(recent, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs })}</div>` : ''}`
-      : conversationRows([], selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs });
+    const localRows = listed.length
+      ? `${pinned.length ? `<div class="chat-history-group" role="group" aria-label="置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(pinned, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null })}</div>` : ''}${recent.length ? `<div class="chat-history-group" role="group" aria-label="最近会话"><p class="chat-history-label">最近</p>${conversationRows(recent, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null })}</div>` : ''}`
+      : conversationRows([], selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null });
+    if (sidebarConversationList !== 'cloud') return localRows;
+    // The round cloud button beside the centered 本地/云端 selector is the one
+    // and only read affordance in the sidebar. Do not duplicate it here.
+    if (!cloudConversations.length) return '<div class="chat-cloud-empty"><p>尚未读取云端会话。</p></div>';
+    const cloudRows = activeCloudConversations(cloudConversations);
+    const cloudFavorites = new Set(cloudRows.filter(item => item.favorite).map(item => item.id));
+    const cloudPinned = cloudRows.filter(item => item.pinned);
+    const cloudRecent = cloudRows.filter(item => !item.pinned);
+    return `<div class="chat-cloud-list" role="group" aria-label="云端会话">${cloudPinned.length ? `<div class="chat-history-group" role="group" aria-label="云端置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(cloudPinned, selectedConversationId, { favoriteIds: cloudFavorites, batchEditing, batchSelectedKeys: batchSelectedConversationKeys })}</div>` : ''}${cloudRecent.length ? `<div class="chat-history-group" role="group" aria-label="云端最近会话"><p class="chat-history-label">最近</p>${conversationRows(cloudRecent, selectedConversationId, { favoriteIds: cloudFavorites, batchEditing, batchSelectedKeys: batchSelectedConversationKeys })}</div>` : ''}</div>`;
   })();
+  const batchCandidates = sidebarConversationList === 'cloud'
+    ? cloudConversations.filter(item => !item.archived && !item.deleted)
+    : activeConversations(data, manualUnreadAtMs);
+  const batchCandidateKeys = batchCandidates.map(item => `${item.workspaceId || 'local'}:${item.id}`);
+  const batchSelectedCount = batchCandidateKeys.filter(key => batchSelectedConversationKeys.has(key)).length;
+  const allBatchSelected = batchCandidateKeys.length > 0 && batchSelectedCount === batchCandidateKeys.length;
+  // Batch actions stay in the fixed footer, like Android's selection strip.
+  // Keeping them after the scrollable history made them disappear below long lists.
+  const sidebarBatchControls = activeWorkMode || !batchEditing ? '' : `<div class="chat-sidebar-batch-controls" aria-label="批量编辑对话"><button data-action="toggle-batch-select-all">${icon(icons.selectAll, allBatchSelected ? '取消全选' : '全选')}<span>${allBatchSelected ? '取消全选' : '全选'}</span></button><button class="danger" data-action="request-batch-conversation-delete" ${batchSelectedCount ? '' : 'disabled'}>${icon(icons.trash, '删除')}<span>删除 ${batchSelectedCount}</span></button><button class="done" data-action="toggle-conversation-batch-edit">${icon(icons.check, '完成')}<span>完成</span></button></div>`;
+  const sidebarListTabs = activeWorkMode ? '' : `<div class="chat-sidebar-list-selector"><div class="chat-sidebar-list-tabs" role="tablist" aria-label="会话来源"><button data-action="show-recent-conversation-list" role="tab" aria-label="本地会话" aria-selected="${sidebarConversationList !== 'cloud'}" class="${sidebarConversationList !== 'cloud' ? 'selected' : ''}">本地</button><button data-action="show-cloud-conversation-list" role="tab" aria-label="云端会话" aria-selected="${sidebarConversationList === 'cloud'}" class="${sidebarConversationList === 'cloud' ? 'selected' : ''}">云端</button></div><div class="chat-sidebar-list-utilities"><button class="chat-sidebar-list-utility ${batchEditing ? 'selected' : ''}" data-action="toggle-conversation-batch-edit" aria-label="${batchEditing ? '退出批量编辑' : '批量编辑对话'}" title="${batchEditing ? '退出批量编辑' : '批量编辑对话'}" aria-pressed="${batchEditing}" ${batchCandidates.length ? '' : 'disabled'}>${icon(icons.listChecks, '批量编辑对话')}</button><button class="chat-sidebar-list-utility chat-sidebar-cloud-read" data-action="load-account-cloud-documents" aria-label="读取云端列表" title="读取云端列表">${icon(icons.cloudDownloadSolid, '读取云端列表')}</button></div></div>`;
   const composer = `
     <section class="chat-composer-wrap" aria-label="消息输入">
       <div class="chat-composer">
@@ -939,9 +989,12 @@ export function renderChatFirstShell({
   const transcriptSurface = preserveTranscript
     ? '<div data-preserved-transcript-slot aria-hidden="true"></div>'
     : `<div class="chat-scroll" data-scroll-owner="message-list" data-conversation-id="${escapeHtml(transcript?.id || '')}" ${temporaryConversation ? 'data-temporary-transcript="true"' : ''} tabindex="0">${messageList(transcript, { imageThumbnails, videoThumbnails, attachmentPreviews: searchAttachmentPreviews, assistantImageSelections, interactive: !temporaryConversation && !lifecycleReadOnly, ariaLabel: temporaryConversation ? '临时聊天消息' : '当前会话消息', findQuery: temporaryConversation ? '' : conversationFindQuery, activeFindMessageId: activeFindMatch?.messageId || null, contextSelectionRecords: temporaryConversation ? [] : contextSelectionRecords, productSettings, settingsCapabilities, reminders })}</div>`;
+  const cloudOpeningStage = cloudConversationOpening
+    ? `<section class="chat-cloud-opening" aria-live="polite" aria-label="正在打开云端对话"><i aria-hidden="true"></i><span>正在打开云端对话</span></section>`
+    : '';
   const ordinaryChatContent = searchPanel ? searchContent : transcript
     ? `${findBar}<div class="chat-transcript-stage">${transcriptSurface}${temporaryConversation ? '' : transcriptPositionRail(transcript)}</div>${lifecycleReadOnly ? '<p class="chat-lifecycle-readonly">当前为会话生命周期只读查看；返回原列表后可恢复或永久删除。</p>' : composerDock}`
-    : `<div class="chat-empty-stage">${messageList(null)}</div>${composerDock}`;
+    : cloudOpeningStage || `<div class="chat-empty-stage">${messageList(null)}</div>${composerDock}`;
   const chatContent = pane === 'work'
     ? conversation
       ? ordinaryChatContent
@@ -950,7 +1003,7 @@ export function renderChatFirstShell({
   const header = `
       <header class="chat-main-header">
         <button class="chat-sidebar-toggle" data-action="toggle-chat-sidebar" aria-label="${sidebarOpen ? '关闭导航' : '打开导航'}" title="${sidebarOpen ? '关闭导航' : '打开导航'}" aria-expanded="${sidebarOpen}">${icon(icons.menu, '打开导航')}</button>
-        <div class="chat-title"><p>南枫 AI</p><h1>${escapeHtml(title)}</h1></div>
+        <div class="chat-title"><h1>${escapeHtml(title)}</h1></div>
         ${settingsConversationReturn ? `<button class="chat-search-return" data-action="return-to-settings-conversation-list" aria-label="返回${escapeHtml(settingsConversationReturn.label)}">${icon(icons.chevronLeft, `返回${settingsConversationReturn.label}`)}<span>${escapeHtml(settingsConversationReturn.label)}</span></button>` : ''}
         ${globalThis.__nanfengDesktopSearchState?.searchReturnActive ? `<button class="chat-search-return" data-action="return-to-search" aria-label="返回搜索">${icon(icons.chevronLeft, '返回搜索')}<span>搜索</span></button>` : ''}
         ${!activeWorkMode && !hasConversationContent ? `<div class="chat-mode-switch" aria-label="产品模式">
@@ -958,7 +1011,7 @@ export function renderChatFirstShell({
           <button class="${activeWorkMode ? 'selected' : ''}" data-action="show-work" aria-pressed="${activeWorkMode}">工作</button>
         </div>` : ''}
         ${hasConversationContent && !activeWorkMode
-          ? `<div class="chat-header-content-actions"><button data-action="new-chat" aria-label="新对话" title="新对话">${icon(icons.edit, '新对话')}</button><button class="chat-header-more" data-action="open-conversation-header-menu" data-overlay-trigger aria-label="对话更多操作" title="对话更多操作">${icon(icons.more, '对话更多操作')}</button></div>`
+          ? `<div class="chat-header-content-actions"><button data-action="new-chat" aria-label="新对话" title="新对话">${icon(icons.filePen, '新对话')}</button><button class="chat-header-more" data-action="open-conversation-header-menu" data-overlay-trigger aria-label="对话更多操作" title="对话更多操作">${icon(icons.moreVertical, '对话更多操作')}</button></div>`
           : activeWorkMode ? '' : `<button class="chat-temporary-button ${temporaryConversation ? 'active' : ''}" data-action="toggle-temporary-chat" aria-label="临时聊天" title="临时聊天" aria-pressed="${Boolean(temporaryConversation)}">${icon(icons.ghost, '临时聊天')}</button>`}
       </header>`;
   const workspacePageHeader = `<header class="workspace-page-header">
@@ -1060,9 +1113,9 @@ export function renderChatFirstShell({
       </section>`}
       <div class="chat-sidebar-scroll">
         ${activeWorkMode ? sidebarFunctions({ activeWorkMode, pane, data, workspaces, selectedWorkProjectId, selectedConversationId, workspaceReturn }) : ''}
-        ${activeWorkMode ? '' : `<section class="chat-history" aria-label="本地会话列表">${conversationList}</section>`}
+        ${activeWorkMode ? '' : `<section class="chat-history ${batchEditing ? 'batch-editing' : ''}" aria-label="会话列表">${sidebarListTabs}${conversationList}</section>`}
       </div>
-      ${activeWorkMode ? '' : `<footer class="chat-sidebar-footer"><div class="chat-sidebar-bottom-actions"><button class="chat-profile chat-sidebar-settings" data-action="show-settings" aria-label="设置" title="设置"><span aria-hidden="true">${icon(icons.settings, '设置')}</span></button><button class="chat-sidebar-function" data-action="new-chat" aria-label="新对话"><span aria-hidden="true">${icon(icons.edit, '新对话')}</span><span class="rail-label">新对话</span></button></div></footer>`}
+      ${activeWorkMode ? '' : `<footer class="chat-sidebar-footer">${sidebarBatchControls}<div class="chat-sidebar-bottom-actions"><button class="chat-profile chat-sidebar-settings" data-action="show-settings" aria-label="设置" title="设置"><span aria-hidden="true">${icon(icons.settings, '设置')}</span></button><button class="chat-sidebar-function" data-action="new-chat" aria-label="新对话"><span aria-hidden="true">${icon(icons.edit, '新对话')}</span><span class="rail-label">新对话</span></button></div></footer>`}
     </aside>`}
     <button type="button" class="chat-sidebar-divider" role="separator" aria-label="调整对话导航宽度" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="440" aria-valuenow="${Math.max(220, Math.min(440, Number(sidebarWidth) || 256))}" title="拖拽调整导航宽度；双击恢复默认"></button>
     <button class="chat-sidebar-scrim" data-action="toggle-chat-sidebar" aria-label="关闭导航"></button>`;

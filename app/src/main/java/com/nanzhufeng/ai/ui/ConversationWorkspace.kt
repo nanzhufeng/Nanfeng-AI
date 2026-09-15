@@ -118,8 +118,11 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -293,7 +296,6 @@ import com.nanzhufeng.ai.domain.ConversationAttachmentTextPreview
 import com.nanzhufeng.ai.domain.ConversationSearchCategory
 import com.nanzhufeng.ai.domain.ConversationAttachmentSearchHit
 import com.nanzhufeng.ai.domain.GlmOcrDocumentSearchHit
-import com.nanzhufeng.ai.domain.conversationAttachmentSearchCategory
 import com.nanzhufeng.ai.domain.ProjectId
 import com.nanzhufeng.ai.domain.ProjectSnapshot
 import com.nanzhufeng.ai.domain.TemporaryConversationRecovery
@@ -536,8 +538,8 @@ internal val LocalAttachmentTransferRequest = staticCompositionLocalOf<(Attachme
 }
 
 /** Sent attachment cards can reverse-locate their exact stable ID in the existing search page. */
-private val LocalAttachmentSearchLocateRequest = staticCompositionLocalOf<(MessageNodeId, AttachmentId, String) -> Unit> {
-    { _, _, _ -> }
+private val LocalAttachmentSearchLocateRequest = staticCompositionLocalOf<(MessageNodeId, AttachmentId) -> Unit> {
+    { _, _ -> }
 }
 
 /** Find is a visual projection over the current transcript, never a message mutation. */
@@ -607,6 +609,15 @@ internal fun ConversationWorkspaceDialog(
     onBatchSoftDelete: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
     onExport: () -> Unit,
     onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onCancelConversationSync: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onReadCloudConversations: () -> Unit,
+    syncNotice: String?,
+    syncOperation: P7DAccountSyncOperation?,
+    syncCompletedFeedback: P7DAccountSyncFeedback?,
+    syncedConversationIds: Set<String>,
+    cloudConversations: List<com.nanzhufeng.ai.domain.Conversation>,
+    cloudPinnedConversationIds: Set<String>,
+    onToggleCloudConversationPinned: (com.nanzhufeng.ai.domain.Conversation, Boolean) -> Unit,
     onAddCamera: () -> Unit,
     onAddImage: () -> Unit,
     onAddFile: () -> Unit,
@@ -684,6 +695,12 @@ internal fun ConversationWorkspaceDialog(
     var editingMessageId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingText by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
+    LaunchedEffect(syncNotice, syncCompletedFeedback) {
+        if (syncCompletedFeedback == null) {
+            syncNotice?.takeIf { it.isNotBlank() }?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+        }
+    }
+    P7DAccountSyncProgressDialog(syncOperation, syncCompletedFeedback)
     val actionScope = rememberCoroutineScope()
     val shareMessage: (PresentedTranscriptMessage) -> Unit = { transcript ->
         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
@@ -984,14 +1001,16 @@ internal fun ConversationWorkspaceDialog(
     if (searchPageVisible && state.searchHistoryOpen) BackHandler(onBack = onCloseSearchHistory)
     CompositionLocalProvider(
         LocalAttachmentTransferRequest provides onRequestAttachmentTransfer,
-        LocalAttachmentSearchLocateRequest provides { messageNodeId, attachmentId, mimeType ->
+        LocalAttachmentSearchLocateRequest provides { messageNodeId, attachmentId ->
             searchLocateConversationId = state.selectedConversationId?.value
             searchLocateMessageId = messageNodeId.value
             searchReturnAttachmentId = attachmentId.value
             searchLocateAttachmentId = attachmentId.value
             searchLocateRequestId += 1L
+            // This is an exact jump inside the complete catalogue, not an implicit
+            // filename/type filter that hides the surrounding search results.
             onSearchChanged("")
-            onSearchCategoryChanged(conversationAttachmentSearchCategory(mimeType))
+            onSearchCategoryChanged(ConversationSearchCategory.ALL)
             searchPageVisible = true
             onDrawerOpenChanged(false)
             drawerScope.launch { drawerState.close() }
@@ -1053,8 +1072,8 @@ internal fun ConversationWorkspaceDialog(
                             onRequestRename = { conversation -> onSelect(conversation.id); renameText = conversation.title; renameVisible = true },
                             onRequestProject = { conversation -> onSelect(conversation.id); choosingProject = true },
                             onRequestDelete = { conversation -> onSelect(conversation.id); confirmingDelete = true },
-                            onRequestConversationActions = { conversation, anchor ->
-                                conversationActionTarget = ConversationActionMenuTarget(conversation.id.value, anchor)
+                            onRequestConversationActions = { conversation, anchor, cloudList ->
+                                conversationActionTarget = ConversationActionMenuTarget(conversation.id.value, anchor, cloudList = cloudList)
                             },
                             onCreateProject = { onCreateProject(); drawerScope.launch { drawerState.close() } },
                             onManageProjects = { onManageProjects(); drawerScope.launch { drawerState.close() } },
@@ -1065,6 +1084,11 @@ internal fun ConversationWorkspaceDialog(
                             onOpenRoute = { route -> onDismiss(); onOpenRoute(route) },
                             onOpenScheduledMonitors = { onOpenScheduledMonitors(); drawerScope.launch { drawerState.close() } },
                             onExport = { drawerScope.launch { drawerState.close() }; onExport() },
+                            syncedConversationIds = syncedConversationIds,
+                            cloudConversations = cloudConversations,
+                            cloudPinnedConversationIds = cloudPinnedConversationIds,
+                            onToggleCloudConversationPinned = onToggleCloudConversationPinned,
+                            onReadCloudConversations = onReadCloudConversations,
                         )
                     }
                     }
@@ -1365,7 +1389,7 @@ internal fun ConversationWorkspaceDialog(
                     onCreateConversation = onCreate,
                     onConversationActionsRequested = { anchor ->
                         selectedConversation?.let { conversation ->
-                            conversationActionTarget = ConversationActionMenuTarget(conversation.id.value, anchor, includeRename = false)
+                            conversationActionTarget = ConversationActionMenuTarget(conversation.id.value, anchor)
                         }
                     },
                     modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 18.dp, vertical = 18.dp),
@@ -1790,9 +1814,11 @@ internal fun ConversationWorkspaceDialog(
             conversation = conversation,
             anchor = target.anchor,
             workMode = workMode,
-            includeRename = target.includeRename,
+            cloudList = target.cloudList,
+            cloudPinned = conversation.id.value in cloudPinnedConversationIds,
             onDismiss = { conversationActionTarget = null },
             onManage = onManage,
+            onToggleCloudPinned = { pinned -> onToggleCloudConversationPinned(conversation, pinned) },
             onMarkWatchLater = onMarkWatchLater,
             onRequestRename = { target ->
                 conversationActionTarget = null
@@ -1818,6 +1844,11 @@ internal fun ConversationWorkspaceDialog(
                 conversationActionTarget = null
                 onSyncConversation(target)
             },
+            onCancelConversationSync = { target ->
+                conversationActionTarget = null
+                onCancelConversationSync(target)
+            },
+            isSyncedToCloud = conversation.id.value in syncedConversationIds,
             onShowUploadedFiles = { target ->
                 conversationActionTarget = null
                 if (target.id == state.selectedConversationId) {
@@ -2531,7 +2562,7 @@ private fun ConversationNavigationDrawer(
     onRequestRename: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestProject: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestDelete: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
-    onRequestConversationActions: (com.nanzhufeng.ai.domain.Conversation, androidx.compose.ui.geometry.Rect) -> Unit,
+    onRequestConversationActions: (com.nanzhufeng.ai.domain.Conversation, androidx.compose.ui.geometry.Rect, Boolean) -> Unit,
     onCreateProject: () -> Unit,
     onManageProjects: () -> Unit,
     onManageProject: (ProjectId) -> Unit,
@@ -2541,11 +2572,31 @@ private fun ConversationNavigationDrawer(
     onOpenRoute: (P5ARoute) -> Unit,
     onOpenScheduledMonitors: () -> Unit,
     onExport: () -> Unit,
+    syncedConversationIds: Set<String>,
+    cloudConversations: List<com.nanzhufeng.ai.domain.Conversation>,
+    cloudPinnedConversationIds: Set<String>,
+    onToggleCloudConversationPinned: (com.nanzhufeng.ai.domain.Conversation, Boolean) -> Unit,
+    onReadCloudConversations: () -> Unit,
 ) {
     // Creating a chat opens an empty workspace immediately, but the drawer is a history of
     // conversations that actually contain content. The first persisted message supplies the
     // leaf and makes the row appear without changing draft or first-send ownership.
-    val drawerConversations = state.conversations.filter { it.currentLeafMessageId != null }
+    val allDrawerConversations = state.conversations.filter { it.currentLeafMessageId != null }
+    var cloudListVisible by rememberSaveable { mutableStateOf(false) }
+    // Cloud rows are local projections with a durable cloud receipt. Their presentation pin is
+    // deliberately separate from Conversation.pinnedAt, exactly like Desktop's cloud list.
+    val drawerConversations = if (cloudListVisible) {
+        // The normal Room query deliberately puts *local* pins first.  A cloud
+        // projection must not inherit that ordering: its only grouping is the
+        // cloud-list presentation pin, then the common conversation update time.
+        // Without this explicit order a phone could show a locally pinned row
+        // ahead of Desktop's cloud order even after both had read the same data.
+        cloudConversations
+            .filter { it.id.value in syncedConversationIds }
+            .sortedWith(compareByDescending<com.nanzhufeng.ai.domain.Conversation> { it.updatedAt }.thenBy { it.id.value })
+    } else {
+        allDrawerConversations
+    }
     // A row may expose its quick actions, but the drawer owns which one is open so
     // a deliberate swipe never leaves multiple rows half-open after scrolling.
     var revealedConversationId by remember { mutableStateOf<String?>(null) }
@@ -2558,7 +2609,9 @@ private fun ConversationNavigationDrawer(
     val onConversationSwipeAction: (com.nanzhufeng.ai.domain.Conversation, ConversationRowSwipeAction) -> Unit = { conversation, action ->
         revealedConversationId = null
         when (action) {
-            ConversationRowSwipeAction.TOGGLE_PIN -> onManage(
+            ConversationRowSwipeAction.TOGGLE_PIN -> if (cloudListVisible) {
+                onToggleCloudConversationPinned(conversation, conversation.id.value !in cloudPinnedConversationIds)
+            } else onManage(
                 conversation,
                 if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN,
                 null,
@@ -2590,7 +2643,7 @@ private fun ConversationNavigationDrawer(
                 }
             },
             onConversationActions = { conversation, anchor ->
-                if (revealedConversationId != null) revealedConversationId = null else onRequestConversationActions(conversation, anchor)
+                if (revealedConversationId != null) revealedConversationId = null else onRequestConversationActions(conversation, anchor, false)
             },
             onConversationSwipeAction = onConversationSwipeAction,
             revealedConversationId = revealedConversationId,
@@ -2608,11 +2661,15 @@ private fun ConversationNavigationDrawer(
             compareByDescending<com.nanzhufeng.ai.domain.Conversation> { it.id in state.watchLaterAtEpochMs }
                 .thenByDescending { state.watchLaterAtEpochMs[it.id] ?: Long.MIN_VALUE },
         )
-        val pinned = remember(drawerConversations, state.watchLaterAtEpochMs) {
-            prioritizeWatchLater(drawerConversations.filter { it.pinnedAt != null })
+        val pinned = remember(drawerConversations, state.watchLaterAtEpochMs, cloudListVisible, cloudPinnedConversationIds) {
+            prioritizeWatchLater(drawerConversations.filter { conversation ->
+                if (cloudListVisible) conversation.id.value in cloudPinnedConversationIds else conversation.pinnedAt != null
+            })
         }
-        val content = remember(drawerConversations, state.watchLaterAtEpochMs) {
-            prioritizeWatchLater(drawerConversations.filter { it.pinnedAt == null })
+        val content = remember(drawerConversations, state.watchLaterAtEpochMs, cloudListVisible, cloudPinnedConversationIds) {
+            prioritizeWatchLater(drawerConversations.filter { conversation ->
+                if (cloudListVisible) conversation.id.value !in cloudPinnedConversationIds else conversation.pinnedAt == null
+            })
         }
         val batchCandidates = remember(pinned, content) { pinned + content }
         val batchCandidateIds = remember(batchCandidates) {
@@ -2751,6 +2808,39 @@ private fun ConversationNavigationDrawer(
                         }
                     }
                 }
+                item(key = "drawer-list-mode", contentType = "section-header") {
+                    DrawerNavigationListControls(
+                        cloudListVisible = cloudListVisible,
+                        batchEditing = batchEditing,
+                        batchEnabled = batchCandidates.isNotEmpty(),
+                        onShowLocal = {
+                            if (!dismissRevealedConversation()) {
+                                cloudListVisible = false
+                                batchEditing = false
+                                selectedBatchConversationIds = emptySet()
+                            }
+                        },
+                        onShowCloud = {
+                            if (!dismissRevealedConversation()) {
+                                cloudListVisible = true
+                                batchEditing = false
+                                selectedBatchConversationIds = emptySet()
+                            }
+                        },
+                        onToggleBatch = {
+                            if (!dismissRevealedConversation()) {
+                                batchEditing = !batchEditing
+                                selectedBatchConversationIds = emptySet()
+                            }
+                        },
+                        onReadCloud = {
+                            // Reading is a list operation: once its durable receipts arrive,
+                            // leave the user in the cloud projection where those rows appear.
+                            cloudListVisible = true
+                            onReadCloudConversations()
+                        },
+                    )
+                }
                 if (pinned.isNotEmpty() && state.listScope == ConversationListScope.ACTIVE) {
                     item(key = "drawer-pinned-header", contentType = "section-header") {
                         Text("已置顶", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
@@ -2763,12 +2853,14 @@ private fun ConversationNavigationDrawer(
                         ConversationNavigationRow(
                             conversation = conversation,
                             selected = conversation.id == state.selectedConversationId,
+                            presentationPinned = if (cloudListVisible) conversation.id.value in cloudPinnedConversationIds else conversation.pinnedAt != null,
+                            syncedToCloud = !cloudListVisible && conversation.id.value in syncedConversationIds,
                             generating = conversation.id in state.runningConversationIds,
                             unread = notificationReminderSettings.unreadConversationIndicatorsEnabled && conversation.id in state.unreadConversationIds,
                             watchLater = conversation.id in state.watchLaterAtEpochMs,
                             onSelect = { id -> if (!dismissRevealedConversation()) { onClearWatchLater(id); onSelect(id) } },
                             onRequestConversationActions = { target, anchor ->
-                                if (!dismissRevealedConversation()) onRequestConversationActions(target, anchor)
+                                if (!dismissRevealedConversation()) onRequestConversationActions(target, anchor, cloudListVisible)
                             },
                             onSwipeAction = onConversationSwipeAction,
                             revealed = revealedConversationId == conversation.id.value,
@@ -2784,26 +2876,7 @@ private fun ConversationNavigationDrawer(
                     }
                 }
                 item(key = "drawer-recent-header", contentType = "section-header") {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("最近", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = SecondaryText)
-                        IconButton(
-                            onClick = {
-                                if (!dismissRevealedConversation()) {
-                                    batchEditing = !batchEditing
-                                    selectedBatchConversationIds = emptySet()
-                                }
-                            },
-                            enabled = batchCandidates.isNotEmpty(),
-                            modifier = Modifier.size(36.dp),
-                        ) {
-                            Icon(
-                                Icons.Rounded.Edit,
-                                contentDescription = if (batchEditing) "退出批量编辑" else "批量编辑对话",
-                                modifier = Modifier.size(scaledAppIconSize(13.3.dp)),
-                                tint = if (batchEditing) AccentOrange else SecondaryText,
-                            )
-                        }
-                    }
+                    Text("最近", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
                 }
                 items(
                     items = content,
@@ -2813,12 +2886,14 @@ private fun ConversationNavigationDrawer(
                     ConversationNavigationRow(
                         conversation = conversation,
                         selected = conversation.id == state.selectedConversationId,
+                        presentationPinned = if (cloudListVisible) conversation.id.value in cloudPinnedConversationIds else conversation.pinnedAt != null,
+                        syncedToCloud = !cloudListVisible && conversation.id.value in syncedConversationIds,
                         generating = conversation.id in state.runningConversationIds,
                         unread = notificationReminderSettings.unreadConversationIndicatorsEnabled && conversation.id in state.unreadConversationIds,
                         watchLater = conversation.id in state.watchLaterAtEpochMs,
                         onSelect = { id -> if (!dismissRevealedConversation()) { onClearWatchLater(id); onSelect(id) } },
                         onRequestConversationActions = { target, anchor ->
-                            if (!dismissRevealedConversation()) onRequestConversationActions(target, anchor)
+                            if (!dismissRevealedConversation()) onRequestConversationActions(target, anchor, cloudListVisible)
                         },
                         onSwipeAction = onConversationSwipeAction,
                         revealed = revealedConversationId == conversation.id.value,
@@ -2947,6 +3022,116 @@ private fun ConversationNavigationDrawer(
 }
 
 @Composable
+private fun DrawerListModeButton(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(50)
+    Surface(
+        onClick = onClick,
+        color = if (selected) AccentOrange else Color.Transparent,
+        contentColor = if (selected) ForegroundSurface else SecondaryText,
+        shape = shape,
+        modifier = modifier.fillMaxHeight().clip(shape),
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(label, fontSize = scaledConversationTextUnit(12.sp), fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun DrawerNavigationListControls(
+    cloudListVisible: Boolean,
+    batchEditing: Boolean,
+    batchEnabled: Boolean,
+    onShowLocal: () -> Unit,
+    onShowCloud: () -> Unit,
+    onToggleBatch: () -> Unit,
+    onReadCloud: () -> Unit,
+) {
+    // The whole control strip is compact. The central mode pill takes one third of
+    // the drawer; the two circular utilities share that same compact scale instead
+    // of leaving the pen/cloud actions visually oversized beside it.
+    val modeShape = RoundedCornerShape(50)
+    Box(Modifier.fillMaxWidth().height(30.dp)) {
+        Surface(
+            color = ForegroundSurface,
+            shape = modeShape,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.3333f).height(26.dp).conversationForegroundShadow(modeShape),
+        ) {
+            Row(Modifier.fillMaxSize().padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                DrawerListModeButton("本地", selected = !cloudListVisible, modifier = Modifier.weight(1f), onClick = onShowLocal)
+                DrawerListModeButton("云端", selected = cloudListVisible, modifier = Modifier.weight(1f), onClick = onShowCloud)
+            }
+        }
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DrawerRoundIconButton(
+                icon = null,
+                contentDescription = if (batchEditing) "退出批量编辑" else "批量编辑对话",
+                // Keep this utility visually identical to cloud-read: both use
+                // the same white circle and a full-strength dark glyph. Only
+                // the active editing state becomes orange.
+                tint = if (batchEditing) AccentOrange else BodyText,
+                enabled = batchEnabled,
+                onClick = onToggleBatch,
+            )
+            DrawerRoundIconButton(
+                icon = Icons.Rounded.CloudDownload,
+                contentDescription = "读取云端列表",
+                tint = BodyText,
+                onClick = onReadCloud,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DrawerRoundIconButton(
+    icon: ImageVector?,
+    contentDescription: String,
+    tint: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Surface(
+        color = ForegroundSurface,
+        contentColor = tint,
+        shape = CircleShape,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        // Material's clickable Surface applies a disabled alpha to its whole
+        // container, which made the batch control look like a different gray
+        // circle. Keep the shared surface opaque; disable only interaction.
+        modifier = Modifier
+            .size(26.dp)
+            .conversationForegroundShadow(CircleShape)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (icon == null) {
+                NanfengBatchEditIcon(
+                    tint = tint,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.size(scaledAppIconSize(13.dp)),
+                )
+            } else {
+                Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(scaledAppIconSize(13.dp)))
+            }
+        }
+    }
+}
+
+@Composable
 private fun ConversationBatchEditControls(
     selectedCount: Int,
     allSelected: Boolean,
@@ -2956,11 +3141,11 @@ private fun ConversationBatchEditControls(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = ForegroundSurface,
+        color = Color.White,
         shape = RoundedCornerShape(18.dp),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        modifier = modifier,
+        modifier = modifier.conversationForegroundShadow(shape = RoundedCornerShape(18.dp)),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().height(50.dp).padding(horizontal = 6.dp),
@@ -5092,6 +5277,10 @@ private fun SearchHint(text: String) = Box(Modifier.fillMaxSize().padding(24.dp)
 private fun ConversationNavigationRow(
     conversation: com.nanzhufeng.ai.domain.Conversation,
     selected: Boolean,
+    // In the cloud projection this is deliberately independent from the local
+    // conversation record, so a cloud-only pin never leaks into the local list.
+    presentationPinned: Boolean = conversation.pinnedAt != null,
+    syncedToCloud: Boolean = false,
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onRequestConversationActions: (com.nanzhufeng.ai.domain.Conversation, androidx.compose.ui.geometry.Rect) -> Unit,
     generating: Boolean = false,
@@ -5160,7 +5349,7 @@ private fun ConversationNavigationRow(
     ) {
         if (swipeAction != null && translatedPx > 0f) {
             ConversationRowSwipeActions(
-                pinned = conversation.pinnedAt != null,
+                pinned = presentationPinned,
                 favorited = conversation.favoritedAt != null,
                 rowHeight = rowHeight,
                 onAction = { action ->
@@ -5200,11 +5389,18 @@ private fun ConversationNavigationRow(
                         selectionDescription = if (batchSelected) "已选择${conversation.title}" else "选择${conversation.title}",
                     )
                 }
-                if (conversation.pinnedAt != null) {
+                if (presentationPinned) {
                     Icon(
                         painter = painterResource(R.drawable.ic_nanfeng_conversation_bubble),
                         contentDescription = null,
                         modifier = Modifier.size(scaledAppIconSize(18.dp)),
+                        tint = if (selected) AccentOrange else SecondaryText,
+                    )
+                }
+                if (syncedToCloud) {
+                    NanfengCloudDoneIcon(
+                        contentDescription = "已同步到云端",
+                        modifier = Modifier.size(scaledAppIconSize(15.dp)),
                         tint = if (selected) AccentOrange else SecondaryText,
                     )
                 }
@@ -5364,8 +5560,7 @@ private fun ConversationRowSwipeActionButton(
 private data class ConversationActionMenuTarget(
     val conversationId: String,
     val anchor: androidx.compose.ui.geometry.Rect,
-    /** Sidebar legacy actions retain rename; the content header follows the reference's eight rows. */
-    val includeRename: Boolean = true,
+    val cloudList: Boolean = false,
 )
 
 private data class MessageActionMenuTarget(
@@ -5467,14 +5662,18 @@ private fun ConversationActionSheet(
     conversation: com.nanzhufeng.ai.domain.Conversation,
     anchor: androidx.compose.ui.geometry.Rect,
     onManage: (com.nanzhufeng.ai.domain.Conversation, ConversationManagementAction, String?) -> Unit,
+    onToggleCloudPinned: (Boolean) -> Unit,
     onMarkWatchLater: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     workMode: Boolean,
-    includeRename: Boolean,
+    cloudList: Boolean,
+    cloudPinned: Boolean,
     onRequestRename: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestProject: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestDelete: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onShareConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onCancelConversationSync: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    isSyncedToCloud: Boolean,
     onShowUploadedFiles: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onFindInConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onAddToHomeScreen: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
@@ -5487,8 +5686,8 @@ private fun ConversationActionSheet(
         conversation.deletedAt != null -> 1
         // The ordinary conversation menu stays focused on reading and managing the chat.
         // Workspace keeps its existing project, attachment and launcher actions.
-        workMode -> 11 + if (includeRename) 1 else 0
-        else -> 8 + if (includeRename) 1 else 0
+        workMode -> 12
+        else -> 9
     }
     val horizontalMargin = with(density) { 16.dp.roundToPx() }
     val verticalGap = with(density) { 6.dp.roundToPx() }
@@ -5527,12 +5726,16 @@ private fun ConversationActionSheet(
                     ConversationMenuAction(Icons.Rounded.RestoreFromTrash, "从回收站恢复", onClick = { onDismiss(); onManage(conversation, ConversationManagementAction.RESTORE_DELETED, null) })
                 } else {
                     if (workMode) {
-                        ConversationMenuAction(Icons.Rounded.PushPin, if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
+                        ConversationMenuAction(Icons.Rounded.PushPin, if (cloudList) if (cloudPinned) "取消置顶" else "置顶" else if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); if (cloudList) onToggleCloudPinned(!cloudPinned) else onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
                         ConversationMenuAction(Icons.Rounded.Visibility, "未读", onClick = { onDismiss(); onMarkWatchLater(conversation) })
                         ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
+                        ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
-                        ConversationMenuAction(Icons.Rounded.CloudUpload, "同步到南枫云", onClick = { onSyncConversation(conversation) })
-                        if (includeRename) ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
+                        ConversationMenuAction(
+                            Icons.Rounded.CloudUpload,
+                            if (isSyncedToCloud) "取消同步" else "同步到南枫云",
+                            onClick = { if (isSyncedToCloud) onCancelConversationSync(conversation) else onSyncConversation(conversation) },
+                        )
                         ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove, if (conversation.projectId == null) "添加到项目" else "移动或移出项目", trailing = Icons.Rounded.ChevronRight, onClick = { onRequestProject(conversation) })
                         ConversationMenuAction(Icons.Rounded.AttachFile, "已上传文件", onClick = { onShowUploadedFiles(conversation) })
                         ConversationMenuAction(Icons.Rounded.Search, "在聊天中查找", onClick = { onFindInConversation(conversation) })
@@ -5540,12 +5743,16 @@ private fun ConversationActionSheet(
                         ConversationMenuAction(if (conversation.archivedAt == null) Icons.Rounded.Archive else Icons.Rounded.Unarchive, if (conversation.archivedAt == null) "归档" else "恢复", onClick = { onDismiss(); onManage(conversation, if (conversation.archivedAt == null) ConversationManagementAction.ARCHIVE else ConversationManagementAction.UNARCHIVE, null) })
                         ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
                     } else {
-                        ConversationMenuAction(Icons.Rounded.PushPin, if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
+                        ConversationMenuAction(Icons.Rounded.PushPin, if (cloudList) if (cloudPinned) "取消置顶" else "置顶" else if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); if (cloudList) onToggleCloudPinned(!cloudPinned) else onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
                         ConversationMenuAction(Icons.Rounded.Visibility, "未读", onClick = { onDismiss(); onMarkWatchLater(conversation) })
                         ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
-                        if (includeRename) ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
+                        ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
-                        ConversationMenuAction(Icons.Rounded.CloudUpload, "同步到南枫云", onClick = { onSyncConversation(conversation) })
+                        ConversationMenuAction(
+                            Icons.Rounded.CloudUpload,
+                            if (isSyncedToCloud) "取消同步" else "同步到南枫云",
+                            onClick = { if (isSyncedToCloud) onCancelConversationSync(conversation) else onSyncConversation(conversation) },
+                        )
                         ConversationMenuAction(Icons.Rounded.Search, "在聊天中查找", onClick = { onFindInConversation(conversation) })
                         ConversationMenuAction(if (conversation.archivedAt == null) Icons.Rounded.Archive else Icons.Rounded.Unarchive, if (conversation.archivedAt == null) "归档" else "恢复", onClick = { onDismiss(); onManage(conversation, if (conversation.archivedAt == null) ConversationManagementAction.ARCHIVE else ConversationManagementAction.UNARCHIVE, null) })
                         ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
@@ -9326,7 +9533,7 @@ private fun AttachmentInfoPopup(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (!isDraft && messageNodeId != null) {
                         AttachmentPopupAction(Icons.Rounded.Search, "搜索定位", Modifier.weight(1f), emphasized = true) {
-                            locateAttachmentInSearch(messageNodeId, attachmentId, mimeType)
+                            locateAttachmentInSearch(messageNodeId, attachmentId)
                             onDismiss()
                         }
                     }
@@ -9496,6 +9703,38 @@ private fun PreviewCloseButton(dark: Boolean, onClose: () -> Unit, modifier: Mod
     }
 }
 
+/** One prominent circular control owns all preview-only previous/next navigation. */
+@Composable
+private fun PreviewPagerButton(
+    previous: Boolean,
+    enabled: Boolean,
+    dark: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val container = if (dark) Color.White.copy(alpha = 0.20f) else Color(0xFFF1F4F2)
+    val content = if (dark) Color.White else BodyText
+    IconButton(onClick = onClick, enabled = enabled, modifier = modifier.size(52.dp)) {
+        Surface(
+            color = container,
+            contentColor = content,
+            shape = CircleShape,
+            border = BorderStroke(1.dp, if (dark) Color.White.copy(alpha = 0.28f) else NeutralBorder.copy(alpha = 0.72f)),
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    if (previous) Icons.Rounded.ChevronLeft else Icons.Rounded.ChevronRight,
+                    contentDescription = if (previous) "上一项" else "下一项",
+                    tint = content,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+        }
+    }
+}
+
 /** Audio keeps all three header actions in one fixed row, leaving the title one stable slot. */
 @Composable
 private fun AudioPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare: () -> Unit, onClose: () -> Unit, showTransferActions: Boolean = true) {
@@ -9644,9 +9883,19 @@ private fun PdfPreviewDialog(
                             .padding(12.dp)
                             .zIndex(3f),
                     ) {
-                        OutlinedButton(onClick = { onOpenPage(it.pageNumber - 1) }, enabled = it.pageNumber > 1 && !loading, shape = RoundedCornerShape(14.dp)) { Text("上一页") }
+                        PreviewPagerButton(
+                            previous = true,
+                            enabled = it.pageNumber > 1 && !loading,
+                            dark = darkFilePreview,
+                            onClick = { onOpenPage(it.pageNumber - 1) },
+                        )
                         Text("第 ${it.pageNumber} / ${it.pageCount} 页", style = MaterialTheme.typography.labelSmall, color = SecondaryText, modifier = Modifier.padding(horizontal = 10.dp))
-                        OutlinedButton(onClick = { onOpenPage(it.pageNumber + 1) }, enabled = it.pageNumber < it.pageCount && !loading, shape = RoundedCornerShape(14.dp)) { Text("下一页") }
+                        PreviewPagerButton(
+                            previous = false,
+                            enabled = it.pageNumber < it.pageCount && !loading,
+                            dark = darkFilePreview,
+                            onClick = { onOpenPage(it.pageNumber + 1) },
+                        )
                     }
                 }
             }
@@ -10531,6 +10780,7 @@ private fun ImagePreviewDialog(
     DisposableEffect(bitmap) { onDispose { bitmap?.recycle() } }
     val generatedImageIds = relatedImageIds.distinct().ifEmpty { listOf(preview.id) }
     val hasMultipleGeneratedImages = generatedImageIds.size > 1
+    val currentGeneratedImageIndex = generatedImageIds.indexOf(preview.id).coerceAtLeast(0)
     val chrome = rememberFilePreviewChromeState(preview.id.value)
     var batchDownloadVisible by rememberSaveable(preview.id.value) { mutableStateOf(false) }
     var zoom by rememberSaveable(preview.id.value) { mutableStateOf(1f) }
@@ -10812,6 +11062,48 @@ private fun ImagePreviewDialog(
                         showTransferActions = preview.canTransfer,
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
                     )
+                }
+                if (hasMultipleGeneratedImages) {
+                    PreviewPagerButton(
+                        previous = true,
+                        enabled = currentGeneratedImageIndex > 0,
+                        dark = true,
+                        onClick = {
+                            generatedImageIds.getOrNull(currentGeneratedImageIndex - 1)?.let { target ->
+                                zoom = 1f
+                                offsetX = 0f
+                                offsetY = 0f
+                                onOpenImagePreview(target)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart).padding(12.dp).zIndex(3f),
+                    )
+                    PreviewPagerButton(
+                        previous = false,
+                        enabled = currentGeneratedImageIndex < generatedImageIds.lastIndex,
+                        dark = true,
+                        onClick = {
+                            generatedImageIds.getOrNull(currentGeneratedImageIndex + 1)?.let { target ->
+                                zoom = 1f
+                                offsetX = 0f
+                                offsetY = 0f
+                                onOpenImagePreview(target)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(12.dp).zIndex(3f),
+                    )
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.56f),
+                        contentColor = Color.White,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp).zIndex(3f),
+                    ) {
+                        Text(
+                            "${currentGeneratedImageIndex + 1} / ${generatedImageIds.size}",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        )
+                    }
                 }
                 if (batchDownloadVisible) {
                     val outsideDismissInteraction = remember { MutableInteractionSource() }

@@ -3,6 +3,9 @@ import { resizeComposer } from './composer-size.mjs';
 import { renderSafeMarkdown } from './safe-markdown.mjs';
 import { sourceDisplayTitle } from './source-link-presentation.mjs';
 import { createSearchResultCache } from './search-result-cache.mjs';
+import { mergeCloudConversationList } from './cloud-conversation-list-merge.mjs';
+import { createCloudConversationOpenRoute } from './cloud-conversation-open-route.mjs';
+import { syncSelectedContinuation } from './selected-conversation-continuation.mjs';
 import { renderSearchAttachmentMenu, renderChatAttachmentMenu, attachmentMenuAnchor } from './search-attachment-menu.mjs';
 import { icon as sharedIcon, icons as sharedIcons } from './icon-source.mjs';
 import { p8InspectCanvas } from './p8-inspect.mjs';
@@ -15,6 +18,7 @@ import { MODEL_SERVICE_PREVIEW_SETTINGS } from './android-settings-shell.mjs';
 import { bestSearchHistoryMatch } from './desktop-search-page.mjs';
 import { attachmentPreviewCapability } from './desktop-attachment-preview-owner.mjs';
 import { imagePreviewNavigation, imagePreviewTargetId, relatedImageIds } from './image-preview-navigation.mjs';
+import { resolveSearchResultAnchor } from './search-result-anchor.mjs';
 import { createC08BrowserSearchPage } from './c08-search-preview-fixture.mjs';
 import { createC09ReminderPreviewDraft, createC09ReminderPreviewProjection } from './c09-reminder-preview-fixture.mjs';
 import { createC10ImportedPreviewTask, createC10TranscriptionPreviewProjection } from './c10-transcription-preview-fixture.mjs';
@@ -27,6 +31,7 @@ import { renderDesktopTranscriptionPage, TRANSCRIPTION_PREVIEW_STATE } from './d
 import { renderDesktopRemindersPage } from './desktop-reminders-page.mjs';
 import { reminderNotificationAction, reminderNotificationExtra } from './reminder-notification-routing.mjs';
 import { createConversationLongPressController } from './conversation-long-press.mjs';
+import { conversationFindScrollTop, createConversationFindInputController } from './conversation-find-interaction.mjs';
 import { isWorkspaceRoot, resolveWorkConversationState } from './workspace-view.mjs';
 
 const app = document.querySelector('#app');
@@ -66,15 +71,167 @@ const fixture = {
 };
 const previewConnection = { connection: 'ONLINE_CONFIGURATION_REQUIRED', providerConfiguration: 'NOT_CONFIGURED', credentialPresence: 'MISSING', catalogFreshness: 'NOT_AVAILABLE', egressConsent: 'REQUIRED_PER_INTENT', syncCapability: 'ENCRYPTED_SYNC_NOT_CONFIGURED', degradedReasons: ['NO_CREDENTIAL', 'CATALOG_UNAVAILABLE', 'NETWORK_UNVERIFIED', 'EGRESS_CONSENT_REQUIRED', 'SYNC_NOT_CONFIGURED'] };
 const settingsLocalKey = 'nanfeng-ai.desktop.settings.sidebar-width.v1';
+// This stores only local workspace/conversation IDs. Row content remains in
+// Rust-owned SQLite, so the list can return after restart without a network read.
+const cloudConversationCacheKey = 'nanfeng-ai.desktop.sync-cloud-list.v1';
 const parityPreferences = new DesktopParityPreferences(window.localStorage);
 const systemDarkQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
 function readSidebarWidth() { try { return clampDesktopSidebarWidth(Number(localStorage.getItem(settingsLocalKey)), window.innerWidth); } catch { return 256; } }
 function persistSidebarWidth(width) { try { localStorage.setItem(settingsLocalKey, String(width)); } catch { /* browser preview may deny local storage */ } }
+function dedupeCloudConversationEntries(entries) {
+  const seen = new Set();
+  return (Array.isArray(entries) ? entries : []).filter(item => {
+    const workspaceId = item?.workspaceId;
+    const conversationId = item?.conversationId ?? item?.id;
+    if (typeof workspaceId !== 'string' || typeof conversationId !== 'string') return false;
+    const key = `${workspaceId}:${conversationId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function readCloudConversationCache() {
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(cloudConversationCacheKey) || 'null');
+    if (![1, 2].includes(cached?.version) || typeof cached.email !== 'string' || !Array.isArray(cached.entries)) return null;
+    return {
+      email: cached.email,
+      entries: dedupeCloudConversationEntries(cached.entries).slice(0, 200).map(item => ({
+        workspaceId: item.workspaceId,
+        conversationId: item.conversationId ?? item.id,
+        // This is presentation state for the cloud list only. It must never
+        // borrow the restored local conversation's pinned flag.
+        cloudPinned: Boolean(item.cloudPinned),
+      })),
+    };
+  } catch { return null; }
+}
+function persistCloudConversationCache(rows = state.cloudConversations) {
+  const email = state.accountSync?.email;
+  if (!email) return;
+  const entries = dedupeCloudConversationEntries(rows).map(item => ({ workspaceId: item.workspaceId, conversationId: item.id, cloudPinned: Boolean(item.cloudPinned) }));
+  try { window.localStorage.setItem(cloudConversationCacheKey, JSON.stringify({ version: 2, email, entries })); } catch { /* cache is optional */ }
+}
+function clearCloudConversationCache() {
+  try { window.localStorage.removeItem(cloudConversationCacheKey); } catch { /* cache is optional */ }
+}
 const initialProductSettings = parityPreferences.readProductSettings();
-const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构' } };
+const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, sidebarConversationList: 'recent', cloudConversations: [], batchEditing: false, batchSelectedConversationKeys: new Set(), chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', accountSyncProgress: null, scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchRevealTarget: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构' } };
 state.selectedWorkProjectId = null;
 state.assistantMessageMenu = null;
+state.cloudConversationOpening = null;
 globalThis.__nanfengDesktopWorkState = state;
+let transientToast = null;
+let transientToastTimer = null;
+let accountSyncProgressResultTimer = null;
+let cloudListReadGeneration = 0;
+let cloudListReadPending = false;
+const pendingSyncReconciliations = new Set();
+
+const openCloudConversationRoute = createCloudConversationOpenRoute({
+  reuse: ({ workspaceId, conversationId }) => {
+    const current = state.current;
+    if (current?.summary?.id !== workspaceId || !resolveConversation(current, conversationId)) return null;
+    return {
+      current,
+      history: state.history,
+      alreadySelected: !state.cloudConversationOpening && state.pane === 'chat' && state.selectedConversationId === conversationId,
+    };
+  },
+  load: async ({ workspaceId, conversationId }) => {
+    const [current, history] = await Promise.all([
+      invoke('read_desktop_workspace', { workspaceId }),
+      invoke('read_desktop_workbench_history', { workspaceId }),
+    ]);
+    if (!resolveConversation(current, conversationId)) throw new Error('云端会话详情暂不可用，请先读取云端列表后重试。');
+    return { current, history };
+  },
+  // Model preferences decorate the composer only. They are intentionally read
+  // after the selected conversation is on screen, so a short SQLite delay can
+  // never leave a cloud click looking like an empty new conversation.
+  loadPreferences: ({ workspaceId, conversationId }) => invoke('read_desktop_p6g_selection', { workspaceId, conversationId }),
+  onPending: route => {
+    state.cloudConversationOpening = route;
+    state.pane = 'chat';
+    state.selectedConversationId = null;
+    state.p6gSelection = null;
+    state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+    state.error = '';
+    render();
+  },
+  onOpened: (route, { current, history }) => {
+    state.current = current;
+    state.history = history;
+    state.selectedConversationId = route.conversationId;
+    state.cloudConversationOpening = null;
+    state.p6gSelection = null;
+    state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+    state.profileOpen = false;
+    state.error = '';
+    if (!state.chatScrollPositions.has(route.conversationId)) state.pendingChatScrollToLatestId = route.conversationId;
+    reloadFavoriteConversationIds();
+    void loadConversationReadState({ observeSelected: true }).catch(() => {});
+    render();
+  },
+  onPreferences: (route, selection) => {
+    if (state.current?.summary?.id !== route.workspaceId || state.selectedConversationId !== route.conversationId) return;
+    state.p6gSelection = selection;
+    state.conversationPreferences = selection?.conversationOverride || { revision: 0, toneOverride: null, webSearchOverride: null };
+    render();
+  },
+  onPreferencesFailure: () => {
+    // The transcript is already visible. Preference reads may retry naturally
+    // on the next selection; never replace content with a secondary failure.
+  },
+  onFailure: (_route, error) => {
+    state.cloudConversationOpening = null;
+    state.error = `云端会话未打开：${String(error)}`;
+    render();
+  },
+});
+
+function showTransientToast(message, kind = 'success') {
+  transientToast = { message, kind };
+  window.clearTimeout(transientToastTimer);
+  render();
+  transientToastTimer = window.setTimeout(() => {
+    transientToast = null;
+    render();
+  }, 2600);
+}
+
+const ACCOUNT_SYNC_PROGRESS_MIN_VISIBLE_MS = 520;
+const ACCOUNT_SYNC_RESULT_VISIBLE_MS = 2600;
+
+function beginAccountSyncProgress(operation) {
+  state.accountSyncProgress = { operation, startedAt: performance.now() };
+  render();
+}
+
+// A single requestAnimationFrame callback runs before its frame is painted.
+// Waiting for its successor guarantees the progress surface was actually
+// visible before an IPC or network operation can occupy the renderer.
+function waitForAccountSyncProgressPaint() {
+  return new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+}
+
+async function completeAccountSyncProgress(message, kind = 'success') {
+  const startedAt = state.accountSyncProgress?.startedAt;
+  if (Number.isFinite(startedAt)) {
+    const remaining = ACCOUNT_SYNC_PROGRESS_MIN_VISIBLE_MS - (performance.now() - startedAt);
+    if (remaining > 0) await new Promise(resolve => window.setTimeout(resolve, remaining));
+  }
+  const completedProgress = { ...state.accountSyncProgress, result: { message, kind } };
+  state.accountSyncProgress = completedProgress;
+  window.clearTimeout(accountSyncProgressResultTimer);
+  render();
+  accountSyncProgressResultTimer = window.setTimeout(() => {
+    if (state.accountSyncProgress === completedProgress) {
+      state.accountSyncProgress = null;
+      render();
+    }
+  }, ACCOUNT_SYNC_RESULT_VISIBLE_MS);
+}
 let composerModelPricingRefreshTimer = null;
 state.pendingNewConversationModelId = null;
 state.p6gModelPickerTier = null;
@@ -115,6 +272,11 @@ state.conversationReadState = { workspaceId: null, conversations: [] };
 state.unreadConversationIds = new Set();
 state.manualUnreadAtMs = new Map();
 state.pendingCreatedConversationRouteWorkspaceId = null;
+// A submitted message may move the viewport to its freshly-created reply once.
+// It is deliberately a content-free client receipt. Runtime events also fire for
+// every streaming checkpoint, accounting update and title update, so a workspace
+// or conversation ID alone is not sufficient to identify the originating Send.
+state.pendingChatSubmission = null;
 
 const ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS = 80;
 let ordinaryChatRuntimeRefreshPending = null;
@@ -129,10 +291,60 @@ function scheduleOrdinaryChatRuntimeRefresh() {
   }, ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS);
 }
 
+async function syncPersistedConversationContinuation(workspaceId, conversationId) {
+  try {
+    const receipt = await syncSelectedContinuation({ invoke, workspaceId, conversationId,
+      syncedConversationKeys: state.accountSync?.syncedConversationKeys || [] });
+    if (receipt?.status === 'UNKNOWN') {
+      state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
+      scheduleUnknownSyncReconciliation(workspaceId, conversationId);
+      state.error = '回复已保存在本机；云端提交结果正在核对，尚未确认同步完成。';
+    }
+  } catch (error) {
+    // A failed cloud write must never turn a completed provider request into
+    // "message not submitted" or restore its draft for accidental resending.
+    state.error = `回复已保存在本机，但云端续同步未完成：${String(error)}`;
+  }
+}
+
 function queueOrdinaryChatRuntimeRefresh(payload) {
   if (!payload?.workspaceId || state.current?.summary?.id !== payload.workspaceId) return;
   ordinaryChatRuntimeRefreshPending = payload;
   scheduleOrdinaryChatRuntimeRefresh();
+}
+
+function createChatSubmissionId() {
+  const id = globalThis.crypto?.randomUUID?.();
+  if (typeof id === 'string' && id.length >= 12) return id;
+  const bytes = new Uint8Array(16);
+  const filled = typeof globalThis.crypto?.getRandomValues === 'function';
+  if (filled) globalThis.crypto.getRandomValues(bytes);
+  const suffix = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+  return `desktop-send-${Date.now().toString(36)}-${filled ? suffix : Math.random().toString(36).slice(2)}`;
+}
+
+function claimSubmittedChatRoute(payload) {
+  const conversationId = payload?.conversationId || null;
+  const pending = state.pendingChatSubmission;
+  if (!conversationId || !pending
+    || pending.workspaceId !== payload?.workspaceId
+    || pending.clientSubmissionId !== payload?.clientSubmissionId) return false;
+  if (pending.conversationId && pending.conversationId !== conversationId) {
+    state.pendingChatSubmission = null;
+    return false;
+  }
+  if (!pending.conversationId
+    && !state.selectedConversationId
+    && state.pendingCreatedConversationRouteWorkspaceId === payload.workspaceId) {
+    state.selectedConversationId = conversationId;
+    state.pendingCreatedConversationRouteWorkspaceId = null;
+  }
+  const ownsSubmittedRoute = state.selectedConversationId === conversationId;
+  state.pendingChatSubmission = null;
+  if (ownsSubmittedRoute) {
+    state.pendingChatSendScrollToLatestId = conversationId;
+  }
+  return ownsSubmittedRoute;
 }
 
 async function flushOrdinaryChatRuntimeRefresh() {
@@ -144,11 +356,7 @@ async function flushOrdinaryChatRuntimeRefresh() {
   ordinaryChatRuntimeRefreshInFlight = true;
   try {
     state.current = await invoke('read_desktop_workspace', { workspaceId: payload.workspaceId });
-    if (!state.selectedConversationId && state.pendingCreatedConversationRouteWorkspaceId === payload.workspaceId) {
-      state.selectedConversationId = payload.conversationId || null;
-      state.pendingCreatedConversationRouteWorkspaceId = null;
-    }
-    if (state.selectedConversationId === payload.conversationId) state.pendingChatSendScrollToLatestId = payload.conversationId || null;
+    claimSubmittedChatRoute(payload);
     await loadConversationReadState({ observeSelected: true });
     state.error = '';
     render();
@@ -234,21 +442,12 @@ function activeRuntimeConversation(data, preferredConversationId = null) {
 }
 
 async function refreshDesktopRuntimeWhilePending(workspaceId, preferredConversationId, isSettled) {
-  let discoveredConversationId = preferredConversationId;
   while (!isSettled()) {
     await new Promise(resolve => window.setTimeout(resolve, 120));
     if (isSettled() || state.current?.summary?.id !== workspaceId) continue;
     try {
       const current = await invoke('read_desktop_workspace', { workspaceId });
-      const active = activeRuntimeConversation(current, preferredConversationId);
       state.current = current;
-      if (!discoveredConversationId && active) {
-        discoveredConversationId = active.id;
-        if (!state.selectedConversationId && state.pendingCreatedConversationRouteWorkspaceId === workspaceId) {
-          state.selectedConversationId = active.id;
-          state.pendingCreatedConversationRouteWorkspaceId = null;
-        }
-      }
       render();
     } catch { /* final command result owns user-visible errors */ }
   }
@@ -261,11 +460,32 @@ function recomputeConversationFind({ resetIndex = false } = {}) {
 }
 
 function focusCurrentFindMatch() {
-  queueMicrotask(() => {
+  const query = state.conversationFindQuery;
+  requestAnimationFrame(() => {
+    if (!state.conversationFindOpen || state.conversationFindQuery !== query) return;
     const input = document.querySelector('#conversation-find-input');
-    input?.focus({ preventScroll: true });
+    if (input && document.activeElement !== input) {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
     const match = state.conversationFindMatches[state.conversationFindIndex];
-    if (match) document.querySelector(`[data-message-id="${CSS.escape(match.messageId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const message = match ? document.querySelector(`[data-message-id="${CSS.escape(match.messageId)}"]`) : null;
+    const owner = message?.closest('.chat-scroll[data-scroll-owner="message-list"]');
+    const target = message?.querySelector('.chat-message-body mark') || message;
+    if (!owner || !target) return;
+    const ownerBounds = owner.getBoundingClientRect();
+    const targetBounds = target.getBoundingClientRect();
+    if (ownerBounds.height <= 0 || targetBounds.height <= 0) return;
+    owner.scrollTo({
+      top: conversationFindScrollTop({
+        scrollTop: owner.scrollTop,
+        ownerTop: ownerBounds.top,
+        ownerHeight: ownerBounds.height,
+        targetTop: targetBounds.top,
+        targetHeight: targetBounds.height,
+      }),
+      behavior: 'smooth',
+    });
   });
 }
 
@@ -330,7 +550,7 @@ async function updateAppearance(field, value) {
   render();
 }
 
-async function toggleFavoriteConversation(conversationId) {
+async function toggleFavoriteConversation(conversationId, { renderAfter = true } = {}) {
   const workspaceId = state.current?.summary?.id;
   if (!workspaceId || !conversationId) return;
   const next = new Set(state.favoriteConversationIds);
@@ -347,7 +567,7 @@ async function toggleFavoriteConversation(conversationId) {
     state.error = `会话收藏状态未更新：${String(error)}`;
   }
   state.contextMenu = null;
-  render();
+  if (renderAfter) render();
 }
 
 function removeFavoriteConversation(conversationId) {
@@ -427,7 +647,7 @@ function closeTopOverlay({ restoreFocus = true, navigateComposerLayerBack = fals
   else if (state.cameraCaptureOpen) stopComposerCamera();
   else if (state.profileOpen) state.profileOpen = false;
   else if (state.dialog) state.dialog = null;
-  else if (state.imagePreview) state.imagePreview = null;
+  else if (state.imagePreview) { cancelImagePreviewLoad(); state.imagePreview = null; }
   else if (state.pdfPreview) state.pdfPreview = null;
   else if (state.archivePreview) state.archivePreview = null;
   else if (state.previewBoundary) state.previewBoundary = null;
@@ -767,6 +987,14 @@ function resetModelServiceDraft(service = selectedModelService()) {
   state.modelSettingsError = '';
   state.settingsPicker = null;
 }
+function clearModelCredentialDraftOutsideEditor(force = false) {
+  if (!force && state.pane === 'settings' && state.settingsSection === 'model-configuration') return;
+  // A revealed or typed key must not survive in JavaScript state after the
+  // settings editor is gone. Unsaved input is intentionally discarded here.
+  state.modelCredentialDraft = '';
+  state.modelCredentialEdited = false;
+  state.modelCredentialVisible = false;
+}
 function replaceModelService(next) {
   state.modelServiceSettings = state.modelServiceSettings.map(item => item.providerId === next.providerId ? next : item);
 }
@@ -816,7 +1044,13 @@ async function loadDesktopPrivacyInventory() {
 async function loadDesktopAccountSync() {
   if (!native) return state.accountSync;
   const pendingUnknown = state.accountSync?.pendingUnknown || null;
-  const remoteDocuments = state.accountSync?.remoteDocuments || [];
+  // `null` means the user has not requested a cloud read in this settings
+  // session.  An empty array is a real, authenticated read that returned no
+  // documents; collapsing the two made the page claim "none found" before it
+  // had contacted the cloud at all.
+  const remoteDocuments = Array.isArray(state.accountSync?.remoteDocuments)
+    ? state.accountSync.remoteDocuments
+    : null;
   const previous = state.accountSync;
   state.accountSync = { ...await invoke('read_desktop_account_sync'), pendingUnknown, remoteDocuments };
   if (previous?.email && previous.email === state.accountSync.email) state.accountSync.avatarDataUrl ||= previous.avatarDataUrl;
@@ -831,6 +1065,52 @@ async function loadDesktopAccountSync() {
     }).catch(() => {}).finally(() => { accountAvatarPending = false; });
   }
   return state.accountSync;
+}
+
+async function cloudRowsFromLocalEntries(entries) {
+  if (!native || !Array.isArray(entries)) return [];
+  const uniqueEntries = dedupeCloudConversationEntries(entries);
+  // Restoring a cloud list often returns several rows from one workspace.  The
+  // old per-row IPC pattern made every row wait for two SQLite reads.
+  const workspaceIds = [...new Set(uniqueEntries.map(item => item?.workspaceId).filter(Boolean))];
+  const projections = await Promise.all(workspaceIds.map(async workspaceId => {
+    try {
+      const [workspace, favoriteIds] = await Promise.all([
+        invoke('read_desktop_workspace', { workspaceId }),
+        invoke('read_desktop_favorite_conversation_ids', { workspaceId }),
+      ]);
+      return [workspaceId, { workspace, favoriteIds }];
+    } catch { return null; }
+  }));
+  const byWorkspace = new Map(projections.filter(Boolean));
+  const rows = uniqueEntries.map(item => {
+    if (!item?.workspaceId || !item?.conversationId) return null;
+    const projection = byWorkspace.get(item.workspaceId);
+    const conversation = projection?.workspace?.exchange?.conversations?.find(entry => entry.id === item.conversationId);
+    // A cloud list is a separate presentation surface. The restored workspace
+    // is only used to render/open its content, never as the owner of cloud
+    // list ordering or pinning.
+    return conversation ? { ...conversation, workspaceId: item.workspaceId, favorite: projection.favoriteIds.includes(item.conversationId), pinned: Boolean(item.cloudPinned), cloudPinned: Boolean(item.cloudPinned) } : null;
+  });
+  return dedupeCloudConversationEntries(rows);
+}
+
+async function restoreCachedCloudConversationList() {
+  const cached = readCloudConversationCache();
+  // A list is private to the signed-in Google identity. A prior account's
+  // cached IDs are never shown after an account switch or sign-out.
+  if (!cached || !state.accountSync?.email || cached.email !== state.accountSync.email) return;
+  state.cloudConversations = await cloudRowsFromLocalEntries(cached.entries);
+  persistCloudConversationCache();
+}
+
+function accountSyncErrorMessage(error) {
+  const raw = String(error || '').trim();
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.error === 'string' && parsed.error.trim()) return parsed.error.trim();
+  } catch (_) { /* Native failures are not required to be JSON. */ }
+  return raw || '同步操作失败，请稍后重试。';
 }
 let accountAvatarPending = false;
 async function loadDesktopHistoryKnowledge({ runDue = false } = {}) {
@@ -943,6 +1223,44 @@ function notifyAccountSync(kind) {
   if (!native || typeof NotificationOwner !== 'function' || NotificationOwner.permission !== 'granted') return;
   const body = kind === 'success' ? '加密同步已完成；可在设置中查看安全回执。' : '加密同步需要处理；请在设置中查看安全诊断。';
   try { new NotificationOwner('南枫云同步', { body, tag: 'nanfeng-account-sync-v1' }); } catch { /* system notification is optional and never blocks local truth */ }
+}
+
+function scheduleUnknownSyncReconciliation(workspaceId, conversationId) {
+  if (!native || !workspaceId || !conversationId) return;
+  const key = `${workspaceId}:${conversationId}`;
+  if (pendingSyncReconciliations.has(key)) return;
+  pendingSyncReconciliations.add(key);
+  // The submit response was uncertain, not a failed write.  Reconcile after
+  // yielding the click frame so the user sees the honest pending state first.
+  window.setTimeout(() => {
+    void invoke('reconcile_desktop_conversation_sync', { workspaceId, conversationId })
+      .then(receipt => {
+        if (receipt.status === 'SYNCED_AFTER_RECONCILE' || receipt.status === 'SYNCED_AFTER_REMOTE_RECONCILE') {
+          state.accountSync = { ...state.accountSync, pendingUnknown: null };
+          state.status = receipt.status === 'SYNCED_AFTER_REMOTE_RECONCILE' ? '已合并云端最新对话并完成同步。' : '同步成功，已回读校验。';
+          state.error = '';
+          showTransientToast(state.status);
+          notifyAccountSync('success');
+        } else if (receipt.status === 'SAFE_TO_RETRY_EXPLICITLY') {
+          state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
+          state.status = '云端未确认本次提交；未重复上传。';
+          notifyAccountSync('attention');
+        } else {
+          state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
+          state.status = '云端仍在核对，未覆盖任何内容。';
+          notifyAccountSync('attention');
+        }
+      })
+      .catch(() => {
+        state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
+        state.status = '云端提交正在后台核对；不会重复上传。';
+      })
+      .finally(() => {
+        pendingSyncReconciliations.delete(key);
+        render();
+        void loadDesktopAccountSync().then(render).catch(() => {});
+      });
+  }, 0);
 }
 async function loadTranscriptionState() {
   if (!native) {
@@ -1213,12 +1531,21 @@ let fullSearchGeneration = 0;
 let fullSearchRequestId = 0;
 let fullSearchCategoryFrame = null;
 let settingsSearchRenderFrame = null;
-let conversationFindRenderTimer = null;
 let transcriptRailSyncFrame = null;
 let pendingTranscriptRailScroll = null;
 let renderedTranscriptRetention = null;
 let renderedSidebarRetention = null;
 let renderedAttachmentPreview = null;
+const conversationFindInputController = createConversationFindInputController({
+  onSettled: query => {
+    if (!state.conversationFindOpen || state.conversationFindQuery !== query) return;
+    recomputeConversationFind({ resetIndex: true });
+    render();
+    focusCurrentFindMatch();
+  },
+  setTimer: (callback, milliseconds) => window.setTimeout(callback, milliseconds),
+  clearTimer: timer => window.clearTimeout(timer),
+});
 
 function assistantGallerySelectionKey(selections = state.assistantImageSelections) {
   return selections instanceof Map
@@ -1284,10 +1611,15 @@ function currentSidebarRetention(data) {
     sidebarOpen: state.sidebarOpen,
     railCollapsed: state.railCollapsed,
     profileOpen: state.profileOpen,
+    sidebarConversationList: state.sidebarConversationList,
+    cloudConversations: state.cloudConversations,
+    batchEditing: state.batchEditing,
+    batchSelectedConversationKeys: state.batchSelectedConversationKeys,
     chatSearch: state.chatSearch,
     searchHistory: state.searchHistory,
     searchHistoryOpen: state.searchHistoryOpen,
     favoriteConversationIds: state.favoriteConversationIds,
+    syncedConversationKeys: state.accountSync?.syncedConversationKeys || [],
     unreadConversationIds: state.unreadConversationIds,
     manualUnreadAtMs: state.manualUnreadAtMs,
   };
@@ -1314,10 +1646,18 @@ function canRetainSidebar(previous, next) {
     && previous.sidebarOpen === next.sidebarOpen
     && previous.railCollapsed === next.railCollapsed
     && previous.profileOpen === next.profileOpen
+    // The compact local/cloud switch owns both its selected pill and the list
+    // below it. Retaining the old sidebar here would leave the control visually
+    // frozen even though the state has already changed.
+    && previous.sidebarConversationList === next.sidebarConversationList
+    && previous.cloudConversations === next.cloudConversations
+    && previous.batchEditing === next.batchEditing
+    && previous.batchSelectedConversationKeys === next.batchSelectedConversationKeys
     && previous.chatSearch === next.chatSearch
     && previous.searchHistory === next.searchHistory
     && previous.searchHistoryOpen === next.searchHistoryOpen
     && previous.favoriteConversationIds === next.favoriteConversationIds
+    && previous.syncedConversationKeys === next.syncedConversationKeys
     // Opening a conversation clears only its automatic unread dot. That is a
     // local row patch, not a reason to sort and recreate every sidebar row.
     && sameSetExceptId(previous.unreadConversationIds, next.unreadConversationIds, next.selectedConversationId)
@@ -1359,22 +1699,14 @@ function scheduleSettingsSearchRender() {
 }
 
 function cancelConversationFindRender() {
-  if (conversationFindRenderTimer !== null) window.clearTimeout(conversationFindRenderTimer);
-  conversationFindRenderTimer = null;
+  conversationFindInputController.cancel();
 }
 
-function scheduleConversationFindRender() {
-  cancelConversationFindRender();
+function scheduleConversationFindRender({ isComposing = false } = {}) {
   // Matching and highlighted Markdown both touch every message. Keep the field
-  // native while the user types, then commit one settled query instead of
-  // rebuilding a long transcript for each individual keypress.
-  conversationFindRenderTimer = window.setTimeout(() => {
-    conversationFindRenderTimer = null;
-    if (!state.conversationFindOpen) return;
-    recomputeConversationFind({ resetIndex: true });
-    render();
-    focusCurrentFindMatch();
-  }, 120);
+  // native through an IME composition and the user's brief typing pause, then
+  // commit one settled query instead of rebuilding a long transcript mid-word.
+  conversationFindInputController.onInput({ value: state.conversationFindQuery, isComposing });
 }
 
 function paintSearchCategorySelection(category) {
@@ -1519,12 +1851,22 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false, inP
     state.searchError = '';
     state.searchEvidenceLabel = page.indexCurrent === false ? '本机索引正在后台恢复；当前显示的是已就绪的结果。' : '';
     state.searchHistoryHighlighted = bestSearchHistoryMatch(state.chatSearch, state.searchHistory);
+    // A main-chat attachment locator keeps the complete search canvas. Page forward until
+    // the exact stable tuple is present; it never turns the attachment name into a query.
+    if (state.searchRevealTarget && !fullSearchRevealHit()) {
+      if (page.hasMore) void runFullSearch({ append: true, restoreScroll: true });
+      else {
+        state.searchRevealTarget = null;
+        state.searchEvidenceLabel = '目标附件已不在当前本机索引中；完整搜索结果保持不变。';
+      }
+    }
     render();
     queueMicrotask(() => {
       const input = document.querySelector('#full-search-input');
       if (!restoreScroll && !inPlace) input?.focus({ preventScroll: true });
       if (inPlace) document.querySelector(`.desktop-search-tabs [data-action="set-search-category"][data-category="${CSS.escape(state.searchCategory)}"]`)?.focus({ preventScroll: true });
       restoreFullSearchScroll();
+      revealFullSearchAttachment();
     });
     if (recordHistory && !append && state.current && state.chatSearch.trim()) {
       void invoke('record_desktop_local_search_history', { workspaceId: state.current.summary.id, query: state.chatSearch }).then(history => {
@@ -1602,6 +1944,34 @@ function fullSearchHit(entryId) {
   return state.searchPage?.hits?.find(hit => hit.entryId === entryId) || null;
 }
 
+function fullSearchRevealHit(target = state.searchRevealTarget) {
+  if (!target) return null;
+  return state.searchPage?.hits?.find(hit =>
+    hit.workspaceId === target.workspaceId &&
+    hit.conversationId === target.conversationId &&
+    hit.messageId === target.messageId &&
+    hit.attachmentId === target.attachmentId,
+  ) || null;
+}
+
+function revealFullSearchAttachment(target = state.searchRevealTarget) {
+  const hit = fullSearchRevealHit(target);
+  if (!hit) return false;
+  queueMicrotask(() => {
+    if (state.searchRevealTarget !== target || !state.searchPanel) return;
+    const card = document.querySelector(`[data-search-entry-id="${CSS.escape(hit.entryId)}"]`);
+    const owner = document.querySelector('[data-search-scroll-owner]');
+    if (!card || !owner) return;
+    owner.scrollTo({ top: Math.max(0, card.offsetTop - (owner.clientHeight - card.offsetHeight) / 2), behavior: 'smooth' });
+    card.classList.remove('search-anchor-flash');
+    void card.offsetWidth;
+    card.classList.add('search-anchor-flash');
+    window.setTimeout(() => card.classList.remove('search-anchor-flash'), 1600);
+    if (state.searchRevealTarget === target) state.searchRevealTarget = null;
+  });
+  return true;
+}
+
 async function loadSearchWorkspace(workspaceId) {
   if (!native || !workspaceId) return false;
   if (state.current?.summary?.id === workspaceId) return true;
@@ -1641,16 +2011,20 @@ async function locateSearchHit(hit) {
     await markConversationOpened(hit.conversationId);
     state.searchAnchorMessageId = hit.messageId || null;
     state.searchAnchorAttachmentId = hit.attachmentId || null;
+    // A generated-image group keeps every image surface mounted but only one visible. Select the
+    // indexed asset before rendering so an image search returns to that exact image, not merely
+    // the surrounding assistant message.
+    if (hit.messageId && hit.attachmentId) state.assistantImageSelections.set(hit.messageId, hit.attachmentId);
     state.searchLocatedArchivedConversationId = hit.archived ? hit.conversationId : null;
     state.searchReturnActive = true;
     state.searchPanel = false;
     state.pane = 'chat';
     render();
     queueMicrotask(() => {
-      const selector = hit.messageId ? `[data-message-id="${CSS.escape(hit.messageId)}"]` : null;
-      const node = selector ? document.querySelector(selector) : null;
-      node?.scrollIntoView({ block: 'center' });
-      if (node) { node.classList.add('search-anchor-flash'); window.setTimeout(() => node.classList.remove('search-anchor-flash'), 1600); }
+      if (state.pane !== 'chat' || state.selectedConversationId !== hit.conversationId) return;
+      const { target } = resolveSearchResultAnchor(document, hit);
+      target?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      if (target) { target.classList.add('search-anchor-flash'); window.setTimeout(() => target.classList.remove('search-anchor-flash'), 1600); }
     });
   } catch (error) {
     state.searchPanel = true;
@@ -1702,7 +2076,30 @@ if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim cu
   if (state.dialog?.kind === 'reminder-delete') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true"><h2>删除这个提醒计划？</h2><p>将删除“${escape(item.title)}”及其本机执行记录；操作不可撤销，运行中的请求会请求停止。</p><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary danger" data-action="confirm-delete-reminder-plan" data-id="${escape(item.planId)}">删除计划</button></div></section></div>`; }
   if (state.dialog.kind === 'memory') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Memory' : '新建 Memory'}</h2><p>Memory 仅是本地文本 IR，不会进入 Prompt 或网络。</p><label>正文<textarea id="memory-body" maxlength="2000000">${escape(item?.body || '')}</textarea></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-memory">保存 ⌘S</button></div></section></div>`; }
   if (state.dialog.kind === 'relation') { const data = workspace(); const items = active(data, 'knowledge'); const options = items.map(item => `<option value="${escape(item.id)}">${escape(item.title)} · r${item.revision}</option>`).join(''); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">显式本地 relation</p><h2 id="dialog-title">建立 Knowledge 关系</h2><p>仅同一活动 scope 的两条 Knowledge 可建立；不会自动关联或去重。</p><label>来源<select id="relation-from">${options}</select></label><label>目标<select id="relation-to">${options}</select></label><label>类型<select id="relation-kind"><option value="RELATED">RELATED（对称）</option><option value="DERIVED_FROM">DERIVED_FROM</option><option value="REFERENCES">REFERENCES</option></select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-relation" ${items.length < 2 ? 'disabled' : ''}>建立关系</button></div></section></div>`; }
-  if (state.dialog?.kind === 'assistant-answer-information') { const record = state.dialog.record; const sources = Array.isArray(record?.selectedSources) ? record.selectedSources : []; const styleSource = sources.find(source => ['STYLE', '对话风格'].includes(source.kind)); const nonStyleSources = sources.filter(source => !['STYLE', '对话风格'].includes(source.kind)); const webSearch = record?.webSearchUsed; const webSearchLabel = webSearch === true ? '已实际使用' : webSearch === false ? '本次未使用' : '未记录（旧回答）'; const sourceLabels = { STYLE: '回答风格', PERSONA: '称呼与职业', MEMORY: '长期记忆', KNOWLEDGE: '知识库', CURRENT_PATH: '当前对话路径' }; return `<div class="scrim"><section class="dialog answer-information-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><h2 id="dialog-title">本次回答信息</h2><dl class="answer-information-list"><dt>基础风格和语气</dt><dd>${escape(styleSource?.title || '未记录（旧回答）')}</dd><dt>实时网络</dt><dd>${webSearchLabel}</dd></dl>${nonStyleSources.length ? `<h3>本次上下文来源</h3><ul>${nonStyleSources.map(source => `<li><strong>${escape(sourceLabels[source.kind] || source.kind)}</strong> · ${escape(source.title)}</li>`).join('')}</ul>` : ''}<div class="dialog-actions"><button class="primary" data-action="close-dialog">完成</button></div></section></div>`; }
+  if (state.dialog?.kind === 'assistant-answer-information') {
+    const record = state.dialog.record;
+    const sources = Array.isArray(record?.selectedSources) ? record.selectedSources : [];
+    const styleSource = sources.find(source => ['STYLE', '对话风格'].includes(source.kind));
+    const sourceLabels = { STYLE: '回答风格', PERSONA: '称呼与职业', MEMORY: '长期记忆', KNOWLEDGE: '资料库', CURRENT_PATH: '当前对话路径', '自定义指令': '自定义指令', '个性化资料': '个性化资料', Memory: '长期记忆', '资料库': '资料库' };
+    const groupedSources = new Map();
+    for (const source of sources) {
+      if (['STYLE', '对话风格'].includes(source.kind)) continue;
+      const label = sourceLabels[source.kind] || source.kind;
+      const titles = groupedSources.get(label) || [];
+      const title = String(source.title || '').trim();
+      if (title && !titles.includes(title)) titles.push(title);
+      groupedSources.set(label, titles);
+    }
+    const webSearchLabel = !record
+      ? '未找到本次回答的本机执行记录'
+      : record.webSearchRequested !== true
+        ? '本次未启用联网'
+        : record.webSearchVerified === true
+          ? '已实际联网（服务商返回核验依据）'
+          : '已请求联网（服务商未返回核验依据）';
+    const sourceList = [...groupedSources.entries()];
+    return `<div class="scrim"><section class="dialog answer-information-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><h2 id="dialog-title">本次回答信息</h2><dl class="answer-information-list"><dt>基础风格和语气</dt><dd>${escape(styleSource?.title || '未记录（旧回答）')}</dd><dt>实时网络</dt><dd>${webSearchLabel}</dd></dl>${sourceList.length ? `<h3>本次上下文来源</h3><ul>${sourceList.map(([label, titles]) => `<li><strong>${escape(label)}</strong>${titles.length ? ` · ${escape(titles.join('；'))}` : ''}</li>`).join('')}</ul>` : ''}<div class="dialog-actions"><button class="primary" data-action="close-dialog">完成</button></div></section></div>`;
+  }
   if (state.dialog === 'metadata') return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">仅本地安全 metadata</p><h2 id="dialog-title">模型与成本 metadata</h2><p>不存 Key、不联网取 catalog；价格仅标记为 fixture、手工或未知，绝不当作真实费用。</p><label>Provider ID<input id="provider-id" value="provider-local"></label><label>Model ID<input id="model-id" value="model-manual"></label><label>价格版本<input id="price-version" value="manual-v1"></label><label>币种<input id="price-currency" value="CNY"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-metadata">保存 metadata</button></div></section></div>`;
   if (state.dialog === 'recycle') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">本地软删除</p><h2 id="dialog-title">回收站</h2><p>此处恢复通用软删除对象；会话的恢复与永久删除在“设置 → 对话管理 → 回收站”。恢复将生成新 revision。</p><div class="recycle-list">${state.history.recycleBin.length ? state.history.recycleBin.map(item => `<div><span>${escape(item.entity)} · ${escape(item.title)}</span><button data-action="restore" data-entity="${escape(item.entity)}" data-id="${escape(item.id)}" data-revision="${item.revision}">恢复</button></div>`).join('') : '<p class="empty-copy">暂无可恢复对象。</p>'}</div><div class="dialog-actions"><button data-action="close-dialog">关闭</button></div></section></div>`;
   if (state.dialog === 'about') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">Desktop 本机交付摘要</p><h2 id="dialog-title">关于南枫 AI Desktop</h2><dl class="about-list"><dt>版本</dt><dd>0.6.0-p6d-dev</dd><dt>账号与同步</dt><dd>尚未配置 · 离线可用；无浏览器登录、无 HTTP、无同步队列</dd><dt>签名</dt><dd>ad-hoc 开发签名，未 notarized</dd><dt>最低系统</dt><dd>macOS 11 或更高</dd><dt>本地数据</dt><dd>仅 app-private 容器；此处不显示路径或数据库文件</dd><dt>更新</dt><dd>本地静态状态；未检查网络</dd></dl><p>卸载应用不会主动删除用户本地数据；清除数据必须通过未来独立的安全流程，不暴露 SQLite 文件。</p><div class="dialog-actions"><button data-action="close-dialog">关闭</button></div></section></div>`;
@@ -1714,6 +2111,7 @@ if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim cu
   if (state.dialog?.kind === 'conversation-rename') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true"><label>会话标题<input id="conversation-rename" maxlength="120" value="${escape(state.dialog.title)}"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-conversation-rename" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}">保存</button></div></section></div>`;
   if (state.dialog?.kind === 'conversation-project') { const projects = active(workspace(), 'projects'); const options = [`<option value="">不归入项目</option>`, ...projects.map(project => `<option value="${escape(project.id)}" ${project.id === state.dialog.projectId ? 'selected' : ''}>${escape(project.title)}</option>`)].join(''); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true"><h2>项目归属</h2><p>${projects.length ? '选择现有本地项目；切换即为移动，取消不变更。' : '当前没有可选项目。'}</p><label>项目<select id="conversation-project">${options}</select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-conversation-project" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}">保存</button></div></section></div>`; }
   if (state.dialog?.kind === 'conversation-delete') { const busy = state.dialog.submitting; const copy = state.dialog.source === 'archived' ? `“${escape(state.dialog.title)}”将移入回收站，可恢复。` : '删除不同于归档：消息树不会物理删除，可从回收站恢复。'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>移入回收站？</h2><p>${copy}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary" data-action="confirm-conversation-delete" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}" ${busy ? 'disabled' : ''}>${busy ? '正在移入…' : '移入回收站'}</button></div></section></div>`; }
+  if (state.dialog?.kind === 'conversation-batch-delete') { const busy = state.dialog.submitting; const count = state.dialog.items?.length || 0; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>移入回收站？</h2><p>${count} 个会话将移入回收站，可恢复。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary" data-action="confirm-conversation-batch-delete" ${busy ? 'disabled' : ''}>${busy ? '正在移入…' : '移入回收站'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'conversation-permanent-delete') { const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>永久删除？</h2><p>将永久删除“${escape(state.dialog.title)}”，无法恢复。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-conversation-permanent-delete" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}" ${busy ? 'disabled' : ''}>${busy ? '正在永久删除…' : '永久删除'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'conversation-bulk-cleanup') { const busy = state.dialog.submitting; const recycle = state.dialog.scope === 'recycle'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>${recycle ? '清空回收站？' : '清空已归档？'}</h2><p>${recycle ? `将永久删除 ${state.dialog.count} 个会话，无法恢复。` : `${state.dialog.count} 个会话将移入回收站，可恢复。`}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary ${recycle ? 'danger' : ''}" data-action="confirm-conversation-bulk-cleanup" data-scope="${state.dialog.scope}" ${busy ? 'disabled' : ''}>${busy ? '正在处理…' : recycle ? '永久删除' : '移入回收站'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'local-backup-restart-required') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title"><p class="overline">本机恢复已完成</p><h2 id="dialog-title">请完全重启 App</h2><p>数据库和受控资产已经替换并通过回读。为避免旧 SQLite、页面和任务引用，现请手动完全退出并重新打开 App；不会自动继续任何任务。</p></section></div>`;
@@ -1732,7 +2130,23 @@ function scheduleComposerModelPricingRefresh() {
     : null;
 }
 
-function render() { const data = workspace(); if (state.pane === 'chat' || state.pane === 'connections') { app.className = 'app-shell chat-first'; app.innerHTML = `${renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, composerDraft: state.composerDraft, profileOpen: state.profileOpen, pane: state.pane, status: state.status, error: state.error, connection: state.connection })}${dialog()}`; scheduleComposerModelPricingRefresh(); return; } const canvas = state.pane === 'p8-inspect' ? p8InspectCanvas({ agentRuns: state.agentRuns, native, escape, short }) : data ? (state.pane === 'conversation' ? conversationCanvas(data) : knowledgeCanvas(data)) : `<section class="canvas empty-canvas"><p class="overline">P6-D · 离线 Desktop</p><h1>从受控交换包开始</h1><p>导入后可在 Rust 本地领域链中明确创建、编辑、撤销与软删除。</p><button class="primary" data-action="start-import">选择交换包</button></section>`; app.className = `app-shell scale-${state.scale === 2 ? '2' : '1'}`; app.innerHTML = `<aside class="sidebar ${state.treeOpen ? 'mobile-open' : ''}"><header class="brand"><span class="brand-mark">南</span><span><strong>南枫 AI</strong><small>本地工作台</small></span><button class="icon-button mobile-close" data-action="toggle-tree" aria-label="关闭导航">${icon(icons.close, '关闭')}</button></header><nav class="primary-nav"><button data-action="show-chat"><span>${icon(icons.conversation, '聊天')}</span>返回聊天</button><button class="nav-active"><span>${icon(icons.workspace, '工作区')}</span>工作区</button><button data-action="show-conversation"><span>${icon(icons.conversation, '会话')}</span>会话</button><button data-action="show-knowledge"><span>${icon(icons.knowledge, '知识')}</span>知识</button><button data-action="show-p8-inspect"><span>${icon(icons.info, '本地受控记录')}</span>本地受控记录</button></nav><section class="tree"><div class="tree-label"><span>Workspace</span><button class="icon-button" data-action="start-import" aria-label="导入">${icon(icons.import, '导入')}</button></div>${tree(data)}</section><footer><span class="offline-dot"></span>本地可用 · 联网需配置</footer></aside><section class="main-area"><header class="topbar"><button class="icon-button tree-toggle" data-action="toggle-tree" aria-label="打开导航">${icon(icons.workspace, '导航')}</button><div class="topbar-status"><span class="offline-dot"></span><span>${native ? 'Rust SQLite 本地所有权' : 'Web 预览（不写入）'}</span></div><div class="topbar-actions"><button data-action="undo" ${data && state.history.canUndo && native ? '' : 'disabled'}>${icon(icons.undo, '撤销')}撤销</button><button data-action="redo" ${data && state.history.canRedo && native ? '' : 'disabled'}>${icon(icons.redo, '重做')}重做</button><button data-action="start-export" ${data && native ? '' : 'disabled'}>${icon(icons.export, '导出')}导出</button><button data-action="toggle-scale" aria-label="切换应用缩放">${state.scale.toFixed(1)}×</button><button class="icon-button" data-action="about" aria-label="关于">${icon(icons.info, '关于')}</button><button class="icon-button" data-action="toggle-inspector" aria-label="${state.inspectorOpen ? '收起' : '展开'} Inspector">${icon(icons.knowledge, 'Inspector')}</button></div></header><p class="status ${state.error ? 'error' : ''}" role="status">${escape(state.error || state.status)}</p><div class="workbench ${state.inspectorOpen ? '' : 'inspector-collapsed'}">${canvas}${state.inspectorOpen ? inspector(data) : ''}</div></section>${dialog()}`; if (state.dialog) queueMicrotask(() => document.querySelector('.dialog input, .dialog textarea, .dialog select, .dialog button')?.focus()); }
+function transientToastMarkup() { return transientToast ? `<div class="desktop-transient-toast ${escape(transientToast.kind)}" role="status" aria-live="polite">${escape(transientToast.message)}</div>` : ''; }
+function accountSyncProgressDialog() {
+  const progress = state.accountSyncProgress;
+  if (!progress) return '';
+  const reading = progress.operation === 'read';
+  const result = progress.result;
+  const title = result
+    ? result.kind === 'success' ? (reading ? '读取完成' : '同步成功')
+      : result.kind === 'pending' ? '同步尚未确认'
+        : reading ? '读取失败' : '同步失败'
+    : reading ? '正在读取云端列表' : '正在同步到南枫云';
+  const detail = result?.message || (result ? '' : reading ? '正在核对并合并云端会话，请稍候。' : '正在加密提交并核对云端回执，请稍候。');
+  const resultIcon = result
+    ? icon(result.kind === 'success' ? icons.check : icons.info, result.kind === 'success' ? '成功' : '提示')
+    : '<span class="account-sync-progress-spinner" aria-hidden="true"></span>';
+  return `<div class="scrim account-sync-progress-scrim"><section class="dialog account-sync-progress-dialog ${result ? `result ${escape(result.kind)}` : ''}" role="status" aria-live="polite" aria-busy="${result ? 'false' : 'true'}">${resultIcon}<h2>${title}</h2>${detail ? `<p>${escape(detail)}</p>` : ''}</section></div>`;
+}
 async function refresh() {
   if (!native) {
     const browserWorkspace = c15WorkspacePreview
@@ -2007,6 +2421,7 @@ app.addEventListener('click', event => {
   } else if (action === 'open-settings-page') {
     const nextSettingsSection = target.dataset.page || 'personalization';
     if (nextSettingsSection !== 'account' && state.accountRecovery?.rotation === true) state.accountRecovery = null;
+    if (nextSettingsSection !== 'model-configuration') clearModelCredentialDraftOutsideEditor(true);
     state.settingsSection = nextSettingsSection;
     state.settingsPicker = null;
     if (state.settingsSection === 'personalization') {
@@ -2023,6 +2438,7 @@ app.addEventListener('click', event => {
     state.error = '';
   } else if (action === 'settings-back') {
     if (state.accountRecovery?.rotation === true) state.accountRecovery = null;
+    if (settingsParent(state.settingsSection) !== 'model-configuration') clearModelCredentialDraftOutsideEditor(true);
     state.settingsSection = settingsParent(state.settingsSection) || 'personalization';
     state.settingsPicker = null;
     state.error = '';
@@ -2152,6 +2568,7 @@ async function confirmPrivacyCleanup() {
       state.favoriteConversationIds = new Set();
       applyConversationReadState({ workspaceId: null, conversations: [] });
       state.pendingCreatedConversationRouteWorkspaceId = null;
+      state.pendingChatSubmission = null;
       state.productSettings = normalizeProductSettings({});
       state.personalizationDraft = { ...state.productSettings };
       state.appearance = normalizeAppearance({});
@@ -2367,7 +2784,8 @@ app.addEventListener('input', event => {
     if (counter) counter.textContent = `${event.target.value.length} / 2000000 字`;
   } else if (event.target.id === 'conversation-find-input') {
     state.conversationFindQuery = event.target.value;
-    scheduleConversationFindRender();
+    if (event.isComposing) scheduleConversationFindRender({ isComposing: true });
+    else scheduleConversationFindRender();
   } else if (event.target.id === 'personalization-nickname' || event.target.id === 'personalization-occupation' || event.target.id === 'personalization-instructions' || event.target.id === 'personalization-instructions-fullscreen') {
     const key = event.target.id === 'personalization-nickname' ? 'nickname' : event.target.id === 'personalization-occupation' ? 'occupation' : 'customInstructions';
     state.personalizationDraft = { ...state.personalizationDraft, [key]: event.target.value };
@@ -2379,6 +2797,17 @@ app.addEventListener('input', event => {
       if (counter) counter.textContent = `${event.target.value.length} / ${CUSTOM_INSTRUCTIONS_MAX_LENGTH} 字`;
     }
   }
+});
+
+app.addEventListener('compositionstart', event => {
+  if (event.target.id !== 'conversation-find-input') return;
+  conversationFindInputController.onCompositionStart();
+});
+
+app.addEventListener('compositionend', event => {
+  if (event.target.id !== 'conversation-find-input') return;
+  state.conversationFindQuery = event.target.value;
+  conversationFindInputController.onCompositionEnd(event.target.value);
 });
 
 function composerHasFileTransfer(transfer) {
@@ -2695,6 +3124,7 @@ function openConversationContextMenu(row, trigger = row) {
     pinned: row.dataset.pinned === 'true',
     favorite: row.dataset.favorite === 'true',
     archived: row.dataset.archived === 'true',
+    workspaceId: row.dataset.workspaceId || null,
     source: 'sidebar',
     anchorRect: menuAnchorRect(trigger),
     title: row.querySelector('.chat-history-select > span')?.textContent || '',
@@ -2813,7 +3243,12 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape' && st
 function navigateImagePreview(direction) {
   const preview = state.imagePreview;
   if (!preview || preview.loading) return false;
-  const targetId = imagePreviewTargetId(preview.imageIds, preview.attachmentId, direction);
+  // A quick second swipe may arrive while the adjacent image is still being
+  // decoded. Navigate from that requested target rather than dropping it.
+  const activeAttachmentId = imagePreviewLoadRequest?.workspaceId === preview.workspaceId
+    ? imagePreviewLoadRequest.attachmentId
+    : preview.attachmentId;
+  const targetId = imagePreviewTargetId(preview.imageIds, activeAttachmentId, direction);
   if (!targetId) return false;
   void openImagePreview(targetId, preview.workspaceId, preview.imageIds);
   return true;
@@ -2960,6 +3395,7 @@ function restoreChatScroll() {
 }
 
 function renderUnified() {
+  clearModelCredentialDraftOutsideEditor();
   queueMicrotask(() => resizeComposer(document.getElementById('chat-composer')));
   const focusedComposer = document.activeElement?.id === 'chat-composer' ? document.activeElement : null;
   const composerSelection = focusedComposer ? [focusedComposer.selectionStart, focusedComposer.selectionEnd] : null;
@@ -3023,7 +3459,7 @@ function renderUnified() {
   if (retainedTranscript) retainedTranscript.replaceWith(document.createComment('retained-transcript'));
   if (retainedSidebar) retainedSidebar.replaceWith(document.createComment('retained-sidebar'));
   app.className = `app-shell chat-first ${standaloneWorkspacePage ? 'workspace-standalone-shell' : ''} ${visiblePane === 'settings' ? 'settings-mode' : ''} ${sidebarWorkMode ? 'work-mode' : ''} ${state.sidebarOpen ? 'fallback-sidebar-open' : ''} ${state.searchPanel ? 'search-mode' : ''}`;
-  app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
+  app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, syncedConversationKeys: new Set(state.accountSync?.syncedConversationKeys || []), conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
   if (retainedTranscript) {
     const slot = app.querySelector('[data-preserved-transcript-slot]');
     if (slot) slot.replaceWith(retainedTranscript);
@@ -3042,7 +3478,7 @@ function renderUnified() {
   if (state.contextMenu?.source === 'header') requestAnimationFrame(() => {
     if (state.contextMenu?.source === 'header') positionConversationContextMenu();
   });
-  const modal = cameraCaptureDialog() || dialog() || imagePreviewDialog() || pdfPreviewDialog() || videoPreviewDialog() || audioPreviewDialog() || textPreviewDialog() || archivePreviewDialog() || previewBoundaryDialog();
+  const modal = accountSyncProgressDialog() || cameraCaptureDialog() || dialog() || imagePreviewDialog() || pdfPreviewDialog() || videoPreviewDialog() || audioPreviewDialog() || textPreviewDialog() || archivePreviewDialog() || previewBoundaryDialog();
   if (retainedPreview) app.append(retainedPreview);
   else if (modal) app.insertAdjacentHTML('beforeend', modal);
   const attachmentMenu = app.querySelector('.search-attachment-menu');
@@ -3113,11 +3549,12 @@ function imagePreviewDialog() {
   const galleryControls = imageCount > 1
     ? `<button class="image-preview-nav previous" data-action="image-preview-previous" ${navigation.previousId ? '' : 'disabled'} aria-label="上一张图片">${icon(icons.chevronLeft, '上一张')}</button><span class="image-preview-index" aria-live="polite">${navigation.index + 1} / ${imageCount}</span><button class="image-preview-nav next" data-action="image-preview-next" ${navigation.nextId ? '' : 'disabled'} aria-label="下一张图片">${icon(icons.chevronRight, '下一张')}</button>`
     : '';
+  const navigationNotice = preview.navigationError ? `<span class="image-preview-navigation-error" role="alert">${escape(preview.navigationError)}</span>` : '';
   const content = preview.loading
     ? '<div class="media-preview-loading" role="status" aria-label="正在读取图片"></div>'
     : preview.error
       ? `<p class="image-preview-error">${escape(preview.error)}</p>`
-      : `<figure><div class="image-preview-viewport ${zoom > 1 ? 'zoomed' : ''}" data-image-preview-viewport><img data-image-preview-content draggable="false" src="${escape(preview.dataUrl)}" alt="${escape(preview.displayName)} 原图预览" style="transform:translate(${Number(preview.panX) || 0}px, ${Number(preview.panY) || 0}px) scale(${zoom})">${galleryControls}</div></figure>`;
+      : `<figure><div class="image-preview-viewport ${zoom > 1 ? 'zoomed' : ''}" data-image-preview-viewport><img data-image-preview-content draggable="false" src="${escape(preview.dataUrl)}" alt="${escape(preview.displayName)} 原图预览" style="transform:translate(${Number(preview.panX) || 0}px, ${Number(preview.panY) || 0}px) scale(${zoom})">${galleryControls}${navigationNotice}</div></figure>`;
   return `<div class="scrim attachment-preview-overlay"><section class="dialog image-preview-dialog" role="dialog" aria-modal="true" aria-label="图片预览">${previewTopActions('image', preview)}${content}</section></div>`;
 }
 
@@ -3543,25 +3980,113 @@ async function openAttachmentPreview(attachment, workspaceId = state.current?.su
   if (capability.kind === 'archive') return openArchivePreview(attachmentId, workspaceId);
 }
 
+const imagePreviewPayloadCache = new Map();
+const MAX_IMAGE_PREVIEW_PAYLOAD_CACHE_ENTRIES = 2;
+let imagePreviewLoadRequest = null;
+
+function imagePreviewPayloadKey(workspaceId, attachmentId) {
+  return `${workspaceId}:${attachmentId}`;
+}
+
+function retainImagePreviewPayload(key, payload) {
+  imagePreviewPayloadCache.delete(key);
+  imagePreviewPayloadCache.set(key, payload);
+  while (imagePreviewPayloadCache.size > MAX_IMAGE_PREVIEW_PAYLOAD_CACHE_ENTRIES) {
+    imagePreviewPayloadCache.delete(imagePreviewPayloadCache.keys().next().value);
+  }
+}
+
+async function decodeImagePreviewPayload(dataUrl) {
+  // Do not replace the visible image until WebKit has decoded the next frame.
+  // Swapping a freshly-created <img> before decode caused the visible flash.
+  if (!dataUrl || typeof Image === 'undefined') return;
+  const image = new Image();
+  image.decoding = 'async';
+  const loaded = new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = reject;
+  });
+  image.src = dataUrl;
+  if (typeof image.decode === 'function') {
+    try { await image.decode(); return; } catch (_) { /* fall through to load */ }
+  }
+  await loaded;
+}
+
+function loadImagePreviewPayload(workspaceId, attachmentId) {
+  const key = imagePreviewPayloadKey(workspaceId, attachmentId);
+  const cached = imagePreviewPayloadCache.get(key);
+  if (cached) {
+    retainImagePreviewPayload(key, cached);
+    return cached;
+  }
+  const request = invoke('read_desktop_image_preview', { args: { workspaceId, attachmentId, fullSize: true } })
+    .then(async result => {
+      await decodeImagePreviewPayload(result.dataUrl);
+      return result;
+    })
+    .catch(error => {
+      if (imagePreviewPayloadCache.get(key) === request) imagePreviewPayloadCache.delete(key);
+      throw error;
+    });
+  retainImagePreviewPayload(key, request);
+  return request;
+}
+
+function warmImagePreviewNeighbors(preview) {
+  if (!preview?.dataUrl || !preview.workspaceId || !preview.attachmentId) return;
+  const navigation = imagePreviewNavigation(preview.imageIds, preview.attachmentId);
+  const neighbors = [navigation.nextId, navigation.previousId].filter(Boolean);
+  if (!neighbors.length) return;
+  const warm = () => {
+    if (state.imagePreview?.attachmentId !== preview.attachmentId || state.imagePreview?.workspaceId !== preview.workspaceId) return;
+    neighbors.forEach(attachmentId => { void loadImagePreviewPayload(preview.workspaceId, attachmentId).catch(() => {}); });
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(warm, { timeout: 700 });
+  else setTimeout(warm, 0);
+}
+
+function cancelImagePreviewLoad() {
+  imagePreviewLoadRequest = null;
+}
+
 async function openImagePreview(attachmentId, workspaceId = state.current?.summary?.id, imageIds = relatedImageIds(currentConversation(), attachmentId)) {
   if (!native || !workspaceId || !attachmentId) return;
-  const safeImageIds = imageIds.includes(String(attachmentId)) ? imageIds : [String(attachmentId)];
-  const request = { loading: true, attachmentId, workspaceId, imageIds: safeImageIds };
-  state.imagePreview = request; render();
+  const normalizedAttachmentId = String(attachmentId);
+  const normalizedImageIds = Array.isArray(imageIds) ? imageIds.map(String) : [];
+  const safeImageIds = normalizedImageIds.includes(normalizedAttachmentId) ? normalizedImageIds : [normalizedAttachmentId];
+  if (imagePreviewLoadRequest?.attachmentId === normalizedAttachmentId && imagePreviewLoadRequest.workspaceId === workspaceId) return;
+  const previousPreview = state.imagePreview?.dataUrl ? state.imagePreview : null;
+  const request = { attachmentId: normalizedAttachmentId, workspaceId, imageIds: safeImageIds };
+  imagePreviewLoadRequest = request;
+  // Keep the current decoded frame in place while the next original is read.
+  // Initial opening still has an honest loading state.
+  if (!previousPreview) {
+    state.imagePreview = { loading: true, ...request };
+    render();
+  }
   try {
-    const result = await invoke('read_desktop_image_preview', { args: { workspaceId, attachmentId, fullSize: true } });
-    if (state.imagePreview !== request) return;
-    state.imagePreview = { ...result, attachmentId, workspaceId, imageIds: safeImageIds, zoom: 1, panX: 0, panY: 0 };
+    const result = await loadImagePreviewPayload(workspaceId, normalizedAttachmentId);
+    if (imagePreviewLoadRequest !== request) return;
+    imagePreviewLoadRequest = null;
+    state.imagePreview = { ...result, ...request, zoom: 1, panX: 0, panY: 0, navigationError: '' };
   } catch (error) {
-    if (state.imagePreview !== request) return;
-    state.imagePreview = { error: '本地原图不可用或校验失败。', attachmentId, workspaceId, imageIds: safeImageIds };
+    if (imagePreviewLoadRequest !== request) return;
+    imagePreviewLoadRequest = null;
+    // A failed adjacent read must not blank the image already being viewed.
+    state.imagePreview = previousPreview
+      ? { ...previousPreview, navigationError: '相邻图片不可用或校验失败。' }
+      : { error: '本地原图不可用或校验失败。', ...request };
   }
   render();
+  if (state.imagePreview?.dataUrl) warmImagePreviewNeighbors(state.imagePreview);
 }
 
 let imagePanGesture = null;
-let imagePreviewHorizontalSwipe = { attachmentId: '', deltaX: 0, lastAt: 0, lockUntil: 0 };
-const imagePreviewHorizontalSwipeThreshold = 56;
+let imagePreviewHorizontalSwipe = { attachmentId: '', deltaX: 0, lastAt: 0, lockUntil: 0, axis: null, consumed: false };
+const imagePreviewHorizontalSwipeThreshold = 36;
+const imagePreviewHorizontalSwipeIdleMillis = 160;
+const imagePreviewHorizontalSwipeAxisRatio = 1.25;
 function clampImagePreviewPan(viewport, zoom, panX, panY) {
   const image = viewport?.querySelector('[data-image-preview-content]');
   if (!viewport || !image || zoom <= 1) return { panX: 0, panY: 0 };
@@ -3607,19 +4132,29 @@ app.addEventListener('dblclick', event => {
 });
 function consumeImagePreviewHorizontalSwipe(event, viewport) {
   const preview = state.imagePreview;
-  if (!preview || (Number(preview.zoom) || 1) > 1 || Math.abs(event.deltaX) <= Math.abs(event.deltaY) || Math.abs(event.deltaX) < 1) return false;
+  if (!preview || (Number(preview.zoom) || 1) > 1 || event.ctrlKey) return false;
   event.preventDefault();
   const now = performance.now();
-  if (now - imagePreviewHorizontalSwipe.lastAt > 500) {
-    imagePreviewHorizontalSwipe = { attachmentId: preview.attachmentId, deltaX: 0, lastAt: now, lockUntil: 0 };
+  if (imagePreviewHorizontalSwipe.attachmentId !== preview.attachmentId || now - imagePreviewHorizontalSwipe.lastAt > imagePreviewHorizontalSwipeIdleMillis) {
+    imagePreviewHorizontalSwipe = { attachmentId: preview.attachmentId, deltaX: 0, lastAt: now, lockUntil: 0, axis: null, consumed: false };
   }
   imagePreviewHorizontalSwipe.lastAt = now;
-  if (imagePreviewHorizontalSwipe.lockUntil > 0) return true;
+  if (imagePreviewHorizontalSwipe.consumed) return true;
+  const horizontal = Math.abs(event.deltaX);
+  const vertical = Math.abs(event.deltaY);
+  if (!imagePreviewHorizontalSwipe.axis) {
+    if (horizontal < 1 && vertical < 1) return true;
+    imagePreviewHorizontalSwipe.axis = horizontal > vertical * imagePreviewHorizontalSwipeAxisRatio ? 'horizontal' : 'vertical';
+  }
+  // Once classified, a wheel gesture has one owner. A diagonal horizontal
+  // swipe can therefore never fall through to the zoom path.
+  if (imagePreviewHorizontalSwipe.axis !== 'horizontal') return true;
   imagePreviewHorizontalSwipe.deltaX += event.deltaX;
   if (Math.abs(imagePreviewHorizontalSwipe.deltaX) < imagePreviewHorizontalSwipeThreshold) return true;
   const direction = imagePreviewHorizontalSwipe.deltaX > 0 ? 'next' : 'previous';
   imagePreviewHorizontalSwipe.deltaX = 0;
   imagePreviewHorizontalSwipe.lockUntil = now + 280;
+  imagePreviewHorizontalSwipe.consumed = true;
   navigateImagePreview(direction);
   return true;
 }
@@ -3627,7 +4162,10 @@ app.addEventListener('wheel', event => {
   const viewport = event.target.closest?.('[data-image-preview-viewport], .image-preview-dialog');
   if (!viewport || !state.imagePreview) return;
   if (consumeImagePreviewHorizontalSwipe(event, viewport)) return;
+  // macOS WebKit exposes a two-finger pinch as Ctrl-wheel. Ordinary wheel
+  // motion is not zoom, so a horizontal swipe cannot magnify the image.
   event.preventDefault();
+  if (!event.ctrlKey) return;
   if (!state.imagePreview.dataUrl) return;
   const current = Number(state.imagePreview.zoom) || 1;
   const zoom = Math.max(1, Math.min(4, current + (event.deltaY < 0 ? 0.25 : -0.25)));
@@ -3941,7 +4479,7 @@ function openChatAttachmentMenu(card) {
   const mime = asset.mimeType || '';
   const category = mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'file';
   const duration = state.videoThumbnails?.[attachmentId]?.durationMillis || state.searchAttachmentPreviews?.[attachmentId]?.durationMillis;
-  const item = { workspaceId: state.current.summary.id, attachmentId, displayName: asset.displayName || '附件', category,
+  const item = { workspaceId: state.current.summary.id, conversationId: currentConversation()?.id, messageId, attachmentId, displayName: asset.displayName || '附件', category,
     details: [({ image: '图片', video: '视频', audio: '音频', file: '文件' })[category], duration ? formatDuration(duration) : '', bytes(Number(asset.byteCount) || 0)].filter(Boolean).join(' · '),
     sentAt: message.createdAt ? `发送于 ${new Date(message.createdAt).toLocaleString('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '' };
   state.dialog = { kind: 'chat-attachment-actions', item, anchor: attachmentMenuAnchor(card) };
@@ -4001,7 +4539,7 @@ app.addEventListener('pointermove', event => {
   if (searchAttachmentPressOrigin && Math.hypot(event.clientX - searchAttachmentPressOrigin.x, event.clientY - searchAttachmentPressOrigin.y) > 10) cancelSearchAttachmentLongPress();
 });
 
-render = renderUnified;
+const render = renderUnified;
 
 let ordinaryComposerDraftQueue = Promise.resolve();
 let ordinaryComposerDraftTimer = null;
@@ -4402,14 +4940,20 @@ async function sendLocalMessage() {
     return;
   }
   const conversation = resolveConversation(state.current, state.selectedConversationId);
-  const routeAtSubmit = state.selectedConversationId;
   const sentDraft = state.composerDraft;
   const sentAttachments = [...state.composerAttachments];
   const pendingModelId = conversation ? null : state.pendingNewConversationModelId;
   const pendingPreferences = conversation ? null : { ...state.conversationPreferences };
+  let clientSubmissionId = null;
   try {
     const workspaceId = state.current.summary.id;
+    clientSubmissionId = createChatSubmissionId();
     if (!conversation) state.pendingCreatedConversationRouteWorkspaceId = workspaceId;
+    state.pendingChatSubmission = {
+      workspaceId,
+      conversationId: conversation?.id || null,
+      clientSubmissionId,
+    };
     const execution = invoke('submit_desktop_ordinary_chat', { args: {
       workspaceId,
       conversationId: conversation?.id || null,
@@ -4422,7 +4966,7 @@ async function sendLocalMessage() {
       webSearchOverride: typeof pendingPreferences?.webSearchOverride === 'boolean' ? pendingPreferences.webSearchOverride : null,
       // The visible Send press is the only authorization action; the Rust boundary refuses
       // to construct a provider request without this short, content-free receipt.
-      egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: 'normal-chat-egress-v1' },
+      egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: 'normal-chat-egress-v1', clientSubmissionId },
     } });
     state.composerAttachments = []; writeComposerAttachments();
     state.composerDraft = '';
@@ -4433,14 +4977,9 @@ async function sendLocalMessage() {
     const refreshLoop = refreshDesktopRuntimeWhilePending(workspaceId, conversation?.id || null, () => settled);
     let result;
     try { result = await execution; } finally { settled = true; await refreshLoop; }
-    const routeStillOwned = routeAtSubmit
-      ? state.selectedConversationId === routeAtSubmit
-      : state.selectedConversationId === result.conversationId
-        || (!state.selectedConversationId && state.pendingCreatedConversationRouteWorkspaceId === workspaceId);
-    if (routeStillOwned) {
-      state.selectedConversationId = result.conversationId;
-      state.pendingChatSendScrollToLatestId = result.conversationId;
-    }
+    // A short request can settle before its first runtime refresh reaches this
+    // window. Claim that one submission here; never re-arm it after streaming.
+    claimSubmittedChatRoute({ workspaceId, conversationId: result.conversationId, clientSubmissionId });
     if (!conversation) state.pendingNewConversationModelId = null;
     if (state.pendingCreatedConversationRouteWorkspaceId === workspaceId) state.pendingCreatedConversationRouteWorkspaceId = null;
     state.status = result.state === 'COMPLETED' ? '回复已完成并写入用量账本。'
@@ -4450,9 +4989,11 @@ async function sendLocalMessage() {
       : '回复失败；可从失败卡片重试。';
     await loadDesktopContextRecords();
     await loadDesktopDiagnosticRecords();
+    await syncPersistedConversationContinuation(workspaceId, result.conversationId);
     await refresh();
   } catch (error) {
     if (state.pendingCreatedConversationRouteWorkspaceId === state.current?.summary?.id) state.pendingCreatedConversationRouteWorkspaceId = null;
+    if (state.pendingChatSubmission?.clientSubmissionId === clientSubmissionId) state.pendingChatSubmission = null;
     state.composerDraft = sentDraft;
     state.composerAttachments = sentAttachments;
     if (!conversation) state.pendingNewConversationModelId = pendingModelId;
@@ -4573,7 +5114,24 @@ async function pickComposerAttachment(kind) {
 }
 
 async function mutateConversationLifecycle(target, action, fields, success) {
+  const sidebarWorkspace = captureCloudSidebarWorkspace();
+  const cloudWorkspaceId = target.dataset.workspaceId || state.dialog?.workspaceId || null;
+  let cloudSyncVerificationPending = false;
+  await ensureConversationActionWorkspace(target);
   if (!native || !state.current) return;
+  const workspaceId = state.current.summary.id;
+  const conversationId = target.dataset.id;
+  const syncedConversationKeys = state.accountSync?.syncedConversationKeys || [];
+  const shouldSync = Boolean(cloudWorkspaceId) || syncedConversationKeys.includes(`${workspaceId}:${conversationId}`);
+  let localSaved = false;
+  const refreshSavedCloudRow = async () => {
+    const existing = state.cloudConversations?.find(row => row.workspaceId === workspaceId && row.id === conversationId);
+    if (!existing) return;
+    const [updated] = await cloudRowsFromLocalEntries([{ workspaceId, conversationId, cloudPinned: existing.cloudPinned }]);
+    if (!updated) throw new Error('已保存会话，但列表回读失败。');
+    state.cloudConversations = state.cloudConversations.map(row => row === existing ? updated : row);
+    persistCloudConversationCache();
+  };
   try {
     await invoke('mutate_desktop_domain', { args: {
       intentId: intent('conversation-lifecycle'),
@@ -4584,19 +5142,175 @@ async function mutateConversationLifecycle(target, action, fields, success) {
       expectedRevision: Number(target.dataset.revision),
       fields,
     } });
+    localSaved = true;
     if (action === 'archive') {
       removeFavoriteConversation(target.dataset.id);
       if (state.selectedConversationId === target.dataset.id) state.selectedConversationId = null;
     }
     state.error = '';
-    state.status = success;
+    if (shouldSync) {
+      const receipt = await syncSelectedContinuation({ invoke, workspaceId, conversationId,
+        syncedConversationKeys: cloudWorkspaceId ? [...syncedConversationKeys, `${workspaceId}:${conversationId}`] : syncedConversationKeys });
+      if (receipt.status === 'UNKNOWN') {
+        cloudSyncVerificationPending = true;
+        state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId: state.current.summary.id, conversationId: target.dataset.id } };
+        scheduleUnknownSyncReconciliation(state.current.summary.id, target.dataset.id);
+      } else if (!['SYNCED', 'UP_TO_DATE'].includes(receipt.status)) {
+        throw new Error(`云端回写未完成：${receipt.status}`);
+      }
+    }
+    await refreshSavedCloudRow();
+    state.status = shouldSync
+      ? (cloudSyncVerificationPending ? `${success}；云端提交正在后台核对。` : `${success} 已同步到云端。`)
+      : success;
     state.dialog = null;
+    await restoreCloudSidebarWorkspace(sidebarWorkspace);
     await refresh();
   } catch (error) {
-    state.error = `会话操作被拒绝：${String(error)}`;
+    if (localSaved) {
+      await refreshSavedCloudRow().catch(() => {});
+      state.dialog = null;
+    }
+    await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
+    state.error = localSaved
+      ? `会话修改已保存在本机，但同步或列表回读未完成：${String(error)}`
+      : `会话操作被拒绝：${String(error)}`;
     render();
   }
 }
+
+function isCloudListConversationTarget(target) {
+  return state.sidebarConversationList === 'cloud' && Boolean(target?.dataset?.workspaceId);
+}
+
+async function setCloudListConversationPinned(target, pinned) {
+  if (!isCloudListConversationTarget(target)) return;
+  const pinnedConversationIds = new Set(await invoke('set_desktop_cloud_list_pinned', {
+    conversationId: target.dataset.id,
+    pinned,
+  }));
+  state.cloudConversations = state.cloudConversations.map(item => (
+    { ...item, pinned: pinnedConversationIds.has(item.id), cloudPinned: pinnedConversationIds.has(item.id) }
+  ));
+  persistCloudConversationCache();
+  state.contextMenu = null;
+  state.error = '';
+  state.status = pinned ? '云端列表已置顶；本地列表未改动。' : '已取消云端列表置顶；本地列表未改动。';
+  render();
+}
+
+async function ensureConversationActionWorkspace(target) {
+  const workspaceId = target?.dataset?.workspaceId || target?.workspaceId || state.dialog?.workspaceId || state.contextMenu?.workspaceId || null;
+  if (!native || !workspaceId || state.current?.summary?.id === workspaceId) return;
+  state.current = await invoke('read_desktop_workspace', { workspaceId });
+  state.selectedConversationId = null;
+  state.history = await invoke('read_desktop_workbench_history', { workspaceId });
+  reloadFavoriteConversationIds();
+  await loadConversationReadState({ observeSelected: false });
+}
+
+// Cloud-list actions may briefly load a restored workspace to mutate that row.
+// Only opening a cloud row navigates; list actions always return here.
+function captureCloudSidebarWorkspace() {
+  if (state.sidebarConversationList !== 'cloud' || !state.current?.summary?.id) return null;
+  return { workspaceId: state.current.summary.id, selectedConversationId: state.selectedConversationId };
+}
+
+async function restoreCloudSidebarWorkspace(snapshot) {
+  if (!snapshot || !native || state.current?.summary?.id === snapshot.workspaceId) return;
+  const current = await invoke('read_desktop_workspace', { workspaceId: snapshot.workspaceId });
+  state.current = current;
+  state.selectedConversationId = resolveConversation(current, snapshot.selectedConversationId) ? snapshot.selectedConversationId : null;
+  state.history = await invoke('read_desktop_workbench_history', { workspaceId: snapshot.workspaceId });
+  state.favoriteConversationIds = new Set(await invoke('read_desktop_favorite_conversation_ids', { workspaceId: snapshot.workspaceId }));
+  await loadConversationReadState({ observeSelected: false });
+}
+
+function batchConversationKey(item) {
+  return `${item?.workspaceId || 'local'}:${item?.id || ''}`;
+}
+
+function currentBatchCandidates() {
+  const source = state.sidebarConversationList === 'cloud'
+    ? state.cloudConversations
+    : activeConversations(workspace(), state.manualUnreadAtMs);
+  return source.filter(item => item && !item.archived && !item.deleted);
+}
+
+function finishConversationBatchEditing() {
+  state.batchEditing = false;
+  state.batchSelectedConversationKeys = new Set();
+}
+
+async function confirmConversationBatchDelete() {
+  const dialog = state.dialog;
+  if (!native || dialog?.kind !== 'conversation-batch-delete' || dialog.submitting || !Array.isArray(dialog.items) || !dialog.items.length) return;
+  const sidebarWorkspace = captureCloudSidebarWorkspace();
+  state.dialog = { ...dialog, submitting: true, failure: '' };
+  render();
+  let completed = 0;
+  let cloudSyncVerificationPending = false;
+  try {
+    for (const item of dialog.items) {
+      await ensureConversationActionWorkspace(item);
+      if (!state.current) throw new Error('本机工作区不可用');
+      await invoke('mutate_desktop_domain', { args: {
+        intentId: intent('conversation-lifecycle'), workspaceId: state.current.summary.id,
+        entity: 'conversation', action: 'softDelete', objectId: item.id,
+        expectedRevision: Number(item.revision), fields: {},
+      } });
+      removeFavoriteConversation(item.id);
+      if (item.workspaceId) {
+        const receipt = await invoke('sync_selected_desktop_conversation', {
+          workspaceId: state.current.summary.id,
+          conversationId: item.id,
+        });
+        if (receipt.status === 'UNKNOWN') {
+          cloudSyncVerificationPending = true;
+          state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId: state.current.summary.id, conversationId: item.id } };
+          scheduleUnknownSyncReconciliation(state.current.summary.id, item.id);
+        } else if (!['SYNCED', 'UP_TO_DATE'].includes(receipt.status)) {
+          throw new Error(`云端回写未完成：${receipt.status}`);
+        }
+      }
+      completed += 1;
+    }
+    if (state.selectedConversationId && dialog.items.some(item => item.id === state.selectedConversationId && (!item.workspaceId || item.workspaceId === state.current?.summary?.id))) state.selectedConversationId = null;
+    const cloudKeys = new Set(dialog.items.filter(item => item.workspaceId).map(batchConversationKey));
+    if (cloudKeys.size) {
+      state.cloudConversations = state.cloudConversations.filter(item => !cloudKeys.has(batchConversationKey(item)));
+      cloudListReadGeneration += 1;
+      persistCloudConversationCache();
+    }
+    state.dialog = null;
+    finishConversationBatchEditing();
+    state.error = '';
+    state.status = cloudSyncVerificationPending
+      ? `已将 ${completed} 个会话移入回收站；云端提交正在后台核对。`
+      : `已将 ${completed} 个会话移入回收站，可恢复。`;
+    await restoreCloudSidebarWorkspace(sidebarWorkspace);
+    await refresh();
+  } catch (error) {
+    await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
+    state.dialog = { ...dialog, submitting: false, failure: `${completed ? `已处理 ${completed} 个；` : ''}${String(error)}` };
+    render();
+  }
+}
+
+// A cloud row is rendered from a restored local workspace, but opening it has
+// its own asynchronous route. Do not mutate its DOM and synthesize a second
+// click: that allowed a late workspace read or optional model preference read
+// to strand the visual surface on the old empty conversation.
+app.addEventListener('click', event => {
+  const target = event.target.closest?.('[data-action="select-chat"]');
+  const workspaceId = target?.dataset?.workspaceId;
+  if (!target || !workspaceId) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const conversationId = target.dataset.id || '';
+  const conversation = state.cloudConversations.find(item => item.workspaceId === workspaceId && item.id === conversationId);
+  void openCloudConversationRoute({ workspaceId, conversationId, title: conversation?.title || '云端会话' });
+}, true);
 
 /** FB-P6-037: dialog state follows the typed receipt, never a CSS-only hide. */
 async function confirmConversationDelete(target) {
@@ -4773,8 +5487,19 @@ app.addEventListener('click', async event => {
     const item = state.dialog?.item;
     if (!item) return;
     state.dialog = null;
-    state.chatSearch = item.displayName;
-    openFullSearch(item.category);
+    // This is a navigation request, not a filename search. Start from the complete catalogue
+    // and reveal the exact attachment only after its normal page has been loaded.
+    state.chatSearch = '';
+    state.searchCategory = 'all';
+    state.searchSortMode = 'default';
+    state.searchFileType = 'all';
+    state.searchRevealTarget = {
+      workspaceId: item.workspaceId,
+      conversationId: item.conversationId,
+      messageId: item.messageId,
+      attachmentId: item.attachmentId,
+    };
+    openFullSearch('all');
     return;
   }
   if (action === 'chat-attachment-save' || action === 'chat-attachment-share') {
@@ -4801,8 +5526,8 @@ app.addEventListener('click', async event => {
     catch (error) { if (error?.name !== 'AbortError') showPreviewActionError(target, '分享未打开。'); }
     return;
   }
-  if (action === 'close-image-preview') { event.preventDefault(); state.imagePreview = null; render(); return; }
-  if (action === 'image-preview-previous' || action === 'image-preview-next') { event.preventDefault(); const preview = state.imagePreview; if (!preview) return; const navigation = imagePreviewNavigation(preview.imageIds, preview.attachmentId); const targetId = action === 'image-preview-next' ? navigation.nextId : navigation.previousId; if (targetId) await openImagePreview(targetId, preview.workspaceId, preview.imageIds); return; }
+  if (action === 'close-image-preview') { event.preventDefault(); cancelImagePreviewLoad(); state.imagePreview = null; render(); return; }
+  if (action === 'image-preview-previous' || action === 'image-preview-next') { event.preventDefault(); navigateImagePreview(action === 'image-preview-next' ? 'next' : 'previous'); return; }
   if (action === 'close-pdf-preview') { event.preventDefault(); state.pdfPreview = null; render(); return; }
   if (action === 'close-video-preview') { event.preventDefault(); await closeVideoPreview(); return; }
   if (action === 'close-audio-preview') { event.preventDefault(); await closeAudioPreview(); return; }
@@ -4872,6 +5597,7 @@ app.addEventListener('click', async event => {
     event.preventDefault();
     const attemptId = target.dataset.attemptId;
     if (!attemptId) return;
+    const retryWorkspaceId = state.current?.summary?.id;
     state.status = '已按原 Provider、原模型和原幂等键开始重试。';
     state.error = '';
     render();
@@ -4880,6 +5606,7 @@ app.addEventListener('click', async event => {
       state.status = result.state === 'COMPLETED' ? '重试已完成并写入用量账本。' : result.state === 'UNKNOWN' ? '重试结果仍未知，未再次自动重发。' : '重试未完成。';
       await loadDesktopContextRecords();
       await loadDesktopDiagnosticRecords();
+      await syncPersistedConversationContinuation(retryWorkspaceId, result.conversationId);
       await refresh();
     } catch (error) { state.error = `重试被拒绝：${String(error)}`; render(); }
     return;
@@ -5004,7 +5731,14 @@ app.addEventListener('click', async event => {
   if (action === 'set-appearance-mode') { updateAppearance('mode', target.dataset.value); return; }
   if (action === 'set-font-size') { updateAppearance('fontSize', target.dataset.value); return; }
   if (action === 'set-theme-color') { updateAppearance('themeColor', target.dataset.value); return; }
-  if (action === 'toggle-conversation-favorite' || action === 'context-menu-favorite') { toggleFavoriteConversation(target.dataset.id); return; }
+  if (action === 'toggle-conversation-favorite' || action === 'context-menu-favorite') {
+    const sidebarWorkspace = captureCloudSidebarWorkspace();
+    await ensureConversationActionWorkspace(target);
+    await toggleFavoriteConversation(target.dataset.id, { renderAfter: false });
+    await restoreCloudSidebarWorkspace(sidebarWorkspace);
+    render();
+    return;
+  }
   if (action === 'toggle-conversation-find') {
     cancelConversationFindRender();
     state.conversationFindOpen = !state.conversationFindOpen;
@@ -5014,6 +5748,7 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-find') {
+    await ensureConversationActionWorkspace(target);
     cancelConversationFindRender();
     state.selectedConversationId = target.dataset.id;
     state.contextMenu = null;
@@ -5047,18 +5782,49 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-share') {
+    await ensureConversationActionWorkspace(target);
     state.contextMenu = null;
     const conversation = workspace()?.exchange?.conversations?.find(item => item.id === target.dataset.id);
     if (!conversation) return;
     await saveMarkdown(conversationMarkdown(conversation), safeMarkdownName(conversation?.title), '当前会话');
     return;
   }
+  if (action === 'context-menu-cancel-sync') {
+    const sidebarWorkspace = captureCloudSidebarWorkspace();
+    await ensureConversationActionWorkspace(target);
+    if (!native || !state.current) return;
+    const cloudWorkspaceId = state.current.summary.id;
+    try {
+      await invoke('cancel_desktop_conversation_sync', {
+        workspaceId: cloudWorkspaceId,
+        conversationId: target.dataset.id,
+      });
+      await loadDesktopAccountSync();
+      state.cloudConversations = state.cloudConversations.filter(item => !(item.workspaceId === cloudWorkspaceId && item.id === target.dataset.id));
+      cloudListReadGeneration += 1;
+      persistCloudConversationCache();
+      state.contextMenu = null;
+      state.status = '已取消同步；云端副本已删除，本地对话保留。';
+      state.error = '';
+    } catch (error) {
+      state.error = `取消同步未完成：${String(error)}`;
+    }
+    await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
+    render();
+    return;
+  }
   if (action === 'context-menu-pin') {
+    if (isCloudListConversationTarget(target)) {
+      await setCloudListConversationPinned(target, target.dataset.pinned !== 'true');
+      return;
+    }
     await mutateConversationLifecycle(target, 'setPinned', { pinned: target.dataset.pinned !== 'true' }, target.dataset.pinned === 'true' ? '会话已取消置顶。' : '会话已置顶。');
     state.contextMenu = null;
     return;
   }
   if (action === 'context-menu-unread') {
+    const sidebarWorkspace = captureCloudSidebarWorkspace();
+    await ensureConversationActionWorkspace(target);
     try {
       await markConversationUnread(target.dataset.id);
       state.status = '会话已标记未读；真正打开该会话后清除。';
@@ -5066,6 +5832,7 @@ app.addEventListener('click', async event => {
     } catch (error) {
       state.error = `会话未读状态未更新：${String(error)}`;
     }
+    await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
     state.contextMenu = null;
     render();
     return;
@@ -5076,22 +5843,31 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-rename') {
+    await ensureConversationActionWorkspace(target);
     const conversation = workspace()?.exchange?.conversations?.find(item => item.id === target.dataset.id);
     state.contextMenu = null;
-    state.dialog = { kind: 'conversation-rename', id: target.dataset.id, revision: Number(target.dataset.revision), title: conversation?.title || '' };
+    state.dialog = { kind: 'conversation-rename', id: target.dataset.id, revision: Number(target.dataset.revision), title: conversation?.title || '', workspaceId: target.dataset.workspaceId || null };
+    render();
+    return;
+  }
+  if (action === 'open-conversation-rename') {
+    await ensureConversationActionWorkspace(target);
+    const conversation = workspace()?.exchange?.conversations?.find(item => item.id === target.dataset.id);
+    state.dialog = { kind: 'conversation-rename', id: target.dataset.id, revision: Number(target.dataset.revision), title: conversation?.title || '', workspaceId: target.dataset.workspaceId || null };
     render();
     return;
   }
   if (action === 'context-menu-project') {
+    await ensureConversationActionWorkspace(target);
     const conversation = workspace()?.exchange?.conversations?.find(item => item.id === target.dataset.id);
     state.contextMenu = null;
-    state.dialog = { kind: 'conversation-project', id: target.dataset.id, revision: Number(target.dataset.revision), projectId: conversation?.projectId || null };
+    state.dialog = { kind: 'conversation-project', id: target.dataset.id, revision: Number(target.dataset.revision), projectId: conversation?.projectId || null, workspaceId: target.dataset.workspaceId || null };
     render();
     return;
   }
   if (action === 'context-menu-delete') {
     state.contextMenu = null;
-    state.dialog = { kind: 'conversation-delete', id: target.dataset.id, revision: Number(target.dataset.revision) };
+    state.dialog = { kind: 'conversation-delete', id: target.dataset.id, revision: Number(target.dataset.revision), workspaceId: target.dataset.workspaceId || null };
     render();
     return;
   }
@@ -5108,12 +5884,59 @@ app.addEventListener('click', async event => {
     await confirmConversationDelete(target);
     return;
   }
+  if (action === 'toggle-conversation-batch-edit') {
+    if (state.batchEditing) finishConversationBatchEditing();
+    else if (currentBatchCandidates().length) {
+      state.batchEditing = true;
+      state.batchSelectedConversationKeys = new Set();
+    }
+    render();
+    return;
+  }
+  if (action === 'toggle-batch-conversation') {
+    const key = target.dataset.batchKey;
+    if (!key) return;
+    const selected = new Set(state.batchSelectedConversationKeys);
+    if (selected.has(key)) selected.delete(key); else selected.add(key);
+    state.batchSelectedConversationKeys = selected;
+    render();
+    return;
+  }
+  if (action === 'toggle-batch-select-all') {
+    const candidates = currentBatchCandidates();
+    const keys = candidates.map(batchConversationKey);
+    const allSelected = keys.length > 0 && keys.every(key => state.batchSelectedConversationKeys.has(key));
+    state.batchSelectedConversationKeys = allSelected ? new Set() : new Set(keys);
+    render();
+    return;
+  }
+  if (action === 'request-batch-conversation-delete') {
+    const selected = state.batchSelectedConversationKeys;
+    const items = currentBatchCandidates().filter(item => selected.has(batchConversationKey(item))).map(item => ({
+      id: item.id,
+      revision: item.revision,
+      workspaceId: item.workspaceId || null,
+      title: item.title || '未命名会话',
+    }));
+    if (!items.length) return;
+    state.dialog = { kind: 'conversation-batch-delete', items, submitting: false, failure: '' };
+    render();
+    return;
+  }
+  if (action === 'confirm-conversation-batch-delete') {
+    await confirmConversationBatchDelete();
+    return;
+  }
   if (action === 'toggle-rail') {
     state.railCollapsed = !state.railCollapsed;
     render();
     return;
   }
   if (action === 'set-conversation-pinned') {
+    if (isCloudListConversationTarget(target)) {
+      await setCloudListConversationPinned(target, target.dataset.pinned === 'true');
+      return;
+    }
     await mutateConversationLifecycle(target, 'setPinned', { pinned: target.dataset.pinned === 'true' }, target.dataset.pinned === 'true' ? '会话已置顶。' : '会话已取消置顶。');
     return;
   }
@@ -5357,51 +6180,70 @@ app.addEventListener('click', event => {
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   const action = target?.dataset.action;
-  if (!['show-google-login-requirements', 'sign-in-google-account', 'sign-out-google-account', 'create-account-recovery', 'confirm-account-recovery', 'copy-account-recovery-code', 'create-account-recovery-rotation', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'load-account-cloud-documents', 'restore-account-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
+  if (!['show-google-login-requirements', 'sign-in-google-account', 'sign-out-google-account', 'create-account-recovery-rotation', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'load-account-cloud-documents', 'show-recent-conversation-list', 'show-cloud-conversation-list', 'open-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
+  if (action === 'load-account-cloud-documents') {
+    if (cloudListReadPending) return;
+    cloudListReadPending = true;
+  }
   void (async () => {
     try {
       if (!native) {
         if (action === 'context-menu-sync') {
           state.contextMenu = null;
-          state.pane = 'settings';
-          state.settingsSection = 'account';
+          state.status = '同步尚未就绪：Web 预览不会打开 Google、读取凭据或连接南枫云。';
+          render();
+          return;
         }
         state.status = 'Web 预览不会打开 Google、读取凭据或连接南枫云。';
         render();
         return;
       }
-      if (action === 'context-menu-sync') {
+      if (action === 'show-recent-conversation-list') {
+        finishConversationBatchEditing();
+        state.sidebarConversationList = 'recent';
+        state.status = '';
+      } else if (action === 'show-cloud-conversation-list') {
+        finishConversationBatchEditing();
+        state.sidebarConversationList = 'cloud';
+        state.status = '';
+      } else if (action === 'open-cloud-conversation') {
+        state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.workspaceId || '' });
+        state.selectedConversationId = target.dataset.conversationId || null;
+        state.pane = 'chat';
+        state.status = '';
+      } else if (action === 'context-menu-sync') {
         state.contextMenu = null;
-        if (state.accountSync.state !== 'READY') {
-          state.pane = 'settings';
-          state.settingsSection = 'account';
-          state.status = '请先完成登录、恢复码确认和首次同步方向。';
-          await loadDesktopAccountSync();
-          render();
-          return;
-        }
         const workspaceId = state.current?.summary?.id;
         const conversationId = target.dataset.id;
         if (!workspaceId || !conversationId) throw new Error('当前对话不可用');
-        state.status = '正在加密并核对云端版本…';
-        render();
+        // Render before any IPC so a slow network never makes the click look
+        // inert. The native sync owner still verifies login and cloud state.
+        state.status = '正在核对云端版本并提交…';
+        beginAccountSyncProgress('sync');
+        await waitForAccountSyncProgressPaint();
         const receipt = await invoke('sync_selected_desktop_conversation', { workspaceId, conversationId });
         if (receipt.status === 'UNKNOWN') {
           state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId, conversationId } };
-          state.pane = 'settings';
-          state.settingsSection = 'account';
-          state.status = '提交结果未知；已停止重发，请先核对云端结果。';
+          state.status = '云端提交正在后台核对；不会重复上传。';
+          await completeAccountSyncProgress('已提交 1 个对话，正在后台核对。', 'pending');
+          scheduleUnknownSyncReconciliation(workspaceId, conversationId);
         } else if (receipt.status === 'CONFLICT') {
           state.pane = 'settings';
           state.settingsSection = 'account';
           state.status = '云端版本已变化，本机未覆盖任何云端内容。';
-        } else {
+          await completeAccountSyncProgress('云端版本已变化，本机未覆盖。', 'error');
+        } else if (['SYNCED', 'UP_TO_DATE'].includes(receipt.status)) {
           state.status = receipt.status === 'UP_TO_DATE' ? '所选对话已是最新版本。' : '所选对话已加密上传并通过云端回读。';
+          await completeAccountSyncProgress('', 'success');
+        } else {
+          throw new Error(`云端回写未完成：${receipt.status}`);
         }
         notifyAccountSync(['SYNCED', 'UP_TO_DATE'].includes(receipt.status) ? 'success' : 'attention');
-        await loadDesktopAccountSync();
+        // The receipt has already completed the visible action. Refresh the
+        // account card in the background instead of delaying its success cue.
+        void loadDesktopAccountSync().then(render).catch(() => {});
       } else if (action === 'show-google-login-requirements') {
         state.status = '此 Desktop 尚未写入南枫云地址或公开访问密钥；不会打开浏览器、读取账号或上传数据。';
       } else if (action === 'sign-in-google-account') {
@@ -5414,25 +6256,15 @@ app.addEventListener('click', event => {
         render();
         state.accountSync = await invoke('sign_in_desktop_google_account');
         state.accountRecovery = null;
-        state.status = '已建立南枫云应用账号会话；确认恢复码前不会上传。';
+        await restoreCachedCloudConversationList();
+        state.status = '已建立南枫云应用账号会话；可直接读取云端会话。';
       } else if (action === 'sign-out-google-account') {
         state.accountSync = await invoke('sign_out_desktop_google_account');
         state.accountRecovery = null;
+        state.cloudConversations = [];
+        cloudListReadGeneration += 1;
+        clearCloudConversationCache();
         state.status = '已退出账号；本机对话与工作区保留不变。';
-      } else if (action === 'create-account-recovery') {
-        state.accountRecovery = { ...await invoke('create_desktop_recovery_code'), rotation: false };
-        state.status = '恢复码只显示这一次；安全保存后再确认。';
-      } else if (action === 'copy-account-recovery-code') {
-        const recoveryCode = document.querySelector('.android-account-recovery output')?.textContent || '';
-        if (!recoveryCode) throw new Error('恢复码已隐藏，无法复制');
-        if (!navigator.clipboard?.writeText) throw new Error('当前环境无法使用系统剪贴板');
-        await navigator.clipboard.writeText(recoveryCode);
-        showCopyIconFeedback(target);
-        state.status = '';
-      } else if (action === 'confirm-account-recovery') {
-        state.accountSync = await invoke('confirm_desktop_recovery_code', { confirmationHash: target.dataset.confirmationHash });
-        state.accountRecovery = null;
-        state.status = '恢复保护已确认；请再明确选择首次同步方向。';
       } else if (action === 'create-account-recovery-rotation') {
         state.accountRecovery = { rotation: true };
         state.status = '';
@@ -5443,30 +6275,69 @@ app.addEventListener('click', event => {
         const receipt = await invoke('confirm_desktop_recovery_rotation', { confirmationHash: pending.confirmationHash });
         state.accountRecovery = null;
         state.accountSync = { ...state.accountSync, rotationPending: receipt.status !== 'ROTATED' };
-        state.status = receipt.status === 'ROTATED' ? `新恢复码已激活；${receipt.completedDocuments} 个云端对话已重加密并回读。` : `恢复码轮换暂停于 ${receipt.status}；已完成 ${receipt.completedDocuments}/${receipt.totalDocuments}，未静默重发。`;
+        state.status = receipt.status === 'ROTATED' ? '恢复码已更换并完成云端回读。' : `恢复码更换暂停于 ${receipt.status}；已完成 ${receipt.completedDocuments}/${receipt.totalDocuments}。`;
         notifyAccountSync(receipt.status === 'ROTATED' ? 'success' : 'attention');
         await loadDesktopAccountSync();
       } else if (action === 'retry-account-recovery-rotation') {
         const receipt = await invoke('retry_desktop_recovery_rotation');
         state.accountSync = { ...state.accountSync, rotationPending: receipt.status !== 'ROTATED' };
-        state.status = receipt.status === 'ROTATED' ? '恢复码轮换已全部完成并回读。' : `轮换仍暂停于 ${receipt.status}；已完成 ${receipt.completedDocuments}/${receipt.totalDocuments}。`;
+        state.status = receipt.status === 'ROTATED' ? '恢复码已更换并完成云端回读。' : `更换仍暂停于 ${receipt.status}；已完成 ${receipt.completedDocuments}/${receipt.totalDocuments}。`;
         notifyAccountSync(receipt.status === 'ROTATED' ? 'success' : 'attention');
         await loadDesktopAccountSync();
       } else if (action === 'load-account-cloud-documents') {
-        const remoteDocuments = await invoke('list_desktop_cloud_documents');
-        state.accountSync = { ...state.accountSync, remoteDocuments };
-        state.status = remoteDocuments.length ? `已读取 ${remoteDocuments.length} 个可恢复的加密云端对话。` : '当前账号没有可恢复的云端对话。';
-      } else if (action === 'restore-account-cloud-conversation') {
-        const documentId = document.querySelector('#account-cloud-document')?.value || '';
-        const input = document.querySelector('#account-cloud-recovery-code');
-        const recoveryCode = input?.value || '';
-        if (input) input.value = '';
-        if (!recoveryCode) throw new Error('请输入恢复码');
-        const receipt = await invoke('restore_desktop_cloud_conversation', { documentId, recoveryCode });
-        state.status = receipt.status === 'ALREADY_RESTORED' ? '该云端对话已恢复，未重复写入。' : '云端对话已恢复为新的本机工作区，现有数据未被覆盖。';
-        notifyAccountSync('success');
-        await refresh();
-        await loadDesktopAccountSync();
+        const readGeneration = ++cloudListReadGeneration;
+        beginAccountSyncProgress('read');
+        state.status = '正在读取云端列表…';
+        render();
+        await waitForAccountSyncProgressPaint();
+        const receipt = await invoke('restore_all_desktop_cloud_conversations');
+        const restored = Array.isArray(receipt?.restored) ? receipt.restored : [];
+        const updatedCount = restored.filter(item => item?.status === 'UPDATED_LOCAL').length;
+        const addedCount = restored.filter(item => item?.status === 'RESTORED_AS_NEW_WORKSPACE').length;
+        const failedCount = Math.max(0, Number(receipt?.failedCount) || 0);
+        const legacyCount = Math.max(0, Number(receipt?.skippedLegacyCount) || 0);
+        const refreshedRows = await cloudRowsFromLocalEntries(restored);
+        // A newer read, explicit cloud removal, or sign-out won the race. Its
+        // list state is authoritative; this old response must not put rows back.
+        if (readGeneration !== cloudListReadGeneration) return;
+        state.accountSync = { ...state.accountSync, remoteDocuments: [] };
+        state.sidebarConversationList = 'cloud';
+        state.cloudConversations = mergeCloudConversationList(state.cloudConversations, refreshedRows, receipt?.cloudConversationKeys);
+        // A successfully decoded remote presentation is authoritative even
+        // when an older bridge has omitted its optional ID array.  In that
+        // case it means zero pins; retaining a cached pin would make Desktop
+        // disagree with Android's direct cloud read.
+        let pinnedConversationIds = receipt?.cloudListPresentationPresent
+          ? new Set(Array.isArray(receipt?.cloudPinnedConversationIds) ? receipt.cloudPinnedConversationIds : [])
+          : null;
+        // Missing presentation keeps the cached pins. A read must not wait on
+        // (or implicitly perform) a series of cloud pin writes.
+        if (pinnedConversationIds) {
+          state.cloudConversations = state.cloudConversations.map(item => ({
+            ...item,
+            pinned: pinnedConversationIds.has(item.id),
+            cloudPinned: pinnedConversationIds.has(item.id),
+          }));
+        }
+        persistCloudConversationCache();
+        state.pane = 'chat';
+        if (failedCount || legacyCount) {
+          state.status = `已显示 ${state.cloudConversations.length} 个云端会话；${failedCount} 个未能恢复，已保留本机内容。${legacyCount ? `另有 ${legacyCount} 个旧格式记录，需要在原设备明确同步后再读取。` : '请核对读取错误或同步冲突。'}`;
+          notifyAccountSync('attention');
+          await completeAccountSyncProgress(state.status, 'error');
+        } else if (!state.cloudConversations.length) {
+          state.status = '当前账号没有云端会话。';
+          await completeAccountSyncProgress('新增 0 个，当前账号没有云端会话。');
+        } else {
+          state.status = `已读取 ${state.cloudConversations.length} 个云端会话，已显示在云端列表。`;
+          notifyAccountSync('success');
+          await completeAccountSyncProgress(
+            `新增 ${addedCount} 个，已更新 ${updatedCount} 个，当前显示 ${state.cloudConversations.length} 个云端会话。`,
+            'success',
+          );
+        }
+        // Account metadata is not a prerequisite for already-restored rows.
+        void loadDesktopAccountSync().then(render).catch(() => {});
       } else if (action === 'choose-selected-local-sync-start') {
         state.accountSync = await invoke('choose_desktop_selected_sync_start');
         state.status = '已选择以本机所选对话为起点；云端非空时仍会停下并报冲突。';
@@ -5475,18 +6346,25 @@ app.addEventListener('click', event => {
         state.status = '';
       } else if (action === 'reconcile-account-sync') {
         const receipt = await invoke('reconcile_desktop_conversation_sync', { workspaceId: target.dataset.workspaceId, conversationId: target.dataset.conversationId });
-        if (receipt.status === 'SYNCED_AFTER_RECONCILE') state.accountSync = { ...state.accountSync, pendingUnknown: null };
-        state.status = receipt.status === 'SYNCED_AFTER_RECONCILE' ? '已回读确认上次提交成功，未重复上传。' : receipt.status === 'SAFE_TO_RETRY_EXPLICITLY' ? '云端未改变；如需重试，请在会话菜单再次明确发起。' : '云端版本冲突，已停止。';
-        notifyAccountSync(receipt.status === 'SYNCED_AFTER_RECONCILE' ? 'success' : 'attention');
+        if (receipt.status === 'SYNCED_AFTER_RECONCILE' || receipt.status === 'SYNCED_AFTER_REMOTE_RECONCILE') state.accountSync = { ...state.accountSync, pendingUnknown: null };
+        state.status = receipt.status === 'SYNCED_AFTER_RECONCILE' ? '已回读确认上次提交成功，未重复上传。' : receipt.status === 'SYNCED_AFTER_REMOTE_RECONCILE' ? '已合并云端最新对话并完成同步。' : receipt.status === 'SAFE_TO_RETRY_EXPLICITLY' ? '云端未改变；如需重试，请在会话菜单再次明确发起。' : '云端仍在核对，未覆盖任何内容。';
+        notifyAccountSync(receipt.status === 'SYNCED_AFTER_RECONCILE' || receipt.status === 'SYNCED_AFTER_REMOTE_RECONCILE' ? 'success' : 'attention');
         await loadDesktopAccountSync();
       }
       state.error = '';
     } catch (error) {
-      state.error = `账号与同步操作未完成：${String(error)}`;
+      state.error = `账号与同步操作未完成：${accountSyncErrorMessage(error)}`;
       if (action === 'sign-in-google-account') state.status = 'Google 授权未完成；本机数据与云端均未改变，可检查配置后重试。';
-      if (['context-menu-sync', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'restore-account-cloud-conversation', 'reconcile-account-sync'].includes(action)) notifyAccountSync('attention');
+      if (action === 'context-menu-sync') await completeAccountSyncProgress('请检查网络或登录后重试。', 'error');
+      if (action === 'load-account-cloud-documents') await completeAccountSyncProgress('请检查网络或登录后重试。', 'error');
+      if (['context-menu-sync', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'reconcile-account-sync'].includes(action)) notifyAccountSync('attention');
     } finally {
+      // completeAccountSyncProgress owns the result lifetime. Clearing it here
+      // immediately after the receipt/error turns the acknowledgement into a
+      // one-frame flash, so sync/read must leave the completed card in place
+      // until its own timeout expires.
       if (action === 'sign-in-google-account') accountSignInPending = false;
+      if (action === 'load-account-cloud-documents') cloudListReadPending = false;
       if (action === 'copy-account-recovery-code' && target?.__copyIconFeedback) window.setTimeout(render, COPY_SUCCESS_DURATION_MS);
       else render();
     }
@@ -5549,6 +6427,8 @@ async function bootDesktopShell() {
       await loadDesktopPrivacyInventory();
       startupStage = 'ACCOUNT_SYNC_READBACK';
       await loadDesktopAccountSync();
+      startupStage = 'CLOUD_LIST_CACHE_READBACK';
+      await restoreCachedCloudConversationList();
       startupStage = 'V2_EXCHANGE_READBACK';
       state.v2CommittedExchanges = await invoke('list_desktop_workspace_exchange_v2_committed');
       globalThis.__nanfengV2CommittedExchanges = state.v2CommittedExchanges;

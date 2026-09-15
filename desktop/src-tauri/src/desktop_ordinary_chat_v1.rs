@@ -90,6 +90,42 @@ pub fn migrate_context_audit(connection: &rusqlite::Connection) -> Result<(), St
     ).map_err(|_| "普通聊天上下文审计 migration 失败".to_owned())
 }
 
+/// Adds an answer-bound network evidence bit.  `web_search_route` is the durable fact that the
+/// request asked the provider to use its web capability; this bit is set only when the completed
+/// provider response contained a safe, provider-owned source or tool-result signal.
+pub fn migrate_web_search_provenance(connection: &rusqlite::Connection) -> Result<(), String> {
+    let has_attempts: bool = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='desktop_ordinary_chat_attempts')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| "普通聊天联网核验表状态无法读取".to_owned())?;
+    // Narrow historical migration fixtures can intentionally stop before ordinary chat exists.
+    // The next real open will run the earlier migrations before this version, so this is a safe
+    // no-op rather than a failed upgrade.
+    if !has_attempts {
+        return Ok(());
+    }
+    let mut statement = connection
+        .prepare("PRAGMA table_info(desktop_ordinary_chat_attempts)")
+        .map_err(|_| "普通聊天联网核验列状态无法读取".to_owned())?;
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|_| "普通聊天联网核验列状态无效".to_owned())?
+        .collect::<Result<std::collections::BTreeSet<_>, _>>()
+        .map_err(|_| "普通聊天联网核验列状态无效".to_owned())?;
+    if columns.contains("web_search_verified") {
+        return Ok(());
+    }
+    connection
+        .execute_batch(
+            "ALTER TABLE desktop_ordinary_chat_attempts
+                 ADD COLUMN web_search_verified INTEGER;",
+        )
+        .map_err(|_| "普通聊天联网核验字段 migration 失败".to_owned())
+}
+
 /// Adds the durable Compare execution envelope while retaining ordinary-chat attempts as the
 /// only branch runtime, transport, context-audit, and usage owner. No user text or provider
 /// payload is duplicated into the Compare table.
@@ -155,6 +191,8 @@ pub struct TransportRequest {
     pub idempotency_key: String,
     pub max_output_tokens: u32,
     pub web_search_route: String,
+    pub structured_json: bool,
+    pub disable_thinking: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,6 +211,7 @@ pub struct Completed {
     pub usage: Usage,
     pub reported_cost_micros: Option<i64>,
     pub actual_model_id: Option<String>,
+    pub web_search_verified: bool,
     pub elapsed_ms: i64,
 }
 
@@ -249,6 +288,30 @@ fn text_delta(value: &Value) -> Option<&str> {
         .as_str()
 }
 
+/// OpenAI-compatible providers are permitted to return the visible assistant message either as
+/// a single string or as typed text parts. Android accepts both forms; keep the same projection
+/// here and deliberately exclude reasoning/tool parts from a user-visible reply or title.
+fn message_content_text(value: &Value) -> Option<String> {
+    match value {
+        Value::String(text) => (!text.trim().is_empty()).then(|| text.trim().to_owned()),
+        Value::Array(parts) => {
+            let text = parts
+                .iter()
+                .filter_map(|part| {
+                    matches!(
+                        part.get("type").and_then(Value::as_str),
+                        Some("text" | "output_text")
+                    )
+                    .then(|| part.get("text").and_then(Value::as_str))
+                    .flatten()
+                })
+                .collect::<String>();
+            (!text.trim().is_empty()).then(|| text.trim().to_owned())
+        }
+        _ => None,
+    }
+}
+
 fn reasoning_delta(value: &Value) -> Option<&str> {
     let delta = value.get("choices")?.get(0)?.get("delta")?;
     delta
@@ -307,6 +370,12 @@ fn transport_body(request: &TransportRequest) -> Value {
                 "stream_options":{"include_usage":true},"max_tokens":request.max_output_tokens,"temperature":0.2
             });
             let object = body.as_object_mut().expect("request body is an object");
+            if request.structured_json {
+                object.insert("response_format".into(), json!({"type":"json_object"}));
+            }
+            if request.disable_thinking && request.provider_id == "DEEPSEEK" {
+                object.insert("thinking".into(), json!({"type":"disabled"}));
+            }
             match request.web_search_route.as_str() {
                 "OPENROUTER_SERVER_TOOL" => {
                     object.insert("tools".into(), json!([{"type":"openrouter:web_search","parameters":{"max_results":5,"max_total_results":10}}]));
@@ -332,21 +401,56 @@ pub async fn execute_non_streaming(
     request: TransportRequest,
     mut secret: Zeroizing<Vec<u8>>,
 ) -> Result<Completed, Failure> {
-    let authorization = Zeroizing::new(String::from_utf8(secret.to_vec()).map_err(|_| Failure::Explicit { code: "CREDENTIAL_FORMAT", http_status: None })?);
+    let authorization =
+        Zeroizing::new(
+            String::from_utf8(secret.to_vec()).map_err(|_| Failure::Explicit {
+                code: "CREDENTIAL_FORMAT",
+                http_status: None,
+            })?,
+        );
     secret.zeroize();
     let mut body = transport_body(&request);
     body["stream"] = Value::Bool(false);
-    body.as_object_mut().map(|object| object.remove("stream_options"));
+    body.as_object_mut()
+        .map(|object| object.remove("stream_options"));
     let started = Instant::now();
-    let response = Client::builder().connect_timeout(Duration::from_secs(15)).timeout(Duration::from_secs(90)).build()
+    let response = Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(90))
+        .build()
         .map_err(|_| Failure::Unknown { code: "CLIENT" })?
-        .post(&request.endpoint).bearer_auth(authorization.as_str())
-        .header("Idempotency-Key", &request.idempotency_key).header("Accept", "application/json")
-        .json(&body).send().await.map_err(|error| if error.is_timeout() { Failure::Unknown { code: "TIMEOUT" } } else { Failure::Unknown { code: "NETWORK" } })?;
+        .post(&request.endpoint)
+        .bearer_auth(authorization.as_str())
+        .header("Idempotency-Key", &request.idempotency_key)
+        .header("Accept", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|error| {
+            if error.is_timeout() {
+                Failure::Unknown { code: "TIMEOUT" }
+            } else {
+                Failure::Unknown { code: "NETWORK" }
+            }
+        })?;
     let status = response.status().as_u16();
-    if !(200..300).contains(&status) { return Err(Failure::Explicit { code: safe_http_code(status), http_status: Some(status) }); }
-    let bytes = response.bytes().await.map_err(|error| if error.is_timeout() { Failure::Unknown { code: "TIMEOUT" } } else { Failure::Unknown { code: "NETWORK" } })?;
-    decode_non_streaming(&bytes, started.elapsed().as_millis().min(i64::MAX as u128) as i64)
+    if !(200..300).contains(&status) {
+        return Err(Failure::Explicit {
+            code: safe_http_code(status),
+            http_status: Some(status),
+        });
+    }
+    let bytes = response.bytes().await.map_err(|error| {
+        if error.is_timeout() {
+            Failure::Unknown { code: "TIMEOUT" }
+        } else {
+            Failure::Unknown { code: "NETWORK" }
+        }
+    })?;
+    decode_non_streaming(
+        &bytes,
+        started.elapsed().as_millis().min(i64::MAX as u128) as i64,
+    )
 }
 
 fn response_sources(value: &Value) -> Vec<(String, String)> {
@@ -447,6 +551,16 @@ fn response_sources(value: &Value) -> Vec<(String, String)> {
     values
 }
 
+fn has_web_search_evidence(value: &Value) -> bool {
+    !response_sources(value).is_empty()
+        || value
+            .get("output")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|item| item.get("type").and_then(Value::as_str) == Some("web_search_call"))
+}
+
 fn append_sources(text: &mut String, sources: &[(String, String)]) {
     if sources.is_empty() {
         return;
@@ -503,7 +617,9 @@ fn decode_responses_non_streaming(bytes: &[u8], elapsed_ms: i64) -> Result<Compl
             code: "RESPONSE_FORMAT",
             http_status: None,
         })?;
-    append_sources(&mut text, &response_sources(&value));
+    let sources = response_sources(&value);
+    let web_search_verified = !sources.is_empty() || has_web_search_evidence(&value);
+    append_sources(&mut text, &sources);
     let usage = value.get("usage");
     Ok(Completed {
         text,
@@ -538,6 +654,7 @@ fn decode_responses_non_streaming(bytes: &[u8], elapsed_ms: i64) -> Result<Compl
             .get("model")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
+        web_search_verified,
         elapsed_ms,
     })
 }
@@ -557,14 +674,11 @@ pub fn decode_non_streaming(bytes: &[u8], elapsed_ms: i64) -> Result<Completed, 
         .and_then(|choices| choices.get(0))
         .and_then(|choice| choice.get("message"))
         .and_then(|message| message.get("content"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
+        .and_then(message_content_text)
         .ok_or(Failure::Explicit {
             code: "RESPONSE_FORMAT",
             http_status: None,
-        })?
-        .to_owned();
+        })?;
     let reasoning = value
         .get("choices")
         .and_then(|choices| choices.get(0))
@@ -587,6 +701,7 @@ pub fn decode_non_streaming(bytes: &[u8], elapsed_ms: i64) -> Result<Completed, 
             .get("model")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
+        web_search_verified: has_web_search_evidence(&value),
         elapsed_ms,
     })
 }
@@ -629,13 +744,13 @@ pub async fn execute_streaming(
     .map_err(|_| Failure::Unknown {
         code: "FIRST_RESPONSE_TIMEOUT",
     })?
-        .map_err(|error| {
-            if error.is_timeout() {
-                Failure::Unknown { code: "TIMEOUT" }
-            } else {
-                Failure::Unknown { code: "NETWORK" }
-            }
-        })?;
+    .map_err(|error| {
+        if error.is_timeout() {
+            Failure::Unknown { code: "TIMEOUT" }
+        } else {
+            Failure::Unknown { code: "NETWORK" }
+        }
+    })?;
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(Failure::Explicit {
@@ -650,12 +765,12 @@ pub async fn execute_streaming(
                 code: "FIRST_VISIBLE_TIMEOUT",
             })?
             .map_err(|error| {
-            if error.is_timeout() {
-                Failure::Unknown { code: "TIMEOUT" }
-            } else {
-                Failure::Unknown { code: "NETWORK" }
-            }
-        })?;
+                if error.is_timeout() {
+                    Failure::Unknown { code: "TIMEOUT" }
+                } else {
+                    Failure::Unknown { code: "NETWORK" }
+                }
+            })?;
         // Android keeps a valid DeepSeek answer even when the provider does not
         // return citation metadata. `decode_responses_non_streaming` appends only
         // provider-owned, safe sources when they are present.
@@ -666,6 +781,12 @@ pub async fn execute_streaming(
             &bytes,
             started.elapsed().as_millis().min(i64::MAX as u128) as i64,
         )?;
+        if !completed.web_search_verified {
+            return Err(Failure::Explicit {
+                code: "WEB_SEARCH_NO_SOURCES",
+                http_status: Some(status),
+            });
+        }
         return Ok(completed);
     }
     let responses_stream = request.web_search_route == "QWEN_RESPONSES";
@@ -879,12 +1000,19 @@ pub async fn execute_streaming(
     // Provider citations are optional metadata on Android. Preserve a valid answer when
     // a search provider did not return them; append only verified provider-owned sources.
     append_sources(&mut text, &sources);
+    if request.web_search_route != "NONE" && sources.is_empty() {
+        return Err(Failure::Explicit {
+            code: "WEB_SEARCH_NO_SOURCES",
+            http_status: Some(status),
+        });
+    }
     Ok(Completed {
         text,
         reasoning: (!reasoning.trim().is_empty()).then(|| reasoning.trim().to_owned()),
         usage,
         reported_cost_micros,
         actual_model_id,
+        web_search_verified: !sources.is_empty(),
         elapsed_ms: started.elapsed().as_millis().min(i64::MAX as u128) as i64,
     })
 }
@@ -928,6 +1056,8 @@ mod tests {
             idempotency_key: "attempt-fixture".into(),
             max_output_tokens: 128,
             web_search_route: "NONE".into(),
+            structured_json: false,
+            disable_thinking: false,
         }
     }
 
@@ -1007,24 +1137,25 @@ mod tests {
     }
 
     #[test]
-    fn deepseek_responses_keeps_valid_answer_without_search_sources() {
+    fn deepseek_responses_marks_answer_without_search_evidence_unverified() {
         let result = decode_responses_non_streaming(
             br#"{"model":"deepseek-chat","output_text":"provider answer","usage":{"input_tokens":3,"output_tokens":2}}"#,
             12,
         )
-        .expect("Android parity keeps a valid DeepSeek answer without citation metadata");
+        .expect("the decoder may retain text while the transport rejects an unverified live search");
         assert_eq!(result.text, "provider answer");
         assert_eq!(result.usage.input_tokens, Some(3));
         assert_eq!(result.usage.output_tokens, Some(2));
+        assert!(!result.web_search_verified);
     }
 
     #[test]
-    fn deepseek_responses_commits_once_without_stream_deltas() {
+    fn deepseek_responses_rejects_unverified_live_search_without_stream_deltas() {
         let body = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"model\":\"deepseek-chat\",\"output_text\":\"provider answer\"}";
         let mut request = request(mock_server_with_stream(body, false));
         request.web_search_route = "DEEPSEEK_RESPONSES".into();
         let mut deltas = Vec::new();
-        let completed = tokio::runtime::Runtime::new()
+        let failure = tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(execute_streaming(
                 request,
@@ -1035,8 +1166,14 @@ mod tests {
                     Ok(())
                 },
             ))
-            .expect("DeepSeek Responses must return one terminal result");
-        assert_eq!(completed.text, "provider answer");
+            .expect_err("a live search must provide a tool or source evidence record");
+        assert_eq!(
+            failure,
+            Failure::Explicit {
+                code: "WEB_SEARCH_NO_SOURCES",
+                http_status: Some(200)
+            }
+        );
         assert!(deltas.is_empty());
     }
 
@@ -1044,16 +1181,47 @@ mod tests {
     fn title_transport_is_a_non_streaming_json_request() {
         let body = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"choices\":[{\"message\":{\"content\":\"{\\\"title\\\":\\\"KFKPlan\\\"}\"}}]}";
         let request = request(mock_server_with_stream(body, false));
-        let completed = tokio::runtime::Runtime::new().unwrap().block_on(execute_non_streaming(request, Zeroizing::new(b"fixture-secret-123".to_vec()))).unwrap();
+        let completed = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(execute_non_streaming(
+                request,
+                Zeroizing::new(b"fixture-secret-123".to_vec()),
+            ))
+            .unwrap();
         assert_eq!(completed.text, "{\"title\":\"KFKPlan\"}");
     }
 
     #[test]
-    fn chat_completions_web_search_keeps_answers_without_sources_and_appends_safe_citations() {
+    fn deepseek_title_request_disables_thinking_and_requires_json() {
+        let mut fixture = request("https://provider.invalid/chat/completions".into());
+        fixture.provider_id = "DEEPSEEK".into();
+        fixture.structured_json = true;
+        fixture.disable_thinking = true;
+
+        let body = transport_body(&fixture);
+        assert_eq!(body["response_format"]["type"], "json_object");
+        assert_eq!(body["thinking"]["type"], "disabled");
+    }
+
+    #[test]
+    fn non_streaming_title_accepts_the_same_content_parts_as_android() {
+        let result = decode_non_streaming(
+            r#"{"model":"deepseek-flash","choices":[{"message":{"content":[{"type":"text","text":"{\"title\":"},{"type":"output_text","text":"\"KFK资料整理方案\"}"}]}}],"usage":{"prompt_tokens":9,"completion_tokens":7}}"#.as_bytes(),
+            12,
+        )
+        .unwrap();
+
+        assert_eq!(result.text, "{\"title\":\"KFK资料整理方案\"}");
+        assert_eq!(result.usage.input_tokens, Some(9));
+        assert_eq!(result.usage.output_tokens, Some(7));
+    }
+
+    #[test]
+    fn chat_completions_web_search_requires_provider_evidence_and_appends_safe_citations() {
         let without_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"provider answer\"}}]}\n\ndata: [DONE]\n\n";
         let mut missing = request(mock_server(without_sources));
         missing.web_search_route = "OPENROUTER_SERVER_TOOL".into();
-        let completed_without_sources = tokio::runtime::Runtime::new()
+        let missing_error = tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(execute_streaming(
                 missing,
@@ -1061,8 +1229,14 @@ mod tests {
                 Arc::new(AtomicBool::new(false)),
                 |_| Ok(()),
             ))
-            .expect("Android parity preserves a valid answer when citations are absent");
-        assert_eq!(completed_without_sources.text, "provider answer");
+            .expect_err("a requested live search without provider evidence is not a verified network answer");
+        assert_eq!(
+            missing_error,
+            Failure::Explicit {
+                code: "WEB_SEARCH_NO_SOURCES",
+                http_status: Some(200)
+            }
+        );
 
         let with_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"grounded answer\",\"annotations\":[{\"url_citation\":{\"title\":\"Official\",\"url\":\"https://example.com/source\"}},{\"url_citation\":{\"title\":\"Unsafe\",\"url\":\"https://user@example.com/private\"}}]}}]}\n\ndata: [DONE]\n\n";
         let mut grounded = request(mock_server(with_sources));
@@ -1080,6 +1254,7 @@ mod tests {
             completed.text,
             "grounded answer\n\n来源：\n- [Official](https://example.com/source)"
         );
+        assert!(completed.web_search_verified);
     }
 
     #[test]

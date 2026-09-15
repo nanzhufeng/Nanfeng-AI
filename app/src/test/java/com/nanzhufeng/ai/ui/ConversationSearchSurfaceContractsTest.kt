@@ -27,7 +27,7 @@ class ConversationSearchSurfaceContractsTest {
     }
 
     @Test
-    fun `external locate targets its category while search quick locate restores the original viewport`() {
+    fun `external locate keeps the complete catalogue while search quick locate restores the original viewport`() {
         val source = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val position = File("src/main/java/com/nanzhufeng/ai/ui/ConversationSearchPosition.kt").readText()
         val owner = source.substring(
@@ -63,6 +63,9 @@ class ConversationSearchSurfaceContractsTest {
         assertTrue(externalLocate.contains("searchReturnAttachmentId = attachmentId.value"))
         assertTrue(externalLocate.contains("searchLocateConversationId = state.selectedConversationId?.value"))
         assertTrue(externalLocate.contains("searchLocateMessageId = messageNodeId.value"))
+        assertTrue(externalLocate.contains("onSearchChanged(\"\")"))
+        assertTrue(externalLocate.contains("onSearchCategoryChanged(ConversationSearchCategory.ALL)"))
+        assertFalse(externalLocate.contains("conversationAttachmentSearchCategory"))
         assertTrue(source.contains("onQueryChanged = { query ->\n                searchReturnAttachmentId = null\n                searchLocateConversationId = null\n                searchLocateMessageId = null\n                searchLocateAttachmentId = null"))
         assertTrue(source.contains("onSelectCategory = { category ->") && source.contains("searchReturnAttachmentId = null\n                searchLocateConversationId = null\n                searchLocateMessageId = null\n                searchLocateAttachmentId = null\n                onSearchCategoryChanged(category)"))
 

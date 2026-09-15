@@ -10,6 +10,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
@@ -448,6 +449,7 @@ data class ConversationEntity(
     @androidx.room.ColumnInfo(defaultValue = "'CHAT'")
     val surface: String = "CHAT",
     val favoritedAtEpochMs: Long? = null,
+    val titleRevision: Long? = null,
 )
 
 @Entity(
@@ -665,6 +667,28 @@ data class AssistantResponseModelAttributionEntity(
     val conversationStyleId: String?,
     val webSearchUsed: Boolean?,
     val recordedAtEpochMs: Long,
+    val inputTokens: Long?,
+    val outputTokens: Long?,
+    val totalTokens: Long?,
+    val cachedInputTokens: Long?,
+    val reasoningTokens: Long?,
+    val costPriceVersion: String?,
+    val costCurrencyCode: String?,
+    val costTotalMicros: Long?,
+    val costSource: String?,
+)
+
+/** Cross-device answer facts without local Provider route or attempt identity. */
+@Entity(
+    tableName = "cloud_response_model_usages",
+    primaryKeys = ["conversationId", "assistantMessageId"],
+    indices = [Index("assistantMessageId")],
+)
+data class CloudResponseModelUsageEntity(
+    val conversationId: String,
+    val assistantMessageId: String,
+    val modelId: String,
+    val modelDisplayName: String,
     val inputTokens: Long?,
     val outputTokens: Long?,
     val totalTokens: Long?,
@@ -1892,7 +1916,7 @@ interface ConversationDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertConversation(conversation: ConversationEntity)
 
-    @Query("UPDATE conversations SET title = :title, surface = :surface, projectId = :projectId, currentLeafMessageId = :currentLeafMessageId, updatedAtEpochMs = :updatedAtEpochMs, defaultProviderId = :defaultProviderId, defaultModelId = :defaultModelId, harnessId = :harnessId, harnessVersion = :harnessVersion, contextPolicyVersion = :contextPolicyVersion, archivedAtEpochMs = :archivedAtEpochMs, pinnedAtEpochMs = :pinnedAtEpochMs, deletedAtEpochMs = :deletedAtEpochMs, favoritedAtEpochMs = :favoritedAtEpochMs, revision = :revision, autoTitlePending = :autoTitlePending, schemaVersion = :schemaVersion WHERE id = :id")
+    @Query("UPDATE conversations SET title = :title, titleRevision = COALESCE(:titleRevision, titleRevision), surface = :surface, projectId = :projectId, currentLeafMessageId = :currentLeafMessageId, updatedAtEpochMs = :updatedAtEpochMs, defaultProviderId = :defaultProviderId, defaultModelId = :defaultModelId, harnessId = :harnessId, harnessVersion = :harnessVersion, contextPolicyVersion = :contextPolicyVersion, archivedAtEpochMs = :archivedAtEpochMs, pinnedAtEpochMs = :pinnedAtEpochMs, deletedAtEpochMs = :deletedAtEpochMs, favoritedAtEpochMs = :favoritedAtEpochMs, revision = :revision, autoTitlePending = :autoTitlePending, schemaVersion = :schemaVersion WHERE id = :id")
     fun updateConversation(
         id: String,
         title: String,
@@ -1912,10 +1936,14 @@ interface ConversationDao {
         revision: Long,
         autoTitlePending: Boolean,
         schemaVersion: Int,
+        titleRevision: Long? = null,
     ): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertNode(node: MessageNodeEntity)
+
+    @Update
+    fun updateNode(node: MessageNodeEntity): Int
 
     @Query("UPDATE message_nodes SET parentMessageId=:parentMessageId, siblingPosition=:siblingPosition WHERE id=:messageId AND conversationId=:conversationId")
     fun updateImportedMessageStructure(
@@ -2457,6 +2485,36 @@ interface ManualConversationSyncStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun save(state: ManualConversationSyncStateEntity)
+
+    @Query("DELETE FROM manual_conversation_sync_state WHERE accountRef=:accountRef AND conversationId=:conversationId")
+    fun delete(accountRef: String, conversationId: String): Int
+}
+
+/** Account-isolated cloud-list presentation only; no title, body or remote envelope is retained. */
+@Entity(
+    tableName = "cloud_conversation_presentation",
+    primaryKeys = ["accountRef", "conversationId"],
+    indices = [Index("conversationId")],
+)
+data class CloudConversationPresentationEntity(
+    val accountRef: String,
+    val conversationId: String,
+    val cloudPinned: Boolean,
+)
+
+@Dao
+interface CloudConversationPresentationDao {
+    @Query("SELECT conversationId FROM cloud_conversation_presentation WHERE accountRef=:accountRef AND cloudPinned=1")
+    fun pinnedConversationIds(accountRef: String): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun save(value: CloudConversationPresentationEntity)
+
+    @Query("DELETE FROM cloud_conversation_presentation WHERE accountRef=:accountRef AND conversationId=:conversationId")
+    fun delete(accountRef: String, conversationId: String): Int
+
+    @Query("DELETE FROM cloud_conversation_presentation WHERE accountRef=:accountRef")
+    fun clearForAccount(accountRef: String): Int
 }
 
 /** P8-A durable facts deliberately exclude tool input/output bodies, credentials, paths and URIs. */
@@ -2680,6 +2738,15 @@ interface AssistantResponseModelAttributionDao {
 }
 
 @Dao
+interface CloudResponseModelUsageDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: CloudResponseModelUsageEntity)
+    /** A verified cloud envelope is the authoritative cross-device fact for this message. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun replace(value: CloudResponseModelUsageEntity)
+    @Query("SELECT * FROM cloud_response_model_usages WHERE conversationId=:conversationId AND assistantMessageId=:assistantMessageId") fun find(conversationId: String, assistantMessageId: String): CloudResponseModelUsageEntity?
+    @Query("SELECT * FROM cloud_response_model_usages WHERE assistantMessageId IN (:assistantMessageIds) ORDER BY conversationId ASC") fun forMessages(assistantMessageIds: List<String>): List<CloudResponseModelUsageEntity>
+}
+
+@Dao
 interface ResumableAttachmentUploadDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: ResumableAttachmentUploadEntity)
     @Query("SELECT * FROM resumable_attachment_uploads WHERE uploadId=:uploadId") fun find(uploadId: String): ResumableAttachmentUploadEntity?
@@ -2726,6 +2793,7 @@ interface ResumableAttachmentUploadDao {
         NormalChatSendAttemptEntity::class,
         ResumableAttachmentUploadEntity::class,
         AssistantResponseModelAttributionEntity::class,
+        CloudResponseModelUsageEntity::class,
         CompareConversationSessionEntity::class,
         CompareConversationBranchEntity::class,
         CompareBranchExecutionReceiptEntity::class,
@@ -2802,6 +2870,7 @@ interface ResumableAttachmentUploadDao {
         SyncJobEntity::class,
         SyncJobReceiptEntity::class,
         ManualConversationSyncStateEntity::class,
+        CloudConversationPresentationEntity::class,
         AgentRunEntity::class,
         AgentStepEntity::class,
         AgentEventEntity::class,
@@ -2818,7 +2887,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 66,
+    version = 69,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2840,6 +2909,7 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun providerDiagnosticDao(): ProviderDiagnosticDao
     abstract fun normalChatSendAttemptDao(): NormalChatSendAttemptDao
     abstract fun assistantResponseModelAttributionDao(): AssistantResponseModelAttributionDao
+    abstract fun cloudResponseModelUsageDao(): CloudResponseModelUsageDao
     abstract fun resumableAttachmentUploadDao(): ResumableAttachmentUploadDao
     abstract fun conversationRealTextExecutionDao(): ConversationRealTextExecutionDao
     abstract fun usageLedgerDao(): UsageLedgerDao
@@ -2855,6 +2925,7 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun syncAccountMetadataDao(): SyncAccountMetadataDao
     abstract fun syncJobDao(): SyncJobDao
     abstract fun manualConversationSyncStateDao(): ManualConversationSyncStateDao
+    abstract fun cloudConversationPresentationDao(): CloudConversationPresentationDao
     abstract fun agentLedgerDao(): AgentLedgerDao
     abstract fun p9bIntegrationLedgerDao(): P9BIntegrationLedgerDao
     abstract fun workspaceExchangeV2RestoreDao(): WorkspaceExchangeV2RestoreDao
@@ -3547,6 +3618,25 @@ abstract class NanfengAiDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `egressAuthorizedAtEpochMs` INTEGER")
                 db.execSQL("ALTER TABLE `normal_chat_send_attempts` ADD COLUMN `egressDisclosureVersion` TEXT")
+            }
+        }
+        /** Cloud-list pinning is presentation-only and never changes the local conversation. */
+        val MIGRATION_66_67 = object : Migration(66, 67) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `cloud_conversation_presentation` (`accountRef` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `cloudPinned` INTEGER NOT NULL, PRIMARY KEY(`accountRef`, `conversationId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_cloud_conversation_presentation_conversationId` ON `cloud_conversation_presentation` (`conversationId`)")
+            }
+        }
+        /** Restored Desktop answer facts remain separate from Android-only Provider attempts. */
+        val MIGRATION_67_68 = object : Migration(67, 68) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `cloud_response_model_usages` (`conversationId` TEXT NOT NULL, `assistantMessageId` TEXT NOT NULL, `modelId` TEXT NOT NULL, `modelDisplayName` TEXT NOT NULL, `inputTokens` INTEGER, `outputTokens` INTEGER, `totalTokens` INTEGER, `cachedInputTokens` INTEGER, `reasoningTokens` INTEGER, `costPriceVersion` TEXT, `costCurrencyCode` TEXT, `costTotalMicros` INTEGER, `costSource` TEXT, PRIMARY KEY(`conversationId`, `assistantMessageId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_cloud_response_model_usages_assistantMessageId` ON `cloud_response_model_usages` (`assistantMessageId`)")
+            }
+        }
+        val MIGRATION_68_69 = object : Migration(68, 69) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversations ADD COLUMN titleRevision INTEGER")
             }
         }
     }

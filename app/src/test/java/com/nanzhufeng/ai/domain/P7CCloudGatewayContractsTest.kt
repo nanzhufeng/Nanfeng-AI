@@ -35,4 +35,20 @@ class P7CCloudGatewayContractsTest {
         assertEquals("com.nanzhufeng.ai", calls.single().second.getString("p_app_id"))
         assertEquals(6, calls.single().second.getLong("p_expected_revision"))
     }
+
+    @Test fun `cancel invokes only the scoped revision-checked document RPC`() {
+        val calls = mutableListOf<Pair<String, JSONObject>>()
+        val transport = object : P7CAuthenticatedRpcTransport {
+            override fun call(function: String, body: String): String {
+                calls += function to JSONObject(body)
+                return "{\"deleted\":true}"
+            }
+        }
+        val availability = P7CServiceConfiguration.resolve("https://example.invalid", "public-key", "web-client") as P7CServiceAvailability.Configured
+        val result = P7CSupabaseEnvelopeGateway(availability.config, transport)
+            .delete("conversation-0123456789012345678901234567890123456789", 7)
+        assertEquals(P7CCloudResult.Value(true), result)
+        assertEquals("nanfeng_sync_delete_document", calls.single().first)
+        assertEquals(7, calls.single().second.getLong("p_expected_revision"))
+    }
 }

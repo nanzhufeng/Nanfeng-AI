@@ -228,8 +228,10 @@ class P6DConversationRowAccessibilityContractsTest {
         assertTrue("pinned conversations must be lazy items", drawer.contains("items = pinned"))
         assertFalse("the drawer must not eagerly compose the complete conversation history", drawer.contains("verticalScroll(rememberScrollState())"))
         for (token in listOf(
+            "color = Color.White",
             "tonalElevation = 0.dp",
             "shadowElevation = 0.dp",
+            "modifier = modifier.conversationForegroundShadow(shape = RoundedCornerShape(18.dp))",
             "height(50.dp)",
             "iconSize = 16.dp",
             "iconSize: androidx.compose.ui.unit.Dp = 18.dp",
@@ -335,8 +337,8 @@ class P6DConversationRowAccessibilityContractsTest {
     fun `conversation menu is compact while workspace retains its complete local action set`() {
         val actionSheet = source.substring(source.indexOf("private fun ConversationActionSheet"), source.indexOf("private fun ConversationMenuAction"))
         for (token in listOf(
-            "workMode -> 11 + if (includeRename) 1 else 0",
-            "else -> 8 + if (includeRename) 1 else 0",
+            "workMode -> 12",
+            "else -> 9",
             "if (workMode) {",
             "ConversationMenuAction(Icons.Rounded.PushPin",
             "ConversationMenuAction(Icons.Rounded.Visibility, \"未读\"",
@@ -357,7 +359,7 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
-    fun `FB-P6-107 content headers replace the empty switch with new and complete overflow actions`() {
+    fun `FB-P6-107 content headers replace the empty switch with new and complete overflow actions including rename`() {
         val shell = source.substring(source.indexOf("private fun ConversationShellHeader"), source.indexOf("private fun ConversationHeaderFloatingIconButton"))
         val actionCapsule = source.substring(source.indexOf("private fun ConversationHeaderContentActions"), source.indexOf("private fun ConversationHeaderFloatingIconButton"))
         val activity = File("src/main/java/com/nanzhufeng/ai/NanfengAiActivity.kt").readText()
@@ -366,7 +368,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "val hasConversationContent = state.messages.isNotEmpty()",
             "showContentActions = hasConversationContent",
             "onCreateConversation = onCreate",
-            "ConversationActionMenuTarget(conversation.id.value, anchor, includeRename = false)",
+            "ConversationActionMenuTarget(conversation.id.value, anchor)",
             "ConversationHeaderContentActions(",
             "if (!showContentActions) ConversationModeSwitch(",
         )) assertTrue("missing content-header token $token", source.contains(token))
@@ -437,7 +439,7 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `conversation action menu share owns current path Markdown without a duplicate export row`() {
         val conversationMenu = source.substring(source.indexOf("private fun ConversationActionSheet"), source.indexOf("private fun ConversationMenuAction"))
-        for (token in listOf("onShareConversation", "Icons.Rounded.Share", "\"分享\"", "else -> 8 + if (includeRename) 1 else 0")) {
+        for (token in listOf("onShareConversation", "Icons.Rounded.Share", "\"分享\"", "else -> 9")) {
             assertTrue("missing conversation Markdown share action $token", conversationMenu.contains(token))
         }
         assertFalse(conversationMenu.contains("onExportConversationMarkdown"))

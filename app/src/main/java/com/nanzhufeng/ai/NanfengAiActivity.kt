@@ -250,6 +250,7 @@ class NanfengAiActivity : ComponentActivity() {
                 container.loadAssistantExperienceSettings,
                 container.invocationRepository,
                 container.assistantResponseModelAttributions,
+                container.cloudResponseModelUsages,
                 container.contextSelectionAudits,
                 container.normalChatOpenRouterExecutor,
                 container.normalChatBackgroundExecution,
@@ -312,6 +313,7 @@ class NanfengAiActivity : ComponentActivity() {
                 container.p7fGoogleAccountOwner,
                 container.p7fManualConversationSyncOwner,
                 container.p7fSelectedConversationSyncScheduler,
+                conversationFoundationViewModel::reload,
             ),
         )[P7DAccountSyncViewModel::class.java]
         dualPathConnectionViewModel = ViewModelProvider(this, DualPathConnectionViewModel.Factory(container.readConnectionCapability))[DualPathConnectionViewModel::class.java]

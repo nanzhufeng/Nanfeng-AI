@@ -45,6 +45,10 @@ test('steady shell interactions retain an unchanged sidebar instead of serializi
   assert.match(app, /function canRetainSidebar/);
   assert.match(app, /function sameSetExceptId/);
   assert.match(app, /function patchRetainedSidebarRows/);
+  assert.match(app, /sidebarConversationList: state\.sidebarConversationList/);
+  assert.match(app, /cloudConversations: state\.cloudConversations/);
+  assert.match(app, /previous\.sidebarConversationList === next\.sidebarConversationList/);
+  assert.match(app, /previous\.cloudConversations === next\.cloudConversations/);
   assert.match(app, /sameSetExceptId\(previous\.unreadConversationIds, next\.unreadConversationIds, next\.selectedConversationId\)/);
   assert.match(app, /sameMapEntries\(previous\.manualUnreadAtMs, next\.manualUnreadAtMs\)/);
   assert.match(app, /retained-sidebar/);
@@ -153,7 +157,6 @@ test('search, startup projections and preview reads never run blocking work on t
     'catalog_desktop_local_index',
     'read_desktop_local_search_history',
     'read_desktop_pdf_preview',
-    'read_desktop_video_preview',
     'read_desktop_audio_preview',
     'read_desktop_text_preview',
     'read_desktop_local_backup_status',
@@ -182,6 +185,10 @@ test('search, startup projections and preview reads never run blocking work on t
   assert.match(imagePreview, /run_desktop_store_paths_blocking/);
   assert.match(imagePreview, /read_desktop_image_preview_from_paths/);
   assert.doesNotMatch(imagePreview, /run_desktop_store_blocking\(/);
+  const videoPreview = rustCommand('read_desktop_video_preview');
+  assert.match(videoPreview, /run_desktop_store_paths_blocking/);
+  assert.match(videoPreview, /read_desktop_video_preview_from_paths/);
+  assert.doesNotMatch(videoPreview, /run_desktop_store_blocking\(/);
   const videoThumbnail = rustCommand('read_desktop_video_thumbnail');
   assert.match(videoThumbnail, /run_desktop_store_paths_blocking/);
   assert.doesNotMatch(videoThumbnail, /run_desktop_store_blocking\(/);

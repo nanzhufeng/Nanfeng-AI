@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { imagePreviewNavigation, imagePreviewTargetId, relatedImageIds } from '../src/image-preview-navigation.mjs';
 
-test('one trackpad gesture including a loading gap advances exactly one image', async () => {
+test('a trackpad gesture advances once, recovers for the next gesture, and never classifies diagonal motion as zoom', async () => {
   const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
   const start = source.indexOf('function consumeImagePreviewHorizontalSwipe(');
   const end = source.indexOf("app.addEventListener('wheel'", start);
@@ -15,20 +15,25 @@ test('one trackpad gesture including a loading gap advances exactly one image', 
   const context = {
     state: { imagePreview: { attachmentId: 'one', zoom: 1 } },
     performance: { now: () => now },
-    imagePreviewHorizontalSwipe: { lastAt: 0, deltaX: 0, lockUntil: 0 },
-    imagePreviewHorizontalSwipeThreshold: 56,
+    imagePreviewHorizontalSwipe: { attachmentId: '', lastAt: 0, deltaX: 0, lockUntil: 0, axis: null, consumed: false },
+    imagePreviewHorizontalSwipeThreshold: 36,
+    imagePreviewHorizontalSwipeIdleMillis: 160,
+    imagePreviewHorizontalSwipeAxisRatio: 1.25,
     navigateImagePreview: direction => advances.push(direction),
   };
   runInNewContext(source.slice(start, end), context);
-  const wheel = deltaX => context.consumeImagePreviewHorizontalSwipe({ deltaX, deltaY: 0, preventDefault() {} });
-  wheel(60);
-  context.state.imagePreview = { attachmentId: 'two', loading: true };
-  now += 240; wheel(65);
-  context.state.imagePreview = { attachmentId: 'two', zoom: 1 };
-  now += 240; wheel(60);
+  const wheel = (deltaX, deltaY = 0, ctrlKey = false) => context.consumeImagePreviewHorizontalSwipe({ deltaX, deltaY, ctrlKey, preventDefault() {} });
+  wheel(20, 2);
+  now += 16; wheel(20, 2);
   assert.deepEqual(advances, ['next']);
-  now += 600; wheel(-60);
+  now += 80; wheel(60, 3);
+  assert.deepEqual(advances, ['next']);
+  now += 180; wheel(-20, 2);
+  now += 16; wheel(-20, 2);
   assert.deepEqual(advances, ['next', 'previous']);
+  now += 180; assert.equal(wheel(20, 34), true);
+  assert.deepEqual(advances, ['next', 'previous']);
+  assert.equal(wheel(40, 0, true), false);
 });
 
 test('FB-P6-079 gives a local image preview the same message-scoped order and previous-next bounds as Android', () => {
@@ -66,10 +71,28 @@ test('FB-P6-079 routes Mac arrow keys and horizontal trackpad swipes through the
     "event.key === 'ArrowLeft' || event.key === 'ArrowRight'",
     "navigateImagePreview(event.key === 'ArrowRight' ? 'next' : 'previous')",
     'function consumeImagePreviewHorizontalSwipe(event, viewport)',
-    'Math.abs(event.deltaX) <= Math.abs(event.deltaY)',
-    'const imagePreviewHorizontalSwipeThreshold = 56',
+    'const MAX_IMAGE_PREVIEW_PAYLOAD_CACHE_ENTRIES = 2',
+    'async function decodeImagePreviewPayload(dataUrl)',
+    'function warmImagePreviewNeighbors(preview)',
+    'const imagePreviewHorizontalSwipeThreshold = 36',
+    'const imagePreviewHorizontalSwipeAxisRatio = 1.25',
+    'imagePreviewHorizontalSwipe.consumed = true',
+    'event.ctrlKey',
     "const direction = imagePreviewHorizontalSwipe.deltaX > 0 ? 'next' : 'previous'",
-    'imagePreviewHorizontalSwipe.lockUntil = now + 280',
+    'if (!event.ctrlKey) return;',
     'if (consumeImagePreviewHorizontalSwipe(event, viewport)) return;',
   ]) assert.ok(source.includes(token), token);
+});
+
+test('image preview paging controls remain prominent circular controls on the media canvas', async () => {
+  const css = await readFile(resolve(import.meta.dirname, '../src/image-preview.css'), 'utf8');
+  for (const token of [
+    '.image-preview-nav{',
+    'width:52px',
+    'border-radius:50%',
+    'background:rgb(32 38 34 / .84)',
+    '.image-preview-nav:hover:not(:disabled)',
+    '.image-preview-nav:disabled',
+    'stroke-width:2.4',
+  ]) assert.ok(css.includes(token), token);
 });

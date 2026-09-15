@@ -81,7 +81,11 @@ returns boolean language sql immutable set search_path = '' as $$
     and (select array_agg(k order by k) from jsonb_object_keys(p_envelope->'payload') k)
         = array['algorithm','ciphertext','nonce']
     and p_envelope #>> '{payload,nonce}' ~ '^[A-Za-z0-9_-]{16}$'
-    and p_envelope #>> '{payload,ciphertext}' ~ '^[A-Za-z0-9_-]{1,1398123}$';
+    -- PostgreSQL rejects an upper repetition bound above its regex limit.
+    -- Keep syntax and size validation separate so valid large encrypted payloads
+    -- do not fail during regex compilation.
+    and p_envelope #>> '{payload,ciphertext}' ~ '^[A-Za-z0-9_-]+$'
+    and length(p_envelope #>> '{payload,ciphertext}') between 1 and 1398123;
 $$;
 
 alter table public.nfai_account_keys enable row level security;

@@ -200,6 +200,7 @@ class ConversationRuntimeStateMachine(private val clock: Clock) {
         val titledSnapshot = title?.let {
             updatedSnapshot.copy(conversation = updatedSnapshot.conversation.copy(
                 title = it,
+                titleRevision = Math.addExact(updatedSnapshot.conversation.titleRevision ?: 0L, 1L),
                 autoTitlePending = false,
                 revision = updatedSnapshot.conversation.revision + 1,
             ))

@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 
 const migration = await readFile(new URL('../migrations/202608130001_p7c_secure_sync.sql', import.meta.url), 'utf8')
+const validatorFix = await readFile(new URL('../migrations/202609130003_p7g_fix_large_ciphertext_validator.sql', import.meta.url), 'utf8')
 
 test('P7-C migration has default-deny tables and only authenticated RPC access', () => {
   assert.match(migration, /create table if not exists public\.nfai_account_keys/)
@@ -27,4 +28,13 @@ test('P7-C commit is locked, optimistic, envelope-only, and cross-user scoped', 
 
 test('P7-C deliberately exposes no document deletion RPC before a product deletion contract', () => {
   assert.doesNotMatch(migration, /nanfeng_sync_delete_document/)
+})
+
+test('P7-G keeps large ciphertext validation outside PostgreSQL regex repeat bounds', () => {
+  for (const source of [migration, validatorFix]) {
+    assert.match(source, /payload,ciphertext}' ~ '\^\[A-Za-z0-9_-\]\+\$'/)
+    assert.match(source, /length\(p_envelope #>> '\{payload,ciphertext\}'\) between 1 and 1398123/)
+    assert.doesNotMatch(source, /\{1,1398123\}/)
+  }
+  assert.match(validatorFix, /notify pgrst, 'reload schema'/)
 })

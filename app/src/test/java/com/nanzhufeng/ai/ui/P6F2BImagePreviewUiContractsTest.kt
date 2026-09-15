@@ -10,6 +10,19 @@ class P6F2BImagePreviewUiContractsTest {
     private val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
     private val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
 
+    @Test fun `image and PDF preview pagination use one prominent circular navigation component`() {
+        val imageViewer = workspace.substring(workspace.indexOf("private fun ImagePreviewDialog"), workspace.indexOf("private fun ComposerSendButton"))
+        val pdfViewer = workspace.substring(workspace.indexOf("private fun PdfPreviewDialog"), workspace.indexOf("private fun PdfPageCanvas"))
+        val pager = workspace.substring(workspace.indexOf("private fun PreviewPagerButton"), workspace.indexOf("/** Audio keeps"))
+        assertTrue(imageViewer.contains("val currentGeneratedImageIndex = generatedImageIds.indexOf(preview.id).coerceAtLeast(0)"))
+        assertTrue(imageViewer.contains("PreviewPagerButton(\n                        previous = true"))
+        assertTrue(imageViewer.contains("PreviewPagerButton(\n                        previous = false"))
+        assertTrue(imageViewer.contains("\"${'$'}{currentGeneratedImageIndex + 1} / ${'$'}{generatedImageIds.size}\""))
+        assertTrue(pdfViewer.contains("PreviewPagerButton(\n                            previous = true"))
+        assertTrue(pdfViewer.contains("PreviewPagerButton(\n                            previous = false"))
+        for (token in listOf("shape = CircleShape", "modifier = modifier.size(52.dp)", "Icons.Rounded.ChevronLeft", "Icons.Rounded.ChevronRight", "contentDescription = if (previous) \"上一项\" else \"下一项\"")) assertTrue(token, pager.contains(token))
+    }
+
     @Test fun `image chips open a direct original canvas with viewport-only gesture state`() {
         val viewer = workspace.substring(workspace.indexOf("private fun ImagePreviewDialog"), workspace.indexOf("private fun ComposerSendButton"))
         for (token in listOf("AttachmentPreviewChip", "onOpenImagePreview", "ImagePreviewDialog", "rememberDecodedBitmap(preview.bytes, preview.id)", "initialOriginalImageScale", "maximumOriginalImageZoom", "imagePreviewGestureTransform", "awaitEachGesture", "OriginalImageZoomLayer", "Constraints.fixed(measuredWidthPx, measuredHeightPx)", "imagePlaceable.place(placedX.toInt(), placedY.toInt())", "ContentScale.Fit", "Surface(color = Color.Black", "FilePreviewTopActions", "关闭文件预览")) assertTrue(token, workspace.contains(token))

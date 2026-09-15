@@ -144,7 +144,7 @@ test('C01-C03 CSS keeps one floating shell geometry owner without bottom trays',
   assert.match(css, /\.chat-sidebar \{[^}]*background: var\(--chat-sidebar\);/s);
   assert.match(css, /> \.chat-main-header \{[^}]*position: absolute;[^}]*background: transparent;[^}]*pointer-events: none;/s);
   assert.match(css, /\.chat-header-content-actions \{[^}]*border-radius: 999px;[^}]*background: var\(--foreground-surface, #fff\);[^}]*box-shadow: 0 3px 54px rgb\(0 0 0 \/ 5\.295%\);/s);
-  assert.match(css, /\.chat-header-content-actions > button \{[^}]*border-radius: 50% !important;/s);
+  assert.match(css, /\.chat-header-content-actions > button \{[^}]*border-radius: 999px !important;[^}]*background: transparent !important;[^}]*box-shadow: none;/s);
 
   assert.ok(!css.includes('.chat-empty-logo'));
   assert.ok(!css.includes('.chat-empty h1'));

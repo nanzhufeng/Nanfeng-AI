@@ -66,7 +66,7 @@ test('sidebar distinguishes pinned and recent conversations while keeping them i
   assert.deepEqual(pinnedConversations(sidebarFixture).map(item => item.id), ['pinned']);
   assert.deepEqual(archivedConversations(sidebarFixture).map(item => item.id), ['archived']);
   const active = renderChatFirstShell({ data: sidebarFixture, native: true, selectedConversationId: 'ordinary', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'chat', status: '', error: '', connection: {} });
-  for (const token of ['chat-sidebar-scroll', 'chat-sidebar-functions', 'chat-history', 'chat-history-group', 'aria-label="置顶会话"', 'aria-label="最近会话"', '<p class="chat-history-label">置顶</p>', '<p class="chat-history-label">最近</p>', '普通会话', '置顶会话', 'set-conversation-pinned', 'toggle-conversation-favorite', 'chat-row-action-icon', 'title="置顶会话"', 'aria-label="收藏"', '<title>收藏</title>']) assert.ok(active.includes(token));
+  for (const token of ['chat-sidebar-scroll', 'chat-sidebar-functions', 'chat-history', 'chat-history-group', 'aria-label="置顶会话"', 'aria-label="最近会话"', '<p class="chat-history-label">置顶</p>', '<p class="chat-history-label">最近</p>', '普通会话', '置顶会话', 'set-conversation-pinned', 'open-conversation-rename', 'chat-row-action-icon', 'title="置顶会话"', 'aria-label="重命名"', '<title>重命名</title>']) assert.ok(active.includes(token));
   assert.ok(!active.includes('data-action="archive-conversation"'));
   assert.ok(!active.includes('class="chat-pinned"'));
   assert.ok(!active.includes('data-action="toggle-archived-conversations"'));
@@ -272,14 +272,23 @@ test('FB-P6-028 desktop conversation rows release the date column before reservi
   assert.ok(!css.includes('.chat-history-select { display: block !important; min-width: 0; flex: 1 1 auto; overflow: hidden; padding: 7px !important; font-size: 14px'));
 });
 
+test('sidebar conversation titles wrap instead of hiding the remainder behind an ellipsis', () => {
+  const titleLine = css.slice(css.indexOf('.chat-history-select .chat-history-title-line'), css.indexOf('.chat-history-conversation-icon'));
+  assert.match(css, /\.chat-history-select \{[^}]*white-space: normal;/);
+  assert.match(titleLine, /overflow: visible;/);
+  assert.match(titleLine, /white-space: normal;/);
+  assert.match(titleLine, /overflow-wrap: anywhere;/);
+  assert.doesNotMatch(titleLine, /text-overflow: ellipsis;/);
+});
+
 test('FB-P6-026 keeps divider diagnostics acceptance-only while exposing pointer, keyboard and reset owners', () => {
   assert.match(shell, /<button type="button" class="chat-sidebar-divider" role="separator"[\s\S]*aria-orientation="vertical"[\s\S]*aria-valuemin="220"[\s\S]*aria-valuemax="440"/);
   for (const token of ['p6hDiagnosticsEnabled', "event.target.closest?.('.chat-sidebar-divider')", 'P6-H acceptance divider ${event.type}: ${state.sidebarWidth}px', 'divider.focus({ preventScroll: true })', 'setPointerCapture', 'pointermove', "event.key === 'ArrowRight'", "event.key === 'Home'", "event.key === 'End'", 'dblclick', 'persistSidebarWidth']) assert.ok(source.includes(token), token);
   assert.ok(!source.includes('P6-H acceptance divider ${event.type}: ${state.sidebarWidth}px`\n;'));
 });
 
-test('FB-P6-036 keeps the user-requested 2px divider with an 8px interaction target', () => {
-  for (const token of ['--chat-sidebar-divider-hit: 8px', '--chat-sidebar-divider-active-stroke: 2px', 'width: var(--chat-sidebar-divider-hit)', 'width: var(--chat-sidebar-divider-active-stroke)', 'background: transparent !important', 'outline: 0 !important', 'box-shadow: none !important', 'setPointerCapture', "event.key === 'ArrowRight'", 'dblclick', 'persistSidebarWidth']) assert.ok(`${css}\n${source}`.includes(token), token);
+test('FB-P6-036 keeps every visible desktop separator at 1px with an 8px interaction target', () => {
+  for (const token of ['--chat-sidebar-divider-hit: 8px', '--chat-sidebar-divider-idle-stroke: 1px', '--chat-sidebar-divider-active-stroke: 1px', 'border-right: 1px solid var(--desktop-sidebar-divider-color)', 'width: var(--chat-sidebar-divider-hit)', 'width: var(--chat-sidebar-divider-active-stroke)', 'background: transparent !important', 'outline: 0 !important', 'box-shadow: none !important', 'setPointerCapture', "event.key === 'ArrowRight'", 'dblclick', 'persistSidebarWidth']) assert.ok(`${css}\n${source}`.includes(token), token);
   assert.match(css, /chat-sidebar-divider:hover::after[\s\S]*chat-sidebar-divider\.dragging::after \{ width: var\(--chat-sidebar-divider-active-stroke\)/);
 });
 
@@ -328,6 +337,10 @@ test('conversation context menu uses the standard compact text and icon density'
   assert.match(css, /\.chat-context-menu \.chat-context-menu-item \{[^}]*min-height: 42px[^}]*gap: 12px[^}]*font-size: 13px[^}]*font-weight: 600[^}]*line-height: 18px/);
   assert.match(css, /\.chat-menu-action-icon \{[^}]*width: 18px[^}]*min-width: 18px/);
   assert.match(css, /\.chat-menu-action-icon svg, \.chat-menu-action-trailing svg \{ width: 18px; height: 18px; \}/);
+  const menu = shell.slice(shell.indexOf('function conversationContextMenu'), shell.indexOf('function assistantMessageMenu'));
+  assert.ok(menu.includes("item('context-menu-rename', icon(icons.edit, '重命名'), '重命名')"));
+  assert.ok(menu.indexOf("item('context-menu-favorite'") < menu.indexOf("item('context-menu-rename'"));
+  assert.ok(menu.indexOf("item('context-menu-rename'") < menu.indexOf("item('context-menu-share'"));
 });
 
 test('FB-P6-067 desktop rename dialog keeps the field and actions without a redundant heading', () => {
@@ -665,9 +678,14 @@ test('ordinary Composer recovery is owned by native SQLite and cleared only by t
   for (const token of ['allow-desktop-conversation-draft-recovery', 'read_desktop_conversation_draft', 'save_desktop_conversation_draft']) assert.ok(`${temporaryPermission}\n${capability}`.includes(token), token);
 });
 
-test('FB-P6-068 Desktop composer send restores the transcript directly to its newest message', () => {
-  for (const token of ['pendingChatSendScrollToLatestId', 'state.pendingChatSendScrollToLatestId = result.conversationId', 'const restoreSubmittedLatest = state.pendingChatSendScrollToLatestId === conversation.id', 'scroll.scrollTop = scroll.scrollHeight', 'state.pendingChatSendScrollToLatestId = null']) assert.ok(source.includes(token));
+test('FB-P6-068 Desktop composer send restores the transcript directly to its newest message only once', () => {
+  for (const token of ['pendingChatSendScrollToLatestId', 'pendingChatSubmission', 'createChatSubmissionId', 'clientSubmissionId', 'claimSubmittedChatRoute({ workspaceId, conversationId: result.conversationId, clientSubmissionId })', 'const restoreSubmittedLatest = state.pendingChatSendScrollToLatestId === conversation.id', 'scroll.scrollTop = scroll.scrollHeight', 'state.pendingChatSendScrollToLatestId = null']) assert.ok(source.includes(token));
+  assert.ok(!source.includes('if (state.selectedConversationId === payload.conversationId) state.pendingChatSendScrollToLatestId = payload.conversationId || null;'));
   assert.ok(!source.includes("if (restoreSubmittedLatest) {\n      scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' })"));
+});
+
+test('model credential drafts are erased whenever the configuration editor is no longer visible', () => {
+  for (const token of ['function clearModelCredentialDraftOutsideEditor', "state.modelCredentialDraft = '';", 'clearModelCredentialDraftOutsideEditor(true)', 'function renderUnified() {\n  clearModelCredentialDraftOutsideEditor();']) assert.ok(source.includes(token), token);
 });
 
 test('ordinary assistant messages expose persisted running stop failure unknown retry and provider cost facts', () => {
@@ -931,10 +949,18 @@ test('assistant footer keeps Android’s time, short model, and RMB amount on on
 
 test('Desktop keeps the header capsule geometry and full-width conversation edge fades', () => {
   for (const token of ['.chat-header-content-actions { position: relative;', 'box-shadow: 0 3px 54px rgb(0 0 0 / 5.295%)', 'left: 44px;', 'width: 22px; height: 22px;']) assert.ok(css.includes(token), token);
-  for (const token of ['--conversation-edge-color: var(--page-background)', '::before { top: 0; height: min(112px, 40%);', 'height: min(112px, 40%)', 'var(--conversation-edge-color) 15.3%', 'var(--conversation-edge-color) 49%', 'var(--conversation-edge-color) 82.7%', 'var(--conversation-edge-color) 98%', '.chat-sidebar::after']) assert.ok(css.includes(token), token);
+  for (const token of ['--conversation-edge-color: var(--page-background)', '::before { top: 0; height: min(148px, 46%);', 'height: min(148px, 46%)', 'var(--conversation-edge-color) 34%', 'var(--conversation-edge-color) 72%', 'var(--conversation-edge-color) 94%', 'var(--conversation-edge-color) 100%', '.chat-sidebar::after']) assert.ok(css.includes(token), token);
   assert.doesNotMatch(css, /::before \{ display: none; \}/);
   assert.doesNotMatch(css, /\.chat-transcript-stage::before|\.chat-transcript-stage::after|\.chat-sidebar-footer::before/);
   assert.match(css, /\.chat-transcript-stage > \.chat-scroll \{[^}]*padding-top: 80px;[^}]*padding-bottom: 190px;/s);
+});
+
+test('Desktop header actions exactly retain the phone capsule grouping and icon semantics', () => {
+  const header = shell.slice(shell.indexOf('class=\"chat-header-content-actions\"'), shell.indexOf('const workspacePageHeader'));
+  assert.match(header, /icon\(icons\.filePen, '新对话'\)/);
+  assert.match(header, /icon\(icons\.moreVertical, '对话更多操作'\)/);
+  assert.doesNotMatch(header, /icon\(icons\.more, '对话更多操作'\)/);
+  assert.match(css, /\.chat-header-content-actions::after \{[^}]*top: 11px;[^}]*left: 44px;[^}]*width: 1px;[^}]*height: 22px;/s);
 });
 
 test('source dialog uses the Android source list with no explanatory copy and an explicit close action', () => {

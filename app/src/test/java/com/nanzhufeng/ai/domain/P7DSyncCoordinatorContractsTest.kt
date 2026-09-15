@@ -18,6 +18,7 @@ class P7DSyncCoordinatorContractsTest {
     private class Gateway(var remote: P7CRemoteEnvelope? = null) : P7CCloudGateway {
         override fun read(documentId: String, minimumRevision: Long) = remote?.let { P7CCloudResult.Value(it) } ?: P7CCloudResult.Rejected("REMOTE_MISSING")
         override fun commit(expectedRevision: Long, canonicalEnvelope: String): P7CCloudResult<P7CCommitReceipt> { val pre = NfaiSyncV1Gateway.preflight(canonicalEnvelope) as NfaiSyncResult.Preflighted; remote = P7CRemoteEnvelope(pre.value.documentId, pre.value.revision, pre.value.payloadHash, canonicalEnvelope); return P7CCloudResult.Value(P7CCommitReceipt(pre.value.revision, pre.value.payloadHash)) }
+        override fun delete(documentId: String, expectedRevision: Long) = P7CCloudResult.Value(remote?.takeIf { it.documentId == documentId && it.revision == expectedRevision }?.let { remote = null; true } ?: false)
     }
     private val enabled = P7DGate(true, true, true, true, true)
 

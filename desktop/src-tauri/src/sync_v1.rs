@@ -11,6 +11,7 @@ use std::collections::BTreeSet;
 use zeroize::{Zeroize, Zeroizing};
 
 const ENVELOPE: &str = "nfai.sync.envelope";
+pub(crate) const DIRECT_ENVELOPE: &str = "nfai.sync.direct";
 const PAYLOAD: &str = "nfai.sync.payload";
 const VERSION: u64 = 1;
 const ITERATIONS: u32 = 210_000;
@@ -159,6 +160,83 @@ fn forbidden(key: &str) -> bool {
     .iter()
     .any(|needle| lower.contains(needle))
 }
+
+/// Portable answer accounting is a fixed, content-free interchange record.
+/// Its token counters are not credentials, but every field must be named and
+/// bounded here so the general sensitive-key guard remains fail-closed.
+fn fixed_portable_model_usage(value: &Value) -> Result<(), String> {
+    let usage = object(value)?;
+    exact(
+        usage,
+        &[
+            "modelId",
+            "modelDisplayName",
+            "inputTokens",
+            "outputTokens",
+            "totalTokens",
+            "cachedInputTokens",
+            "reasoningTokens",
+            "costPriceVersion",
+            "costCurrencyCode",
+            "costTotalMicros",
+            "costSource",
+        ],
+    )?;
+    for key in ["modelId", "modelDisplayName"] {
+        usage
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty() && value.len() <= 256)
+            .ok_or_else(err)?;
+    }
+    for key in [
+        "inputTokens",
+        "outputTokens",
+        "totalTokens",
+        "cachedInputTokens",
+        "reasoningTokens",
+    ] {
+        match usage.get(key) {
+            Some(Value::Null) => {}
+            Some(value) if value.as_u64().is_some_and(|value| value <= 10_000_000) => {}
+            _ => return Err(err()),
+        }
+    }
+    match usage.get("costPriceVersion") {
+        Some(Value::Null) => {}
+        Some(value)
+            if value
+                .as_str()
+                .is_some_and(|value| !value.is_empty() && value.len() <= 128) => {}
+        _ => return Err(err()),
+    }
+    match usage.get("costCurrencyCode") {
+        Some(Value::Null) => {}
+        Some(value)
+            if value.as_str().is_some_and(|value| {
+                value.len() == 3 && value.bytes().all(|byte| byte.is_ascii_uppercase())
+            }) => {}
+        _ => return Err(err()),
+    }
+    match usage.get("costTotalMicros") {
+        Some(Value::Null) => {}
+        Some(value)
+            if value
+                .as_u64()
+                .is_some_and(|value| value <= 1_000_000_000_000) => {}
+        _ => return Err(err()),
+    }
+    match usage.get("costSource") {
+        Some(Value::Null) => {}
+        Some(value)
+            if matches!(
+                value.as_str(),
+                Some("PROVIDER_RESPONSE") | Some("LOCAL_ESTIMATE")
+            ) => {}
+        _ => return Err(err()),
+    }
+    Ok(())
+}
 fn safe_content(value: &Value, depth: u8) -> Result<(), String> {
     if depth > 32 {
         return Err(err());
@@ -166,6 +244,10 @@ fn safe_content(value: &Value, depth: u8) -> Result<(), String> {
     match value {
         Value::Object(map) => {
             for (key, child) in map {
+                if key == "modelUsage" {
+                    fixed_portable_model_usage(child)?;
+                    continue;
+                }
                 if forbidden(key) || (key == "classification" && child == "HIGH_SENSITIVE") {
                     return Err(err());
                 }
@@ -550,6 +632,73 @@ pub fn seal_with_account_wrapping_material(
     )
 }
 
+/// Google-account-authorized direct sync.  It has no recovery code, ciphertext, wrapping key,
+/// or retained data key: the authenticated account and server RLS are the access boundary.
+pub fn seal_direct(payload: Value) -> Result<String, String> {
+    validate_payload(&payload)?;
+    let plain = canonical(&payload)?.into_bytes();
+    if plain.is_empty() || plain.len() > MAX_PAYLOAD {
+        return Err(err());
+    }
+    let root = object(&payload)?;
+    canonical(&json!({
+        "format": DIRECT_ENVELOPE,
+        "protocolVersion": VERSION,
+        "schemaVersion": VERSION,
+        "appId": text(root, "appId")?,
+        "documentId": text(root, "documentId")?,
+        "revision": number(root, "revision")?,
+        "payloadHash": hash(&plain),
+        "payloadByteCount": plain.len(),
+        "payload": payload,
+    }))
+}
+
+pub fn open_direct(
+    envelope_text: &str,
+    expected_app: &str,
+    expected_document: &str,
+    minimum_revision: u64,
+) -> Result<Value, String> {
+    if envelope_text.is_empty() || envelope_text.len() > MAX_ENVELOPE {
+        return Err(err());
+    }
+    let envelope: Value = serde_json::from_str(envelope_text).map_err(|_| err())?;
+    let root = object(&envelope)?;
+    exact(
+        root,
+        &[
+            "appId",
+            "documentId",
+            "format",
+            "payload",
+            "payloadByteCount",
+            "payloadHash",
+            "protocolVersion",
+            "revision",
+            "schemaVersion",
+        ],
+    )?;
+    if text(root, "format")? != DIRECT_ENVELOPE
+        || number(root, "protocolVersion")? != VERSION
+        || number(root, "schemaVersion")? != VERSION
+        || text(root, "appId")? != expected_app
+        || text(root, "documentId")? != expected_document
+        || number(root, "revision")? < minimum_revision
+    {
+        return Err(err());
+    }
+    let payload = root.get("payload").cloned().ok_or_else(err)?;
+    validate_payload(&payload)?;
+    let plain = canonical(&payload)?.into_bytes();
+    if number(root, "payloadByteCount")? as usize != plain.len()
+        || text(root, "payloadHash")? != hash(&plain)
+    {
+        return Err(err());
+    }
+    Ok(payload)
+}
+
 /// P7-A accepts a caller-held key; P7-B owns account-level generation and secure storage.
 pub fn seal(payload: Value, recovery: &str, data_key: &[u8]) -> Result<String, String> {
     if data_key.len() != 32 {
@@ -763,6 +912,59 @@ mod tests {
             f["payload"]
         );
     }
+
+    #[test]
+    fn direct_google_account_envelope_round_trips_without_recovery_material() {
+        let payload = fixture()["payload"].clone();
+        let sealed = seal_direct(payload.clone()).unwrap();
+        let root: Value = serde_json::from_str(&sealed).unwrap();
+        assert_eq!(root["format"], DIRECT_ENVELOPE);
+        assert!(root.get("kdf").is_none());
+        assert!(root.get("wrappedDataKey").is_none());
+        assert_eq!(
+            open_direct(&sealed, "com.nanzhufeng.ai", "sync-fixture-v1", 7).unwrap(),
+            payload
+        );
+        assert!(open_direct(&sealed, "other.app", "sync-fixture-v1", 7).is_err());
+        assert!(open_direct(&sealed, "com.nanzhufeng.ai", "sync-fixture-v1", 8).is_err());
+    }
+
+    #[test]
+    fn direct_payload_allows_fixed_portable_model_usage_without_credentials() {
+        let payload = json!({
+            "format": PAYLOAD,
+            "protocolVersion": VERSION,
+            "schemaVersion": VERSION,
+            "appId": "com.nanzhufeng.ai",
+            "documentId": "conversation-portable-model",
+            "revision": 1,
+            "records": [{
+                "kind": "conversation",
+                "id": "conversation-portable-model",
+                "revision": 1,
+                "classification": "NORMAL",
+                "content": {"messages": [{"modelUsage": {
+                    "modelId": "openai/gpt-6-astra",
+                    "modelDisplayName": "GPT-6 Astra",
+                    "inputTokens": 12,
+                    "outputTokens": 34,
+                    "totalTokens": 46,
+                    "cachedInputTokens": null,
+                    "reasoningTokens": null,
+                    "costPriceVersion": "provider-v1",
+                    "costCurrencyCode": "USD",
+                    "costTotalMicros": 56,
+                    "costSource": "PROVIDER_RESPONSE"
+                }}]}
+            }]
+        });
+        assert!(seal_direct(payload.clone()).is_ok());
+        let mut unknown_field = payload;
+        unknown_field["records"][0]["content"]["messages"][0]["modelUsage"]["apiKey"] =
+            json!("never-portable");
+        assert!(seal_direct(unknown_field).is_err());
+    }
+
     #[test]
     fn strict_rejections_fail_closed() {
         let f = fixture();
