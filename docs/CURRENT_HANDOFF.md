@@ -1,5 +1,13 @@
 # 南枫 AI 当前交接
 
+## 2026-09-15：v1.0.0 正式双端覆盖与 GitHub 交付
+
+- 源码：`1a37880` 已推送 `main`；Desktop 开发时间统一为 `YYYY-MM-DD HH:mm`，Android 同一格式；关于页保留版本、开发时间和开发者信息，不显示 `macos · aarch64`。
+- 构建与签名：Android `lintRelease`／`assembleRelease` 成功，`com.nanzhufeng.ai`、`68 / 1.0.0`，v2／v3 验签通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；macOS DMG 校验通过，Bundle ID `com.nanzhufeng.ai.desktop`、Team `457B263L9J`，严格 codesign 通过。Desktop 定向 24 项、Android 设置定向 JVM 通过。
+- 覆盖：OPPO 以同签名 `pm install -r --user 0` 保数据更新，首次安装时间仍为 `2026-08-20 15:15:31`，安装后 base APK 与候选 SHA-256 均为 `59f639f40eae151582f08d7ffd73cea01e637732e91f5f349fc52724448ddf96`；Desktop 原位替换为 1.0.0，旧包备份为 `南枫 AI Desktop.pre-1.0.0-20260915-2245.app`，启动后 SQLite `quick_check=ok`，4 个 workspace_exchange 可读。
+- Release：[v1.0.0](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.0) 为正式发布，只有 `Nanfeng-AI-Android-1.0.0.apk`（28,345,685 B）和 `Nanfeng-AI-macOS-1.0.0.dmg`（15,631,457 B）。已经由 GitHub 资产 API 下载回读：APK SHA-256 `59f639f40eae151582f08d7ffd73cea01e637732e91f5f349fc52724448ddf96`；DMG SHA-256 `2a1871e342f245166203616a9ce7e4f49961e66ab8ee81e56ffd006205ab75c5` 且镜像校验有效。
+- 边界：本轮未用真实会话执行跨端写入、标题／金额／删除传播验收；既有前端和 Android 全量失败项未因本次发布而重新判定为通过。
+
 ## 2026-09-15：恢复端到端加密同步（源码／生产 SQL 已部署）
 
 - 修复：Android 与 Desktop 均改回 AES-256-GCM 恢复码封包；`nfai.sync.direct` 历史明文不再读取或合并，只能由原设备明确选择的本地对话覆盖为密文。Desktop 补齐“已有恢复码接入新设备”，恢复码轮换后的新设备恢复回归通过。
