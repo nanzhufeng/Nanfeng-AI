@@ -7,7 +7,7 @@
 首个预发布版本：[v2026.09.15-initial](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v2026.09.15-initial)
 
 - Android：`0.3.0-p10j` APK
-- macOS：`0.6.0-p6d-dev` ZIP（Apple Development 签名，未公证）
+- macOS：`0.6.0-p6d-dev` DMG（Apple Development 签名，未公证）
 
 下载后请用 Release 内的 `SHA256SUMS.txt` 校验。
 

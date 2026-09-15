@@ -1,9 +1,11 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 
 const desktopRoot = resolve(import.meta.dirname, '..');
 const appBundle = resolve(desktopRoot, 'src-tauri/target/release/bundle/macos/南枫 AI Desktop.app');
+const dmgDirectory = resolve(desktopRoot, 'src-tauri/target/release/bundle/dmg');
+const dmgOutput = resolve(dmgDirectory, 'Nanfeng-AI-macOS.dmg');
 
 async function androidPublicCloudConfig() {
   const raw = await readFile(resolve(desktopRoot, '..', 'local.properties'), 'utf8');
@@ -42,4 +44,7 @@ const signingIdentity = process.env.NANFENG_DESKTOP_SIGNING_IDENTITY || developm
 if (!signingIdentity) throw new Error('缺少稳定开发签名；停止覆盖，避免钥匙串授权身份随构建改变。');
 await run('codesign', ['--force', '--deep', '--sign', signingIdentity, '--identifier', 'com.nanzhufeng.ai.desktop', appBundle]);
 await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', appBundle]);
-console.log(`macOS development bundle sealed and verified: ${appBundle}`);
+await mkdir(dmgDirectory, { recursive: true });
+await run('hdiutil', ['create', '-volname', '南枫 AI Desktop', '-srcfolder', appBundle, '-ov', '-format', 'UDZO', dmgOutput]);
+await run('hdiutil', ['verify', dmgOutput]);
+console.log(`macOS development DMG sealed and verified: ${dmgOutput}`);

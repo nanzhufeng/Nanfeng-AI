@@ -2,8 +2,8 @@
 
 ## 2026-09-15：首次 GitHub 发布
 
-- 私有仓库：[Nanfeng-AI](https://github.com/nanzhufeng/Nanfeng-AI)，主线 `0089fdf`。
-- 预发布：[v2026.09.15-initial](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v2026.09.15-initial)：Android `0.3.0-p10j` APK、macOS `0.6.0-p6d-dev` ZIP 和 `SHA256SUMS.txt` 已回下载校验。
+- 私有仓库：[Nanfeng-AI](https://github.com/nanzhufeng/Nanfeng-AI)。
+- 预发布：[v2026.09.15-initial](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v2026.09.15-initial)：Android `.apk`、macOS `.dmg` 和 `SHA256SUMS.txt` 已回下载校验。
 - Android 图为本次候选包在隔离模拟器重新采集；Mac 未截图，避免误拍已有数据。
 - GitHub Actions `34954792798` 三项源码检查通过；不代表 Windows 构建、macOS 公证、主设备或真实服务验收。
 

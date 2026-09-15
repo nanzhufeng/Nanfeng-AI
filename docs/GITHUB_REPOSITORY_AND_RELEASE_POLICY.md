@@ -10,9 +10,9 @@
 
 | 范围 | 唯一来源 | 发布形式 | 不可替代的验证 |
 | --- | --- | --- | --- |
-| Android | `app/` | 独立签名 APK | 签名、同签名保数据覆盖、主设备与真实服务（获得授权时） |
-| macOS Desktop | `desktop/` | 独立已签名 macOS 包 | macOS 签名、数据保留、原生交互与服务验收 |
-| Windows Desktop | `desktop/` 的同一主线 | Windows 原生构建的 MSI 或 NSIS 包 | Windows 构建/签名、WebView2、数据路径与真实交互验收 |
+| Android | `app/` | 独立签名 `.apk` | 签名、同签名保数据覆盖、主设备与真实服务（获得授权时） |
+| macOS Desktop | `desktop/` | 独立已签名 `.dmg` | macOS 签名、数据保留、原生交互与服务验收 |
+| Windows Desktop | `desktop/` 的同一主线 | Windows 原生构建的 `.exe` | Windows 构建/签名、WebView2、数据路径与真实交互验收 |
 | 云端 | `supabase/`、`upload-gateway/` | 独立部署流程 | 迁移、权限、真实服务回执 |
 
 ## 截图与发布证据硬门
