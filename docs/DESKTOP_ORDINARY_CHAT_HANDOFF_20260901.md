@@ -5,7 +5,7 @@
 ## 本轮已实现
 
 - 普通发送在 Rust SQLite 同一 transaction 内写入 USER、Assistant `PARTIAL` 占位和 Attempt；相同正文每次点击仍是独立 Attempt。
-- 固定 Provider/端点/模型目录，发送后才 scoped 读取系统凭据；Direct 不可用时 fail closed，Auto 对齐 Android 普通顺序，一次 Attempt 不换路由。
+- 固定 Provider/端点/模型目录，发送后才从应用私有加密凭据 owner scoped 读取 API Key；Direct 不可用时 fail closed，Auto 对齐 Android 普通顺序，一次 Attempt 不换路由。
 - OpenAI-compatible SSE 增量写回，停止时最多 100 ms 轮询取消并丢弃迟到增量；明确失败、结果未知、取消分开持久化。
 - 显式重试保留原 Provider、原模型、原请求指纹和原幂等键，建立新 Assistant 兄弟分支；上下文已改变时拒绝伪重试。
 - 进程中断后保留增量并恢复为 `UNKNOWN / PROCESS_INTERRUPTED`，不自动重发。

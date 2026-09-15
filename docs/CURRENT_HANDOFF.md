@@ -1,6 +1,277 @@
 # 南枫 AI 当前交接
 
+## 2026-09-15：双端覆盖完成，当前代码 checkpoint 收口
+
+- 代码 checkpoint：`50f4b32`（101 个源码／测试／schema／协议／服务文件）。本节及领域合同随后以独立文档 checkpoint 固化；未推送远端。Supabase 两套本地静态合同 5 passed（`/tmp/nanfeng-checkpoint-supabase.log`），不代表本轮部署了服务端迁移。
+- 文档检查：修复经验页一处已迁移 ViewModel 链接；历史 20260910-phone-to-desktop 的三个外部备份链接当前不可达，保留其历史记录，不声称备份仍存在。本次 Desktop 回滚包使用上方日期对应的新路径。工作流审计无 hard error；全局 AGENTS 体积软警告未作范围外修改。
+
+- 本节覆盖下方历史“未安装”状态；不改写当时记录。标题独立版本、列表读取解耦和删除传播已包含在本次双端包中。安装不等于真实双端同步全部验收通过；本轮没有改名、读云端合并或删除用户真实会话来测试。
+- Android：OPPO 正式包保数据覆盖成功，包名 `com.nanzhufeng.ai`，66 / `0.3.0-p10j`。新旧证书 SHA-256 均为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`；安装后拉回 APK 与候选包 SHA-256 均为 `dc8a4fafda7c1b1fbf8ddd75d214cd7dedeee8d8c41fbe4870f86e1c4f614a6c`。首装时间 2026-08-20 15:15:31、CE inode 1459104、DE inode 1433378 未变，更新时间 2026-09-15 16:16:10。未卸载、清数据或自动启动，临时设备 APK 已移除；未据此声称 Android 正文逻辑哈希或运行时迁移已实机验收。
+- Desktop：原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`，Bundle ID `com.nanzhufeng.ai.desktop`，沿用原 Apple Development 身份，Team `457B263L9J`，新旧 designated requirement 一致，严格 codesign 验证通过。候选与安装后执行文件 SHA-256 均为 `e29fa3e55a4322ac4b1670961055e6a73a53bfb7972c924e43e0c633580d9ffd`。备份为同目录 `南枫 AI Desktop.pre-cloud-delete-20260915-1617.app`。本次无需输入密码、未导出私钥或修改钥匙串 ACL；仍使用原签名私钥，不承诺未来永不提示，也不是 Developer ID 公证发行。
+- Desktop 保数据证据：旧进程退出且无 WAL 后 immutable 读取，quick_check 为 ok，4 个 workspace_exchange／858 条会话。覆盖前后按 workspace_id 排序的 exchange_json 流 SHA-256 同为 `f51e0fcc9ecd18fa931917bc8bdace916b22cddc1d84cb62b053674bda3518fa`。启动后既有会话正文可见；数据库整体哈希因启动写入发生变化，不能称数据库逐字节未变。没有移动或清除数据目录。
+- 已完成构建证据复用：Android lintRelease + assembleRelease 成功（`/tmp/nanfeng-dual-cover-release.log`）；Desktop 签名 bundle 成功（`/tmp/nanfeng-dual-cover-desktop-build.log`）。产物已冻结，不为文档再次构建或覆盖。
+- 回归边界：Android 本增量全量 1186 tests / 7 failed / 3 skipped，相关六套 52 tests 无失败；7 项既有 UI 合同失败未掩盖。最终冻结源码重跑 Rust 全量 280 passed / 0 failed / 1 ignored（`/tmp/nanfeng-checkpoint-final-rust.log`）；前端 436 tests / 410 passed / 14 failed / 12 skipped（`/tmp/nanfeng-checkpoint-final-js.log`）。失败含多行标题旧断言、旧 store-lock 断言及其他 UI 断言，不为消除红灯改用户要求。真实服务、大库延迟、历史标题分歧的人工确认与双端实际删除闭环仍不能由安装替代。
+- 本次正式沉淀只增补项目合同、决策、开发档案和经验，不重复历史全库复盘，不修改长期记忆或全局规则。核心新源码、测试、Room 67–69 schema 和共享 fixture 纳入代码 checkpoint；临时截图、输出、私有配置与安装包不入 Git。
+
 > **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
+
+## 2026-09-15：已选对话删除传播与云端列表清理（源码／隔离验收，未安装）
+
+- 用户要求已同步对话再次删除后清理对应云端副本，云端列表只保留真实成员。范围为有明确同步身份的逐对话删除／远端成员核对；不清空账号，不删除无来源孤立文档，不删除另一端本机正文。本轮没有真实账号读写／删除／安装。
+- 已修复：Desktop 完整身份可判定的 list 对照请求前回执，仅清理未更新且已缺失的当前账号选择与非 UNKNOWN 任务；返回 cloudConversationKeys 给前端裁掉幽灵缓存。Android 同样核对完整封包身份并事务清理未变回执／置顶；旧格式保留身份用于核对但不恢复。畸形身份、网络失败、账号变化不按空列表清理；仍在云端但恢复冲突的条目保留。
+- 防复活：已有回执但远端明确不存在时停止并清理选择，不按 expected revision 0 重传。Desktop 新 continue_selected_conversation 和 continuation IPC 标志区分后台／回复续同步与手动新建；Android 后台 syncInternal 要求仍有选中身份，防止旧任务捕获目标后重新创建。只有新的明确手动同步可再次建立副本；参与设备必须双端升级，旧客户端行为不在保证内。
+- 本机删除传播：Desktop softDelete／permanentDelete 与 DELETE_PENDING 任务同事务保存，沿原任务 owner 启动／30 秒重试；失败保留 DELETE_PENDING，永久删除后仍可清理远端。只有本机明确 deleted 或缺少本机记录但有明确删除任务才走远端删除，不把一般读取缺失当作删除授权。Android 沿原 WorkManager 变化监听，删除前重新读取远端 revision，避免旧回执 CAS 永久失败。任务和回执清理不触碰正文。
+- 行为证据：JS 新用例先红后绿，完整空清单清缓存／不完整保留／有效但冲突的行保留；修正同文件旧排序断言为服务器已返回顺序（不改排序实现）。Rust 公开同步／列表用例验证本机删除→远端清理、远端删除→续同步不重建、再次明确同步才重建、其他账号不受清理、本机正文保留、坏身份不清理；新增真实 store 软删→失败退避→永久删→重开仍有删除任务。
+- 回归：Desktop Rust 全量 280 passed / 1 ignored；其后删除重试保持 stage 的微调以新增定向测试复验。前端相关 31 passed / 12 retired skipped，build 通过。Android 全量 1186 tests / 7 failed / 3 skipped（仍为前轮 UI 合同），其中账号与 P7-F data 六套 52 tests / 0 failed / 0 skipped；Android 真实 HTTP→Room 多设备删除仍未实机验证。没有发布或覆盖旧安装，不能说用户当前双端已生效。
+
+## 2026-09-15：云端列表稳定性／等待链路审计与第一轮修复（未实机验收）
+
+- 已确认代码分叉：Android UI 读取前逐条检查／迁移已选文档，失败直接退出；列表 owner 已获得完整封包却丢弃、逐条重新联网；Desktop 读取前进行旧 direct 文档上传并可能第二次 list；单文档恢复错误通过 `?` 中断整批；前端在展示前等待账号回读与旧置顶上传。读取用例耦合写入、恢复和非必要展示刷新，原合同未定义这些故障边界。
+- 已实现：双端读取移除迁移上传前置步骤（明确 sync 仍处理旧源）；Android 同一 list 封包直接进入原恢复校验／合并，置顶也复用封包；Desktop IPC 转后台阻塞线程，前端重复点击 single-flight；移除显示前账号回读／整页 refresh／置顶迁移写入；逐文档恢复隔离失败并返回 failedCount、界面提示部分失败与旧格式跳过。Desktop 快速连接／服务失败最多重试一次，长超时、鉴权、限流、格式和写入不重试。
+- 红绿证据：隔离 Rust 公开 `restore_all_remote_conversations` 输入坏文档后跟有效文档，原代码 Err 云端文档标识无效，新代码保留一条有效恢复并报告一次失败；实际前端生产分支在账号刷新 Promise 未完成时原来不显示列表，新代码已显示，测试先红后绿。追加公开批次临时失败恢复／永久错误不重试测试。Android 新流水线目前有编译及相关 wire／UI 合同覆盖，没有完整账号 owner HTTP→Room 注入行为测试，不夸大验证层。
+- 本轮验证：Rust 全量 279 passed / 1 ignored；前端相关 29 passed / 12 retired skipped；Desktop build 通过。Android 全量 1186 tests / 7 failed / 3 skipped，7 项仍为既有 UI scrim／稍后看／新会话／无障碍／PDF 合同；账号 UI 21 项无失败。前端全量 434 tests / 407 passed / 15 failed / 12 skipped，其中存在多行标题旧断言、旧 store-lock 断言、列表排序等不一致；未声称全绿，未改无关样式或标题规则。
+- 未完成／需继续：Desktop 每条恢复仍会扫描其他工作区同源副本并解析整份 exchange JSON，列表后还读取工作区投影；真实大库耗时未量测，不能认为长等待已全部消除。RPC 返回整份封包而非分页索引；RPC 级畸形响应仍可能整批失败。须补真实 gateway 层失败隔离／Android 可注入 seam、隔离大库基线和双端正式安装验收。无真实账号读取／同步／标题操作，无安装、无主设备测试。
+- 当前规则唯一正文见 P7-F 合同“云端列表读取边界”。不因这些优化恢复、猜测或改写用户历史标题。
+
+## 2026-09-15：标题独立版本与持久续同步已实现（源码／隔离验收；未覆盖安装）
+
+- 接续下方审计，已实现而非仅报告：双端 `titleRevision` 独立逻辑版本、Android 68→69 nullable 前向迁移、Room 读写、自动／手动标题、双端 wire 保真、读写共享合并、同版本冲突保护。具体当前规则唯一放在 P7-F 合同“标题事实与续同步”。迁移不会修改任何旧标题或给旧记录编造版本。
+- 红灯：通过真实 Android `ConversationManagementDomain.apply` 构造一端 RENAME、另一端随后 PIN，再走上传合并，旧实现返回旧标题，实际断言失败。独立版本接入后该用例通过，并补了慢时钟、并发改名保护。
+- Desktop：本地／云端重命名共用已有选中续同步，缓存回读修复保留；新增标题待同步任务与手动／自动／undo／redo 标题事务原子保存。重启仍有任务；未选对话不入队；完成旧上传不清掉后一次改名任务。任务重试有退避，UNKNOWN 走现有核对，标题冲突停止自动覆盖。
+- Android：`Conversation.titleRevision` 与 `ConversationEntity.titleRevision` 双向映射；普通持久化仅在标题真实改变时推进版本，验证过的云端合并保留远端版本；DAO 更新参数已补齐。Room 测试验证 repository 重建、非标题修改、远端版本 7 接收及下一次本地改名变 8；68→69 迁移保留旧标题且版本为 null；历史迁移清单已补全。
+- 共享协议回归：`protocol/fixtures/title-sync-v1.json` 六组独立事实，Android/JVM 与 Desktop/Rust 各自执行读取和上传两条路径。包括晚置顶、时钟偏差、版本较旧、并发冲突、legacy 冲突、同文字新版本，两端通过。无真实账号／会话写入。
+- 最终验证：Desktop Rust 全量 **278 passed / 1 ignored**，前端关联 **27 passed / 12 retired skipped**；Android 标题／Room／迁移／已选同步五组 **44 passed / 0 failed / 0 skipped**。Android 全量较早在本增量快照上 **1185 tests / 7 failed / 3 skipped**，失败为已有 UI 静态合同（居中 scrim、稍后看、新会话列表、侧栏无障碍 3 项、PDF），不伪称全绿；新增迁移清单失败已修正。Release Kotlin 编译、Desktop build、受影响文件 diff 空白检查通过。全量 Android 后新增共享 fixture 已在最终定向组通过，不能据此推算全量新总数；不能以安装包替代真机。
+- 当前没有正式打包／覆盖安装，没有读取合并、重新命名或回滚真实会话。仍需处理全量 UI 门禁、正式双端升级及真实路径验收；历史已分歧标题需先给出有来源的清单并确认，不由代理选择值。已有旧安装仍是旧行为，不能说用户正在运行的软件已修好。
+
+## 2026-09-15：标题同步代码／合同／架构审计（未完成整体修复，不可发布为已解决）
+
+### 数据边界
+
+- 用户要求修复同步，不授权替用户决定标题。前轮读取真实云端导致部分本机标题回退；另通过正式重命名入口修改过一条置顶标题。用户明确反对后停止真实标题写入、回滚、读取合并和同步操作。本轮仅源码、隔离 SQLite／JVM／模拟网关验证；未安装或触发主设备操作。
+- 已移除源代码中的真实会话 ID 硬编码临时云端探针。保留隔离回归，不用用户会话作为写入测试夹具。
+
+### 已定位的分叉与当前改动
+
+| 层 | 证据／症状 | 当前结论 |
+|---|---|---|
+| Desktop 入口 | `app.mjs::mutateConversationLifecycle` 原来仅 `cloudWorkspaceId` 存在才上传，本地列表重命名只落库 | 与已选身份跨列表续同步合同冲突；现复用 `syncSelectedContinuation`，未选对话仍不上传。生产动作 IPC 替身回归先红后绿 |
+| Desktop 投影 | 保存后 `refresh()` 不重新读取 `cloudConversations` | 原云端行继续显示旧标题；现从持久化投影替换目标行并更新缓存。同步失败与本机保存成功分开报告 |
+| 双端读取／上传 | 上传比较时间／revision，读取无条件接收远端标题 | 隔离回归复现旧远端覆盖新本机标题；现两条路径共用各端 `incomingTitleIsNewer`／`incoming_title_is_newer`，保留更晚本机标题及其版本。Desktop 公开同步／恢复回归额外验证保留后继续上传，不误判 UP_TO_DATE |
+| 同版本冲突 | 同一更新时间及语义版本可对应两个标题；没有因果证据判定谁新 | 当前双端均拒绝覆盖，保留原值。此为止损，不是历史冲突已恢复；不能按模型前缀、标题长度或指定设备猜赢家 |
+
+### 尚未修复的核心架构缺口
+
+1. **没有标题独立版本。** `ConversationModels.kt::Conversation` 仅提供会话级 `updatedAt/revision`；`ConversationManagementDomain.apply` 的 RENAME、PIN、ARCHIVE、项目变化等共用这两个字段。同步 wire 也只携带会话时间和 revision。静态可构造：A 改标题，B 保留旧标题后置顶，B 的会话时间更晚，于是当前比较器仍可能把 B 的旧标题当作新标题。尚未新增该交错场景的端到端回归，不能称已排除。
+2. **合同缺少标题冲突语义。** P7-F 只规定“按最新内容”合并，未定义标题级因果信息、同版本冲突、时钟偏差、并发改名与旧客户端兼容。仅统一比较函数不等于补齐合同。
+3. **Desktop 续同步依赖前端入口接线。** 手动操作及回复完成分别调用同步；`mutate_desktop_domain` 仅写本机。Android 则由 Room invalidation 调度 WorkManager。需统一为持久化变更与待同步任务的用例边界，验证离线、退出、重启、自动标题完成；当前未证明这些路径可靠。
+4. **服务端文档 CAS 不能判断标题新旧。** `nanfeng_sync_commit_document` 验证整份文档 expected revision／envelope。客户端先读取最新文档版本，再提交语义陈旧标题，仍可能通过 CAS。没有证据说明是某个模型的标题分支或网络传输漏字段。
+5. **文档漂移。** P7-F 的“业务内容在本机加密后才交给云端”“尚未完成真实账号登录”与当前 direct envelope 实现及前轮真实回查记录不一致。此项不是已证实的标题丢失原因；应单独校正来源与适用版本，不能无审计改安全承诺。
+
+### 下一增量与验收门
+
+- 先定义版本化标题事实／变更因果元数据（不能继续借用置顶／正文的时间），明确旧记录无元数据时不得猜测历史标题。覆盖 Android domain／Room／wire、Desktop domain／exchange／wire、两端统一合并及旧客户端门禁；通过单一协议 fixture 验证双向往返。
+- 必测：离线改名后读取、另一端仅置顶／新增正文、并发改名、时钟偏差、同版本不同标题、失败重试、进程退出重启、旧版客户端、读写后再次读写、UI 缓存。未补齐这些前，不以当前比较器止损补丁宣称架构修复。
+- 本轮最终定向结果：Desktop 同步 Rust **27 passed / 1 ignored**；前端生产动作与续同步 **7 passed**；Android wire／selected contracts／Room **25 passed / 0 failed / 0 skipped**。读取旧标题的回归实际先红后绿；同版本冲突保护断言通过。Android 同步 owner + Room 完整跨设备闭环、正式打包安装与真机未验证。
+- 不自动恢复或重新命名用户真实记录。历史冲突修复必须先提供有来源的原值与拟修改清单，取得明确确认。
+
+## 2026-09-15：问题存在、回答缺失的底层修复与 12:56 OPPO 覆盖
+
+- **实际证据：** 只读 immutable Desktop 磁盘快照（不包含 WAL，不能当作实时云端证据）显示 MATCH 对话同 ID 的原始导入副本有 user + assistant 两条 COMPLETE/TEXT 消息，回答文本长度 3181；cloud 工作区副本仅一条 user，当前叶子也退回问题。两个 cloud 工作区副本都仅一条消息。原始回答仍在，尚不能据此证明手机首次漏传发生在哪个版本/步骤。
+- **底层错误一：** 双端云端读取合并把“远端缺少某消息”当作删除依据，删除/过滤本机已有正文并退回远端叶子。本协议没有逐消息删除凭据。新增前缀载荷回归先红（Desktop 2 条变 1 条，Android merged snapshot 丢回答），后绿；移除缺失即删除规则，双端读写复用后代叶子选择，避免已保留回答被祖先问题隐藏。不是 MATCH 特判。
+- **底层错误二：** Desktop 旧安装产生同 conversation ID 多工作区副本，回执可绑定残缺副本。新增 `recover_local_conversation_occurrences` 在读取/上传时按稳定 ID、已存在消息 ID/父节点/角色/正文核对，仅补缺失消息，不覆盖当前同 ID 消息；SQL 排除绑定其他账号回执的副本。隔离测试复现云端也无完整副本、原始本地副本仍完整时的恢复先红后绿。当前最多检查 32 个候选；真实多副本大库扫描性能、不同账号/分支碰撞还需更完整回归，不能宣称已全盘验收。
+- **验证：** 定向 Android 39 tests / 0 failed / 0 skipped；Desktop Rust 同步 26 passed / 1 ignored；Desktop build 通过。Android 全量 1181 tests / 7 failed / 3 skipped，失败仍为此前 UI 合同，未冒充全量通过。单独 lintRelease、assembleRelease 成功。
+- **主设备：** 用户明确回复“现在保数据覆盖”。OPPO `3B157F009E800000` 原包 SHA-256 `f1e4a21a7118f964f41dee08468a00856ba9b809f032332fa9e6d4ea93df59c6`；新正式包 `66 / 0.3.0-p10j`、非 Debug，签名证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8` 相同。2026-09-15 12:56:29 经临时推送 + `pm install -r --user 0` 覆盖成功，安装后拉回 APK 哈希 `be78dccea8f8a4bf5d6b11ed6574a751cf6cacd744577e12290e94a0023f90ac` 与候选一致。首装时间 `2026-08-20 15:15:31`、ceDataInode `1459104`、deDataInode `1433378` 不变；临时设备 APK 清理并核验。没有卸载/清数据/自动启动/仪器测试。哈希已冻结，不再重建此 APK。
+- **未完成：** Desktop 新代码未正式签名部署、旧完整回答未通过新修复链路回传真实云端、手机升级后未实际读取验收。首个漏传位置尚缺手机源数据/对应远端历史载荷证据，不能把已确认的扩散机制说成全部来源已经查清。其他前轮遗留：Desktop portable modelUsage 恢复再上传保真、模型/金额空值补齐与同时间冲突、退出后续同步。需继续完成，不是“全部修复”。
+
+## 2026-09-15：云端列表正文持续更新（代码与隔离回归通过，双端实机未闭环）
+
+- **已复现并修复：** Android `mergeRemoteAdditionsForLocalCommit` 与 Desktop `merge_remote_additions_for_local_commit` 原先只在远端消息 revision 更大时更新已有消息。同 ID / 同 revision、远端对话 updatedAt 更晚的新正文被跳过。新增 Room 保存后回读和 Rust SQLite 回读测试先失败；两端现按较新的对话时间更新已有消息，时间相同再比较消息 revision。保留本机附件/运行块与独立新增消息，不修改用户真实数据库。设备时钟与字段级并发仍非已验收事项。
+- **续同步入口缺口：** Desktop 原生成完成路径未触发选中对话续同步，定时任务只每 12 小时运行。新增 `selected-conversation-continuation.mjs` 并接入普通回复完成/失败重试的落库后路径；以现账号 `syncedConversationKeys` 限定范围，不依赖本地/云端列表。UNKNOWN 进入既有核对，不将同步失败伪装成发送失败，不恢复已发送草稿。此为窗口运行路径，不宣称所有进程退出/后台补账情形已验证。
+- **验证：** 本轮 Android Room 合同 13 passed；Rust 同步 26 passed / 1 ignored，含同 ID 同 revision 第二次/第三次正文更新经封装、模拟 CloudGateway、恢复和 SQLite 回读；前端同步与续同步 23 passed / 12 skipped，`node --check src/app.mjs` 通过。不是实际远端或 Android 真机端到端测试。此前全量 JVM 7 项 UI 失败没有在本轮解决。
+- **候选包：** `assembleRelease` 成功；APK `app/build/outputs/apk/release/南枫AI.apk` SHA-256 `d8f3d6ee6af9ebcc62dc0646b74473c41383ad2c293709dc2876be3eee145411`，apksigner 验证成功，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未覆盖主设备，最后 adb 仅 emulator-5592。Desktop 新代码未签名部署，不能把旧正式应用行为当新版本证据。
+- **继续验收：** OPPO 连接后按授权覆盖，再核对真实云端列表连续追加/更新、标题、每条回答原模型和金额；Desktop 需先完成允许的正式签名交付。进一步审计同时间冲突、Desktop 恢复 portable modelUsage 的再上传保真、后台退出与补账后续同步，不能承诺已经全链路成功。
+
+## 2026-09-15：10:48 手机旧标题与金额缺失续查（新代码未部署双端）
+
+- **用户实际结果：** 手机模型名已出现，但多个标题仍旧，金额缺失。上一包 `f1e4a21a…` 已于 10:36:04 保数据覆盖 OPPO；安装后设备 APK 哈希一致，`ceDataInode=1459104` / `deDataInode=1433378` 与首装时间保持不变。这不等于同步验收通过。
+- **已确认金额分叉：** Desktop 页脚 `projectedMessageCost` 会从原始/备用用量计算历史估算金额，但 Rust `portable_model_usage` 只传 `chargeMicros`；只读源快照中 7 条有模型消息的 6 条金额为空。此外 `usage` 对象存在但输入/输出为空时，Rust 未采用 `estimatedUsage`，与页脚选择不一致。现已修正备用用量选择。此 Desktop 改动只有 Rust 测试证据，尚未打包/部署。
+- **Android 修复：** 对历史无金额载荷，使用消息原始时间、原模型及已传用量，复用既有版本化估算器恢复历史显示金额，来源明确为 `LOCAL_ESTIMATE`，不覆盖 Provider 已知金额；恢复后金额入 Room 并供再同步使用。测试固定 DS 原用量 5083/3361，对应 USD 2779 微单位，Android 六位显示 `¥0.018676`，与 Desktop 四位 `¥0.0187` 是同一金额。对只有模型、金额为空的旧 Room 行，`RoomCloudResponseModelUsageStore.recordVerified` 允许补齐原先未知金额，不清空或改写已有金额，不改原模型身份。
+- **双端标题修复：** 本机上传前合并原来无条件保留本机标题，旧副本可能覆盖远端新标题。Android 和 Desktop 现在比较对话 `updatedAt`，采用较新对话的标题/当前叶子，保留独立新增消息并集；相同或不可比较时间仍保留本机。不宣称设备时钟冲突或字段级并发都已解决。
+- **真实电脑操作：** 使用正式应用的既有“同步到南枫云”入口，逐条同步截图所示缺少新前缀的 6 条对话：置顶 DS、最近 DS、Sonnet、Terra、另一条 DS、Gemini；六次均在 UI 观察到“同步成功”。没有创建新对话或更改标题正文。此前磁盘快照的 8 条 RETRY_WAIT 是历史证据，不能再断言这 6 条目前仍上传失败；尚无手机端再次读取这 6 条后的证据。
+- **回归与候选：** Android 本轮 29 tests / 0 failures / 0 errors / 0 skipped；Desktop 同步 Rust 26 passed / 1 ignored。先红后绿覆盖标题方向、空金额补齐、备用用量和历史金额。Android `assembleRelease` 与验签通过，`66 / 0.3.0-p10j` 非 Debug；`app/build/outputs/apk/release/南枫AI.apk` SHA-256 `1eec7965e3d87c1dd8b41f30da17d6cd04933bb01b0531c6993c1837e9f2b287`，证书仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。上一轮全量的 7 项 UI 合同失败/3 skipped 未在本轮解决，不称全量通过。
+- **未完成/交付边界：** 新 APK 尚未覆盖；最后设备列表只有 emulator-5592，OPPO 断开。Desktop 新代码尚未部署；现有 bundle 脚本默认查询 Keychain，环境未提供 `NANFENG_DESKTOP_SIGNING_IDENTITY`，本轮未调用该签名回退。后续需按受控签名规则完成 Desktop 交付，并在 OPPO 连接后按授权同签名覆盖，再核对六条标题、全文及金额。不要把本轮 UI 上传成功或新包构建说成已完成双端回读。
+
+## 2026-09-15：手机读取再次失败后的复现修复（尚未覆盖主设备）
+
+- **不能沿用旧完成结论：** 用户 02:10 截图为 6 条完整性失败、2 条保存失败。之前的解码测试绕过了真实封包入口，打包和覆盖不能证明这 8 条已恢复。本轮未取得每条真实远端记录和 OPPO 错误日志，以下是可复现代码缺陷，不冒充逐条真机归因。
+- **封包阻断已复现并修复：** `NfaiSyncSensitivityDetector` 的通用 `token` 禁用规则把 `modelUsage.inputTokens/outputTokens` 等合法结算字段也拒绝；`openDirect` 又将其混同于完整性错误。Android 现在采用与 Desktop 相同的固定模型用量白名单及数值/字符串上限，未知字段和凭据仍拒绝。测试先红后绿，覆盖 seal/open 和凭据拒绝；错误码区分格式、绑定、哈希与载荷字段校验。
+- **已有消息保存冲突已复现并修复：** Room 的非空父节点/兄弟顺序唯一键会在两条既有消息交换顺序时逐条冲突。验证云端更新现在在同一事务内暂时释放待更新行的父关联，再写入最终合法关系；不删节点、不清数据。普通本地消息不可变写入合同保持不变。上传前合并远端新增内容同样改用已验证合并入口，避免普通 `save` 拒绝既有消息更新。
+- **正文和汇总已复现并修复：** Android `nodes.text` 错套 4096 字的标识限制；正文改由封包字节上限控制、不截断。成功更新与失败并存时，汇总此前漏算 `updatedCount`；现在正确报告部分成功。
+- **只读数据佐证：** Desktop 当前存储快照中，已选同步对话的消息统计包含 7 条带 `modelSnapshot`/`usage` 的消息，最大文本块为 9097 字。只读取计数/长度，未输出正文或秘密；该快照不证明服务端与手机当前内容一致。
+- **贯通验证：** 新增 Room 测试经过封包 seal/open、解码、旧标题/正文合并、数据库读回、模型用量存储读回和页脚投影，断言长正文完整、`DS V4.1` 与 `CNY 18700` 微单位金额保留。54 项同步/Room/页脚定向回归通过。共享同步 golden 通过。最终全量 JVM 为 1177 tests / 7 failures / 0 errors / 3 skipped；余下失败位于 5 个 UI 源码合同套件（未读排序、居中弹层、会话行、PDF 预览、空会话列表），不能宣称全套通过。迁移清单补齐 66→67→68，提示断言改为分阶段错误后均通过。
+- **构建与候选：** `lintRelease`、`assembleRelease` 通过。`app/build/outputs/apk/release/南枫AI.apk` 为 `com.nanzhufeng.ai`、`66 / 0.3.0-p10j`、非 Debug；SHA-256 `f1e4a21a7118f964f41dee08468a00856ba9b809f032332fa9e6d4ea93df59c6`，v2/v3 验签通过，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。
+- **真实验收阻断：** 当前 `adb devices -l` 只有 `emulator-5592`，无 OPPO。已请求用户重新连接；本轮没有安装、启动、卸载、清数据或运行 connected 测试。连接后需先核对正式签名和主设备身份，再按授权保数据覆盖；回读真实失败记录的分阶段结果，双向核对标题、全文、模型和结算金额。尚不能称 8 条真实对话恢复或双端闭环。
+
+## 2026-09-15：双端完整对话合并、未知提交继续核对与正式覆盖
+
+- **同步语义：** 两端在每次本机同步前先打开并校验当前直接云端载荷，将对端新增的已完成文本消息并入本机快照，再以刚读到的 revision 提交。标题、当前叶子和本机非文本块保留明确的本机动作；对端新增消息不会因旧回执被覆盖丢失。云端读取仍以经校验的云端完整文本树更新本机。附件、工具和运行时块不上传，但其后的完整文本子消息会重新挂接到最近的可移植父消息，不能再因结构节点或数组顺序丢失。
+- **模型／金额：** 已完成回答的模型和结算金额只允许缺失时从已校验云端记录补齐；既有本机事实不可被后续载荷清除或改写。Android 在把远端新增节点并入本机后先持久化这些事实，再生成下一份上传载荷，避免 Desktop→Android→云端的合并过程中丢掉页脚。
+- **未知提交：** `UNKNOWN` 先只读回查，绝不重发原密文；若云端已变化，旧尝试标为 `SUPERSEDED`，随后走“读取－完整合并－新提交”路径，不再将正常跨端更新显示为“冲突／已停止同步”。
+- **验证与交付：** Desktop `npm run lint`、`typecheck`、5 个同步 Rust 定向回归（包含远端新增并集、未知提交后的继续合并、附件结构子节点）通过；Android 四组定向 JVM 回归通过，`assembleRelease` 通过。Desktop 新 bundle 已严格验签并原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`，主程序 SHA-256 `57e6755b2759a330f95a25605d27b655b8b0922187bab0e92da2d2fa8f7d7667`；旧包在 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-sync-union-20260915-0205.app`，覆盖前后 workspace SQLite SHA-256 `6f370022fe3e624fc69fb88bc8f8288c139c5b4373a404a84132e16fdd1532fc`，`quick_check=ok`。Android `app/build/outputs/apk/release/南枫AI.apk` SHA-256 `2dbf4582ceba4cb86a1d82636ea22bbb705dbcfa14e8ffe8456e7e734edd7774`，v2／v3 签名和既有证书通过，已对 OPPO `3B157F009E800000` 保数据覆盖；设备 base APK 哈希一致，首次安装时间仍为 `2026-08-20 15:15:31`。
+- **仍须真实账号回读：** 当前 Desktop 旧进程仍在运行，用户正常退出后重新打开才会加载新二进制。随后在同一账号下用既有真实会话完成一次 Desktop 同步、Android 读取云端列表、Android 新增一条完成消息后 Desktop 同步的回读，核对标题、完整文本树、模型和金额；不得记录正文、恢复码、密文或 token。构建、覆盖与模拟网关回归不能代替此真实服务验收。
+
+## 2026-09-14：Android 跨端回答模型／金额 Room 还原与再同步保留（待真实账号回读）
+
+- **根因与边界：** Desktop 的便携 `modelUsage` 故意不携带 Android 本机 Provider 路由或 attempt ID；不能伪造为 `assistant_response_model_attributions`，否则会污染本地调用审计。此前 Android 严格接受该字段，却只恢复消息树，未持久化和投影给回答页脚。
+- **实现：** 新增无正文、无服务商路由、无凭据、无 attempt 的 `cloud_response_model_usages` Room 表（67→68）。`P7FConversationSyncWireFormat.decodeWithModelUsage` 只接受 assistant 消息上的完整、非负且费用来源自洽的 `modelUsage`；恢复在会话保存后以会话 + 消息 ID 幂等持久化，冲突拒绝而不覆盖。Android 回答页脚优先本机 Provider 归属，缺失时投影跨端模型及原始金额；再次同步同样优先本机归属、否则原样回传跨端事实。
+- **自动验证：** `:app:testDebugUnitTest --tests P7FConversationSyncWireFormatTest --tests P7FManualConversationSyncRoomContractsTest` 通过：协议 `5/5`，Room `3/3`，覆盖严格解析、页脚投影和 67→68 表结构。`git diff --check` 通过。主源码 `:app:compileDebugKotlin` 通过。
+- **正式候选：** `app/build/outputs/apk/release/南枫AI.apk`，`66 / 0.3.0-p10j`，SHA-256 `23f6062d075cfdcdba6e788ebd10a9942f983a892de9f6f4cfd42f678a3fbae7`；v2/v3 签名校验通过，证书 SHA-256 仍为 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。本轮未覆盖、启动、卸载、清数据或运行任何 `connected*AndroidTest`。
+- **仍待真实验收：** 用户使用正式 Desktop 先“读取云端列表”，再以本正式 Android 包保数据覆盖后手动“读取云端列表”；只记录两端数量、置顶集合、顺序、模型／金额是否显示、打开／继续和取消同步仅删除云端副本。不得记录或输出会话正文、恢复码、密文或 access token；在该真实账号回读前，不得称双端同步已打通。
+
+## 2026-09-14：共享云端列表、旧直接记录受控重写与模型金额载荷（待真实账号回读）
+
+- **目标与当前边界：** 目标仍是同一 Google 账号下 Android 与 Desktop 的云端会话数量、置顶和顺序一致；“读取云端列表”只能合并／更新，不能重置已有云端列表或把云端置顶写进本地会话。两端的新正式包已保数据覆盖，但尚未由用户完成本轮真实账号的双端读取回读，因此绝不能称已打通。
+- **已确认根因：** 旧实现把各端缓存、各端本地置顶和服务端列表顺序混作同一真相；Desktop 虽已有共享置顶边车，却未接入可见云端操作。旧直接会话还有重试失败分支或重复消息 ID；哈希相同会被提前判为 `UP_TO_DATE`，永远不会重写为当前可读格式。另一个数据丢失点是跨端便携载荷未承载模型、token 与结算金额。
+- **本轮实现：** `cloud-conversation-list-v1` 成为唯一共享列表展示记录，只保存置顶 ID；Android 和 Desktop 都提交后回读确认，云端置顶不会触碰 `conversation.pinned`。读取按服务端返回顺序合并，不清空未返回的缓存行；Desktop 在显式“读取云端列表”中，只对当前本机有同账号同 document ID 来源、且确实需要修复的旧直接记录做原 document 覆写，再重新列出，绝不删会话或另建副本。需要重写的旧记录不会再走错误的 `UP_TO_DATE` 早退。
+- **模型／金额边界：** 两端便携消息现可携带不含服务商、路由、端点或凭据的 `modelUsage`（模型 ID／显示名、token、币种、金额、版本、来源）。Desktop 已把 Android 载荷归一到可显示的模型／金额；Android 当前只允许并保留该字段用于后续再同步，尚未把 Desktop 传来的元数据写进 Room 并显示。这个 Android 可见还原缺口仍待实现，不能承诺手机端已恢复模型或金额。
+- **代码入口：** Android：`app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt`、`P7FConversationSyncWireFormat.kt`；Desktop：`desktop/src-tauri/src/desktop_account_sync_v1.rs`、`desktop/src-tauri/src/lib.rs`、`desktop/src/app.mjs`、`desktop/src/cloud-conversation-list-merge.mjs`。新线程先读这些文件与本交接，不按标题去重、不读取或记录会话正文、恢复码、密文、access token。
+- **已验证：** Android 定向 JVM 的 `P7FConversationSyncWireFormatTest`、`P7ASyncContractsTest`、`P7DAccountSyncUiContractsTest`、`P7FManualConversationSyncRoomContractsTest` 通过；Release 已构建，候选 [`南枫AI.apk`](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk) SHA-256 `b644075a07795929145f6f744a6ca785a5c66ea2d9053d46ff4f1d3398996469`，同证书保数据覆盖 OPPO 后拉回 base APK 与候选一致，未启动 App。Desktop 的 lint、`node --check`、`cargo check`，以及“旧格式重写”和“模型金额载荷”Rust 定向测试通过；候选已严格验签并原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`。覆盖前后 workspace SQLite SHA-256 均为 `6ccf391a0fcc8d6e120246e2c65fd9fdd3b3d90af5a5138c7d1c032a40f75798` 且 `quick_check=ok`；上一包为 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-current-sync-20260914-1911.app`。
+- **下一步真实验收：** 用户先完全退出并重开 Desktop，进入“云端”点击一次“读取云端列表”；它会在有对应本机来源时受控升级旧直接记录并重新列出。再由用户在手机正式包点击“读取云端列表”。核对两端数量、同一置顶集合、顺序、打开／继续与取消同步仅删云端副本；若手机仍显示不同数量，保留只含 document ID、数量、阶段和异常类的诊断，不输出内容。随后补齐 Android 的 `modelUsage` Room 持久化与 UI 投影，再做同样回读。
+
+## 2026-09-14：双端本地已同步会话云端标识
+
+- **语义：** 仅在“本地”会话列表中，存在当前账号持久同步回执的会话在标题前显示云端图标；云端列表本身不重复标记。该标记只来自账号隔离的 `workspaceId + conversationId` 回执，不改变或复制会话内容。
+- **实现与证据：** Android 直接复用 `syncedConversationIds`，Desktop 账号投影新增回执键而非只返回数量；同步、取消同步和云端读取后立即刷新该投影，侧栏保留优化也会在键变化时重绘。Desktop Node 定向 `2/2`、Rust `21 passed / 0 failed / 1 ignored`、Android `P7DAccountSyncUiContractsTest` 和 `assembleRelease` 均通过。
+- **产物：** Desktop 已同 Bundle ID 原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`，严格验签通过，主程序 SHA-256 `4db68aad8c2f76643b2a870cd35d608087cb512d63e157d124b61bdd85f52aee`，上一包保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-cloud-marker-20260914-1600.app`；SQLite `quick_check=ok` 且覆盖前后 SHA-256 一致。Android 正式包为 [`南枫AI.apk`](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk)，SHA-256 `29741bfbfd3c282b7c8c38582109cbea5a7fe802feafa2ab84f3abe1b8e95795`，本轮未安装或启动主设备。
+
+## 2026-09-14：Desktop 同步误报、全链路锁竞争与侧栏视觉收敛（待重开后真实云端回读）
+
+- **根因与修复：** 已确认的提交在“回读暂时失败／滞后”时被前端当作硬失败；现在保留为 `VERIFYING`，先显示“后台核对”，只读核对成功后显示成功，绝不自动重复上传。同步、取消、核对、云端列表恢复与周期同步不再持有全局 Desktop store 锁等待网络；云端列表改为复用 `list` 回包，不再逐条二次 `read`，同工作区侧栏投影也由每行两次 IPC 降为每工作区两次。
+- **视觉收敛：** 可见结构分割线（侧栏拖拽线及设置双栏）统一为 `1px`；批量选择框以高于通用 `.chat-first button` 的选择器强制 `20×20px`，未选中也显示可见浅灰方框，选中为浅橙底＋橙色勾和 `2px` 直角，不再被通用按钮 `min-height` 拉成竖向胶囊。
+- **自动与交付证据：** Desktop 同步 Node 回归 `15 passed / 0 failed / 12 retired skipped`，同步 Rust 定向 `21 passed / 0 failed / 1 ignored`，`npm run lint`、`npm run typecheck`、`cargo check` 和已签名 macOS bundle 通过。已同 Bundle ID `com.nanzhufeng.ai.desktop` 原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`；候选和安装后主程序 SHA-256 为 `044b26a7ed141beb1a9e1a2e5cc944a6091778a5db4b5e1e0594e1929ba395cb`，旧包保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-sync-ui-20260914-1427.app`，用户 SQLite `quick_check=ok` 且覆盖前后数据库 SHA-256 一致。
+- **待验收：** 正常退出后重开本包，云端同步一条会话并观察“后台核对／成功”状态不再误报失败；读取多条云端对话时观察首帧和列表恢复耗时。再进入批量编辑与设置双栏，确认方形未选框、浅橙选中态及 `1px` 分割线。
+
+> **14:55 追加正式包：** 因上一包的批量框仍被通用按钮最小高度拉成长方形，已在选择器层级修复并新增“空选择仍输出 `aria-checked=false` 方框”回归；悬停和按压也不会再移除未选框边框。定向回归、`npm run lint`、构建与签名通过；已原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`，主程序 SHA-256 为 `8725f311023a0703a64e2f49dcf4442a207cb6e960ebf8a61f926e003ec90cc4`，上一包可恢复于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-square-checkbox-hover-20260914-1455.app`，SQLite `quick_check=ok` 且覆盖前后 SHA-256 一致。须正常退出正在运行的旧进程再打开。
+
+## 2026-09-14：Desktop 云端读取增量合并修复（待重开后实机回读）
+
+- **根因：** “读取云端列表”把读取结果直接赋值给 `state.cloudConversations`，这会把当前列表整表替换，丢失云端列表独有的 `cloudPinned` 与未出现在本次读取结果中的现有条目。重复点击时，较早请求的迟到回包还可能覆盖较新的读取、取消同步或退出账号状态。
+- **修复：** 读取现在按 `workspaceId + conversationId` 合并：同一条刷新云端字段但保留已有云端置顶和位置；新条目追加；已有条目不会因一次读取消失。读取代次防止旧回包覆盖新读取、明确取消同步、批量移除或退出账号后的列表。
+- **证据与交付：** 新增可执行合并回归，先红后绿，断言“已置顶 + 仅缓存条目 + 新云端条目”合并后仍为原顺序，置顶不丢失；云端置顶、读取和侧栏合同回归 `3/3` 通过，`npm run lint`、构建、打包、严格验签通过。已同 Bundle ID 原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`，候选和安装后主程序 SHA-256 均为 `bf77c7154ad7734ee32049ccd1df95f7db610702522e5e0535083b0b511b47ec`；旧包保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-cloud-merge-20260914-1430.app`，SQLite `quick_check=ok`。
+- **待验收：** 正常退出后重开本包，在云端先置顶一条、再点击读取，确认该条仍在“置顶”，其余现有行不消失，新云端行仅追加。
+
+## 2026-09-14：Desktop 侧栏工具按钮真圆修复（待重开后截图验收）
+
+- **根因与修复：** 侧栏的通用 `.chat-first button` 设置了 `min-height: 34px`，其选择器优先级高于工具按钮的 `26px` 声明，导致手写笔和云端读取按钮被纵向拉成椭圆。工具按钮现在以同等优先级强制 `26 × 26px` 的最小／最大尺寸、零内边距和 `50%` 圆角；白底、图标居中和既有柔和阴影保持不变。
+- **证据与交付：** 该视觉合同先红后绿；与云端置顶及批量编辑回归共 `3/3` 通过，`npm run lint`、`npm run build && npm run bundle:macos`、候选和安装包的严格签名校验均通过。已同 Bundle ID 原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`，候选和安装后主程序 SHA-256 均为 `85903fbdb9662fe6c30e72760267e442dd1dd85f6fa0fd88aefed9359ddb9698`；旧包保留在 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-true-circle-20260914-1400.app`，SQLite `quick_check=ok`。
+- **待验收：** 安装时旧 Desktop 进程仍在运行，必须正常退出后重新打开，才会加载这一包；之后只需回看右侧两个按钮是否为相同直径的白色圆形。
+
+## 2026-09-14：Desktop 云端置顶误写本地修复（待重开后可见验收）
+
+- **已确认根因：** 云端行复用了“恢复到本机工作区”的对象；旧置顶路径先执行 `mutate_desktop_domain(setPinned)`，再把该本机内容同步回云端。因此在云端列表点置顶，实际先改了本地会话。截图中本地“置顶”出现 KFK 行而没有可见取消入口，是同一问题的可见后果。
+- **修复：** 云端列表置顶改为账号隔离的云端列表展示状态，缓存只保留 `workspaceId`、`conversationId` 与 `cloudPinned`，绝不读取或写入恢复工作区的 `conversation.pinned`。云端读取／重开仍保留该云端列表顺序；本地列表继续只看自己的 `conversation.pinned`。任意已置顶行的操作区现常显，直接提供“取消置顶”，不再依赖鼠标悬停。
+- **证据与交付：** 新增“cloud-list pin is a presentation action and never mutates the local conversation”回归：先红后绿；连同云端行、批量编辑合同为 `3/3` 通过，`npm run lint` 通过。Desktop 已重新构建、签名校验并原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`；候选与安装后主程序 SHA-256 均为 `6df41539062f1d0904bb221e20a7ba4d1b7af8b5e70c5f0485456f1225746e45`，同 Bundle ID `com.nanzhufeng.ai.desktop`。原包保留在 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-cloud-pin-20260914-1325.app`。覆盖未改写数据库、会话或云端文档。
+- **待验收：** 当前正在运行的是覆盖前的旧 Desktop 进程；用户正常退出再打开后，在云端点置顶／取消置顶，确认本地列表不再变化，并确认本地置顶行右侧立即可点“取消置顶”。
+
+## 2026-09-14：直接同步角色兼容、Desktop 云端操作与正式原位更新（待用户可见验收）
+
+- **Android 根因与修复：** Desktop 直接同步写出的消息角色是小写 `user`／`assistant`，Android 解码曾只接受 Kotlin 枚举的大写名称，因而完整性通过后仍在恢复阶段失败。`P7FConversationSyncWireFormat` 现显式接收两端的小写协议角色并保留未知角色的安全拒绝；不降低任何内容哈希或载荷校验门。
+- **Desktop 交互修复：** 云端行的置顶、收藏、取消同步和批量删除现在在操作后恢复操作前的本地／云端列表、滚动位置和当前工作区；只有用户点击云端行本身才打开该会话。批量编辑操作栏固定在侧栏底部，行选框即时呈现；手写笔与云端读取按钮统一为浅白圆底和两层柔和阴影。同步点击先在下一帧显示“正在同步到南枫云…”，原生回执后显示“同步成功，已回读校验”或“云端已是最新”，不再因前置重复读账号状态阻塞首帧。
+- **自动与交付证据：** Android `P7FConversationSyncWireFormatTest`、`P7ASyncContractsTest`、`P7DAccountSyncUiContractsTest` 定向通过；Desktop 侧栏批量合同、云端操作不跳转合同和同步反馈合同定向通过，`npm run lint` 通过。Desktop `npm run build && npm run bundle:macos` 成功；候选及已装应用均为 Bundle ID `com.nanzhufeng.ai.desktop`、Team `457B263L9J`，严格验签通过。已将新包原位更新至 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`，旧包保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-sync-ui-20260914-1255.app`。更新前后用户 SQLite `quick_check=ok`，工作区 `1`、聊天尝试 `16`、已选同步记录 `7`、同步通知 `18`，未启动或改写数据。
+- **Desktop 真实回读（2026-09-14）：** 已从刚原位更新的正式包正常启动；初始短暂空列表后既有本地历史恢复。真实账号“读取云端列表”后显示 1 条置顶加 5 条最近云端会话，当前本地会话未被跳转；直接打开其中一条后正文、模型及可编辑输入框均可用。云端批量编辑即时显示每行选框和固定在左下的“全选／删除／完成”操作栏，退出后仍停留云端列表。读取前后 SQLite `quick_check=ok`，工作区 `1`、聊天尝试 `16`、已选同步记录 `7`、同步通知 `18`。本轮没有删除、上传或改写云端对话。
+- **仍待真实验收：** Android 正式包需由用户手动执行读取云端列表、直接打开／继续和取消同步保留本地。Desktop 的“取消同步只删除云端副本”已有上一轮真实回读证据；本轮不重复删除用户云端数据。没有 Android 真实账号回读，不得称“同步彻底打通”。
+
+## 2026-09-14：Android 直接同步旧记录迁移提示修复（待用户手动验收）
+
+- **已确认根因：** 手机上的“该对话正在由原设备迁移为直接同步，请稍后刷新列表。”并不代表存在迁移任务、进度或自动重试。Android 把不能以直接格式打开的记录统一伪装成该文案；同时旧的、已经手动同步且本机仍有来源对话的回执，即使远端仍为旧格式，也会被错误当作“内容未变”而跳过重写。
+- **本轮修复：** 用户点“读取云端列表”时，只先迁移当前账号已存在回执、且本机仍保留源对话的旧格式记录；不扫描、上传或删除其他本地对话，缺少源对话或无关联云端记录也不处理。同步 owner 只有远端已为直接格式且本机内容哈希一致时才可判定无需写入。格式/完整性不通过的直接记录改为诚实提示“云端对话完整性校验未通过，本机内容未改动”，移除没有完成条件的“稍后刷新”。
+- **自动与正式包证据：** `P7DAccountSyncUiContractsTest` 为 12/12 通过；`assembleRelease`（含 `lintVitalRelease`）通过，`git diff --check` 通过。新候选为 `app/build/outputs/apk/release/南枫AI.apk`，包 `com.nanzhufeng.ai`、`66 / 0.3.0-p10j`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。已与 OPPO 已装包逐项核对后执行 `pm install -r --user 0`；覆盖后 `ceDataInode=1459104`、首次安装时间不变。未卸载、清数据、启动 App 或运行任何 `connected*AndroidTest`。
+- **仍待真实验收：** 用户手动启动这次覆盖后的正式包，在“Google 账号与同步”点“读取云端列表”，确认不再显示旧迁移等待文案，并继续验证云端页、原对话打开/继续和“取消同步”仅移除云端副本。本轮尚未读取、输出或保存会话正文、恢复码、密文或 access token。
+
+## 2026-09-14：Desktop → Android 直接同步内容哈希兼容修复（待用户手动验收）
+
+- **已确认代码层根因：** Desktop 的直接同步用 `serde_json` 输出字符串，Android 却使用 `JSONObject.quote` 重算内容哈希；后者会额外转义 `</` 及 `U+2000..U+20FF`。因此 Desktop 已提交、服务端原样返回的直接信封可在 Android 预检通过，却会在打开时因 payload 字节数／哈希不一致被拒绝。截图中的“云端对话完整性校验未通过，本机内容未改动。”正是这个保护门生效，不能靠重试绕过。
+- **本轮修复：** 直接同步的 Android 新写入和读取改用与 Desktop `serde_json` 一致的 JSON 字符串规范化；读取同时只在旧 Android 自己的历史字节数与哈希精确匹配时兼容旧拼写，绝不跳过完整性校验。新增回归覆盖 Desktop 风格的 `</script>` 与 Unicode 分隔符信封。
+- **自动与正式包证据：** `P7ASyncContractsTest`（含新跨端字符串边界）与 `P7DAccountSyncUiContractsTest` 定向通过；`assembleRelease`（含 `lintVitalRelease`）通过。正式包再次验签为 `com.nanzhufeng.ai`、`66 / 0.3.0-p10j`、证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`，并已用 `pm install -r --user 0` 同签名保数据覆盖 OPPO。覆盖后 `ceDataInode=1459104` 和首次安装时间不变；未启动 App、未卸载或清数据。
+- **仍待真实验收：** 覆盖会使 Android 回到桌面，必须由用户手动打开正式包后点“读取云端列表”。只有该真实账号链路读到原会话并继续／取消同步保留本地后，才可称同步闭环。
+
+## 2026-09-14：双端直接云同步与侧栏统一交接（进行中，切换新线程）
+
+- **当前目标与完成定义：** 用户要求“彻底打通同步功能才能结束”。完成不能用构建或静态测试替代：Desktop 与 Android 都必须在正式包中保留本地会话、读取同一账号的云端列表、直接打开/继续原始会话、云端取消同步只移除云端副本，并由真实设备与账号链路分别证明。
+- **本轮实现：** Android/ Desktop 的云端列表均改为原始本地会话的筛选投影，读取完成后直接显示云端页，不再出现“恢复为新工作区”等中间操作。云端行复用本地的打开、继续、编辑、置顶、收藏、删除、日期和批量删除；唯一差异是云端菜单提供“取消同步”，并保留本地对话。同步载荷保留置顶、归档与收藏，Qwen/智谱等末尾未完成回复不会覆盖此前 `COMPLETE` 对话前缀；列表缓存按账号持久化，读取过一次后重开仍显示。30 秒的变更合并同步与 12 小时后备同步均已接入。
+- **界面合同：** 两端侧栏中“本地/云端”居中并占左栏三分之一；手写笔（批量删除）和读取云端图标固定在最右、使用浅白圆形底并一起缩小；“已置顶/最近”标题保持正常尺寸。设置“恢复与安全”严格保留手机端样式的两个大胶囊：`更换恢复码 / 已丢失`、带云下载图标的`读取云端列表`，删除其余解释性小字，仅保留最近同步时间。
+- **当前正式产物与回滚：** Android release 为 [`南枫AI.apk`](../app/build/outputs/apk/release/%E5%8D%97%E6%9E%ABAI.apk)，包 `com.nanzhufeng.ai`，`66 / 0.3.0-p10j`，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`。Desktop 候选已经以同 Bundle ID `com.nanzhufeng.ai.desktop`、相同 Apple Development Team `457B263L9J` 原位覆盖 `/Users/nanzhufeng/Applications/南枫 AI Desktop.app`，覆盖前版本完整保留在 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-cloud-sidebar-compact-20260914-0110.app`；覆盖后 SQLite `quick_check`/`integrity_check` 均为 `ok`。运行中的旧 Desktop 进程须正常退出再打开，才能对最新紧凑侧栏做像素级回读。
+- **本轮自动证据：** Android `P7DAccountSyncUiContractsTest` 与 Release `assembleRelease`（含 `lintVitalRelease`）通过；Desktop `desktop-account-sync.test.mjs` 为 13 passed / 0 failed / 12 retired skipped；Desktop bundle 已 `codesign --verify --deep --strict` 通过。`git diff --check` 对本轮同步/侧栏文件通过。
+- **真实 Desktop 证据：** 已用应用内“读取云端列表”实际读取当前已登录账号，云端页切换成功并显示 6 条云端会话。SQLite 回执核对显示它们为 6 个不同 `conversation_id`（标题相同不等于同一对话），因此不得按标题去重、合并或删除。该验证没有上传、删除或改写任何云端文档。
+- **未完成 / 风险：** OPPO `3B157F009E800000` 当前不在 `adb devices -l` 中（仅有 `emulator-5592`，严禁对模拟器安装）。已创建心跳自动化 `oppo`：OPPO 重连为 `device` 后，先核对候选与设备包名/版本/签名，再只做同签名保数据覆盖安装；禁止卸载、清数据、启动应用或任何 `connected*AndroidTest`。Android 真机读取云端列表、直接打开/继续和取消同步保留本地的可见验收仍待设备重连完成。真实 Desktop 云端读取已通过，但需重开刚覆盖的包后复核紧凑侧栏视觉。
+- **2026-09-14 后续实测（Desktop 取消同步已闭环，Android 未闭环）：** OPPO 已重连为 `device`。候选 APK 与已装包均为 `com.nanzhufeng.ai` `66 / 0.3.0-p10j`，并由本地与设备 base APK 的 `apksigner` 回读确认同一 SHA-256 证书 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8` 后，执行 `pm install -r --user 0` 成功。覆盖前后 `ceDataInode=1459104`、首次安装时间不变、`stopped=false`；临时 APK 已清理；未启动 Android App，未运行任何 `connected*AndroidTest`。Desktop 已正常退出旧进程并从已覆盖包重新启动；短暂空侧栏后，SQLite `quick_check=ok` 的既有本地会话恢复可见。应用内再次真实读取当前账号云端列表，显示 6 个同标题但独立的云端行，未按标题合并；直接打开其中一条后仍可在本地侧栏和原会话中继续。随后对该条执行“取消同步”：本地 SQLite 仍为 `855` 个会话、`5,158` 条消息且 `integrity_check=ok`，已选同步回执由 `7` 降为 `6`；重新读取真实云端列表为 `5` 条，证明仅移除了该云端副本，其他 `5` 条未受影响。尚未完成：Android 可见链路仍受“不可启动主设备 App”门禁限制，需由用户手动启动已覆盖的正式包后再验收读取、直接打开/继续与取消同步保本地。
+- **下一线程第一步：** 先运行 `adb devices -l`，仅在 `3B157F009E800000` 显示为 `device` 时执行正式 APK 的同签名保数据覆盖；同时正常重开已覆盖的 Desktop，通过“云端”页验证居中三分之一胶囊、右侧两个圆形图标及直接打开原对话。不得读取、输出或保存恢复码、会话正文、密文或 access token。
+
+## 2026-09-13：南枫云真实提交 400 的生产根因修复与双端保数据更新
+
+- **根因与生产修复：** 已认证 Desktop 的真实加密提交此前稳定返回 PostgreSQL `2201B`。根因是云端 envelope 校验函数把密文长度写入单个正则重复范围，超出 PostgreSQL 正则引擎支持的上限；这与 Google 登录、恢复码、网络或 Android 代码无关。P7-G 已在生产 SQL Editor 成功部署：密文校验改为固定字符集正则加独立长度判断，并已刷新 PostgREST schema。迁移不读取、记录或展示任何恢复材料、会话正文或密文。
+- **真实端到端证据：** 部署后，以 Desktop 已登录的应用私有会话对一条已由用户选择同步的对话运行实际提交路径，完成加密提交、受认证云端回读 hash/revision 校验和本机同步回执写入；复跑同一受控探针确认回执保留。此前错误状态不再被伪装成成功。
+- **客户端防回归：** Desktop 将所有 4xx 服务体仅在内存中收敛为已定义协议哨兵或受限错误码，绝不写入日志、诊断或用户提示；`2201B` 也有明确的安全状态。提交失败文案与读取失败文案分开，避免将提交问题错误写成“读取”。P7-G 静态迁移 4/4、Desktop 同步前端 17/17、Rust 账户同步 19/19 通过。
+- **覆盖与边界：** Desktop 当前正式包已同 Bundle ID/同开发团队验签后保数据覆盖，旧包保留为 `南枫 AI Desktop.pre-sync-validator-20260913-1741.app`，新包已原生启动。Android 正式包继续为 `com.nanzhufeng.ai` 66 / `0.3.0-p10j`，已在 OPPO 做同签名保数据覆盖；未卸载、清数据、启动设备 App 或运行任何仪器测试。下一项且仅剩的真实端侧验收，是用户在 Android 的“读取云端列表”中读到该条目并按自身恢复保护完成恢复；不得代填或记录恢复码。
+
+## 2026-09-13：南枫云同步生产基础层补齐与 Desktop 真实只读回读（未写入用户云端数据）
+
+- **真实根因：** 目标生产项目此前只存在 P7-F 的 `nanfeng_sync_list_documents`，却漏掉 P7-C 的两张加密同步表及四个基础读写 RPC。列表函数没有可用底座，PostgREST 不能暴露完整同步能力，Desktop 因而持续显示“南枫云同步服务暂不可用”。这不是手机端代码、模型、macOS Keychain 或恢复码错误。
+- **生产修复：** 已按顺序部署 P7-C 基础迁移、P7-F 列表迁移，并刷新 PostgREST schema。生产库只读核验显示 `read_account_key`、`put_account_key`、`read_document`、`commit_document`、`list_documents` 五个 RPC 均存在，且每个只授予 `authenticated`；直接表访问仍为默认拒绝。未读取、输出或改写任何用户密文、恢复码或对话正文。
+- **客户端真实验证：** Desktop 在应用内完成 Google/Supabase 会话后，点击“读取云端列表”已由旧的服务不可用转为“当前账号没有可恢复的云端对话”。这证明受登录态保护的真实列表 RPC 已成功执行；当前账号尚无手机端手动同步上传的可恢复对话，故没有进入恢复码/导入步骤。
+- **空云端迁移补齐：** Keychain 退役后若旧确认标记仍在、应用私有恢复材料不存在且云端确实为空，Desktop 过去只有“输入已有恢复码”死路。现在候选包在真实登录态下会再次读取云端列表，并且仅在云端为空、本机无已选同步回执、无恢复码轮换时开放“建立新的恢复码”；它不会读取 Keychain、改写任何对话或上传数据。新命令已纳入最小 Tauri ACL。真实候选端已验证：读空列表 → 自举 → 显示“创建恢复码”。
+- **当前真实状态：** 已生成一次性恢复码，桌面 SQLite 仍为 `AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION` / `recovery_confirmed=0`；没有伪装成完成、没有写入任何用户云端数据。必须由用户实际保存该码并在应用中点击确认，才能安全生成应用私有材料、选择一条本机对话并上传；之后 Android 以同一恢复码登录读取并恢复。Android 针对 P7-C RPC、P7-F 已选对话同步与 Room owner 的 JVM 回归本次通过；无需为已部署的 RPC 基础层另改 Android 源码。
+- **防回归：** `p7e-supabase-readiness.sh` 现在明确检查 P7-C 基础迁移、P7-F 列表迁移及五个 RPC 合同是否齐全；Runbook 禁止“只部署列表接口”，要求部署后回读五个 authenticated RPC。
+
+## 2026-09-13：Desktop 账户同步凭据改为应用私有存储（候选包已启动，未覆盖安装）
+
+- **根因：** Provider API Key 已迁入应用私有存储，但 Google 会话、恢复包装材料和同步数据密钥仍由 macOS Keychain 适配器保存；因此云端读取可弹出系统“登录”钥匙串密码框。这既违背了“软件自身管理凭据”的产品边界，也会把同步可用性错误地依赖到系统授权 UI。
+- **修复：** 删除账户同步与 P7-B 状态路径中的 Keychain 调用和依赖；新增 `account-sync-credentials-v2` 应用私有 AES-GCM 存储，安装本地密钥与加密记录均在 Desktop 私有根目录，权限收紧为目录 `0700`、文件 `0600`。会话刷新、云端列表、同步提交、恢复码和定期同步均改走同一私有 owner。
+- **迁移边界：** 为保证新包绝不读取系统钥匙串，旧的 Keychain 会话不会被迁移或探测；已经存在于应用私有目录的会话可继续使用，私有目录不存在或无有效会话时才需在应用内重新完成 Google 登录。不会请求 macOS 钥匙串密码，也不会把新会话、恢复材料或数据密钥写入钥匙串。
+- **验证：** 私有存储加密回归、Rust library `259/259`、Desktop Node `389/389`、lint、`cargo check` 和 `git diff --check` 通过；候选包严格验签并已原生启动，未出现钥匙串授权弹窗。未进行云端写入；重新登录后才可继续做真实只读云端列表验证。
+
+## 2026-09-13：Desktop 会话标题区渐隐与品牌副标题收敛（未覆盖安装）
+
+- **标题区：** 顶部正文渐隐从 `112px / 40%` 调整为 `148px / 46%`，并加重中段不透明度；滚动正文接近标题区时会平滑淡出，标题栏和右侧操作仍位于独立可点击层，未采用会遮挡交互的实心蒙层。
+- **标题文案：** 已移除当前会话标题上方冗余的“南枫 AI”品牌副标题，仅保留实际会话标题，不影响侧栏品牌、搜索页、设置页或应用名称。
+- **验证：** Desktop Node `389/389`、lint 与 `git diff --check` 通过。未覆盖安装；需要由新包的原生窗口确认最终观感。
+
+## 2026-09-13：Desktop 回答联网事实与上下文来源去重（未覆盖安装）
+
+- **根因：** “本次回答信息”把上下文来源审计误当作联网事实，并且投影中根本没有 `webSearch` 字段；即使同一 Answer 已有完成 Attempt，前端也会把 `undefined` 显示成“未记录（旧回答）”。来源列表又逐项平铺同类审计数据，默认标题相同的多条 Memory 因而看起来像重复记忆。
+- **修复：** Attempt 新增 `web_search_verified` 迁移字段；`web_search_route` 持久化“是否请求联网”，响应中有服务商工具／安全来源证据才持久化“已实际联网”。弹窗现在明确区分“本次未启用联网”“已请求联网（服务商未返回核验依据）”和“已实际联网（服务商返回核验依据）”，不再用“旧回答”掩盖投影缺字段。开启联网但服务商没有返还任何可核验工具／来源证据的回复会以 `WEB_SEARCH_NO_SOURCES` 失败，而不会保存为无法核验的成功回答。
+- **来源收敛：** 弹窗按来源类别合并同名条目；同标题同正文的 Memory／资料库在请求组装阶段只进入一次，避免同步重试或历史导入的不同 ID 重复消耗上下文。不同正文的资料仍保留，只以一条类别行展示其标题。
+- **验证：** Desktop Node `389/389`、普通聊天 Rust 定向 `27/27`、`cargo check`、lint 与 `git diff --check` 通过。未触发真实 Provider、未读取用户正文、未覆盖安装；原生真实联网／来源证据仍须在新包手动确认。
+
+## 2026-09-13：Desktop 图片预览触控板切换、缩放与回闪修复（未覆盖安装）
+
+- **已证实根因：** 图片预览每次前后切换都会先把 `imagePreview` 替换为 loading 对象并重绘，已显示图片被同步卸下，原图读取／解码完成后才重新插入，因而出现回闪。横滑手势的 `lockUntil` 一旦设置即永久吞掉连续事件，且略带纵向分量的横滑会落入通用 wheel 缩放，分别造成“几次没有反应”和“横滑误放大”。
+- **修复：** 切图改为保留当前已解码画面，在后台读取、预解码下一张后才原子替换；相邻图以最多两张的有界缓存预热，快速反向或连续切换会复用同一读取结果，不复制整组图片。触控板以单一手势 owner 判定轴向、一次手势只切一张、空闲后恢复下一次切换；普通双指滚动不再缩放，只有 macOS 的 Ctrl-wheel pinch 可以缩放。相邻原图失败时保留当前画面并显示错误，不清空预览。
+- **验证：** 新增横滑恢复、斜向横滑不进入缩放、pinch 放行的 Node 回归；定向 `3/3`、Desktop Node 全量 `386/386`、lint、typecheck、静态 build 与 `git diff --check` 通过。本项尚未覆盖安装或在原生 WebKit 进行人工触控板验收；不会以静态验证代替该步骤。
+- **预览导航统一：** Android 图片预览新增与顶栏同一材质的 `52dp` 圆形上一项／下一项控件及当前位置；PDF 前后页也改复用该控件。Desktop 图片预览同步提高为 `52px` 高对比圆形、完整 hover／focus／disabled 状态。仅处理媒体预览中的分页切换，列表行尾“进入”箭头维持轻量导航语义。新增 Desktop 视觉合同 `4/4`、Android `P6F2BImagePreviewUiContractsTest 10/10` 通过；未覆盖安装。
+- **图片组选中态：** Desktop 回答图片缩略图此前被通用 `button:hover` 规则清掉主题色边框，悬停时视觉上像取消选择。现将选中态自身设为普通、hover、focus 的单一 outline owner，始终保留主题色 `2px` 线框、轻底色与焦点可见性；另以 `1px` 轻上浮及低透明暖色投影表示激活，未选缩略图仍只显示轻量 hover。`fb-p6-080` 定向 `3/3`、lint、typecheck、静态 build 与 `git diff --check` 通过；未覆盖安装。
+
+## 2026-09-13：Desktop 搜索结果精确附件定位修复（未覆盖安装）
+
+- **双端主界面反向定位补充：** 从会话内附件“搜索定位”进入搜索页时，Desktop 旧代码会把附件名写进关键词并切换至对应媒体类别，Android 则切换至对应媒体类别；两者都会把完整搜索页错误收窄。现统一为清空关键词、进入“全部”目录，保留普通分页结果；Desktop 会按 `workspace + conversation + message + attachment` 精确扫描后续页，找到目标才居中滚动并以主题色短暂闪烁，Android 同样按已有三元锚点在完整目录内滚动并闪烁。目标已从索引删除时保留完整结果且给出诚实提示，绝不伪造单条筛选结果。
+- **回归补充：** Desktop 新增主界面附件反向定位合同回归，Node `386/386`、lint、typecheck、静态 build 通过；Android `MainAttachmentSearchLocateUiContractsTest` 与 `ConversationSearchSurfaceContractsTest` JVM `11/11` 通过。未覆盖安装，未改写真实会话、索引或附件。
+
+- **已证实根因：** 本地搜索索引本来就为每条附件结果持久化了精确 `message_id + attachment_id`；当前工作区索引实际有图片 1,481、视频 66、音频 7、文件 128 条且均带附件 ID。旧前端却只以 `messageId` 查找并滚动 `.chat-message`，完全丢弃 `attachmentId`；同一消息含多张图片或多个附件时，因此只能回到笼统消息位置。
+- **修复：** 新增单一锚点 owner，在所属消息内按精确附件 ID 选择目标，滚动与闪烁都施加到该附件卡；文本命中仍定位消息本身，附件在定位前已被删除时也只安全回退至所属消息。回答图片组会先选择检索命中的那张图片，再执行滚动，避免回到同组默认首图。图片、视频、音频、PDF、ZIP 与其他文件共用这一附件锚点，不再各自实现。
+- **回归：** 附件精确命中、文本/已删除附件回退、图片组选择、静态构建 import 图均有回归；定向 28/28、Desktop Node 385/385、lint、typecheck、静态 build 与 `git diff --check` 通过。未改写索引、附件、会话或已安装包；真实 UI 点击验收待新包覆盖后以既有图片附件确认。
+
+## 2026-09-13：Desktop 大视频首帧与媒体分段读取修复（未覆盖安装）
+
+- **已证实根因：** 旧 `read_desktop_video_preview` 在每次打开时持有可变 `DesktopWorkspaceStore`，完整读取并 SHA-256 扫描整个 MP4，再解析时长；`nfai-media` 协议遇到无 `Range` 的 WebKit 首次探测还会读入整段视频。真实工作区中单个 MP4 可达约 76 MiB，因此点击到首帧会被重复全文件 I/O、内存复制和 store 锁竞争拖慢，而非播放控件或网络问题。
+- **修复：** 视频打开改为独立只读 SQLite 连接，仅校验工作区归属、摘要形状、私有文件精确长度及最多 `64 KiB` 的 ISO-BMFF 头；导入时的完整摘要校验仍是私有副本入库门。时长不在头部的 tail-moov MP4 不再等待全文件扫描，由 WebKit 的分段 metadata 读取回填。媒体 URI 协议也直接读取不可变 `store_paths`，不再抢可变锁；无 `Range` 的 GET 返回首个最大 `2 MiB` 的 `206` 分段，后续数据仍由播放器按需读取，绝不再整段复制。
+- **回归：** 新增视频首帧性能边界测试；Desktop Node `382/382`、Rust library `255/255`、lint、typecheck 与 `git diff --check` 通过。未改写数据库、附件或已安装 Desktop 包，亦未对用户真实视频执行播放操作；实际硬件解码首帧仍需以新包在用户视频上确认。
+
+## 2026-09-13：Desktop 发送回执路由、应用私有模型凭据与保数据覆盖
+
+- **并发路由修复：** 新会话发送不再根据“同一工作区里任意 `PARTIAL` 会话”猜测选中目标。前端为每次 Send 创建无正文的 `clientSubmissionId`，Rust 只把该回执随同同一次 Attempt 的运行时事件回传；只有工作区、会话和回执三者都匹配，前端才首次选中该会话并滚至最新。后续流式、计费和标题事件不能再次触发滚动；轮询只刷新持久化投影，不再参与路由认领。
+- **模型凭据统一：** 已显示或未保存的 API Key 离开“模型配置”页面即从前端状态抹除。Provider API Key 的唯一实际 owner 是应用私有 AES-GCM 加密存储；历史系统凭据兼容类型永久 fail-closed，已移除其 Keychain 读取／写入／授权代码，不存在 Provider Key 的系统授权回退。
+- **自动验证：** Desktop lint、typecheck、Node `380/380`、Rust library `255/255` 通过，包含“错误回执不可劫持新会话”“同一回执只滚动一次”“离开设置页清空密钥草稿”和“退役系统凭据入口拒绝”的回归；`git diff --check` 通过。未发起真实 Provider、Google/Supabase 云同步请求或读取密钥。
+- **Desktop 覆盖：** 候选与安装后主程序 SHA-256 均为 `1605e1fa1a190bd600b6cc959394a517342d39b6b2e6c2d6f7e3196cef343c31`；Bundle ID `com.nanzhufeng.ai.desktop`、版本 `0.6.0-p6d-dev`、Team `457B263L9J` 严格验签通过。覆盖前、覆盖后数据库 `quick_check`／`integrity_check=ok`、87 表、1 工作区、7,322 搜索索引；既有原生会话与 Composer 已回读。被覆盖包保留于 `/Users/nanzhufeng/Applications/南枫 AI Desktop.pre-submission-receipt-entropy-20260913-1345.app`；未触碰 Android。
 
 ## 2026-09-13：Desktop 自动会话标题与 Android 规则对齐修复与保数据覆盖
 

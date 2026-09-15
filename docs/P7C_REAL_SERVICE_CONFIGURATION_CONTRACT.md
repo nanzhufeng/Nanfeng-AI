@@ -1,7 +1,7 @@
 # 南枫 AI P7-C Google/Supabase 可部署服务合同
 
 日期：2026-08-13  
-状态：P7-C 本地工件完成；真实项目部署、Google OAuth 和真实账号/密文回读仍是独立外部门。
+状态：P7-C／P7-F 同步 RPC 已在目标生产项目部署并由 Desktop 登录态只读列表实际回读；Google OAuth 已建立应用账号会话。跨端密文恢复仍需要手机端已有已上传对话与用户原恢复码，是独立验收门。
 
 ## 目标与不变量
 
@@ -13,12 +13,13 @@ P7-B 仍负责本机 32-byte data key 与 Keystore/Keychain 封装；P7-A 仍是
 
 ## 可部署 Supabase 合同
 
-迁移：`supabase/migrations/202608130001_p7c_secure_sync.sql`。
+迁移按顺序为 `supabase/migrations/202608130001_p7c_secure_sync.sql`（P7-C 基础表与四个受保护 RPC）及 `supabase/migrations/202609120002_p7f_list_sync_documents.sql`（P7-F 加密文档列表 RPC）。列表 RPC 不能脱离 P7-C 单独部署。
 
 - `nfai_account_keys` 和 `nfai_sync_documents` 以 `user_id=auth.uid()` 隔离；两表启用并强制 RLS，撤销 anon/authenticated 的直接表权限，因此默认拒绝。
 - 账号 key record 只能通过幂等 `nanfeng_sync_put_account_key` 首次写入；metadata hash 不同即拒绝，避免悄然替换恢复材料。
 - 文档只能通过 `nanfeng_sync_read_document` 和 `nanfeng_sync_commit_document` 存取。提交用 user/app/document advisory transaction lock，再比较 `expectedRevision`，仅接受 `nextRevision` 的 P7-A v1 envelope，写后返回 revision/hash。过期、匿名、跨用户、越限、未知版本、字段错误和哈希错误均拒绝。
 - P7-C 没有删除 RPC：尚无用户可解释的远端删除/墓碑/恢复合同，故不允许远端删除来绕过 revision 语义。P7-D 决定 UX 后再单独立约。
+- 生产部署的就绪证明是五个 RPC 同时存在，并都只授予 `authenticated`：`read_account_key`、`put_account_key`、`read_document`、`commit_document`、`list_documents`。只看到 `list_documents` 不构成同步服务可用。
 - 真实部署后的只读核验必须确认表、RLS、函数、grant 与匿名拒绝；不读取任何用户 ciphertext。
 
 `google-avatar` Edge Function 只从已验证 JWT 的 Google identity metadata 取头像地址，且只接受 HTTPS `*.googleusercontent.com`。它不接受请求给出的 URL，不接受 userinfo/IP/root domain/非默认端口；每次 redirect 都重新验证，最多 3 跳，整体 8 秒、最多 2 MiB、只返 `image/*`，不写 Storage/数据库/缓存。函数仅是受限读取代理，不保存头像。

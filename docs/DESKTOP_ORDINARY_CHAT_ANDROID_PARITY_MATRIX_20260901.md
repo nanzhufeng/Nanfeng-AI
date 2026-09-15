@@ -29,7 +29,7 @@
 | Direct | 手动 override 固定 Provider／模型，失败不换路由 | P6G override 仅本地保存 | 真实执行读取同一 override；精确模型未配置／无凭据／能力不足时 fail closed |
 | Auto | 发送前一次确定性选择，能力／健康／配置过滤；一次发送不自动换模型 | P6G router 与持久 route metadata 已有，但 catalog 未接普通执行 | 复用 P6G route metadata；同一 Attempt 只执行一次选中结果；候选失败不再路由 |
 | Compare | 双分支独立 Attempt；普通单路不借 Compare 降级 | 仅未组合的 fail-closed Compare owner | 本轮普通聊天不启用 Compare；原 Compare 继续 fail closed，禁止被普通发送旁路调用 |
-| Provider／端点／凭据 | 固定 Provider ID、固定端点、scoped credential store；正文只在授权调用栈 | Desktop 设置已有固定端点、Security.framework Key owner、启用／preset | 普通执行仅在点击发送后 scoped 读取所选 Provider Key；不显示、不记录、不备份、不同步 |
+| Provider／端点／凭据 | 固定 Provider ID、固定端点、scoped credential store；正文只在授权调用栈 | Desktop 设置已有固定端点、应用私有加密 Key owner、启用／preset | 普通执行仅在点击发送后 scoped 读取所选 Provider Key；不显示、不记录、不备份、不同步 |
 | stream／non-stream 解码 | Provider adapter 规范化正文、reasoning、usage、来源与终态 | 只有设置连接测试 | Rust 严格解析 OpenAI-compatible SSE／JSON；原始 payload 不落库；无明确终态不得标 COMPLETE |
 | usage／cost／延迟／健康 | 绑定实际 Attempt 和 Assistant；Provider 报告优先，本机估算次之；reasoning token 分离 | 已有独立 usage ledger，但普通聊天无写入 | 先保存回复，再追加同 Attempt 账本；Provider cost 为最高事实，价格可核验时才估算，未知不写 0；保存安全延迟与错误类别 |
 | 个性化／Memory／上下文 | `LocalContextBroker` 每次按开关选择最小必要资料并绑定回答级审计 | 设置页明确禁用，普通聊天没有消费者 | 本轮不伪造已对齐：仅当前分支历史进入请求；个性化／Memory／资料库保持禁用并在交接列为后续缺口 |
