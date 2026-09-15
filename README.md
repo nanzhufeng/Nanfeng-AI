@@ -9,7 +9,6 @@
 - Android：`1.0.0` APK
 - macOS：`1.0.0` DMG（Apple Development 签名，未公证）
 
-下载后请用 Release 内的 `SHA256SUMS.txt` 校验。
 
 ## 源码
 
