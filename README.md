@@ -4,10 +4,10 @@
 
 ## 下载
 
-正式版：[v1.0.0](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.0)
+正式版：[v1.0.1](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.1)
 
-- Android：`1.0.0` APK
-- macOS：`1.0.0` DMG（Apple Development 签名，未公证）
+- Android：`1.0.1` APK
+- macOS：`1.0.1` DMG（Apple Development 签名，未公证）
 
 
 ## 源码

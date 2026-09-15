@@ -189,6 +189,7 @@ test('settings expose the latest phone values in the desktop primary and seconda
   for (const token of ['Desktop 版 0.0.1', 'macos', 'aarch64', '开发时间']) assert.ok(about.includes(token));
   assert.ok(!about.includes('读取中'));
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
+  assert.match(css, /\.android-settings-about small \{ display: block; margin-top: 6px; \}/);
   assert.match(css, /\.android-settings-about > div:not\(\.android-settings-divider\)/);
   assert.match(css, /\.android-settings-about > \.android-settings-divider \{ height: 1px; min-height: 1px; padding: 0;/);
 });

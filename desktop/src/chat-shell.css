@@ -1315,6 +1315,7 @@
 .android-settings-status-card strong { font-size: calc(14px * var(--app-font-scale, 1)); }
 .android-settings-about p,
 .android-settings-status-card p { margin: 5px 0 0; color: #747a75; font-size: calc(11px * var(--app-font-scale, 1)); }
+.android-settings-about small { display: block; margin-top: 6px; }
 .android-settings-status-card small { display: block; margin-top: 8px; color: #747a75; }
 .android-account-sync-page .android-account-status-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; min-height: 108px; padding: 20px 24px; }
 .android-account-status-content { min-width: 0; max-width: 860px; }
