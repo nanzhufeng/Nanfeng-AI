@@ -1,0 +1,74 @@
+name: Source verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-verification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol-and-gateway:
+    name: Protocol, Supabase contracts, and gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: upload-gateway/go.mod
+      - name: Run versioned protocol fixtures
+        run: |
+          node protocol/scripts/run-golden.mjs
+          node protocol/scripts/run-v2-golden.mjs
+          node protocol/scripts/run-sync-golden.mjs
+      - name: Run local Supabase policy contracts
+        run: node --test supabase/tests/*.test.mjs supabase/functions/google-avatar/policy.test.mjs
+      - name: Check release-evidence verifier syntax
+        run: |
+          python3 -m py_compile scripts/verify_release_evidence_manifest.py
+          python3 -m unittest scripts/tests/verify_release_evidence_manifest_test.py
+      - name: Test upload gateway
+        working-directory: upload-gateway
+        run: go test -count=1 ./...
+
+  desktop:
+    name: Desktop source checks
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check JavaScript and generated-source boundaries
+        working-directory: desktop
+        run: |
+          npm run lint
+          npm run typecheck
+      - name: Run Desktop Rust library tests
+        working-directory: desktop/src-tauri
+        run: cargo test --lib
+
+  android-compile:
+    name: Android compile only
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Android Studio JBR
+        shell: bash
+        run: |
+          task_jbr_path="$(find /Applications -path '*/Android Studio.app/Contents/jbr/Contents/Home' -type d -print -quit)"
+          test -n "$task_jbr_path"
+          echo "JAVA_HOME=$task_jbr_path" >> "$GITHUB_ENV"
+      - name: Compile Android sources without an installable package
+        run: ./gradlew --no-daemon :app:compileDebugKotlin

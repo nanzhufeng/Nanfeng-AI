@@ -1,0 +1,31 @@
+{
+  "baselineHead": "ff9fd332636a5e3136e9b5278c25c14697b0a0ee",
+  "finalHead": "ff9fd332636a5e3136e9b5278c25c14697b0a0ee",
+  "businessTrackedPathsCompared": 976,
+  "businessChanges": [],
+  "preservedMissingPaths": ["app/src/main/icon-source/nanfeng_ai_launcher_source.jpg"],
+  "skills": {"count": 5, "yamlAndUi": "passed using Ruby YAML", "officialQuickValidate": "unavailable: Python environment lacks PyYAML"},
+  "documentLinks": {"checked": 241, "missing": [], "scope": "archive, experience, AGENTS, five skills and review report; historical handoff links excluded"},
+  "workflowAudit": {"hardErrors": 0, "retainedWarnings": ["global AGENTS soft size limit", "8 unrelated global GSAP skills lack UI metadata"]},
+  "diffCheck": "passed",
+  "newChecks": {
+    "json": 106,
+    "xmlSvgPassed": 83,
+    "historicalXmlFailed": 7,
+    "esmSyntax": 160,
+    "pythonSyntax": 6,
+    "shellSyntax": 6,
+    "golden": ["v1 passed", "v2 passed", "encrypted sync passed"],
+    "supabaseLocalTests": {"tests": 9, "passed": 9, "failed": 0},
+    "go": "go test -count=1 ./... passed",
+    "desktopTypecheck": "static command and keyboard boundary passed",
+    "desktopInventory": {"invokes": 143, "rustCommands": 184, "registeredCommands": 184, "missingImplementation": 0, "missingRegistration": 0, "unhandledRenderedActions": 0, "invokesWithoutDirectTestReference": 40, "actionsWithoutDirectTestReference": 87}
+  },
+  "reusedPriorFinalRegression": {
+    "businessCheckpoint": "50f4b32",
+    "rust": {"passed": 280, "failed": 0, "ignored": 1},
+    "desktopNode": {"tests": 436, "passed": 410, "failed": 14, "skipped": 12},
+    "androidJvm": {"tests": 1186, "failed": 7, "skipped": 3}
+  },
+  "limitations": ["No business changes, builds, installs, live services or commits in this retrospective", "Whole-file inventory is not line-by-line semantic proof", "No real credentials, private configs, databases or ignored artifacts read", "Static syntax checks do not compile Kotlin, Rust or SQL", "Test counts do not establish runtime coverage or remote deployment"]
+}

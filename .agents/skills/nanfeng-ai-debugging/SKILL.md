@@ -16,6 +16,7 @@ description: Diagnose Nanfeng AI Android, Desktop, storage, Provider, import, bu
 
 3. 从 UI 到真实 owner 追踪数据和状态：Android Activity／ViewModel／Room／Executor；Desktop ESM／Tauri command／Rust／SQLite。核对当前运行包是否包含正在检查的源码。
 4. 每次写一个假设、最小只读或隔离复现、成功／失败判据。先取计数／状态／安全错误码，再读必要源码片段；不输出正文、原始 Provider payload 或秘密。
+   - 同步错误逐层核对源端持久事实、wire、服务回读、目标端落库和显示投影；读取慢拆分网络、锁等待、解码、恢复与刷新，不用整段总耗时猜瓶颈。缺项先区分完整成员清单、恢复失败子集及旧缓存；不通过改名／删除真实会话制造实验。
 5. 流式异常沿 Attempt → Provider 事件 → runtime → 完整回复／终态事务 → UI 回读检查；超时与结果未知不能自动重发。费用异常区分目录上限、产品预算、Provider usage 和本机估算。
 6. 凭据异常先看 metadata presence、拒绝／不可用状态与签名身份；实际发送／测试连接才读 secret。不删现有密钥来试错，不后台循环弹授权。
 7. 导入／存储异常检查 source identity、资产 hash、occurrence、活动引用、物理字节及 journal；迁移用隔离库复现关闭重开／中断，不注入用户库。

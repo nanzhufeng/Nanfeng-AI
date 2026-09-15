@@ -1,5 +1,11 @@
 # 南枫 AI 当前交接
 
+## 2026-09-15：用户要求的完整项目复盘（仅文档／流程）
+
+- 基线 `ff9fd33`，全量清单 1,344 路径／154 本地提交；结构检查和定向语义核查见 [复盘报告](review/20260915-project-retrospective/REVIEW.md)。更新开发档案、长期 AGENTS、五类项目 Skill、可迁移经验，新增逐文件结构检查脚本；未改业务／配置／测试，未重新安装或访问真实服务，未提交。
+- 当前档案修正 Room 69／Desktop 42、目录统计和 direct 数据流；P7-F 首部加密承诺与当前 direct 实现仍冲突，记录后留待独立安全合同处理。当前前端 14／Android 7 失败照实保留，不能用历史全绿覆盖。没有修复用户真实历史标题或重新验证结算／删除闭环。
+- 非文档／流程的 976 个跟踪路径已比对，业务字节未变，原有图标源缺失与未跟踪截图保持。新跑协议、Supabase 9 项、Go、静态入口／命令检查；此前同源码最终回归复用，验证摘要见 [validation.json](review/20260915-project-retrospective/validation.json)。
+
 ## 2026-09-15：双端覆盖完成，当前代码 checkpoint 收口
 
 - 代码 checkpoint：`50f4b32`（101 个源码／测试／schema／协议／服务文件）。本节及领域合同随后以独立文档 checkpoint 固化；未推送远端。Supabase 两套本地静态合同 5 passed（`/tmp/nanfeng-checkpoint-supabase.log`），不代表本轮部署了服务端迁移。

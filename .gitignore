@@ -18,3 +18,21 @@ local.properties
 *.keystore
 keystore.properties
 signing.properties
+
+# Local credentials and deployment configuration. Examples remain trackable
+# only when they are explicitly named *.example.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+
+# Generated review output and local service state are never release evidence.
+desktop/output/
+output/
+supabase/.temp/

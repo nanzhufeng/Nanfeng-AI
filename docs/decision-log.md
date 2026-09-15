@@ -1,5 +1,12 @@
 # 南枫 AI 决策日志
 
+## 决策：首个 GitHub 远端保持私有单仓库，安装包按平台独立交付（2026-09-15）
+
+- 当前选择：Android、Tauri Desktop、跨端协议、Supabase 和附件网关留在同一个源码仓库；Android APK、macOS 包和未来 Windows 安装器分别构建、签名、校验并作为独立附件交付。Desktop 的 macOS 与 Windows 继续共用 `desktop/` 主线，Windows 只在 Windows 原生构建与验收环境产生候选包。
+- 截图门：Release 截图必须来自最终候选包安装/启动后的新采集，并由包 SHA-256、commit、设备、时间和截图 SHA-256 的 manifest 绑定。历史截图永久只作历史证据，不能改标或复用为“最新”。
+- 不采用方案：不把 macOS 包当成 Windows 包，不为 Windows 复制出第二份 Desktop 源码，也不因首次上传而把当前开发/验收 APK 发布为正式 Release。拆仓会使共享协议、同步变更和服务迁移失去原子历史。
+- 重新评估触发条件：平台和云端具备独立团队、节奏和版本化共享协议后，先建立兼容矩阵、跨仓迁移顺序与回滚方案，再评估拆仓。
+
 ## 2026-09-15：同步事实独立、读取隔离与双端覆盖证据
 
 - 标题不再借用会话时间裁决：采用可选独立 titleRevision，读写共享规则，同版本不同标题与无版本分歧保留冲突。不会按模型前缀改写历史标题。金额仍只同步已有服务端结算事实，不引入本地估算。依据：[P7-F 合同](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)与共享协议 fixture。

@@ -5,6 +5,7 @@
 - 先确认当前 checkout、工作树和 `docs/CURRENT_HANDOFF.md`；历史资料不证明当前状态。源码／可复现验证优先，冲突记录依据。
 - 会话／搜索／文件读取 `docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md`；设置读取 `docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md`；普通上下文读取 `docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md`；转写读取 `docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md`。Desktop、协议与服务读取对应 owner 的合同；入口索引见完整开发档案。
 - Android、Desktop、协议、Supabase 与附件网关分别确认实现及证据，各层证据不能互相替代。
+- 跨端同步先读 `docs/P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md`，区分当前 wire 格式与历史安全承诺；不得把认证、hash 或旧加密模块的存在当作当前路径端到端加密证据。
 
 ## 数据与执行边界
 
@@ -13,6 +14,7 @@
 - 授权业务正文和附件只进入其业务存储／导出 owner；凭据、恢复秘密、原始 Provider payload、无关正文和私人路径不得进入 Git、诊断日志或无正文审计。凭据 presence 只查状态，实际执行／测试连接／明确显示才读 secret；拒绝不等于未保存，不自动删密钥或后台重试。
 - 数据结构变化必须有连续前向迁移、版本化 schema 和定向升级验证；不改结构的持久化变化验证事务、并发、失败和关闭重开，不无故增加 schema。禁止 destructive fallback、删库或新装夹具冒充真实升级。
 - 外部动作保留 Attempt／receipt／provenance／幂等和真实归因；UNKNOWN 不静默重发。字节身份与 occurrence 分开，最后真实引用消失前不得删除共享附件。
+- 同步只传递有来源的事实，不按模型名／时间或当前设置重写用户历史；字段冲突沿领域合同处理。远端缺失清理须有完整身份清单与账号边界，恢复成功子集和网络失败不能当空清单。
 - 导入、备份、语义交换和加密同步使用各自严格格式与 owner；未知／歧义字段、来源或路径显式拒绝，不猜配、不把 Android 数据库当 Desktop 协议。
 - 模型变更贯通目录、凭据、路由、材料桥、预算、归因、费用与入口；原生能力、请求意图和实际结果分别记录。
 

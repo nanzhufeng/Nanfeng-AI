@@ -18,6 +18,7 @@ description: Validate Nanfeng AI Android, Desktop, protocol, and service changes
 4. Android：`./gradlew :app:testDebugUnitTest`，定向可用 `--tests`；相关 `:app:assembleDebug`，正式候选 `:app:lintRelease :app:assembleRelease`。不杀共享 Gradle、不清锁、不改验证 metadata 掩盖构建失败。
 5. Desktop：`npm --prefix desktop test`、`run lint`、`run typecheck`、`run inventory:audit`、`run build`；Rust 用 `cargo test --manifest-path desktop/src-tauri/Cargo.toml`。主题变化补 `run theme:computed-style`，相关 native bundle 用 `run bundle:macos`。遵从 package.json 当前脚本，不使用不存在的 React／Vite 入口。
 6. 协议按变更运行 `protocol/scripts/run-golden.mjs`、`run-v2-golden.mjs`、`run-sync-golden.mjs`。跨语言 owner 保真用 `scripts/verify-p6-v2-owner-fidelity-cross-platform.sh`；它只证明合成包兼容，不证明系统 picker 或真实用户迁移。
+   - 当前 direct 同步与旧加密 golden 分别确认覆盖；标题共享 fixture 必须由两端实际合并 owner 消费。补测离线改名后置顶、并发同版本冲突、任务重启、远端删除后续同步、空清单／坏身份／切账号，不用仅序列化成功代替持久化与合并验证。
 7. 网关在 upload-gateway 执行 `go test -count=1 ./...`；Supabase 使用 `node --test supabase/tests/p7c_static_contract.test.mjs supabase/functions/google-avatar/policy.test.mjs`。SQL 静态测试不替代真实 Postgres／RLS／RPC／Edge Function。
 8. 格式／脚本检查按真实解释器和文件类型执行；历史 UI dump 可能夹带日志，先区分业务配置与历史证据。源码字符串测试、模拟 transport 和预览 fixture 必须明确分类。
 
