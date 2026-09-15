@@ -3102,6 +3102,10 @@ private fun DrawerRoundIconButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    Box(
+        modifier = Modifier.size(36.dp),
+        contentAlignment = Alignment.Center,
+    ) {
     Surface(
         color = ForegroundSurface,
         contentColor = tint,
@@ -3128,6 +3132,7 @@ private fun DrawerRoundIconButton(
                 Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(scaledAppIconSize(13.dp)))
             }
         }
+    }
     }
 }
 

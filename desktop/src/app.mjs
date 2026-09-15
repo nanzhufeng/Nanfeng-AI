@@ -116,7 +116,7 @@ function clearCloudConversationCache() {
   try { window.localStorage.removeItem(cloudConversationCacheKey); } catch { /* cache is optional */ }
 }
 const initialProductSettings = parityPreferences.readProductSettings();
-const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, sidebarConversationList: 'recent', cloudConversations: [], batchEditing: false, batchSelectedConversationKeys: new Set(), chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', accountSyncProgress: null, scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchRevealTarget: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构' } };
+const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, sidebarConversationList: 'recent', cloudConversations: [], batchEditing: false, batchSelectedConversationKeys: new Set(), chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', accountSyncProgress: null, scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchRevealTarget: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构', buildEpochSeconds: 0 } };
 state.selectedWorkProjectId = null;
 state.assistantMessageMenu = null;
 state.cloudConversationOpening = null;
@@ -967,8 +967,12 @@ async function markConversationOpened(conversationId) {
 }
 async function markConversationUnread(conversationId) {
   const workspaceId = state.current?.summary?.id;
-  if (!workspaceId || !conversationId || !native) return;
-  applyConversationReadState(await invoke('mark_desktop_conversation_unread', { workspaceId, conversationId }));
+  if (!native) throw new Error('当前环境不支持保存未读标记');
+  if (!workspaceId || !conversationId) throw new Error('当前会话不可用');
+  const projection = await invoke('mark_desktop_conversation_unread', { workspaceId, conversationId });
+  const marker = projection?.conversations?.find(item => item.conversationId === conversationId);
+  if (marker?.manualUnreadAtMs == null) throw new Error('未读标记没有完成回读确认');
+  applyConversationReadState(projection);
 }
 const selectedModelService = () => state.modelServiceSettings.find(item => item.providerId === state.modelProviderId) || state.modelServiceSettings[0] || null;
 function modelServiceConfigurationStatus(settings = state.modelServiceSettings) {
@@ -1646,9 +1650,8 @@ function canRetainSidebar(previous, next) {
     && previous.sidebarOpen === next.sidebarOpen
     && previous.railCollapsed === next.railCollapsed
     && previous.profileOpen === next.profileOpen
-    // The compact local/cloud switch owns both its selected pill and the list
-    // below it. Retaining the old sidebar here would leave the control visually
-    // frozen even though the state has already changed.
+    // Cloud rows participate in the same sidebar projection as local rows.
+    // A new cloud array must therefore invalidate the retained list.
     && previous.sidebarConversationList === next.sidebarConversationList
     && previous.cloudConversations === next.cloudConversations
     && previous.batchEditing === next.batchEditing
@@ -1667,13 +1670,13 @@ function canRetainSidebar(previous, next) {
 }
 
 function patchRetainedSidebarRows() {
-  const showUnread = state.productSettings.unreadIndicators !== false;
+  const showAutomaticUnread = state.productSettings.unreadIndicators !== false;
   document.querySelectorAll('.chat-history-row[data-conversation-row]').forEach(row => {
     const conversationId = row.dataset.id;
     row.classList.toggle('selected', conversationId === state.selectedConversationId);
     const line = row.querySelector('.chat-history-title-line');
     const manualUnread = Number(state.manualUnreadAtMs?.get?.(conversationId) || 0) > 0;
-    const unread = showUnread && (manualUnread || state.unreadConversationIds.has(conversationId));
+    const unread = manualUnread || (showAutomaticUnread && state.unreadConversationIds.has(conversationId));
     const indicator = line?.querySelector('.chat-history-unread');
     if (!unread) {
       indicator?.remove();
@@ -3460,6 +3463,7 @@ function renderUnified() {
   if (retainedSidebar) retainedSidebar.replaceWith(document.createComment('retained-sidebar'));
   app.className = `app-shell chat-first ${standaloneWorkspacePage ? 'workspace-standalone-shell' : ''} ${visiblePane === 'settings' ? 'settings-mode' : ''} ${sidebarWorkMode ? 'work-mode' : ''} ${state.sidebarOpen ? 'fallback-sidebar-open' : ''} ${state.searchPanel ? 'search-mode' : ''}`;
   app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, syncedConversationKeys: new Set(state.accountSync?.syncedConversationKeys || []), conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
+  scheduleComposerModelPricingRefresh();
   if (retainedTranscript) {
     const slot = app.querySelector('[data-preserved-transcript-slot]');
     if (slot) slot.replaceWith(retainedTranscript);
@@ -5641,6 +5645,20 @@ app.addEventListener('click', async event => {
     }
     return;
   }
+  if (action === 'copy-account-recovery-code') {
+    event.preventDefault();
+    const payload = String(target.dataset.copyValue || '');
+    if (!payload) { state.error = '恢复码不可用，请重新创建。'; render(); return; }
+    try {
+      await navigator.clipboard.writeText(payload);
+      showCopyIconFeedback(target);
+      state.error = '';
+    } catch (error) {
+      state.error = `复制失败：${String(error)}`;
+      render();
+    }
+    return;
+  }
   if (action === 'open-assistant-message-menu') {
     event.preventDefault();
     toggleAssistantMessageMenu(target);
@@ -6180,7 +6198,7 @@ app.addEventListener('click', event => {
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   const action = target?.dataset.action;
-  if (!['show-google-login-requirements', 'sign-in-google-account', 'sign-out-google-account', 'create-account-recovery-rotation', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'load-account-cloud-documents', 'show-recent-conversation-list', 'show-cloud-conversation-list', 'open-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
+  if (!['show-google-login-requirements', 'sign-in-google-account', 'sign-out-google-account', 'create-account-recovery-code', 'confirm-account-recovery-code', 'recover-account-existing-recovery', 'create-account-recovery-rotation', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'load-account-cloud-documents', 'show-recent-conversation-list', 'show-cloud-conversation-list', 'open-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   if (action === 'load-account-cloud-documents') {
@@ -6265,6 +6283,21 @@ app.addEventListener('click', event => {
         cloudListReadGeneration += 1;
         clearCloudConversationCache();
         state.status = '已退出账号；本机对话与工作区保留不变。';
+      } else if (action === 'create-account-recovery-code') {
+        state.accountRecovery = { ...(await invoke('create_desktop_recovery_code')), setup: true };
+        state.status = '请保存恢复码并明确确认；确认前不会读取或上传云端对话。';
+      } else if (action === 'confirm-account-recovery-code') {
+        if (!document.getElementById('account-recovery-saved')?.checked) throw new Error('请先确认已保存恢复码');
+        state.accountSync = await invoke('confirm_desktop_recovery_code', { confirmationHash: state.accountRecovery?.confirmationHash });
+        state.accountRecovery = null;
+        state.status = '恢复保护已启用；云端只保存端到端加密封包。';
+        notifyAccountSync('success');
+      } else if (action === 'recover-account-existing-recovery') {
+        const recoveryCode = document.getElementById('existing-account-recovery-code')?.value || '';
+        if ([...recoveryCode].length < 12 || new TextEncoder().encode(recoveryCode).length > 128 || recoveryCode.trim() !== recoveryCode || /[\u0000-\u001f\u007f]/.test(recoveryCode)) throw new Error('恢复码至少 12 个字符，最多 128 字节，不能包含首尾空格或控制字符');
+        state.accountSync = await invoke('recover_desktop_existing_recovery', { recoveryCode });
+        state.status = '已验证恢复码并接入加密同步；现在可以读取云端对话。';
+        notifyAccountSync('success');
       } else if (action === 'create-account-recovery-rotation') {
         state.accountRecovery = { rotation: true };
         state.status = '';
@@ -6322,7 +6355,7 @@ app.addEventListener('click', event => {
         persistCloudConversationCache();
         state.pane = 'chat';
         if (failedCount || legacyCount) {
-          state.status = `已显示 ${state.cloudConversations.length} 个云端会话；${failedCount} 个未能恢复，已保留本机内容。${legacyCount ? `另有 ${legacyCount} 个旧格式记录，需要在原设备明确同步后再读取。` : '请核对读取错误或同步冲突。'}`;
+          state.status = `已读取 ${state.cloudConversations.length} 个云端会话；${failedCount} 个未能恢复，已保留本机内容。${legacyCount ? `另有 ${legacyCount} 个旧格式记录，需要在原设备明确同步后再读取。` : '请核对读取错误或同步冲突。'}`;
           notifyAccountSync('attention');
           await completeAccountSyncProgress(state.status, 'error');
         } else if (!state.cloudConversations.length) {

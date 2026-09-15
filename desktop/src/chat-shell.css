@@ -621,7 +621,7 @@
 .chat-sidebar.rail-collapsed .chat-sidebar-bottom-actions .chat-sidebar-function[data-action="new-chat"] { flex: 0 0 44px; width: 44px; min-width: 44px; min-height: 44px; margin-left: 0; padding: 0 !important; justify-content: center; gap: 0; border-radius: 50%; }
 .chat-sidebar.rail-collapsed .chat-sidebar-bottom-actions .chat-profile.chat-sidebar-settings { display: inline-flex; background: var(--foreground-surface, #fff); box-shadow: 0 6px 16px #1f2e2426; }
 .chat-sidebar.rail-collapsed .chat-sidebar-bottom-actions .chat-sidebar-function[data-action="new-chat"] { order: 1; }
-.chat-sidebar.rail-collapsed .chat-sidebar-bottom-actions .chat-profile.chat-sidebar-settings { order: 3; }
+.chat-sidebar.rail-collapsed .chat-sidebar-bottom-actions .chat-profile.chat-sidebar-settings { order: 2; }
 .chat-sidebar.rail-collapsed .chat-sidebar-functions { width: 100%; }
 .chat-sidebar.rail-collapsed .chat-sidebar-function,
 .chat-sidebar.rail-collapsed .chat-work-nav-item { justify-content: center; padding-right: 4px !important; padding-left: 4px !important; }

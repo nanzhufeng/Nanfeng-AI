@@ -12,7 +12,7 @@ const permissions = await readFile(resolve(root, 'src-tauri/permissions/default.
 const cargo = await readFile(resolve(root, 'src-tauri/Cargo.toml'), 'utf8');
 
 test('P6-B UI has a real three-pane workbench and explicit empty state', () => {
-  for (const token of ['sidebar', 'conversation-canvas', 'knowledge-canvas', 'Inspector', '从受控交换包开始']) assert.ok(source.includes(token));
+  for (const token of ['chat-sidebar', 'chat-main', 'chat-empty-canvas', 'workspace-standalone-shell', '工作区']) assert.ok(`${source}\n${chatShell}`.includes(token));
   assert.ok(!source.includes('P6-A 交换夹具</h1>'));
 });
 

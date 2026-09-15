@@ -927,19 +927,19 @@ export function renderChatFirstShell({
   // still sort and serialize every historical conversation merely to discard
   // the string immediately afterwards.
   const conversationList = preserveSidebar ? '' : (() => {
+    // Disabling automatic unread reminders must not erase a user's explicit
+    // “mark unread” action. Manual marks remain a visible theme-colour dot.
     const visibleUnreadIds = productSettings.unreadIndicators === false ? new Set() : unreadConversationIds;
-    const visibleManualUnreadAtMs = productSettings.unreadIndicators === false ? new Map() : manualUnreadAtMs;
-    const listed = activeConversations(data, visibleManualUnreadAtMs);
-    const pinned = pinnedConversations(data, visibleManualUnreadAtMs);
-    const recent = listed.filter(item => !item.pinned);
-    const localRows = listed.length
-      ? `${pinned.length ? `<div class="chat-history-group" role="group" aria-label="置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(pinned, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null })}</div>` : ''}${recent.length ? `<div class="chat-history-group" role="group" aria-label="最近会话"><p class="chat-history-label">最近</p>${conversationRows(recent, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null })}</div>` : ''}`
+    const visibleManualUnreadAtMs = manualUnreadAtMs;
+    const localRows = activeConversations(data, visibleManualUnreadAtMs);
+    const localPinned = localRows.filter(item => item.pinned);
+    const localRecent = localRows.filter(item => !item.pinned);
+    const renderedLocalRows = localRows.length
+      ? `${localPinned.length ? `<div class="chat-history-group" role="group" aria-label="置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(localPinned, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null })}</div>` : ''}${localRecent.length ? `<div class="chat-history-group" role="group" aria-label="最近会话"><p class="chat-history-label">最近</p>${conversationRows(localRecent, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null })}</div>` : ''}`
       : conversationRows([], selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null });
-    if (sidebarConversationList !== 'cloud') return localRows;
-    // The round cloud button beside the centered 本地/云端 selector is the one
-    // and only read affordance in the sidebar. Do not duplicate it here.
-    if (!cloudConversations.length) return '<div class="chat-cloud-empty"><p>尚未读取云端会话。</p></div>';
+    if (sidebarConversationList !== 'cloud') return renderedLocalRows;
     const cloudRows = activeCloudConversations(cloudConversations);
+    if (!cloudRows.length) return '<div class="chat-cloud-empty"><p>尚未读取云端会话。</p></div>';
     const cloudFavorites = new Set(cloudRows.filter(item => item.favorite).map(item => item.id));
     const cloudPinned = cloudRows.filter(item => item.pinned);
     const cloudRecent = cloudRows.filter(item => !item.pinned);

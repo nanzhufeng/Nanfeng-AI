@@ -409,7 +409,6 @@ class P7FManualConversationSyncOwner(
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     fun onAuthenticated(session: P7FCloudSession) {
-        accountOwner.clearRetiredRecoveryMaterial(session.userId)
         val accountRef = P7BAccountStateMachine.accountRef(session.userId)
         val current = accounts.metadata(accountRef)
         accounts.authenticateVerifiedOpaqueId(
@@ -417,13 +416,6 @@ class P7FManualConversationSyncOwner(
             expectedRevision = current?.revision,
             opaqueId = session.userId,
         )
-        // Direct Google-account sync has no recovery-code ceremony.  Retain the state machine's
-        // direction/conflict guard, but immediately leave the obsolete recovery-confirmation
-        // state created by earlier encrypted-sync builds.
-        val authenticated = accounts.metadata(accountRef)
-        if (authenticated?.state == P7BSyncState.AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION) {
-            accounts.confirmRecoverySaved("direct-google-${UUID.randomUUID()}", authenticated.revision, accountRef)
-        }
     }
 
     fun onSignedOut(session: P7FCloudSession?) {
@@ -436,6 +428,20 @@ class P7FManualConversationSyncOwner(
                 expectedRevision = current.revision,
                 accountRef = accountRef,
             )
+        }
+    }
+
+    /** Recovery-derived wrapping material is required before any cloud payload can be opened or sealed. */
+    fun prepareRecoveryProtection(recoveryCode: CharArray, recoveryCodeSaved: Boolean): Result<Unit> = runCatching {
+        require(recoveryCodeSaved) { "请先确认已保存恢复码。" }
+        require(recoveryCode.size >= 12) { "恢复码至少 12 个字符。" }
+        val session = accountOwner.cachedSession() ?: error("请先登录 Google 账号。")
+        onAuthenticated(session)
+        if (!accountOwner.recoveryReady(session.userId)) accountOwner.prepareRecoveryMaterial(session.userId, recoveryCode)
+        val accountRef = P7BAccountStateMachine.accountRef(session.userId)
+        val metadata = accounts.metadata(accountRef) ?: error("账号密钥尚未准备。")
+        if (metadata.state == P7BSyncState.AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION) {
+            accounts.confirmRecoverySaved("recovery-${UUID.randomUUID()}", metadata.revision, accountRef)
         }
     }
 
@@ -454,12 +460,6 @@ class P7FManualConversationSyncOwner(
         if (!accountOwner.configured) return emptyList()
         val session = accountOwner.cachedSession() ?: return emptyList()
         return accountOwner.listCloudDocuments().mapNotNull { envelope ->
-            // Old encrypted envelopes are retired. They remain untouched in
-            // cloud history, but cannot block direct Google-account history
-            // from immediately appearing in the ordinary conversation list.
-            if (runCatching { JSONObject(envelope).optString("format") == "nfai.sync.direct" }.getOrDefault(false).not()) {
-                return@mapNotNull null
-            }
             val preflight = (NfaiSyncV1Gateway.preflight(envelope) as? NfaiSyncResult.Preflighted)?.value
                 ?: return@mapNotNull null
             preflight.takeIf { it.appId == "com.nanzhufeng.ai" && it.documentId.startsWith("conversation-") }
@@ -493,20 +493,21 @@ class P7FManualConversationSyncOwner(
     fun restoreAllRemoteConversations(): P7FCloudConversationBatchRestoreResult {
         val session = accountOwner.cachedSession()
             ?: return P7FCloudConversationBatchRestoreResult.Rejected("请先登录 Google 账号。")
+        if (!accountOwner.recoveryReady(session.userId)) {
+            return P7FCloudConversationBatchRestoreResult.Rejected("请先用恢复码完成恢复保护。")
+        }
         val accountRef = P7BAccountStateMachine.accountRef(session.userId)
         val before = database.manualConversationSyncStateDao().listForAccount(accountRef)
         // The list RPC already returns complete envelopes. Reuse this snapshot
         // rather than issuing one more network read for every conversation.
-        val documents = runCatching { accountOwner.listCloudDocuments(includeRetired = true) }
+        val documents = runCatching { accountOwner.listCloudDocuments() }
             .getOrElse { return P7FCloudConversationBatchRestoreResult.Rejected("云端列表读取失败，请重试。") }
         val result = summarizeRemoteConversationRestores(
             documents.mapNotNull { envelope ->
-                if (envelope.isEmpty()) return@mapNotNull null // retired envelopes
                 if (session.userId != accountOwner.cachedSession()?.userId)
                     return P7FCloudConversationBatchRestoreResult.Rejected("登录状态已变化。")
                 val header = (NfaiSyncV1Gateway.preflight(envelope) as? NfaiSyncResult.Preflighted)?.value
                     ?: return@mapNotNull P7FCloudConversationRestoreResult.Rejected("云端封包格式无法读取，本机内容未改动。")
-                if (JSONObject(envelope).optString("format") != "nfai.sync.direct") return@mapNotNull null
                 val remote = P7CRemoteEnvelope(header.documentId, header.revision, header.payloadHash, envelope)
                 if (header.documentId == CLOUD_LIST_PRESENTATION_DOCUMENT_ID) {
                     runCatching { readCloudListPresentation(session, remote) }
@@ -545,6 +546,7 @@ class P7FManualConversationSyncOwner(
         }
         if (!accountOwner.configured) return P7FCloudConversationRestoreResult.Rejected("尚未配置 Google 登录与云端服务。")
         val session = accountOwner.cachedSession() ?: return P7FCloudConversationRestoreResult.Rejected("请先登录 Google 账号。")
+        if (!accountOwner.recoveryReady(session.userId)) return P7FCloudConversationRestoreResult.Rejected("请先用恢复码完成恢复保护。")
         val configured = P7CAndroidCloudGateway.availability() as? com.nanzhufeng.ai.domain.P7CServiceAvailability.Configured
             ?: return P7FCloudConversationRestoreResult.Rejected("云端服务尚未配置。")
         val remote = listedRemote ?: when (val read = P7CSupabaseEnvelopeGateway(configured.config, accountOwner.authenticatedTransport()).read(documentId, 0)) {
@@ -552,16 +554,16 @@ class P7FManualConversationSyncOwner(
             is P7CCloudResult.Rejected -> return P7FCloudConversationRestoreResult.Rejected("云端对话无法读取。")
             P7CCloudResult.Disabled -> return P7FCloudConversationRestoreResult.Rejected("云端服务尚未配置。")
         }
-        val openResult = NfaiSyncV1Gateway.openDirect(
-            remote.canonicalEnvelope, "com.nanzhufeng.ai", documentId, remote.revision,
-        )
+        val openResult = accountOwner.withWrappingMaterial(session.userId) { material ->
+            NfaiSyncV1Gateway.openWithAccountWrappingMaterial(
+                remote.canonicalEnvelope, material, "com.nanzhufeng.ai", documentId, remote.revision,
+            )
+        }
         val opened = openResult as? NfaiSyncResult.Opened ?: run {
-            val code = (openResult as? NfaiSyncResult.Rejected)?.code ?: "DIRECT_ENVELOPE_REJECTED"
+            val code = (openResult as? NfaiSyncResult.Rejected)?.code ?: "ENVELOPE_REJECTED"
             Log.w("NanfengCloudSync", "restore stage=envelope code=$code")
             val message = when (code) {
-                "DIRECT_HASH_MISMATCH" -> "云端内容校验值不一致"
-                "DIRECT_PAYLOAD_REJECTED" -> "云端数据字段校验未通过"
-                "DIRECT_BINDING_REJECTED" -> "云端对话标识或版本不一致"
+                "REVISION_ROLLBACK" -> "云端对话版本不一致"
                 else -> "云端封包格式无法读取"
             }
             return P7FCloudConversationRestoreResult.Rejected("$message，本机内容未改动。")
@@ -661,7 +663,7 @@ class P7FManualConversationSyncOwner(
                 is P7CCloudResult.Rejected -> return P7FLegacyConversationMigrationResult.Rejected("已同步对话的云端状态无法读取，本机内容未改动。")
                 P7CCloudResult.Disabled -> return P7FLegacyConversationMigrationResult.Rejected("云端服务尚未配置。")
             }
-            if (isDirectEnvelope(remote.canonicalEnvelope)) continue
+            if (!isRetiredDirectEnvelope(remote.canonicalEnvelope)) continue
             when (val result = sync(conversationId)) {
                 is P7FManualConversationSyncResult.Synced -> migrated += 1
                 is P7FManualConversationSyncResult.Rejected -> return P7FLegacyConversationMigrationResult.Rejected(result.message)
@@ -703,6 +705,7 @@ class P7FManualConversationSyncOwner(
         if (!accountOwner.configured) return P7FManualConversationSyncResult.Rejected("尚未配置 Google 登录与云端服务。")
         val session = accountOwner.cachedSession()
             ?: return P7FManualConversationSyncResult.Rejected("请先登录 Google 账号。")
+        if (!accountOwner.recoveryReady(session.userId)) return P7FManualConversationSyncResult.Rejected("请先在账号页完成恢复保护。")
         val snapshot = conversations.findById(conversationId)
             ?: return P7FManualConversationSyncResult.Rejected("该对话已不存在。")
         eligibilityFailure(snapshot)?.let { return P7FManualConversationSyncResult.Rejected(it) }
@@ -732,13 +735,16 @@ class P7FManualConversationSyncOwner(
             }
             return P7FManualConversationSyncResult.Rejected("该对话已从云端删除，已停止续同步；本机内容保留。")
         }
-        val remoteDecoded = remote?.let { envelope ->
-            val opened = NfaiSyncV1Gateway.openDirect(
-                envelope.canonicalEnvelope,
-                "com.nanzhufeng.ai",
-                documentId,
-                envelope.revision,
-            ) as? NfaiSyncResult.Opened
+        // P8's direct envelope stored payload JSON in the clear. It is never
+        // opened or merged; an already selected source can only replace it
+        // with a newly sealed encrypted envelope after recovery protection is ready.
+        val remoteIsRetiredDirect = remote?.let { isRetiredDirectEnvelope(it.canonicalEnvelope) } == true
+        val remoteDecoded = remote?.takeUnless { remoteIsRetiredDirect }?.let { envelope ->
+            val opened = accountOwner.withWrappingMaterial(session.userId) { material ->
+                NfaiSyncV1Gateway.openWithAccountWrappingMaterial(
+                    envelope.canonicalEnvelope, material, "com.nanzhufeng.ai", documentId, envelope.revision,
+                )
+            } as? NfaiSyncResult.Opened
                 ?: return P7FManualConversationSyncResult.Rejected("云端对话完整性校验未通过。")
             runCatching { P7FConversationSyncWireFormat.decodeWithModelUsage(opened.value.snapshot) }
                 .getOrElse { return P7FManualConversationSyncResult.Rejected("云端对话结构无法兼容。") }
@@ -765,7 +771,7 @@ class P7FManualConversationSyncOwner(
             runCatching { mergeRemoteAdditionsForLocalCommit(snapshot, remoteValue) }
                 .getOrElse { return P7FManualConversationSyncResult.Rejected(if (it is TitleVersionConflict) it.message!! else "云端对话无法与本机完整合并。") }
         } ?: snapshot
-        // The remote tree has already passed the direct-envelope and wire
+        // The remote tree has already passed the encrypted-envelope and wire
         // checks. Keep its additions locally before attempting our next
         // optimistic write, so a later network failure cannot make a valid
         // phone turn disappear from this device. Model/cost facts are stored
@@ -780,20 +786,21 @@ class P7FManualConversationSyncOwner(
                 .getOrElse { return P7FManualConversationSyncResult.Rejected("云端回答模型信息未能保存。") }
         }
         val (prepared, localContentHash) = preparedSnapshot(uploadSnapshot, documentId, expectedRevision + 1)
-        // A legacy encrypted envelope can have the exact same local snapshot hash.  It must be
-        // committed once by the already-authorized source device, otherwise it is permanently
-        // misreported as current and every direct-list read asks the user to wait forever.
         if (remote != null &&
+            !remoteIsRetiredDirect &&
             ledger?.remoteRevision == remote.revision &&
             ledger.payloadHash == remote.payloadHash &&
-            isDirectEnvelope(remote.canonicalEnvelope) &&
             ledger.localContentHash == localContentHash
         ) {
             val checkedAt = now()
             database.manualConversationSyncStateDao().save(ledger.copy(lastSyncedAtEpochMs = checkedAt))
             return P7FManualConversationSyncResult.Synced(snapshot.conversation.title, checkedAt)
         }
-        val sealed = NfaiSyncV1Gateway.sealDirect(prepared) as? NfaiSyncResult.Sealed
+        val sealed = accountOwner.withWrappingMaterial(session.userId) { material ->
+            accounts.withReadyDataKey(accountRef) { dataKey ->
+                NfaiSyncV1Gateway.sealWithAccountWrappingMaterial(prepared, dataKey, material)
+            }
+        } as? NfaiSyncResult.Sealed
             ?: return P7FManualConversationSyncResult.Rejected("该对话无法准备同步内容。")
         val preflight = NfaiSyncV1Gateway.preflight(sealed.canonicalEnvelope) as? NfaiSyncResult.Preflighted
             ?: return P7FManualConversationSyncResult.Rejected("加密完整性校验失败。")
@@ -814,6 +821,7 @@ class P7FManualConversationSyncOwner(
     /** Periodic work can only revisit conversations that already have a successful manual receipt. */
     fun syncPreviouslySelected(): List<P7FManualConversationSyncResult> {
         val session = accountOwner.cachedSession() ?: return emptyList()
+        if (!accountOwner.recoveryReady(session.userId)) return emptyList()
         val accountRef = P7BAccountStateMachine.accountRef(session.userId)
         return database.manualConversationSyncStateDao().listForAccount(accountRef).map { state ->
             val local = conversations.findById(ConversationId(state.conversationId))
@@ -884,6 +892,7 @@ class P7FManualConversationSyncOwner(
      */
     fun setCloudConversationPinned(session: P7FCloudSession?, conversationId: ConversationId, pinned: Boolean): Boolean {
         val value = session ?: return false
+        if (!accountOwner.recoveryReady(value.userId)) return false
         val accountRef = P7BAccountStateMachine.accountRef(value.userId)
         if (database.manualConversationSyncStateDao().find(accountRef, conversationId.value) == null) return false
         return runCatching {
@@ -910,7 +919,11 @@ class P7FManualConversationSyncOwner(
                     ),
                 ),
             )
-            val sealed = NfaiSyncV1Gateway.sealDirect(prepared) as? NfaiSyncResult.Sealed ?: return false
+            val sealed = accountOwner.withWrappingMaterial(value.userId) { material ->
+                accounts.withReadyDataKey(accountRef) { dataKey ->
+                    NfaiSyncV1Gateway.sealWithAccountWrappingMaterial(prepared, dataKey, material)
+                }
+            } as? NfaiSyncResult.Sealed ?: return false
             val committed = gateway.commit(expectedRevision, sealed.canonicalEnvelope) as? P7CCloudResult.Value ?: return false
             val readBack = readCloudListPresentation(value) ?: return false
             if (readBack.remoteRevision != committed.value.revision || readBack.pinnedConversationIds != updated) return false
@@ -935,12 +948,13 @@ class P7FManualConversationSyncOwner(
             is P7CCloudResult.Rejected -> if (result.code == "REMOTE_MISSING") return null else error("云端列表状态无法读取。")
             P7CCloudResult.Disabled -> error("云端服务尚未配置。")
         }
-        val opened = NfaiSyncV1Gateway.openDirect(
-            remote.canonicalEnvelope,
-            "com.nanzhufeng.ai",
-            CLOUD_LIST_PRESENTATION_DOCUMENT_ID,
-            remote.revision,
-        ) as? NfaiSyncResult.Opened ?: error("云端列表状态校验失败。")
+        if (!accountOwner.recoveryReady(session.userId)) error("请先用恢复码完成恢复保护。")
+        val opened = accountOwner.withWrappingMaterial(session.userId) { material ->
+            NfaiSyncV1Gateway.openWithAccountWrappingMaterial(
+                remote.canonicalEnvelope, material, "com.nanzhufeng.ai",
+                CLOUD_LIST_PRESENTATION_DOCUMENT_ID, remote.revision,
+            )
+        } as? NfaiSyncResult.Opened ?: error("云端列表状态校验失败。")
         val record = opened.value.snapshot.records.singleOrNull {
             it.kind == "safe_settings" && it.id == CLOUD_LIST_PRESENTATION_DOCUMENT_ID
         } ?: error("云端列表状态无效。")
@@ -990,7 +1004,7 @@ class P7FManualConversationSyncOwner(
         else -> null
     }
 
-    private fun isDirectEnvelope(envelope: String): Boolean = runCatching {
+    private fun isRetiredDirectEnvelope(envelope: String): Boolean = runCatching {
         JSONObject(envelope).optString("format") == "nfai.sync.direct"
     }.getOrDefault(false)
 

@@ -18,6 +18,8 @@ import com.nanzhufeng.ai.domain.P7CAuthenticatedRpcTransport
 import com.nanzhufeng.ai.domain.P7CPrivateServiceConfig
 import com.nanzhufeng.ai.domain.P7CServiceAvailability
 import com.nanzhufeng.ai.domain.P7CServiceConfiguration
+import com.nanzhufeng.ai.domain.NfaiSyncAccountWrappingMaterial
+import com.nanzhufeng.ai.domain.NfaiSyncV1Gateway
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
@@ -124,15 +126,49 @@ class P7FEncryptedSessionStore(context: Context) {
 
     fun clear() { check(preferences.edit().remove(STATE).commit()) { "SESSION_CLEAR_FAILED" } }
 
-    /** Direct account sync retired recovery material. Clear any remnants from
-     * previous versions without touching the signed-in session. */
-    fun clearRetiredRecoveryMaterial(userId: String) {
+    fun hasWrappingMaterial(userId: String): Boolean = preferences.contains(wrappingStateKey(userId))
+
+    fun saveWrappingMaterial(userId: String, material: NfaiSyncAccountWrappingMaterial) {
+        saveMaterial(wrappingStateKey(userId), userId, material)
+    }
+
+    fun savePendingWrappingMaterial(userId: String, material: NfaiSyncAccountWrappingMaterial) {
+        saveMaterial(pendingWrappingStateKey(userId), userId, material)
+    }
+
+    fun promotePendingWrappingMaterial(userId: String) {
+        val pending = preferences.getString(pendingWrappingStateKey(userId), null) ?: error("RECOVERY_ROTATION_NOT_READY")
         check(
             preferences.edit()
-                .remove(wrappingStateKey(userId))
+                .putString(wrappingStateKey(userId), pending)
                 .remove(pendingWrappingStateKey(userId))
                 .commit(),
-        ) { "RETIRED_RECOVERY_CLEANUP_FAILED" }
+        ) { "RECOVERY_ROTATION_PROMOTE_FAILED" }
+    }
+
+    fun <T> withWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T =
+        withMaterial(wrappingStateKey(userId), userId, block)
+
+    fun <T> withPendingWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T =
+        withMaterial(pendingWrappingStateKey(userId), userId, block)
+
+    private fun saveMaterial(key: String, userId: String, material: NfaiSyncAccountWrappingMaterial) {
+        val payload = JSONObject()
+            .put("userId", userId)
+            .put("wrappingKey", Base64.encodeToString(material.wrappingKey, Base64.NO_WRAP))
+            .put("salt", Base64.encodeToString(material.salt, Base64.NO_WRAP))
+            .toString()
+        check(preferences.edit().putString(key, encrypt(payload)).commit()) { "WRAPPING_MATERIAL_WRITE_FAILED" }
+    }
+
+    private fun <T> withMaterial(key: String, userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T {
+        val encrypted = preferences.getString(key, null) ?: error("RECOVERY_SETUP_REQUIRED")
+        val root = JSONObject(decrypt(encrypted))
+        require(root.getString("userId") == userId)
+        val keyBytes = Base64.decode(root.getString("wrappingKey"), Base64.NO_WRAP)
+        val salt = Base64.decode(root.getString("salt"), Base64.NO_WRAP)
+        return try { block(NfaiSyncAccountWrappingMaterial(keyBytes, salt)) }
+        finally { keyBytes.fill(0); salt.fill(0) }
     }
 
     private fun JSONObject.toSession() = P7FCloudSession(
@@ -323,7 +359,31 @@ class P7FGoogleAccountOwner(context: Context) {
 
     val configured: Boolean get() = config != null && google.configured
     fun cachedSession(): P7FCloudSession? = store.read()
-    fun clearRetiredRecoveryMaterial(userId: String) = store.clearRetiredRecoveryMaterial(userId)
+    fun recoveryReady(userId: String): Boolean = store.hasWrappingMaterial(userId)
+
+    fun prepareRecoveryMaterial(userId: String, recoveryCode: CharArray) {
+        require(cachedSession()?.userId == userId) { "SIGNED_OUT" }
+        require(!recoveryReady(userId)) { "RECOVERY_ALREADY_READY" }
+        val material = NfaiSyncV1Gateway.createAccountWrappingMaterial(recoveryCode)
+        try { store.saveWrappingMaterial(userId, material) }
+        finally { material.wrappingKey.fill(0); material.salt.fill(0) }
+    }
+
+    fun preparePendingRecoveryMaterial(userId: String, recoveryCode: CharArray) {
+        require(cachedSession()?.userId == userId) { "SIGNED_OUT" }
+        require(recoveryReady(userId)) { "RECOVERY_SETUP_REQUIRED" }
+        val material = NfaiSyncV1Gateway.createAccountWrappingMaterial(recoveryCode)
+        try { store.savePendingWrappingMaterial(userId, material) }
+        finally { material.wrappingKey.fill(0); material.salt.fill(0) }
+    }
+
+    fun promotePendingRecoveryMaterial(userId: String) = store.promotePendingWrappingMaterial(userId)
+
+    fun <T> withWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T =
+        store.withWrappingMaterial(userId, block)
+
+    fun <T> withPendingWrappingMaterial(userId: String, block: (NfaiSyncAccountWrappingMaterial) -> T): T =
+        store.withPendingWrappingMaterial(userId, block)
 
     suspend fun signIn(activityContext: Context): Result<P7FCloudSession> {
         if (!configured) return Result.failure(IllegalStateException("尚未配置 Google 登录与云端服务。"))
@@ -372,7 +432,7 @@ class P7FGoogleAccountOwner(context: Context) {
     }
 
     /** List responses are arrays: do not use the single-document RPC unwrapping path. */
-    fun listCloudDocuments(includeRetired: Boolean = false): List<String> {
+    fun listCloudDocuments(): List<String> {
         val current = store.read() ?: error("请先登录 Google 账号。")
         val session = if (current.expiresAtEpochSeconds <= System.currentTimeMillis() / 1000L + 60L) {
             client!!.refresh(current.refreshToken).also(store::write)
@@ -387,16 +447,10 @@ class P7FGoogleAccountOwner(context: Context) {
                 is String -> raw
                 else -> error("REMOTE_DOCUMENT_INVALID")
             }
-            // The cloud can still contain retired encrypted records.  They are
-            // intentionally skipped here so one legacy item never blocks the
-            // direct Google-account conversation list.
-            if (includeRetired) envelope else envelope.takeIf {
-                runCatching {
-                    val root = JSONObject(it)
-                    root.optString("format") == "nfai.sync.direct"
-                        && root.optString("appId") == "com.nanzhufeng.ai"
-                }.getOrDefault(false)
-            }.orEmpty()
+            val checked = NfaiSyncV1Gateway.preflight(envelope) as? com.nanzhufeng.ai.domain.NfaiSyncResult.Preflighted
+                ?: error("云端文档校验失败。")
+            require(checked.value.appId == "com.nanzhufeng.ai") { "云端文档不属于本应用。" }
+            envelope
         }
     }
 

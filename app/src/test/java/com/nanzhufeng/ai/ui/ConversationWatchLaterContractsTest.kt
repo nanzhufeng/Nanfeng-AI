@@ -32,8 +32,9 @@ class ConversationWatchLaterContractsTest {
         val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
 
-        assertTrue(workspace.contains("prioritizeWatchLater(drawerConversations.filter { it.pinnedAt != null })"))
-        assertTrue(workspace.contains("prioritizeWatchLater(drawerConversations.filter { it.pinnedAt == null })"))
+        assertTrue(workspace.contains("val allDrawerConversations = state.conversations.filter { it.currentLeafMessageId != null }"))
+        assertTrue(workspace.contains("prioritizeWatchLater(drawerConversations.filter { conversation ->"))
+        assertTrue(workspace.contains("if (cloudListVisible) conversation.id.value in cloudPinnedConversationIds else conversation.pinnedAt != null"))
         assertTrue(workspace.contains("val projectConversations = prioritizeWatchLater("))
         assertTrue(workspace.contains("watchLater = conversation.id in watchLaterAtEpochMs"))
         assertTrue(workspace.contains("ConversationMenuAction(Icons.Rounded.Visibility, \"未读\""))

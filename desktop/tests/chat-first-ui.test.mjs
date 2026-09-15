@@ -82,7 +82,7 @@ test('sidebar distinguishes pinned and recent conversations while keeping them i
 });
 
 test('pinned conversations share the single sidebar scroll flow above the bottom actions', () => {
-  for (const token of ['.chat-sidebar-scroll { display: flex;', 'overflow-y: auto;', 'padding-bottom: 68px;', 'scrollbar-gutter: stable;', '@media (min-width: 901px)', 'margin-inline-end: -12px;', 'padding-inline-end: 12px;', '.chat-history { flex: 0 0 auto;', '.chat-sidebar-footer { position: absolute;', 'pointer-events: none;', '.chat-sidebar-footer button { pointer-events: auto;']) assert.ok(css.includes(token), token);
+  for (const token of ['.chat-sidebar-scroll { display: flex;', 'overflow-y: auto;', 'padding-bottom: 126px;', 'scrollbar-gutter: stable;', '@media (min-width: 901px)', 'margin-inline-end: -12px;', 'padding-inline-end: 12px;', '.chat-history { flex: 0 0 auto;', '.chat-sidebar-footer { position: absolute;', 'pointer-events: none;', '.chat-sidebar-footer button { pointer-events: auto;']) assert.ok(css.includes(token), token);
   for (const forbidden of ['.chat-pinned {', 'max-height: 156px', '置顶</p>', '最近</p>']) assert.ok(!css.includes(forbidden));
 });
 
@@ -272,13 +272,11 @@ test('FB-P6-028 desktop conversation rows release the date column before reservi
   assert.ok(!css.includes('.chat-history-select { display: block !important; min-width: 0; flex: 1 1 auto; overflow: hidden; padding: 7px !important; font-size: 14px'));
 });
 
-test('sidebar conversation titles wrap instead of hiding the remainder behind an ellipsis', () => {
+test('sidebar keeps compact conversation rows while exposing the full title on the control', () => {
   const titleLine = css.slice(css.indexOf('.chat-history-select .chat-history-title-line'), css.indexOf('.chat-history-conversation-icon'));
-  assert.match(css, /\.chat-history-select \{[^}]*white-space: normal;/);
-  assert.match(titleLine, /overflow: visible;/);
-  assert.match(titleLine, /white-space: normal;/);
-  assert.match(titleLine, /overflow-wrap: anywhere;/);
-  assert.doesNotMatch(titleLine, /text-overflow: ellipsis;/);
+  assert.match(css, /\.chat-history-select \{[^}]*white-space: nowrap;/);
+  assert.match(titleLine, /text-overflow: ellipsis;/);
+  assert.match(shell, /title="\$\{escapeHtml\(item\.title \|\| '未命名会话'\)\}/);
 });
 
 test('FB-P6-026 keeps divider diagnostics acceptance-only while exposing pointer, keyboard and reset owners', () => {

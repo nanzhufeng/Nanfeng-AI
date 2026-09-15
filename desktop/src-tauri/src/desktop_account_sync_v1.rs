@@ -1099,6 +1099,58 @@ pub fn confirm_recovery<C: CredentialStore>(
     Ok(())
 }
 
+/// Connect a new Desktop install to an existing encrypted account.  The
+/// recovery code is used only to open one existing envelope and recover this
+/// install's account wrapping/data material; it is never persisted.
+pub fn recover_existing_recovery<C: CredentialStore, G: CloudGateway>(
+    connection: &mut Connection,
+    credentials: &C,
+    gateway: &G,
+    recovery_code: &str,
+) -> Result<(), String> {
+    let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
+    let account = sync_state_v1::account_ref(&session.user_id)?;
+    let remote = gateway.list()
+        .map_err(|failure| safe_error(cloud_read_failure_message(failure)))?
+        .into_iter()
+        .find(|item| serde_json::from_str::<Value>(&item.envelope).ok()
+            .and_then(|value| value.get("format").and_then(Value::as_str).map(str::to_owned))
+            .as_deref() == Some(sync_v1::ENVELOPE))
+        .ok_or_else(|| safe_error("云端没有可用的加密对话；请在原设备迁移后再接入"))?;
+    let document_id = envelope_document_id(&remote.envelope)?;
+    let recovered = sync_v1::recover_account_material(
+        &remote.envelope,
+        recovery_code,
+        APP_ID,
+        &document_id,
+        remote.revision,
+    ).map_err(|_| safe_error("恢复码无法打开云端加密对话"))?;
+    credentials.save(RECOVERY_SERVICE, &account, recovered.wrapping_key.as_slice())
+        .map_err(|_| safe_error("恢复保护无法安全保存"))?;
+    if let Err(_) = credentials.save(DATA_KEY_SERVICE, &account, recovered.data_key.as_slice()) {
+        let _ = credentials.delete(RECOVERY_SERVICE, &account);
+        return Err(safe_error("账号加密密钥无法安全保存"));
+    }
+    let salt = URL_SAFE_NO_PAD.encode(&recovered.salt);
+    connection.execute(
+        "UPDATE desktop_cloud_account_state SET recovery_confirmed=1,recovery_salt_b64=?2,state='DIRECTION_REQUIRED',pending_recovery_salt_b64=NULL,pending_recovery_code_hash=NULL,pending_recovery_created_at_ms=NULL,revision=revision+1,updated_at_ms=?3 WHERE account_ref=?1",
+        params![account, salt, now_ms()],
+    ).map_err(|_| safe_error("恢复保护状态未保存"))?;
+    let mut state_store = SqliteMetadataStore { connection };
+    if let Some(metadata) = state_store.metadata(&account)? {
+        if metadata.state == sync_state_v1::State::NeedsRecoveryConfirmation {
+            sync_state_v1::confirm_recovery_saved(
+                &mut state_store,
+                &format!("desktop-existing-recovery-{}", now_ms()),
+                &account,
+                metadata.revision,
+            )?;
+        }
+    }
+    write_diagnostic(state_store.connection, Some(&account), "RECOVERY_EXISTING", "SUCCESS", None);
+    Ok(())
+}
+
 pub fn prepare_custom_recovery_rotation<C: CredentialStore>(
     connection: &Connection,
     credentials: &C,
@@ -2356,33 +2408,11 @@ pub fn list_remote_documents<G: CloudGateway>(
             if document_id == CLOUD_LIST_PRESENTATION_DOCUMENT_ID {
                 return Ok(None);
             }
-            let title = serde_json::from_str::<Value>(&remote.envelope)
-                .ok()
-                .filter(|value| {
-                    value.get("format").and_then(Value::as_str) == Some(sync_v1::DIRECT_ENVELOPE)
-                })
-                .and_then(|value| {
-                    value
-                        .pointer("/payload/records")
-                        .and_then(Value::as_array)
-                        .cloned()
-                })
-                .and_then(|records| {
-                    records.into_iter().find(|record| {
-                        record.get("kind").and_then(Value::as_str) == Some("conversation")
-                    })
-                })
-                .and_then(|record| {
-                    record
-                        .pointer("/content/title")
-                        .and_then(Value::as_str)
-                        .map(str::trim)
-                        .map(str::to_owned)
-                })
-                .filter(|title| !title.is_empty())
-                .map(|title| title.chars().take(48).collect())
-                .or_else(|| selected_local_conversation_title(connection, &document_id))
-                .unwrap_or_else(|| "云端会话".into());
+            // Document headers intentionally contain no title.  A title is
+            // available only after the envelope is opened with the account's
+            // recovery material during restore/sync.
+            let title = selected_local_conversation_title(connection, &document_id)
+                .unwrap_or_else(|| "已加密云端会话".into());
             Ok(Some(RemoteDocumentProjection {
                 document_id,
                 title,
@@ -2518,8 +2548,12 @@ fn restore_remote_envelope<C: CredentialStore>(
     let document_id = envelope_document_id(&remote.envelope)?;
     let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
-    let payload = sync_v1::open_direct(&remote.envelope, APP_ID, &document_id, remote.revision)
-        .map_err(|_| safe_error("该云端对话仍是旧加密格式，正在等待原设备迁移"))?;
+    let material = wrapping_material(connection, credentials, &account)?;
+    let payload = sync_v1::open_with_account_wrapping_material(
+        &remote.envelope, &material, APP_ID, &document_id, remote.revision,
+    )
+        .map_err(|_| safe_error("云端对话未通过恢复保护校验"))?
+        .payload;
     let records = payload
         .get("records")
         .and_then(Value::as_array)
@@ -2876,13 +2910,13 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
             continue;
         };
         if document_id == CLOUD_LIST_PRESENTATION_DOCUMENT_ID {
-            if let Ok(pinned) = cloud_list_presentation_ids(&document) {
+            if let Ok(pinned) = cloud_list_presentation_ids(connection, credentials, &document) {
                 cloud_pinned_conversation_ids = pinned;
                 cloud_list_presentation_present = true;
             }
             continue;
         }
-        if envelope.get("format").and_then(Value::as_str) != Some(sync_v1::DIRECT_ENVELOPE) {
+        if envelope.get("format").and_then(Value::as_str) == Some(sync_v1::DIRECT_ENVELOPE) {
             skipped_legacy_count += 1;
             continue;
         }
@@ -2929,13 +2963,23 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
 }
 
 
-fn cloud_list_presentation_ids(remote: &RemoteEnvelope) -> Result<BTreeSet<String>, String> {
-    let payload = sync_v1::open_direct(
+fn cloud_list_presentation_ids<C: CredentialStore>(
+    connection: &Connection,
+    credentials: &C,
+    remote: &RemoteEnvelope,
+) -> Result<BTreeSet<String>, String> {
+    let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
+    let account = sync_state_v1::account_ref(&session.user_id)?;
+    let material = wrapping_material(connection, credentials, &account)?;
+    let payload = sync_v1::open_with_account_wrapping_material(
         &remote.envelope,
+        &material,
         APP_ID,
         CLOUD_LIST_PRESENTATION_DOCUMENT_ID,
         remote.revision,
-    )?;
+    )
+    .map_err(|_| safe_error("云端列表未通过恢复保护校验"))?
+    .payload;
     let records = payload
         .get("records")
         .and_then(Value::as_array)
@@ -2983,6 +3027,7 @@ fn cloud_list_presentation_ids(remote: &RemoteEnvelope) -> Result<BTreeSet<Strin
 
 /// Writes IDs only.  It never opens a workspace, mutates a local pin, or serializes a title/body.
 pub fn set_cloud_list_pinned<C: CredentialStore, G: CloudGateway>(
+    connection: &Connection,
     credentials: &C,
     gateway: &G,
     conversation_id: &str,
@@ -2996,12 +3041,14 @@ pub fn set_cloud_list_pinned<C: CredentialStore, G: CloudGateway>(
     {
         return Err(safe_error("云端对话标识无效"));
     }
-    read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
+    let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
+    let account = sync_state_v1::account_ref(&session.user_id)?;
+    let material = wrapping_material(connection, credentials, &account)?;
     let remote = gateway
         .read(CLOUD_LIST_PRESENTATION_DOCUMENT_ID)
         .map_err(|failure| safe_error(cloud_read_failure_message(failure)))?;
     let (expected_revision, mut values) = match remote {
-        Some(remote) => (remote.revision, cloud_list_presentation_ids(&remote)?),
+        Some(remote) => (remote.revision, cloud_list_presentation_ids(connection, credentials, &remote)?),
         None => (0, BTreeSet::new()),
     };
     if pinned {
@@ -3017,7 +3064,10 @@ pub fn set_cloud_list_pinned<C: CredentialStore, G: CloudGateway>(
           "revision":expected_revision + 1,"classification":"NORMAL",
           "content":{"type":"CLOUD_CONVERSATION_LIST_V1","pinnedConversationIds":values.iter().collect::<Vec<_>>()}}]
     });
-    let envelope = sync_v1::seal_direct(payload).map_err(|_| safe_error("云端列表置顶无法准备"))?;
+    let data_key = Zeroizing::new(credentials.read(DATA_KEY_SERVICE, &account)
+        .map_err(|_| safe_error("账号加密密钥不可用"))?);
+    let envelope = sync_v1::seal_with_account_wrapping_material(payload, data_key.as_slice(), &material)
+        .map_err(|_| safe_error("云端列表置顶无法准备加密内容"))?;
     let (revision, hash) = gateway
         .commit(
             CLOUD_LIST_PRESENTATION_DOCUMENT_ID,
@@ -3757,7 +3807,7 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
     // valid envelope that simply omits the phone's latest completed answer.
     // Old non-direct documents are intentionally migrated by the local source;
     // a malformed current direct document is rejected rather than overwritten.
-    let remote_is_direct = remote
+    let remote_is_retired_direct = remote
         .as_ref()
         .and_then(|value| serde_json::from_str::<Value>(&value.envelope).ok())
         .and_then(|value| {
@@ -3768,10 +3818,14 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
         })
         .as_deref()
         == Some(sync_v1::DIRECT_ENVELOPE);
-    if remote_is_direct {
+    if !remote_is_retired_direct && remote.is_some() {
         let remote = remote.as_ref().expect("direct remote exists");
-        let payload = sync_v1::open_direct(&remote.envelope, APP_ID, &document_id, remote.revision)
-            .map_err(|_| safe_error("云端对话完整性校验失败"))?;
+        let material = wrapping_material(connection, credentials, &account)?;
+        let payload = sync_v1::open_with_account_wrapping_material(
+            &remote.envelope, &material, APP_ID, &document_id, remote.revision,
+        )
+            .map_err(|_| safe_error("云端对话未通过恢复保护校验"))?
+            .payload;
         let record = payload
             .get("records")
             .and_then(Value::as_array)
@@ -3818,12 +3872,8 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
         &document_id,
         expected + 1,
     )?;
-    // A previous encrypted envelope can have the same local content hash.  It
-    // must still be committed once so the selected document is migrated to the
-    // direct Google-account format instead of being permanently reported as up
-    // to date.
     if ledger.is_some()
-        && remote_is_direct
+        && !remote_is_retired_direct
         && ledger.as_ref().is_some_and(|known| remote.as_ref().is_some_and(|current| {
             known.0 as u64 == current.revision && known.1 == current.payload_hash
         }))
@@ -3832,7 +3882,11 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
         return Ok(SyncReceipt { status:"UP_TO_DATE".into(), safe_code:None, synced_at_ms:connection.query_row("SELECT last_synced_at_ms FROM desktop_selected_conversation_sync WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3", params![account,workspace_id,conversation_id], |row| row.get(0)).ok() });
     }
     connection.execute("UPDATE desktop_cloud_account_state SET state='SYNCING',last_error_code=NULL,updated_at_ms=?2 WHERE account_ref=?1", params![account,now_ms()]).map_err(|_| safe_error("同步状态未保存"))?;
-    let envelope = sync_v1::seal_direct(payload).map_err(|_| safe_error("对话无法准备同步内容"))?;
+    let material = wrapping_material(connection, credentials, &account)?;
+    let data_key = Zeroizing::new(credentials.read(DATA_KEY_SERVICE, &account)
+        .map_err(|_| safe_error("账号加密密钥不可用"))?);
+    let envelope = sync_v1::seal_with_account_wrapping_material(payload, data_key.as_slice(), &material)
+        .map_err(|_| safe_error("对话无法准备加密内容"))?;
     let payload_hash = serde_json::from_str::<Value>(&envelope)
         .ok()
         .and_then(|value| {
@@ -4921,7 +4975,12 @@ mod tests {
         assert_eq!(sync_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").unwrap().status, "SYNCED");
         let uploaded = cloud.0.borrow().clone().unwrap();
         let document = format!("conversation-{}", &sha256(b"conversation-safe")[..40]);
-        let payload = sync_v1::open_direct(&uploaded.envelope, APP_ID, &document, uploaded.revision).unwrap();
+        let session = read_session(&keys).unwrap().unwrap();
+        let account = sync_state_v1::account_ref(&session.user_id).unwrap();
+        let material = wrapping_material(store.connection, &keys, &account).unwrap();
+        let payload = sync_v1::open_with_account_wrapping_material(
+            &uploaded.envelope, &material, APP_ID, &document, uploaded.revision,
+        ).unwrap().payload;
         assert_eq!(payload["records"][0]["content"]["title"], "尚未上传的新标题");
         // Return to the original baseline for the existing phone-update cases.
         *cloud.0.borrow_mut() = None;
@@ -5348,7 +5407,7 @@ mod tests {
             .flat_map(|message| message["blocks"].as_array().unwrap())
             .all(|block| { block["kind"].as_str() == Some("TEXT") }));
         assert!(!payload.to_string().contains("资料.pdf"));
-        assert!(sync_v1::seal_direct(payload).is_ok());
+        assert_eq!(payload["format"], "nfai.sync.payload");
     }
     #[test]
     fn conversation_payload_syncs_completed_prefix_without_mutating_terminal_failure() {
@@ -5501,14 +5560,34 @@ mod tests {
         };
         save_session(&keys, &session).unwrap();
         let account = sync_state_v1::account_ref(&session.user_id).unwrap();
-        c.execute("INSERT INTO desktop_cloud_account_state VALUES(?1,?2,?3,NULL,NULL,'VERIFYING',0,1,'safe-salt',1,NULL,'COMMIT_RESULT_UNKNOWN','device-safe',1,1,NULL,NULL,NULL)",params![account,session.user_id,session.email]).unwrap();
+        c.execute("INSERT INTO desktop_cloud_account_state VALUES(?1,?2,?3,NULL,NULL,'AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION',0,0,NULL,0,NULL,NULL,'device-safe',1,1,NULL,NULL,NULL)",params![account,session.user_id,session.email]).unwrap();
+        let mut state_store = SqliteMetadataStore { connection: &mut c };
+        sync_state_v1::authenticate(&mut state_store, &keys, "auth", None, &session.user_id).unwrap();
+        let (shown, pending) = create_recovery_code(state_store.connection, &keys).unwrap();
+        confirm_recovery(state_store.connection, &keys, pending, &shown.confirmation_hash).unwrap();
+        state_store.connection.execute("UPDATE desktop_cloud_account_state SET state='VERIFYING',last_error_code='COMMIT_RESULT_UNKNOWN' WHERE account_ref=?1", [&account]).unwrap();
         c.execute("INSERT INTO workspaces(id,title,semantic_hash,package_hash,created_at) VALUES('workspace-unknown','测试','before','package','2026-09-01T00:00:00Z')", []).unwrap();
         c.execute("INSERT INTO workspace_exchange VALUES('workspace-unknown',?1)",[json!({"conversations":[{"id":"conversation-unknown","title":"完整对话","revision":1,"currentLeafId":"message","messages":[{"id":"message","parentId":null,"ordinal":0,"role":"user","delivery":"COMPLETE","createdAt":"2026-09-01T00:00:00Z","revision":1,"blocks":[{"kind":"TEXT","text":"正文"}]}]}]}).to_string()]).unwrap();
-        c.execute("INSERT INTO desktop_sync_jobs VALUES('job-unknown',?1,'workspace-unknown','conversation-unknown','conversation-unknown-document','UNKNOWN','old-hash',0,1,NULL,'COMMIT_RESULT_UNKNOWN',1,1)",[&account]).unwrap();
+        let document_id = format!("conversation-{}", &sha256(b"conversation-unknown")[..40]);
+        c.execute("INSERT INTO desktop_sync_jobs VALUES('job-unknown',?1,'workspace-unknown','conversation-unknown',?2,'UNKNOWN','old-hash',0,1,NULL,'COMMIT_RESULT_UNKNOWN',1,1)",params![&account, &document_id]).unwrap();
+        let (initial_payload, _) = conversation_payload(
+            &c,
+            "workspace-unknown",
+            "conversation-unknown",
+            &document_id,
+            1,
+        ).unwrap();
+        let material = wrapping_material(&c, &keys, &account).unwrap();
+        let data_key = keys.read(DATA_KEY_SERVICE, &account).unwrap();
+        let initial_envelope = sync_v1::seal_with_account_wrapping_material(
+            initial_payload, &data_key, &material,
+        ).unwrap();
+        let initial_hash = serde_json::from_str::<Value>(&initial_envelope)
+            .unwrap()["payloadHash"].as_str().unwrap().to_owned();
         let cloud = Cloud(RefCell::new(RemoteEnvelope {
             revision: 1,
-            payload_hash: "remote-change".into(),
-            envelope: "{}".into(),
+            payload_hash: initial_hash,
+            envelope: initial_envelope,
         }));
         let receipt = reconcile_unknown_commit(
             &mut c,
@@ -5530,7 +5609,6 @@ mod tests {
         assert_eq!(cloud.0.borrow().revision, 2);
     }
     #[test]
-    #[ignore = "The recovery-code rotation workflow is retired; direct Google-account sync is covered separately."]
     fn recovery_rotation_rewraps_every_selected_document_and_new_device_restores_without_replacing_local(
     ) {
         struct Cloud(RefCell<Option<RemoteEnvelope>>);
@@ -5686,6 +5764,12 @@ mod tests {
             "verified-user-rotation",
         )
         .unwrap();
+        recover_existing_recovery(
+            target_store.connection,
+            &target_keys,
+            &cloud,
+            &new_code.recovery_code,
+        ).unwrap();
         let restored = restore_remote_conversation(
             target_store.connection,
             &target_keys,

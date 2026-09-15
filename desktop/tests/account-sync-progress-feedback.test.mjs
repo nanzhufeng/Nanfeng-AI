@@ -24,7 +24,7 @@ test('manual sync and cloud read paint progress then retain a clear quantified r
   assert.match(app, /读取完成/);
   assert.match(sync, /await completeAccountSyncProgress\('', 'success'\);/);
   assert.doesNotMatch(app, /已同步 1 个对话/);
-  assert.match(app, /新增 \$\{addedCount\} 个，已更新 \$\{updatedCount\} 个，当前显示 \$\{state\.cloudConversations\.length\} 个云端会话。/);
+  assert.match(app, /新增 \$\{addedCount\} 个，已更新 \$\{updatedCount\} 个，云端会话已合并到列表。/);
   assert.match(read, /正在读取云端列表/);
   assert.match(app, /请检查网络或登录后重试。/);
   assert.match(app, /accountSyncProgressDialog\(\) \|\| cameraCaptureDialog/);

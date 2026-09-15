@@ -598,6 +598,7 @@ struct DesktopRuntimeInfo {
     version: String,
     platform: &'static str,
     arch: &'static str,
+    build_epoch_seconds: u64,
     startup_mode: &'static str,
     automatic_work_suppressed: bool,
 }
@@ -17713,6 +17714,9 @@ fn read_desktop_runtime_info(
         version: app.package_info().version.to_string(),
         platform: std::env::consts::OS,
         arch: std::env::consts::ARCH,
+        build_epoch_seconds: option_env!("NANFENG_AI_BUILD_EPOCH_SECONDS")
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0),
         startup_mode: state.startup_mode.label(),
         automatic_work_suppressed: !state.startup_mode.work_plan().runs_automatic_work(),
     }
@@ -20667,6 +20671,27 @@ fn confirm_desktop_recovery_code(
 }
 
 #[tauri::command]
+fn recover_desktop_existing_recovery(
+    recovery_code: String,
+    state: State<'_, AppState>,
+) -> Result<desktop_account_sync_v1::AccountProjection, String> {
+    state.require_external_access()?;
+    let recovery_code = Zeroizing::new(recovery_code);
+    let (credentials, gateway) = desktop_account_cloud_gateway(
+        desktop_account_credentials(&state),
+        state.account_sync_mock_enabled,
+    )?;
+    let mut connection = open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
+    desktop_account_sync_v1::recover_existing_recovery(
+        &mut connection,
+        &credentials,
+        &gateway,
+        recovery_code.as_str(),
+    )?;
+    desktop_account_sync_v1::projection(&connection, &credentials, true, None)
+}
+
+#[tauri::command]
 fn sign_out_desktop_google_account(
     state: State<'_, AppState>,
 ) -> Result<desktop_account_sync_v1::AccountProjection, String> {
@@ -20943,7 +20968,8 @@ fn set_desktop_cloud_list_pinned(
         desktop_account_credentials(&state),
         state.account_sync_mock_enabled,
     )?;
-    desktop_account_sync_v1::set_cloud_list_pinned(&credentials, &gateway, &conversation_id, pinned)
+    let connection = open_desktop_workspace_connection(&state.store_paths.root, &state.store_paths.database)?;
+    desktop_account_sync_v1::set_cloud_list_pinned(&connection, &credentials, &gateway, &conversation_id, pinned)
 }
 
 fn run_desktop_pending_title_sync_cycle(app: &tauri::AppHandle) {
@@ -21688,6 +21714,7 @@ pub fn run() {
             sign_in_desktop_google_account,
             create_desktop_recovery_code,
             confirm_desktop_recovery_code,
+            recover_desktop_existing_recovery,
             sign_out_desktop_google_account,
             sync_selected_desktop_conversation,
             cancel_desktop_conversation_sync,

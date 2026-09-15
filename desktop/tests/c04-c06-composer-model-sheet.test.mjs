@@ -118,7 +118,7 @@ test('C06 pricing-period refresh follows every open model-sheet render, not side
   for (const token of [
     'function scheduleComposerModelPricingRefresh()',
     'millisecondsUntilDeepSeekPricingTransition() + 80',
-    'scheduleComposerModelPricingRefresh(); return;',
+    'scheduleComposerModelPricingRefresh();',
   ]) assert.ok(app.includes(token), token);
   const sidebarStart = app.indexOf('function updateSidebarWidth(width)');
   const sidebarEnd = app.indexOf("app.addEventListener('pointerdown'", sidebarStart);

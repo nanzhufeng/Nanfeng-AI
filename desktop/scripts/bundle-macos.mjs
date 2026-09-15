@@ -5,7 +5,9 @@ import { spawn, execFileSync } from 'node:child_process';
 const desktopRoot = resolve(import.meta.dirname, '..');
 const appBundle = resolve(desktopRoot, 'src-tauri/target/release/bundle/macos/南枫 AI Desktop.app');
 const dmgDirectory = resolve(desktopRoot, 'src-tauri/target/release/bundle/dmg');
-const dmgOutput = resolve(dmgDirectory, 'Nanfeng-AI-macOS.dmg');
+const tauriConfig = JSON.parse(await readFile(resolve(desktopRoot, 'src-tauri/tauri.conf.json'), 'utf8'));
+if (!/^\d+\.\d+\.\d+$/u.test(tauriConfig.version || '')) throw new Error('Desktop 版本必须是简洁的 x.y.z 格式。');
+const dmgOutput = resolve(dmgDirectory, `Nanfeng-AI-macOS-${tauriConfig.version}.dmg`);
 
 async function androidPublicCloudConfig() {
   const raw = await readFile(resolve(desktopRoot, '..', 'local.properties'), 'utf8');

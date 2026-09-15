@@ -178,8 +178,9 @@ class P3AConversationRoomContractsTest {
             .put("surface", "CHAT").put("nodes", org.json.JSONArray().put(node))
         val prepared = com.nanzhufeng.ai.domain.NfaiSyncPreparedSnapshot("com.nanzhufeng.ai", "conversation-integration", 2,
             listOf(com.nanzhufeng.ai.domain.NfaiSyncRecord("conversation", baseline.conversation.id.value, 2, "NORMAL", content.toString())))
-        val sealed = com.nanzhufeng.ai.domain.NfaiSyncV1Gateway.sealDirect(prepared) as com.nanzhufeng.ai.domain.NfaiSyncResult.Sealed
-        val opened = com.nanzhufeng.ai.domain.NfaiSyncV1Gateway.openDirect(sealed.canonicalEnvelope, prepared.appId, prepared.documentId, 2) as com.nanzhufeng.ai.domain.NfaiSyncResult.Opened
+        val recoveryCode = "room-contract-recovery".toCharArray()
+        val sealed = com.nanzhufeng.ai.domain.NfaiSyncV1Gateway.seal(prepared, recoveryCode, ByteArray(32) { it.toByte() }) as com.nanzhufeng.ai.domain.NfaiSyncResult.Sealed
+        val opened = com.nanzhufeng.ai.domain.NfaiSyncV1Gateway.open(sealed.canonicalEnvelope, recoveryCode, prepared.appId, prepared.documentId, 2) as com.nanzhufeng.ai.domain.NfaiSyncResult.Opened
         val decoded = P7FConversationSyncWireFormat.decodeWithModelUsage(opened.value.snapshot)
         database.runInTransaction {
             repository.saveVerifiedCloudMerge((mergeNewerRemoteConversation(baseline, decoded.snapshot) as P7FExistingConversationMerge.Applied).snapshot)

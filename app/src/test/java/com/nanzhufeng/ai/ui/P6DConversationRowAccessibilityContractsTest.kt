@@ -212,7 +212,7 @@ class P6DConversationRowAccessibilityContractsTest {
         val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
         for (token in listOf(
             "contentDescription = if (batchEditing) \"退出批量编辑\" else \"批量编辑对话\"",
-            "modifier = Modifier.size(scaledAppIconSize(13.3.dp))",
+            "modifier = Modifier.size(scaledAppIconSize(13.dp))",
             "var selectedBatchConversationIds by remember",
             "var pendingBatchDelete by remember",
             "ConversationBatchEditControls(",
@@ -344,7 +344,8 @@ class P6DConversationRowAccessibilityContractsTest {
             "ConversationMenuAction(Icons.Rounded.Visibility, \"未读\"",
             "ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove",
             "ConversationMenuAction(Icons.Rounded.AttachFile, \"已上传文件\"",
-            "ConversationMenuAction(Icons.Rounded.CloudUpload, \"同步到南枫云\"",
+            "Icons.Rounded.CloudUpload,",
+            "\"同步到南枫云\"",
             "ConversationMenuAction(Icons.Rounded.Search, \"在聊天中查找\"",
             "ConversationMenuAction(Icons.Rounded.Home, \"添加到主屏幕\"",
             "ConversationManagementAction.ARCHIVE",

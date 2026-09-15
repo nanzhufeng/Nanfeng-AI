@@ -62,6 +62,22 @@ test('conversation rows render one theme dot and stable conversation-dot-progres
   }
 });
 
+test('a manual unread mark stays visibly themed even when automatic unread indicators are off', () => {
+  const html = renderChatFirstShell({
+    data,
+    native: true,
+    pane: 'chat',
+    status: '',
+    error: '',
+    connection: {},
+    productSettings: { unreadIndicators: false },
+    unreadConversationIds: new Set(),
+    manualUnreadAtMs: new Map([['recent-manual-old', 100]]),
+  });
+  const row = html.match(/<div class="chat-history-row[^>]*data-id="recent-manual-old"[\s\S]*?<\/div>\s*<\/div>/)?.[0] || '';
+  assert.match(row, /chat-history-unread/);
+});
+
 test('pinned rows reserve a phone conversation glyph before the unread state and title', async () => {
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   for (const token of ['.chat-history-conversation-icon { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px;', '.chat-history-conversation-icon svg { width: 17px; height: 17px;', '.chat-history-select .chat-history-title-line { display: flex; min-width: 0; align-items: center; gap: 8px;', '.chat-history-row.selected .chat-history-conversation-icon { color: var(--accent-orange); }']) assert.ok(css.includes(token), token);

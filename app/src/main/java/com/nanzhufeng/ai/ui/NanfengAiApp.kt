@@ -767,7 +767,7 @@ internal fun NanfengAiApp(
                     onSwitchAccount = { accountSyncViewModel.switchAccount(activity ?: context) },
                     onSignOut = accountSyncViewModel::signOut,
                     onPeriodicChanged = accountSyncViewModel::setPeriodicEnabled,
-                    onResetRecoveryMaterial = accountSyncViewModel::resetRetiredRecoveryMaterial,
+                    onPrepareRecovery = accountSyncViewModel::prepareRecoveryProtection,
                     onReadCloudDocuments = accountSyncViewModel::readCloudDocuments,
                     loadAvatar = accountSyncViewModel::loadAvatar,
                 )
@@ -3051,9 +3051,17 @@ private fun AboutSettingsCard() = Surface(
             Text("Android 版 ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(3.dp))
             Text("构建号 ${BuildConfig.VERSION_CODE}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(3.dp))
+            Text("开发时间 ${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
+
+private fun formatDevelopmentTime(epochSeconds: Long): String = runCatching {
+    java.time.Instant.ofEpochSecond(epochSeconds)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+}.getOrElse { "未记录" }
 
 @Composable
 private fun AboutSettingsSection(content: @Composable ColumnScope.() -> Unit) {

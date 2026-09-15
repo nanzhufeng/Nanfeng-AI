@@ -93,11 +93,11 @@ test('C03 sidebar preserves Android information order and uses floating settings
     'class="chat-search-wrap"',
     'data-action="show-reminders"',
     'data-action="show-transcription"',
-    'class="chat-history"',
+    'class="chat-history-group"',
     'class="chat-sidebar-footer"',
   ].map(token => html.indexOf(token));
 
-  assert.ok(order.every(index => index >= 0), order);
+  assert.ok(order.every(index => index >= 0), JSON.stringify(order));
   assert.deepEqual(order, [...order].sort((left, right) => left - right));
   for (const token of [
     'class="chat-search-glyph"',
@@ -113,13 +113,12 @@ test('C03 sidebar preserves Android information order and uses floating settings
 test('C03 keeps search, reminders, and transcription outside the conversation scroll owner', async () => {
   const html = render({ data: activeData, selectedConversationId: 'conversation-c02' });
   const fixedStart = html.indexOf('class="chat-sidebar-fixed-tools"');
-  const fixedEnd = html.indexOf('</section>', fixedStart);
   const scrollStart = html.indexOf('class="chat-sidebar-scroll"');
-  assert.ok(fixedStart >= 0 && fixedEnd > fixedStart && scrollStart > fixedEnd);
-  const fixedTools = html.slice(fixedStart, fixedEnd);
+  assert.ok(fixedStart >= 0 && scrollStart > fixedStart);
+  const fixedTools = html.slice(fixedStart, scrollStart);
   for (const token of ['id="chat-search"', 'data-action="show-reminders"', 'data-action="show-transcription"']) assert.ok(fixedTools.includes(token), token);
-  assert.ok(!fixedTools.includes('class="chat-history"'));
-  assert.ok(html.indexOf('class="chat-history"') > scrollStart);
+  assert.ok(!fixedTools.includes('class="chat-history-group"'));
+  assert.ok(html.indexOf('class="chat-history-group"') > scrollStart);
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   assert.match(css, /\.chat-sidebar-fixed-tools \{[^}]*flex: 0 0 auto;/s);
   assert.match(css, /\.chat-sidebar-scroll \{[^}]*flex: 1 1 auto;[^}]*overflow-y: auto;/s);

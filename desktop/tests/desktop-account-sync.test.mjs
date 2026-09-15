@@ -223,16 +223,16 @@ test('account settings match the phone recovery-and-cloud card', () => {
   for (const forbidden of ['从南枫云恢复', '恢复为新工作区', 'conversation-cloud-safe']) assert.ok(!rendered.includes(forbidden));
 });
 
-test('sidebar owns centered recent and cloud list switching', async () => {
-  const [chat, settings, icons] = await Promise.all([
+test('sidebar keeps the local and cloud tabs with an explicit cloud read action', async () => {
+  const [chat, icons] = await Promise.all([
     readFile(resolve(import.meta.dirname, '../src/chat-shell.mjs'), 'utf8'),
-    readFile(resolve(import.meta.dirname, '../src/android-settings-shell.mjs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src/icon-source.mjs'), 'utf8'),
   ]);
   assert.match(chat, /data-action="show-recent-conversation-list"/);
   assert.match(chat, /data-action="show-cloud-conversation-list"/);
-  assert.match(chat, /aria-label="本地会话"[^>]*>本地<\/button>/);
-  assert.match(chat, /aria-label="云端会话"[^>]*>云端<\/button>/);
+  assert.match(chat, /aria-label="本地会话"/);
+  assert.match(chat, /aria-label="云端会话"/);
+  assert.match(chat, /chat-sidebar-list-tabs/);
   assert.match(chat, /class="chat-sidebar-list-utility \$\{batchEditing \? 'selected' : ''\}" data-action="toggle-conversation-batch-edit"/);
   assert.match(chat, /toggle-conversation-batch-edit[^`]*icons\.listChecks/);
   assert.match(icons, /listChecks: `\$\{p\('m3 6 2 2 4-4'\)\}\$\{p\('m3 14 2 2 4-4'\)\}\$\{p\('M13 6h8'\)\}\$\{p\('M13 14h8'\)\}`/);
@@ -242,11 +242,9 @@ test('sidebar owns centered recent and cloud list switching', async () => {
   assert.match(chat, /icons\.cloudDownloadSolid/);
   assert.match(chat, /data-action="load-account-cloud-documents"/);
   assert.doesNotMatch(chat, /data-action="open-cloud-restore"/);
-  assert.match(settings, /data-action="load-account-cloud-documents"/);
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   for (const token of [
     '.chat-sidebar-list-selector { position: relative; display: flex; width: 100%; min-height: 30px;',
-    '.chat-sidebar-list-tabs { display: grid; width: 33.333%;',
     '.chat-sidebar-list-utility { display: grid; box-sizing: border-box; flex: 0 0 26px;',
     '.chat-first .chat-sidebar-list-utility { flex: 0 0 26px !important; width: 26px !important; min-width: 26px !important; max-width: 26px !important; height: 26px !important; min-height: 26px !important; max-height: 26px !important; padding: 0 !important; border-radius: 50% !important; line-height: 1 !important; }',
     '.chat-first .chat-sidebar-list-utility:hover,',
@@ -289,13 +287,14 @@ test('cloud empty state has no duplicate read button and the read list survives 
   assert.match(app, /sign-out-google-account[\s\S]*clearCloudConversationCache/);
 });
 
-test('cloud tab reuses the complete local conversation row after the direct read', async () => {
+test('cloud tab renders the restored cloud conversations without deleting local rows', async () => {
   const rendered = renderChatFirstShell({
     data: fixture, native: true, pane: 'chat', selectedConversationId: 'conversation-safe',
     sidebarConversationList: 'cloud', cloudConversations: [{ workspaceId: 'workspace-cloud-safe', id: 'conversation-safe', title: '云端测试会话', revision: 1, createdAt: '2026-09-13T00:00:00Z', updatedAt: '2026-09-13T00:00:00Z', messages: [] }],
   });
-  assert.ok(rendered.includes('aria-label="云端会话"'));
   assert.ok(rendered.includes('云端测试会话'));
+  assert.match(rendered, /aria-label="本地会话"/);
+  assert.match(rendered, /aria-label="云端会话"/);
   assert.ok(rendered.includes('data-action="select-chat" data-id="conversation-safe" data-workspace-id="workspace-cloud-safe"'));
   assert.ok(rendered.includes('data-action="set-conversation-pinned"'));
   assert.ok(rendered.includes('data-action="open-conversation-rename"'));
@@ -419,14 +418,15 @@ test('desktop batch edit follows the Android conversation list contract', async 
   ]) assert.ok(css.includes(token), token);
 });
 
-test('desktop cloud read is a single batch action that skips retired legacy envelopes', async () => {
+test('desktop cloud read is a single batch action that skips retired direct envelopes', async () => {
   const [owner, command, app, permissions] = await Promise.all([
     readFile(resolve(import.meta.dirname, '../src-tauri/src/desktop_account_sync_v1.rs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src-tauri/src/lib.rs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src-tauri/permissions/default.toml'), 'utf8'),
   ]);
-  assert.match(owner, /sync_v1::open_direct\(/);
+  assert.match(owner, /sync_v1::open_with_account_wrapping_material\(/);
+  assert.doesNotMatch(owner, /sync_v1::open_direct\(/);
   assert.match(owner, /CLOUD_LIST_LEGACY_SKIPPED/);
   assert.match(owner, /restore_remote_envelope\(connection, credentials, document\)/);
   assert.match(owner, /skipped_legacy_count/);

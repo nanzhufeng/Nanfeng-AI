@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.os.SystemClock
 import android.util.Log
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -20,7 +19,6 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,14 +35,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogWindowProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -150,6 +146,7 @@ data class P7DAccountSyncUiState(
     val completedOperationFeedback: P7DAccountSyncFeedback? = null,
     val notice: String? = null,
     val lastSyncedAtEpochMs: Long? = null,
+    val recoveryReady: Boolean = false,
     val periodicEnabled: Boolean = false,
     val syncedConversationIds: Set<String> = emptySet(),
     val cloudConversations: List<com.nanzhufeng.ai.domain.Conversation> = emptyList(),
@@ -298,6 +295,7 @@ class P7DAccountSyncViewModel(
         when {
             !state.configured -> state = state.copy(detailVisible = true, notice = "Google 登录与云端服务尚未配置。")
             state.session == null -> state = state.copy(detailVisible = true, notice = "请先登录 Google 账号。")
+            !state.recoveryReady -> state = state.copy(detailVisible = true, notice = "请先完成恢复保护。")
             else -> {
                 val progressStartedAtElapsedMs = SystemClock.elapsedRealtime()
                 state = state.copy(
@@ -402,18 +400,24 @@ class P7DAccountSyncViewModel(
             .onFailure { state = state.copy(notice = "定期同步设置保存失败。") }
     }
 
-    /** Direct account sync does not use recovery material.  This only clears a
-     * retired local record after an explicit "lost / replace" action. */
-    fun resetRetiredRecoveryMaterial() {
+    fun prepareRecoveryProtection(recoveryCode: String, recoveryCodeSaved: Boolean) {
         if (state.working || state.session == null) return
-        val userId = checkNotNull(state.session).userId
+        val secret = recoveryCode.toCharArray()
         state = state.copy(working = true, notice = null)
         viewModelScope.launch {
-            val result = runCatching { withContext(Dispatchers.IO) { accountOwner.clearRetiredRecoveryMaterial(userId) } }
-            state = state.copy(
-                working = false,
-                notice = if (result.isSuccess) "旧恢复材料已清除；当前账号同步不需要恢复码。" else "恢复材料处理失败，请稍后重试。",
+            val result = try {
+                withContext(Dispatchers.IO) { manualSync.prepareRecoveryProtection(secret, recoveryCodeSaved) }
+            } finally {
+                secret.fill('\u0000')
+            }
+            state = result.fold(
+                onSuccess = {
+                    if (scheduler.enabled()) scheduler.resumeIfEnabled()
+                    loadState().copy(detailVisible = true, notice = "恢复保护已启用。")
+                },
+                onFailure = { state.copy(working = false, notice = it.message ?: "无法启用恢复保护。") },
             )
+            if (result.isSuccess) refreshLatestSync()
         }
     }
 
@@ -449,6 +453,7 @@ class P7DAccountSyncViewModel(
         return P7DAccountSyncUiState(
             configured = accountOwner.configured,
             session = session,
+            recoveryReady = session?.let { accountOwner.recoveryReady(it.userId) } == true,
             periodicEnabled = scheduler.enabled(),
         )
     }
@@ -514,12 +519,14 @@ internal fun P7DAccountSyncScreen(
     onSwitchAccount: () -> Unit,
     onSignOut: () -> Unit,
     onPeriodicChanged: (Boolean) -> Unit,
-    onResetRecoveryMaterial: () -> Unit,
+    onPrepareRecovery: (String, Boolean) -> Unit,
     onReadCloudDocuments: () -> Unit,
     loadAvatar: suspend (String) -> ByteArray?,
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
+    var recoveryCode by remember(state.session?.userId) { mutableStateOf("") }
+    var recoverySaved by remember(state.session?.userId) { mutableStateOf(false) }
     LaunchedEffect(state.notice, state.completedOperationFeedback) {
         if (state.completedOperationFeedback == null) {
             state.notice?.takeIf { it.isNotBlank() }?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
@@ -615,24 +622,42 @@ internal fun P7DAccountSyncScreen(
                         Text("上次同步  ${formatSyncTime(it)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                SettingsSwitch(checked = state.periodicEnabled, onCheckedChange = onPeriodicChanged, enabled = !state.working)
+                SettingsSwitch(checked = state.periodicEnabled, onCheckedChange = onPeriodicChanged, enabled = state.recoveryReady && !state.working)
+            }
+            if (state.session != null && !state.recoveryReady) {
+                Spacer(Modifier.height(16.dp))
+                Text("恢复保护", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = recoveryCode,
+                    onValueChange = { recoveryCode = it.take(128) },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("输入至少 12 个字符的恢复码") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    enabled = !state.working,
+                    shape = P5AInteractiveShape,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = recoverySaved, onCheckedChange = { recoverySaved = it }, enabled = !state.working)
+                    Text("我已保存恢复码", style = MaterialTheme.typography.bodySmall)
+                }
+                Button(
+                    onClick = { onPrepareRecovery(recoveryCode, recoverySaved); recoveryCode = "" },
+                    enabled = recoveryCode.length >= 12 && recoverySaved && !state.working,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = P5AInteractiveShape,
+                ) { Text("启用端到端加密同步") }
             }
         }
         if (state.session != null) WhiteCard(Modifier.fillMaxWidth()) {
             Text("恢复与安全", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(20.dp))
-            OutlinedButton(
-                onClick = onResetRecoveryMaterial,
-                enabled = !state.working,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = P5AInteractiveShape,
-                border = null,
-                colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText),
-            ) { Text("更换恢复码 / 已丢失") }
+            Text(if (state.recoveryReady) "恢复保护已启用，云端只保存加密封包。" else "完成恢复保护后才能读取或同步云端对话。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(18.dp))
             OutlinedButton(
                 onClick = onReadCloudDocuments,
-                enabled = !state.working,
+                enabled = state.recoveryReady && !state.working,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = P5AInteractiveShape,
                 border = null,
@@ -664,7 +689,6 @@ internal fun P7DAccountSyncProgressDialog(
     val detail = if (isWorking) operation.progressDetail else checkNotNull(completedFeedback).detail
     val feedbackKind = completedFeedback?.kind
     Dialog(onDismissRequest = {}) {
-        P7DNoDimProgressDialogEffect()
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.extraLarge,
@@ -703,25 +727,6 @@ internal fun P7DAccountSyncProgressDialog(
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 if (detail.isNotBlank()) Text(detail, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-}
-
-@Composable
-private fun P7DNoDimProgressDialogEffect() {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val window = (view.parent as? DialogWindowProvider)?.window
-        val originalFlags = window?.attributes?.flags ?: 0
-        val originalDimAmount = window?.attributes?.dimAmount ?: 0f
-        window?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-        onDispose {
-            if (originalFlags and WindowManager.LayoutParams.FLAG_DIM_BEHIND != 0) {
-                window?.apply {
-                    addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-                    setDimAmount(originalDimAmount)
-                }
             }
         }
     }

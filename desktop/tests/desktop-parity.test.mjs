@@ -151,7 +151,7 @@ test('conversation header branches from visible transcript content like Android'
     contextMenu: { id: conversation.id, revision: conversation.revision, pinned: false, favorite: false, archived: false, source: 'header' },
   });
   for (const token of ['context-menu-share', 'context-menu-find', 'context-menu-pin', 'context-menu-archive', 'context-menu-delete']) assert.ok(menuHtml.includes(token), token);
-  assert.ok(!menuHtml.includes('context-menu-rename'));
+  assert.ok(menuHtml.includes('context-menu-rename'));
 });
 
 test('completed assistant answers expose answer information only through the more menu', () => {
@@ -185,8 +185,8 @@ test('settings expose the latest phone values in the desktop primary and seconda
   for (const token of ['aria-label="设置一级菜单"', 'aria-label="设置二级页面"', '外观', '深色', '字体大小', '大', '主题色', '绿色', 'open-settings-picker']) assert.ok(appearance.includes(token));
   const favorites = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'favorites', status: '', error: '', connection: {}, favoriteConversationIds: new Set([conversation.id]) });
   for (const token of ['收藏', 'toggle-conversation-favorite', '双端同步']) assert.ok(favorites.includes(token));
-  const about = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo: { version: '0.0.1', platform: 'macos', arch: 'aarch64' } });
-  for (const token of ['Desktop 版 0.0.1', 'macos', 'aarch64']) assert.ok(about.includes(token));
+  const about = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo: { version: '0.0.1', platform: 'macos', arch: 'aarch64', buildEpochSeconds: 1767225600 } });
+  for (const token of ['Desktop 版 0.0.1', 'macos', 'aarch64', '开发时间']) assert.ok(about.includes(token));
   assert.ok(!about.includes('读取中'));
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   assert.match(css, /\.android-settings-about > div:not\(\.android-settings-divider\)/);

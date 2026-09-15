@@ -34,11 +34,10 @@ class P7DAccountSyncUiContractsTest {
         val source = File("src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt").readText()
         assertTrue(source.contains("syncStateActionMessage(metadata)"))
         assertTrue(source.contains("云端已有不同版本，请先读取云端列表并处理冲突。"))
-        assertTrue(source.contains("DIRECT_HASH_MISMATCH"))
-        assertTrue(source.contains("云端内容校验值不一致"))
-        assertTrue(source.contains("DIRECT_PAYLOAD_REJECTED"))
-        assertTrue(source.contains("云端数据字段校验未通过"))
-        assertFalse(source.contains("该对话正在由原设备迁移为直接同步，请稍后刷新列表。"))
+        assertTrue(source.contains("KEY_MATERIAL_UNAVAILABLE"))
+        assertTrue(source.contains("本机恢复保护材料不可用"))
+        assertTrue(source.contains("请先在账号页完成恢复保护。"))
+        assertFalse(source.contains("直接同步"))
         assertFalse(source.contains("账号同步状态需要先处理。"))
     }
 
@@ -77,10 +76,12 @@ class P7DAccountSyncUiContractsTest {
         assertFalse(syncCard.contains("}\n            state.lastSyncedAtEpochMs"))
     }
 
-    @Test fun `account page retains the two phone recovery actions and exposes direct cloud read`() {
+    @Test fun `account page requires recovery protection before cloud read`() {
         val source = File("src/main/java/com/nanzhufeng/ai/ui/P7DAccountSyncUi.kt").readText()
-        assertTrue(source.contains("Text(\"更换恢复码 / 已丢失\")"))
-        assertFalse(source.contains("P7DRecoveryCodeField"))
+        assertTrue(source.contains("fun prepareRecoveryProtection(recoveryCode: String, recoveryCodeSaved: Boolean)"))
+        assertTrue(source.contains("PasswordVisualTransformation()"))
+        assertTrue(source.contains("Text(\"启用端到端加密同步\")"))
+        assertTrue(source.contains("enabled = state.recoveryReady && !state.working"))
         assertTrue(source.contains("Icons.Rounded.CloudDownload"))
         assertTrue(source.contains("Text(\"读取云端列表\")"))
     }
@@ -144,8 +145,8 @@ class P7DAccountSyncUiContractsTest {
         assertTrue(directSync.contains("finishOperation("))
         assertTrue(account.contains("fun P7DAccountSyncProgressDialog"))
         assertTrue(account.contains("CircularProgressIndicator"))
-        assertTrue(account.contains("P7DNoDimProgressDialogEffect()"))
-        assertTrue(account.contains("clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)"))
+        assertTrue(account.contains("Dialog(onDismissRequest = {})"))
+        assertFalse(account.contains("import androidx.compose.ui.window.Dialog"))
         assertTrue(account.contains("LaunchedEffect(state.notice, state.completedOperationFeedback)"))
         assertTrue(account.contains("Toast.makeText(context, it, Toast.LENGTH_LONG).show()"))
         assertTrue(app.contains("syncOperation = accountSyncViewModel.state.activeOperation"))

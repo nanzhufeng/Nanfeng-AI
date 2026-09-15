@@ -29,12 +29,12 @@ class NewConversationRecentListContractsTest {
             workspace.indexOf("private fun WorkProjectNavigationDrawer"),
         )
 
-        assertTrue(drawer.contains("val drawerConversations = state.conversations.filter { it.currentLeafMessageId != null }"))
+        assertTrue(drawer.contains("val allDrawerConversations = state.conversations.filter { it.currentLeafMessageId != null }"))
         assertTrue(drawer.contains("conversations = drawerConversations"))
-        assertTrue(drawer.contains("val pinned = remember(drawerConversations, state.watchLaterAtEpochMs)"))
-        assertTrue(drawer.contains("prioritizeWatchLater(drawerConversations.filter { it.pinnedAt != null })"))
-        assertTrue(drawer.contains("val content = remember(drawerConversations, state.watchLaterAtEpochMs)"))
-        assertTrue(drawer.contains("prioritizeWatchLater(drawerConversations.filter { it.pinnedAt == null })"))
+        assertTrue(drawer.contains("val pinned = remember(drawerConversations, state.watchLaterAtEpochMs, cloudListVisible, cloudPinnedConversationIds)"))
+        assertTrue(drawer.contains("prioritizeWatchLater(drawerConversations.filter { conversation ->"))
+        assertTrue(drawer.contains("val content = remember(drawerConversations, state.watchLaterAtEpochMs, cloudListVisible, cloudPinnedConversationIds)"))
+        assertTrue(drawer.contains("if (cloudListVisible) conversation.id.value !in cloudPinnedConversationIds else conversation.pinnedAt == null"))
         assertFalse(drawer.contains("val content = state.conversations.filter"))
     }
 }

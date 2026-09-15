@@ -17,7 +17,7 @@ test('attachment long press tolerates hand jitter but cancels a drag', async () 
     window: { setTimeout: callback => { timer = callback; return 1; }, clearTimeout: () => { timer = null; } },
     fullSearchHit: id => ({ entryId: id }), rememberFullSearchScroll() {}, render() {},
   };
-  runInNewContext(source.slice(source.indexOf('let searchAttachmentLongPressTimer ='), source.indexOf('render = renderUnified;')), context);
+  runInNewContext(source.slice(source.indexOf('let searchAttachmentLongPressTimer ='), source.indexOf('const render = renderUnified;')), context);
   const down = { button: 0, clientX: 20, clientY: 20, target: { closest: selector => selector === '.desktop-search-attachment-card' ? card : null } };
   handlers.pointerdown(down);
   handlers.pointermove({ clientX: 22, clientY: 21 });

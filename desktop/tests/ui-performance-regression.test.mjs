@@ -126,7 +126,7 @@ test('assistant answer menu survives residual transcript scroll and closes on a 
   assert.match(wheelOwner, /state\.assistantMessageMenu/);
   assert.match(wheelOwner, /\.chat-scroll\[data-conversation-id\]/);
   assert.match(wheelOwner, /closeTopOverlay\(\{ restoreFocus: false \}\)/);
-  const renderOwner = app.slice(app.lastIndexOf('function render()'), app.indexOf('function cameraCaptureDialog'));
+  const renderOwner = app.slice(app.indexOf('function renderUnified()'), app.indexOf('function cameraCaptureDialog'));
   assert.match(renderOwner, /if \(!retainedTranscript \|\| state\.pendingChatScrollToLatestId \|\| state\.pendingChatSendScrollToLatestId\) restoreChatScroll\(\)/);
 });
 
@@ -149,6 +149,7 @@ test('assistant answer menu opens on primary pointerdown while click is keyboard
 
 test('search, startup projections and preview reads never run blocking work on the AppKit thread', () => {
   assert.match(rust, /async fn run_desktop_store_blocking/);
+  assert.match(rust, /async fn run_desktop_store_paths_blocking/);
   assert.match(rust, /tauri::async_runtime::spawn_blocking/);
   for (const name of [
     'list_desktop_workspaces',
@@ -164,7 +165,7 @@ test('search, startup projections and preview reads never run blocking work on t
   ]) {
     const command = rustCommand(name);
     assert.match(command, new RegExp(`async fn ${name}`));
-    assert.match(command, /run_desktop_store_blocking/);
+    assert.match(command, /run_desktop_store(?:_paths)?_blocking/);
   }
   const localIndexQuery = rustCommand('query_desktop_local_index');
   assert.match(localIndexQuery, /run_desktop_store_paths_blocking/);
