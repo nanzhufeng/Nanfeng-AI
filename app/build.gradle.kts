@@ -202,7 +202,13 @@ android {
 
 gradle.taskGraph.whenReady {
     val needsInstallableApp = allTasks.any { task ->
-        task.name.matches(Regex("(?i)(assemble|bundle|package|install).+"))
+        task.path.startsWith(":app:") && (
+            task.name.matches(Regex("(?i)(assemble|bundle|install).+")) ||
+                (
+                    task.name.matches(Regex("(?i)package.+")) &&
+                        !task.name.endsWith("Resources", ignoreCase = true)
+                    )
+            )
     }
     if (needsInstallableApp && !formalSigningReady) {
         throw GradleException(
