@@ -1,4 +1,4 @@
 interface:
   display_name: "南枫 AI 代码审查"
-  short_description: "审查双端数据边界、事务、外发与回归风险"
-  default_prompt: "Use $nanfeng-ai-code-review for this Nanfeng AI task and report source-backed results and verification gaps."
+  short_description: "审查所有权、持久化、外发、同步与回归风险。"
+  default_prompt: "基于当前差异和合同审查风险；不修改业务代码，按证据给出可行动结论。"

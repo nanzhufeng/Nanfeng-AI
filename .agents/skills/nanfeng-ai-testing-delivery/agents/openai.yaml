@@ -1,4 +1,4 @@
 interface:
   display_name: "南枫 AI 测试交付"
-  short_description: "分层验证双端、协议与服务并安全交付产物"
-  default_prompt: "Use $nanfeng-ai-testing-delivery for this Nanfeng AI task and report source-backed results and verification gaps."
+  short_description: "选择并执行分层回归、原生验收和正式交付验证。"
+  default_prompt: "按受影响 owner 选择最小充分验证，分开报告自动测试、设备和真实服务证据。"

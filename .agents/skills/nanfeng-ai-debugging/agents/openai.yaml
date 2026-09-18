@@ -1,4 +1,4 @@
 interface:
   display_name: "南枫 AI 排错"
-  short_description: "用可复现证据定位双端、数据和服务链问题"
-  default_prompt: "Use $nanfeng-ai-debugging for this Nanfeng AI task and report source-backed results and verification gaps."
+  short_description: "用可复现证据定位 Android、Desktop、同步与存储问题。"
+  default_prompt: "先复现并沿真实 owner 链定位根因；未经修复授权只报告证据和缺口。"

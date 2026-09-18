@@ -4,18 +4,18 @@
 
 ## 下载
 
-正式版：[v1.0.12](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.12)
+当前发布：[v1.0.20](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.20)
 
-- Android：[APK](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.12/Nanfeng-AI-Android-1.0.12.apk)
-- macOS：[DMG](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.12/Nanfeng-AI-macOS-1.0.12.dmg)（Apple Development 签名，未公证）
+- Android：[APK](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-Android-1.0.20.apk)
+- macOS：[DMG](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-macOS-1.0.20.dmg)（开发签名，未公证）
 
 ## 预览
 
 | Android | macOS |
 | --- | --- |
-| ![Android 1.0.12 设置界面预览](docs/preview/android-1.0.12-emulator.png) | ![macOS 1.0.12 对话界面预览](docs/preview/macos-1.0.12.png) |
+| ![Android 1.0.20 预览](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-Android-1.0.20-preview.png) | ![macOS 1.0.20 预览](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-macOS-1.0.20-preview.png) |
 
-Android 图来自隔离模拟器中的 1.0.12 正式 APK；macOS 图来自当前构建的无数据界面。
+预览图与对应安装包一起生成并随 Release 附件校验；Android 来自隔离模拟器，macOS 来自隔离数据目录。
 
 ## 源码
 

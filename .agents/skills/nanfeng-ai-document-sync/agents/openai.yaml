@@ -1,4 +1,4 @@
 interface:
   display_name: "南枫 AI 文档同步"
-  short_description: "以全库证据同步合同、开发档案、经验与工作流"
-  default_prompt: "Use $nanfeng-ai-document-sync for this Nanfeng AI task and report source-backed results and verification gaps."
+  short_description: "用代码、测试与 Git 证据维护合同、交接、档案和经验。"
+  default_prompt: "先做全库清单与关键链路核对，再同步文档并记录冲突和未验证边界。"
