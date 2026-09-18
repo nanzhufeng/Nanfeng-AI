@@ -5,6 +5,7 @@
 ## 2026-09-18：v1.0.12 双端 GitHub 发布
 
 - 交付 Android `Nanfeng-AI-Android-1.0.12.apk`（`com.nanzhufeng.ai`，78／1.0.12，v2／v3 签名，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`）及 macOS `Nanfeng-AI-macOS-1.0.12.dmg`（Bundle ID `com.nanzhufeng.ai.desktop`、Team `457B263L9J`、Apple Development 签名，未公证）。本地 SHA-256 分别为 `536af80811ac0293cb9e48156d06ff27aa703a01d6b70ed2d3dee9d6478434f6`、`6ae31064d933eee8b238060b624581dab5cb836eda21dd9b6e845ea23b9729d9`。
+- Release：[v1.0.12](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.12) 已附 APK、DMG 与 `SHA256SUMS.txt`；GitHub Release API 下载回读的两个安装包 SHA-256 与本地候选一致，下载回读 DMG 的镜像校验有效。
 - Android APK 由 `aapt` 回读包名和版本，`apksigner` 回读 v2／v3；macOS `.app` 严格签名验证与 DMG 镜像校验均通过。Desktop 全量 435 passed／0 failed／12 skipped，lint、typecheck 通过；Android 全量 1215 passed／0 failed／3 既有真实 ZIP 夹具 skipped，lintRelease 无 error、assembleRelease 通过。
 - 根 README 保持简洁：当前下载入口、双端预览和源码路径。Android 图来自隔离模拟器中的正式 APK，Desktop 图来自当前构建的无数据界面；没有读取、上传或展示 OPPO／Mac 上的真实对话。
 - 本轮只发布已冻结产物；没有重新触碰 OPPO，也没有把构建、安装或预览冒充为真实 Provider、云同步或连续手势验收。
