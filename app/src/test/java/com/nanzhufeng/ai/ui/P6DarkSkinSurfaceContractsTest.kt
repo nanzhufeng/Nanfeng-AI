@@ -11,8 +11,8 @@ class P6DarkSkinSurfaceContractsTest {
             "val darkTable = ForegroundSurface.red < 0.5f",
             "Color(0xFF34383A)",
             "Color(0xFF42484A)",
-            "Color(0xFF5A6264)",
-            "Color(0xFF4A5153)",
+            "val tableBorder = ConversationWorkspaceCanvas",
+            "val tableDivider = ConversationWorkspaceCanvas",
             "headerBackground = tableHeaderSurface",
             "dividerColor = tableDivider",
         )) assertTrue("missing dark Markdown table treatment: $token", table.contains(token))

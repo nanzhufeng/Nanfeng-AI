@@ -50,6 +50,24 @@ class P7BAccountStateMachine(private val store: P7BMetadataStore, private val ke
     fun authenticateVerifiedOpaqueId(intentId: String, expectedRevision: Long?, opaqueId: String): P7BIntentReceipt =
         authenticate(intentId, expectedRevision, VerifiedAccountHandle.fromVerifiedAuthentication(opaqueId))
 
+    /** Google-authenticated direct sync has no encryption-key or recovery ceremony dependency. */
+    fun authenticateDirect(intentId: String, expectedRevision: Long?, opaqueId: String): P7BIntentReceipt = store.transaction {
+        val ref = accountRef(VerifiedAccountHandle.fromVerifiedAuthentication(opaqueId).opaqueId)
+        store.receipt(intentId)?.let { require(it.accountRef == ref); return@transaction it }
+        val prior = store.account(ref)
+        if (prior != null && expectedRevision != null) require(prior.revision == expectedRevision) { "REVISION_CONFLICT" }
+        val next = when {
+            prior == null -> P7BAccountMetadata(ref, P7BSyncState.DIRECTION_REQUIRED, 1, null, null, null, null, null)
+            prior.state in setOf(P7BSyncState.SIGNED_OUT, P7BSyncState.SIGNED_OUT_KEEP_LOCAL, P7BSyncState.AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION) ||
+                (prior.state == P7BSyncState.FAILED && prior.lastError == "KEY_MATERIAL_UNAVAILABLE") ->
+                prior.copy(state = P7BSyncState.DIRECTION_REQUIRED, revision = prior.revision + 1, lastError = null)
+            else -> prior
+        }
+        val receipt = P7BIntentReceipt(intentId, ref, expectedRevision, next.revision, next.state)
+        store.save(next, receipt)
+        receipt
+    }
+
     fun metadata(accountRef: String): P7BAccountMetadata? = store.account(accountRef)
 
     fun authenticate(intentId: String, expectedRevision: Long?, verified: VerifiedAccountHandle): P7BIntentReceipt = store.transaction {

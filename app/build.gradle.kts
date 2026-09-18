@@ -76,6 +76,7 @@ val formalSigningReady = formalKeystoreFile?.isFile == true
 android {
     namespace = "com.nanzhufeng.ai"
     compileSdk = 36
+    testOptions { unitTests.isIncludeAndroidResources = true }
 
     defaultConfig {
         buildConfigField("boolean", "P6E_ACCEPTANCE", "false")
@@ -84,8 +85,8 @@ android {
         applicationId = "com.nanzhufeng.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 68
-        versionName = "1.0.0"
+        versionCode = 78
+        versionName = "1.0.12"
         buildConfigField("long", "BUILD_TIME_EPOCH_SECONDS", "${System.currentTimeMillis() / 1000L}L")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -264,6 +265,7 @@ dependencies {
     testImplementation("androidx.room:room-testing:$roomVersion")
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
     // Executes the same FTS5 DDL and triggers on host SQLite; Robolectric's SQLite omits FTS5.
     testImplementation("org.xerial:sqlite-jdbc:3.41.2.2")
 }

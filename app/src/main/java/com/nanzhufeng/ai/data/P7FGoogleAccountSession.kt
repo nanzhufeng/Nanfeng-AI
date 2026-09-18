@@ -107,11 +107,11 @@ class P7FGoogleSignInClient(context: Context, private val serverClientId: String
 class P7FEncryptedSessionStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
-    fun read(): P7FCloudSession? = preferences.getString(STATE, null)?.let { encrypted ->
+    @Synchronized fun read(): P7FCloudSession? = preferences.getString(STATE, null)?.let { encrypted ->
         runCatching { JSONObject(decrypt(encrypted)).toSession() }.getOrNull()
     }
 
-    fun write(session: P7FCloudSession) {
+    @Synchronized fun write(session: P7FCloudSession) {
         val payload = JSONObject()
             .put("userId", session.userId)
             .put("email", session.email)
@@ -124,7 +124,7 @@ class P7FEncryptedSessionStore(context: Context) {
         check(preferences.edit().putString(STATE, encrypt(payload)).commit()) { "SESSION_WRITE_FAILED" }
     }
 
-    fun clear() { check(preferences.edit().remove(STATE).commit()) { "SESSION_CLEAR_FAILED" } }
+    @Synchronized fun clear() { check(preferences.edit().remove(STATE).commit()) { "SESSION_CLEAR_FAILED" } }
 
     fun hasWrappingMaterial(userId: String): Boolean = preferences.contains(wrappingStateKey(userId))
 
@@ -303,7 +303,7 @@ class P7FSupabaseAccountClient(private val config: P7CPrivateServiceConfig) {
             connection.outputStream.use { it.write(bytes) }
             val code = connection.responseCode
             val text = (if (code in 200..299) connection.inputStream else connection.errorStream)
-                ?.readUtf8Bounded(2 * 1024 * 1024).orEmpty()
+                ?.readUtf8Bounded(if (path.endsWith("/nanfeng_sync_inventory")) 32 * 1024 * 1024 else 2 * 1024 * 1024).orEmpty()
             if (code !in 200..299) error("REMOTE_${code}")
             if (text.isBlank() && allowEmpty) return JSONObject()
             return if (text.trimStart().startsWith("[")) JSONArray(text) else JSONObject(text)
@@ -421,37 +421,37 @@ class P7FGoogleAccountOwner(context: Context) {
         return signIn(activityContext)
     }
 
-    fun authenticatedTransport(): P7CAuthenticatedRpcTransport = object : P7CAuthenticatedRpcTransport {
+    private fun refreshedSession(expectedUserId: String): P7FCloudSession {
+        val current = store.read() ?: error("SIGNED_OUT")
+        check(current.userId == expectedUserId) { "ACCOUNT_CHANGED" }
+        if (current.expiresAtEpochSeconds > System.currentTimeMillis() / 1000L + 60L) return current
+        val refreshed = client!!.refresh(current.refreshToken)
+        synchronized(store) {
+            check(store.read()?.userId == expectedUserId && refreshed.userId == expectedUserId) { "ACCOUNT_CHANGED" }
+            store.write(refreshed)
+        }
+        return refreshed
+    }
+
+    fun authenticatedTransport(expectedUserId: String = store.read()?.userId ?: error("SIGNED_OUT")): P7CAuthenticatedRpcTransport = object : P7CAuthenticatedRpcTransport {
         override fun call(function: String, body: String): String {
-            val current = store.read() ?: error("SIGNED_OUT")
-            val session = if (current.expiresAtEpochSeconds <= System.currentTimeMillis() / 1000L + 60L) {
-                client!!.refresh(current.refreshToken).also(store::write)
-            } else current
-            return client!!.rpc(function, body, session.accessToken).let(::unwrapRpcResult)
+            val session = refreshedSession(expectedUserId)
+            val result = client!!.rpc(function, body, session.accessToken)
+            check(store.read()?.userId == expectedUserId) { "ACCOUNT_CHANGED" }
+            return unwrapRpcResult(result)
         }
     }
 
     /** List responses are arrays: do not use the single-document RPC unwrapping path. */
     fun listCloudDocuments(): List<String> {
-        val current = store.read() ?: error("请先登录 Google 账号。")
-        val session = if (current.expiresAtEpochSeconds <= System.currentTimeMillis() / 1000L + 60L) {
-            client!!.refresh(current.refreshToken).also(store::write)
-        } else current
-        val response = client!!.rpc("nanfeng_sync_list_documents", JSONObject().put("p_app_id", "com.nanzhufeng.ai").toString(), session.accessToken)
-        val rows = JSONArray(response)
-        require(rows.length() <= 10000) { "云端列表过大，请缩小恢复范围。" }
-        return List(rows.length()) { index ->
-            val row = rows.getJSONObject(index)
-            val envelope = when (val raw = row.get("envelope")) {
-                is JSONObject -> raw.toString()
-                is String -> raw
-                else -> error("REMOTE_DOCUMENT_INVALID")
-            }
-            val checked = NfaiSyncV1Gateway.preflight(envelope) as? com.nanzhufeng.ai.domain.NfaiSyncResult.Preflighted
-                ?: error("云端文档校验失败。")
-            require(checked.value.appId == "com.nanzhufeng.ai") { "云端文档不属于本应用。" }
-            envelope
-        }
+        val expectedUserId = store.read()?.userId ?: error("请先登录 Google 账号。")
+        val session = refreshedSession(expectedUserId)
+        val response = client!!.rpc("nanfeng_sync_inventory", JSONObject().put("p_app_id", "com.nanzhufeng.ai").toString(), session.accessToken)
+        check(store.read()?.userId == expectedUserId) { "ACCOUNT_CHANGED" }
+        val inventory = JSONObject(response)
+        val documents = inventory.getJSONArray("documents")
+        check(inventory.getInt("documentCount") == documents.length()) { "INCOMPLETE_INVENTORY" }
+        return decodeCloudDocumentList(documents.toString())
     }
 
     private fun unwrapRpcResult(raw: String): String {
@@ -497,3 +497,16 @@ private fun readBoundedGoogleAvatar(input: InputStream): ByteArray? {
 }
 
 private const val AVATAR_TIMEOUT_MILLIS = 8_000
+
+/** Transport decoding preserves one slot per row; per-document validation belongs to restore. */
+internal fun decodeCloudDocumentList(response: String): List<String> {
+    val rows = JSONArray(response)
+    require(rows.length() <= 10000) { "云端列表过大，请缩小恢复范围。" }
+    return List(rows.length()) { index ->
+        when (val raw = rows.optJSONObject(index)?.opt("envelope")) {
+            is JSONObject -> raw.toString()
+            is String -> raw
+            else -> "{}" // Preserve invalid inventory membership; never treat it as absence.
+        }
+    }
+}

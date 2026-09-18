@@ -15,7 +15,9 @@
 - 全局实时网页搜索开启后，每次普通对话都请求当前 Provider 已实现的网页检索，不用关键词猜测是否“需要当前信息”。关闭后不请求网页工具。
 - 带附件的普通对话先走共享文本／Markdown 投影，再保持显式联网状态。不得因存在附件而静默关闭 DeepSeek 或智谱的网页检索。
 - 当前 Desktop 请求 owner 只声明已在源码中实现的路由：OpenRouter server tool、Qwen Responses／Chat Completions 分支、DeepSeek Responses、智谱 Chat Completions。这里的“已实现”只表示请求序列化与本机响应解析存在，不表示真实服务已验证支持、可用或计费正确。
-- 联网成功必须伴随 Provider 返回的结构化公开来源。只接受无凭据、具有 host 的绝对 `http`／`https` URL；去重后附在回答下方。声明联网的响应若没有结构化来源，则以 `WEB_SEARCH_NO_SOURCES` 失败关闭，不把模型记忆生成的正文冒充网页结果。
+- Desktop 回答完成与联网证据分别记录：有效正文与协议终态决定回答成功，结构化工具执行／公开来源决定是否可核验联网；缺少来源不得丢弃有效正文、用量或把它变成断点续写。只接受无凭据、具有 host 的绝对 `http`／`https` URL，去重后附在回答下方。已请求但无依据显示“已请求，未返回联网依据”，不宣称已实际联网。
+- 历史 Desktop `WEB_SEARCH_NO_SOURCES`／`WEB_SEARCH_NO_VERIFIED_SOURCES` 保留失败审计与原文，提示“联网来源未核验”；用户显式重试从原用户消息重新生成，不把旧完整回答接成无限续写，也不自动补写来源、费用或完成事实。真正网络中断的既有断点恢复仍保留。
+- Android 当前仍按 `WebSearchGroundingPolicy` 执行其独立门槛（DeepSeek Responses 已豁免公开 URL）；不能把本次 Desktop 修复当作 Android 同类路径已验证。
 
 ## 3. 调用记录投影
 

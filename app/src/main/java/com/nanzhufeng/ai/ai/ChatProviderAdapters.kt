@@ -146,6 +146,8 @@ sealed interface ChatAdapterDecodedResult {
         val cachedInputTokens: Long? = null,
         /** Provider-reported subset of output tokens spent on hidden reasoning. */
         val reasoningTokens: Long? = null,
+        /** Provider-owned search execution evidence, independent of the request switch. */
+        val webSearchPerformed: Boolean = false,
     ) : ChatAdapterDecodedResult
     /** Parsed but deliberately not executed by the ordinary-chat surface. */
     data class ToolCalls(
@@ -809,6 +811,7 @@ private object ResponsesWebSearchJsonCodec {
                 } }
                 .distinctBy(ProviderWebSource::url)
                 .toList(),
+            webSearchPerformed = outputItems.any { it.stringValue("type") == "web_search_call" },
             cachedInputTokens = usage?.objectValue("input_tokens_details")?.long("cached_tokens")
                 ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens"),
             reasoningTokens = usage?.reasoningTokens(),

@@ -498,6 +498,7 @@ class ConversationFoundationViewModel(
         state = state.copy(isLoading = true, notice = notice ?: state.notice)
         viewModelScope.launch {
             val loaded = withContext(Dispatchers.IO) {
+                repository.repairLegacyCreationTimes()
                 val conversations = (repository as? ConversationListRepository)?.list(state.listScope) ?: repository.listActive()
                 val surfaceConversations = when (surface) {
                     ConversationSurface.CHAT -> conversations

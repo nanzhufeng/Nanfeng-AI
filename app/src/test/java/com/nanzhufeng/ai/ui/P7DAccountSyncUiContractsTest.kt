@@ -35,8 +35,8 @@ class P7DAccountSyncUiContractsTest {
         assertTrue(source.contains("syncStateActionMessage(metadata)"))
         assertTrue(source.contains("云端已有不同版本，请先读取云端列表并处理冲突。"))
         assertTrue(source.contains("KEY_MATERIAL_UNAVAILABLE"))
-        assertTrue(source.contains("本机恢复保护材料不可用"))
-        assertTrue(source.contains("请先在账号页完成恢复保护。"))
+        assertFalse(source.contains("请使用恢复码"))
+        assertTrue(source.contains("账号状态正在更新，请重新登录后重试。"))
         assertFalse(source.contains("直接同步"))
         assertFalse(source.contains("账号同步状态需要先处理。"))
     }
@@ -76,14 +76,13 @@ class P7DAccountSyncUiContractsTest {
         assertFalse(syncCard.contains("}\n            state.lastSyncedAtEpochMs"))
     }
 
-    @Test fun `account page requires recovery protection before cloud read`() {
+    @Test fun `account page uses login only without recovery ceremony`() {
         val source = File("src/main/java/com/nanzhufeng/ai/ui/P7DAccountSyncUi.kt").readText()
-        assertTrue(source.contains("fun prepareRecoveryProtection(recoveryCode: String, recoveryCodeSaved: Boolean)"))
-        assertTrue(source.contains("PasswordVisualTransformation()"))
-        assertTrue(source.contains("Text(\"启用端到端加密同步\")"))
-        assertTrue(source.contains("enabled = state.recoveryReady && !state.working"))
-        assertTrue(source.contains("Icons.Rounded.CloudDownload"))
-        assertTrue(source.contains("Text(\"读取云端列表\")"))
+        assertFalse(source.contains("fun prepareRecoveryProtection"))
+        assertFalse(source.contains("启用端到端加密同步"))
+        assertFalse(source.contains("PasswordVisualTransformation()"))
+        assertFalse(source.contains("使用当前 Google 账号同步，传输由 HTTPS 保护。"))
+        assertTrue(source.contains("Text(\"读取云端列表\""))
     }
 
     @Test fun `cloud read immediately restores ordinary conversations without leaving its current surface`() {
@@ -96,7 +95,7 @@ class P7DAccountSyncUiContractsTest {
         assertTrue(owner.contains("ledger.payloadHash == remote.payloadHash"))
         assertTrue(owner.contains("ledger.localContentHash == localContentHash"))
         assertTrue(owner.contains("readCloudListPresentation(session, remote)"))
-        assertTrue(owner.contains("restoreRemoteConversationInternal(header.documentId, remote)"))
+        assertTrue(owner.contains("restoreRemoteConversationInternal(header.documentId, remote, session.userId)"))
         assertTrue(owner.contains("The server list is ordered by the shared cloud update order"))
         assertTrue(owner.contains("if (conversations.findById(conversationId) == null) continue"))
         assertTrue(ui.contains("manualSync.restoreAllRemoteConversations()"))
@@ -145,8 +144,9 @@ class P7DAccountSyncUiContractsTest {
         assertTrue(directSync.contains("finishOperation("))
         assertTrue(account.contains("fun P7DAccountSyncProgressDialog"))
         assertTrue(account.contains("CircularProgressIndicator"))
-        assertTrue(account.contains("Dialog(onDismissRequest = {})"))
-        assertFalse(account.contains("import androidx.compose.ui.window.Dialog"))
+        assertTrue(account.contains("usePlatformDefaultWidth = false"))
+        assertTrue(account.contains("widthIn(max = 340.dp)"))
+        assertTrue(account.contains("import androidx.compose.ui.window.Dialog"))
         assertTrue(account.contains("LaunchedEffect(state.notice, state.completedOperationFeedback)"))
         assertTrue(account.contains("Toast.makeText(context, it, Toast.LENGTH_LONG).show()"))
         assertTrue(app.contains("syncOperation = accountSyncViewModel.state.activeOperation"))
@@ -155,7 +155,7 @@ class P7DAccountSyncUiContractsTest {
         assertTrue(workspace.contains("syncCompletedFeedback: P7DAccountSyncFeedback?"))
         assertTrue(workspace.contains("P7DAccountSyncProgressDialog(syncOperation, syncCompletedFeedback)"))
         assertTrue(account.contains("\"同步成功\""))
-        assertTrue(account.contains("\"新增 \${result.restoredCount} 个，已更新 \${result.updatedCount} 个\""))
+        assertTrue(cloudRead.contains("cloudReadFeedback(result)"))
     }
 
     @Test fun `completed cloud feedback uses the foreground surface without tonal tint and never falls through to a toast`() {

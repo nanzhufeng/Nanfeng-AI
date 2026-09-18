@@ -45,6 +45,8 @@ interface CaptureDraftRepository {
  * tree/branch semantics; UI never reaches a DAO.
  */
 interface ConversationRepository {
+    /** Idempotent local upgrade of proven native blank-chat timestamps; never infers imported dates. */
+    fun repairLegacyCreationTimes(): Int = 0
     fun save(snapshot: ConversationSnapshot): ConversationSnapshot
     /**
      * A verified cloud read may update portable text already stored under the

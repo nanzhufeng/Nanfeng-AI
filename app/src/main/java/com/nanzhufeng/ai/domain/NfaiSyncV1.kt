@@ -14,6 +14,7 @@ import javax.crypto.spec.PBEKeySpec
 /** P7-A local-only E2EE envelope. It has no account, Room, filesystem, or network ownership. */
 const val NFAI_SYNC_V1_ENVELOPE_FORMAT = "nfai.sync.envelope"
 private const val PAYLOAD_FORMAT = "nfai.sync.payload"
+private const val DIRECT_FORMAT = "nfai.sync.direct"
 private const val SYNC_VERSION = 1
 private const val KDF_ITERATIONS = 210_000
 private const val MAX_ENVELOPE_BYTES = 2 * 1024 * 1024
@@ -100,6 +101,57 @@ object NfaiSyncV1Gateway {
     fun sealKnownAnswer(snapshot: NfaiSyncPreparedSnapshot, recoveryCode: CharArray, material: NfaiSyncKnownAnswerMaterial): NfaiSyncResult =
         sealInternal(snapshot, recoveryCode, material)
 
+    /** Google-account-authorized direct sync: no recovery code, ciphertext, or key material. */
+    fun sealDirect(snapshot: NfaiSyncPreparedSnapshot): NfaiSyncResult = runCatching {
+        val payload = payloadFor(snapshot)
+        // Direct envelopes are shared with Desktop's serde_json implementation.  Do not use
+        // JSONObject.quote here: it escapes `</` and U+2000..U+20FF differently, making a
+        // faithfully returned Desktop document fail its hash check on Android.
+        val canonicalPayload = canonicalDirect(payload)
+        val bytes = canonicalPayload.toByteArray(StandardCharsets.UTF_8)
+        require(bytes.size in 1..MAX_PAYLOAD_BYTES)
+        val envelope = JSONObject()
+            .put("format", DIRECT_FORMAT)
+            .put("protocolVersion", SYNC_VERSION)
+            .put("schemaVersion", SYNC_VERSION)
+            .put("appId", snapshot.appId)
+            .put("documentId", snapshot.documentId)
+            .put("revision", snapshot.revision)
+            .put("payloadHash", sha256(bytes))
+            .put("payloadByteCount", bytes.size)
+            .put("payload", payload)
+        NfaiSyncResult.Sealed(canonical(envelope))
+    }.getOrElse { NfaiSyncResult.Rejected("DIRECT_SEAL_REJECTED") }
+
+    /** Opens only the direct, Google-authorized representation. Legacy encrypted records are
+     * deliberately not a user-action requirement; their source device migrates them on its next sync. */
+    fun openDirect(envelopeJson: String, expectedAppId: String, expectedDocumentId: String, minimumRevision: Long): NfaiSyncResult {
+        var failureCode = "DIRECT_ENVELOPE_REJECTED"
+        return runCatching {
+        val (preflight, envelope) = parseDirectEnvelope(envelopeJson)
+        failureCode = "DIRECT_BINDING_REJECTED"
+        require(preflight.appId == expectedAppId && preflight.documentId == expectedDocumentId)
+        require(preflight.revision >= minimumRevision)
+        val payload = envelope.getJSONObject("payload")
+        failureCode = "DIRECT_CANONICAL_REJECTED"
+        val directCanonicalPayload = canonicalDirect(payload).toByteArray(StandardCharsets.UTF_8)
+        val legacyAndroidCanonicalPayload = canonical(payload).toByteArray(StandardCharsets.UTF_8)
+        // Accept the old Android direct spelling only when its own byte count and hash match.
+        // This preserves already committed Android documents while all newly sealed documents
+        // use the Desktop-compatible spelling above.
+        failureCode = "DIRECT_HASH_MISMATCH"
+        require(
+            (directCanonicalPayload.size == preflight.payloadByteCount && sha256(directCanonicalPayload) == preflight.payloadHash) ||
+                (legacyAndroidCanonicalPayload.size == preflight.payloadByteCount && sha256(legacyAndroidCanonicalPayload) == preflight.payloadHash),
+        )
+        failureCode = "DIRECT_PAYLOAD_REJECTED"
+        val snapshot = parsePayload(payload)
+        failureCode = "DIRECT_BINDING_REJECTED"
+        require(snapshot.appId == preflight.appId && snapshot.documentId == preflight.documentId && snapshot.revision == preflight.revision)
+        NfaiSyncResult.Opened(NfaiSyncOpenedSnapshot(snapshot, canonicalDirect(payload)))
+        }.getOrElse { NfaiSyncResult.Rejected(failureCode) }
+    }
+
     /** The recovery code is consumed once; only its Keystore-protected derived material is retained. */
     fun createAccountWrappingMaterial(recoveryCode: CharArray): NfaiSyncAccountWrappingMaterial {
         require(recoveryCode.size >= 12)
@@ -125,7 +177,7 @@ object NfaiSyncV1Gateway {
 
     fun preflight(envelopeJson: String): NfaiSyncResult = runCatching {
         val root = strictObject(envelopeJson)
-        NfaiSyncResult.Preflighted(parseEnvelope(envelopeJson).first)
+        NfaiSyncResult.Preflighted(if (root.optString("format") == DIRECT_FORMAT) parseDirectEnvelope(envelopeJson).first else parseEnvelope(envelopeJson).first)
     }
         .getOrElse { NfaiSyncResult.Rejected("PREFLIGHT_REJECTED") }
 
@@ -211,6 +263,18 @@ object NfaiSyncV1Gateway {
         return NfaiSyncPreflight(appId, documentId, revision, hash, byteCount) to root
     }
 
+    private fun parseDirectEnvelope(text: String): Pair<NfaiSyncPreflight, JSONObject> {
+        require(text.toByteArray(StandardCharsets.UTF_8).size in 1..MAX_ENVELOPE_BYTES)
+        val root = strictObject(text)
+        root.requireExact("format", "protocolVersion", "schemaVersion", "appId", "documentId", "revision", "payloadHash", "payloadByteCount", "payload")
+        require(root.getString("format") == DIRECT_FORMAT && root.getInt("protocolVersion") == SYNC_VERSION && root.getInt("schemaVersion") == SYNC_VERSION)
+        val appId = root.getString("appId"); val documentId = root.getString("documentId"); requireId(appId); requireId(documentId)
+        val revision = root.getLong("revision"); require(revision > 0)
+        val hash = root.getString("payloadHash"); requireHash(hash)
+        val byteCount = root.getInt("payloadByteCount"); require(byteCount in 1..MAX_PAYLOAD_BYTES)
+        return NfaiSyncPreflight(appId, documentId, revision, hash, byteCount) to root
+    }
+
     private fun payloadFor(snapshot: NfaiSyncPreparedSnapshot): JSONObject {
         requireId(snapshot.appId); requireId(snapshot.documentId); require(snapshot.revision > 0 && snapshot.records.size <= MAX_RECORDS)
         val seen = mutableSetOf<String>(); val records = JSONArray()
@@ -267,4 +331,40 @@ object NfaiSyncV1Gateway {
     private fun JSONObject.requireExact(vararg keys: String) { require(keys().asSequence().toSet() == keys.toSet()) }
     private fun canonical(value: Any?): String = when (value) { null, JSONObject.NULL -> "null"; is String -> JSONObject.quote(value); is Boolean -> value.toString(); is Number -> require(value.toDouble().isFinite() && value.toLong().toDouble() == value.toDouble()).let { value.toLong().toString() }; is JSONObject -> value.keys().asSequence().toList().sorted().joinToString(",", "{", "}") { "${JSONObject.quote(it)}:${canonical(value.get(it))}" }; is JSONArray -> (0 until value.length()).joinToString(",", "[", "]") { canonical(value.get(it)) }; else -> error("unsupported JSON") }
 
+    /** Matches serde_json string emission used by the Desktop direct-sync producer. */
+    private fun canonicalDirect(value: Any?): String = when (value) {
+        null, JSONObject.NULL -> "null"
+        is String -> directQuote(value)
+        is Boolean -> value.toString()
+        is Number -> require(value.toDouble().isFinite() && value.toLong().toDouble() == value.toDouble()).let { value.toLong().toString() }
+        is JSONObject -> value.keys().asSequence().toList().sorted().joinToString(",", "{", "}") { "${directQuote(it)}:${canonicalDirect(value.get(it))}" }
+        is JSONArray -> (0 until value.length()).joinToString(",", "[", "]") { canonicalDirect(value.get(it)) }
+        else -> error("unsupported JSON")
+    }
+
+    private fun directQuote(value: String): String = buildString(value.length + 2) {
+        append('"')
+        var index = 0
+        while (index < value.length) {
+            when (val character = value[index++]) {
+                '"' -> append("\\\"")
+                '\\' -> append("\\\\")
+                '\b' -> append("\\b")
+                '\u000C' -> append("\\f")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> when {
+                    character.code < 0x20 -> append("\\u%04x".format(java.util.Locale.ROOT, character.code))
+                    character.isHighSurrogate() -> {
+                        require(index < value.length && value[index].isLowSurrogate())
+                        append(character).append(value[index++])
+                    }
+                    character.isLowSurrogate() -> error("unpaired surrogate")
+                    else -> append(character)
+                }
+            }
+        }
+        append('"')
+    }
 }

@@ -61,6 +61,25 @@ class AnswerInformationDisclosureBehaviorTest {
         assertEquals(emptyList<Any>(), unknown.sources)
     }
 
+    @Test fun `source groups retain actual titles and profile fields without inventing absent sources`() {
+        val disclosure = listOf(audit(null, listOf(
+            ContextSelectionSource("个性化资料", "profile", "昵称、职业／角色", 0),
+            ContextSelectionSource("自定义指令", "instructions", "已保存的自定义指令", 0),
+            ContextSelectionSource("知识库", "knowledge-1", "跨端开发规范", 3),
+            ContextSelectionSource("知识库", "knowledge-2", "第二份资料", 3),
+            ContextSelectionSource("记忆", "memory", "长期 Memory", 3),
+            ContextSelectionSource("当前对话路径", "path", "此前 8 条消息", 3),
+        ))).answerInformationDisclosure(emptyList())
+        assertEquals(listOf(
+            AnswerContextSourceGroup("个性化资料", listOf("昵称", "职业／角色")),
+            AnswerContextSourceGroup("自定义指令", listOf("已保存的自定义指令")),
+            AnswerContextSourceGroup("资料库", listOf("跨端开发规范", "第二份资料")),
+            AnswerContextSourceGroup("长期记忆", listOf("长期 Memory")),
+            AnswerContextSourceGroup("当前对话路径", listOf("此前 8 条消息")),
+        ), disclosure.sources.answerContextSourceGroups())
+        assertEquals(emptyList<AnswerContextSourceGroup>(), emptyList<com.nanzhufeng.ai.domain.AnswerContextSourceDisclosure>().answerContextSourceGroups())
+    }
+
     private fun audit(
         webSearchUsed: Boolean?,
         sources: List<ContextSelectionSource>,

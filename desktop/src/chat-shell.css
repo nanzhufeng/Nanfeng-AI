@@ -29,7 +29,7 @@
   --composer-idle-border: #dfe2de;
   --accent-orange-soft: #fff1e5;
   --assistant-surface: #f7f8f7;
-  --markdown-inline-code-surface: #f6f8f6;
+  --markdown-inline-code-surface: #f7f8f8;
   --system-surface: #f2f4f3;
   --tool-surface: #f1f5f8;
   --error-surface: #ffeceb;
@@ -1316,6 +1316,8 @@
 .android-settings-about p,
 .android-settings-status-card p { margin: 5px 0 0; color: #747a75; font-size: calc(11px * var(--app-font-scale, 1)); }
 .android-settings-about small { display: block; margin-top: 6px; }
+.android-settings-about, .android-settings-about * { -webkit-user-select: text; user-select: text; }
+.android-settings-about a { color: var(--accent-orange); text-decoration: underline; text-underline-offset: 3px; }
 .android-settings-status-card small { display: block; margin-top: 8px; color: #747a75; }
 .android-account-sync-page .android-account-status-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; min-height: 108px; padding: 20px 24px; }
 .android-account-status-content { min-width: 0; max-width: 860px; }
@@ -1585,7 +1587,9 @@
 .android-account-cloud-restore { display: grid; gap: 12px; padding: 20px; }
 .android-account-cloud-restore > p { margin: 0; color: #737974; font-size: calc(12px * var(--app-font-scale, 1)); line-height: 1.55; }
 .android-account-cloud-empty { color: #737974; }
-.android-account-cloud-restore > button { justify-self: start; min-height: 42px; padding: 0 16px; border: 0; border-radius: 14px; background: #f1f3f1; color: #333834; font: inherit; font-weight: 700; }
+.android-account-cloud-restore > button { display: flex; align-items: center; justify-content: center; gap: 10px; justify-self: stretch; width: 100%; min-height: 52px; padding: 12px 20px; border: 0; border-radius: 999px; background: #f1f3f1; color: #333834; font: inherit; font-weight: 600; text-align: center; }
+.android-account-cloud-restore > button > svg { width: 22px; height: 22px; flex: 0 0 22px; }
+.android-account-cloud-restore > button > span { min-width: 0; text-align: center; }
 .android-account-cloud-restore > button.primary { background: var(--accent-orange); color: #fff; }
 .android-account-cloud-restore select { min-height: 54px; padding: 0 16px; border: 0; border-radius: 18px; outline: none; background: #f6f7f6; color: #272b28; font: inherit; }
 .android-account-phone-recovery { gap: 24px; padding: 24px; }
@@ -1825,13 +1829,25 @@
 }
 .app-shell.chat-first .p6g-model-trigger:focus-visible::before { border-color: transparent; box-shadow: none; }
 .app-shell.chat-first .desktop-search-dock > label:focus-within { outline: none; border-color: var(--search-line); box-shadow: 0 8px 26px rgb(25 31 29 / 12%); }
-.answer-information-dialog { width: min(480px, calc(100vw - 32px)); }
-.answer-information-dialog h2 { margin: 0 36px 24px 0; }
-.answer-information-list { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 24px; margin: 0; }
-.answer-information-list dt,
-.answer-information-list dd { margin: 0; padding: 14px 0; font-size: 14px; line-height: 1.6; border-bottom: 1px solid var(--border, #e8ebe8); }
-.answer-information-list dd { text-align: right; overflow-wrap: anywhere; }
-.answer-information-dialog .dialog-actions { margin-top: 24px; }
+/* Answer information follows the mobile reading hierarchy; only the body scrolls. */
+.answer-information-dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; padding: 28px; border-radius: 28px; }
+.answer-information-dialog h2 { margin: 0 0 24px; font-size: 22px; line-height: 1.4; font-weight: 500; }
+.answer-information-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.answer-information-body > section + section { margin-top: 24px; }
+.answer-information-dialog h3 { margin: 0 0 12px; font-size: 12px; line-height: 1.5; font-weight: 500; color: var(--chat-muted); }
+.answer-information-list { display: block; margin: 0; }
+.answer-information-list > div + div { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--chat-border, #e8ebe8); }
+.answer-information-list dt { margin: 0 0 4px; color: var(--chat-muted); font-size: 13px; line-height: 1.5; }
+.answer-information-list dd { margin: 0; font-size: 15px; line-height: 1.6; font-weight: 500; overflow-wrap: anywhere; }
+.answer-information-list .answer-information-used { color: var(--accent-orange); }
+.answer-information-sources { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.7; }
+.answer-information-sources > li + li { margin-top: 12px; }
+.answer-information-sources > li::marker { color: var(--accent-orange); }
+.answer-information-sources ul { list-style: none; padding: 0; margin: 4px 0 0; font-size: 14px; font-weight: 400; overflow-wrap: anywhere; }
+.answer-information-sources ul li + li { margin-top: 4px; }
+.answer-information-dialog .dialog-actions { display: flex; justify-content: flex-end; margin-top: 24px; flex-shrink: 0; }
+.answer-information-dialog .answer-information-dismiss { min-height: 40px; padding: 8px 12px; border: 0; background: transparent; color: var(--accent-orange); box-shadow: none; }
+
 
 /* One circular surface owns close-control hover, press and keyboard feedback.
    Keep existing dimensions/anchors so opening or closing never moves content. */
@@ -1880,3 +1896,28 @@
 }
 .desktop-transient-toast.success::before { content: '✓'; margin-right: 7px; color: #2d7b4e; font-weight: 800; }
 .desktop-transient-toast.pending::before { content: '…'; margin-right: 7px; color: var(--accent-orange); font-weight: 800; }
+
+/* Desktop white reading canvas uses gray code surfaces; mobile owns its bright cards. */
+.chat-markdown-code-copyable { --code-surface: #f7f8f8; --code-copy-surface: transparent; --code-comment: #777f7b; --code-string: #4c8055; --code-key: #877022; --code-section: #ae6460; --code-keyword: #866296; --code-number: #9a673b; border: 0; border-radius: 16px; background: var(--code-surface); overflow: hidden; }
+.chat-code-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; margin: 0 18px; border-bottom: 1px solid color-mix(in srgb, var(--chat-muted) 14%, transparent); color: var(--chat-muted); }
+.chat-code-language { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(12px * var(--app-font-scale, 1)); font-weight: 400; }
+.chat-code-header .chat-markdown-block-copy { position: static; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 6px; width: auto; min-width: 70px; height: 40px; padding: 8px 12px; border: 0; border-radius: 999px; background: var(--code-copy-surface); color: inherit; box-shadow: none; font-size: calc(12px * var(--app-font-scale, 1)); }
+.chat-code-header .chat-markdown-block-copy:hover { background: transparent; border: 0; }
+.chat-markdown-code-copyable .chat-markdown-code { margin: 0; padding: 18px 20px 20px; border: 0; border-radius: 0; background: transparent; font: calc(13px * var(--app-font-scale, 1))/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--chat-text); tab-size: 4; }
+.code-syntax-comment { color: var(--code-comment); font-style: italic; }
+.code-syntax-string { color: var(--code-string); }
+.code-syntax-key { color: var(--code-key); }
+.code-syntax-section { color: var(--code-section); }
+.code-syntax-keyword { color: var(--code-keyword); }
+.code-syntax-number { color: var(--code-number); }
+:root[data-appearance-mode="dark"] .chat-markdown-code-copyable { --code-surface: #414543; --code-copy-surface: transparent; --code-comment: #aeb7b0; --code-string: #a7cfa8; --code-key: #e0ce8c; --code-section: #e3a49b; --code-keyword: #cbb0db; --code-number: #e5bb91; }
+:root[data-appearance-mode="dark"] .chat-markdown-code-copyable .chat-markdown-code { border: 0; background: transparent; color: var(--chat-text); }
+:root[data-appearance-mode="dark"] .chat-code-header .chat-markdown-block-copy { border: 0; background: var(--code-copy-surface); color: var(--chat-muted); }
+
+.chat-markdown-code-copyable .chat-markdown-code code { font-weight: 400; }
+
+/* Table copy shares its header surface, including hover and dark appearance. */
+.chat-markdown-table-copyable .chat-markdown-block-copy,
+.chat-markdown-table-copyable .chat-markdown-block-copy:hover,
+:root[data-appearance-mode="dark"] .chat-markdown-table-copyable .chat-markdown-block-copy,
+:root[data-appearance-mode="dark"] .chat-markdown-table-copyable .chat-markdown-block-copy:hover { background: transparent; border: 0; box-shadow: none; }

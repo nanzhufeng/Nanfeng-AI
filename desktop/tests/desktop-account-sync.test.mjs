@@ -219,8 +219,8 @@ test('account settings match the phone recovery-and-cloud card', () => {
     settingsCapabilities: { googleAccountSync: true },
     accountSync: { configured: true, state: 'READY', email: 'safe@example.invalid', remoteDocuments: [{ documentId: 'conversation-cloud-safe', revision: 2, payloadHashPrefix: 'abcdef123456' }] },
   });
-  for (const token of ['恢复与安全', '更换恢复码 / 已丢失', 'data-action="create-account-recovery-rotation"', 'data-action="load-account-cloud-documents"', '读取云端列表']) assert.ok(rendered.includes(token));
-  for (const forbidden of ['从南枫云恢复', '恢复为新工作区', 'conversation-cloud-safe']) assert.ok(!rendered.includes(forbidden));
+  for (const token of ['云端会话', 'data-action="load-account-cloud-documents"', '读取云端列表']) assert.ok(rendered.includes(token));
+  for (const forbidden of ['更换恢复码', '创建新的恢复码', '从南枫云恢复', '恢复为新工作区', 'conversation-cloud-safe']) assert.ok(!rendered.includes(forbidden));
 });
 
 test('sidebar keeps the local and cloud tabs with an explicit cloud read action', async () => {
@@ -418,7 +418,7 @@ test('desktop batch edit follows the Android conversation list contract', async 
   ]) assert.ok(css.includes(token), token);
 });
 
-test('desktop cloud read is a single batch action that skips retired direct envelopes', async () => {
+test('desktop cloud read is a single batch action that validates account documents and preserves legacy recovery', async () => {
   const [owner, command, app, permissions] = await Promise.all([
     readFile(resolve(import.meta.dirname, '../src-tauri/src/desktop_account_sync_v1.rs'), 'utf8'),
     readFile(resolve(import.meta.dirname, '../src-tauri/src/lib.rs'), 'utf8'),
@@ -426,17 +426,17 @@ test('desktop cloud read is a single batch action that skips retired direct enve
     readFile(resolve(import.meta.dirname, '../src-tauri/permissions/default.toml'), 'utf8'),
   ]);
   assert.match(owner, /sync_v1::open_with_account_wrapping_material\(/);
-  assert.doesNotMatch(owner, /sync_v1::open_direct\(/);
+  assert.match(owner, /sync_v1::open_direct\(/);
   assert.match(owner, /CLOUD_LIST_LEGACY_SKIPPED/);
   assert.match(owner, /restore_remote_envelope\(connection, credentials, document\)/);
   assert.match(owner, /skipped_legacy_count/);
-  assert.match(owner, /if envelope\.get\("format"\).*DIRECT_ENVELOPE/s);
+  assert.match(owner, /LEGACY_DEVICE_REQUIRED/);
   assert.match(command, /fn restore_all_desktop_cloud_conversations\(/);
   assert.match(command, /restore_all_remote_conversations/);
   assert.match(app, /invoke\('restore_all_desktop_cloud_conversations'\)/);
   assert.match(permissions, /"restore_all_desktop_cloud_conversations"/);
   assert.match(app, /read_desktop_workspace.*read_desktop_favorite_conversation_ids/s);
-  assert.match(app, /已读取 \$\{state\.cloudConversations\.length\} 个云端会话，已显示在云端列表。/);
+  assert.match(app, /cloudReadFeedback\(receipt\)/);
   assert.doesNotMatch(owner, /云端尚未支持完整传输，未同步/);
   assert.match(owner, /Explicitly syncing this local conversation makes its complete current/);
   assert.match(owner, /known\.0 as u64 == current\.revision && known\.1 == current\.payload_hash/);
@@ -462,7 +462,7 @@ test('conversation context menu owns the selected direct sync entry and app uses
   assert.ok(!rendered.includes('data-action="save-local-message">\n'));
 
   const source = await readFile(resolve(import.meta.dirname, '../src/app.mjs'), 'utf8');
-  for (const command of ['sync_selected_desktop_conversation', 'reconcile_desktop_conversation_sync', 'create_desktop_recovery_rotation', 'confirm_desktop_recovery_rotation', 'restore_all_desktop_cloud_conversations']) assert.ok(source.includes(command));
+  for (const command of ['sync_selected_desktop_conversation', 'reconcile_desktop_conversation_sync', 'restore_all_desktop_cloud_conversations']) assert.ok(source.includes(command));
   assert.ok(source.includes('云端提交正在后台核对；不会重复上传。'));
   assert.ok(source.includes('此 Desktop 尚未写入南枫云地址或公开访问密钥'));
   assert.ok(source.includes("'show-google-login-requirements', 'sign-in-google-account'"));

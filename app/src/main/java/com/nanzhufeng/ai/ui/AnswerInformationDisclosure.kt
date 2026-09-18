@@ -38,3 +38,21 @@ internal fun List<ContextSelectionAuditRecord>.answerInformationDisclosure(
         sources = sourceRows,
     )
 }
+
+internal data class AnswerContextSourceGroup(val label: String, val titles: List<String>)
+
+internal fun List<AnswerContextSourceDisclosure>.answerContextSourceGroups(): List<AnswerContextSourceGroup> =
+    filterNot { it.kind in setOf("对话风格", "STYLE") }
+        .groupBy { source ->
+            when (source.kind) {
+                "记忆", "Memory", "MEMORY" -> "长期记忆"
+                "知识库", "KNOWLEDGE" -> "资料库"
+                "PERSONA" -> "个性化资料"
+                "CURRENT_PATH" -> "当前对话路径"
+                else -> source.kind
+            }
+        }.map { (label, sources) ->
+            AnswerContextSourceGroup(label, sources.flatMap { source ->
+                if (label == "个性化资料") source.title.split("、", "；") else listOf(source.title)
+            }.map(String::trim).filter { it.isNotEmpty() && it != label }.distinct())
+        }

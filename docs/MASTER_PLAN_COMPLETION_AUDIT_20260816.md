@@ -2,7 +2,7 @@
 
 ## 2026-09-03 当前总控门：Android → Desktop C-01～C-16 最终独立审计
 
-**本节是本文唯一的当前完成性与排程入口。** Android 当前行为仍由会话、设置、普通运行时上下文和南枫转写四份现行合同定义；实现、回归、bundle、隔离验收和未完成边界只读取 [当前交接](CURRENT_HANDOFF.md) 顶部与 [C-01～C-16 最终独立审计](ANDROID_DESKTOP_FINAL_INDEPENDENT_AUDIT_20260903.md)。
+**本节是本文唯一的当前完成性与排程入口。** Android 当前行为仍由[会话](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[普通运行时上下文](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)和[南枫转写](ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md)四份现行合同定义；实现、回归、bundle、隔离验收和未完成边界只读取 [当前交接](CURRENT_HANDOFF.md) 顶部与 [C-01～C-16 最终独立审计](ANDROID_DESKTOP_FINAL_INDEPENDENT_AUDIT_20260903.md)。
 
 - 当前本地实现、Node／Rust、Android JVM／build、最新 bundle 与隔离 Tauri 启动门通过，没有发现需要重做的业务 owner。
 - C-01～C-16 不能整体写成“全部全状态同步完成”：C-02～C-06 缺同状态原生硬门，C-07／C-08／C-09／C-10／C-12／C-14／C-16 仍有各自行所述证据或外部边界。

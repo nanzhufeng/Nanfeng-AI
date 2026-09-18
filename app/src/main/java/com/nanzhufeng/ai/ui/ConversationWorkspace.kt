@@ -1015,6 +1015,15 @@ internal fun ConversationWorkspaceDialog(
             onDrawerOpenChanged(false)
             drawerScope.launch { drawerState.close() }
         },
+        LocalReadingDrawerOpen provides if (!returnToSearchAfterSearchOpen && !searchPageVisible) {
+            {
+                if (drawerState.isClosed) drawerScope.launch {
+                    kotlinx.coroutines.yield()
+                    drawerState.open()
+                }
+                Unit
+            }
+        } else null,
         LocalConversationFindQuery provides activeFindQuery,
         LocalConversationFindTarget provides activeFindMatches.getOrNull(activeFindMatchIndex)?.takeIf { activeFindRequestId > 0L }?.let { match ->
             ConversationFindTarget(match = match, requestId = activeFindRequestId)
@@ -1940,7 +1949,6 @@ internal fun ConversationWorkspaceDialog(
             MessageContextAction(
                 if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
                 if (copied) "已复制" else "复制",
-                iconOnly = true,
             ) {
                 copyText(presentedMessagePlainText(transcript.message)) { copiedContextMessageId = rawId }
             }
@@ -2375,7 +2383,7 @@ private const val QuickDrawerOpenHorizontalRatio = 1.35f
  * Keeps Material's full-canvas drawer gesture, then finishes a clearly horizontal right swipe
  * promptly instead of making the user drag the sheet across most of a wide screen.
  */
-private fun Modifier.quickConversationDrawerOpen(onOpen: () -> Unit): Modifier = pointerInput(onOpen) {
+internal fun Modifier.quickConversationDrawerOpen(onOpen: () -> Unit): Modifier = pointerInput(onOpen) {
     val openThresholdPx = QuickDrawerOpenTravel.toPx()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
@@ -2383,14 +2391,17 @@ private fun Modifier.quickConversationDrawerOpen(onOpen: () -> Unit): Modifier =
         var horizontalDistancePx = 0f
         var verticalDistancePx = 0f
         var openRequested = false
+        var childOwnsGesture = false
         while (true) {
             val event = awaitPointerEvent()
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            // A code/table scroll or text selection has priority over the canvas shortcut.
+            if (change.isConsumed && !openRequested) childOwnsGesture = true
             val delta = change.position - previousPosition
             previousPosition = change.position
             horizontalDistancePx += delta.x
             verticalDistancePx += delta.y
-            if (!openRequested &&
+            if (!childOwnsGesture && !openRequested &&
                 horizontalDistancePx >= openThresholdPx &&
                 horizontalDistancePx > abs(verticalDistancePx) * QuickDrawerOpenHorizontalRatio
             ) {
@@ -6569,7 +6580,7 @@ private fun AnswerInformationDialog(
                 }
                 if (disclosure.sources.isNotEmpty()) {
                     AnswerInformationSection(title = "本次上下文来源") {
-                        disclosure.sources.forEach { source -> AnswerContextSourceRow(source) }
+                        disclosure.sources.answerContextSourceGroups().forEach { source -> AnswerContextSourceRow(source) }
                     }
                 }
             }
@@ -6608,27 +6619,20 @@ private fun AnswerInformationFact(label: String, value: String, emphasized: Bool
 }
 
 @Composable
-private fun AnswerContextSourceRow(source: AnswerContextSourceDisclosure) {
+private fun AnswerContextSourceRow(source: AnswerContextSourceGroup) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Text("•", color = AccentOrange, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-        Text(
-            text = answerContextSourceTitle(source),
-            modifier = Modifier.weight(1f),
-            color = BodyText,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Text("•", color = AccentOrange, style = MaterialTheme.typography.bodyMedium)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(source.label, color = BodyText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            source.titles.forEach { title ->
+                Text(title, color = BodyText, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
     }
-}
-
-private fun answerContextSourceTitle(source: AnswerContextSourceDisclosure): String = when (source.kind) {
-    "个性化资料" -> source.title
-    "自定义指令" -> source.kind
-    else -> "${source.kind} · ${source.title}"
 }
 
 /** The footer is a reading aid, not a technical route ledger. */
@@ -6670,6 +6674,10 @@ private fun AssistantMessageAction(
     }
 }
 
+private val MessageActionRowHeight = 42.dp
+private val MessageActionHeadlineHeight = 24.dp
+private val MessageActionVerticalPadding = 4.dp
+
 @Composable
 private fun MessageActionPopup(
     anchorBounds: androidx.compose.ui.geometry.Rect,
@@ -6681,13 +6689,16 @@ private fun MessageActionPopup(
 ) {
     val density = LocalDensity.current
     val containerSize = LocalWindowInfo.current.containerSize
-    val menuWidth = 224.dp
+    val menuWidth = 200.dp
     val rowCount = 3 + if (editable) 1 else 0
     val horizontalMargin = with(density) { 16.dp.roundToPx() }
     val verticalGap = with(density) { 6.dp.roundToPx() }
     val menuWidthPx = with(density) { menuWidth.roundToPx() }
-    val headlineHeightPx = with(density) { if (headline.isBlank()) 0 else 36.dp.roundToPx() }
-    val menuHeightPx = with(density) { (rowCount * 46).dp.roundToPx() } + headlineHeightPx + with(density) { 12.dp.roundToPx() }
+    val menuHeightPx = with(density) {
+        (MessageActionRowHeight * rowCount +
+            (if (headline.isBlank()) 0.dp else MessageActionHeadlineHeight) +
+            MessageActionVerticalPadding * 2).roundToPx()
+    }
     val screenWidthPx = containerSize.width
     val screenHeightPx = containerSize.height
     val pressInRoot = androidx.compose.ui.geometry.Offset(anchorBounds.left + pressPosition.x, anchorBounds.top + pressPosition.y)
@@ -6704,19 +6715,25 @@ private fun MessageActionPopup(
         Surface(
             color = ForegroundSurface,
             contentColor = BodyText,
-            shape = RoundedCornerShape(20.dp),
-            shadowElevation = 6.dp,
+            shape = RoundedCornerShape(16.dp),
+            shadowElevation = 4.dp,
             modifier = Modifier.width(menuWidth),
         ) {
-            Column(Modifier.padding(vertical = 6.dp)) {
-                if (headline.isNotBlank()) Text(
-                    headline,
-                    modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 2.dp),
-                    color = SecondaryText,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            Column(Modifier.padding(vertical = MessageActionVerticalPadding)) {
+                if (headline.isNotBlank()) Box(
+                    Modifier.fillMaxWidth().height(MessageActionHeadlineHeight).padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text(
+                        headline,
+                        color = SecondaryText,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 content()
             }
         }
@@ -6842,26 +6859,23 @@ private fun rememberConversationCopyTextAction(): (String, () -> Unit) -> Unit {
 private fun MessageContextAction(
     icon: ImageVector,
     label: String,
-    iconOnly: Boolean = false,
     onClick: () -> Unit,
 ) {
     Surface(
         onClick = onClick,
-        modifier = if (iconOnly) Modifier.size(46.dp) else Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 6.dp),
+        modifier = Modifier.fillMaxWidth().height(MessageActionRowHeight).padding(horizontal = 6.dp),
         shape = RoundedCornerShape(12.dp),
         color = Color.Transparent,
         contentColor = BodyText,
     ) {
         Row(
-            Modifier.fillMaxSize().padding(horizontal = if (iconOnly) 0.dp else 12.dp),
+            Modifier.fillMaxSize().padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (iconOnly) Arrangement.Center else Arrangement.Start,
+            horizontalArrangement = Arrangement.Start,
         ) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp))
-            if (!iconOnly) {
-                Spacer(Modifier.width(16.dp))
-                Text(label, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
-            }
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(label, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Normal)
         }
     }
 }
@@ -7394,13 +7408,16 @@ private fun PresentationBlockView(block: PresentationBlock, attachmentPreviews: 
         is PresentationBlock.HorizontalRule -> Box(
             Modifier.fillMaxWidth().padding(vertical = 12.dp).height(1.dp).background(SecondaryText.copy(alpha = 0.18f)),
         )
-        is PresentationBlock.CodeFence -> CopyableInformationSurface(label = block.language ?: "可复制内容", value = block.code) {
+        is PresentationBlock.CodeFence -> CopyableInformationSurface(label = block.language ?: "text", value = block.code) {
             InlinePresentationText(
                 spans = listOf(InlinePresentation.Text(block.code)),
                 color = BodyText,
                 fontStyle = null,
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                lineHeight = scaledConversationTextUnit(20.sp),
+                modifier = Modifier.readingHorizontalScroll(rememberScrollState()),
+                literalCode = block.code,
+                codeLanguage = block.language,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = scaledConversationTextUnit(13.sp)),
+                lineHeight = scaledConversationTextUnit(22.sp),
                 findMessageId = findMessageId,
                 findSegmentKey = blockFindKey,
             )
@@ -7551,25 +7568,35 @@ private fun CopyableInformationSurface(label: String, value: String, content: @C
             copied = false
         }
     }
+    val darkCode = ForegroundSurface.red < 0.5f
     Surface(
-            color = NeutralAssistantSurface,
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.dp, Color(0xFFD8E0E8)),
+        color = if (darkCode) Color(0xFF414543) else Color.White,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(start = 14.dp, top = 10.dp, end = 6.dp, bottom = 12.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(label, color = SecondaryText, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                IconButton(onClick = { copyText(value) { copied = true } }) {
+        Column(Modifier.padding(horizontal = 18.dp)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = SecondaryText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TextButton(
+                    onClick = { copyText(value) { copied = true } },
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.textButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = SecondaryText,
+                    ),
+                ) {
                     Icon(
                         if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
                         contentDescription = if (copied) "已复制" else "复制$label",
-                        tint = if (copied) BrandGreen else BodyText,
-                        modifier = Modifier.size(20.dp),
+                        tint = if (copied) BrandGreen else SecondaryText,
+                        modifier = Modifier.size(18.dp),
                     )
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (copied) "已复制" else "复制", color = if (copied) BrandGreen else SecondaryText, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            content()
+            HorizontalDivider(color = SecondaryText.copy(alpha = 0.14f))
+            Box(Modifier.fillMaxWidth().padding(vertical = 16.dp)) { content() }
         }
     }
 }
@@ -7588,9 +7615,8 @@ private fun MarkdownTable(block: PresentationBlock.Table, findBlockIndex: Int? =
     val darkTable = ForegroundSurface.red < 0.5f
     val tableSurface = if (darkTable) Color(0xFF34383A) else Color(0xFFFBFCFD)
     val tableHeaderSurface = if (darkTable) Color(0xFF42484A) else Color(0xFFF0F3F6)
-    val tableBorder = if (darkTable) Color(0xFF5A6264) else Color(0xFFD8E0E8)
-    val tableDivider = if (darkTable) Color(0xFF555D60) else Color(0xFFDDE4EB)
-    val tableCopySurface = if (darkTable) Color(0xFF4A5153) else Color.White.copy(alpha = 0.94f)
+    val tableBorder = ConversationWorkspaceCanvas
+    val tableDivider = ConversationWorkspaceCanvas
     val tableCopyContent = if (darkTable) Color.White else BodyText
     // A data table is an information structure, not a paragraph with tabs. Keep the muted
     // header, content-weighted columns and restrained chrome used by the knowledge-base reading view.
@@ -7608,7 +7634,7 @@ private fun MarkdownTable(block: PresentationBlock.Table, findBlockIndex: Int? =
                 border = BorderStroke(1.dp, tableBorder),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(Modifier.horizontalScroll(scrollState)) {
+                Column(Modifier.readingHorizontalScroll(scrollState)) {
                     Column(Modifier.width(tableWidth)) {
                         MarkdownTableRow(
                             block.headers,
@@ -7640,10 +7666,9 @@ private fun MarkdownTable(block: PresentationBlock.Table, findBlockIndex: Int? =
             }
             Surface(
                 onClick = { copyTable(tableMarkdownText(block)) { copied = true } },
-                color = tableCopySurface,
+                color = Color.Transparent,
                 contentColor = if (copied) BrandGreen else tableCopyContent,
                 shape = CircleShape,
-                shadowElevation = 1.dp,
                 modifier = Modifier.align(Alignment.TopEnd).padding(3.dp).size(30.dp),
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -7827,6 +7852,8 @@ private fun InlinePresentationText(
     suppressEmphasis: Boolean = false,
     findMessageId: MessageNodeId? = null,
     findSegmentKey: String? = null,
+    literalCode: String? = null,
+    codeLanguage: String? = null,
 ) {
     val sources = spans.filterIsInstance<InlinePresentation.Link>().distinctBy { it.url }
     val importedMarkers = spans.flatMap { span ->
@@ -7840,7 +7867,31 @@ private fun InlinePresentationText(
         chatGptImportedMarkers(value)
     }.distinctBy { it.inlineContentId }
     val findQuery = LocalConversationFindQuery.current
-    val text = inlineText(
+    val darkCode = ForegroundSurface.red < 0.5f
+    val codeText = remember(literalCode, codeLanguage, darkCode) {
+        literalCode?.let { source -> buildAnnotatedString {
+            append(source)
+            codeSyntaxSpans(source, codeLanguage).forEach { token ->
+                val tokenColor = when (token.kind) {
+                    "comment" -> if (darkCode) Color(0xFFAEB7B0) else Color(0xFF777F7B)
+                    "string" -> if (darkCode) Color(0xFFA7CFA8) else Color(0xFF4C8055)
+                    "key" -> if (darkCode) Color(0xFFE0CE8C) else Color(0xFF877022)
+                    "section" -> if (darkCode) Color(0xFFE3A49B) else Color(0xFFAE6460)
+                    "number" -> if (darkCode) Color(0xFFE5BB91) else Color(0xFF9A673B)
+                    else -> if (darkCode) Color(0xFFCBB0DB) else Color(0xFF866296)
+                }
+                addStyle(SpanStyle(color = tokenColor, fontStyle = if (token.kind == "comment") androidx.compose.ui.text.font.FontStyle.Italic else null), token.start, token.end)
+            }
+        } }
+    }
+    val text = if (codeText != null) buildAnnotatedString {
+        append(codeText)
+        conversationFindOccurrenceStarts(codeText.text, findQuery.orEmpty()).forEach { start ->
+            val end = start + findQuery.orEmpty().trim().length
+            addStringAnnotation(ConversationFindHighlightAnnotationTag, findQuery.orEmpty().trim(), start, end)
+            addStyle(SpanStyle(color = AccentOrange, fontWeight = FontWeight.Bold), start, end)
+        }
+    } else inlineText(
         spans,
         appendSourceShortcut = sources.isNotEmpty(),
         suppressEmphasis = suppressEmphasis,
@@ -7913,6 +7964,7 @@ private fun InlinePresentationText(
         lineHeight = lineHeight,
         textAlign = textAlign,
         inlineContent = inlineContent,
+        softWrap = literalCode == null,
         onTextLayout = { textLayoutResult = it },
     )
 }

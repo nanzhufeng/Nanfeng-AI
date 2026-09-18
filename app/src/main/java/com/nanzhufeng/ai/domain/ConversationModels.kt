@@ -460,7 +460,14 @@ class ConversationTreeService(private val clock: Clock) {
             checkpoint = request.checkpoint,
         )
         val appended = snapshot.copy(
-            conversation = snapshot.conversation.copy(currentLeafMessageId = node.id, updatedAt = clock.instant()),
+            conversation = snapshot.conversation.copy(
+                currentLeafMessageId = node.id,
+                // An app-entry placeholder is not an actual conversation until its first send.
+                createdAt = if (snapshot.nodes.isEmpty() && snapshot.conversation.autoTitlePending &&
+                    snapshot.conversation.surface == ConversationSurface.CHAT && request.role == MessageRole.USER
+                ) node.createdAt else snapshot.conversation.createdAt,
+                updatedAt = clock.instant(),
+            ),
             nodes = snapshot.nodes + node,
         )
         val title = ConversationAutoTitle.titleForFirstCompletedAssistantReply(appended, node.id) ?: return appended

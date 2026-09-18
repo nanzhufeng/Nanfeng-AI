@@ -19,6 +19,34 @@ class P7BAccountSyncContractsTest {
         override fun <T> withUnsealedDataKey(accountRef: String, block: (ByteArray) -> T): T { val key = keys.getValue(accountRef).copyOf(); try { return block(key) } finally { key.fill(0) } }
         override fun isUsable(metadata: P7BAccountMetadata) = metadata.accountRef in keys
     }
+    @Test fun `direct login never creates or reads recovery keys and survives sign out`() {
+        val store = Store()
+        val deniedVault = object : P7BKeyVault {
+            override fun createAccountKey(accountRef: String): P7BKeyVault.Created = error("must not create a key")
+            override fun <T> withUnsealedDataKey(accountRef: String, block: (ByteArray) -> T): T = error("must not open a key")
+            override fun isUsable(metadata: P7BAccountMetadata): Boolean = error("must not inspect a key")
+        }
+        val machine = P7BAccountStateMachine(store, deniedVault)
+        val first = machine.authenticateDirect("direct", null, "direct-fixture-account")
+        assertEquals(P7BSyncState.DIRECTION_REQUIRED, first.state)
+        assertEquals(first, machine.authenticateDirect("direct", null, "direct-fixture-account"))
+        val ready = machine.chooseDirection("direction", first.resultingRevision, first.accountRef, P7BDirectionFact.LOCAL_PRESENT_EMPTY_REMOTE)
+        assertEquals(P7BSyncState.READY, ready.state)
+        val out = machine.signOutKeepLocal("out", ready.resultingRevision, first.accountRef)
+        assertEquals(P7BSyncState.DIRECTION_REQUIRED, machine.authenticateDirect("again", out.resultingRevision, "direct-fixture-account").state)
+    }
+
+    @Test fun `direct login repairs only obsolete key failures and preserves real conflicts`() {
+        val store = Store(); val machine = P7BAccountStateMachine(store, Vault())
+        val ref = P7BAccountStateMachine.accountRef("direct-legacy-account")
+        val old = P7BAccountMetadata(ref, P7BSyncState.FAILED, 7, "old-alias", "old-ref", "old-hash", null, "KEY_MATERIAL_UNAVAILABLE")
+        store.accounts[ref] = old
+        assertEquals(P7BSyncState.DIRECTION_REQUIRED, machine.authenticateDirect("repair", 7, "direct-legacy-account").state)
+        assertEquals("old-ref", store.accounts[ref]?.wrappedKeyRef)
+        store.accounts[ref] = old.copy(state = P7BSyncState.CONFLICT, lastError = "REMOTE_CHANGED")
+        assertEquals(P7BSyncState.CONFLICT, machine.authenticateDirect("conflict", 7, "direct-legacy-account").state)
+    }
+
     private fun verified(value: String) = VerifiedAccountHandle.fromVerifiedAuthentication(value)
 
     @Test fun `new verified account is idempotent gated and isolates keys`() {

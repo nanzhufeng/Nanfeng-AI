@@ -539,7 +539,8 @@ function ordinaryChatFailureCopy(code) {
     CREDENTIAL_DENIED: '本次无法读取服务商 API Key；请在模型设置中重新保存后重试。',
     CREDENTIAL_MISSING: '尚未保存该服务商密钥，请在模型设置中保存。',
     CREDENTIAL_UNAVAILABLE: '应用私有凭据不可用；请在模型设置中重新保存 API Key 后重试。',
-    WEB_SEARCH_NO_VERIFIED_SOURCES: '服务商未返回可验证的公开来源，本次没有保存为完整回答。',
+    WEB_SEARCH_NO_SOURCES: '旧版因缺少联网来源将本次回答标为失败，已有正文已保留；如需重做，请重新生成。',
+    WEB_SEARCH_NO_VERIFIED_SOURCES: '旧版因缺少联网来源将本次回答标为失败，已有正文已保留；如需重做，请重新生成。',
   })[String(code || '')] || '本次没有形成完整回答。请检查模型与网络设置后显式重试。';
 }
 
@@ -618,7 +619,9 @@ function messageList(conversation, options = {}) {
         const continuationState = String(message.continuationState || '');
         const continuingFromSavedText = Boolean(message.continuationOf);
         const hasPreservedText = textBlocks.some(block => String(block.text || '').trim());
-        const recoveryActionLabel = hasPreservedText ? '从断点继续' : '重新生成';
+        const missingSearchEvidence = ['WEB_SEARCH_NO_SOURCES', 'WEB_SEARCH_NO_VERIFIED_SOURCES'].includes(String(runtimeSafeErrorCode));
+        const failureTitle = missingSearchEvidence ? '联网来源未核验' : '回答未完成';
+        const recoveryActionLabel = hasPreservedText && !missingSearchEvidence ? '从断点继续' : '重新生成';
         const compareExecutionId = typeof message.compareExecutionId === 'string' ? message.compareExecutionId : '';
         const compareLogicalModel = message.compareLogicalModel === 'CHATGPT' ? 'ChatGPT' : message.compareLogicalModel === 'CLAUDE' ? 'Claude' : '';
         const sourceUser = index > 0 ? messages[index - 1] : null;
@@ -626,7 +629,7 @@ function messageList(conversation, options = {}) {
           ? `<button class="chat-reminder-suggestion" data-action="generate-reminder-draft" data-user-message-id="${escapeHtml(sourceUser.id)}" data-assistant-message-id="${escapeHtml(message.id)}">添加提醒 / 监控</button>`
           : '';
         const runtimeStatus = !isAssistant || effectiveDelivery === 'COMPLETE' ? ''
-          : continuationState === 'CONTINUED' ? `<div class="chat-runtime-state cancelled" role="status"><strong>此处已保存内容；正在从断点继续</strong></div>`
+          : continuationState === 'CONTINUED' ? `<div class="chat-runtime-state cancelled" role="status"><strong>此处内容已保留，后续回答见下方</strong></div>`
           : isRunning ? `<div class="chat-runtime-state running" role="status" aria-live="polite"><i class="chat-runtime-spinner" aria-hidden="true"></i><span><strong>${continuingFromSavedText ? '正在从断点继续生成' : '正在生成回复'}</strong><small>${continuingFromSavedText ? '已保留前段内容，仅生成缺失部分。' : '正在接收模型输出；已生成内容会持续保存。'}</small></span><button data-action="${compareExecutionId ? 'stop-desktop-compare' : 'stop-ordinary-chat'}" ${compareExecutionId ? `data-execution-id="${escapeHtml(compareExecutionId)}"` : ''}>停止生成</button></div>`
           : effectiveDelivery === 'UNKNOWN' ? compareExecutionId
             ? `<div class="chat-runtime-state unknown" role="status"><span><strong>连接结果未知，未自动重发${runtimeSafeErrorCode ? ` · ${escapeHtml(runtimeSafeErrorCode)}` : ''}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))} 历史 Compare 不再提供重试；内容与归因保持只读。</small></span></div>`
@@ -634,8 +637,8 @@ function messageList(conversation, options = {}) {
             : `<div class="chat-runtime-state unknown" role="status"><span><strong>生成已中断，未收到明确完成结果 · ${escapeHtml(runtimeSafeErrorCode || 'LOCAL_RUNTIME_STATE_MISSING')}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))}</small></span></div>`
           : effectiveDelivery === 'CANCELLED' ? `<div class="chat-runtime-state cancelled" role="status"><strong>已停止，已生成内容已保留</strong></div>`
           : compareExecutionId
-            ? `<div class="chat-runtime-state failed" role="status"><span><strong>回答未完成</strong><small>${escapeHtml(ordinaryChatFailureCopy(message.safeErrorCode))} · 历史 Compare 不再提供重试。</small></span></div>`
-            : `<div class="chat-runtime-state failed" role="status"><span><strong>回答未完成</strong><small>${escapeHtml(ordinaryChatFailureCopy(message.safeErrorCode))}</small></span><button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId || '')}">${recoveryActionLabel}</button></div>`;
+            ? `<div class="chat-runtime-state failed" role="status"><span><strong>${failureTitle}</strong><small>${escapeHtml(ordinaryChatFailureCopy(runtimeSafeErrorCode))} · 历史 Compare 不再提供重试。</small></span></div>`
+            : `<div class="chat-runtime-state failed" role="status"><span><strong>${failureTitle}</strong><small>${escapeHtml(ordinaryChatFailureCopy(runtimeSafeErrorCode))}</small></span><button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId || '')}">${recoveryActionLabel}</button></div>`;
         const cost = isAssistant ? (cnyCostLabel(projectedMessageCost(message), { maximumFractionDigits: 4, trimTrailingZeros: false }) || '金额未知') : null;
         if (metadata.model) metadata.model = compactModelName(metadata.model);
         const metadataPrimary = [

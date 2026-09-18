@@ -44,6 +44,107 @@ class P3AConversationRoomContractsTest {
     @After
     fun tearDown() = database.close()
 
+    @Test fun `creation repair rolls back on write failure and survives database close and reopen`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "creation-repair-${UUID.randomUUID()}.db"
+        database.close()
+        database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, name).allowMainThreadQueries().build()
+        repository = RoomConversationRepository(database)
+        try {
+            val start = Instant.parse("2026-09-16T10:47:36.957Z")
+            val old = repository.save(ConversationTreeService(Clock.fixed(start, ZoneOffset.UTC)).append(
+                service.create(), AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("question"))),
+            ))
+            recordNativeSend(old, start)
+            database.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_creation_repair BEFORE UPDATE OF createdAtEpochMs ON conversations BEGIN SELECT RAISE(ABORT, 'fixture failure'); END")
+            org.junit.Assert.assertThrows(android.database.sqlite.SQLiteException::class.java) { repository.repairLegacyCreationTimes() }
+            assertEquals(old, repository.findById(old.conversation.id))
+            database.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_creation_repair")
+            assertEquals(1, repository.repairLegacyCreationTimes())
+            database.close()
+            database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, name).allowMainThreadQueries().build()
+            repository = RoomConversationRepository(database)
+            assertEquals(start, repository.findById(old.conversation.id)!!.conversation.createdAt)
+            assertEquals(0, repository.repairLegacyCreationTimes())
+        } finally {
+            database.close()
+            context.deleteDatabase(name)
+        }
+    }
+
+    @Test fun `cloud round trip keeps corrected creation date even when stale client activity is newer`() {
+        val start = Instant.parse("2026-09-16T10:47:36.957Z")
+        val blank = service.create()
+        val sent = ConversationTreeService(Clock.fixed(start, ZoneOffset.UTC)).append(
+            blank, AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("question"))),
+        )
+        val old = repository.save(sent)
+        val corrected = old.copy(conversation = old.conversation.copy(createdAt = start, revision = old.conversation.revision + 1))
+        val merged = (mergeNewerRemoteConversation(old, corrected) as P7FExistingConversationMerge.Applied).snapshot
+        assertEquals(start, repository.saveVerifiedCloudMerge(merged).conversation.createdAt)
+        val stale = old.copy(conversation = old.conversation.copy(updatedAt = start.plusSeconds(86400), revision = 10))
+        assertEquals(start, mergeRemoteAdditionsForLocalCommit(stale, corrected).conversation.createdAt)
+        assertEquals(start, mergeRemoteAdditionsForLocalCommit(corrected, stale).conversation.createdAt)
+        assertEquals(start, (mergeNewerRemoteConversation(corrected, stale) as P7FExistingConversationMerge.Applied).snapshot.conversation.createdAt)
+    }
+
+    @Test fun `legacy native creation date repairs once without rewriting activity or messages`() {
+        val start = Instant.parse("2026-09-15T16:40:47.885Z")
+        val sender = ConversationTreeService(Clock.fixed(start, ZoneOffset.UTC))
+        val blank = service.create(autoTitlePending = true)
+        val sent = sender.append(blank, AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("question"))))
+        val old = repository.save(sent.copy(conversation = sent.conversation.copy(createdAt = blank.conversation.createdAt)))
+        // A portable snapshot alone is insufficient evidence for rewriting its source date.
+        assertEquals(0, RoomConversationRepository(database).repairLegacyCreationTimes())
+        recordNativeSend(old, start)
+        assertEquals(1, RoomConversationRepository(database).repairLegacyCreationTimes())
+        val repaired = RoomConversationRepository(database).findById(old.conversation.id)!!
+        assertEquals(start, repaired.conversation.createdAt)
+        assertEquals("2026/09/16", java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd").withZone(java.time.ZoneId.of("Asia/Shanghai")).format(repaired.conversation.createdAt))
+        assertEquals(old.conversation.updatedAt, repaired.conversation.updatedAt)
+        assertEquals(old.conversation.revision + 1, repaired.conversation.revision)
+        assertEquals(old.nodes, repaired.nodes)
+        assertEquals(0, RoomConversationRepository(database).repairLegacyCreationTimes())
+        assertEquals(repaired, RoomConversationRepository(database).findById(old.conversation.id))
+    }
+
+    @Test fun `import provenance protects original creation date even after a native retry`() {
+        val start = Instant.parse("2026-09-16T10:47:36.957Z")
+        val sender = ConversationTreeService(Clock.fixed(start, ZoneOffset.UTC))
+        val blank = service.create()
+        val imported = repository.save(sender.append(blank, AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("imported")))))
+        recordNativeSend(imported, start)
+        database.openHelper.writableDatabase.execSQL(
+            "INSERT INTO chatgpt_import_provenance (conversationId,sourceConversationId,packageHash,contentHash,importedAtEpochMs,adapterId,adapterVersion,revokedAtEpochMs) VALUES (?,?,?,?,?,?,?,NULL)",
+            arrayOf<Any>(imported.conversation.id.value, "source", "package", "content", start.toEpochMilli(), "test", 1),
+        )
+        assertEquals(0, RoomConversationRepository(database).repairLegacyCreationTimes())
+        assertEquals(imported, repository.findById(imported.conversation.id))
+    }
+
+    private fun recordNativeSend(snapshot: ConversationSnapshot, at: Instant) {
+        val id = com.nanzhufeng.ai.domain.NormalChatSendAttemptId.new()
+        com.nanzhufeng.ai.data.local.RoomNormalChatSendAttemptStore(database).create(
+            com.nanzhufeng.ai.domain.NormalChatSendAttempt(
+                id, snapshot.nodes.first().id, snapshot.conversation.id,
+                com.nanzhufeng.ai.domain.ProviderId.OPENROUTER, "test-model", id.value,
+                com.nanzhufeng.ai.domain.NormalChatSendAttemptStatus.COMPLETED, at, at,
+            ),
+        )
+    }
+
+    @Test fun `reused empty chat starts on first submission and later activity keeps that creation date`() {
+        val blank = repository.save(service.create(autoTitlePending = true))
+        val start = Instant.parse("2026-09-16T10:47:36.957Z")
+        val sender = ConversationTreeService(Clock.fixed(start, ZoneOffset.UTC))
+        val sent = repository.save(sender.append(blank, AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("question")))))
+        assertEquals(start, sent.conversation.createdAt)
+        val later = ConversationTreeService(Clock.fixed(start.plusSeconds(86400), ZoneOffset.UTC))
+        val answered = repository.save(later.append(sent, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text("answer")))))
+        assertEquals(start, RoomConversationRepository(database).findById(answered.conversation.id)!!.conversation.createdAt)
+        assertEquals(start.plusSeconds(86400), answered.conversation.updatedAt)
+    }
+
     @Test fun `title logical revision survives repository recreation and non title writes`() {
         val original = repository.save(service.create("原标题"))
         val renamed = repository.save(original.copy(conversation = original.conversation.copy(title = "新标题")))

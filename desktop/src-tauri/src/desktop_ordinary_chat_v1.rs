@@ -781,12 +781,6 @@ pub async fn execute_streaming(
             &bytes,
             started.elapsed().as_millis().min(i64::MAX as u128) as i64,
         )?;
-        if !completed.web_search_verified {
-            return Err(Failure::Explicit {
-                code: "WEB_SEARCH_NO_SOURCES",
-                http_status: Some(status),
-            });
-        }
         return Ok(completed);
     }
     let responses_stream = request.web_search_route == "QWEN_RESPONSES";
@@ -798,6 +792,7 @@ pub async fn execute_streaming(
     let mut actual_model_id = None;
     let mut bytes_read = 0usize;
     let mut completed = false;
+    let mut search_evidence = false;
     let first_visible_deadline = Instant::now() + STREAM_FIRST_VISIBLE_DELTA_TIMEOUT;
     let mut stream = response.bytes_stream();
     let mut pending = Vec::<u8>::new();
@@ -876,6 +871,7 @@ pub async fn execute_streaming(
                 code: "RESPONSE_FORMAT",
                 http_status: Some(status),
             })?;
+            search_evidence |= has_web_search_evidence(&value);
             for source in response_sources(&value) {
                 if sources.len() < 10 && !sources.iter().any(|item| item.1 == source.1) {
                     sources.push(source);
@@ -904,6 +900,7 @@ pub async fn execute_streaming(
                     }
                     Some("response.completed") => {
                         if let Some(response) = value.get("response") {
+                            search_evidence |= has_web_search_evidence(response);
                             let response_usage = response.get("usage");
                             merge_usage(
                                 &mut usage,
@@ -1000,19 +997,13 @@ pub async fn execute_streaming(
     // Provider citations are optional metadata on Android. Preserve a valid answer when
     // a search provider did not return them; append only verified provider-owned sources.
     append_sources(&mut text, &sources);
-    if request.web_search_route != "NONE" && sources.is_empty() {
-        return Err(Failure::Explicit {
-            code: "WEB_SEARCH_NO_SOURCES",
-            http_status: Some(status),
-        });
-    }
     Ok(Completed {
         text,
         reasoning: (!reasoning.trim().is_empty()).then(|| reasoning.trim().to_owned()),
         usage,
         reported_cost_micros,
         actual_model_id,
-        web_search_verified: !sources.is_empty(),
+        web_search_verified: search_evidence || !sources.is_empty(),
         elapsed_ms: started.elapsed().as_millis().min(i64::MAX as u128) as i64,
     })
 }
@@ -1142,7 +1133,7 @@ mod tests {
             br#"{"model":"deepseek-chat","output_text":"provider answer","usage":{"input_tokens":3,"output_tokens":2}}"#,
             12,
         )
-        .expect("the decoder may retain text while the transport rejects an unverified live search");
+        .expect("a completed answer without search evidence remains usable");
         assert_eq!(result.text, "provider answer");
         assert_eq!(result.usage.input_tokens, Some(3));
         assert_eq!(result.usage.output_tokens, Some(2));
@@ -1150,12 +1141,12 @@ mod tests {
     }
 
     #[test]
-    fn deepseek_responses_rejects_unverified_live_search_without_stream_deltas() {
+    fn deepseek_responses_preserves_completed_answer_without_search_evidence() {
         let body = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"model\":\"deepseek-chat\",\"output_text\":\"provider answer\"}";
         let mut request = request(mock_server_with_stream(body, false));
         request.web_search_route = "DEEPSEEK_RESPONSES".into();
         let mut deltas = Vec::new();
-        let failure = tokio::runtime::Runtime::new()
+        let completed = tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(execute_streaming(
                 request,
@@ -1166,15 +1157,30 @@ mod tests {
                     Ok(())
                 },
             ))
-            .expect_err("a live search must provide a tool or source evidence record");
-        assert_eq!(
-            failure,
-            Failure::Explicit {
-                code: "WEB_SEARCH_NO_SOURCES",
-                http_status: Some(200)
-            }
-        );
+            .expect("missing citations must not discard a completed answer");
+        assert_eq!(completed.text, "provider answer");
+        assert!(!completed.web_search_verified);
         assert!(deltas.is_empty());
+    }
+
+    #[test]
+    fn responses_stream_completion_keeps_usage_without_sources_and_separates_tool_evidence() {
+        for evidence in [false, true] {
+            let output = if evidence { json!([{"type":"web_search_call","status":"completed"}]) } else { json!([]) };
+            let event = json!({"type":"response.completed","response":{"model":"fixture-model","output":output,"usage":{"input_tokens":11,"output_tokens":7}}});
+            let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {{\"type\":\"response.output_text.delta\",\"delta\":\"complete answer\"}}\n\ndata: {event}\n\n");
+            let response: &'static [u8] = Box::leak(response.into_bytes().into_boxed_slice());
+            let mut fixture = request(mock_server(response));
+            fixture.provider_id = "QWEN".into();
+            fixture.web_search_route = "QWEN_RESPONSES".into();
+            let completed = tokio::runtime::Runtime::new().unwrap().block_on(execute_streaming(
+                fixture, Zeroizing::new(b"fixture-secret-123".to_vec()),
+                Arc::new(AtomicBool::new(false)), |_| Ok(()))).unwrap();
+            assert_eq!(completed.text, "complete answer");
+            assert_eq!(completed.usage.input_tokens, Some(11));
+            assert_eq!(completed.usage.output_tokens, Some(7));
+            assert_eq!(completed.web_search_verified, evidence);
+        }
     }
 
     #[test]
@@ -1217,11 +1223,11 @@ mod tests {
     }
 
     #[test]
-    fn chat_completions_web_search_requires_provider_evidence_and_appends_safe_citations() {
+    fn chat_completions_preserves_answer_and_reports_search_evidence_separately() {
         let without_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"provider answer\"}}]}\n\ndata: [DONE]\n\n";
         let mut missing = request(mock_server(without_sources));
         missing.web_search_route = "OPENROUTER_SERVER_TOOL".into();
-        let missing_error = tokio::runtime::Runtime::new()
+        let completed = tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(execute_streaming(
                 missing,
@@ -1229,14 +1235,9 @@ mod tests {
                 Arc::new(AtomicBool::new(false)),
                 |_| Ok(()),
             ))
-            .expect_err("a requested live search without provider evidence is not a verified network answer");
-        assert_eq!(
-            missing_error,
-            Failure::Explicit {
-                code: "WEB_SEARCH_NO_SOURCES",
-                http_status: Some(200)
-            }
-        );
+            .expect("a completed answer is independent from search evidence");
+        assert_eq!(completed.text, "provider answer");
+        assert!(!completed.web_search_verified);
 
         let with_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"grounded answer\",\"annotations\":[{\"url_citation\":{\"title\":\"Official\",\"url\":\"https://example.com/source\"}},{\"url_citation\":{\"title\":\"Unsafe\",\"url\":\"https://user@example.com/private\"}}]}}]}\n\ndata: [DONE]\n\n";
         let mut grounded = request(mock_server(with_sources));

@@ -76,6 +76,21 @@ class RoomConversationRepository(
         const val RECENT_MESSAGES_EXCLUDED_FROM_SUMMARY = 8
         const val ROLLING_SUMMARY_MAX_CHARS = 1_800
     }
+    private var creationTimesChecked = false
+
+    @Synchronized
+    override fun repairLegacyCreationTimes(): Int {
+        if (creationTimesChecked) return 0
+        val repaired = database.inConversationTransaction {
+            val dao = database.conversationDao()
+            dao.legacyNativeCreationTimes().sumOf {
+                dao.repairNativeCreationTime(it.id, it.createdAtEpochMs, it.revision, it.firstSentAtEpochMs)
+            }
+        }
+        creationTimesChecked = true
+        return repaired
+    }
+
     override fun save(snapshot: ConversationSnapshot): ConversationSnapshot = database.inConversationTransaction {
         persistSnapshot(database.conversationDao(), snapshot)
     }
@@ -332,7 +347,13 @@ class RoomConversationRepository(
             else incoming
         }
         if (existing == null) dao.insertConversation(entity)
-        else dao.update(entity)
+        else {
+            val firstUser = snapshot.nodes.minByOrNull { it.createdAt }
+            if (firstUser?.role == MessageRole.USER && firstUser.parentMessageId == null &&
+                firstUser.createdAt == snapshot.conversation.createdAt && existing.autoTitlePending
+            ) dao.startBlankConversation(entity.id, entity.createdAtEpochMs)
+            dao.update(entity)
+        }
 
         snapshot.nodes.forEach { node ->
             val stored = dao.findNode(node.id.value)
@@ -370,7 +391,12 @@ class RoomConversationRepository(
         MessageTree(snapshot.conversation, snapshot.nodes)
         val existing = dao.findConversation(snapshot.conversation.id.value)
         if (existing == null) dao.insertConversation(snapshot.conversation.toEntity())
-        else dao.update(snapshot.conversation.toEntity())
+        else {
+            if (snapshot.conversation.createdAt == snapshot.nodes.minOfOrNull { it.createdAt }) {
+                dao.restoreVerifiedCreationTime(existing.id, snapshot.conversation.createdAt.toEpochMilli())
+            }
+            dao.update(snapshot.conversation.toEntity())
+        }
 
         // SQLite checks uniqueness on every UPDATE, even inside a transaction.
         // A valid A:0/B:1 -> A:1/B:0 reorder otherwise fails on the first row.

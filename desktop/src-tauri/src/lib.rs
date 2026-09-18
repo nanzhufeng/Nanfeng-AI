@@ -13026,6 +13026,18 @@ fn ordinary_chat_context_score(query_terms: &BTreeSet<String>, title: &str, body
         .sum()
 }
 
+fn ordinary_chat_tone_label(tone: &str) -> Option<&'static str> {
+    match tone {
+        "default" => Some("默认"),
+        "direct" => Some("直言不讳"),
+        "professional" => Some("专业可靠"),
+        "friendly" => Some("亲和友善"),
+        "efficient" => Some("高效务实"),
+        "humorous" => Some("风趣搞笑"),
+        _ => None,
+    }
+}
+
 fn ordinary_chat_tone_instruction(tone: &str) -> &'static str {
     match tone {
         "direct" => "对话方式：直言不讳。先说结论，直接指出问题，减少与判断和行动无关的铺垫。以可核验的事实、证据和现实约束为优先，不要因为用户立场强烈就迎合或违背事实妥协。发现用户观点错误、重要前提不成立、表达明显情绪化、过度自信或过度悲观时，应明确指出问题、直击要害，并给出针对性提醒或修正方向。可以反驳用户或与用户讨论不同观点，但不得无依据武断、羞辱、嘲讽或人身攻击。清楚区分已确认事实、合理判断与待验证信息，不把不确定推断写成事实。",
@@ -13652,7 +13664,7 @@ impl DesktopWorkspaceStore {
         selected_sources.push(DesktopOrdinaryChatSelectedSource {
             kind: "对话风格".into(),
             source_id: format!("tone:{tone_id}"),
-            title: "基础风格和语气".into(),
+            title: ordinary_chat_tone_label(tone_id).unwrap_or("默认").into(),
         });
         if !settings.custom_instructions.trim().is_empty() {
             context_sections.push(format!(
@@ -14540,6 +14552,10 @@ impl DesktopWorkspaceStore {
                 message.get("id").and_then(Value::as_str)
                     == Some(previous.assistant_message_id.as_str())
             })
+            // Missing citations do not imply truncated text. Explicit retry must regenerate
+            // from the original user message while retaining the old branch for inspection.
+            .filter(|_| !matches!(previous.safe_error_code.as_deref(),
+                Some("WEB_SEARCH_NO_SOURCES" | "WEB_SEARCH_NO_VERIFIED_SOURCES")))
             .filter(|message| !ordinary_chat_message_text(message).trim().is_empty())
             .map(|message| {
                 message
@@ -14894,14 +14910,19 @@ impl DesktopWorkspaceStore {
         ) in rows
         {
             let mut sources = connection.prepare(
-                "SELECT source_kind,title FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1 ORDER BY ordinal"
+                "SELECT source_kind,title,source_id FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1 ORDER BY ordinal"
             ).map_err(|_| json_error("无法读取上下文来源"))?;
             let selected_sources = sources
                 .query_map([&attempt_id], |row| {
-                    Ok(DesktopOrdinaryChatContextSourceProjection {
-                        kind: row.get(0)?,
-                        title: row.get(1)?,
-                    })
+                    let kind: String = row.get(0)?;
+                    let saved_title: String = row.get(1)?;
+                    let source_id: String = row.get(2)?;
+                    // Old records retain the actual tone ID. Decode it, never today's setting.
+                    let title = if kind == "对话风格" && saved_title == "基础风格和语气" {
+                        source_id.strip_prefix("tone:").and_then(ordinary_chat_tone_label)
+                            .unwrap_or("未记录（旧回答）").to_owned()
+                    } else { saved_title };
+                    Ok(DesktopOrdinaryChatContextSourceProjection { kind, title })
                 })
                 .map_err(|_| json_error("无法读取上下文来源"))?
                 .collect::<Result<Vec<_>, _>>()
@@ -21712,19 +21733,12 @@ pub fn run() {
             read_desktop_account_sync,
             read_desktop_google_avatar,
             sign_in_desktop_google_account,
-            create_desktop_recovery_code,
-            confirm_desktop_recovery_code,
-            recover_desktop_existing_recovery,
             sign_out_desktop_google_account,
             sync_selected_desktop_conversation,
             cancel_desktop_conversation_sync,
             reconcile_desktop_conversation_sync,
             set_desktop_periodic_sync,
             choose_desktop_selected_sync_start,
-            create_desktop_recovery_rotation,
-            confirm_desktop_recovery_rotation,
-            retry_desktop_recovery_rotation,
-            bootstrap_desktop_empty_cloud_recovery,
             restore_all_desktop_cloud_conversations,
             set_desktop_cloud_list_pinned,
             stage_preflight_selected_exchange,
@@ -26782,6 +26796,16 @@ mod tests {
         assert_eq!(records[0].fixed_input_tokens, 42);
         assert!(records[0].web_search_requested);
         assert_eq!(records[0].web_search_verified, Some(true));
+        assert_eq!(records[0].selected_sources.iter().find(|s| s.kind == "对话风格").unwrap().title, "直言不讳");
+        // Simulate an old persisted answer and a later setting change, then reopen.
+        store.connection().unwrap().execute("UPDATE desktop_ordinary_chat_context_sources SET title='基础风格和语气' WHERE attempt_id=?1 AND source_kind='对话风格'", [&prepared.projection.attempt_id]).unwrap();
+        store.connection().unwrap().execute("UPDATE desktop_app_settings SET tone='friendly' WHERE id=1", []).unwrap();
+        store.connection().unwrap().execute("UPDATE desktop_ordinary_chat_attempts SET web_search_verified=NULL WHERE attempt_id=?1", [&prepared.projection.attempt_id]).unwrap();
+        let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
+        let historical = reopened.ordinary_chat_context_records().unwrap();
+        assert_eq!(historical[0].selected_sources.iter().find(|s| s.kind == "对话风格").unwrap().title, "直言不讳");
+        assert_eq!(historical[0].web_search_verified, None);
+
         assert!(records[0]
             .selected_sources
             .iter()
@@ -27214,6 +27238,94 @@ mod tests {
                 &retry.model_id
             )
             .is_err());
+    }
+
+    /// Explicit opt-in probe: only a fixed arithmetic prompt leaves this process. The live
+    /// credential owner is read for execution; all answer/Attempt writes use a temporary store.
+    #[test]
+    #[ignore = "requires an explicitly authorized live provider probe"]
+    fn live_completion_probe_preserves_answer_and_reopens_terminal_attempt() {
+        use desktop_model_service_v1::{AppPrivateProviderCredentialStore, ProviderCredentialStore};
+        let root = std::env::var("NANFENG_COMPLETION_PROBE_CREDENTIAL_ROOT").expect("explicit credential root");
+        let provider = std::env::var("NANFENG_COMPLETION_PROBE_PROVIDER").expect("explicit provider");
+        let model = match provider.as_str() {
+            "DEEPSEEK" => "deepseek-flash", "QWEN" => "qwen3.7-plus",
+            "ZHIPU" => "glm-5.3-flash", _ => panic!("unsupported diagnostic provider"),
+        };
+        let route = ordinary_chat_web_search_route(&provider, model, true, false);
+        let path = if route.ends_with("RESPONSES") { "responses" } else { "chat/completions" };
+        let endpoint = format!("{}/{path}", desktop_model_service_v1::provider(&provider).unwrap().endpoint);
+        let (directory, store, imported) = imported_store();
+        let prepared = store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {
+            workspace_id: imported.summary.id.clone(), conversation_id: None,
+            project_id: None, expected_revision: None, text: "Return only the result of 2 + 2.".into(),
+            attachment_ids: vec![], model_id: None, tone_override: None,
+            web_search_override: Some(true), egress_authorization: None,
+        }, Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        store.connection().unwrap().execute(
+            "UPDATE desktop_ordinary_chat_attempts SET provider_id=?1,requested_model_id=?2,web_search_route=?3 WHERE attempt_id=?4",
+            params![provider,model,route,prepared.projection.attempt_id]).unwrap();
+        let secret = AppPrivateProviderCredentialStore::at(root).with_secret(&provider,
+            |bytes| Ok(zeroize::Zeroizing::new(bytes.to_vec()))).expect("saved credential available");
+        let completed = tokio::runtime::Runtime::new().unwrap().block_on(
+            desktop_ordinary_chat_v1::execute_streaming(desktop_ordinary_chat_v1::TransportRequest {
+                endpoint, provider_id: provider.clone(), model_id: model.into(),
+                messages: json!([{"role":"user","content":"Return only the result of 2 + 2."}]),
+                idempotency_key: prepared.idempotency_key, max_output_tokens: 1024,
+                web_search_route: route.into(), structured_json: false, disable_thinking: false,
+            }, secret, std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)), |_| Ok(()))
+        ).expect("real provider must return a completed answer");
+        assert!(!completed.text.trim().is_empty());
+        store.update_ordinary_chat_message(&prepared.projection.attempt_id, &completed.text,
+            "COMPLETE", completed.reasoning.as_deref(), Some(&completed), None).unwrap();
+        store.complete_ordinary_chat_accounting(&prepared.projection.attempt_id, &completed).unwrap();
+        drop(store);
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let attempt = DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),
+            &prepared.projection.attempt_id).unwrap();
+        assert_eq!(attempt.state, "COMPLETED");
+        assert!(attempt.safe_error_code.is_none());
+        assert_eq!(attempt.web_search_verified, Some(completed.web_search_verified));
+        let exchange = reopened.workspace_projection(&imported.summary.id).unwrap();
+        let message = exchange.exchange["conversations"].as_array().unwrap().iter()
+            .find(|c| c["id"] == prepared.projection.conversation_id).unwrap()["messages"].as_array().unwrap().iter()
+            .find(|m| m["id"] == prepared.projection.assistant_message_id).unwrap().clone();
+        assert_eq!(message["delivery"], "COMPLETE");
+        assert!(!ordinary_chat_message_text(&message).trim().is_empty());
+        println!("PROBE {}", json!({"provider":provider,"model":model,"route":route,
+            "state":attempt.state,"searchVerified":completed.web_search_verified,
+            "inputTokens":completed.usage.input_tokens,"outputTokens":completed.usage.output_tokens,
+            "elapsedMs":completed.elapsed_ms,"reopened":true}));
+    }
+
+    #[test]
+    fn missing_search_evidence_retry_regenerates_without_continuing_completed_text() {
+        let (directory, store, imported) = imported_store();
+        let prepared = store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {
+            workspace_id: imported.summary.id.clone(), conversation_id: None,
+            project_id: None, expected_revision: None, text: "fixture question".into(),
+            attachment_ids: vec![], model_id: None, tone_override: None,
+            web_search_override: Some(true), egress_authorization: None,
+        }, Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        store.update_ordinary_chat_message(&prepared.projection.attempt_id,
+            "fixture already complete answer", "FAILED", None, None,
+            Some("WEB_SEARCH_NO_SOURCES")).unwrap();
+        drop(store);
+        let store = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let retry = store.prepare_ordinary_chat_retry(&prepared.projection.attempt_id,
+            Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        assert!(!retry.messages.to_string().contains("fixture already complete answer"));
+        assert!(!retry.messages.to_string().contains("只从上面已生成内容的末尾自然继续"));
+        let projection = store.workspace_projection(&imported.summary.id).unwrap();
+        let conversation = projection.exchange["conversations"].as_array().unwrap().iter()
+            .find(|c| c["id"] == retry.projection.conversation_id).unwrap();
+        let messages = conversation["messages"].as_array().unwrap();
+        let original = messages.iter().find(|m| m["id"] == prepared.projection.assistant_message_id).unwrap();
+        assert_eq!(original["blocks"][0]["text"], "fixture already complete answer");
+        assert_eq!(original["safeErrorCode"], "WEB_SEARCH_NO_SOURCES");
+        let next = messages.iter().find(|m| m["id"] == retry.projection.assistant_message_id).unwrap();
+        assert_eq!(next["parentId"], prepared.projection.user_message_id);
+        assert!(next["continuationOf"].is_null());
     }
 
     #[test]

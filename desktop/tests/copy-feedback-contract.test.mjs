@@ -19,7 +19,6 @@ test('all Desktop copy surfaces use the shared icon-to-check feedback contract',
     ['copy-message', shell],
     ['copy-markdown-block', markdown],
     ['copy-text-preview', app],
-    ['copy-account-recovery-code', account],
   ]) {
     assert.match(owner, new RegExp(`data-action="${action}"[^>]*data-copy-action|data-copy-action[^>]*data-action="${action}"`), action);
   }

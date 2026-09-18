@@ -1,5 +1,114 @@
 # 南枫 AI 当前交接
 
+> **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
+
+## 2026-09-18：v1.0.12 双端 GitHub 发布
+
+- 交付 Android `Nanfeng-AI-Android-1.0.12.apk`（`com.nanzhufeng.ai`，78／1.0.12，v2／v3 签名，证书 SHA-256 `6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8`）及 macOS `Nanfeng-AI-macOS-1.0.12.dmg`（Bundle ID `com.nanzhufeng.ai.desktop`、Team `457B263L9J`、Apple Development 签名，未公证）。本地 SHA-256 分别为 `536af80811ac0293cb9e48156d06ff27aa703a01d6b70ed2d3dee9d6478434f6`、`6ae31064d933eee8b238060b624581dab5cb836eda21dd9b6e845ea23b9729d9`。
+- Android APK 由 `aapt` 回读包名和版本，`apksigner` 回读 v2／v3；macOS `.app` 严格签名验证与 DMG 镜像校验均通过。Desktop 全量 435 passed／0 failed／12 skipped，lint、typecheck 通过；Android 全量 1215 passed／0 failed／3 既有真实 ZIP 夹具 skipped，lintRelease 无 error、assembleRelease 通过。
+- 根 README 保持简洁：当前下载入口、双端预览和源码路径。Android 图来自隔离模拟器中的正式 APK，Desktop 图来自当前构建的无数据界面；没有读取、上传或展示 OPPO／Mac 上的真实对话。
+- 本轮只发布已冻结产物；没有重新触碰 OPPO，也没有把构建、安装或预览冒充为真实 Provider、云同步或连续手势验收。
+
+## 2026-09-18：阅读手势遗漏风险检查（Android 1.0.12 已按追加授权保数据覆盖）
+
+- 已在主机 Robolectric＋Compose v2 时钟中复现 1.0.11 的真实触摸红灯：代码／表格在起点右拖超过阈值后收到 ACTION_CANCEL，仍打开侧栏。Foundation 1.11.4 的取消也会走 onPreFling，不能用该回调判定正常松手。已改为复用 ScrollState 的 DragInteraction：Start／Cancel 清零，仅 Stop 交接；代码／表格继续优先横滚。
+- 包含真实 Material 抽屉、quickConversationDrawerOpen 与 readingHorizontalScroll 的 12 项 MotionEvent 行为测试全部通过，覆盖中段右滑、左滑、同次到边界、取消、取消后新手势、反向／短滑／纵滑、无溢出内容与普通画布。原 7 项边界策略测试保留。新增 test-only Compose UI 测试库及 Android resources 支持；33 个传递制品逐一比对官方仓库 HTTPS 字节后加入严格 SHA-256 清单，没有跳过依赖验证。
+- 全量 Android 1218 项中 1215 passed／0 failed／3 既有真实 ZIP 夹具 skipped。另更正暗色表格合同测试仍要求突出边线的陈旧断言，以用户最新“边线跟随页面底色”要求为准；没有改回突出边线。复制／关于页业务代码未改，复用 1.0.10／1.0.11 同源码的验证；不声称重新验收同步／Provider。
+- 初次检查因手机通话未安装；用户随后明确要求“覆盖安装”，预检时前台已为系统桌面。已拉回原安装 APK 核验同证书，再将根目录 78／1.0.12 正式非 Debug 包通过 `pm install -r --user 0` 保数据覆盖，清理远端临时文件；安装后拉回 APK 与正式文件 SHA-256 一致，首次安装时间及 CE／DE inode 不变。没有卸载、清数据、启动应用或进行触摸操作；OPPO 真实会话连续手势仍未验收。Mac 保持 1.0.11。证据见 `release-evidence/2026-09-18-reading-risk-audit/android-install-before.json`、`android-install-after.json`；lintRelease／assembleRelease 均通过（104 warnings／19 hints，无 error）。未提交／推送／上传 Release。
+
+## 2026-09-18：表格复制透明与横滑优先级（1.0.11 双端已覆盖，连续手势真机复测未闭环）
+
+- 双端表格复制按钮去独立底色、描边／阴影。Android 根因是 quickConversationDrawerOpen 忽略子手势消费，代码／表格滚动时仍累计原始右滑距离；现在子手势消费后退出快速打开判定。
+- 代码及表格复用 readingHorizontalScroll：通过 NestedScrollConnection 只累计最左端后的未消费右滑距离；同一手势达到 36dp 后释放时打开侧栏，不累计内容自身滚动、惯性、程序滚动或分开的短手势。普通页面右滑和既有 Material 抽屉手势保留。
+- 验收信号：长代码滚到中部后右滑但仍未到最左端，侧栏必须关闭；到左端后继续右滑达到阈值并松手，才打开。表格同一 owner；窄表无横向余量时可以右滑开侧栏。123 项定向 Android 检查（含 7 项边界策略行为）通过；22 项 Desktop 检查通过，浏览器确认浅／深表格复制按钮均透明、无边框／阴影。Android lintRelease／assembleRelease 与 macOS bundle／DMG 校验通过。
+- 已保数据覆盖 OPPO 77／1.0.11 与 Mac 1.0.11。手机首次安装时间、CE／DE inode 不变、安装 APK 回读与根目录正式包相同；Mac 同 Bundle／Team，旧 app 备份，替换前后工作区逻辑摘要一致、quick_check=ok，重开既有会话正常显示。原生手机表格复制透明已目视确认。
+- 连续手势验收仍未闭环：手机页面在观察间发生滚动变化，已停止自动操作，未宣称“中段右滑不打开／左端余量右滑打开”的真机链通过。7 项策略单测与源码接线通过不替代原生连续手势。真实 Provider／云同步未重跑。根目录交付 `Nanfeng-AI-Android-1.0.11.apk`、`Nanfeng-AI-macOS-1.0.11.dmg`；证据 `release-evidence/1.0.11/`。未提交／推送。
+
+## 2026-09-18：关于页文字可选择、GitHub 可点击（1.0.10 双端已保数据覆盖）
+
+- Android 关于卡通过 SelectionContainer 提供系统长按选择；GitHub 使用 LinkAnnotation.Url、主题色与下划线打开系统浏览器。Desktop 关于页启用原生文本选择，GitHub 为真实 href 并复用受控来源链接 IPC。布局与既有信息保留，不新增常驻按钮。
+- 同步设置合同的品牌／版本／开发者三分区事实，并更正已有入口审计中陈旧的“一条分隔线”断言。24 项 Android 设置／入口检查与 6 项 Desktop 设置检查通过；浏览器真实拖选及链接点击事件验证通过。
+- Mac 已同 Bundle／Team 保数据覆盖 1.0.10，替换前后工作区逻辑摘要一致、quick_check=ok，旧 app 已备份。原生关于页确认版本和真实链接；点击后无应用错误，但浏览器清单工具超时，未独立确认页面加载。Android 76／1.0.10 已验签保数据覆盖，首次安装时间与 CE／DE inode 不变，APK 回读匹配。真机长按联系邮箱可见系统选区、复制／全选菜单；GitHub 点击进入 Chrome，系统 Intent 中地址精确为仓库 HTTPS URL。证据 `release-evidence/1.0.10/`。
+
+## 2026-09-18：代码底色减淡、复制按钮透明、Android 表格线弱化（1.0.9 双端已保数据覆盖）
+
+- Desktop 浅色代码块／行内代码由 `#f1f2f2` 调浅为 `#f7f8f8`；双端代码复制按钮去掉独立底色，透明透出卡片，保留图文、胶囊命中轮廓及复制动作。Android 表格外框与内部横纵线统一取 `ConversationWorkspaceCanvas`，随阅读背景色，不再使用独立蓝灰描边。
+- Android 定向 99 项全部通过；Desktop 代码／Markdown 16 项通过；真实浏览器预览确认浅色底、透明复制按钮、暗色回归及原文 payload 保真。Android lintRelease／assembleRelease 与 macOS 签名／DMG 校验完成，双端已保数据覆盖。OPPO 首次安装时间、CE／DE inode 未变，安装 APK 拉回摘要匹配 GitHub 根目录正式包。Mac 同 Bundle／Team，旧 app 已备份，quick_check=ok、既有会话可读；SQLite 关闭前后摘要发生变化（WAL 后续为空），未确认字节完全不变，不作为该项通过证据。
+- 原生视觉：Mac 原 Codex 对话 bash／toml 卡片灰底更浅、复制透明；OPPO 原会话表格内外线已弱化，代码复制按钮（含捕获到的“已复制”态）透明。未运行真实 Provider／同步往返或业务全量。常规 theme:computed-style 的 Chrome 4 秒进程未返回回执；延长至 30 秒的诊断运行回读主题色全部匹配，但 Chrome 退出超时；代码专用浏览器检查正常完成，未修改主题脚本掩盖环境限制。
+- 交付 GitHub 根目录 `Nanfeng-AI-Android-1.0.9.apk`、`Nanfeng-AI-macOS-1.0.9.dmg`；证据 `release-evidence/1.0.9/`。未提交／推送。
+
+## 2026-09-18：Android 消息长按菜单统一并缩小（1.0.8 已保数据覆盖）
+
+- 原因：复制项单独开启 iconOnly，隐藏了文字并使用不同宽度／间距；已删除该分支，复制／已复制与选择文本、编辑、分享共用整行组件及图标、文字列。图标不再重复提供与文字相同的可访问名。
+- 按用户追加要求整体缩小：菜单 200dp，操作行 42dp，14sp／20sp／Normal 标准文字，18dp 图标、12dp 图文间距，16dp 圆角、4dp 阴影；日期 11sp、24dp 槽位。定位高度和实际行高共用常量，避免缩小后锚点仍消费旧尺寸。
+- 更新与最新要求冲突的旧“复制仅图标”合同断言及唯一界面合同，并去掉 composer 检查中误跨入消息菜单的旧字号断言。最终 94 项定向回归通过，lintRelease、assembleRelease 通过；未重跑业务全量／Provider／云端同步。
+- OPPO 已同正式证书保数据覆盖 74／1.0.8；首次安装时间、CE／DE inode 不变，安装后拉回 APK 与 GitHub 根目录正式文件 SHA-256 一致。真机 UI 树确认四项“复制／选择文本／编辑消息／分享”齐全，文字左边缘均为 671px、行距均为 116px。用户操作中菜单发生切换，已停止交互；未完成截图视觉核对与复制成功态实机回读，不把静态合同通过等同于此两项验收。
+- 交付：`/Users/nanzhufeng/GitHub/Nanfeng-AI-Android-1.0.8.apk`；证据 `release-evidence/1.0.8/`。此前未缩小中间包未安装／交付；当前只改 Android 消息菜单与版本，日期修复、正文代码样式和 Desktop 保持现有实现。未提交／推送。
+
+## 2026-09-18：Android 会话创建日期校正（1.0.7 已保数据覆盖、原列表验证）
+
+- 用户明确：截图为手机，本地／云端列表继续显示创建日期。此前误判为 Desktop 并改为 updatedAt 的尝试已经全部撤回，未构建／安装该尝试；本增量不改 Desktop 日期显示。
+- 根因复现：Android 入口会复用旧空白会话，首发沿用占位创建时间；Room 常规 UPDATE 也不写 createdAt。已在真实 domain＋Room 路径复现“8 月空白占位、9 月首次发送，列表仍为 8 月”的红灯，并修复首次发送及事务落库。
+- 旧记录校正只处理有本机原始根消息与 5 分钟内发送 Attempt、没有任何已知导入／恢复 provenance 的记录，日期取该首条消息；保留正文、updatedAt／排序，增加 revision。证据不足不猜测。升级写入失败回滚、关闭重开幂等、导入原日期保真及同步旧副本不回退均有回归覆盖；无 schema／wire 变更。
+- 验证：定向 69 项全部通过（含存储、同步、入口与合同）；最终全量 1199 项中 1195 passed／1 failed／3 skipped，唯一失败为既有关于页分隔线断言，未修改。合同路由文档断言已补回链接并转绿。lintRelease 无 error（104 warnings／19 hints），assembleRelease 通过。
+- 手机交付：OPPO 已同正式证书保数据覆盖 73／1.0.7；首次安装时间、CE／DE inode 不变，安装后 APK 拉回 SHA-256 与 GitHub 根目录候选一致。真实本地及云端标签页分别回读截图两条原会话，均显示 2026/09/16。列表继续消费 createdAt，Desktop 安装与日期逻辑未动。
+- 边界：点击真实云端读取后，用户切换到了其他应用；最终服务读取结果未捕获，已停止设备操作，不能声称本次真实双端同步往返通过。日期同步防回退在隔离 owner／Room 回归验证。
+- 证据目录 `release-evidence/1.0.7/`；本增量未提交／推送。
+
+## 2026-09-18：代码底色按平台区分（Desktop 1.0.6 已保数据覆盖）
+
+- 用户明确指定：Android 灰色页面＋亮代码卡保持；Desktop 白色页面上的全部代码改灰底。Desktop 代码块与行内代码统一为 `#f1f2f2`，深色皮肤保持炭灰；无外框、语法配色和胶囊复制按钮保留。
+- 当前：仅改 Desktop CSS 与平台版本；Android 两个代码呈现源文件 hash 与 1.0.4 相同。已在白色页面／窄屏深色预览核对代码底色、无外框、复制 payload 原文、胶囊轮廓和横向滚动。平台差异已写阅读合同，避免以后重新强行统一底色。Desktop 1.0.6 已验同 Bundle／Team／严格签名并保数据覆盖，替换前后 SQLite／WAL hash 一致、quick_check=ok；DMG 已校验并复制到 GitHub 根目录。正式应用打开原 Codex 对话，截图确认白色正文上 bash／toml 代码块及行内代码均为浅灰底，胶囊复制按钮与无外框保留。本轮仅视觉改动，未重跑模型请求／Android 构建／业务全量测试；预览和正式包检查均通过，未提交／推送。证据见 `release-evidence/1.0.6/`。
+
+## 2026-09-18：Desktop 反复断点续写修复（1.0.5 已保数据覆盖并原问题实测）
+
+- 真实只读基线：9 月 17 日 Qwen／GLM／DeepSeek 三条截图对应 Attempt 全部为 `FAILED / WEB_SEARCH_NO_SOURCES`；Qwen retry_count=3。不是三家同时断网，而是 9 月 15 日已存在的来源门槛将成功输出转为失败。1.0.4 的代码块 UI 改动未改该 transport，但上一轮未检查真实生成链路，遗漏了问题。
+- 修复：正文完成与联网证据分开；缺少可核验来源仍保留有效回答与用量，联网信息显示“已请求，未返回联网依据”。真实异常／未知仍保留失败语义。历史来源失败展示准确原因，显式重试从原用户消息重新生成，原文与历史失败分支保留，不再无限续写。普通网络断点继续保留。旧 CONTINUED 提示不再永久显示“正在”。
+- 证据：Rust 三项针对性红灯转绿；完整 282 passed／1 opt-in ignored。Desktop 435 passed／12 既有 skipped；lint／typecheck／inventory 通过。真实 DeepSeek、Qwen、GLM 各一次固定算术请求均正常结束、取得 Token、隔离落库并关闭重开为 COMPLETED；三家均 searchVerified=false，直接验证旧门槛错误。没有发送用户历史／附件，不在正式库注入测试资料。证据见 `release-evidence/1.0.5/`。
+- 交付：Mac 1.0.5 已验同 Bundle／Team／严格签名并保数据覆盖；备份旧 app，替换前后 SQLite／WAL hash 一致，quick_check=ok。DMG 构建与校验通过，根目录 `Nanfeng-AI-macOS-1.0.5.dmg` 摘要见 packages.json。
+- 原症状闭环：通过正式应用搜索打开 9 月 17 日 18:39 的 DeepSeek 空白失败对话，旧提示已变“联网来源未核验／重新生成”。执行一次用户原问题重试，21,985ms 后 COMPLETED／COMPLETE，input=6176、output=4461，实际界面“用时22.0秒／¥0.0365”（Provider charge 为空，展示金额不等于服务端结算凭证），没有续传／失败按钮；旧失败分支仍保留。searchVerified=false，不宣称该回答执行了可核验网页搜索。见 native-original-question.json。Qwen／GLM 原长会话没有再收费重做，仅最小真实 Provider 请求与隔离持久回读通过。
+- 边界：Android 同名策略为独立路径（DeepSeek 已豁免），本增量未修改／验收 Android，不将 Desktop 结果泛化到手机。旧失败审计不自动改成成功、不补造历史费用。未提交／推送。
+
+## 2026-09-18：双端正文代码块视觉优化（1.0.4 双端已保数据覆盖）
+
+- 用户参考代码卡截图，并明确要求“底色提亮，与背景拉开色差，周围线框去掉”。双端实现白色／亮炭灰圆角代码卡，无外框；顶部语言＋胶囊形图文复制按钮（用户补图明确）、内部细分隔线，代码横向滚动而头部固定。原文、复制内容、检索定位不变。
+- Android UI 使用本地 offset tokenizer＋AnnotatedString，代码不再交给正文 marker 归一化；Desktop 在安全转义后插入样式 span，未知语言／超长代码退化纯文本，查找模式保留整段命中。无新增依赖／网络／协议。
+- 验证：Desktop 434 passed / 12 既有 skipped，lint／typecheck 通过；Android 定向 95 tests / 0 failures / 0 skips，lintRelease／assembleRelease 通过。1280×750 浅色、390×780 深色预览确认外框 border=0、复制按钮圆角 999px、copy payload 原文一致及窄屏横向滚动。Android 全量未重跑，上一增量关于页既有失败仍保留。
+- 交付：正式 1.0.4 双端已同原签名保数据覆盖；Android 72，首次安装日期及 CE／DE inode 不变，安装后 APK 拉回与根目录候选 SHA-256 一致；Mac Bundle／Team 一致，保留旧 app，替换前后 SQLite／WAL hash 一致且 quick_check=ok。DMG 初次校验遇资源占用，精确卸载本次构建镜像后 hdiutil verify 通过。根目录安装包及摘要见 `release-evidence/1.0.4/packages.json`。
+- 实机边界：Mac 已打开原 Codex 对话，确认胶囊复制按钮，点击 TOML 按钮后 AX 显示“已复制”；未读取系统剪贴板回核。Android 已完成正式安装及数据保留核验，尚无更新后的真机视觉截图，不能称双端视觉已全验。未触发模型请求或重跑同步；未提交／推送。完整记录见 `release-evidence/1.0.4/verification.json`。
+
+## 2026-09-18：双端回答信息修正（1.0.3 双端已保数据覆盖）
+
+- 当前增量：Android 来源按类别展开字段／标题；Desktop 改为手机式纵向轻量弹窗、可滚动正文和固定“知道了”。复用实际回答绑定记录，不根据其他答案或当前设置补造来源。
+- 已定位：Desktop 风格来源保存字段标题，真实 `tone:` ID 尚在；读取时兼容还原并修复新记录。真实本机 13 条完成 Attempt 的联网证据全部为 NULL，旧 UI 错当“服务商未返回依据”；现在未知保持未知。Android DeepSeek 成功分支原取请求开关，新增服务商搜索执行位，未来使用事实取该位／有效来源链接。
+- 验证：Rust 风格回归先红（基础风格和语气 != 直言不讳）后绿，历史记录＋改变设置＋关闭重开保真；全量 280 passed。前端 431 passed / 12 既有 skipped。Android 全量 1191 tests / 1 既有关于页失败 / 3 skipped；相关新用例通过。临时日志 `/tmp/nfai-answer-*`，完整 Android XML 汇总保存在 `release-evidence/1.0.3/android-tests.json`。
+- 构建／覆盖：Android lintRelease 无 error（104 warnings / 19 hints），assembleRelease 成功，71 / 1.0.3 同原正式证书保数据覆盖，首次安装时间及 CE／DE inode 不变，拉回 base APK 与候选一致。Mac 1.0.3 同 Bundle ID／Team 覆盖，保留旧 app，替换前后主 SQLite／WAL hash 一致，quick_check=ok。正式包在 `/Users/nanzhufeng/GitHub/Nanfeng-AI-{Android,macOS}-1.0.3.{apk,dmg}`，具体 SHA-256 见 `release-evidence/1.0.3/packages.json`。
+- 真实界面：Mac KFK 历史回答已回读“直言不讳／未记录（旧回答）”及四组来源，“知道了”关闭正常；OPPO 原截图 Codex 对话已回读分类、昵称、职业／角色与自定义指令明细。隔离浏览器验证 1280×900 浅色、390×700 深色，长列表滚动及按钮可点，无脚本错误；Browser plugin 不可用，采用已安装 Playwright。手机截图碰到转场及后续用户切换应用，不将这些截图称为稳定视觉截图；以真实 UI 树确认字段。
+- 边界：Android 本次相关 48 tests 全通过，全量唯一失败仍为既有关于页断言；前端 12 skipped。未触发新付费 Provider 请求，不把夹具与历史字段回读称为新联网调用验收。没有对历史手机归因做无依据重写，没有改同步 wire／云端服务。回答来源审计仍按现合同只在生成设备本机保存，跨端不存在的记录不能推测补齐。未提交／推送 GitHub。
+
+## 2026-09-18：去除隐性恢复码门槛与读取按钮修正（双端 1.0.2 已覆盖验收）
+
+- 最新裁决：用户先要求恢复码管理保留，随后澄清“以后完全用不到可删除，但不能入口没了又被恢复码卡住”；因此保持 Google 账号直同步，未恢复管理入口、未改云端协议或重新加密。永久约束已写 AGENTS 与 P7-F 合同。
+- 新发现并修复：Android `P7BAccountStateMachine.authenticate` 即便 direct 同步仍创建／检查旧数据密钥，缺材料会 FAILED；Desktop OAuth 持久化也调用同类旧初始化。新增独立 `authenticateDirect`／`authenticate_direct`，Google direct 登录不读写密钥，旧恢复确认／缺密钥状态迁移，真实冲突保留。Android 账号页状态名改为 syncReady，避免把登录可用性伪装成恢复码状态。
+- UI：双端“读取云端列表”撑满卡片宽度，图标紧邻文字并作为一组居中，删除重复 HTTPS 小字。
+- 验证：Rust 新用例先红（登录额外创建 key），修复后全量 280 passed；前端 428 passed / 12 既有 skipped，lint／typecheck 通过。Android 全量 1189 tests / 1 failed / 3 skipped，唯一失败为未改动的关于页分隔线旧断言；最终相关定向 59 passed / 0 failed / 0 skipped，lintRelease 和 assembleRelease 通过。最终日志 `/tmp/nfai-102-centered-{android,js}.log`、`/tmp/nfai-102-android-tests.log`、`/tmp/nfai-102-macos-centered.log`、`/tmp/nfai-direct-login-rust.log`。
+- 正式覆盖与视觉：OPPO 70 / 1.0.2 同正式证书保数据覆盖，首次安装时间、CE／DE 数据 inode 不变，拉回 APK 与候选一致；Mac 同 Bundle ID／Team 原位替换，备份旧包，替换前后 SQLite 主文件／WAL hash 一致，quick_check=ok。双端账号页真机／正式应用确认长条按钮、图标紧邻文字整组居中、说明小字删除。中途文字单独居中版已按用户新图修正，以最后两端实拍为准。
+- 真实读取：Mac“已核对 10 个云端会话，新增 0 个，更新 0 个”；OPPO 最终“已核对 10 个云端会话。新增 0 个，已更新 1 个”。没有为了验收退出主设备账号、重装清库或删除恢复材料；无恢复材料的新设备登录在隔离回归覆盖，不能冒充真实新设备登录。
+- 交付：`release-evidence/1.0.2/verification.json` 与安装记录；正式包 `/Users/nanzhufeng/GitHub/Nanfeng-AI-Android-1.0.2.apk`（SHA-256 `4419f3a6b14fe1c39eac26b98e69bffbaabb00592c87cac2bd8c1412c1cc954d`），`/Users/nanzhufeng/GitHub/Nanfeng-AI-macOS-1.0.2.dmg`（`2dae1f95cf35319842840f1ea8d37ef3cb1d66ed1d0d55893a3e67bbc154d619`）。未提交／推送，未改生产 SQL；合同中残留的强制部署旧加密 migration 条款已更正，防止后续反向迁移。
+
+## 2026-09-18：账号直同步修复（服务已部署，双端 1.0.1 已覆盖并真实读取）
+
+- 用户明确批准取消恢复码和端到端加密，接受服务端可读正文；同时批准 OPPO／Mac 正式包保数据覆盖。唯一当前规则见 `P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md`，下方 9 月 15 日加密方案为历史证据。
+- 已确认根因：Android 列表逐条预检抛错导致整批失败；两端历史包装盐不同导致部分旧密文不可读；Desktop 部分成功反馈误标失败；历史已恢复工作区缺回执时返回成功却漏入云端列表。
+- 修复：新写入 `nfai.sync.direct`；旧材料仅用于逐条验证迁移，CAS＋精确回读确认，不以本机旧副本覆盖无法解密的内容。逐条隔离失败、修复回执与正文的事务边界、账号绑定请求、完整清单数量校验、文档／对话身份绑定、置顶异常显式报告。移除恢复码 UI／Tauri 入口，Android 提示参考 Desktop 紧凑居中白卡。
+- 服务：`202609180007_p8_account_isolated_sync.sql` 已在 NanFengCloud Production SQL Editor 经 rollback 校验后 commit；独立回读 `inventory_deployed=true / anon_can_read=false / direct_table_access=false / unchanged_document_count=10`。匿名真实 HTTP inventory 返回 401。对应可重复 SQL 检查存于 `supabase/tests/account_isolated_sync.sql`。
+- 真实迁移：Mac 先迁移可读旧记录，OPPO 使用其原有材料补齐余下旧记录。独立真实账号读取 `total=10 / direct=10 / legacy=0 / rejected=0`，包括 9 条会话和 1 份云端置顶。隔离 SQLite 副本完整 owner 回读 `restored=9 / failed=0 / cloud_pins_present=true`，旧缺回执修复后回执由 8 补齐至 9；私有副本已删除。原始探针中的 `message_count=0` 因未归一化 Android nodes 字段而不具备消息统计意义，不作内容验收证据。
+- 实机：首轮正式 1.0.1 已同签名覆盖双端；OPPO 首次安装时间仍为 2026-08-20 15:15:31。手机已捕获“读取完成”白卡；Mac 已出现“读取完成”。Mac 原 4 个工作区可读、quick_check=ok；首轮全文件 hash 对比包含易变 SHM 导致断言失败，随后只读检查主 SQLite bytes 稳定，不能把原始丢失对比当已证明。
+- 自动验证：Desktop 前端 428 passed / 12 既有 skipped；Rust 最新 279 passed；Android 最终定向 65 passed / 0 failed，lintRelease（无 error；104 warning／19 hint）、assembleRelease 通过；Desktop lint／typecheck 通过。日志 `/tmp/nfai-{android-final,desktop-final,rust-final,macos-final-build}.log`。
+- 交付目录：`release-evidence/1.0.1/`。Mac 末轮覆盖已完成：主 SQLite 与 WAL hash 在替换前后完全一致；正式 UI 显示“已核对 9 个云端会话，新增 0 个，更新 0 个”，实际同步回执为 9；DMG SHA-256 `c71c849ddce32b6ba52a291ba868c3e628d633e45ffc104881faec0c3a2bb507`。Android 末轮构建遇到 Kotlin GC overhead OOM，已将单条恢复提取为普通函数、采用仅本次构建的 4 GiB Kotlin heap 和单 worker 重跑，未修改长期构建配置。最终 Android SHA-256 `62a619fbcfe3014cd72a468bb869e2008cbf08aa1d80c6775403f647e7a5ba82`，同签名保数据覆盖成功，拉回 base APK 与候选完全一致，首次安装时间保持不变。未提交／推送 GitHub。无 connected Android test、Debug 主设备部署、卸载或清数据。
+- 最终实时回读：手机“已核对 10 个云端会话。新增 0 个，已更新 1 个”；Mac“已核对 10 个云端会话，新增 0 个，更新 0 个”，同步回执 10。生产只读 SQL 最新 `total=11 / direct=11`（10 会话＋1 置顶），较先前迁移快照新增 1 份会话；以上最终数字取代先前 9 会话验收总数。正式包位于 `/Users/nanzhufeng/GitHub/Nanfeng-AI-Android-1.0.1.apk` 与 `/Users/nanzhufeng/GitHub/Nanfeng-AI-macOS-1.0.1.dmg`。
+- 验收边界：不以总数一致证明逐条金额、模型和全文字节一致；本轮未制造真实 Provider 新消息。手机录屏尝试被设备拒绝／无帧，改用截图完成 QA；临时 screenrecord 进程的精确 TERM／INT 返回 Permission denied，收尾仍见 PID 25351 睡眠，无录屏帧产物；精确停止受系统权限拒绝，未重启／root／关闭安全设置。
+
 ## 2026-09-15：v1.0.0 正式双端覆盖与 GitHub 交付
 
 - 源码：`1a37880` 已推送 `main`；Desktop 开发时间统一为 `YYYY-MM-DD HH:mm`，Android 同一格式；关于页保留版本、开发时间和开发者信息，不显示 `macos · aarch64`。
@@ -50,7 +159,6 @@
 - 回归边界：Android 本增量全量 1186 tests / 7 failed / 3 skipped，相关六套 52 tests 无失败；7 项既有 UI 合同失败未掩盖。最终冻结源码重跑 Rust 全量 280 passed / 0 failed / 1 ignored（`/tmp/nanfeng-checkpoint-final-rust.log`）；前端 436 tests / 410 passed / 14 failed / 12 skipped（`/tmp/nanfeng-checkpoint-final-js.log`）。失败含多行标题旧断言、旧 store-lock 断言及其他 UI 断言，不为消除红灯改用户要求。真实服务、大库延迟、历史标题分歧的人工确认与双端实际删除闭环仍不能由安装替代。
 - 本次正式沉淀只增补项目合同、决策、开发档案和经验，不重复历史全库复盘，不修改长期记忆或全局规则。核心新源码、测试、Room 67–69 schema 和共享 fixture 纳入代码 checkpoint；临时截图、输出、私有配置与安装包不入 Git。
 
-> **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
 
 ## 2026-09-15：已选对话删除传播与云端列表清理（源码／隔离验收，未安装）
 

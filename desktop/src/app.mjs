@@ -1,3 +1,5 @@
+import { renderAnswerInformation } from './answer-information.mjs';
+import { cloudReadFeedback } from './cloud-read-feedback.mjs';
 import { installModalLayerOwner, installActionMenuLayerOwner } from './modal-layer-owner.mjs';
 import { resizeComposer } from './composer-size.mjs';
 import { renderSafeMarkdown } from './safe-markdown.mjs';
@@ -230,7 +232,7 @@ async function completeAccountSyncProgress(message, kind = 'success') {
       state.accountSyncProgress = null;
       render();
     }
-  }, ACCOUNT_SYNC_RESULT_VISIBLE_MS);
+  }, kind === 'success' ? ACCOUNT_SYNC_RESULT_VISIBLE_MS : 8000);
 }
 let composerModelPricingRefreshTimer = null;
 state.pendingNewConversationModelId = null;
@@ -2079,30 +2081,7 @@ if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim cu
   if (state.dialog?.kind === 'reminder-delete') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true"><h2>删除这个提醒计划？</h2><p>将删除“${escape(item.title)}”及其本机执行记录；操作不可撤销，运行中的请求会请求停止。</p><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary danger" data-action="confirm-delete-reminder-plan" data-id="${escape(item.planId)}">删除计划</button></div></section></div>`; }
   if (state.dialog.kind === 'memory') { const item = state.dialog.item; return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">本地 revision 写入</p><h2 id="dialog-title">${item ? '编辑 Memory' : '新建 Memory'}</h2><p>Memory 仅是本地文本 IR，不会进入 Prompt 或网络。</p><label>正文<textarea id="memory-body" maxlength="2000000">${escape(item?.body || '')}</textarea></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-memory">保存 ⌘S</button></div></section></div>`; }
   if (state.dialog.kind === 'relation') { const data = workspace(); const items = active(data, 'knowledge'); const options = items.map(item => `<option value="${escape(item.id)}">${escape(item.title)} · r${item.revision}</option>`).join(''); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="取消">${icon(icons.close, '关闭')}</button><p class="overline">显式本地 relation</p><h2 id="dialog-title">建立 Knowledge 关系</h2><p>仅同一活动 scope 的两条 Knowledge 可建立；不会自动关联或去重。</p><label>来源<select id="relation-from">${options}</select></label><label>目标<select id="relation-to">${options}</select></label><label>类型<select id="relation-kind"><option value="RELATED">RELATED（对称）</option><option value="DERIVED_FROM">DERIVED_FROM</option><option value="REFERENCES">REFERENCES</option></select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-relation" ${items.length < 2 ? 'disabled' : ''}>建立关系</button></div></section></div>`; }
-  if (state.dialog?.kind === 'assistant-answer-information') {
-    const record = state.dialog.record;
-    const sources = Array.isArray(record?.selectedSources) ? record.selectedSources : [];
-    const styleSource = sources.find(source => ['STYLE', '对话风格'].includes(source.kind));
-    const sourceLabels = { STYLE: '回答风格', PERSONA: '称呼与职业', MEMORY: '长期记忆', KNOWLEDGE: '资料库', CURRENT_PATH: '当前对话路径', '自定义指令': '自定义指令', '个性化资料': '个性化资料', Memory: '长期记忆', '资料库': '资料库' };
-    const groupedSources = new Map();
-    for (const source of sources) {
-      if (['STYLE', '对话风格'].includes(source.kind)) continue;
-      const label = sourceLabels[source.kind] || source.kind;
-      const titles = groupedSources.get(label) || [];
-      const title = String(source.title || '').trim();
-      if (title && !titles.includes(title)) titles.push(title);
-      groupedSources.set(label, titles);
-    }
-    const webSearchLabel = !record
-      ? '未找到本次回答的本机执行记录'
-      : record.webSearchRequested !== true
-        ? '本次未启用联网'
-        : record.webSearchVerified === true
-          ? '已实际联网（服务商返回核验依据）'
-          : '已请求联网（服务商未返回核验依据）';
-    const sourceList = [...groupedSources.entries()];
-    return `<div class="scrim"><section class="dialog answer-information-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><h2 id="dialog-title">本次回答信息</h2><dl class="answer-information-list"><dt>基础风格和语气</dt><dd>${escape(styleSource?.title || '未记录（旧回答）')}</dd><dt>实时网络</dt><dd>${webSearchLabel}</dd></dl>${sourceList.length ? `<h3>本次上下文来源</h3><ul>${sourceList.map(([label, titles]) => `<li><strong>${escape(label)}</strong>${titles.length ? ` · ${escape(titles.join('；'))}` : ''}</li>`).join('')}</ul>` : ''}<div class="dialog-actions"><button class="primary" data-action="close-dialog">完成</button></div></section></div>`;
-  }
+  if (state.dialog?.kind === 'assistant-answer-information') return renderAnswerInformation(state.dialog.record);
   if (state.dialog === 'metadata') return `<div class="scrim"><section class="dialog edit-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">仅本地安全 metadata</p><h2 id="dialog-title">模型与成本 metadata</h2><p>不存 Key、不联网取 catalog；价格仅标记为 fixture、手工或未知，绝不当作真实费用。</p><label>Provider ID<input id="provider-id" value="provider-local"></label><label>Model ID<input id="model-id" value="model-manual"></label><label>价格版本<input id="price-version" value="manual-v1"></label><label>币种<input id="price-currency" value="CNY"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-metadata">保存 metadata</button></div></section></div>`;
   if (state.dialog === 'recycle') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">本地软删除</p><h2 id="dialog-title">回收站</h2><p>此处恢复通用软删除对象；会话的恢复与永久删除在“设置 → 对话管理 → 回收站”。恢复将生成新 revision。</p><div class="recycle-list">${state.history.recycleBin.length ? state.history.recycleBin.map(item => `<div><span>${escape(item.entity)} · ${escape(item.title)}</span><button data-action="restore" data-entity="${escape(item.entity)}" data-id="${escape(item.id)}" data-revision="${item.revision}">恢复</button></div>`).join('') : '<p class="empty-copy">暂无可恢复对象。</p>'}</div><div class="dialog-actions"><button data-action="close-dialog">关闭</button></div></section></div>`;
   if (state.dialog === 'about') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button class="icon-button close" data-action="close-dialog" aria-label="关闭">${icon(icons.close, '关闭')}</button><p class="overline">Desktop 本机交付摘要</p><h2 id="dialog-title">关于南枫 AI Desktop</h2><dl class="about-list"><dt>版本</dt><dd>0.6.0-p6d-dev</dd><dt>账号与同步</dt><dd>尚未配置 · 离线可用；无浏览器登录、无 HTTP、无同步队列</dd><dt>签名</dt><dd>ad-hoc 开发签名，未 notarized</dd><dt>最低系统</dt><dd>macOS 11 或更高</dd><dt>本地数据</dt><dd>仅 app-private 容器；此处不显示路径或数据库文件</dd><dt>更新</dt><dd>本地静态状态；未检查网络</dd></dl><p>卸载应用不会主动删除用户本地数据；清除数据必须通过未来独立的安全流程，不暴露 SQLite 文件。</p><div class="dialog-actions"><button data-action="close-dialog">关闭</button></div></section></div>`;
@@ -2142,9 +2121,10 @@ function accountSyncProgressDialog() {
   const title = result
     ? result.kind === 'success' ? (reading ? '读取完成' : '同步成功')
       : result.kind === 'pending' ? '同步尚未确认'
-        : reading ? '读取失败' : '同步失败'
+        : result.kind === 'attention' ? '读取完成，部分待处理'
+          : reading ? '读取失败' : '同步失败'
     : reading ? '正在读取云端列表' : '正在同步到南枫云';
-  const detail = result?.message || (result ? '' : reading ? '正在核对并合并云端会话，请稍候。' : '正在加密提交并核对云端回执，请稍候。');
+  const detail = result?.message || (result ? '' : reading ? '正在核对并合并云端会话，请稍候。' : '正在提交并核对云端回执，请稍候。');
   const resultIcon = result
     ? icon(result.kind === 'success' ? icons.check : icons.info, result.kind === 'success' ? '成功' : '提示')
     : '<span class="account-sync-progress-spinner" aria-hidden="true"></span>';
@@ -4456,7 +4436,7 @@ function showCopyIconFeedback(button) {
   button.classList.add('is-copy-success');
   button.setAttribute('aria-label', '已复制');
   button.setAttribute('title', '已复制');
-  button.innerHTML = icon(icons.check, '已复制');
+  button.innerHTML = icon(icons.check, '已复制') + (prior.html.includes('code-copy-label') ? '<span class="code-copy-label">已复制</span>' : '');
   window.setTimeout(() => {
     if (!button.isConnected || button.__copyIconFeedbackToken !== token) return;
     button.innerHTML = prior.html;
@@ -6198,7 +6178,7 @@ app.addEventListener('click', event => {
 app.addEventListener('click', event => {
   const target = event.target.closest?.('[data-action]');
   const action = target?.dataset.action;
-  if (!['show-google-login-requirements', 'sign-in-google-account', 'sign-out-google-account', 'create-account-recovery-code', 'confirm-account-recovery-code', 'recover-account-existing-recovery', 'create-account-recovery-rotation', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'load-account-cloud-documents', 'show-recent-conversation-list', 'show-cloud-conversation-list', 'open-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
+  if (!['show-google-login-requirements', 'sign-in-google-account', 'sign-out-google-account', 'load-account-cloud-documents', 'show-recent-conversation-list', 'show-cloud-conversation-list', 'open-cloud-conversation', 'choose-selected-local-sync-start', 'toggle-periodic-account-sync', 'context-menu-sync', 'reconcile-account-sync'].includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   if (action === 'load-account-cloud-documents') {
@@ -6283,40 +6263,6 @@ app.addEventListener('click', event => {
         cloudListReadGeneration += 1;
         clearCloudConversationCache();
         state.status = '已退出账号；本机对话与工作区保留不变。';
-      } else if (action === 'create-account-recovery-code') {
-        state.accountRecovery = { ...(await invoke('create_desktop_recovery_code')), setup: true };
-        state.status = '请保存恢复码并明确确认；确认前不会读取或上传云端对话。';
-      } else if (action === 'confirm-account-recovery-code') {
-        if (!document.getElementById('account-recovery-saved')?.checked) throw new Error('请先确认已保存恢复码');
-        state.accountSync = await invoke('confirm_desktop_recovery_code', { confirmationHash: state.accountRecovery?.confirmationHash });
-        state.accountRecovery = null;
-        state.status = '恢复保护已启用；云端只保存端到端加密封包。';
-        notifyAccountSync('success');
-      } else if (action === 'recover-account-existing-recovery') {
-        const recoveryCode = document.getElementById('existing-account-recovery-code')?.value || '';
-        if ([...recoveryCode].length < 12 || new TextEncoder().encode(recoveryCode).length > 128 || recoveryCode.trim() !== recoveryCode || /[\u0000-\u001f\u007f]/.test(recoveryCode)) throw new Error('恢复码至少 12 个字符，最多 128 字节，不能包含首尾空格或控制字符');
-        state.accountSync = await invoke('recover_desktop_existing_recovery', { recoveryCode });
-        state.status = '已验证恢复码并接入加密同步；现在可以读取云端对话。';
-        notifyAccountSync('success');
-      } else if (action === 'create-account-recovery-rotation') {
-        state.accountRecovery = { rotation: true };
-        state.status = '';
-      } else if (action === 'confirm-account-recovery-rotation') {
-        const recoveryCode = document.getElementById('new-recovery-code')?.value || '';
-        if ([...recoveryCode].length < 12 || new TextEncoder().encode(recoveryCode).length > 128 || recoveryCode.trim() !== recoveryCode || /[\u0000-\u001f\u007f]/.test(recoveryCode)) throw new Error('恢复码至少 12 个字符，最多 128 字节，不能包含首尾空格或控制字符');
-        const pending = await invoke('create_desktop_recovery_rotation', { recoveryCode });
-        const receipt = await invoke('confirm_desktop_recovery_rotation', { confirmationHash: pending.confirmationHash });
-        state.accountRecovery = null;
-        state.accountSync = { ...state.accountSync, rotationPending: receipt.status !== 'ROTATED' };
-        state.status = receipt.status === 'ROTATED' ? '恢复码已更换并完成云端回读。' : `恢复码更换暂停于 ${receipt.status}；已完成 ${receipt.completedDocuments}/${receipt.totalDocuments}。`;
-        notifyAccountSync(receipt.status === 'ROTATED' ? 'success' : 'attention');
-        await loadDesktopAccountSync();
-      } else if (action === 'retry-account-recovery-rotation') {
-        const receipt = await invoke('retry_desktop_recovery_rotation');
-        state.accountSync = { ...state.accountSync, rotationPending: receipt.status !== 'ROTATED' };
-        state.status = receipt.status === 'ROTATED' ? '恢复码已更换并完成云端回读。' : `更换仍暂停于 ${receipt.status}；已完成 ${receipt.completedDocuments}/${receipt.totalDocuments}。`;
-        notifyAccountSync(receipt.status === 'ROTATED' ? 'success' : 'attention');
-        await loadDesktopAccountSync();
       } else if (action === 'load-account-cloud-documents') {
         const readGeneration = ++cloudListReadGeneration;
         beginAccountSyncProgress('read');
@@ -6325,10 +6271,6 @@ app.addEventListener('click', event => {
         await waitForAccountSyncProgressPaint();
         const receipt = await invoke('restore_all_desktop_cloud_conversations');
         const restored = Array.isArray(receipt?.restored) ? receipt.restored : [];
-        const updatedCount = restored.filter(item => item?.status === 'UPDATED_LOCAL').length;
-        const addedCount = restored.filter(item => item?.status === 'RESTORED_AS_NEW_WORKSPACE').length;
-        const failedCount = Math.max(0, Number(receipt?.failedCount) || 0);
-        const legacyCount = Math.max(0, Number(receipt?.skippedLegacyCount) || 0);
         const refreshedRows = await cloudRowsFromLocalEntries(restored);
         // A newer read, explicit cloud removal, or sign-out won the race. Its
         // list state is authoritative; this old response must not put rows back.
@@ -6354,21 +6296,10 @@ app.addEventListener('click', event => {
         }
         persistCloudConversationCache();
         state.pane = 'chat';
-        if (failedCount || legacyCount) {
-          state.status = `已读取 ${state.cloudConversations.length} 个云端会话；${failedCount} 个未能恢复，已保留本机内容。${legacyCount ? `另有 ${legacyCount} 个旧格式记录，需要在原设备明确同步后再读取。` : '请核对读取错误或同步冲突。'}`;
-          notifyAccountSync('attention');
-          await completeAccountSyncProgress(state.status, 'error');
-        } else if (!state.cloudConversations.length) {
-          state.status = '当前账号没有云端会话。';
-          await completeAccountSyncProgress('新增 0 个，当前账号没有云端会话。');
-        } else {
-          state.status = `已读取 ${state.cloudConversations.length} 个云端会话，已显示在云端列表。`;
-          notifyAccountSync('success');
-          await completeAccountSyncProgress(
-            `新增 ${addedCount} 个，已更新 ${updatedCount} 个，当前显示 ${state.cloudConversations.length} 个云端会话。`,
-            'success',
-          );
-        }
+        const feedback = cloudReadFeedback(receipt);
+        state.status = feedback.message;
+        notifyAccountSync(feedback.kind === 'success' ? 'success' : 'attention');
+        await completeAccountSyncProgress(feedback.message, feedback.kind);
         // Account metadata is not a prerequisite for already-restored rows.
         void loadDesktopAccountSync().then(render).catch(() => {});
       } else if (action === 'choose-selected-local-sync-start') {
@@ -6389,8 +6320,8 @@ app.addEventListener('click', event => {
       state.error = `账号与同步操作未完成：${accountSyncErrorMessage(error)}`;
       if (action === 'sign-in-google-account') state.status = 'Google 授权未完成；本机数据与云端均未改变，可检查配置后重试。';
       if (action === 'context-menu-sync') await completeAccountSyncProgress('请检查网络或登录后重试。', 'error');
-      if (action === 'load-account-cloud-documents') await completeAccountSyncProgress('请检查网络或登录后重试。', 'error');
-      if (['context-menu-sync', 'confirm-account-recovery-rotation', 'retry-account-recovery-rotation', 'reconcile-account-sync'].includes(action)) notifyAccountSync('attention');
+      if (action === 'load-account-cloud-documents') await completeAccountSyncProgress(accountSyncErrorMessage(error), 'error');
+      if (['context-menu-sync', 'reconcile-account-sync'].includes(action)) notifyAccountSync('attention');
     } finally {
       // completeAccountSyncProgress owns the result lifetime. Clearing it here
       // immediately after the receipt/error turns the acknowledgement into a

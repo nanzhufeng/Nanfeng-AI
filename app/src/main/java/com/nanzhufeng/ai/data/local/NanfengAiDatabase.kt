@@ -1913,6 +1913,35 @@ interface GeneratedCandidateDao {
 
 @Dao
 interface ConversationDao {
+    /** Only original roots sent on this device, excluding every portable import owner. */
+    @Query("""
+        SELECT DISTINCT c.id, c.createdAtEpochMs, c.revision, root.createdAtEpochMs AS firstSentAtEpochMs
+        FROM normal_chat_send_attempts a
+        JOIN message_nodes root ON root.id=a.messageId AND root.conversationId=a.conversationId
+        JOIN conversations c ON c.id=root.conversationId
+        WHERE c.surface='CHAT' AND c.deletedAtEpochMs IS NULL
+          AND root.role='USER' AND root.parentMessageId IS NULL AND root.siblingPosition=0
+          AND root.revisesMessageId IS NULL AND root.createdAtEpochMs>c.createdAtEpochMs
+          AND root.createdAtEpochMs<=c.updatedAtEpochMs
+          AND a.createdAtEpochMs BETWEEN root.createdAtEpochMs AND root.createdAtEpochMs+300000
+          AND NOT EXISTS (SELECT 1 FROM message_nodes n WHERE n.conversationId=c.id AND n.createdAtEpochMs<root.createdAtEpochMs)
+          AND NOT EXISTS (SELECT 1 FROM chatgpt_import_provenance p WHERE p.conversationId=c.id)
+          AND NOT EXISTS (SELECT 1 FROM claude_import_provenance p WHERE p.conversationId=c.id)
+          AND NOT EXISTS (SELECT 1 FROM nanfeng_knowledge_import_provenance p WHERE p.conversationId=c.id)
+          AND NOT EXISTS (SELECT 1 FROM p6k_zip_import_provenance p WHERE p.conversationId=c.id)
+          AND NOT EXISTS (SELECT 1 FROM workspace_exchange_v2_restore_provenance p WHERE p.ownerId=c.id)
+    """)
+    fun legacyNativeCreationTimes(): List<LegacyNativeCreationTime>
+
+    @Query("UPDATE conversations SET createdAtEpochMs=:firstSentAtEpochMs, revision=revision+1 WHERE id=:id AND createdAtEpochMs=:oldCreatedAtEpochMs AND revision=:expectedRevision")
+    fun repairNativeCreationTime(id: String, oldCreatedAtEpochMs: Long, expectedRevision: Long, firstSentAtEpochMs: Long): Int
+
+    @Query("UPDATE conversations SET createdAtEpochMs=:createdAtEpochMs WHERE id=:id AND createdAtEpochMs<:createdAtEpochMs")
+    fun restoreVerifiedCreationTime(id: String, createdAtEpochMs: Long): Int
+
+    @Query("UPDATE conversations SET createdAtEpochMs=:createdAtEpochMs WHERE id=:id AND autoTitlePending=1 AND surface='CHAT' AND NOT EXISTS (SELECT 1 FROM message_nodes WHERE conversationId=:id)")
+    fun startBlankConversation(id: String, createdAtEpochMs: Long): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insertConversation(conversation: ConversationEntity)
 

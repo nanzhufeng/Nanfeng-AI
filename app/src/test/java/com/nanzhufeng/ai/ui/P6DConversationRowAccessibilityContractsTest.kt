@@ -396,8 +396,8 @@ class P6DConversationRowAccessibilityContractsTest {
         val messagePopup = source.substring(source.indexOf("private fun MessageActionPopup"), source.indexOf("private fun MessageContextAction"))
         val messageAction = source.substring(source.indexOf("private fun MessageContextAction"), source.indexOf("private val transcriptTimeFormatter"))
         for (token in listOf("messageActionTarget", "MessageActionMenuTarget", "MessageActionPopup(", "Icons.Rounded.ContentCopy", "Icons.Rounded.SelectAll", "Icons.Rounded.Share", "\"编辑消息\"", "Intent.ACTION_SEND", "formatTranscriptTimeOrNull")) assertTrue("missing $token", source.contains(token))
-        for (token in listOf("val menuWidth = 224.dp", "(rowCount * 46).dp", "RoundedCornerShape(20.dp)", "shadowElevation = 6.dp", "PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true)", "offset = IntOffset(x, y)")) assertTrue("missing compact popup token $token", messagePopup.contains(token))
-        for (token in listOf("height(46.dp)", "Modifier.size(22.dp)", "fontSize = 15.sp", "contentColor = BodyText")) assertTrue("missing black action token $token", messageAction.contains(token))
+        for (token in listOf("val menuWidth = 200.dp", "MessageActionRowHeight * rowCount", "RoundedCornerShape(16.dp)", "shadowElevation = 4.dp", "PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true)", "offset = IntOffset(x, y)")) assertTrue("missing compact popup token $token", messagePopup.contains(token))
+        for (token in listOf("height(MessageActionRowHeight)", "Modifier.size(18.dp)", "fontSize = 14.sp", "FontWeight.Normal", "contentColor = BodyText")) assertTrue("missing black action token $token", messageAction.contains(token))
         assertFalse(messagePopup.contains("ModalBottomSheet"))
         assertFalse(messageAction.contains("AccentOrange"))
         for (forbidden in listOf("\"模型未知\"", "durationLabel", "origin.label", "Text(\"你\"")) assertFalse("unexpected $forbidden", source.contains(forbidden))
@@ -948,7 +948,7 @@ class P6DConversationRowAccessibilityContractsTest {
         }
         assertFalse(composerSource.contains("singleLine = true"))
         assertFalse(composerSource.contains("OutlinedTextFieldDefaults.Container("))
-        assertTrue(source.contains("Text(label, fontSize = 15.sp"))
+        // Message-menu typography is scoped to FB-P6-078, independently of the composer.
         assertFalse(composer.contains("ComposerModelSelectorHitWidth"))
     }
 
@@ -1336,7 +1336,7 @@ class P6DConversationRowAccessibilityContractsTest {
     @Test
     fun `FB-P6-089 gives assistant information blocks local hierarchy tables and individual copy actions`() {
         val presentation = source.substring(source.indexOf("private fun PresentationBlockView"), source.indexOf("private fun inlineText"))
-        for (token in listOf("is PresentationBlock.Table -> MarkdownTable(block, findBlockIndex)", "CopyableInformationSurface", "MarkdownTable(block", "if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy", "contentDescription = if (copied) \"已复制\" else \"复制\$label\"", "NeutralAssistantSurface", "horizontalScroll(scrollState)", "adaptiveTableColumnWeights(block)", "cellWidths = columnWeights.map", "trailingHeaderInset = 38.dp", "复制表格（保留 Markdown 格式）", "tableMarkdownText(block)", "VerticalDivider(", "contentAlignment = Alignment.Center", "textAlign = androidx.compose.ui.text.style.TextAlign.Center")) assertTrue("missing formatted assistant content token $token", presentation.contains(token))
+        for (token in listOf("is PresentationBlock.Table -> MarkdownTable(block, findBlockIndex)", "CopyableInformationSurface", "MarkdownTable(block", "if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy", "contentDescription = if (copied) \"已复制\" else \"复制\$label\"", "color = if (darkCode) Color(0xFF414543) else Color.White", "readingHorizontalScroll(scrollState)", "adaptiveTableColumnWeights(block)", "cellWidths = columnWeights.map", "trailingHeaderInset = 38.dp", "复制表格（保留 Markdown 格式）", "tableMarkdownText(block)", "VerticalDivider(", "contentAlignment = Alignment.Center", "textAlign = androidx.compose.ui.text.style.TextAlign.Center")) assertTrue("missing formatted assistant content token $token", presentation.contains(token))
         val inline = source.substring(source.indexOf("private fun inlineText"), source.indexOf("private fun ConversationActions"))
         assertTrue(inline.contains("appendChatGptImportedText(\"\${span.label} ↗\")"))
     }
@@ -1433,7 +1433,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "val copyText = rememberConversationCopyTextAction()",
             "onCopyAssistant = { transcript -> copyText(presentedMessagePlainText(transcript.message)) { copiedAssistantMessageId = transcript.message.messageId.value } }",
             "copyText(presentedMessagePlainText(transcript.message))",
-            "IconButton(onClick = { copyText(value) { copied = true } })",
+            "onClick = { copyText(value) { copied = true } }",
         )) assertTrue("missing shared copy entry token $token", source.contains(token))
     }
 
@@ -1457,11 +1457,11 @@ class P6DConversationRowAccessibilityContractsTest {
         )) assertTrue("missing assistant-row-scoped copy feedback token $token", actionRow.contains(token))
         val contextAction = source.substring(source.indexOf("private fun MessageContextAction"), source.indexOf("private val transcriptTimeFormatter"))
         for (token in listOf(
-            "iconOnly = true",
-            "modifier = if (iconOnly) Modifier.size(46.dp)",
-            "contentDescription = label",
-            "if (!iconOnly)",
-        )) assertTrue("context copy must be an accessible icon-only control: $token", source.substring(source.indexOf("messageActionTarget?.let"), source.indexOf("selectingTextMessageId?.let")).plus(contextAction).contains(token))
+            "Modifier.fillMaxWidth().height(MessageActionRowHeight)",
+            "Arrangement.Start",
+            "Text(label",
+        )) assertTrue("context copy must use the same labeled menu row: $token", contextAction.contains(token))
+        assertFalse("message menus must not hide the copy label", contextAction.contains("iconOnly"))
         for (surface in listOf(informationSurface, markdownTable, textPreviewActions)) {
             assertTrue("copy control must replace its own glyph", surface.contains("if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy"))
             assertFalse("copy control must not add a second check beside itself", surface.contains("CopySuccessIndicator"))

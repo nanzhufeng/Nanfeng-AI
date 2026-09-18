@@ -528,6 +528,14 @@ class ProviderAdapterContractsTest {
         assertEquals(ChatRequestOptions.Standard, DeepSeekChatAdapter().requestOptions(model(), deepChoices.first()))
     }
 
+    @Test fun `answer network fact requires provider evidence even on the Responses route`() {
+        val plain = DeepSeekChatAdapter().decodeNonStreaming("""{"output_text":"普通回答"}""") as ChatAdapterDecodedResult.Text
+        val searched = DeepSeekChatAdapter().decodeNonStreaming("""{"output_text":"检索回答","output":[{"type":"web_search_call","action":{"type":"search"}}]}""") as ChatAdapterDecodedResult.Text
+        assertFalse(plain.webSearchPerformed)
+        assertTrue(searched.webSearchPerformed)
+        assertTrue(searched.webSources.isEmpty())
+    }
+
     @Test fun `DeepSeek Responses result keeps final text and structured public search sources`() {
         val decoded = DeepSeekChatAdapter().decodeNonStreaming(
             """{"output_text":"已完成检索。","output":[{"type":"web_search_call","action":{"sources":[{"url":"https://example.test/notice","title":"官方公告"}]}},{"type":"message","content":[{"type":"output_text","text":"已完成检索。"}]}],"usage":{"input_tokens":8,"input_tokens_details":{"cached_tokens":3},"output_tokens":5}}""",

@@ -800,7 +800,7 @@ class NormalChatOpenRouterExecutor(
                             visibleReply, reply.reasoning, k3Tools, notice, attempt, providerId,
                             executionProviderId, modelId, resolvedModel.displayName, usage, cost, source,
                             conversationStyle = experience.conversationStyle,
-                            webSearchUsed = requestOptions.liveWebSearch,
+                            webSearchUsed = reply.webSearchPerformed || reply.webSources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) },
                         )
                     }
                 }
@@ -883,7 +883,7 @@ class NormalChatOpenRouterExecutor(
                         visibleReply, outcome.reasoning, k3Tools, notice, attempt, providerId,
                         executionProviderId, modelId, resolvedModel.displayName, usage, cost, source,
                         conversationStyle = experience.conversationStyle,
-                        webSearchUsed = requestOptions.liveWebSearch,
+                        webSearchUsed = outcome.webSources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) },
                     )
                 }
             }

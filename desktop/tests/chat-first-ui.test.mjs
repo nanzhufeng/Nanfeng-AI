@@ -732,7 +732,7 @@ test('partial ordinary replies continue from the durable answer instead of repla
     { id: 'partial', parentId: 'user', role: 'assistant', delivery: 'UNKNOWN', attemptId: 'attempt-partial', continuationState: 'CONTINUED', blocks: [{ kind: 'TEXT', text: '已保存的前半段。' }] },
     { id: 'continuation', parentId: 'partial', continuationOf: 'partial', role: 'assistant', delivery: 'PARTIAL', runtimeState: 'RUNNING', attemptId: 'attempt-partial', blocks: [{ kind: 'TEXT', text: '' }] },
   ] }] } }, native: true, selectedConversationId: 'continued-runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
-  for (const token of ['此处已保存内容；正在从断点继续', '正在从断点继续生成', '已保留前段内容，仅生成缺失部分。']) assert.ok(rendered.includes(token), token);
+  for (const token of ['此处内容已保留，后续回答见下方', '正在从断点继续生成', '已保留前段内容，仅生成缺失部分。']) assert.ok(rendered.includes(token), token);
   for (const token of ['ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS', 'queueOrdinaryChatRuntimeRefresh', 'ordinaryChatRuntimeRefreshInFlight']) assert.ok(source.includes(token), token);
 });
 
@@ -914,7 +914,7 @@ test('Desktop shares assistant replies through the same Markdown save path as An
 });
 
 test('inline Markdown code uses the shared half-strength neutral emphasis surface', () => {
-  assert.match(css, /--markdown-inline-code-surface: #f6f8f6;/);
+  assert.match(css, /--markdown-inline-code-surface: #f7f8f8;/);
   assert.match(css, /\.chat-markdown-body code \{[^}]*background: var\(--markdown-inline-code-surface\);/s);
   assert.match(css, /:root\[data-appearance-mode="dark"\] \{[^}]*--markdown-inline-code-surface: #242925;/s);
   assert.doesNotMatch(css, /\.chat-markdown-body code \{[^}]*background: #edf0ed;/s);
@@ -974,8 +974,8 @@ test('source dialog uses the Android source list with no explanatory copy and an
   assert.ok(source.includes("invoke('open_desktop_source_link'"));
 });
 
-test('assistant more menu is a compact trigger-owned popup that keeps answer information and branching', () => {
-  for (const token of ['open-assistant-message-menu', "openTransientOverlay('assistant-message-menu'", 'resolveAssistantMessageMenuAnchor', 'show-assistant-answer-information', '本次回答信息', '创建分支', '未记录（旧回答）']) assert.ok(source.includes(token), token);
+test('assistant more menu is a compact trigger-owned popup that keeps answer information and branching', async () => {
+  for (const token of ['open-assistant-message-menu', "openTransientOverlay('assistant-message-menu'", 'resolveAssistantMessageMenuAnchor', 'show-assistant-answer-information', '本次回答信息', '创建分支', '未记录（旧回答）']) assert.ok((source + await readFile(resolve(import.meta.dirname, '../src/answer-information.mjs'), 'utf8')).includes(token), token);
   assert.match(source, /branch: 'M5 4v4c0 1\.1\.9 2 2 2h12/);
   const rendered = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', pane: 'chat', connection: {}, assistantMessageMenu: { messageId: 'assistant-one' } });
   assert.match(rendered, /<div class="assistant-message-menu" role="menu" aria-label="更多操作"/);
@@ -1121,4 +1121,16 @@ test('header conversation menu ignores sidebar bounds and aligns to its trigger'
   const options = { source: 'header', viewportWidth: 1280, viewportHeight: 800, sidebarRect: { left: 0, top: 0, right: 286, bottom: 800 }, menuWidth: 192, menuHeight: 380 };
   assert.deepEqual(resolveConversationMenuAnchor({ left: 1218, right: 1256, top: 32, bottom: 70 }, options), { x: 1064, y: 76 });
   assert.deepEqual(resolveConversationMenuAnchor({ left: 280, right: 318, top: 600, bottom: 638 }, { ...options, viewportWidth: 320 }), { x: 122, y: 214 });
+});
+
+
+test('historical missing search evidence explains the failure and never offers continuation', () => {
+  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'missing-sources', title: '搜索核验', messages: [
+    { id: 'user', role: 'user', blocks: [{kind:'TEXT',text:'问题'}] },
+    { id: 'answer', role: 'assistant', delivery:'FAILED', safeErrorCode:'WEB_SEARCH_NO_SOURCES', attemptId:'attempt', blocks:[{kind:'TEXT',text:'原回答正文保留'}] }
+  ] }] } }, native: true, selectedConversationId:'missing-sources', composerDraft:'', chatSearch:'', profileOpen:false, sidebarOpen:false, pane:'chat', status:'', error:'', connection:{} });
+  assert.match(rendered, /原回答正文保留/);
+  assert.match(rendered, /联网来源未核验/);
+  assert.match(rendered, /重新生成/);
+  assert.doesNotMatch(rendered, /从断点继续|回答未完成|请检查模型与网络设置/);
 });

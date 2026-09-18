@@ -49,18 +49,15 @@ class P7ASyncContractsTest {
         assertEquals(2, (opened as NfaiSyncResult.Opened).value.snapshot.records.size)
     }
 
-    @Test fun `retired direct envelope is rejected before any payload can be read`() {
-        val direct = JSONObject()
-            .put("format", "nfai.sync.direct")
-            .put("protocolVersion", 1)
-            .put("schemaVersion", 1)
-            .put("appId", "com.nanzhufeng.ai")
-            .put("documentId", "sync-fixture-v1")
-            .put("revision", 7)
-            .put("payloadHash", "0".repeat(64))
-            .put("payloadByteCount", 1)
-            .put("payload", JSONObject())
-        assertTrue(NfaiSyncV1Gateway.preflight(direct.toString()) is NfaiSyncResult.Rejected)
+    @Test fun `direct sync works without recovery material and binds both envelope and payload`() {
+        val prepared = NfaiSyncPreparedSnapshot("com.nanzhufeng.ai", "conversation-fixture", 1,
+            listOf(NfaiSyncRecord("conversation", "fixture", 1, "NORMAL", "{\"title\":\"Fixture\"}")))
+        val sealed = NfaiSyncV1Gateway.sealDirect(prepared) as NfaiSyncResult.Sealed
+        assertTrue(NfaiSyncV1Gateway.openDirect(sealed.canonicalEnvelope, "com.nanzhufeng.ai", "conversation-fixture", 1) is NfaiSyncResult.Opened)
+        assertTrue(NfaiSyncV1Gateway.openDirect(sealed.canonicalEnvelope, "other.app", "conversation-fixture", 1) is NfaiSyncResult.Rejected)
+        assertTrue(NfaiSyncV1Gateway.openDirect(sealed.canonicalEnvelope, "com.nanzhufeng.ai", "conversation-fixture", 2) is NfaiSyncResult.Rejected)
+        val tampered = JSONObject(sealed.canonicalEnvelope).put("documentId", "conversation-other")
+        assertTrue(NfaiSyncV1Gateway.openDirect(tampered.toString(), "com.nanzhufeng.ai", "conversation-other", 1) is NfaiSyncResult.Rejected)
     }
 
     @Test fun `wrong code tamper unknown duplicate truncation binding rollback and sensitive content fail closed`() {

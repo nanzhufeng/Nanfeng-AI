@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use zeroize::{Zeroize, Zeroizing};
 
-pub const ENVELOPE: &str = "nfai.sync.envelope";
+pub(crate) const ENVELOPE: &str = "nfai.sync.envelope";
 pub(crate) const DIRECT_ENVELOPE: &str = "nfai.sync.direct";
 const PAYLOAD: &str = "nfai.sync.payload";
 const VERSION: u64 = 1;
@@ -632,6 +632,79 @@ pub fn seal_with_account_wrapping_material(
     )
 }
 
+/// Google-account-authorized direct sync.  It has no recovery code, ciphertext, wrapping key,
+/// or retained data key: the authenticated account and server RLS are the access boundary.
+pub fn seal_direct(payload: Value) -> Result<String, String> {
+    validate_payload(&payload)?;
+    let plain = canonical(&payload)?.into_bytes();
+    if plain.is_empty() || plain.len() > MAX_PAYLOAD {
+        return Err(err());
+    }
+    let root = object(&payload)?;
+    canonical(&json!({
+        "format": DIRECT_ENVELOPE,
+        "protocolVersion": VERSION,
+        "schemaVersion": VERSION,
+        "appId": text(root, "appId")?,
+        "documentId": text(root, "documentId")?,
+        "revision": number(root, "revision")?,
+        "payloadHash": hash(&plain),
+        "payloadByteCount": plain.len(),
+        "payload": payload,
+    }))
+}
+
+pub fn open_direct(
+    envelope_text: &str,
+    expected_app: &str,
+    expected_document: &str,
+    minimum_revision: u64,
+) -> Result<Value, String> {
+    if envelope_text.is_empty() || envelope_text.len() > MAX_ENVELOPE {
+        return Err(err());
+    }
+    let envelope = strict(envelope_text)?;
+    let root = object(&envelope)?;
+    exact(
+        root,
+        &[
+            "appId",
+            "documentId",
+            "format",
+            "payload",
+            "payloadByteCount",
+            "payloadHash",
+            "protocolVersion",
+            "revision",
+            "schemaVersion",
+        ],
+    )?;
+    if text(root, "format")? != DIRECT_ENVELOPE
+        || number(root, "protocolVersion")? != VERSION
+        || number(root, "schemaVersion")? != VERSION
+        || text(root, "appId")? != expected_app
+        || text(root, "documentId")? != expected_document
+        || number(root, "revision")? < minimum_revision
+    {
+        return Err(err());
+    }
+    let payload = root.get("payload").cloned().ok_or_else(err)?;
+    validate_payload(&payload)?;
+    let payload_root = object(&payload)?;
+    if text(payload_root, "appId")? != expected_app
+        || text(payload_root, "documentId")? != expected_document
+        || number(payload_root, "revision")? != number(root, "revision")? {
+        return Err(err());
+    }
+    let plain = canonical(&payload)?.into_bytes();
+    if number(root, "payloadByteCount")? as usize != plain.len()
+        || text(root, "payloadHash")? != hash(&plain)
+    {
+        return Err(err());
+    }
+    Ok(payload)
+}
+
 /// P7-A accepts a caller-held key; P7-B owns account-level generation and secure storage.
 pub fn seal(payload: Value, recovery: &str, data_key: &[u8]) -> Result<String, String> {
     if data_key.len() != 32 {
@@ -847,7 +920,23 @@ mod tests {
     }
 
     #[test]
-    fn encrypted_payload_allows_fixed_portable_model_usage_without_credentials() {
+    fn direct_google_account_envelope_round_trips_without_recovery_material() {
+        let payload = fixture()["payload"].clone();
+        let sealed = seal_direct(payload.clone()).unwrap();
+        let root: Value = serde_json::from_str(&sealed).unwrap();
+        assert_eq!(root["format"], DIRECT_ENVELOPE);
+        assert!(root.get("kdf").is_none());
+        assert!(root.get("wrappedDataKey").is_none());
+        assert_eq!(
+            open_direct(&sealed, "com.nanzhufeng.ai", "sync-fixture-v1", 7).unwrap(),
+            payload
+        );
+        assert!(open_direct(&sealed, "other.app", "sync-fixture-v1", 7).is_err());
+        assert!(open_direct(&sealed, "com.nanzhufeng.ai", "sync-fixture-v1", 8).is_err());
+    }
+
+    #[test]
+    fn direct_payload_allows_fixed_portable_model_usage_without_credentials() {
         let payload = json!({
             "format": PAYLOAD,
             "protocolVersion": VERSION,
@@ -875,11 +964,11 @@ mod tests {
                 }}]}
             }]
         });
-        assert!(seal(payload.clone(), "portable-model-recovery", &[7; 32]).is_ok());
+        assert!(seal_direct(payload.clone()).is_ok());
         let mut unknown_field = payload;
         unknown_field["records"][0]["content"]["messages"][0]["modelUsage"]["apiKey"] =
             json!("never-portable");
-        assert!(seal(unknown_field, "portable-model-recovery", &[7; 32]).is_err());
+        assert!(seal_direct(unknown_field).is_err());
     }
 
     #[test]

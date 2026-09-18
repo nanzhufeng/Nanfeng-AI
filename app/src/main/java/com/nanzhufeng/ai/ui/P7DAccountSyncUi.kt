@@ -18,6 +18,12 @@ import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,7 +64,7 @@ enum class P7DAccountSyncOperation(
     val progressLabel: String,
     val progressDetail: String,
 ) {
-    SYNCING_CONVERSATION("正在同步到南枫云", "正在加密提交并核对云端回执，请稍候。"),
+    SYNCING_CONVERSATION("正在同步到南枫云", "正在提交并核对云端回执，请稍候。"),
     READING_CLOUD_LIST("正在读取云端列表", "正在核对并合并云端会话，请稍候。"),
     CANCELLING_CONVERSATION("正在取消云端同步", "正在移除云端副本，本地对话会保留。"),
 }
@@ -146,7 +152,7 @@ data class P7DAccountSyncUiState(
     val completedOperationFeedback: P7DAccountSyncFeedback? = null,
     val notice: String? = null,
     val lastSyncedAtEpochMs: Long? = null,
-    val recoveryReady: Boolean = false,
+    val syncReady: Boolean = false,
     val periodicEnabled: Boolean = false,
     val syncedConversationIds: Set<String> = emptySet(),
     val cloudConversations: List<com.nanzhufeng.ai.domain.Conversation> = emptyList(),
@@ -178,7 +184,7 @@ class P7DAccountSyncViewModel(
             notice = if (detail.isBlank()) title else "$title：$detail",
         )
         viewModelScope.launch {
-            delay(P7D_ACCOUNT_SYNC_RESULT_VISIBLE_MS)
+            delay(if (kind == P7DAccountSyncFeedbackKind.SUCCESS) P7D_ACCOUNT_SYNC_RESULT_VISIBLE_MS else 8_000L)
             if (state.completedOperationFeedback === feedback) {
                 // The centered feedback card is the sole completion acknowledgement.
                 // Clearing its paired notice prevents the workspace's legacy Toast
@@ -227,31 +233,9 @@ class P7DAccountSyncViewModel(
                     is P7FCloudConversationBatchRestoreResult.Rejected -> "rejected"
                 })
                 awaitP7DAccountSyncProgressPresentation(progressStartedAtElapsedMs)
-                if (state.session?.userId == userId) when (result) {
-                    is P7FCloudConversationBatchRestoreResult.Restored -> finishOperation(
-                        P7DAccountSyncOperation.READING_CLOUD_LIST,
-                        P7DAccountSyncFeedbackKind.SUCCESS,
-                        "读取完成",
-                        "新增 ${result.restoredCount} 个，已更新 ${result.updatedCount} 个",
-                    )
-                    is P7FCloudConversationBatchRestoreResult.PartiallyRestored -> finishOperation(
-                        P7DAccountSyncOperation.READING_CLOUD_LIST,
-                        P7DAccountSyncFeedbackKind.ATTENTION,
-                        "读取完成",
-                        "新增 ${result.restoredCount} 个，已更新 ${result.updatedCount} 个，已有 ${result.alreadyPresentCount} 个；${result.rejectedCount} 个未读入：${result.rejectedSummary}",
-                    )
-                    is P7FCloudConversationBatchRestoreResult.Empty -> finishOperation(
-                        P7DAccountSyncOperation.READING_CLOUD_LIST,
-                        P7DAccountSyncFeedbackKind.SUCCESS,
-                        "读取完成",
-                        if (result.ignoredCount > 0) "没有新增对话，已有 ${result.ignoredCount} 个" else "当前没有可恢复的对话",
-                    )
-                    is P7FCloudConversationBatchRestoreResult.Rejected -> finishOperation(
-                        P7DAccountSyncOperation.READING_CLOUD_LIST,
-                        P7DAccountSyncFeedbackKind.ERROR,
-                        "读取失败",
-                        result.message,
-                    )
+                if (state.session?.userId == userId) {
+                    val feedback = cloudReadFeedback(result)
+                    finishOperation(feedback.operation, feedback.kind, feedback.title, feedback.detail)
                 }
                 refreshCloudConversationProjection()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -295,7 +279,6 @@ class P7DAccountSyncViewModel(
         when {
             !state.configured -> state = state.copy(detailVisible = true, notice = "Google 登录与云端服务尚未配置。")
             state.session == null -> state = state.copy(detailVisible = true, notice = "请先登录 Google 账号。")
-            !state.recoveryReady -> state = state.copy(detailVisible = true, notice = "请先完成恢复保护。")
             else -> {
                 val progressStartedAtElapsedMs = SystemClock.elapsedRealtime()
                 state = state.copy(
@@ -400,27 +383,6 @@ class P7DAccountSyncViewModel(
             .onFailure { state = state.copy(notice = "定期同步设置保存失败。") }
     }
 
-    fun prepareRecoveryProtection(recoveryCode: String, recoveryCodeSaved: Boolean) {
-        if (state.working || state.session == null) return
-        val secret = recoveryCode.toCharArray()
-        state = state.copy(working = true, notice = null)
-        viewModelScope.launch {
-            val result = try {
-                withContext(Dispatchers.IO) { manualSync.prepareRecoveryProtection(secret, recoveryCodeSaved) }
-            } finally {
-                secret.fill('\u0000')
-            }
-            state = result.fold(
-                onSuccess = {
-                    if (scheduler.enabled()) scheduler.resumeIfEnabled()
-                    loadState().copy(detailVisible = true, notice = "恢复保护已启用。")
-                },
-                onFailure = { state.copy(working = false, notice = it.message ?: "无法启用恢复保护。") },
-            )
-            if (result.isSuccess) refreshLatestSync()
-        }
-    }
-
     private fun runAccountAction(activityContext: Context, switch: Boolean) {
         if (state.working || !state.configured) return
         state = state.copy(working = true, notice = null)
@@ -453,7 +415,7 @@ class P7DAccountSyncViewModel(
         return P7DAccountSyncUiState(
             configured = accountOwner.configured,
             session = session,
-            recoveryReady = session?.let { accountOwner.recoveryReady(it.userId) } == true,
+            syncReady = session != null,
             periodicEnabled = scheduler.enabled(),
         )
     }
@@ -519,14 +481,11 @@ internal fun P7DAccountSyncScreen(
     onSwitchAccount: () -> Unit,
     onSignOut: () -> Unit,
     onPeriodicChanged: (Boolean) -> Unit,
-    onPrepareRecovery: (String, Boolean) -> Unit,
     onReadCloudDocuments: () -> Unit,
     loadAvatar: suspend (String) -> ByteArray?,
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
-    var recoveryCode by remember(state.session?.userId) { mutableStateOf("") }
-    var recoverySaved by remember(state.session?.userId) { mutableStateOf(false) }
     LaunchedEffect(state.notice, state.completedOperationFeedback) {
         if (state.completedOperationFeedback == null) {
             state.notice?.takeIf { it.isNotBlank() }?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
@@ -622,54 +581,30 @@ internal fun P7DAccountSyncScreen(
                         Text("上次同步  ${formatSyncTime(it)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                SettingsSwitch(checked = state.periodicEnabled, onCheckedChange = onPeriodicChanged, enabled = state.recoveryReady && !state.working)
+                SettingsSwitch(checked = state.periodicEnabled, onCheckedChange = onPeriodicChanged, enabled = state.syncReady && !state.working)
             }
-            if (state.session != null && !state.recoveryReady) {
-                Spacer(Modifier.height(16.dp))
-                Text("恢复保护", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = recoveryCode,
-                    onValueChange = { recoveryCode = it.take(128) },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("输入至少 12 个字符的恢复码") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    enabled = !state.working,
-                    shape = P5AInteractiveShape,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = recoverySaved, onCheckedChange = { recoverySaved = it }, enabled = !state.working)
-                    Text("我已保存恢复码", style = MaterialTheme.typography.bodySmall)
-                }
-                Button(
-                    onClick = { onPrepareRecovery(recoveryCode, recoverySaved); recoveryCode = "" },
-                    enabled = recoveryCode.length >= 12 && recoverySaved && !state.working,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = P5AInteractiveShape,
-                ) { Text("启用端到端加密同步") }
-            }
+
         }
         if (state.session != null) WhiteCard(Modifier.fillMaxWidth()) {
-            Text("恢复与安全", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(20.dp))
-            Text(if (state.recoveryReady) "恢复保护已启用，云端只保存加密封包。" else "完成恢复保护后才能读取或同步云端对话。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(18.dp))
+            Text("云端会话", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(16.dp))
             OutlinedButton(
                 onClick = onReadCloudDocuments,
-                enabled = state.recoveryReady && !state.working,
+                enabled = state.syncReady && !state.working,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = P5AInteractiveShape,
                 border = null,
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText),
             ) {
-                Icon(Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text("读取云端列表")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("读取云端列表", textAlign = TextAlign.Center)
+                }
             }
         }
         if (!state.configured) Text("Google 登录与云端服务尚未配置。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            state.notice?.let {
+            state.notice?.takeIf { state.completedOperationFeedback == null }?.let {
                 val isSuccess = it.startsWith("已") || it.endsWith("已启用。") || it.endsWith("已关闭。")
                 Text(it, color = if (isSuccess) MaterialTheme.colorScheme.primary else ErrorRed, style = MaterialTheme.typography.bodySmall)
             }
@@ -688,9 +623,15 @@ internal fun P7DAccountSyncProgressDialog(
     val title = if (isWorking) operation.progressLabel else checkNotNull(completedFeedback).title
     val detail = if (isWorking) operation.progressDetail else checkNotNull(completedFeedback).detail
     val feedbackKind = completedFeedback?.kind
-    Dialog(onDismissRequest = {}) {
+    Dialog(onDismissRequest = {}, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        DisposableEffect(dialogWindow) {
+            val originalDim = dialogWindow?.attributes?.dimAmount
+            dialogWindow?.setDimAmount(0f)
+            onDispose { if (originalDim != null) dialogWindow.setDimAmount(originalDim) }
+        }
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.padding(horizontal = 24.dp).widthIn(max = 340.dp).fillMaxWidth(),
             shape = MaterialTheme.shapes.extraLarge,
             color = ForegroundSurface,
             contentColor = BodyText,
@@ -701,7 +642,7 @@ internal fun P7DAccountSyncProgressDialog(
             shadowElevation = 18.dp,
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 28.dp, vertical = 26.dp),
+                modifier = Modifier.padding(horizontal = 28.dp, vertical = 30.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 if (isWorking) {
@@ -724,9 +665,9 @@ internal fun P7DAccountSyncProgressDialog(
                     )
                 }
                 Spacer(Modifier.height(18.dp))
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(title, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(6.dp))
-                if (detail.isNotBlank()) Text(detail, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                if (detail.isNotBlank()) Text(detail, color = SecondaryText, fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center)
             }
         }
     }
@@ -795,3 +736,22 @@ private fun P7DGoogleAccountAvatar(
 private fun formatSyncTime(epochMs: Long): String = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     .withZone(ZoneId.systemDefault())
     .format(Instant.ofEpochMilli(epochMs))
+
+internal fun cloudReadFeedback(result: P7FCloudConversationBatchRestoreResult): P7DAccountSyncFeedback {
+    val operation = P7DAccountSyncOperation.READING_CLOUD_LIST
+    if (result is P7FCloudConversationBatchRestoreResult.Rejected) return P7DAccountSyncFeedback(operation, P7DAccountSyncFeedbackKind.ERROR, "读取失败", result.message)
+    val legacy = when (result) {
+        is P7FCloudConversationBatchRestoreResult.Restored -> result.skippedLegacyCount
+        is P7FCloudConversationBatchRestoreResult.PartiallyRestored -> result.skippedLegacyCount
+        is P7FCloudConversationBatchRestoreResult.Empty -> result.skippedLegacyCount
+        else -> 0
+    }
+    val detail = when (result) {
+        is P7FCloudConversationBatchRestoreResult.Restored -> "已核对 ${result.restoredCount + result.updatedCount + result.alreadyPresentCount} 个云端会话。新增 ${result.restoredCount} 个，已更新 ${result.updatedCount} 个。"
+        is P7FCloudConversationBatchRestoreResult.PartiallyRestored -> "新增 ${result.restoredCount} 个，已更新 ${result.updatedCount} 个，已有 ${result.alreadyPresentCount} 个；${result.rejectedCount} 个未读入：${result.rejectedSummary}"
+        is P7FCloudConversationBatchRestoreResult.Empty -> if (result.ignoredCount > 0) "已核对 ${result.ignoredCount} 个已有会话。" else if (legacy > 0) "暂无可读取的加密会话。" else "当前账号没有云端会话。"
+        else -> ""
+    } + if (legacy > 0) "另有 $legacy 个旧加密记录，请在原设备更新后同步一次。" else ""
+    val attention = legacy > 0 || result is P7FCloudConversationBatchRestoreResult.PartiallyRestored
+    return P7DAccountSyncFeedback(operation, if (attention) P7DAccountSyncFeedbackKind.ATTENTION else P7DAccountSyncFeedbackKind.SUCCESS, if (attention) "读取完成，部分待处理" else "读取完成", detail)
+}

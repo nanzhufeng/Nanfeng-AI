@@ -1,3 +1,4 @@
+import { renderCodeSyntax } from './code-syntax.mjs';
 import { icon, icons } from './icon-source.mjs';
 import { sourceDisplayTitle, sourceWebsiteColor, sourceWebsiteName } from './source-link-presentation.mjs';
 
@@ -182,9 +183,9 @@ function renderInlineMarkdown(value, query = '', inert = false) {
   return highlightHtml(`${html}${sourceShortcutHtml(sources)}`, query);
 }
 
-function markdownBlockCopyButton(label, value) {
+function markdownBlockCopyButton(label, value, showLabel = false) {
   const safeLabel = escapeHtml(label);
-  return `<button class="chat-markdown-block-copy" type="button" data-action="copy-markdown-block" data-copy-action data-copy-label="${safeLabel}" data-copy-text="${escapeHtml(value)}" aria-label="复制${safeLabel}" title="复制${safeLabel}">${icon(icons.copy, `复制${label}`)}</button>`;
+  return `<button class="chat-markdown-block-copy" type="button" data-action="copy-markdown-block" data-copy-action data-copy-label="${safeLabel}" data-copy-text="${escapeHtml(value)}" aria-label="复制${safeLabel}" title="复制${safeLabel}">${icon(icons.copy, `复制${label}`)}${showLabel ? '<span class="code-copy-label">复制</span>' : ''}</button>`;
 }
 
 const tableCells = line => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
@@ -274,7 +275,8 @@ export function renderSafeMarkdown(value, { query = '', inert = false } = {}) {
       if (index < lines.length) index += 1;
       const language = fence[1] ? ` data-language="${escapeHtml(fence[1])}"` : '';
       const codeText = code.join('\n');
-      output.push(`<div class="chat-markdown-copyable chat-markdown-code-copyable"><pre class="chat-markdown-code"${language}><code>${highlightHtml(escapeHtml(codeText), query)}</code></pre>${blockCopy('代码块', codeText)}</div>`);
+      const codeHtml = query ? highlightHtml(escapeHtml(codeText), query) : renderCodeSyntax(codeText, fence[1], escapeHtml);
+      output.push(`<div class="chat-markdown-copyable chat-markdown-code-copyable"><div class="chat-code-header"><span class="chat-code-language">${escapeHtml(fence[1] || 'text')}</span>${inert ? '' : markdownBlockCopyButton('代码块', codeText, true)}</div><pre class="chat-markdown-code"${language}><code>${codeHtml}</code></pre></div>`);
       continue;
     }
     const heading = headingLine(line);

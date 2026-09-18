@@ -45,6 +45,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
@@ -767,7 +773,6 @@ internal fun NanfengAiApp(
                     onSwitchAccount = { accountSyncViewModel.switchAccount(activity ?: context) },
                     onSignOut = accountSyncViewModel::signOut,
                     onPeriodicChanged = accountSyncViewModel::setPeriodicEnabled,
-                    onPrepareRecovery = accountSyncViewModel::prepareRecoveryProtection,
                     onReadCloudDocuments = accountSyncViewModel::readCloudDocuments,
                     loadAvatar = accountSyncViewModel::loadAvatar,
                 )
@@ -3038,33 +3043,50 @@ private fun AboutSettingsCard() = Surface(
     shape = CardShape,
     color = ForegroundSurface,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        AboutSettingsSection {
-            Text("南枫 AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Text("本机对话、项目与知识工作区。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        }
-        SettingsCategoryDivider()
-        AboutSettingsSection {
-            Text("版本信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Text("Android 版 ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.height(3.dp))
-            Text("构建号 ${BuildConfig.VERSION_CODE}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(3.dp))
-            Text("开发时间 ${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-        }
-        SettingsCategoryDivider()
-        AboutSettingsSection {
-            Text("开发者信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Text("开发者：席瑞", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(3.dp))
-            Text("联系邮箱：nanzhufeng.studio@gmail.com", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(3.dp))
-            Text("源码与更新：GitHub · nanzhufeng/Nanfeng-AI", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(3.dp))
-            Text("版权所有 © 2026 席瑞", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    SelectionContainer {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AboutSettingsSection {
+                Text("南枫 AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text("本机对话、项目与知识工作区。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            }
+            SettingsCategoryDivider()
+            AboutSettingsSection {
+                Text("版本信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text("Android 版 ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(3.dp))
+                Text("构建号 ${BuildConfig.VERSION_CODE}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(3.dp))
+                Text("开发时间 ${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            }
+            SettingsCategoryDivider()
+            AboutSettingsSection {
+                Text("开发者信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text("开发者：席瑞", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(3.dp))
+                Text("联系邮箱：nanzhufeng.studio@gmail.com", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    buildAnnotatedString {
+                        val label = "源码与更新：GitHub · nanzhufeng/Nanfeng-AI"
+                        append(label)
+                        addLink(
+                            LinkAnnotation.Url(
+                                "https://github.com/nanzhufeng/Nanfeng-AI",
+                                styles = TextLinkStyles(style = SpanStyle(color = AccentOrange, textDecoration = TextDecoration.Underline)),
+                            ),
+                            start = label.indexOf("GitHub"),
+                            end = label.length,
+                        )
+                    },
+                    color = SecondaryText,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text("版权所有 © 2026 席瑞", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }

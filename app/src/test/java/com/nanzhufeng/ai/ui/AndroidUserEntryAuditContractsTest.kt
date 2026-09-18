@@ -53,7 +53,7 @@ class AndroidUserEntryAuditContractsTest {
         for (token in listOf("Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}")) assertTrue("missing about detail: $token", about.contains(token))
         assertFalse("about must not repeat the data-management destination", about.contains("数据与隐私") || about.contains("隐私与安全") || about.contains("数据管理"))
         assertTrue("about modules must share one full-width rounded foreground card", about.contains("modifier = Modifier.fillMaxWidth()") && about.contains("shape = CardShape"))
-        assertTrue("about modules must retain the shared canvas separator", Regex("SettingsCategoryDivider\\(\\)").findAll(about).count() == 1)
+        assertTrue("brand, version and developer sections retain shared canvas separators", Regex("SettingsCategoryDivider\\(\\)").findAll(about).count() == 2)
         assertTrue("about sections must not shrink to their text", about.contains("AboutSettingsSection") && about.contains("Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp)"))
         for (forbidden in listOf("帮助中心", "使用条款", "许可证")) assertFalse("invented about action: $forbidden", about.contains(forbidden))
     }
