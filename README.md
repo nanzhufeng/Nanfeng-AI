@@ -11,9 +11,9 @@
 
 ## 预览
 
-![Android 1.0.20 预览](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-Android-1.0.20-preview.png)
+![Android 1.0.20 预览](docs/preview/android-1.0.20-emulator.png)
 
-预览图与对应安装包一起生成并随 Release 附件校验，来自隔离 Android 模拟器的正常运行态。
+预览图作为仓库独立资源维护，来自隔离 Android 模拟器的正常运行态；Release 只提供安装包和校验文件。
 
 ## 源码
 
