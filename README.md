@@ -11,9 +11,17 @@
 
 ## 预览
 
-| Android | macOS |
+### Android
+
+| 对话侧栏 | 设置 |
 | --- | --- |
-| ![Android 正常设置界面](docs/preview/android-settings.png) | ![macOS 正常对话界面](docs/preview/macos-conversation.png) |
+| ![Android 对话侧栏](docs/preview/android-navigation.png) | ![Android 设置界面](docs/preview/android-settings.png) |
+
+### macOS
+
+| 对话 | 工作区 |
+| --- | --- |
+| ![macOS 正常对话界面](docs/preview/macos-conversation.png) | ![macOS 工作区界面](docs/preview/macos-workspace.png) |
 
 预览图作为仓库独立资源维护，只展示正常界面；Release 只提供安装包和校验文件。
 

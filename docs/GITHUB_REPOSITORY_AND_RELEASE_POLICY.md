@@ -24,6 +24,8 @@
 3. 每张截图随同一个与冻结候选包放在一起的本地 `release-evidence/<tag>/manifest.json` 记录平台、包名/Bundle ID、版本、候选包 SHA-256、Git commit、采集时间、设备/系统和截图 SHA-256；
 4. 提交前由发布者逐项比对 manifest、源码提交和图片哈希；没有 manifest 的截图一律不作为最新 README 预览提交。
 
+双端发布的 README 每个平台至少展示两张正常界面图，覆盖不同主要界面；预览不能用加载中、诊断模式、错误态或含用户私密正文的画面。
+
 复制 [manifest 示例](../release-evidence/manifest.example.json) 到本次候选包所在目录，填入最终值后，在仓库根目录运行：
 
 ```sh
