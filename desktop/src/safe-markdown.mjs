@@ -1,4 +1,5 @@
 import { renderCodeSyntax } from './code-syntax.mjs';
+import { markdownLinkAt, replaceMarkdownLinks } from './markdown-link.mjs';
 import { icon, icons } from './icon-source.mjs';
 import { sourceDisplayTitle, sourceWebsiteColor, sourceWebsiteName } from './source-link-presentation.mjs';
 
@@ -82,10 +83,10 @@ const sourceHeadingLine = value => /^\s*(?:来源(?:网站)?|sources?)\s*[:：]?
 
 function sourceListLink(value) {
   const item = String(value || '').trim().replace(/^(?:[-+*]|\d+[.)])\s+/, '');
-  const markdown = item.match(/^\[([^\]]+)\]\s*\(\s*([^\s)]+)(?:\s+"[^"]*")?\s*\)$/);
-  if (markdown) {
-    const href = safeHref(markdown[2]);
-    return href ? { href, label: markdown[1] } : null;
+  const markdown = markdownLinkAt(item, 0);
+  if (markdown?.end === item.length) {
+    const href = safeHref(markdown.href);
+    return href ? { href, label: markdown.label } : null;
   }
   const href = safeHref(item);
   return href ? { href, label: sourceWebsiteName(href) } : null;
@@ -162,7 +163,7 @@ function renderInlineMarkdown(value, query = '', inert = false) {
     if (inert) return token(`<span>${text}</span>`);
     return token(href ? `<a class="chat-markdown-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${icon(icons.globe, '链接')}<span>${text}</span></a>` : `<span>${text}</span>`);
   });
-  source = source.replace(/\[([^\]]+)\]\s*\(\s*([^\s)]+)(?:\s+"[^"]*")?\s*\)/g, (_, label, rawUrl) => {
+  source = replaceMarkdownLinks(source, ({ label, href: rawUrl }) => {
     const href = safeHref(rawUrl);
     const text = escapeHtml(label);
     if (inert) return token(`<span>${text}</span>`);
@@ -172,6 +173,10 @@ function renderInlineMarkdown(value, query = '', inert = false) {
     }
     return token(`<span>${text}</span>`);
   });
+  // Only unwrap a token whose link was moved to the source control. Literal
+  // empty parentheses and parenthesized code/math remain authored content.
+  source = source.replace(/\(\s*(NFMARKDOWNTOKEN(\d+)X)\s*\)/g,
+    (whole, key, index) => tokens[Number(index)] === '' ? key : whole);
   let html = escapeHtml(source)
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
     .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
@@ -220,9 +225,16 @@ export function renderSafeMarkdown(value, { query = '', inert = false } = {}) {
   // block parsing so it retains the same compact source affordance.
   const normalizedValue = String(value ?? '')
     .replaceAll('\r\n', '\n')
-    .replaceAll('\r', '\n')
-    .replace(/\[([^\]\n]+)\]\s*\n\s*\(\s*(https?:\/\/[^\s)]+)\s*\)/g, '[$1]($2)');
+    .replaceAll('\r', '\n');
   const lines = normalizedValue.split('\n');
+  let inFence = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^\s*```/.test(lines[i])) { inFence = !inFence; continue; }
+    if (!inFence && lines[i].trimEnd().endsWith(']') && lines[i + 1]?.trimStart().startsWith('(')
+      && sourceListLink(`${lines[i]}\n${lines[i + 1]}`)) {
+      lines.splice(i, 2, `${lines[i].trimEnd()}${lines[i + 1].trimStart()}`);
+    }
+  }
   const output = [];
   let index = 0;
   while (index < lines.length) {

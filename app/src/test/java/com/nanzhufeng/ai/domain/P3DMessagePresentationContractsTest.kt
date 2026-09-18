@@ -23,8 +23,9 @@ class P3DMessagePresentationContractsTest {
         assertTrue(paragraph.spans.any { it is InlinePresentation.Link && it.url == "https://example.test" })
 
         val malformed = "<script>alert(1)</script>\n```kotlin\n未闭合"
-        val fallback = renderer.render(listOf(message("b", malformed))).single().blocks.single() as PresentationBlock.PlainText
-        assertEquals("<script>alert(1)</script>\nkotlin\n未闭合", fallback.raw)
+        val fallback = renderer.render(listOf(message("b", malformed))).single().blocks
+        assertEquals("<script>alert(1)</script>", (fallback.first() as PresentationBlock.Paragraph).spans.filterIsInstance<InlinePresentation.Text>().joinToString("") { it.value })
+        assertEquals("未闭合", (fallback.last() as PresentationBlock.CodeFence).code)
     }
 
     @Test fun `standalone material markers share the same bold projection`() {

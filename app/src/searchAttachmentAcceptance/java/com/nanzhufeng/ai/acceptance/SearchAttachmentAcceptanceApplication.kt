@@ -97,6 +97,12 @@ class SearchAttachmentAcceptanceApplication : Application(), Configuration.Provi
         seedScheduledMonitors(container, snapshot.conversation.id, clock.instant())
         seedGlmOcrStates(container, sharedImage, markdown, clock.instant())
         seedRedactedCallMetadata(container, snapshot, clock.instant())
+        var markdownSnapshot = tree.create("Markdown 格式回归验收")
+        markdownSnapshot = tree.append(markdownSnapshot, AppendMessageRequest(MessageRole.USER, listOf(ContentBlock.Text("检查表格和来源"))))
+        markdownSnapshot = tree.append(markdownSnapshot, AppendMessageRequest(MessageRole.ASSISTANT, listOf(ContentBlock.Text(
+            "# 苏美尔王表\n\n**格式保留检查**\n\n---\n\n| 序号 | 统治者 | 城市 | 在位时间 |\n| --- | --- | --- | --- |\n| 1 | Alulim | Eridu | 28800年 |\n| 城邦衰落，王权转移 |||\n| 2 | Alalgar | Eridu | 36000年 |\n\n## 结论\n\n表格短行不会破坏正文。\n\n来源：\n- [History [archive]]\n(https://example.com/King_(Sumer))\n\n```text\n[label]\n(https://example.com)\n```"
+        ))))
+        container.conversationRepository.save(markdownSnapshot)
     }
 
     private fun import(

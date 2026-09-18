@@ -7,7 +7,7 @@ import java.security.MessageDigest
  * P3-D's in-memory-only projection boundary. It never accepts provider chunks and it never
  * writes parsed content back into Conversation/Room. Text is untrusted presentation input.
  */
-const val MESSAGE_PRESENTATION_PARSER_VERSION = 11
+const val MESSAGE_PRESENTATION_PARSER_VERSION = 12
 
 data class PresentationBlockIdentity(
     val messageId: MessageNodeId,
@@ -183,24 +183,25 @@ private object SafeMarkdownParser {
             val fenceMatch = fence.matchEntire(line)
             if (fenceMatch != null) {
                 val close = (index + 1 until lines.size).firstOrNull { fence.matchEntire(lines[it]) != null }
-                if (close == null) return listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris()))
                 val language = fenceMatch.groupValues[1].ifBlank { null }
-                result += PresentationBlock.CodeFence(identity, language, lines.subList(index + 1, close).joinToString("\n"))
-                index = close + 1
+                result += PresentationBlock.CodeFence(identity, language, lines.subList(index + 1, close ?: lines.size).joinToString("\n"))
+                index = close?.plus(1) ?: lines.size
                 continue
             }
-            if (index + 1 < lines.size && tableDivider.matches(lines[index + 1])) {
-                val headers = tableCells(lines[index]) ?: return listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris()))
+            if (index + 1 < lines.size && tableCells(line) != null && tableDivider.matches(lines[index + 1])) {
+                val headers = tableCells(line)!!
                 val rows = mutableListOf<List<List<InlinePresentation>>>()
                 index += 2
                 while (index < lines.size) {
                     val cells = tableCells(lines[index]) ?: break
-                    if (cells.size != headers.size) return listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris()))
                     rows += cells.map(::inline)
                     index++
                 }
-                if (rows.isEmpty()) return listOf(PresentationBlock.PlainText(identity, source.withoutMarkdownControlDebris()))
-                result += PresentationBlock.Table(identity, headers.map(::inline), rows)
+                // Provider transition rows may omit trailing empty cells or add a column.
+                // Keep every supplied cell, and never flatten unrelated document blocks.
+                val width = maxOf(headers.size, rows.maxOfOrNull { it.size } ?: 0)
+                fun pad(cells: List<List<InlinePresentation>>) = cells + List(width - cells.size) { emptyList<InlinePresentation>() }
+                result += PresentationBlock.Table(identity, pad(headers.map(::inline)), rows.map(::pad))
                 continue
             }
             if (horizontalRule.matches(line)) {
@@ -349,6 +350,25 @@ private object SafeMarkdownParser {
             }
         }
         if (openFence?.second == true) normalized += "```"
+        // Join only a standalone source destination, never literal fenced code.
+        var inFence = false
+        var index = 0
+        while (index < normalized.size) {
+            val line = normalized[index]
+            if (fence.matches(line)) inFence = !inFence
+            else if (!inFence && line.trimEnd().endsWith(']') && normalized.getOrNull(index + 1)?.trimStart()?.startsWith('(') == true) {
+                val next = normalized[index + 1].trimStart()
+                val candidate = line.trimEnd() + next
+                val start = candidate.indexOf('[')
+                val link = markdownLinkAt(candidate, start)
+                if (start >= 0 && link?.end == candidate.length &&
+                    candidate.substring(0, start).trim().matches(Regex("(?:[-+*]|\\d+[.)])?"))) {
+                    normalized[index] = candidate
+                    normalized.removeAt(index + 1)
+                }
+            }
+            index++
+        }
         return normalized.joinToString("\n")
     }
 
@@ -581,12 +601,12 @@ private object SafeMarkdownParser {
                     continue
                 }
             } else if (start == linkStart) {
-                val labelEnd = source.indexOf("](", start + 1)
-                val urlEnd = if (labelEnd >= 0) source.indexOf(')', labelEnd + 2) else -1
-                if (labelEnd > start + 1 && urlEnd > labelEnd + 2) {
-                    appendText(start)
-                    result += InlinePresentation.Link(source.substring(start + 1, labelEnd), source.substring(labelEnd + 2, urlEnd))
-                    cursor = urlEnd + 1
+                val link = markdownLinkAt(source, start)
+                if (link != null) {
+                    val wrappedSource = start > cursor && source[start - 1] == '(' && source.getOrNull(link.end) == ')'
+                    appendText(if (wrappedSource) start - 1 else start)
+                    result += InlinePresentation.Link(link.label, link.url)
+                    cursor = link.end + if (wrappedSource) 1 else 0
                     continue
                 }
             } else if (start == strongStart) {

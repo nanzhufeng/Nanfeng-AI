@@ -4,10 +4,10 @@
 
 ## 下载
 
-当前发布：[v1.0.20](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.20)
+当前发布：[v1.0.21](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.21)
 
-- Android：[APK](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-Android-1.0.20.apk)
-- macOS：[DMG](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-macOS-1.0.20.dmg)（开发签名，未公证）
+- Android：[APK](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.21/Nanfeng-AI-Android-1.0.21.apk)
+- macOS：[DMG](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.21/Nanfeng-AI-macOS-1.0.21.dmg)（开发签名，未公证）
 
 ## 预览
 
@@ -23,7 +23,7 @@
 | --- | --- |
 | ![macOS 正常对话界面](docs/preview/macos-conversation.png) | ![macOS 工作区界面](docs/preview/macos-workspace.png) |
 
-预览图作为仓库独立资源维护，只展示正常界面；Release 只提供安装包和校验文件。
+以上预览沿用 v1.0.20 的正常界面，未作为 v1.0.21 格式修复验收图。预览图作为仓库独立资源维护；Release 只提供安装包和校验文件。
 
 ## 源码
 

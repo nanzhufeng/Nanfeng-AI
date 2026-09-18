@@ -28,6 +28,8 @@ AiRuntimeEvent → ConversationRuntimeStateMachine（运行和错误终态）
 
 所有正文均是不可信展示输入。生产 OpenRouter egress 固定 `Disabled`；本增量绝不读取或写入 Key、不构造 Authorization/RunSpec、不发 HTTP、不产生费用，也不新增图片读取或外发。
 
+> 当前 Markdown 局部容错以 [P6-F 展示合同](P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md) 为准；下列整篇降级描述为历史阶段规则。
+
 ## 展示 IR 与安全策略
 
 - `MessagePresentationRenderer` 只接收已持久化 `ContentBlock`，生成 `parserVersion=1` 的 `PresentedMessage` / `PresentationBlock`；稳定身份为 `(messageId, contentBlockPosition, parserVersion)`，不是文字内容或列表下标。
