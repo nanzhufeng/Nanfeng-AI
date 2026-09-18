@@ -17,12 +17,12 @@
 
 ## 截图与发布证据硬门
 
-历史 `docs/evidence/`、历史交接、`desktop/output/` 和任意本机截图都不是“最新结果”的候选来源。只有下列条件同时成立的截图，才可作为 GitHub Release 附件或 Release 页面展示：
+历史 `docs/evidence/`、历史交接、`desktop/output/` 和任意本机截图都不是“最新结果”的候选来源。README 预览图只能作为仓库内独立文件维护，不能作为 GitHub Release 附件，也不能从 Release 下载地址引用。只有下列条件同时成立的截图，才可作为最新 README 预览候选：
 
 1. 截图在候选包完成构建、签名与 SHA-256 固定之后采集；
 2. 截图所在设备已安装或启动该**同一哈希**的候选包，不能以源码日期、文件名或“刚构建过”代替身份校验；
 3. 每张截图随同一个与冻结候选包放在一起的本地 `release-evidence/<tag>/manifest.json` 记录平台、包名/Bundle ID、版本、候选包 SHA-256、Git commit、采集时间、设备/系统和截图 SHA-256；
-4. 上传前由发布者逐项比对 manifest、Release tag 和附件哈希；没有 manifest 的截图一律不上传。
+4. 提交前由发布者逐项比对 manifest、源码提交和图片哈希；没有 manifest 的截图一律不作为最新 README 预览提交。
 
 复制 [manifest 示例](../release-evidence/manifest.example.json) 到本次候选包所在目录，填入最终值后，在仓库根目录运行：
 
@@ -32,13 +32,13 @@ python3 scripts/verify_release_evidence_manifest.py --manifest /absolute/release
 
 校验会拒绝哈希不匹配、截图早于候选包、候选包与安装包哈希不同、不是当前最终 commit 或路径逃逸的清单。它不代替人工确认真实设备确实运行了该包。
 
-旧截图若有追溯价值可继续留在历史证据目录，但必须保留其历史定位，不得移动、改名或重用为最新 Release 截图。每次新 Release 都重新采集，不复用上次的“通过”截图。已核验且无隐私内容的 README 预览图可复制到 `docs/release-previews/<tag>/`；候选包、回拉包和 manifest 本身不进入源码 Git。
+旧截图若有追溯价值可继续留在历史证据目录，但必须保留其历史定位，不得移动、改名或重用为最新 README 预览。每次新 Release 都重新采集，不复用上次的“通过”截图。已核验且无隐私内容的 README 预览图可复制到 `docs/preview/`；候选包、回拉包和 manifest 本身不进入源码 Git。
 
 ## 版本与 GitHub Release
 
 源码提交可使用一个产品级 tag；安装包以平台各自版本号和文件名命名。只有 Android 与 Desktop 都通过各自发布门，才可创建包含多资产的共同 GitHub Release。平台节奏不一致时，使用平台专属 tag 或草稿 Release，不把任一开发/验收包伪装为另一个平台的正式版本。
 
-Release 附件最少包含每个安装包、对应 SHA-256 校验文件、通过上述 manifest 校验的最新截图，以及平台、版本、签名身份类别和验证边界的简短说明。
+Release 附件最少包含每个安装包、对应 SHA-256 校验文件，以及平台、版本、签名身份类别和验证边界的简短说明。预览图不属于 Release 附件。
 
 发布前不得上传私钥、keystore、Apple provisioning profile、服务端密钥、恢复材料、真实用户数据库、原始 Provider payload 或包含它们的诊断包。
 

@@ -11,9 +11,11 @@
 
 ## 预览
 
-![Android 1.0.20 预览](docs/preview/android-1.0.20-emulator.png)
+| Android | macOS |
+| --- | --- |
+| ![Android 正常设置界面](docs/preview/android-settings.png) | ![macOS 正常对话界面](docs/preview/macos-conversation.png) |
 
-预览图作为仓库独立资源维护，来自隔离 Android 模拟器的正常运行态；Release 只提供安装包和校验文件。
+预览图作为仓库独立资源维护，只展示正常界面；Release 只提供安装包和校验文件。
 
 ## 源码
 
