@@ -71,6 +71,7 @@ class RoomConversationRepository(
     private val database: NanfengAiDatabase,
     private val privateAttachmentStore: PrivateAttachmentStore? = null,
     private val p6kImportIdentities: RoomP6KImportIdentityLedger = RoomP6KImportIdentityLedger(database),
+    private val draftClock: java.time.Clock = java.time.Clock.systemUTC(),
 ) : ConversationRepository, ConversationDraftRepository, ConversationMessageAttachmentRepository, ConversationRuntimeRepository, ConversationActionRepository, ConversationManagementRepository, ConversationSearchRepository, OptimizedConversationSearchRepository, LocalSearchIndexRepository, ConversationListRepository, ConversationSurfaceRepository, ImportedConversationProvenanceReader {
     private companion object {
         const val RECENT_MESSAGES_EXCLUDED_FROM_SUMMARY = 8
@@ -311,7 +312,7 @@ class RoomConversationRepository(
     }
 
     override fun loadDraft(conversationId: ConversationId): ConversationDraft? =
-        database.conversationDao().loadSnapshot(conversationId)?.draft
+        findById(conversationId)?.draft
 
     override fun saveDraft(conversationId: ConversationId, draft: ConversationDraft): ConversationDraft = database.inConversationTransaction {
         val dao = database.conversationDao()
@@ -489,7 +490,19 @@ class RoomConversationRepository(
         }
     }
 
-    override fun findById(id: ConversationId): ConversationSnapshot? = database.conversationDao().loadSnapshot(id)
+    override fun findById(id: ConversationId): ConversationSnapshot? {
+        val dao = database.conversationDao()
+        val snapshot = dao.loadSnapshot(id) ?: return null
+        if (!com.nanzhufeng.ai.domain.NewConversationDraftPolicy.isExpired(snapshot, draftClock.instant())) return snapshot
+        return database.inConversationTransaction {
+            // Recheck under the transaction: a concurrent fresh edit must survive cleanup.
+            val current = dao.loadSnapshot(id) ?: return@inConversationTransaction null
+            if (!com.nanzhufeng.ai.domain.NewConversationDraftPolicy.isExpired(current, draftClock.instant())) return@inConversationTransaction current
+            val cleared = current.draft.copy(text = "")
+            dao.upsertDraft(cleared.toEntity(id))
+            current.copy(draft = cleared)
+        }
+    }
 
     override fun listActive(): List<Conversation> = database.conversationDao().let { dao ->
         dao.restoreConversationList(dao.listVisibleActiveConversations())

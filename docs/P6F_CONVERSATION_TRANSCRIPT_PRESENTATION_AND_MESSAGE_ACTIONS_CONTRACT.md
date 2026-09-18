@@ -1,8 +1,19 @@
 # P6-F Conversation Transcript Presentation & Message Actions Contract
 
+> 新对话未发送文字的双端保留与过期规则见 [新对话草稿保留合同](NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md)。
+
 状态：数据/动作 owner 与 FB-P6-027..034 presentation UI 门均已关闭。平台：Desktop + Android 同阶段；仍不外推为 Provider、账号或后续 Adapter 完成。
 
 > **当前 Android UI 路由（2026-08-26）：** 本文保留 transcript、消息、附件和动作的领域语义及历史证据。凡涉及 Android 会话界面的尺寸、颜色、皮肤、顶栏、抽屉、Composer、模型面、外部点按、文本选择或滑动行为，统一以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为准；本文中的阶段性 UI 数值不得与之并列执行。
+
+## Desktop 运行时阅读连续性
+
+- 正在生成的回答没有可用金额时，页脚隐藏费用文字及其分隔点，不显示“金额未知”；生成结束后的真实费用／缺失费用事实仍按既有规则显示，不改账本。
+
+- 同一会话的流式增量、标题更新及完成回读必须原位更新 DOM；不得拆除 message-list 滚动容器、未变化的消息／媒体或 Composer。保留阅读位置、代码／表格横向位置、文字选择与已展开内容。
+- 多选／勾选／会话菜单／确认弹窗等轻交互同样须保持正文与侧栏留在 DOM 中；“先拆除后插回同一元素”不满足保留要求。只更新外围控件，不重新解析正文或扫描全部消息绑定菜单。
+- 用户上滑或开始手动阅读立即暂停自动跟随，不能被“距底部不足 24px”的近底判断抢回；自行下滑抵达真实底部或明确到最新消息后恢复跟随。无变化的更新不得反复写入 scrollTop 取消惯性。
+- 运行时事件与兜底轮询共用串行快照读取；迟到快照不得覆盖已切换的工作区。标题后台等待只更新发生变化的标题／状态，不能高频重建整页。
 
 ## 2026-08-14 用户交接覆盖：双端统一先于后续阶段
 
@@ -176,3 +187,9 @@ P6-F 在 P6-E 后、P6-F2 与 Model Selection / Auto Router 前。固定后续�
 - Android 系统分享为已验收的明确确认后 `ACTION_SEND` chooser；取消不写入、不外发。Desktop 未具备可安全调用且可验证的原生系统 share owner，用户已明确许可保持该入口隐藏；它不以网页、伪分享或不受控外发替代。
 - 本阶段未读取 Key、未发 Provider HTTP、未作图片外发、未操作 OPPO、未改图标或发布。
 - FB-P6-027..032 关闭补证：Desktop 外置 tools 的 DOM/视觉/Tab 顺序、附件 overlay/type/弱 divider、官方图标映射均有 Node 回归；新 strict-signed `.app` 实际点击分享后只把非敏感正文复制到本机剪贴板。Android 实际 long-press message action sheet、attachment long-press sheet、DocumentsUI 附件与 force-stop readback 已验。没有外发、URI/path/Key 泄漏或 OPPO 操作。
+
+## 普通模型连接与完成状态
+
+- Desktop 普通请求与 Android 共享模型语义：GLM-5.3／Flash 显式 max 推理；指定 OpenRouter 深度预设 high；Qwen3.8-Max low、preserve_thinking=false、组合输出上限 16384。
+- 首段正文不再用固定 75 秒截止。真实正文、推理增量（含 OpenRouter structured reasoning）和首次 Provider 搜索证据延续 90 秒进展窗口；心跳不续期，整体 HTTP 生命周期上限 600 秒，首个响应上限 180 秒。推理不冒充正文，超时 UNKNOWN 不自动重发。
+- Chat Completions 收到 finish_reason 后继续读取尾部 usage，直至 DONE／EOF。length/max_tokens 和 content_filter 不得算完整回答。合法正文的完成与联网证据分别记录；无公开来源不能丢弃正文或阻断自动标题。

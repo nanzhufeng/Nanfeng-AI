@@ -69,13 +69,13 @@ function pageHeader({ embedded = false } = {}) {
   return `<header class="desktop-work-page-header"><span></span><h1>南枫转写</h1><button data-action="show-chat" aria-label="关闭南枫转写">${icon(icons.close, '关闭')}</button></header>`;
 }
 
-export function renderDesktopTranscriptionPage({ projection = TRANSCRIPTION_PREVIEW_STATE, selectedTaskId = null, native = false, busyTaskId = null, previewInteractive = false, evidenceLabel = '', embedded = false } = {}) {
+export function renderDesktopTranscriptionPage({ loading = false, projection = TRANSCRIPTION_PREVIEW_STATE, selectedTaskId = null, native = false, busyTaskId = null, previewInteractive = false, evidenceLabel = '', embedded = false } = {}) {
   const tasks = projection?.tasks || [];
   const documentTasks = tasks.filter(isDocumentTask);
   const legacySpeechTasks = tasks.filter(task => !isDocumentTask(task));
   const selected = tasks.find(task => task.id === selectedTaskId) || documentTasks[0] || legacySpeechTasks[0] || null;
   const rows = [...documentTasks.map(task => taskRow(task, selected?.id, busyTaskId)), ...(legacySpeechTasks.length ? [`<p class="transcription-list-subhead">旧版音视频任务 · 仅保留已有记录</p>`, ...legacySpeechTasks.map(task => taskRow(task, selected?.id, busyTaskId))] : [])].join('');
-  const pageBody = tasks.length ? `<div class="transcription-page-body"><div class="transcription-workspace"><aside><div class="transcription-list-head"><strong>全部转写</strong><span>${tasks.length}</span></div>${rows}</aside>${taskDetail(selected, busyTaskId)}</div></div>` : `<div class="transcription-empty-canvas transcription-page-body">${evidenceLabel ? `<p class="transcription-evidence">${escapeHtml(evidenceLabel)}</p>` : ''}${emptyState()}</div>`;
+  const pageBody = tasks.length ? `<div class="transcription-page-body"><div class="transcription-workspace"><aside><div class="transcription-list-head"><strong>全部转写</strong><span>${tasks.length}</span></div>${rows}</aside>${taskDetail(selected, busyTaskId)}</div></div>` : `<div class="transcription-empty-canvas transcription-page-body">${evidenceLabel ? `<p class="transcription-evidence">${escapeHtml(evidenceLabel)}</p>` : ''}${loading ? '<p role="status">正在读取转写任务…</p>' : emptyState()}</div>`;
   const pickEnabled = native || previewInteractive;
-  return `<section class="canvas transcription-page" aria-label="南枫转写">${pageHeader({ embedded })}${withCopyIcons(pageBody)}<footer class="transcription-page-footer"><button class="primary transcription-pick" data-action="pick-transcription-document" ${pickEnabled ? '' : 'disabled'}>${icon(icons.import, '选择文件')}<span>选择图片或 PDF</span></button></footer></section>`;
+  return `<section class="canvas transcription-page" aria-label="南枫转写" aria-busy="${loading}">${pageHeader({ embedded })}${withCopyIcons(pageBody)}<footer class="transcription-page-footer"><button class="primary transcription-pick" data-action="pick-transcription-document" ${pickEnabled ? '' : 'disabled'}>${icon(icons.import, '选择文件')}<span>选择图片或 PDF</span></button></footer></section>`;
 }

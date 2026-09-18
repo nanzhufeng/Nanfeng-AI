@@ -1,5 +1,7 @@
 package com.nanzhufeng.ai.data
 
+import com.nanzhufeng.ai.domain.ConversationSurface
+
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -32,7 +34,7 @@ import java.util.concurrent.TimeUnit
  * One unique, connected-only request per task. The next request is enqueued only after a
  * completed attempt records its visible result or safe error in Room.
  */
-class AndroidScheduledMonitorScheduler(context: Context) {
+class AndroidScheduledMonitorScheduler(context: Context, private val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT) {
     private val appContext = context.applicationContext
     private val manager: WorkManager by lazy { configuredWorkManager(appContext) }
     private val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
@@ -45,7 +47,7 @@ class AndroidScheduledMonitorScheduler(context: Context) {
         val delayMillis = Duration.between(Instant.now(), task.nextRunAt).toMillis().coerceAtLeast(0L)
         val request = OneTimeWorkRequestBuilder<ScheduledMonitorWorker>()
             .setConstraints(constraints)
-            .setInputData(workDataOf(KEY_TASK_ID to task.id.value))
+            .setInputData(workDataOf("dataArea" to dataArea.name, KEY_TASK_ID to task.id.value))
             .setInitialDelay(delayMillis, TimeUnit.MILLISECONDS)
             .build()
         manager.enqueueUniqueWork(workName(task.id), ExistingWorkPolicy.REPLACE, request)
@@ -55,7 +57,7 @@ class AndroidScheduledMonitorScheduler(context: Context) {
         manager.cancelUniqueWork(workName(taskId))
     }
 
-    private fun workName(taskId: ScheduledMonitorTaskId) = "nfai.scheduled-monitor.${taskId.value}"
+    private fun workName(taskId: ScheduledMonitorTaskId) = if (dataArea == ConversationSurface.CHAT) "nfai.scheduled-monitor.${taskId.value}" else "nfai.scheduled-monitor.WORK.${taskId.value}"
 
     private fun configuredWorkManager(context: Context): WorkManager {
         // Manifest deliberately removes Startup's provider. This feature is the explicit runtime
@@ -75,19 +77,19 @@ class AndroidScheduledMonitorScheduler(context: Context) {
 class ScheduledMonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val taskId = inputData.getString(KEY_TASK_ID)?.let(::ScheduledMonitorTaskId) ?: return Result.success()
-        val container = com.nanzhufeng.ai.app.AppContainer(applicationContext)
+        val container = com.nanzhufeng.ai.app.AppContainer(applicationContext, dataArea = com.nanzhufeng.ai.domain.ConversationSurface.valueOf(inputData.getString("dataArea") ?: "CHAT"))
         return when (val result = container.scheduledMonitorExecutor.execute(taskId)) {
             is com.nanzhufeng.ai.ai.ScheduledMonitorExecutor.Result.Completed -> {
                 // A user may pause/delete during a running request. Always re-read the owner
                 // before chaining or notifying; the executor's pre-request snapshot is stale.
                 val current = container.scheduledMonitorRepository.find(result.task.id)
                 current?.let { task ->
-                    AndroidScheduledMonitorScheduler(applicationContext).schedule(task)
+                    AndroidScheduledMonitorScheduler(applicationContext, container.dataArea).schedule(task)
                     if (
                         task.status == ScheduledMonitorStatus.ACTIVE &&
                         container.loadNotificationReminderSettings.execute().monitorResultsNotificationEnabled
                     ) {
-                        ScheduledMonitorNotifier.notifyCompleted(applicationContext, task)
+                        ScheduledMonitorNotifier.notifyCompleted(applicationContext, task, container.dataArea)
                     }
                 }
                 Result.success()
@@ -112,7 +114,7 @@ private object ScheduledMonitorNotifier {
     private const val CHANNEL_NAME = "计划监控"
     private const val NOTIFICATION_ID_PREFIX = 72_000
 
-    fun notifyCompleted(context: Context, task: ScheduledMonitorTask) {
+    fun notifyCompleted(context: Context, task: ScheduledMonitorTask, area: ConversationSurface) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return
@@ -120,13 +122,13 @@ private object ScheduledMonitorNotifier {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT))
         }
-        val intent = Intent(context, NanfengAiActivity::class.java)
+        val intent = Intent(context, if (area == ConversationSurface.WORK) com.nanzhufeng.ai.NanfengWorkActivity::class.java else NanfengAiActivity::class.java)
             .setAction(NanfengAiActivity.ACTION_OPEN_SCHEDULED_MONITOR)
             .putExtra(NanfengAiActivity.EXTRA_SCHEDULED_MONITOR_TASK_ID, task.id.value)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pendingIntent = PendingIntent.getActivity(
             context,
-            task.id.value.hashCode(),
+            "${area.name}:${task.id.value}".hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -137,6 +139,6 @@ private object ScheduledMonitorNotifier {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
-        manager.notify(NOTIFICATION_ID_PREFIX + task.id.value.hashCode(), notification)
+        manager.notify(NOTIFICATION_ID_PREFIX + "${area.name}:${task.id.value}".hashCode(), notification)
     }
 }

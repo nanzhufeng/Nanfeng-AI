@@ -57,7 +57,7 @@ function renderEditor(editor) {
   </section>`;
 }
 
-export function renderDesktopRemindersPage({ projection = { drafts: [], plans: [] }, notificationEnabled = false, notificationPermission = 'default', native = false, previewInteractive = false, evidenceLabel = '', editor = null, embedded = false } = {}) {
+export function renderDesktopRemindersPage({ loading = false, projection = { drafts: [], plans: [] }, notificationEnabled = false, notificationPermission = 'default', native = false, previewInteractive = false, evidenceLabel = '', editor = null, embedded = false } = {}) {
   if (editor) return renderEditor(editor);
   const plans = projection?.plans || [];
   const drafts = (projection?.drafts || []).filter(item => ['PENDING_REVIEW', 'FAILED', 'UNKNOWN'].includes(item.status));
@@ -66,12 +66,13 @@ export function renderDesktopRemindersPage({ projection = { drafts: [], plans: [
     ? permissionReady ? '结果完成后可发送不含正文的系统通知。' : '计划仍会执行；系统通知尚未授权。'
     : '计划会照常执行，结果只保存在本机。';
   const createEnabled = native || previewInteractive;
-  return `<section class="desktop-reminders-page" aria-label="定时任务">
+  return `<section class="desktop-reminders-page" aria-label="定时任务" aria-busy="${loading}">
     ${pageHeader('已计划', 'show-chat', '关闭定时任务', { embedded })}
     <main class="desktop-reminder-content">
+      ${loading ? '<p role="status">正在读取定时任务…</p>' : ''}
       ${evidenceLabel ? `<p class="desktop-reminder-evidence">${escapeHtml(evidenceLabel)}</p>` : ''}
       <button class="desktop-reminder-notification" data-action="request-reminder-notification-permission" ${native ? '' : 'disabled'}><span>${icon(icons.bell, '通知')}</span><span><strong>开启结果通知</strong><small>${escapeHtml(notificationHint)}</small></span></button>
-      ${drafts.length || plans.length ? `<div class="desktop-reminder-grid">${drafts.map(draftCard).join('')}${plans.map(planCard).join('')}</div>` : `<p class="desktop-reminder-empty">暂无计划。可以添加新闻、公告或价格等长期跟踪任务。</p>`}
+      ${drafts.length || plans.length ? `<div class="desktop-reminder-grid">${drafts.map(draftCard).join('')}${plans.map(planCard).join('')}</div>` : loading ? '' : `<p class="desktop-reminder-empty">暂无计划。可以添加新闻、公告或价格等长期跟踪任务。</p>`}
       <button class="primary desktop-reminder-add" data-action="create-manual-reminder-draft" ${createEnabled ? '' : 'disabled'}>${icon(icons.plus, '添加计划')}<span>添加计划</span></button>
     </main>
   </section>`;

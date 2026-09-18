@@ -71,7 +71,12 @@ import kotlinx.coroutines.withContext
 const val CONVERSATION_SHORTCUT_ID_EXTRA = "com.nanzhufeng.ai.extra.CONVERSATION_SHORTCUT_ID"
 
 /** Root activity: all user-visible actions remain rooted in the local app container. */
-class NanfengAiActivity : ComponentActivity() {
+class NanfengWorkActivity : NanfengAiActivity() {
+    override val dataArea = com.nanzhufeng.ai.domain.ConversationSurface.WORK
+}
+
+open class NanfengAiActivity : ComponentActivity() {
+    protected open val dataArea = com.nanzhufeng.ai.domain.ConversationSurface.CHAT
     private lateinit var container: AppContainer
     private lateinit var textShareGate: AndroidTextShareIntentGate
     private lateinit var captureViewModel: CaptureViewModel
@@ -114,6 +119,7 @@ class NanfengAiActivity : ComponentActivity() {
     private val normalChatExecutionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != NormalChatGenerationForegroundService.ACTION_EXECUTION_STATE_CHANGED) return
+            if ((intent.getStringExtra("dataArea") ?: "CHAT") != dataArea.name) return
             val conversationId = intent.getStringExtra(NormalChatGenerationForegroundService.EXTRA_CONVERSATION_ID)
                 ?.takeIf(String::isNotBlank)
                 ?.let(::ConversationId)
@@ -139,7 +145,7 @@ class NanfengAiActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         applyLightSystemBars()
-        appEntryPreferences = getSharedPreferences(APP_ENTRY_PREFERENCES, MODE_PRIVATE)
+        appEntryPreferences = getSharedPreferences(if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT) APP_ENTRY_PREFERENCES else "$APP_ENTRY_PREFERENCES-WORK", MODE_PRIVATE)
         entryConversationId = com.nanzhufeng.ai.domain.ConversationAppEntryPolicy.retainedId(
             appEntryPreferences.getString(APP_ENTRY_LAST_CONVERSATION_ID, null),
             appEntryPreferences.getLong(APP_ENTRY_LAST_BACKGROUND_AT_MILLIS, 0L),
@@ -147,7 +153,33 @@ class NanfengAiActivity : ComponentActivity() {
             appEntryPreferences.getBoolean(APP_ENTRY_HAD_RUNNING_GENERATION, false),
         )
         startWithFreshChat = shouldStartWithFreshChat(intent)
-        container = AppContainer(applicationContext)
+        startAreaInitialization(savedInstanceState)
+    }
+
+    private fun startAreaInitialization(savedInstanceState: Bundle?) {
+        val panel=android.widget.LinearLayout(this).apply {
+            orientation=android.widget.LinearLayout.VERTICAL
+            gravity=android.view.Gravity.CENTER
+            addView(android.widget.ProgressBar(this@NanfengAiActivity))
+            addView(android.widget.TextView(this@NanfengAiActivity).apply { text="正在准备本地数据…"; textSize=16f })
+        }
+        setContentView(panel)
+        lifecycleScope.launch {
+            try {
+                container=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AppContainer(applicationContext, dataArea=dataArea) }
+                startWithFreshChat = shouldStartWithFreshChat(intent)
+                initializeAreaViews(savedInstanceState)
+                if(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) startAreaForeground()
+            } catch(cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+              catch(error: Exception) {
+                panel.removeAllViews()
+                panel.addView(android.widget.TextView(this@NanfengAiActivity).apply { text="本地数据暂未就绪，原数据已保留。"; textSize=16f })
+                panel.addView(android.widget.Button(this@NanfengAiActivity).apply { text="重试";setOnClickListener { startAreaInitialization(savedInstanceState) } })
+            }
+        }
+    }
+
+    private fun initializeAreaViews(savedInstanceState: Bundle?) {
         textShareGate = AndroidTextShareIntentGate(savedInstanceState?.getString(TEXT_SHARE_FINGERPRINT))
         captureViewModel = ViewModelProvider(
             this,
@@ -256,6 +288,38 @@ class NanfengAiActivity : ComponentActivity() {
                 container.normalChatBackgroundExecution,
                 startWithFreshChat,
                 entryConversationId = entryConversationId.takeUnless { isExplicitAppLaunch(intent) },
+                ownedSurface = dataArea,
+                onReferenceMessage = { conversationId, messageId ->
+                    lifecycleScope.launch {
+                        val targetArea = if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT)
+                            com.nanzhufeng.ai.domain.ConversationSurface.WORK else com.nanzhufeng.ai.domain.ConversationSurface.CHAT
+                        val result = runCatching {
+                            withContext(Dispatchers.IO) {
+                                val source = container.conversationRepository.findById(conversationId) ?: error("源会话不可用")
+                                val clock = java.time.Clock.systemUTC()
+                                val draft = com.nanzhufeng.ai.domain.CrossAreaMessageReference.copyToNewDraft(
+                                    source, messageId, targetArea, com.nanzhufeng.ai.domain.ConversationTreeService(clock), clock)
+                                val target = AppContainer(applicationContext, dataArea = targetArea)
+                                target.conversationRepository.save(draft).conversation.id
+                            }
+                        }
+                        result.onSuccess { id ->
+                            val destination = if (targetArea == com.nanzhufeng.ai.domain.ConversationSurface.WORK)
+                                NanfengWorkActivity::class.java else NanfengAiActivity::class.java
+                            startActivity(Intent(this@NanfengAiActivity, destination)
+                                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                .putExtra(CONVERSATION_SHORTCUT_ID_EXTRA, id.value))
+                        }.onFailure {
+                            android.widget.Toast.makeText(this@NanfengAiActivity, "引用未能保存，原内容未改动。", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                onAreaRequested = { area ->
+                    if (area == com.nanzhufeng.ai.domain.ConversationSurface.WORK) {
+                        startActivity(Intent(this, NanfengWorkActivity::class.java))
+                    } else startActivity(Intent(this, NanfengAiActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                },
             ),
         )[ConversationFoundationViewModel::class.java]
         // Normal generation recovery belongs to GenerationForegroundService.  This Activity
@@ -322,12 +386,12 @@ class NanfengAiActivity : ComponentActivity() {
             this,
             ScheduledMonitorViewModel.Factory(
                 container.scheduledMonitorRepository,
-                AndroidScheduledMonitorScheduler(applicationContext),
+                AndroidScheduledMonitorScheduler(applicationContext, dataArea),
                 container.qwenReminderDraftRefiner,
                 java.time.Clock.systemUTC(),
             ),
         )[ScheduledMonitorViewModel::class.java]
-        routePreferences = getSharedPreferences("p5a_ui", MODE_PRIVATE)
+        routePreferences = getSharedPreferences(if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT) "p5a_ui" else "p5a_ui-WORK", MODE_PRIVATE)
         navigationViewModel = ViewModelProvider(this)[P5ANavigationViewModel::class.java]
         restoreP5ARoute(intent)
         if (startWithFreshChat) selectP5ARoute(P5ARoute.CONVERSATION)
@@ -381,6 +445,11 @@ class NanfengAiActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (::conversationFoundationViewModel.isInitialized) startAreaForeground()
+    }
+
+    private fun startAreaForeground() {
+        if (normalChatExecutionReceiverRegistered) return
         ContextCompat.registerReceiver(
             this,
             normalChatExecutionReceiver,
@@ -399,7 +468,7 @@ class NanfengAiActivity : ComponentActivity() {
             unregisterReceiver(normalChatExecutionReceiver)
             normalChatExecutionReceiverRegistered = false
         }
-        if (!isChangingConfigurations) {
+        if (!isChangingConfigurations && ::conversationFoundationViewModel.isInitialized) {
             conversationFoundationViewModel.onAppBackground(SystemClock.elapsedRealtime())
             appEntryPreferences.edit()
                 .putLong(APP_ENTRY_LAST_BACKGROUND_AT_MILLIS, System.currentTimeMillis())
@@ -414,6 +483,7 @@ class NanfengAiActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (!::navigationViewModel.isInitialized) return
         restoreP5ARoute(intent)
         consumeTextShareIntent(intent)
         consumeConversationShortcutIntent(intent)
@@ -421,7 +491,7 @@ class NanfengAiActivity : ComponentActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString(TEXT_SHARE_FINGERPRINT, textShareGate.savedFingerprint())
+        if (::textShareGate.isInitialized) outState.putString(TEXT_SHARE_FINGERPRINT, textShareGate.savedFingerprint())
         super.onSaveInstanceState(outState)
     }
 
@@ -470,6 +540,13 @@ class NanfengAiActivity : ComponentActivity() {
 
     @Suppress("UseKtx") // Keep this UI-only preference write dependency-free in the single Android module.
     private fun selectP5ARoute(route: P5ARoute) {
+        if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT && route == P5ARoute.PROJECTS) {
+            startActivity(Intent(this, NanfengWorkActivity::class.java).apply {
+                putExtra(P5A_ROUTE_EXTRA, route.wireValue)
+                addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            })
+            return
+        }
         navigationViewModel.select(route)
         persistP5ANavigationState()
     }

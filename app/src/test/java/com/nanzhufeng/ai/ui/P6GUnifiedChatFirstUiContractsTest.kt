@@ -117,7 +117,7 @@ class P6GUnifiedChatFirstUiContractsTest {
         assertTrue(reload.contains("LoadedConversation(surfaceConversations"))
         assertTrue(select.contains("ConversationSurface.WORK -> selectedWorkConversationId = id"))
         assertFalse(select.contains("state = state.copy(surface = ConversationSurface.CHAT"))
-        assertTrue(createWork.contains("createConversation.execute(projectId = projectId.value, surface = ConversationSurface.WORK)"))
+        assertTrue(createWork.contains("createConversation.resumeOrCreateDraft(projectId = projectId.value, surface = ConversationSurface.WORK)"))
 
         assertTrue(workspace.contains("WorkProjectNavigationDrawer("))
         assertTrue(workspace.contains("TemporaryConversationNavigationDrawer("))

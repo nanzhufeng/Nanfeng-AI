@@ -267,7 +267,7 @@ test('rapid search changes cancel the native SQLite statement instead of only dr
   assert.match(searchOwner, /function scheduleFullSearch\(\) \{\s*supersedeFullSearch\(\);/);
   assert.match(searchOwner, /invoke\('query_desktop_local_index',[\s\S]*requestId/);
   assert.match(searchOwner, /withFullSearchDeadline\(pending, requestId\)/);
-  assert.match(rust, /fn cancel_desktop_local_search\(state: State<'_, AppState>, request_id: u64\)/);
+  assert.match(rust, /fn cancel_desktop_local_search\(state: AreaState<'_>, request_id: u64\)/);
   assert.match(rust, /get_interrupt_handle\(\)/);
   assert.match(rust, /interrupt\.interrupt\(\)/);
 });

@@ -10,14 +10,14 @@ class NewConversationRecentListContractsTest {
     private val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
 
     @Test
-    fun `explicit new conversation still creates a fresh selected workspace`() {
+    fun `new conversation resumes its scoped draft without selecting history`() {
         val create = source.substring(
             source.indexOf("fun createDevelopmentConversation"),
             source.indexOf("/** A work conversation is born"),
         )
 
         assertTrue(create.contains("listScope = ConversationListScope.ACTIVE"))
-        assertTrue(create.contains("createConversation.execute(surface = surface)"))
+        assertTrue(create.contains("createConversation.resumeOrCreateDraft(surface = surface)"))
         assertTrue(create.contains("selectedBefore = result.snapshot.conversation.id"))
         assertFalse(create.contains("reusableEmpty"))
     }

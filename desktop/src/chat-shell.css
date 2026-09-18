@@ -856,7 +856,7 @@
 .chat-composer-actions button { color: #737874; }
 .chat-composer-actions .chat-send { position: relative; margin-left: 0; width: 40px; min-width: 40px !important; min-height: 40px !important; padding: 0 !important; background: transparent; color: var(--accent-on-primary); }
 .chat-composer-actions .chat-send::before { position: absolute; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-orange); content: ''; }
-.chat-composer-actions .chat-send svg { position: relative; z-index: 1; width: 16px; height: 16px; transform: rotate(-90deg); transform-origin: center; }
+.chat-composer-actions .chat-send svg { position: relative; z-index: 1; width: 16px; height: 16px; transform: rotate(-90deg); transform-origin: center; fill: currentColor; }
 .chat-composer-actions .chat-send-stop::before { background: var(--accent-orange); }
 .chat-send-stop-mark { position: relative; z-index: 1; display: block; width: 10px; height: 10px; border-radius: 2px; background: var(--foreground-surface, #fff); box-shadow: 0 1px 2px rgb(60 32 9 / 18%); }
 .chat-composer-actions .chat-send:hover::before { background: var(--accent-orange-hover); }

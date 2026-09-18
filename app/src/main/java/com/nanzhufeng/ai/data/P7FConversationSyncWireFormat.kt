@@ -97,7 +97,7 @@ object P7FConversationSyncWireFormat {
     private fun decodeDesktopLegacy(id: String, semanticRevision: Long, value: JSONObject): ConversationSnapshot {
         value.requireKeys(
             required = setOf("title", "createdAt", "updatedAt", "currentLeafId", "messages"),
-            optional = setOf("pinned", "archived", "favorited", "titleRevision"),
+            optional = setOf("pinned", "archived", "favorited", "titleRevision", "surface"),
         )
         val conversationId = ConversationId(id.requireNonBlank("云端对话标识无效。"))
         val createdAt = Instant.parse(value.getString("createdAt"))
@@ -216,7 +216,7 @@ object P7FConversationSyncWireFormat {
                 createdAt = createdAt,
                 updatedAt = updatedAt,
                 revision = semanticRevision.coerceAtLeast(1),
-                surface = ConversationSurface.CHAT,
+                surface = if (value.has("surface")) enumValueOf(value.getString("surface")) else ConversationSurface.CHAT,
                 // `pinned` belongs to the source device's local drawer. Cloud-list pins are
                 // carried by the separate account presentation document and must never turn
                 // into Android's durable Conversation.pinnedAt during a cloud read.

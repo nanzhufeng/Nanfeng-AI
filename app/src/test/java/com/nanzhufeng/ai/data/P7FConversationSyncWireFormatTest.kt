@@ -21,6 +21,22 @@ import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 class P7FConversationSyncWireFormatTest {
+    @Test fun `both platform wires preserve area with identical conversation and message ids`() {
+        val fixture = listOf(java.io.File("../protocol/fixtures/data-area-sync-v1.json"), java.io.File("protocol/fixtures/data-area-sync-v1.json")).first { it.isFile }
+        val vectors = org.json.JSONArray(fixture.readText())
+        repeat(vectors.length()) { index ->
+            val vector = vectors.getJSONObject(index)
+            val area = com.nanzhufeng.ai.domain.ConversationSurface.valueOf(vector.getString("area"))
+            val id = vector.getString("conversationId")
+            assertEquals(vector.getString("documentId"), com.nanzhufeng.ai.domain.ConversationDataArea.cloudDocumentId(area, id))
+            val decoded = P7FConversationSyncWireFormat.decode(NfaiSyncPreparedSnapshot("com.nanzhufeng.ai", vector.getString("documentId"), 1,
+                listOf(NfaiSyncRecord("conversation", id, 1, "NORMAL", vector.getJSONObject("content").toString()))))
+            assertEquals(area, decoded.conversation.surface)
+            assertEquals(id, decoded.conversation.id.value)
+            assertEquals("m1", decoded.nodes.single().id.value)
+        }
+    }
+
     @Test fun `shared cross platform title vectors agree on read and upload`() {
         val fixture = listOf(java.io.File("../protocol/fixtures/title-sync-v1.json"), java.io.File("protocol/fixtures/title-sync-v1.json"))
             .first { it.isFile }.readText()

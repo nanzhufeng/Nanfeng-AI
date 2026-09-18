@@ -575,6 +575,7 @@ internal fun ConversationWorkspaceDialog(
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onClearWatchLater: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onSurfaceChanged: (com.nanzhufeng.ai.domain.ConversationSurface) -> Unit,
+    onReferenceMessage: (com.nanzhufeng.ai.domain.MessageNodeId) -> Unit,
     onDraftChanged: (String) -> Unit,
     onSubmitDraft: (com.nanzhufeng.ai.domain.ConversationId?, com.nanzhufeng.ai.domain.NormalChatEgressAuthorization?) -> Unit,
     onRetryNormalSend: () -> Unit,
@@ -1962,6 +1963,10 @@ internal fun ConversationWorkspaceDialog(
                     editingText = editableForMenu.getValue(transcript.message.messageId).text
                     messageActionTarget = null
                 }
+            }
+            MessageContextAction(Icons.Rounded.ContentCopy, if (workMode) "引用文字到对话区" else "引用文字到工作区") {
+                messageActionTarget = null
+                onReferenceMessage(transcript.message.messageId)
             }
             MessageContextAction(Icons.Rounded.Share, "分享") {
                 shareMessage(transcript)
@@ -7210,7 +7215,7 @@ private suspend fun shareAssistantMarkdown(
     messageSequence: Int,
 ) {
     val file = withContext(Dispatchers.IO) {
-        val directory = java.io.File(context.cacheDir, "shared_attachments")
+        val directory = java.io.File(context.cacheDir, "shared_attachments/${java.util.UUID.randomUUID()}")
         if (!directory.exists() && !directory.mkdirs()) error("无法创建 Markdown 导出文件。")
         val target = java.io.File(directory, conversationMarkdownExportFileName(conversationTitle, messageSequence))
         target.writeText(presentedMessageMarkdown(transcript.message), Charsets.UTF_8)
@@ -7233,7 +7238,7 @@ private suspend fun shareConversationMarkdown(
     messages: List<PresentedTranscriptMessage>,
 ) {
     val file = withContext(Dispatchers.IO) {
-        val directory = java.io.File(context.cacheDir, "shared_attachments")
+        val directory = java.io.File(context.cacheDir, "shared_attachments/${java.util.UUID.randomUUID()}")
         if (!directory.exists() && !directory.mkdirs()) error("无法创建 Markdown 导出文件。")
         val target = java.io.File(directory, conversationMarkdownExportFileName(conversation.title, sequence = 1))
         target.writeText(buildString {
@@ -11326,7 +11331,7 @@ private suspend fun performAttachmentTransfer(context: android.content.Context, 
         }
         AttachmentTransferAction.SHARE -> {
             val uri = withContext(Dispatchers.IO) {
-                val directory = java.io.File(context.cacheDir, "shared_attachments").apply { mkdirs() }
+                val directory = java.io.File(context.cacheDir, "shared_attachments/${java.util.UUID.randomUUID()}").apply { mkdirs() }
                 val file = java.io.File(directory, "${request.id.value}-${attachmentTransferFileName(request)}")
                 request.open().use { input -> file.outputStream().use(input::copyTo) }
                 FileProvider.getUriForFile(context, "${context.packageName}.attachment-share", file)

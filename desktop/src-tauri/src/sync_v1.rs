@@ -693,7 +693,8 @@ pub fn open_direct(
     let payload_root = object(&payload)?;
     if text(payload_root, "appId")? != expected_app
         || text(payload_root, "documentId")? != expected_document
-        || number(payload_root, "revision")? != number(root, "revision")? {
+        || number(payload_root, "revision")? != number(root, "revision")?
+    {
         return Err(err());
     }
     let plain = canonical(&payload)?.into_bytes();

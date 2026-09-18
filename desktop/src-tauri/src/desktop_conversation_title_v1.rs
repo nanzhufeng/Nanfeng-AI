@@ -130,9 +130,70 @@ pub fn parse_response(raw: &str) -> Option<String> {
         .then_some(title)
 }
 
+/// A known, nonempty but invalid model label may be corrected once by its original provider.
+/// Empty titles are intentional abstentions. Never truncate or synthesize a local title.
+#[derive(Default)]
+pub struct FormatCorrection(std::collections::HashMap<String, (String, String)>);
+
+impl FormatCorrection {
+    pub fn retry(&mut self, provider: &str, raw: &str) -> bool {
+        if self.0.contains_key(provider) || parse_response(raw).is_some() {
+            return false;
+        }
+        let raw = raw
+            .trim()
+            .strip_prefix("```json")
+            .or_else(|| raw.trim().strip_prefix("```"))
+            .unwrap_or(raw.trim())
+            .trim()
+            .trim_end_matches("```")
+            .trim();
+        let title = serde_json::from_str::<Value>(raw).ok().and_then(|value| {
+            value
+                .get("title")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        });
+        let Some(title) = title.filter(|title| !title.trim().is_empty()) else {
+            return false;
+        };
+        let previous = json!({"title":title.chars().take(120).collect::<String>()}).to_string();
+        self.0.insert(provider.into(), (previous, format!(
+            "你刚才的标题实际共 {} 个字符，已被拒绝。请将它压缩成更短标题，目标 6 到 10 个字符，硬上限仍是 6 到 13 个字符。每个英文字母、数字、汉字、空格均各算 1 个字符，英文单词不是 1 个字符。保留对象和核心意图，删除其他修饰词，不添加事实，不使用标点。只返回 JSON：{{\"title\":\"...\"}}。", title.chars().count())));
+        true
+    }
+
+    pub fn apply(&self, provider: &str, messages: &mut Value) {
+        if let (Some((previous, correction)), Some(messages)) =
+            (self.0.get(provider), messages.as_array_mut())
+        {
+            messages.push(json!({"role":"assistant", "content":previous}));
+            messages.push(json!({"role":"user", "content":correction}));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn invalid_model_title_gets_one_bounded_format_correction() {
+        let mut retry = FormatCorrection::default();
+        let raw = r#"{"title":"备份Codex配置防更新丢失"}"#;
+        assert!(parse_response(raw).is_none());
+        assert!(retry.retry("DEEPSEEK", raw));
+        let mut messages = json!([{"role":"user","content":"原始开头材料"}]);
+        retry.apply("DEEPSEEK", &mut messages);
+        assert_eq!(messages[1]["role"], "assistant");
+        assert!(messages[2]["content"].as_str().unwrap().contains("14"));
+        assert!(messages[2]["content"].as_str().unwrap().contains("6 到 13"));
+        assert_eq!(
+            parse_response(r#"{"title":"Codex配置备份"}"#),
+            Some("Codex配置备份".into())
+        );
+        assert!(!retry.retry("DEEPSEEK", raw));
+        assert!(!retry.retry("QWEN", r#"{"title":""}"#));
+    }
     #[test]
     fn parser_matches_android_title_contract() {
         assert_eq!(

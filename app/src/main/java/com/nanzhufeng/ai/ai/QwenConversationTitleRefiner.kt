@@ -91,48 +91,58 @@ class ConfiguredConversationTitleRefiner(
                 record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "ADAPTER_UNAVAILABLE")
                 return@forEach
             }
-            val prepared = adapter.prepare(
-                model = resolved.model,
-                messages = listOf(
-                    "system" to TITLE_CONTRACT,
-                    "user" to source.promptInput(),
-                ),
-                attachments = emptyList(), stream = false,
-            ) as? ChatAdapterPrepareResult.Ready
-            if (prepared == null) {
-                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "REQUEST_UNSUPPORTED")
-                return@forEach
+            var correction: List<Pair<String, String>>? = null
+            for (formatAttempt in 0..1) {
+                val prepared = adapter.prepare(
+                    model = resolved.model,
+                    messages = listOf(
+                        "system" to TITLE_CONTRACT,
+                        "user" to source.promptInput(),
+                    ) + correction.orEmpty(),
+                    attachments = emptyList(), stream = false,
+                ) as? ChatAdapterPrepareResult.Ready
+                if (prepared == null) {
+                    record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "REQUEST_UNSUPPORTED")
+                    return@forEach
+                }
+                val credential = credentials.loadCredential(candidate.providerId)
+                if (credential == null) {
+                    record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "CREDENTIAL_MISSING")
+                    return@forEach
+                }
+                val outcome = try {
+                    transport.execute(ProviderChatRequest(
+                        endpoint = "${config.provider.fixedEndpoint}${adapter.endpointPath(ChatRequestOptions.Standard)}",
+                        jsonBody = prepared.jsonBody, body = prepared.body, expectsStream = false,
+                        idempotencyKey = "conversation-title-${requestedAt.toEpochMilli()}-${sourceConversationId.value}-${candidate.preset.name}-$formatAttempt",
+                        readTimeoutMillis = adapter.readTimeoutMillis(resolved.model, emptyList(), false),
+                        maxResponseBytes = ProviderResponseByteBudget.forMaxOutputTokens(256),
+                    ), credential)
+                } finally { credential.fill('\u0000') }
+                val reply = when (outcome) {
+                    is ProviderChatOutcome.HttpResponse -> if (outcome.statusCode in 200..299) adapter.decodeNonStreaming(outcome.responseBody) as? ChatAdapterDecodedResult.Text else null
+                    else -> null
+                }
+                if (reply == null) {
+                    record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = outcome.safeCode())
+                    if (outcome is ProviderChatOutcome.TimedOut || outcome is ProviderChatOutcome.NetworkFailure || outcome is ProviderChatOutcome.Cancelled) {
+                        return ConversationTitleRefinementResult.Failed(outcome.safeCode())
+                    }
+                    return@forEach
+                }
+                val usage = ProviderUsage(reply.inputTokens, reply.outputTokens, cachedInputTokens = reply.cachedInputTokens)
+                val title = parseConversationTitleResponse(reply.text)
+                if (title == null) {
+                    record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, usage, "RESPONSE_FORMAT")
+                    if (formatAttempt == 0) {
+                        correction = conversationTitleFormatCorrection(reply.text)
+                        if (correction != null) continue
+                    }
+                    return@forEach
+                }
+                record(ConversationTitleGenerationStatus.SUCCEEDED, candidate.providerId, resolved.model.modelId, usage)
+                return ConversationTitleRefinementResult.Title(title)
             }
-            val credential = credentials.loadCredential(candidate.providerId)
-            if (credential == null) {
-                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "CREDENTIAL_MISSING")
-                return@forEach
-            }
-            val outcome = try {
-                transport.execute(ProviderChatRequest(
-                    endpoint = "${config.provider.fixedEndpoint}${adapter.endpointPath(ChatRequestOptions.Standard)}",
-                    jsonBody = prepared.jsonBody, body = prepared.body, expectsStream = false,
-                    idempotencyKey = "conversation-title-${requestedAt.toEpochMilli()}-${sourceConversationId.value}-${candidate.preset.name}",
-                    readTimeoutMillis = adapter.readTimeoutMillis(resolved.model, emptyList(), false),
-                    maxResponseBytes = ProviderResponseByteBudget.forMaxOutputTokens(256),
-                ), credential)
-            } finally { credential.fill('\u0000') }
-            val reply = when (outcome) {
-                is ProviderChatOutcome.HttpResponse -> if (outcome.statusCode in 200..299) adapter.decodeNonStreaming(outcome.responseBody) as? ChatAdapterDecodedResult.Text else null
-                else -> null
-            }
-            if (reply == null) {
-                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = outcome.safeCode())
-                return@forEach
-            }
-            val usage = ProviderUsage(reply.inputTokens, reply.outputTokens, cachedInputTokens = reply.cachedInputTokens)
-            val title = parseConversationTitleResponse(reply.text)
-            if (title == null) {
-                record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, usage, "RESPONSE_FORMAT")
-                return@forEach
-            }
-            record(ConversationTitleGenerationStatus.SUCCEEDED, candidate.providerId, resolved.model.modelId, usage)
-            return ConversationTitleRefinementResult.Title(title)
         }
         return ConversationTitleRefinementResult.Failed("ALL_CONFIGURED_TITLE_MODELS_FAILED")
     }
@@ -165,6 +175,15 @@ class ConfiguredConversationTitleRefiner(
     }
 
 }
+
+internal fun conversationTitleFormatCorrection(rawResponse: String): List<Pair<String, String>>? = runCatching {
+    val raw = rawResponse.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+    val title = JSONObject(raw).optString("title").takeIf { it.isNotBlank() } ?: return null
+    listOf(
+        "assistant" to JSONObject().put("title", title.take(120)).toString(),
+        "user" to "你刚才的标题实际共 ${title.codePointCount(0, title.length)} 个字符，已被拒绝。请将它压缩成更短标题，目标 6 到 10 个字符，硬上限仍是 6 到 13 个字符。每个英文字母、数字、汉字、空格均各算 1 个字符，英文单词不是 1 个字符。保留对象和核心意图，删除其他修饰词，不添加事实，不使用标点。只返回 JSON：{\"title\":\"...\"}。",
+    )
+}.getOrNull()
 
 /**
  * The generated title is a plain-language drawer label. Keep the acceptance rule local and

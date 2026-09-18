@@ -255,7 +255,7 @@ import java.time.Clock
 import java.io.File
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
-class AppContainer(baseContext: Context, private val clock: Clock = Clock.systemUTC()) {
+class AppContainer(baseContext: Context, private val clock: Clock = Clock.systemUTC(), val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT) {
     private val dataStorageLocationOwner = AndroidDataStorageLocationOwner(baseContext.applicationContext)
     // Android framework and third-party initializers must always receive the real application
     // context.  The movable wrapper is deliberately limited to Room's database boundary.
@@ -263,16 +263,17 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     // Context implementation and caused launch crashes on real devices.
     private val context: Context = baseContext.applicationContext
     private val databaseContext: Context = dataStorageLocationOwner.storageContext()
+    private val businessFileContext: Context = com.nanzhufeng.ai.data.ConversationAreaFileContext(databaseContext, dataArea)
     init { PDFBoxResourceLoader.init(context.applicationContext) }
     // The established direct-provider path keeps its Android request owner.  It does not create
     // a gateway task or select a second execution mode.
-    val normalChatBackgroundExecution = AndroidNormalChatBackgroundExecution(context.applicationContext)
+    val normalChatBackgroundExecution = AndroidNormalChatBackgroundExecution(context.applicationContext, dataArea)
     val captureDraftFactory = CaptureDraftFactory(clock)
     private val mockAiTaskRunner = MockAiTaskRunner(clock)
-    private val database = Room.databaseBuilder(
+    private fun buildAreaDatabase(name: String) = Room.databaseBuilder(
         databaseContext,
         NanfengAiDatabase::class.java,
-        "nanfeng-ai.db",
+        name,
     ).addMigrations(
         NanfengAiDatabase.MIGRATION_1_2,
         NanfengAiDatabase.MIGRATION_2_3,
@@ -342,14 +343,17 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         NanfengAiDatabase.MIGRATION_66_67,
         NanfengAiDatabase.MIGRATION_67_68,
         NanfengAiDatabase.MIGRATION_68_69,
-    ).build()
-    val dataStorageLocationManager = AndroidDataStorageLocationManager(dataStorageLocationOwner) { database.close() }
+    ).build().also { com.nanzhufeng.ai.data.ConversationDatabaseHandles.register(requireNotNull(databaseContext.getDatabasePath("nanfeng-ai.db").parentFile), it) }
+    private val database = com.nanzhufeng.ai.data.local.ConversationAreaDatabaseOwner.open(databaseContext, dataArea, ::buildAreaDatabase)
+    val dataStorageLocationManager = AndroidDataStorageLocationManager(dataStorageLocationOwner) {
+        com.nanzhufeng.ai.data.ConversationDatabaseHandles.closeForMove(requireNotNull(databaseContext.getDatabasePath("nanfeng-ai.db").parentFile))
+    }
     val captureDraftRepository = RoomCaptureDraftRepository(database)
-    val privateAttachmentStore = AndroidPrivateAttachmentStore(context)
+    val privateAttachmentStore = AndroidPrivateAttachmentStore(businessFileContext)
     val privateAttachmentRepository = RoomPrivateAttachmentRepository(database)
     /** Module-internal so the separately installed, offline acceptance source set can seed typed states. */
     internal val glmOcrTasks = com.nanzhufeng.ai.data.local.RoomGlmOcrTaskRepository(database)
-    val glmOcrScheduler = com.nanzhufeng.ai.data.AndroidGlmOcrScheduler(context)
+    val glmOcrScheduler = com.nanzhufeng.ai.data.AndroidGlmOcrScheduler(context, dataArea)
     private val temporaryConversationRecoveryStore = RoomTemporaryConversationRecoveryStore(database)
     val temporaryConversationDomain = com.nanzhufeng.ai.domain.TemporaryConversationDomain(temporaryConversationRecoveryStore, clock)
     val addTemporaryConversationAttachment = com.nanzhufeng.ai.domain.AddTemporaryConversationAttachmentUseCase(temporaryConversationDomain, privateAttachmentStore, privateAttachmentRepository)
@@ -366,20 +370,20 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     private val knowledgeRepository = RoomKnowledgeRepository(database, clock)
     private val knowledgeRelationshipRepository = RoomKnowledgeRelationshipRepository(database, clock)
     private val markdownImportTasks = RoomMarkdownImportTaskRepository(database)
-    private val markdownPrivateAssets = AndroidMarkdownPrivateAssetStore(context)
+    private val markdownPrivateAssets = AndroidMarkdownPrivateAssetStore(businessFileContext)
     private val jsonKnowledgeTasks = RoomJsonKnowledgeTaskRepository(database)
-    private val jsonKnowledgePrivateAssets = AndroidJsonKnowledgePrivateAssetStore(context)
+    private val jsonKnowledgePrivateAssets = AndroidJsonKnowledgePrivateAssetStore(businessFileContext)
     private val chatGptExportTasks = RoomChatGptImportTaskRepository(database)
-    private val chatGptExportPrivateAssets = AndroidChatGptExportPrivateAssetStore(context)
+    private val chatGptExportPrivateAssets = AndroidChatGptExportPrivateAssetStore(businessFileContext)
     private val claudeExportTasks = RoomClaudeImportTaskRepository(database)
-    private val claudeExportPrivateAssets = AndroidClaudeExportPrivateAssetStore(context)
+    private val claudeExportPrivateAssets = AndroidClaudeExportPrivateAssetStore(businessFileContext)
     private val nanfengKnowledgeExportTasks = RoomNanfengKnowledgeImportTaskRepository(database)
-    private val nanfengKnowledgeExportPrivateAssets = AndroidNanfengKnowledgeExportPrivateAssetStore(context)
+    private val nanfengKnowledgeExportPrivateAssets = AndroidNanfengKnowledgeExportPrivateAssetStore(businessFileContext)
     private val p6kZipImportTasks = RoomP6KZipImportTaskRepository(database)
     private val p6kZipAssetRecoveryJobs = RoomP6KZipAssetRecoveryJobRepository(database)
     private val p6kProfilePersonalizationSettings = RoomP6KProfilePersonalizationSettingsOwner(database)
     private val pdfTextImportTasks = RoomPdfTextImportTaskRepository(database)
-    private val pdfTextPrivateAssets = AndroidPdfTextKnowledgePrivateAssetStore(context)
+    private val pdfTextPrivateAssets = AndroidPdfTextKnowledgePrivateAssetStore(businessFileContext)
     private val webTextSnapshotTasks = RoomWebTextSnapshotTaskRepository(database)
     val invocationRepository = RoomInvocationRepository(database)
     val generatedCandidateRepository = RoomGeneratedCandidateRepository(database)
@@ -394,9 +398,9 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     private val p6kZipManualAssetLinkOwner = RoomP6KZipManualAssetLinkOwner(database, conversationRepository)
     private val p6kZipMappedAssetLinkOwner = RoomP6KZipMappedAssetLinkOwner(database, conversationRepository, identityLedger = p6kImportIdentityLedger)
     private val manageP6KChatGptZipImport = com.nanzhufeng.ai.domain.ManageP6KChatGptZipImportUseCase(p6kZipImportTasks, p6kZipCommitStore, clock)
-    val p6kZipAssetRecoveryScheduler = AndroidP6KZipAssetRecoveryScheduler(context, p6kZipAssetRecoveryJobs, p6kZipImportTasks)
+    val p6kZipAssetRecoveryScheduler = AndroidP6KZipAssetRecoveryScheduler(context, p6kZipAssetRecoveryJobs, p6kZipImportTasks, dataArea)
     val p6kZipIntakeStore = AndroidP6KZipIntakeStore(
-        context, p6kZipImportTasks, manageP6KChatGptZipImport, p6kProfilePersonalizationSettings,
+        businessFileContext, p6kZipImportTasks, manageP6KChatGptZipImport, p6kProfilePersonalizationSettings,
         p6kZipManualAssetLinkOwner, p6kZipMappedAssetLinkOwner, privateAttachmentStore,
         conversationRepository, clock, assetRecoveryJobs = p6kZipAssetRecoveryJobs,
         assetRecoveryScheduler = p6kZipAssetRecoveryScheduler,
@@ -433,7 +437,7 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         relationships = knowledgeRelationshipRepository,
     )
     val workspaceExchangeV2ExportPort = AndroidWorkspaceExchangeV2ExportPort(
-        context = context,
+        context = businessFileContext,
         planner = workspaceExchangeV2Planner,
         writer = NfaiExchangeV2PackageWriter(
             mapper = NfaiExchangeV2OwnerMapper(workspaceExchangeV2Source, BuildConfig.VERSION_NAME, clock),
@@ -478,8 +482,9 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         database = database,
         accounts = p7bAccountStateMachine,
         accountOwner = p7fGoogleAccountOwner,
+        dataArea = dataArea,
     )
-    val p7fSelectedConversationSyncScheduler = P7FSelectedConversationSyncScheduler(context.applicationContext)
+    val p7fSelectedConversationSyncScheduler = P7FSelectedConversationSyncScheduler(context.applicationContext, dataArea)
     // Process-local observer: all actual conversation writes converge on the same delayed
     // selected-conversation queue, while the receipt table itself remains outside its scope.
     private val p7fSelectedConversationMutationObserver = P7FSelectedConversationMutationObserver(
@@ -487,23 +492,23 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         p7fSelectedConversationSyncScheduler,
     )
     private val p7dStateStore = RoomP7DStateStore(database)
-    private val p7eRestoreWriter = AndroidP7ESemanticAtomicRestoreWriter(context.applicationContext, database)
+    private val p7eRestoreWriter = AndroidP7ESemanticAtomicRestoreWriter(businessFileContext, database)
     val p7eGuardedRestoreOwner = P7EGuardedRestoreOwner(
         accounts = p7bAccountStateMachine,
         accountMetadata = p7bMetadataStore,
         syncState = p7dStateStore,
         restore = P7ERestorePlanCoordinator(p7eRestoreWriter),
-        receipts = AndroidP7ERestoreReceiptStore(context.applicationContext),
+        receipts = AndroidP7ERestoreReceiptStore(businessFileContext),
         semanticSource = AndroidP7ESemanticSnapshotSourceAdapter(database),
     )
     val runOfflineEval = RunOfflineEvalUseCase(offlineEvalRepository, clock, BuildConfig.VERSION_NAME)
-    val exportOfflineEvalReport = ExportOfflineEvalReportUseCase(offlineEvalRepository, AndroidOfflineEvalReportStore(context))
+    val exportOfflineEvalReport = ExportOfflineEvalReportUseCase(offlineEvalRepository, AndroidOfflineEvalReportStore(businessFileContext))
     val manageProject = ManageProjectUseCase(ProjectDomain(clock), projectRepository)
     val manageMemory = ManageMemoryUseCase(MemoryDomain(clock), memoryRepository)
     val manageKnowledge = ManageKnowledgeUseCase(KnowledgeDomain(clock), knowledgeRepository)
     val manageKnowledgeRelationships = ManageKnowledgeRelationshipsUseCase(KnowledgeRelationshipDomain(clock), knowledgeRelationshipRepository)
     val manageMarkdownImport = ManageMarkdownImportUseCase(markdownImportTasks, markdownPrivateAssets, MarkdownKnowledgeAdapter(KnowledgeDomain(clock)), manageKnowledge, clock)
-    val exportMarkdownKnowledge = ExportMarkdownKnowledgeUseCase(knowledgeRepository, AndroidMarkdownKnowledgeExportStore(context), clock)
+    val exportMarkdownKnowledge = ExportMarkdownKnowledgeUseCase(knowledgeRepository, AndroidMarkdownKnowledgeExportStore(businessFileContext), clock)
     val manageJsonKnowledgeImport = ManageJsonKnowledgeImportUseCase(jsonKnowledgeTasks, jsonKnowledgePrivateAssets, JsonKnowledgeAdapter(KnowledgeDomain(clock)), manageKnowledge, clock)
     /** P6-H is local-only: parser, private copy and atomic Room commit; no Provider or Key surface. */
     val manageChatGptExportImport = ManageChatGptExportImportUseCase(chatGptExportTasks, chatGptExportPrivateAssets, ChatGptExportJsonAdapter(), chatGptConversationCommitStore, clock)
@@ -511,9 +516,9 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     val manageClaudeExportImport = ManageClaudeExportImportUseCase(claudeExportTasks, claudeExportPrivateAssets, ClaudeExportJsonAdapter(), claudeConversationCommitStore, clock)
     /** P6-J handles an exported static JSON copy only; it has no knowledge database or Provider path. */
     val manageNanfengKnowledgeExportImport = ManageNanfengKnowledgeExportImportUseCase(nanfengKnowledgeExportTasks, nanfengKnowledgeExportPrivateAssets, NanfengKnowledgeExportJsonAdapter(), nanfengKnowledgeConversationCommitStore, clock)
-    val exportJsonKnowledge = ExportJsonKnowledgeUseCase(knowledgeRepository, AndroidJsonKnowledgeExportStore(context), clock)
+    val exportJsonKnowledge = ExportJsonKnowledgeUseCase(knowledgeRepository, AndroidJsonKnowledgeExportStore(businessFileContext), clock)
     val managePdfTextKnowledgeImport = ManagePdfTextKnowledgeImportUseCase(pdfTextImportTasks, pdfTextPrivateAssets, PdfTextKnowledgeAdapter(KnowledgeDomain(clock)), manageKnowledge, clock)
-    val manageWebTextSnapshot = ManageWebTextSnapshotUseCase(webTextSnapshotTasks, AndroidWebTextSnapshotPrivateAssetStore(context), AndroidPublicWebFetcher(), manageKnowledge, clock)
+    val manageWebTextSnapshot = ManageWebTextSnapshotUseCase(webTextSnapshotTasks, AndroidWebTextSnapshotPrivateAssetStore(businessFileContext), AndroidPublicWebFetcher(), manageKnowledge, clock)
     // P4-B is local metadata-only source selection. It cannot assemble a Prompt or enable egress.
     val readContextSelection = ReadContextSelectionUseCase(conversationRepository, projectRepository)
     // P4-D only builds a transient, explicitly controlled local body IR. It cannot create a Prompt or egress.
@@ -527,9 +532,9 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     val manageConversation = ManageConversationUseCase(conversationManagementDomain, conversationRepository)
     val searchConversations = SearchConversationsUseCase(conversationRepository, ConversationSearchProjection(conversationManagementDomain))
     val searchConversationAttachments = SearchConversationAttachmentsUseCase(conversationRepository)
-    val localSearchHistory = AndroidLocalSearchHistoryStore(context)
-    val conversationReadMarkerStore = AndroidConversationReadMarkerStore(context)
-    private val conversationExportStore = AndroidConversationExportStore(context)
+    val localSearchHistory = AndroidLocalSearchHistoryStore(businessFileContext)
+    val conversationReadMarkerStore = AndroidConversationReadMarkerStore(businessFileContext)
+    private val conversationExportStore = AndroidConversationExportStore(businessFileContext)
     val exportConversationPackage = ExportConversationPackageUseCase(conversationRepository, conversationExportStore, clock)
     val createConversation = CreateConversationUseCase(conversationTreeService, conversationRepository)
     val appendConversationMessage = AppendConversationMessageUseCase(conversationTreeService, conversationRepository)
@@ -548,15 +553,15 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         clock,
     )
     val conversationAttachmentPreviewProjection = ConversationAttachmentPreviewProjection(privateAttachmentRepository, privateAttachmentStore)
-    val pdfPreviewPositionStore = AndroidPdfPreviewPositionStore(context)
-    val videoPreviewPositionStore = AndroidVideoPreviewPositionStore(context)
-    val audioPreviewPositionStore = AndroidAudioPreviewPositionStore(context)
+    val pdfPreviewPositionStore = AndroidPdfPreviewPositionStore(businessFileContext)
+    val videoPreviewPositionStore = AndroidVideoPreviewPositionStore(businessFileContext)
+    val audioPreviewPositionStore = AndroidAudioPreviewPositionStore(businessFileContext)
     /** P6-G local-only owner; its store contains no Key, endpoint, prompt or Provider invocation. */
-    val p6gModelSelection = P6GModelSelectionOwner(AndroidP6GModelSelectionStore(context), P6GModelRouter())
+    val p6gModelSelection = P6GModelSelectionOwner(AndroidP6GModelSelectionStore(businessFileContext), P6GModelRouter())
     /** Per-conversation web-search overrides are local, content-free, and do not alter the global default. */
-    val conversationWebSearchOverrides = ConversationWebSearchOverrideOwner(AndroidConversationWebSearchOverrideStore(context))
+    val conversationWebSearchOverrides = ConversationWebSearchOverrideOwner(AndroidConversationWebSearchOverrideStore(businessFileContext))
     /** Per-conversation answer style is independent from the global personalization setting. */
-    val conversationStyleOverrides = ConversationStyleOverrideOwner(AndroidConversationStyleOverrideStore(context))
+    val conversationStyleOverrides = ConversationStyleOverrideOwner(AndroidConversationStyleOverrideStore(businessFileContext))
     val readConversationAttemptHistory = ReadConversationAttemptHistoryUseCase(conversationRepository, conversationRepository)
     val messagePresentationRenderer = MessagePresentationRenderer()
     private val conversationRuntimeStateMachine = ConversationRuntimeStateMachine(clock)
@@ -588,20 +593,20 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         clock = clock,
     )
     /** P5-C owns aggregate-only privacy inventory, scoped deletion and user-initiated diagnostics. */
-    val privacyDataManager = AndroidPrivacyDataManager(context, database, BuildConfig.VERSION_NAME)
+    val privacyDataManager = AndroidPrivacyDataManager(businessFileContext, database, BuildConfig.VERSION_NAME)
     /** P5-D is manual local portability only; it never participates in lifecycle recovery or cloud backup. */
-    val localBackupRestoreManager = AndroidLocalBackupRestoreManager(context, database, BuildConfig.VERSION_NAME)
+    val localBackupRestoreManager = AndroidLocalBackupRestoreManager(businessFileContext, database, BuildConfig.VERSION_NAME)
     private val modelServiceSettingsRepository = AndroidModelServiceSettingsRepository(context)
     private val chatRoutingPolicyRepository = AndroidChatRoutingPolicyRepository(context)
-    private val assistantExperienceSettingsRepository = AndroidAssistantExperienceSettingsRepository(context)
-    val historyKnowledgeAutoCurationScheduler = AndroidHistoryKnowledgeAutoCurationScheduler(context)
-    private val historyKnowledgeAutoCurationCheckpointStore = AndroidHistoryKnowledgeCurationCheckpointStore(context)
-    val historyKnowledgeAutoCurationRunStore = AndroidHistoryKnowledgeAutoCurationRunStore(context)
+    private val assistantExperienceSettingsRepository = AndroidAssistantExperienceSettingsRepository(businessFileContext)
+    val historyKnowledgeAutoCurationScheduler = AndroidHistoryKnowledgeAutoCurationScheduler(context, dataArea)
+    private val historyKnowledgeAutoCurationCheckpointStore = AndroidHistoryKnowledgeCurationCheckpointStore(businessFileContext)
+    val historyKnowledgeAutoCurationRunStore = AndroidHistoryKnowledgeAutoCurationRunStore(businessFileContext)
     private val notificationReminderSettingsRepository = AndroidNotificationReminderSettingsRepository(context)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository(context)
     private val providerCredentialStore = createAndroidProviderCredentialStore(context)
-    val directChatCallAudit = AndroidDirectChatCallAuditStore(context)
-    val contextSelectionAudits = AndroidContextSelectionAuditStore(context)
+    val directChatCallAudit = AndroidDirectChatCallAuditStore(businessFileContext)
+    val contextSelectionAudits = AndroidContextSelectionAuditStore(businessFileContext)
     val providerDiagnostics = RoomProviderDiagnosticStore(database)
     private val normalChatSendAttempts = RoomNormalChatSendAttemptStore(database)
     val scheduledMonitorRepository = RoomScheduledMonitorRepository(database)
@@ -661,7 +666,7 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     /** User-confirmed historical conversation -> reviewable local-knowledge candidate; it never writes by itself. */
     val readHistoryKnowledgeCurationSource = com.nanzhufeng.ai.domain.ReadHistoryKnowledgeCurationSourceUseCase(conversationRepository)
     val exportKnowledgeSnapshot = ExportKnowledgeSnapshotUseCase(knowledgeRepository, clock)
-    private val knowledgeExportStore = AndroidKnowledgeExportStore(context)
+    private val knowledgeExportStore = AndroidKnowledgeExportStore(businessFileContext)
     val exportKnowledgePackage = ExportKnowledgePackageUseCase(knowledgeRepository, knowledgeExportStore, clock)
     val captureGalleryImage = CaptureGalleryImageUseCase(
         privateAttachmentStore,
@@ -845,6 +850,7 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
 
     /** Seeds the user-confirmed baseline only before any global summary has ever existed. */
     fun ensureInitialMemorySummary(): Int {
+        if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.WORK) return 0
         // A soft-deleted summary is an explicit user decision. It must prevent a cold start from
         // silently recreating the baseline after the user chose "删除记忆".
         if (!InitialMemorySummary.shouldSeed(

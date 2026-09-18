@@ -36,7 +36,11 @@ class AndroidDataStorageLocationManager(
     private val closeDatabase: () -> Unit,
 ) {
     fun state(): AndroidDataStorageLocationState = owner.state()
-    fun moveTo(target: AndroidDataStorageLocation): AndroidDataStorageMoveResult = owner.moveTo(target, closeDatabase)
+    fun moveTo(target: AndroidDataStorageLocation): AndroidDataStorageMoveResult {
+        if (com.nanzhufeng.ai.background.NormalChatGenerationRegistry.hasActiveExecution())
+            return AndroidDataStorageMoveResult.Rejected("请等待当前区域及另一区域的生成结束后再迁移。")
+        return owner.moveTo(target, closeDatabase)
+    }
 }
 
 /** Bootstrap settings stay in the base Context; all product data is read through [storageContext]. */
@@ -89,7 +93,9 @@ class AndroidDataStorageLocationOwner(private val base: Context) {
             copyFilesTree(sourceRoot, sourceDatabaseDirectory, File(stagingRoot, "files"))
             copyDatabaseFiles(sourceDatabaseDirectory, stagingRoot)
             verifyFilesTree(sourceRoot, sourceDatabaseDirectory, File(stagingRoot, "files"))
-            verifyDatabase(File(stagingRoot, "databases/$DATABASE_NAME"))
+            val stagedNames = DATABASE_NAMES.filter { File(stagingRoot, "databases/$it").isFile }
+            require(stagedNames.isNotEmpty()) { "数据库副本不存在。" }
+            stagedNames.forEach { name -> verifyDatabase(File(stagingRoot, "databases/$name")) }
 
             replaceDirectory(targetRoot, File(stagingRoot, "files"))
             replaceDatabaseFiles(targetDatabaseDirectory, File(stagingRoot, "databases"))
@@ -108,7 +114,7 @@ class AndroidDataStorageLocationOwner(private val base: Context) {
 
     private fun copyDatabaseFiles(sourceDirectory: File, stagingRoot: File) {
         val targetDirectory = File(stagingRoot, "databases").also(File::mkdirs)
-        listOf(DATABASE_NAME, "$DATABASE_NAME-wal", "$DATABASE_NAME-shm").forEach { name ->
+        DATABASE_NAMES.flatMap { listOf(it, "$it-wal", "$it-shm") }.forEach { name ->
             val source = File(sourceDirectory, name)
             if (source.isFile) copyFile(source, File(targetDirectory, name))
         }
@@ -161,12 +167,12 @@ class AndroidDataStorageLocationOwner(private val base: Context) {
     private fun replaceDatabaseFiles(targetDirectory: File, stagedDirectory: File) {
         require(stagedDirectory.isDirectory) { "数据库副本不存在。" }
         require(targetDirectory.mkdirs() || targetDirectory.isDirectory) { "无法创建数据库目录。" }
-        listOf(DATABASE_NAME, "$DATABASE_NAME-wal", "$DATABASE_NAME-shm").forEach { name ->
+        DATABASE_NAMES.flatMap { listOf(it, "$it-wal", "$it-shm") }.forEach { name ->
             val staged = File(stagedDirectory, name)
             val target = File(targetDirectory, name)
             if (staged.isFile) copyFile(staged, target) else target.delete()
         }
-        verifyDatabase(File(targetDirectory, DATABASE_NAME))
+        DATABASE_NAMES.filter { File(targetDirectory, it).isFile }.forEach { verifyDatabase(File(targetDirectory, it)) }
     }
 
     private fun verifyTree(source: File, target: File) {
@@ -216,6 +222,7 @@ class AndroidDataStorageLocationOwner(private val base: Context) {
         const val KEY_LOCATION = "location"
         const val EXTERNAL_DIRECTORY = "nanfeng-ai-data"
         const val DATABASE_NAME = "nanfeng-ai.db"
+        val DATABASE_NAMES = listOf(DATABASE_NAME, "nanfeng-ai-work.db")
     }
 }
 

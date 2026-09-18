@@ -15,6 +15,7 @@ import android.os.SystemClock
 import com.nanzhufeng.ai.R
 import com.nanzhufeng.ai.ai.NormalChatOpenRouterExecutor
 import com.nanzhufeng.ai.app.AppContainer
+import com.nanzhufeng.ai.domain.ConversationSurface
 import com.nanzhufeng.ai.domain.ConversationId
 import com.nanzhufeng.ai.domain.NormalChatEgressAuthorization
 import java.util.concurrent.ConcurrentHashMap
@@ -47,10 +48,10 @@ object NoopNormalChatBackgroundExecution : NormalChatBackgroundExecution {
     override fun runningConversationIds() = emptySet<ConversationId>()
 }
 
-class AndroidNormalChatBackgroundExecution(private val context: Context) : NormalChatBackgroundExecution {
+class AndroidNormalChatBackgroundExecution(private val context: Context, private val dataArea: ConversationSurface = ConversationSurface.CHAT) : NormalChatBackgroundExecution {
     override fun begin(conversationId: ConversationId, operation: NormalChatBackgroundOperation, authorization: NormalChatEgressAuthorization?): Boolean = runCatching {
         context.startForegroundService(
-            Intent(context, NormalChatGenerationForegroundService::class.java)
+            Intent(context, if (dataArea == ConversationSurface.CHAT) NormalChatGenerationForegroundService::class.java else WorkChatGenerationForegroundService::class.java)
                 .setAction(NormalChatGenerationForegroundService.ACTION_BEGIN)
                 .putExtra(NormalChatGenerationForegroundService.EXTRA_CONVERSATION_ID, conversationId.value)
                 .putExtra(NormalChatGenerationForegroundService.EXTRA_OPERATION, operation.name)
@@ -66,33 +67,38 @@ class AndroidNormalChatBackgroundExecution(private val context: Context) : Norma
 
     override fun cancel(conversationId: ConversationId) {
         context.startService(
-            Intent(context, NormalChatGenerationForegroundService::class.java)
+            Intent(context, if (dataArea == ConversationSurface.CHAT) NormalChatGenerationForegroundService::class.java else WorkChatGenerationForegroundService::class.java)
                 .setAction(NormalChatGenerationForegroundService.ACTION_CANCEL)
                 .putExtra(NormalChatGenerationForegroundService.EXTRA_CONVERSATION_ID, conversationId.value),
         )
     }
 
     override fun ownsExecution() = true
-    override fun isRunning(conversationId: ConversationId) = NormalChatGenerationRegistry.isRunning(conversationId)
-    override fun runningConversationIds() = NormalChatGenerationRegistry.snapshot()
+    override fun isRunning(conversationId: ConversationId) = NormalChatGenerationRegistry.isRunning(conversationId, dataArea)
+    override fun runningConversationIds() = NormalChatGenerationRegistry.snapshot(dataArea)
 }
 
 /** In-process truth used only to avoid marking an active foreground request as interrupted. */
 object NormalChatGenerationRegistry {
-    private val activeConversationIds = ConcurrentHashMap.newKeySet<String>()
-    fun markRunning(conversationId: ConversationId) { activeConversationIds += conversationId.value }
-    fun markFinished(conversationId: ConversationId) { activeConversationIds -= conversationId.value }
-    fun isRunning(conversationId: ConversationId) = conversationId.value in activeConversationIds
+    private val activeConversationIds = ConcurrentHashMap.newKeySet<Pair<ConversationSurface, ConversationId>>()
+    fun markRunning(conversationId: ConversationId, area: ConversationSurface = ConversationSurface.CHAT) { activeConversationIds += area to conversationId }
+    fun markFinished(conversationId: ConversationId, area: ConversationSurface = ConversationSurface.CHAT) { activeConversationIds -= area to conversationId }
+    fun isRunning(conversationId: ConversationId, area: ConversationSurface = ConversationSurface.CHAT) = (area to conversationId) in activeConversationIds
     fun hasActiveExecution() = activeConversationIds.isNotEmpty()
-    fun snapshot(): Set<ConversationId> = activeConversationIds.mapTo(linkedSetOf(), ::ConversationId)
+    fun snapshot(area: ConversationSurface = ConversationSurface.CHAT): Set<ConversationId> = activeConversationIds.filter { it.first == area }.mapTo(linkedSetOf()) { it.second }
 }
 
-class NormalChatGenerationForegroundService : Service() {
+class WorkChatGenerationForegroundService : NormalChatGenerationForegroundService() {
+    override val dataArea = ConversationSurface.WORK
+}
+
+open class NormalChatGenerationForegroundService : Service() {
+    protected open val dataArea = ConversationSurface.CHAT
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val jobs = ConcurrentHashMap<ConversationId, Job>()
     /** UI wake-ups are metadata-only and coalesced; an SSE provider can emit many tiny chunks. */
     private val lastProgressPublishedAtMs = ConcurrentHashMap<ConversationId, Long>()
-    private val container by lazy { AppContainer(applicationContext) }
+    private val container by lazy { AppContainer(applicationContext, dataArea = dataArea) }
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -139,7 +145,7 @@ class NormalChatGenerationForegroundService : Service() {
                 showOngoingNotification(activeCount = jobs.size.coerceAtLeast(1))
                 return
             }
-            NormalChatGenerationRegistry.markRunning(conversationId)
+            NormalChatGenerationRegistry.markRunning(conversationId, dataArea)
             publishExecutionState(conversationId, running = true)
             val job = serviceScope.launch(start = CoroutineStart.LAZY) {
                 var safeResult: String? = null
@@ -164,7 +170,7 @@ class NormalChatGenerationForegroundService : Service() {
                 } finally {
                     jobs.remove(conversationId)
                     lastProgressPublishedAtMs.remove(conversationId)
-                    NormalChatGenerationRegistry.markFinished(conversationId)
+                    NormalChatGenerationRegistry.markFinished(conversationId, dataArea)
                     // Publish terminal state only after the registry changes, so a simultaneous
                     // UI reload cannot resurrect a just-completed spinner from a stale snapshot.
                     publishExecutionState(conversationId, running = false, safeResult = safeResult)
@@ -201,6 +207,7 @@ class NormalChatGenerationForegroundService : Service() {
         sendBroadcast(
             Intent(ACTION_EXECUTION_STATE_CHANGED)
                 .setPackage(packageName)
+                .putExtra("dataArea", dataArea.name)
                 .putExtra(EXTRA_CONVERSATION_ID, conversationId.value)
                 .putExtra(EXTRA_RUNNING, running)
                 .putExtra(EXTRA_PROGRESS, progress)
@@ -214,9 +221,9 @@ class NormalChatGenerationForegroundService : Service() {
             description = "南枫 AI 正在后台生成回复"
             setShowBadge(false)
         })
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val launchIntent = if (dataArea == ConversationSurface.WORK) Intent(this, com.nanzhufeng.ai.NanfengWorkActivity::class.java) else packageManager.getLaunchIntentForPackage(packageName)
         val launchPendingIntent = launchIntent?.let {
-            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.getActivity(this, dataArea.ordinal, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nanfeng_send_rounded)
@@ -231,16 +238,16 @@ class NormalChatGenerationForegroundService : Service() {
                     android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_nanfeng_send_rounded),
                     "停止全部生成",
                     PendingIntent.getService(
-                        this, 1,
-                        Intent(this, NormalChatGenerationForegroundService::class.java).setAction(ACTION_CANCEL_ALL),
+                        this, 1 + dataArea.ordinal,
+                        Intent(this, this::class.java).setAction(ACTION_CANCEL_ALL),
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                     ),
                 ).build(),
             )
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else startForeground(NOTIFICATION_ID, notification)
+            startForeground(NOTIFICATION_ID + dataArea.ordinal, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else startForeground(NOTIFICATION_ID + dataArea.ordinal, notification)
     }
 
     override fun onDestroy() {

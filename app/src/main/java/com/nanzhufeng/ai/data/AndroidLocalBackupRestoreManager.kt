@@ -28,6 +28,7 @@ class AndroidLocalBackupRestoreManager(
     private val database: NanfengAiDatabase,
     private val appVersion: String,
 ) : LocalBackupRestoreManager {
+    private val dataArea = (context as? ConversationAreaFileContext)?.area?.name ?: "CHAT"
     private val app = context.applicationContext
     private val files = app.filesDir.canonicalFile
     private val dbFile get() = app.getDatabasePath(DB_NAME)
@@ -79,14 +80,16 @@ class AndroidLocalBackupRestoreManager(
         try {
             extractVerified(inbox, root)
             val stagedDb = File(root, LocalBackupFormat.DATABASE_ENTRY)
+            validateDatabaseArea(stagedDb)
             if (!sqliteHealthy(stagedDb) || schemaVersion(stagedDb) != currentSchema || tableCounts(stagedDb) != current.tableCounts) return LocalBackupResult.Rejected("候选数据库完整性、Schema 或计数不匹配。")
             checkpointDatabase(File(checkpoint, "nanfeng-ai.snapshot"))
             checkpointAssets(checkpoint)
             // After close, no repository/container may keep using this process. The caller must restart.
             database.close()
+            // From the first filesystem mutation onward, any failure must restore both owners.
+            switched = true
             replaceFile(stagedDb, dbFile)
             replaceAssets(root)
-            switched = true
             state.edit().putString(PREF_OPERATION, "RESTORED_RESTART_REQUIRED").remove(PREF_FINGERPRINT).apply()
             LocalBackupResult.RestoredRestartRequired(checkpoint.name)
         } catch (t: Throwable) {
@@ -118,7 +121,7 @@ class AndroidLocalBackupRestoreManager(
         val entries = mutableListOf<Pair<String, File>>(LocalBackupFormat.DATABASE_ENTRY to snapshot)
         assets.forEach { entries += it.relativeTo(requireNotNull(snapshot.parentFile)).invariantSeparatorsPath to it }
         val list = JSONArray(entries.sortedBy { it.first }.map { (path, file) -> JSONObject().put("path", path).put("bytes", file.length()).put("sha256", sha256(file)) })
-        val manifest = JSONObject().put("format", LocalBackupFormat.FORMAT).put("version", LocalBackupFormat.VERSION).put("appVersion", appVersion).put("schemaVersion", currentSchema).put("scope", "room_and_private_assets").put("excluded", JSONArray(EXCLUDED)).put("tableCounts", JSONObject(counts)).put("entries", list)
+        val manifest = JSONObject().put("format", LocalBackupFormat.FORMAT).put("dataArea", dataArea).put("version", LocalBackupFormat.VERSION).put("appVersion", appVersion).put("schemaVersion", currentSchema).put("scope", "room_and_private_assets").put("excluded", JSONArray(EXCLUDED)).put("tableCounts", JSONObject(counts)).put("entries", list)
         manifest.put("manifestSha256", sha256(manifest.toString().toByteArray()))
         ZipOutputStream(FileOutputStream(out)).use { zip ->
             zip.putNextEntry(ZipEntry(LocalBackupFormat.MANIFEST_ENTRY)); zip.write(manifest.toString().toByteArray()); zip.closeEntry()
@@ -137,6 +140,7 @@ class AndroidLocalBackupRestoreManager(
             val manifest = JSONObject(zip.getInputStream(manifestEntry).bufferedReader().readText())
             require(manifest.getString("format") == LocalBackupFormat.FORMAT && manifest.getInt("version") == LocalBackupFormat.VERSION) { "version" }
             require(manifest.getInt("schemaVersion") == currentSchema) { "schema" }
+            require(manifest.optString("dataArea", "CHAT") == dataArea) { "data area" }
             val originalHash = manifest.getString("manifestSha256"); manifest.remove("manifestSha256"); require(originalHash == sha256(manifest.toString().toByteArray())) { "manifest hash" }
             val listed = manifest.getJSONArray("entries"); require(listed.length() + 1 == all.size) { "entry count" }
             for (i in 0 until listed.length()) { val item = listed.getJSONObject(i); val entry = zip.getEntry(item.getString("path")) ?: error("missing entry"); require(sha256(zip.getInputStream(entry)) == item.getString("sha256") && entry.size == item.getLong("bytes")) { "entry hash" } }
@@ -147,6 +151,7 @@ class AndroidLocalBackupRestoreManager(
         }
     }
     private fun safePackageFailure(failure: Throwable): String = when (failure.message) {
+        "data area" -> "备份属于另一区域，请在对应区域恢复"
         "zip bomb" -> "未压缩内容超过 32 GiB 上限"
         "unsafe zip" -> "包路径或条目不安全"
         "manifest hash", "entry hash", "entry count" -> "包结构或哈希不一致"
@@ -156,11 +161,27 @@ class AndroidLocalBackupRestoreManager(
     private fun extractVerified(zipFile: File, root: File) { ZipFile(zipFile).use { zip -> zip.entries().toList().filter { it.name != LocalBackupFormat.MANIFEST_ENTRY }.forEach { entry -> val target = File(root, entry.name); require(safeChild(root, target)); target.parentFile?.mkdirs(); zip.getInputStream(entry).use { input -> FileOutputStream(target).use(input::copyTo) } } } }
     private fun replaceFile(source: File, target: File) { target.parentFile?.mkdirs(); val old = File(target.parentFile, ".${target.name}.p5d-old"); if (target.exists()) target.renameTo(old); if (!source.renameTo(target)) source.copyTo(target, overwrite = true); old.delete() }
     private fun replaceAssets(root: File) { allowedRoots().forEach { key -> val destination = File(files, key); destination.deleteRecursively(); val source = File(root, "assets/$key"); if (source.exists()) source.copyRecursively(destination, overwrite = true) } }
-    private fun restoreCheckpoint(checkpoint: File) { replaceFile(File(checkpoint, "nanfeng-ai.snapshot"), dbFile); val assets = File(checkpoint, "assets"); if (assets.exists()) replaceAssets(checkpoint) }
+    private fun validateDatabaseArea(file: File) {
+        android.database.sqlite.SQLiteDatabase.openDatabase(file.path,null,android.database.sqlite.SQLiteDatabase.OPEN_READONLY).use { db ->
+            val identity=db.rawQuery("PRAGMA application_id",null).use { it.moveToFirst();it.getInt(0) }
+            val expected=if(dataArea=="WORK") com.nanzhufeng.ai.data.local.ConversationAreaIdentity.WORK else com.nanzhufeng.ai.data.local.ConversationAreaIdentity.CHAT
+            require(identity==expected || (identity==0 && dataArea=="CHAT")) { "备份数据库所属区域不一致，未替换本机数据。" }
+            if(identity==0) {
+                val workRoots=db.rawQuery("SELECT (SELECT COUNT(*) FROM projects)+(SELECT COUNT(*) FROM conversations WHERE surface='WORK' OR projectId IS NOT NULL)",null).use { it.moveToFirst();it.getLong(0) }
+                require(workRoots==0L || !context.getDatabasePath("nanfeng-ai-work.db").exists()) { "此旧备份包含工作区记录，不能覆盖已有独立工作区。" }
+            }
+        }
+    }
+
+    private fun restoreCheckpoint(checkpoint: File) { replaceFile(File(checkpoint, "nanfeng-ai.snapshot"), dbFile); replaceAssets(checkpoint) }
     private fun tableCounts(file: File): Map<String, Long> { if (!file.isFile || file.length() == 0L) return emptyMap(); val sql = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY); return try { sql.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('android_metadata','room_master_table') ORDER BY name", null).use { c -> buildMap { while (c.moveToNext()) { val name = c.getString(0); sql.rawQuery("SELECT COUNT(*) FROM `" + name.replace("`", "``") + "`", null).use { n -> n.moveToFirst(); put(name, n.getLong(0)) } } } } } finally { sql.close() } }
     private fun schemaVersion(file: File): Int = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY).use { it.version }
     private fun sqliteHealthy(file: File): Boolean = runCatching { val sql = android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY); try { sql.rawQuery("PRAGMA integrity_check", null).use { it.moveToFirst() && it.getString(0) == "ok" } } finally { sql.close() } }.getOrDefault(false)
-    private fun allowedRoots() = listOf("attachments/v1", "markdown-import-assets/v1", "json-knowledge-import-assets/v1", "pdf-text-import-assets/v1", "web-text-snapshots/v1")
+    private fun allowedRoots() = listOf(
+        "attachments/v1", "markdown-import-assets/v1", "json-knowledge-import-assets/v1",
+        "pdf-text-import-assets/v1", "web-text-snapshots/v1", "chatgpt-export-import-assets/v1",
+        "claude-export-import-assets/v1", "nanfeng-knowledge-export-import-assets/v1", "p6k-zip-import/v1",
+    )
     private fun safeEntry(name: String) = name == LocalBackupFormat.MANIFEST_ENTRY || (name.matches(Regex("[A-Za-z0-9._/-]+")) && !name.startsWith('/') && !name.contains(".."))
     private fun safeChild(root: File, child: File) = child.canonicalFile.path.startsWith(root.canonicalFile.path + File.separator) && !child.isDirectory
     private fun sha256(file: File) = FileInputStream(file).use(::sha256)

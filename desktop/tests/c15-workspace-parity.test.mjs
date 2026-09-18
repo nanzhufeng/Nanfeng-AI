@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { renderChatFirstShell } from '../src/chat-shell.mjs';
-import { isWorkspaceRoot } from '../src/workspace-view.mjs';
+import { isWorkspaceRoot, resolveWorkConversationState } from '../src/workspace-view.mjs';
 import {
   C15_PROJECT_ID,
   C15_WORKSPACE_COPY,
@@ -62,10 +62,10 @@ test('C15 work entry opens the Android-aligned empty work state, not ordinary ch
 test('C15 selected project exposes one project-scoped draft without creating a fake conversation', () => {
   const html = renderWork({ selectedWorkProjectId: C15_PROJECT_ID });
   assert.ok(html.includes(C15_WORKSPACE_COPY.projectTitle));
-  assert.ok(html.includes('暂无工作对话'));
+  assert.ok(html.includes('id="chat-composer"'));
   assert.ok(!html.includes(C15_WORKSPACE_COPY.emptyWorkDetail));
   assert.ok(html.includes('id="chat-composer"'));
-  assert.ok(!html.includes('data-scroll-owner="message-list"'));
+  assert.ok(!html.includes('C15 普通对话不可进入工作态'));
   assert.ok(!html.includes('C15 普通对话不可进入工作态'));
 });
 
@@ -125,7 +125,7 @@ test('C15 workspace pages use a dedicated workspace shell and keep chat function
 });
 
 test('C15 workspace root and its peer pages share one standalone shell contract', () => {
-  assert.match(shellSource, /const workspaceRootPanel = isWorkspaceRoot\(data, pane, selectedWorkProjectId, selectedConversationId\)/);
+  assert.match(shellSource, /const workspaceRootPanel = data\?\.dataArea !== 'WORK' && isWorkspaceRoot\(data, pane, selectedWorkProjectId, selectedConversationId\)/);
   assert.match(shellSource, /const standaloneWorkspacePage = \(showWorkPanel && !utilityPane\) \|\| Boolean\(workspaceRootPanel\)/);
   assert.match(cssSource, /\.workspace-shell \{[^}]*grid-template-columns: var\(--chat-sidebar-width, 256px\) minmax\(0, 1fr\);/s);
   assert.match(cssSource, /\.workspace-standalone-content > \.canvas \{[^}]*border: 0;[^}]*background: transparent;[^}]*box-shadow: none;/s);
@@ -135,7 +135,7 @@ test('C15 work root claims the same full-width standalone owner as its peer page
   assert.equal(isWorkspaceRoot(fixture, 'work', null, null), true);
   assert.equal(isWorkspaceRoot(fixture, 'work', C15_PROJECT_ID, null), false);
   assert.equal(isWorkspaceRoot(fixture, 'settings', null, null), false);
-  assert.match(appSource, /const standaloneWorkspacePage = \(!utilityPane && Boolean\(workPanel\)\) \|\| isWorkspaceRoot\(data, visiblePane, state\.selectedWorkProjectId, state\.selectedConversationId\);/);
+  assert.match(appSource, /const standaloneWorkspacePage = \(!utilityPane && Boolean\(workPanel\)\) \|\| \(data\?\.dataArea !== 'WORK' && isWorkspaceRoot\(data, visiblePane, state\.selectedWorkProjectId, state\.selectedConversationId\)\);/);
   assert.match(cssSource, /\.app-shell\.workspace-standalone-shell \{[^}]*display: block;[^}]*height: 100vh;/s);
 });
 
@@ -164,4 +164,30 @@ test('C15 Browser fixture is explicit, isolated and routable across only C15 sta
     'state.settingsSection = c15WorkspacePreview',
   ]) assert.ok(appSource.includes(token), token);
   assert.ok(fixtureSource.includes('c15-browser-read-only'));
+});
+
+// The pending independent database implementation must retain this negative boundary.
+// Reusing the chat surface never authorizes ordinary history as a Work fallback.
+test('work never adopts an ordinary conversation by explicit ID or a missing project', () => {
+  const ordinary = { id: 'ordinary-only', projectId: null, title: '不可跨区读取', messages: [] };
+  const data = { ...fixture, exchange: { ...fixture.exchange, conversations: [ordinary] } };
+  for (const projectId of [null, 'missing-project', C15_PROJECT_ID]) {
+    const result = resolveWorkConversationState(data, projectId, ordinary.id);
+    assert.equal(result.conversation, null);
+    assert.deepEqual(result.conversations, []);
+  }
+});
+
+// A physically owned WORK projection is the only no-project path allowed to chat.
+test('WORK database root has the shared composer and its own conversation history without a project', () => {
+  const data = structuredClone(fixture);
+  data.dataArea = 'WORK';
+  data.exchange.conversations = [];
+  const html = renderWork({ data });
+  assert.ok(html.includes('id="chat-composer"'));
+  assert.ok(!html.includes('C15 普通对话不可进入工作态'));
+  assert.ok(html.includes('data-action="show-projects"'));
+  assert.ok(html.includes('data-action="new-chat"'));
+  assert.ok(!html.includes('work-root-canvas'));
+  assert.equal(resolveWorkConversationState(data, null, null).conversation, null);
 });

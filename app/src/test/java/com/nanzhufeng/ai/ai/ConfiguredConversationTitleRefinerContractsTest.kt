@@ -34,6 +34,38 @@ class ConfiguredConversationTitleRefinerContractsTest {
     private val clock = Clock.fixed(Instant.parse("2026-08-27T00:00:00Z"), ZoneOffset.UTC)
     private val source = ConversationTitleSource("请整理 Android 设置页面层级", "可以按入口和使用频率重新组织设置页面。")
 
+    @Test fun `overlong model title is corrected once by the same provider before fallback`() {
+        val transport = RecordingTransport(listOf(success("备份Codex配置防更新丢失"), success("Codex配置备份")))
+        val records = Records()
+        val result = refiner(setOf(ProviderId.DEEPSEEK), records, transport).refine(ConversationId("conversation"), source)
+        assertEquals(ConversationTitleRefinementResult.Title("Codex配置备份"), result)
+        assertEquals(listOf("deepseek-flash", "deepseek-flash"), transport.modelIds())
+        assertTrue(transport.requestBodies[1].contains("14"))
+        assertEquals(2, transport.idempotencyKeys.toSet().size)
+        assertEquals(listOf(ConversationTitleGenerationStatus.FAILED, ConversationTitleGenerationStatus.SUCCEEDED), records.values.map { it.status })
+    }
+
+    @Test fun `format correction stops after one attempt`() {
+        val transport = RecordingTransport(listOf(success("备份Codex配置防更新丢失"), success("备份Codex配置防更新丢失")))
+        val result = refiner(setOf(ProviderId.DEEPSEEK), Records(), transport).refine(ConversationId("conversation"), source)
+        assertEquals(ConversationTitleRefinementResult.Failed("ALL_CONFIGURED_TITLE_MODELS_FAILED"), result)
+        assertEquals(2, transport.requestBodies.size)
+    }
+
+    @Test fun `unknown timeout does not trigger another provider request`() {
+        val transport = RecordingTransport(listOf(ProviderChatOutcome.TimedOut))
+        val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), Records(), transport).refine(ConversationId("conversation"), source)
+        assertEquals(ConversationTitleRefinementResult.Failed("TIMEOUT"), result)
+        assertEquals(listOf("deepseek-flash"), transport.modelIds())
+    }
+
+    @Test fun `intentional empty title does not get format correction`() {
+        val transport = RecordingTransport(listOf(success("")))
+        val result = refiner(setOf(ProviderId.DEEPSEEK), Records(), transport).refine(ConversationId("conversation"), source)
+        assertEquals(ConversationTitleRefinementResult.Failed("ALL_CONFIGURED_TITLE_MODELS_FAILED"), result)
+        assertEquals(1, transport.requestBodies.size)
+    }
+
     @Test fun `DeepSeek V4 point 1 Flash is the shared first choice when all background providers are available`() {
         val transport = RecordingTransport(listOf(success("Android设置规划")))
         val records = Records()
@@ -137,8 +169,10 @@ class ConfiguredConversationTitleRefinerContractsTest {
     private class RecordingTransport(outcomes: List<ProviderChatOutcome>) : ProviderChatTransport {
         private val remaining = outcomes.toMutableList()
         val requestBodies = mutableListOf<String>()
+        val idempotencyKeys = mutableListOf<String>()
         override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome {
             requestBodies += request.jsonBody
+            idempotencyKeys += request.idempotencyKey
             return remaining.removeAt(0)
         }
         fun modelIds() = requestBodies.map { Regex("\\\"model\\\":\\\"([^\\\"]+)\\\"").find(it)?.groupValues?.get(1) ?: "" }

@@ -516,7 +516,7 @@ class P6DConversationRowAccessibilityContractsTest {
         val viewModel = File("src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt").readText()
         val create = viewModel.substring(viewModel.indexOf("fun createDevelopmentConversation"), viewModel.indexOf("fun updateDraft"))
         assertTrue(create.contains("val surface = state.surface"))
-        assertTrue(create.contains("createConversation.execute(surface = surface)"))
+        assertTrue(create.contains("createConversation.resumeOrCreateDraft(surface = surface)"))
         assertFalse(create.contains("appendMessage.execute"))
         assertFalse(create.contains("确定性 fixture"))
     }

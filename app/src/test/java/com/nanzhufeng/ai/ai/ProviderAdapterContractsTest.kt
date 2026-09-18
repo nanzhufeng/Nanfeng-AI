@@ -555,10 +555,11 @@ class ProviderAdapterContractsTest {
 
         assertEquals("南烛枫，美元汇率请以银行实时报价为准。", decoded?.text)
         assertTrue(decoded?.webSources.isNullOrEmpty())
-        assertTrue(
-            WebSearchGroundingPolicy.hasRequiredSources(
+        assertEquals(
+            "WEB_SEARCH_COMPLETED_WITHOUT_SOURCES",
+            WebSearchGroundingPolicy.completedAuditStatus(
                 ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES),
-                decoded?.webSources.orEmpty(),
+                decoded?.webSources.orEmpty(), streamed = false,
             ),
         )
     }

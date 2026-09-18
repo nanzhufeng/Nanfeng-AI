@@ -1,5 +1,7 @@
 package com.nanzhufeng.ai.data
 
+import com.nanzhufeng.ai.domain.ConversationSurface
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -38,6 +40,7 @@ class AndroidP6KZipAssetRecoveryScheduler(
     context: Context,
     private val jobs: P6KZipAssetRecoveryJobRepository,
     private val tasks: P6KZipImportTaskRepository,
+    private val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT,
 ) : P6KZipAssetRecoveryScheduler {
     private val appContext = context.applicationContext
     private val manager: WorkManager by lazy { configuredWorkManager(appContext) }
@@ -45,7 +48,7 @@ class AndroidP6KZipAssetRecoveryScheduler(
 
     override fun enqueue(taskId: P6KZipTaskId) {
         val request = OneTimeWorkRequestBuilder<P6KZipAssetRecoveryWorker>()
-            .setInputData(workDataOf(KEY_TASK_ID to taskId.value))
+            .setInputData(workDataOf("dataArea" to dataArea.name, KEY_TASK_ID to taskId.value))
             .build()
         manager.enqueueUniqueWork(workName(taskId), ExistingWorkPolicy.KEEP, request)
     }
@@ -61,7 +64,7 @@ class AndroidP6KZipAssetRecoveryScheduler(
         manager.cancelUniqueWork(workName(taskId))
     }
 
-    private fun workName(taskId: P6KZipTaskId) = "nfai.p6k-asset-recovery.${taskId.value}"
+    private fun workName(taskId: P6KZipTaskId) = "nfai.p6k-asset-recovery.${if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT) "" else "WORK."}${taskId.value}"
 
     /** One-time bridge for imports created before the Room recovery job existed. */
     private fun migrateLegacyJobs() {
@@ -129,8 +132,8 @@ class AndroidP6KZipAssetRecoveryScheduler(
 class P6KZipAssetRecoveryWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val taskId = inputData.getString(AndroidP6KZipAssetRecoveryScheduler.KEY_TASK_ID) ?: return Result.success()
-        setForeground(recoveryForegroundInfo(applicationContext))
-        val store = com.nanzhufeng.ai.app.AppContainer(applicationContext).p6kZipIntakeStore
+        setForeground(recoveryForegroundInfo(applicationContext, ConversationSurface.valueOf(inputData.getString("dataArea") ?: "CHAT")))
+        val store = com.nanzhufeng.ai.app.AppContainer(applicationContext, dataArea = com.nanzhufeng.ai.domain.ConversationSurface.valueOf(inputData.getString("dataArea") ?: "CHAT")).p6kZipIntakeStore
         return runCatching { store.runAssetRecovery(taskId) }
             .fold(
                 onSuccess = { job ->
@@ -148,16 +151,16 @@ class P6KZipAssetRecoveryWorker(context: Context, params: WorkerParameters) : Co
     }
 }
 
-private fun recoveryForegroundInfo(context: Context): ForegroundInfo {
+private fun recoveryForegroundInfo(context: Context, area: ConversationSurface): ForegroundInfo {
     val channelId = "zip_asset_recovery"
     val manager = context.getSystemService(NotificationManager::class.java)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         manager?.createNotificationChannel(NotificationChannel(channelId, "ZIP 附件恢复", NotificationManager.IMPORTANCE_LOW))
     }
-    val intent = Intent(context, NanfengAiActivity::class.java)
+    val intent = Intent(context, if (area == ConversationSurface.WORK) com.nanzhufeng.ai.NanfengWorkActivity::class.java else NanfengAiActivity::class.java)
     val pendingIntent = PendingIntent.getActivity(
         context,
-        73_100,
+        73_100 + area.ordinal,
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
@@ -170,8 +173,8 @@ private fun recoveryForegroundInfo(context: Context): ForegroundInfo {
         .setContentIntent(pendingIntent)
         .build()
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        ForegroundInfo(73_100, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        ForegroundInfo(73_100 + area.ordinal, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     } else {
-        ForegroundInfo(73_100, notification)
+        ForegroundInfo(73_100 + area.ordinal, notification)
     }
 }

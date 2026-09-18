@@ -30,6 +30,9 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/attachment_share_paths" />
         </provider>
+        <activity android:name=".NanfengWorkActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:launchMode="singleTop" android:windowSoftInputMode="adjustResize|stateAlwaysHidden" />
         <activity
             android:name=".NanfengAiActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
@@ -51,6 +54,11 @@
         </activity>
         <service
             android:name=".background.NormalChatGenerationForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+        <service
+            android:name=".background.WorkChatGenerationForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />

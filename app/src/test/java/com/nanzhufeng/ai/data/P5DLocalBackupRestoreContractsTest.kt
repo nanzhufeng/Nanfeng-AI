@@ -20,6 +20,79 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P5DLocalBackupRestoreContractsTest {
+    @Test fun `failed asset replacement restores original database and removes partial new assets`() {
+        val base = ApplicationProvider.getApplicationContext<Context>()
+        val root = File(base.cacheDir, "backup-rollback-${UUID.randomUUID()}").also { it.mkdirs() }
+        val context = object : android.content.ContextWrapper(base) {
+            override fun getApplicationContext(): Context = this
+            override fun getDatabasePath(name: String) = File(root,name)
+            override fun getFilesDir() = File(root,"files").also { it.mkdirs() }
+        }
+        val database = Room.databaseBuilder(context,NanfengAiDatabase::class.java,"nanfeng-ai.db").build()
+        val archive=File(root,"candidate.nfai-backup")
+        val files=context.filesDir
+        val peer=File(files,"work-area/attachments/v1/peer.bin").also { it.parentFile!!.mkdirs();it.writeText("keep peer") }
+        try {
+            val sql=database.openHelper.writableDatabase
+            sql.execSQL("INSERT INTO capture_drafts (id,text,createdAtEpochMs,schemaVersion) VALUES ('sentinel','candidate',0,1)")
+            for(key in listOf("attachments/v1/new.bin","markdown-import-assets/v1/new.md")) {
+                File(files,key).also { it.parentFile!!.mkdirs();it.writeText("candidate asset") }
+            }
+            val manager=AndroidLocalBackupRestoreManager(context,database,"test")
+            assertTrue(manager.export(Uri.fromFile(archive)) is LocalBackupResult.Exported)
+            File(files,"attachments").deleteRecursively()
+            File(files,"markdown-import-assets").deleteRecursively()
+            // A real filesystem conflict fails after the candidate DB and first asset were installed.
+            File(files,"markdown-import-assets").writeText("block nested destination")
+            sql.execSQL("UPDATE capture_drafts SET text='original' WHERE id='sentinel'")
+            val preflight=manager.preflight(Uri.fromFile(archive)) as LocalBackupResult.Preflighted
+            val result=manager.restore(preflight.preflight.fingerprint,true)
+            assertTrue(result is LocalBackupResult.Failed)
+            assertTrue((result as LocalBackupResult.Failed).rollbackAttempted)
+            assertEquals("keep peer",peer.readText())
+            android.database.sqlite.SQLiteDatabase.openDatabase(context.getDatabasePath("nanfeng-ai.db").path,null,android.database.sqlite.SQLiteDatabase.OPEN_READONLY).use { db ->
+                db.rawQuery("SELECT text FROM capture_drafts WHERE id='sentinel'",null).use { row ->
+                    assertTrue(row.moveToFirst());assertEquals("original",row.getString(0))
+                }
+            }
+            assertFalse(File(files,"attachments/v1/new.bin").exists())
+        } finally { database.close();root.deleteRecursively() }
+    }
+
+    @Test fun `both area backups retain imported source packages without including peer files`() {
+        val base=ApplicationProvider.getApplicationContext<Context>()
+        val root=File(base.cacheDir,"backup-imports-${UUID.randomUUID()}").also { it.mkdirs() }
+        val isolated=object : android.content.ContextWrapper(base) {
+            override fun getApplicationContext(): Context = this
+            override fun getDatabasePath(name: String) = File(root,name)
+            override fun getFilesDir() = File(root,"files").also { it.mkdirs() }
+        }
+        val keys=listOf("chatgpt-export-import-assets/v1/source.json","claude-export-import-assets/v1/source.json",
+            "nanfeng-knowledge-export-import-assets/v1/source.json","p6k-zip-import/v1/archives/source.zip")
+        try {
+            for(area in com.nanzhufeng.ai.domain.ConversationSurface.entries) {
+                val ctx=ConversationAreaFileContext(isolated,area)
+                keys.forEach { key -> File(ctx.filesDir,key).also { it.parentFile!!.mkdirs();it.writeText(area.name) } }
+            }
+            for(area in com.nanzhufeng.ai.domain.ConversationSurface.entries) {
+                val ctx=ConversationAreaFileContext(isolated,area)
+                val db=Room.databaseBuilder(ctx,NanfengAiDatabase::class.java,"nanfeng-ai.db").build()
+                try {
+                    val archive=File(root,"${area.name}.nfai-backup")
+                    assertTrue(AndroidLocalBackupRestoreManager(ctx,db,"test").export(Uri.fromFile(archive)) is LocalBackupResult.Exported)
+                    ZipFile(archive).use { zip ->
+                        keys.forEach { key ->
+                            val entry=zip.getEntry("assets/$key")
+                            assertTrue("source package missing: $key",entry!=null)
+                            assertEquals(area.name,zip.getInputStream(entry).bufferedReader().readText())
+                        }
+                        assertFalse(zip.entries().toList().any { it.name.contains("work-area/") })
+                    }
+                } finally { db.close() }
+            }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun `local backup capacity covers a full attachment library`() {
         assertEquals(32L * 1024L * 1024L * 1024L, LocalBackupFormat.MAX_ARCHIVE_BYTES)
     }
@@ -27,9 +100,29 @@ class P5DLocalBackupRestoreContractsTest {
     @Test fun `runtime backup and privacy owners use the actual build version`() {
         val container = File("src/main/java/com/nanzhufeng/ai/app/AppContainer.kt").readText()
         assertTrue(container.contains("import com.nanzhufeng.ai.BuildConfig"))
-        assertTrue(container.contains("AndroidPrivacyDataManager(context, database, BuildConfig.VERSION_NAME)"))
-        assertTrue(container.contains("AndroidLocalBackupRestoreManager(context, database, BuildConfig.VERSION_NAME)"))
+        assertTrue(container.contains("AndroidPrivacyDataManager(businessFileContext, database, BuildConfig.VERSION_NAME)"))
+        assertTrue(container.contains("AndroidLocalBackupRestoreManager(businessFileContext, database, BuildConfig.VERSION_NAME)"))
         assertFalse(container.contains("\"0.3.0-p5d\""))
+    }
+
+    @Test fun `backup cannot restore chat data into work database`() {
+        val base = ApplicationProvider.getApplicationContext<Context>()
+        val root = File(base.cacheDir, "backup-areas-${UUID.randomUUID()}").also { it.mkdirs() }
+        val isolated = object : android.content.ContextWrapper(base) {
+            override fun getApplicationContext(): Context = this
+            override fun getDatabasePath(name: String) = File(root, name)
+            override fun getFilesDir() = File(root, "files").also { it.mkdirs() }
+            override fun getCacheDir() = File(root, "cache").also { it.mkdirs() }
+        }
+        val workContext = ConversationAreaFileContext(isolated, com.nanzhufeng.ai.domain.ConversationSurface.WORK)
+        val chat = Room.databaseBuilder(isolated, NanfengAiDatabase::class.java, "nanfeng-ai.db").build()
+        val work = Room.databaseBuilder(workContext, NanfengAiDatabase::class.java, "nanfeng-ai.db").build()
+        val packageFile = File(root, "chat.nfai-backup")
+        try {
+            val exported = AndroidLocalBackupRestoreManager(isolated, chat, "test").export(Uri.fromFile(packageFile))
+            assertTrue(exported is LocalBackupResult.Exported)
+            assertFalse(AndroidLocalBackupRestoreManager(workContext, work, "test").preflight(Uri.fromFile(packageFile)) is LocalBackupResult.Preflighted)
+        } finally { chat.close(); work.close(); root.deleteRecursively() }
     }
 
     @Test fun `manual package is consistent manifest checked and excludes non business roots`() {

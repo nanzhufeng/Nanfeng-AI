@@ -8,6 +8,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProviderSseDecoderContractsTest {
+    @Test fun `all direct adapters preserve explicit truncation instead of completing partial text`() {
+        for (adapter in listOf(OpenRouterChatAdapter(), QwenChatAdapter(), DeepSeekChatAdapter(), ZhipuChatAdapter())) {
+            val payload = "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n"
+            val result = ProviderSseDecoder.read(ByteArrayInputStream(payload.toByteArray()), {}, adapter::decodeStreamingEvent)
+            assertEquals("partial", result.text)
+            assertEquals("INCOMPLETE", result.finishReason)
+        }
+    }
+
     @Test fun `fragmented OpenRouter tool calls are reconstructed with reasoning for K3 continuation`() {
         val payload = """
             data: {"choices":[{"delta":{"reasoning_content":"先查资料","tool_calls":[{"index":0,"id":"call_1","function":{"name":"lookup","arguments":"{\"q\":"}}]}}]}

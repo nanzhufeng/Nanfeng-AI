@@ -27,16 +27,16 @@ export function activeWorkspaceProjects(data) {
 }
 
 export function projectWorkConversations(data, projectId) {
-  if (!projectId) return [];
+  if (!projectId && data?.dataArea !== 'WORK') return [];
   return (data?.exchange?.conversations || [])
-    .filter(item => item.projectId === projectId && !item.archived && !item.deleted)
+    .filter(item => (!projectId || item.projectId === projectId) && !item.archived && !item.deleted)
     .sort((left, right) => String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')));
 }
 
 export function resolveWorkConversationState(data, selectedWorkProjectId, selectedConversationId) {
   const projects = activeWorkspaceProjects(data);
   const project = projects.find(item => item.id === selectedWorkProjectId) || null;
-  const conversations = projectWorkConversations(data, project?.id);
+  const conversations = selectedWorkProjectId && !project ? [] : projectWorkConversations(data, project?.id);
   const conversation = conversations.find(item => item.id === selectedConversationId) || null;
   return { projects, project, conversations, conversation };
 }

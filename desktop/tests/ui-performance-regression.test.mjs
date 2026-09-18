@@ -92,10 +92,10 @@ test('destructive confirmation, sidebar drag, image zoom and retained shells sta
   assert.match(app, /if \(!retainObserved\) \{\s*imageThumbnailObserver\?\.disconnect\(\);/);
 });
 
-test('composer typing batches local persistence and preserves the current draft before submit', () => {
+test('composer typing serializes native persistence and preserves the current draft before submit', () => {
   const ordinaryOwner = app.slice(app.indexOf('let ordinaryComposerDraftQueue'), app.indexOf('async function enterTemporaryChat'));
   assert.match(ordinaryOwner, /let ordinaryComposerDraftTimer = null/);
-  assert.match(ordinaryOwner, /void persistOrdinaryComposerDraft\(scheduled\);\n  \}, 180\)/);
+  assert.match(ordinaryOwner, /void persistOrdinaryComposerDraft\(args\)\.then/);
   assert.match(ordinaryOwner, /async function flushOrdinaryComposerDraft\(\)[\s\S]{0,400}persistOrdinaryComposerDraft\(scheduled\)/);
   const writeOwner = ordinaryOwner.slice(ordinaryOwner.indexOf('function writeChatDraft'), ordinaryOwner.indexOf('async function enterTemporaryChat'));
   assert.doesNotMatch(writeOwner, /localStorage\.(setItem|removeItem)/);
@@ -127,7 +127,7 @@ test('assistant answer menu survives residual transcript scroll and closes on a 
   assert.match(wheelOwner, /\.chat-scroll\[data-conversation-id\]/);
   assert.match(wheelOwner, /closeTopOverlay\(\{ restoreFocus: false \}\)/);
   const renderOwner = app.slice(app.indexOf('function renderUnified()'), app.indexOf('function cameraCaptureDialog'));
-  assert.match(renderOwner, /if \(!retainedTranscript \|\| state\.pendingChatScrollToLatestId \|\| state\.pendingChatSendScrollToLatestId\) restoreChatScroll\(\)/);
+  assert.match(renderOwner, /if \(\(!retainedTranscript && !runtimePatched\) \|\| state\.pendingChatScrollToLatestId \|\| state\.pendingChatSendScrollToLatestId\) restoreChatScroll\(\)/);
 });
 
 test('opening the assistant answer menu never scrolls the preserved transcript to reveal its focused item', () => {
@@ -140,7 +140,7 @@ test('assistant answer menu opens on primary pointerdown while click is keyboard
   assert.match(app, /function bindAssistantMessageMenuTriggers\(\)/);
   assert.match(app, /button\.addEventListener\('pointerdown', event => \{[\s\S]*?event\.button !== 0[\s\S]*?toggleAssistantMessageMenu\(button\);/);
   assert.match(app, /button\.addEventListener\('click', event => \{[\s\S]*?event\.detail === 0[\s\S]*?toggleAssistantMessageMenu\(button\);/);
-  const renderStart = app.lastIndexOf('app.innerHTML = renderChatFirstShell');
+  const renderStart = app.lastIndexOf('const nextShellHtml = renderChatFirstShell');
   const renderCall = app.slice(renderStart, app.indexOf('if (retainedTranscript)', renderStart));
   assert.match(renderCall, /assistantMessageMenu: state\.assistantMessageMenu/);
   const css = await readFile(new URL('src/chat-shell.css', root), 'utf8');

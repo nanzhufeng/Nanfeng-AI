@@ -18,9 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** User-controlled periodic refresh for the successful manual-selection ledger only. */
-class P7FSelectedConversationSyncScheduler(context: Context) {
+class P7FSelectedConversationSyncScheduler(context: Context, private val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT) {
+    private fun scoped(value: String) = if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT) value else "$value-WORK"
+    private fun areaInput() = androidx.work.workDataOf("dataArea" to dataArea.name)
     private val app = context.applicationContext
-    private val preferences = app.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+    private val preferences = app.getSharedPreferences(scoped(PREFERENCES), Context.MODE_PRIVATE)
 
     fun enabled(): Boolean = preferences.getBoolean(ENABLED, false)
 
@@ -35,22 +37,24 @@ class P7FSelectedConversationSyncScheduler(context: Context) {
     /** Coalesces real local changes for selected conversations; the 12-hour switch remains a fallback. */
     fun scheduleAfterLocalConversationMutation() {
         val request = OneTimeWorkRequestBuilder<P7FSelectedConversationSyncWorker>()
+            .setInputData(areaInput())
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInitialDelay(30, TimeUnit.SECONDS)
             .build()
-        configuredWorkManager().enqueueUniqueWork(MUTATION_WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+        configuredWorkManager().enqueueUniqueWork(scoped(MUTATION_WORK_NAME), ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
 
     private fun schedule() {
         val request = PeriodicWorkRequestBuilder<P7FSelectedConversationSyncWorker>(12, TimeUnit.HOURS)
+            .setInputData(areaInput())
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
-        configuredWorkManager().enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
+        configuredWorkManager().enqueueUniquePeriodicWork(scoped(WORK_NAME), ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
     private fun cancel() {
-        configuredWorkManager().cancelUniqueWork(WORK_NAME)
-        configuredWorkManager().cancelUniqueWork(MUTATION_WORK_NAME)
+        configuredWorkManager().cancelUniqueWork(scoped(WORK_NAME))
+        configuredWorkManager().cancelUniqueWork(scoped(MUTATION_WORK_NAME))
     }
 
     private fun configuredWorkManager(): WorkManager {
@@ -89,7 +93,7 @@ class P7FSelectedConversationMutationObserver(
 class P7FSelectedConversationSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         runCatching {
-            com.nanzhufeng.ai.app.AppContainer(applicationContext)
+            com.nanzhufeng.ai.app.AppContainer(applicationContext, dataArea = com.nanzhufeng.ai.domain.ConversationSurface.valueOf(inputData.getString("dataArea") ?: "CHAT"))
                 .p7fManualConversationSyncOwner
                 .syncPreviouslySelected()
         }.fold(

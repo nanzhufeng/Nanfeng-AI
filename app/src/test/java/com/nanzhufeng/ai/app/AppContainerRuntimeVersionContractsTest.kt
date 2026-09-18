@@ -11,8 +11,8 @@ class AppContainerRuntimeVersionContractsTest {
         assertTrue(source.contains("import com.nanzhufeng.ai.BuildConfig"))
         for (call in listOf(
             "RunOfflineEvalUseCase(offlineEvalRepository, clock, BuildConfig.VERSION_NAME)",
-            "AndroidPrivacyDataManager(context, database, BuildConfig.VERSION_NAME)",
-            "AndroidLocalBackupRestoreManager(context, database, BuildConfig.VERSION_NAME)",
+            "AndroidPrivacyDataManager(businessFileContext, database, BuildConfig.VERSION_NAME)",
+            "AndroidLocalBackupRestoreManager(businessFileContext, database, BuildConfig.VERSION_NAME)",
         )) {
             assertTrue("missing current version for $call", source.contains(call))
         }

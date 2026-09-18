@@ -517,13 +517,14 @@ class AndroidPrivacyDataManager(
         }
     }
     private fun clearBusinessPreferences() {
-        LOCAL_BUSINESS_PREFERENCE_FILES.forEach { file ->
+        val sharedApplicationPreferences = setOf( "appearance_settings_v1", "chat_routing_policy_v1", "model-health-v1", "model_service_settings_v1", "nanfeng_ai_google_account", "notification_reminder_settings_v1")
+        LOCAL_BUSINESS_PREFERENCE_FILES.filterNot { context is ConversationAreaFileContext && it in sharedApplicationPreferences }.forEach { file ->
             check(context.getSharedPreferences(file, Context.MODE_PRIVATE).edit().clear().commit()) {
                 "LOCAL_BUSINESS_PREFERENCE_CLEAR_FAILED:$file"
             }
         }
         val credentialRoot = File(context.noBackupFilesDir, "provider-credentials-v2")
-        if (credentialRoot.exists()) {
+        if (context !is ConversationAreaFileContext && credentialRoot.exists()) {
             check(credentialRoot.deleteRecursively()) { "APP_PRIVATE_CREDENTIAL_CLEAR_FAILED" }
         }
     }

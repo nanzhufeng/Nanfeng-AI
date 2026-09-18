@@ -98,7 +98,7 @@ class P6KZipImportUiContractsTest {
         assertFalse(listOwner.contains("assetMapper.map"))
         assertFalse(listOwner.contains("reconcileMappedAssets"))
         assertTrue(scheduling.contains("OneTimeWorkRequestBuilder<P6KZipAssetRecoveryWorker>()"))
-        assertTrue(scheduling.contains("setForeground(recoveryForegroundInfo(applicationContext))"))
+        assertTrue(scheduling.contains("setForeground(recoveryForegroundInfo(applicationContext, ConversationSurface.valueOf(inputData.getString(\"dataArea\") ?: \"CHAT\")))"))
         assertTrue(scheduling.contains("FOREGROUND_SERVICE_TYPE_DATA_SYNC"))
         assertTrue(scheduling.contains("resumeScope.launch {"))
         assertTrue(scheduling.contains("jobs.resumable().forEach"))

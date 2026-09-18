@@ -2944,6 +2944,16 @@ private fun FeatureReviewSettingsCard() {
             Text("新增能力在进入常用界面前，先在这里列出用途、现有入口与待您判断项。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("工作区独立对话", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("已确认保留：工作区与对话区分别存储、分别同步；可人工引用选中的消息文字，原消息不会改动。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("入口：原有工作区入口和消息长按菜单；引用进入另一区的新对话草稿，核对后按原发送键发送，无需新增常驻按钮。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("新对话草稿", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("已确认保留：切换会话或重开后，点击新对话可恢复未发送文字；最后编辑一小时后清除。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("入口：原有新对话和输入框；无需新增按键，短暂离开后可继续输入。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("模型服务设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text("当前：设置 → 模型与联网提供模型设置、费用与用量、上下文记录与运行诊断；模型设置包含 OpenRouter、Qwen、DeepSeek 与智谱服务配置。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
@@ -3306,7 +3316,7 @@ private fun ConversationFoundationCard(
         interceptsSystemBack = onReturnToLifecycleList != null,
         searchDismissesToParent = searchDismissesToParent,
         onCreate = viewModel::createDevelopmentConversation,
-        onSelect = viewModel::selectConversation, onClearWatchLater = viewModel::clearConversationWatchLater, onSurfaceChanged = viewModel::selectSurface, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
+        onSelect = viewModel::selectConversation, onClearWatchLater = viewModel::clearConversationWatchLater, onSurfaceChanged = viewModel::selectSurface, onReferenceMessage = viewModel::referenceMessageToOtherArea, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
         onRetryNormalSend = viewModel::retryLatestNormalSend, onMarkNormalSendFailed = viewModel::markLatestNormalSendFailed,
         onStartFixture = { viewModel.startDeterministicLocalStream() }, onStartFailureFixture = { viewModel.startDeterministicLocalStream(fail = true) },
         onStop = viewModel::stopLocalStream, onAction = viewModel::performAction, onSwitchBranch = viewModel::switchToBranch, onBranchFromMessage = viewModel::branchFromMessage, onDismissBranchCreation = viewModel::dismissBranchCreation,

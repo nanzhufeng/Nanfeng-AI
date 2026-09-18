@@ -11,6 +11,10 @@ import com.nanzhufeng.ai.domain.AttachmentReference
 import com.nanzhufeng.ai.domain.toConversationReference
 import com.nanzhufeng.ai.domain.ConversationDraftResult
 import com.nanzhufeng.ai.domain.ConversationDraftSubmissionResult
+import com.nanzhufeng.ai.domain.CreateConversationUseCase
+import com.nanzhufeng.ai.domain.ConversationMutationResult
+import com.nanzhufeng.ai.domain.ConversationSurface
+import org.junit.Assert.assertNotEquals
 import com.nanzhufeng.ai.domain.ConversationTreeService
 import com.nanzhufeng.ai.domain.MessageRole
 import com.nanzhufeng.ai.domain.SaveConversationDraftUseCase
@@ -39,6 +43,39 @@ class P3DConversationDraftRoomContractsTest {
         tree = ConversationTreeService(clock)
     }
     @After fun tearDown() = database.close()
+
+    @Test fun `new draft survives reopen resumes by surface and expires exactly one hour after editing`() {
+        val now = clock.instant()
+        val fresh = RoomConversationRepository(database, draftClock = clock)
+        val create = CreateConversationUseCase(tree, fresh)
+        val original = (create.resumeOrCreateDraft() as ConversationMutationResult.Saved).snapshot
+        val id = original.conversation.id
+        SaveConversationDraftUseCase(fresh, clock).execute(id, "未发送的文字", emptyList())
+        val before = RoomConversationRepository(database, draftClock = Clock.fixed(now.plusMillis(3_599_999), ZoneOffset.UTC))
+        val restored = (CreateConversationUseCase(tree, before).resumeOrCreateDraft() as ConversationMutationResult.Saved).snapshot
+        assertEquals(id, restored.conversation.id)
+        assertEquals("未发送的文字", restored.draft.text)
+        assertEquals(now, restored.draft.updatedAt)
+        val work = (CreateConversationUseCase(tree, before).resumeOrCreateDraft(surface = ConversationSurface.WORK) as ConversationMutationResult.Saved).snapshot
+        assertNotEquals(id, work.conversation.id)
+        assertEquals("", work.draft.text)
+        val expired = RoomConversationRepository(database, draftClock = Clock.fixed(now.plusMillis(3_600_000), ZoneOffset.UTC))
+        assertEquals("", expired.findById(id)!!.draft.text)
+        assertEquals("", before.findById(id)!!.draft.text)
+        assertTrue(expired.findById(id)!!.nodes.isEmpty())
+    }
+
+    @Test fun `editing a new draft renews expiry but reading does not`() {
+        val fresh = RoomConversationRepository(database, draftClock = clock)
+        val original = (CreateConversationUseCase(tree, fresh).resumeOrCreateDraft() as ConversationMutationResult.Saved).snapshot
+        val id = original.conversation.id
+        SaveConversationDraftUseCase(fresh, clock).execute(id, "first", emptyList())
+        val later = Clock.fixed(clock.instant().plusSeconds(1_800), ZoneOffset.UTC)
+        SaveConversationDraftUseCase(fresh, later).execute(id, "second", emptyList())
+        val reopened = RoomConversationRepository(database, draftClock = Clock.fixed(clock.instant().plusSeconds(3_600), ZoneOffset.UTC))
+        assertEquals("second", reopened.findById(id)!!.draft.text)
+        assertEquals(later.instant(), reopened.findById(id)!!.draft.updatedAt)
+    }
 
     @Test fun `draft preserves exact multiline editor text deduplicates attachments and survives repository rebuild`() {
         val snapshot = repository.save(tree.create("草稿"))

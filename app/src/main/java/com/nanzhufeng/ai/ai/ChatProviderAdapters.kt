@@ -970,7 +970,13 @@ private object OpenAiCompatibleJsonCodec {
             ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens")
         val reasoningTokens = usage?.reasoningTokens()
         val webSources = root.webSources(delta.orEmpty())
-        if (text == null && reasoning == null && toolDeltas.isEmpty() && input == null && output == null && cost == null && reasoningTokens == null && webSources.isEmpty()) null
+        val terminal = when (choice?.stringValue("finish_reason")) {
+            "length", "max_tokens" -> ProviderStreamTerminal.INCOMPLETE
+            "content_filter" -> ProviderStreamTerminal.FAILED
+            "stop" -> ProviderStreamTerminal.COMPLETED
+            else -> null
+        }
+        if (terminal == null && text == null && reasoning == null && toolDeltas.isEmpty() && input == null && output == null && cost == null && reasoningTokens == null && webSources.isEmpty()) null
         else ProviderSseEvent(
             text, reasoning, input, output,
             reportedProviderCost = providerCost,
@@ -979,6 +985,7 @@ private object OpenAiCompatibleJsonCodec {
             toolCallDeltas = toolDeltas,
             cachedInputTokens = cachedInput,
             reasoningTokens = reasoningTokens,
+            terminal = terminal,
         )
     }.getOrNull()
 

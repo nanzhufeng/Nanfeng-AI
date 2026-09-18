@@ -4,6 +4,7 @@
 
 - 先确认当前 checkout、工作树和 `docs/CURRENT_HANDOFF.md`；历史资料不证明当前状态。源码／可复现验证优先，冲突记录依据。
 - 会话／搜索／文件读取 `docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md`；设置读取 `docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md`；普通上下文读取 `docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md`；转写读取 `docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md`。Desktop、协议与服务读取对应 owner 的合同；入口索引见完整开发档案。
+- 工作区／对话区入口、存储、跨区人工调用及共享 UI 变更，先读 `docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md` 第 2 节；旧测试和历史空态不构成数据混用的依据。
 - Android、Desktop、协议、Supabase 与附件网关分别确认实现及证据，各层证据不能互相替代。
 - 跨端同步先读 `docs/P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md`，区分当前 wire 格式与历史安全承诺；不得把认证、hash 或旧加密模块的存在当作当前路径端到端加密证据。
 - Google 账号直同步不得依赖恢复码、恢复确认或旧加密密钥；新设备、重装、重登和定期同步都必须能在无恢复材料时工作。旧密文兼容仅逐条处理，不得重新成为整批前置门槛；规则与例外唯一正文见上述同步合同。

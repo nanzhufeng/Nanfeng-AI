@@ -1,3 +1,5 @@
+import { createUtilityPageNavigation } from './utility-page-navigation.mjs';
+import { commitRetainedChatShell, commitRuntimeChatShell, installRuntimeChatScrolling } from './runtime-chat-commit.mjs';
 import { renderAnswerInformation } from './answer-information.mjs';
 import { cloudReadFeedback } from './cloud-read-feedback.mjs';
 import { installModalLayerOwner, installActionMenuLayerOwner } from './modal-layer-owner.mjs';
@@ -39,6 +41,7 @@ import { isWorkspaceRoot, resolveWorkConversationState } from './workspace-view.
 const app = document.querySelector('#app');
 installModalLayerOwner(app);
 installActionMenuLayerOwner(app);
+installRuntimeChatScrolling(app);
 window.addEventListener('error', event => { console.error('Desktop runtime error', event.error || event.message); });
 window.addEventListener('unhandledrejection', event => { console.error('Desktop async runtime error', event.reason); });
 const tauriBridge = window.__TAURI__?.core ?? window.__TAURI_INTERNALS__;
@@ -118,7 +121,10 @@ function clearCloudConversationCache() {
   try { window.localStorage.removeItem(cloudConversationCacheKey); } catch { /* cache is optional */ }
 }
 const initialProductSettings = parityPreferences.readProductSettings();
-const state = { workspaces: [], current: null, pane: 'chat', selectedConversationId: null, sidebarConversationList: 'recent', cloudConversations: [], batchEditing: false, batchSelectedConversationKeys: new Set(), chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', accountSyncProgress: null, scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchRevealTarget: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构', buildEpochSeconds: 0 } };
+function createAreaState(dataArea = 'CHAT') { return { dataArea, workspaces: [], current: null, pane: 'chat', selectedConversationId: null, sidebarConversationList: 'recent', cloudConversations: [], batchEditing: false, batchSelectedConversationKeys: new Set(), chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', accountSyncProgress: null, scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchRevealTarget: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构', buildEpochSeconds: 0 } }; }
+let state = createAreaState();
+const dataAreaStates = new Map([['CHAT', state]]);
+
 state.selectedWorkProjectId = null;
 state.assistantMessageMenu = null;
 state.cloudConversationOpening = null;
@@ -154,7 +160,7 @@ const openCloudConversationRoute = createCloudConversationOpenRoute({
   loadPreferences: ({ workspaceId, conversationId }) => invoke('read_desktop_p6g_selection', { workspaceId, conversationId }),
   onPending: route => {
     state.cloudConversationOpening = route;
-    state.pane = 'chat';
+    state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
     state.selectedConversationId = null;
     state.p6gSelection = null;
     state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
@@ -302,7 +308,7 @@ async function syncPersistedConversationContinuation(workspaceId, conversationId
       scheduleUnknownSyncReconciliation(workspaceId, conversationId);
       state.error = '回复已保存在本机；云端提交结果正在核对，尚未确认同步完成。';
     }
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     // A failed cloud write must never turn a completed provider request into
     // "message not submitted" or restore its draft for accidental resending.
     state.error = `回复已保存在本机，但云端续同步未完成：${String(error)}`;
@@ -357,14 +363,16 @@ async function flushOrdinaryChatRuntimeRefresh() {
   if (state.current?.summary?.id !== payload.workspaceId) return;
   ordinaryChatRuntimeRefreshInFlight = true;
   try {
-    state.current = await invoke('read_desktop_workspace', { workspaceId: payload.workspaceId });
+    const current = await invoke('read_desktop_workspace', { workspaceId: payload.workspaceId });
+    if (state.current?.summary?.id !== payload.workspaceId) return;
+    state.current = current;
     claimSubmittedChatRoute(payload);
     await loadConversationReadState({ observeSelected: true });
     state.error = '';
-    render();
-  } catch (error) {
+    render({ runtimeRefresh: true });
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `聊天增量已持久化，但界面刷新失败：${String(error)}`;
-    render();
+    render({ runtimeRefresh: true });
   } finally {
     ordinaryChatRuntimeRefreshInFlight = false;
     if (ordinaryChatRuntimeRefreshPending) scheduleOrdinaryChatRuntimeRefresh();
@@ -373,14 +381,15 @@ async function flushOrdinaryChatRuntimeRefresh() {
 
 const tauriEvents = window.__TAURI__?.event;
 if (native && tauriEvents?.listen) {
-  void tauriEvents.listen('desktop-ordinary-chat-runtime-v1', event => queueOrdinaryChatRuntimeRefresh(event?.payload || {}));
-  void tauriEvents.listen('desktop-reminder-runtime-v1', async () => {
+  void tauriEvents.listen('desktop-ordinary-chat-runtime-v1', event => { if ((event?.payload?.dataArea || 'CHAT') === state.dataArea) queueOrdinaryChatRuntimeRefresh(event?.payload || {}); });
+  void tauriEvents.listen('desktop-reminder-runtime-v1', async event => {
+    if ((event?.payload?.dataArea || 'CHAT') !== state.dataArea) return;
     try {
       await loadDesktopReminders();
       await loadDesktopUsageLedger();
       await flushReminderNotifications();
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `提醒运行结果已保存在本机，但界面或通知回执未刷新：${String(error)}`;
     }
     render();
@@ -418,15 +427,16 @@ function applyC16Preview(surface = 'Browser') {
 }
 
 function reloadFavoriteConversationIds() {
+  const runtimeRefresh = arguments[0]?.runtimeRefresh === true;
   const workspaceId = state.current?.summary?.id;
   if (!workspaceId) { state.favoriteConversationIds = new Set(); return; }
   if (!native) { state.favoriteConversationIds = parityPreferences.readFavoriteConversationIds(workspaceId); return; }
   void invoke('read_desktop_favorite_conversation_ids', { workspaceId }).then(ids => {
     state.favoriteConversationIds = new Set(ids);
-    render();
-  }).catch(error => {
+    render({ runtimeRefresh });
+  }).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `收藏会话读取失败：${String(error)}`;
-    render();
+    render({ runtimeRefresh });
   });
 }
 
@@ -444,14 +454,15 @@ function activeRuntimeConversation(data, preferredConversationId = null) {
 }
 
 async function refreshDesktopRuntimeWhilePending(workspaceId, preferredConversationId, isSettled) {
+  const owner = state;
   while (!isSettled()) {
-    await new Promise(resolve => window.setTimeout(resolve, 120));
-    if (isSettled() || state.current?.summary?.id !== workspaceId) continue;
-    try {
-      const current = await invoke('read_desktop_workspace', { workspaceId });
-      state.current = current;
-      render();
-    } catch { /* final command result owns user-visible errors */ }
+    await new Promise(resolve => window.setTimeout(resolve, 1200));
+    if (isSettled() || state !== owner || state.current?.summary?.id !== workspaceId) continue;
+    // Backstop only: share the event queue so two reads cannot paint stale snapshots
+    // over one another. Polling has no submission receipt and cannot claim navigation.
+    if (ordinaryChatRuntimeRefreshInFlight || ordinaryChatRuntimeRefreshPending) continue;
+    ordinaryChatRuntimeRefreshPending = { workspaceId };
+    await flushOrdinaryChatRuntimeRefresh();
   }
 }
 
@@ -505,7 +516,7 @@ async function saveMarkdown(markdown, defaultPath, label) {
     const receipt = await invoke('write_desktop_markdown_to_selected_path', { args: { selectedPath, markdown } });
     state.status = `${label}已导出并回读校验：${bytes(receipt.byteCount)} · ${short(receipt.sha256)}`;
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `${label}导出失败：${String(error)}`;
   }
   render();
@@ -544,7 +555,7 @@ async function updateAppearance(field, value) {
     await persistNativeAppSettings({ [field]: value }, {});
     state.status = '';
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.appearance = previous;
     applyAppearance();
     state.error = `外观偏好未保存：${String(error)}`;
@@ -565,7 +576,7 @@ async function toggleFavoriteConversation(conversationId, { renderAfter = true }
     state.favoriteConversationIds = new Set(ids);
     state.status = wasFavorite ? '会话已取消收藏。' : '会话已收藏；归档或删除时会自动取消。';
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `会话收藏状态未更新：${String(error)}`;
   }
   state.contextMenu = null;
@@ -582,7 +593,7 @@ function removeFavoriteConversation(conversationId) {
     void invoke('set_desktop_conversation_favorite', { workspaceId, conversationId, favorite: false }).then(ids => {
       state.favoriteConversationIds = new Set(ids);
       render();
-    }).catch(error => {
+    }).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `会话取消收藏未完成：${String(error)}`;
       render();
     });
@@ -675,7 +686,15 @@ function openTransientOverlay(kind, target, value = true) {
 app.addEventListener('click', event => {
   const target = event.target.closest('[data-action]');
   const action = target?.dataset.action;
-  const workspaceAction = ['show-work', 'show-workspace', 'show-projects', 'show-knowledge', 'show-memory'].includes(action);
+  const workspaceAction = ['show-work', 'show-workspace', 'show-projects'].includes(action);
+  const returningToChat = ['return-workspace-origin', 'show-chat'].includes(action) && state.dataArea === 'WORK';
+  if ((workspaceAction && state.dataArea === 'CHAT') || returningToChat) {
+    event.preventDefault(); event.stopImmediatePropagation();
+    const area = returningToChat ? 'CHAT' : 'WORK';
+    const pane = returningToChat ? (action === 'return-workspace-origin' ? (dataAreaStates.get('CHAT')?.pane || 'chat') : 'chat') : ({ 'show-projects': 'projects', 'show-knowledge': 'knowledge', 'show-memory': 'memory' }[action] || 'work');
+    void switchDataArea(area, pane).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = String(error); render(); });
+    return;
+  }
   if (workspaceAction && target.closest('.android-settings-main')) state.workspaceReturn = { pane: 'settings', settingsSection: state.settingsSection, label: '返回' };
   else if (action === 'show-work' && state.pane === 'chat') state.workspaceReturn = { pane: 'chat', conversationId: state.selectedConversationId || null, label: '返回' };
   if (action === 'show-work' && state.pane === 'chat' && state.selectedConversationId) state.chatReturnConversationId = state.selectedConversationId;
@@ -763,7 +782,7 @@ app.addEventListener('click', event => {
         state.status = '历史资料库候选记录已删除；已采纳的 Knowledge 不会被连带删除。';
       }
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `历史资料库操作未完成：${String(error)}`;
     }
     render();
@@ -806,7 +825,7 @@ app.addEventListener('click', event => {
         state.reminderEditor = null;
         state.status = native ? '已取消手工新建；未创建计划。' : 'Web 只读交互样本已返回列表；未写入 Desktop SQLite。';
         state.error = '';
-      } catch (error) {
+      } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
         state.error = `手工提醒草案未取消：${String(error)}`;
       }
       render();
@@ -839,7 +858,7 @@ app.addEventListener('click', event => {
         render();
         try {
           state.reminders = await invoke('generate_desktop_reminder_draft', { args: { workspaceId, conversationId, userMessageId: target.dataset.userMessageId, assistantMessageId: target.dataset.assistantMessageId, timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai' } });
-        } catch (error) { await loadDesktopReminders(); throw error; }
+        } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; await loadDesktopReminders(); throw error; }
         const draft = state.reminders.drafts.find(item => item.sourceAssistantMessageId === target.dataset.assistantMessageId);
         if (draft?.status === 'PENDING_REVIEW') state.reminderEditor = { kind: 'reminder-editor', mode: 'create', item: draft };
         state.status = draft?.status === 'NOT_ELIGIBLE' ? '模型判断该对话不构成明确提醒；未创建计划。' : '提醒草案已生成，请核对编辑后再确认。';
@@ -862,7 +881,7 @@ app.addEventListener('click', event => {
         state.status = '正在按显式操作重试草案 refinement；UNKNOWN 不会自动重发。';
         render();
         try { state.reminders = await invoke('retry_desktop_reminder_draft', { draftId: target.dataset.id }); }
-        catch (error) { await loadDesktopReminders(); throw error; }
+        catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; await loadDesktopReminders(); throw error; }
         const draft = state.reminders.drafts.find(item => item.draftId === target.dataset.id);
         if (draft?.status === 'PENDING_REVIEW') state.reminderEditor = { kind: 'reminder-editor', mode: 'create', item: draft };
       } else if (action === 'confirm-reminder-draft') {
@@ -914,7 +933,7 @@ app.addEventListener('click', event => {
       }
       if (native) await loadDesktopBackgroundRuntime();
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `提醒操作未完成：${String(error)}`;
     }
     render();
@@ -941,7 +960,33 @@ app.addEventListener('click', event => {
   resetComposerPresentation();
   void Promise.all([markConversationOpened(target.dataset.id), loadOrdinaryComposerDraft()]).finally(render);
 }, true);
-const invoke = (command, args = {}) => tauriBridge.invoke(command, args);
+const invoke = async (command, args = {}, owner = state) => {
+  const stale = () => Object.assign(new Error('原区域的操作结果已留在原区域'), { code: 'STALE_DATA_AREA' });
+  let result;
+  try { result = await tauriBridge.invoke(command, args, { headers: { 'x-nanfeng-data-area': owner.dataArea } }); }
+  catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (state !== owner) throw stale(); throw error; }
+  if (state !== owner) throw stale();
+  return result?.exchange ? { ...result, dataArea: owner.dataArea } : result;
+};
+window.addEventListener('unhandledrejection', event => {
+  if (event.reason?.code === 'STALE_DATA_AREA') event.preventDefault();
+});
+async function switchDataArea(area, pane) {
+  if (state.dataArea === area) { state.pane = pane; render(); return; }
+  await flushOrdinaryComposerDraft();
+  ordinaryChatRuntimeRefreshPending = null;
+  composerDraftRouteGeneration += 1;
+  if (newConversationDraftExpiryTimer) clearTimeout(newConversationDraftExpiryTimer);
+  state = dataAreaStates.get(area) || createAreaState(area);
+  dataAreaStates.set(area, state);
+  state.pane = pane;
+  state.profileOpen = false;
+  state.sidebarOpen = true;
+  render();
+  await refresh();
+  await loadOrdinaryComposerDraft();
+  render();
+}
 const dialogInvoke = (command, options) => invoke(`plugin:dialog|${command}`, { options });
 function applyConversationReadState(projection) {
   state.conversationReadState = projection || { workspaceId: null, conversations: [] };
@@ -1322,7 +1367,7 @@ async function pickTranscriptionDocument() {
     state.selectedTranscriptionTaskId = task.id;
     state.status = '图片/PDF 已复制到本机私有存储并建立 GLM-OCR 任务；尚未发送。';
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `图片/PDF 未导入：${String(error)}`;
   }
   render();
@@ -1346,7 +1391,7 @@ async function executeTranscriptionTask(taskId, retry = false) {
     if (retry) await invoke('retry_desktop_transcription_task', { taskId });
     await invoke(documentTask ? 'run_desktop_ocr_task' : 'run_desktop_transcription_task', { taskId });
     state.status = documentTask ? '图片/PDF 已转换为 Markdown，来源、结果与费用已保存。' : '语音转写已完成，结果、时间轴与费用已保存。';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `${documentTask ? '图片/PDF 转写' : '语音转写'}未完成：${String(error)}`;
   } finally {
     state.transcriptionBusyTaskId = null;
@@ -1368,7 +1413,7 @@ async function previewTranscriptionSource(taskId) {
   if (task.sourceMimeType === 'video/mp4') return openVideoPreview(task.sourceAttachmentId, undefined, task.workspaceId);
   if (['audio/mpeg', 'audio/wav', 'audio/mp4'].includes(task.sourceMimeType)) return openAudioPreview(task.sourceAttachmentId, undefined, task.workspaceId);
   try { await invoke('open_desktop_attachment_with_system', { args: { workspaceId: task.workspaceId, attachmentId: task.sourceAttachmentId } }); }
-  catch (error) { state.error = `原文件未打开：${String(error)}`; render(); }
+  catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `原文件未打开：${String(error)}`; render(); }
 }
 
 async function previewTranscriptionResult(taskId) {
@@ -1393,7 +1438,7 @@ async function exportTranscriptionTask(taskId, format) {
     const receipt = await invoke('export_desktop_transcription_task', { args: { taskId, selectedPath, format } });
     state.status = `转写结果已原子导出并回读：${bytes(receipt.byteCount)} · ${short(receipt.sha256)}`;
     state.error = '';
-  } catch (error) { state.error = `转写结果未导出：${String(error)}`; }
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `转写结果未导出：${String(error)}`; }
   render();
 }
 
@@ -1405,12 +1450,20 @@ async function continueChatWithTranscription(taskId) {
     state.composerAttachments = [{ id: result.attachmentId, mimeType: result.mimeType, displayName: result.displayName, byteCount: result.byteCount }];
     state.composerDraft = '';
     state.selectedConversationId = null;
-    state.pane = 'chat';
+    state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
     state.status = '转写结果已作为本地 Markdown 附件放入新对话草稿；尚未发送。';
     state.error = '';
-  } catch (error) { state.error = `转写结果未加入对话：${String(error)}`; }
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `转写结果未加入对话：${String(error)}`; }
   render();
 }
+
+const utilityPagesLoading = new Set();
+const loadUtilityPage = createUtilityPageNavigation({
+  isCurrent: page => state.pane === page,
+  render: () => render(),
+  loading: (page, value) => value ? utilityPagesLoading.add(page) : utilityPagesLoading.delete(page),
+  failed: (page, error) => { state.error = `${page === 'reminders' ? '定时任务' : '南枫转写任务'}未读取：${String(error)}`; },
+});
 
 app.addEventListener('click', async event => {
   const target = event.target.closest?.('[data-action]');
@@ -1419,20 +1472,25 @@ app.addEventListener('click', async event => {
   if (!actions.includes(action)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  if (action === 'show-reminders') { state.utilitySidebarWorkMode = false; state.pane = 'reminders'; state.sidebarOpen = false; state.profileOpen = false; await loadDesktopReminders().catch(error => { state.error = `定时任务未读取：${String(error)}`; }); render(); return; }
-  if (action === 'show-transcription') { state.utilitySidebarWorkMode = false; state.pane = 'transcription'; state.sidebarOpen = false; state.profileOpen = false; await loadTranscriptionState().catch(error => { state.error = `南枫转写任务未读取：${String(error)}`; }); render(); return; }
+  if (action === 'show-reminders' || action === 'show-transcription') {
+    state.utilitySidebarWorkMode = false;
+    state.pane = action === 'show-reminders' ? 'reminders' : 'transcription';
+    state.sidebarOpen = false; state.profileOpen = false; state.error = '';
+    await loadUtilityPage(state.pane, state.pane === 'reminders' ? loadDesktopReminders : loadTranscriptionState);
+    return;
+  }
   if (action === 'pick-transcription-document') return pickTranscriptionDocument();
   if (action === 'select-transcription-task') { state.selectedTranscriptionTaskId = target.dataset.taskId; render(); return; }
   if (action === 'run-transcription-task') return executeTranscriptionTask(target.dataset.taskId, false);
   if (action === 'retry-transcription-task') return executeTranscriptionTask(target.dataset.taskId, true);
-  if (action === 'cancel-transcription-task') { try { await invoke('cancel_desktop_transcription_task', { taskId: target.dataset.taskId }); state.status = '转写任务已取消；已保存的检查点仍保留供后续显式重试。'; state.error = ''; } catch (error) { state.error = `任务未取消：${String(error)}`; } await loadTranscriptionState().catch(() => {}); render(); return; }
+  if (action === 'cancel-transcription-task') { try { await invoke('cancel_desktop_transcription_task', { taskId: target.dataset.taskId }); state.status = '转写任务已取消；已保存的检查点仍保留供后续显式重试。'; state.error = ''; } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `任务未取消：${String(error)}`; } await loadTranscriptionState().catch(() => {}); render(); return; }
   if (action === 'preview-transcription-source') return previewTranscriptionSource(target.dataset.taskId);
   if (action === 'preview-transcription-result') return previewTranscriptionResult(target.dataset.taskId);
   if (action === 'copy-transcription-result') { const text = (transcriptionTask(target.dataset.taskId)?.segments || []).map(segment => segment.text).join('\n\n'); try { await navigator.clipboard.writeText(text); showCopyIconFeedback(target); state.error = ''; } catch { state.error = '系统未允许写入剪贴板。'; render(); } return; }
   if (action === 'continue-chat-with-transcription') return continueChatWithTranscription(target.dataset.taskId);
   if (action === 'export-transcription-task') return exportTranscriptionTask(target.dataset.taskId, target.dataset.format);
   if (action === 'ask-delete-transcription-task') { state.dialog = { kind: 'transcription-delete', taskId: target.dataset.taskId, submitting: false, failure: '' }; render(); return; }
-  if (action === 'confirm-delete-transcription-task') { state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('delete_desktop_transcription_task', { taskId: target.dataset.taskId }); state.dialog = null; state.selectedTranscriptionTaskId = null; state.status = '转写任务已删除；无引用私有字节进入安全清理期。'; await loadTranscriptionState(); } catch (error) { state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; } render(); }
+  if (action === 'confirm-delete-transcription-task') { state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('delete_desktop_transcription_task', { taskId: target.dataset.taskId }); state.dialog = null; state.selectedTranscriptionTaskId = null; state.status = '转写任务已删除；无引用私有字节进入安全清理期。'; await loadTranscriptionState(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; } render(); }
 }, true);
 async function saveModelServiceSettings() {
   const service = selectedModelService();
@@ -1467,7 +1525,7 @@ async function saveModelServiceSettings() {
     state.modelCredentialDraft = '';
     state.modelCredentialEdited = false;
     state.modelCredentialVisible = false;
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.modelSettingsError = `保存失败：${String(error)}`;
   } finally {
     state.modelSettingsSaving = false;
@@ -1497,7 +1555,7 @@ async function revealModelServiceCredential() {
     state.modelCredentialDraft = await invoke('reveal_desktop_model_service_credential', { providerId: service.providerId });
     state.modelCredentialVisible = true;
     state.modelSettingsError = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.modelSettingsError = `无法显示 API Key：${String(error)}`;
   }
   render();
@@ -1517,7 +1575,7 @@ async function testModelServiceConnection() {
   try {
     await invoke('test_desktop_model_service_connection', { args: { providerId: service.providerId, presetId: service.presetId } });
     state.modelSettingsNotice = `连接成功：${service.providerDisplayName} · ${service.presetDisplayName}`;
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.modelSettingsError = `连接测试失败：${String(error)}`;
   } finally {
     state.modelSettingsTesting = false;
@@ -1887,7 +1945,7 @@ async function runFullSearch({ recordHistory = false, restoreScroll = false, inP
         if (repaired && generation === fullSearchGeneration && state.searchPanel) void runFullSearch({ restoreScroll: true, inPlace: true });
       }).catch(() => {}).finally(() => { fullSearchRepairPending = false; });
     }
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     if (generation !== fullSearchGeneration) return;
     state.searchLoading = false;
     state.searchLoadingMore = false;
@@ -2023,7 +2081,7 @@ async function locateSearchHit(hit) {
     state.searchLocatedArchivedConversationId = hit.archived ? hit.conversationId : null;
     state.searchReturnActive = true;
     state.searchPanel = false;
-    state.pane = 'chat';
+    state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
     render();
     queueMicrotask(() => {
       if (state.pane !== 'chat' || state.selectedConversationId !== hit.conversationId) return;
@@ -2031,7 +2089,7 @@ async function locateSearchHit(hit) {
       target?.scrollIntoView({ block: 'center', inline: 'nearest' });
       if (target) { target.classList.add('search-anchor-flash'); window.setTimeout(() => target.classList.remove('search-anchor-flash'), 1600); }
     });
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.searchPanel = true;
     state.searchError = `无法定位这条结果：${String(error)}`;
     render();
@@ -2131,6 +2189,7 @@ function accountSyncProgressDialog() {
   return `<div class="scrim account-sync-progress-scrim"><section class="dialog account-sync-progress-dialog ${result ? `result ${escape(result.kind)}` : ''}" role="status" aria-live="polite" aria-busy="${result ? 'false' : 'true'}">${resultIcon}<h2>${title}</h2>${detail ? `<p>${escape(detail)}</p>` : ''}</section></div>`;
 }
 async function refresh() {
+  const runtimeRefresh = arguments[0]?.runtimeRefresh === true;
   if (!native) {
     const browserWorkspace = c15WorkspacePreview
       ? createC15WorkspacePreview()
@@ -2197,17 +2256,17 @@ async function refresh() {
     }
     applyC16Preview('Browser ');
     if (!c15WorkspacePreview && !state.selectedConversationId) selectWorkspaceDefaultConversation(browserWorkspace);
-    if (!c13ConversationLifecyclePreview) reloadFavoriteConversationIds();
+    if (!c13ConversationLifecyclePreview) reloadFavoriteConversationIds({ runtimeRefresh });
     await loadConversationReadState({ observeSelected: true });
     recomputeConversationFind();
-    render();
+    render({ runtimeRefresh });
     return;
   }
   state.runtimeInfo = await invoke('read_desktop_runtime_info');
   state.workspaces = await invoke('list_desktop_workspaces');
   state.current = state.workspaces.length ? await invoke('read_desktop_workspace', { workspaceId: state.current?.summary?.id || state.workspaces[0].id }) : null;
   if (state.current && !resolveConversation(state.current, state.selectedConversationId)) selectWorkspaceDefaultConversation(state.current);
-  reloadFavoriteConversationIds();
+  reloadFavoriteConversationIds({ runtimeRefresh });
   // These are independent read projections after the workspace and selected
   // conversation are known. Waiting for each IPC receipt serially delayed the
   // first usable Desktop frame even though no mutation depends on another.
@@ -2240,7 +2299,7 @@ async function refresh() {
   state.p6eAcceptance = p6eAcceptance;
   state.transcription = transcription;
   if (state.p6eAcceptance.enabled && state.pane === 'chat') state.pane = 'connections';
-  render();
+  render({ runtimeRefresh });
 }
 
 async function runP6eTemporaryMaintenanceAcceptance() {
@@ -2249,7 +2308,7 @@ async function runP6eTemporaryMaintenanceAcceptance() {
     state.p6eAcceptance = { enabled: true, receipt: await invoke('run_p6e_temporary_maintenance_acceptance') };
     state.status = 'P6-E 固定 23h59 / 24h owner 维护已运行；回执保存在 acceptance 私有根目录，重启后可读。';
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `P6-E 验收维护失败：${String(error)}`;
   }
   render();
@@ -2261,7 +2320,7 @@ app.addEventListener('click', event => {
   event.stopImmediatePropagation();
   void runP6eTemporaryMaintenanceAcceptance();
 }, true);
-async function pickExchange() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 交换包', extensions: ['nfai-exchange'] }] }); if (!selectedPath) return; try { state.preflight = await invoke('stage_preflight_selected_exchange', { selectedPath }); state.current = await invoke('import_staged_exchange_as_new_workspace', { args: { stagingId: state.preflight.stagingId, workspaceTitle: '导入工作区' } }); state.preflight = null; state.dialog = null; state.status = '交换包已通过严格预检并直接导入为新的独立工作区。'; state.error = ''; await refresh(); } catch (error) { state.error = `导入被拒绝：${String(error)}`; } render(); }
+async function pickExchange() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 交换包', extensions: ['nfai-exchange'] }] }); if (!selectedPath) return; try { state.preflight = await invoke('stage_preflight_selected_exchange', { selectedPath }); state.current = await invoke('import_staged_exchange_as_new_workspace', { args: { stagingId: state.preflight.stagingId, workspaceTitle: '导入工作区' } }); state.preflight = null; state.dialog = null; state.status = '交换包已通过严格预检并直接导入为新的独立工作区。'; state.error = ''; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `导入被拒绝：${String(error)}`; } render(); }
 function p6hImportLifecycleMarker(phase) { if (!p6hDiagnosticsEnabled) return; let marker = document.querySelector('#p6h-dom-event-marker'); if (!marker) { marker = document.createElement('p'); marker.id = 'p6h-dom-event-marker'; marker.setAttribute('role', 'status'); marker.style.cssText = 'position:fixed;z-index:9999;left:12px;bottom:12px;padding:6px;background:#173;color:#fff;font-size:12px'; document.body.append(marker); } marker.textContent = `P6-H acceptance import: ${phase}`; }
 async function commitSelectedImport({ taskKey, stageCommand, readCommand, confirmCommand, selectedPath, label }) {
   if (!state.current) throw new Error('请先导入或创建一个本地工作区。');
@@ -2297,9 +2356,9 @@ async function commitPendingImport({ taskKey, readCommand, confirmCommand, label
   state.status = `${label} 已直接续作；失败或拒绝 ${rejected} 项保留独立回执。`;
   state.error = '';
 }
-async function pickChatGptExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } p6hImportLifecycleMarker('picker-open'); const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'ChatGPT conversations.json', extensions: ['json'] }] }); if (!selectedPath) { p6hImportLifecycleMarker('picker-cancel'); return; } p6hImportLifecycleMarker('picker-returned'); try { await commitSelectedImport({ taskKey: 'chatgptTask', stageCommand: 'stage_chatgpt_export_selected', readCommand: 'read_chatgpt_import_task', confirmCommand: 'confirm_chatgpt_import_item', selectedPath, label: 'ChatGPT' }); p6hImportLifecycleMarker('direct-commit-succeeded'); } catch (error) { p6hImportLifecycleMarker('stage-error'); state.error = `ChatGPT 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
-async function pickClaudeExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'Claude conversations.json', extensions: ['json'] }] }); if (!selectedPath) return; try { await commitSelectedImport({ taskKey: 'claudeTask', stageCommand: 'stage_claude_export_selected', readCommand: 'read_claude_import_task', confirmCommand: 'confirm_claude_import_item', selectedPath, label: 'Claude' }); } catch (error) { state.error = `Claude 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
-async function pickP6kZip(provider) { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } if (!state.current) { state.error = '先导入或创建一个本地工作区。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: `${provider} data export ZIP`, extensions: ['zip'] }] }); if (!selectedPath) return; try { state.p6kTask = await invoke('stage_p6k_zip_import_selected', { args: { workspaceId: state.current.summary.id, provider, selectedPath } }); state.status = `${provider} ZIP 已完成私有校验并直接导入：${state.p6kTask.importedCount} 个会话；失败 ${state.p6kTask.failedCount}，未关联媒体 ${state.p6kTask.unmappedAssetCount}。`; state.error = ''; await refresh(); } catch (error) { state.error = `ZIP 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
+async function pickChatGptExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } p6hImportLifecycleMarker('picker-open'); const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'ChatGPT conversations.json', extensions: ['json'] }] }); if (!selectedPath) { p6hImportLifecycleMarker('picker-cancel'); return; } p6hImportLifecycleMarker('picker-returned'); try { await commitSelectedImport({ taskKey: 'chatgptTask', stageCommand: 'stage_chatgpt_export_selected', readCommand: 'read_chatgpt_import_task', confirmCommand: 'confirm_chatgpt_import_item', selectedPath, label: 'ChatGPT' }); p6hImportLifecycleMarker('direct-commit-succeeded'); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; p6hImportLifecycleMarker('stage-error'); state.error = `ChatGPT 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
+async function pickClaudeExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: 'Claude conversations.json', extensions: ['json'] }] }); if (!selectedPath) return; try { await commitSelectedImport({ taskKey: 'claudeTask', stageCommand: 'stage_claude_export_selected', readCommand: 'read_claude_import_task', confirmCommand: 'confirm_claude_import_item', selectedPath, label: 'Claude' }); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `Claude 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
+async function pickP6kZip(provider) { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } if (!state.current) { state.error = '先导入或创建一个本地工作区。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: `${provider} data export ZIP`, extensions: ['zip'] }] }); if (!selectedPath) return; try { state.p6kTask = await invoke('stage_p6k_zip_import_selected', { args: { workspaceId: state.current.summary.id, provider, selectedPath } }); state.status = `${provider} ZIP 已完成私有校验并直接导入：${state.p6kTask.importedCount} 个会话；失败 ${state.p6kTask.failedCount}，未关联媒体 ${state.p6kTask.unmappedAssetCount}。`; state.error = ''; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `ZIP 导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
 async function pickV2WorkspaceExchange() {
   if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; }
   const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫 AI 完整工作区交换（v2）', extensions: ['nfai-exchange', 'zip'] }] });
@@ -2311,7 +2370,7 @@ async function pickV2WorkspaceExchange() {
     globalThis.__nanfengV2CommittedExchanges = state.v2CommittedExchanges;
     state.status = `完整工作区交换（v2）已私有导入并回读：${short(receipt.semanticHash)} · ${receipt.assetCount} 项附件${receipt.replayed ? ' · 已验证重放回执' : ''}。`;
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `完整工作区交换（v2）被拒绝：${String(error)}`;
     state.status = state.error;
   }
@@ -2325,20 +2384,20 @@ async function reexportV2WorkspaceExchange(workspaceId) {
     const receipt = await invoke('reexport_desktop_workspace_exchange_v2_selected', { workspaceId, selectedPath });
     state.status = `完整工作区交换（v2）已从私有记录回导并严格回读：${short(receipt.semanticHash)} · ${receipt.assetCount} 项附件。`;
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `完整工作区交换（v2）回导被拒绝：${String(error)}`;
     state.status = state.error;
   }
   render();
 }
-async function pickNanfengKnowledgeExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫知识库完整 JSON', extensions: ['json'] }] }); if (!selectedPath) return; try { await commitSelectedImport({ taskKey: 'nanfengKnowledgeTask', stageCommand: 'stage_nanfeng_knowledge_export_selected', readCommand: 'read_nanfeng_knowledge_import_task', confirmCommand: 'confirm_nanfeng_knowledge_import_item', selectedPath, label: '南枫知识库' }); } catch (error) { state.error = `知识库导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
+async function pickNanfengKnowledgeExport() { if (!native) { state.status = 'Web 预览不会请求文件；请在 Tauri Desktop 开发包中使用系统 picker。'; render(); return; } const selectedPath = await dialogInvoke('open', { multiple: false, directory: false, filters: [{ name: '南枫知识库完整 JSON', extensions: ['json'] }] }); if (!selectedPath) return; try { await commitSelectedImport({ taskKey: 'nanfengKnowledgeTask', stageCommand: 'stage_nanfeng_knowledge_export_selected', readCommand: 'read_nanfeng_knowledge_import_task', confirmCommand: 'confirm_nanfeng_knowledge_import_item', selectedPath, label: '南枫知识库' }); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `知识库导入被拒绝：${String(error)}`; state.status = state.error; } render(); }
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-chatgpt-export"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickChatGptExport(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-claude-export"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickClaudeExport(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-p6k-chatgpt-zip"],[data-action="select-p6k-claude-zip"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickP6kZip(target.dataset.action === 'select-p6k-chatgpt-zip' ? 'CHATGPT' : 'CLAUDE'); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-v2-workspace-exchange"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickV2WorkspaceExchange(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="reexport-v2-workspace-exchange"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); reexportV2WorkspaceExchange(target.dataset.workspaceId); }, true);
-app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="retry-p6k-zip"],[data-action="skip-p6k-zip-failures"],[data-action="delete-p6k-zip-batch"],[data-action="confirm-delete-p6k-zip-batch"]'); if (!target || !state.p6kTask) return; event.preventDefault(); event.stopImmediatePropagation(); const action = target.dataset.action; if (action === 'delete-p6k-zip-batch') { state.dialog = { kind: 'p6k-batch-delete', taskId: state.p6kTask.id, submitting: false, failure: '' }; render(); return; } if (action === 'confirm-delete-p6k-zip-batch' && (state.dialog?.kind !== 'p6k-batch-delete' || state.dialog.taskId !== state.p6kTask.id || state.dialog.submitting)) return; try { if (action === 'retry-p6k-zip') state.p6kTask = await invoke('retry_p6k_zip_import_task', { taskId: state.p6kTask.id }); else if (action === 'skip-p6k-zip-failures') state.p6kTask = await invoke('skip_p6k_zip_import_failures', { taskId: state.p6kTask.id }); else { state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); await invoke('delete_p6k_zip_import_batch', { taskId: state.p6kTask.id }); state.p6kTask = null; state.dialog = null; } state.status = action === 'confirm-delete-p6k-zip-batch' ? '已删除该导入批次与私有副本；官方会话删除标记已保留，不会在后续导入中复活。' : 'ZIP 导入状态已更新。'; state.error = ''; if (state.current) await refresh(); } catch (error) { if (action === 'confirm-delete-p6k-zip-batch' && state.dialog?.kind === 'p6k-batch-delete') state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; else state.error = `ZIP 导入状态未更新：${String(error)}`; } render(); }, true);
-app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="select-p6k-manual-asset"],[data-action="select-p6k-manual-target"],[data-action="link-p6k-manual-asset"]'); if (!target || !state.p6kTask) return; event.preventDefault(); event.stopImmediatePropagation(); if (target.dataset.action === 'select-p6k-manual-asset') { p6kManualLink = { assetOrdinal: Number(target.dataset.assetOrdinal), conversationId: null, messageId: null }; globalThis.__nanfengP6kManualLink = p6kManualLink; render(); return; } if (target.dataset.action === 'select-p6k-manual-target') { p6kManualLink = { ...p6kManualLink, conversationId: target.dataset.conversationId, messageId: target.dataset.messageId }; globalThis.__nanfengP6kManualLink = p6kManualLink; render(); return; } if (p6kManualLink.assetOrdinal === null || !p6kManualLink.conversationId || !p6kManualLink.messageId || !state.current) return; try { state.p6kTask = await invoke('link_p6k_zip_manual_asset', { args: { taskId: state.p6kTask.id, assetOrdinal: p6kManualLink.assetOrdinal, workspaceId: state.current.summary.id, conversationId: p6kManualLink.conversationId, messageId: p6kManualLink.messageId } }); p6kManualLink = { assetOrdinal: null, conversationId: null, messageId: null }; globalThis.__nanfengP6kManualLink = p6kManualLink; state.status = '已按所选媒体与消息建立精确关联；附件现在只在该消息位置呈现。'; state.error = ''; await refresh(); } catch (error) { state.error = `媒体关联未完成：${String(error)}`; } render(); }, true);
+app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="retry-p6k-zip"],[data-action="skip-p6k-zip-failures"],[data-action="delete-p6k-zip-batch"],[data-action="confirm-delete-p6k-zip-batch"]'); if (!target || !state.p6kTask) return; event.preventDefault(); event.stopImmediatePropagation(); const action = target.dataset.action; if (action === 'delete-p6k-zip-batch') { state.dialog = { kind: 'p6k-batch-delete', taskId: state.p6kTask.id, submitting: false, failure: '' }; render(); return; } if (action === 'confirm-delete-p6k-zip-batch' && (state.dialog?.kind !== 'p6k-batch-delete' || state.dialog.taskId !== state.p6kTask.id || state.dialog.submitting)) return; try { if (action === 'retry-p6k-zip') state.p6kTask = await invoke('retry_p6k_zip_import_task', { taskId: state.p6kTask.id }); else if (action === 'skip-p6k-zip-failures') state.p6kTask = await invoke('skip_p6k_zip_import_failures', { taskId: state.p6kTask.id }); else { state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); await invoke('delete_p6k_zip_import_batch', { taskId: state.p6kTask.id }); state.p6kTask = null; state.dialog = null; } state.status = action === 'confirm-delete-p6k-zip-batch' ? '已删除该导入批次与私有副本；官方会话删除标记已保留，不会在后续导入中复活。' : 'ZIP 导入状态已更新。'; state.error = ''; if (state.current) await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (action === 'confirm-delete-p6k-zip-batch' && state.dialog?.kind === 'p6k-batch-delete') state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; else state.error = `ZIP 导入状态未更新：${String(error)}`; } render(); }, true);
+app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="select-p6k-manual-asset"],[data-action="select-p6k-manual-target"],[data-action="link-p6k-manual-asset"]'); if (!target || !state.p6kTask) return; event.preventDefault(); event.stopImmediatePropagation(); if (target.dataset.action === 'select-p6k-manual-asset') { p6kManualLink = { assetOrdinal: Number(target.dataset.assetOrdinal), conversationId: null, messageId: null }; globalThis.__nanfengP6kManualLink = p6kManualLink; render(); return; } if (target.dataset.action === 'select-p6k-manual-target') { p6kManualLink = { ...p6kManualLink, conversationId: target.dataset.conversationId, messageId: target.dataset.messageId }; globalThis.__nanfengP6kManualLink = p6kManualLink; render(); return; } if (p6kManualLink.assetOrdinal === null || !p6kManualLink.conversationId || !p6kManualLink.messageId || !state.current) return; try { state.p6kTask = await invoke('link_p6k_zip_manual_asset', { args: { taskId: state.p6kTask.id, assetOrdinal: p6kManualLink.assetOrdinal, workspaceId: state.current.summary.id, conversationId: p6kManualLink.conversationId, messageId: p6kManualLink.messageId } }); p6kManualLink = { assetOrdinal: null, conversationId: null, messageId: null }; globalThis.__nanfengP6kManualLink = p6kManualLink; state.status = '已按所选媒体与消息建立精确关联；附件现在只在该消息位置呈现。'; state.error = ''; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `媒体关联未完成：${String(error)}`; } render(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="select-nanfeng-knowledge-export"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); pickNanfengKnowledgeExport(); }, true);
 const settingsParent = page => ['model-configuration', 'conversation-cost', 'context-selections', 'diagnostics'].includes(page)
   ? 'model'
@@ -2359,11 +2418,11 @@ function writeProductSettings(patch) {
       await loadDesktopHistoryKnowledge({ runDue: Boolean(state.productSettings.historyLibraryEnabled) });
       await loadDesktopBackgroundRuntime();
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `历史资料库状态未更新：${String(error)}`;
     }
     render();
-  }).catch(error => {
+  }).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.productSettings = previous;
     if (!state.personalizationDirty) state.personalizationDraft = { ...previous };
     state.error = `Desktop 设置未保存：${String(error)}`;
@@ -2381,7 +2440,7 @@ async function savePersonalization() {
     if (state.dialog?.kind === 'custom-instructions-fullscreen') state.dialog = null;
     state.status = '';
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.productSettings = previous;
     state.error = `个性化设置未保存：${String(error)}`;
   }
@@ -2412,12 +2471,12 @@ app.addEventListener('click', event => {
       state.personalizationDirty = false;
     }
     if (state.settingsSection === 'model-configuration' && !state.modelServiceDraft) resetModelServiceDraft();
-    if (state.settingsSection === 'reminders' && native) Promise.all([loadDesktopReminders(), loadDesktopBackgroundRuntime(), readReminderNotificationPermission()]).then(render).catch(error => { state.error = `提醒计划读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'conversation-cost' && native) loadDesktopUsageLedger().then(render).catch(error => { state.error = `费用记录读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'context-selections' && native) loadDesktopContextRecords().then(render).catch(error => { state.error = `上下文记录读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'diagnostics' && native) loadDesktopDiagnosticRecords().then(render).catch(error => { state.error = `运行诊断读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'privacy' && native) loadDesktopPrivacyInventory().then(render).catch(error => { state.error = `本机数据概况读取失败：${String(error)}`; render(); });
-    if (state.settingsSection === 'account' && native) loadDesktopAccountSync().then(render).catch(error => { state.error = `账号同步状态读取失败：${String(error)}`; render(); });
+    if (state.settingsSection === 'reminders' && native) Promise.all([loadDesktopReminders(), loadDesktopBackgroundRuntime(), readReminderNotificationPermission()]).then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `提醒计划读取失败：${String(error)}`; render(); });
+    if (state.settingsSection === 'conversation-cost' && native) loadDesktopUsageLedger().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `费用记录读取失败：${String(error)}`; render(); });
+    if (state.settingsSection === 'context-selections' && native) loadDesktopContextRecords().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `上下文记录读取失败：${String(error)}`; render(); });
+    if (state.settingsSection === 'diagnostics' && native) loadDesktopDiagnosticRecords().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `运行诊断读取失败：${String(error)}`; render(); });
+    if (state.settingsSection === 'privacy' && native) loadDesktopPrivacyInventory().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `本机数据概况读取失败：${String(error)}`; render(); });
+    if (state.settingsSection === 'account' && native) loadDesktopAccountSync().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `账号同步状态读取失败：${String(error)}`; render(); });
     state.error = '';
   } else if (action === 'settings-back') {
     if (state.accountRecovery?.rotation === true) state.accountRecovery = null;
@@ -2507,7 +2566,7 @@ app.addEventListener('click', async event => {
   event.stopImmediatePropagation();
   const category = target.dataset.category || 'all';
   state.chatSearch = '';
-  state.pane = 'chat';
+  state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
   state.profileOpen = false;
   state.error = '';
   await openFullSearch(category);
@@ -2522,7 +2581,7 @@ async function previewPrivacyCleanup(scope, selectedTaskIds = []) {
     const preview = await invoke('preview_desktop_privacy_deletion', { args: { scope, selectedTaskIds } });
     state.dialog = { kind: 'privacy-cleanup-preview', preview, selectedTaskIds: [...selectedTaskIds], confirmation: '', submitting: false, failure: '' };
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `清理范围预览失败：${String(error)}`;
     state.dialog = null;
   }
@@ -2571,7 +2630,7 @@ async function confirmPrivacyCleanup() {
     await refresh();
     if (fullDelete) await loadDesktopAppSettings();
     await loadDesktopPrivacyInventory();
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     if (state.dialog?.kind === 'privacy-cleanup-preview') {
       state.dialog = { ...state.dialog, submitting: false, failure: String(error) };
     }
@@ -2641,16 +2700,16 @@ app.addEventListener('click', event => {
 }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="confirm-import"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); importPreflighted(); }, true);
 app.addEventListener('click', event => { const target = event.target.closest?.('[data-action="resume-chatgpt-import"],[data-action="resume-claude-import"],[data-action="resume-nanfeng-knowledge-import"]'); if (!target) return; event.preventDefault(); event.stopImmediatePropagation(); state.dialog = null; state.status = '已保留历史导入回执；新的文件选择会直接执行，历史待处理项不会要求二次确认。'; state.error = ''; render(); }, true);
-app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="retry-chatgpt-task"]'); if (!target || !state.chatgptTask) return; event.preventDefault(); event.stopImmediatePropagation(); try { await invoke('retry_chatgpt_import_task', { taskId: state.chatgptTask.id }); await commitPendingImport({ taskKey: 'chatgptTask', readCommand: 'read_chatgpt_import_task', confirmCommand: 'confirm_chatgpt_import_item', label: 'ChatGPT' }); } catch (error) { state.error = `ChatGPT 重试未完成：${String(error)}`; } render(); }, true);
-async function importPreflighted() { try { state.current = await invoke('import_staged_exchange_as_new_workspace', { args: { stagingId: state.preflight.stagingId, workspaceTitle: document.querySelector('#workspace-title')?.value || '' } }); state.dialog = null; state.status = '导入完成：stable ID、revision、关系与资产 hash 已保真保存。'; await refresh(); } catch (error) { state.error = `导入失败：${String(error)}`; render(); } }
-async function mutate(args, success) { if (!native || !state.current) return; try { await invoke('mutate_desktop_domain', { args: { ...args, intentId: intent('intent'), workspaceId: state.current.summary.id } }); state.status = success; state.error = ''; state.dialog = null; await refresh(); } catch (error) { state.error = `写入被拒绝：${String(error)}`; render(); } }
+app.addEventListener('click', async event => { const target = event.target.closest?.('[data-action="retry-chatgpt-task"]'); if (!target || !state.chatgptTask) return; event.preventDefault(); event.stopImmediatePropagation(); try { await invoke('retry_chatgpt_import_task', { taskId: state.chatgptTask.id }); await commitPendingImport({ taskKey: 'chatgptTask', readCommand: 'read_chatgpt_import_task', confirmCommand: 'confirm_chatgpt_import_item', label: 'ChatGPT' }); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `ChatGPT 重试未完成：${String(error)}`; } render(); }, true);
+async function importPreflighted() { try { state.current = await invoke('import_staged_exchange_as_new_workspace', { args: { stagingId: state.preflight.stagingId, workspaceTitle: document.querySelector('#workspace-title')?.value || '' } }); state.dialog = null; state.status = '导入完成：stable ID、revision、关系与资产 hash 已保真保存。'; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `导入失败：${String(error)}`; render(); } }
+async function mutate(args, success) { if (!native || !state.current) return; try { await invoke('mutate_desktop_domain', { args: { ...args, intentId: intent('intent'), workspaceId: state.current.summary.id } }); state.status = success; state.error = ''; state.dialog = null; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `写入被拒绝：${String(error)}`; render(); } }
 function saveProject() { const item = state.dialog.item; mutate({ entity: 'project', action: item ? 'update' : 'create', objectId: item?.id, expectedRevision: item?.revision, fields: { title: document.querySelector('#project-title')?.value || '', description: document.querySelector('#project-description')?.value || '' } }, item ? 'Project 已保存为新的本地 revision。' : 'Project 已创建；可撤销。'); }
 function saveKnowledge() { const item = state.dialog.item; const tags = (document.querySelector('#knowledge-tags')?.value || '').split(',').map(value => value.trim()).filter(Boolean); const fields = { title: document.querySelector('#knowledge-title')?.value || '', body: document.querySelector('#knowledge-body')?.value || '', ...(item ? { tags } : { tags, scope: 'GLOBAL', projectId: null }) }; mutate({ entity: 'knowledge', action: item ? 'update' : 'create', objectId: item?.id, expectedRevision: item?.revision, fields }, item ? 'Knowledge 已保存为新的本地 revision。' : 'Knowledge 已创建；可撤销。'); }
 function saveMemory() { const item = state.dialog.item; mutate({ entity: 'memory', action: item ? 'update' : 'create', objectId: item?.id, expectedRevision: item?.revision, fields: item ? { body: document.querySelector('#memory-body')?.value || '' } : { body: document.querySelector('#memory-body')?.value || '', scope: 'GLOBAL', scopeId: null } }, item ? 'Memory 已保存为新的本地 revision。' : 'Memory 已创建；可撤销。'); }
 function saveRelation() { mutate({ entity: 'relation', action: 'create', fields: { fromId: document.querySelector('#relation-from')?.value || '', toId: document.querySelector('#relation-to')?.value || '', kind: document.querySelector('#relation-kind')?.value || '' } }, 'Knowledge relation 已显式建立；可撤销。'); }
-async function undo(redo = false) { if (!native || !state.current) return; try { await invoke(redo ? 'redo_desktop_domain' : 'undo_desktop_domain', { args: { intentId: intent(redo ? 'redo' : 'undo'), workspaceId: state.current.summary.id } }); state.status = redo ? '已重做为新 revision。' : '已撤销为新 revision。'; state.error = ''; await refresh(); } catch (error) { state.error = `历史动作不可应用：${String(error)}`; render(); } }
-async function saveMetadata() { if (!native || !state.current) return; try { const providerId = document.querySelector('#provider-id')?.value || ''; const modelId = document.querySelector('#model-id')?.value || ''; const existing = state.history.modelMetadata.find(item => item.providerId === providerId && item.modelId === modelId); await invoke('upsert_desktop_model_metadata', { args: { intentId: intent('metadata'), workspaceId: state.current.summary.id, expectedRevision: existing?.revision || 0, providerId, modelId, metadata: { capabilities: ['TEXT'], priceVersion: document.querySelector('#price-version')?.value || '', currency: document.querySelector('#price-currency')?.value || '', source: '用户手工本地配置', updatedAt: '2026-08-13T00:00:00Z', pricingStatus: 'MANUAL', safeUsage: { knownCostMicros: null } } } }); state.status = '本地 metadata 已保存；不是实时价格或真实费用。'; state.dialog = null; await refresh(); } catch (error) { state.error = `metadata 被拒绝：${String(error)}`; render(); } }
-async function exportCurrent() { if (!native || !state.current) return; const selectedPath = await dialogInvoke('save', { defaultPath: `${state.current.summary.id}.nfai-exchange`, filters: [{ name: '南枫 AI 交换包', extensions: ['nfai-exchange'] }] }); if (!selectedPath) return; try { const receipt = await invoke('export_desktop_workspace_to_selected_path', { workspaceId: state.current.summary.id, selectedPath }); state.status = `导出完成并严格回读：${short(receipt.semanticHash)} · ${bytes(receipt.byteCount)}`; } catch (error) { state.error = `导出失败：${String(error)}`; } render(); }
+async function undo(redo = false) { if (!native || !state.current) return; try { await invoke(redo ? 'redo_desktop_domain' : 'undo_desktop_domain', { args: { intentId: intent(redo ? 'redo' : 'undo'), workspaceId: state.current.summary.id } }); state.status = redo ? '已重做为新 revision。' : '已撤销为新 revision。'; state.error = ''; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `历史动作不可应用：${String(error)}`; render(); } }
+async function saveMetadata() { if (!native || !state.current) return; try { const providerId = document.querySelector('#provider-id')?.value || ''; const modelId = document.querySelector('#model-id')?.value || ''; const existing = state.history.modelMetadata.find(item => item.providerId === providerId && item.modelId === modelId); await invoke('upsert_desktop_model_metadata', { args: { intentId: intent('metadata'), workspaceId: state.current.summary.id, expectedRevision: existing?.revision || 0, providerId, modelId, metadata: { capabilities: ['TEXT'], priceVersion: document.querySelector('#price-version')?.value || '', currency: document.querySelector('#price-currency')?.value || '', source: '用户手工本地配置', updatedAt: '2026-08-13T00:00:00Z', pricingStatus: 'MANUAL', safeUsage: { knownCostMicros: null } } } }); state.status = '本地 metadata 已保存；不是实时价格或真实费用。'; state.dialog = null; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `metadata 被拒绝：${String(error)}`; render(); } }
+async function exportCurrent() { if (!native || !state.current) return; const selectedPath = await dialogInvoke('save', { defaultPath: `${state.current.summary.id}.nfai-exchange`, filters: [{ name: '南枫 AI 交换包', extensions: ['nfai-exchange'] }] }); if (!selectedPath) return; try { const receipt = await invoke('export_desktop_workspace_to_selected_path', { workspaceId: state.current.summary.id, selectedPath }); state.status = `导出完成并严格回读：${short(receipt.semanticHash)} · ${bytes(receipt.byteCount)}`; } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `导出失败：${String(error)}`; } render(); }
 async function exportLocalBackup() {
   if (!native || state.localBackup.working || state.localBackup.restartRequired) return;
   const selectedPath = await dialogInvoke('save', { defaultPath: 'nanfeng-ai-local-backup.nfai-backup', filters: [{ name: '南枫 AI 本机备份', extensions: ['nfai-backup'] }] });
@@ -2660,7 +2719,7 @@ async function exportLocalBackup() {
   try {
     const artifact = await invoke('export_desktop_local_backup', { selectedPath });
     state.localBackup = { ...state.localBackup, working: false, operation: null, notice: `备份已系统位置回读校验：${artifact.sha256.slice(0, 12)}… · Schema ${artifact.schemaVersion}`, error: '' };
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.localBackup = { ...state.localBackup, working: false, operation: null, notice: '', error: `备份失败：${String(error)}` };
   }
   render();
@@ -2674,7 +2733,7 @@ async function importLocalBackup() {
   try {
     const preflight = await invoke('preflight_desktop_local_backup', { selectedPath });
     state.localBackup = { ...state.localBackup, working: false, operation: null, preflight, replaceLocal: !(preflight.conflicts || []).length, notice: `预检通过：Schema ${preflight.schemaVersion}，请确认恢复方式。`, error: '' };
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, notice: '', error: `预检失败：${String(error)}` };
   }
   render();
@@ -2688,7 +2747,7 @@ async function restoreLocalBackup() {
     const receipt = await invoke('restore_desktop_local_backup', { fingerprint: preflight.fingerprint, replaceLocal: Boolean(state.localBackup.replaceLocal) });
     state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, notice: '替换已完成。为避免旧 SQLite 与页面引用，现请手动完全重启 App；不会自动继续任务。', error: '', restartRequired: Boolean(receipt.restartRequired) };
     if (receipt.restartRequired) state.dialog = { kind: 'local-backup-restart-required' };
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.localBackup = { ...state.localBackup, working: false, operation: null, notice: '', error: `恢复失败：${String(error)}` };
   }
   render();
@@ -2700,7 +2759,7 @@ async function cancelLocalRestore() {
   try {
     await invoke('cancel_desktop_local_restore');
     state.localBackup = { ...state.localBackup, working: false, operation: null, preflight: null, replaceLocal: false, notice: '已取消；未改动本地数据。', error: '', interrupted: false };
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.localBackup = { ...state.localBackup, working: false, operation: null, error: `取消未完成：${String(error)}` };
   }
   render();
@@ -2722,8 +2781,8 @@ app.addEventListener('click', event => {
   state.searchAnchorMessageId = null;
   state.searchAnchorAttachmentId = null;
 }, true);
-async function saveLocalMessage() { const text = state.composerDraft.trim(); if (!text) { state.error = '请输入非空内容。'; render(); return; } if (!native || !state.current) { state.error = native ? '先导入一个本地工作区。' : 'Web 预览不会写入 Desktop SQLite。'; render(); return; } const conversation = resolveConversation(state.current, state.selectedConversationId); try { if (conversation) { await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-message'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'appendMessage', objectId: conversation.id, expectedRevision: conversation.revision, fields: { text, role: 'user' } } }); } else { const receipt = await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-create'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'create', fields: { title: text.replace(/\s+/g, ' ').slice(0, 36), projectId: state.pane === 'work' ? state.selectedWorkProjectId : null, firstMessage: text } } }); state.selectedConversationId = receipt.objectId; } state.composerDraft = ''; state.error = ''; state.status = '已保存为本地记录；没有调用模型。'; await refresh(); } catch (error) { state.error = `本地保存被拒绝：${String(error)}`; render(); } }
-app.addEventListener('click', async event => { const target = event.target.closest('[data-action]'); const action = target?.dataset.action; if (!action) return; const data = workspace(); if (action === 'new-chat') { state.settingsConversationReturn = null; state.pane = 'chat'; state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; state.composerDraft = ''; state.profileOpen = false; state.error = ''; state.status = '新对话将先保存到本地；联网回答需另行配置并确认。'; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); render(); } else if (action === 'select-chat') { const settingsPage = target.closest('.android-settings-main') ? state.settingsSection : null; if (settingsPage && ['favorites', 'archived', 'recycle'].includes(settingsPage)) state.settingsConversationReturn = { page: settingsPage, label: settingsPage === 'favorites' ? '收藏' : settingsPage === 'archived' ? '已归档' : '回收站', readOnly: ['archived', 'recycle'].includes(settingsPage) }; else state.settingsConversationReturn = null; state.pane = 'chat'; state.selectedConversationId = target.dataset.id; if (native && state.current) { state.p6gSelection = await invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId }); state.conversationPreferences = state.p6gSelection.conversationOverride; } else { state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; } if (!state.chatScrollPositions.has(target.dataset.id)) state.pendingChatScrollToLatestId = target.dataset.id; state.profileOpen = false; state.error = ''; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); if (!state.settingsConversationReturn?.readOnly) await markConversationOpened(target.dataset.id); render(); } else if (action === 'show-chat') { state.settingsConversationReturn = null; state.pane = 'chat'; state.profileOpen = false; render(); } else if (action === 'show-work') { state.settingsConversationReturn = null; state.pane = 'work'; state.selectedConversationId = null; state.selectedWorkProjectId = null; state.profileOpen = false; render(); } else if (action === 'show-connections') { state.pane = 'connections'; state.profileOpen = false; render(); } else if (action === 'toggle-profile') { state.profileOpen = !state.profileOpen; render(); } else if (action === 'save-local-message') saveLocalMessage(); else if (action === 'start-import') pickExchange(); else if (action === 'confirm-import') importPreflighted(); else if (action === 'close-dialog') { if (state.dialog?.kind === 'custom-instructions-fullscreen') { state.personalizationDraft = { ...state.dialog.previousDraft }; state.personalizationDirty = state.dialog.previousDirty; } state.dialog = null; render(); } else if (action === 'select-workspace') { state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.id }); state.history = await invoke('read_desktop_workbench_history', { workspaceId: target.dataset.id }); state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; reloadFavoriteConversationIds(); await loadConversationReadState({ observeSelected: false }); state.status = '已切换到独立本地工作区。'; state.error = ''; render(); } else if (action === 'show-conversation') { state.pane = 'conversation'; state.treeOpen = false; render(); } else if (action === 'show-knowledge') { state.pane = 'knowledge'; state.treeOpen = false; render(); } else if (action === 'toggle-inspector') { state.inspectorOpen = !state.inspectorOpen; render(); } else if (action === 'toggle-tree') { state.treeOpen = !state.treeOpen; render(); } else if (action === 'toggle-scale') { state.scale = state.scale === 1 ? 2 : 1; state.status = `应用缩放已切换为 ${state.scale.toFixed(1)}×。`; render(); } else if (action === 'about') { state.dialog = 'about'; render(); } else if (action === 'new-project') { state.dialog = { kind: 'project', item: null }; render(); } else if (action === 'edit-project') { state.dialog = { kind: 'project', item: data.exchange.projects.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-project') saveProject(); else if (action === 'new-knowledge') { state.dialog = { kind: 'knowledge', item: null }; render(); } else if (action === 'edit-knowledge') { state.dialog = { kind: 'knowledge', item: data.exchange.knowledge.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-knowledge') saveKnowledge(); else if (action === 'new-memory') { state.dialog = { kind: 'memory', item: null }; render(); } else if (action === 'edit-memory') { state.dialog = { kind: 'memory', item: data.exchange.memory.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-memory') saveMemory(); else if (action === 'new-relation') { state.dialog = { kind: 'relation' }; render(); } else if (action === 'save-relation') saveRelation(); else if (action === 'delete-knowledge') mutate({ entity: 'knowledge', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Knowledge 已软删除；可在回收站恢复。'); else if (action === 'delete-memory') mutate({ entity: 'memory', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Memory 已软删除；可在回收站恢复。'); else if (action === 'delete-relation') mutate({ entity: 'relation', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'relation 已撤销；可在回收站恢复。'); else if (action === 'restore') mutate({ entity: target.dataset.entity, action: 'restore', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, '对象已恢复为新的 revision。'); else if (action === 'undo') undo(); else if (action === 'redo') undo(true); else if (action === 'recycle') { state.dialog = 'recycle'; render(); } else if (action === 'metadata') { state.dialog = 'metadata'; render(); } else if (action === 'save-metadata') saveMetadata(); else if (action === 'start-export') exportCurrent(); });
+async function saveLocalMessage() { const text = state.composerDraft.trim(); if (!text) { state.error = '请输入非空内容。'; render(); return; } if (!native || !state.current) { state.error = native ? '先导入一个本地工作区。' : 'Web 预览不会写入 Desktop SQLite。'; render(); return; } const conversation = resolveConversation(state.current, state.selectedConversationId); try { if (conversation) { await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-message'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'appendMessage', objectId: conversation.id, expectedRevision: conversation.revision, fields: { text, role: 'user' } } }); } else { const receipt = await invoke('mutate_desktop_domain', { args: { intentId: intent('chat-create'), workspaceId: state.current.summary.id, entity: 'conversation', action: 'create', fields: { title: text.replace(/\s+/g, ' ').slice(0, 36), projectId: state.pane === 'work' ? state.selectedWorkProjectId : null, firstMessage: text } } }); state.selectedConversationId = receipt.objectId; } state.composerDraft = ''; state.error = ''; state.status = '已保存为本地记录；没有调用模型。'; await refresh(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `本地保存被拒绝：${String(error)}`; render(); } }
+app.addEventListener('click', async event => { const target = event.target.closest('[data-action]'); const action = target?.dataset.action; if (!action) return; const data = workspace(); if (action === 'new-chat') { state.settingsConversationReturn = null; state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; state.composerDraft = ''; state.profileOpen = false; state.error = ''; state.status = '新对话将先保存到本地；联网回答需另行配置并确认。'; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); render(); } else if (action === 'select-chat') { const settingsPage = target.closest('.android-settings-main') ? state.settingsSection : null; if (settingsPage && ['favorites', 'archived', 'recycle'].includes(settingsPage)) state.settingsConversationReturn = { page: settingsPage, label: settingsPage === 'favorites' ? '收藏' : settingsPage === 'archived' ? '已归档' : '回收站', readOnly: ['archived', 'recycle'].includes(settingsPage) }; else state.settingsConversationReturn = null; state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.selectedConversationId = target.dataset.id; if (native && state.current) { state.p6gSelection = await invoke('read_desktop_p6g_selection', { workspaceId: state.current.summary.id, conversationId: state.selectedConversationId }); state.conversationPreferences = state.p6gSelection.conversationOverride; } else { state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; } if (!state.chatScrollPositions.has(target.dataset.id)) state.pendingChatScrollToLatestId = target.dataset.id; state.profileOpen = false; state.error = ''; state.conversationFindOpen = false; state.conversationFindQuery = ''; recomputeConversationFind({ resetIndex: true }); if (!state.settingsConversationReturn?.readOnly) await markConversationOpened(target.dataset.id); render(); } else if (action === 'show-chat') { state.settingsConversationReturn = null; state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.profileOpen = false; render(); } else if (action === 'show-work') { state.settingsConversationReturn = null; state.pane = 'work'; state.selectedConversationId = null; state.selectedWorkProjectId = null; state.profileOpen = false; render(); } else if (action === 'show-connections') { state.pane = 'connections'; state.profileOpen = false; render(); } else if (action === 'toggle-profile') { state.profileOpen = !state.profileOpen; render(); } else if (action === 'save-local-message') saveLocalMessage(); else if (action === 'start-import') pickExchange(); else if (action === 'confirm-import') importPreflighted(); else if (action === 'close-dialog') { if (state.dialog?.kind === 'custom-instructions-fullscreen') { state.personalizationDraft = { ...state.dialog.previousDraft }; state.personalizationDirty = state.dialog.previousDirty; } state.dialog = null; render(); } else if (action === 'select-workspace') { state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.id }); state.history = await invoke('read_desktop_workbench_history', { workspaceId: target.dataset.id }); state.selectedConversationId = null; state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null }; reloadFavoriteConversationIds(); await loadConversationReadState({ observeSelected: false }); state.status = '已切换到独立本地工作区。'; state.error = ''; render(); } else if (action === 'show-conversation') { state.pane = 'conversation'; state.treeOpen = false; render(); } else if (action === 'show-knowledge') { state.pane = 'knowledge'; state.treeOpen = false; render(); } else if (action === 'toggle-inspector') { state.inspectorOpen = !state.inspectorOpen; render(); } else if (action === 'toggle-tree') { state.treeOpen = !state.treeOpen; render(); } else if (action === 'toggle-scale') { state.scale = state.scale === 1 ? 2 : 1; state.status = `应用缩放已切换为 ${state.scale.toFixed(1)}×。`; render(); } else if (action === 'about') { state.dialog = 'about'; render(); } else if (action === 'new-project') { state.dialog = { kind: 'project', item: null }; render(); } else if (action === 'edit-project') { state.dialog = { kind: 'project', item: data.exchange.projects.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-project') saveProject(); else if (action === 'new-knowledge') { state.dialog = { kind: 'knowledge', item: null }; render(); } else if (action === 'edit-knowledge') { state.dialog = { kind: 'knowledge', item: data.exchange.knowledge.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-knowledge') saveKnowledge(); else if (action === 'new-memory') { state.dialog = { kind: 'memory', item: null }; render(); } else if (action === 'edit-memory') { state.dialog = { kind: 'memory', item: data.exchange.memory.find(item => item.id === target.dataset.id) }; render(); } else if (action === 'save-memory') saveMemory(); else if (action === 'new-relation') { state.dialog = { kind: 'relation' }; render(); } else if (action === 'save-relation') saveRelation(); else if (action === 'delete-knowledge') mutate({ entity: 'knowledge', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Knowledge 已软删除；可在回收站恢复。'); else if (action === 'delete-memory') mutate({ entity: 'memory', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'Memory 已软删除；可在回收站恢复。'); else if (action === 'delete-relation') mutate({ entity: 'relation', action: 'softDelete', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, 'relation 已撤销；可在回收站恢复。'); else if (action === 'restore') mutate({ entity: target.dataset.entity, action: 'restore', objectId: target.dataset.id, expectedRevision: Number(target.dataset.revision), fields: {} }, '对象已恢复为新的 revision。'); else if (action === 'undo') undo(); else if (action === 'redo') undo(true); else if (action === 'recycle') { state.dialog = 'recycle'; render(); } else if (action === 'metadata') { state.dialog = 'metadata'; render(); } else if (action === 'save-metadata') saveMetadata(); else if (action === 'start-export') exportCurrent(); });
 app.addEventListener('click', event => {
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'return-workspace-origin') {
@@ -2737,7 +2796,7 @@ app.addEventListener('click', event => {
       state.pane = 'settings';
       state.settingsSection = destination.settingsSection || 'workspace';
       state.settingsPicker = null;
-    } else state.pane = 'chat';
+    } else state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
   } else if (action === 'show-work') {
     state.status = '已选择 LOCAL_OFFLINE / LOCAL_ONLY：继续本地工作；没有调用模型或同步。';
     state.error = '';
@@ -2855,7 +2914,7 @@ async function clearMemorySummary() {
     state.dialog = null;
     state.memorySummaryNotice = memories.length ? '记忆摘要已删除。' : '没有可删除的记忆摘要。';
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.dialog = null;
     state.error = `记忆摘要删除在 ${removed} / ${memories.length} 条后停止：${String(error)}`;
   }
@@ -3258,7 +3317,7 @@ window.addEventListener('scroll', () => {
   if (state.contextMenu) positionConversationContextMenu();
   else conversationLongPress.cancel('scroll');
 }, true);
-restoreTemporaryChat().then(refresh).catch(error => { state.error = `无法打开本地工作区：${String(error)}`; render(); });
+restoreTemporaryChat().then(refresh).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `无法打开本地工作区：${String(error)}`; render(); });
 app.addEventListener('click', event => {
   if (event.target.closest('[data-action]')?.dataset.action !== 'show-p8-inspect') return;
   state.pane = 'p8-inspect';
@@ -3340,13 +3399,14 @@ function rememberSettingsScroll() {
 
 function restoreSettingsScroll() {
   document.querySelectorAll('[data-settings-scroll-key]').forEach(element => {
-    element.scrollTop = state.settingsScrollPositions.get(element.dataset.settingsScrollKey) || 0;
+    const top = state.settingsScrollPositions.get(element.dataset.settingsScrollKey) || 0;
+    if (element.scrollTop !== top) element.scrollTop = top;
   });
 }
 
 function restoreSidebarScroll() {
   const sidebarScroll = document.querySelector('.chat-sidebar-scroll');
-  if (sidebarScroll) sidebarScroll.scrollTop = state.sidebarScrollTop;
+  if (sidebarScroll && sidebarScroll.scrollTop !== state.sidebarScrollTop) sidebarScroll.scrollTop = state.sidebarScrollTop;
 }
 
 function restoreChatScroll() {
@@ -3379,6 +3439,7 @@ function restoreChatScroll() {
 
 function renderUnified() {
   clearModelCredentialDraftOutsideEditor();
+  const { runtimeRefresh = false } = arguments[0] || {};
   queueMicrotask(() => resizeComposer(document.getElementById('chat-composer')));
   const focusedComposer = document.activeElement?.id === 'chat-composer' ? document.activeElement : null;
   const composerSelection = focusedComposer ? [focusedComposer.selectionStart, focusedComposer.selectionEnd] : null;
@@ -3410,24 +3471,23 @@ function renderUnified() {
   const workPanel = state.pane === 'projects' ? projectsCanvas(data)
     : state.pane === 'knowledge' ? knowledgeOnlyCanvas(data)
         : state.pane === 'memory' ? memoryCanvas(data)
-          : state.pane === 'reminders' ? renderDesktopRemindersPage({ projection: state.reminders, notificationEnabled: Boolean(state.productSettings.monitorNotifications), notificationPermission: state.reminderNotificationPermission, native, previewInteractive: Boolean(c09ReminderPreview), evidenceLabel: c09ReminderPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', editor: state.reminderEditor, embedded: true })
-            : state.pane === 'transcription' ? renderDesktopTranscriptionPage({ projection: state.transcription, selectedTaskId: state.selectedTranscriptionTaskId, native, busyTaskId: state.transcriptionBusyTaskId, previewInteractive: Boolean(c10TranscriptionPreview), evidenceLabel: c10TranscriptionPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', embedded: true })
+          : state.pane === 'reminders' ? renderDesktopRemindersPage({ loading: utilityPagesLoading.has('reminders'), projection: state.reminders, notificationEnabled: Boolean(state.productSettings.monitorNotifications), notificationPermission: state.reminderNotificationPermission, native, previewInteractive: Boolean(c09ReminderPreview), evidenceLabel: c09ReminderPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', editor: state.reminderEditor, embedded: true })
+            : state.pane === 'transcription' ? renderDesktopTranscriptionPage({ loading: utilityPagesLoading.has('transcription'), projection: state.transcription, selectedTaskId: state.selectedTranscriptionTaskId, native, busyTaskId: state.transcriptionBusyTaskId, previewInteractive: Boolean(c10TranscriptionPreview), evidenceLabel: c10TranscriptionPreview ? 'Web 只读交互样本不会写入 Desktop SQLite' : '', embedded: true })
           : state.pane === 'p8-inspect' ? p8InspectCanvas({ agentRuns: state.agentRuns, native, escape, short })
             : null;
-  const standaloneWorkspacePage = (!utilityPane && Boolean(workPanel)) || isWorkspaceRoot(data, visiblePane, state.selectedWorkProjectId, state.selectedConversationId);
+  const standaloneWorkspacePage = (!utilityPane && Boolean(workPanel)) || (data?.dataArea !== 'WORK' && isWorkspaceRoot(data, visiblePane, state.selectedWorkProjectId, state.selectedConversationId));
   const nextTranscriptRetention = currentTranscriptRetention(data);
   const existingTranscript = document.querySelector('.chat-scroll[data-conversation-id]');
-  const preserveTranscript = canRetainTranscript(renderedTranscriptRetention, nextTranscriptRetention)
+  const preserveTranscript = !runtimeRefresh && canRetainTranscript(renderedTranscriptRetention, nextTranscriptRetention)
     && existingTranscript?.dataset.conversationId === nextTranscriptRetention.conversation.id;
   // Most shell interactions (menus, sidebar, dialogs and header controls) do
-  // not change a transcript. Move that existing scroll owner out before the
-  // shell commit and place it back into the new slot, so a long conversation is
-  // neither serialized nor parsed again just because a surrounding control changed.
+  // not change a transcript. Keep its scroll owner connected during shell patches;
+  // detaching/reinserting still forces a long WebKit layout and loses selection.
   const retainedTranscript = preserveTranscript ? existingTranscript : null;
   const retainedTranscriptTop = retainedTranscript?.scrollTop;
   const nextSidebarRetention = currentSidebarRetention(data);
   const existingSidebar = document.querySelector('.chat-sidebar');
-  const preserveSidebar = canRetainSidebar(renderedSidebarRetention, nextSidebarRetention) && Boolean(existingSidebar);
+  const preserveSidebar = !runtimeRefresh && canRetainSidebar(renderedSidebarRetention, nextSidebarRetention) && Boolean(existingSidebar);
   // A long imported history can contain hundreds of sidebar rows. Menus,
   // Composer sheets and dialogs do not alter those rows, so keep this owner in
   // place instead of serializing and parsing the whole list on every overlay.
@@ -3439,21 +3499,26 @@ function renderUnified() {
     .filter(node => node.scrollTop || node.scrollLeft)
     .map(node => ({ node, top: node.scrollTop, left: node.scrollLeft })) : [];
   if (retainedPreview) retainedPreview.remove();
-  if (retainedTranscript) retainedTranscript.replaceWith(document.createComment('retained-transcript'));
-  if (retainedSidebar) retainedSidebar.replaceWith(document.createComment('retained-sidebar'));
   app.className = `app-shell chat-first ${standaloneWorkspacePage ? 'workspace-standalone-shell' : ''} ${visiblePane === 'settings' ? 'settings-mode' : ''} ${sidebarWorkMode ? 'work-mode' : ''} ${state.sidebarOpen ? 'fallback-sidebar-open' : ''} ${state.searchPanel ? 'search-mode' : ''}`;
-  app.innerHTML = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, syncedConversationKeys: new Set(state.accountSync?.syncedConversationKeys || []), conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
+  const nextShellHtml = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, syncedConversationKeys: new Set(state.accountSync?.syncedConversationKeys || []), conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
+  const runtimePatched = runtimeRefresh && commitRuntimeChatShell(app, nextShellHtml);
+  const shellPatched = !runtimeRefresh && commitRetainedChatShell(app, nextShellHtml, retainedTranscript, retainedSidebar);
+  if (!runtimePatched && !shellPatched) {
+    if (retainedTranscript) retainedTranscript.replaceWith(document.createComment('retained-transcript'));
+    if (retainedSidebar) retainedSidebar.replaceWith(document.createComment('retained-sidebar'));
+    app.innerHTML = nextShellHtml;
+  }
   scheduleComposerModelPricingRefresh();
-  if (retainedTranscript) {
+  if (retainedTranscript && !shellPatched) {
     const slot = app.querySelector('[data-preserved-transcript-slot]');
     if (slot) slot.replaceWith(retainedTranscript);
     retainedTranscript.scrollTop = retainedTranscriptTop;
   }
   if (retainedSidebar) {
-    app.querySelector('[data-preserved-sidebar-slot]')?.replaceWith(retainedSidebar);
+    if (!shellPatched) app.querySelector('[data-preserved-sidebar-slot]')?.replaceWith(retainedSidebar);
     patchRetainedSidebarRows();
   }
-  bindAssistantMessageMenuTriggers();
+  if (!retainedTranscript) bindAssistantMessageMenuTriggers();
   renderedTranscriptRetention = nextTranscriptRetention;
   renderedSidebarRetention = nextSidebarRetention;
   app.style.setProperty('--chat-sidebar-width', `${state.sidebarWidth}px`);
@@ -3482,7 +3547,7 @@ function renderUnified() {
     // Restore synchronously above; fresh nodes use the conversation owner here.
     // Explicit navigation must run after reinsertion, which cancels WebKit's
     // in-flight smooth scroll. Passive rerenders still preserve the viewport.
-    if (!retainedTranscript || state.pendingChatScrollToLatestId || state.pendingChatSendScrollToLatestId) restoreChatScroll();
+    if ((!retainedTranscript && !runtimePatched) || state.pendingChatScrollToLatestId || state.pendingChatSendScrollToLatestId) restoreChatScroll();
     restoreSidebarScroll();
     restoreSettingsScroll();
     if (state.searchPanel) restoreFullSearchScroll();
@@ -4009,7 +4074,7 @@ function loadImagePreviewPayload(workspaceId, attachmentId) {
       await decodeImagePreviewPayload(result.dataUrl);
       return result;
     })
-    .catch(error => {
+    .catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
       if (imagePreviewPayloadCache.get(key) === request) imagePreviewPayloadCache.delete(key);
       throw error;
     });
@@ -4054,7 +4119,7 @@ async function openImagePreview(attachmentId, workspaceId = state.current?.summa
     if (imagePreviewLoadRequest !== request) return;
     imagePreviewLoadRequest = null;
     state.imagePreview = { ...result, ...request, zoom: 1, panX: 0, panY: 0, navigationError: '' };
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     if (imagePreviewLoadRequest !== request) return;
     imagePreviewLoadRequest = null;
     // A failed adjacent read must not blank the image already being viewed.
@@ -4162,7 +4227,7 @@ async function openPdfPreview(attachmentId, pageNumber = undefined, workspaceId 
   state.pdfPreview = { loading: true }; render();
   try {
     state.pdfPreview = { ...await invoke('read_desktop_pdf_preview', { args: { workspaceId, attachmentId, pageNumber } }), workspaceId };
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.pdfPreview = { error: '本地 PDF 不可用或校验失败。' };
   }
   render();
@@ -4200,7 +4265,7 @@ async function openVideoPreview(attachmentId, positionMillis = undefined, worksp
     if (!preview?.attachmentId || !preview?.mediaUrl || !Number.isFinite(Number(preview.byteCount)) || !Number.isFinite(Number(preview.durationMillis))) throw new Error('本地视频预览状态无效');
     state.videoPreview = { ...preview, workspaceId };
   }
-  catch (error) { if (state.videoPreview?.request !== request) return; state.videoPreview = { error: '本地视频不可用、已损坏或校验失败。' }; }
+  catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (state.videoPreview?.request !== request) return; state.videoPreview = { error: '本地视频不可用、已损坏或校验失败。' }; }
   render();
   const restorePosition = Math.max(0, Number(state.videoPreview?.positionMillis) || 0) / 1000;
   queueMicrotask(() => {
@@ -4541,7 +4606,8 @@ function ordinaryComposerDraftArgs() {
 function persistOrdinaryComposerDraft() {
   const args = arguments.length ? arguments[0] : ordinaryComposerDraftArgs();
   if (!args) return Promise.resolve();
-  const save = ordinaryComposerDraftQueue.catch(() => {}).then(() => invoke('save_desktop_conversation_draft', { args }));
+  const owner = state;
+  const save = ordinaryComposerDraftQueue.catch(() => {}).then(() => invoke('save_desktop_conversation_draft', { args }, owner));
   ordinaryComposerDraftQueue = save;
   return save;
 }
@@ -4550,28 +4616,38 @@ function resetComposerPresentation() {
   state.composerDraft = '';
   state.composerAttachments = [];
 }
+let newConversationDraftExpiryTimer = null;
+function armNewConversationDraftExpiry(expiresAtMs) {
+  if (newConversationDraftExpiryTimer) clearTimeout(newConversationDraftExpiryTimer);
+  newConversationDraftExpiryTimer = null;
+  if (!expiresAtMs || state.selectedConversationId || state.temporaryConversation) return;
+  const generation = composerDraftRouteGeneration;
+  const workspaceId = state.current?.summary?.id;
+  newConversationDraftExpiryTimer = setTimeout(() => {
+    if (generation !== composerDraftRouteGeneration || state.selectedConversationId || state.current?.summary?.id !== workspaceId) return;
+    void loadOrdinaryComposerDraft().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `草稿未读取：${String(error)}`; render(); });
+  }, Math.max(0, expiresAtMs - Date.now()));
+}
 function resetNewConversationComposer() {
   resetComposerPresentation();
-  const workspaceId = workspace()?.summary?.id;
-  if (!native || !workspaceId || state.temporaryConversation || state.selectedConversationId) return;
-  // A user explicitly entering a new chat abandons only the unbound native draft. Browser
-  // storage is deliberately not a recovery owner, so it cannot repopulate this route later.
-  void persistOrdinaryComposerDraft({ workspaceId, conversationId: null, text: '', attachmentIds: [] }).catch(error => {
-    state.error = `新对话草稿未清除：${String(error)}`;
+  void loadOrdinaryComposerDraft().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
+    state.error = `新对话草稿未读取：${String(error)}`;
     render();
   });
 }
 function scheduleOrdinaryComposerDraft() {
   const args = ordinaryComposerDraftArgs();
   if (!args) return;
-  scheduledOrdinaryComposerDraft = args;
-  if (ordinaryComposerDraftTimer) clearTimeout(ordinaryComposerDraftTimer);
-  ordinaryComposerDraftTimer = setTimeout(() => {
-    ordinaryComposerDraftTimer = null;
-    const scheduled = scheduledOrdinaryComposerDraft;
-    scheduledOrdinaryComposerDraft = null;
-    void persistOrdinaryComposerDraft(scheduled);
-  }, 180);
+  // Persist each edit immediately; route changes and normal exit have no debounce gap.
+  composerDraftRouteGeneration += 1;
+  armNewConversationDraftExpiry(args.text && !args.conversationId ? Date.now() + 3_600_000 : null);
+  const generation = composerDraftRouteGeneration;
+  void persistOrdinaryComposerDraft(args).then(draft => {
+    if (generation === composerDraftRouteGeneration) armNewConversationDraftExpiry(draft?.expiresAtMs);
+  }).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
+    state.error = `草稿未保存：${String(error)}`;
+    render();
+  });
 }
 async function flushOrdinaryComposerDraft() {
   if (ordinaryComposerDraftTimer) {
@@ -4589,6 +4665,8 @@ async function loadOrdinaryComposerDraft() {
   const args = ordinaryComposerDraftArgs();
   if (!args) return;
   const routeGeneration = ++composerDraftRouteGeneration;
+  await flushOrdinaryComposerDraft();
+  if (routeGeneration !== composerDraftRouteGeneration) return;
   const draft = await invoke('read_desktop_conversation_draft', { workspaceId: args.workspaceId, conversationId: args.conversationId });
   if (routeGeneration !== composerDraftRouteGeneration || state.current?.summary?.id !== args.workspaceId || (state.selectedConversationId || null) !== args.conversationId) return;
   if (!draft) {
@@ -4598,6 +4676,7 @@ async function loadOrdinaryComposerDraft() {
   }
   state.composerDraft = draft.text || '';
   state.composerAttachments = Array.isArray(draft.attachments) ? draft.attachments : [];
+  armNewConversationDraftExpiry(draft.expiresAtMs);
 }
 function writeComposerAttachments() { scheduleOrdinaryComposerDraft(); }
 
@@ -4614,7 +4693,7 @@ app.addEventListener('click', event => {
   if (action !== 'select-chat') return;
   resetComposerPresentation();
   render();
-  void loadOrdinaryComposerDraft().then(render).catch(error => {
+  void loadOrdinaryComposerDraft().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `普通会话草稿未读取：${String(error)}`;
     render();
   });
@@ -4705,7 +4784,7 @@ async function importComposerClipboardFiles(files) {
         writeComposerAttachments();
       }
       imported += 1;
-    } catch (error) { failures.push(`${clipboardAttachmentName(file, index)}：${String(error)}`); }
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; failures.push(`${clipboardAttachmentName(file, index)}：${String(error)}`); }
   }
   state.status = imported ? `已将 ${imported} 个粘贴附件私有复制到当前草稿；尚未发送。${files.length > accepted.length ? ' 其余附件超过本条 4 个上限，未加入。' : ''}` : '';
   state.error = failures.length ? `以下粘贴附件未加入草稿：${failures.join('；')}` : '';
@@ -4725,8 +4804,8 @@ async function enterTemporaryChat() {
     state.composerDraft = state.temporaryConversation.draft || '';
     state.composerAttachments = [];
     state.selectedConversationId = null;
-    state.pane = 'chat'; state.error = ''; state.status = '已进入临时聊天：仅本地隔离恢复，最长保留 24 小时。'; render();
-  } catch (error) { state.error = `临时聊天未能打开：${String(error)}`; render(); }
+    state.pane = state.dataArea === 'WORK' ? 'work' : 'chat'; state.error = ''; state.status = '已进入临时聊天：仅本地隔离恢复，最长保留 24 小时。'; render();
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时聊天未能打开：${String(error)}`; render(); }
 }
 
 async function restoreTemporaryChat() {
@@ -4779,7 +4858,7 @@ async function flushTemporaryDraft() {
 }
 async function updateTemporaryDraft(value) {
   scheduleTemporaryDraft(value);
-  try { await flushTemporaryDraft(); } catch (error) { state.error = `临时草稿未保存：${String(error)}`; render(); throw error; }
+  try { await flushTemporaryDraft(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时草稿未保存：${String(error)}`; render(); throw error; }
 }
 window.addEventListener('pagehide', () => {
   // Best-effort final flush; normal submit already awaits the same queues.
@@ -4796,7 +4875,7 @@ async function updateTemporaryModelOverride(value) {
     state.error = '';
     state.status = modelOverrideId ? '已保存临时会话的本地模型选择；没有读取 Key、没有调用 Provider。' : '临时会话已切回自动；仍只保存在隔离恢复记录。';
     render();
-  } catch (error) { state.error = `临时模型选择未保存：${String(error)}`; render(); }
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时模型选择未保存：${String(error)}`; render(); }
 }
 
 async function updateP6GConversationOverride(modelId) {
@@ -4826,7 +4905,7 @@ async function updateP6GConversationOverride(modelId) {
     state.status = modelId ? '已保存当前会话的本地手动模型选择；未读取 Key、未调用 Provider。' : '已切回自动；当前会话恢复本地策略。';
     state.error = '';
     await refresh();
-  } catch (error) { state.error = `模型选择未保存：${String(error)}`; state.p6gModelPickerOpen = false; render(); }
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `模型选择未保存：${String(error)}`; state.p6gModelPickerOpen = false; render(); }
 }
 
 async function updateConversationPreferences(patch, { close = false } = {}) {
@@ -4866,7 +4945,7 @@ async function updateConversationPreferences(patch, { close = false } = {}) {
     state.error = '';
     await refresh();
     if (close) restoreOverlayFocus();
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `会话偏好未保存：${String(error)}`;
     if (close) { state.composerAddOpen = false; state.composerAddPage = 'root'; }
     render();
@@ -4882,7 +4961,7 @@ async function saveP6GGlobalDefault() {
     state.status = tier ? `已保存本地全局默认：${tier}。` : '已清除本地全局默认；自动策略将使用当前请求档位。';
     state.error = '';
     await refresh();
-  } catch (error) { state.error = `全局默认未保存：${String(error)}`; render(); }
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `全局默认未保存：${String(error)}`; render(); }
 }
 
 function leaveTemporaryChat() {
@@ -4891,11 +4970,11 @@ function leaveTemporaryChat() {
   resetComposerPresentation();
   state.temporaryModelOpen = false;
   state.selectedConversationId = null;
-  state.pane = 'chat';
+  state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
   state.status = '已返回普通聊天；临时内容仍在隔离恢复记录中，24 小时内可继续。';
   state.error = '';
   render();
-  void loadOrdinaryComposerDraft().then(render).catch(error => { state.error = `普通会话草稿未读取：${String(error)}`; render(); });
+  void loadOrdinaryComposerDraft().then(render).catch(error => { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `普通会话草稿未读取：${String(error)}`; render(); });
 }
 
 async function sendLocalMessage() {
@@ -4910,7 +4989,7 @@ async function sendLocalMessage() {
       await updateTemporaryDraft(state.composerDraft);
       state.temporaryConversation = await invoke('append_desktop_temporary_message', { args: { temporaryId: state.temporaryConversation.temporaryId } });
       state.composerDraft = ''; state.composerAttachments = []; state.error = ''; state.status = '临时消息已保存到隔离恢复记录；没有调用模型。'; render();
-    } catch (error) { state.error = `临时消息未保存：${String(error)}`; render(); }
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时消息未保存：${String(error)}`; render(); }
     return;
   }
   if (!native || !state.current) {
@@ -4918,7 +4997,7 @@ async function sendLocalMessage() {
     render();
     return;
   }
-  try { await flushOrdinaryComposerDraft(); } catch (error) {
+  try { await flushOrdinaryComposerDraft(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.error = `草稿未写入本机：${String(error)}`;
     render();
     return;
@@ -4974,8 +5053,8 @@ async function sendLocalMessage() {
     await loadDesktopContextRecords();
     await loadDesktopDiagnosticRecords();
     await syncPersistedConversationContinuation(workspaceId, result.conversationId);
-    await refresh();
-  } catch (error) {
+    await refresh({ runtimeRefresh: true });
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     if (state.pendingCreatedConversationRouteWorkspaceId === state.current?.summary?.id) state.pendingCreatedConversationRouteWorkspaceId = null;
     if (state.pendingChatSubmission?.clientSubmissionId === clientSubmissionId) state.pendingChatSubmission = null;
     state.composerDraft = sentDraft;
@@ -5027,7 +5106,7 @@ async function openComposerCamera() {
     state.cameraCaptureReady = true;
     render();
     queueMicrotask(attachComposerCameraStream);
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     stopComposerCamera({ close: false });
     state.cameraCaptureError = error?.name === 'NotAllowedError'
       ? '相机权限未授予；可在“系统设置 → 隐私与安全性 → 相机”允许后重试。草稿没有改变。'
@@ -5064,7 +5143,7 @@ async function captureComposerCamera() {
     stopComposerCamera();
     state.status = '相机原图已私有复制到当前草稿；尚未发送。';
     state.error = '';
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.cameraCaptureBusy = false;
     state.cameraCaptureError = `相机原图未加入草稿：${String(error)}`;
   }
@@ -5094,7 +5173,7 @@ async function pickComposerAttachment(kind) {
     if (state.composerAttachments.some(item => item.sha256 === attachment.sha256)) { state.status = '相同附件已在当前草稿中；未重复添加。'; }
     else { state.composerAttachments = [...state.composerAttachments, attachment]; writeComposerAttachments(); state.status = '附件已私有复制并完成内容校验；未外发。'; }
     state.composerAddOpen = false; state.error = ''; render();
-  } catch (error) { state.error = `附件未加入草稿：${String(error)}`; render(); }
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `附件未加入草稿：${String(error)}`; render(); }
 }
 
 async function mutateConversationLifecycle(target, action, fields, success) {
@@ -5150,7 +5229,7 @@ async function mutateConversationLifecycle(target, action, fields, success) {
     state.dialog = null;
     await restoreCloudSidebarWorkspace(sidebarWorkspace);
     await refresh();
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     if (localSaved) {
       await refreshSavedCloudRow().catch(() => {});
       state.dialog = null;
@@ -5274,7 +5353,7 @@ async function confirmConversationBatchDelete() {
       : `已将 ${completed} 个会话移入回收站，可恢复。`;
     await restoreCloudSidebarWorkspace(sidebarWorkspace);
     await refresh();
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
     state.dialog = { ...dialog, submitting: false, failure: `${completed ? `已处理 ${completed} 个；` : ''}${String(error)}` };
     render();
@@ -5317,7 +5396,7 @@ async function confirmConversationDelete(target) {
     state.status = completed.status;
     await refresh();
     document.querySelector(`[data-action="${completed.focusAction}"]`)?.focus({ preventScroll: true });
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     if (state.dialog?.kind === 'conversation-delete' && state.dialog.id === dialog.id) {
       state.dialog = failConversationRecycle(dialog, error);
     }
@@ -5344,7 +5423,7 @@ async function confirmConversationPermanentDelete(target) {
     await refresh();
     await loadDesktopPrivacyInventory();
     render();
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     if (state.dialog?.kind === 'conversation-permanent-delete') state.dialog = { ...dialogState, submitting: false, failure: String(error) };
     render();
   }
@@ -5378,7 +5457,7 @@ async function confirmConversationBulkCleanup(scope) {
       completed += 1;
       removeFavoriteConversation(conversation.id);
       if (state.selectedConversationId === conversation.id) state.selectedConversationId = null;
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       rejected.push(String(error));
     }
   }
@@ -5394,6 +5473,17 @@ async function confirmConversationBulkCleanup(scope) {
   await loadDesktopPrivacyInventory();
   render();
 }
+
+app.addEventListener('contextmenu', event => {
+  const message = event.target.closest?.('.chat-message[data-message-id]');
+  if (!message || event.target.closest?.('[data-attachment-id]') || window.getSelection()?.toString().trim()) return;
+  event.preventDefault();
+  openTransientOverlay('assistant-message-menu', message, {
+    messageId: message.dataset.messageId,
+    role: message.classList.contains('user') ? 'user' : 'assistant',
+    anchorRect: { left: event.clientX, right: event.clientX + 1, top: event.clientY, bottom: event.clientY + 1 },
+  });
+});
 
 app.addEventListener('contextmenu', event => {
   const row = event.target.closest('[data-conversation-row]');
@@ -5414,7 +5504,7 @@ app.addEventListener('click', async event => {
     try {
       await invoke('choose_desktop_storage_location', { selectedPath });
       state.dialog = { kind: 'model-settings-feedback', message: '保存路径已设置，下次启动生效。空目录会复制现有数据；已有南枫 AI 数据的目录会直接读取。旧目录保留。' };
-    } catch (error) { state.dialog = { kind: 'model-settings-feedback', failed: true, message: String(error) }; }
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.dialog = { kind: 'model-settings-feedback', failed: true, message: String(error) }; }
     render(); return;
   }
   if (action === 'open-conversation-row-menu') { openConversationContextMenu(target.closest('[data-conversation-row]'), target); return; }
@@ -5461,7 +5551,7 @@ app.addEventListener('click', async event => {
       await navigator.clipboard.writeText(preview.text);
       showCopyIconFeedback(target);
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       if (error?.name !== 'AbortError') showPreviewActionError(target, '复制未完成。');
     }
     return;
@@ -5493,21 +5583,21 @@ app.addEventListener('click', async event => {
     try {
       if (action === 'chat-attachment-save') await saveAttachmentCopy(item);
       else await sharePreviewAttachment(item);
-    } catch (error) { if (error?.name !== 'AbortError') showPreviewActionError(target, action === 'chat-attachment-save' ? '附件副本未保存。' : '分享未打开。'); }
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (error?.name !== 'AbortError') showPreviewActionError(target, action === 'chat-attachment-save' ? '附件副本未保存。' : '分享未打开。'); }
     return;
   }
   if (action === 'save-preview-attachment') {
     event.preventDefault();
     const preview = activePreviewForKind(target.dataset.previewKind);
     try { await saveAttachmentCopy(preview || {}); }
-    catch (error) { showPreviewActionError(target, '附件副本未保存。'); }
+    catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; showPreviewActionError(target, '附件副本未保存。'); }
     return;
   }
   if (action === 'share-preview-attachment') {
     event.preventDefault();
     const preview = activePreviewForKind(target.dataset.previewKind);
     try { await sharePreviewAttachment(preview); state.error = ''; }
-    catch (error) { if (error?.name !== 'AbortError') showPreviewActionError(target, '分享未打开。'); }
+    catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; if (error?.name !== 'AbortError') showPreviewActionError(target, '分享未打开。'); }
     return;
   }
   if (action === 'close-image-preview') { event.preventDefault(); cancelImagePreviewLoad(); state.imagePreview = null; render(); return; }
@@ -5562,7 +5652,7 @@ app.addEventListener('click', async event => {
       const accepted = await invoke('cancel_desktop_compare', { args: { executionId } });
       state.status = accepted ? '正在停止 Compare 两个分支；已生成内容会分别保留。' : '当前 Compare 没有可停止的分支。';
       state.error = '';
-    } catch (error) { state.error = `Compare 停止失败：${String(error)}`; }
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `Compare 停止失败：${String(error)}`; }
     render();
     return;
   }
@@ -5573,7 +5663,7 @@ app.addEventListener('click', async event => {
       const accepted = await invoke('cancel_desktop_ordinary_chat', { args: { conversationId: state.selectedConversationId } });
       state.status = accepted ? '正在停止；已生成的文本会保留。' : '当前没有可停止的生成。';
       state.error = '';
-    } catch (error) { state.error = `停止失败：${String(error)}`; }
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `停止失败：${String(error)}`; }
     render();
     return;
   }
@@ -5592,7 +5682,7 @@ app.addEventListener('click', async event => {
       await loadDesktopDiagnosticRecords();
       await syncPersistedConversationContinuation(retryWorkspaceId, result.conversationId);
       await refresh();
-    } catch (error) { state.error = `重试被拒绝：${String(error)}`; render(); }
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `重试被拒绝：${String(error)}`; render(); }
     return;
   }
   if (action === 'copy-message') {
@@ -5604,7 +5694,7 @@ app.addEventListener('click', async event => {
       await navigator.clipboard.writeText(payload);
       showMessageCopyFeedback(target);
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `复制失败：${String(error)}`;
       render();
     }
@@ -5619,7 +5709,7 @@ app.addEventListener('click', async event => {
       await navigator.clipboard.writeText(payload);
       showCopyIconFeedback(target);
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `复制失败：${String(error)}`;
       render();
     }
@@ -5633,7 +5723,7 @@ app.addEventListener('click', async event => {
       await navigator.clipboard.writeText(payload);
       showCopyIconFeedback(target);
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `复制失败：${String(error)}`;
       render();
     }
@@ -5658,10 +5748,30 @@ app.addEventListener('click', async event => {
     try {
       await invoke('open_desktop_source_link', { args: { href: String(target.dataset.href || '') } });
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `无法打开来源网站：${String(error)}`;
       render();
     }
+    return;
+  }
+  if (action === 'reference-message-to-other-area') {
+    event.preventDefault();
+    const sourceOwner = state;
+    const targetArea = state.dataArea === 'CHAT' ? 'WORK' : 'CHAT';
+    state.assistantMessageMenu = null;
+    try {
+      const receipt = await invoke('reference_desktop_message_to_other_area', {
+        workspaceId: state.current.summary.id, conversationId: state.selectedConversationId,
+        messageId: target.dataset.messageId,
+        targetWorkspaceId: dataAreaStates.get(targetArea)?.current?.summary?.id || null,
+      });
+      await switchDataArea(targetArea, targetArea === 'WORK' ? 'work' : 'chat');
+      state.current = await invoke('read_desktop_workspace', { workspaceId: receipt.workspaceId });
+      state.selectedConversationId = null;
+      state.selectedWorkProjectId = null;
+      await loadOrdinaryComposerDraft();
+      render();
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; sourceOwner.error = String(error); if (state === sourceOwner) render(); }
     return;
   }
   if (action === 'show-assistant-answer-information' || action === 'show-answer-context') {
@@ -5694,7 +5804,7 @@ app.addEventListener('click', async event => {
         state.status = '已复制可分享内容；请在目标应用中通过系统粘贴发送。';
       }
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       if (error?.name !== 'AbortError') state.error = '系统分享不可用，且未复制分享内容。';
     }
     render();
@@ -5715,14 +5825,14 @@ app.addEventListener('click', async event => {
       state.status = '已从该持久化消息创建本地分支；保留前缀与来源，不连接 Provider。';
       state.error = '';
       await refresh();
-    } catch (error) { state.error = `创建分支被拒绝：${String(error)}`; render(); }
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `创建分支被拒绝：${String(error)}`; render(); }
     return;
   }
   if (action === 'toggle-temporary-chat') { if (state.temporaryConversation) leaveTemporaryChat(); else await enterTemporaryChat(); return; }
   if (action === 'pick-composer-image' || action === 'pick-composer-file') { await pickComposerAttachment(action === 'pick-composer-image' ? 'image' : 'file'); return; }
   if (action === 'remove-composer-attachment') {
     if (state.temporaryConversation) {
-      try { state.temporaryConversation = await invoke('remove_desktop_temporary_attachment', { args: { temporaryId: state.temporaryConversation.temporaryId, attachmentId: target.dataset.id } }); state.error = ''; render(); } catch (error) { state.error = `临时附件未移除：${String(error)}`; render(); }
+      try { state.temporaryConversation = await invoke('remove_desktop_temporary_attachment', { args: { temporaryId: state.temporaryConversation.temporaryId, attachmentId: target.dataset.id } }); state.error = ''; render(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时附件未移除：${String(error)}`; render(); }
     } else { state.composerAttachments = state.composerAttachments.filter(item => item.id !== target.dataset.id); writeComposerAttachments(); render(); }
     return;
   }
@@ -5804,7 +5914,7 @@ app.addEventListener('click', async event => {
       state.contextMenu = null;
       state.status = '已取消同步；云端副本已删除，本地对话保留。';
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `取消同步未完成：${String(error)}`;
     }
     await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
@@ -5827,7 +5937,7 @@ app.addEventListener('click', async event => {
       await markConversationUnread(target.dataset.id);
       state.status = '会话已标记未读；真正打开该会话后清除。';
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `会话未读状态未更新：${String(error)}`;
     }
     await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
@@ -5987,7 +6097,7 @@ app.addEventListener('click', async event => {
     state.pane = 'memory';
     state.profileOpen = false;
   } else if (action === 'show-conversation') {
-    state.pane = 'chat';
+    state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
     state.profileOpen = false;
   }
   if (['return-workspace-origin', 'show-work', 'show-workspace', 'select-work-project', 'new-work-chat', 'select-work-conversation', 'show-projects', 'show-knowledge', 'show-memory', 'show-conversation'].includes(action)) {
@@ -6034,10 +6144,10 @@ app.addEventListener('click', async event => {
   if (action === 'open-search-attachment') { event.preventDefault(); if (searchAttachmentLongPressTriggered === target.dataset.entryId) { searchAttachmentLongPressTriggered = null; return; } await openSearchAttachment(fullSearchHit(target.dataset.entryId)); return; }
   if (action === 'open-search-attachment-menu') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId); if (hit) { rememberFullSearchScroll(hit.entryId); state.dialog = { kind: 'search-attachment-actions', hit, anchor: attachmentMenuAnchor(target.closest('.desktop-search-attachment-card') || target) }; render(); } return; }
   if (action === 'preview-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; state.dialog = null; await openSearchAttachment(hit); return; }
-  if (action === 'save-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; try { if (await saveAttachmentCopy(hit)) state.dialog = null; } catch (error) { state.error = `附件副本未保存：${String(error)}`; } render(); return; }
+  if (action === 'save-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; try { if (await saveAttachmentCopy(hit)) state.dialog = null; } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `附件副本未保存：${String(error)}`; } render(); return; }
   if (action === 'locate-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; state.dialog = null; await locateSearchHit(hit); return; }
   if (action === 'ask-delete-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (hit) { state.dialog = { kind: 'search-attachment-delete', hit }; render(); } return; }
-  if (action === 'confirm-delete-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('mutate_desktop_domain', { args: { intentId: intent('search-remove-attachment'), workspaceId: hit.workspaceId, entity: 'conversation', action: 'removeAttachment', objectId: hit.conversationId, expectedRevision: Number(hit.conversationRevision), fields: { messageId: hit.messageId, attachmentId: hit.attachmentId } } }); state.dialog = null; state.status = '附件引用已删除；共享私有副本仍会保留，最后一个引用移除后进入安全清理期。'; if (state.current?.summary?.id === hit.workspaceId) state.current = await invoke('read_desktop_workspace', { workspaceId: hit.workspaceId }); await runFullSearch({ restoreScroll: true }); } catch (error) { state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; render(); } return; }
+  if (action === 'confirm-delete-search-attachment') { event.preventDefault(); const hit = fullSearchHit(target.dataset.entryId) || state.dialog?.hit; if (!hit) return; state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('mutate_desktop_domain', { args: { intentId: intent('search-remove-attachment'), workspaceId: hit.workspaceId, entity: 'conversation', action: 'removeAttachment', objectId: hit.conversationId, expectedRevision: Number(hit.conversationRevision), fields: { messageId: hit.messageId, attachmentId: hit.attachmentId } } }); state.dialog = null; state.status = '附件引用已删除；共享私有副本仍会保留，最后一个引用移除后进入安全清理期。'; if (state.current?.summary?.id === hit.workspaceId) state.current = await invoke('read_desktop_workspace', { workspaceId: hit.workspaceId }); await runFullSearch({ restoreScroll: true }); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; render(); } return; }
   if (action === 'toggle-temporary-model') {
     event.preventDefault();
     if (!state.temporaryConversation) return;
@@ -6209,7 +6319,7 @@ app.addEventListener('click', event => {
       } else if (action === 'open-cloud-conversation') {
         state.current = await invoke('read_desktop_workspace', { workspaceId: target.dataset.workspaceId || '' });
         state.selectedConversationId = target.dataset.conversationId || null;
-        state.pane = 'chat';
+        state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
         state.status = '';
       } else if (action === 'context-menu-sync') {
         state.contextMenu = null;
@@ -6295,7 +6405,7 @@ app.addEventListener('click', event => {
           }));
         }
         persistCloudConversationCache();
-        state.pane = 'chat';
+        state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
         const feedback = cloudReadFeedback(receipt);
         state.status = feedback.message;
         notifyAccountSync(feedback.kind === 'success' ? 'success' : 'attention');
@@ -6316,7 +6426,7 @@ app.addEventListener('click', event => {
         await loadDesktopAccountSync();
       }
       state.error = '';
-    } catch (error) {
+    } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
       state.error = `账号与同步操作未完成：${accountSyncErrorMessage(error)}`;
       if (action === 'sign-in-google-account') state.status = 'Google 授权未完成；本机数据与云端均未改变，可检查配置后重试。';
       if (action === 'context-menu-sync') await completeAccountSyncProgress('请检查网络或登录后重试。', 'error');
@@ -6399,7 +6509,7 @@ async function bootDesktopShell() {
       applyC16Preview('Tauri 原生');
       render();
     }
-  } catch (error) {
+  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     console.error('Desktop startup readback failed', startupStage, error);
     state.error = `本地工作区启动读取未完成（${startupStage}）；请重新打开应用后再试。`;
     state.status = `启动读取失败（${startupStage}）；未修改本地数据。`;

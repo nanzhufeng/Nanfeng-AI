@@ -149,22 +149,55 @@ pub fn authenticate_direct(
 ) -> Result<Receipt, String> {
     let account = account_ref(verified_opaque_id)?;
     if let Some(replay) = store.receipt(intent_id)? {
-        if replay.account_ref != account { return Err(err()); }
+        if replay.account_ref != account {
+            return Err(err());
+        }
         return Ok(replay);
     }
     let existing = store.metadata(&account)?;
-    if existing.as_ref().is_some_and(|value| expected_revision.is_some_and(|revision| revision != value.revision)) {
+    if existing
+        .as_ref()
+        .is_some_and(|value| expected_revision.is_some_and(|revision| revision != value.revision))
+    {
         return Err("REVISION_CONFLICT".into());
     }
     let metadata = match existing {
-        None => Metadata { account_ref: account.clone(), state: State::Ready, revision: 1,
-            key_alias_ref: None, wrapped_key_ref: None, wrapped_key_sha256: None, direction_fact: None, last_error: None },
-        Some(current) if matches!(current.state, State::SignedOut | State::SignedOutKeepLocal | State::NeedsRecoveryConfirmation | State::DirectionRequired) ||
-            (current.state == State::Failed && current.last_error.as_deref() == Some("KEY_MATERIAL_UNAVAILABLE")) =>
-            Metadata { state: State::Ready, revision: current.revision + 1, last_error: None, ..current },
+        None => Metadata {
+            account_ref: account.clone(),
+            state: State::Ready,
+            revision: 1,
+            key_alias_ref: None,
+            wrapped_key_ref: None,
+            wrapped_key_sha256: None,
+            direction_fact: None,
+            last_error: None,
+        },
+        Some(current)
+            if matches!(
+                current.state,
+                State::SignedOut
+                    | State::SignedOutKeepLocal
+                    | State::NeedsRecoveryConfirmation
+                    | State::DirectionRequired
+            ) || (current.state == State::Failed
+                && current.last_error.as_deref() == Some("KEY_MATERIAL_UNAVAILABLE")) =>
+        {
+            Metadata {
+                state: State::Ready,
+                revision: current.revision + 1,
+                last_error: None,
+                ..current
+            }
+        }
         Some(current) => current,
     };
-    let receipt = Receipt { intent_id: intent_id.into(), account_ref: account, expected_revision, revision: metadata.revision, state: metadata.state };
+    let receipt = Receipt {
+        intent_id: intent_id.into(),
+        account_ref: account,
+        expected_revision,
+        revision: metadata.revision,
+        state: metadata.state,
+    };
     store.save(&metadata, &receipt)?;
     Ok(receipt)
 }

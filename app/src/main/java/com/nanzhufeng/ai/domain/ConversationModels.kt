@@ -464,7 +464,7 @@ class ConversationTreeService(private val clock: Clock) {
                 currentLeafMessageId = node.id,
                 // An app-entry placeholder is not an actual conversation until its first send.
                 createdAt = if (snapshot.nodes.isEmpty() && snapshot.conversation.autoTitlePending &&
-                    snapshot.conversation.surface == ConversationSurface.CHAT && request.role == MessageRole.USER
+                    request.role == MessageRole.USER
                 ) node.createdAt else snapshot.conversation.createdAt,
                 updatedAt = clock.instant(),
             ),
@@ -519,12 +519,30 @@ class CreateConversationUseCase(
     private val treeService: ConversationTreeService,
     private val repository: ConversationRepository,
 ) {
+    /** Resume only an unsent draft owned by this exact surface and project. */
+    fun resumeOrCreateDraft(
+        projectId: String? = null,
+        surface: ConversationSurface = ConversationSurface.CHAT,
+    ): ConversationMutationResult = runCatching {
+        val conversations = (repository as? ConversationSurfaceRepository)?.listActive(surface)
+            ?: repository.listActive().filter { it.surface == surface }
+        val reusable = conversations.asSequence()
+            .filter { it.surface == surface && it.projectId == projectId }
+            .mapNotNull { repository.findById(it.id) }
+            .filter(NewConversationDraftPolicy::isUnsentNew)
+            .sortedWith(compareByDescending<ConversationSnapshot> { it.draft.text.isNotEmpty() }
+                .thenByDescending { it.draft.updatedAt })
+            .firstOrNull()
+        reusable?.let { ConversationMutationResult.Saved(it) }
+            ?: execute(projectId = projectId, surface = surface)
+    }.getOrElse { ConversationMutationResult.Rejected("新对话草稿未能读取，请重试。") }
+
     fun execute(
         title: String = ConversationAutoTitle.NEW_CONVERSATION_TITLE,
         projectId: String? = null,
         surface: ConversationSurface = ConversationSurface.CHAT,
     ): ConversationMutationResult = runCatching {
-        ConversationMutationResult.Saved(repository.save(treeService.create(title, projectId, autoTitlePending = surface == ConversationSurface.CHAT, surface = surface)))
+        ConversationMutationResult.Saved(repository.save(treeService.create(title, projectId, autoTitlePending = true, surface = surface)))
     }.getOrElse { ConversationMutationResult.Rejected("会话创建未完成，本地数据没有被报告为成功。") }
 }
 

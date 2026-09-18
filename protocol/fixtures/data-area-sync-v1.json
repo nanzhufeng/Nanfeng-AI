@@ -1,0 +1,118 @@
+[
+  {
+    "platform": "ANDROID",
+    "area": "CHAT",
+    "conversationId": "same-area-conversation",
+    "documentId": "conversation-3b77127426e1d0a2b7cb64662a54a8c34b3fb699",
+    "content": {
+      "title": "CHAT fixture",
+      "surface": "CHAT",
+      "currentLeafMessageId": "m1",
+      "createdAtEpochMs": 1000,
+      "updatedAtEpochMs": 1000,
+      "nodes": [
+        {
+          "id": "m1",
+          "parentMessageId": null,
+          "siblingPosition": 0,
+          "role": "USER",
+          "createdAtEpochMs": 1000,
+          "deliveryState": "COMPLETE",
+          "revision": 1,
+          "revisesMessageId": null,
+          "text": [
+            "CHAT selected text"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "platform": "ANDROID",
+    "area": "WORK",
+    "conversationId": "same-area-conversation",
+    "documentId": "conversation-c66e916a113739f0589822bc382e71f7618ec8d3",
+    "content": {
+      "title": "WORK fixture",
+      "surface": "WORK",
+      "currentLeafMessageId": "m1",
+      "createdAtEpochMs": 1000,
+      "updatedAtEpochMs": 1000,
+      "nodes": [
+        {
+          "id": "m1",
+          "parentMessageId": null,
+          "siblingPosition": 0,
+          "role": "USER",
+          "createdAtEpochMs": 1000,
+          "deliveryState": "COMPLETE",
+          "revision": 1,
+          "revisesMessageId": null,
+          "text": [
+            "WORK selected text"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "platform": "DESKTOP",
+    "area": "CHAT",
+    "conversationId": "same-area-conversation",
+    "documentId": "conversation-3b77127426e1d0a2b7cb64662a54a8c34b3fb699",
+    "content": {
+      "title": "CHAT fixture",
+      "surface": "CHAT",
+      "currentLeafId": "m1",
+      "createdAt": "1970-01-01T00:00:01Z",
+      "updatedAt": "1970-01-01T00:00:01Z",
+      "messages": [
+        {
+          "id": "m1",
+          "parentId": null,
+          "ordinal": 0,
+          "role": "user",
+          "delivery": "COMPLETE",
+          "createdAt": "1970-01-01T00:00:01Z",
+          "revision": 1,
+          "blocks": [
+            {
+              "kind": "TEXT",
+              "text": "CHAT selected text"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "platform": "DESKTOP",
+    "area": "WORK",
+    "conversationId": "same-area-conversation",
+    "documentId": "conversation-c66e916a113739f0589822bc382e71f7618ec8d3",
+    "content": {
+      "title": "WORK fixture",
+      "surface": "WORK",
+      "currentLeafId": "m1",
+      "createdAt": "1970-01-01T00:00:01Z",
+      "updatedAt": "1970-01-01T00:00:01Z",
+      "messages": [
+        {
+          "id": "m1",
+          "parentId": null,
+          "ordinal": 0,
+          "role": "user",
+          "delivery": "COMPLETE",
+          "createdAt": "1970-01-01T00:00:01Z",
+          "revision": 1,
+          "blocks": [
+            {
+              "kind": "TEXT",
+              "text": "WORK selected text"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

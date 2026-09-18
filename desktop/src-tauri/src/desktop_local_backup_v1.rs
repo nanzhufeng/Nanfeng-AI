@@ -180,6 +180,8 @@ struct BackupManifest {
     version: u32,
     app_version: String,
     schema_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    data_area: Option<String>,
     scope: String,
     excluded: Vec<String>,
     table_counts: BTreeMap<String, u64>,
@@ -704,6 +706,7 @@ fn create_package(
         version: FORMAT_VERSION,
         app_version: app_version.into(),
         schema_version: schema_version(snapshot)?,
+        data_area: Some(super::desktop_data_area::read_area(&Connection::open(snapshot).map_err(|_| json_error("备份区域无法读取"))?)?.wire().into()),
         scope: "desktop_sqlite_usage_ledger_and_controlled_private_assets".into(),
         excluded: vec![
             "provider-secret-material".into(),
@@ -1231,10 +1234,17 @@ pub fn preflight_selected(
     fs::rename(&temporary, &inbox).map_err(|_| json_error("备份私有副本无法发布"))?;
     let current_schema = schema_version(database)?;
     let verified = verify_package(&inbox, current_schema)?;
+    let target_area = super::desktop_data_area::read_area(&Connection::open(database).map_err(|_| json_error("目标区域无法读取"))?)?;
+    if verified.manifest.data_area.as_deref().unwrap_or("CHAT") != target_area.wire() {
+        return Err(json_error("备份属于另一区域，请在对应区域恢复"));
+    }
     let inspect = owner_root(root).join(unique_id("preflight"));
     let result = (|| {
         extract_verified(&inbox, &inspect, &verified)?;
         let candidate = inspect.join(DATABASE_ENTRY);
+        if super::desktop_data_area::read_area(&Connection::open(&candidate).map_err(|_| json_error("候选区域无法读取"))?)? != target_area {
+            return Err(json_error("备份数据库区域身份不一致"));
+        }
         if !sqlite_healthy(&candidate)?
             || schema_version(&candidate)? != current_schema
             || table_counts(&candidate)? != verified.preflight.table_counts
@@ -1280,6 +1290,10 @@ pub fn restore_preflighted(
     let current_schema = schema_version(database)?;
     let inbox = inbox_path(root);
     let verified = verify_package(&inbox, current_schema)?;
+    let target_area = super::desktop_data_area::read_area(&Connection::open(database).map_err(|_| json_error("目标区域无法读取"))?)?;
+    if verified.manifest.data_area.as_deref().unwrap_or("CHAT") != target_area.wire() {
+        return Err(json_error("备份属于另一区域，请在对应区域恢复"));
+    }
     let persisted = read_state(root);
     if persisted.fingerprint.as_deref() != Some(fingerprint)
         || verified.preflight.fingerprint != fingerprint
@@ -1293,6 +1307,9 @@ pub fn restore_preflighted(
     let stage = owner_root(root).join(&restore_id);
     extract_verified(&inbox, &stage, &verified)?;
     let candidate = stage.join(DATABASE_ENTRY);
+    if super::desktop_data_area::read_area(&Connection::open(&candidate).map_err(|_| json_error("候选区域无法读取"))?)? != target_area {
+        return Err(json_error("备份数据库区域身份不一致"));
+    }
     if !sqlite_healthy(&candidate)?
         || schema_version(&candidate)? != current_schema
         || table_counts(&candidate)? != verified.preflight.table_counts

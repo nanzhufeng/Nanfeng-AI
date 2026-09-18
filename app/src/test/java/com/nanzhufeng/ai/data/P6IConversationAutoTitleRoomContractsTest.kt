@@ -34,7 +34,7 @@ class P6IConversationAutoTitleRoomContractsTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val database = Room.inMemoryDatabaseBuilder(context, NanfengAiDatabase::class.java).allowMainThreadQueries().build()
         try {
-            val repository = RoomConversationRepository(database)
+            val repository = RoomConversationRepository(database, draftClock = clock)
             val created = CreateConversationUseCase(ConversationTreeService(clock), repository).execute()
                 as ConversationMutationResult.Saved
             SaveConversationDraftUseCase(repository, clock).execute(created.snapshot.conversation.id, "请帮我整理 Android 设置页面层级", emptyList())

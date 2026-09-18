@@ -185,7 +185,8 @@ class AndroidHistoryKnowledgeAutoCurationRunStore(context: Context) : HistoryKno
 }
 
 /** A user-enabled queue: latest completed chat replaces older pending work, while history backfill is slow and bounded. */
-class AndroidHistoryKnowledgeAutoCurationScheduler(context: Context) {
+class AndroidHistoryKnowledgeAutoCurationScheduler(context: Context, private val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT) {
+    private fun scoped(value: String) = if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT) value else "$value-WORK"
     private val app = context.applicationContext
 
     fun onSettingChanged(enabled: Boolean) {
@@ -193,35 +194,35 @@ class AndroidHistoryKnowledgeAutoCurationScheduler(context: Context) {
             enqueueBackfill()
             ensurePeriodic()
         } else {
-            manager().cancelUniqueWork(ONCE_WORK)
-            manager().cancelUniqueWork(PERIODIC_WORK)
+            manager().cancelUniqueWork(scoped(ONCE_WORK))
+            manager().cancelUniqueWork(scoped(PERIODIC_WORK))
         }
     }
 
     fun enqueueConversation(conversationId: ConversationId) {
         val request = OneTimeWorkRequestBuilder<HistoryKnowledgeAutoCurationWorker>()
             .setConstraints(network)
-            .setInputData(workDataOf(CONVERSATION_ID to conversationId.value, TRIGGER to HistoryKnowledgeAutoCurationTrigger.CONVERSATION_IDLE.name))
+            .setInputData(workDataOf("dataArea" to dataArea.name, CONVERSATION_ID to conversationId.value, TRIGGER to HistoryKnowledgeAutoCurationTrigger.CONVERSATION_IDLE.name))
             .setInitialDelay(30, TimeUnit.MINUTES)
             .build()
-        manager().enqueueUniqueWork(ONCE_WORK, ExistingWorkPolicy.REPLACE, request)
+        manager().enqueueUniqueWork(scoped(ONCE_WORK), ExistingWorkPolicy.REPLACE, request)
     }
 
     private fun enqueueBackfill() {
         val request = OneTimeWorkRequestBuilder<HistoryKnowledgeAutoCurationWorker>()
             .setConstraints(network)
-            .setInputData(workDataOf(TRIGGER to HistoryKnowledgeAutoCurationTrigger.SETTING_ENABLED.name))
+            .setInputData(workDataOf("dataArea" to dataArea.name, TRIGGER to HistoryKnowledgeAutoCurationTrigger.SETTING_ENABLED.name))
             .setInitialDelay(15, TimeUnit.MINUTES)
             .build()
-        manager().enqueueUniqueWork(ONCE_WORK, ExistingWorkPolicy.KEEP, request)
+        manager().enqueueUniqueWork(scoped(ONCE_WORK), ExistingWorkPolicy.KEEP, request)
     }
 
     private fun ensurePeriodic() {
         val request = PeriodicWorkRequestBuilder<HistoryKnowledgeAutoCurationWorker>(12, TimeUnit.HOURS)
             .setConstraints(network)
-            .setInputData(workDataOf(TRIGGER to HistoryKnowledgeAutoCurationTrigger.PERIODIC.name))
+            .setInputData(workDataOf("dataArea" to dataArea.name, TRIGGER to HistoryKnowledgeAutoCurationTrigger.PERIODIC.name))
             .build()
-        manager().enqueueUniquePeriodicWork(PERIODIC_WORK, ExistingPeriodicWorkPolicy.KEEP, request)
+        manager().enqueueUniquePeriodicWork(scoped(PERIODIC_WORK), ExistingPeriodicWorkPolicy.KEEP, request)
     }
 
     private fun manager(): WorkManager = WorkManager.getInstance(app)
@@ -238,7 +239,7 @@ class AndroidHistoryKnowledgeAutoCurationScheduler(context: Context) {
 
 class HistoryKnowledgeAutoCurationWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val container = com.nanzhufeng.ai.app.AppContainer(applicationContext)
+        val container = com.nanzhufeng.ai.app.AppContainer(applicationContext, dataArea = com.nanzhufeng.ai.domain.ConversationSurface.valueOf(inputData.getString("dataArea") ?: "CHAT"))
         val owner = container.automaticHistoryKnowledgeCurationOwner
         val runStore = container.historyKnowledgeAutoCurationRunStore
         val trigger = inputData.getString("trigger")

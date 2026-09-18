@@ -23,9 +23,9 @@ class AutomaticWebSearchPolicyTest {
 
         val source = ProviderWebSource.fromProvider(" https://example.test/policy ", " 政策原文 ")
         assertEquals(ProviderWebSource("https://example.test/policy", "政策原文"), source)
-        assertTrue(WebSearchGroundingPolicy.hasRequiredSources(
+        assertEquals("WEB_SEARCH_SUCCEEDED_WITH_SOURCES", WebSearchGroundingPolicy.completedAuditStatus(
             ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES),
-            listOf(requireNotNull(source)),
+            listOf(requireNotNull(source)), streamed = false,
         ))
     }
 
@@ -172,24 +172,18 @@ class AutomaticWebSearchPolicyTest {
 
     @Test
     fun `DeepSeek Responses accepts its documented server-side search action without public URLs`() {
-        val deepSeek = ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
-        val urlReportingRoutes = listOf(
-            OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL,
-            OfficialWebSearchRoute.QWEN_RESPONSES,
-            OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS,
-            OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS,
-        )
-        assertEquals(true, WebSearchGroundingPolicy.hasRequiredSources(deepSeek, emptyList()))
-        urlReportingRoutes.forEach { route ->
-            assertEquals(false, WebSearchGroundingPolicy.hasRequiredSources(ChatRequestOptions(route), emptyList()))
-            assertEquals(
-                true,
-                WebSearchGroundingPolicy.hasRequiredSources(
-                    ChatRequestOptions(route),
-                    listOf(ProviderWebSource("https://example.test/policy", "政策原文")),
-                ),
-            )
+        OfficialWebSearchRoute.entries.forEach { route ->
+            for (streamed in listOf(false, true)) {
+                val options = ChatRequestOptions(route)
+                assertEquals(
+                    if (options.liveWebSearch) "WEB_SEARCH_COMPLETED_WITHOUT_SOURCES" else if (streamed) "STREAM_SUCCEEDED" else "SUCCEEDED",
+                    WebSearchGroundingPolicy.completedAuditStatus(options, emptyList(), streamed),
+                )
+                if (options.liveWebSearch) assertEquals(
+                    if (streamed) "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES" else "WEB_SEARCH_SUCCEEDED_WITH_SOURCES",
+                    WebSearchGroundingPolicy.completedAuditStatus(options, listOf(ProviderWebSource("https://example.test/policy", "政策原文")), streamed),
+                )
+            }
         }
-        assertEquals(true, WebSearchGroundingPolicy.hasRequiredSources(ChatRequestOptions.Standard, emptyList()))
     }
 }

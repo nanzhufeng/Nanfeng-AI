@@ -735,13 +735,9 @@ class NormalChatOpenRouterExecutor(
                 // tool is registered or approved here, so treating that mixed response as a
                 // completed answer would falsely claim the required action has happened.
                 val toolCallEncountered = !requestOptions.liveWebSearch && (toolOnly != null || (reply?.toolCallEncountered == true && modelId != KIMI_K3_MODEL_ID))
-                val webSearchMissingSources = reply != null &&
-                    !WebSearchGroundingPolicy.hasRequiredSources(requestOptions, reply.webSources)
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, reply?.inputTokens ?: toolOnly?.inputTokens, reply?.outputTokens ?: toolOnly?.outputTokens, when {
                     toolCallEncountered -> "TOOL_CALL_UNSUPPORTED"
-                    webSearchMissingSources -> "WEB_SEARCH_NO_SOURCES"
-                    reply != null && requestOptions.liveWebSearch -> "WEB_SEARCH_SUCCEEDED_WITH_SOURCES"
-                    reply != null -> "SUCCEEDED"
+                    reply != null -> WebSearchGroundingPolicy.completedAuditStatus(requestOptions, reply.webSources, streamed = false)
                     else -> "RESPONSE_FORMAT"
                 }))
                 if (toolCallEncountered) {
@@ -757,18 +753,6 @@ class NormalChatOpenRouterExecutor(
                     )
                     recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
                     OneResult.Failed(Code.RESPONSE_FORMAT)
-                } else if (webSearchMissingSources) {
-                    sendAttempts.transition(
-                        attempt.attemptId,
-                        setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING),
-                        NormalChatSendAttemptStatus.FAILED,
-                        clock.instant(),
-                        "WEB_SEARCH_NO_SOURCES",
-                    )
-                    modelHealthReporter.recordFailure(preset, ProviderDiagnosticErrorClass.RESPONSE_FORMAT)
-                    runtime?.fail(Code.WEB_SEARCH_NO_SOURCES.name)
-                    recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
-                    OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)
                 } else {
                     modelHealthReporter.recordSuccess(preset)
                     val responseText = if (explicitMemoryCommand) {
@@ -808,15 +792,11 @@ class NormalChatOpenRouterExecutor(
             is ProviderChatOutcome.StreamedResponse -> {
                 val reply = outcome.text.cleanReply()
                 val incompleteResponsesStream = outcome.finishReason in setOf("INCOMPLETE", "FAILED", "MISSING_COMPLETION")
-                val webSearchMissingSources = reply != null &&
-                    !WebSearchGroundingPolicy.hasRequiredSources(requestOptions, outcome.webSources)
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, outcome.inputTokens, outcome.outputTokens, when {
                     incompleteResponsesStream -> "RESPONSE_INCOMPLETE"
                     outcome.toolCallEncountered && modelId != KIMI_K3_MODEL_ID -> "TOOL_CALL_UNSUPPORTED"
                     reply == null -> "RESPONSE_FORMAT"
-                    webSearchMissingSources -> "WEB_SEARCH_NO_SOURCES"
-                    requestOptions.liveWebSearch -> "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES"
-                    else -> "STREAM_SUCCEEDED"
+                    else -> WebSearchGroundingPolicy.completedAuditStatus(requestOptions, outcome.webSources, streamed = true)
                 }))
                 if (runtime?.persistenceRejected == true) {
                     OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
@@ -845,18 +825,6 @@ class NormalChatOpenRouterExecutor(
                     runtime?.fail(Code.RESPONSE_FORMAT.name)
                     recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
                     OneResult.Failed(Code.RESPONSE_FORMAT)
-                } else if (webSearchMissingSources) {
-                    sendAttempts.transition(
-                        attempt.attemptId,
-                        setOf(NormalChatSendAttemptStatus.SENDING, NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING),
-                        NormalChatSendAttemptStatus.FAILED,
-                        clock.instant(),
-                        "WEB_SEARCH_NO_SOURCES",
-                    )
-                    modelHealthReporter.recordFailure(preset, ProviderDiagnosticErrorClass.RESPONSE_FORMAT)
-                    runtime?.fail(Code.WEB_SEARCH_NO_SOURCES.name)
-                    recordResponseFormatDiagnostic(conversationId, executionProviderId, endpoint, modelId, contextMessages, providerAttachments, requestOptions, requestedAt, outcome.statusCode)
-                    OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)
                 } else {
                     modelHealthReporter.recordSuccess(preset)
                     val visibleReply = appendProviderWebSources(reply, outcome.webSources)

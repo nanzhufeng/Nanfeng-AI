@@ -8,7 +8,7 @@ test('chat source shortcut renders its source dialog and uses the shared globe g
   const chatRender = source.slice(source.indexOf('function renderUnified()'), source.indexOf('function cameraCaptureDialog'));
   const sourceDialog = source.slice(source.indexOf("if (state.dialog?.kind === 'source-links')"), source.indexOf("if (state.dialog === 'import')"));
 
-  assert.match(chatRender, /app\.innerHTML = renderChatFirstShell\(/);
+  assert.match(chatRender, /const nextShellHtml = renderChatFirstShell\(/);
   assert.match(chatRender, /accountSyncProgressDialog\(\) \|\| cameraCaptureDialog\(\) \|\| dialog\(\)/);
   assert.match(sourceDialog, /sharedIcon\(sharedIcons\.globe, '打开来源'\)/);
   assert.doesNotMatch(sourceDialog, /icon\(icons\.globe, '打开来源'\)/);

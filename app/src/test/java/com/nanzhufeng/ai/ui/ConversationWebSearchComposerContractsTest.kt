@@ -39,7 +39,7 @@ class ConversationWebSearchComposerContractsTest {
         assertTrue(executor.contains("resolveConversationWebSearchEnabled(conversationId, experience.webSearchEnabled)"))
         assertTrue(executor.contains("enabled = webSearchEnabled"))
         assertTrue(executor.contains("webSearchEnabled && !requestOptions.liveWebSearch"))
-        assertTrue(executor.contains("WebSearchGroundingPolicy.hasRequiredSources"))
+        assertTrue(executor.contains("WebSearchGroundingPolicy.completedAuditStatus"))
         assertTrue(executor.contains("WEB_SEARCH_NO_SOURCES"))
         assertTrue(viewModel.contains("已请求实时网页搜索，但服务商没有返回可验证的公开来源"))
         assertTrue(container.contains("resolveConversationWebSearchEnabled = conversationWebSearchOverrides::effectiveEnabled"))

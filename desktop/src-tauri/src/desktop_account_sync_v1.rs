@@ -1,5 +1,6 @@
 //! Desktop Google account and selected-conversation encrypted sync owner.
 //! Secrets live only in the app-owned credential store; SQLite keeps safe state, receipts and diagnostics.
+use crate::desktop_data_area;
 use crate::sync_state_v1::{self, CredentialStore, SqliteMetadataStore};
 use crate::sync_v1::{self, AccountWrappingMaterial};
 use aes_gcm::{
@@ -1109,12 +1110,22 @@ pub fn recover_existing_recovery<C: CredentialStore, G: CloudGateway>(
 ) -> Result<(), String> {
     let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
-    let remote = gateway.list()
+    let remote = gateway
+        .list()
         .map_err(|failure| safe_error(cloud_read_failure_message(failure)))?
         .into_iter()
-        .find(|item| serde_json::from_str::<Value>(&item.envelope).ok()
-            .and_then(|value| value.get("format").and_then(Value::as_str).map(str::to_owned))
-            .as_deref() == Some(sync_v1::ENVELOPE))
+        .find(|item| {
+            serde_json::from_str::<Value>(&item.envelope)
+                .ok()
+                .and_then(|value| {
+                    value
+                        .get("format")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                })
+                .as_deref()
+                == Some(sync_v1::ENVELOPE)
+        })
         .ok_or_else(|| safe_error("云端没有可用的加密对话；请在原设备迁移后再接入"))?;
     let document_id = envelope_document_id(&remote.envelope)?;
     let recovered = sync_v1::recover_account_material(
@@ -1123,8 +1134,14 @@ pub fn recover_existing_recovery<C: CredentialStore, G: CloudGateway>(
         APP_ID,
         &document_id,
         remote.revision,
-    ).map_err(|_| safe_error("恢复码无法打开云端加密对话"))?;
-    credentials.save(RECOVERY_SERVICE, &account, recovered.wrapping_key.as_slice())
+    )
+    .map_err(|_| safe_error("恢复码无法打开云端加密对话"))?;
+    credentials
+        .save(
+            RECOVERY_SERVICE,
+            &account,
+            recovered.wrapping_key.as_slice(),
+        )
         .map_err(|_| safe_error("恢复保护无法安全保存"))?;
     if let Err(_) = credentials.save(DATA_KEY_SERVICE, &account, recovered.data_key.as_slice()) {
         let _ = credentials.delete(RECOVERY_SERVICE, &account);
@@ -1146,7 +1163,13 @@ pub fn recover_existing_recovery<C: CredentialStore, G: CloudGateway>(
             )?;
         }
     }
-    write_diagnostic(state_store.connection, Some(&account), "RECOVERY_EXISTING", "SUCCESS", None);
+    write_diagnostic(
+        state_store.connection,
+        Some(&account),
+        "RECOVERY_EXISTING",
+        "SUCCESS",
+        None,
+    );
     Ok(())
 }
 
@@ -1479,6 +1502,10 @@ pub trait CloudGateway {
 // It never represents a conversation and must therefore never enter the
 // normal conversation restore path.
 const CLOUD_LIST_PRESENTATION_DOCUMENT_ID: &str = "cloud-conversation-list-v1";
+const WORK_CLOUD_LIST_DOCUMENT_ID: &str = "cloud-work-conversation-list-v1";
+fn cloud_list_document_id(connection: &Connection) -> Result<&'static str, String> {
+    Ok(match desktop_data_area::read_area(connection)? { crate::DesktopDataArea::Chat => CLOUD_LIST_PRESENTATION_DOCUMENT_ID, crate::DesktopDataArea::Work => WORK_CLOUD_LIST_DOCUMENT_ID })
+}
 
 pub struct SupabaseGateway {
     client: Client,
@@ -1531,22 +1558,36 @@ impl SupabaseGateway {
 impl CloudGateway for SupabaseGateway {
     fn list(&self) -> Result<Vec<RemoteEnvelope>, CloudFailure> {
         let response = self.rpc("nanfeng_sync_inventory", json!({"p_app_id":APP_ID}))?;
-        let rows = response.get("documents").and_then(Value::as_array).ok_or(CloudFailure::MalformedResponse)?;
-        if response.get("documentCount").and_then(Value::as_u64) != Some(rows.len() as u64) { return Err(CloudFailure::MalformedResponse); }
-        if rows.len() > 10000 { return Err(CloudFailure::MalformedResponse); }
-        Ok(rows.iter().map(|row| {
-            let envelope = match row.get("envelope") {
-                Some(Value::String(raw)) => raw.clone(),
-                Some(value) => value.to_string(),
-                None => "{}".into(),
-            };
-            let root = serde_json::from_str::<Value>(&envelope).unwrap_or(Value::Null);
-            RemoteEnvelope {
-                revision: root.get("revision").and_then(Value::as_u64).unwrap_or(0),
-                payload_hash: root.get("payloadHash").and_then(Value::as_str).unwrap_or("").into(),
-                envelope,
-            }
-        }).collect())
+        let rows = response
+            .get("documents")
+            .and_then(Value::as_array)
+            .ok_or(CloudFailure::MalformedResponse)?;
+        if response.get("documentCount").and_then(Value::as_u64) != Some(rows.len() as u64) {
+            return Err(CloudFailure::MalformedResponse);
+        }
+        if rows.len() > 10000 {
+            return Err(CloudFailure::MalformedResponse);
+        }
+        Ok(rows
+            .iter()
+            .map(|row| {
+                let envelope = match row.get("envelope") {
+                    Some(Value::String(raw)) => raw.clone(),
+                    Some(value) => value.to_string(),
+                    None => "{}".into(),
+                };
+                let root = serde_json::from_str::<Value>(&envelope).unwrap_or(Value::Null);
+                RemoteEnvelope {
+                    revision: root.get("revision").and_then(Value::as_u64).unwrap_or(0),
+                    payload_hash: root
+                        .get("payloadHash")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .into(),
+                    envelope,
+                }
+            })
+            .collect())
     }
 
     fn read(&self, document_id: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> {
@@ -1662,12 +1703,25 @@ pub struct RotationReceipt {
 }
 
 fn envelope_document_id(envelope: &str) -> Result<String, String> {
-    let value: Value = serde_json::from_str(envelope).map_err(|_|safe_error("云端文档标识无效"))?;
-    if value.get("appId").and_then(Value::as_str) != Some(APP_ID) { return Err(safe_error("云端文档不属于本应用")); }
-    value.get("documentId").and_then(Value::as_str).filter(|id| {
-        *id == CLOUD_LIST_PRESENTATION_DOCUMENT_ID || id.strip_prefix("conversation-")
-            .is_some_and(|suffix|suffix.len()==40 && suffix.bytes().all(|b|b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
-    }).map(str::to_owned).ok_or_else(||safe_error("云端文档标识无效"))
+    let value: Value =
+        serde_json::from_str(envelope).map_err(|_| safe_error("云端文档标识无效"))?;
+    if value.get("appId").and_then(Value::as_str) != Some(APP_ID) {
+        return Err(safe_error("云端文档不属于本应用"));
+    }
+    value
+        .get("documentId")
+        .and_then(Value::as_str)
+        .filter(|id| {
+            matches!(*id, CLOUD_LIST_PRESENTATION_DOCUMENT_ID | WORK_CLOUD_LIST_DOCUMENT_ID)
+                || id.strip_prefix("conversation-").is_some_and(|suffix| {
+                    suffix.len() == 40
+                        && suffix
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                })
+        })
+        .map(str::to_owned)
+        .ok_or_else(|| safe_error("云端文档标识无效"))
 }
 
 pub fn rotate_recovery_material<C: CredentialStore, G: CloudGateway>(
@@ -1953,44 +2007,72 @@ fn portable_message_text(message: &Value) -> Vec<String> {
 }
 
 // A prefix snapshot is not a deletion and must not hide retained descendants.
-fn complete_sync_leaf(preferred: Option<&Value>, alternate: Option<&Value>, messages: &[Value]) -> Option<Value> {
-    let Some(preferred_id) = preferred.and_then(Value::as_str) else { return alternate.cloned(); };
+fn complete_sync_leaf(
+    preferred: Option<&Value>,
+    alternate: Option<&Value>,
+    messages: &[Value],
+) -> Option<Value> {
+    let Some(preferred_id) = preferred.and_then(Value::as_str) else {
+        return alternate.cloned();
+    };
     let mut cursor = alternate.and_then(Value::as_str);
     let mut visited = BTreeSet::new();
     while let Some(id) = cursor {
-        if !visited.insert(id) { break; }
-        if id == preferred_id { return alternate.cloned(); }
-        cursor = messages.iter().find(|m| m.get("id").and_then(Value::as_str) == Some(id))
-            .and_then(|m| m.get("parentId")).and_then(Value::as_str);
+        if !visited.insert(id) {
+            break;
+        }
+        if id == preferred_id {
+            return alternate.cloned();
+        }
+        cursor = messages
+            .iter()
+            .find(|m| m.get("id").and_then(Value::as_str) == Some(id))
+            .and_then(|m| m.get("parentId"))
+            .and_then(Value::as_str);
     }
     preferred.cloned()
 }
 
 fn incoming_title_is_newer(
-    local: &serde_json::Map<String, Value>, remote: &serde_json::Map<String, Value>, remote_revision: u64,
+    local: &serde_json::Map<String, Value>,
+    remote: &serde_json::Map<String, Value>,
+    remote_revision: u64,
 ) -> Result<bool, String> {
     let title_revision = |value: &serde_json::Map<String, Value>| -> Result<Option<u64>, String> {
         match value.get("titleRevision") {
             None | Some(Value::Null) => Ok(None),
-            Some(value) => value.as_u64().filter(|v| *v > 0 && *v <= i64::MAX as u64).map(Some)
+            Some(value) => value
+                .as_u64()
+                .filter(|v| *v > 0 && *v <= i64::MAX as u64)
+                .map(Some)
                 .ok_or_else(|| safe_error("标题版本必须是正整数")),
         }
     };
     let local_title_revision = title_revision(local)?;
     let remote_title_revision = title_revision(remote)?;
     if local_title_revision.is_some() || remote_title_revision.is_some() {
-        let order = remote_title_revision.unwrap_or(0).cmp(&local_title_revision.unwrap_or(0));
+        let order = remote_title_revision
+            .unwrap_or(0)
+            .cmp(&local_title_revision.unwrap_or(0));
         if order.is_eq() && local.get("title") != remote.get("title") {
-            return Err(safe_error("标题版本冲突：两个标题有相同的标题版本；已保留原值"));
+            return Err(safe_error(
+                "标题版本冲突：两个标题有相同的标题版本；已保留原值",
+            ));
         }
         return Ok(!order.is_lt());
     }
-    let parse = |value: Option<&Value>| value.and_then(Value::as_str)
-        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok());
+    let parse = |value: Option<&Value>| {
+        value
+            .and_then(Value::as_str)
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+    };
     let time_order = parse(remote.get("updatedAt")).cmp(&parse(local.get("updatedAt")));
-    let revision_order = remote_revision.cmp(&local.get("revision").and_then(Value::as_u64).unwrap_or(1));
+    let revision_order =
+        remote_revision.cmp(&local.get("revision").and_then(Value::as_u64).unwrap_or(1));
     if local.get("title") != remote.get("title") {
-        return Err(safe_error("标题版本冲突：旧记录缺少标题先后依据；已保留本机标题，未覆盖"));
+        return Err(safe_error(
+            "标题版本冲突：旧记录缺少标题先后依据；已保留本机标题，未覆盖",
+        ));
     }
     Ok(time_order.is_gt() || (time_order.is_eq() && !revision_order.is_lt()))
 }
@@ -2022,10 +2104,16 @@ fn merge_newer_remote_conversation(
         .and_then(Value::as_object_mut)
         .ok_or_else(|| safe_error("本机对话不存在"))?;
     let local_revision = local.get("revision").and_then(Value::as_u64).unwrap_or(1);
-    let remote_title_is_newer = incoming_title_is_newer(local, remote_conversation, remote_semantic_revision)?;
+    let remote_title_is_newer =
+        incoming_title_is_newer(local, remote_conversation, remote_semantic_revision)?;
     let local_updated_at = local.get("updatedAt").cloned();
-    let timestamp = |value: Option<&Value>| value.and_then(Value::as_str).and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
-    let remote_time_is_newer = timestamp(remote_conversation.get("updatedAt")) > timestamp(local_updated_at.as_ref());
+    let timestamp = |value: Option<&Value>| {
+        value
+            .and_then(Value::as_str)
+            .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+    };
+    let remote_time_is_newer =
+        timestamp(remote_conversation.get("updatedAt")) > timestamp(local_updated_at.as_ref());
     let local_title = local.get("title").cloned();
     let local_title_revision = local.get("titleRevision").cloned();
     let local_leaf = local.get("currentLeafId").cloned();
@@ -2119,7 +2207,11 @@ fn merge_newer_remote_conversation(
     }
     // No per-message tombstones exist in this protocol. A missing answer is
     // retained and included in the next upload instead of being erased.
-    let complete_leaf = complete_sync_leaf(remote_conversation.get("currentLeafId"), local_leaf.as_ref(), local_messages);
+    let complete_leaf = complete_sync_leaf(
+        remote_conversation.get("currentLeafId"),
+        local_leaf.as_ref(),
+        local_messages,
+    );
     for field in [
         "title",
         "titleRevision",
@@ -2130,8 +2222,12 @@ fn merge_newer_remote_conversation(
         "archived",
         "favorited",
     ] {
-        if matches!(field, "title" | "titleRevision") && !remote_title_is_newer { continue; }
-        if field == "updatedAt" && !remote_time_is_newer && local_updated_at.is_some() { continue; }
+        if matches!(field, "title" | "titleRevision") && !remote_title_is_newer {
+            continue;
+        }
+        if field == "updatedAt" && !remote_time_is_newer && local_updated_at.is_some() {
+            continue;
+        }
         if let Some(value) = remote_conversation.get(field) {
             local.insert(field.into(), value.clone());
         }
@@ -2230,14 +2326,18 @@ fn merge_remote_additions_for_local_commit(
     {
         return Err(safe_error("云端消息树无效"));
     }
-    let parse_updated = |value: Option<&Value>| value.and_then(Value::as_str)
-        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok());
+    let parse_updated = |value: Option<&Value>| {
+        value
+            .and_then(Value::as_str)
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+    };
     let remote_updated = parse_updated(remote_conversation.get("updatedAt"));
     let local_updated = parse_updated(local.get("updatedAt"));
     let remote_is_newer = remote_updated.is_some() && remote_updated > local_updated;
     let same_updated_at = remote_updated == local_updated;
     let local_semantic_revision = local.get("revision").and_then(Value::as_u64).unwrap_or(1);
-    let remote_title_is_newer = incoming_title_is_newer(local, remote_conversation, remote_semantic_revision)?;
+    let remote_title_is_newer =
+        incoming_title_is_newer(local, remote_conversation, remote_semantic_revision)?;
     let previous_leaf = local.get("currentLeafId").cloned();
     let local_messages = local
         .get_mut("messages")
@@ -2312,9 +2412,17 @@ fn merge_remote_additions_for_local_commit(
         changed = true;
     }
     let complete_leaf = if remote_is_newer {
-        complete_sync_leaf(remote_conversation.get("currentLeafId"), previous_leaf.as_ref(), local_messages)
+        complete_sync_leaf(
+            remote_conversation.get("currentLeafId"),
+            previous_leaf.as_ref(),
+            local_messages,
+        )
     } else {
-        complete_sync_leaf(previous_leaf.as_ref(), remote_conversation.get("currentLeafId"), local_messages)
+        complete_sync_leaf(
+            previous_leaf.as_ref(),
+            remote_conversation.get("currentLeafId"),
+            local_messages,
+        )
     };
     if remote_title_is_newer {
         if let Some(value) = remote_conversation.get("titleRevision") {
@@ -2385,7 +2493,7 @@ pub fn list_remote_documents<G: CloudGateway>(
         .into_iter()
         .map(|remote| {
             let document_id = envelope_document_id(&remote.envelope)?;
-            if document_id == CLOUD_LIST_PRESENTATION_DOCUMENT_ID {
+            if matches!(document_id.as_str(), CLOUD_LIST_PRESENTATION_DOCUMENT_ID | WORK_CLOUD_LIST_DOCUMENT_ID) {
                 return Ok(None);
             }
             // Document headers intentionally contain no title.  A title is
@@ -2520,40 +2628,87 @@ pub fn restore_remote_conversation<C: CredentialStore, G: CloudGateway>(
 
 // The batch list RPC already returns each full encrypted envelope.  Reusing it
 // avoids one extra network read per conversation during a cloud-list refresh.
-fn open_account_document<C: CredentialStore>(connection: &Connection, credentials: &C, account: &str, remote: &RemoteEnvelope, document_id: &str) -> Result<Value, String> {
-    let format = serde_json::from_str::<Value>(&remote.envelope).ok().and_then(|v|v.get("format").and_then(Value::as_str).map(str::to_owned));
+fn open_account_document<C: CredentialStore>(
+    connection: &Connection,
+    credentials: &C,
+    account: &str,
+    remote: &RemoteEnvelope,
+    document_id: &str,
+) -> Result<Value, String> {
+    let format = serde_json::from_str::<Value>(&remote.envelope)
+        .ok()
+        .and_then(|v| v.get("format").and_then(Value::as_str).map(str::to_owned));
     if format.as_deref() == Some(sync_v1::DIRECT_ENVELOPE) {
         return sync_v1::open_direct(&remote.envelope, APP_ID, document_id, remote.revision)
             .map_err(|_| safe_error("云端对话完整性校验未通过"));
     }
-    if format.as_deref() != Some(sync_v1::ENVELOPE) { return Err(safe_error("云端封包格式无法读取")); }
+    if format.as_deref() != Some(sync_v1::ENVELOPE) {
+        return Err(safe_error("云端封包格式无法读取"));
+    }
     let mut material = wrapping_material(connection, credentials, account)
-        .map_err(|_|safe_error("旧加密记录需要在原设备更新后同步一次"))?;
-    let result = sync_v1::open_with_account_wrapping_material(&remote.envelope, &material, APP_ID, document_id, remote.revision)
-        .map(|opened|opened.payload).map_err(|_|safe_error("旧加密记录需要在原设备更新后同步一次"));
+        .map_err(|_| safe_error("旧加密记录需要在原设备更新后同步一次"))?;
+    let result = sync_v1::open_with_account_wrapping_material(
+        &remote.envelope,
+        &material,
+        APP_ID,
+        document_id,
+        remote.revision,
+    )
+    .map(|opened| opened.payload)
+    .map_err(|_| safe_error("旧加密记录需要在原设备更新后同步一次"));
     material.wrapping_key.zeroize();
     result
 }
 
 /// Convert only a cryptographically verified legacy snapshot, preserving every record.
 /// The CAS and exact readback make an interrupted conversion safe to observe again.
-fn migrate_legacy_document<C: CredentialStore, G: CloudGateway>(connection: &Connection, credentials: &C, gateway: &G, account: &str, remote: RemoteEnvelope) -> Result<RemoteEnvelope, String> {
-    let root: Value = serde_json::from_str(&remote.envelope).map_err(|_|safe_error("云端封包格式无法读取"))?;
-    if root.get("format").and_then(Value::as_str) != Some(sync_v1::ENVELOPE) { return Ok(remote); }
+fn migrate_legacy_document<C: CredentialStore, G: CloudGateway>(
+    connection: &Connection,
+    credentials: &C,
+    gateway: &G,
+    account: &str,
+    remote: RemoteEnvelope,
+) -> Result<RemoteEnvelope, String> {
+    let root: Value =
+        serde_json::from_str(&remote.envelope).map_err(|_| safe_error("云端封包格式无法读取"))?;
+    if root.get("format").and_then(Value::as_str) != Some(sync_v1::ENVELOPE) {
+        return Ok(remote);
+    }
     let document_id = envelope_document_id(&remote.envelope)?;
-    let mut payload = open_account_document(connection, credentials, account, &remote, &document_id)?;
-    let revision = remote.revision.checked_add(1).ok_or_else(||safe_error("云端版本无效"))?;
+    let mut payload =
+        open_account_document(connection, credentials, account, &remote, &document_id)?;
+    let revision = remote
+        .revision
+        .checked_add(1)
+        .ok_or_else(|| safe_error("云端版本无效"))?;
     payload["revision"] = json!(revision);
-    let envelope = sync_v1::seal_direct(payload).map_err(|_|safe_error("旧记录格式更新未完成"))?;
-    let expected_hash = serde_json::from_str::<Value>(&envelope).unwrap()["payloadHash"].as_str().unwrap().to_owned();
-    if read_session(credentials)?.map(|s|sync_state_v1::account_ref(&s.user_id)).transpose()?.as_deref() != Some(account) {
+    let envelope = sync_v1::seal_direct(payload).map_err(|_| safe_error("旧记录格式更新未完成"))?;
+    let expected_hash = serde_json::from_str::<Value>(&envelope).unwrap()["payloadHash"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    if read_session(credentials)?
+        .map(|s| sync_state_v1::account_ref(&s.user_id))
+        .transpose()?
+        .as_deref()
+        != Some(account)
+    {
         return Err(safe_error("登录状态已变化，未更新旧记录"));
     }
     let committed = gateway.commit(&document_id, remote.revision, &envelope);
-    let read_back = gateway.read(&document_id).map_err(|_|safe_error("旧记录格式更新尚未确认，请再次读取核对"))?
-        .ok_or_else(||safe_error("旧记录格式更新尚未确认，请再次读取核对"))?;
-    if read_back.revision != revision || read_back.payload_hash != expected_hash || sync_v1::open_direct(&read_back.envelope, APP_ID, &document_id, revision).is_err() {
-        return Err(safe_error(if committed.is_err() { "旧记录格式更新未完成，原内容已保留" } else { "旧记录格式更新回读未通过" }));
+    let read_back = gateway
+        .read(&document_id)
+        .map_err(|_| safe_error("旧记录格式更新尚未确认，请再次读取核对"))?
+        .ok_or_else(|| safe_error("旧记录格式更新尚未确认，请再次读取核对"))?;
+    if read_back.revision != revision
+        || read_back.payload_hash != expected_hash
+        || sync_v1::open_direct(&read_back.envelope, APP_ID, &document_id, revision).is_err()
+    {
+        return Err(safe_error(if committed.is_err() {
+            "旧记录格式更新未完成，原内容已保留"
+        } else {
+            "旧记录格式更新回读未通过"
+        }));
     }
     Ok(read_back)
 }
@@ -2626,7 +2781,11 @@ fn restore_remote_envelope<C: CredentialStore>(
         .filter(|value| !value.is_empty() && value.len() <= 64)
         .ok_or_else(|| safe_error("云端对话标识无效"))?
         .to_owned();
-    if document_id != format!("conversation-{}", &sha256(conversation_id.as_bytes())[..40]) {
+    let area = desktop_data_area::content_area(record.get("content").ok_or_else(|| safe_error("云端对话内容无效"))?)?;
+    if area != desktop_data_area::read_area(connection)? { return Err(safe_error("OTHER_DATA_AREA")); }
+    let expected_id = desktop_data_area::document_id(area, &conversation_id);
+    let legacy_id = desktop_data_area::document_id(crate::DesktopDataArea::Chat, &conversation_id);
+    if document_id != expected_id && document_id != legacy_id {
         return Err(safe_error("云端对话身份不一致"));
     }
     let mut conversation = record
@@ -2635,6 +2794,7 @@ fn restore_remote_envelope<C: CredentialStore>(
         .cloned()
         .ok_or_else(|| safe_error("云端对话内容无效"))?;
     normalize_android_selected_conversation(&mut conversation)?;
+    conversation.remove("surface");
     let messages = conversation
         .get("messages")
         .and_then(Value::as_array)
@@ -2678,7 +2838,10 @@ fn restore_remote_envelope<C: CredentialStore>(
     // local conversation, not manufacture a second "cloud restore" copy.
     // A ledger row exists only after this installation has already synced or
     // restored this exact document.
-    let expected_workspace_id = format!("workspace-cloud-{}", &sha256(format!("{account}:{document_id}").as_bytes())[..40]);
+    let expected_workspace_id = format!(
+        "workspace-cloud-{}",
+        &sha256(format!("{account}:{document_id}").as_bytes())[..40]
+    );
     let receipt_binding = connection.query_row(
         "SELECT workspace_id, conversation_id FROM desktop_selected_conversation_sync WHERE account_ref=?1 AND document_id=?2 ORDER BY last_synced_at_ms DESC LIMIT 1",
         params![account, document_id], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)),
@@ -2686,7 +2849,9 @@ fn restore_remote_envelope<C: CredentialStore>(
     // Historical imports could persist the deterministic account-owned workspace
     // without its receipt. Reuse and merge that exact identity, then repair the
     // receipt atomically; a package-hash match alone is not completed recovery.
-    let existing_binding = if receipt_binding.is_some() { receipt_binding } else {
+    let existing_binding = if receipt_binding.is_some() {
+        receipt_binding
+    } else {
         connection.query_row(
             "SELECT w.workspace_id, ?2 FROM workspace_exchange w, json_each(w.exchange_json,'$.conversations') c WHERE w.workspace_id=?1 AND json_extract(c.value,'$.id')=?2 AND NOT EXISTS(SELECT 1 FROM desktop_selected_conversation_sync s WHERE s.workspace_id=w.workspace_id AND s.account_ref<>?3) LIMIT 1",
             params![expected_workspace_id, conversation_id, account], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)),
@@ -2701,14 +2866,17 @@ fn restore_remote_envelope<C: CredentialStore>(
             )
             .unwrap_or(false);
         if workspace_exists {
-            let remote_semantic_revision = record
-                .get("revision")
-                .and_then(Value::as_u64)
-                .unwrap_or(1);
+            let remote_semantic_revision =
+                record.get("revision").and_then(Value::as_u64).unwrap_or(1);
             let transaction = connection
                 .transaction()
                 .map_err(|_| safe_error("云端对话合并 transaction 无法开启"))?;
-            recover_local_conversation_occurrences_in_transaction(&transaction, &account, &existing_workspace_id, &existing_conversation_id)?;
+            recover_local_conversation_occurrences_in_transaction(
+                &transaction,
+                &account,
+                &existing_workspace_id,
+                &existing_conversation_id,
+            )?;
             let merge = merge_newer_remote_conversation(
                 &transaction,
                 &existing_workspace_id,
@@ -2726,7 +2894,12 @@ fn restore_remote_envelope<C: CredentialStore>(
                 .commit()
                 .map_err(|_| safe_error("云端对话合并未提交"))?;
             return Ok(RestoreReceipt {
-                status: if merge == ExistingRemoteConversationMerge::Updated { "UPDATED_LOCAL" } else { "ALREADY_LOCAL" }.into(),
+                status: if merge == ExistingRemoteConversationMerge::Updated {
+                    "UPDATED_LOCAL"
+                } else {
+                    "ALREADY_LOCAL"
+                }
+                .into(),
                 workspace_id: existing_workspace_id,
                 conversation_id: existing_conversation_id,
                 title: selected_local_conversation_title(connection, &document_id)
@@ -2759,9 +2932,16 @@ fn restore_remote_envelope<C: CredentialStore>(
     exchange["export"]["semanticHash"] = Value::String(semantic_hash.clone());
     let encoded = serde_json::to_string(&exchange).map_err(|_| safe_error("恢复工作区无法编码"))?;
     let package_hash = sha256(encoded.as_bytes());
-    let workspace_occupied: bool = connection.query_row("SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)", [&workspace_id], |r|r.get(0))
+    let workspace_occupied: bool = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?1)",
+            [&workspace_id],
+            |r| r.get(0),
+        )
         .map_err(|_| safe_error("恢复工作区无法读取"))?;
-    if workspace_occupied { return Err(safe_error("同一云端文档的本机恢复身份无法核对")); }
+    if workspace_occupied {
+        return Err(safe_error("同一云端文档的本机恢复身份无法核对"));
+    }
     let transaction = connection
         .transaction()
         .map_err(|_| safe_error("云端恢复 transaction 无法开启"))?;
@@ -2826,7 +3006,12 @@ fn restore_remote_envelope<C: CredentialStore>(
                 params![interests,now_ms()],
             ).map_err(|_| safe_error("云端关注方向兼容值未恢复"))?;
         }
-        recover_local_conversation_occurrences_in_transaction(&transaction, &account, &workspace_id, &conversation_id)?;
+        recover_local_conversation_occurrences_in_transaction(
+            &transaction,
+            &account,
+            &workspace_id,
+            &conversation_id,
+        )?;
         transaction.execute("UPDATE desktop_cloud_account_state SET state='READY',last_success_at_ms=?2,last_error_code=NULL,revision=revision+1,updated_at_ms=?2 WHERE account_ref=?1",params![account,now_ms()]).map_err(|_| safe_error("云端恢复账号状态未写入"))?;
         let metadata_revision: i64 = transaction
             .query_row(
@@ -2871,32 +3056,49 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
     credentials: &C,
     gateway: &G,
 ) -> Result<RestoreAllReceipt, String> {
-    let account = read_session(credentials)?.map(|s| sync_state_v1::account_ref(&s.user_id)).transpose()?;
+    let account = read_session(credentials)?
+        .map(|s| sync_state_v1::account_ref(&s.user_id))
+        .transpose()?;
     // Snapshot receipts before the network request. Do not prune a selection
     // created or updated while that request was in flight.
-    let before: Vec<(String,String,String,i64)> = if let Some(account) = account.as_ref() {
+    let before: Vec<(String, String, String, i64)> = if let Some(account) = account.as_ref() {
         let mut statement = connection.prepare("SELECT workspace_id,conversation_id,document_id,last_synced_at_ms FROM desktop_selected_conversation_sync WHERE account_ref=?1")
             .map_err(|_| safe_error("本机同步列表无法读取"))?;
-        let rows = statement.query_map([account], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)))
+        let rows = statement
+            .query_map([account], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
             .map_err(|_| safe_error("本机同步列表无法读取"))?;
-        rows.collect::<Result<Vec<_>,_>>().map_err(|_| safe_error("本机同步列表无法读取"))?
-    } else { Vec::new() };
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| safe_error("本机同步列表无法读取"))?
+    } else {
+        Vec::new()
+    };
     let started = std::time::Instant::now();
     let documents = match gateway.list() {
         Err(CloudFailure::Known | CloudFailure::ServerUnavailable)
-            if started.elapsed() < Duration::from_secs(5) => {
-                // One bounded retry for a fast transient read failure only.
-                // Never retry authorization, corruption, rate limits or writes;
-                // a full request timeout must not start another long wait.
-                std::thread::sleep(Duration::from_millis(200));
-                gateway.list()
-            }
+            if started.elapsed() < Duration::from_secs(5) =>
+        {
+            // One bounded retry for a fast transient read failure only.
+            // Never retry authorization, corruption, rate limits or writes;
+            // a full request timeout must not start another long wait.
+            std::thread::sleep(Duration::from_millis(200));
+            gateway.list()
+        }
         result => result,
-    }.map_err(|failure| safe_error(cloud_read_failure_message(failure)))?;
-    if read_session(credentials)?.map(|s| sync_state_v1::account_ref(&s.user_id)).transpose()? != account {
+    }
+    .map_err(|failure| safe_error(cloud_read_failure_message(failure)))?;
+    if read_session(credentials)?
+        .map(|s| sync_state_v1::account_ref(&s.user_id))
+        .transpose()?
+        != account
+    {
         return Err(safe_error("登录状态已变化，未应用云端列表。"));
     }
-    let present_ids = documents.iter().map(|d| envelope_document_id(&d.envelope)).collect::<Result<BTreeSet<_>,_>>();
+    let present_ids = documents
+        .iter()
+        .map(|d| envelope_document_id(&d.envelope))
+        .collect::<Result<BTreeSet<_>, _>>();
     // Upgrade only fully verified legacy snapshots with CAS and exact readback.
     // A failed item never prevents discovery of its siblings.
     let upgraded_legacy_direct_count = 0;
@@ -2907,7 +3109,11 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
     let mut cloud_pinned_conversation_ids = BTreeSet::new();
     let mut cloud_list_presentation_present = false;
     for document in documents {
-        if read_session(credentials)?.map(|s|sync_state_v1::account_ref(&s.user_id)).transpose()? != account {
+        if read_session(credentials)?
+            .map(|s| sync_state_v1::account_ref(&s.user_id))
+            .transpose()?
+            != account
+        {
             return Err(safe_error("登录状态已变化，已停止读取"));
         }
         let document = if let Some(account) = account.as_deref() {
@@ -2915,13 +3121,25 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
                 Ok(document) => document,
                 Err(error) => {
                     failed_count += 1;
-                    let code = if error.contains("旧加密记录") { "LEGACY_DEVICE_REQUIRED" } else { "LEGACY_MIGRATION_PENDING" };
+                    let code = if error.contains("旧加密记录") {
+                        "LEGACY_DEVICE_REQUIRED"
+                    } else {
+                        "LEGACY_MIGRATION_PENDING"
+                    };
                     *failure_reasons.entry(code.into()).or_default() += 1;
-                    write_diagnostic(connection, Some(account), "CLOUD_DOCUMENT_MIGRATION", "FAILED", Some(code));
+                    write_diagnostic(
+                        connection,
+                        Some(account),
+                        "CLOUD_DOCUMENT_MIGRATION",
+                        "FAILED",
+                        Some(code),
+                    );
                     continue;
                 }
             }
-        } else { document };
+        } else {
+            document
+        };
         let Ok(envelope) = serde_json::from_str::<Value>(&document.envelope) else {
             failed_count += 1;
             continue;
@@ -2930,24 +3148,45 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
             failed_count += 1;
             continue;
         };
-        if document_id == CLOUD_LIST_PRESENTATION_DOCUMENT_ID {
+        if matches!(document_id.as_str(), CLOUD_LIST_PRESENTATION_DOCUMENT_ID | WORK_CLOUD_LIST_DOCUMENT_ID) {
+            if document_id != cloud_list_document_id(connection)? { continue; }
             match cloud_list_presentation_ids(connection, credentials, &document) {
-                Ok(pinned) => { cloud_pinned_conversation_ids = pinned; cloud_list_presentation_present = true; }
-                Err(_) => { failed_count += 1; *failure_reasons.entry("CLOUD_PRESENTATION_FAILED".into()).or_default() += 1; }
+                Ok(pinned) => {
+                    cloud_pinned_conversation_ids = pinned;
+                    cloud_list_presentation_present = true;
+                }
+                Err(_) => {
+                    failed_count += 1;
+                    *failure_reasons
+                        .entry("CLOUD_PRESENTATION_FAILED".into())
+                        .or_default() += 1;
+                }
             }
             continue;
         }
         match restore_remote_envelope(connection, credentials, document) {
             Ok(receipt) => restored.push(receipt),
             Err(error) => {
+                if error.contains("OTHER_DATA_AREA") { continue; }
                 failed_count += 1;
-                let code = if error.contains("旧加密记录") { "LEGACY_DEVICE_REQUIRED" }
-                    else if error.contains("恢复保护校验") { "RECOVERY_VERIFICATION_FAILED" }
-                    else if error.contains("标题版本冲突") { "TITLE_CONFLICT" }
-                    else { "DOCUMENT_RESTORE_FAILED" };
+                let code = if error.contains("旧加密记录") {
+                    "LEGACY_DEVICE_REQUIRED"
+                } else if error.contains("恢复保护校验") {
+                    "RECOVERY_VERIFICATION_FAILED"
+                } else if error.contains("标题版本冲突") {
+                    "TITLE_CONFLICT"
+                } else {
+                    "DOCUMENT_RESTORE_FAILED"
+                };
                 *failure_reasons.entry(code.into()).or_default() += 1;
-                write_diagnostic(connection, account.as_deref(), "CLOUD_DOCUMENT_RESTORE", "FAILED", Some(code));
-            },
+                write_diagnostic(
+                    connection,
+                    account.as_deref(),
+                    "CLOUD_DOCUMENT_RESTORE",
+                    "FAILED",
+                    Some(code),
+                );
+            }
         }
     }
     if skipped_legacy_count != 0 {
@@ -2959,10 +3198,16 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
             Some("LEGACY_DIRECT_PROTOCOL_RETIRED"),
         );
     }
-    let cloud_conversation_keys = if let (Some(account), Ok(present_ids)) = (account.as_ref(), present_ids) {
-        let transaction = connection.transaction().map_err(|_| safe_error("云端列表核对事务未开启"))?;
+    let cloud_conversation_keys = if let (Some(account), Ok(present_ids)) =
+        (account.as_ref(), present_ids)
+    {
+        let transaction = connection
+            .transaction()
+            .map_err(|_| safe_error("云端列表核对事务未开启"))?;
         for (workspace, conversation, document, timestamp) in before {
-            if present_ids.contains(&document) { continue; }
+            if present_ids.contains(&document) {
+                continue;
+            }
             let removed = transaction.execute("DELETE FROM desktop_selected_conversation_sync WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3 AND document_id=?4 AND last_synced_at_ms=?5",
                 params![account,workspace,conversation,document,timestamp]).map_err(|_| safe_error("失效同步身份未清理"))?;
             if removed > 0 {
@@ -2970,12 +3215,21 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
                     params![account,workspace,conversation]).map_err(|_| safe_error("失效同步任务未清理"))?;
             }
         }
-        transaction.commit().map_err(|_| safe_error("云端列表核对未保存"))?;
+        transaction
+            .commit()
+            .map_err(|_| safe_error("云端列表核对未保存"))?;
         let mut statement = connection.prepare("SELECT workspace_id || ':' || conversation_id FROM desktop_selected_conversation_sync WHERE account_ref=?1")
             .map_err(|_| safe_error("云端列表身份无法读取"))?;
-        let rows = statement.query_map([account], |r| r.get(0)).map_err(|_| safe_error("云端列表身份无法读取"))?;
-        Some(rows.collect::<Result<Vec<String>,_>>().map_err(|_| safe_error("云端列表身份无法读取"))?)
-    } else { None };
+        let rows = statement
+            .query_map([account], |r| r.get(0))
+            .map_err(|_| safe_error("云端列表身份无法读取"))?;
+        Some(
+            rows.collect::<Result<Vec<String>, _>>()
+                .map_err(|_| safe_error("云端列表身份无法读取"))?,
+        )
+    } else {
+        None
+    };
     Ok(RestoreAllReceipt {
         restored,
         failed_count,
@@ -2988,15 +3242,21 @@ pub fn restore_all_remote_conversations<C: CredentialStore, G: CloudGateway>(
     })
 }
 
-
 fn cloud_list_presentation_ids<C: CredentialStore>(
     connection: &Connection,
     credentials: &C,
     remote: &RemoteEnvelope,
 ) -> Result<BTreeSet<String>, String> {
+    let list_document_id = cloud_list_document_id(connection)?;
     let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
-    let payload = open_account_document(connection, credentials, &account, &remote, CLOUD_LIST_PRESENTATION_DOCUMENT_ID)?;
+    let payload = open_account_document(
+        connection,
+        credentials,
+        &account,
+        &remote,
+        list_document_id,
+    )?;
     let records = payload
         .get("records")
         .and_then(Value::as_array)
@@ -3006,7 +3266,7 @@ fn cloud_list_presentation_ids<C: CredentialStore>(
         .find(|record| {
             record.get("kind").and_then(Value::as_str) == Some("safe_settings")
                 && record.get("id").and_then(Value::as_str)
-                    == Some(CLOUD_LIST_PRESENTATION_DOCUMENT_ID)
+                    == Some(list_document_id)
         })
         .ok_or_else(|| safe_error("云端列表投影无效"))?;
     let content = record
@@ -3061,10 +3321,13 @@ pub fn set_cloud_list_pinned<C: CredentialStore, G: CloudGateway>(
     let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
     let remote = gateway
-        .read(CLOUD_LIST_PRESENTATION_DOCUMENT_ID)
+        .read(cloud_list_document_id(connection)?)
         .map_err(|failure| safe_error(cloud_read_failure_message(failure)))?;
     let (expected_revision, mut values) = match remote {
-        Some(remote) => (remote.revision, cloud_list_presentation_ids(connection, credentials, &remote)?),
+        Some(remote) => (
+            remote.revision,
+            cloud_list_presentation_ids(connection, credentials, &remote)?,
+        ),
         None => (0, BTreeSet::new()),
     };
     if pinned {
@@ -3074,22 +3337,22 @@ pub fn set_cloud_list_pinned<C: CredentialStore, G: CloudGateway>(
     }
     let payload = json!({
         "format":"nfai.sync.payload", "protocolVersion":1, "schemaVersion":1,
-        "appId":APP_ID, "documentId":CLOUD_LIST_PRESENTATION_DOCUMENT_ID,
+        "appId":APP_ID, "documentId":cloud_list_document_id(connection)?,
         "revision":expected_revision + 1,
-        "records":[{"kind":"safe_settings","id":CLOUD_LIST_PRESENTATION_DOCUMENT_ID,
+        "records":[{"kind":"safe_settings","id":cloud_list_document_id(connection)?,
           "revision":expected_revision + 1,"classification":"NORMAL",
           "content":{"type":"CLOUD_CONVERSATION_LIST_V1","pinnedConversationIds":values.iter().collect::<Vec<_>>()}}]
     });
-    let envelope = sync_v1::seal_direct(payload).map_err(|_|safe_error("云端列表置顶无法准备"))?;
+    let envelope = sync_v1::seal_direct(payload).map_err(|_| safe_error("云端列表置顶无法准备"))?;
     let (revision, hash) = gateway
         .commit(
-            CLOUD_LIST_PRESENTATION_DOCUMENT_ID,
+            cloud_list_document_id(connection)?,
             expected_revision,
             &envelope,
         )
         .map_err(|failure| safe_error(cloud_read_failure_message(failure)))?;
     let read_back = gateway
-        .read(CLOUD_LIST_PRESENTATION_DOCUMENT_ID)
+        .read(cloud_list_document_id(connection)?)
         .map_err(|failure| safe_error(cloud_read_failure_message(failure)))?
         .ok_or_else(|| safe_error("云端列表置顶回读失败"))?;
     if read_back.revision != revision || read_back.payload_hash != hash {
@@ -3329,8 +3592,10 @@ fn portable_model_usage(message: &Value) -> Option<Value> {
     }
     let usage = message
         .get("usage")
-        .filter(|usage| usage.get("inputTokens").and_then(Value::as_u64).is_some()
-            && usage.get("outputTokens").and_then(Value::as_u64).is_some())
+        .filter(|usage| {
+            usage.get("inputTokens").and_then(Value::as_u64).is_some()
+                && usage.get("outputTokens").and_then(Value::as_u64).is_some()
+        })
         .or_else(|| message.get("estimatedUsage"));
     let usage_token = |name: &str| {
         usage
@@ -3514,6 +3779,7 @@ fn conversation_payload(
         )
         .unwrap_or(false);
     let mut content = json!({"title":conversation.get("title").and_then(Value::as_str).unwrap_or("未命名会话"),"createdAt":conversation.get("createdAt"),"updatedAt":conversation.get("updatedAt"),"currentLeafId":current_leaf_id,"pinned":conversation.get("pinned").and_then(Value::as_bool).unwrap_or(false),"archived":conversation.get("archived").and_then(Value::as_bool).unwrap_or(false),"favorited":favorited,"messages":safe_messages});
+    content["surface"] = desktop_data_area::read_area(connection)?.wire().into();
     if let Some(version) = conversation.get("titleRevision").filter(|v| !v.is_null()) {
         content["titleRevision"] = version.clone();
     }
@@ -3626,7 +3892,7 @@ pub fn cancel_remote_conversation<C: CredentialStore, G: CloudGateway>(
 ) -> Result<CancelSyncReceipt, String> {
     let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
-    let document_id = format!("conversation-{}", &sha256(conversation_id.as_bytes())[..40]);
+    let document_id = connection.query_row("SELECT document_id FROM desktop_selected_conversation_sync WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3", params![account, workspace_id, conversation_id], |row| row.get::<_, String>(0)).optional().map_err(|_| safe_error("同步身份无法读取"))?.unwrap_or(desktop_data_area::document_id(desktop_data_area::read_area(connection)?, conversation_id));
     let remote = gateway
         .read(&document_id)
         .map_err(|failure| safe_error(cloud_read_failure_message(failure)))?;
@@ -3684,15 +3950,30 @@ fn mark_sync_commit_unknown(
 /// Repair historical duplicate occurrences only by stable conversation identity
 /// and matching message ancestry/content. Never copy from another account's receipt.
 fn recover_local_conversation_occurrences(
-    connection: &mut Connection, account: &str, workspace_id: &str, conversation_id: &str,
+    connection: &mut Connection,
+    account: &str,
+    workspace_id: &str,
+    conversation_id: &str,
 ) -> Result<(), String> {
-    let transaction = connection.transaction().map_err(|_| safe_error("本机对话修复事务未开启"))?;
-    recover_local_conversation_occurrences_in_transaction(&transaction, account, workspace_id, conversation_id)?;
-    transaction.commit().map_err(|_| safe_error("本机对话修复未提交"))
+    let transaction = connection
+        .transaction()
+        .map_err(|_| safe_error("本机对话修复事务未开启"))?;
+    recover_local_conversation_occurrences_in_transaction(
+        &transaction,
+        account,
+        workspace_id,
+        conversation_id,
+    )?;
+    transaction
+        .commit()
+        .map_err(|_| safe_error("本机对话修复未提交"))
 }
 
 fn recover_local_conversation_occurrences_in_transaction(
-    transaction: &rusqlite::Transaction<'_>, account: &str, workspace_id: &str, conversation_id: &str,
+    transaction: &rusqlite::Transaction<'_>,
+    account: &str,
+    workspace_id: &str,
+    conversation_id: &str,
 ) -> Result<(), String> {
     let candidates: Vec<String> = {
         let mut statement = transaction.prepare(
@@ -3703,35 +3984,70 @@ fn recover_local_conversation_occurrences_in_transaction(
                  WHERE s.workspace_id=w.workspace_id AND s.conversation_id=?2 AND s.account_ref<>?3)
              ORDER BY w.workspace_id LIMIT 32"
         ).map_err(|_| safe_error("本机同源对话无法核对"))?;
-        let rows = statement.query_map(params![workspace_id, conversation_id, account], |row| row.get(0))
+        let rows = statement
+            .query_map(params![workspace_id, conversation_id, account], |row| {
+                row.get(0)
+            })
             .map_err(|_| safe_error("本机同源对话无法核对"))?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|_| safe_error("本机同源对话无法读取"))?
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|_| safe_error("本机同源对话无法读取"))?
     };
-    if candidates.is_empty() { return Ok(()); }
+    if candidates.is_empty() {
+        return Ok(());
+    }
     for candidate in candidates {
-        let source: Value = serde_json::from_str(&candidate).map_err(|_| safe_error("本机同源对话结构无效"))?;
+        let source: Value =
+            serde_json::from_str(&candidate).map_err(|_| safe_error("本机同源对话结构无效"))?;
         let target_json: String = transaction.query_row(
             "SELECT c.value FROM workspace_exchange w,json_each(w.exchange_json,'$.conversations') c WHERE w.workspace_id=?1 AND json_extract(c.value,'$.id')=?2",
             params![workspace_id, conversation_id], |row| row.get(0),
         ).map_err(|_| safe_error("本机对话修复目标不存在"))?;
-        let target: Value = serde_json::from_str(&target_json).map_err(|_| safe_error("本机对话结构无效"))?;
-        let Some(source_messages) = source.get("messages").and_then(Value::as_array) else { continue; };
-        let Some(target_messages) = target.get("messages").and_then(Value::as_array) else { continue; };
-        let anchored = source_messages.iter().any(|original| target_messages.iter().any(|current|
-            original.get("id") == current.get("id") && original.get("id").and_then(Value::as_str).is_some()
-            && original.get("parentId") == current.get("parentId") && original.get("role") == current.get("role")
-            && !portable_message_text(original).is_empty() && portable_message_text(original) == portable_message_text(current)));
-        if !anchored { continue; }
+        let target: Value =
+            serde_json::from_str(&target_json).map_err(|_| safe_error("本机对话结构无效"))?;
+        let Some(source_messages) = source.get("messages").and_then(Value::as_array) else {
+            continue;
+        };
+        let Some(target_messages) = target.get("messages").and_then(Value::as_array) else {
+            continue;
+        };
+        let anchored = source_messages.iter().any(|original| {
+            target_messages.iter().any(|current| {
+                original.get("id") == current.get("id")
+                    && original.get("id").and_then(Value::as_str).is_some()
+                    && original.get("parentId") == current.get("parentId")
+                    && original.get("role") == current.get("role")
+                    && !portable_message_text(original).is_empty()
+                    && portable_message_text(original) == portable_message_text(current)
+            })
+        });
+        if !anchored {
+            continue;
+        }
         // Only fill missing identities. Existing text/title/model/cost facts
         // remain owned by the selected copy and the normal remote merge.
         let mut recovery = target.clone();
-        recovery["messages"] = Value::Array(source_messages.iter().map(|original|
-            target_messages.iter().find(|current| current.get("id") == original.get("id"))
-                .unwrap_or(original).clone()).collect());
+        recovery["messages"] = Value::Array(
+            source_messages
+                .iter()
+                .map(|original| {
+                    target_messages
+                        .iter()
+                        .find(|current| current.get("id") == original.get("id"))
+                        .unwrap_or(original)
+                        .clone()
+                })
+                .collect(),
+        );
         recovery["currentLeafId"] = source.get("currentLeafId").cloned().unwrap_or(Value::Null);
-        merge_remote_additions_for_local_commit(&transaction, workspace_id, conversation_id,
-            recovery.as_object().ok_or_else(|| safe_error("本机同源对话结构无效"))?,
-            target.get("revision").and_then(Value::as_u64).unwrap_or(1))?;
+        merge_remote_additions_for_local_commit(
+            &transaction,
+            workspace_id,
+            conversation_id,
+            recovery
+                .as_object()
+                .ok_or_else(|| safe_error("本机同源对话结构无效"))?,
+            target.get("revision").and_then(Value::as_u64).unwrap_or(1),
+        )?;
     }
     Ok(())
 }
@@ -3743,19 +4059,40 @@ pub fn sync_selected_conversation<C: CredentialStore, G: CloudGateway>(
     workspace_id: &str,
     conversation_id: &str,
 ) -> Result<SyncReceipt, String> {
-    sync_selected_conversation_internal(connection, credentials, gateway, workspace_id, conversation_id, false)
+    sync_selected_conversation_internal(
+        connection,
+        credentials,
+        gateway,
+        workspace_id,
+        conversation_id,
+        false,
+    )
 }
 
 pub fn continue_selected_conversation<C: CredentialStore, G: CloudGateway>(
-    connection: &mut Connection, credentials: &C, gateway: &G,
-    workspace_id: &str, conversation_id: &str,
+    connection: &mut Connection,
+    credentials: &C,
+    gateway: &G,
+    workspace_id: &str,
+    conversation_id: &str,
 ) -> Result<SyncReceipt, String> {
-    sync_selected_conversation_internal(connection, credentials, gateway, workspace_id, conversation_id, true)
+    sync_selected_conversation_internal(
+        connection,
+        credentials,
+        gateway,
+        workspace_id,
+        conversation_id,
+        true,
+    )
 }
 
 fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
-    connection: &mut Connection, credentials: &C, gateway: &G,
-    workspace_id: &str, conversation_id: &str, require_existing_selection: bool,
+    connection: &mut Connection,
+    credentials: &C,
+    gateway: &G,
+    workspace_id: &str,
+    conversation_id: &str,
+    require_existing_selection: bool,
 ) -> Result<SyncReceipt, String> {
     let session = read_session(credentials)?.ok_or_else(|| safe_error("请先登录 Google 账号"))?;
     let account = sync_state_v1::account_ref(&session.user_id)?;
@@ -3771,7 +4108,7 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
             synced_at_ms: None,
         });
     }
-    let document_id = format!("conversation-{}", &sha256(conversation_id.as_bytes())[..40]);
+    let document_id = connection.query_row("SELECT document_id FROM desktop_selected_conversation_sync WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3", params![account, workspace_id, conversation_id], |row| row.get::<_, String>(0)).optional().map_err(|_| safe_error("同步身份无法读取"))?.unwrap_or(desktop_data_area::document_id(desktop_data_area::read_area(connection)?, conversation_id));
     let ledger: Option<(i64,String)> = connection.query_row("SELECT remote_revision,payload_hash FROM desktop_selected_conversation_sync WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3", params![account,workspace_id,conversation_id], |row| Ok((row.get(0)?,row.get(1)?))).optional().map_err(|_| safe_error("同步回执无法读取"))?;
     if require_existing_selection && ledger.is_none() {
         return Err(safe_error("该对话已停止云端同步，未重新上传。"));
@@ -3783,8 +4120,18 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
         let deletion_pending: bool = connection.query_row("SELECT EXISTS(SELECT 1 FROM desktop_sync_jobs WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3 AND stage='DELETE_PENDING')",
             params![account,workspace_id,conversation_id], |r| r.get(0)).map_err(|_| safe_error("删除任务无法核对"))?;
         if deleted == Some(true) || (deleted.is_none() && deletion_pending) {
-            cancel_remote_conversation(connection, credentials, gateway, workspace_id, conversation_id)?;
-            return Ok(SyncReceipt { status: "SYNCED".into(), safe_code: Some("REMOTE_COPY_REMOVED".into()), synced_at_ms: Some(now_ms()) });
+            cancel_remote_conversation(
+                connection,
+                credentials,
+                gateway,
+                workspace_id,
+                conversation_id,
+            )?;
+            return Ok(SyncReceipt {
+                status: "SYNCED".into(),
+                safe_code: Some("REMOTE_COPY_REMOVED".into()),
+                synced_at_ms: Some(now_ms()),
+            });
         }
     }
     let remote = match gateway.read(&document_id) {
@@ -3812,13 +4159,19 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
         }
     };
     if remote.is_none() && ledger.is_some() {
-        let transaction = connection.transaction().map_err(|_| safe_error("同步身份清理事务未开启"))?;
+        let transaction = connection
+            .transaction()
+            .map_err(|_| safe_error("同步身份清理事务未开启"))?;
         transaction.execute("DELETE FROM desktop_selected_conversation_sync WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3", params![account,workspace_id,conversation_id])
             .map_err(|_| safe_error("失效同步身份未清理"))?;
         transaction.execute("DELETE FROM desktop_sync_jobs WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3 AND stage<>'UNKNOWN'", params![account,workspace_id,conversation_id])
             .map_err(|_| safe_error("失效同步任务未清理"))?;
-        transaction.commit().map_err(|_| safe_error("同步身份清理未保存"))?;
-        return Err(safe_error("该对话已从云端删除，已停止续同步；本机内容保留。"));
+        transaction
+            .commit()
+            .map_err(|_| safe_error("同步身份清理未保存"))?;
+        return Err(safe_error(
+            "该对话已从云端删除，已停止续同步；本机内容保留。",
+        ));
     }
     recover_local_conversation_occurrences(connection, &account, workspace_id, conversation_id)?;
     // Before this explicit local write, fold any verified remote additions
@@ -3827,10 +4180,15 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
     // valid envelope that simply omits the phone's latest completed answer.
     // Old non-direct documents are intentionally migrated by the local source;
     // a malformed current direct document is rejected rather than overwritten.
-    let remote_is_direct = remote.as_ref().and_then(|r|serde_json::from_str::<Value>(&r.envelope).ok())
-        .and_then(|v|v.get("format").and_then(Value::as_str).map(str::to_owned)).as_deref() == Some(sync_v1::DIRECT_ENVELOPE);
+    let remote_is_direct = remote
+        .as_ref()
+        .and_then(|r| serde_json::from_str::<Value>(&r.envelope).ok())
+        .and_then(|v| v.get("format").and_then(Value::as_str).map(str::to_owned))
+        .as_deref()
+        == Some(sync_v1::DIRECT_ENVELOPE);
     if let Some(remote) = remote.as_ref() {
-        let payload = open_account_document(connection, credentials, &account, remote, &document_id)?;
+        let payload =
+            open_account_document(connection, credentials, &account, remote, &document_id)?;
         let record = payload
             .get("records")
             .and_then(Value::as_array)
@@ -3887,7 +4245,7 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
         return Ok(SyncReceipt { status:"UP_TO_DATE".into(), safe_code:None, synced_at_ms:connection.query_row("SELECT last_synced_at_ms FROM desktop_selected_conversation_sync WHERE account_ref=?1 AND workspace_id=?2 AND conversation_id=?3", params![account,workspace_id,conversation_id], |row| row.get(0)).ok() });
     }
     connection.execute("UPDATE desktop_cloud_account_state SET state='SYNCING',last_error_code=NULL,updated_at_ms=?2 WHERE account_ref=?1", params![account,now_ms()]).map_err(|_| safe_error("同步状态未保存"))?;
-    let envelope = sync_v1::seal_direct(payload).map_err(|_|safe_error("对话无法准备同步内容"))?;
+    let envelope = sync_v1::seal_direct(payload).map_err(|_| safe_error("对话无法准备同步内容"))?;
     let payload_hash = serde_json::from_str::<Value>(&envelope)
         .ok()
         .and_then(|value| {
@@ -3979,21 +4337,44 @@ fn sync_selected_conversation_internal<C: CredentialStore, G: CloudGateway>(
 
 /// A local title save and its retry marker share one SQLite transaction.
 /// Only existing selected identities are eligible; this never enrolls a conversation.
-pub(crate) fn queue_selected_title_change(transaction: &Transaction<'_>, workspace: &str, conversation: &str) -> Result<(), String> {
+pub(crate) fn queue_selected_title_change(
+    transaction: &Transaction<'_>,
+    workspace: &str,
+    conversation: &str,
+) -> Result<(), String> {
     let title: String = transaction.query_row(
         "SELECT json_object('title',json_extract(c.value,'$.title'),'titleRevision',json_extract(c.value,'$.titleRevision')) FROM workspace_exchange w,json_each(w.exchange_json,'$.conversations') c WHERE w.workspace_id=?1 AND json_extract(c.value,'$.id')=?2",
         params![workspace,conversation], |r| r.get(0)).map_err(|_| safe_error("标题变更未能读取"))?;
-    queue_selected_change(transaction, workspace, conversation, &sha256(title.as_bytes()))
+    queue_selected_change(
+        transaction,
+        workspace,
+        conversation,
+        &sha256(title.as_bytes()),
+    )
 }
 
-pub(crate) fn queue_selected_deletion(transaction: &Transaction<'_>, workspace: &str, conversation: &str) -> Result<(), String> {
-    queue_selected_change(transaction, workspace, conversation, &sha256(format!("deleted:{}", now_ms()).as_bytes()))?;
+pub(crate) fn queue_selected_deletion(
+    transaction: &Transaction<'_>,
+    workspace: &str,
+    conversation: &str,
+) -> Result<(), String> {
+    queue_selected_change(
+        transaction,
+        workspace,
+        conversation,
+        &sha256(format!("deleted:{}", now_ms()).as_bytes()),
+    )?;
     transaction.execute("UPDATE desktop_sync_jobs SET stage='DELETE_PENDING' WHERE workspace_id=?1 AND conversation_id=?2 AND job_id='title-pending:'||account_ref||':'||workspace_id||':'||conversation_id", params![workspace,conversation])
         .map_err(|_| safe_error("删除续同步任务未保存"))?;
     Ok(())
 }
 
-fn queue_selected_change(transaction: &Transaction<'_>, workspace: &str, conversation: &str, marker: &str) -> Result<(), String> {
+fn queue_selected_change(
+    transaction: &Transaction<'_>,
+    workspace: &str,
+    conversation: &str,
+    marker: &str,
+) -> Result<(), String> {
     transaction.execute(
         "INSERT INTO desktop_sync_jobs(job_id,account_ref,workspace_id,conversation_id,document_id,stage,payload_hash,attempt,next_retry_at_ms,created_at_ms,updated_at_ms)
          SELECT 'title-pending:'||account_ref||':'||workspace_id||':'||conversation_id,account_ref,workspace_id,conversation_id,document_id,'TITLE_PENDING',?3,0,?4,?4,?4 FROM desktop_selected_conversation_sync WHERE workspace_id=?1 AND conversation_id=?2
@@ -4002,22 +4383,47 @@ fn queue_selected_change(transaction: &Transaction<'_>, workspace: &str, convers
     Ok(())
 }
 
-pub(crate) fn pending_title_targets<C: CredentialStore>(connection: &Connection, credentials: &C) -> Result<Vec<(String,String,String,String)>, String> {
-    let Some(session) = read_session(credentials)? else { return Ok(Vec::new()); };
+pub(crate) fn pending_title_targets<C: CredentialStore>(
+    connection: &Connection,
+    credentials: &C,
+) -> Result<Vec<(String, String, String, String)>, String> {
+    let Some(session) = read_session(credentials)? else {
+        return Ok(Vec::new());
+    };
     let account = sync_state_v1::account_ref(&session.user_id)?;
     let mut statement = connection.prepare("SELECT j.job_id,j.workspace_id,j.conversation_id,j.payload_hash FROM desktop_sync_jobs j JOIN desktop_selected_conversation_sync s ON s.account_ref=j.account_ref AND s.workspace_id=j.workspace_id AND s.conversation_id=j.conversation_id WHERE j.account_ref=?1 AND j.stage IN ('TITLE_PENDING','DELETE_PENDING') AND coalesce(j.next_retry_at_ms,0)<=?2 ORDER BY j.updated_at_ms LIMIT 32")
         .map_err(|_| safe_error("标题续同步任务无法读取"))?;
-    let targets = statement.query_map(params![account,now_ms()], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)))
-        .map_err(|_| safe_error("标题续同步任务无法读取"))?.collect::<Result<Vec<_>,_>>().map_err(|_| safe_error("标题续同步任务无效"))?;
+    let targets = statement
+        .query_map(params![account, now_ms()], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+        })
+        .map_err(|_| safe_error("标题续同步任务无法读取"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| safe_error("标题续同步任务无效"))?;
     Ok(targets)
 }
 
-pub(crate) fn finish_pending_title_attempt(connection: &Connection, job: &str, marker: &str, result: &Result<SyncReceipt,String>) -> Result<(),String> {
-    if result.as_ref().is_ok_and(|r| matches!(r.status.as_str(),"SYNCED"|"UP_TO_DATE")) {
-        connection.execute("DELETE FROM desktop_sync_jobs WHERE job_id=?1 AND payload_hash=?2",params![job,marker])
+pub(crate) fn finish_pending_title_attempt(
+    connection: &Connection,
+    job: &str,
+    marker: &str,
+    result: &Result<SyncReceipt, String>,
+) -> Result<(), String> {
+    if result
+        .as_ref()
+        .is_ok_and(|r| matches!(r.status.as_str(), "SYNCED" | "UP_TO_DATE"))
+    {
+        connection
+            .execute(
+                "DELETE FROM desktop_sync_jobs WHERE job_id=?1 AND payload_hash=?2",
+                params![job, marker],
+            )
             .map_err(|_| safe_error("标题续同步回执未确认"))?;
     } else {
-        let conflict = result.as_ref().err().is_some_and(|e| e.contains("标题版本冲突"));
+        let conflict = result
+            .as_ref()
+            .err()
+            .is_some_and(|e| e.contains("标题版本冲突"));
         connection.execute("UPDATE desktop_sync_jobs SET stage=CASE WHEN stage='DELETE_PENDING' THEN stage ELSE ?3 END,attempt=attempt+1,next_retry_at_ms=?4+MIN(1800000,30000*(1 << MIN(attempt,6))),updated_at_ms=?4 WHERE job_id=?1 AND payload_hash=?2",params![job,marker,if conflict { "TITLE_CONFLICT" } else { "TITLE_PENDING" },now_ms()])
             .map_err(|_| safe_error("标题续同步重试状态未保存"))?;
     }
@@ -4379,10 +4785,20 @@ pub fn projection<C: CredentialStore>(
         > 0;
     let diagnostics = connection.prepare("SELECT event,outcome,safe_code,occurred_at_ms FROM desktop_sync_diagnostics ORDER BY occurred_at_ms DESC LIMIT 12").map_err(|_| safe_error("同步诊断无法读取"))?.query_map([], |row| Ok(DiagnosticProjection { event:row.get(0)?, outcome:row.get(1)?, safe_code:row.get(2)?, occurred_at_ms:row.get(3)? })).map_err(|_| safe_error("同步诊断无法读取"))?.collect::<Result<Vec<_>,_>>().map_err(|_| safe_error("同步诊断无效"))?;
     let notifications = connection.prepare("SELECT kind,message,occurred_at_ms,unread FROM desktop_sync_notifications ORDER BY occurred_at_ms DESC LIMIT 8").map_err(|_| safe_error("同步通知无法读取"))?.query_map([], |row| Ok(NotificationProjection { kind:row.get(0)?, message:row.get(1)?, occurred_at_ms:row.get(2)?, unread:row.get::<_,i64>(3)? != 0 })).map_err(|_| safe_error("同步通知无法读取"))?.collect::<Result<Vec<_>,_>>().map_err(|_| safe_error("同步通知无效"))?;
-    let state = row.as_ref().map(|value| match value.0.as_str() {
-        "AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION" | "AUTHENTICATED_NEEDS_RECOVERY_MATERIAL" => "READY".to_owned(),
-        _ => value.0.clone(),
-    }).unwrap_or_else(|| if configured { "SIGNED_OUT".into() } else { "NOT_CONFIGURED".into() });
+    let state = row
+        .as_ref()
+        .map(|value| match value.0.as_str() {
+            "AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION"
+            | "AUTHENTICATED_NEEDS_RECOVERY_MATERIAL" => "READY".to_owned(),
+            _ => value.0.clone(),
+        })
+        .unwrap_or_else(|| {
+            if configured {
+                "SIGNED_OUT".into()
+            } else {
+                "NOT_CONFIGURED".into()
+            }
+        });
     Ok(AccountProjection {
         configured,
         state: state.clone(),
@@ -4399,7 +4815,10 @@ pub fn projection<C: CredentialStore>(
         selected_conversation_count: selected,
         synced_conversation_keys,
         sync_stage: state,
-        notice: row.as_ref().and_then(|value| value.4.clone()).filter(|code| code != "RECOVERY_MATERIAL_REQUIRED"),
+        notice: row
+            .as_ref()
+            .and_then(|value| value.4.clone())
+            .filter(|code| code != "RECOVERY_MATERIAL_REQUIRED"),
         device_id: row
             .map(|value| value.5)
             .unwrap_or_else(|| "尚未建立设备身份".into()),
@@ -4414,100 +4833,272 @@ mod tests {
     use std::{cell::RefCell, collections::BTreeMap};
 
     #[test]
+    fn both_platforms_restore_only_into_their_own_database_area() {
+        struct OneDocument(RemoteEnvelope);
+        impl CloudGateway for OneDocument {
+            fn read(&self, _: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> { Ok(Some(self.0.clone())) }
+            fn commit(&self, _: &str, _: u64, _: &str) -> Result<(u64,String), CloudFailure> { panic!("restore must not upload") }
+            fn list(&self) -> Result<Vec<RemoteEnvelope>,CloudFailure> { Ok(vec![self.0.clone()]) }
+        }
+        let vectors: Value = serde_json::from_str(include_str!("../../../protocol/fixtures/data-area-sync-v1.json")).unwrap();
+        for vector in vectors.as_array().unwrap() {
+            let wire_area = crate::DesktopDataArea::parse(vector["area"].as_str().unwrap()).unwrap();
+            let id = vector["conversationId"].as_str().unwrap();
+            let document = vector["documentId"].as_str().unwrap();
+            assert_eq!(desktop_data_area::document_id(wire_area, id), document);
+            for target in [crate::DesktopDataArea::Chat, crate::DesktopDataArea::Work] {
+                let mut c = database();
+                desktop_data_area::migrate(&c).unwrap();
+                c.execute("UPDATE desktop_data_area_v1 SET area=?1", [target.wire()]).unwrap();
+                let keys = Mem(RefCell::new(BTreeMap::new()));
+                persist_authenticated_session(&mut c, &keys, &Session { user_id:"area-fixture".into(), email:"fixture@example.invalid".into(), display_name:None, avatar_url:None, access_token:"a".into(), refresh_token:"r".into(), expires_at_epoch_seconds:9999999999 }).unwrap();
+                let payload = json!({"format":"nfai.sync.payload","protocolVersion":1,"schemaVersion":1,"appId":APP_ID,"documentId":document,"revision":1,"records":[{"kind":"conversation","id":id,"revision":1,"classification":"NORMAL","content":vector["content"]}]});
+                let envelope = sync_v1::seal_direct(payload).unwrap();
+                let header: Value = serde_json::from_str(&envelope).unwrap();
+                let gateway = OneDocument(RemoteEnvelope { revision:1, payload_hash:header["payloadHash"].as_str().unwrap().into(), envelope });
+                let result = restore_all_remote_conversations(&mut c, &keys, &gateway).unwrap();
+                assert_eq!(result.failed_count, 0);
+                let count: i64 = c.query_row("SELECT count(*) FROM workspace_exchange", [], |r| r.get(0)).unwrap();
+                assert_eq!(count, if target == wire_area { 1 } else { 0 });
+            }
+        }
+    }
+
+    #[test]
     fn google_login_does_not_create_or_require_any_recovery_key() {
         let mut connection = database();
         let credentials = Mem(RefCell::new(BTreeMap::new()));
-        let session = Session { user_id: "direct-login-fixture".into(), email: "fixture@example.invalid".into(), display_name: None, avatar_url: None, access_token: "a".into(), refresh_token: "r".into(), expires_at_epoch_seconds: 9999999999 };
+        let session = Session {
+            user_id: "direct-login-fixture".into(),
+            email: "fixture@example.invalid".into(),
+            display_name: None,
+            avatar_url: None,
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at_epoch_seconds: 9999999999,
+        };
         persist_authenticated_session(&mut connection, &credentials, &session).unwrap();
-        assert_eq!(credentials.0.borrow().len(), 1, "only the Google session may be stored");
+        assert_eq!(
+            credentials.0.borrow().len(),
+            1,
+            "only the Google session may be stored"
+        );
         let account = sync_state_v1::account_ref(&session.user_id).unwrap();
-        assert_eq!(SqliteMetadataStore { connection: &mut connection }.metadata(&account).unwrap().unwrap().state, sync_state_v1::State::Ready);
+        assert_eq!(
+            SqliteMetadataStore {
+                connection: &mut connection
+            }
+            .metadata(&account)
+            .unwrap()
+            .unwrap()
+            .state,
+            sync_state_v1::State::Ready
+        );
         set_periodic_enabled(&connection, &credentials, true).unwrap();
-        assert!(projection(&connection, &credentials, true, None).unwrap().periodic_enabled);
+        assert!(
+            projection(&connection, &credentials, true, None)
+                .unwrap()
+                .periodic_enabled
+        );
         sign_out_keep_local(&mut connection, &credentials).unwrap();
         persist_authenticated_session(&mut connection, &credentials, &session).unwrap();
         assert_eq!(credentials.0.borrow().len(), 1);
-        assert_eq!(projection(&connection, &credentials, true, None).unwrap().state, "READY");
+        assert_eq!(
+            projection(&connection, &credentials, true, None)
+                .unwrap()
+                .state,
+            "READY"
+        );
     }
 
     #[test]
     fn reading_existing_cloud_workspace_repairs_missing_receipt_without_duplicates() {
-        let mut c=database();
-        let keys=Mem(RefCell::new(BTreeMap::new()));
-        let session=Session {user_id:"receipt-fixture".into(),email:"fixture@example.invalid".into(),display_name:None,avatar_url:None,access_token:"a".into(),refresh_token:"r".into(),expires_at_epoch_seconds:9999999999};
-        persist_authenticated_session(&mut c,&keys,&session).unwrap();
-        c.execute("INSERT INTO workspaces VALUES('source','Fixture','s','p','2026-09-01T00:00:00Z')",[]).unwrap();
+        let mut c = database();
+        let keys = Mem(RefCell::new(BTreeMap::new()));
+        let session = Session {
+            user_id: "receipt-fixture".into(),
+            email: "fixture@example.invalid".into(),
+            display_name: None,
+            avatar_url: None,
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at_epoch_seconds: 9999999999,
+        };
+        persist_authenticated_session(&mut c, &keys, &session).unwrap();
+        c.execute(
+            "INSERT INTO workspaces VALUES('source','Fixture','s','p','2026-09-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
         c.execute("INSERT INTO workspace_exchange VALUES('source',?1)",[json!({"conversations":[{"id":"fixture-conversation","title":"Fixture","revision":1,"currentLeafId":"m1","messages":[{"id":"m1","parentId":null,"ordinal":0,"role":"user","delivery":"COMPLETE","createdAt":"2026-09-01T00:00:00Z","revision":1,"blocks":[{"kind":"TEXT","text":"Fixture text"}]}]}]}).to_string()]).unwrap();
-        let doc=format!("conversation-{}", &sha256(b"fixture-conversation")[..40]);
-        let (payload,_)=conversation_payload(&c,"source","fixture-conversation",&doc,1).unwrap();
-        let envelope=sync_v1::seal_direct(payload).unwrap();
-        let parsed:Value=serde_json::from_str(&envelope).unwrap();
-        let remote=RemoteEnvelope{revision:1,payload_hash:parsed["payloadHash"].as_str().unwrap().into(),envelope};
-        c.execute("DELETE FROM workspace_exchange",[]).unwrap();c.execute("DELETE FROM workspaces",[]).unwrap();
-        let first=restore_remote_envelope(&mut c,&keys,remote.clone()).unwrap();
-        c.execute("DELETE FROM desktop_selected_conversation_sync",[]).unwrap();
-        let second=restore_remote_envelope(&mut c,&keys,remote).unwrap();
-        assert_eq!(second.workspace_id,first.workspace_id);
-        assert_eq!(c.query_row("SELECT count(*) FROM workspaces",[],|r|r.get::<_,i64>(0)).unwrap(),1);
-        assert_eq!(c.query_row("SELECT count(*) FROM desktop_selected_conversation_sync",[],|r|r.get::<_,i64>(0)).unwrap(),1);
+        let doc = format!("conversation-{}", &sha256(b"fixture-conversation")[..40]);
+        let (payload, _) =
+            conversation_payload(&c, "source", "fixture-conversation", &doc, 1).unwrap();
+        let envelope = sync_v1::seal_direct(payload).unwrap();
+        let parsed: Value = serde_json::from_str(&envelope).unwrap();
+        let remote = RemoteEnvelope {
+            revision: 1,
+            payload_hash: parsed["payloadHash"].as_str().unwrap().into(),
+            envelope,
+        };
+        c.execute("DELETE FROM workspace_exchange", []).unwrap();
+        c.execute("DELETE FROM workspaces", []).unwrap();
+        let first = restore_remote_envelope(&mut c, &keys, remote.clone()).unwrap();
+        c.execute("DELETE FROM desktop_selected_conversation_sync", [])
+            .unwrap();
+        let second = restore_remote_envelope(&mut c, &keys, remote).unwrap();
+        assert_eq!(second.workspace_id, first.workspace_id);
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM workspaces", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            c.query_row(
+                "SELECT count(*) FROM desktop_selected_conversation_sync",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
     }
     #[test]
     fn legacy_migration_preserves_records_and_resolves_unknown_commit_by_exact_readback() {
-        struct MigrationCloud { document: RefCell<RemoteEnvelope>, writes: std::cell::Cell<u32>, unknown: bool }
+        struct MigrationCloud {
+            document: RefCell<RemoteEnvelope>,
+            writes: std::cell::Cell<u32>,
+            unknown: bool,
+        }
         impl CloudGateway for MigrationCloud {
-            fn read(&self, _: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> { Ok(Some(self.document.borrow().clone())) }
-            fn commit(&self, _: &str, expected: u64, envelope: &str) -> Result<(u64,String),CloudFailure> {
-                if expected != self.document.borrow().revision { return Err(CloudFailure::StaleRevision); }
+            fn read(&self, _: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> {
+                Ok(Some(self.document.borrow().clone()))
+            }
+            fn commit(
+                &self,
+                _: &str,
+                expected: u64,
+                envelope: &str,
+            ) -> Result<(u64, String), CloudFailure> {
+                if expected != self.document.borrow().revision {
+                    return Err(CloudFailure::StaleRevision);
+                }
                 let root: Value = serde_json::from_str(envelope).unwrap();
                 let hash = root["payloadHash"].as_str().unwrap().to_owned();
-                self.writes.set(self.writes.get()+1);
-                *self.document.borrow_mut() = RemoteEnvelope { revision:expected+1,payload_hash:hash.clone(),envelope:envelope.into() };
-                if self.unknown { Err(CloudFailure::UnknownCommit) } else { Ok((expected+1,hash)) }
+                self.writes.set(self.writes.get() + 1);
+                *self.document.borrow_mut() = RemoteEnvelope {
+                    revision: expected + 1,
+                    payload_hash: hash.clone(),
+                    envelope: envelope.into(),
+                };
+                if self.unknown {
+                    Err(CloudFailure::UnknownCommit)
+                } else {
+                    Ok((expected + 1, hash))
+                }
             }
         }
         let c = database();
         let keys = Mem(RefCell::new(BTreeMap::new()));
-        let session = Session { user_id:"migration-fixture".into(),email:"fixture@example.invalid".into(),display_name:None,avatar_url:None,access_token:"fixture".into(),refresh_token:"fixture".into(),expires_at_epoch_seconds:9999999999 };
-        save_session(&keys,&session).unwrap();
+        let session = Session {
+            user_id: "migration-fixture".into(),
+            email: "fixture@example.invalid".into(),
+            display_name: None,
+            avatar_url: None,
+            access_token: "fixture".into(),
+            refresh_token: "fixture".into(),
+            expires_at_epoch_seconds: 9999999999,
+        };
+        save_session(&keys, &session).unwrap();
         let account = sync_state_v1::account_ref(&session.user_id).unwrap();
         let document = format!("conversation-{}", &sha256(b"migration-conversation")[..40]);
         let payload = json!({"format":"nfai.sync.payload","protocolVersion":1,"schemaVersion":1,"appId":APP_ID,"documentId":document,"revision":4,"records":[{"kind":"conversation","id":"migration-conversation","revision":8,"classification":"NORMAL","content":{"title":"Fixture","titleRevision":3,"nodes":[]}}]});
         let code = "synthetic-migration-code";
-        let encrypted = sync_v1::seal(payload.clone(),code,&[7u8;32]).unwrap();
-        let root:Value = serde_json::from_str(&encrypted).unwrap();
-        let remote = RemoteEnvelope { revision:4,payload_hash:root["payloadHash"].as_str().unwrap().into(),envelope:encrypted };
-        let recovered = sync_v1::recover_account_material(&remote.envelope,code,APP_ID,&document,4).unwrap();
-        let cloud = MigrationCloud { document:RefCell::new(remote.clone()),writes:std::cell::Cell::new(0),unknown:true };
+        let encrypted = sync_v1::seal(payload.clone(), code, &[7u8; 32]).unwrap();
+        let root: Value = serde_json::from_str(&encrypted).unwrap();
+        let remote = RemoteEnvelope {
+            revision: 4,
+            payload_hash: root["payloadHash"].as_str().unwrap().into(),
+            envelope: encrypted,
+        };
+        let recovered =
+            sync_v1::recover_account_material(&remote.envelope, code, APP_ID, &document, 4)
+                .unwrap();
+        let cloud = MigrationCloud {
+            document: RefCell::new(remote.clone()),
+            writes: std::cell::Cell::new(0),
+            unknown: true,
+        };
         // Missing material must leave the remote byte-for-byte untouched.
-        assert!(migrate_legacy_document(&c,&keys,&cloud,&account,remote.clone()).is_err());
-        assert_eq!(cloud.writes.get(),0);
-        keys.save(RECOVERY_SERVICE,&account,recovered.wrapping_key.as_slice()).unwrap();
+        assert!(migrate_legacy_document(&c, &keys, &cloud, &account, remote.clone()).is_err());
+        assert_eq!(cloud.writes.get(), 0);
+        keys.save(
+            RECOVERY_SERVICE,
+            &account,
+            recovered.wrapping_key.as_slice(),
+        )
+        .unwrap();
         c.execute("INSERT INTO desktop_cloud_account_state VALUES(?1,?2,?3,NULL,NULL,'READY',0,1,?4,1,NULL,NULL,'fixture',1,1,NULL,NULL,NULL)",params![account,session.user_id,session.email,URL_SAFE_NO_PAD.encode(&recovered.salt)]).unwrap();
-        let migrated = migrate_legacy_document(&c,&keys,&cloud,&account,remote.clone()).unwrap();
-        let opened = sync_v1::open_direct(&migrated.envelope,APP_ID,&document,5).unwrap();
-        assert_eq!(opened["records"],payload["records"]);
-        assert_eq!(cloud.writes.get(),1);
-        assert_eq!(migrate_legacy_document(&c,&keys,&cloud,&account,migrated.clone()).unwrap().envelope,migrated.envelope);
-        assert_eq!(cloud.writes.get(),1);
+        let migrated =
+            migrate_legacy_document(&c, &keys, &cloud, &account, remote.clone()).unwrap();
+        let opened = sync_v1::open_direct(&migrated.envelope, APP_ID, &document, 5).unwrap();
+        assert_eq!(opened["records"], payload["records"]);
+        assert_eq!(cloud.writes.get(), 1);
+        assert_eq!(
+            migrate_legacy_document(&c, &keys, &cloud, &account, migrated.clone())
+                .unwrap()
+                .envelope,
+            migrated.envelope
+        );
+        assert_eq!(cloud.writes.get(), 1);
         // A stale conversion cannot overwrite an already advanced remote.
-        assert!(migrate_legacy_document(&c,&keys,&cloud,&account,remote).is_ok());
-        assert_eq!(cloud.writes.get(),1);
+        assert!(migrate_legacy_document(&c, &keys, &cloud, &account, remote).is_ok());
+        assert_eq!(cloud.writes.get(), 1);
     }
     #[test]
     fn cloud_list_recovers_one_fast_transient_failure_but_never_retries_permanent_failures() {
-        struct Flaky { attempts: std::cell::Cell<usize>, failure: CloudFailure }
+        struct Flaky {
+            attempts: std::cell::Cell<usize>,
+            failure: CloudFailure,
+        }
         impl CloudGateway for Flaky {
-            fn read(&self, _: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> { panic!("unexpected read") }
-            fn commit(&self, _: &str, _: u64, _: &str) -> Result<(u64, String), CloudFailure> { panic!("read must not write") }
+            fn read(&self, _: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> {
+                panic!("unexpected read")
+            }
+            fn commit(&self, _: &str, _: u64, _: &str) -> Result<(u64, String), CloudFailure> {
+                panic!("read must not write")
+            }
             fn list(&self) -> Result<Vec<RemoteEnvelope>, CloudFailure> {
-                let count = self.attempts.get(); self.attempts.set(count + 1);
-                if count == 0 { Err(self.failure) } else { Ok(vec![]) }
+                let count = self.attempts.get();
+                self.attempts.set(count + 1);
+                if count == 0 {
+                    Err(self.failure)
+                } else {
+                    Ok(vec![])
+                }
             }
         }
-        for failure in [CloudFailure::ServerUnavailable, CloudFailure::Known, CloudFailure::Unauthorized, CloudFailure::RateLimited, CloudFailure::MalformedResponse] {
-            let cloud = Flaky { attempts: std::cell::Cell::new(0), failure };
-            let result = restore_all_remote_conversations(&mut database(), &Mem(RefCell::new(BTreeMap::new())), &cloud);
-            let transient = matches!(failure, CloudFailure::ServerUnavailable | CloudFailure::Known);
+        for failure in [
+            CloudFailure::ServerUnavailable,
+            CloudFailure::Known,
+            CloudFailure::Unauthorized,
+            CloudFailure::RateLimited,
+            CloudFailure::MalformedResponse,
+        ] {
+            let cloud = Flaky {
+                attempts: std::cell::Cell::new(0),
+                failure,
+            };
+            let result = restore_all_remote_conversations(
+                &mut database(),
+                &Mem(RefCell::new(BTreeMap::new())),
+                &cloud,
+            );
+            let transient = matches!(
+                failure,
+                CloudFailure::ServerUnavailable | CloudFailure::Known
+            );
             assert_eq!(result.is_ok(), transient);
             assert_eq!(cloud.attempts.get(), if transient { 2 } else { 1 });
         }
@@ -4515,26 +5106,64 @@ mod tests {
 
     #[test]
     fn shared_cross_platform_title_vectors_agree_on_read_and_upload() {
-        let vectors: Vec<Value> = serde_json::from_str(include_str!("../../../protocol/fixtures/title-sync-v1.json")).unwrap();
+        let vectors: Vec<Value> = serde_json::from_str(include_str!(
+            "../../../protocol/fixtures/title-sync-v1.json"
+        ))
+        .unwrap();
         for vector in vectors {
             for upload in [false, true] {
                 let mut connection = database();
                 let mut local = vector["local"].clone();
                 let mut remote = vector["remote"].clone();
-                for value in [&mut local,&mut remote] {
-                    value["id"] = json!("c"); value["revision"] = json!(9); value["currentLeafId"] = json!("m");
+                for value in [&mut local, &mut remote] {
+                    value["id"] = json!("c");
+                    value["revision"] = json!(9);
+                    value["currentLeafId"] = json!("m");
                     value["messages"] = json!([{"id":"m","parentId":null,"role":"user","revision":1,"delivery":"COMPLETE","blocks":[{"kind":"TEXT","text":"Fixture message"}]}]);
                 }
                 connection.execute("INSERT INTO workspaces VALUES('w','fixture','hash','package','2026-01-01T00:00:00Z')",[]).unwrap();
-                connection.execute("INSERT INTO workspace_exchange VALUES('w',?1)",[json!({"conversations":[local]}).to_string()]).unwrap();
+                connection
+                    .execute(
+                        "INSERT INTO workspace_exchange VALUES('w',?1)",
+                        [json!({"conversations":[local]}).to_string()],
+                    )
+                    .unwrap();
                 let transaction = connection.transaction().unwrap();
-                let result = if upload { merge_remote_additions_for_local_commit(&transaction,"w","c",remote.as_object().unwrap(),9) }
-                    else { merge_newer_remote_conversation(&transaction,"w","c",remote.as_object().unwrap(),9) };
-                if vector["conflict"] == true { assert!(result.unwrap_err().contains("标题版本冲突"),"{}",vector["name"]); }
-                else {
+                let result = if upload {
+                    merge_remote_additions_for_local_commit(
+                        &transaction,
+                        "w",
+                        "c",
+                        remote.as_object().unwrap(),
+                        9,
+                    )
+                } else {
+                    merge_newer_remote_conversation(
+                        &transaction,
+                        "w",
+                        "c",
+                        remote.as_object().unwrap(),
+                        9,
+                    )
+                };
+                if vector["conflict"] == true {
+                    assert!(
+                        result.unwrap_err().contains("标题版本冲突"),
+                        "{}",
+                        vector["name"]
+                    );
+                } else {
                     result.unwrap();
                     let actual: (String,u64) = transaction.query_row("SELECT json_extract(exchange_json,'$.conversations[0].title'),json_extract(exchange_json,'$.conversations[0].titleRevision') FROM workspace_exchange WHERE workspace_id='w'",[],|r|Ok((r.get(0)?,r.get(1)?))).unwrap();
-                    assert_eq!(actual,(vector["expectedTitle"].as_str().unwrap().into(),vector["expectedRevision"].as_u64().unwrap()),"{}",vector["name"]);
+                    assert_eq!(
+                        actual,
+                        (
+                            vector["expectedTitle"].as_str().unwrap().into(),
+                            vector["expectedRevision"].as_u64().unwrap()
+                        ),
+                        "{}",
+                        vector["name"]
+                    );
                 }
             }
         }
@@ -4749,7 +5378,14 @@ mod tests {
         struct Cloud(RefCell<Option<RemoteEnvelope>>);
         impl CloudGateway for Cloud {
             fn delete(&self, _: &str, expected: u64) -> Result<bool, CloudFailure> {
-                if self.0.borrow().as_ref().is_some_and(|r| r.revision != expected) { return Err(CloudFailure::StaleRevision); }
+                if self
+                    .0
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|r| r.revision != expected)
+                {
+                    return Err(CloudFailure::StaleRevision);
+                }
                 Ok(self.0.borrow_mut().take().is_some())
             }
             fn read(&self, _: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> {
@@ -4803,20 +5439,34 @@ mod tests {
         // require the user to click again after partial local commits.
         struct MixedList<'a>(&'a Cloud);
         impl CloudGateway for MixedList<'_> {
-            fn read(&self, _: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> { panic!("list must reuse its envelopes") }
-            fn commit(&self, _: &str, _: u64, _: &str) -> Result<(u64, String), CloudFailure> { panic!("reading current documents must not upload") }
+            fn read(&self, _: &str) -> Result<Option<RemoteEnvelope>, CloudFailure> {
+                panic!("list must reuse its envelopes")
+            }
+            fn commit(&self, _: &str, _: u64, _: &str) -> Result<(u64, String), CloudFailure> {
+                panic!("reading current documents must not upload")
+            }
             fn list(&self) -> Result<Vec<RemoteEnvelope>, CloudFailure> {
-                let mut rows = vec![RemoteEnvelope { revision: 1, payload_hash: "invalid".into(), envelope: "{}".into() }];
+                let mut rows = vec![RemoteEnvelope {
+                    revision: 1,
+                    payload_hash: "invalid".into(),
+                    envelope: "{}".into(),
+                }];
                 rows.extend(self.0.list()?);
                 Ok(rows)
             }
         }
         let mixed = restore_all_remote_conversations(store.connection, &keys, &MixedList(&cloud));
-        assert!(mixed.is_ok(), "one invalid document must not abort valid cloud history: {mixed:?}");
+        assert!(
+            mixed.is_ok(),
+            "one invalid document must not abort valid cloud history: {mixed:?}"
+        );
         let mixed = mixed.unwrap();
         assert_eq!(mixed.restored.len(), 1);
         assert_eq!(mixed.failed_count, 1);
-        assert!(mixed.cloud_conversation_keys.is_none(), "an unidentified item must disable absence-based pruning");
+        assert!(
+            mixed.cloud_conversation_keys.is_none(),
+            "an unidentified item must disable absence-based pruning"
+        );
         let listed = restore_all_remote_conversations(store.connection, &keys, &cloud).unwrap();
         assert_eq!(listed.restored.len(), 1);
         assert_eq!(listed.restored[0].status, "ALREADY_LOCAL");
@@ -4860,18 +5510,43 @@ mod tests {
         restore_all_remote_conversations(store.connection, &keys, &cloud).unwrap();
         let title_after_read: String = store.connection.query_row("SELECT json_extract(exchange_json,'$.conversations[0].title') FROM workspace_exchange WHERE workspace_id='workspace-safe'", [], |row| row.get(0)).unwrap();
         assert_eq!(title_after_read, "尚未上传的新标题");
-        assert_eq!(sync_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").unwrap().status, "SYNCED");
+        assert_eq!(
+            sync_selected_conversation(
+                store.connection,
+                &keys,
+                &cloud,
+                "workspace-safe",
+                "conversation-safe"
+            )
+            .unwrap()
+            .status,
+            "SYNCED"
+        );
         let uploaded = cloud.0.borrow().clone().unwrap();
         let document = format!("conversation-{}", &sha256(b"conversation-safe")[..40]);
         let session = read_session(&keys).unwrap().unwrap();
         let account = sync_state_v1::account_ref(&session.user_id).unwrap();
-        let payload = sync_v1::open_direct(&uploaded.envelope, APP_ID, &document, uploaded.revision).unwrap();
-        assert_eq!(payload["records"][0]["content"]["title"], "尚未上传的新标题");
+        let payload =
+            sync_v1::open_direct(&uploaded.envelope, APP_ID, &document, uploaded.revision).unwrap();
+        assert_eq!(
+            payload["records"][0]["content"]["title"],
+            "尚未上传的新标题"
+        );
         // Return to the original baseline for the existing phone-update cases.
         *cloud.0.borrow_mut() = None;
-        store.connection.execute("DELETE FROM desktop_selected_conversation_sync", []).unwrap();
+        store
+            .connection
+            .execute("DELETE FROM desktop_selected_conversation_sync", [])
+            .unwrap();
         store.connection.execute("UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id='workspace-safe'", [original_exchange.to_string()]).unwrap();
-        sync_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").unwrap();
+        sync_selected_conversation(
+            store.connection,
+            &keys,
+            &cloud,
+            "workspace-safe",
+            "conversation-safe",
+        )
+        .unwrap();
         remote_exchange = original_exchange;
         let remote_conversation = remote_exchange["conversations"]
             .as_array_mut()
@@ -4932,16 +5607,23 @@ mod tests {
             2,
         )
         .unwrap();
-        assert!(unread_after_phone_merge.conversations.iter().any(|row| {
-            row.conversation_id == "conversation-safe" && row.unread
-        }));
+        assert!(unread_after_phone_merge
+            .conversations
+            .iter()
+            .any(|row| { row.conversation_id == "conversation-safe" && row.unread }));
         let incomplete = json!({"id":"conversation-safe","title":"手机端新标题","revision":3,
             "currentLeafId":"message-safe","messages":[{"id":"message-safe","parentId":null,
             "ordinal":0,"role":"user","delivery":"COMPLETE","createdAt":"2026-09-01T00:00:00Z",
             "revision":1,"blocks":[{"kind":"TEXT","text":"安全正文"}]}]});
         let transaction = store.connection.transaction().unwrap();
-        merge_newer_remote_conversation(&transaction, "workspace-safe", "conversation-safe",
-            incomplete.as_object().unwrap(), 3).unwrap();
+        merge_newer_remote_conversation(
+            &transaction,
+            "workspace-safe",
+            "conversation-safe",
+            incomplete.as_object().unwrap(),
+            3,
+        )
+        .unwrap();
         transaction.commit().unwrap();
         let retained: (i64, String) = store.connection.query_row(
             "SELECT json_array_length(json_extract(exchange_json,'$.conversations[0].messages')), json_extract(exchange_json,'$.conversations[0].currentLeafId') FROM workspace_exchange WHERE workspace_id='workspace-safe'",
@@ -4951,19 +5633,52 @@ mod tests {
         // An old installation made a separate cloud workspace for this same
         // conversation. Continuing that selected copy must recover the answer
         // from its original local occurrence, without matching on titles.
-        let original: String = store.connection.query_row(
-            "SELECT exchange_json FROM workspace_exchange WHERE workspace_id='workspace-safe'", [], |row| row.get(0),
-        ).unwrap();
+        let original: String = store
+            .connection
+            .query_row(
+                "SELECT exchange_json FROM workspace_exchange WHERE workspace_id='workspace-safe'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         store.connection.execute("INSERT INTO workspaces VALUES('workspace-original','original','s','p','2026-09-01T00:00:00Z')", []).unwrap();
-        store.connection.execute("INSERT INTO workspace_exchange VALUES('workspace-original',?1)", [&original]).unwrap();
+        store
+            .connection
+            .execute(
+                "INSERT INTO workspace_exchange VALUES('workspace-original',?1)",
+                [&original],
+            )
+            .unwrap();
         store.connection.execute("UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id='workspace-safe'",
             [json!({"conversations":[incomplete]}).to_string()]).unwrap();
         *cloud.0.borrow_mut() = None;
-        assert!(continue_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").unwrap_err().contains("已从云端删除"));
+        assert!(continue_selected_conversation(
+            store.connection,
+            &keys,
+            &cloud,
+            "workspace-safe",
+            "conversation-safe"
+        )
+        .unwrap_err()
+        .contains("已从云端删除"));
         assert!(cloud.0.borrow().is_none());
-        assert!(continue_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").is_err());
+        assert!(continue_selected_conversation(
+            store.connection,
+            &keys,
+            &cloud,
+            "workspace-safe",
+            "conversation-safe"
+        )
+        .is_err());
         // Only a new explicit user sync may recreate the removed copy.
-        sync_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").unwrap();
+        sync_selected_conversation(
+            store.connection,
+            &keys,
+            &cloud,
+            "workspace-safe",
+            "conversation-safe",
+        )
+        .unwrap();
         let recovered_count: i64 = store.connection.query_row(
             "SELECT json_array_length(json_extract(exchange_json,'$.conversations[0].messages')) FROM workspace_exchange WHERE workspace_id='workspace-safe'",
             [], |row| row.get(0),
@@ -4971,26 +5686,45 @@ mod tests {
         assert_eq!(recovered_count, 2);
         // Repeated edits must cross the real envelope/restore seams even when
         // the message identity and semantic revision are unchanged.
-        for (second, body) in [(10, "云端列表第二次完整正文"), (20, "云端列表第三次完整正文")] {
+        for (second, body) in [
+            (10, "云端列表第二次完整正文"),
+            (20, "云端列表第三次完整正文"),
+        ] {
             let previous: String = store.connection.query_row(
                 "SELECT exchange_json FROM workspace_exchange WHERE workspace_id='workspace-safe'",
                 [], |row| row.get(0),
             ).unwrap();
             let mut updated: Value = serde_json::from_str(&previous).unwrap();
-            updated["conversations"][0]["updatedAt"] = json!(format!("2026-09-01T00:02:{second:02}Z"));
+            updated["conversations"][0]["updatedAt"] =
+                json!(format!("2026-09-01T00:02:{second:02}Z"));
             updated["conversations"][0]["messages"][1]["blocks"][0]["text"] = json!(body);
             store.connection.execute(
                 "UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id='workspace-safe'",
                 [updated.to_string()],
             ).unwrap();
-            assert_eq!(sync_selected_conversation(store.connection, &keys, &cloud,
-                "workspace-safe", "conversation-safe").unwrap().status, "SYNCED");
+            assert_eq!(
+                sync_selected_conversation(
+                    store.connection,
+                    &keys,
+                    &cloud,
+                    "workspace-safe",
+                    "conversation-safe"
+                )
+                .unwrap()
+                .status,
+                "SYNCED"
+            );
             store.connection.execute(
                 "UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id='workspace-safe'",
                 [&previous],
             ).unwrap();
-            assert_eq!(restore_all_remote_conversations(store.connection, &keys, &cloud)
-                .unwrap().restored[0].status, "UPDATED_LOCAL");
+            assert_eq!(
+                restore_all_remote_conversations(store.connection, &keys, &cloud)
+                    .unwrap()
+                    .restored[0]
+                    .status,
+                "UPDATED_LOCAL"
+            );
             let restored_body: String = store.connection.query_row(
                 "SELECT json_extract(exchange_json, '$.conversations[0].messages[1].blocks[0].text') FROM workspace_exchange WHERE workspace_id='workspace-safe'",
                 [], |row| row.get(0),
@@ -5008,19 +5742,53 @@ mod tests {
         .unwrap();
         assert_eq!(latest.status, "SYNCED");
         store.connection.execute("UPDATE workspace_exchange SET exchange_json=json_set(exchange_json,'$.conversations[0].deleted',json('true')) WHERE workspace_id='workspace-safe'", []).unwrap();
-        let removed = continue_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").unwrap();
+        let removed = continue_selected_conversation(
+            store.connection,
+            &keys,
+            &cloud,
+            "workspace-safe",
+            "conversation-safe",
+        )
+        .unwrap();
         assert_eq!(removed.safe_code.as_deref(), Some("REMOTE_COPY_REMOVED"));
-        assert!(cloud.0.borrow().is_none(), "local deletion must remove its cloud copy instead of uploading");
+        assert!(
+            cloud.0.borrow().is_none(),
+            "local deletion must remove its cloud copy instead of uploading"
+        );
         store.connection.execute("UPDATE workspace_exchange SET exchange_json=json_set(exchange_json,'$.conversations[0].deleted',json('false')) WHERE workspace_id='workspace-safe'", []).unwrap();
-        sync_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").unwrap();
+        sync_selected_conversation(
+            store.connection,
+            &keys,
+            &cloud,
+            "workspace-safe",
+            "conversation-safe",
+        )
+        .unwrap();
         *cloud.0.borrow_mut() = None;
         store.connection.execute("INSERT INTO desktop_selected_conversation_sync SELECT 'other-fixture-account',workspace_id,conversation_id,document_id,remote_revision,payload_hash,local_content_hash,last_synced_at_ms FROM desktop_selected_conversation_sync WHERE account_ref=?1", [&account]).unwrap();
         let empty = restore_all_remote_conversations(store.connection, &keys, &cloud).unwrap();
         assert!(empty.cloud_conversation_keys.unwrap().is_empty());
-        assert!(continue_selected_conversation(store.connection, &keys, &cloud, "workspace-safe", "conversation-safe").is_err());
+        assert!(continue_selected_conversation(
+            store.connection,
+            &keys,
+            &cloud,
+            "workspace-safe",
+            "conversation-safe"
+        )
+        .is_err());
         assert!(cloud.0.borrow().is_none());
-        let kept: i64 = store.connection.query_row("SELECT count(*) FROM workspace_exchange WHERE workspace_id='workspace-safe'", [], |r| r.get(0)).unwrap();
-        assert_eq!(kept, 1, "remote deletion must not delete the other device's local content");
+        let kept: i64 = store
+            .connection
+            .query_row(
+                "SELECT count(*) FROM workspace_exchange WHERE workspace_id='workspace-safe'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            kept, 1,
+            "remote deletion must not delete the other device's local content"
+        );
         let other: i64 = store.connection.query_row("SELECT count(*) FROM desktop_selected_conversation_sync WHERE account_ref='other-fixture-account'", [], |r| r.get(0)).unwrap();
         assert_eq!(other, 1, "inventory cleanup is strictly account isolated");
     }
@@ -5085,7 +5853,14 @@ mod tests {
         newer_remote["titleRevision"] = json!(2);
         newer_remote["messages"][0]["blocks"][0]["text"] = json!("最新完整正文");
         let transaction = c.transaction().unwrap();
-        merge_remote_additions_for_local_commit(&transaction, "workspace-union", "conversation-union", newer_remote.as_object().unwrap(), 3).unwrap();
+        merge_remote_additions_for_local_commit(
+            &transaction,
+            "workspace-union",
+            "conversation-union",
+            newer_remote.as_object().unwrap(),
+            3,
+        )
+        .unwrap();
         transaction.commit().unwrap();
         let title: String = c.query_row("SELECT json_extract(exchange_json,'$.conversations[0].title') FROM workspace_exchange WHERE workspace_id='workspace-union'", [], |row| row.get(0)).unwrap();
         assert_eq!(title, "手机端最新标题");
@@ -5095,16 +5870,46 @@ mod tests {
         later_pin["updatedAt"] = json!("2036-09-02T00:00:00Z");
         later_pin["pinned"] = json!(true);
         let transaction = c.transaction().unwrap();
-        merge_remote_additions_for_local_commit(&transaction, "workspace-union", "conversation-union", later_pin.as_object().unwrap(), 999).unwrap();
-        merge_newer_remote_conversation(&transaction, "workspace-union", "conversation-union", later_pin.as_object().unwrap(), 999).unwrap();
+        merge_remote_additions_for_local_commit(
+            &transaction,
+            "workspace-union",
+            "conversation-union",
+            later_pin.as_object().unwrap(),
+            999,
+        )
+        .unwrap();
+        merge_newer_remote_conversation(
+            &transaction,
+            "workspace-union",
+            "conversation-union",
+            later_pin.as_object().unwrap(),
+            999,
+        )
+        .unwrap();
         transaction.commit().unwrap();
         let preserved: (String, u64) = c.query_row("SELECT json_extract(exchange_json,'$.conversations[0].title'),json_extract(exchange_json,'$.conversations[0].titleRevision') FROM workspace_exchange WHERE workspace_id='workspace-union'", [], |row| Ok((row.get(0)?, row.get(1)?))).unwrap();
         assert_eq!(preserved, ("手机端最新标题".into(), 2));
         let mut ambiguous = newer_remote.clone();
         ambiguous["title"] = json!("相同版本的另一个标题");
         let transaction = c.transaction().unwrap();
-        assert!(merge_newer_remote_conversation(&transaction, "workspace-union", "conversation-union", ambiguous.as_object().unwrap(), 3).unwrap_err().contains("标题版本冲突"));
-        assert!(merge_remote_additions_for_local_commit(&transaction, "workspace-union", "conversation-union", ambiguous.as_object().unwrap(), 3).unwrap_err().contains("标题版本冲突"));
+        assert!(merge_newer_remote_conversation(
+            &transaction,
+            "workspace-union",
+            "conversation-union",
+            ambiguous.as_object().unwrap(),
+            3
+        )
+        .unwrap_err()
+        .contains("标题版本冲突"));
+        assert!(merge_remote_additions_for_local_commit(
+            &transaction,
+            "workspace-union",
+            "conversation-union",
+            ambiguous.as_object().unwrap(),
+            3
+        )
+        .unwrap_err()
+        .contains("标题版本冲突"));
         transaction.rollback().unwrap();
         let preserved: String = c.query_row("SELECT json_extract(exchange_json,'$.conversations[0].title') FROM workspace_exchange WHERE workspace_id='workspace-union'", [], |row| row.get(0)).unwrap();
         assert_eq!(preserved, "手机端最新标题");
@@ -5117,13 +5922,15 @@ mod tests {
             "INSERT INTO workspaces(id,title,semantic_hash,package_hash,created_at) VALUES(?1,?2,?3,?4,?5)",
             params!["workspace-cost", "测试", "before", "package", "2026-09-01T00:00:00Z"],
         ).unwrap();
-        let answer = |micros: u64, source: &str| json!({
-            "id":"answer","parentId":"root","ordinal":1,"role":"assistant","delivery":"COMPLETE","createdAt":"2026-09-01T00:01:00Z","revision":1,
-            "blocks":[{"kind":"TEXT","text":"完成"}],
-            "modelSnapshot":{"modelId":"qwen3.7-plus","displayName":"Qwen3.7 Plus"},
-            "usage":{"inputTokens":12,"outputTokens":4,"totalTokens":16},
-            "chargeMicros":micros,"currencyCode":"CNY","costPriceVersion":"provider-v1","costSource":source
-        });
+        let answer = |micros: u64, source: &str| {
+            json!({
+                "id":"answer","parentId":"root","ordinal":1,"role":"assistant","delivery":"COMPLETE","createdAt":"2026-09-01T00:01:00Z","revision":1,
+                "blocks":[{"kind":"TEXT","text":"完成"}],
+                "modelSnapshot":{"modelId":"qwen3.7-plus","displayName":"Qwen3.7 Plus"},
+                "usage":{"inputTokens":12,"outputTokens":4,"totalTokens":16},
+                "chargeMicros":micros,"currencyCode":"CNY","costPriceVersion":"provider-v1","costSource":source
+            })
+        };
         c.execute(
             "INSERT INTO workspace_exchange VALUES('workspace-cost',?1)",
             [json!({"conversations":[{"id":"conversation-cost","title":"费用","revision":1,"updatedAt":"2026-09-01T00:01:00Z","currentLeafId":"answer","messages":[
@@ -5136,12 +5943,23 @@ mod tests {
             answer(18_700, "PROVIDER_RESPONSE")
         ]});
         let transaction = c.transaction().unwrap();
-        merge_remote_additions_for_local_commit(&transaction, "workspace-cost", "conversation-cost", remote.as_object().unwrap(), 2).unwrap();
+        merge_remote_additions_for_local_commit(
+            &transaction,
+            "workspace-cost",
+            "conversation-cost",
+            remote.as_object().unwrap(),
+            2,
+        )
+        .unwrap();
         transaction.commit().unwrap();
-        let merged: Value = c.query_row(
-            "SELECT exchange_json FROM workspace_exchange WHERE workspace_id='workspace-cost'", [],
-            |row| row.get::<_, String>(0),
-        ).map(|value| serde_json::from_str(&value).unwrap()).unwrap();
+        let merged: Value = c
+            .query_row(
+                "SELECT exchange_json FROM workspace_exchange WHERE workspace_id='workspace-cost'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .map(|value| serde_json::from_str(&value).unwrap())
+            .unwrap();
         let restored = &merged["conversations"][0]["messages"][1];
         assert_eq!(restored["chargeMicros"], 18_700);
         assert_eq!(restored["costSource"], "PROVIDER_RESPONSE");
@@ -5206,14 +6024,18 @@ mod tests {
     fn cloud_list_presentation_document_id_is_valid_but_never_a_conversation() {
         assert_eq!(
             envelope_document_id(
-                &json!({"appId":APP_ID,"documentId":CLOUD_LIST_PRESENTATION_DOCUMENT_ID}).to_string(),
+                &json!({"appId":APP_ID,"documentId":CLOUD_LIST_PRESENTATION_DOCUMENT_ID})
+                    .to_string(),
             )
             .unwrap(),
             CLOUD_LIST_PRESENTATION_DOCUMENT_ID,
         );
         assert_eq!(
-            envelope_document_id(&json!({"appId":APP_ID,"documentId":format!("conversation-{}", "a".repeat(40))}).to_string())
-                .unwrap(),
+            envelope_document_id(
+                &json!({"appId":APP_ID,"documentId":format!("conversation-{}", "a".repeat(40))})
+                    .to_string()
+            )
+            .unwrap(),
             format!("conversation-{}", "a".repeat(40)),
         );
     }
@@ -5232,7 +6054,8 @@ mod tests {
             "modelSnapshot":{"modelId":"anthropic/claude-sonnet-5","displayName":"Sonnet 5"},
             "usage":{"inputTokens":null,"outputTokens":null},
             "estimatedUsage":{"inputTokens":21,"outputTokens":2115}
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(legacy["inputTokens"], 21);
         assert_eq!(legacy["outputTokens"], 2115);
     }
@@ -5447,9 +6270,16 @@ mod tests {
         let account = sync_state_v1::account_ref(&session.user_id).unwrap();
         c.execute("INSERT INTO desktop_cloud_account_state VALUES(?1,?2,?3,NULL,NULL,'AUTHENTICATED_NEEDS_RECOVERY_CONFIRMATION',0,0,NULL,0,NULL,NULL,'device-safe',1,1,NULL,NULL,NULL)",params![account,session.user_id,session.email]).unwrap();
         let mut state_store = SqliteMetadataStore { connection: &mut c };
-        sync_state_v1::authenticate(&mut state_store, &keys, "auth", None, &session.user_id).unwrap();
+        sync_state_v1::authenticate(&mut state_store, &keys, "auth", None, &session.user_id)
+            .unwrap();
         let (shown, pending) = create_recovery_code(state_store.connection, &keys).unwrap();
-        confirm_recovery(state_store.connection, &keys, pending, &shown.confirmation_hash).unwrap();
+        confirm_recovery(
+            state_store.connection,
+            &keys,
+            pending,
+            &shown.confirmation_hash,
+        )
+        .unwrap();
         state_store.connection.execute("UPDATE desktop_cloud_account_state SET state='VERIFYING',last_error_code='COMMIT_RESULT_UNKNOWN' WHERE account_ref=?1", [&account]).unwrap();
         c.execute("INSERT INTO workspaces(id,title,semantic_hash,package_hash,created_at) VALUES('workspace-unknown','测试','before','package','2026-09-01T00:00:00Z')", []).unwrap();
         c.execute("INSERT INTO workspace_exchange VALUES('workspace-unknown',?1)",[json!({"conversations":[{"id":"conversation-unknown","title":"完整对话","revision":1,"currentLeafId":"message","messages":[{"id":"message","parentId":null,"ordinal":0,"role":"user","delivery":"COMPLETE","createdAt":"2026-09-01T00:00:00Z","revision":1,"blocks":[{"kind":"TEXT","text":"正文"}]}]}]}).to_string()]).unwrap();
@@ -5461,14 +6291,17 @@ mod tests {
             "conversation-unknown",
             &document_id,
             1,
-        ).unwrap();
+        )
+        .unwrap();
         let material = wrapping_material(&c, &keys, &account).unwrap();
         let data_key = keys.read(DATA_KEY_SERVICE, &account).unwrap();
-        let initial_envelope = sync_v1::seal_with_account_wrapping_material(
-            initial_payload, &data_key, &material,
-        ).unwrap();
-        let initial_hash = serde_json::from_str::<Value>(&initial_envelope)
-            .unwrap()["payloadHash"].as_str().unwrap().to_owned();
+        let initial_envelope =
+            sync_v1::seal_with_account_wrapping_material(initial_payload, &data_key, &material)
+                .unwrap();
+        let initial_hash = serde_json::from_str::<Value>(&initial_envelope).unwrap()["payloadHash"]
+            .as_str()
+            .unwrap()
+            .to_owned();
         let cloud = Cloud(RefCell::new(RemoteEnvelope {
             revision: 1,
             payload_hash: initial_hash,

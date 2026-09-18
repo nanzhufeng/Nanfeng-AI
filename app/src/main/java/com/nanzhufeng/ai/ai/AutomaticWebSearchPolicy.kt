@@ -40,17 +40,12 @@ internal object AutomaticWebSearchPolicy {
     }
 }
 
-/**
- * A provider-specific completion gate for an explicitly requested live search.
- *
- * DeepSeek's official Responses protocol records the server-side `web_search_call`, but its
- * documented action object does not return public source URLs. Requiring DashScope-style
- * `action.sources` for that route turns a completed DeepSeek answer into a false failure. Other
- * routes keep the public-source requirement because their adapters expose that evidence.
- */
+/** Source evidence describes search results; it never vetoes a completed answer. */
 internal object WebSearchGroundingPolicy {
-    fun hasRequiredSources(options: ChatRequestOptions, sources: List<ProviderWebSource>): Boolean =
-        !options.liveWebSearch ||
-            options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_RESPONSES ||
-            sources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) }
+    fun completedAuditStatus(options: ChatRequestOptions, sources: List<ProviderWebSource>, streamed: Boolean): String = when {
+        !options.liveWebSearch -> if (streamed) "STREAM_SUCCEEDED" else "SUCCEEDED"
+        sources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) } ->
+            if (streamed) "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES" else "WEB_SEARCH_SUCCEEDED_WITH_SOURCES"
+        else -> "WEB_SEARCH_COMPLETED_WITHOUT_SOURCES"
+    }
 }

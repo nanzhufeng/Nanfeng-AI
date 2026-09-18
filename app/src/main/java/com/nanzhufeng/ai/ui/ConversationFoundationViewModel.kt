@@ -343,6 +343,9 @@ class ConversationFoundationViewModel(
     private val normalChatBackgroundExecution: NormalChatBackgroundExecution = NoopNormalChatBackgroundExecution,
     private val startWithFreshChat: Boolean = false,
     private val entryConversationId: com.nanzhufeng.ai.domain.ConversationId? = null,
+    private val ownedSurface: ConversationSurface? = null,
+    private val onAreaRequested: ((ConversationSurface) -> Unit)? = null,
+        private val onReferenceMessage: ((com.nanzhufeng.ai.domain.ConversationId, MessageNodeId) -> Unit)? = null,
 ) : ViewModel() {
     private var streamJob: Job? = null
     private var searchDebounceJob: Job? = null
@@ -375,7 +378,7 @@ class ConversationFoundationViewModel(
     private var selectedWorkConversationId: com.nanzhufeng.ai.domain.ConversationId? = null
     private var appBackgroundElapsedRealtime: Long? = null
     private var backgroundGenerationConversationIds = emptySet<com.nanzhufeng.ai.domain.ConversationId>()
-    var state by mutableStateOf(ConversationFoundationUiState())
+    var state by mutableStateOf(ConversationFoundationUiState(surface = ownedSurface ?: ConversationSurface.CHAT))
         private set
 
     init {
@@ -386,8 +389,26 @@ class ConversationFoundationViewModel(
                 temporary.readRecovery()
             }
         }
+        viewModelScope.launch {
+            while (true) {
+                delay(1_000)
+                val id = state.selectedConversationId ?: continue
+                val draft = state.draft ?: continue
+                val selected = state.conversations.firstOrNull { it.id == id } ?: continue
+                if ((!selected.autoTitlePending && selected.title != com.nanzhufeng.ai.domain.ConversationAutoTitle.NEW_CONVERSATION_TITLE) || selected.pinnedAt != null) continue
+                if (state.isSending || state.messages.isNotEmpty() || draft.text.isEmpty() ||
+                    java.time.Instant.now().isBefore(draft.updatedAt.plusMillis(com.nanzhufeng.ai.domain.NewConversationDraftPolicy.RETENTION_MILLIS))) continue
+                val generation = draftSaveGeneration
+                val restored = draftMutationMutex.withLock {
+                    withContext(Dispatchers.IO) { repository.findById(id)?.draft }
+                }
+                if (id == state.selectedConversationId && generation == draftSaveGeneration && restored != null && restored.text != state.draft?.text) {
+                    state = state.copy(draft = restored)
+                }
+            }
+        }
         when {
-            startWithFreshChat -> openFreshChatForAppEntry()
+            startWithFreshChat || (ownedSurface == ConversationSurface.WORK && entryConversationId == null) -> openFreshChatForAppEntry()
             entryConversationId != null -> restoreConversationForAppEntry(entryConversationId)
             else -> reload() // Explicit navigation resolves its own target after Activity creation.
         }
@@ -424,38 +445,25 @@ class ConversationFoundationViewModel(
         if (state.isCreating) return
         state = state.copy(
             isCreating = true,
-            surface = ConversationSurface.CHAT,
+            surface = (ownedSurface ?: ConversationSurface.CHAT),
             listScope = ConversationListScope.ACTIVE,
             notice = null,
         )
         viewModelScope.launch {
-            val reusableEmpty = withContext(Dispatchers.IO) {
-                val chats = (repository as? ConversationListRepository)?.list(ConversationListScope.ACTIVE)
-                    ?: repository.listActive()
-                chats
-                    .asSequence()
-                    .filter { it.surface == ConversationSurface.CHAT }
-                    .sortedByDescending { it.updatedAt }
-                    .firstOrNull { chat ->
-                        repository.findById(chat.id)?.let(
-                            com.nanzhufeng.ai.domain.ConversationAppEntryPolicy::isReusableBlank,
-                        ) == true
-                    }
-            }
-            val selected = reusableEmpty?.id ?: when (val result = withContext(Dispatchers.IO) {
-                createConversation.execute(surface = ConversationSurface.CHAT)
+            val selected = when (val result = draftMutationMutex.withLock {
+                withContext(Dispatchers.IO) { createConversation.resumeOrCreateDraft(surface = (ownedSurface ?: ConversationSurface.CHAT)) }
             }) {
                 is ConversationMutationResult.Saved -> result.snapshot.conversation.id
                 is ConversationMutationResult.Rejected -> null
             }
             if (selected == null) {
                 state = state.copy(isCreating = false, notice = "新对话未能在本机创建。")
-                reload(targetSurface = ConversationSurface.CHAT, selectedBefore = null)
+                reload(targetSurface = (ownedSurface ?: ConversationSurface.CHAT), selectedBefore = null)
                 return@launch
             }
-            selectedChatConversationId = selected
+            if (ownedSurface == ConversationSurface.WORK) selectedWorkConversationId = selected else selectedChatConversationId = selected
             state = state.copy(selectedConversationId = selected, isCreating = false)
-            reload(targetSurface = ConversationSurface.CHAT, selectedBefore = selected)
+            reload(targetSurface = (ownedSurface ?: ConversationSurface.CHAT), selectedBefore = selected)
         }
     }
 
@@ -1509,7 +1517,16 @@ class ConversationFoundationViewModel(
      * The visual transcript is shared, while this switch changes its persisted content owner.
      * Work is a dedicated local conversation surface, never a projection of the selected chat.
      */
+    fun referenceMessageToOtherArea(messageId: MessageNodeId) {
+        val conversationId = state.selectedConversationId ?: return
+        onReferenceMessage?.invoke(conversationId, messageId)
+    }
+
     fun selectSurface(surface: ConversationSurface) {
+        if (ownedSurface != null && surface != ownedSurface) {
+            onAreaRequested?.invoke(surface)
+            return
+        }
         val request = ++surfaceRequestGeneration
         val selectedBefore = when (surface) {
             ConversationSurface.CHAT -> selectedChatConversationId
@@ -1891,15 +1908,11 @@ class ConversationFoundationViewModel(
     fun createDevelopmentConversation() {
         if (state.isCreating) return
         val surface = state.surface
-        // “新对话” is an explicit user request for a fresh conversation, not a request to
-        // reopen an older empty draft.  Reset to the active list before loading so its new
-        // updatedAt is projected as the first row under “最近”.
+        // A new-chat entry resumes its own unsent draft; it never borrows another surface.
         state = state.copy(isCreating = true, notice = null, listScope = ConversationListScope.ACTIVE)
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                // A normal conversation starts empty.  Deterministic fixtures remain explicit
-                // task actions and are never silently written into a user-visible transcript.
-                createConversation.execute(surface = surface)
+            val result = draftMutationMutex.withLock {
+                withContext(Dispatchers.IO) { createConversation.resumeOrCreateDraft(surface = surface) }
             }
             when (result) {
                 is ConversationMutationResult.Saved -> {
@@ -1909,7 +1922,7 @@ class ConversationFoundationViewModel(
                     }
                     state = state.copy(selectedConversationId = result.snapshot.conversation.id, isCreating = false)
                     reload(
-                        notice = if (surface == ConversationSurface.CHAT) "已创建新对话；首条消息会在本机生成标题。" else "已创建独立工作内容。",
+                        notice = if (surface == ConversationSurface.CHAT) "已打开新对话。" else "已打开独立工作内容。",
                         targetSurface = surface,
                         selectedBefore = result.snapshot.conversation.id,
                     )
@@ -1925,7 +1938,7 @@ class ConversationFoundationViewModel(
         state = state.copy(isCreating = true, notice = null)
         viewModelScope.launch {
             when (val result = withContext(Dispatchers.IO) {
-                createConversation.execute(projectId = projectId.value, surface = ConversationSurface.WORK)
+                createConversation.resumeOrCreateDraft(projectId = projectId.value, surface = ConversationSurface.WORK)
             }) {
                 is ConversationMutationResult.Saved -> {
                     selectedWorkConversationId = result.snapshot.conversation.id
@@ -2430,11 +2443,14 @@ class ConversationFoundationViewModel(
         private val normalChatBackgroundExecution: NormalChatBackgroundExecution,
         private val startWithFreshChat: Boolean = false,
         private val entryConversationId: com.nanzhufeng.ai.domain.ConversationId? = null,
+        private val ownedSurface: ConversationSurface? = null,
+        private val onAreaRequested: ((ConversationSurface) -> Unit)? = null,
+        private val onReferenceMessage: ((com.nanzhufeng.ai.domain.ConversationId, MessageNodeId) -> Unit)? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ConversationFoundationViewModel::class.java))
-            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, glmOcr, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, deletePersistedAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, conversationStyleOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, cloudResponseModelUsages, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat, entryConversationId) as T
+            return ConversationFoundationViewModel(repository, createConversation, appendMessage, editUserMessage, saveDraft, submitDraft, renderer, startLocalRuntime, applyRuntimeEvent, fixture, actions, switchBranch, manageConversation, searchConversations, searchConversationAttachments, glmOcr, searchHistory, conversationReadMarkerStore, exportConversation, galleryReader, documentReader, addAttachment, removeAttachment, deletePersistedAttachment, attachmentPreview, pdfPreviewPosition, videoPreviewPosition, audioPreviewPosition, readAttemptHistory, temporary, addTemporaryAttachment, clearTemporary, p6gModelSelection, conversationWebSearchOverrides, conversationStyleOverrides, loadAssistantExperienceSettings, invocations, responseModelAttributions, cloudResponseModelUsages, contextSelectionAudits, normalChatOpenRouterExecutor, normalChatBackgroundExecution, startWithFreshChat, entryConversationId, ownedSurface, onAreaRequested, onReferenceMessage) as T
         }
     }
 }

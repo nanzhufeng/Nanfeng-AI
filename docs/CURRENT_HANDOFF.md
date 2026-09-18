@@ -1,6 +1,104 @@
 # 南枫 AI 当前交接
 
+## 2026-09-18：独立数据区 1.0.20 最终 checkpoint
+
+- 当前增量已冻结为双端独立 CHAT／WORK 数据库、区域同步、显式跨区文字引用与一小时新对话草稿保留；核心新增 Android／Desktop／协议／测试文件均纳入 Git，三张仅供预览的 Desktop 图片保持未跟踪，不进入 checkpoint。
+- 防回退唯一正文已固化到 C-15 与 P7-F：不得以 `projectId=null`、同一 SQLite、历史空态或失败兜底把 WORK 归入 CHAT；同步只允许同区域文档、列表、receipt 与恢复。P5-D 改为读取当前 Schema，移除历史 `37` 作为未来迁移上限。
+- 最终自动回归：Android `1235` 项，`0` failed／`0` errors／`3` 既有 skipped，`lintRelease` 通过；Desktop Node `447` passed／`0` failed／`12` skipped，lint、typecheck、静态 build 通过；Rust `301` passed／`0` failed／`3` ignored；v1／v2／sync 协议 golden 均通过。未重打正式包，保持已核验的 1.0.20 覆盖安装产物不变。
+- 文档库存冻结为 1,378 个受控文件；inventory 无后续字节变化。历史 Android XML 取证文件有 7 个既存 ParseError，均在 `docs/evidence/` 且不属于本增量源码或合同；Kotlin／Rust 已由上述实际编译／测试覆盖。
+- 未验证边界保持诚实：本 checkpoint 不代替真实 Google 双端同步、OPPO 首次启动迁移、完整原生 UI 回放或新的 Provider 真实调用。安装与数据保留证据仍在 `release-evidence/2026-09-18-independent-areas-install/`，本次自动回归清单在 `release-evidence/2026-09-18-final-checkpoint/`。
+
+## 2026-09-18：独立数据库与风险修复，双端 1.0.20 已保数据覆盖
+
+- 用户明确授权双端覆盖。Android 84／1.0.20 同正式证书、非 Debug，pm install -r --user 0 成功；firstInstallTime／dataDir 保留，回拉 base APK 与根目录候选 SHA-256 一致。未启动或触摸手机应用，手机私有内容与首次启动迁移不宣称已验证。
+- Mac 同 Bundle／Team、Apple Development 未公证；旧 app 与完整数据根已备份，先对真实数据副本做隔离原生迁移，再覆盖并完整重启。已确认新二进制实际运行、Schema 43、CHAT／WORK 两个文件身份和 quick_check；原 6 工作区／868 会话全部字段保持，既有会话与输入框原生回读正常。正常启动清理 1 项无会话／草稿引用的附件元数据，更新后台状态与已读标记。
+- 根目录包为 `/Users/nanzhufeng/GitHub/Nanfeng-AI-Android-1.0.20.apk` 与 `Nanfeng-AI-macOS-1.0.20.dmg`；安装证据、数据摘要、备份位置、产物 hash 在 `release-evidence/2026-09-18-independent-areas-install/`。本轮未上传 GitHub、未验证 Google 双端真实同步／Provider。源码自动验证沿下一节，无重复声称。
+
+## 2026-09-18：独立数据库风险复核——四处遗漏已修复，未安装
+
+- 本轮核查物理迁移、区域身份、备份恢复、同步区域校验和人工引用。修复 Android 附件恢复失败未回滚已替换数据库、空附件 checkpoint 遗留候选文件、导入来源包漏备份；修复 Desktop 首次建库中断后 WORK 身份错误；修复 Android 只读身份预检不能恢复热日志导致启动失败。
+- 新增真实 SQLite／Room 失败路径测试：文件系统冲突恢复原 DB、两区来源包备份隔离、Schema 42 中断后恢复 WORK 身份、非空旧库不重新归属、热日志回滚后 80 条原记录保持。四个问题均先复现失败再验证修复。
+- 最终验证：Rust 301 passed／3 ignored；Android 1232 passed／3 skipped，零失败；Release Kotlin 编译／lintRelease 通过。证据 `release-evidence/2026-09-18-independent-data-areas-risk-audit/REPORT.md` 与源码 hash。未改变前端，复用上一节前端结果。
+- 未安装／打包／上传，设备仍 1.0.19；未运行主设备、原生 UI 全流程或 Google 双端真实同步。这里是本增量定向语义审查和自动回归，不声明全项目不存在风险。
+
+## 2026-09-18：工作区／对话区独立数据库——源码与自动回归完成，尚未发布
+
+- 用户要求完成独立数据库，强调双端同步；最近要求完成后直接结束，不继续扩展检查范围。唯一边界 C-15 第 2 节。主设备仍为 1.0.19，此增量没有覆盖安装、打包交付或上传 GitHub，不得宣称设备已更新。
+- Desktop 每个 IPC 固定 AreaState／AreaAppHandle，WORK 使用 `work-area/workspace.sqlite3`；Android 使用 `nanfeng-ai-work.db` 与独立 Activity／后台任务／私有材料目录。无项目工作对话复用完整对话界面；草稿、异步回读、搜索、备份、删除与同步各归本区。应用级模型开关／目录／默认模型与登录身份保留共用，业务正文不进共用配置库。
+- 补齐旧库迁移：先保留原 SQLite 快照，按原 WORK／项目归属及审核过的关联迁移；两库通过 SQLite rollback super-journal 提交，消息／草稿／旧同步 receipt 保持，源区域未知或材料不一致拒绝覆盖。Android 初始化移到 IO，避免首次迁移堵住点击线程。迁移失败回滚及重开幂等已用真实 SQLite／Room 测试通过；原数据备份不进入 Git。
+- 消息菜单可人工引用所选文字到另一区未发送草稿，带来源 ID 与 SHA-256，不改源，不自动发，不携带附件。引用已删除消息拒绝；分享缓存每次独立目录避免跨区同名覆盖。
+- 协议共用 `protocol/fixtures/data-area-sync-v1.json`，Android/Desktop × CHAT/WORK 同一份样本；WORK 文档／列表身份独立，跨区恢复拒绝或批量跳过。日常 Google 身份／新模型配置与两份业务数据库解耦。
+- 自动验证最终日志与 REPORT 汇总在 `release-evidence/2026-09-18-independent-data-areas/`。前端 447 passed／12 skipped，Rust 299 passed／3 ignored，Android 1229 passed／3 skipped 已通过；最终冻结代码的 Android 单测／Release Kotlin 编译、Desktop 前端测试／lint／类型检查／构建均已通过；Android lintRelease 通过。
+- 未验层：此增量没有隔离原生 UI 完整操作回放、主设备安装或 Google 双端真实同步。以上是源码、协议与自动行为测试证据，不替代这些层。不得直接复用 1.0.19 包作为新功能产物。
+
+## 2026-09-18：新对话文字保留一小时，双端 1.0.19 已保数据覆盖
+
+- 用户确认最后一次编辑起 1 小时，重新编辑续期，打开／切换／重开不续期；唯一正文 `NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md`。旧“新对话必须丢弃草稿”规则已替代。
+- Desktop 删除新对话入口清库逻辑，原生 SQLite 草稿按工作区／会话键恢复；输入即排队持久化，读取等待保存且校验路由世代，UI 定时清除；Rust 只在过期时条件更新未绑定文字，保留附件和已有会话草稿。Android 复用同 surface／project 下未发送草稿，Room 使用持久编辑时间，过期时事务内重读防止误删并发编辑；界面定时回读。
+- 验证：前端 444 passed／0 failed／12 既有 skipped；Rust 293 passed／0 failed／3 opt-in ignored；Android 1225 项，1222 passed／0 failed／3 既有 ZIP skipped；lintRelease／assembleRelease 通过。新增真实 SQLite／Room 重开、小时边界、编辑续期、范围隔离及生产 JS owner 切换／进程重建／迟到读取测试。
+- 两端保数据覆盖 1.0.19：Android 构建号 83、原正式证书，首次安装时间／dataDir 保留，回拉 base APK 哈希与根目录候选一致；没有启动或触摸 OPPO。Mac 同 Bundle／Team、Apple Development 未公证；6 工作区 exchange 指纹保持且 quick_check=ok，旧 app 已备份。DMG 创建后暂被本次 diskimages-helper 占用；精确卸载该候选镜像后 verify=VALID，无需重新构建。
+- Mac 正式应用已用既有未发送草稿验证“新对话 → 历史会话 → 新对话”恢复，两个输入框各自保留内容，没有制造消息或调用 Provider；重开恢复已回读通过；另用未发送验证文字复验后已清空，原旧草稿刚好超过一小时并按预期清理。1 小时边界是确定性时钟测试，不冒充真机等待一小时。
+- 根目录 APK／DMG 为 `/Users/nanzhufeng/GitHub/Nanfeng-AI-Android-1.0.19.apk`、`/Users/nanzhufeng/GitHub/Nanfeng-AI-macOS-1.0.19.dmg`；证据 `release-evidence/2026-09-18-new-chat-draft/`。本轮未上传 GitHub；工作区独立库仍由上一节追踪，不把 scoped 草稿测试当作物理库隔离证据。
+
+
+## 2026-09-18：工作／对话区边界纠正，独立数据库改造待完成
+
+- 用户最新明确确认：两区独立数据库文件；共用的是对话界面和操作能力，只有左栏不同。允许用户人工选择另一区内容作为引用，不合并、不自动同步或共享会话。唯一规则在 C-15 第 2 节，AGENTS 与总蓝图已补路由并澄清旧“独立本地工作区”表述。
+- 已撤回本轮尚未发布的错误方案：工作根页读取 `projectId=null` 普通会话、直接沿普通发送入库，以及为此修改的工作入口 UI。旧工作空态暂存，这是未解决事项，不是最终产品设计。不得将旧空态测试当作用户要求或重新引入该共用数据方案。
+- 实现核对：现有 Desktop owner 仍打开 `root/workspace.sqlite3`；同库 projectId 过滤不满足新的独立文件边界。后续须贯通独立存储、发送／草稿／异步回读／上下文／搜索／同步／备份恢复和显式引用桥，再恢复完整工作对话 UI。不要仅修改 resolver 或 Composer 来绕过存储边界。
+- 当前设备仍为已装 1.0.18，本次没有数据库迁移、安装、打包或发布。先前 1.0.19 为未完成候选，已撤回版本提升；之前的标题、流式滚动、点击性能、费用和发送图标修复保留。
+- 定向回归及规则审计见 `release-evidence/2026-09-18-work-boundary-rule/REPORT.md`。这些验证只证明撤回后未引入测试失败、普通对话不可作为工作根页回退，不证明独立数据库或人工调用已经实现。
+
+
+## 2026-09-18：发送纸飞机白色实心，双端 1.0.18 已覆盖
+
+- 只改图标填充：Android `ic_nanfeng_send_rounded.xml` 的外轮廓填充白色，Desktop 共享发送 SVG 填充 currentColor；启用态白色、禁用态沿用既有禁用色。轮廓／方向／尺寸／点击范围、发送与停止动作保持原样，普通／工作／临时会话共享入口。
+- Desktop 101 项会话 UI 检查通过，构建与签名镜像校验通过；Android lintRelease／assembleRelease 成功，aapt 回读实际编译的 drawable 填充 0xffffffff。小型资源改动未新增测试或重跑全部业务测试。
+- 双端按已有授权保数据覆盖 1.0.18：Mac 同 Bundle／Team、Apple Development 未公证；无进行中的生成时退出覆盖，备份旧 app，6 工作区指纹前后一致、quick_check=ok。Android 82／1.0.18 非 Debug，原正式证书，pm install -r --user 0 成功；回拉 base APK 与根目录包哈希一致，首次安装时间和 dataDir 保留，未启动／触摸手机应用。系统拒绝读取私有目录，因此不声称核验手机私有内容指纹或实机视觉。
+- 根目录包 `/Users/nanzhufeng/GitHub/Nanfeng-AI-Android-1.0.18.apk`、`/Users/nanzhufeng/GitHub/Nanfeng-AI-macOS-1.0.18.dmg`。安装与 hash 证据 `release-evidence/2026-09-18-solid-send/`，本轮未更新 GitHub Release。
+
+## 2026-09-18：生成中隐藏未知金额，Mac 1.0.17 已覆盖
+
+- Desktop 消息页脚只在运行中（PARTIAL + RUNNING）且没有可用费用时隐藏“金额未知”和分隔点；完成／失败／结果未知后的费用事实保留，账本不改。Android 已通过 `footerCostLabel()` 的空值投影隐藏缺失费用，本次未改手机。
+- 104 项已有会话／费用检查通过；生产 renderer 合成生成态检查费用及分隔点均不存在，三种终态继续保留未知费用事实。未发起真实 Provider 请求验证这一显示改动。
+- Mac 1.0.17 同 Bundle／Team 保数据覆盖，Apple Development 签名未公证，镜像校验通过；覆盖前确认没有正在生成的任务。6 工作区内容指纹前后一致、quick_check=ok。证据 `release-evidence/2026-09-18-generating-cost/`；根目录 DMG `Nanfeng-AI-macOS-1.0.17.dmg` SHA-256 `8ff73ce6785668aa330db00f219d6415a06070d7f014a5c1822dffbd3e46aa92`，未更新 GitHub Release。
+
+## 2026-09-18：Desktop 按钮卡顿检查，Mac 1.0.16 已保数据覆盖
+
+- 根因：普通多选／菜单／确认弹窗将保留的正文先拆除再插回，仍引发长对话重排；现用 `commitRetainedChatShell` 保持正文／侧栏连接并跳过正文菜单重新扫描。定时任务／转写入口先显示页面及读取反馈，同页读取合并，迟到结果不重绘其他页面。
+- 红绿：150 消息、4 倍 CPU、相同四类点击平均 261ms→44ms，正文移除 4→0，滚动位置保持。入口盘点覆盖 13 owner／220 字面量动作；全应用隔离样本 57 次点击、20 设置页面无脚本错误。不是全部业务写入或联网动作的真机验收。
+- 验证：前端 441 passed／0 failed／12 既有 skipped；lint/typecheck/build 通过。正式 Mac 原生复验多选、删除弹窗取消、菜单、设置分组、定时任务与转写导航、历史正文回读。没有删除／发送测试数据。
+- Mac 1.0.16 同 Bundle／Team、Apple Development 未公证；旧 app 已备份，6 工作区 quick_check=ok，exchange 指纹前后相同。手机保持 1.0.15，本轮未更新 GitHub Release。证据及边界 `release-evidence/2026-09-18-click-performance/REPORT.md`。
+- 根目录 DMG `/Users/nanzhufeng/GitHub/Nanfeng-AI-macOS-1.0.16.dmg`，SHA-256 `5ef9318ad7aaff7e6260ad730219c34e4b8a67de6159ab39601a116171263e6b`。
+
+## 2026-09-18：双端模型连接／标题链检查，1.0.15 已覆盖
+
+- Android 根因：普通对话在拿到完整正文后，仍以缺少 Provider 公开来源判定失败，阻断保存与后续自动标题。已将来源审计与完成分开；实际联网仍只读 Provider 证据，不伪造来源；显式截断／过滤仍失败。既有标题有界纠正与手动改名保护一并进入本次手机包。
+- Desktop 根因：固定 75 秒首正文超时忽略持续推理；普通请求漏掉 Android 已有 GLM max／OpenRouter 指定深度模型 high／Qwen Max low 与组合预算；finish_reason 过早结束丢失尾 usage。已修正为 90 秒有效进展窗口／600 秒总上限（心跳不延长），支持结构化推理进展且不混入正文，读取尾部用量，截断保留失败。
+- 真实服务：17 个聊天预设普通模式 17/17 正确且均回收 Token；修复后联网首次 16/17 成功，Gemini 一次 NETWORK UNKNOWN 留档；使用新的独立合成问题再次检查 Gemini 成功但无可验证搜索证据。标题三候选 DeepSeek Flash／GLM Flash／Qwen Flash 均返回合格标题。上述为 Desktop 生产 transport 真实调用，非手机实际网络验收。未自动重发用户原问题、未改旧失败审计。
+- 验证：Android 1223 项，1220 passed／0 failed／3 既有 ZIP skipped；lintRelease、assembleRelease 成功。Rust 全量 292 passed／0 failed／3 opt-in ignored；新增真实时间的 80.01 秒持续推理回归单独通过。当前前端沿用上轮已通过的流式滚动／稳定 DOM 验证，本轮无新增前端业务变化。
+- 已按现有授权覆盖 OPPO 与 Mac 1.0.15：Android 81／1.0.15、原正式证书，首次安装时间及 dataDir 保留，base APK 哈希与根目录候选相同；未启动手机制造测试会话，未直接读取正式私有数据库。Mac 同 Bundle／Team、Apple Development 未公证；旧 app 有备份，重开 SQLite quick_check=ok，workspace_exchange 指纹前后一致，历史正文原生可读。
+- 根目录产物：`/Users/nanzhufeng/GitHub/Nanfeng-AI-Android-1.0.15.apk` SHA-256 `eed606e46b5a32a8b3f31311650e63e234f9789e0ff68937b9403ac9899d5d81`；`/Users/nanzhufeng/GitHub/Nanfeng-AI-macOS-1.0.15.dmg` SHA-256 `845ba3f3cd53df43bd416bad7a74a7643626033b199c12cf868787e67cddc80e`。本轮未更新 GitHub Release。
+- 逐模型安全矩阵／安装回读／本地备份在被 Git 忽略的 `release-evidence/2026-09-18-model-generation/`；入口 `REPORT.md`。真实服务 opt-in harness 为 `desktop/src-tauri/src/model_generation_live_audit.rs`，默认 ignored，显式授权开关与私有凭据根缺一不可，输出不含正文／密钥。
+
+
 > **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
+
+## 2026-09-18：Desktop 生成中闪烁与滚动被打断（Mac 1.0.14 已保数据覆盖）
+
+- 已证实：流式事件按约 80ms 刷新，提交命令等待标题时另有 120ms 轮询；两个读取入口可并发，且每次新快照使引用保留失效，`app.innerHTML` 移除正在滚动的容器。上一轮延长标题请求等待却遗漏该 UI 链，放大了问题。
+- 修复：运行时事件、轮询及完成回读走原位 DOM commit，同一会话的滚动容器、未变化的消息、代码／表格、媒体与 Composer 保持连接；只修改变化节点。轮询降为 1200ms 兜底并与事件共用串行队列，返回时复核工作区身份。轻微上滑／键盘向上／选择阅读立即停止跟随，不能被近底阈值拉回；明确到底恢复跟随。侧栏与设置不再重复写入未变化的偏移。
+- 红绿证据：真实 Chrome 加载生产 shell 与 commit owner 的长回答夹具，旧提交方式移除 scroll owner，纵向位置、代码横向位置与文本选择全部丢失；修复后连续内容／标题更新保持这些事实。另先复现向上 4px 被近底跟随拉回，再修正输入优先级；保留底部跟随、离底阅读与会话切换边界。并发读取／迟到快照测试通过。
+- 最终源码 Desktop 全套 438 passed／0 failed／12 既有 skipped；相关 5 项行为检查、lint／typecheck 均通过。Rust／Android 业务未改，未重复测试或触碰 OPPO。Mac 1.0.14 已验同 Bundle／Team、严格签名后保数据覆盖；旧 app 已备份，替换与重开前后 exchange SHA-256 一致且 quick_check=ok。正式应用中原会话上下滚动可达、标题与草稿保留；该原会话代码无横向溢出，横滚连续性由隔离长代码夹具验证，不冒充原生横滚验收。根目录 DMG 为 `Nanfeng-AI-macOS-1.0.14.dmg`（Apple Development，未公证），SHA-256 `8c27fc092b1f4c662e2cc4221c8f2c7e5690a57c437169ccab5fb65a33070b82`；未上传 GitHub。没有在真实库制造生成夹具，没有再次调用付费 Provider；隔离流式回放与真实连续 Provider 生成分开计证。
+
+## 2026-09-18：自动标题未生成修复（Mac 1.0.13 已保数据覆盖）
+
+- 真实失败链：DeepSeek 返回超过 13 字符的标题被合同拒绝；Desktop 智谱统一 256 Token 上限被推理耗尽，空正文误记 RESPONSE_FORMAT；最后千问超时，导致完整回答仍显示“新对话”。这是后台标题链的组合故障，非侧栏样式问题。
+- 双端对明确收到的非空无效标题最多做一次同 Provider 格式纠正，保留 6–13 字符与对象／意图合同、手动改名保护和每次调用独立审计。未知网络／超时／取消停止本轮。Desktop 智谱改为明确 max 推理与 8192 输出预算，非 DeepSeek 后台有限等待 180 秒，length 归为 OUTPUT_LIMIT。
+- 真实验证：合成请求复现 DeepSeek 14 字符被拒、智谱 256 Token 全耗于推理；修复后的真实智谱请求为截图对应的已完成会话生成合法 12 字符标题，由原存储 owner 写回标题、搜索索引和调用账。与事前备份比较，消息和创建日期不变；另一条 UNKNOWN 回复没有被重发或补造标题。临时定向修复 harness 已从源码删除，备份仅保留在被 Git 忽略的本地 release-evidence。
+- 回归：Rust 285 passed／0 failed／1 既有 opt-in ignored；Android 1222 项中 1219 passed／0 failed／3 既有 ZIP 夹具 skipped，lintRelease／assembleRelease 通过；Desktop 前端 435 passed／0 failed／12 既有 skipped，lint／typecheck 通过。Mac 1.0.13 已同 Bundle／Team、严格验签并保数据覆盖，旧 app 已备份，替换前后及重开后 exchange SHA-256 一致、quick_check=ok。原生侧栏已显示自动标题，进入该会话后标题与原未发送草稿均正确；Android 已验签构建但未覆盖 OPPO。本轮没有发布新的 GitHub Release。
+
+- 本地正式产物：根目录 `Nanfeng-AI-Android-1.0.13.apk`（79／1.0.13，原正式证书）、`Nanfeng-AI-macOS-1.0.13.dmg`（Apple Development，未公证）；SHA-256 分别为 `41bfdeca41c75a6bf48e767f8ec07c9866d24ea8944f59ebd642c185def1cab8`、`a327fdd94f5b549b60ceffb98680bdadb8d30ca538d70e94a8af0687cd8961c8`。安装安全结果见 `release-evidence/2026-09-18-auto-title/install.json`。真实修复验证了 GLM 调用和原存储链；未在正式库制造新对话夹具，未重新验收云端同步。
 
 ## 2026-09-18：v1.0.12 双端 GitHub 发布
 

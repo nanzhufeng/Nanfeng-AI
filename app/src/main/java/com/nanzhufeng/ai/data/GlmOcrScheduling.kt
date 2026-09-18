@@ -15,15 +15,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Explicit user requests are durable, unique per task and never retried after an unknown outcome. */
-class AndroidGlmOcrScheduler(context: Context) {
+class AndroidGlmOcrScheduler(context: Context, private val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT) {
     private val app = context.applicationContext
 
     fun enqueue(taskId: GlmOcrTaskId) {
         val request = OneTimeWorkRequestBuilder<GlmOcrWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setInputData(workDataOf(TASK_ID to taskId.value))
+            .setInputData(workDataOf("dataArea" to dataArea.name, TASK_ID to taskId.value))
             .build()
-        manager().enqueueUniqueWork("nfai.glm-ocr.${taskId.value}", ExistingWorkPolicy.REPLACE, request)
+        manager().enqueueUniqueWork("nfai.glm-ocr.${if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT) "" else "WORK."}${taskId.value}", ExistingWorkPolicy.REPLACE, request)
     }
 
     private fun manager(): WorkManager {
@@ -41,7 +41,7 @@ class GlmOcrWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         // The owner persists the exact terminal state. Unknown network/timeout results wait for
         // an explicit user retry so the app never silently bills the same document twice.
         val taskId = GlmOcrTaskId(id)
-        val owner = com.nanzhufeng.ai.app.AppContainer(applicationContext).glmOcrTaskOwner
+        val owner = com.nanzhufeng.ai.app.AppContainer(applicationContext, dataArea = com.nanzhufeng.ai.domain.ConversationSurface.valueOf(inputData.getString("dataArea") ?: "CHAT")).glmOcrTaskOwner
         runCatching { owner.process(taskId) }.onFailure { runCatching { owner.failUnexpectedExecution(taskId) } }
         Result.success()
     }

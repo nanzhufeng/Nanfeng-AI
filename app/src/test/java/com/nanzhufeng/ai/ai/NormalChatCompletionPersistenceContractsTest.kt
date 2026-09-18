@@ -36,14 +36,14 @@ class NormalChatCompletionPersistenceContractsTest {
         assertTrue(viewModel.contains("normalChatCompletionNoticeLabel"))
     }
 
-    @Test fun `live search cannot complete or claim success without provider sources`() {
+    @Test fun `completed answers persist independently of optional source evidence`() {
         val nonStreaming = executor.substringAfter("is ProviderChatOutcome.HttpResponse").substringBefore("is ProviderChatOutcome.StreamedResponse")
         val streaming = executor.substringAfter("is ProviderChatOutcome.StreamedResponse").substringBefore("ProviderChatOutcome.TimedOut")
 
         for (branch in listOf(nonStreaming, streaming)) {
-            assertTrue(branch.contains("WebSearchGroundingPolicy.hasRequiredSources"))
-            assertTrue(branch.contains("WEB_SEARCH_NO_SOURCES"))
-            assertTrue(branch.indexOf("WEB_SEARCH_NO_SOURCES") < branch.indexOf("runtime?.complete(visibleReply)"))
+            assertTrue(branch.contains("WebSearchGroundingPolicy.completedAuditStatus"))
+            assertFalse(branch.contains("OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)"))
+            assertTrue(branch.contains("runtime?.complete(visibleReply)"))
         }
         assertTrue(viewModel.contains("WEB_SEARCH_UNAVAILABLE"))
         assertTrue(viewModel.contains("本次未保存为完整回答"))

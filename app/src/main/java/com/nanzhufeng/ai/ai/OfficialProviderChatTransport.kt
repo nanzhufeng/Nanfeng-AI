@@ -396,10 +396,10 @@ internal object ProviderSseDecoder {
             }
         }
         val finishReason = when {
-            textMode != ProviderStreamTextMode.RESPONSES_API -> null
-            terminal == ProviderStreamTerminal.COMPLETED -> "COMPLETED"
             terminal == ProviderStreamTerminal.INCOMPLETE -> "INCOMPLETE"
             terminal == ProviderStreamTerminal.FAILED -> "FAILED"
+            textMode != ProviderStreamTextMode.RESPONSES_API -> null
+            terminal == ProviderStreamTerminal.COMPLETED -> "COMPLETED"
             else -> "MISSING_COMPLETION"
         }
         return Result(
