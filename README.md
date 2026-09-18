@@ -11,11 +11,9 @@
 
 ## 预览
 
-| Android | macOS |
-| --- | --- |
-| ![Android 1.0.20 预览](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-Android-1.0.20-preview.png) | ![macOS 1.0.20 预览](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-macOS-1.0.20-preview.png) |
+![Android 1.0.20 预览](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.20/Nanfeng-AI-Android-1.0.20-preview.png)
 
-预览图与对应安装包一起生成并随 Release 附件校验；Android 来自隔离模拟器，macOS 来自隔离数据目录。
+预览图与对应安装包一起生成并随 Release 附件校验，来自隔离 Android 模拟器的正常运行态。
 
 ## 源码
 
