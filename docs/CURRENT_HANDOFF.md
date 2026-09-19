@@ -2,11 +2,11 @@
 
 > **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
 
-## 2026-09-19：1.0.22 GitHub 正式发布准备
+## 2026-09-19：1.0.22 GitHub 正式发布完成
 
 - 用户要求“打包上传 GitHub”。核对 GitHub 根目录 APK／DMG 与同签名覆盖包 hash 一致，Android 86／1.0.22 非 Debug，DMG 内 app 版本／签名／二进制匹配已安装候选；7 项核心源码 hash 与完整回归冻结点一致，不重打或重复设备安装。
 - 本次提交包含联网执行修复、详情兼容、数据库 70 与此前菜单精简；发布说明见 [v1.0.22](releases/v1.0.22.md)。README 下载更新到本版，预览仍明确标记 v1.0.20，不将旧图作为新版本验收。
-- 远端以 Release 元数据、附件下载与 SHA-256 回验为交付依据，证据保存在 `release-evidence/2026-09-19-github-1.0.22/`；本条为上传前冻结记录。
+- [v1.0.22](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.22) 已正式发布（非 Draft／Prerelease），latest API 回读正确；标签绑定 `4ced523f73cfca5ad7fa462a4f7786016a20b5d1`。APK／DMG／SHA256SUMS 三附件下载 hash 全部匹配；证据 `release-evidence/2026-09-19-github-1.0.22/`。原有三项未跟踪 UI 预览资产未纳入提交。
 
 ## 2026-09-19：DeepSeek 原生联网打通，1.0.22 双端同签名覆盖完成
 
