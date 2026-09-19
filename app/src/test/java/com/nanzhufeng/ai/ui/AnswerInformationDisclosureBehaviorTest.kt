@@ -26,6 +26,7 @@ class AnswerInformationDisclosureBehaviorTest {
             recordedAt = Instant.EPOCH,
             conversationStyle = ConversationStyle.PROFESSIONAL,
             webSearchUsed = false,
+            webSearchRequested = false,
         )
         val audits = listOf(
             audit(
@@ -61,6 +62,11 @@ class AnswerInformationDisclosureBehaviorTest {
         assertEquals(emptyList<Any>(), unknown.sources)
     }
 
+    @Test fun `legacy false cannot prove that no web request was sent`() {
+        val legacy = listOf(audit(false, emptyList())).answerInformationDisclosure(emptyList())
+        assertNull(legacy.webSearchUsed)
+    }
+
     @Test fun `source groups retain actual titles and profile fields without inventing absent sources`() {
         val disclosure = listOf(audit(null, listOf(
             ContextSelectionSource("个性化资料", "profile", "昵称、职业／角色", 0),
@@ -78,6 +84,26 @@ class AnswerInformationDisclosureBehaviorTest {
             AnswerContextSourceGroup("当前对话路径", listOf("此前 8 条消息")),
         ), disclosure.sources.answerContextSourceGroups())
         assertEquals(emptyList<AnswerContextSourceGroup>(), emptyList<com.nanzhufeng.ai.domain.AnswerContextSourceDisclosure>().answerContextSourceGroups())
+    }
+
+    @Test fun `request evidence distinguishes disabled requested and historical answers`() {
+        fun attribution(requested: Boolean?, used: Boolean?) = AssistantResponseModelAttribution(
+            assistantMessageId = MessageNodeId("network-answer"), attemptId = NormalChatSendAttemptId("network-attempt"),
+            providerId = ProviderId.DEEPSEEK, receiverProviderId = ProviderId.DEEPSEEK,
+            modelId = "deepseek-flash", modelDisplayName = "DeepSeek", recordedAt = Instant.EPOCH,
+            webSearchRequested = requested, webSearchUsed = used,
+        )
+        fun label(vararg facts: AssistantResponseModelAttribution) =
+            emptyList<ContextSelectionAuditRecord>().answerInformationDisclosure(facts.toList()).networkLabel
+        assertEquals("本次未使用", label(attribution(false, false)))
+        assertEquals("联网未完成", label(attribution(true, false)))
+        assertEquals("联网未完成", label(attribution(true, null)))
+        assertEquals("已实际使用", label(attribution(true, true)))
+        assertEquals("无法确认（旧记录）", label(attribution(null, false)))
+        assertEquals("无法确认（旧记录）", label(attribution(null, null)))
+        assertEquals("无法确认（旧记录）", label(attribution(false, false), attribution(null, false)))
+        assertEquals("已实际使用", label(attribution(true, false), attribution(true, true)))
+        assertEquals("无法确认（旧记录）", label())
     }
 
     private fun audit(

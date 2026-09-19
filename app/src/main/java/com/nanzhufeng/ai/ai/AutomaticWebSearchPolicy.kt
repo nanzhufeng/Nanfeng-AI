@@ -33,19 +33,20 @@ internal object AutomaticWebSearchPolicy {
             // The shared attachment bridge projects Markdown/OCR/PDF/media to text before these
             // text-only official search routes are serialized. An attachment is not permission to
             // silently remove the user's explicit web-search requirement.
-            ProviderId.DEEPSEEK -> current.copy(webSearchRoute = OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
+            ProviderId.DEEPSEEK -> current.copy(webSearchRoute = OfficialWebSearchRoute.DEEPSEEK_MESSAGES)
             ProviderId.ZHIPU -> current.copy(webSearchRoute = OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)
             ProviderId.MOCK -> current
         }
     }
 }
 
-/** Source evidence describes search results; it never vetoes a completed answer. */
+/** An explicit search request requires provider-owned execution evidence. */
 internal object WebSearchGroundingPolicy {
-    fun completedAuditStatus(options: ChatRequestOptions, sources: List<ProviderWebSource>, streamed: Boolean): String = when {
+    fun completedAuditStatus(options: ChatRequestOptions, sources: List<ProviderWebSource>, streamed: Boolean, performed: Boolean = false): String = when {
         !options.liveWebSearch -> if (streamed) "STREAM_SUCCEEDED" else "SUCCEEDED"
         sources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) } ->
             if (streamed) "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES" else "WEB_SEARCH_SUCCEEDED_WITH_SOURCES"
-        else -> "WEB_SEARCH_COMPLETED_WITHOUT_SOURCES"
+        performed -> "WEB_SEARCH_SUCCEEDED"
+        else -> "WEB_SEARCH_NO_SOURCES"
     }
 }

@@ -504,6 +504,7 @@ class NormalChatOpenRouterExecutor(
             val costSource: ConversationCostSource?,
             val conversationStyle: com.nanzhufeng.ai.domain.ConversationStyle,
             val webSearchUsed: Boolean,
+            val webSearchRequested: Boolean,
         ) : OneResult
         data class Blocked(val code: Code) : OneResult
         data class Failed(val code: Code) : OneResult
@@ -675,7 +676,7 @@ class NormalChatOpenRouterExecutor(
             ),
         )
         val requestedAt = clock.instant()
-        val endpoint = "${config.provider.fixedEndpoint}${adapter.endpointPath(requestOptions)}"
+        val endpoint = adapter.endpoint(config.provider.fixedEndpoint, requestOptions)
         val outcome = try {
             transport.execute(
                 ProviderChatRequest(
@@ -737,10 +738,14 @@ class NormalChatOpenRouterExecutor(
                 val toolCallEncountered = !requestOptions.liveWebSearch && (toolOnly != null || (reply?.toolCallEncountered == true && modelId != KIMI_K3_MODEL_ID))
                 audit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedAt, reply?.inputTokens ?: toolOnly?.inputTokens, reply?.outputTokens ?: toolOnly?.outputTokens, when {
                     toolCallEncountered -> "TOOL_CALL_UNSUPPORTED"
-                    reply != null -> WebSearchGroundingPolicy.completedAuditStatus(requestOptions, reply.webSources, streamed = false)
+                    reply != null -> WebSearchGroundingPolicy.completedAuditStatus(requestOptions, reply.webSources, streamed = false, performed = reply.webSearchPerformed)
                     else -> "RESPONSE_FORMAT"
                 }))
-                if (toolCallEncountered) {
+                if (requestOptions.liveWebSearch && reply != null && !reply.webSearchPerformed && reply.webSources.isEmpty()) {
+                    sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "WEB_SEARCH_NO_SOURCES")
+                    runtime?.fail(Code.WEB_SEARCH_NO_SOURCES.name)
+                    OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)
+                } else if (toolCallEncountered) {
                     sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "TOOL_CALL_UNSUPPORTED")
                     OneResult.Failed(Code.TOOL_CALL_UNSUPPORTED)
                 } else if (reply == null) {
@@ -785,6 +790,7 @@ class NormalChatOpenRouterExecutor(
                             executionProviderId, modelId, resolvedModel.displayName, usage, cost, source,
                             conversationStyle = experience.conversationStyle,
                             webSearchUsed = reply.webSearchPerformed || reply.webSources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) },
+                            webSearchRequested = requestOptions.liveWebSearch,
                         )
                     }
                 }
@@ -796,10 +802,14 @@ class NormalChatOpenRouterExecutor(
                     incompleteResponsesStream -> "RESPONSE_INCOMPLETE"
                     outcome.toolCallEncountered && modelId != KIMI_K3_MODEL_ID -> "TOOL_CALL_UNSUPPORTED"
                     reply == null -> "RESPONSE_FORMAT"
-                    else -> WebSearchGroundingPolicy.completedAuditStatus(requestOptions, outcome.webSources, streamed = true)
+                    else -> WebSearchGroundingPolicy.completedAuditStatus(requestOptions, outcome.webSources, streamed = true, performed = outcome.webSearchPerformed)
                 }))
                 if (runtime?.persistenceRejected == true) {
                     OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
+                } else if (requestOptions.liveWebSearch && !outcome.webSearchPerformed && outcome.webSources.isEmpty()) {
+                    sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), NormalChatSendAttemptStatus.FAILED, clock.instant(), "WEB_SEARCH_NO_SOURCES")
+                    runtime?.fail(Code.WEB_SEARCH_NO_SOURCES.name)
+                    OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)
                 } else if (incompleteResponsesStream) {
                     sendAttempts.transition(
                         attempt.attemptId,
@@ -851,7 +861,8 @@ class NormalChatOpenRouterExecutor(
                         visibleReply, outcome.reasoning, k3Tools, notice, attempt, providerId,
                         executionProviderId, modelId, resolvedModel.displayName, usage, cost, source,
                         conversationStyle = experience.conversationStyle,
-                        webSearchUsed = outcome.webSources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) },
+                        webSearchUsed = outcome.webSearchPerformed || outcome.webSources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) },
+                        webSearchRequested = requestOptions.liveWebSearch,
                     )
                 }
             }
@@ -887,7 +898,7 @@ class NormalChatOpenRouterExecutor(
     ): Boolean = recordResponseAttribution(
         assistantMessageId, reply.attempt, reply.providerId, reply.receiverProviderId, reply.modelId, reply.modelDisplayName,
         reply.usage, reply.cost, reply.costSource,
-        reply.conversationStyle, reply.webSearchUsed,
+        reply.conversationStyle, reply.webSearchUsed, reply.webSearchRequested,
     )
 
     private fun recordResponseAttribution(
@@ -902,6 +913,7 @@ class NormalChatOpenRouterExecutor(
         costSource: ConversationCostSource? = null,
         conversationStyle: com.nanzhufeng.ai.domain.ConversationStyle? = null,
         webSearchUsed: Boolean? = null,
+        webSearchRequested: Boolean? = null,
     ): Boolean = runCatching {
         responseModelAttributions.record(
             AssistantResponseModelAttribution(
@@ -914,6 +926,7 @@ class NormalChatOpenRouterExecutor(
                 recordedAt = clock.instant(),
                 conversationStyle = conversationStyle,
                 webSearchUsed = webSearchUsed,
+                webSearchRequested = webSearchRequested,
                 usage = usage,
                 cost = cost,
                 costSource = costSource,
@@ -1040,7 +1053,7 @@ class NormalChatOpenRouterExecutor(
         OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL -> " OpenRouter 官方实时网页检索"
         OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS -> " 千问官方实时网页检索"
         OfficialWebSearchRoute.QWEN_RESPONSES -> " 千问官方 Responses 实时网页检索"
-        OfficialWebSearchRoute.DEEPSEEK_RESPONSES -> " DeepSeek 官方 Responses 实时网页检索"
+        OfficialWebSearchRoute.DEEPSEEK_MESSAGES -> " DeepSeek 官方 Messages 实时网页检索"
         OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS -> " 智谱官方实时网页检索"
         OfficialWebSearchRoute.NONE -> ""
     }

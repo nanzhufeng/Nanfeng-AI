@@ -1485,13 +1485,13 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
-    fun `FB-P6-090 launches the platform share sheet immediately without an in-app confirmation dialog`() {
-        assertTrue(source.contains("val shareMessage: (PresentedTranscriptMessage) -> Unit"))
-        assertTrue(source.contains("context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND)"))
-        assertTrue(source.contains("MessageContextAction(Icons.Rounded.Share, \"分享\")"))
-        assertFalse(source.contains("通过系统分享？"))
-        assertFalse(source.contains("打开系统分享"))
-        assertFalse(source.contains("sharingMessageId"))
+    fun `message popup keeps reading and editing actions without share or cross-area reference`() {
+        val popup = source.substring(source.indexOf("    messageActionTarget?.let { target ->"), source.indexOf("    selectingTextMessageId?.let"))
+        assertTrue(popup.contains("Icons.Rounded.SelectAll"))
+        assertTrue(popup.contains("Icons.Rounded.Edit"))
+        assertTrue(popup.contains("copyText(presentedMessagePlainText(transcript.message))"))
+        assertFalse(popup.contains("Icons.Rounded.Share"))
+        assertFalse(popup.contains("onReferenceMessage"))
     }
 
     @Test

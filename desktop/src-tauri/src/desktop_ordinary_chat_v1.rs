@@ -390,16 +390,41 @@ fn responses_input(messages: &Value) -> Value {
     }).collect())
 }
 
+pub fn provider_endpoint(base: &str, route: &str) -> String {
+    let base = base.trim_end_matches('/');
+    match route {
+        "DEEPSEEK_MESSAGES" => format!("{}/anthropic/v1/messages", base.strip_suffix("/v1").unwrap_or(base)),
+        "QWEN_RESPONSES" => format!("{base}/responses"),
+        _ => format!("{base}/chat/completions"),
+    }
+}
+
 fn transport_body(request: &TransportRequest) -> Value {
     let mut body = match request.web_search_route.as_str() {
         "QWEN_RESPONSES" => json!({
             "model":request.model_id,"input":responses_input(&request.messages),"tools":[{"type":"web_search"}],
             "store":false,"stream":true,"max_output_tokens":request.max_output_tokens
         }),
-        "DEEPSEEK_RESPONSES" => json!({
-            "model":request.model_id,"input":responses_input(&request.messages),"tools":[{"type":"web_search"}],
-            "tool_choice":{"type":"web_search"},"stream":false,"max_output_tokens":request.max_output_tokens
-        }),
+        "DEEPSEEK_MESSAGES" => {
+            let messages = request.messages.as_array().cloned().unwrap_or_default();
+            let system = messages.iter().filter(|m| m["role"] == "system").filter_map(|m| m["content"].as_str()).collect::<Vec<_>>().join("\n");
+            let messages: Vec<Value> = messages.into_iter().filter(|m| m["role"] != "system").map(|mut m| {
+                if let Some(parts) = m["content"].as_array() {
+                    m["content"] = Value::Array(parts.iter().map(|part| {
+                        if part["type"] == "image_url" {
+                            let url = part["image_url"]["url"].as_str().unwrap_or("");
+                            if let Some((mime, data)) = url.strip_prefix("data:").and_then(|v| v.split_once(";base64,")) {
+                                json!({"type":"image","source":{"type":"base64","media_type":mime,"data":data}})
+                            } else { json!({"type":"image","source":{"type":"url","url":url}}) }
+                        } else { part.clone() }
+                    }).collect());
+                }
+                m
+            }).collect();
+            json!({"model":request.model_id,"system":system,"messages":messages,
+                "tools":[{"type":"web_search_20250305","name":"web_search","max_uses":5}],
+                "tool_choice":{"type":"tool","name":"web_search"},"stream":false,"max_tokens":request.max_output_tokens})
+        },
         _ => {
             let mut body = json!({
                 "model":request.model_id,"messages":request.messages,"stream":true,
@@ -643,7 +668,7 @@ fn has_web_search_evidence(value: &Value) -> bool {
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
-            .any(|item| item.get("type").and_then(Value::as_str) == Some("web_search_call"))
+            .any(|item| item.get("type").and_then(Value::as_str) == Some("web_search_call") && matches!(item.get("status").and_then(Value::as_str), None | Some("completed")))
 }
 
 fn append_sources(text: &mut String, sources: &[(String, String)]) {
@@ -801,6 +826,38 @@ pub fn decode_non_streaming(bytes: &[u8], elapsed_ms: i64) -> Result<Completed, 
     })
 }
 
+fn decode_deepseek_messages(bytes: &[u8], elapsed_ms: i64) -> Result<Completed, Failure> {
+    let fail = |code| Failure::Explicit { code, http_status: None };
+    if bytes.len() > MAX_RESPONSE_BYTES { return Err(fail("RESPONSE_SIZE")); }
+    let value: Value = serde_json::from_slice(bytes).map_err(|_| fail("RESPONSE_FORMAT"))?;
+    let blocks = value["content"].as_array().ok_or_else(|| fail("RESPONSE_FORMAT"))?;
+    let results: Vec<_> = blocks.iter().filter(|b| b["type"] == "web_search_tool_result").collect();
+    if results.is_empty() || results.iter().any(|b| !b["content"].is_array()) {
+        return Err(fail("WEB_SEARCH_NO_SOURCES"));
+    }
+    if value["stop_reason"] != "end_turn" { return Err(fail("RESPONSE_INCOMPLETE")); }
+    let last = blocks.iter().rposition(|b| b["type"] == "web_search_tool_result").unwrap();
+    let mut text = blocks.iter().skip(last + 1).filter(|b| b["type"] == "text").filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n");
+    if text.trim().is_empty() { return Err(fail("RESPONSE_FORMAT")); }
+    let mut sources = Vec::new();
+    for result in results {
+        for item in result["content"].as_array().unwrap() {
+            if item["type"] == "web_search_result" {
+                if let Some(url) = item["url"].as_str().filter(|url| reqwest::Url::parse(url).is_ok_and(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some() && u.username().is_empty() && u.password().is_none())) {
+                    if !sources.iter().any(|(_, existing)| existing == url) {
+                        sources.push((item["title"].as_str().unwrap_or(url).to_owned(), url.to_owned()));
+                    }
+                }
+            }
+        }
+    }
+    append_sources(&mut text, &sources);
+    let usage = &value["usage"];
+    Ok(Completed { text, reasoning: None,
+        usage: Usage { input_tokens: usage["input_tokens"].as_i64(), output_tokens: usage["output_tokens"].as_i64(), cached_input_tokens: usage["cache_read_input_tokens"].as_i64(), reasoning_tokens: None },
+        reported_cost_micros: None, actual_model_id: value["model"].as_str().map(ToOwned::to_owned), web_search_verified: true, elapsed_ms })
+}
+
 pub async fn execute_streaming(
     request: TransportRequest,
     mut secret: Zeroizing<Vec<u8>>,
@@ -821,19 +878,19 @@ pub async fn execute_streaming(
     let body = transport_body(&request);
     let started = Instant::now();
     let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(15))
         .timeout(STREAM_TOTAL_TIMEOUT)
         .build()
         .map_err(|_| Failure::Unknown { code: "CLIENT" })?;
+    let mut builder = client.post(&request.endpoint).bearer_auth(authorization.as_str())
+        .header("Idempotency-Key", &request.idempotency_key);
+    if request.web_search_route == "DEEPSEEK_MESSAGES" {
+        builder = builder.header("x-api-key", authorization.as_str()).header("anthropic-version", "2023-06-01").header("Accept", "application/json");
+    } else { builder = builder.header("Accept", "text/event-stream"); }
     let response = tokio::time::timeout(
         STREAM_RESPONSE_TIMEOUT,
-        client
-            .post(&request.endpoint)
-            .bearer_auth(authorization.as_str())
-            .header("Idempotency-Key", &request.idempotency_key)
-            .header("Accept", "text/event-stream")
-            .json(&body)
-            .send(),
+        builder.json(&body).send(),
     )
     .await
     .map_err(|_| Failure::Unknown {
@@ -853,7 +910,7 @@ pub async fn execute_streaming(
             http_status: Some(status),
         });
     }
-    if request.web_search_route == "DEEPSEEK_RESPONSES" {
+    if request.web_search_route == "DEEPSEEK_MESSAGES" {
         let bytes = tokio::time::timeout(
             STREAM_TOTAL_TIMEOUT.saturating_sub(started.elapsed()),
             response.bytes(),
@@ -869,15 +926,8 @@ pub async fn execute_streaming(
                 Failure::Unknown { code: "NETWORK" }
             }
         })?;
-        // Android keeps a valid DeepSeek answer even when the provider does not
-        // return citation metadata. `decode_responses_non_streaming` appends only
-        // provider-owned, safe sources when they are present.
-        // DeepSeek's Android adapter declares this Responses route non-streaming.
-        // Do not publish a partial delta from a fully-buffered JSON reply: the
-        // workspace owner must receive one terminal `Completed` result.
-        let completed = decode_responses_non_streaming(
-            &bytes,
-            started.elapsed().as_millis().min(i64::MAX as u128) as i64,
+        let completed = decode_deepseek_messages(
+            &bytes, started.elapsed().as_millis().min(i64::MAX as u128) as i64,
         )?;
         return Ok(completed);
     }
@@ -1114,8 +1164,9 @@ pub async fn execute_streaming(
             http_status: Some(status),
         });
     }
-    // Provider citations are optional metadata on Android. Preserve a valid answer when
-    // a search provider did not return them; append only verified provider-owned sources.
+    if request.web_search_route != "NONE" && !search_evidence && sources.is_empty() {
+        return Err(Failure::Explicit { code: "WEB_SEARCH_NO_SOURCES", http_status: Some(status) });
+    }
     append_sources(&mut text, &sources);
     Ok(Completed {
         text,
@@ -1170,6 +1221,51 @@ mod tests {
             structured_json: false,
             disable_thinking: false,
         }
+    }
+
+    #[test]
+    fn native_search_endpoint_is_same_provider_and_offline_retains_chat() {
+        assert_eq!(provider_endpoint("https://api.deepseek.com/v1", "DEEPSEEK_MESSAGES"), "https://api.deepseek.com/anthropic/v1/messages");
+        assert_eq!(provider_endpoint("https://api.deepseek.com/v1", "NONE"), "https://api.deepseek.com/v1/chat/completions");
+    }
+
+    #[test]
+    fn native_search_projects_only_final_answer_and_rejects_tool_errors() {
+        let good = json!({"model":"deepseek-flash","stop_reason":"end_turn","content":[
+            {"type":"text","text":"planning"},
+            {"type":"web_search_tool_result","content":[{"type":"web_search_result","url":"https://example.test/a","title":"Official"}]},
+            {"type":"text","text":"answer"}],"usage":{"input_tokens":8,"output_tokens":5,"cache_read_input_tokens":2}});
+        let result = decode_deepseek_messages(&serde_json::to_vec(&good).unwrap(), 1).unwrap();
+        assert_eq!(result.text, "answer\n\n来源：\n- [Official](https://example.test/a)");
+        assert!(result.web_search_verified);
+        assert_eq!(result.usage.input_tokens, Some(8));
+        assert_eq!(result.usage.cached_input_tokens, Some(2));
+        for stop in ["pause_turn", "max_tokens"] {
+            let mut bad = good.clone(); bad["stop_reason"] = json!(stop);
+            assert!(matches!(decode_deepseek_messages(&serde_json::to_vec(&bad).unwrap(), 1), Err(Failure::Explicit { code: "RESPONSE_INCOMPLETE", .. })));
+        }
+        let mut bad = good; bad["content"][1]["content"] = json!({"type":"web_search_tool_result_error","error_code":"unavailable"});
+        assert!(matches!(decode_deepseek_messages(&serde_json::to_vec(&bad).unwrap(), 1), Err(Failure::Explicit { code: "WEB_SEARCH_NO_SOURCES", .. })));
+    }
+
+    #[test]
+    #[ignore = "explicit user-authorized live DeepSeek search only"]
+    fn live_deepseek_messages_search() {
+        use crate::desktop_model_service_v1::{AppPrivateProviderCredentialStore, ProviderCredentialStore};
+        let root = std::env::var("NANFENG_LIVE_SEARCH_WORKSPACE").expect("explicit workspace required");
+        let store = AppPrivateProviderCredentialStore::at(root);
+        let mut req = request("https://api.deepseek.com/anthropic/v1/messages".into());
+        req.provider_id = "DEEPSEEK".into();
+        req.model_id = "deepseek-flash".into();
+        req.messages = json!([{"role":"user","content":"请联网搜索 DeepSeek 官方 API 文档的 Anthropic 兼容接口地址，用一句话回答并给出来源。"}]);
+        req.web_search_route = "DEEPSEEK_MESSAGES".into();
+        req.max_output_tokens = 2048;
+        let result = store.with_secret("DEEPSEEK", |secret| {
+            tokio::runtime::Runtime::new().unwrap().block_on(execute_streaming(req, Zeroizing::new(secret.to_vec()), Arc::new(AtomicBool::new(false)), |_| Ok(()))).map_err(|failure| format!("{failure:?}"))
+        }).expect("native search must succeed");
+        assert!(result.web_search_verified);
+        assert!(result.text.contains("https://"));
+        println!("live_search verified={} input_tokens={:?} output_tokens={:?} elapsed_ms={} actual_model={:?}", result.web_search_verified, result.usage.input_tokens, result.usage.output_tokens, result.elapsed_ms, result.actual_model_id);
     }
 
     #[test]
@@ -1370,24 +1466,24 @@ mod tests {
         assert_eq!(body["stream"], true);
         assert_eq!(body["input"][0]["content"][0]["type"], "input_text");
 
-        fixture.web_search_route = "DEEPSEEK_RESPONSES".into();
+        fixture.web_search_route = "DEEPSEEK_MESSAGES".into();
         let body = transport_body(&fixture);
-        assert_eq!(body["tools"][0]["type"], "web_search");
-        assert_eq!(body["tool_choice"]["type"], "web_search");
+        assert_eq!(body["tools"][0]["type"], "web_search_20250305");
+        assert_eq!(body["tool_choice"]["name"], "web_search");
         assert_eq!(body["stream"], false);
     }
 
     #[test]
-    fn deepseek_flash_responses_preserves_images_and_requested_identity() {
+    fn deepseek_messages_preserves_images_and_requested_identity() {
         let mut fixture = request("http://127.0.0.1:1".into());
         fixture.model_id = "deepseek-flash".into();
         fixture.messages = json!([{"role":"user","content":[{"type":"text","text":"look"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AQID"}}]}]);
-        fixture.web_search_route = "DEEPSEEK_RESPONSES".into();
+        fixture.web_search_route = "DEEPSEEK_MESSAGES".into();
         let body = transport_body(&fixture);
         assert_eq!(body["model"], "deepseek-flash");
         assert_eq!(
-            body["input"][0]["content"][1],
-            json!({"type":"input_image","image_url":"data:image/png;base64,AQID"})
+            body["messages"][0]["content"][1],
+            json!({"type":"image","source":{"type":"base64","media_type":"image/png","data":"AQID"}})
         );
         assert_eq!(body["stream"], false);
         fixture.web_search_route = "NONE".into();
@@ -1426,10 +1522,10 @@ mod tests {
     }
 
     #[test]
-    fn deepseek_responses_preserves_completed_answer_without_search_evidence() {
-        let body = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"model\":\"deepseek-chat\",\"output_text\":\"provider answer\"}";
+    fn deepseek_messages_refuses_success_without_search_results() {
+        let body = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"model\":\"deepseek-chat\",\"content\":[{\"type\":\"text\",\"text\":\"provider answer\"}],\"stop_reason\":\"end_turn\"}";
         let mut request = request(mock_server_with_stream(body, false));
-        request.web_search_route = "DEEPSEEK_RESPONSES".into();
+        request.web_search_route = "DEEPSEEK_MESSAGES".into();
         let mut deltas = Vec::new();
         let completed = tokio::runtime::Runtime::new()
             .unwrap()
@@ -1442,9 +1538,8 @@ mod tests {
                     Ok(())
                 },
             ))
-            .expect("missing citations must not discard a completed answer");
-        assert_eq!(completed.text, "provider answer");
-        assert!(!completed.web_search_verified);
+            .expect_err("enabled search must not silently degrade");
+        assert!(matches!(completed, Failure::Explicit { code: "WEB_SEARCH_NO_SOURCES", .. }));
         assert!(deltas.is_empty());
     }
 
@@ -1470,7 +1565,12 @@ mod tests {
                     Arc::new(AtomicBool::new(false)),
                     |_| Ok(()),
                 ))
-                .unwrap();
+                ;
+            if !evidence {
+                assert!(matches!(completed, Err(Failure::Explicit { code: "WEB_SEARCH_NO_SOURCES", .. })));
+                continue;
+            }
+            let completed = completed.unwrap();
             assert_eq!(completed.text, "complete answer");
             assert_eq!(completed.usage.input_tokens, Some(11));
             assert_eq!(completed.usage.output_tokens, Some(7));
@@ -1543,7 +1643,7 @@ mod tests {
     }
 
     #[test]
-    fn chat_completions_preserves_answer_and_reports_search_evidence_separately() {
+    fn chat_completions_requires_search_evidence_when_enabled() {
         let without_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"provider answer\"}}]}\n\ndata: [DONE]\n\n";
         let mut missing = request(mock_server(without_sources));
         missing.web_search_route = "OPENROUTER_SERVER_TOOL".into();
@@ -1555,9 +1655,8 @@ mod tests {
                 Arc::new(AtomicBool::new(false)),
                 |_| Ok(()),
             ))
-            .expect("a completed answer is independent from search evidence");
-        assert_eq!(completed.text, "provider answer");
-        assert!(!completed.web_search_verified);
+            .expect_err("enabled search cannot complete without execution evidence");
+        assert!(matches!(completed, Failure::Explicit { code: "WEB_SEARCH_NO_SOURCES", .. }));
 
         let with_sources = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"grounded answer\",\"annotations\":[{\"url_citation\":{\"title\":\"Official\",\"url\":\"https://example.com/source\"}},{\"url_citation\":{\"title\":\"Unsafe\",\"url\":\"https://user@example.com/private\"}}]}}]}\n\ndata: [DONE]\n\n";
         let mut grounded = request(mock_server(with_sources));

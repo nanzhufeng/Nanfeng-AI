@@ -1,5 +1,29 @@
 # 南枫 AI 当前交接
 
+> **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
+
+## 2026-09-19：1.0.22 GitHub 正式发布准备
+
+- 用户要求“打包上传 GitHub”。核对 GitHub 根目录 APK／DMG 与同签名覆盖包 hash 一致，Android 86／1.0.22 非 Debug，DMG 内 app 版本／签名／二进制匹配已安装候选；7 项核心源码 hash 与完整回归冻结点一致，不重打或重复设备安装。
+- 本次提交包含联网执行修复、详情兼容、数据库 70 与此前菜单精简；发布说明见 [v1.0.22](releases/v1.0.22.md)。README 下载更新到本版，预览仍明确标记 v1.0.20，不将旧图作为新版本验收。
+- 远端以 Release 元数据、附件下载与 SHA-256 回验为交付依据，证据保存在 `release-evidence/2026-09-19-github-1.0.22/`；本条为上传前冻结记录。
+
+## 2026-09-19：DeepSeek 原生联网打通，1.0.22 双端同签名覆盖完成
+
+- 用户明确纠正目标：开启联网必须真实执行搜索，不能只修详情提示。已确认双端错误使用 DeepSeek Responses；官方明确忽略内置 web_search。改为同一官方 Messages endpoint + 强制原生搜索，模型与 Provider 保持不变。
+- HTTP／SSE／Android 监控无搜索证据不得成功；旧正文及失败审计不改写，失败不会自动换 Provider 或重发。Android 69→70 新增 nullable 请求事实，旧 false 保留，详情无法证明旧记录时显示未知。
+- 真实 DeepSeek Flash 请求经正式 Rust transport 与本机应用私有凭据 owner：搜索结果、来源和最终正文齐全，3454ms，input 29357／output 286；没有发送真实会话或附件。此证据不冒充手机实机联网验证。
+- 自动回归：Android 1249 项／0 failure／0 error／3 skip，Release lint 通过；Rust 303 passed／4 ignored（其中显式 live test 已单独通过）；前端 451 passed／12 skip，lint／typecheck／build 通过。红灯与最终证据：`release-evidence/2026-09-19-native-web-search/`。
+- 1.0.22（Android 86）包含此前消息菜单精简，已同签名保数据覆盖 OPPO 与 Mac 两份安装。手机回拉包一致、首次安装时间／dataDir 保持；Mac 完整备份、覆盖期间指纹保持、启动后 CHAT 870／WORK 0 会话及正式 UI 回读正常。主设备未启动／操作手机 App，因此手机实发联网仍未验。未再次上传 GitHub／提交／推送。
+- ADB 先误查 5037 导致误报离线；USB 与现有 5039 SDK 服务确认手机一直连接。覆盖后按用户指令清理多余服务，统一为 Android SDK 默认 5037，OPPO 与 emulator-5592 均 device，5039 已无监听。未来使用默认 SDK adb，不重启或创建 5039。
+
+## 2026-09-19：精简消息操作入口，源码检查完成
+
+- Desktop 用户消息底栏移除分享，DOM 与视觉顺序为真实时间→复制；AI 回复底栏保持原行为。Android 用户消息原本没有同款底栏，不新增。
+- Android 消息长按菜单删除“引用文字到工作区／对话区”和“分享”，保留复制、选择文本，以及可编辑用户消息的编辑入口；移除相应已无入口的 UI 回调／纯文本分享闭包。回复底部 Markdown 分享与会话／附件分享未调整。
+- Desktop 相关 101 项回归通过；实际 renderer 验证用户时间→复制且无分享、AI 操作保留；lint／typecheck 通过。Android 菜单合同套件 92 项、0 failure/error，Release Kotlin 编译通过。证据：`release-evidence/2026-09-19-message-actions/`。
+- 本次未重新打包／覆盖／发布，当前安装与 GitHub 正式版仍为 1.0.21；未操作主设备 UI。上一版 GitHub 发布及三附件下载 hash 回验已完成，详见 `release-evidence/2026-09-18-github-1.0.21/REPORT.md`。
+
 ## 2026-09-18：v1.0.21 GitHub 发布准备冻结
 
 - 用户明确要求“打包上传 GitHub”。复用已完成双端同签名覆盖的精确 APK／DMG，根目录文件 hash 与安装证据一致，不重打、不重签、不重复覆盖。
@@ -104,7 +128,6 @@
 - 逐模型安全矩阵／安装回读／本地备份在被 Git 忽略的 `release-evidence/2026-09-18-model-generation/`；入口 `REPORT.md`。真实服务 opt-in harness 为 `desktop/src-tauri/src/model_generation_live_audit.rs`，默认 ignored，显式授权开关与私有凭据根缺一不可，输出不含正文／密钥。
 
 
-> **当前合同读取门：** [Android 会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)、[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)。以下按最近增量记录；历史验收不能覆盖这些当前合同。
 
 ## 2026-09-18：Desktop 生成中闪烁与滚动被打断（Mac 1.0.14 已保数据覆盖）
 

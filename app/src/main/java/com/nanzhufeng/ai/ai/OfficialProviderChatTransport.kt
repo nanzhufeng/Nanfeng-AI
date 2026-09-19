@@ -165,6 +165,7 @@ data class ProviderSseEvent(
     val webSources: List<ProviderWebSource> = emptyList(),
     /** Responses streams are not complete merely because the socket reached EOF. */
     val terminal: ProviderStreamTerminal? = null,
+    val webSearchPerformed: Boolean = false,
 )
 
 enum class ProviderStreamTerminal { COMPLETED, INCOMPLETE, FAILED }
@@ -205,6 +206,7 @@ sealed interface ProviderChatOutcome {
         val durableTaskId: String? = null,
         val durableTerminalSequence: Long? = null,
         val finishReason: String? = null,
+        val webSearchPerformed: Boolean = false,
     ) : ProviderChatOutcome
     data object TimedOut : ProviderChatOutcome
     /**
@@ -250,6 +252,10 @@ class OfficialProviderChatTransport : ProviderChatTransport {
         try {
             if (request.cancellation?.isCancelled() == true) return ProviderChatOutcome.Cancelled
             connection.setRequestProperty("Authorization", "Bearer ${credential.concatToString()}")
+            if (request.endpoint == "https://api.deepseek.com/anthropic/v1/messages") {
+                connection.setRequestProperty("x-api-key", credential.concatToString())
+                connection.setRequestProperty("anthropic-version", "2023-06-01")
+            }
             connection.outputStream.use { requestBody.writeTo(it) }
             if (request.cancellation?.isCancelled() == true) return ProviderChatOutcome.Cancelled
             val status = connection.responseCode
@@ -268,6 +274,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
                 return ProviderChatOutcome.StreamedResponse(
                     status, streamed.text, streamed.reasoning, streamed.inputTokens, streamed.outputTokens, streamed.reportedProviderCost, streamed.toolCallEncountered, streamed.toolCalls, streamed.cachedInputTokens, streamed.reasoningTokens,
                     webSources = streamed.webSources,
+                    webSearchPerformed = streamed.webSearchPerformed,
                     finishReason = streamed.finishReason,
                 )
             }
@@ -310,6 +317,7 @@ internal object ProviderSseDecoder {
         val reasoningTokens: Long? = null,
         val webSources: List<ProviderWebSource> = emptyList(),
         val finishReason: String? = null,
+        val webSearchPerformed: Boolean = false,
     )
 
     fun read(
@@ -330,6 +338,7 @@ internal object ProviderSseDecoder {
         data class PendingToolCall(var id: String? = null, var name: String? = null, val arguments: StringBuilder = StringBuilder())
         val pendingToolCalls = linkedMapOf<Int, PendingToolCall>()
         val webSources = linkedMapOf<String, ProviderWebSource>()
+        var webSearchPerformed = false
         var terminal: ProviderStreamTerminal? = null
         val output = StringBuilder()
         val bufferedVisibleText = StringBuilder()
@@ -370,6 +379,7 @@ internal object ProviderSseDecoder {
                         delta.name?.let { pending.name = it }
                         pending.arguments.append(delta.argumentsDelta)
                     }
+                    webSearchPerformed = webSearchPerformed || event.webSearchPerformed
                     event.webSources.forEach { source -> webSources.putIfAbsent(source.url, source) }
                     event.terminal?.let { terminal = it }
                 }
@@ -406,7 +416,7 @@ internal object ProviderSseDecoder {
             output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens,
             reportedProviderCost, toolCallEncountered,
             pendingToolCalls.values.mapNotNull { pending -> pending.name?.let { ChatToolCall(pending.id, it, pending.arguments.toString().ifBlank { "{}" }) } },
-            cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason,
+            cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason, webSearchPerformed,
         )
     }
 }

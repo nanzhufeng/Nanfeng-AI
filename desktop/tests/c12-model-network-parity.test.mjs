@@ -109,7 +109,7 @@ test('C12 Desktop request owner follows Android enabled-search semantics for ord
   const route = source.slice(source.indexOf('fn ordinary_chat_web_search_route('), source.indexOf('impl DesktopWorkspaceStore', source.indexOf('fn ordinary_chat_web_search_route(')));
   assert.ok(!route.includes('ordinary_chat_needs_current_web_information'));
   assert.match(route, /if !enabled \{\s*return "NONE";/);
-  assert.match(route, /"DEEPSEEK"\s*=>\s*"DEEPSEEK_RESPONSES"/);
+  assert.match(route, /"DEEPSEEK"\s*=>\s*"DEEPSEEK_MESSAGES"/);
   assert.match(route, /"ZHIPU"\s*=>\s*"ZHIPU_CHAT_COMPLETIONS"/);
 });
 

@@ -26,7 +26,8 @@ class RoomAssistantResponseModelAttributionStore(
                 existing.modelId == attribution.modelId &&
                 existing.modelDisplayName == attribution.modelDisplayName &&
                 compatible(existing.conversationStyleId, attribution.conversationStyle?.persistedId) &&
-                compatible(existing.webSearchUsed, attribution.webSearchUsed)
+                compatible(existing.webSearchUsed, attribution.webSearchUsed) &&
+                compatible(existing.webSearchRequested, attribution.webSearchRequested)
             ) { "助手回复已有冲突的模型归属。" }
             require(
                 compatible(existing.inputTokens, attribution.usage.inputTokens) &&
@@ -43,7 +44,7 @@ class RoomAssistantResponseModelAttributionStore(
             // response may enrich that exact row once; an unknown retry can never erase it.
             check(dao.enrichCompletedFacts(
                 attribution.assistantMessageId.value, attribution.attemptId.value,
-                attribution.conversationStyle?.persistedId, attribution.webSearchUsed,
+                attribution.conversationStyle?.persistedId, attribution.webSearchUsed, attribution.webSearchRequested,
                 attribution.usage.inputTokens, attribution.usage.outputTokens, attribution.usage.totalTokens,
                 attribution.usage.cachedInputTokens, attribution.usage.reasoningTokens,
                 attribution.cost.priceVersion, attribution.cost.currencyCode, attribution.cost.totalMicros,
@@ -90,6 +91,7 @@ private fun AssistantResponseModelAttribution.toEntity() = AssistantResponseMode
     modelDisplayName = modelDisplayName,
     conversationStyleId = conversationStyle?.persistedId,
     webSearchUsed = webSearchUsed,
+    webSearchRequested = webSearchRequested,
     recordedAtEpochMs = recordedAt.toEpochMilli(),
     inputTokens = usage.inputTokens,
     outputTokens = usage.outputTokens,
@@ -111,6 +113,7 @@ private fun AssistantResponseModelAttributionEntity.toDomain() = AssistantRespon
     modelDisplayName = modelDisplayName,
     conversationStyle = conversationStyleId?.let(ConversationStyle::fromPersistedId),
     webSearchUsed = webSearchUsed,
+    webSearchRequested = webSearchRequested,
     recordedAt = Instant.ofEpochMilli(recordedAtEpochMs),
     usage = com.nanzhufeng.ai.domain.ProviderUsage(inputTokens, outputTokens, totalTokens, cachedInputTokens, reasoningTokens),
     cost = com.nanzhufeng.ai.domain.ProviderCost(costPriceVersion, costCurrencyCode, costTotalMicros),

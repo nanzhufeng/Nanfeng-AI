@@ -40,7 +40,7 @@ class AutomaticWebSearchPolicyTest {
             AutomaticWebSearchPolicy.requestOptions(ProviderId.QWEN, ChatRequestOptions.Standard, true, "英伟达最新财报", emptyList()).webSearchRoute,
         )
         assertEquals(
-            OfficialWebSearchRoute.DEEPSEEK_RESPONSES,
+            OfficialWebSearchRoute.DEEPSEEK_MESSAGES,
             AutomaticWebSearchPolicy.requestOptions(ProviderId.DEEPSEEK, ChatRequestOptions.Standard, true, "现在的美元汇率", emptyList()).webSearchRoute,
         )
         assertEquals(
@@ -149,7 +149,7 @@ class AutomaticWebSearchPolicyTest {
         val attachment = ChatAttachment(ChatAttachmentKind.FILE, "text/markdown", "design.md", "# design".toByteArray())
 
         assertEquals(
-            OfficialWebSearchRoute.DEEPSEEK_RESPONSES,
+            OfficialWebSearchRoute.DEEPSEEK_MESSAGES,
             AutomaticWebSearchPolicy.requestOptions(
                 ProviderId.DEEPSEEK,
                 ChatRequestOptions.Standard,
@@ -171,12 +171,12 @@ class AutomaticWebSearchPolicyTest {
     }
 
     @Test
-    fun `DeepSeek Responses accepts its documented server-side search action without public URLs`() {
+    fun `enabled search cannot succeed without provider execution evidence`() {
         OfficialWebSearchRoute.entries.forEach { route ->
             for (streamed in listOf(false, true)) {
                 val options = ChatRequestOptions(route)
                 assertEquals(
-                    if (options.liveWebSearch) "WEB_SEARCH_COMPLETED_WITHOUT_SOURCES" else if (streamed) "STREAM_SUCCEEDED" else "SUCCEEDED",
+                    if (options.liveWebSearch) "WEB_SEARCH_NO_SOURCES" else if (streamed) "STREAM_SUCCEEDED" else "SUCCEEDED",
                     WebSearchGroundingPolicy.completedAuditStatus(options, emptyList(), streamed),
                 )
                 if (options.liveWebSearch) assertEquals(

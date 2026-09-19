@@ -575,7 +575,6 @@ internal fun ConversationWorkspaceDialog(
     onSelect: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onClearWatchLater: (com.nanzhufeng.ai.domain.ConversationId) -> Unit,
     onSurfaceChanged: (com.nanzhufeng.ai.domain.ConversationSurface) -> Unit,
-    onReferenceMessage: (com.nanzhufeng.ai.domain.MessageNodeId) -> Unit,
     onDraftChanged: (String) -> Unit,
     onSubmitDraft: (com.nanzhufeng.ai.domain.ConversationId?, com.nanzhufeng.ai.domain.NormalChatEgressAuthorization?) -> Unit,
     onRetryNormalSend: () -> Unit,
@@ -703,12 +702,6 @@ internal fun ConversationWorkspaceDialog(
     }
     P7DAccountSyncProgressDialog(syncOperation, syncCompletedFeedback)
     val actionScope = rememberCoroutineScope()
-    val shareMessage: (PresentedTranscriptMessage) -> Unit = { transcript ->
-        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, presentedMessagePlainText(transcript.message))
-        }, "分享本地消息"))
-    }
     val exportAssistantMarkdown: (PresentedTranscriptMessage) -> Unit = { transcript ->
         val conversationTitle = state.conversations
             .firstOrNull { it.id == state.selectedConversationId }
@@ -1964,14 +1957,7 @@ internal fun ConversationWorkspaceDialog(
                     messageActionTarget = null
                 }
             }
-            MessageContextAction(Icons.Rounded.ContentCopy, if (workMode) "引用文字到对话区" else "引用文字到工作区") {
-                messageActionTarget = null
-                onReferenceMessage(transcript.message.messageId)
-            }
-            MessageContextAction(Icons.Rounded.Share, "分享") {
-                shareMessage(transcript)
-                messageActionTarget = null
-            }
+
         }
     }
     selectingTextMessageId?.let { rawId ->
@@ -6575,11 +6561,7 @@ private fun AnswerInformationDialog(
                     HorizontalDivider(color = SecondaryText.copy(alpha = 0.12f))
                     AnswerInformationFact(
                         label = "实时网络",
-                        value = when (disclosure.webSearchUsed) {
-                            true -> "已实际使用"
-                            false -> "本次未使用"
-                            null -> "未记录（旧回答）"
-                        },
+                        value = disclosure.networkLabel,
                         emphasized = disclosure.webSearchUsed == true,
                     )
                 }

@@ -8,6 +8,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProviderSseDecoderContractsTest {
+    @Test fun `completed provider search is retained without URLs while pending and failed search are not confirmed`() {
+        val options = ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
+        for ((status, expected) in listOf("completed" to true, "failed" to false, "in_progress" to false)) {
+            val payload = "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Answer with https://example.test in prose\"}\n\n" +
+                "data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"type\":\"web_search_call\",\"status\":\"$status\"}]}}\n\n"
+            val result = ProviderSseDecoder.read(ByteArrayInputStream(payload.toByteArray()), {},
+                { QwenChatAdapter().decodeStreamingEvent(it, options) }, ProviderStreamTextMode.RESPONSES_API)
+            assertEquals(expected, result.webSearchPerformed)
+            assertTrue(result.webSources.isEmpty())
+            assertEquals("COMPLETED", result.finishReason)
+        }
+    }
+
     @Test fun `all direct adapters preserve explicit truncation instead of completing partial text`() {
         for (adapter in listOf(OpenRouterChatAdapter(), QwenChatAdapter(), DeepSeekChatAdapter(), ZhipuChatAdapter())) {
             val payload = "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n"

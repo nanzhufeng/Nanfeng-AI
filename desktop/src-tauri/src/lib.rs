@@ -13262,7 +13262,7 @@ fn ordinary_chat_web_search_route(
         "OPENROUTER" => "OPENROUTER_SERVER_TOOL",
         "QWEN" if !has_attachments && model_id != "qwen3.8-max" => "QWEN_RESPONSES",
         "QWEN" => "QWEN_CHAT_COMPLETIONS",
-        "DEEPSEEK" => "DEEPSEEK_RESPONSES",
+        "DEEPSEEK" => "DEEPSEEK_MESSAGES",
         "ZHIPU" => "ZHIPU_CHAT_COMPLETIONS",
         _ => "NONE",
     }
@@ -14277,11 +14277,11 @@ impl DesktopWorkspaceStore {
         if mock_endpoint.is_none()
             && matches!(
                 web_search_route.as_str(),
-                "QWEN_RESPONSES" | "DEEPSEEK_RESPONSES"
+                "QWEN_RESPONSES" | "DEEPSEEK_MESSAGES"
             )
         {
             let provider = desktop_model_service_v1::provider(&provider_id)?;
-            endpoint = format!("{}/responses", provider.endpoint.trim_end_matches('/'));
+            endpoint = desktop_ordinary_chat_v1::provider_endpoint(provider.endpoint, &web_search_route);
         }
         let route_revision: u64 = transaction.query_row("SELECT COALESCE(MAX(revision),0)+1 FROM p6g_route_metadata WHERE workspace_id=?1 AND conversation_id=?2",params![args.workspace_id,conversation_id],|row|row.get(0)).map_err(|_|json_error("无法读取路由修订"))?;
         transaction.execute("INSERT INTO p6g_route_metadata(workspace_id,conversation_id,revision,metadata_json,created_at_ms) VALUES(?1,?2,?3,?4,?5)",params![args.workspace_id,conversation_id,route_revision,canonical_json(&json!({"policyVersion":2,"source":"ORDINARY_CHAT_ANDROID_PARITY","providerId":provider_id,"modelId":model_id,"displayName":model_display_name}))?,now]).map_err(|_|json_error("无法保存普通聊天路由摘要"))?;
@@ -14720,15 +14720,7 @@ impl DesktopWorkspaceStore {
             String::new()
         } else {
             let provider = desktop_model_service_v1::provider(&provider_id)?;
-            let path = if matches!(
-                web_search_route.as_str(),
-                "QWEN_RESPONSES" | "DEEPSEEK_RESPONSES"
-            ) {
-                "responses"
-            } else {
-                "chat/completions"
-            };
-            format!("{}/{path}", provider.endpoint.trim_end_matches('/'))
+            desktop_ordinary_chat_v1::provider_endpoint(provider.endpoint, &web_search_route)
         };
         let exchange_text: String = transaction
             .query_row(
@@ -14823,15 +14815,7 @@ impl DesktopWorkspaceStore {
         .to_owned();
         if mock_endpoint.is_none() && preflight_failure_code.is_none() {
             let provider = desktop_model_service_v1::provider(&provider_id)?;
-            let path = if matches!(
-                web_search_route.as_str(),
-                "QWEN_RESPONSES" | "DEEPSEEK_RESPONSES"
-            ) {
-                "responses"
-            } else {
-                "chat/completions"
-            };
-            endpoint = format!("{}/{path}", provider.endpoint.trim_end_matches('/'));
+            endpoint = desktop_ordinary_chat_v1::provider_endpoint(provider.endpoint, &web_search_route);
         }
         conversation["currentLeafId"] = Value::String(assistant_message_id.clone());
         conversation["revision"] = Value::Number(
@@ -27323,7 +27307,7 @@ mod tests {
         );
         assert_eq!(
             ordinary_chat_web_search_route("DEEPSEEK", "deepseek-v4-pro", true, true),
-            "DEEPSEEK_RESPONSES"
+            "DEEPSEEK_MESSAGES"
         );
         assert_eq!(
             ordinary_chat_web_search_route("ZHIPU", "glm-5.3", true, true),

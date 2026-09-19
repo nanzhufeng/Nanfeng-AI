@@ -343,6 +343,7 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         NanfengAiDatabase.MIGRATION_66_67,
         NanfengAiDatabase.MIGRATION_67_68,
         NanfengAiDatabase.MIGRATION_68_69,
+        NanfengAiDatabase.MIGRATION_69_70,
     ).build().also { com.nanzhufeng.ai.data.ConversationDatabaseHandles.register(requireNotNull(databaseContext.getDatabasePath("nanfeng-ai.db").parentFile), it) }
     private val database = com.nanzhufeng.ai.data.local.ConversationAreaDatabaseOwner.open(databaseContext, dataArea, ::buildAreaDatabase)
     val dataStorageLocationManager = AndroidDataStorageLocationManager(dataStorageLocationOwner) {

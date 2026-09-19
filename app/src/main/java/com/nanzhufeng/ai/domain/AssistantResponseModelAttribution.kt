@@ -24,7 +24,7 @@ data class AssistantResponseModelAttribution(
     val recordedAt: Instant,
     /** Exact style instruction used for this answer; null means a legacy record. */
     val conversationStyle: ConversationStyle? = null,
-    /** True only after a verified-source web request produced this visible answer. */
+    /** Provider-owned source or completed search evidence; old false alone is ambiguous. */
     val webSearchUsed: Boolean? = null,
     /** Content-free response accounting. Unknown stays null; a verified zero remains zero. */
     val usage: ProviderUsage = ProviderUsage(),
@@ -35,6 +35,8 @@ data class AssistantResponseModelAttribution(
      * not persisted here: the Attempt remains the one owner of its start/end boundary.
      */
     val modelDurationMillis: Long? = null,
+    /** Route selected for this exact request. Null means legacy evidence is insufficient. */
+    val webSearchRequested: Boolean? = null,
 ) {
     init {
         require(modelId.isNotBlank() && modelDisplayName.isNotBlank())

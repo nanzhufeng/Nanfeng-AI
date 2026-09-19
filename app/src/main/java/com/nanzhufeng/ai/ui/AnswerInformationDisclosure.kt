@@ -10,7 +10,15 @@ internal data class AnswerInformationDisclosure(
     val styleLabel: String?,
     val webSearchUsed: Boolean?,
     val sources: List<AnswerContextSourceDisclosure>,
-)
+    val webSearchRequested: Boolean? = null,
+) {
+    val networkLabel: String get() = when {
+        webSearchUsed == true -> "已实际使用"
+        webSearchRequested == true -> "联网未完成"
+        webSearchRequested == false && webSearchUsed == false -> "本次未使用"
+        else -> "无法确认（旧记录）"
+    }
+}
 
 /** One content-free projection owns every fact shown by the answer-level information dialog. */
 internal fun List<ContextSelectionAuditRecord>.answerInformationDisclosure(
@@ -23,18 +31,21 @@ internal fun List<ContextSelectionAuditRecord>.answerInformationDisclosure(
     val sourceRows = flatMap { it.answerContextDisclosure().sources }
         .filterNot { it.kind == "对话风格" }
         .distinctBy { "${it.kind}\u0000${it.stableId}" }
-    val durableWebSearch = responseAttributions.mapNotNull(AssistantResponseModelAttribution::webSearchUsed)
-    val contextWebSearch = mapNotNull(ContextSelectionAuditRecord::webSearchUsed)
-    val actualWebSearch = when {
-        durableWebSearch.any { it } -> true
-        durableWebSearch.isNotEmpty() && durableWebSearch.all { !it } -> false
-        contextWebSearch.any { it } -> true
-        contextWebSearch.isNotEmpty() && contextWebSearch.all { !it } -> false
+    val requested = when {
+        responseAttributions.any { it.webSearchRequested == true } -> true
+        responseAttributions.isNotEmpty() && responseAttributions.all { it.webSearchRequested == false } -> false
         else -> null
+    }
+    val actualWebSearch = when {
+        responseAttributions.any { it.webSearchUsed == true } -> true
+        requested != null -> false
+        any { it.webSearchUsed == true } -> true
+        else -> null // Historical false conflated not-requested and unverified requests.
     }
     return AnswerInformationDisclosure(
         styleLabel = (durableStyleLabels.ifEmpty { contextStyleLabels }).takeIf { it.isNotEmpty() }?.joinToString("、"),
         webSearchUsed = actualWebSearch,
+        webSearchRequested = requested,
         sources = sourceRows,
     )
 }

@@ -57,7 +57,7 @@ class ScheduledMonitorExecutor(
         val adapter = ChatProviderAdapters().adapter(providerId) ?: return fail("MODEL_UNAVAILABLE")
         val options = monitoringWebSearchOptions(providerId)
         // A recurring news monitor must never silently run as an offline model call. Every deep
-        // provider here owns its verified native route; DeepSeek stays on its own /responses.
+        // provider here owns its verified native route; DeepSeek stays on its own native Messages search route.
         if (!options.liveWebSearch) return fail("WEB_SEARCH_UNAVAILABLE")
         val executionProvider = adapter.executionProviderId(options)
         val config = configuration.execute(executionProvider) ?: return fail("SERVICE_DISABLED")
@@ -74,7 +74,7 @@ class ScheduledMonitorExecutor(
             options = options,
         ) as? ChatAdapterPrepareResult.Ready ?: return fail("REQUEST_UNSUPPORTED")
         val credential = credentials.loadCredential(executionProvider) ?: return fail("CREDENTIAL_MISSING")
-        val endpoint = "${config.provider.fixedEndpoint}${adapter.endpointPath(options)}"
+        val endpoint = adapter.endpoint(config.provider.fixedEndpoint, options)
         val outcome = try {
             transport.execute(
                 ProviderChatRequest(
@@ -103,6 +103,7 @@ class ScheduledMonitorExecutor(
             ProviderChatOutcome.ResponseTooLarge -> return fail("RESPONSE_TOO_LARGE")
             ProviderChatOutcome.Cancelled -> return fail("CANCELLED")
         }
+        if (!reply.webSearchPerformed && reply.webSources.isEmpty()) return fail("WEB_SEARCH_NO_SOURCES")
         val visibleReply = appendProviderWebSources(reply.text, reply.webSources)
         val completedAt = clock.instant()
         val updated = task.copy(
@@ -134,7 +135,7 @@ class ScheduledMonitorExecutor(
     private fun monitoringWebSearchOptions(providerId: ProviderId) = when (providerId) {
         ProviderId.OPENROUTER -> ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)
         ProviderId.QWEN -> ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
-        ProviderId.DEEPSEEK -> ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
+        ProviderId.DEEPSEEK -> ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_MESSAGES)
         ProviderId.ZHIPU -> ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)
         ProviderId.MOCK -> ChatRequestOptions.Standard
     }

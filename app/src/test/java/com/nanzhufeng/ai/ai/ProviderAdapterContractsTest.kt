@@ -10,17 +10,43 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
 
 class ProviderAdapterContractsTest {
+    @Test fun `DeepSeek Messages requires completed server search and preserves final answer sources and usage`() {
+        val adapter = DeepSeekChatAdapter()
+        val good = """{"stop_reason":"end_turn","content":[{"type":"text","text":"planning"},{"type":"server_tool_use","id":"search1","name":"web_search"},{"type":"web_search_tool_result","tool_use_id":"search1","content":[{"type":"web_search_result","title":"Official","url":"https://example.test/a"}]},{"type":"text","text":"answer"}],"usage":{"input_tokens":8,"output_tokens":5,"cache_read_input_tokens":2}}"""
+        val result = adapter.decodeNonStreaming(good) as ChatAdapterDecodedResult.Text
+        assertEquals("answer", result.text)
+        assertTrue(result.webSearchPerformed)
+        assertEquals(8L, result.inputTokens)
+        assertEquals(2L, result.cachedInputTokens)
+        assertEquals(listOf(ProviderWebSource("https://example.test/a", "Official")), result.webSources)
+        for (bad in listOf(good.replace("end_turn", "max_tokens"), good.replace("end_turn", "pause_turn"), good.replace("\"content\":[{\"type\":\"web_search_result\",\"title\":\"Official\",\"url\":\"https://example.test/a\"}]", "\"content\":{\"type\":\"web_search_tool_result_error\",\"error_code\":\"unavailable\"}"))) {
+            val failed = adapter.decodeNonStreaming(bad) as ChatAdapterDecodedResult.Text
+            assertFalse(failed.webSearchPerformed)
+            assertTrue(failed.webSources.isEmpty())
+        }
+    }
+
+    @Test fun `DeepSeek explicit search uses supported native Messages tool`() {
+        val adapter = DeepSeekChatAdapter()
+        val options = AutomaticWebSearchPolicy.requestOptions(com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, ChatRequestOptions.Standard, true, "搜索", emptyList())
+        val body = (adapter.prepare(model(), listOf("system" to "rules", "user" to "搜索"), emptyList(), false, options) as ChatAdapterPrepareResult.Ready).jsonBody
+        assertTrue(body.contains("web_search_20250305"))
+        assertTrue(body.contains("\"system\":\"rules\""))
+        assertTrue(body.contains("\"messages\":"))
+        assertFalse(body.contains("\"input\":"))
+    }
+
     @Test fun `Flash native images retain original bytes in chat and web search while Pro and PDF fail closed`() {
         val flash = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK,
             modelId = "deepseek-flash", capabilities = model().capabilities.copy(supportsVision = true))
         val image = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "chart.png", byteArrayOf(1, 2, 3))
-        for (route in listOf(OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.DEEPSEEK_RESPONSES)) {
+        for (route in listOf(OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.DEEPSEEK_MESSAGES)) {
             val ready = DeepSeekChatAdapter().prepare(flash, listOf("user" to "看图"), listOf(image), false, ChatRequestOptions(route)) as ChatAdapterPrepareResult.Ready
             val output = java.io.ByteArrayOutputStream()
             ready.body.writeTo(output)
             val body = output.toString(Charsets.UTF_8)
-            assertTrue(body.contains("data:image/png;base64,AQID"))
-            assertTrue(body.contains(if (route == OfficialWebSearchRoute.NONE) "\"type\":\"image_url\"" else "\"type\":\"input_image\""))
+            assertTrue(body.contains(if (route == OfficialWebSearchRoute.NONE) "data:image/png;base64,AQID" else "\"data\":\"AQID\""))
+            assertTrue(body.contains(if (route == OfficialWebSearchRoute.NONE) "\"type\":\"image_url\"" else "\"type\":\"image\""))
             assertEquals(ready.body.contentLength, output.size().toLong())
         }
         assertTrue(DeepSeekChatAdapter().prepare(flash.copy(modelId = "deepseek-v4-pro"), emptyList(), listOf(image), false) is ChatAdapterPrepareResult.AttachmentUnsupported)
@@ -480,16 +506,16 @@ class ProviderAdapterContractsTest {
         assertTrue(qwen38ChatSearch.jsonBody.contains("\"max_completion_tokens\":16384"))
 
         val deepSeek = DeepSeekChatAdapter()
-        val deepSeekOptions = ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES)
+        val deepSeekOptions = ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_MESSAGES)
         val deepSeekDirect = deepSeek.prepare(model(), listOf("user" to "复杂推理"), emptyList(), stream = false, options = deepSeekOptions) as ChatAdapterPrepareResult.Ready
-        assertEquals(OfficialWebSearchRoute.DEEPSEEK_RESPONSES, deepSeekOptions.webSearchRoute)
+        assertEquals(OfficialWebSearchRoute.DEEPSEEK_MESSAGES, deepSeekOptions.webSearchRoute)
         assertEquals(com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, deepSeek.executionProviderId(deepSeekOptions))
-        assertEquals("/responses", deepSeek.endpointPath(deepSeekOptions))
+        assertEquals("https://api.deepseek.com/anthropic/v1/messages", deepSeek.endpoint("https://api.deepseek.com/v1", deepSeekOptions))
         assertFalse(deepSeek.supportsStreaming(openRouter, deepSeekOptions))
-        assertTrue(deepSeekDirect.jsonBody.contains("\"tools\":[{\"type\":\"web_search\"}]"))
-        assertTrue(deepSeekDirect.jsonBody.contains("\"tool_choice\":{\"type\":\"web_search\"}"))
-        assertTrue(deepSeekDirect.jsonBody.contains("\"input\":[{\"role\":\"user\""))
-        assertFalse(deepSeekDirect.jsonBody.contains("\"messages\":"))
+        assertTrue(deepSeekDirect.jsonBody.contains("web_search_20250305"))
+        assertTrue(deepSeekDirect.jsonBody.contains("\"tool_choice\":{\"type\":\"tool\",\"name\":\"web_search\"}"))
+        assertTrue(deepSeekDirect.jsonBody.contains("\"messages\":[{\"role\":\"user\""))
+        assertFalse(deepSeekDirect.jsonBody.contains("\"input\":"))
 
         val zhipu = ZhipuChatAdapter()
         val zhipuOptions = ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)
@@ -528,16 +554,24 @@ class ProviderAdapterContractsTest {
         assertEquals(ChatRequestOptions.Standard, DeepSeekChatAdapter().requestOptions(model(), deepChoices.first()))
     }
 
+    @Test fun `failed or pending provider search does not prove actual use`() {
+        for (status in listOf("failed", "in_progress", "queued")) {
+            val reply = QwenChatAdapter().decodeNonStreaming("""{"output_text":"Answer mentions https://example.test","output":[{"type":"web_search_call","status":"$status"}]}""") as ChatAdapterDecodedResult.Text
+            assertFalse(reply.webSearchPerformed)
+            assertTrue(reply.webSources.isEmpty())
+        }
+    }
+
     @Test fun `answer network fact requires provider evidence even on the Responses route`() {
-        val plain = DeepSeekChatAdapter().decodeNonStreaming("""{"output_text":"普通回答"}""") as ChatAdapterDecodedResult.Text
-        val searched = DeepSeekChatAdapter().decodeNonStreaming("""{"output_text":"检索回答","output":[{"type":"web_search_call","action":{"type":"search"}}]}""") as ChatAdapterDecodedResult.Text
+        val plain = QwenChatAdapter().decodeNonStreaming("""{"output_text":"普通回答"}""") as ChatAdapterDecodedResult.Text
+        val searched = QwenChatAdapter().decodeNonStreaming("""{"output_text":"检索回答","output":[{"type":"web_search_call","action":{"type":"search"}}]}""") as ChatAdapterDecodedResult.Text
         assertFalse(plain.webSearchPerformed)
         assertTrue(searched.webSearchPerformed)
         assertTrue(searched.webSources.isEmpty())
     }
 
-    @Test fun `DeepSeek Responses result keeps final text and structured public search sources`() {
-        val decoded = DeepSeekChatAdapter().decodeNonStreaming(
+    @Test fun `Qwen Responses result keeps final text and structured public search sources`() {
+        val decoded = QwenChatAdapter().decodeNonStreaming(
             """{"output_text":"已完成检索。","output":[{"type":"web_search_call","action":{"sources":[{"url":"https://example.test/notice","title":"官方公告"}]}},{"type":"message","content":[{"type":"output_text","text":"已完成检索。"}]}],"usage":{"input_tokens":8,"input_tokens_details":{"cached_tokens":3},"output_tokens":5}}""",
         ) as? ChatAdapterDecodedResult.Text
 
@@ -548,24 +582,24 @@ class ProviderAdapterContractsTest {
         assertEquals(listOf(ProviderWebSource("https://example.test/notice", "官方公告")), decoded?.webSources)
     }
 
-    @Test fun `DeepSeek Responses keeps a completed server search without inventing public URLs`() {
-        val decoded = DeepSeekChatAdapter().decodeNonStreaming(
+    @Test fun `Qwen Responses keeps a completed server search without inventing public URLs`() {
+        val decoded = QwenChatAdapter().decodeNonStreaming(
             """{"output":[{"type":"web_search_call","action":{"type":"search","query":"最新汇率"}},{"type":"message","content":[{"type":"output_text","text":"南烛枫，美元汇率请以银行实时报价为准。"}]}],"usage":{"input_tokens":8,"output_tokens":5}}""",
         ) as? ChatAdapterDecodedResult.Text
 
         assertEquals("南烛枫，美元汇率请以银行实时报价为准。", decoded?.text)
         assertTrue(decoded?.webSources.isNullOrEmpty())
         assertEquals(
-            "WEB_SEARCH_COMPLETED_WITHOUT_SOURCES",
+            "WEB_SEARCH_NO_SOURCES",
             WebSearchGroundingPolicy.completedAuditStatus(
-                ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_RESPONSES),
+                ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_MESSAGES),
                 decoded?.webSources.orEmpty(), streamed = false,
             ),
         )
     }
 
     @Test fun `Responses reasoning is retained separately and never concatenated into final reply`() {
-        val decoded = DeepSeekChatAdapter().decodeNonStreaming(
+        val decoded = QwenChatAdapter().decodeNonStreaming(
             """{"output":[{"type":"reasoning","content":[{"type":"reasoning_text","text":"Let me search the latest index data first."}]},{"type":"message","content":[{"type":"output_text","text":"南烛枫，结论如下。"}]}],"usage":{"input_tokens":8,"output_tokens":5}}""",
         ) as? ChatAdapterDecodedResult.Text
 

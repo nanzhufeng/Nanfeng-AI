@@ -24,6 +24,7 @@ interface ChatProviderAdapter {
     /** A hosted model may have a different explicit request receiver from its brand/provider. */
     fun executionProviderId(options: ChatRequestOptions): ProviderId = providerId
     fun endpointPath(options: ChatRequestOptions): String = "/chat/completions"
+    fun endpoint(base: String, options: ChatRequestOptions): String = base.trimEnd('/') + endpointPath(options)
     fun supportsStreaming(model: ResolvedModel, options: ChatRequestOptions): Boolean = model.capabilities.supportsStreaming
     fun prepare(
         model: ResolvedModel,
@@ -82,7 +83,7 @@ enum class OfficialWebSearchRoute {
     OPENROUTER_SERVER_TOOL,
     QWEN_CHAT_COMPLETIONS,
     QWEN_RESPONSES,
-    DEEPSEEK_RESPONSES,
+    DEEPSEEK_MESSAGES,
     ZHIPU_CHAT_COMPLETIONS,
 }
 
@@ -493,13 +494,15 @@ class DeepSeekChatAdapter : OpenAiCompatibleChatAdapter() {
     override val providerId = ProviderId.DEEPSEEK
 
     override fun endpointPath(options: ChatRequestOptions): String =
-        if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_RESPONSES) "/responses" else super.endpointPath(options)
+        if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_MESSAGES) "/anthropic/v1/messages" else super.endpointPath(options)
 
-    // DeepSeek's Responses stream uses semantic SSE event names rather than the OpenAI Chat
-    // Completions chunks consumed by this transport. Keep this call non-streaming until that
-    // separate protocol is implemented, while retaining server-side search and its final result.
+    override fun endpoint(base: String, options: ChatRequestOptions): String =
+        if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_MESSAGES) base.trimEnd('/').removeSuffix("/v1") + endpointPath(options)
+        else super.endpoint(base, options)
+
+    // Native server search uses the Messages envelope and one buffered terminal response.
     override fun supportsStreaming(model: ResolvedModel, options: ChatRequestOptions): Boolean =
-        if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_RESPONSES) false else super.supportsStreaming(model, options)
+        if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_MESSAGES) false else super.supportsStreaming(model, options)
 
     override fun prepare(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): ChatAdapterPrepareResult {
         val inlineTextFiles = inlineUtf8TextFiles(attachments) ?: return ChatAdapterPrepareResult.AttachmentUnsupported
@@ -517,13 +520,13 @@ class DeepSeekChatAdapter : OpenAiCompatibleChatAdapter() {
             return ChatAdapterPrepareResult.Ready("<streamed-deepseek-chat-body>", body)
         }
         val effectiveMessages = if (inlineTextFiles.isBlank()) messages else messages + ("user" to inlineTextFiles)
-        return if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_RESPONSES) {
-            ChatAdapterPrepareResult.Ready(deepSeekResponsesWebSearchBody(model, effectiveMessages))
+        return if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_MESSAGES) {
+            ChatAdapterPrepareResult.Ready(deepSeekMessagesWebSearchBody(model, effectiveMessages))
         } else ChatAdapterPrepareResult.Ready(textOnlyBody(model, effectiveMessages, stream, options))
     }
     override fun decodeStreamingEvent(body: String) = decodeOpenAiCompatibleStreamingEvent(body)
     override fun decodeNonStreaming(body: String): ChatAdapterDecodedResult =
-        ResponsesWebSearchJsonCodec.decode(body) ?: super.decodeNonStreaming(body)
+        DeepSeekMessagesJsonCodec.decode(body) ?: super.decodeNonStreaming(body)
 }
 
 /**
@@ -567,7 +570,7 @@ private fun StringBuilder.appendRequestOptions(options: ChatRequestOptions, stre
         OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL -> append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"max_results\":5,\"max_total_results\":10}}]")
         OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS -> append(",\"enable_search\":true,\"search_options\":{\"forced_search\":true}")
         OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS -> append(",\"tools\":[{\"type\":\"web_search\",\"web_search\":{\"enable\":true,\"search_engine\":\"search_std\",\"search_result\":true,\"count\":5,\"content_size\":\"medium\"}}],\"tool_choice\":\"auto\"")
-        OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.QWEN_RESPONSES, OfficialWebSearchRoute.DEEPSEEK_RESPONSES -> Unit
+        OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.QWEN_RESPONSES, OfficialWebSearchRoute.DEEPSEEK_MESSAGES -> Unit
     }
     options.reasoningEffort?.let { append(",\"reasoning\":{\"effort\":\"").append(it.wireValue).append("\"}") }
     append(",\"stream\":").append(stream)
@@ -579,7 +582,7 @@ private fun requestOptionsSuffix(options: ChatRequestOptions, stream: Boolean): 
         OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL -> append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"max_results\":5,\"max_total_results\":10}}]")
         OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS -> append(",\"enable_search\":true,\"search_options\":{\"forced_search\":true}")
         OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS -> append(",\"tools\":[{\"type\":\"web_search\",\"web_search\":{\"enable\":true,\"search_engine\":\"search_std\",\"search_result\":true,\"count\":5,\"content_size\":\"medium\"}}],\"tool_choice\":\"auto\"")
-        OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.QWEN_RESPONSES, OfficialWebSearchRoute.DEEPSEEK_RESPONSES -> Unit
+        OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.QWEN_RESPONSES, OfficialWebSearchRoute.DEEPSEEK_MESSAGES -> Unit
     }
     options.reasoningEffort?.let { append(",\"reasoning\":{\"effort\":\"").append(it.wireValue).append("\"}") }
     append(",\"stream\":").append(stream)
@@ -728,44 +731,66 @@ private fun qwen38RequestOutputLimit(model: ResolvedModel): Long =
     (model.maxOutputTokens ?: QWEN_3_8_MAX_REQUEST_OUTPUT_TOKENS)
         .coerceAtMost(QWEN_3_8_MAX_REQUEST_OUTPUT_TOKENS)
 
-/** DeepSeek V4's native Responses web_search is server-executed and must be forced for an
- * explicit real-time request. This is intentionally a DeepSeek /responses request, never a
- * relay of DeepSeek's model ID through another provider. */
-/** The two official image envelopes share streamed original bytes; PDFs/video remain unsupported. */
-private fun deepSeekImageBody(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, inlineTextFiles: String, stream: Boolean, options: ChatRequestOptions): ProviderChatRequestBody {
-    if (options.webSearchRoute != OfficialWebSearchRoute.DEEPSEEK_RESPONSES) {
-        return inlineMultimodalChatBody(model, messages, attachments, inlineTextFiles, stream, options)
+/** DeepSeek Responses ignores web_search. Native server search is Messages-only. */
+private fun deepSeekMessagesWebSearchBody(model: ResolvedModel, messages: List<Pair<String, String>>): String = buildString {
+    append("{\"model\":\"").append(model.modelId.escapeJson()).append("\",\"system\":\"")
+    append(messages.filter { it.first == "system" }.joinToString("\n") { it.second }.escapeJson())
+    append("\",\"messages\":[")
+    messages.filter { it.first != "system" }.forEachIndexed { index, (role, content) ->
+        if (index > 0) append(',')
+        append("{\"role\":\"").append(role.escapeJson()).append("\",\"content\":\"").append(content.escapeJson()).append("\"}")
     }
+    append("],\"max_tokens\":").append(model.maxOutputTokens ?: 16384)
+    append(",\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\",\"max_uses\":5}],\"tool_choice\":{\"type\":\"tool\",\"name\":\"web_search\"},\"stream\":false}")
+}
+
+private fun deepSeekImageBody(model: ResolvedModel, messages: List<Pair<String, String>>, attachments: List<ChatAttachment>, inlineTextFiles: String, stream: Boolean, options: ChatRequestOptions): ProviderChatRequestBody {
+    if (options.webSearchRoute != OfficialWebSearchRoute.DEEPSEEK_MESSAGES) return inlineMultimodalChatBody(model, messages, attachments, inlineTextFiles, stream, options)
+    val base = deepSeekMessagesWebSearchBody(model, messages)
     val parts = mutableListOf<ProviderChatRequestBody.Part>()
     fun text(value: String) { parts += ProviderChatRequestBody.Part.Utf8(value) }
-    text("{\"model\":\"${model.modelId.escapeJson()}\",\"input\":[")
-    messages.forEachIndexed { index, (role, content) ->
-        if (index > 0) text(",")
-        text("{\"role\":\"${role.escapeJson()}\",\"content\":[{\"type\":\"input_text\",\"text\":\"${content.escapeJson()}\"}]}")
-    }
-    if (messages.isNotEmpty()) text(",")
-    text("{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"${(attachmentReferenceInstruction(attachments) + inlineTextFiles).escapeJson()}\"}")
+    val split = base.indexOf("],\"max_tokens\":")
+    text(base.substring(0, split))
+    if (messages.any { it.first != "system" }) text(",")
+    text("{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${(attachmentReferenceInstruction(attachments) + inlineTextFiles).escapeJson()}\"}")
     attachments.filter { it.kind == ChatAttachmentKind.IMAGE }.forEach {
-        text(",{\"type\":\"input_image\",\"image_url\":\"data:${it.mimeType};base64,")
+        text(",{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"${it.mimeType}\",\"data\":\"")
         parts += ProviderChatRequestBody.Part.Base64File(it.byteCount, it::open)
-        text("\"}")
+        text("\"}}")
     }
-    text("]}],\"tools\":[{\"type\":\"web_search\"}],\"tool_choice\":{\"type\":\"web_search\"},\"stream\":false")
-    model.maxOutputTokens?.let { text(",\"max_output_tokens\":$it") }
-    text("}")
+    text("]}" + base.substring(split))
     return ProviderChatRequestBody.Segmented(parts)
 }
 
-private fun deepSeekResponsesWebSearchBody(model: ResolvedModel, messages: List<Pair<String, String>>): String = buildString {
-    append("{\"model\":\"").append(model.modelId.escapeJson()).append("\",\"input\":[")
-    messages.forEachIndexed { index, (role, content) ->
-        if (index > 0) append(',')
-        append("{\"role\":\"").append(role.escapeJson()).append("\",\"content\":[{\"type\":\"input_text\",\"text\":\"")
-        append(content.escapeJson()).append("\"}]}")
+private object DeepSeekMessagesJsonCodec {
+    @Suppress("UNCHECKED_CAST") private fun Any?.objectValue(): Map<String, Any?>? = this as? Map<String, Any?>
+    private fun Map<String, Any?>.objectValue(key: String): Map<String, Any?>? = this[key].objectValue()
+    @Suppress("UNCHECKED_CAST") private fun Map<String, Any?>.arrayValue(key: String): List<Any?>? = this[key] as? List<Any?>
+    private fun Map<String, Any?>.stringValue(key: String): String? = this[key] as? String
+    private fun Map<String, Any?>.long(vararg keys: String): Long? = keys.firstNotNullOfOrNull { key ->
+        when (val value = this[key]) {
+            is java.math.BigDecimal -> runCatching { value.longValueExact() }.getOrNull()
+            is Number -> value.toLong()
+            else -> null
+        }
     }
-    append("],\"tools\":[{\"type\":\"web_search\"}],\"tool_choice\":{\"type\":\"web_search\"},\"stream\":false")
-    model.maxOutputTokens?.let { append(",\"max_output_tokens\":").append(it) }
-    append('}')
+
+    fun decode(raw: String): ChatAdapterDecodedResult? = runCatching {
+        val root = StrictJson.parse(raw).objectValue() ?: return null
+        val blocks = root.arrayValue("content")?.mapNotNull { it.objectValue() } ?: return null
+        val results = blocks.filter { it.stringValue("type") == "web_search_tool_result" }
+        val succeeded = results.isNotEmpty() && results.all { it.arrayValue("content") != null }
+        val lastResult = blocks.indexOfLast { it.stringValue("type") == "web_search_tool_result" }
+        val text = blocks.drop(lastResult + 1).filter { it.stringValue("type") == "text" }.mapNotNull { it.stringValue("text") }.joinToString("\n").cleanChatReply()
+            ?: return ChatAdapterDecodedResult.EmptyOrMalformed
+        val usage = root.objectValue("usage")
+        ChatAdapterDecodedResult.Text(text = text,
+            inputTokens = usage?.long("input_tokens"), outputTokens = usage?.long("output_tokens"),
+            cachedInputTokens = usage?.long("cache_read_input_tokens"),
+            webSearchPerformed = succeeded && root.stringValue("stop_reason") == "end_turn",
+            webSources = if (succeeded && root.stringValue("stop_reason") == "end_turn") results.flatMap { it.arrayValue("content").orEmpty() }.mapNotNull { it.objectValue() }.filter { it.stringValue("type") == "web_search_result" }.mapNotNull { ProviderWebSource.fromProvider(it.stringValue("url"), it.stringValue("title")) }.distinctBy { it.url } else emptyList(),
+        )
+    }.getOrNull()
 }
 
 /** Minimal provider-specific Responses projection; never reuses an OpenAI Chat Completions codec. */
@@ -811,7 +836,7 @@ private object ResponsesWebSearchJsonCodec {
                 } }
                 .distinctBy(ProviderWebSource::url)
                 .toList(),
-            webSearchPerformed = outputItems.any { it.stringValue("type") == "web_search_call" },
+            webSearchPerformed = outputItems.any { it.stringValue("type") == "web_search_call" && it.stringValue("status") in setOf(null, "completed") },
             cachedInputTokens = usage?.objectValue("input_tokens_details")?.long("cached_tokens")
                 ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens"),
             reasoningTokens = usage?.reasoningTokens(),
@@ -872,6 +897,8 @@ private object ResponsesSseJsonCodec {
                 ?: usage?.objectValue("prompt_tokens_details")?.long("cached_tokens"),
             reasoningTokens = usage?.reasoningTokens(),
             webSources = response.webSources(),
+            webSearchPerformed = terminal == ProviderStreamTerminal.COMPLETED && response.arrayValue("output").orEmpty()
+                .mapNotNull { it.objectValue() }.any { it.stringValue("type") == "web_search_call" && it.stringValue("status") in setOf(null, "completed") },
             terminal = terminal,
         )
     }

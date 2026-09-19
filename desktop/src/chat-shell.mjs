@@ -539,8 +539,8 @@ function ordinaryChatFailureCopy(code) {
     CREDENTIAL_DENIED: '本次无法读取服务商 API Key；请在模型设置中重新保存后重试。',
     CREDENTIAL_MISSING: '尚未保存该服务商密钥，请在模型设置中保存。',
     CREDENTIAL_UNAVAILABLE: '应用私有凭据不可用；请在模型设置中重新保存 API Key 后重试。',
-    WEB_SEARCH_NO_SOURCES: '旧版因缺少联网来源将本次回答标为失败，已有正文已保留；如需重做，请重新生成。',
-    WEB_SEARCH_NO_VERIFIED_SOURCES: '旧版因缺少联网来源将本次回答标为失败，已有正文已保留；如需重做，请重新生成。',
+    WEB_SEARCH_NO_SOURCES: '联网搜索未完成，本次回答未标为成功。请重试联网搜索。',
+    WEB_SEARCH_NO_VERIFIED_SOURCES: '联网搜索未完成，本次回答未标为成功。请重试联网搜索。',
   })[String(code || '')] || '本次没有形成完整回答。请检查模型与网络设置后显式重试。';
 }
 
@@ -620,7 +620,7 @@ function messageList(conversation, options = {}) {
         const continuingFromSavedText = Boolean(message.continuationOf);
         const hasPreservedText = textBlocks.some(block => String(block.text || '').trim());
         const missingSearchEvidence = ['WEB_SEARCH_NO_SOURCES', 'WEB_SEARCH_NO_VERIFIED_SOURCES'].includes(String(runtimeSafeErrorCode));
-        const failureTitle = missingSearchEvidence ? '联网来源未核验' : '回答未完成';
+        const failureTitle = missingSearchEvidence ? '联网搜索未完成' : '回答未完成';
         const recoveryActionLabel = hasPreservedText && !missingSearchEvidence ? '从断点继续' : '重新生成';
         const compareExecutionId = typeof message.compareExecutionId === 'string' ? message.compareExecutionId : '';
         const compareLogicalModel = message.compareLogicalModel === 'CHATGPT' ? 'ChatGPT' : message.compareLogicalModel === 'CLAUDE' ? 'Claude' : '';
@@ -650,6 +650,11 @@ function messageList(conversation, options = {}) {
           metadataPrimary && cost ? '<span class="chat-message-metadata-separator chat-message-metadata-cost-separator" aria-hidden="true"> · </span>' : '',
           cost ? `<span class="chat-message-metadata-cost">${escapeHtml(cost)}</span>` : '',
         ].filter(Boolean).join('');
+        const messageActions = interactive && payload ? `<div class="chat-message-actions"><button class="chat-message-action-icon" data-action="copy-message" data-copy-action data-message-id="${escapeHtml(message.id)}" aria-label="复制消息" title="复制消息">${icon(icons.copy, '复制')}</button>${role !== 'user' ? `<button class="chat-message-action-icon" data-action="share-message" data-message-id="${escapeHtml(message.id)}" aria-label="分享" title="分享">${icon(icons.share, '分享')}</button>` : ''}${isAssistant ? `<button class="chat-message-action-icon chat-message-action-more" data-action="open-assistant-message-menu" data-message-id="${escapeHtml(message.id)}" aria-label="更多操作" title="更多操作">${icon(icons.more, '更多操作')}</button>` : ''}</div>` : '';
+        const messageMetadata = metadataFacts ? `<p class="chat-message-metadata">${metadataFacts}</p>` : '';
+        const messageTools = role === 'user'
+          ? messageMetadata + messageActions
+          : messageActions + messageMetadata;
         return `
         ${dateKey !== previousDateKey ? `<div class="chat-date-divider" role="separator">${escapeHtml(dateKey)}</div>` : ''}
         <article class="chat-message ${escapeHtml(role)}${matchesFind ? ' find-match' : ''}${activeFindMessageId === message.id ? ' find-active' : ''}" data-message-id="${escapeHtml(message.id)}" data-message-index="${index}" tabindex="0">
@@ -660,7 +665,7 @@ function messageList(conversation, options = {}) {
             ${reasoningBlocks.length ? `<details class="chat-reasoning"><summary>思考过程</summary><div class="chat-markdown-body">${reasoningBlocks.map(block => renderSafeMarkdown(block.text || '', { query: findQuery })).join('')}</div></details>` : ''}
             ${textBlocks.length ? `<div class="chat-message-bubble"><div class="chat-message-body ${isAssistant ? 'chat-markdown-body' : ''}">${textBlocks.map(block => isAssistant ? renderSafeMarkdown(block.text || '', { query: findQuery }) : `<p>${highlightedText(block.text || '', findQuery)}</p>`).join('')}</div></div>` : ''}
             ${runtimeStatus}
-            ${(metadataFacts || (interactive && payload)) ? `<div class="chat-message-tools">${interactive && payload ? `<div class="chat-message-actions"><button class="chat-message-action-icon" data-action="copy-message" data-copy-action data-message-id="${escapeHtml(message.id)}" aria-label="复制消息" title="复制消息">${icon(icons.copy, '复制')}</button><button class="chat-message-action-icon" data-action="share-message" data-message-id="${escapeHtml(message.id)}" aria-label="分享" title="分享">${icon(icons.share, '分享')}</button>${isAssistant ? `<button class="chat-message-action-icon chat-message-action-more" data-action="open-assistant-message-menu" data-message-id="${escapeHtml(message.id)}" aria-label="更多操作" title="更多操作">${icon(icons.more, '更多操作')}</button>` : ''}</div>` : ''}<p class="chat-message-metadata">${metadataFacts}</p></div>` : ''}
+            ${messageTools ? `<div class="chat-message-tools">${messageTools}</div>` : ''}
             ${reminderSuggestion}
           </div>
         </article>

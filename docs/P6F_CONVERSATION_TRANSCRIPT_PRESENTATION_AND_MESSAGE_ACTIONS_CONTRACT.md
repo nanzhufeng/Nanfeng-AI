@@ -162,7 +162,7 @@ P6-F 在 P6-E 后、P6-F2 与 Model Selection / Auto Router 前。固定后续�
 
 ## Message Actions 与隔离
 
-- AI 至少支持真实的复制、系统分享、从此处创建分支；USER 至少支持复制、真实编辑/重试（仅既有 owner 支持时）、从此处分支。操作必须使用成熟图标库的图标按钮，Desktop 提供 tooltip，Android 提供 contentDescription/长按说明；禁止文本按钮、Emoji 或手绘 SVG。Desktop DOM、视觉和 Tab 顺序一律为复制→分享→分支（按角色/既有语义裁剪）→真实时间→实际模型；不得使用 CSS `order` 让语义顺序与视觉顺序分离。Android action sheet 以动作在前、真实时间/模型详情在后。
+- AI 至少支持真实的复制、系统分享、从此处创建分支；USER 至少支持复制、真实编辑/重试（仅既有 owner 支持时）、从此处分支。操作必须使用成熟图标库的图标按钮，Desktop 提供 tooltip，Android 提供 contentDescription/长按说明；禁止文本按钮、Emoji 或手绘 SVG。Desktop 用户消息底栏仅显示真实时间→复制，移除分享按钮；AI 消息底栏保持复制→分享→分支（按既有语义裁剪）→真实时间→实际模型。DOM、视觉和 Tab 顺序保持一致；不得使用 CSS `order` 让语义顺序与视觉顺序分离。Android 消息长按菜单仅保留复制、选择文本，以及可编辑用户消息的编辑入口；移除分享和跨区文字引用，真实时间／模型仍为菜单头部信息。
 - 复制成功反馈使用短暂绿色勾号，并必须直接显示在对应复制按钮左侧、与按钮共享同一操作或定位 owner；不得进入正文普通文档流、掉到内容框左下角，或为了显示反馈推动消息正文和附件布局。
 - 分支必须由选中 Message Tree node 建立新的 Conversation/branch，保留前缀 lineage/provenance；typed intent + revision + idempotency，重启回读，不复制伪文本或隐藏字段。
 - copy 输出 plain text；rich/Markdown 是明确次级选项。不得复制 Key、path、URI 或隐藏 metadata。

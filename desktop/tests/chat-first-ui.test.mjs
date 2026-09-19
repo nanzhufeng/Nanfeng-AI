@@ -1130,7 +1130,7 @@ test('historical missing search evidence explains the failure and never offers c
     { id: 'answer', role: 'assistant', delivery:'FAILED', safeErrorCode:'WEB_SEARCH_NO_SOURCES', attemptId:'attempt', blocks:[{kind:'TEXT',text:'原回答正文保留'}] }
   ] }] } }, native: true, selectedConversationId:'missing-sources', composerDraft:'', chatSearch:'', profileOpen:false, sidebarOpen:false, pane:'chat', status:'', error:'', connection:{} });
   assert.match(rendered, /原回答正文保留/);
-  assert.match(rendered, /联网来源未核验/);
+  assert.match(rendered, /联网搜索未完成/);
   assert.match(rendered, /重新生成/);
   assert.doesNotMatch(rendered, /从断点继续|回答未完成|请检查模型与网络设置/);
 });

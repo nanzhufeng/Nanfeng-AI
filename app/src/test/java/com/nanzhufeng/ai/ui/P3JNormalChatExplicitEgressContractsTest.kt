@@ -118,7 +118,7 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertTrue(executor.contains("当前本机日期为 \$date"))
         assertTrue(executor.contains("OpenRouter 官方实时网页检索"))
         assertTrue(executor.contains("千问官方 Responses 实时网页检索"))
-        assertTrue(executor.contains("DeepSeek 官方 Responses 实时网页检索"))
+        assertTrue(executor.contains("DeepSeek 官方 Messages 实时网页检索"))
         assertTrue(executor.contains("不得把训练数据截止时间说成当前日期"))
         assertTrue(executor.contains("webSearchRoute=\${options.webSearchRoute.name}"))
         assertTrue(executor.contains("recordResponseFormatDiagnostic"))

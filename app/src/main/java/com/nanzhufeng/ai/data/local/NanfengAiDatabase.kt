@@ -676,6 +676,7 @@ data class AssistantResponseModelAttributionEntity(
     val costCurrencyCode: String?,
     val costTotalMicros: Long?,
     val costSource: String?,
+    val webSearchRequested: Boolean? = null,
 )
 
 /** Cross-device answer facts without local Provider route or attempt identity. */
@@ -2763,7 +2764,7 @@ interface AssistantResponseModelAttributionDao {
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun find(assistantMessageId: String, attemptId: String): AssistantResponseModelAttributionEntity?
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId IN (:assistantMessageIds) ORDER BY recordedAtEpochMs ASC, attemptId ASC") fun forMessages(assistantMessageIds: List<String>): List<AssistantResponseModelAttributionEntity>
     @Query("SELECT * FROM assistant_response_model_attributions WHERE inputTokens IS NOT NULL OR outputTokens IS NOT NULL OR costTotalMicros IS NOT NULL ORDER BY recordedAtEpochMs DESC, attemptId DESC") fun listCostedNewestFirst(): List<AssistantResponseModelAttributionEntity>
-    @Query("UPDATE assistant_response_model_attributions SET conversationStyleId=COALESCE(conversationStyleId,:conversationStyleId), webSearchUsed=COALESCE(webSearchUsed,:webSearchUsed), inputTokens=COALESCE(inputTokens,:inputTokens), outputTokens=COALESCE(outputTokens,:outputTokens), totalTokens=COALESCE(totalTokens,:totalTokens), cachedInputTokens=COALESCE(cachedInputTokens,:cachedInputTokens), reasoningTokens=COALESCE(reasoningTokens,:reasoningTokens), costPriceVersion=COALESCE(costPriceVersion,:costPriceVersion), costCurrencyCode=COALESCE(costCurrencyCode,:costCurrencyCode), costTotalMicros=COALESCE(costTotalMicros,:costTotalMicros), costSource=COALESCE(costSource,:costSource) WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichCompletedFacts(assistantMessageId: String, attemptId: String, conversationStyleId: String?, webSearchUsed: Boolean?, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, reasoningTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?): Int
+    @Query("UPDATE assistant_response_model_attributions SET conversationStyleId=COALESCE(conversationStyleId,:conversationStyleId), webSearchUsed=COALESCE(webSearchUsed,:webSearchUsed), webSearchRequested=COALESCE(webSearchRequested,:webSearchRequested), inputTokens=COALESCE(inputTokens,:inputTokens), outputTokens=COALESCE(outputTokens,:outputTokens), totalTokens=COALESCE(totalTokens,:totalTokens), cachedInputTokens=COALESCE(cachedInputTokens,:cachedInputTokens), reasoningTokens=COALESCE(reasoningTokens,:reasoningTokens), costPriceVersion=COALESCE(costPriceVersion,:costPriceVersion), costCurrencyCode=COALESCE(costCurrencyCode,:costCurrencyCode), costTotalMicros=COALESCE(costTotalMicros,:costTotalMicros), costSource=COALESCE(costSource,:costSource) WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichCompletedFacts(assistantMessageId: String, attemptId: String, conversationStyleId: String?, webSearchUsed: Boolean?, webSearchRequested: Boolean?, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, reasoningTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?): Int
 }
 
 @Dao
@@ -2916,7 +2917,7 @@ interface ResumableAttachmentUploadDao {
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
     ],
-    version = 69,
+    version = 70,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -3661,6 +3662,12 @@ abstract class NanfengAiDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `cloud_response_model_usages` (`conversationId` TEXT NOT NULL, `assistantMessageId` TEXT NOT NULL, `modelId` TEXT NOT NULL, `modelDisplayName` TEXT NOT NULL, `inputTokens` INTEGER, `outputTokens` INTEGER, `totalTokens` INTEGER, `cachedInputTokens` INTEGER, `reasoningTokens` INTEGER, `costPriceVersion` TEXT, `costCurrencyCode` TEXT, `costTotalMicros` INTEGER, `costSource` TEXT, PRIMARY KEY(`conversationId`, `assistantMessageId`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_cloud_response_model_usages_assistantMessageId` ON `cloud_response_model_usages` (`assistantMessageId`)")
+            }
+        }
+        /** Never backfill ambiguous legacy false values from current settings. */
+        val MIGRATION_69_70 = object : Migration(69, 70) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `webSearchRequested` INTEGER")
             }
         }
         val MIGRATION_68_69 = object : Migration(68, 69) {

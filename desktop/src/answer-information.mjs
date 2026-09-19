@@ -21,7 +21,8 @@ export function answerInformation(record) {
   return {
     styleLabel: styles.join('、') || '未记录（旧回答）',
     networkLabel: record?.webSearchVerified === true ? '已实际使用'
-      : record?.webSearchVerified === false ? (record?.webSearchRequested ? '已请求，未返回联网依据' : '本次未使用') : '未记录（旧回答）',
+      : record?.webSearchRequested === true ? '联网未完成'
+      : record?.webSearchRequested === false && record?.webSearchVerified === false ? '本次未使用' : '无法确认（旧记录）',
     networkUsed: record?.webSearchVerified === true,
     sources: [...grouped].map(([label, titles]) => ({label, titles})),
   };

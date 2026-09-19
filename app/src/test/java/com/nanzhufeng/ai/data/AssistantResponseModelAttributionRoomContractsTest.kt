@@ -50,6 +50,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
         store.record(initial.copy(
             conversationStyle = ConversationStyle.DIRECT,
             webSearchUsed = true,
+            webSearchRequested = true,
             usage = ProviderUsage(inputTokens = 12, outputTokens = 4, totalTokens = 16),
             cost = ProviderCost("provider-response", "USD", 42L),
             costSource = ConversationCostSource.PROVIDER_RESPONSE,
@@ -58,6 +59,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
         val restored = store.forMessages(listOf(initial.assistantMessageId)).getValue(initial.assistantMessageId).single()
         assertEquals(ConversationStyle.DIRECT, restored.conversationStyle)
         assertEquals(true, restored.webSearchUsed)
+        assertEquals(true, restored.webSearchRequested)
         assertEquals(16L, restored.usage.totalTokens)
         assertEquals(42L, restored.cost.totalMicros)
         database.close(); context.deleteDatabase(name)
@@ -78,6 +80,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
             modelDisplayName = "GPT-5.6",
             conversationStyle = ConversationStyle.DIRECT,
             webSearchUsed = true,
+            webSearchRequested = true,
             recordedAt = Instant.EPOCH,
         )
         store.record(recorded)
@@ -128,6 +131,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
             recordedAt = Instant.EPOCH,
             conversationStyle = ConversationStyle.DIRECT,
             webSearchUsed = true,
+            webSearchRequested = true,
             usage = ProviderUsage(inputTokens = 12, outputTokens = 4, reasoningTokens = 2),
             cost = ProviderCost("openrouter-provider-response", "USD", 5_210L),
             costSource = ConversationCostSource.PROVIDER_RESPONSE,
@@ -145,7 +149,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
                 while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
             }
         }
-        assertEquals(setOf("assistantMessageId", "attemptId", "providerId", "receiverProviderId", "modelId", "modelDisplayName", "conversationStyleId", "webSearchUsed", "recordedAtEpochMs", "inputTokens", "outputTokens", "totalTokens", "cachedInputTokens", "reasoningTokens", "costPriceVersion", "costCurrencyCode", "costTotalMicros", "costSource"), columns)
+        assertEquals(setOf("assistantMessageId", "attemptId", "providerId", "receiverProviderId", "modelId", "modelDisplayName", "conversationStyleId", "webSearchUsed", "webSearchRequested", "recordedAtEpochMs", "inputTokens", "outputTokens", "totalTokens", "cachedInputTokens", "reasoningTokens", "costPriceVersion", "costCurrencyCode", "costTotalMicros", "costSource"), columns)
         val indexNames = reopened.openHelper.writableDatabase.query("PRAGMA index_list(assistant_response_model_attributions)").use { cursor ->
             buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
         }
@@ -236,6 +240,48 @@ class AssistantResponseModelAttributionRoomContractsTest {
         } finally {
             helper.close(); context.deleteDatabase(name)
         }
+    }
+
+    @Test fun `requested without evidence survives reopen and cannot be overwritten as disabled`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "network-request-reopen-${UUID.randomUUID()}.db"
+        val fact = AssistantResponseModelAttribution(
+            MessageNodeId("network-answer"), NormalChatSendAttemptId("network-attempt"),
+            ProviderId.DEEPSEEK, ProviderId.DEEPSEEK, "deepseek-flash", "DeepSeek", Instant.EPOCH,
+            webSearchUsed = false, webSearchRequested = true,
+        )
+        open(context, name).let { db -> RoomAssistantResponseModelAttributionStore(db).record(fact); db.close() }
+        val reopened = open(context, name)
+        try {
+            val store = RoomAssistantResponseModelAttributionStore(reopened)
+            val restored = store.forMessages(listOf(fact.assistantMessageId)).getValue(fact.assistantMessageId).single()
+            assertEquals(true, restored.webSearchRequested)
+            assertEquals(false, restored.webSearchUsed)
+            assertTrue(runCatching { store.record(fact.copy(webSearchRequested = false)) }.exceptionOrNull() is IllegalArgumentException)
+        } finally { reopened.close(); context.deleteDatabase(name) }
+    }
+
+    @Test fun `schema seventy preserves old false as unknown request evidence`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "network-request-migration-${UUID.randomUUID()}.db"
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object : SupportSQLiteOpenHelper.Callback(69) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE TABLE assistant_response_model_attributions (assistantMessageId TEXT NOT NULL PRIMARY KEY, webSearchUsed INTEGER, costTotalMicros INTEGER)")
+                    db.execSQL("INSERT INTO assistant_response_model_attributions VALUES ('legacy-false',0,123),('legacy-true',1,456)")
+                }
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            }).build(),
+        )
+        try {
+            val db = helper.writableDatabase
+            NanfengAiDatabase.MIGRATION_69_70.migrate(db)
+            db.query("SELECT webSearchUsed,webSearchRequested,costTotalMicros FROM assistant_response_model_attributions ORDER BY assistantMessageId").use { rows ->
+                assertTrue(rows.moveToFirst()); assertEquals(0, rows.getInt(0)); assertTrue(rows.isNull(1)); assertEquals(123, rows.getInt(2))
+                assertTrue(rows.moveToNext()); assertEquals(1, rows.getInt(0)); assertTrue(rows.isNull(1)); assertEquals(456, rows.getInt(2))
+                assertEquals(2, rows.count)
+            }
+        } finally { helper.close(); context.deleteDatabase(name) }
     }
 
     private fun open(context: Context, name: String) =

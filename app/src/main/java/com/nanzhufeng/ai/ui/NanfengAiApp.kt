@@ -3316,7 +3316,7 @@ private fun ConversationFoundationCard(
         interceptsSystemBack = onReturnToLifecycleList != null,
         searchDismissesToParent = searchDismissesToParent,
         onCreate = viewModel::createDevelopmentConversation,
-        onSelect = viewModel::selectConversation, onClearWatchLater = viewModel::clearConversationWatchLater, onSurfaceChanged = viewModel::selectSurface, onReferenceMessage = viewModel::referenceMessageToOtherArea, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
+        onSelect = viewModel::selectConversation, onClearWatchLater = viewModel::clearConversationWatchLater, onSurfaceChanged = viewModel::selectSurface, onDraftChanged = viewModel::updateDraft, onSubmitDraft = viewModel::submitCurrentDraft,
         onRetryNormalSend = viewModel::retryLatestNormalSend, onMarkNormalSendFailed = viewModel::markLatestNormalSendFailed,
         onStartFixture = { viewModel.startDeterministicLocalStream() }, onStartFailureFixture = { viewModel.startDeterministicLocalStream(fail = true) },
         onStop = viewModel::stopLocalStream, onAction = viewModel::performAction, onSwitchBranch = viewModel::switchToBranch, onBranchFromMessage = viewModel::branchFromMessage, onDismissBranchCreation = viewModel::dismissBranchCreation,

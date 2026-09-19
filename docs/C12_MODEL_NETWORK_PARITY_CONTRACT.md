@@ -1,7 +1,7 @@
 # C-12 模型与联网／调用记录跨端合同
 
 日期：2026-09-03
-状态：Desktop 本机实现与分层验收已完成；真实 Provider、真实网页来源及真实费用继续独立未验收
+状态：联网完成语义已于 2026-09-19 修正；当前证据见交接，历史验收保留日期边界
 
 ## 1. 当前事实与范围
 
@@ -14,10 +14,11 @@
 
 - 全局实时网页搜索开启后，每次普通对话都请求当前 Provider 已实现的网页检索，不用关键词猜测是否“需要当前信息”。关闭后不请求网页工具。
 - 带附件的普通对话先走共享文本／Markdown 投影，再保持显式联网状态。不得因存在附件而静默关闭 DeepSeek 或智谱的网页检索。
-- 当前 Desktop 请求 owner 只声明已在源码中实现的路由：OpenRouter server tool、Qwen Responses／Chat Completions 分支、DeepSeek Responses、智谱 Chat Completions。这里的“已实现”只表示请求序列化与本机响应解析存在，不表示真实服务已验证支持、可用或计费正确。
-- Desktop 回答完成与联网证据分别记录：有效正文与协议终态决定回答成功，结构化工具执行／公开来源决定是否可核验联网；缺少来源不得丢弃有效正文、用量或把它变成断点续写。只接受无凭据、具有 host 的绝对 `http`／`https` URL，去重后附在回答下方。已请求但无依据显示“已请求，未返回联网依据”，不宣称已实际联网。
-- 历史 Desktop `WEB_SEARCH_NO_SOURCES`／`WEB_SEARCH_NO_VERIFIED_SOURCES` 保留失败审计与原文，提示“联网来源未核验”；用户显式重试从原用户消息重新生成，不把旧完整回答接成无限续写，也不自动补写来源、费用或完成事实。真正网络中断的既有断点恢复仍保留。
-- Android 当前仍按 `WebSearchGroundingPolicy` 执行其独立门槛（DeepSeek Responses 已豁免公开 URL）；不能把本次 Desktop 修复当作 Android 同类路径已验证。
+- Android 与 Desktop 的 DeepSeek 联网统一使用同服务商 `https://api.deepseek.com/anthropic/v1/messages`，保留所选模型；原生工具为 `web_search_20250305`，`tool_choice` 强制 `web_search`。普通离线聊天仍用 Chat Completions。DeepSeek Responses 会忽略内置 web_search，禁止将它用作联网接口。
+- 显式开启联网的请求，只有服务端结构化来源或成功的搜索执行结果才能完成；模型正文自行写出的 URL、请求开关、排队／失败工具状态都不是证据。DeepSeek 要求 `web_search_tool_result` 成功且 `stop_reason=end_turn`，只展示最后搜索结果之后的正文；错误、缺结果、暂停和输出截断不得冒充完成。
+- HTTP、SSE 和 Android 定时监控执行同一完成要求。联网失败明确保留失败状态及已有正文，不静默回退为离线成功、不自动换 Provider、不自动重发。历史无证据记录保留原始审计，不能伪造补证；显式重试重新处理原用户请求，不接成无限续写。
+- 来源只接受无凭据、具有 host 的绝对 HTTP(S) URL，去重附在正文下方。详情投影和旧数据兼容读取 [运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md) §5。
+- 官方依据：[Responses 能力限制](https://api-docs.deepseek.com/guides/responses_api/)、[原生搜索说明](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/)、[官方搜索适配实现](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/web/web-search-deepseek/src/provider.ts)。2026-09-19 实测及安装状态见当前交接；下文旧验收数字是历史阶段记录。
 
 ## 3. 调用记录投影
 

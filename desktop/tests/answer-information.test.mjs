@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { answerInformation, renderAnswerInformation } from '../src/answer-information.mjs';
 
 test('missing historical evidence is unknown, never provider failure or current settings', () => {
-  assert.equal(answerInformation({ webSearchRequested: true, webSearchVerified: null }).networkLabel, '未记录（旧回答）');
-  assert.equal(answerInformation(null).networkLabel, '未记录（旧回答）');
-  assert.equal(answerInformation({ webSearchRequested: true, webSearchVerified: false }).networkLabel, '已请求，未返回联网依据');
+  assert.equal(answerInformation({ webSearchRequested: true, webSearchVerified: null }).networkLabel, '联网未完成');
+  assert.equal(answerInformation(null).networkLabel, '无法确认（旧记录）');
+  assert.equal(answerInformation({ webSearchVerified: false }).networkLabel, '无法确认（旧记录）');
+  assert.equal(answerInformation({ webSearchRequested: false, webSearchVerified: false }).networkLabel, '本次未使用');
+  assert.equal(answerInformation({ webSearchRequested: true, webSearchVerified: false }).networkLabel, '联网未完成');
   assert.equal(answerInformation({ webSearchRequested: false, webSearchVerified: true }).networkLabel, '已实际使用');
 });
 
