@@ -10,3 +10,10 @@
 - 四张预览联系表检查无正文、密钥或账号标识；每端两张绑定精确冻结包。外部本地 manifest 随候选保留，提交前执行 manifest 脚本与图片 hash 核对。
 - 未主动发送问题、连接测试或新付费 Provider 请求；不重复模型比较或长报告。界面采集不关闭逐事实 Provider、Pro404、旧 UNKNOWN/504、媒体／系统 picker／生命周期或线上云端验收缺口。
 - 上传范围只有 main、v1.0.29 产品标签、APK、DMG 与 SHA256SUMS.txt；323 个原始／临时证据及本机私有 checkpoint 保留本地。远端发布与资产下载校验由后续发布回执记录。
+
+## 远端完成回执
+
+- 正式 Release：[v1.0.29](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.29)，非草稿／非 Pre-release；main 与产品标签源码点 a69447ded567beff03f57b351900470c7e0dcc46 读回一致。
+- 三个资产名称／大小／下载 URL 核验，APK／DMG／SHA256SUMS.txt 全部从 GitHub 下载并逐项 SHA-256 一致；预览未进入 Release 资产。
+- [云端源码检查](https://github.com/nanzhufeng/Nanfeng-AI/actions/runs/38532410221) 三项全通过；原生与真实业务缺口保留。
+- 上传遇到 HTTP EOF／408／连接重置，保留同一草稿补传后再公开；未改代理系统设置、未重复打包。结构化结果见 [release-receipt.json](release-receipt.json)。

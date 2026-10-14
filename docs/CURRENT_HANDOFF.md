@@ -1,7 +1,8 @@
 > 当前合同读取门：[全项目合同索引](contracts/CONTRACT_INDEX.md) · [合同治理](CONTRACT_GOVERNANCE_CURRENT.md)。
 
-## 2026-10-14：v1.0.29 GitHub 双端发布
+## 2026-10-14：v1.0.29 GitHub 双端发布完成
 
+- [正式 Release](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.29) 已公开，main／产品标签 a69447ded567beff03f57b351900470c7e0dcc46 读回一致；APK／DMG／校验文件均下载hash相同，云端源码三项PASS。原私有分支／checkpoint未推送；此后仅薄文档提交固化完成回执。
 - [发布候选与验证](verification/2026-10-14-github-release/REPORT.md)：正式双端构建与验签、1189输入无漂移、Android模拟器实装读回、Mac用户授权正常启动采图及数据保留核对完成；四张当前正常预览更新。正式 Mac 未覆盖安装、Android 真机未连接。
 - 当前远端为公开仓库，修正旧私有规划与默认 Pre-release 冲突；原私有 checkpoint 留本机，仅公开 main 和产品 tag 上传。原包构建 SHA 与公开脱敏文档提交 SHA 分列。
 - 本轮仅发布与必要采图，无新业务改动／主动付费请求；既有真实验收缺口继续见项目状态，不能以发布成功关闭。

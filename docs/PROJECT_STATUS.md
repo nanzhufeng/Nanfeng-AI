@@ -6,7 +6,7 @@
 
 - Last verified: 2026-10-14 13:56:12 +0800（最终回归内容与本地源码checkpoint一致；无新真实验收）
 - Verified branch: main
-- Code baseline: d519e83ccb6d9d715936f9e9dcc29c3d2f7fd4d9；本地annotated tag checkpoint-search-routing-20261014
+- Code baseline: 发布源代码点 a69447ded567beff03f57b351900470c7e0dcc46（v1.0.29）；原本机私有checkpoint及回归hash证据保留，生产输入一致。
 - Verification scope: COMMIT / 回归在提交前WORKTREE执行，1189个已验输入与源码checkpoint逐项相同； 1189源码、配置、Schema、应用测试及维护输入hash无漂移；强制Android全JVM及Release Lint、Rust全lib、Desktop全Node及静态build、合同/模型/协议/Supabase静态/Go通过。未安装、未新原生或真实服务验收。
 - Verified by: Codex
 - Status: Active
@@ -42,7 +42,7 @@
 | Desktop | 551 PASS/12 skip；lint/typecheck/inventory/build PASS | Node/静态前端，未原生Mac UI |
 | 维护门 | 43 PASS；114合同/40域/122owner，20聊天+1独立/7组门PASS | 离线一致性，不保证上游服务 |
 | 协议/服务 | exchange v1/v2/sync golden、Supabase静态10、Go PASS | 合成/静态/单测，不是生产RPC/RLS部署 |
-| 构建/安装/真实服务 | 本轮无正式重签包/安装/付费调用 | 复用既有准确安装/真实报告，不刷新原执行时间 |
+| 发布增量 | 双端正式构建/验签及正常采图PASS，Android仅模拟器保数据覆盖，Mac授权启动；0主动付费请求 | GitHub三项CI与资产下载hash PASS；不替代既有真实业务缺口 |
 
 [结构化命令/退出状态/跳过项](verification/2026-10-14-code-checkpoint/regression.json)、[源码hash](verification/2026-10-14-code-checkpoint/source-hashes.json)。系统Skill quick_validate缺PyYAML限制保留；经验审计/链接/秘密检查使用标准库校验。源码字符串与预览fixture不能冒充原生验收。
 
@@ -50,13 +50,13 @@
 
 - [Luna初始矩阵](verification/2026-10-13-luna-routing-implementation/REPORT.md)有双端20部署调用、18款多附件完整成功和14格式代表模型正交成功；非20×14全部组合。后续普通文字成功不抹原Pro404/原UNKNOWN或新媒体缺口。
 - 正式双端UI/系统picker/后台休眠/强杀、扫描/OCR/音视频真实Provider、Mac页脚系统复制与About旧占位原生可达性。
-- 线上Google/Supabase迁移/RLS/RPC/头像及网关、最新1.0.29远端Release/下载hash、Windows/公证未确认。
+- 线上Google/Supabase迁移/RLS/RPC/头像及网关、Windows/公证未确认。v1.0.29远端Release及双端资产下载hash已核验，见发布回执。
 - 43历史引用缺失及7XML原始取证格式失败已分类保留，不改写冻结原件；历史本机/ignored产物不进入新checkpoint完整证明。
 
 ## Sync & Safety
 
 - Git working tree: 651文件变更已提交为源码checkpoint，358新增文件纳Git；排除原始/临时证据保留本地。323个原始/临时证据文件仍未跟踪且字节保留；准确提交与剩余集合见[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)。
-- Remote sync: 本轮按新授权发布 main 与 v1.0.29；公开仓库已回读，原私有checkpoint不推送，结果见发布回执。
+- Remote sync: main 与 v1.0.29 已推送／正式发布，三个资产下载hash一致，云端源码三项PASS；原私有checkpoint不推送，结果见发布回执。
 - Installed sync: 最新业务输入保持10月14日10:49前后正式候选源码；本輪纯文档/模板变化不进入包，本地Git SHA不代表重新安装。
 - Rollback point: 本轮源码checkpoint/tag及限定改前副本；禁止全仓reset/clean/stash覆盖排除证据。
 - Secrets/config: 原凭据与正式数据不操作；测试opt-in未启用，新增Provider请求0。原始回执/正文/before/日志不进入提交。
