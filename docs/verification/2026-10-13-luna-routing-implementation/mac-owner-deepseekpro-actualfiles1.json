@@ -1,0 +1,279 @@
+{
+  "actualModel": "deepseek-v4-pro",
+  "covered": 2,
+  "files": "public-02.md,public-10.docx",
+  "ledgerCalls": [
+    {
+      "actual": "deepseek-v4-pro",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 2620,
+      "model": "deepseek-v4-pro",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "deepseek-v4-pro",
+      "source": null
+    },
+    {
+      "actual": "deepseek-v4-pro",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 2428,
+      "model": "deepseek-v4-pro",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "deepseek-v4-pro",
+      "source": null
+    },
+    {
+      "actual": "deepseek-v4-pro",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 1043,
+      "model": "deepseek-v4-pro",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "deepseek-v4-pro",
+      "source": null
+    },
+    {
+      "actual": "deepseek-v4-pro",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 13251,
+      "model": "deepseek-v4-pro",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "deepseek-v4-pro",
+      "source": null
+    }
+  ],
+  "physical": [
+    {
+      "input": 571,
+      "nativeSources": [
+        [
+          "[RELEASE] Python 3.13.0 (final) released",
+          "https://mail.python.org/archives/list/python-list@python.org/message/H6XNON547KWKIC3R2FHWIIBG6VJFANB7/"
+        ],
+        [
+          "[Python-announce] [RELEASE] Python 3.13.0 (final) released",
+          "https://mail.python.org/archives/list/python-announce-list@python.org/message/H6XNON547KWKIC3R2FHWIIBG6VJFANB7/"
+        ],
+        [
+          "Welcome to Python.org",
+          "https://www.python.org/search/?q=python+tools&page=11#1"
+        ],
+        [
+          "PEP 719 – Python 3.13 Release Schedule | peps.python.org",
+          "https://hugovk-peps.readthedocs.io/en/latest/pep-0719/"
+        ],
+        [
+          "Python 3.13.0 发布 | Python.org",
+          "https://pythonlang.cn/downloads/release/python-3130/#content"
+        ],
+        [
+          "Python 3.13.0 (final) released",
+          "https://pythoninsider.blogspot.com/2024/10/python-3130-final-released.html?m=1"
+        ],
+        [
+          "Python Insider: Python 3.13.0 (final) released",
+          "https://pythoninsider.blogspot.com/2024/10/python-3130-final-released.html"
+        ],
+        [
+          "PEP: 719",
+          "https://raw.githubusercontent.com/python/peps/refs/heads/main/peps/pep-0719.rst#1"
+        ],
+        [
+          "Python Insider: Python 3.13.0 release candidate 1 released",
+          "https://pythoninsider.blogspot.com/2024/08/python-3130-release-candidate-1-released.html?utm_campaign=Django%2BNewsletter&utm_medium=web&utm_source=Django_Newsletter_244"
+        ],
+        [
+          "Revision history - None - origin: https://github.com/python/cpython - https://github.com/python/cpython",
+          "https://archive.softwareheritage.org/browse/snapshot/ef845d53b203e27a5380278d537cf0926d149f6d/log/?origin_url=https://github.com/python/cpython&release=v3.13.0&snapshot=ef845d53b203e27a5380278d537cf0926d149f6d#1"
+        ],
+        [
+          "Announcing Rust 1.89.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/?source=-----01746ef589ae---------------------------------------#more-x86-target-features"
+        ],
+        [
+          "The Rust Release Announcements",
+          "https://blog.rust-lang.org/releases/?utm_campaign=state-of-rust-2026&utm_medium=referral&utm_source=devnewsletter.com"
+        ],
+        [
+          "Rust 1.89 Released With More AVX-512 Intrinsics & x86 Target Features",
+          "https://www.phoronix.com/news/Rust-1.89-Released"
+        ],
+        [
+          "Rust 1.89 underscores arguments to const generics",
+          "https://www.infoworld.com/article/4037813/rust-1-89-underscores-arguments-to-const-generics.html"
+        ],
+        [
+          "RELEASES.md",
+          "https://searchfox.org/rust/diff/6b805102c0d91e0659c673986b5e75e6094665b3/RELEASES.md"
+        ],
+        [
+          "Draft release notes for 1.89.0 · Issue #144097 · rust-lang/rust - Skip to content",
+          "https://github.com/rust-lang/rust/issues/144097#1"
+        ],
+        [
+          "rust 1.89.0 发布：语言特性、编译器优化与平台支持全面升级 - 福大大架构师每日一题",
+          "https://cloud.tencent.cn/developer/article/2554568?policyId=1004#1"
+        ],
+        [
+          "rust 1.89.0 at DuckDuckGo - - 1.89.0 # Released on: 7 August, 2025 Branched from master on: 20 June, 2025 Language # Stabilize explicitly inferred const arg...",
+          "https://duckduckgo.com/?q=rust+1.89.0&redirected=1&ia=web#1"
+        ],
+        [
+          "Announcing Rust 1.89.0 | Rust Blog - The Wayback Machine - https://web",
+          "https://web.archive.org/web/20260811020201/https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/#1"
+        ],
+        [
+          "Changelog",
+          "https://rust.googlesource.com/rust/+/09d3120a99fee8d839e502bdb54f8117c0623c5d/src/tools/clippy/CHANGELOG.md"
+        ]
+      ],
+      "output": 595,
+      "reportedMicros": null,
+      "requested": "deepseek-v4-pro",
+      "returned": "deepseek-v4-pro"
+    },
+    {
+      "input": 552,
+      "nativeSources": [
+        [
+          "[RELEASE] Python 3.13.0 (final) released",
+          "https://mail.python.org/archives/list/python-list@python.org/message/H6XNON547KWKIC3R2FHWIIBG6VJFANB7/"
+        ],
+        [
+          "[Python-announce] [RELEASE] Python 3.13.0 (final) released",
+          "https://mail.python.org/archives/list/python-announce-list@python.org/message/H6XNON547KWKIC3R2FHWIIBG6VJFANB7/"
+        ],
+        [
+          "Welcome to Python.org",
+          "https://www.python.org/search/?q=python+tools&page=11#1"
+        ],
+        [
+          "PEP 719 – Python 3.13 Release Schedule | peps.python.org",
+          "https://hugovk-peps.readthedocs.io/en/latest/pep-0719/"
+        ],
+        [
+          "Python 3.13.0 发布 | Python.org",
+          "https://pythonlang.cn/downloads/release/python-3130/#content"
+        ],
+        [
+          "Python 3.13.0 (final) released",
+          "https://pythoninsider.blogspot.com/2024/10/python-3130-final-released.html?m=1"
+        ],
+        [
+          "Python Insider: Python 3.13.0 (final) released",
+          "https://pythoninsider.blogspot.com/2024/10/python-3130-final-released.html"
+        ],
+        [
+          "PEP: 719",
+          "https://raw.githubusercontent.com/python/peps/refs/heads/main/peps/pep-0719.rst#1"
+        ],
+        [
+          "Python Insider: Python 3.13.0 release candidate 1 released",
+          "https://pythoninsider.blogspot.com/2024/08/python-3130-release-candidate-1-released.html?utm_campaign=Django%2BNewsletter&utm_medium=web&utm_source=Django_Newsletter_244"
+        ],
+        [
+          "Revision history - None - origin: https://github.com/python/cpython - https://github.com/python/cpython",
+          "https://archive.softwareheritage.org/browse/snapshot/ef845d53b203e27a5380278d537cf0926d149f6d/log/?origin_url=https://github.com/python/cpython&release=v3.13.0&snapshot=ef845d53b203e27a5380278d537cf0926d149f6d#1"
+        ]
+      ],
+      "output": 594,
+      "reportedMicros": null,
+      "requested": "deepseek-v4-pro",
+      "returned": "deepseek-v4-pro"
+    },
+    {
+      "input": 556,
+      "nativeSources": [
+        [
+          "Announcing Rust 1.89.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/?source=-----01746ef589ae---------------------------------------#more-x86-target-features"
+        ],
+        [
+          "The Rust Release Announcements",
+          "https://blog.rust-lang.org/releases/?utm_campaign=state-of-rust-2026&utm_medium=referral&utm_source=devnewsletter.com"
+        ],
+        [
+          "Diff - refs/tags/1.89.0^1..refs/tags/1.89.0 - rust-lang/rust",
+          "https://rust.googlesource.com/rust-lang/rust/+/refs/tags/1.89.0%5E1..refs/tags/1.89.0/"
+        ],
+        [
+          "Rust 1.89 Released With More AVX-512 Intrinsics & x86 Target Features",
+          "https://www.phoronix.com/news/Rust-1.89-Released"
+        ],
+        [
+          "Rust 1.89 underscores arguments to const generics",
+          "https://www.infoworld.com/article/4037813/rust-1-89-underscores-arguments-to-const-generics.html"
+        ],
+        [
+          "RELEASES.md",
+          "https://searchfox.org/rust/diff/6b805102c0d91e0659c673986b5e75e6094665b3/RELEASES.md"
+        ],
+        [
+          "Draft release notes for 1.89.0 · Issue #144097 · rust-lang/rust - Skip to content",
+          "https://github.com/rust-lang/rust/issues/144097#1"
+        ],
+        [
+          "rust 1.89.0 发布：语言特性、编译器优化与平台支持全面升级 - 福大大架构师每日一题",
+          "https://cloud.tencent.cn/developer/article/2554568?policyId=1004#1"
+        ],
+        [
+          "rust 1.89.0 at DuckDuckGo - - 1.89.0 # Released on: 7 August, 2025 Branched from master on: 20 June, 2025 Language # Stabilize explicitly inferred const arg...",
+          "https://duckduckgo.com/?q=rust+1.89.0&redirected=1&ia=web#1"
+        ],
+        [
+          "Announcing Rust 1.89.0 | Rust Blog - The Wayback Machine - https://web",
+          "https://web.archive.org/web/20260811020201/https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/#1"
+        ]
+      ],
+      "output": 243,
+      "reportedMicros": null,
+      "requested": "deepseek-v4-pro",
+      "returned": "deepseek-v4-pro"
+    }
+  ],
+  "planned": 2,
+  "preset": "DEEPSEEK_V4_PRO",
+  "publicAnswer": "核验结果：\n\n- **Python 3.13.0**：已核实，正式发布日期为 **2024年10月7日**。  \n  官方来源：  \n  - https://mail.python.org/archives/list/python-announce-list@python.org/message/H6XNON547KWKIC3R2FHWIIBG6VJFANB7/  \n  - https://www.python.org/downloads/release/python-3130/\n\n- **Rust 1.89.0**：官方博客发布页路径显示为 **2025年8月7日**，但本次检索未成功对正文进行交叉核验，故该日期暂列为**待最终确认**，不作为已核实事实。  \n  来源：  \n  - https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/\n\n来源：- [(Python-announce) (RELEASE) Python 3.13.0 (final) released](https://mail.python.org/archives/list/python-announce-list@python.org/message/H6XNON547KWKIC3R2FHWIIBG6VJFANB7/)\n- [Announcing Rust 1.89.0 | Rust Blog](https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/?source=-----01746ef589ae---------------------------------------)",
+  "reopenedCheckpoints": 2,
+  "reopenedModel": "deepseek-v4-pro",
+  "reopenedState": "COMPLETED",
+  "requested": "deepseek-v4-pro",
+  "sources": [
+    [
+      "[Python-announce] [RELEASE] Python 3.13.0 (final) released",
+      "https://mail.python.org/archives/list/python-announce-list@python.org/message/H6XNON547KWKIC3R2FHWIIBG6VJFANB7/"
+    ],
+    [
+      "Announcing Rust 1.89.0 | Rust Blog",
+      "https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/?source=-----01746ef589ae---------------------------------------"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "path": "app/build/outputs/apk/release/南枫AI.apk",
+    "bytes": 28672444,
+    "sha256": "3253ae611058a5de7e46bb77a89887c1790d4c64222e3d3ff33e213c2ec34e25"
+  },
+  {
+    "path": "app/build/outputs/apk/publicModelAcceptance/南枫AI-开发验收.apk",
+    "bytes": 44571948,
+    "sha256": "f9bfebcf9060747f8a16a3366a1e4ceb05dfb0f183298f63d1488f17a25fab88"
+  },
+  {
+    "path": "desktop/src-tauri/target/release/bundle/dmg/Nanfeng-AI-macOS-1.0.29.dmg",
+    "bytes": 17415762,
+    "sha256": "d0274bda77d28be8fb8afd7d8c1a60fc12f92d2f464cada6c73e3bf0d750781f"
+  }
+]

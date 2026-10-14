@@ -31,6 +31,12 @@ jobs:
           node protocol/scripts/run-golden.mjs
           node protocol/scripts/run-v2-golden.mjs
           node protocol/scripts/run-sync-golden.mjs
+      - name: Verify shared model-service maintenance contracts
+        run: |
+          python3 protocol/scripts/verify-model-service-contract.py
+          python3 -m unittest discover -s protocol/tests -p 'test_model_service_contract.py'
+          python3 protocol/scripts/verify-contract-governance.py
+          python3 -m unittest discover -s protocol/tests -p 'test_contract_governance.py'
       - name: Run local Supabase policy contracts
         run: node --test supabase/tests/*.test.mjs supabase/functions/google-avatar/policy.test.mjs
       - name: Check release-evidence verifier syntax

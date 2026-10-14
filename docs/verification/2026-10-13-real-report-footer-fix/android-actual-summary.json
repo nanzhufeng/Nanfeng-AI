@@ -1,0 +1,15 @@
+[
+  {
+    "preset": "RELAYCORE_SONNET_5_5",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "6/6项检索结果",
+    "elapsedMs": 203244,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "requestedModel": "claude-sonnet-5-5",
+    "attachmentCount": 1,
+    "mimes": [
+      "text/markdown"
+    ]
+  }
+]

@@ -1,0 +1,1022 @@
+[
+  {
+    "requestedModel": "anthropic\/claude-sonnet-5.5",
+    "outcome": "HttpResponse",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 128000,
+    "httpStatus": 200,
+    "responseKnownFields": [
+      "choices",
+      "usage",
+      "model"
+    ],
+    "hasErrorObject": false,
+    "choiceFinishReason": "stop",
+    "contentChars": 1272,
+    "thinkingChars": 0,
+    "wire": {
+      "maxTokens": 128000,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": false
+    }
+  },
+  {
+    "requestedModel": "anthropic\/claude-haiku-5.5",
+    "outcome": "HttpResponse",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 128000,
+    "httpStatus": 200,
+    "responseKnownFields": [
+      "choices",
+      "usage",
+      "model"
+    ],
+    "hasErrorObject": false,
+    "choiceFinishReason": "stop",
+    "contentChars": 1106,
+    "thinkingChars": 0,
+    "wire": {
+      "maxTokens": 128000,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": false
+    }
+  },
+  {
+    "requestedModel": "deepseek-flash",
+    "outcome": "StreamedResponse",
+    "validFrames": 2980,
+    "reasoningChars": 5661,
+    "firstFrameMillis": 1548,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "MESSAGES_API",
+    "endpointPath": "\/anthropic\/v1\/messages",
+    "outputBudget": 384000,
+    "wire": {
+      "maxTokens": 384000,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search_20250305",
+          "keys": [
+            "type",
+            "name",
+            "max_uses"
+          ]
+        }
+      ],
+      "choiceKind": "object",
+      "choiceType": "tool",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "httpStatus": 200,
+    "finish": "FAILED",
+    "returnedModel": "deepseek-flash",
+    "nativeSources": [
+      "https:\/\/golang.google.cn\/blog\/go1.23",
+      "https:\/\/go.googlesource.com\/website\/+\/b1e9d437ed2598ddd91f68117754ac2740fb6bf3%5E%21\/#1",
+      "https:\/\/go.googlesource.com\/website\/+show\/ed4f083ea4ff83f7a083042031cdd8dd679bdac2\/_content\/doc\/go1.23.md#1",
+      "https:\/\/golang.google.cn\/doc\/go1.23#linux",
+      "https:\/\/go.googlesource.com\/website\/+\/2cd74689d72e594ee0e9814c11e016d174f69278\/_content\/doc\/go1.23.md#1",
+      "https:\/\/goframe.org\/en\/release\/golang\/go1.23",
+      "https:\/\/oldstack-dot-golang-org.appspot.com\/tip.golang.org\/blog\/",
+      "https:\/\/pages.goframe.org\/release\/golang\/go1.23",
+      "https:\/\/golang.com.tw\/blog\/go1.23",
+      "https:\/\/github.com\/xobotyi\/cc-foundry\/blob\/5c2ea09ddcdf964f9f235c842d06d92cd6acf720\/plugins\/golang\/skills\/golang\/references\/versions\/go1.23.md#1",
+      "https:\/\/www.163.com\/dy\/article\/JUBKQ2A30511B8LM.html?spss=dy_author",
+      "https:\/\/lwn.net\/Articles\/1019319\/",
+      "https:\/\/www.ithome.com\/0\/849\/940.htm",
+      "https:\/\/forest.watch.impress.co.jp\/docs\/news\/2010800.html",
+      "https:\/\/news.zol.com.cn\/979\/9790475.html",
+      "https:\/\/lwn.net\/Articles\/1019634\/#1",
+      "https:\/\/thinkit.co.jp\/index%2ephp\/news\/38162",
+      "https:\/\/windowsforum.com\/news\/firefox-138-0-update-enhanced-profiles-windows-11-visuals-for-better-browsing.363956\/",
+      "https:\/\/www.root.cz\/zpravicky\/firefox-138-0-vylepsuje-praci-s-panely-a-uzivatelskymi-profily\/#prejit-na-formular-pro-odeslani-zpravy",
+      "https:\/\/www.getgnu.org\/tag\/mozilla-firefox-138-0",
+      "https:\/\/www.pcwelt.de\/article\/2768146#1",
+      "https:\/\/www.neowin.net\/news\/firefox-gets-big-update-with-profiles-and-better-looks-on-windows-11\/#1",
+      "https:\/\/ubuntuhandbook.org\/index.php\/2025\/04\/firefox-138-0-is-out\/",
+      "https:\/\/planet.ubuntuusers.de\/14\/?width=95%25",
+      "https:\/\/m2.cn.bing.com:443\/news\/search?q=Firefox&qpvt=firefox+news&FORM=EWRE",
+      "https:\/\/prohoster.info\/my\/blog\/page\/78#2",
+      "https:\/\/www.camp-firefox.de\/forum\/forum\/2-nachrichten\/?&sortField=replies&pageNo=26",
+      "https:\/\/www.drwindows.de\/xf\/threads\/firefox-mozilla-ver%C3%B6ffentlicht-version-138-0-f%C3%BCr-windows-mac-und-linux.191142\/",
+      "https:\/\/wp.m.bing.com\/news\/search?q=firefox&qft=sortbydate%3d%221%22&form=YFNR",
+      "https:\/\/www.getgnu.org\/?s=Mozilla+Firefox&x=7&y=8&paged=9",
+      "https:\/\/wiki.mozilla.org\/index.php?title=Support:Releases&diff=prev&oldid=1254632",
+      "https:\/\/itest.5ch.io\/egg\/test\/read.cgi\/software\/1746071363\/l-",
+      "https:\/\/golang.google.cn\/doc\/go1.25",
+      "https:\/\/golang.google.cn\/blog\/go1.25",
+      "https:\/\/build-dot-golang-org.appspot.com\/golang.google.cn\/blog\/",
+      "https:\/\/oldstack-dot-golang-org.appspot.com\/go.dev\/blog\/",
+      "https:\/\/www.phoronix.com\/news\/Go-1.25-Released",
+      "https:\/\/github.com\/golang\/website\/blob\/master\/_content\/doc\/go1.25.md#1",
+      "https:\/\/go.googlesource.com\/website\/+\/9bdfdc53313b87b29901c975ada631a9c020f674%5E%21\/#1",
+      "https:\/\/github.com\/wahidyankf\/ose-public\/blob\/main\/apps\/ayokoding-www\/content\/en\/learn\/legacy\/software-engineering\/programming-languages\/golang\/release-highlights\/go-1-25.md#1",
+      "https:\/\/github.com\/xobotyi\/cc-foundry\/blob\/5c2ea09ddcdf964f9f235c842d06d92cd6acf720\/plugins\/golang\/skills\/golang\/references\/versions\/go1.25.md#1",
+      "https:\/\/devcenter.heroku.com\/changelog-items\/3377"
+    ],
+    "webSearchPerformed": true,
+    "publicFixtureReply": "## 两项日期的联网核验结果\n\n**Go 1.23.0 — 2024 年 8 月 13 日**\n- 官方来源：Go 团队博客《[Go 1.23 is released](https:\/\/go.dev\/blog\/go1.23)》，署名 Dmitri Shuralyov，日期 2024 年 8 月 13 日；配套官方文档为《[Go 1.23 Release Notes](https:\/\/go.dev\/doc\/go1.23)》。\n- 核验到的原文表述：博客正文写于 13 August 2024，网站源码提交记录中该文章 front matter 也标注 `date: 2024-08-13`。\n\n**Firefox 138.0 — 2025 年 4 月 29 日**\n- 官方来源：Mozilla 官方发布说明《[Firefox 138.0, See All New Features, Updates and Fixes](https:\/\/www.mozilla.org\/en-US\/firefox\/138.0\/releasenotes\/)》。\n- 官方 changelog 原话为“Version 138.0, first offered to Release channel users on April 29, 2025”（首次向 Release 渠道用户提供的时间为 2025 年 4 月 29 日）。多篇报道（[IT之家](https:\/\/www.ithome.com\/0\/849\/940.htm)、[Impress 窓の杜](https:\/\/forest.watch.impress.co.jp\/docs\/news\/2010800.html)、[Neowin](https:\/\/www.neowin.net\/news\/firefox-gets-big-update-with-profiles-and-better-looks-on-windows-11\/)）均与此一致。\n- 需要提醒一点：也有个别媒体（如 [thinkit](https:\/\/thinkit.co.jp\/index%2ephp\/news\/38162)）写成 4 月 22 日，与 Mozilla 官方说明不符，应以官方 4 月 29 日为准。\n\n## 发布节奏比较\n\n| 维度 | Go | Firefox Release |\n|---|---|---|\n| 主版本周期 | 约 6 个月一次（2 月 \/ 8 月） | 约 4 周一次 |\n| 节奏证据 | 1.23 = 2024-08-13，1.25 = [2025-08-12](https:\/\/go.dev\/blog\/go1.25)，恰好相隔 12 个月、中间夹一个 1.24 | 137 = 2025-04-01，138 = 2025-04-29，139 = 2025-05-27，140 = 2025-06-24（均相隔 4 周） |\n| 版本号结构 | 大版本 + 频繁小版本（1.23.1、1.23.2…，以回归\/安全修复为主） | 大版本 + 点版本（138.0.1、138.0.3…，主版本发布后数天到两周内即出现），另有年度 ESR 分支按月打安全补丁 |\n| 年产量 | 每年 2 个主版本 | 每年约 12–13 个主版本 |\n\n结论：Firefox 走的是“火车式”高频节奏，主版本约 4 周发一班，点版本随缺陷随时插入；Go 则是半年一班的低频大版本 + 不定期的补丁小版本。单看主版本频率，Firefox 大约相当于 Go 的 6 倍。就这两个具体版本而言，Go 1.23.0 比 Firefox 138.0 早约 8 个半月（约 259 天），二者的可比性主要在于“各自的版本线进度”，而非同一时间点的生态对比。",
+    "input": 261269,
+    "output": 3084
+  },
+  {
+    "requestedModel": "openai\/gpt-6-luna",
+    "outcome": "HttpResponse",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 128000,
+    "httpStatus": 200,
+    "responseKnownFields": [
+      "choices",
+      "usage",
+      "model"
+    ],
+    "hasErrorObject": false,
+    "choiceFinishReason": "stop",
+    "contentChars": 449,
+    "thinkingChars": 0,
+    "wire": {
+      "maxTokens": 128000,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": false
+    }
+  },
+  {
+    "requestedModel": "glm-5.3-flash",
+    "outcome": "StreamedResponse",
+    "validFrames": 1,
+    "reasoningChars": 0,
+    "firstFrameMillis": 3751,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/paas\/v4\/chat\/completions",
+    "outputBudget": 128000,
+    "reasoningEffort": "max",
+    "wire": {
+      "effort": "max",
+      "maxTokens": 128000,
+      "searchEngine": "search_std",
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search",
+          "keys": [
+            "type",
+            "web_search"
+          ]
+        }
+      ],
+      "choiceKind": "string",
+      "choiceValue": "auto",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "httpStatus": 200,
+    "finish": "CONTENT_FILTER",
+    "returnedModel": "glm-5.3-flash",
+    "nativeSources": [],
+    "webSearchPerformed": false,
+    "publicFixtureReply": ""
+  },
+  {
+    "requestedModel": "qwen3.7-plus",
+    "outcome": "StreamedResponse",
+    "validFrames": 143,
+    "reasoningChars": 410,
+    "firstFrameMillis": 1312,
+    "readTimeoutMillis": 180000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "RESPONSES_API",
+    "endpointPath": "\/compatible-mode\/v1\/responses",
+    "outputBudget": 65536,
+    "wire": {
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search",
+          "keys": [
+            "type"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [
+        {
+          "role": "system",
+          "partTypes": [
+            "input_text"
+          ]
+        },
+        {
+          "role": "user",
+          "partTypes": [
+            "input_text"
+          ]
+        }
+      ],
+      "routingKeyPresent": false,
+      "maxOutputTokens": 65536,
+      "stream": true,
+      "store": false
+    },
+    "httpStatus": 200,
+    "finish": "COMPLETED",
+    "returnedModel": "qwen3.7-plus",
+    "nativeSources": [
+      "https:\/\/go.dev\/doc\/devel\/release",
+      "https:\/\/go.dev\/doc\/go1.23",
+      "https:\/\/endoflife.date\/go",
+      "https:\/\/www.reddit.com\/r\/golang\/comments\/1e7vsm0\/interactive_release_notes_for_go_123\/",
+      "https:\/\/x.com\/golang\/status\/1823404920583663807",
+      "https:\/\/go.dev\/dl\/",
+      "https:\/\/groups.google.com\/g\/golang-dev\/c\/x4lICMSWuHg",
+      "https:\/\/tip.golang.org\/doc\/next",
+      "https:\/\/medium.com\/@dmytro.misik\/go-1-23-personal-top-features-9eac82c5466b",
+      "https:\/\/antonz.org\/go-1-23\/",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0\/releasenotes\/",
+      "https:\/\/ftp.mozilla.org\/pub\/firefox\/releases\/138.0\/",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0.4\/releasenotes\/",
+      "https:\/\/en.wikipedia.org\/wiki\/Firefox_version_history",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0.1\/releasenotes\/",
+      "https:\/\/www.reddit.com\/r\/firefox\/comments\/1kca12d\/firefox_13801_see_all_new_features_updates_and\/",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/android\/138.0\/releasenotes\/",
+      "https:\/\/whattrainisitnow.com\/calendar\/",
+      "https:\/\/www.firefox.com\/en-US\/releases\/",
+      "https:\/\/www.apkmirror.com\/apk\/mozilla\/firefox\/firefox-fast-private-browser-138-0-release\/"
+    ],
+    "webSearchPerformed": true,
+    "publicFixtureReply": "根据官方来源核验：\n\n## 发布日期\n\n| 软件 | 版本 | 发布日期 | 官方来源 |\n|------|------|----------|----------|\n| Go | 1.23.0 | **2024年8月13日** | [go.dev\/doc\/devel\/release](https:\/\/go.dev\/doc\/devel\/release) |\n| Firefox | 138.0 | **2025年4月29日** | [firefox.com\/138.0\/releasenotes](https:\/\/www.firefox.com\/en-US\/firefox\/138.0\/releasenotes\/) |\n\n## 发布节奏对比\n\n- **Go**：约 **6个月** 一个大版本（如 1.22 → 1.23 间隔半年），节奏稳定，侧重语言特性与工具链的渐进式演进。\n- **Firefox**：约 **4周** 一个主版本（如 137 → 138 间隔约一个月），节奏更快，侧重功能迭代与安全补丁的快速推送。\n\n**总结**：Firefox 的发布频率约为 Go 的 6 倍，反映了浏览器需要快速响应安全威胁和 Web 标准变化，而编程语言更注重稳定性和向后兼容。",
+    "input": 3089,
+    "output": 536
+  },
+  {
+    "requestedModel": "google\/gemini-3.8-flash",
+    "outcome": "HttpResponse",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 65536,
+    "httpStatus": 200,
+    "responseKnownFields": [
+      "choices",
+      "usage",
+      "model"
+    ],
+    "hasErrorObject": false,
+    "choiceFinishReason": "stop",
+    "contentChars": 921,
+    "thinkingChars": 0,
+    "wire": {
+      "maxTokens": 65536,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": false
+    }
+  },
+  {
+    "requestedModel": "anthropic\/claude-opus-5.5",
+    "outcome": "HttpResponse",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 128000,
+    "httpStatus": 200,
+    "responseKnownFields": [
+      "choices",
+      "usage",
+      "model"
+    ],
+    "hasErrorObject": false,
+    "choiceFinishReason": "stop",
+    "contentChars": 1066,
+    "thinkingChars": 0,
+    "wire": {
+      "maxTokens": 128000,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": false
+    }
+  },
+  {
+    "requestedModel": "openai\/gpt-6.1-sol",
+    "outcome": "HttpResponse",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 128000,
+    "httpStatus": 200,
+    "responseKnownFields": [
+      "choices",
+      "usage",
+      "model"
+    ],
+    "hasErrorObject": false,
+    "choiceFinishReason": "stop",
+    "contentChars": 650,
+    "thinkingChars": 0,
+    "wire": {
+      "maxTokens": 128000,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": false
+    }
+  },
+  {
+    "requestedModel": "deepseek-v4-pro",
+    "outcome": "StreamedResponse",
+    "validFrames": 2693,
+    "reasoningChars": 7328,
+    "firstFrameMillis": 1556,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "MESSAGES_API",
+    "endpointPath": "\/anthropic\/v1\/messages",
+    "outputBudget": 384000,
+    "wire": {
+      "maxTokens": 384000,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search_20250305",
+          "keys": [
+            "type",
+            "name",
+            "max_uses"
+          ]
+        }
+      ],
+      "choiceKind": "object",
+      "choiceType": "tool",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "httpStatus": 200,
+    "finish": "COMPLETED",
+    "returnedModel": "deepseek-v4-pro",
+    "nativeSources": [
+      "https:\/\/golang.google.cn\/blog\/go1.23",
+      "https:\/\/go.googlesource.com\/website\/+\/b1e9d437ed2598ddd91f68117754ac2740fb6bf3%5E%21\/#1",
+      "https:\/\/golang-org.appspot.com\/tip.golang.org\/blog\/",
+      "https:\/\/golang.com.tw\/blog\/go1.23",
+      "https:\/\/cloud.tencent.com.cn\/developer\/article\/2444608?policyId=1003#1",
+      "https:\/\/cloud.tencent.cn\/developer\/article\/2545986?policyId=1003#1",
+      "https:\/\/build.opensuse.org\/request\/show\/1193774",
+      "https:\/\/build-test-1.opensuse.org\/package\/show\/devel:languages:go\/go1.23?expand=0&rev=3",
+      "https:\/\/github.com\/tamnd\/godev-index#2",
+      "https:\/\/golangweekly.com\/issues\/519",
+      "https:\/\/thinkit.co.jp\/index%2ephp\/news\/38162",
+      "https:\/\/news.infoseek.co.jp\/article\/mynavi_2968596\/?p=1",
+      "https:\/\/www.freshports.org\/www\/firefox\/distinfo#2",
+      "https:\/\/news.mynavi.jp\/article\/20250501-3271652\/#1",
+      "https:\/\/3dnews.ru\/tags\/firefox\/page-2.html#2",
+      "https:\/\/wiki.mozilla.org\/index.php?title=Firefox\/Channels\/Meetings\/2025-04-24&oldid=1253906",
+      "https:\/\/www.getgnu.org\/tag\/mozilla-firefox-138-0",
+      "https:\/\/tsecurity.de\/de\/2749834\/it-nachrichten\/firefox-mozilla-veroeffentlicht-version-1380-fuer-windows-mac-und-linux\/#1",
+      "https:\/\/www.punto-informatico.it\/mozilla-rilascia-firefox-138-le-novita-della-nuova-versione\/",
+      "https:\/\/forest.watch.impress.co.jp\/img\/wf\/docs\/2011\/486\/html\/image1.png.html",
+      "https:\/\/www.ithome.com\/0\/849\/940.htm",
+      "https:\/\/news.zol.com.cn\/979\/9790475.html",
+      "https:\/\/www.security-next.com\/169899",
+      "https:\/\/www.root.cz\/zpravicky\/firefox-138-0-vylepsuje-praci-s-panely-a-uzivatelskymi-profily\/#prejit-na-formular-pro-odeslani-zpravy",
+      "https:\/\/releases.mozilla.org\/pub\/firefox\/releases\/138.0\/mac-EME-free\/be\/",
+      "https:\/\/wiki.mozilla.org\/index.php?title=Support\/Firefox138&diff=1253996&oldid=1253995",
+      "https:\/\/wiki.mozilla.org\/index.php?sort=img_size&user=%d8%ad%d8%a7%d8%b3%d8%a8+%d8%b9+%d8%b9%d9%85%d8%b1%d9%83",
+      "https:\/\/bug635044.bugzilla.mozilla.org\/show_bug.cgi?id=1963580",
+      "https:\/\/addons.mozilla.org\/pa-IN\/firefox\/addon\/burmese-my-language-pack\/versions\/?utm_content=search&utm_medium=referral&utm_source=addons.mozilla.org#1",
+      "https:\/\/ftp.mozilla.org\/pub\/devedition\/releases\/138.0b8\/mac\/ja-JP-mac\/",
+      "https:\/\/ftp.mozilla.org\/pub\/devedition\/releases\/138.0b8\/mac\/th\/",
+      "https:\/\/archive.mozilla.org\/pub\/firefox\/releases\/138.0.4\/update\/mac\/nb-NO\/",
+      "https:\/\/wiki.mozilla.org\/Special:MobileDiff\/1253986",
+      "http:\/\/ftp.mozilla.org\/pub\/devedition\/releases\/138.0b1\/win64\/es-MX\/"
+    ],
+    "webSearchPerformed": true,
+    "publicFixtureReply": "## 核验结果\n\n- **Go 1.23.0**：**2024 年 8 月 13 日**发布。官方来源：[Go 官方博客《Go 1.23 is released》](https:\/\/go.dev\/blog\/go1.23)（作者 Dmitri Shuralyov，日期 13 August 2024）。\n- **Firefox 138.0**：**2025 年 4 月 29 日**发布。官方来源：[Mozilla 官方发行说明 Firefox 138.0](https:\/\/www.mozilla.org\/en-US\/firefox\/138.0\/releasenotes\/)；Mozilla Wiki 的版本日期模板亦记录 `138.0 = 2025-04-29`。补充说明：网上个别日媒写“4 月 22 日”属于误报，多数权威来源（Mozilla Wiki、多家媒体与安全公告）一致指向 4 月 29 日。\n\n## 发布节奏比较\n\n| 项目 | Go | Firefox |\n|---|---|---|\n| 大版本节奏 | 每年 **2 个**大版本（约每年 2 月和 8 月，即约 **6 个月\/版**） | 每 **4 周**一个大版本（约每年 **13 个**） |\n| 该版本间隔 | Go 1.23 距 Go 1.22（2024-02）约 6 个月 | Firefox 138 距 Firefox 137（2025-04-01）恰好 4 周 |\n| 补丁版本 | 按需发布 1.23.x（安全\/缺陷修复） | 按需发布 138.0.x，另有每年一次的 ESR 延长支持版 |\n\n**总结**：两者都采用“固定时间窗口”的节奏，但频率差异很大——Go 是**半年一次**的慢节奏（偏向语言稳定性），Firefox 是**四周一次**的快节奏（偏向 Web 平台快速迭代与安全更新）。",
+    "input": 46972,
+    "output": 2775
+  },
+  {
+    "requestedModel": "glm-5.3",
+    "outcome": "StreamedResponse",
+    "validFrames": 1,
+    "reasoningChars": 0,
+    "firstFrameMillis": 6187,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/paas\/v4\/chat\/completions",
+    "outputBudget": 131072,
+    "reasoningEffort": "max",
+    "wire": {
+      "effort": "max",
+      "maxTokens": 131072,
+      "searchEngine": "search_std",
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search",
+          "keys": [
+            "type",
+            "web_search"
+          ]
+        }
+      ],
+      "choiceKind": "string",
+      "choiceValue": "auto",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "httpStatus": 200,
+    "finish": "CONTENT_FILTER",
+    "returnedModel": "glm-5.3",
+    "nativeSources": [],
+    "webSearchPerformed": false,
+    "publicFixtureReply": ""
+  },
+  {
+    "requestedModel": "qwen3.8-max",
+    "outcome": "StreamedResponse",
+    "validFrames": 272,
+    "reasoningChars": 529,
+    "firstFrameMillis": 2131,
+    "readTimeoutMillis": 180000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "RESPONSES_API",
+    "endpointPath": "\/compatible-mode\/v1\/responses",
+    "outputBudget": 16384,
+    "wire": {
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search",
+          "keys": [
+            "type"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [
+        {
+          "role": "system",
+          "partTypes": [
+            "input_text"
+          ]
+        },
+        {
+          "role": "user",
+          "partTypes": [
+            "input_text"
+          ]
+        }
+      ],
+      "routingKeyPresent": false,
+      "maxOutputTokens": 16384,
+      "stream": true,
+      "store": false
+    },
+    "httpStatus": 200,
+    "finish": "COMPLETED",
+    "returnedModel": "qwen3.8-max",
+    "nativeSources": [
+      "https:\/\/go.dev\/doc\/devel\/release",
+      "https:\/\/go.dev\/blog\/go1.23",
+      "https:\/\/x.com\/golang\/status\/1823404920583663807",
+      "https:\/\/www.reddit.com\/r\/golang\/comments\/1e7vsm0\/interactive_release_notes_for_go_123\/",
+      "https:\/\/groups.google.com\/g\/golang-dev\/c\/x4lICMSWuHg",
+      "https:\/\/endoflife.date\/go",
+      "https:\/\/forum.devtalk.com\/t\/go-1-23-is-released\/166036",
+      "https:\/\/boldlygo.tech\/archive\/2024-08-15-go-1.23.0-has-been-released\/",
+      "https:\/\/medium.com\/@dmytro.misik\/go-1-23-personal-top-features-9eac82c5466b",
+      "https:\/\/mariocarrion.com\/2024\/09\/02\/what-is-new-in-go-1-23.html",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0\/releasenotes\/",
+      "https:\/\/www.firefox.com\/en-US\/releases\/",
+      "https:\/\/www.askwoody.com\/forums\/topic\/mozilla-firefox-and-esr-updates-2025\/",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/android\/138.0\/releasenotes\/",
+      "https:\/\/www.mozilla.org\/en-US\/firefox\/9.0.1\/releasenotes\/",
+      "https:\/\/whattrainisitnow.com\/calendar\/",
+      "https:\/\/www.reddit.com\/r\/firefox\/comments\/1j0yp33\/firefox_release_notes_1350_february_4_2025\/",
+      "https:\/\/en.wikipedia.org\/wiki\/Firefox_version_history",
+      "https:\/\/www.ghacks.net\/2025\/04\/29\/firefox-138-launches-with-improved-profile-management-and-security-updates\/",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0.4\/releasenotes\/"
+    ],
+    "webSearchPerformed": true,
+    "publicFixtureReply": "## 核验结果\n\n| 项目 | 官方发布日期 | 官方来源 |\n|---|---|---|\n| **Go 1.23.0** | **2024 年 8 月 13 日** | [Go Release History](https:\/\/go.dev\/doc\/devel\/release)（\"go1.23.0 (released 2024-08-13)\"）、[官方博客 Go 1.23 is released](https:\/\/go.dev\/blog\/go1.23) |\n| **Firefox 138.0** | **2025 年 4 月 29 日** | [Firefox 138.0 Release Notes](https:\/\/www.firefox.com\/en-US\/firefox\/138.0\/releasenotes\/)（\"Firefox Release. April 29, 2025\"）、[Firefox for Android 138.0](https:\/\/www.firefox.com\/en-US\/firefox\/android\/138.0\/releasenotes\/) |\n\n两者日期一致，无争议来源冲突。\n\n## 发布节奏比较\n\n- **Go：半年一个大版本，节奏慢而可预期。** 大版本固定在每年 2 月与 8 月前后（1.22 为 2024-02-06，1.23 为 2024-08-13），间隔约 6 个月；期间以小版本修补，例如 1.23.1 于 2024-09-05 发布，主要携带安全修复。每个大版本的支持窗口约一年（Go 1.23 于 2025-08-12 结束支持）。这种节奏适合语言\/工具链：强调向后兼容与稳定性，用户升级压力小。\n\n- **Firefox：约每 4 周一个大版本，节奏快而连续。** 版本号高速递增（135.0 为 2025-02-04，138.0 为 2025-04-29），主版本发布后还会在数周内密集推出点版本，如 138.0.4 于 2025-05-17 发布，主要用于安全修复。同时另设 ESR 分支供企业长周期维护。这种节奏适合终端产品：安全漏洞必须尽快随版本触达用户。\n\n**核心差异**：Go 的\"少而稳\"把变更集中在半年一次的窗口，代价是新特性等待时间长；Firefox 的\"多而快\"把安全修复延迟压到几周，代价是版本号膨胀、下游（扩展、企业部署）适配成本更高。两者都用**独立的点版本\/小版本通道**来解耦\"功能发布\"与\"安全修复\"，这是节奏策略上共同的成熟做法。",
+    "input": 3076,
+    "output": 996
+  },
+  {
+    "requestedModel": "openai\/gpt-6-luna",
+    "outcome": "StreamedResponse",
+    "validFrames": 23,
+    "reasoningChars": 0,
+    "firstFrameMillis": 6053,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 2048,
+    "wire": {
+      "maxTokens": 2048,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "httpStatus": 200,
+    "returnedModel": "openai\/gpt-6-luna",
+    "nativeSources": [
+      "https:\/\/go.dev\/doc\/devel\/release?utm_source=openai",
+      "https:\/\/www.mozilla.org\/en\/firefox\/138.0\/releasenotes\/?utm_source=openai",
+      "https:\/\/go.dev\/doc\/go1.23?utm_source=openai"
+    ],
+    "webSearchPerformed": false,
+    "publicFixtureReply": "- **Go 1.23.0：2024年8月13日**，Go 官方发布历史确认。([go.dev](https:\/\/go.dev\/doc\/devel\/release?utm_source=openai))\n- **Firefox 138.0：2025年4月29日**，见 Mozilla 官方发布说明。([mozilla.org](https:\/\/www.mozilla.org\/en\/firefox\/138.0\/releasenotes\/?utm_source=openai))\n- **发布节奏：**Go 的大版本约每六个月发布一次；Firefox 主版本约每四周发布一次，节奏更快。([go.dev](https:\/\/go.dev\/doc\/go1.23?utm_source=openai))",
+    "input": 8722,
+    "output": 418
+  },
+  {
+    "requestedModel": "claude-opus-5.5",
+    "outcome": "StreamedResponse",
+    "validFrames": 65,
+    "reasoningChars": 0,
+    "firstFrameMillis": 12140,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "MESSAGES_API",
+    "endpointPath": "\/v1\/messages",
+    "outputBudget": 16384,
+    "wire": {
+      "maxTokens": 16384,
+      "toolsPresent": false,
+      "toolsCount": 0,
+      "tools": [],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "httpStatus": 200,
+    "finish": "COMPLETED",
+    "returnedModel": "claude-opus-5.5",
+    "nativeSources": [],
+    "webSearchPerformed": false,
+    "publicFixtureReply": "- Go 1.23.0：2024 年 8 月 13 日，来源：[Go 官方发布历史](https:\/\/go.dev\/doc\/devel\/release)\n- Firefox 138.0：2025 年 4 月 29 日，来源：[Mozilla Firefox 138.0 发布说明](https:\/\/www.mozilla.org\/en\/firefox\/138.0\/releasenotes\/)\n\nGo 的主版本大约每六个月发布一次，依据是 [Go 1.23 发布说明](https:\/\/go.dev\/doc\/go1.23)。Firefox 的主版本大约每四周发布一次，这个说法在本次检索资料中没有对应的 Mozilla 官方来源，资料里引用的是 Go 页面，所以这一点还不算核实。\n\n如果按这两个节奏估算，Firefox 每半年会推出约 6 到 7 个主版本，Go 同期只推出 1 个，Firefox 的迭代明显更快。两者的版本号也因此没有可比性。",
+    "input": 75147,
+    "output": 351
+  },
+  {
+    "requestedModel": "openai\/gpt-6-luna",
+    "outcome": "StreamedResponse",
+    "validFrames": 278,
+    "reasoningChars": 1453,
+    "firstFrameMillis": 2626,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 2048,
+    "wire": {
+      "maxTokens": 2048,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "httpStatus": 200,
+    "returnedModel": "openai\/gpt-6-luna",
+    "nativeSources": [
+      "https:\/\/go.dev\/doc\/devel\/release?utm_source=openai",
+      "https:\/\/developer.mozilla.org\/en-US\/Firefox\/Releases\/138?utm_source=openai",
+      "https:\/\/go.dev\/wiki\/Go-Release-Cycle?utm_source=openai"
+    ],
+    "webSearchPerformed": false,
+    "publicFixtureReply": "- **Go 1.23.0：2024年8月13日**，见 Go 官方发布历史。([go.dev](https:\/\/go.dev\/doc\/devel\/release?utm_source=openai))\n- **Firefox 138.0：2025年4月29日**，见 Mozilla 开发者文档。([developer.mozilla.org](https:\/\/developer.mozilla.org\/en-US\/Firefox\/Releases\/138?utm_source=openai))\n\n**发布节奏：**Go 主版本约每六个月发布一次；Firefox 138 到 139 相隔约四周。也就是说，Firefox 的主版本更新更频繁。([go.dev](https:\/\/go.dev\/wiki\/Go-Release-Cycle?utm_source=openai))",
+    "input": 12851,
+    "output": 629
+  },
+  {
+    "requestedModel": "claude-sonnet-5-5",
+    "outcome": "StreamedResponse",
+    "validFrames": 156,
+    "reasoningChars": 723,
+    "firstFrameMillis": 4693,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "MESSAGES_API",
+    "endpointPath": "\/v1\/messages",
+    "outputBudget": 16384,
+    "wire": {
+      "maxTokens": 16384,
+      "toolsPresent": false,
+      "toolsCount": 0,
+      "tools": [],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "httpStatus": 200,
+    "finish": "COMPLETED",
+    "returnedModel": "claude-sonnet-5-5",
+    "nativeSources": [],
+    "webSearchPerformed": false,
+    "publicFixtureReply": "**已核验日期**\n\n- Go 1.23.0：2024 年 8 月 13 日。来源：[Go Release History](https:\/\/go.dev\/doc\/devel\/release)\n- Firefox 138.0：2025 年 4 月 29 日。来源：[MDN: Firefox 138 for developers](https:\/\/developer.mozilla.org\/en-US\/Firefox\/Releases\/138)\n\n**发布节奏比较**\n\n- Go 大约每六个月发布一个主版本。依据：[Go Release Cycle](https:\/\/go.dev\/wiki\/Go-Release-Cycle)。\n- Firefox 的主版本大约每四周一个，所以更新明显比 Go 频繁，约是 Go 的六倍。\n\n**说明**\n\n- 检索资料里\"Firefox 138 到 139 约相隔四周\"这一说法，引用的是 Go 的 wiki 页面，该页面只支持 Go 的节奏，不支持 Firefox 的。所以 Firefox 四周周期这一点，我在本次提供的来源中未能核实。\n- 另外，MDN 是 Mozilla 的开发者文档，不是 Mozilla 的正式发布公告。如需严格的\"官方\"出处，建议再对照 Mozilla 官方 Release Notes 或 Firefox 发布日程页面。",
+    "input": 1064,
+    "output": 483
+  },
+  {
+    "requestedModel": "gpt-6.1-sol",
+    "outcome": "StreamedResponse",
+    "validFrames": 186,
+    "reasoningChars": 0,
+    "firstFrameMillis": 4700,
+    "readTimeoutMillis": 180000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "RESPONSES_API",
+    "endpointPath": "\/v1\/responses",
+    "outputBudget": -1,
+    "wire": {
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search",
+          "keys": [
+            "type",
+            "external_web_access"
+          ],
+          "externalWebAccess": true
+        }
+      ],
+      "choiceKind": "string",
+      "choiceValue": "required",
+      "input": [
+        {
+          "role": "developer",
+          "partTypes": [
+            "input_text"
+          ]
+        },
+        {
+          "role": "user",
+          "partTypes": [
+            "input_text"
+          ]
+        }
+      ],
+      "routingKeyPresent": true,
+      "routingKeyFingerprint": "c0ace88716d3506237d4900744dfcaec5acab2b4a5d90407db19864bfe2b445f",
+      "stream": true,
+      "store": false
+    },
+    "httpStatus": 200,
+    "finish": "COMPLETED",
+    "returnedModel": "gpt-6.1-sol",
+    "nativeSources": [
+      "https:\/\/go.dev\/doc\/devel\/release",
+      "https:\/\/blog.mozilla.org\/sumo\/2026\/08\/19\/firefox-new-release-cadence-and-what-to-expect\/",
+      "https:\/\/go.dev\/blog\/go1.23",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0\/releasenotes\/?redirect_source=mozilla-org",
+      "https:\/\/blog.mozilla.org\/l10n\/2026\/07\/23\/firefox-release-changes-and-localization\/",
+      "https:\/\/www.mozilla.org\/en-US\/firefox\/releases\/",
+      "https:\/\/developer.mozilla.org\/en-US\/Firefox\/Releases\/138",
+      "https:\/\/wiki.mozilla.org\/RapidRelease\/Calendar",
+      "https:\/\/release.mozilla.org\/firefox\/release\/2017\/04\/17\/dawn-project-faq",
+      "https:\/\/wiki.mozilla.org\/Release_Management\/Release_Process",
+      "https:\/\/developer.mozilla.org\/ja\/docs\/Mozilla\/Firefox\/Releases\/138",
+      "https:\/\/www.mozilla.org\/en-US\/security\/known-vulnerabilities\/firefox\/",
+      "https:\/\/research.mozilla.org\/files\/2022\/10\/Mozilla-Five-Walled-Gardens.pdf",
+      "https:\/\/assets.publishing.service.gov.uk\/media\/673f2d992ff787d4e01b09ce\/appendix_a_-_browser_comparison.pdf",
+      "https:\/\/www.reddit.com\/r\/firefox\/comments\/1kp5m1i",
+      "https:\/\/en.wikipedia.org\/wiki\/Firefox_version_history",
+      "https:\/\/en.wikipedia.org\/wiki\/Firefox",
+      "https:\/\/www.reddit.com\/r\/golang\/comments\/1ercdgw",
+      "https:\/\/www.reddit.com\/r\/firefox\/comments\/1kan4tq",
+      "https:\/\/www.reddit.com\/r\/firefox\/comments\/1usr4yp\/firefox_will_start_pushing_new_releases_every_two\/",
+      "https:\/\/en.wikipedia.org\/wiki\/Long-term_support",
+      "https:\/\/www.reddit.com\/r\/firefox\/comments\/1vrovv2\/starting_today_a_new_major_firefox_release_is_now\/",
+      "https:\/\/www.reddit.com\/r\/PDQDeploy\/comments\/1kaszfg",
+      "https:\/\/www.reddit.com\/r\/firefox\/comments\/1uwa1oh\/mozilla_firefox_to_follow_google_chrome_microsoft\/"
+    ],
+    "webSearchPerformed": true,
+    "publicFixtureReply": "我会核对两者的官方发布记录，并简要比较版本发布节奏。已联网核验官方记录：\n\n- **Go 1.23.0：2024 年 8 月 13 日**。官方来源：Go《Release History》，明确列出 `go1.23.0 (released 2024-08-13)`。([go.dev](https:\/\/go.dev\/doc\/devel\/release?utm_source=openai))\n- **Firefox 138.0：2025 年 4 月 29 日**。官方来源：Firefox 138.0 发布说明，注明当天首次向正式发布渠道用户提供。([firefox.com](https:\/\/www.firefox.com\/en-US\/firefox\/138.0\/releasenotes\/?redirect_source=mozilla-org))\n\n**发布节奏比较：**Go 的主要版本约每 **6 个月**发布一次；Firefox 138.0 所处时期的主要版本约每 **4 周**发布一次，因此 Firefox 迭代更频繁。([go.googlesource.com](https:\/\/go.googlesource.com\/wiki\/%2B\/425389da5d50622813edc5293c6af264faa6dba5\/Go-Release-Cycle.md?utm_source=openai)) 截至 2026 年 10 月 13 日，Firefox 已从 **2026 年 9 月 1 日的 155 版**起改为每 **2 周**发布一次。([blog.mozilla.org](https:\/\/blog.mozilla.org\/sumo\/2026\/08\/19\/firefox-new-release-cadence-and-what-to-expect\/?utm_source=openai))",
+    "input": 21744,
+    "output": 424
+  },
+  {
+    "requestedModel": "gpt-6-astra",
+    "outcome": "NetworkFailure",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 180000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "RESPONSES_API",
+    "endpointPath": "\/v1\/responses",
+    "outputBudget": -1,
+    "wire": {
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search",
+          "keys": [
+            "type",
+            "external_web_access",
+            "search_context_size"
+          ],
+          "externalWebAccess": true,
+          "searchContextSize": "low"
+        }
+      ],
+      "choiceKind": "string",
+      "choiceValue": "required",
+      "input": [
+        {
+          "role": "developer",
+          "partTypes": [
+            "input_text"
+          ]
+        },
+        {
+          "role": "user",
+          "partTypes": [
+            "input_text"
+          ]
+        }
+      ],
+      "routingKeyPresent": true,
+      "routingKeyFingerprint": "087d4e14270fb158fdf6af3dd1e56a94d1a06cc8df95cfa5d35d4185d966824e",
+      "stream": true,
+      "store": false
+    },
+    "kind": "IO",
+    "exceptionClass": "IOException"
+  },
+  {
+    "requestedModel": "openai\/gpt-6-luna",
+    "outcome": "NetworkFailure",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 2048,
+    "wire": {
+      "maxTokens": 2048,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "kind": "IO",
+    "exceptionClass": "SocketException"
+  },
+  {
+    "requestedModel": "openai\/gpt-6-luna",
+    "outcome": "NetworkFailure",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 2048,
+    "wire": {
+      "maxTokens": 2048,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    },
+    "kind": "IO",
+    "exceptionClass": "SocketException"
+  },
+  {
+    "requestedModel": "qwen3.6-flash",
+    "outcome": "StreamedResponse",
+    "validFrames": 871,
+    "reasoningChars": 7664,
+    "firstFrameMillis": 342,
+    "readTimeoutMillis": 180000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "RESPONSES_API",
+    "endpointPath": "\/compatible-mode\/v1\/responses",
+    "outputBudget": 65536,
+    "wire": {
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "web_search",
+          "keys": [
+            "type"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [
+        {
+          "role": "system",
+          "partTypes": [
+            "input_text"
+          ]
+        },
+        {
+          "role": "user",
+          "partTypes": [
+            "input_text"
+          ]
+        }
+      ],
+      "routingKeyPresent": false,
+      "maxOutputTokens": 65536,
+      "stream": true,
+      "store": false
+    },
+    "httpStatus": 200,
+    "finish": "COMPLETED",
+    "returnedModel": "qwen3.6-flash",
+    "nativeSources": [
+      "https:\/\/go.dev\/doc\/devel\/release",
+      "https:\/\/go.dev\/doc\/go1.23",
+      "https:\/\/endoflife.date\/go",
+      "https:\/\/www.reddit.com\/r\/golang\/comments\/1ikrrpa\/go_asking_for_version_1231\/",
+      "https:\/\/go.dev\/blog\/go1.23",
+      "https:\/\/x.com\/golang\/status\/1823404920583663807",
+      "https:\/\/groups.google.com\/g\/golang-dev\/c\/x4lICMSWuHg",
+      "https:\/\/medium.com\/@dmytro.misik\/go-1-23-personal-top-features-9eac82c5466b",
+      "https:\/\/antonz.org\/go-1-23\/",
+      "https:\/\/tip.golang.org\/doc\/next",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0\/releasenotes\/",
+      "https:\/\/ftp.mozilla.org\/pub\/firefox\/releases\/138.0\/",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0.4\/releasenotes\/",
+      "https:\/\/en.wikipedia.org\/wiki\/Firefox_version_history",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/138.0.1\/releasenotes\/",
+      "https:\/\/www.reddit.com\/r\/firefox\/comments\/1kca12d\/firefox_13801_see_all_new_features_updates_and\/",
+      "https:\/\/www.firefox.com\/en-US\/firefox\/android\/138.0\/releasenotes\/",
+      "https:\/\/whattrainisitnow.com\/calendar\/",
+      "https:\/\/www.firefox.com\/en-US\/releases\/",
+      "https:\/\/www.apkmirror.com\/apk\/mozilla\/firefox\/firefox-fast-private-browser-138-0-release\/"
+    ],
+    "webSearchPerformed": true,
+    "publicFixtureReply": "根据实时联网检索结果，Go 1.23.0 与 Firefox 138.0 的官方发布日期及节奏比较如下：\n\n### 1. 官方发布日期与来源\n\n*   **Go 1.23.0**\n    *   **发布日期**：**2024年8月13日**\n    *   **官方来源**：Go 官方博客 ([golang.org](https:\/\/go.dev\/blog\/go1.23))\n\n*   **Firefox 138.0**\n    *   **发布日期**：**2025年4月29日**\n    *   **官方来源**：Mozilla Firefox 发布说明页面 ([mozilla.org](https:\/\/www.firefox.com\/en-US\/firefox\/138.0\/releasenotes\/))\n\n> **注意**：鉴于当前系统时间为 2026年，上述版本均属于已发布的过往历史版本。\n\n### 2. 发布节奏比较\n\n这两个软件在发布策略上存在显著差异：\n\n1.  **Go 语言（半年一次）**：\n    Go 采用非常稳定的**双年度（每6个月）**大版本发布周期。Go 1.23.0 正是这一规律下的产物（紧随 2023年8月的 Go 1.22 之后），旨在提供长期稳定支持和向后兼容性。\n\n2.  **Firefox（快速迭代月度发布）**：\n    Firefox 常规渠道（Stable）保持**每周或每月**的快速迭代节奏。Firefox 138.0 作为常规版本之一，在其之前的版本号基础上迅速推进。Firefox 仅针对需要长期维护的特殊场景提供大约每 18 个月的“扩展支持版本”（ESR，如 128 ESR）。\n\n**总结**：相较于 Firefox 追求快速功能迭代的“月更”节奏，Go 语言的发布更为审慎和低频，以 6 个月为固定周期推出主要更新。",
+    "input": 3840,
+    "output": 2999
+  }
+]

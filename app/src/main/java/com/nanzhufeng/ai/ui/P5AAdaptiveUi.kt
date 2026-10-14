@@ -84,6 +84,9 @@ internal enum class P5ARoute(val wireValue: String, val label: String) {
     ADAPTERS("adapters", "导入与适配"),
     CONTROL("control", "工作区");
 
+    fun visibleRoute(): P5ARoute = if (!com.nanzhufeng.ai.domain.ProductScope.workspacesVisible &&
+        this in setOf(PROJECTS, KNOWLEDGE, CONTROL)) CONVERSATION else this
+
     companion object {
         fun fromWireValue(value: String?): P5ARoute? = entries.firstOrNull { it.wireValue == value }
     }
@@ -179,7 +182,8 @@ internal class P5ANavigationViewModel(private val savedStateHandle: SavedStateHa
 }
 
 private fun P5AUiState.normalized(): P5AUiState =
-    if (route == P5ARoute.CONVERSATION) this else copy(conversationDrawerOpen = false)
+    if (route.visibleRoute() != route) copy(route = route.visibleRoute(), conversationDrawerOpen = false)
+    else if (route == P5ARoute.CONVERSATION) this else copy(conversationDrawerOpen = false)
 
 @Composable
 internal fun P5AAdaptiveScaffold(

@@ -1,5 +1,10 @@
 # P6-D 紧凑态消息长列表滚动与窗口恢复合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 跨形态滚动与窗口恢复 ](P6D_COMPACT_CHAT_SCROLL_AND_WINDOW_RECOVERY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-D 紧凑态消息长列表滚动与窗口恢复合同
+<!-- contract-governance:end -->
+
 ## 唯一目标
 
 在既有 Desktop chat-first shell 中，确认并补足紧凑窗口的长消息列表滚动与“窄窗口抽屉 → 展开窗口 → 再次紧凑”恢复行为。此合同只定义前端瞬时展示状态；Conversation 和消息真值继续由现有 Rust `DesktopWorkspaceStore` 拥有。

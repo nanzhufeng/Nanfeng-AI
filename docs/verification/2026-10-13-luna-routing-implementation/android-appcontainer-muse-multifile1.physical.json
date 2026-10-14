@@ -1,0 +1,66 @@
+[
+  {
+    "requestedModel": "meta\/muse-wonder",
+    "outcome": "HttpResponse",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 32768,
+    "httpStatus": 403,
+    "responseKnownFields": [
+      "error"
+    ],
+    "hasErrorObject": true,
+    "contentChars": 0,
+    "thinkingChars": 0,
+    "wire": {
+      "maxTokens": 32768,
+      "toolsPresent": true,
+      "toolsCount": 1,
+      "tools": [
+        {
+          "type": "openrouter:web_search",
+          "keys": [
+            "type",
+            "parameters"
+          ]
+        }
+      ],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": true
+    }
+  },
+  {
+    "requestedModel": "meta\/muse-wonder",
+    "outcome": "HttpResponse",
+    "validFrames": 0,
+    "reasoningChars": 0,
+    "readTimeoutMillis": 90000,
+    "maxStreamDurationMillis": 300000,
+    "streamTextMode": "IMMEDIATE",
+    "endpointPath": "\/api\/v1\/chat\/completions",
+    "outputBudget": 943718,
+    "httpStatus": 403,
+    "responseKnownFields": [
+      "error"
+    ],
+    "hasErrorObject": true,
+    "contentChars": 0,
+    "thinkingChars": 0,
+    "wire": {
+      "maxTokens": 943718,
+      "toolsPresent": false,
+      "toolsCount": 0,
+      "tools": [],
+      "choiceKind": "absent",
+      "input": [],
+      "routingKeyPresent": false,
+      "stream": false
+    }
+  }
+]

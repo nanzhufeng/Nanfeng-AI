@@ -1,0 +1,629 @@
+{
+  "schemaVersion": 1,
+  "scope": "仓库配置与维护规范；客户端运行时能力仍由原ModelRegistry/Profile/Adapter判定，不代表最新官方目录或真实服务验收。",
+  "providers": [
+    {
+      "providerId": "OPENROUTER",
+      "platform": "OPENROUTER",
+      "endpoint": "https://openrouter.ai/api/v1",
+      "defaultPresetId": "GPT_6_LUNA",
+      "credentialGroup": "OPENROUTER",
+      "offlineProtocol": "CHAT_COMPLETIONS",
+      "webProtocol": "CHAT_COMPLETIONS",
+      "webRoute": "OPENROUTER_SERVER_TOOL",
+      "webEndpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "nativeMediaWithWeb": true,
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md"
+    },
+    {
+      "providerId": "DEEPSEEK",
+      "platform": "DEEPSEEK",
+      "endpoint": "https://api.deepseek.com/v1",
+      "defaultPresetId": "DEEPSEEK_V4_PRO",
+      "credentialGroup": "DEEPSEEK",
+      "offlineProtocol": "CHAT_COMPLETIONS",
+      "webProtocol": "MESSAGES",
+      "webRoute": "DEEPSEEK_MESSAGES",
+      "webEndpoint": "https://api.deepseek.com/anthropic/v1/messages",
+      "nativeMediaWithWeb": false,
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md"
+    },
+    {
+      "providerId": "ZHIPU",
+      "platform": "ZHIPU",
+      "endpoint": "https://open.bigmodel.cn/api/paas/v4",
+      "defaultPresetId": "GLM_5_3_FLASH",
+      "credentialGroup": "ZHIPU",
+      "offlineProtocol": "CHAT_COMPLETIONS",
+      "webProtocol": "CHAT_COMPLETIONS",
+      "webRoute": "ZHIPU_CHAT_COMPLETIONS",
+      "webEndpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+      "nativeMediaWithWeb": false,
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md"
+    },
+    {
+      "providerId": "QWEN",
+      "platform": "QWEN",
+      "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "defaultPresetId": "QWEN_3_7_PLUS",
+      "credentialGroup": "QWEN",
+      "offlineProtocol": "CHAT_COMPLETIONS",
+      "webProtocol": "RESPONSES",
+      "webRoute": "QWEN_RESPONSES",
+      "webEndpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/responses",
+      "nativeMediaWithWeb": false,
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md"
+    },
+    {
+      "providerId": "RELAYCORE_CLAUDE",
+      "platform": "RelayCore",
+      "endpoint": "https://api.relaycore.cn/v1",
+      "defaultPresetId": "RELAYCORE_SONNET_5_5",
+      "credentialGroup": "RELAYCORE_CLAUDE",
+      "offlineProtocol": "MESSAGES",
+      "webProtocol": "COMPANION",
+      "webRoute": "RELAYCORE_COMPANION",
+      "webEndpoint": "https://api.relaycore.cn/v1/responses",
+      "nativeMediaWithWeb": false,
+      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md"
+    },
+    {
+      "providerId": "RELAYCORE_GPT",
+      "platform": "RelayCore",
+      "endpoint": "https://api.relaycore.cn/v1",
+      "defaultPresetId": "RELAYCORE_GPT_6_1_SOL",
+      "credentialGroup": "RELAYCORE_GPT",
+      "offlineProtocol": "CHAT_COMPLETIONS",
+      "webProtocol": "RESPONSES",
+      "webRoute": "RELAYCORE_GPT_RESPONSES",
+      "webEndpoint": "https://api.relaycore.cn/v1/responses",
+      "nativeMediaWithWeb": false,
+      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md"
+    },
+    {
+      "providerId": "RELAYCORE_GEMINI",
+      "platform": "RelayCore",
+      "endpoint": "https://api.relaycore.cn/v1",
+      "defaultPresetId": "RELAYCORE_GEMINI_3_8_FLASH",
+      "credentialGroup": "RELAYCORE_GEMINI",
+      "offlineProtocol": "CHAT_COMPLETIONS",
+      "webProtocol": "COMPANION",
+      "webRoute": "RELAYCORE_COMPANION",
+      "webEndpoint": "https://api.relaycore.cn/v1/responses",
+      "nativeMediaWithWeb": false,
+      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md"
+    }
+  ],
+  "models": [
+    {
+      "presetId": "CLAUDE_OPUS_5_5",
+      "providerId": "OPENROUTER",
+      "modelId": "anthropic/claude-opus-5.5",
+      "displayName": "Claude Opus 5.5",
+      "selection": "深度",
+      "exceptionIds": [
+        "OR_OPUS_MEDIUM"
+      ]
+    },
+    {
+      "presetId": "CLAUDE_SONNET_5_5",
+      "providerId": "OPENROUTER",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "displayName": "Claude Sonnet 5.5",
+      "selection": "日常",
+      "exceptionIds": [
+        "OR_HIGH"
+      ]
+    },
+    {
+      "presetId": "CLAUDE_HAIKU_5_5",
+      "providerId": "OPENROUTER",
+      "modelId": "anthropic/claude-haiku-5.5",
+      "displayName": "Claude Haiku 5.5",
+      "selection": "日常",
+      "exceptionIds": []
+    },
+    {
+      "presetId": "GPT_6_1_SOL",
+      "providerId": "OPENROUTER",
+      "modelId": "openai/gpt-6.1-sol",
+      "displayName": "GPT-6.1 Sol",
+      "selection": "深度",
+      "exceptionIds": [
+        "OR_HIGH"
+      ]
+    },
+    {
+      "presetId": "GPT_6_LUNA",
+      "providerId": "OPENROUTER",
+      "modelId": "openai/gpt-6-luna",
+      "displayName": "GPT-6 Luna",
+      "selection": "日常",
+      "exceptionIds": []
+    },
+    {
+      "presetId": "GEMINI_3_8_FLASH",
+      "providerId": "OPENROUTER",
+      "modelId": "google/gemini-3.8-flash",
+      "displayName": "Gemini 3.8 Flash",
+      "selection": "日常",
+      "exceptionIds": [
+        "OR_GEMINI_SEARCH_INTENT"
+      ]
+    },
+    {
+      "presetId": "DEEPSEEK_V4_PRO",
+      "providerId": "DEEPSEEK",
+      "modelId": "deepseek-v4-pro",
+      "displayName": "DeepSeek V4 Pro",
+      "selection": "深度",
+      "exceptionIds": [
+        "DEEPSEEK_MESSAGES"
+      ]
+    },
+    {
+      "presetId": "DEEPSEEK_V4_FLASH",
+      "providerId": "DEEPSEEK",
+      "modelId": "deepseek-flash",
+      "displayName": "DeepSeek V4.1 Flash",
+      "selection": "日常",
+      "exceptionIds": [
+        "DEEPSEEK_MESSAGES"
+      ]
+    },
+    {
+      "presetId": "MUSE_WONDER",
+      "providerId": "OPENROUTER",
+      "modelId": "meta/muse-wonder",
+      "displayName": "Muse Wonder",
+      "selection": "深度",
+      "exceptionIds": [
+        "OR_MUSE_RESPONSES"
+      ]
+    },
+    {
+      "presetId": "GLM_5_3",
+      "providerId": "ZHIPU",
+      "modelId": "glm-5.3",
+      "displayName": "GLM-5.3",
+      "selection": "深度",
+      "exceptionIds": [
+        "GLM_BUDGET",
+        "ZHIPU_SCOPE"
+      ]
+    },
+    {
+      "presetId": "GLM_5_3_FLASH",
+      "providerId": "ZHIPU",
+      "modelId": "glm-5.3-flash",
+      "displayName": "GLM-5.3 Flash",
+      "selection": "日常",
+      "exceptionIds": [
+        "GLM_BUDGET",
+        "ZHIPU_SCOPE"
+      ]
+    },
+    {
+      "presetId": "QWEN_3_7_PLUS",
+      "providerId": "QWEN",
+      "modelId": "qwen3.7-plus",
+      "displayName": "Qwen3.7-Plus",
+      "selection": "日常",
+      "exceptionIds": [
+        "QWEN_CNY"
+      ]
+    },
+    {
+      "presetId": "QWEN_3_8_MAX",
+      "providerId": "QWEN",
+      "modelId": "qwen3.8-max",
+      "displayName": "Qwen3.8-Max",
+      "selection": "深度",
+      "exceptionIds": [
+        "QWEN_MAX",
+        "QWEN_CNY"
+      ]
+    },
+    {
+      "presetId": "RELAYCORE_OPUS_5_5",
+      "providerId": "RELAYCORE_CLAUDE",
+      "modelId": "claude-opus-5.5",
+      "displayName": "Opus 5.5 · Kiro正价",
+      "selection": "RelayCore/DEEP",
+      "exceptionIds": [
+        "RC_COMPANION",
+        "RC_CLAUDE_EFFORT",
+        "RC_OPUS_ALIAS",
+        "RC_CNY"
+      ]
+    },
+    {
+      "presetId": "RELAYCORE_SONNET_5_5",
+      "providerId": "RELAYCORE_CLAUDE",
+      "modelId": "claude-sonnet-5-5",
+      "displayName": "Sonnet 5.5 · Kiro正价",
+      "selection": "RelayCore/DAILY",
+      "exceptionIds": [
+        "RC_COMPANION",
+        "RC_CLAUDE_EFFORT",
+        "RC_CNY"
+      ]
+    },
+    {
+      "presetId": "RELAYCORE_GPT_6_1_SOL",
+      "providerId": "RELAYCORE_GPT",
+      "modelId": "gpt-6.1-sol",
+      "displayName": "GPT-6.1 Sol · Pro3",
+      "selection": "RelayCore/DEEP",
+      "exceptionIds": [
+        "RC_REQUIRED",
+        "RC_CNY",
+        "RC_COMPANION"
+      ]
+    },
+    {
+      "presetId": "RELAYCORE_GPT_6_ASTRA",
+      "providerId": "RELAYCORE_GPT",
+      "modelId": "gpt-6-astra",
+      "displayName": "GPT-6 Astra · Pro3",
+      "selection": "RelayCore/DEEP",
+      "exceptionIds": [
+        "RC_REQUIRED",
+        "RC_ASTRA_ADAPTIVE",
+        "RC_CNY",
+        "RC_COMPANION"
+      ]
+    },
+    {
+      "presetId": "RELAYCORE_GEMINI_3_8_FLASH",
+      "providerId": "RELAYCORE_GEMINI",
+      "modelId": "gemini-3.8-flash",
+      "displayName": "Gemini 3.8 Flash · Gemini",
+      "selection": "RelayCore/DAILY",
+      "exceptionIds": [
+        "RC_COMPANION",
+        "RC_CNY",
+        "RC_GEMINI_GROUNDED_OUTPUT"
+      ]
+    },
+    {
+      "presetId": "RELAYCORE_GEMINI_3_1_PRO",
+      "providerId": "RELAYCORE_GEMINI",
+      "modelId": "gemini-3.1-pro",
+      "displayName": "Gemini 3.1 Pro · Gemini",
+      "selection": "RelayCore/DEEP",
+      "exceptionIds": [
+        "RC_COMPANION",
+        "RC_CNY",
+        "RC_GEMINI_GROUNDED_OUTPUT"
+      ]
+    },
+    {
+      "presetId": "QWEN_3_6_FLASH",
+      "providerId": "QWEN",
+      "modelId": "qwen3.6-flash",
+      "displayName": "Qwen3.6 Flash",
+      "selection": "Auto候选专用",
+      "exceptionIds": [
+        "QWEN_CNY"
+      ]
+    }
+  ],
+  "specialModels": [
+    {
+      "presetId": "GLM_OCR",
+      "providerId": "ZHIPU",
+      "modelId": "glm-ocr",
+      "usage": "DOCUMENT_OCR",
+      "contract": "docs/GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md"
+    }
+  ],
+  "authorities": [
+    {
+      "id": "catalog-and-identity",
+      "contract": "docs/model-service/MODEL_SERVICE_ARCHITECTURE.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ModelService.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ResolvedModel.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/MultiProviderModelRegistry.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/desktop_model_service_v1.rs",
+        "desktop/src/model-settings-browser.mjs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/domain/MultiProviderModelRegistryContractsTest.kt"
+      ]
+    },
+    {
+      "id": "selection-and-auto",
+      "contract": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatRoutingSnapshot.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/auto_chat_routing_v1.rs",
+        "desktop/src/auto-chat-routing.mjs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/domain/NormalChatRoutingSnapshotLoaderTest.kt",
+        "desktop/tests/auto-chat-routing.test.mjs"
+      ]
+    },
+    {
+      "id": "egress-and-compatibility",
+      "contract": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatSendAttempt.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorizationTest.kt"
+      ]
+    },
+    {
+      "id": "request-stream-search",
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchCoordinator.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchInventory.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchCheckpointCache.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+        "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+        "desktop/src-tauri/src/attachment_search_checkpoint_v1.rs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt",
+        "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentWebSearchCoordinatorTest.kt",
+        "protocol/fixtures/attachment-search-coverage-v2.json",
+        "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentSearchCheckpointTest.kt",
+        "desktop/src-tauri/src/attachment_search_live_matrix_tests.rs"
+      ]
+    },
+    {
+      "id": "companion-and-fact-coverage",
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/relaycore_web_search_v1.rs",
+        "desktop/src-tauri/src/attachment_web_search_v1.rs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanionTest.kt",
+        "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlanTest.kt"
+      ]
+    },
+    {
+      "id": "material-projection",
+      "contract": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/UniversalChatAttachmentBridge.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/attachment_document_text_v1.rs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/ai/UniversalChatAttachmentBridgeContractsTest.kt"
+      ]
+    },
+    {
+      "id": "answer-language",
+      "contract": "docs/ANSWER_LANGUAGE_CURRENT_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/AnswerLanguagePolicy.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/answer_language_v1.rs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt"
+      ]
+    },
+    {
+      "id": "runtime-and-island",
+      "contract": "docs/NANFENG_ISLAND_CURRENT_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/GenerationIsland.kt",
+        "app/src/main/java/com/nanzhufeng/ai/background/GenerationIslandRuntime.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/nanfeng_island_v1.rs",
+        "desktop/src/nanfeng-island.mjs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/domain/GenerationIslandTest.kt"
+      ]
+    },
+    {
+      "id": "usage-and-cost",
+      "contract": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/UsageLedger.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/usage_ledger_v1.rs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/domain/ConversationCostEstimatorTest.kt",
+        "app/src/test/java/com/nanzhufeng/ai/domain/UsageLedgerContractsTest.kt"
+      ]
+    },
+    {
+      "id": "special-ocr",
+      "contract": "docs/GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md",
+      "androidOwners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/OfficialGlmOcrTransport.kt"
+      ],
+      "desktopOwners": [
+        "desktop/src-tauri/src/desktop_model_service_v1.rs"
+      ],
+      "verification": [
+        "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "id": "RC_REQUIRED",
+      "appliesTo": [
+        "RELAYCORE_GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_ASTRA"
+      ],
+      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "rule": "Sol/Astra普通文字Responses使用required、external_web_access=true及include web_search_call.action.sources；附件路径遵循RC_COMPANION，真实来源和返回身份分别验证。"
+    },
+    {
+      "id": "RC_COMPANION",
+      "appliesTo": [
+        "RELAYCORE_OPUS_5_5",
+        "RELAYCORE_SONNET_5_5",
+        "RELAYCORE_GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_ASTRA",
+        "RELAYCORE_GEMINI_3_8_FLASH",
+        "RELAYCORE_GEMINI_3_1_PRO"
+      ],
+      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "rule": "普通文字Sol/Astra自身Responses，其余四款及RC六款联网附件由固定OpenRouter Luna原生检索后交回原模型；准确接收方／材料授权，来源、不同币种用量及失败分别保留。"
+    },
+    {
+      "id": "RC_CLAUDE_EFFORT",
+      "appliesTo": [
+        "RELAYCORE_OPUS_5_5",
+        "RELAYCORE_SONNET_5_5"
+      ],
+      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "rule": "普通Messages SSE；Opus medium、Sonnet high，system与完整原材料保留。"
+    },
+    {
+      "id": "RC_OPUS_ALIAS",
+      "appliesTo": [
+        "RELAYCORE_OPUS_5_5"
+      ],
+      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "rule": "唯一已验同组别名：claude-opus-5-5→claude-opus-5.5；不是运行时自动fallback。"
+    },
+    {
+      "id": "RC_ASTRA_ADAPTIVE",
+      "appliesTo": [
+        "RELAYCORE_GPT_6_ASTRA"
+      ],
+      "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "rule": "简单查询low，复杂查询medium，effort与搜索上下文一致，模型身份保持。"
+    },
+    {
+      "id": "OR_OPUS_MEDIUM",
+      "appliesTo": [
+        "CLAUDE_OPUS_5_5"
+      ],
+      "contract": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "rule": "OpenRouter reasoning.effort=medium；不套RC的output_config参数。"
+    },
+    {
+      "id": "OR_HIGH",
+      "appliesTo": [
+        "CLAUDE_SONNET_5_5",
+        "GPT_6_1_SOL"
+      ],
+      "contract": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "rule": "当前OpenRouter默认high；联网不能删除reasoning字段。"
+    },
+    {
+      "id": "QWEN_MAX",
+      "appliesTo": [
+        "QWEN_3_8_MAX"
+      ],
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "rule": "Responses enable_thinking=true、reasoning low，上限16384；离线字段由Qwen适配器处理。"
+    },
+    {
+      "id": "GLM_BUDGET",
+      "appliesTo": [
+        "GLM_5_3",
+        "GLM_5_3_FLASH"
+      ],
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "rule": "thinking enabled；内部显式附件检索low，原选最终回答及普通请求max（C12）；Mac输出预算32768，Android受当前profile约束，预算不冒充用量。"
+    },
+    {
+      "id": "ZHIPU_SCOPE",
+      "appliesTo": [
+        "GLM_5_3",
+        "GLM_5_3_FLASH"
+      ],
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "rule": "附件要点作为search_query；关闭意图分支并要求实际搜索及来源。"
+    },
+    {
+      "id": "DEEPSEEK_MESSAGES",
+      "appliesTo": [
+        "DEEPSEEK_V4_PRO",
+        "DEEPSEEK_V4_FLASH"
+      ],
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "rule": "联网走anthropic Messages原生搜索，单请求5–12次；离线仍Chat Completions。"
+    },
+    {
+      "id": "RC_CNY",
+      "appliesTo": [
+        "RELAYCORE_OPUS_5_5",
+        "RELAYCORE_SONNET_5_5",
+        "RELAYCORE_GPT_6_1_SOL",
+        "RELAYCORE_GPT_6_ASTRA",
+        "RELAYCORE_GEMINI_3_8_FLASH",
+        "RELAYCORE_GEMINI_3_1_PRO"
+      ],
+      "contract": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+      "rule": "当前账户名义金额为CNY；usage.cost没有可信结算语义时不作美元实付，不二次换汇。"
+    },
+    {
+      "id": "QWEN_CNY",
+      "appliesTo": [
+        "QWEN_3_7_PLUS",
+        "QWEN_3_8_MAX",
+        "QWEN_3_6_FLASH"
+      ],
+      "contract": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+      "rule": "新本地估算按冻结北京标准价CNY，历史金额不重算，估算不是结算。"
+    },
+    {
+      "id": "RC_GEMINI_GROUNDED_OUTPUT",
+      "appliesTo": [
+        "RELAYCORE_GEMINI_3_8_FLASH",
+        "RELAYCORE_GEMINI_3_1_PRO"
+      ],
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "rule": "检索后grounded普通回答与Android现行profile对齐，不发送legacy max_tokens；同模型／Key／端点，无自动协议恢复。合法完成但无可见正文明确EMPTY_COMPLETION，不伪造回答。"
+    },
+    {
+      "id": "OR_MUSE_RESPONSES",
+      "appliesTo": [
+        "MUSE_WONDER"
+      ],
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "rule": "Muse纯文字与完整本地可读文件经同OpenRouter／同模型／同Key的Responses原生搜索；不发送不兼容required，不转换媒体路线。结构化真实来源与终态仍验收；费用按真实Responses回执保留。"
+    },
+    {
+      "id": "OR_GEMINI_SEARCH_INTENT",
+      "appliesTo": [
+        "GEMINI_3_8_FLASH"
+      ],
+      "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "rule": "开启自身搜索时在原Chat Completions请求中使用web plugin（engine=native）启动原生grounding，保留搜索指令；不同时发可选server tool或不兼容required。文字／可读文件／媒体共用，禁用或grounded回答不注入；同模型／渠道／Key、来源成功门保持。该plugin兼容例外的后续迁移须同题真实验收。"
+    }
+  ],
+  "autoPolicy": "protocol/fixtures/auto-routing-rc-domestic-20261010.json",
+  "historicalPolicy": "保留各平台历史身份与授权原值；读取兼容不授予新发送权限。新默认、目录映射、同组API别名、精确冻结重试是不同规则，不做全局静默替换。"
+}

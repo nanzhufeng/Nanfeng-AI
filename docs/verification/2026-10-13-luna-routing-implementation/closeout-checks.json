@@ -1,0 +1,9 @@
+{
+  "sourcePaths": 56,
+  "sourceChanged": 55,
+  "normalizedReceipts": 54,
+  "brokenNewLinks": [],
+  "secretPatternHits": [],
+  "formalDevicesInstalled": false,
+  "sourceSnapshotScope": "only this phase owned files; HEAD is not a full WIP snapshot"
+}

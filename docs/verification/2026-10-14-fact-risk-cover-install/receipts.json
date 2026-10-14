@@ -1,0 +1,35 @@
+{
+  "android": {
+    "installed": true,
+    "package": "com.nanzhufeng.ai",
+    "versionCode": 93,
+    "versionName": "1.0.29",
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "sha256": "c637e365a70de7d631fd107491a8e78d5e301d92f6148872c379add0a2080470",
+    "exactCandidateBytes": true,
+    "dataMetadataPreserved": true,
+    "remoteTempRemoved": true,
+    "completedAt": "2026-10-14 10:49:19 +0800",
+    "launched": false
+  },
+  "mac": {
+    "installed": true,
+    "version": "1.0.29",
+    "bundleId": "com.nanzhufeng.ai.desktop",
+    "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+    "exactCandidateFiles": true,
+    "dataFiles": 1595,
+    "dataBytes": 6069511187,
+    "dataChanges": {
+      "added": 0,
+      "deleted": 0,
+      "changed": 0
+    },
+    "completedAt": "2026-10-14 10:48:51 +0800",
+    "launched": false,
+    "dmgSha256": "6c12b1996a5655c75c299197e9cb6bd36560e556fc882a807d0be81280824779"
+  },
+  "sourceFiles": 1152,
+  "testedOwnersUnchanged": 8,
+  "paidRequests": 0
+}

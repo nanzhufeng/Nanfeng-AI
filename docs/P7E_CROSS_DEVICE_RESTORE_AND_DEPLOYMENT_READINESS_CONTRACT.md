@@ -1,7 +1,20 @@
 # 南枫 AI P7-E 跨设备加密恢复、冲突与部署验证就绪合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 已选对话云同步与账号边界 ](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P7-E 跨设备加密恢复、冲突与部署验证就绪合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：进行中；本阶段先完成可重复的本地双端隔离闭环与不含秘密的部署验证器。真实 Google/Supabase、真机 OAuth、跨网络和发布仍是外部门，不因本地 fake 通过而完成。
+
+## 当前适用范围
+
+本合同的fake-cloud／encrypted envelope和恢复码红队矩阵是历史加密模块的隔离验收，不是当前Google已选对话同步的资格门。现行nfai.sync.direct、无恢复码登录、账号／区域隔离、完整消息合并和读取校验遵循[P7-F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)。保留旧密文的真实兼容处理，不因其缺材料阻断其他direct记录。
+
+下面各“真实退出门”只描述当时加密方案的验收要求，不能重新强制已取消的恢复码功能或据此判断当前同步整体未接入。当前设备、服务部署、完整内容与失败恢复仍分别验证，按最新交接报告。
+
+## 历史P7-E加密隔离验收与部署记录
 
 ## 目标与唯一范围
 
@@ -55,5 +68,9 @@ fixture 仅使用非敏感 synthetic records、temporary private roots 与随机
 ## 验收与版本
 
 - 自动：P7-E Android/domain/data 及 Desktop Rust/Node harness、P7-A golden、P7-C static policy、部署预检 dry-run；并分片列出全量 Android JVM 测试类以调查 JBR SIGSEGV，任何 SIGSEGV 均不记为测试通过。
+
+
+## 历史P7-E版本与签名退出要求
+
 - 构建：Android production 更改升 `versionCode 45` / `0.3.0-p7e`，Debug/Release 同现有正式证书 `889ecf3f…e99d5`；只在 `emulator-5554` 做同签名覆盖、冷启动和无配置安全页回归，不清数据、不装 test APK、不操作 OPPO。Desktop 完整门及 Tauri app 后 ad-hoc strict verify；Windows 独立。
 - 真实退出门：明确 Supabase target + 授权 CLI/session + 私有配置 + 本应用 Google OAuth + 用户授权的真机测试，完成部署回读与 Android/Desktop 跨网络 encrypted envelope 回读。缺任一项时仅可报告“本地闭环完成 / 真实服务待验证”。

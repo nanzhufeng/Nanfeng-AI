@@ -5,7 +5,8 @@ import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.nanzhufeng.ai.data.local.NanfengAiDatabase
-import com.nanzhufeng.ai.domain.LocalBackupResult
+import com.nanzhufeng.ai.domain.*
+import com.nanzhufeng.ai.data.local.RoomNormalChatSendAttemptStore
 import com.nanzhufeng.ai.domain.LocalBackupFormat
 import java.io.File
 import java.util.UUID
@@ -148,17 +149,22 @@ class P5DLocalBackupRestoreContractsTest {
 
     @Test fun `user selected business text survives local backup`() {
         val context = ApplicationProvider.getApplicationContext<Context>(); context.deleteDatabase("nanfeng-ai.db")
-        val database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, "nanfeng-ai.db").build()
+        val database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, "nanfeng-ai.db").allowMainThreadQueries().build()
         val target = File(context.cacheDir, "p5d-secret-${UUID.randomUUID()}.nfai-backup")
         try {
             database.openHelper.writableDatabase.execSQL("INSERT INTO capture_drafts (id,text,createdAtEpochMs,schemaVersion) VALUES ('p5d-secret','api_key=abcdefghijklmnop',0,1)")
+            val attemptId=NormalChatSendAttemptId.new();val at=java.time.Instant.now()
+            RoomNormalChatSendAttemptStore(database).create(NormalChatSendAttempt(attemptId,MessageNodeId(UUID.randomUUID().toString()),ConversationId(UUID.randomUUID().toString()),ProviderId.QWEN,"qwen3.7-plus","backup-test",NormalChatSendAttemptStatus.FAILED,at,at))
+            database.openHelper.writableDatabase.execSQL("INSERT INTO normal_chat_search_checkpoints VALUES(?,?,?,?,?,?,?,?,?)",arrayOf(attemptId.value,"a".repeat(64),"A1","normalized evidence","[]","qwen3.7-plus","Qwen",0,"call-original"))
             assertTrue(AndroidLocalBackupRestoreManager(context, database, "test").export(Uri.fromFile(target)) is LocalBackupResult.Exported)
+            database.openHelper.writableDatabase.query("SELECT COUNT(*) FROM normal_chat_search_checkpoints").use {assertTrue(it.moveToFirst());assertEquals(1,it.getInt(0))}
             ZipFile(target).use { zip ->
                 val snapshot = File(context.cacheDir, "p5d-secret-snapshot-${UUID.randomUUID()}")
                 try {
                     zip.getInputStream(zip.getEntry("database/nanfeng-ai.snapshot")).use { input -> snapshot.outputStream().use(input::copyTo) }
                     val copy = android.database.sqlite.SQLiteDatabase.openDatabase(snapshot.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
                     try {
+                        copy.rawQuery("SELECT COUNT(*) FROM normal_chat_search_checkpoints",null).use {assertTrue(it.moveToFirst());assertEquals(0,it.getInt(0))}
                         copy.rawQuery("SELECT text FROM capture_drafts WHERE id='p5d-secret'", null).use { rows ->
                             assertTrue(rows.moveToFirst())
                             assertEquals("api_key=abcdefghijklmnop", rows.getString(0))
@@ -213,6 +219,7 @@ class P5DLocalBackupRestoreContractsTest {
             NanfengAiDatabase.MIGRATION_67_68,
             NanfengAiDatabase.MIGRATION_68_69,
         NanfengAiDatabase.MIGRATION_69_70,
+        NanfengAiDatabase.MIGRATION_70_71,NanfengAiDatabase.MIGRATION_71_72,
         )
         val context = ApplicationProvider.getApplicationContext<Context>(); context.deleteDatabase("nanfeng-ai.db")
         val database = Room.databaseBuilder(context, NanfengAiDatabase::class.java, "nanfeng-ai.db").build()

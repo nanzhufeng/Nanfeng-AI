@@ -42,7 +42,7 @@ class ConversationWatchLaterContractsTest {
         assertTrue(workspace.contains("if (watchLater) \"未读对话\""))
         val row = workspace.substringAfter("private fun ConversationNavigationRow(")
         assertTrue(row.indexOf("if (conversation.pinnedAt != null)") < row.indexOf("if (unread || watchLater)"))
-        assertTrue(row.indexOf("if (unread || watchLater)") < row.indexOf("Text(conversation.title"))
+        assertTrue(row.indexOf("if (unread || watchLater)") < row.indexOf("InlineConversationTitle(title = conversation.title"))
         assertTrue(viewModel.contains("fun clearConversationWatchLater(id:"))
         assertTrue(viewModel.contains("conversationReadMarkerStore.clearWatchLater(id)"))
         assertTrue(viewModel.contains("fun markConversationWatchLater(conversation: Conversation)"))

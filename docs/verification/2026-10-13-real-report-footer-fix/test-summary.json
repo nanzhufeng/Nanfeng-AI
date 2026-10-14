@@ -1,0 +1,19 @@
+{
+  "android": {
+    "tests": 1480,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 9
+  },
+  "rust": {
+    "passed": 423,
+    "failed": 0,
+    "ignored": 33
+  },
+  "desktop": {
+    "passed": 545,
+    "failed": 0,
+    "skipped": 12
+  },
+  "sourceFrozenAndInstalled": true
+}

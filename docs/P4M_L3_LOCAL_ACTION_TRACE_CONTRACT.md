@@ -1,5 +1,10 @@
 # 南枫 AI P4-M L3 本地短期操作轨迹合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 普通生成上下文与临时隔离 ](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-M L3 本地短期操作轨迹合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：已实现本地只读元数据闭环；Schema 保持 15。它补齐 P4-D 正文之外的 L3 元数据预览，不是 Provider、Prompt、RunSpec、缓存、语义摘要或任何外发能力。
 

@@ -4,25 +4,133 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.io.File
 import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
 
 class ProviderAdapterContractsTest {
+    @Test fun `Gemini own enabled search explicitly requests live tool execution without unsupported force`() {
+        val selected=model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,modelId="google/gemini-3.8-flash")
+        val adapter=OpenRouterChatAdapter()
+        for(search in listOf(true,false)) {
+            val options=if(search) ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL) else ChatRequestOptions.Standard
+            val body=(adapter.prepare(selected,listOf("user" to "力帆与理想有什么关系"),emptyList(),false,options) as ChatAdapterPrepareResult.Ready).jsonBody
+            assertEquals(search,body.contains("本轮已启用实时网页搜索"));assertFalse(body.contains("\"tool_choice\":\"required\""));assertTrue(body.contains("力帆与理想有什么关系"))
+        }
+    }
+
+    @Test fun `OpenRouter error finish cannot be a successful stop and retains fee`() {
+        val event=OpenRouterChatAdapter().decodeStreamingEvent("""{"choices":[{"delta":{"content":"partial"},"finish_reason":"error"}],"usage":{"prompt_tokens":100,"completion_tokens":20,"cost":0.0001}}""")!!
+        assertEquals(ProviderStreamTerminal.FAILED,event.terminal);assertEquals("STREAM_PROVIDER_ERROR",event.terminalFailureCode);assertEquals(100L,event.reportedProviderCost?.totalMicros)
+    }
+
+    @Test fun `empty Muse Responses completion retains the returned fee as a failed reply`() {
+        val decoded=OpenRouterChatAdapter().decodeNonStreaming("""{"object":"response","status":"completed","model":"meta/muse-wonder","output":[],"usage":{"cost":0.0001}}""") as ChatAdapterDecodedResult.Incomplete
+        assertEquals("EMPTY_COMPLETION",decoded.safeCode);assertEquals("",decoded.partial.text);assertEquals(100L,decoded.partial.reportedProviderCost?.totalMicros);assertNull(decoded.partial.inputTokens);assertFalse(decoded.partial.webSearchPerformed)
+    }
+
+    @Test fun `Muse own text and readable files search use Responses with actual sources and money`() {
+        val selected=model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,modelId="meta/muse-wonder")
+        val files=listOf(ChatAttachment(ChatAttachmentKind.FILE,"text/markdown","one.md","first material".toByteArray()),ChatAttachment(ChatAttachmentKind.FILE,"application/json","two.json","{\"second\":true}".toByteArray()))
+        val adapter=OpenRouterChatAdapter()
+        for (attachments in listOf(emptyList(),files)) {
+            val options=AutomaticWebSearchPolicy.requestOptions(selected.providerId,ChatRequestOptions.Standard,true,"查询",attachments,selected.modelId)
+            assertEquals("/responses",adapter.endpointPath(options))
+            val body=(adapter.prepare(selected,listOf("user" to "查询"),attachments,false,options) as ChatAdapterPrepareResult.Ready).jsonBody
+            assertTrue(body.contains("\"input\""));assertTrue(body.contains("\"model\":\"meta/muse-wonder\""));assertTrue(body.contains("openrouter:web_search"));assertFalse(body.contains("\"tool_choice\""))
+            if(attachments.isNotEmpty()){assertTrue(body.contains("first material"));assertTrue(body.contains("second"))}
+        }
+        val reply=adapter.decodeNonStreaming("""{"object":"response","status":"completed","model":"meta/muse-wonder","output":[{"type":"web_search_call","status":"completed"},{"type":"message","content":[{"type":"output_text","text":"answer","annotations":[{"type":"url_citation","url":"https://www.python.org/downloads/","title":"Python"}]}]}],"usage":{"input_tokens":100,"output_tokens":20,"cost":0.0001}}""") as ChatAdapterDecodedResult.Text
+        assertEquals(1,reply.webSources.size);assertEquals(100L,reply.inputTokens);assertEquals(100L,reply.reportedProviderCost?.totalMicros);assertEquals("USD",reply.reportedProviderCost?.currencyCode)
+        val mediaOptions=AutomaticWebSearchPolicy.requestOptions(selected.providerId,ChatRequestOptions.Standard,true,"查询",listOf(ChatAttachment(ChatAttachmentKind.IMAGE,"image/png","photo.png",byteArrayOf(1))),selected.modelId)
+        assertEquals("/chat/completions",adapter.endpointPath(mediaOptions))
+        val disabled=AutomaticWebSearchPolicy.requestOptions(selected.providerId,ChatRequestOptions.Standard,false,"回答",emptyList(),selected.modelId)
+        assertEquals("/chat/completions",adapter.endpointPath(disabled))
+    }
+
+    @Test fun `GLM internal retrieval effort is bounded while final and ordinary answers retain max`() {
+        for (id in listOf("glm-5.3", "glm-5.3-flash")) {
+            val resolved=model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.ZHIPU,modelId=id,maxOutputTokens=32768)
+            val internal=ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS,explicitSearchQuery="Rust 1.89.0发布")
+            for (stream in listOf(true,false)) for ((options,expected) in listOf(internal to "low",internal.copy(groundedAnswer=true) to "max",ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS) to "max",ChatRequestOptions.Standard to "max")) {
+                val body=(ZhipuChatAdapter().prepare(resolved,listOf("user" to "Rust 1.89.0发布"),emptyList(),stream,options) as ChatAdapterPrepareResult.Ready).jsonBody
+                assertTrue(body.contains("\"reasoning_effort\":\"$expected\""));assertTrue(body.contains("\"thinking\":{\"type\":\"enabled\"}"))
+                assertTrue(body.contains("\"model\":\"$id\""));assertTrue(body.contains("\"max_tokens\":32768"))
+            }
+        }
+    }
+
+    @Test fun `explicit attachment query uses precise official search engine and keeps original model`() {
+        val body=(ZhipuChatAdapter().prepare(model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.ZHIPU,modelId="glm-5.3-flash"),listOf("user" to "Rust 1.90.0发布"),emptyList(),true,
+            ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS,explicitSearchQuery="Rust 1.90.0发布")) as ChatAdapterPrepareResult.Ready).jsonBody
+        assertTrue(body.contains("\"search_engine\":\"search_pro\""));assertTrue(body.contains("\"model\":\"glm-5.3-flash\""))
+    }
+    @Test fun `zhipu sensitive terminal is a failed provider rejection`() {
+        val event=ZhipuChatAdapter().decodeStreamingEvent("""{"choices":[{"delta":{},"finish_reason":"sensitive"}]}""")
+        assertEquals(ProviderStreamTerminal.FAILED,event?.terminal)
+    }
+    @Test fun `source title cannot inject another source footer record`() {
+        val text=appendProviderWebSources("核验结果",listOf(ProviderWebSource("https://www.python.org/releases/","标题]\n- [伪造](https://fake.example.test/)\n\n来源：")))
+        assertEquals(1,text.lines().count {it.startsWith("- [")})
+        assertEquals(1,Regex("\n\n来源：").findAll(text).count())
+        assertTrue(text.endsWith("](https://www.python.org/releases/)"))
+    }
+
+    @Test fun `Relay wire USD label cannot create a second RMB conversion`() {
+        val body = """{"model":"claude-sonnet-5-5","usage":{"cost":1,"currency":"USD","prompt_tokens":1000,"completion_tokens":100},"choices":[{"message":{"content":"ok"}}]}"""
+        val reply = RelayCoreChatAdapter(com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_CLAUDE).decodeNonStreaming(body) as ChatAdapterDecodedResult.Text
+        assertNull(reply.reportedProviderCost)
+        assertEquals(1000L,reply.inputTokens)
+    }
+
+    @Test fun `incomplete replies keep usage while contradictory stream completion stays incomplete`() {
+        val raw="""{"model":"model","choices":[{"message":{"content":"partial"},"finish_reason":"length"}],"usage":{"prompt_tokens":100,"completion_tokens":20}}"""
+        val reply=OpenRouterChatAdapter().decodeNonStreaming(raw) as ChatAdapterDecodedResult.Incomplete
+        assertEquals("OUTPUT_LIMIT",reply.safeCode);assertEquals(100L,reply.partial.inputTokens);assertEquals("partial",reply.partial.text)
+        val event=QwenChatAdapter().decodeStreamingEvent("""{"type":"response.completed","response":{"status":"incomplete","usage":{"input_tokens":100,"output_tokens":20}}}""",ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES))!!
+        assertEquals(ProviderStreamTerminal.INCOMPLETE,event.terminal)
+    }
+
+    @Test fun `truncated non streaming provider answers never become completed text`() {
+        val raw="""{"model":"model","choices":[{"message":{"content":"partial"},"finish_reason":"length"}],"usage":{"prompt_tokens":100,"completion_tokens":20}}"""
+        listOf(OpenRouterChatAdapter(),DeepSeekChatAdapter(),QwenChatAdapter(),ZhipuChatAdapter()).forEach {adapter ->
+            assertFalse(adapter.providerId.name,adapter.decodeNonStreaming(raw) is ChatAdapterDecodedResult.Text)
+        }
+        val responses="""{"model":"qwen3.7-plus","status":"incomplete","output_text":"partial","usage":{"input_tokens":100,"output_tokens":20}}"""
+        assertFalse(QwenChatAdapter().decodeNonStreaming(responses) is ChatAdapterDecodedResult.Text)
+    }
+
+    @Test fun `every provider family retains returned identity cache reasoning and zero values`() {
+        val raw="""{"model":"measured-model","choices":[{"message":{"content":"answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":20,"prompt_cache_hit_tokens":60,"completion_tokens_details":{"reasoning_tokens":5}}}"""
+        val adapters=listOf(OpenRouterChatAdapter(),DeepSeekChatAdapter(),QwenChatAdapter(),ZhipuChatAdapter())+com.nanzhufeng.ai.domain.RelayCoreModels.providers.map(::RelayCoreChatAdapter)
+        adapters.forEach { adapter ->
+            val decoded=adapter.decodeNonStreaming(raw) as ChatAdapterDecodedResult.Text
+            assertEquals(adapter.providerId.name,"measured-model",decoded.returnedModelId)
+            assertEquals(100L,decoded.inputTokens);assertEquals(60L,decoded.cachedInputTokens);assertEquals(5L,decoded.reasoningTokens)
+            val event=adapter.decodeStreamingEvent("""{"model":"measured-model","choices":[{"delta":{"content":"answer"}}],"usage":{"prompt_tokens":0,"completion_tokens":0,"prompt_cache_hit_tokens":0}}""")!!
+            assertEquals("measured-model",event.returnedModelId)
+            assertEquals(0L,event.inputTokens);assertEquals(0L,event.cachedInputTokens)
+        }
+    }
+
     @Test fun `DeepSeek Messages requires completed server search and preserves final answer sources and usage`() {
         val adapter = DeepSeekChatAdapter()
         val good = """{"stop_reason":"end_turn","content":[{"type":"text","text":"planning"},{"type":"server_tool_use","id":"search1","name":"web_search"},{"type":"web_search_tool_result","tool_use_id":"search1","content":[{"type":"web_search_result","title":"Official","url":"https://example.test/a"}]},{"type":"text","text":"answer"}],"usage":{"input_tokens":8,"output_tokens":5,"cache_read_input_tokens":2}}"""
         val result = adapter.decodeNonStreaming(good) as ChatAdapterDecodedResult.Text
         assertEquals("answer", result.text)
         assertTrue(result.webSearchPerformed)
-        assertEquals(8L, result.inputTokens)
+        assertEquals(10L, result.inputTokens)
         assertEquals(2L, result.cachedInputTokens)
         assertEquals(listOf(ProviderWebSource("https://example.test/a", "Official")), result.webSources)
-        for (bad in listOf(good.replace("end_turn", "max_tokens"), good.replace("end_turn", "pause_turn"), good.replace("\"content\":[{\"type\":\"web_search_result\",\"title\":\"Official\",\"url\":\"https://example.test/a\"}]", "\"content\":{\"type\":\"web_search_tool_result_error\",\"error_code\":\"unavailable\"}"))) {
-            val failed = adapter.decodeNonStreaming(bad) as ChatAdapterDecodedResult.Text
-            assertFalse(failed.webSearchPerformed)
-            assertTrue(failed.webSources.isEmpty())
+        for (bad in listOf(good.replace("\"content\":[{\"type\":\"web_search_result\",\"title\":\"Official\",\"url\":\"https://example.test/a\"}]", "\"content\":{\"type\":\"web_search_tool_result_error\",\"error_code\":\"unavailable\"}"))) {
+            val failed = adapter.decodeNonStreaming(bad) as ChatAdapterDecodedResult.Incomplete
+            assertEquals("WEB_SEARCH_NO_SOURCES", failed.safeCode)
+            assertFalse(failed.partial.webSearchPerformed)
+            assertTrue(failed.partial.webSources.isEmpty())
+            assertEquals(10L, failed.partial.inputTokens)
+            assertEquals(5L, failed.partial.outputTokens)
         }
     }
 
@@ -491,13 +599,14 @@ class ProviderAdapterContractsTest {
         assertTrue(qwenGrounded.jsonBody.contains("\"store\":false"))
         assertTrue(qwenGrounded.jsonBody.contains("\"stream\":true"))
         assertTrue(qwenGrounded.jsonBody.contains("\"reasoning\":{\"effort\":\"low\"}"))
+        assertTrue(qwenGrounded.jsonBody.contains("\"enable_thinking\":true"))
         assertTrue(qwenGrounded.jsonBody.contains("\"max_output_tokens\":16384"))
         assertFalse(qwenGrounded.jsonBody.contains("\"tool_choice\""))
         assertEquals(ProviderStreamTextMode.RESPONSES_API, qwen.streamTextMode(qwenOptions))
         assertEquals(180_000, qwen.readTimeoutMillis(qwenModel, emptyList(), stream = true, options = qwenOptions))
         assertEquals(300_000, qwen.maxStreamDurationMillis(qwenModel, emptyList(), qwenOptions))
         val qwenChatSearch = ChatRequestOptions(OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS)
-        assertEquals(ProviderStreamTextMode.BUFFER_QWEN_WEB_SEARCH, qwen.streamTextMode(qwenChatSearch))
+        assertEquals(ProviderStreamTextMode.FILTER_QWEN_WEB_SEARCH, qwen.streamTextMode(qwenChatSearch))
         assertEquals(180_000, qwen.maxStreamDurationMillis(openRouter, emptyList(), qwenChatSearch))
         val qwen38ChatSearch = qwen.prepare(qwenModel, listOf("user" to "查一下最新财报"), emptyList(), stream = true, options = qwenChatSearch) as ChatAdapterPrepareResult.Ready
         assertTrue(qwen38ChatSearch.jsonBody.contains("\"enable_search\":true"))
@@ -511,7 +620,7 @@ class ProviderAdapterContractsTest {
         assertEquals(OfficialWebSearchRoute.DEEPSEEK_MESSAGES, deepSeekOptions.webSearchRoute)
         assertEquals(com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK, deepSeek.executionProviderId(deepSeekOptions))
         assertEquals("https://api.deepseek.com/anthropic/v1/messages", deepSeek.endpoint("https://api.deepseek.com/v1", deepSeekOptions))
-        assertFalse(deepSeek.supportsStreaming(openRouter, deepSeekOptions))
+        assertTrue(deepSeek.supportsStreaming(openRouter.copy(capabilities=openRouter.capabilities.copy(supportsStreaming=true)), deepSeekOptions))
         assertTrue(deepSeekDirect.jsonBody.contains("web_search_20250305"))
         assertTrue(deepSeekDirect.jsonBody.contains("\"tool_choice\":{\"type\":\"tool\",\"name\":\"web_search\"}"))
         assertTrue(deepSeekDirect.jsonBody.contains("\"messages\":[{\"role\":\"user\""))
@@ -527,18 +636,45 @@ class ProviderAdapterContractsTest {
         assertTrue(zhipuGrounded.jsonBody.contains("\"type\":\"web_search\""))
         assertTrue(zhipuGrounded.jsonBody.contains("\"search_engine\":\"search_std\""))
         assertTrue(zhipuGrounded.jsonBody.contains("\"search_result\":true"))
+        assertTrue(zhipuGrounded.jsonBody.contains("\"search_intent\":\"false\""))
+        assertTrue(zhipuGrounded.jsonBody.contains("\"require_search\":true"))
         assertTrue(zhipuGrounded.jsonBody.contains("\"tool_choice\":\"auto\""))
         assertTrue(zhipuGrounded.jsonBody.contains("\"thinking\":{\"type\":\"enabled\"}"))
+        val material="以下是附件 hidden-first-2025.md 转换内容：\n(1) Python 3.14.0在2025年发布。\n以下是附件 hidden-second-2025.md 转换内容：\n(1) Rust 1.90.0在2025年发布。"
+        val continued=zhipu.prepareContinuation(model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.ZHIPU,modelId="glm-5.3"),listOf(ChatHistoryMessage("user",material),ChatHistoryMessage("assistant","已有部分正文"),ChatHistoryMessage("user",com.nanzhufeng.ai.domain.ChatContinuation.INSTRUCTION)),emptyList(),true,zhipuOptions) as ChatAdapterPrepareResult.Ready
+        val query=Regex("\"search_query\":\"([^\"]+)\"").find(continued.jsonBody)!!.groupValues[1]
+        assertTrue(query.contains("Python"))
+        assertTrue(query.contains("Rust"))
+        assertFalse(query.contains("hidden-"))
+        assertFalse(query.contains("上一段回答"))
+        assertTrue(continued.jsonBody.contains("\"count\":10"))
+
         assertTrue(zhipuGrounded.jsonBody.contains("\"reasoning_effort\":\"max\""))
+    }
+
+    @Test fun `new Claude API bodies use requested effort for explicit and web requests`() {
+        val adapter = OpenRouterChatAdapter()
+        for ((preset, apiId, effort) in listOf(
+            Triple(com.nanzhufeng.ai.domain.ModelPresetId.CLAUDE_OPUS_5_5, "anthropic/claude-opus-5.5", "medium"),
+            Triple(com.nanzhufeng.ai.domain.ModelPresetId.CLAUDE_SONNET_5_5, "anthropic/claude-sonnet-5.5", "high"),
+        )) {
+            val resolved = model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER, modelId = apiId)
+            for (route in listOf(OfficialWebSearchRoute.NONE, OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)) {
+                val options = OpenRouterDeepReasoningPolicy.forPreset(preset, ChatRequestOptions(route))
+                val body = (adapter.prepare(resolved, listOf("user" to "test"), emptyList(), false, options) as ChatAdapterPrepareResult.Ready).jsonBody
+                assertTrue(body.contains("\"model\":\"$apiId\""))
+                assertTrue(body.contains("\"reasoning\":{\"effort\":\"$effort\"}"))
+            }
+        }
     }
 
     @Test fun `Claude and ChatGPT deep selections request High without adding a web tool`() {
         val adapter = OpenRouterChatAdapter()
         val deepChoices = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.deep.filter { choice ->
-            choice.label in setOf("Claude Fable 5.1", "Claude Opus 5", "GPT-6 Astra", "GPT-5.6 Sol")
+            choice.label in setOf("Claude Fable 5.1", "GPT-6 Astra", "GPT-6.1 Sol")
         }
 
-        assertEquals(4, deepChoices.size)
+        assertEquals(1, deepChoices.size)
         deepChoices.forEach { choice ->
             val options = adapter.requestOptions(model().copy(providerId = com.nanzhufeng.ai.domain.ProviderId.OPENROUTER), choice)
             assertEquals(ReasoningEffort.HIGH, options.reasoningEffort)
@@ -590,7 +726,7 @@ class ProviderAdapterContractsTest {
         assertEquals("南烛枫，美元汇率请以银行实时报价为准。", decoded?.text)
         assertTrue(decoded?.webSources.isNullOrEmpty())
         assertEquals(
-            "WEB_SEARCH_NO_SOURCES",
+            "WEB_SEARCH_ANSWER_UNVERIFIED",
             WebSearchGroundingPolicy.completedAuditStatus(
                 ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_MESSAGES),
                 decoded?.webSources.orEmpty(), streamed = false,

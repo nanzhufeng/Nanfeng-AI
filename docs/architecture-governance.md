@@ -1,5 +1,9 @@
 # 南枫 AI 架构治理
 
+全项目合同的当前入口、限定模块、实验与历史分类统一见[口径索引](contracts/CONTRACT_INDEX.md)及[合同治理](CONTRACT_GOVERNANCE_CURRENT.md)；下方阶段性owner表不据状态日期推断整机是否联网或某功能当前未接入。
+
+模型服务当前总入口为[统一架构](model-service/MODEL_SERVICE_ARCHITECTURE.md)、[维护流程](model-service/MODEL_SERVICE_MAINTENANCE.md)和[自动矩阵](model-service/MODEL_SERVICE_MATRIX.md)。具体规则仍归各领域合同；下方阶段化Compare／P6-G等实验模块记录不取代当前普通发送owner。
+
 > 2026-08-16 权威修订：Local Persistence 与 Provider Adapters 是同一产品数据链的并列基础设施，不构成独立本地工作区。Application Use Case 负责权限/边界/可见错误和原子事务；用户已选择导入或执行后不再追加产品级确认闸门。
 
 > 本文只记录南枫 AI 的项目事实、概念所有权和明确边界。通用 App 架构原则由用户级治理基线维护。
@@ -24,11 +28,11 @@ Local Persistence / Provider Adapters / Platform Services
 - Provider Adapter 不决定知识是否保存，也不直接写业务数据库。
 - 输入适配器只规范化文字、分享内容和图片，保留来源证据。
 - Application Use Case 负责权限校验、调用、候选校验和正式保存的完整事务。
-- AI Hub 只保留未来接口边界，V1 不实现远程依赖。
+- 旧AI Hub V1只保留独立接口边界；不把其未实现远程依赖解读为当前普通聊天未联网。当前执行入口见[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)及[领域实现定位](contracts/DOMAIN_OWNER_MAP.md)。
 
-## 多供应商模型编排边界
+## 限定P2多供应商实验编排边界（非普通发送owner）
 
-- `MultiModelOrchestrator` 是 Direct／Compare／Auto 三种模式的唯一编排 owner；它只生成计划，不访问 UI、Key、网络、数据库或后台任务。
+- `MultiModelOrchestrator` 是其独立P2实验模块中Direct／Compare／Auto的计划owner，不是当前普通聊天的执行、Auto或重试owner；它只生成计划，不访问 UI、Key、网络、数据库或后台任务。
 - `DIRECT` 精确保留用户选择的 Logical Model、Deployment 与 Provider；不得调用 Auto Router。
 - `COMPARE` 为每个唯一 Deployment 生成独立分支计划，所有分支引用同一 `CanonicalContextSnapshot`；默认不综合、不自动采用到共享上下文，也不得调用 Auto Router。
 - `AUTO` 是唯一可调用 `AutoRoutingPort` 的模式；路由失败必须显式失败关闭。

@@ -54,10 +54,16 @@ data class ProviderChatRequest(
 
 enum class ProviderStreamTextMode {
     IMMEDIATE,
+    /** Relay Chat Completions must receive an explicit stop or DONE before success. */
+    COMPLETIONS_API,
     /** Qwen Chat Completions fallback: provider search XML is never user-visible. */
-    BUFFER_QWEN_WEB_SEARCH,
+    FILTER_QWEN_WEB_SEARCH,
     /** Responses API emits semantic tool/status events and requires an explicit terminal event. */
     RESPONSES_API,
+    /** Messages requires both end_turn and message_stop, never clean EOF alone. */
+    MESSAGES_API,
+    /** Internal scoped search: intermediate text is not final evidence. */
+    MESSAGES_SEARCH_API,
 }
 
 /**
@@ -166,6 +172,12 @@ data class ProviderSseEvent(
     /** Responses streams are not complete merely because the socket reached EOF. */
     val terminal: ProviderStreamTerminal? = null,
     val webSearchPerformed: Boolean = false,
+    val returnedModelId: String? = null,
+    val messageEndTurn: Boolean = false,
+    val terminalFailureCode: String? = null,
+    val nativeSearchResultBoundary: Boolean = false,
+    /** Adapter-owned requirement; ordinary Messages replies can legitimately have no search. */
+    val requiresNativeWebSources: Boolean = false,
 )
 
 enum class ProviderStreamTerminal { COMPLETED, INCOMPLETE, FAILED }
@@ -207,13 +219,14 @@ sealed interface ProviderChatOutcome {
         val durableTerminalSequence: Long? = null,
         val finishReason: String? = null,
         val webSearchPerformed: Boolean = false,
+        val returnedModelId: String? = null,
     ) : ProviderChatOutcome
     data object TimedOut : ProviderChatOutcome
     /**
      * A bounded local transport fact. It deliberately contains no exception message, URL,
      * credential, request body, or response data, so it is safe to persist in diagnostics.
      */
-    data class NetworkFailure(val kind: ProviderNetworkFailureKind) : ProviderChatOutcome
+    data class NetworkFailure(val kind: ProviderNetworkFailureKind, val exceptionClass: String? = null) : ProviderChatOutcome
     data object ResponseTooLarge : ProviderChatOutcome
     data object Cancelled : ProviderChatOutcome
 }
@@ -252,7 +265,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
         try {
             if (request.cancellation?.isCancelled() == true) return ProviderChatOutcome.Cancelled
             connection.setRequestProperty("Authorization", "Bearer ${credential.concatToString()}")
-            if (request.endpoint == "https://api.deepseek.com/anthropic/v1/messages") {
+            if (request.endpoint in setOf("https://api.deepseek.com/anthropic/v1/messages","https://api.relaycore.cn/v1/messages")) {
                 connection.setRequestProperty("x-api-key", credential.concatToString())
                 connection.setRequestProperty("anthropic-version", "2023-06-01")
             }
@@ -276,6 +289,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
                     webSources = streamed.webSources,
                     webSearchPerformed = streamed.webSearchPerformed,
                     finishReason = streamed.finishReason,
+                    returnedModelId = streamed.returnedModelId,
                 )
             }
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
@@ -290,7 +304,7 @@ class OfficialProviderChatTransport : ProviderChatTransport {
             request.cancellation?.isCancelled() == true -> ProviderChatOutcome.Cancelled
             error is SocketTimeoutException -> ProviderChatOutcome.TimedOut
             error is ProviderResponseTooLargeException -> ProviderChatOutcome.ResponseTooLarge
-            else -> ProviderChatOutcome.NetworkFailure(classifyProviderNetworkFailure(error))
+            else -> ProviderChatOutcome.NetworkFailure(classifyProviderNetworkFailure(error),error.javaClass.simpleName.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) })
         }
     }
 
@@ -318,6 +332,7 @@ internal object ProviderSseDecoder {
         val webSources: List<ProviderWebSource> = emptyList(),
         val finishReason: String? = null,
         val webSearchPerformed: Boolean = false,
+        val returnedModelId: String? = null,
     )
 
     fun read(
@@ -334,14 +349,20 @@ internal object ProviderSseDecoder {
         var cachedInputTokens: Long? = null
         var reasoningTokens: Long? = null
         var reportedProviderCost: ProviderReportedCost? = null
+        var returnedModelId: String? = null
         var toolCallEncountered = false
         data class PendingToolCall(var id: String? = null, var name: String? = null, val arguments: StringBuilder = StringBuilder())
         val pendingToolCalls = linkedMapOf<Int, PendingToolCall>()
         val webSources = linkedMapOf<String, ProviderWebSource>()
         var webSearchPerformed = false
+        var requiresNativeWebSources = false
         var terminal: ProviderStreamTerminal? = null
+        var terminalFailureCode: String? = null
+        var done = false
+        var nativeProtocolEnded = false
         val output = StringBuilder()
-        val bufferedVisibleText = StringBuilder()
+        val traceFilter = ProviderWebSearchToolTraceFilter()
+        var messageEndTurn = false
         val reasoning = StringBuilder()
         var decodedTextBytes = 0L
         val startedAtNanos = nanoTime()
@@ -354,17 +375,15 @@ internal object ProviderSseDecoder {
             fun consumeEvent() {
                 val data = eventData.toString().trim()
                 eventData = StringBuilder()
-                if (data.isBlank() || data == "[DONE]") return
+                if (data == "[DONE]") { done = true; return }
+                if (data.isBlank()) return
                 decodeEvent(data)?.let { event ->
+                    if(textMode==ProviderStreamTextMode.MESSAGES_SEARCH_API && event.nativeSearchResultBoundary) output.clear()
                     event.text?.let { delta ->
                         decodedTextBytes += delta.toByteArray(Charsets.UTF_8).size
                         if (decodedTextBytes > maxResponseBytes) throw ProviderResponseTooLargeException()
-                        if (textMode != ProviderStreamTextMode.BUFFER_QWEN_WEB_SEARCH) {
-                            output.append(delta)
-                            onDelta(delta)
-                        } else {
-                            bufferedVisibleText.append(delta)
-                        }
+                        val visible = if (textMode == ProviderStreamTextMode.FILTER_QWEN_WEB_SEARCH) traceFilter.feed(delta) else delta
+                        if (visible.isNotEmpty()) { output.append(visible); if(textMode!=ProviderStreamTextMode.MESSAGES_SEARCH_API) onDelta(visible) }
                     }
                     event.reasoning?.let(reasoning::append)
                     event.inputTokens?.let { inputTokens = it }
@@ -372,6 +391,7 @@ internal object ProviderSseDecoder {
                     event.cachedInputTokens?.let { cachedInputTokens = it }
                     event.reasoningTokens?.let { reasoningTokens = it }
                     event.reportedProviderCost?.let { reportedProviderCost = it }
+                    event.returnedModelId?.let { returnedModelId = if (returnedModelId == null || returnedModelId == it) it else "inconsistent-response-model" }
                     toolCallEncountered = toolCallEncountered || event.toolCallEncountered
                     event.toolCallDeltas.forEach { delta ->
                         val pending = pendingToolCalls.getOrPut(delta.index) { PendingToolCall() }
@@ -380,8 +400,17 @@ internal object ProviderSseDecoder {
                         pending.arguments.append(delta.argumentsDelta)
                     }
                     webSearchPerformed = webSearchPerformed || event.webSearchPerformed
+                    requiresNativeWebSources = requiresNativeWebSources || event.requiresNativeWebSources
                     event.webSources.forEach { source -> webSources.putIfAbsent(source.url, source) }
-                    event.terminal?.let { terminal = it }
+                    messageEndTurn = messageEndTurn || event.messageEndTurn
+                    event.terminal?.let { incoming ->
+                        terminal = when { terminal == ProviderStreamTerminal.FAILED || incoming == ProviderStreamTerminal.FAILED -> ProviderStreamTerminal.FAILED
+                            terminal == ProviderStreamTerminal.INCOMPLETE || incoming == ProviderStreamTerminal.INCOMPLETE -> ProviderStreamTerminal.INCOMPLETE
+                            else -> incoming }
+                    }
+                    if (event.terminalFailureCode in setOf("CONTENT_FILTER","STREAM_PROVIDER_ERROR")) terminalFailureCode = event.terminalFailureCode
+                    if (textMode in setOf(ProviderStreamTextMode.MESSAGES_API, ProviderStreamTextMode.MESSAGES_SEARCH_API, ProviderStreamTextMode.RESPONSES_API) &&
+                        event.terminal == ProviderStreamTerminal.COMPLETED) nativeProtocolEnded = true
                 }
             }
             while (true) {
@@ -394,29 +423,37 @@ internal object ProviderSseDecoder {
                     line.startsWith("data:") -> {
                         if (eventData.isNotEmpty()) eventData.append('\n')
                         eventData.append(line.removePrefix("data:").trimStart())
+                        val tail=eventData.toString().trim()
+                        val nativeEnd=if(textMode in setOf(ProviderStreamTextMode.RESPONSES_API,ProviderStreamTextMode.MESSAGES_API,ProviderStreamTextMode.MESSAGES_SEARCH_API)) runCatching {val value=org.json.JSONObject(tail);value.optString("type")=="message_stop" || (value.optString("type")=="response.completed" && value.optJSONObject("response")?.optString("status")=="completed")}.getOrDefault(false) else false
+                        if(tail=="[DONE]" || nativeEnd) consumeEvent()
                     }
                 }
+                // DONE ends the protocol, even if a proxy leaves the HTTP socket open.
+                // A choice finish_reason alone must still allow trailing usage events.
+                if (done || nativeProtocolEnded) break
             }
             consumeEvent()
         }
-        if (textMode == ProviderStreamTextMode.BUFFER_QWEN_WEB_SEARCH) {
-            ProviderWebSearchToolTraceText.visibleText(bufferedVisibleText.toString()).takeIf(String::isNotBlank)?.let { visible ->
-                output.append(visible)
-                onDelta(visible)
-            }
+        if (textMode == ProviderStreamTextMode.FILTER_QWEN_WEB_SEARCH) {
+            traceFilter.finish().takeIf(String::isNotEmpty)?.let { visible -> output.append(visible); if(textMode!=ProviderStreamTextMode.MESSAGES_SEARCH_API) onDelta(visible) }
         }
         val finishReason = when {
+            terminalFailureCode != null -> terminalFailureCode
             terminal == ProviderStreamTerminal.INCOMPLETE -> "INCOMPLETE"
             terminal == ProviderStreamTerminal.FAILED -> "FAILED"
-            textMode != ProviderStreamTextMode.RESPONSES_API -> null
+            textMode in setOf(ProviderStreamTextMode.MESSAGES_API,ProviderStreamTextMode.MESSAGES_SEARCH_API) && !messageEndTurn -> "MISSING_COMPLETION"
+            textMode == ProviderStreamTextMode.COMPLETIONS_API -> if (terminal == ProviderStreamTerminal.COMPLETED || done) "COMPLETED" else "MISSING_COMPLETION"
+            textMode !in setOf(ProviderStreamTextMode.RESPONSES_API, ProviderStreamTextMode.MESSAGES_API, ProviderStreamTextMode.MESSAGES_SEARCH_API) -> null
+            terminal == ProviderStreamTerminal.COMPLETED && requiresNativeWebSources && webSources.isEmpty() -> "FAILED"
             terminal == ProviderStreamTerminal.COMPLETED -> "COMPLETED"
             else -> "MISSING_COMPLETION"
         }
+        if(textMode==ProviderStreamTextMode.MESSAGES_SEARCH_API && output.isNotEmpty()) onDelta(output.toString())
         return Result(
             output.toString(), reasoning.toString().takeIf(String::isNotBlank), inputTokens, outputTokens,
             reportedProviderCost, toolCallEncountered,
             pendingToolCalls.values.mapNotNull { pending -> pending.name?.let { ChatToolCall(pending.id, it, pending.arguments.toString().ifBlank { "{}" }) } },
-            cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason, webSearchPerformed,
+            cachedInputTokens, reasoningTokens, webSources.values.toList(), finishReason, webSearchPerformed, returnedModelId,
         )
     }
 }
@@ -458,4 +495,29 @@ private fun java.io.InputStream.readAtMost(maxBytes: Int): ByteArray? {
         output.write(buffer, 0, read)
     }
     return output.toByteArray()
+}
+
+/** Incremental, bounded tag filtering: only a possible tag prefix is held between chunks. */
+internal class ProviderWebSearchToolTraceFilter {
+    private val openings = listOf("<tool_use>", "<tool_result>")
+    private var closing: String? = null
+    private val pending = StringBuilder()
+    fun feed(delta: String): String = buildString {
+        for (character in delta) {
+            pending.append(character)
+            val close = closing
+            if (close != null) {
+                while (pending.isNotEmpty() && !close.startsWith(pending.toString())) pending.deleteCharAt(0)
+                if (pending.toString() == close) { closing = null; pending.clear() }
+            } else {
+                while (pending.isNotEmpty() && openings.none { it.startsWith(pending.toString()) }) {
+                    append(pending[0]); pending.deleteCharAt(0)
+                }
+                openings.firstOrNull { it == pending.toString() }?.let { opening ->
+                    closing = opening.replace("<", "</"); pending.clear()
+                }
+            }
+        }
+    }
+    fun finish(): String { pending.clear(); return "" } // A truncated protocol tag never becomes visible.
 }

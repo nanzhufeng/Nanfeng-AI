@@ -1,0 +1,93 @@
+{
+  "actualModel": "gpt-6.1-sol",
+  "covered": 4,
+  "files": "public-01.txt,public-02.md,public-03.json,public-04.csv",
+  "ledgerCalls": [
+    {
+      "actual": "openai/gpt-6-luna",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 21765,
+      "model": "openai/gpt-6-luna",
+      "source": "PROVIDER_RESPONSE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "openai/gpt-6-luna",
+      "source": null
+    },
+    {
+      "actual": "gpt-6.1-sol",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 3337,
+      "model": "gpt-6.1-sol",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "gpt-6.1-sol",
+      "source": null
+    }
+  ],
+  "physical": [
+    {
+      "input": 19004,
+      "nativeSources": [
+        [
+          "Python Release Python 3.14.0 | Python.org",
+          "https://www.python.org/downloads/release/python-3140/?utm_source=openai"
+        ],
+        [
+          "Python Release Python 3.13.0 | Python.org",
+          "https://www.python.org/downloads/release/python-3130/?utm_source=openai"
+        ],
+        [
+          "Python Release Python 3.12.0 | Python.org",
+          "https://www.python.org/downloads/release/python-3120/?mode=reply&utm_source=openai"
+        ],
+        [
+          "Python Release Python 3.11.0 | Python.org",
+          "https://www.python.org/downloads/release/python-3110/?utm_source=openai"
+        ]
+      ],
+      "output": 560,
+      "reportedMicros": 21765,
+      "requested": "openai/gpt-6-luna",
+      "returned": "openai/gpt-6-luna"
+    }
+  ],
+  "planned": 4,
+  "preset": "RELAYCORE_GPT_6_1_SOL",
+  "publicAnswer": "- `public-01.txt`：Python 3.14.0 于 **2025年10月7日**发布。已核实。[Python 官方发布页](https://www.python.org/downloads/release/python-3140/)\n- `public-02.md`：Python 3.13.0 于 **2024年10月7日**发布。已核实。[Python 官方发布页](https://www.python.org/downloads/release/python-3130/)\n- `public-03.json`：Python 3.12.0 于 **2023年10月2日**发布。已核实。[Python 官方发布页](https://www.python.org/downloads/release/python-3120/)\n- `public-04.csv`：Python 3.11.0 于 **2022年10月24日**发布。已核实。[Python 官方发布页](https://www.python.org/downloads/release/python-3110/)\n\n四项附件均为版本号及官方发布页的核验请求，未包含其他数字或主张。\n\n来源：- [Python Release Python 3.11.0 | Python.org](https://www.python.org/downloads/release/python-3110/)\n- [Python Release Python 3.12.0 | Python.org](https://www.python.org/downloads/release/python-3120/?mode=reply)\n- [Python Release Python 3.13.0 | Python.org](https://www.python.org/downloads/release/python-3130/)\n- [Python Release Python 3.14.0 | Python.org](https://www.python.org/downloads/release/python-3140/)",
+  "reopenedCheckpoints": 4,
+  "reopenedModel": "gpt-6.1-sol",
+  "reopenedState": "COMPLETED",
+  "requested": "gpt-6.1-sol",
+  "sources": [
+    [
+      "Python Release Python 3.14.0 | Python.org",
+      "https://www.python.org/downloads/release/python-3140/"
+    ],
+    [
+      "Python Release Python 3.13.0 | Python.org",
+      "https://www.python.org/downloads/release/python-3130/"
+    ],
+    [
+      "Python Release Python 3.12.0 | Python.org",
+      "https://www.python.org/downloads/release/python-3120/?mode=reply"
+    ],
+    [
+      "Python Release Python 3.11.0 | Python.org",
+      "https://www.python.org/downloads/release/python-3110/"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

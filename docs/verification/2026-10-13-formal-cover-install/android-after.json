@@ -1,0 +1,19 @@
+{
+  "versionCode": "93",
+  "versionName": "1.0.29",
+  "firstInstallTime": "2026-08-20 15:15:31",
+  "lastUpdateTime": "2026-10-13 17:00:46",
+  "ceDataInode": "1459104",
+  "deDataInode": "1433378",
+  "dataDir": "/data/user/0/com.nanzhufeng.ai",
+  "uid": 10611,
+  "debuggable": false,
+  "installedAPKMatchesCandidate": true,
+  "installedAPKSHA256": "da8e6d2447e12df3faf5f5026fc969cb97bc6f995260d42226dc5111e1db6d78",
+  "signatureSHA256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+  "firstInstallTimeUnchanged": true,
+  "dataInodesAndUidUnchanged": true,
+  "privateDataHash": "NOT AVAILABLE: nonDebug private data denied; no bypass",
+  "launch": "NOT RUN",
+  "temporaryAPKRemoved": true
+}

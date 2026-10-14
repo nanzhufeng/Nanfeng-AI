@@ -10,6 +10,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import com.nanzhufeng.ai.domain.ConversationId
 import com.nanzhufeng.ai.domain.ModelPresetId
+import com.nanzhufeng.ai.domain.NanfengModelServiceCatalog
 import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.ScheduledMonitorCadence
 import com.nanzhufeng.ai.domain.ScheduledMonitorRepository
@@ -129,7 +130,7 @@ class RoomScheduledMonitorRepository(private val database: NanfengAiDatabase) : 
     override fun listCostedRunsNewestFirst() = dao.listCostedRunsNewestFirst().map(ScheduledMonitorRunEntity::toDomain)
 }
 
-private fun ScheduledMonitorTask.toEntity() = ScheduledMonitorTaskEntity(id.value, title, instruction, sourceConversationId?.value, cadence.name, modelPresetId.name, status.name, nextRunAt.toEpochMilli(), lastRunAt?.toEpochMilli(), latestResult, lastProviderId?.name, lastModelId, lastInputTokens, lastOutputTokens, lastSafeErrorCode, createdAt.toEpochMilli(), updatedAt.toEpochMilli())
-private fun ScheduledMonitorTaskEntity.toDomain() = ScheduledMonitorTask(ScheduledMonitorTaskId(id), title, instruction, sourceConversationId?.let(::ConversationId), ScheduledMonitorCadence.valueOf(cadence), ModelPresetId.valueOf(modelPresetId), ScheduledMonitorStatus.valueOf(status), Instant.ofEpochMilli(nextRunAtEpochMs), lastRunAtEpochMs?.let(Instant::ofEpochMilli), latestResult, lastProviderId?.let(ProviderId::valueOf), lastModelId, lastInputTokens, lastOutputTokens, lastSafeErrorCode, Instant.ofEpochMilli(createdAtEpochMs), Instant.ofEpochMilli(updatedAtEpochMs))
+private fun ScheduledMonitorTask.toEntity() = ScheduledMonitorTaskEntity(id.value, title, instruction, sourceConversationId?.value, cadence.name, NanfengModelServiceCatalog.currentPreset(modelPresetId).name, status.name, nextRunAt.toEpochMilli(), lastRunAt?.toEpochMilli(), latestResult, lastProviderId?.name, lastModelId, lastInputTokens, lastOutputTokens, lastSafeErrorCode, createdAt.toEpochMilli(), updatedAt.toEpochMilli())
+private fun ScheduledMonitorTaskEntity.toDomain() = ScheduledMonitorTask(ScheduledMonitorTaskId(id), title, instruction, sourceConversationId?.let(::ConversationId), ScheduledMonitorCadence.valueOf(cadence), NanfengModelServiceCatalog.currentPreset(ModelPresetId.valueOf(modelPresetId)), ScheduledMonitorStatus.valueOf(status), Instant.ofEpochMilli(nextRunAtEpochMs), lastRunAtEpochMs?.let(Instant::ofEpochMilli), latestResult, lastProviderId?.let(ProviderId::valueOf), lastModelId, lastInputTokens, lastOutputTokens, lastSafeErrorCode, Instant.ofEpochMilli(createdAtEpochMs), Instant.ofEpochMilli(updatedAtEpochMs))
 private fun ScheduledMonitorRun.toEntity() = ScheduledMonitorRunEntity(id.value, taskId.value, scheduledAt.toEpochMilli(), startedAt.toEpochMilli(), completedAt?.toEpochMilli(), status.name, safeErrorCode, result, providerId?.name, modelId, inputTokens, outputTokens)
 private fun ScheduledMonitorRunEntity.toDomain() = ScheduledMonitorRun(ScheduledMonitorRunId(id), ScheduledMonitorTaskId(taskId), Instant.ofEpochMilli(scheduledAtEpochMs), Instant.ofEpochMilli(startedAtEpochMs), completedAtEpochMs?.let(Instant::ofEpochMilli), ScheduledMonitorRunStatus.valueOf(status), safeErrorCode, result, providerId?.let(ProviderId::valueOf), modelId, inputTokens, outputTokens)

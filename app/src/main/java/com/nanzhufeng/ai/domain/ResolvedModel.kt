@@ -139,6 +139,13 @@ class UnifiedModelResolver(
  */
 private object OpenRouterColdStartTextFallback {
     private val ids = mapOf(
+        ModelPresetId.CLAUDE_OPUS_5_5 to "anthropic/claude-opus-5.5",
+        ModelPresetId.CLAUDE_SONNET_5_5 to "anthropic/claude-sonnet-5.5",
+        ModelPresetId.CLAUDE_HAIKU_5_5 to "anthropic/claude-haiku-5.5",
+        ModelPresetId.GPT_6_1_SOL to "openai/gpt-6.1-sol",
+        ModelPresetId.GPT_6_LUNA to "openai/gpt-6-luna",
+        ModelPresetId.MUSE_WONDER to "meta/muse-wonder",
+
         ModelPresetId.CLAUDE_FABLE_5 to "anthropic/claude-fable-5",
         ModelPresetId.CLAUDE_FABLE_5_1 to "anthropic/claude-fable-5.1-20260831",
         ModelPresetId.CLAUDE_OPUS_5 to "anthropic/claude-opus-5",

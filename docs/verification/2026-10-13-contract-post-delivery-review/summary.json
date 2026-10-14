@@ -1,0 +1,16 @@
+{
+  "head": "dafc64d9b33661dc4f792fd1434ff1ddca9cdfa3",
+  "scope": "Tracked working-tree bytes and all locally available Git refs; no file bodies or secrets emitted",
+  "tracked_files": 1410,
+  "bytes": 70874966,
+  "kinds": {
+    "text": 1332,
+    "binary": 78
+  },
+  "commits": 182,
+  "limitations": [
+    "No ignored or untracked data read",
+    "No binary visual verification",
+    "Not a line-by-line semantic or external deployment audit"
+  ]
+}

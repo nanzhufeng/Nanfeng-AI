@@ -1,0 +1,24 @@
+{
+  "contractToolTests": {
+    "pass": 25,
+    "fail": 0,
+    "redRegressionCases": 9,
+    "historicalAndScopedNonRegressions": true
+  },
+  "modelToolTests": {
+    "pass": 16,
+    "fail": 0
+  },
+  "contractGate": {
+    "contracts": 114,
+    "domains": 40,
+    "ownerReferences": 119,
+    "pass": true
+  },
+  "links": {
+    "relative": 343,
+    "broken": 0,
+    "missingAnchorCandidates": 0
+  },
+  "applicationTestsBuildInstall": "NOT RUN: no application inputs changed; preceding installed artifact bytes preserved"
+}

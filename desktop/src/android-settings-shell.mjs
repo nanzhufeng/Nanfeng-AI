@@ -1,5 +1,9 @@
+import { MODEL_BRAND_NAMES, MODEL_SETTINGS_PURPOSES } from './model-settings-browser.mjs';
+import { WORKSPACES_VISIBLE } from './product-scope.mjs';
+import { RELAYCORE_MODELS, relayCoreUiModelName, relayCoreModel, relayCoreCompactName } from "./relaycore-models.mjs";
 import { icon, icons, settingsIcons } from './icon-source.mjs';
-import { cnyCostLabel, projectedCost } from './desktop-cost-estimator.mjs';
+import { accountingPricingModelId, cnyCostLabel, projectedCost } from './desktop-cost-estimator.mjs';
+import { groupRetrievalUsageRecords, usageRecordPhysicalFacts } from './usage-ledger-display.mjs';
 import { APPEARANCE_MODES, CONVERSATION_TONES, CUSTOM_INSTRUCTIONS_MAX_LENGTH, DESKTOP_SETTINGS_CAPABILITIES, FONT_SIZES, THEME_COLORS, conversationToneDefinition, normalizeAppearance, normalizeProductSettings } from './desktop-parity-preferences.mjs';
 import { renderConversationLifecyclePage } from './conversation-lifecycle-view.mjs';
 import { renderLocalDataImportExportPage, renderLocalDataInventoryPage } from './local-data-view.mjs';
@@ -17,20 +21,20 @@ const formatDevelopmentTime = epochSeconds => {
   return `${date.getFullYear()}-${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}`;
 };
 
+const presetNameForUser = preset => {
+  const relay = relayCoreModel(preset?.id || preset?.presetId);
+  return relay ? `${relayCoreUiModelName(relay)} · RC` : preset?.displayName || '';
+};
 const modelPreset = (id, displayName, description, family) => ({ id, displayName, description, family, chatSelectable: true });
 export const MODEL_SERVICE_PREVIEW_SETTINGS = Object.freeze([
-  { providerId: 'OPENROUTER', providerDisplayName: 'OpenRouter', enabled: false, presetId: 'GPT_5_6_TERRA', presetDisplayName: 'GPT-5.6 Terra', credentialStored: false, revision: 0, presets: [
-    modelPreset('CLAUDE_FABLE_5_1', 'Claude Fable 5.1', '适合长程代码、研究与复杂知识工作。', 'Anthropic · OpenRouter'),
-    modelPreset('GPT_6_ASTRA', 'GPT-6 Astra', '适合高难分析、工程与长程复杂任务。', 'OpenAI · OpenRouter'),
-    modelPreset('CLAUDE_FABLE_5', 'Claude Fable 5', '应对最棘手的复杂任务。', 'Anthropic · OpenRouter'),
-    modelPreset('CLAUDE_OPUS_5', 'Claude Opus 5', '适合复杂任务与深度推理。', 'Anthropic · OpenRouter'),
-    modelPreset('CLAUDE_SONNET_5', 'Claude Sonnet 5', '高效处理日常工作。', 'Anthropic · OpenRouter'),
-    modelPreset('CLAUDE_HAIKU_4_5', 'Claude Haiku 4.5', '快速获得简洁答案。', 'Anthropic · OpenRouter'),
-    modelPreset('GPT_5_6_SOL', 'GPT-5.6 Sol', '前沿能力，适合专业复杂任务。', 'OpenAI · OpenRouter'),
-    modelPreset('GPT_5_6_TERRA', 'GPT-5.6 Terra', '能力与成本更均衡。', 'OpenAI · OpenRouter'),
-    modelPreset('GPT_5_6_LUNA', 'GPT-5.6 Luna', '适合高频、轻量任务。', 'OpenAI · OpenRouter'),
+  { providerId: 'OPENROUTER', providerDisplayName: 'OpenRouter', enabled: false, presetId: 'GPT_6_LUNA', presetDisplayName: 'GPT-6 Luna', credentialStored: false, revision: 0, presets: [
+    modelPreset('CLAUDE_OPUS_5_5', 'Claude Opus 5.5', '适合复杂任务与深度推理。', 'Anthropic · OpenRouter'),
+    modelPreset('CLAUDE_SONNET_5_5', 'Claude Sonnet 5.5', '高效处理日常工作。', 'Anthropic · OpenRouter'),
+    modelPreset('CLAUDE_HAIKU_5_5', 'Claude Haiku 5.5', '快速获得简洁答案。', 'Anthropic · OpenRouter'),
+    modelPreset('GPT_6_1_SOL', 'GPT-6.1 Sol', '前沿能力，适合专业复杂任务。', 'OpenAI · OpenRouter'),
+    modelPreset('GPT_6_LUNA', 'GPT-6 Luna', '能力与成本更均衡。', 'OpenAI · OpenRouter'),
+    modelPreset('MUSE_WONDER', 'Muse Wonder', '适合复杂分析与长程任务。', 'Meta · OpenRouter'),
     modelPreset('GEMINI_3_8_FLASH', 'Gemini 3.8 Flash', '快速处理文字、图片和文件任务。', 'Google · OpenRouter'),
-    modelPreset('KIMI_K3', 'Kimi K3', '复杂分析 · Agent · 长上下文', 'Moonshot AI · OpenRouter'),
   ], nonChatCapabilities: [] },
   { providerId: 'DEEPSEEK', providerDisplayName: 'DeepSeek 官方直连', enabled: false, presetId: 'DEEPSEEK_V4_PRO', presetDisplayName: 'DeepSeek V4 Pro', credentialStored: false, revision: 0, presets: [
     modelPreset('DEEPSEEK_V4_PRO', 'DeepSeek V4 Pro', '适合深度推理与专业分析。', 'DeepSeek · 官方直连'),
@@ -45,6 +49,14 @@ export const MODEL_SERVICE_PREVIEW_SETTINGS = Object.freeze([
     modelPreset('QWEN_3_8_MAX', 'Qwen3.8-Max', '适合深度分析与复杂任务。', 'Qwen · 官方直连'),
     modelPreset('QWEN_3_6_FLASH', 'Qwen3.6 Flash', '适合大批量知识整理与快速检索。', 'Qwen · 官方直连'),
   ], nonChatCapabilities: [] },
+  ...['RELAYCORE_CLAUDE', 'RELAYCORE_GPT', 'RELAYCORE_GEMINI'].map(providerId => {
+    const models = RELAYCORE_MODELS.filter(model => model.providerId === providerId);
+    const selected = models.find(model => model.tier === 'DAILY') || models[0];
+    return { providerId, providerDisplayName: `RelayCore ${providerId.split('_')[1]} · ${selected.channel}`, enabled: false,
+      presetId: selected.presetId, presetDisplayName: relayCoreCompactName(selected), credentialStored: false, revision: 0,
+      presets: models.map(model => modelPreset(model.presetId, relayCoreCompactName(model), '平台列出，返回身份以响应为准。', 'RelayCore')),
+      nonChatCapabilities: [] };
+  }),
 ]);
 
 const pageTitles = Object.freeze({
@@ -96,8 +108,8 @@ function home({ appearance, page, capabilities }) {
       row({ glyph: settingsIcons.data, title: '本机数据', page: 'privacy', muted: true, selected: page === 'privacy' }),
       row({ glyph: settingsIcons.info, title: '关于', page: 'about', muted: true, selected: page === 'about' }),
     ])}
-    ${group('工作区', [
-      row({ glyph: settingsIcons.folder, title: '项目与知识', page: 'workspace', selected: page === 'workspace' }),
+    ${group('高级', [
+      ...(WORKSPACES_VISIBLE ? [row({ glyph: settingsIcons.folder, title: '项目与知识', page: 'workspace', selected: page === 'workspace' })] : []),
       row({ glyph: settingsIcons.tune, title: '开发与诊断', page: 'development', selected: page === 'development' }),
     ])}
   </div>`;
@@ -177,16 +189,41 @@ function modelConfiguration(context) {
   const storedMask = '••••••••••••••••••••••••••••••••';
   const keyValue = context.modelCredentialDraft || (selected.credentialStored ? storedMask : '');
   const busy = context.modelSettingsSaving || context.modelSettingsTesting;
+  const relaySelected = selected.providerId.startsWith('RELAYCORE_');
+  const platformServices = ['OPENROUTER', 'RELAYCORE_CLAUDE', 'DEEPSEEK', 'ZHIPU', 'QWEN'].map(id => services.find(item => item.providerId === id)).filter(Boolean);
+  const brand = id => `<img class="model-provider-brand" data-model-brand="${MODEL_BRAND_NAMES[id]}" src="./assets/model-brands/${MODEL_BRAND_NAMES[id]}.png" alt="" width="20" height="20">`;
+  const providerButton = (item, sub = false) => {
+    const active = sub ? item.providerId === selected.providerId : (item.providerId === selected.providerId || (item.providerId === 'RELAYCORE_CLAUDE' && relaySelected));
+    const label = sub ? item.providerId.split('_')[1].replace('GEMINI', 'Gemini').replace('CLAUDE', 'Claude') : ({ ZHIPU: '智谱', QWEN: 'Qwen', DEEPSEEK: 'DeepSeek', RELAYCORE_CLAUDE: 'RelayCore' })[item.providerId] || 'OpenRouter';
+    return `<button data-action="select-model-service-provider" data-provider-id="${item.providerId}" class="${active ? 'selected' : ''}" data-provider-platform="${!sub}" role="tab" aria-selected="${active}" ${selectionBusy ? 'disabled' : ''}>${brand(sub ? item.providerId : item.providerId.startsWith('RELAYCORE_') ? 'RELAYCORE' : item.providerId)}<span>${label}</span></button>`;
+  };
+  const presets = [...(selected.presets || []).filter(item => item.chatSelectable !== false), ...(selected.nonChatCapabilities || []).filter(item => item.id === 'GLM_OCR')].sort((a,b) => selected.providerId === 'RELAYCORE_CLAUDE' ? Number(b.id === 'RELAYCORE_SONNET_5_5') - Number(a.id === 'RELAYCORE_SONNET_5_5') : 0);
+  const visibleModelCapacity = relaySelected ? 5 : 6;
+  const groupName = relaySelected ? `${selected.providerId.split('_')[1].replace('CLAUDE', 'Claude').replace('GEMINI', 'Gemini')} 分组` : selected.providerDisplayName;
+  const unsaved = context.modelCredentialEdited;
+  const selectionBusy = context.modelSettingsTesting;
   return `<div class="android-settings-page android-settings-model-configuration">
-    <div class="android-settings-segments" role="tablist">${services.map(item => `<button data-action="select-model-service-provider" data-provider-id="${item.providerId}" class="${item.providerId === selected.providerId ? 'selected' : ''}" role="tab" aria-selected="${item.providerId === selected.providerId}">${item.providerId === 'ZHIPU' ? '智谱' : item.providerId === 'QWEN' ? 'Qwen' : item.providerId === 'DEEPSEEK' ? 'DeepSeek' : 'OpenRouter'}</button>`).join('')}</div>
-    <section class="android-settings-card android-settings-model-provider-row"><strong>${escapeHtml(selected.providerDisplayName)}</strong><button type="button" class="android-settings-switch" data-action="toggle-model-service-enabled" role="switch" aria-checked="${Boolean(draft.enabled)}" ${busy ? 'disabled' : ''}><span></span></button></section>
-    <button class="android-settings-model-preset" data-action="open-settings-picker" data-picker="modelPreset" ${busy ? 'disabled' : ''}><span><strong>${escapeHtml(preset?.displayName || draft.presetDisplayName || '')}</strong><small>${escapeHtml(preset?.family || '')}</small></span>${icon(icons.chevronDown, '展开模型预设')}</button>
-    <button class="android-settings-model-test" data-action="test-model-service-connection" ${busy || !selected.credentialStored ? 'disabled' : ''}>${context.modelSettingsTesting ? '<span class="android-settings-spinner" aria-hidden="true"></span>正在测试…' : '测试连接'}</button>
-    ${context.modelSettingsTesting ? '<p class="android-settings-model-feedback">正在检查连接，请稍候。</p>' : ''}
-    ${selected.credentialStatus === 'Unavailable' ? '<p class="android-settings-model-feedback error">应用私有凭据记录无法读取；请重新保存该服务商 API Key。</p>' : ''}
+    <h3 class="model-settings-section-title">服务商与模型</h3>
+    <section class="model-settings-browser" data-model-count="${presets.length}">
+      <div class="model-settings-platform-rail" role="tablist" aria-orientation="vertical" aria-label="模型平台">${platformServices.map(item => providerButton(item)).join('')}</div>
+      <div class="model-settings-model-pane">
+        ${relaySelected ? `<div class="android-settings-segments android-settings-relay-tabs" role="tablist" aria-label="RelayCore 模型分组">${services.filter(item => item.providerId.startsWith('RELAYCORE_')).map(item => providerButton(item, true)).join('')}</div>` : ''}
+        <div class="model-settings-model-list${presets.length > visibleModelCapacity ? ' scrollable' : ''}" role="radiogroup" aria-label="设置模型">${presets.map(item => `<button class="model-settings-model-option${item.id === draft.presetId ? ' selected' : ''}" data-action="select-model-service-preset" data-preset-id="${escapeHtml(item.id)}" role="radio" aria-checked="${item.id === draft.presetId}" ${selectionBusy ? 'disabled' : ''}><input type="radio" name="model-settings-preset" tabindex="-1" aria-hidden="true" ${item.id === draft.presetId ? 'checked' : ''}><span><strong>${escapeHtml(presetNameForUser(item))}</strong><small>${escapeHtml(item.id === 'GLM_OCR' ? '图片、PDF 转 Markdown · 共用智谱 Key' : MODEL_SETTINGS_PURPOSES[item.id] || item.description)}</small></span></button>`).join('')}</div>
+      </div>
+    </section>
+    <h3 class="model-settings-section-title">线路配置</h3>
+    <section class="android-settings-card android-settings-model-provider-row">${brand(selected.providerId)}<div class="model-settings-enabled-copy"><strong>${escapeHtml(groupName)}</strong></div><button type="button" class="android-settings-switch" data-action="toggle-model-service-enabled" role="switch" aria-label="${escapeHtml(groupName)}启用" aria-checked="${Boolean(draft.enabled)}"><span></span></button></section>
     <label class="android-settings-field android-settings-model-key"><span>API Key</span><div><span aria-hidden="true">${icon(icons.key, '')}</span><input id="model-service-api-key" type="${context.modelCredentialVisible ? 'text' : 'password'}" autocomplete="off" spellcheck="false" value="${escapeHtml(keyValue)}" ${busy ? 'disabled' : ''}><button data-action="reveal-model-service-credential" aria-label="${context.modelCredentialVisible ? '隐藏 API Key' : '显示 API Key'}" ${busy || (!selected.credentialStored && !context.modelCredentialDraft) ? 'disabled' : ''}>${icon(context.modelCredentialVisible ? icons.visibilityOff : icons.visibility, context.modelCredentialVisible ? '隐藏 API Key' : '显示 API Key')}</button></div></label>
-    <div class="android-settings-model-save"><button data-action="save-model-service-settings" ${busy ? 'disabled' : ''}>${context.modelSettingsSaving ? '<span class="android-settings-spinner" aria-hidden="true"></span>正在保存…' : '保存'}</button></div>
+    <div class="model-settings-actions">
+      <button class="android-settings-model-test" data-action="test-model-service-connection" ${busy || unsaved || !selected.credentialStored ? 'disabled' : ''}>${context.modelSettingsTesting ? '<span class="android-settings-spinner" aria-hidden="true"></span>正在测试…' : '测试连接'}</button>
+      <div class="android-settings-model-save"><button data-action="save-model-service-settings" ${busy || !context.modelCredentialEdited || !context.modelCredentialDraft.trim() ? 'disabled' : ''}>${context.modelSettingsSaving ? '<span class="android-settings-spinner" aria-hidden="true"></span>正在保存…' : '保存'}</button></div>
+    </div>
+    ${unsaved ? '<p class="model-settings-unsaved">API Key 尚未保存，请先保存再测试连接。</p>' : ''}
+    ${context.modelSettingsTesting ? '<p class="android-settings-model-feedback">正在检查连接，请稍候。</p>' : ''}
+    <p data-model-provider-feedback data-provider-id="${escapeHtml(selected.providerId)}" class="android-settings-model-feedback${context.modelSettingsError ? ' error' : ''}" ${context.modelSettingsError || context.modelSettingsNotice ? '' : 'hidden '}role="${context.modelSettingsError ? 'alert' : 'status'}">${escapeHtml(context.modelSettingsError || context.modelSettingsNotice || '')}</p>${context.modelSettingsNotice === 'API Key 已安全保存在本机。' && !context.modelSettingsError ? '<small>尚未测试连接；请点击“测试连接”确认 API Key 是否可用。</small>' : ''}
+    ${selected.credentialStatus === 'Unavailable' ? '<p class="android-settings-model-feedback error">应用私有凭据记录无法读取；请重新保存该服务商 API Key。</p>' : ''}
   </div>`;
+
 }
 
 function importResultCard(title, task, kind) {
@@ -198,7 +235,8 @@ function importResultCard(title, task, kind) {
 }
 
 const recordCost = record => projectedCost({
-  modelId: record.actualModelId || record.modelId,
+  modelId: accountingPricingModelId(record.requestedModelId,record.actualModelId || record.modelId),
+  modelDisplayName: record.callMetadata?.modelDisplayName,
   inputTokens: record.inputTokens,
   outputTokens: record.outputTokens,
   cachedInputTokens: record.cachedInputTokens,
@@ -206,14 +244,17 @@ const recordCost = record => projectedCost({
   chargeMicros: record.chargeMicros,
   currencyCode: record.currencyCode,
   costSource: record.costSource,
+  priceVersion: record.callMetadata?.priceVersion,
 });
 
 const usageAmount = (records, source = null) => {
-  const costs = records.map(recordCost).filter(Boolean).filter(cost => !source || cost.costSource === source);
+  const costs = records.flatMap(usageRecordPhysicalFacts).map(recordCost).filter(Boolean).filter(cost => !source || cost.costSource === source);
   if (!costs.length) return '金额未知';
-  const cnyMicros = costs.reduce((total, cost) => total + Math.round(cost.chargeMicros * (cost.currencyCode === 'CNY' ? 1 : cost.currencyCode === 'USD' ? 6.720309145556033 : 0)), 0);
+  const cnyMicros = Math.round(costs.reduce((total, cost) => total + cost.chargeMicros * (cost.currencyCode === 'CNY' ? 1 : cost.currencyCode === 'USD' ? 6.720309145556033 : 0), 0));
   const costSource = costs.every(cost => cost.costSource === 'LOCAL_ESTIMATE') ? 'LOCAL_ESTIMATE' : 'PROVIDER_RESPONSE';
-  return cnyCostLabel({ chargeMicros: cnyMicros, currencyCode: 'CNY', costSource }, { maximumFractionDigits: 6 }) || '金额未知';
+  const label=cnyCostLabel({ chargeMicros: cnyMicros, currencyCode: 'CNY', costSource }, { maximumFractionDigits: 6 }) || '金额未知';
+  const unknown=records.filter(record=>usageRecordPhysicalFacts(record).some(call=>!recordCost(call))).length;
+  return unknown ? `${label}（另有 ${unknown} 次费用未知）` : label;
 };
 
 const localDateTime = value => {
@@ -229,7 +270,7 @@ const elapsedTime = value => {
 };
 
 function usageLedgerPage(context) {
-  const records = context.usageLedger?.records || [];
+  const records = groupRetrievalUsageRecords(context.usageLedger?.records || []);
   if (!records.length) return `<div class="android-settings-page android-settings-ledger-empty">${icon(icons.data, '')}<strong>尚无可用费用记录</strong><p>已返回输入和输出 Token 的调用会显示费用与用量。</p></div>`;
   const sections = [['conversation', '会话'], ['title', '会话标题整理'], ['history', '历史资料整理'], ['ocr', '南枫转写']];
   const selected = context.usageSection || 'conversation';
@@ -238,13 +279,16 @@ function usageLedgerPage(context) {
   const automaticRows = records.filter(record => category(record) === 'reminder');
   const ledgerRow = (record, fallbackTitle, preferFallback = false) => {
     const conversation = (context.data?.exchange?.conversations || []).find(item => item.id === record.conversationId);
-    const cost = recordCost(record);
+    const cost = record.groupedCalls ? null : recordCost(record);
+    const memberCosts = usageRecordPhysicalFacts(record).map(recordCost);
+    const knownCosts = memberCosts.filter(Boolean);
+    const costKind = knownCosts.some(item => item.costSource === 'LOCAL_ESTIMATE') ? '本地估算' : knownCosts.length ? '接口金额' : '费用未知';
     const hasProviderUsage = Number.isSafeInteger(record.inputTokens) && Number.isSafeInteger(record.outputTokens);
-    const amount = cnyCostLabel(cost, { maximumFractionDigits: 6 }) || '金额未知';
+    const amount = record.groupedCalls ? usageAmount([record]) : cnyCostLabel(cost, { maximumFractionDigits: 6 }) || '金额未知';
     const usage = hasProviderUsage
       ? `输入 ${record.inputTokens.toLocaleString('zh-CN')} / 输出 ${record.outputTokens.toLocaleString('zh-CN')} Token`
       : 'Token 用量未返回';
-    return `<section class="android-settings-card android-settings-ledger-row"><div><strong>${escapeHtml(preferFallback ? fallbackTitle : conversation?.title || fallbackTitle)}</strong><b>${escapeHtml(amount)}</b></div><p>${escapeHtml(record.modelId)} · ${usage}</p><small>${escapeHtml(localDateTime(record.occurredAtMs))}</small></section>`;
+    return `<section class="android-settings-card android-settings-ledger-row"><div><strong>${escapeHtml(preferFallback ? fallbackTitle : conversation?.title || fallbackTitle)}</strong><b>${escapeHtml(amount)}</b></div><p>${escapeHtml(record.callMetadata?.modelDisplayName || record.modelId)} · ${usage}</p><p>${escapeHtml(record.callMetadata?.role === "RETRIEVAL" ? "联网检索" : record.callMetadata?.role === "ANSWER" ? "主回答" : "调用")} · ${record.kind === "STREAM_PENDING" ? "未取得完整计量" : "已记录"}${record.cachedInputTokens == null ? "" : ` · 缓存 ${record.cachedInputTokens} Token`}${record.callMetadata?.reasoningTokens == null ? "" : ` · 思考 ${record.callMetadata.reasoningTokens} Token`} · ${costKind}</p><small>${escapeHtml(localDateTime(record.occurredAtMs))}</small></section>`;
   };
   return `<div class="android-settings-page android-settings-ledger">
     <section class="android-settings-card android-settings-ledger-summary"><strong>本机累计</strong><div><span>费用</span><b>${escapeHtml(usageAmount(records))}</b></div><div><span>输入 Token</span><b>${Number(context.usageLedger?.inputTokens || 0).toLocaleString('zh-CN')}</b></div><div><span>输出 Token</span><b>${Number(context.usageLedger?.outputTokens || 0).toLocaleString('zh-CN')}</b></div></section>
@@ -292,7 +336,7 @@ function simplePage(page, context) {
   if (page === 'conversation-cost') return usageLedgerPage(context);
   if (page === 'context-selections') return contextSelectionsPage(context);
   if (page === 'diagnostics') return diagnosticsPage(context);
-  if (page === 'about') return `<div class="android-settings-page"><section class="android-settings-card android-settings-about"><div><strong>南枫 AI</strong><p>本机对话、项目与知识工作区。</p></div>${divider}<div><strong>版本信息</strong><p>Desktop 版 ${escapeHtml(runtimeInfo.version || '读取中')}</p><small>开发时间 ${escapeHtml(formatDevelopmentTime(runtimeInfo.buildEpochSeconds))}</small></div>${divider}<div><strong>开发者信息</strong><small>开发者：席瑞</small><small>联系邮箱：nanzhufeng.studio@gmail.com</small><small>源码与更新：<a href="https://github.com/nanzhufeng/Nanfeng-AI" data-action="open-source-link" data-href="https://github.com/nanzhufeng/Nanfeng-AI">GitHub · nanzhufeng/Nanfeng-AI</a></small><small>版权所有 © 2026 席瑞</small></div></section></div>`;
+  if (page === 'about') return `<div class="android-settings-page"><section class="android-settings-card android-settings-about"><div><strong>南枫 AI</strong><p>多模型聊天 AI，支持切换模型与服务商。</p></div>${divider}<div><strong>版本信息</strong><p>Desktop 版 ${escapeHtml(runtimeInfo.version || '读取中')}</p><small>构建基准 Commit：${escapeHtml(runtimeInfo.gitCommit || 'unknown')}</small><small>开发时间：${escapeHtml(formatDevelopmentTime(runtimeInfo.buildEpochSeconds))}</small></div>${divider}<div><strong>开发者信息</strong><small>开发者：席瑞</small><small>联系邮箱：nanzhufeng.studio@gmail.com</small><small>源码与更新：<a href="https://github.com/nanzhufeng/Nanfeng-AI" data-action="open-source-link" data-href="https://github.com/nanzhufeng/Nanfeng-AI">GitHub · nanzhufeng/Nanfeng-AI</a></small><small>版权所有 © 2026 席瑞</small></div></section></div>`;
   if (page === 'memory-overview') {
     const memories = (data?.exchange?.memory || []).filter(item => (item.status || 'ACTIVE') === 'ACTIVE' && !item.deleted && (item.scope || 'GLOBAL') === 'GLOBAL' && !item.scopeId);
     const updatedAt = memories.map(item => item.updatedAt || item.createdAt || '').filter(Boolean).sort().at(-1);
@@ -301,8 +345,8 @@ function simplePage(page, context) {
       <section class="android-memory-summary-content">${memories.map((item, index) => `<article><h2>${escapeHtml(item.title || (index === 0 ? '概览' : `记忆 ${index + 1}`))}</h2><p>${escapeHtml(item.body || '')}</p></article>`).join('') || `<p class="android-settings-empty android-memory-summary-empty">还没有记忆摘要。</p>`}</section>
     </div>`;
   }
-  if (page === 'workspace') return `<div class="android-settings-page">${group('', [row({ glyph: icons.folder, title: `管理 Projects`, action: 'show-projects' }), row({ glyph: icons.knowledge, title: '管理知识库', action: 'show-knowledge' })])}<section class="android-settings-card android-settings-status-card"><strong>功能审阅</strong><p>工作区独立对话：保留。</p><p>沿用工作区入口；在消息菜单中选择引用文字到另一区域。</p><small>两区各自保存，只有主动选择的文字会进入另一边的草稿。</small></section></div>`;
-  if (page === 'development') return `<div class="android-settings-page">${group('', [row({ glyph: icons.settings, title: '本次 Context 控制', action: 'show-connections' }), row({ glyph: icons.info, title: '离线评测', action: 'show-p8-inspect' })])}${p6eAcceptance?.enabled ? `<section class="android-settings-card android-settings-status-card"><strong>P6-E 验收维护</strong><p>仅 acceptance 启动显示；正式启动不出现。</p><button data-action="run-p6e-temporary-maintenance-acceptance">运行 23h59 / 24h 维护验收</button>${p6eAcceptance.receipt ? `<small>23h59 保留=${p6eAcceptance.receipt.retainedAt23h59} · 24h 清理=${p6eAcceptance.receipt.removedAt24h}</small>` : ''}</section>` : ''}</div>`;
+  if (WORKSPACES_VISIBLE && page === 'workspace') return `<div class="android-settings-page">${group('', [row({ glyph: icons.folder, title: `管理 Projects`, action: 'show-projects' }), row({ glyph: icons.knowledge, title: '管理知识库', action: 'show-knowledge' })])}<section class="android-settings-card android-settings-status-card"><strong>功能审阅</strong><p>工作区与 Harness：暂时隐藏，暂停发展。</p><p>只显示对话区，保留多模型切换；已有工作区数据继续隔离保存。</p><small>两区各自保存，只有主动选择的文字会进入另一边的草稿。</small></section></div>`;
+  if (page === 'development') return `<div class="android-settings-page"><section class="android-settings-card"><strong>功能审阅</strong><p>定位：多模型聊天 AI。工作区暂时隐藏，Harness 暂停发展。</p><p>已确认保留：OpenRouter／官方模型和 RC 普通文字 Sol／Astra 使用自身联网；其余 RC 普通文字及全部 RC 附件由 OpenRouter GPT-6 Luna 搜索，再交回原选 RC 模型回答。入口：原发送与显式重试，不新增常驻按钮。理由：按渠道与材料选择稳定路径；发送流程核验 Luna 接收方和当前材料；对话界面去掉重复说明，逐事项保留真实来源，原模型、原渠道及费用分别记录。</p><p>已确认：南枫岛仅在后台生成时显示真实模型、已保存字数、耗时及停止操作；前台不显示灵动岛。</p><small>沿用任务与通知入口；不新增常驻按键。语音、Agent步骤及跨App任务中心待评估，暂不新增入口。</small><p>已确认：附件联网核验覆盖文本、表格、Office正文、可读PDF及ZIP文档；单附件、多附件和混合类型共同取要点。</p><small>沿用现有附件和联网入口；避免遗漏后面的文件，来源对应事项。扫描件和媒体按模型能力或转写结果处理，不以截取或目录代替全文，无新增常驻按钮。</small><p>已确认：深度档加入 Muse Wonder，经 OpenRouter，位于智谱 GLM 上方；沿用原模型选择入口。已确认：新对话沿用上一次最后选择的模型；重启后保留，只有最后选择自动才沿用自动。</p><small>沿用现有选模入口；旧会话保留自己的模型，不新增按键。</small><p>已确认：模型选择弹窗默认字号缩小一档；小、标准、大仅轻微变化，保持辨认稳定。</p><p>已确认：所有模型选择入口的具体模型项显示所属平台图标，便于辨认；沿用原入口，不新增按钮。</p><p>已确认：模型选择增加 RelayCore 独立入口，内部按日常／深度分组。</p><small>集中展示模型与渠道，原日常／深度列表不再重复；入口仍在模型选择内。</small><small>沿用对话输入和模型选择入口；已有工作区数据保留，无新增常驻按键。</small></section>${group('', [row({ glyph: icons.settings, title: '本次 Context 控制', action: 'show-connections' }), row({ glyph: icons.info, title: '离线评测', action: 'show-p8-inspect' })])}${p6eAcceptance?.enabled ? `<section class="android-settings-card android-settings-status-card"><strong>P6-E 验收维护</strong><p>仅 acceptance 启动显示；正式启动不出现。</p><button data-action="run-p6e-temporary-maintenance-acceptance">运行 23h59 / 24h 维护验收</button>${p6eAcceptance.receipt ? `<small>23h59 保留=${p6eAcceptance.receipt.retainedAt23h59} · 24h 清理=${p6eAcceptance.receipt.removedAt24h}</small>` : ''}</section>` : ''}</div>`;
   if (page === 'account') return accountSyncPage(context);
   if (page === 'data') return renderLocalDataImportExportPage(context);
   if (page === 'json-import-results') return `<div class="android-settings-page android-settings-list">${importResultCard('ChatGPT JSON', chatgptTask, 'json')}${importResultCard('Claude JSON', claudeTask, 'json') || (!chatgptTask ? '<p class="android-settings-empty">还没有导入记录。</p>' : '')}</div>`;
@@ -318,7 +362,7 @@ function picker(kind, context) {
     const services = context.modelServiceSettings?.length ? context.modelServiceSettings : MODEL_SERVICE_PREVIEW_SETTINGS;
     const selected = services.find(item => item.providerId === context.modelProviderId) || services[0];
     const current = context.modelServiceDraft?.providerId === selected.providerId ? context.modelServiceDraft.presetId : selected.presetId;
-    return `<div class="android-settings-picker-scrim" data-action="dismiss-settings-picker"><section class="android-settings-picker android-settings-model-picker" role="dialog" aria-modal="true" aria-label="聊天模型" data-overlay-surface>${(selected.presets || []).map(item => `<button data-action="select-model-service-preset" data-preset-id="${item.id}" aria-pressed="${item.id === current}"><span><strong>${escapeHtml(item.displayName)}</strong><small>${escapeHtml(item.description)}</small></span>${item.id === current ? icon(icons.check, '已选中') : ''}</button>`).join('')}${(selected.nonChatCapabilities || []).map(item => `<div class="android-settings-model-capability"><strong>${escapeHtml(item.displayName)}</strong><small>${escapeHtml(item.description)}</small><small>${escapeHtml(item.family)}</small></div>`).join('')}</section></div>`;
+    return `<div class="android-settings-picker-scrim" data-action="dismiss-settings-picker"><section class="android-settings-picker android-settings-model-picker" role="dialog" aria-modal="true" aria-label="聊天模型" data-overlay-surface>${(selected.presets || []).map(item => `<button data-action="select-model-service-preset" data-preset-id="${item.id}" aria-pressed="${item.id === current}"><span><strong>${escapeHtml(presetNameForUser(item))}</strong><small>${escapeHtml(item.description)}</small></span>${item.id === current ? icon(icons.check, '已选中') : ''}</button>`).join('')}${(selected.nonChatCapabilities || []).map(item => `<div class="android-settings-model-capability"><strong>${escapeHtml(item.displayName)}</strong><small>${escapeHtml(item.description)}</small><small>${escapeHtml(item.family)}</small></div>`).join('')}</section></div>`;
   }
   const options = kind === 'mode' ? APPEARANCE_MODES : kind === 'fontSize' ? FONT_SIZES : kind === 'themeColor' ? THEME_COLORS : CONVERSATION_TONES;
   const current = kind === 'mode' ? appearance.mode : kind === 'fontSize' ? appearance.fontSize : kind === 'themeColor' ? appearance.themeColor : draft.tone;
@@ -327,9 +371,10 @@ function picker(kind, context) {
   return `<div class="android-settings-picker-scrim" data-action="dismiss-settings-picker"><section class="${pickerClass}" role="dialog" aria-modal="true" aria-label="${title}" data-overlay-surface>${options.map(item => `<button data-action="select-settings-picker-option" data-picker="${kind}" data-value="${item.id}" aria-pressed="${item.id === current}">${item.accent ? `<i class="android-settings-color-preview android-settings-color-preview-${escapeHtml(item.id)}" aria-hidden="true"></i>` : ''}<span><strong>${escapeHtml(item.label)}</strong>${item.detail ? `<small>${escapeHtml(item.detail)}</small>` : ''}</span>${item.id === current ? icon(icons.check, '已选中') : ''}</button>`).join('')}</section></div>`;
 }
 
-export function renderAndroidSettingsShell({ page = 'personalization', status = '', appearance = {}, settings = {}, personalizationDraft = settings, personalizationDirty = false, picker: pickerKind = null, data, favoriteConversationIds = new Set(), runtimeInfo = {}, connection = {}, native = false, p6eAcceptance = { enabled: false, receipt: null }, p6gCatalog = null, p6kTask = null, chatgptTask = null, claudeTask = null, modelServiceSettings = MODEL_SERVICE_PREVIEW_SETTINGS, modelProviderId = 'OPENROUTER', modelServiceDraft = null, modelCredentialDraft = '', modelCredentialVisible = false, modelSettingsSaving = false, modelSettingsTesting = false, modelSettingsNotice = '', modelSettingsError = '', usageLedger = { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection = 'conversation', contextSelectionRecords = [], diagnosticRecords = [], invocationRecords = [], privacyInventory = { totalBytes: 0, aggregates: [] }, localBackup = {}, accountSync = {}, accountRecovery = null, capabilities = DESKTOP_SETTINGS_CAPABILITIES, reminders = { drafts: [], plans: [], diagnostics: [] }, reminderNotificationPermission = 'default', reminderNotificationBridge = {}, backgroundRuntime = {}, memorySummaryQuery = '', memorySummaryComposer = '', memorySummaryNotice = '' } = {}) {
+export function renderAndroidSettingsShell({ page = 'personalization', status = '', appearance = {}, settings = {}, personalizationDraft = settings, personalizationDirty = false, picker: pickerKind = null, data, favoriteConversationIds = new Set(), runtimeInfo = {}, connection = {}, native = false, p6eAcceptance = { enabled: false, receipt: null }, p6gCatalog = null, p6kTask = null, chatgptTask = null, claudeTask = null, modelServiceSettings = MODEL_SERVICE_PREVIEW_SETTINGS, modelProviderId = 'OPENROUTER', modelServiceDraft = null, modelCredentialDraft = '', modelCredentialEdited = false, modelCredentialVisible = false, modelSettingsSaving = false, modelSettingsTesting = false, modelSettingsNotice = '', modelSettingsError = '', usageLedger = { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection = 'conversation', contextSelectionRecords = [], diagnosticRecords = [], invocationRecords = [], privacyInventory = { totalBytes: 0, aggregates: [] }, localBackup = {}, accountSync = {}, accountRecovery = null, capabilities = DESKTOP_SETTINGS_CAPABILITIES, reminders = { drafts: [], plans: [], diagnostics: [] }, reminderNotificationPermission = 'default', reminderNotificationBridge = {}, backgroundRuntime = {}, memorySummaryQuery = '', memorySummaryComposer = '', memorySummaryNotice = '' } = {}) {
+  if (!WORKSPACES_VISIBLE && page === 'workspace') page = 'personalization';
   const normalizedSettings = normalizeProductSettings(settings);
-  const context = { appearance: normalizeAppearance(appearance), settings: normalizedSettings, draft: normalizeProductSettings({ ...normalizedSettings, ...personalizationDraft }), data, favorites: favoriteConversationIds, runtimeInfo, connection, native, p6eAcceptance, p6gCatalog, p6kTask, chatgptTask, claudeTask, modelServiceSettings, modelProviderId, modelServiceDraft, modelCredentialDraft, modelCredentialVisible, modelSettingsSaving, modelSettingsTesting, modelSettingsNotice, modelSettingsError, usageLedger, usageSection, contextSelectionRecords, diagnosticRecords, invocationRecords, privacyInventory, localBackup, accountSync, accountRecovery, capabilities, reminders, reminderNotificationPermission, reminderNotificationBridge, backgroundRuntime, memorySummaryQuery, memorySummaryComposer, memorySummaryNotice };
+  const context = { appearance: normalizeAppearance(appearance), settings: normalizedSettings, draft: normalizeProductSettings({ ...normalizedSettings, ...personalizationDraft }), data, favorites: favoriteConversationIds, runtimeInfo, connection, native, p6eAcceptance, p6gCatalog, p6kTask, chatgptTask, claudeTask, modelServiceSettings, modelProviderId, modelServiceDraft, modelCredentialDraft, modelCredentialEdited, modelCredentialVisible, modelSettingsSaving, modelSettingsTesting, modelSettingsNotice, modelSettingsError, usageLedger, usageSection, contextSelectionRecords, diagnosticRecords, invocationRecords, privacyInventory, localBackup, accountSync, accountRecovery, capabilities, reminders, reminderNotificationPermission, reminderNotificationBridge, backgroundRuntime, memorySummaryQuery, memorySummaryComposer, memorySummaryNotice };
   context.page = page;
   const content = page === 'personalization' ? personalization(context) : page === 'reminders' ? remindersPage(context) : simplePage(page, context);
   return `<main class="chat-main android-settings-main"><div class="android-settings-layout"><aside class="android-settings-primary" aria-label="设置一级菜单"><div class="android-settings-primary-header"><button data-action="show-chat" aria-label="返回应用">${icon(icons.chevronLeft, '返回应用')}</button><h1>设置</h1><span></span></div><div class="android-settings-primary-scroll" data-settings-scroll-key="settings-primary">${home(context)}</div></aside><section class="android-settings-secondary" aria-label="设置二级页面">${header(page, personalizationDirty, capabilities, context)}<div class="android-settings-scroll" data-settings-scroll-key="settings-page-${escapeHtml(page)}">${content}${status ? `<p class="android-settings-status" role="status">${escapeHtml(status)}</p>` : ''}</div></section></div>${picker(pickerKind, context)}</main>`;

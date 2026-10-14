@@ -1,0 +1,206 @@
+{
+  "documents": 41,
+  "contracts": 40,
+  "changes": [
+    {
+      "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "reason": "消除附件子合同与C12事实粒度冲突，单一owner持有范围"
+    },
+    {
+      "path": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+      "reason": "限定退役所属渠道，不误禁用RC Astra"
+    },
+    {
+      "path": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+      "reason": "明确可见页脚复制与隐藏metadata禁复制的边界"
+    },
+    {
+      "path": "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
+      "reason": "去除把本地模块未接线扩为全软件无Provider缓存的标题"
+    },
+    {
+      "path": "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
+      "reason": "区分真实缓存机制并隔离未实施的Provider参数规划"
+    },
+    {
+      "path": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "reason": "将历史远端目录判断与当前产品禁发规则分开"
+    },
+    {
+      "path": "docs/CONTRACT_GOVERNANCE_CURRENT.md",
+      "reason": "单一交付权限入口与编号历史章节治理"
+    },
+    {
+      "path": "docs/C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md",
+      "reason": "历史阶段包／测试证据独立包含；原标题slug不变"
+    },
+    {
+      "path": "docs/C14_LOCAL_DATA_PARITY_CONTRACT.md",
+      "reason": "历史阶段包／测试证据独立包含；原标题slug不变"
+    },
+    {
+      "path": "docs/C14_LOCAL_DATA_PARITY_CONTRACT.md",
+      "reason": "历史阶段包／测试证据独立包含；原标题slug不变"
+    },
+    {
+      "path": "docs/C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md",
+      "reason": "保留252槽门但隔离旧84/84及ad-hoc包证据"
+    },
+    {
+      "path": "docs/P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md",
+      "reason": "保留Auto Backup规则、旧交付值独立历史化、未来验收不钉旧序列号"
+    },
+    {
+      "path": "docs/P7A_LOCAL_E2EE_SYNC_FOUNDATION_CONTRACT.md",
+      "reason": "旧code／证书／ad-hoc约束保留为历史，不用于当前开发包"
+    },
+    {
+      "path": "docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md",
+      "reason": "旧code／证书／ad-hoc约束保留为历史，不用于当前开发包"
+    },
+    {
+      "path": "docs/P7D_SYNC_COORDINATOR_AND_ACCOUNT_UI_CONTRACT.md",
+      "reason": "旧code／证书／ad-hoc约束保留为历史，不用于当前开发包"
+    },
+    {
+      "path": "docs/P7E_CROSS_DEVICE_RESTORE_AND_DEPLOYMENT_READINESS_CONTRACT.md",
+      "reason": "旧code／证书／ad-hoc约束保留为历史，不用于当前开发包"
+    },
+    {
+      "path": "docs/P7C_REAL_SERVICE_CONFIGURATION_CONTRACT.md",
+      "reason": "历史阶段包／测试证据独立包含；原标题slug不变"
+    },
+    {
+      "path": "docs/P4L_JSON_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+      "reason": "历史阶段包／测试证据独立包含；原标题slug不变"
+    },
+    {
+      "path": "docs/P6_ANDROID_V2_ATOMIC_RESTORE_CONTRACT.md",
+      "reason": "历史阶段包／测试证据独立包含；原标题slug不变"
+    },
+    {
+      "path": "docs/P4D_EXPLICIT_CONTEXT_BODY_SELECTION_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4G_LOCAL_KNOWLEDGE_RELATIONSHIPS_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4H_MARKDOWN_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4I_OFFLINE_EVAL_BASELINE_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4J_LOCAL_CONTEXT_COMPRESSION_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4K_LOCAL_CONTEXT_PREVIEW_STABLE_PREFIX_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4L_JSON_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4N_PDF_TEXT_KNOWLEDGE_ADAPTER_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P4O_HTTPS_WEB_TEXT_SNAPSHOT_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P5B_BACKGROUND_CANCELLATION_BATTERY_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P6H_CHATGPT_EXPORT_JSON_ADAPTER_CONTRACT.md",
+      "reason": "未来验收按当次隔离环境，不继承旧固定模拟器编号；历史实测段不改"
+    },
+    {
+      "path": "docs/P6D_MACOS_GUI_ACCEPTANCE_AND_DESKTOP_DELIVERY_CONTRACT.md",
+      "reason": "区分旧GUI/About原型文字与当前Apple Development包身份，不改旧UI代码"
+    },
+    {
+      "path": "docs/P6C_DESKTOP_LOCAL_WRITE_WORKBENCH_CONTRACT.md",
+      "reason": "未来验收服从当前签名与设备隔离入口，不要求旧ad-hoc或固定序列号"
+    },
+    {
+      "path": "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+      "reason": "未来验收服从当前签名与设备隔离入口，不要求旧ad-hoc或固定序列号"
+    },
+    {
+      "path": "docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md",
+      "reason": "未来验收服从当前签名与设备隔离入口，不要求旧ad-hoc或固定序列号"
+    },
+    {
+      "path": "docs/P8C_LOCAL_VISIBLE_AGENT_INSPECT_CONTRACT.md",
+      "reason": "未来验收服从当前签名与设备隔离入口，不要求旧ad-hoc或固定序列号"
+    },
+    {
+      "path": "docs/P8D_LOCAL_EXIT_RED_TEAM_AUDIT_CONTRACT.md",
+      "reason": "未来验收服从当前签名与设备隔离入口，不要求旧ad-hoc或固定序列号"
+    },
+    {
+      "path": "docs/P8D_LOCAL_EXIT_RED_TEAM_AUDIT_CONTRACT.md",
+      "reason": "原型Agent验证不强制重签当前正式包"
+    },
+    {
+      "path": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+      "reason": "现行UI回归不硬编码旧包签名，历史已完成glyph证据原样保留"
+    },
+    {
+      "path": "docs/P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md",
+      "reason": "未来验收不继承旧模拟器地址，历史字段和验证层不改"
+    },
+    {
+      "path": "docs/P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md",
+      "reason": "未来验收不继承旧模拟器地址，历史字段和验证层不改"
+    },
+    {
+      "path": "docs/P6J_NANFENG_KNOWLEDGE_EXPORT_ADAPTER_CONTRACT.md",
+      "reason": "未来验收不继承旧模拟器地址，历史字段和验证层不改"
+    },
+    {
+      "path": "docs/P6D_DESKTOP_SIDEBAR_INFORMATION_ARCHITECTURE_CONTRACT.md",
+      "reason": "将旧WORK／归档可见入口目标与矩阵真正置于历史父章节，不靠顶部声明"
+    },
+    {
+      "path": "docs/P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md",
+      "reason": "旧ZIP未实施／禁止解析指令不覆盖当前已接线Android媒体恢复；原证据保留"
+    },
+    {
+      "path": "docs/P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md",
+      "reason": "当前音频/文件验收不要求旧ad-hoc包"
+    }
+  ]
+}

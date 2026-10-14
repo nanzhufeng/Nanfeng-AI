@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -76,7 +77,7 @@ internal fun ScheduledMonitorDialog(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Box(modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text(
                         if (state.creating) "新建计划" else "已计划",
                         style = MaterialTheme.typography.titleLarge,
@@ -122,7 +123,7 @@ internal fun ScheduledMonitorDialog(
                             ScheduledMonitorTaskCard(task, onPause = onPause, onDelete = onDelete)
                         }
                     }
-                    Button(onClick = onStartCreate, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(18.dp)) {
+                    Button(onClick = onStartCreate, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(18.dp)) {
                         Icon(Icons.Rounded.Add, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("添加计划")
@@ -173,8 +174,8 @@ private fun ScheduledMonitorEditor(
     }
     state.notice?.let { Text(it, color = AccentOrange, style = MaterialTheme.typography.bodySmall) }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp)) { Text("取消") }
-        Button(onClick = onCreate, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp)) { Text("保存并开始") }
+        OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(16.dp)) { Text("取消") }
+        Button(onClick = onCreate, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(16.dp)) { Text("保存并开始") }
     }
 }
 

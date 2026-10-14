@@ -46,7 +46,21 @@ class P5AAdaptiveNavigationContractsTest {
     fun `persisted route restores after process recreation without an explicit intent`() {
         val viewModel = P5ANavigationViewModel(SavedStateHandle())
         viewModel.restoreFromIntent(null, null, persistedRoute = P5ARoute.KNOWLEDGE.wireValue)
-        assertEquals(P5ARoute.KNOWLEDGE, viewModel.state.route)
+        assertEquals(P5ARoute.CONVERSATION, viewModel.state.route)
+    }
+
+    @Test
+    fun `saved state deep links and explicit navigation cannot reopen hidden work pages`() {
+        for (route in listOf(P5ARoute.PROJECTS, P5ARoute.KNOWLEDGE, P5ARoute.CONTROL)) {
+            val viewModel = P5ANavigationViewModel(SavedStateHandle(mapOf("p5a_route" to route.wireValue)))
+            assertEquals(P5ARoute.CONVERSATION, viewModel.state.route)
+            viewModel.select(P5ARoute.SETTINGS)
+            viewModel.restoreFromIntent("android.intent.action.VIEW", null, deepLinkRoute = route.wireValue)
+            assertEquals(P5ARoute.CONVERSATION, viewModel.state.route)
+            viewModel.select(route)
+            assertEquals(P5ARoute.CONVERSATION, viewModel.state.route)
+            assertFalse(viewModel.state.conversationDrawerOpen)
+        }
     }
 
     @Test

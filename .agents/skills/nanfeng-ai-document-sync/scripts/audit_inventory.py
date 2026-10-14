@@ -76,7 +76,7 @@ def main():
         'changed_since_inventory': [row['path'] for row in rows if row.get('matches_inventory') is False],
         'limitations': ['Marker counts are routing hints, not findings or coverage.',
                         'No Kotlin/Rust/SQL type or runtime validation in this script.',
-                        'No private, untracked or ignored input; no file bodies emitted.'],
+                        'Only supplied inventory paths; no file bodies emitted. Ignored inputs must be excluded by the inventory producer.'],
     }
     # Exclusive output creation preserves all prior evidence.
     with args.output.open('x') as output:

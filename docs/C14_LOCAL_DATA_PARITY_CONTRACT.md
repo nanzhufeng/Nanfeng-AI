@@ -1,5 +1,10 @@
 # C-14 导入导出／本机数据跨端合同
 
+<!-- contract-governance:start -->
+> **合同口径：现行领域合同。** 领域入口：[ 本机数据与导入导出表面 ](C14_LOCAL_DATA_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** C-14 导入导出／本机数据跨端合同
+<!-- contract-governance:end -->
+
 > 证据日期：2026-09-03。本文只约束 C-14，不扩展 C-15 或 C-16。Android 当前源码与隔离同状态是可见事实源；Desktop 只做宽屏平台适配。
 
 ## Desktop 保存路径卡片
@@ -34,7 +39,9 @@
 | 知识／记忆回收站 | 只清除已软删除项 | Android AVD，Browser，Tauri，Rust 清理后重开 |
 | 全部本地数据 | 预览后仍禁用，只有精确确认语可启用提交 | Android AVD，Browser 错误／正确确认语，Tauri 禁用态，Rust 真删除测试 |
 
-## 2026-09-03 证据结果与边界
+## 历史C14初期证据与包身份
+
+### 2026-09-03 证据结果与边界
 
 - Android 首次进入全部删除预览时触发 Room 主线程读取崩溃。`PrivacyDataViewModel` 已将预览与删除后库存刷新统一调度到 `Dispatchers.IO`；同路径复验进入强确认态，logcat 无新 FATAL。
 - Desktop C-14 `4/4`，完整 Node `221/221`，Rust `191/191`，Android `PrivacyStorageNavigationContractsTest` `6/6`，Android APK 构建、Desktop lint／typecheck／inventory／protocol／static build 和 macOS bundle 通过。
@@ -42,7 +49,9 @@
 - 隔离 Tauri SQLite `integrity_check=ok`。原生导出交换包为 3142 bytes，SHA-256 `0dfc2b6fe911aa4441b0b4dbb131f2df6d4e3a6a82bad9d2da529b60f0997385`，ZIP 全条目检验通过。
 - 未在图形界面提交任何删除；真删除成功／失败关闭由隔离 Rust 测试覆盖。未使用 OPPO、正式 Desktop 数据根、账号、Provider、Key、通知、真实外部服务或任何 `connected*AndroidTest`。
 
-## 2026-09-03 原尺寸证据补全
+## 历史C14原尺寸验收补充
+
+### 2026-09-03 原尺寸证据补全
 
 - 当前闭环证据目录：`~/.codex/visualizations/2026/09/03/01a06645-e226-7cd0-82c7-07532b18a582/nanfeng-ai-c02-c06-c14-closure-20260903/`。目录保留 Android `1140×2616`、Browser `1440×900`、隔离 Tauri `1229×768` 的原始 PNG；三张联系表只作审阅索引，不替代原图。
 - 三端均单独保留“导入与导出”“本机数据”“选择清理范围”“删除全部本地数据禁用门”状态。Browser 另保留精确确认语启用态；Tauri 只到禁用门并取消，没有提交删除。

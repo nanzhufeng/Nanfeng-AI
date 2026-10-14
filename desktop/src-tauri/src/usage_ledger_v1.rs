@@ -170,11 +170,16 @@ impl Ledger {
                 )
                 .map_err(|_| "Usage Ledger cost-source migration failed".to_owned())?;
         }
+        connection.execute_batch("CREATE TABLE IF NOT EXISTS usage_ledger_call_metadata (entry_id TEXT PRIMARY KEY NOT NULL REFERENCES usage_ledger_entries(entry_id), metadata_json TEXT NOT NULL);")
+            .map_err(|_| "Usage Ledger metadata migration failed".to_owned())?;
         Ok(Self { connection })
     }
 
     pub fn append(&self, entry: &Entry) -> Result<AppendResult, String> {
-        valid_entry(entry)?;
+        self.append_receiver(entry,false)
+    }
+    fn append_receiver(&self,entry:&Entry,service:bool)->Result<AppendResult,String> {
+        valid_entry(entry,service)?;
         if let Some(existing) = self.by_id(&entry.entry_id)? {
             return Ok(if existing == *entry {
                 AppendResult::Replayed(existing)
@@ -211,6 +216,45 @@ impl Ledger {
         self.by_id(&entry.entry_id)?
             .map(AppendResult::Appended)
             .ok_or_else(|| "Usage Ledger append readback failed".to_owned())
+    }
+
+    pub fn append_background(&self, entry:&Entry, reasoning:Option<i64>) -> Result<AppendResult,String> {
+        let mut entry=entry.clone();
+        entry.occurred_at_ms=self.stable_occurred_at(&entry.entry_id,entry.occurred_at_ms)?;
+        if let Some(existing)=self.by_id(&entry.entry_id)? {
+            if self.call_metadata(&entry.entry_id)?.is_none() && existing.requested_model_id==entry.requested_model_id && existing.actual_model_id==entry.actual_model_id && existing.input_tokens==entry.input_tokens && existing.output_tokens==entry.output_tokens && existing.cached_input_tokens==entry.cached_input_tokens && existing.charge_micros==entry.charge_micros {
+                let metadata=crate::chat_call_accounting_v1::Metadata{role:"BACKGROUND".into(),model_display_name:entry.requested_model_id.clone(),reasoning_tokens:reasoning,..Default::default()};
+                return self.append_call(&existing,&metadata);
+            }
+        }
+        let estimate=crate::chat_call_accounting_v1::estimate(&crate::chat_call_accounting_v1::pricing_model_id(&entry.requested_model_id,entry.actual_model_id.as_deref()),"",entry.input_tokens,entry.output_tokens,entry.cached_input_tokens,entry.occurred_at_ms);
+        if entry.charge_micros.is_some() && ["deepseek","qwen","glm"].iter().any(|prefix|entry.requested_model_id.starts_with(prefix)) {entry.currency_code=Some("CNY".into());}
+        let version=if entry.charge_micros.is_none() { if let Some(ref cost)=estimate { entry.charge_micros=Some(cost.micros);entry.currency_code=Some(cost.currency.clone());entry.cost_source=Some("LOCAL_ESTIMATE".into());Some(cost.version.clone()) } else {None} } else {None};
+        let metadata=crate::chat_call_accounting_v1::Metadata {role:"BACKGROUND".into(),model_display_name:entry.requested_model_id.clone(),reasoning_tokens:reasoning,price_version:version,..Default::default()};
+        self.append_call(&entry,&metadata)
+    }
+
+    /// Entry and its whitelisted metadata commit together. Reopen/replay cannot drop details.
+    pub fn append_call(&self, entry: &Entry, metadata: &crate::chat_call_accounting_v1::Metadata) -> Result<AppendResult,String> {
+        metadata.validate()?;
+        let tx=self.connection.unchecked_transaction().map_err(|_| "Usage Ledger transaction failed".to_owned())?;
+        if metadata.service_id.is_some() && (!entry.requested_model_id.is_empty() || entry.actual_model_id.is_some() || entry.input_tokens.is_some() || entry.output_tokens.is_some()) {return Err("Search service cannot report a response model or LLM tokens".into());}
+        let result=self.append_receiver(entry,metadata.service_id.is_some())?;
+        if result==AppendResult::Conflict { return Ok(result); }
+        let encoded=serde_json::to_string(metadata).map_err(|_| "Usage Ledger metadata invalid".to_owned())?;
+        let existing:Option<String>=self.connection.query_row("SELECT metadata_json FROM usage_ledger_call_metadata WHERE entry_id=?1",[&entry.entry_id],|row|row.get(0)).optional().map_err(|_| "Usage Ledger metadata read failed".to_owned())?;
+        if existing.as_ref().is_some_and(|value| value!=&encoded){return Ok(AppendResult::Conflict)}
+        self.connection.execute("INSERT OR IGNORE INTO usage_ledger_call_metadata(entry_id,metadata_json) VALUES(?1,?2)",params![entry.entry_id,encoded]).map_err(|_| "Usage Ledger metadata write failed".to_owned())?;
+        tx.commit().map_err(|_| "Usage Ledger commit failed".to_owned())?;
+        Ok(result)
+    }
+    pub fn call_metadata(&self, entry_id:&str) -> Result<Option<crate::chat_call_accounting_v1::Metadata>,String> {
+        let value:Option<String>=self.connection.query_row("SELECT metadata_json FROM usage_ledger_call_metadata WHERE entry_id=?1",[entry_id],|row|row.get(0)).optional().map_err(|_| "Usage Ledger metadata read failed".to_owned())?;
+        value.map(|v|serde_json::from_str(&v).map_err(|_| "Usage Ledger metadata invalid".to_owned())).transpose()
+    }
+    pub fn entry(&self,id:&str)->Result<Option<Entry>,String>{self.by_id(id)}
+    pub fn stable_occurred_at(&self, entry_id:&str, proposed:i64) -> Result<i64,String> {
+        Ok(self.by_id(entry_id)?.map(|e|e.occurred_at_ms).unwrap_or(proposed))
     }
 
     pub fn entries_for_execution(&self, execution_id: &str) -> Result<Vec<Entry>, String> {
@@ -337,7 +381,7 @@ fn read_model(entries: Vec<Entry>) -> ReadModel {
     }
 }
 
-fn valid_entry(entry: &Entry) -> Result<(), String> {
+fn valid_entry(entry: &Entry,service:bool) -> Result<(), String> {
     let opaque_ids = [
         &entry.entry_id,
         &entry.execution_id,
@@ -348,7 +392,7 @@ fn valid_entry(entry: &Entry) -> Result<(), String> {
     ];
     if opaque_ids.iter().any(|value| !opaque(value))
         || !replay_token(&entry.replay_token)
-        || !model_id(&entry.requested_model_id)
+        || !(model_id(&entry.requested_model_id) || service && entry.requested_model_id.is_empty())
         || entry
             .actual_model_id
             .as_deref()
@@ -470,6 +514,35 @@ mod tests {
             source: Source::DesktopLocal,
             occurred_at_ms: 1,
         }
+    }
+
+    #[test]
+    fn legacy_background_receipt_keeps_unknown_amount_when_enriched_and_reopened() {
+        let root=tempdir().unwrap();let ledger=Ledger::open(root.path()).unwrap();
+        let old=Entry{requested_model_id:"openai/gpt-6.1-sol".into(),actual_model_id:Some("gpt-6.1-sol".into()),input_tokens:Some(1000),output_tokens:Some(100),cached_input_tokens:Some(500),charge_micros:None,currency_code:None,cost_source:None,..entry("legacy-fee","legacy-fee-token",Kind::FinalMeasured,FactGrade::ProviderReported)};
+        ledger.append(&old).unwrap();
+        assert!(matches!(ledger.append_background(&old,Some(20)).unwrap(),AppendResult::Replayed(_)));
+        assert_eq!(ledger.entry("legacy-fee").unwrap(),Some(old));
+        drop(ledger);let reopened=Ledger::open(root.path()).unwrap();
+        assert_eq!(reopened.call_metadata("legacy-fee").unwrap().unwrap().reasoning_tokens,Some(20));
+        assert!(reopened.entry("legacy-fee").unwrap().unwrap().charge_micros.is_none());
+    }
+
+    #[test]
+    fn atomic_metadata_replays_conflicts_and_reopens_without_content_fields() {
+        let root=tempdir().unwrap();
+        let ledger=Ledger::open(root.path()).unwrap();
+        let fact=entry("metadata-fact","metadata-token",Kind::FinalMeasured,FactGrade::ProviderReported);
+        let metadata=crate::chat_call_accounting_v1::Metadata {role:"ANSWER".into(),model_display_name:"GPT-6.1 Sol · Pro3".into(),reasoning_tokens:Some(0),price_version:Some("fixture".into()),context_source_count:Some(3),context_window_tokens:Some(1048576),..Default::default()};
+        assert!(matches!(ledger.append_call(&fact,&metadata).unwrap(),AppendResult::Appended(_)));
+        assert!(matches!(ledger.append_call(&fact,&metadata).unwrap(),AppendResult::Replayed(_)));
+        let conflicting=crate::chat_call_accounting_v1::Metadata{reasoning_tokens:Some(1),..metadata.clone()};
+        assert_eq!(ledger.append_call(&fact,&conflicting).unwrap(),AppendResult::Conflict);
+        drop(ledger);
+        let reopened=Ledger::open(root.path()).unwrap();
+        assert_eq!(reopened.call_metadata("metadata-fact").unwrap(),Some(metadata));
+        assert_eq!(reopened.all_entries().unwrap().len(),1);
+        assert!(serde_json::from_str::<crate::chat_call_accounting_v1::Metadata>(r#"{"role":"ANSWER","modelDisplayName":"model","prompt":"forbidden"}"#).is_err());
     }
 
     #[test]

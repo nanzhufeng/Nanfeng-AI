@@ -32,7 +32,8 @@ class ScheduledMonitorExecutor(
     }
 
     fun execute(taskId: ScheduledMonitorTaskId): Result {
-        val task = tasks.find(taskId) ?: return Result.Cancelled
+        val savedTask = tasks.find(taskId) ?: return Result.Cancelled
+        val task = savedTask.copy(modelPresetId = NanfengModelServiceCatalog.currentPreset(savedTask.modelPresetId))
         if (task.status != ScheduledMonitorStatus.ACTIVE) return Result.Cancelled
         val now = clock.instant()
         val running = ScheduledMonitorRun(ScheduledMonitorRunId.new(), task.id, task.nextRunAt, now, status = ScheduledMonitorRunStatus.RUNNING)
@@ -137,6 +138,7 @@ class ScheduledMonitorExecutor(
         ProviderId.QWEN -> ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
         ProviderId.DEEPSEEK -> ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_MESSAGES)
         ProviderId.ZHIPU -> ChatRequestOptions(OfficialWebSearchRoute.ZHIPU_CHAT_COMPLETIONS)
+        ProviderId.RELAYCORE_CLAUDE, ProviderId.RELAYCORE_GPT, ProviderId.RELAYCORE_GEMINI -> ChatRequestOptions.Standard
         ProviderId.MOCK -> ChatRequestOptions.Standard
     }
 

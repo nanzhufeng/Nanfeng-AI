@@ -96,8 +96,8 @@ class AnswerInformationDisclosureBehaviorTest {
         fun label(vararg facts: AssistantResponseModelAttribution) =
             emptyList<ContextSelectionAuditRecord>().answerInformationDisclosure(facts.toList()).networkLabel
         assertEquals("本次未使用", label(attribution(false, false)))
-        assertEquals("联网未完成", label(attribution(true, false)))
-        assertEquals("联网未完成", label(attribution(true, null)))
+        assertEquals("联网未核实", label(attribution(true, false)))
+        assertEquals("联网未核实", label(attribution(true, null)))
         assertEquals("已实际使用", label(attribution(true, true)))
         assertEquals("无法确认（旧记录）", label(attribution(null, false)))
         assertEquals("无法确认（旧记录）", label(attribution(null, null)))

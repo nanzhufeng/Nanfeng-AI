@@ -1,5 +1,10 @@
 # P6-K ChatGPT ZIP 附件口径契约
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本机数据与导入导出表面 ](C14_LOCAL_DATA_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-K ChatGPT ZIP 附件口径契约
+<!-- contract-governance:end -->
+
 状态：当前权威契约。统计事实来自用户明确选择的
 `ChatGPT_20260827.zip`，只读取结构与匿名计数，不记录标题、正文或文件名。
 

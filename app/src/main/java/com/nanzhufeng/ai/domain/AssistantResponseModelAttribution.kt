@@ -37,6 +37,14 @@ data class AssistantResponseModelAttribution(
     val modelDurationMillis: Long? = null,
     /** Route selected for this exact request. Null means legacy evidence is insufficient. */
     val webSearchRequested: Boolean? = null,
+    val accountingCalls: List<ChatCallAccounting> = emptyList(),
+    /** Derived ledger-only row identity and state, never a stored message. */
+    val physicalCallId: String? = null,
+    val physicalCallRole: String? = null,
+    val physicalCallStatus: String? = null,
+    val physicalActualModelId: String? = null,
+    val physicalContextWindowTokens: Long? = null,
+    val physicalContextSourceCount: Int? = null,
 ) {
     init {
         require(modelId.isNotBlank() && modelDisplayName.isNotBlank())
@@ -50,12 +58,17 @@ data class AssistantResponseModelAttribution(
     fun footerLabel(): String = visibleModelName()
 
     /** Returns no label for an unknown amount; zero is a legitimate billed amount. */
-    fun footerCostLabel(): String? = cost.totalMicros?.let { micros ->
-        CnyMoneyDisplay.label(
-            totalMicros = micros,
-            currencyCode = cost.currencyCode,
-            estimated = costSource == ConversationCostSource.LOCAL_ESTIMATE,
-        )
+    fun footerCostLabel(): String? {
+        if (accountingCalls.isEmpty()) return cost.withRelayNominalCurrency().let { displayed ->
+            displayed.totalMicros?.let { CnyMoneyDisplay.label(it, displayed.currencyCode, costSource == ConversationCostSource.LOCAL_ESTIMATE) }
+        }
+        val calls = accountingCalls.distinctBy { it.callId }
+        val costs = calls.map { it.cost.withRelayNominalCurrency() }
+        val known = costs.filter { it.totalMicros != null && it.currencyCode in setOf("USD", "CNY") }
+        // A display conversion is not a new settlement currency or a ledger mutation.
+        val label = CnyMoneyDisplay.summaryLabel(known) ?: return null
+        val incomplete = known.size != costs.size || calls.any { it.finishedAt == null }
+        return label + if (incomplete) " + 未知" else ""
     }
 
     private fun visibleModelName(): String = modelDisplayNameForUser(modelDisplayName)
@@ -67,8 +80,13 @@ data class AssistantResponseModelAttribution(
  * historical amount, and a changed public price table must not silently mutate stored facts.
  */
 fun AssistantResponseModelAttribution.withAvailableLocalCostEstimate(): AssistantResponseModelAttribution {
-    if (cost.totalMicros != null) return this
-    val estimate = ConversationCostEstimator.estimate(modelId, usage, recordedAt) ?: return this
+    if (cost.totalMicros != null) {
+        val corrected = cost.withRelayNominalCurrency()
+        return if (corrected == cost) this else copy(cost = corrected)
+    }
+    // Legacy cooperative replies lack their retrieval charge; do not project a main-only amount as total.
+    if (providerId in setOf(ProviderId.RELAYCORE_CLAUDE,ProviderId.RELAYCORE_GEMINI) && webSearchRequested == true) return this
+    val estimate = ConversationCostEstimator.estimate(modelId, usage, recordedAt,modelDisplayName) ?: return this
     return copy(cost = estimate, costSource = ConversationCostSource.LOCAL_ESTIMATE)
 }
 

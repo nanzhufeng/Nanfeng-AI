@@ -1,7 +1,12 @@
 # 南枫 AI P2-J OpenRouter Model Registry 只读核验合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 模型选择与Auto ](P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P2-J OpenRouter Model Registry 只读核验合同
+<!-- contract-governance:end -->
+
 日期：2026-08-12  
-状态：已实现并经公开目录/API 35 模拟器核验；本合同是唯一允许的联网范围，不包含任何推理调用
+状态：已实现并经公开目录/API 35 模拟器核验；本合同只限定Registry核验入口的目录读取范围，不包含推理调用；其他普通生成／账号／网页入口由各自当前合同授权
 
 ## 1. 唯一目标与唯一链路
 

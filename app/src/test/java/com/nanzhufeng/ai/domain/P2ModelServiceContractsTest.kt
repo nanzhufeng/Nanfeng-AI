@@ -47,7 +47,7 @@ class P2ModelServiceContractsTest {
 
     @Test
     fun `enabling without a credential is rejected before settings change`() {
-        val result = save.execute(ProviderId.OPENROUTER, true, ModelPresetId.CLAUDE_SONNET_5, null)
+        val result = save.execute(ProviderId.OPENROUTER, true, ModelPresetId.CLAUDE_SONNET_5_5, null)
 
         assertEquals(SaveModelServiceConfigurationResult.Rejected(AiTaskError.ProviderCredentialMissing), result)
         assertFalse(settings.load(ProviderId.OPENROUTER).enabled)
@@ -58,45 +58,132 @@ class P2ModelServiceContractsTest {
         val result = save.execute(
             ProviderId.OPENROUTER,
             enabled = true,
-            presetId = ModelPresetId.CLAUDE_HAIKU_4_5,
+            presetId = ModelPresetId.CLAUDE_HAIKU_5_5,
             replacementCredential = "test-key-not-real",
         ) as SaveModelServiceConfigurationResult.Saved
 
-        assertEquals(ModelPresetId.CLAUDE_HAIKU_4_5, result.configuration.settings.presetId)
+        assertEquals(ModelPresetId.CLAUDE_HAIKU_5_5, result.configuration.settings.presetId)
         assertEquals(CredentialState.STORED, result.configuration.credentialState)
         assertTrue(result.configuration.settings.enabled)
         assertEquals("test-key-not-real", credentials.value?.concatToString())
     }
 
     @Test
-    fun `stored local credential repairs a stale disabled flag for settings and composer alike`() {
+    fun `stored credential never overrides an explicit disabled provider`() {
         credentials.value = "test-key-not-real".toCharArray()
 
         val configuration = load.execute(ProviderId.OPENROUTER)!!
 
         assertFalse(settings.load(ProviderId.OPENROUTER).enabled)
-        assertTrue(configuration.settings.enabled)
+        assertFalse(configuration.settings.enabled)
         assertEquals(CredentialState.STORED, configuration.credentialState)
+    }
+
+    @Test fun `model selection immediately persists without a Key and leaves enabled unchanged`() {
+        settings.save(ProviderSettings(ProviderId.OPENROUTER, false, ModelPresetId.CLAUDE_SONNET_5_5))
+        val result = save.setPreset(ProviderId.OPENROUTER, ModelPresetId.CLAUDE_HAIKU_5_5) as SaveModelServiceConfigurationResult.Saved
+        assertEquals(ModelPresetId.CLAUDE_HAIKU_5_5, load.execute()!!.settings.presetId)
+        assertFalse(result.configuration.settings.enabled)
+        assertNull(credentials.value)
+        assertEquals(SaveModelServiceConfigurationResult.Rejected(AiTaskError.ProviderConfigurationInvalid), save.setPreset(ProviderId.ZHIPU, ModelPresetId.GLM_OCR))
+    }
+    @Test fun `saving a Key never writes or changes the selected model or platform switch`() {
+        save.setPreset(ProviderId.OPENROUTER, ModelPresetId.CLAUDE_HAIKU_5_5)
+        val before = settings.writes
+        val result = save.saveCredential(ProviderId.OPENROUTER, "synthetic-key-only") as SaveModelServiceConfigurationResult.Saved
+        assertEquals(before, settings.writes)
+        assertEquals(ModelPresetId.CLAUDE_HAIKU_5_5, result.configuration.settings.presetId)
+        assertFalse(result.configuration.settings.enabled)
+        assertEquals("synthetic-key-only", credentials.value!!.concatToString())
+    }
+    @Test fun `settings read failure is rejected without escaping the independent toggle or details save`() {
+        val unavailable = object : ModelServiceSettingsRepository {
+            override fun load(providerId: ProviderId): ProviderSettings = throw IllegalStateException("synthetic read failure")
+            override fun save(settings: ProviderSettings): ProviderSettings = settings
+        }
+        val useCase = SaveModelServiceConfigurationUseCase(unavailable, credentials, LoadModelServiceConfigurationUseCase(unavailable, credentials))
+        assertEquals(SaveModelServiceConfigurationResult.Rejected(AiTaskError.PersistenceConflict), useCase.setEnabled(ProviderId.OPENROUTER, true))
+        assertEquals(SaveModelServiceConfigurationResult.Rejected(AiTaskError.PersistenceConflict), useCase.saveDetails(ProviderId.OPENROUTER, ModelPresetId.CLAUDE_SONNET_5_5, null))
+    }
+    @Test fun `metadata read failure after a persisted toggle is reported without crashing`() {
+        val unavailable = object : ProviderCredentialStore {
+            override fun hasCredential(providerId: ProviderId): Boolean = throw IllegalStateException("synthetic metadata failure")
+            override fun saveCredential(providerId: ProviderId, credential: CharArray): Boolean = false
+            override fun loadCredential(providerId: ProviderId): CharArray? = null
+        }
+        val useCase = SaveModelServiceConfigurationUseCase(settings, unavailable, LoadModelServiceConfigurationUseCase(settings, unavailable))
+        assertEquals(SaveModelServiceConfigurationResult.Rejected(AiTaskError.PersistenceConflict), useCase.setEnabled(ProviderId.OPENROUTER, true))
+        assertTrue(settings.load(ProviderId.OPENROUTER).enabled)
+    }
+    @Test fun `settings persistence cancellation remains cancellation`() {
+        val cancelled = object : ModelServiceSettingsRepository {
+            override fun load(providerId: ProviderId): ProviderSettings = throw java.util.concurrent.CancellationException("synthetic cancellation")
+            override fun save(settings: ProviderSettings): ProviderSettings = settings
+        }
+        val useCase = SaveModelServiceConfigurationUseCase(cancelled, credentials, LoadModelServiceConfigurationUseCase(cancelled, credentials))
+        org.junit.Assert.assertThrows(java.util.concurrent.CancellationException::class.java) { useCase.setEnabled(ProviderId.OPENROUTER, true) }
+    }
+    @Test fun `every configured platform persists its independent switch across readback`() {
+        ProviderId.entries.filter { NanfengModelServiceCatalog.provider(it) != null }.forEach { provider ->
+            settings.save(ProviderSettings(provider, false, NanfengModelServiceCatalog.defaultPreset(provider)))
+            save.setEnabled(provider, true)
+            assertTrue(load.execute(provider)!!.settings.enabled)
+            credentials.value = "synthetic-key-only".toCharArray()
+            save.setEnabled(provider, false)
+            assertFalse(load.execute(provider)!!.settings.enabled)
+        }
+    }
+    @Test fun `provider switch controls model visibility independently of usable credentials`() {
+        val snapshot = NormalChatRoutingSnapshot(emptyMap(), emptySet(), true, enabledProviders = setOf(ProviderId.RELAYCORE_CLAUDE))
+        val visible = ComposerModelRoutingCatalog.choices.filter { it != ComposerModelRoutingCatalog.auto && snapshot.isVisible(it) }
+        assertEquals(2,visible.size)
+        assertTrue(visible.all { choice -> choice.routes.all { NanfengModelServiceCatalog.providerFor(it) == ProviderId.RELAYCORE_CLAUDE } })
+        assertTrue(ComposerModelRoutingCatalog.choices.filter { it != ComposerModelRoutingCatalog.auto }.none { snapshot.copy(enabledProviders = emptySet()).isVisible(it) })
+    }
+    @Test fun `provider toggle needs no credential and details never undo it`() {
+        val on = save.setEnabled(ProviderId.OPENROUTER, true) as SaveModelServiceConfigurationResult.Saved
+        assertTrue(on.configuration.settings.enabled)
+        assertEquals(CredentialState.MISSING, on.configuration.credentialState)
+        save.setEnabled(ProviderId.OPENROUTER, false)
+        val details = save.saveDetails(ProviderId.OPENROUTER, ModelPresetId.GPT_6_LUNA, "synthetic-key-only") as SaveModelServiceConfigurationResult.Saved
+        assertFalse(details.configuration.settings.enabled)
+        assertEquals(ModelPresetId.GPT_6_LUNA, details.configuration.settings.presetId)
+        assertEquals(CredentialState.STORED, details.configuration.credentialState)
+        assertFalse(load.execute(ProviderId.OPENROUTER)!!.settings.enabled)
+        assertTrue((save.setEnabled(ProviderId.OPENROUTER, true) as SaveModelServiceConfigurationResult.Saved).configuration.settings.enabled)
     }
 
     @Test
     fun `saving settings with a blank key keeps the existing secure credential`() {
-        save.execute(ProviderId.OPENROUTER, true, ModelPresetId.CLAUDE_FABLE_5, "test-key-not-real")
+        save.execute(ProviderId.OPENROUTER, true, ModelPresetId.GPT_6_LUNA, "test-key-not-real")
 
-        val result = save.execute(ProviderId.OPENROUTER, true, ModelPresetId.CLAUDE_HAIKU_4_5, null)
+        val result = save.execute(ProviderId.OPENROUTER, true, ModelPresetId.CLAUDE_HAIKU_5_5, null)
             as SaveModelServiceConfigurationResult.Saved
 
-        assertEquals(ModelPresetId.CLAUDE_HAIKU_4_5, result.configuration.settings.presetId)
+        assertEquals(ModelPresetId.CLAUDE_HAIKU_5_5, result.configuration.settings.presetId)
         assertEquals(CredentialState.STORED, result.configuration.credentialState)
         assertEquals("test-key-not-real", credentials.value?.concatToString())
     }
 
     @Test
     fun `invalid credential never reaches secure storage`() {
-        val result = save.execute(ProviderId.OPENROUTER, true, ModelPresetId.CLAUDE_FABLE_5, "short")
+        val result = save.execute(ProviderId.OPENROUTER, true, ModelPresetId.GPT_6_LUNA, "short")
 
         assertEquals(SaveModelServiceConfigurationResult.Rejected(AiTaskError.ProviderCredentialInvalid), result)
         assertNull(credentials.value)
+    }
+
+    @Test
+    fun `retired chat presets cannot be newly saved or erase a credential`() {
+        save.execute(ProviderId.OPENROUTER, true, ModelPresetId.GPT_6_LUNA, "test-key-not-real")
+        for (preset in listOf(ModelPresetId.CLAUDE_FABLE_5, ModelPresetId.KIMI_K3)) {
+            assertEquals(
+                SaveModelServiceConfigurationResult.Rejected(AiTaskError.ProviderConfigurationInvalid),
+                save.execute(ProviderId.OPENROUTER, true, preset, null),
+            )
+            assertEquals(ModelPresetId.GPT_6_LUNA, settings.load(ProviderId.OPENROUTER).presetId)
+            assertEquals("test-key-not-real", credentials.value?.concatToString())
+        }
     }
 
     @Test
@@ -170,7 +257,23 @@ class P2ModelServiceContractsTest {
 
         val restored = AndroidModelServiceSettingsRepository(context).load(ProviderId.OPENROUTER)
 
-        assertEquals(ModelPresetId.GPT_5_6_TERRA, restored.presetId)
+        assertEquals(ModelPresetId.GPT_6_LUNA, restored.presetId)
+    }
+
+    @Test fun `October upgrade migrates saved selections without touching credentials`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        for ((old, current) in listOf(
+            "CLAUDE_OPUS_5" to ModelPresetId.CLAUDE_OPUS_5_5,
+            "CLAUDE_SONNET_5" to ModelPresetId.CLAUDE_SONNET_5_5,
+            "CLAUDE_HAIKU_4_5" to ModelPresetId.CLAUDE_HAIKU_5_5,
+            "GPT_5_6_SOL" to ModelPresetId.GPT_6_1_SOL,
+            "GPT_5_6_TERRA" to ModelPresetId.GPT_6_LUNA,
+            "GPT_5_6_LUNA" to ModelPresetId.GPT_6_LUNA,
+        )) {
+            context.getSharedPreferences("model_service_settings_v1", Context.MODE_PRIVATE).edit().putString("OPENROUTER.preset", old).commit()
+            assertEquals(current, AndroidModelServiceSettingsRepository(context).load(ProviderId.OPENROUTER).presetId)
+        }
+        assertEquals(ModelPresetId.GPT_6_LUNA, ComposerModelRoutingCatalog.choice("logical:daily:gpt-terra").routes.single())
     }
 
     @Test
@@ -227,12 +330,13 @@ class P2ModelServiceContractsTest {
 }
 
 private class RecordingSettingsRepository : ModelServiceSettingsRepository {
+    var writes = 0
     private val values = mutableMapOf<ProviderId, ProviderSettings>()
 
     override fun load(providerId: ProviderId): ProviderSettings =
         values[providerId] ?: ProviderSettings(providerId, enabled = false, presetId = ModelPresetId.CLAUDE_FABLE_5)
 
-    override fun save(settings: ProviderSettings): ProviderSettings = settings.also { values[it.providerId] = it }
+    override fun save(settings: ProviderSettings): ProviderSettings = settings.also { writes++; values[it.providerId] = it }
 }
 
 private class RecordingCredentialStore : ProviderCredentialStore {

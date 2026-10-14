@@ -1,0 +1,110 @@
+{
+  "inventory": {
+    "inventory_files": 1410,
+    "syntax": {
+      "not-checked": 935,
+      "python:passed": 9,
+      "json:passed": 114,
+      "xml:passed": 83,
+      "non-text": 78,
+      "node:passed": 178,
+      "failed:ParseError": 7,
+      "bash:passed": 5,
+      "zsh:passed": 1
+    },
+    "changed_since_inventory": [],
+    "limitations": [
+      "Marker counts are routing hints, not findings or coverage.",
+      "No Kotlin/Rust/SQL type or runtime validation in this script.",
+      "No private, untracked or ignored input; no file bodies emitted."
+    ]
+  },
+  "historicalEvidenceSyntaxExceptions": [
+    {
+      "path": "docs/evidence/p6f2d-android-add.xml",
+      "kind": "text",
+      "matches_inventory": true,
+      "markers": {
+        "todo": 0,
+        "test_declaration": 0,
+        "network_boundary": 0,
+        "persistence_boundary": 0
+      },
+      "syntax": "failed:ParseError"
+    },
+    {
+      "path": "docs/evidence/p6f2d-android-documentsui.xml",
+      "kind": "text",
+      "matches_inventory": true,
+      "markers": {
+        "todo": 0,
+        "test_declaration": 0,
+        "network_boundary": 0,
+        "persistence_boundary": 0
+      },
+      "syntax": "failed:ParseError"
+    },
+    {
+      "path": "docs/evidence/p6f2d-android-imported.xml",
+      "kind": "text",
+      "matches_inventory": true,
+      "markers": {
+        "todo": 0,
+        "test_declaration": 0,
+        "network_boundary": 0,
+        "persistence_boundary": 0
+      },
+      "syntax": "failed:ParseError"
+    },
+    {
+      "path": "docs/evidence/p6f2d-android-open.xml",
+      "kind": "text",
+      "matches_inventory": true,
+      "markers": {
+        "todo": 0,
+        "test_declaration": 0,
+        "network_boundary": 0,
+        "persistence_boundary": 0
+      },
+      "syntax": "failed:ParseError"
+    },
+    {
+      "path": "docs/evidence/p6f2d-android-sent.xml",
+      "kind": "text",
+      "matches_inventory": true,
+      "markers": {
+        "todo": 0,
+        "test_declaration": 0,
+        "network_boundary": 0,
+        "persistence_boundary": 0
+      },
+      "syntax": "failed:ParseError"
+    },
+    {
+      "path": "docs/evidence/p6f2d-android-start.xml",
+      "kind": "text",
+      "matches_inventory": true,
+      "markers": {
+        "todo": 0,
+        "test_declaration": 0,
+        "network_boundary": 0,
+        "persistence_boundary": 0
+      },
+      "syntax": "failed:ParseError"
+    },
+    {
+      "path": "docs/evidence/p6f2d-android-workspace.xml",
+      "kind": "text",
+      "matches_inventory": true,
+      "markers": {
+        "todo": 0,
+        "test_declaration": 0,
+        "network_boundary": 0,
+        "persistence_boundary": 0
+      },
+      "syntax": "failed:ParseError"
+    }
+  ],
+  "preserved": true,
+  "reason": "历史UI XML正文后含 adb UI hierchary dumped to 文本；未改写原始证据"
+}

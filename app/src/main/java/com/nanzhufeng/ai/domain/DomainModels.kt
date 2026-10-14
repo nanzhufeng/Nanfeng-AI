@@ -117,9 +117,23 @@ data class CaptureDraft(
  * OpenRouter is intentionally shared by the ChatGPT, Claude and Gemini logical models;
  * Qwen, DeepSeek and Zhipu always have their own official endpoints and credentials.
  */
-enum class ProviderId { MOCK, OPENROUTER, QWEN, DEEPSEEK, ZHIPU }
+enum class ProviderId { MOCK, OPENROUTER, QWEN, DEEPSEEK, ZHIPU, RELAYCORE_CLAUDE, RELAYCORE_GPT, RELAYCORE_GEMINI }
 
 enum class ModelPresetId {
+    RELAYCORE_OPUS_5_5,
+    RELAYCORE_SONNET_5_5,
+    RELAYCORE_GPT_6_1_SOL,
+    RELAYCORE_GPT_6_ASTRA,
+    RELAYCORE_GEMINI_3_8_FLASH,
+    RELAYCORE_GEMINI_3_1_PRO,
+
+    CLAUDE_OPUS_5_5,
+    CLAUDE_SONNET_5_5,
+    CLAUDE_HAIKU_5_5,
+    GPT_6_1_SOL,
+    GPT_6_LUNA,
+    MUSE_WONDER,
+
     CLAUDE_FABLE_5,
     CLAUDE_FABLE_5_1,
     CLAUDE_OPUS_5,

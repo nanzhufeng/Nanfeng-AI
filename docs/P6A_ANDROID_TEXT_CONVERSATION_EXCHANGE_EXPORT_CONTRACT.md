@@ -1,5 +1,10 @@
 # P6-A Android 文本会话跨端交换导出合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v2字段与原子恢复 ](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-A Android 文本会话跨端交换导出合同
+<!-- contract-governance:end -->
+
 ## 目标与停止条件
 
 - 目标：将一个符合条件的 Android 已保存普通文本会话，经系统 SAF 输出为 `nfai.exchange.v1`，供既有 Desktop workspace exchange owner 严格预检/导入；不改变 Android 的会话、Room 或 Desktop workspace。

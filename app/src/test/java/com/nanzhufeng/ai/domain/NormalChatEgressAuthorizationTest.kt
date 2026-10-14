@@ -17,6 +17,14 @@ class NormalChatEgressAuthorizationTest {
         MessageRole.USER, listOf(ContentBlock.Text(text)), Instant.EPOCH,
     )
 
+    @Test fun `saved Terra selection approves current Luna without changing the frozen recipient`() {
+        val approval = NormalChatEgressAuthorization.forUserSend(draft, 1, "logical:daily:gpt-terra", routing)
+        assertEquals(ComposerModelRoutingCatalog.choice("logical:daily:gpt-terra").id, approval.recipientChoiceId)
+        assertEquals(listOf(ModelPresetId.GPT_6_LUNA), approval.recipientPresets)
+        assertTrue(approval.matches(message()))
+        assertFalse(approval.allowsRecipient(ModelPresetId.GPT_5_6_TERRA, ProviderId.OPENROUTER, "api-GPT_5_6_TERRA"))
+    }
+
     @Test fun `queued send retains disclosed recipient after selection changes`() {
         var selection = ComposerModelRoutingCatalog.daily.first().id
         val approval = NormalChatEgressAuthorization.forUserSend(draft, 1, selection, routing)
@@ -51,6 +59,8 @@ class NormalChatEgressAuthorizationTest {
         assertFalse(approval.allowsRecipient(preset, ProviderId.MOCK, "api-${preset.name}"))
         assertFalse(approval.allowsRecipient(ComposerModelRoutingCatalog.deep.first().routes.first(), ProviderId.OPENROUTER, "other-model"))
         assertThrows(IllegalArgumentException::class.java) { approval.copy(disclosureVersion = NormalChatEgressAuthorization.LEGACY_DISCLOSURE_VERSION) }
+        assertThrows(IllegalArgumentException::class.java) { approval.copy(disclosureVersion = "normal-chat-egress-v2") }
+        assertThrows(IllegalArgumentException::class.java) { approval.copy(disclosureVersion = "normal-chat-egress-v4") }
         assertThrows(IllegalArgumentException::class.java) { approval.copy(recipientPresets = emptyList()) }
     }
 
@@ -63,6 +73,10 @@ class NormalChatEgressAuthorizationTest {
             egressDisclosureVersion = NormalChatEgressAuthorization.LEGACY_DISCLOSURE_VERSION,
         )
         assertEquals("normal-chat-egress-v1", attempt.egressDisclosureVersion)
+        assertEquals("normal-chat-egress-v2", attempt.copy(egressDisclosureVersion = "normal-chat-egress-v2").egressDisclosureVersion)
+        assertEquals("normal-chat-egress-v3", attempt.copy(egressDisclosureVersion = "normal-chat-egress-v3").egressDisclosureVersion)
+        assertEquals("normal-chat-egress-v4", attempt.copy(egressDisclosureVersion = "normal-chat-egress-v4").egressDisclosureVersion)
+        assertThrows(IllegalArgumentException::class.java) { attempt.copy(egressDisclosureVersion = "normal-chat-egress-v2\nsecret") }
     }
 
     @Test fun `auto availability changes after click cannot reroute the approved request`() {

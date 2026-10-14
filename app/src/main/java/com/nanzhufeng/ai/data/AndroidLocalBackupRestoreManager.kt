@@ -41,6 +41,7 @@ class AndroidLocalBackupRestoreManager(
         try {
             val snapshot = File(stage, "nanfeng-ai.snapshot")
             snapshotDatabase(snapshot)
+            android.database.sqlite.SQLiteDatabase.openDatabase(snapshot.path,null,android.database.sqlite.SQLiteDatabase.OPEN_READWRITE).use {it.execSQL("DELETE FROM normal_chat_search_checkpoints");it.execSQL("VACUUM")}
             val assets = snapshotAssets(stage)
             val counts = tableCounts(snapshot)
             val packageFile = File(stage, "backup.nfai-backup")

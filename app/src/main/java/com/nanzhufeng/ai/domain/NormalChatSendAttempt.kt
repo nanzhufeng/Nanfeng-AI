@@ -30,7 +30,10 @@ data class NormalChatSendAttempt(
     init {
         require(modelId.isNotBlank() && idempotencyKey.isNotBlank())
         require(safeErrorCode == null || safeErrorCode.matches(Regex("[A-Z0-9_]{1,64}")))
-        require(egressDisclosureVersion == null || egressDisclosureVersion in setOf(NormalChatEgressAuthorization.DISCLOSURE_VERSION, NormalChatEgressAuthorization.LEGACY_DISCLOSURE_VERSION))
+        // A persisted audit version is an immutable historical fact, not a live authorization.
+        // Keep older (and newer) version identifiers readable across upgrades. New network
+        // requests still require NormalChatEgressAuthorization's exact current version.
+        require(egressDisclosureVersion == null || egressDisclosureVersion.matches(Regex("normal-chat-egress-v[1-9][0-9]{0,3}")))
     }
 }
 
@@ -42,4 +45,6 @@ interface NormalChatSendAttemptStore {
     fun markFailed(id: NormalChatSendAttemptId, updatedAt: Instant, safeErrorCode: String): NormalChatSendAttempt?
     /** Any process-interrupted in-flight request has an unknown server outcome until the user decides. */
     fun markInterruptedAsUnknown(updatedAt: Instant): Int
+    fun loadSearchCheckpoint(id:NormalChatSendAttemptId,fingerprint:String,itemId:String):NormalChatSearchCheckpoint? = null
+    fun saveSearchCheckpoint(id:NormalChatSendAttemptId,value:NormalChatSearchCheckpoint) {}
 }

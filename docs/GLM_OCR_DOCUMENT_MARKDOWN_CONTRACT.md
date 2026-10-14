@@ -1,5 +1,10 @@
 # GLM-OCR 南枫转写当前合同
 
+<!-- contract-governance:start -->
+> **合同口径：现行领域合同。** 领域入口：[ 文档OCR任务 ](GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 用户显式发起的独立GLM-OCR材料任务；不自动介入普通搜索
+<!-- contract-governance:end -->
+
 日期：2026-08-30
 状态：Android 已实现；Desktop 已具备本机 owner 与宽屏工作台；真实 Provider 结果仍须单独授权验收
 

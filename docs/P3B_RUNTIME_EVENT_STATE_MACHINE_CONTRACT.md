@@ -1,5 +1,10 @@
 # 南枫 AI P3-B 类型化流事件与本地对话运行状态机合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 消息与动作领域 ](P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P3-B 类型化流事件与本地对话运行状态机合同
+<!-- contract-governance:end -->
+
 日期：2026-08-12  
 状态：本地确定性 fixture、Room Schema 4→5、状态机和最小可见验证；不含真实 Provider、真实 Key 或网络
 

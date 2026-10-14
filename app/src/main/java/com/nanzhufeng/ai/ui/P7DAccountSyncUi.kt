@@ -168,6 +168,7 @@ class P7DAccountSyncViewModel(
 ) : ViewModel() {
     var state by mutableStateOf(loadState())
         private set
+    private var cloudProjectionGeneration = 0L
 
     private fun finishOperation(
         operation: P7DAccountSyncOperation,
@@ -232,12 +233,12 @@ class P7DAccountSyncViewModel(
                     is P7FCloudConversationBatchRestoreResult.Empty -> "empty:${result.ignoredCount}"
                     is P7FCloudConversationBatchRestoreResult.Rejected -> "rejected"
                 })
+                refreshCloudConversationProjectionNow()
                 awaitP7DAccountSyncProgressPresentation(progressStartedAtElapsedMs)
                 if (state.session?.userId == userId) {
                     val feedback = cloudReadFeedback(result)
                     finishOperation(feedback.operation, feedback.kind, feedback.title, feedback.detail)
                 }
-                refreshCloudConversationProjection()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -327,12 +328,17 @@ class P7DAccountSyncViewModel(
         }
     }
 
-    fun cancelConversationSync(conversation: Conversation) {
+    fun cancelConversationSync(conversation: Conversation) = cancelConversationsSync(listOf(conversation))
+
+    fun cancelConversationsSync(conversations: List<Conversation>) {
+        val targets = conversations.distinctBy { it.id.value }
+        if (targets.isEmpty()) return
         when {
             !state.configured -> state = state.copy(detailVisible = true, notice = "Google 登录与云端服务尚未配置。")
             state.session == null -> state = state.copy(detailVisible = true, notice = "请先登录 Google 账号。")
-            state.working -> Unit
+            state.working -> state = state.copy(notice = "请等待当前云端操作完成后重试。")
             else -> {
+                val userId = state.session?.userId
                 val progressStartedAtElapsedMs = SystemClock.elapsedRealtime()
                 state = state.copy(
                     working = true,
@@ -343,28 +349,35 @@ class P7DAccountSyncViewModel(
                 viewModelScope.launch {
                     delay(P7D_ACCOUNT_SYNC_PROGRESS_FIRST_FRAME_DELAY_MS)
                     try {
-                        val result = withContext(Dispatchers.IO) { manualSync.cancelSync(conversation.id) }
-                        awaitP7DAccountSyncProgressPresentation(progressStartedAtElapsedMs)
-                        when (result) {
-                            is P7FManualConversationCancelResult.Cancelled -> finishOperation(
-                                P7DAccountSyncOperation.CANCELLING_CONVERSATION,
-                                P7DAccountSyncFeedbackKind.SUCCESS,
-                                "已取消同步",
-                                "本地对话保留",
-                            )
-                            is P7FManualConversationCancelResult.Rejected -> finishOperation(
-                                P7DAccountSyncOperation.CANCELLING_CONVERSATION,
-                                P7DAccountSyncFeedbackKind.ERROR,
-                                "取消同步失败",
-                                result.message,
-                            )
+                        val results = withContext(Dispatchers.IO) {
+                            targets.map { target -> manualSync.cancelSync(target.id) }
                         }
-                        if (result is P7FManualConversationCancelResult.Cancelled) refreshCloudConversationProjection()
+                        val cancelledCount = results.count { it is P7FManualConversationCancelResult.Cancelled }
+                        val failures = results.filterIsInstance<P7FManualConversationCancelResult.Rejected>()
+                        if (cancelledCount > 0) refreshCloudConversationProjectionNow()
+                        awaitP7DAccountSyncProgressPresentation(progressStartedAtElapsedMs)
+                        if (state.session?.userId == userId) finishOperation(
+                            P7DAccountSyncOperation.CANCELLING_CONVERSATION,
+                            when {
+                                failures.isEmpty() -> P7DAccountSyncFeedbackKind.SUCCESS
+                                cancelledCount > 0 -> P7DAccountSyncFeedbackKind.ATTENTION
+                                else -> P7DAccountSyncFeedbackKind.ERROR
+                            },
+                            when {
+                                failures.isEmpty() -> "已取消同步"
+                                cancelledCount > 0 -> "部分取消同步"
+                                else -> "取消同步失败"
+                            },
+                            when {
+                                failures.isEmpty() -> "已移除 $cancelledCount 个云端副本，本地对话保留。"
+                                else -> "已取消 $cancelledCount 个，${failures.size} 个未完成；${failures.first().message}"
+                            },
+                        )
                     } catch (cancelled: kotlinx.coroutines.CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
                         awaitP7DAccountSyncProgressPresentation(progressStartedAtElapsedMs)
-                        finishOperation(
+                        if (state.session?.userId == userId) finishOperation(
                             P7DAccountSyncOperation.CANCELLING_CONVERSATION,
                             P7DAccountSyncFeedbackKind.ERROR,
                             "取消同步失败",
@@ -445,21 +458,25 @@ class P7DAccountSyncViewModel(
     }
 
     private fun refreshCloudConversationProjection() {
+        viewModelScope.launch { refreshCloudConversationProjectionNow() }
+    }
+
+    private suspend fun refreshCloudConversationProjectionNow() {
         val session = state.session ?: return
-        viewModelScope.launch {
-            val projection = withContext(Dispatchers.IO) {
-                Triple(manualSync.syncedConversationIds(session), manualSync.cloudPinnedConversationIds(session), manualSync.cloudConversationProjection(session))
-            }
-            Log.i(
-                "NanfengCloudSync",
-                "cloud-list-projection synced=${projection.first.size} pinned=${projection.second.size} rows=${projection.third.size}",
-            )
-            if (state.session?.userId == session.userId) state = state.copy(
-                syncedConversationIds = projection.first,
-                cloudPinnedConversationIds = projection.second.intersect(projection.first),
-                cloudConversations = projection.third,
-            ).also { onCloudProjectionRefreshed() }
+        val generation = ++cloudProjectionGeneration
+        val projection = withContext(Dispatchers.IO) {
+            Triple(manualSync.syncedConversationIds(session), manualSync.cloudPinnedConversationIds(session), manualSync.cloudConversationProjection(session))
         }
+        if (generation != cloudProjectionGeneration || state.session?.userId != session.userId) return
+        Log.i(
+            "NanfengCloudSync",
+            "cloud-list-projection synced=${projection.first.size} pinned=${projection.second.size} rows=${projection.third.size}",
+        )
+        state = state.copy(
+            syncedConversationIds = projection.first,
+            cloudPinnedConversationIds = projection.second.intersect(projection.first),
+            cloudConversations = projection.third,
+        ).also { onCloudProjectionRefreshed() }
     }
 
     class Factory(
@@ -528,7 +545,7 @@ internal fun P7DAccountSyncScreen(
                     Button(
                         onClick = onSignIn,
                         enabled = state.configured && !state.working,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         shape = P5AInteractiveShape,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     ) {
@@ -544,7 +561,7 @@ internal fun P7DAccountSyncScreen(
             OutlinedButton(
                 onClick = onSwitchAccount,
                 enabled = state.session != null && !state.working,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 shape = P5AInteractiveShape,
                 border = null,
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText),
@@ -555,7 +572,7 @@ internal fun P7DAccountSyncScreen(
             OutlinedButton(
                 onClick = onSignOut,
                 enabled = state.session != null && !state.working,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 shape = P5AInteractiveShape,
                 border = null,
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText),
@@ -591,7 +608,7 @@ internal fun P7DAccountSyncScreen(
             OutlinedButton(
                 onClick = onReadCloudDocuments,
                 enabled = state.syncReady && !state.working,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 shape = P5AInteractiveShape,
                 border = null,
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = SettingsPageBackground, contentColor = BodyText),

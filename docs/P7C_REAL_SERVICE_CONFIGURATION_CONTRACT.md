@@ -1,7 +1,20 @@
 # 南枫 AI P7-C Google/Supabase 可部署服务合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 已选对话云同步与账号边界 ](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P7-C Google/Supabase 可部署服务合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
-状态：P7-C／P7-F 同步 RPC 已在目标生产项目部署并由 Desktop 登录态只读列表实际回读；Google OAuth 已建立应用账号会话。跨端密文恢复仍需要手机端已有已上传对话与用户原恢复码，是独立验收门。
+状态：P7-C／P7-F 同步 RPC 已在目标生产项目部署并由 Desktop 登录态只读列表实际回读；Google OAuth 已建立应用账号会话。该阶段的旧密文恢复依赖既有包装材料；当前direct同步不要求恢复码，旧格式只保留有界兼容迁移。
+
+## 当前部署与账号口径
+
+当前日常同步写nfai.sync.direct，由Google登录、HTTPS、Supabase账号隔离与CAS保护；新设备／重登不以恢复码或data key为前置。当前同步范围、旧密文迁移、冲突、回读与账号切换唯一见[P7-F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)。令牌／Provider凭据不进入同步业务数据。
+
+下方P7-C加密基础表／RPC、wrapping metadata和密文恢复是原阶段部署／兼容记录。保留旧格式及已验证迁移链，不能据此要求当前账号页重建恢复码，不能把旧加密格式写成当前服务端不可读的隐私承诺。远端是否已部署、Google真机及跨设备验收各自读取当前交接，不由本文件的早期状态推断。
+
+## 历史P7-C加密基础部署记录
 
 ## 目标与不变量
 
@@ -40,7 +53,9 @@ Desktop 的 `p7c_remote_gateway_v1` 只定义同样的 private-config 可用性�
 4. 在 Supabase 的 Google Provider 填本应用 Web Client 与 secret，登记 Supabase 提供的 callback；OAuth Testing 仅添加用户明确授权的测试用户。完成品牌、受众、发布/production verification 后才面对生产用户。
 5. 有明确目标项目、CLI link 和授权会话时，先只读查 schema，再执行 migration/函数部署；随后只读核验 RLS/RPC/匿名拒绝与无用户密文的 metadata/hash。真实 Google 登录、头像、恢复、跨设备提交/回读仍需要真机与用户授权。
 
-## P7-C 本轮安全审计与验证
+## 历史P7-C当次安全审计与验证
+
+### P7-C 本轮安全审计与验证
 
 本机审计只输出布尔结果：Supabase CLI 缺失、项目 link 缺失、私有客户端配置缺失、授权会话不可验证。因此没有远端读取或写入、没有部署/Edge Function publish、没有 OAuth 调用、没有账号或密文访问。
 

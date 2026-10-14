@@ -1,0 +1,74 @@
+[
+  {
+    "run": 1,
+    "status": "UNKNOWN",
+    "planned": 315,
+    "covered": null,
+    "error": "Unknown { code: \"NETWORK\" }",
+    "reopenedState": "UNKNOWN",
+    "reopenedAccountingExact": true,
+    "reopenedMessageExact": true,
+    "reopenedCheckpoints": 32,
+    "completedPhysicalCount": 14
+  },
+  {
+    "run": 2,
+    "status": "PARTIAL",
+    "planned": 6,
+    "covered": 4,
+    "error": null,
+    "reopenedState": "COMPLETED",
+    "reopenedAccountingExact": true,
+    "reopenedMessageExact": true,
+    "reopenedCheckpoints": 4,
+    "completedPhysicalCount": 6
+  },
+  {
+    "run": 3,
+    "status": "PARTIAL",
+    "planned": 6,
+    "covered": 5,
+    "error": null,
+    "reopenedState": "COMPLETED",
+    "reopenedAccountingExact": true,
+    "reopenedMessageExact": true,
+    "reopenedCheckpoints": 5,
+    "completedPhysicalCount": 8
+  },
+  {
+    "run": 4,
+    "status": "PARTIAL",
+    "planned": 6,
+    "covered": 5,
+    "error": null,
+    "reopenedState": "COMPLETED",
+    "reopenedAccountingExact": true,
+    "reopenedMessageExact": true,
+    "reopenedCheckpoints": 5,
+    "completedPhysicalCount": 4
+  },
+  {
+    "run": 5,
+    "status": "PARTIAL",
+    "planned": 6,
+    "covered": 5,
+    "error": null,
+    "reopenedState": "COMPLETED",
+    "reopenedAccountingExact": true,
+    "reopenedMessageExact": true,
+    "reopenedCheckpoints": 5,
+    "completedPhysicalCount": 8
+  },
+  {
+    "run": 6,
+    "status": "UNKNOWN",
+    "planned": 6,
+    "covered": null,
+    "error": "Unknown { code: \"NETWORK\" }",
+    "reopenedState": "UNKNOWN",
+    "reopenedAccountingExact": true,
+    "reopenedMessageExact": true,
+    "reopenedCheckpoints": 5,
+    "completedPhysicalCount": 6
+  }
+]

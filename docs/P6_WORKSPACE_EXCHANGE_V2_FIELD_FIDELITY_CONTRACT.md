@@ -1,5 +1,10 @@
 # P6 工作区交换 v2 字段保真与拒绝合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v2字段与原子恢复 ](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6 工作区交换 v2 字段保真与拒绝合同
+<!-- contract-governance:end -->
+
 ## 结论与范围
 
 `nfai.exchange.v2` 是 P6 全对象交换的**协议/IR 前置**，不是 Android 完整工作区 UI、SAF 或任一端生产导入已开放的声明。v1 保持为已交付的窄语义投影；不得把 v2 fixture、schema 或预检说成真实迁移完成。
@@ -22,14 +27,14 @@ v2 只接纳下表中有现存 Android owner、清晰字段语义、并且不会
 | Relationship / `KnowledgeRelationshipDomain` | endpoints、status、revision、createdAt | v1 只安全表示 `RELATED`；其余被拒绝 | 全部真实 type、scope/project、updatedAt、created/latest intent、suggestion source、完整 revision history，可逆 | endpoint 必须是同包 Knowledge 且 scope/project 与 endpoints 一致；未知 enum、缺历史或跨 scope 一律拒绝 |
 | Conversation/Knowledge 附件 owner | display name、MIME、size、SHA-256、classification | Conversation 已表示；Knowledge 丢失 | 每项 asset metadata + content-addressed bytes，引用可逆 | EXIF、内部 storage key、外部 URI/path、picker token 一律拒绝 |
 | Safe app settings / `NfaiExchangeSafeSettings` | `uiLanguage,theme` | 已表示 | 原样保留，可逆 | Provider、credentials、route preference、runtime、usage/cost、diagnostics、path/URI 永远不进入 v2 |
-| Desktop / `DesktopWorkspaceStore` | 当前 `workspace_exchange` serialized IR、asset archive、provenance、journal | v1 原子导入已闭合 | v2 先以同一 canonical IR/semantic hash 严格验证；后续迁移必须把 IR、asset index、provenance、journal 放在一个 transaction | 本合同不允许 v1 importer 将 v2 当 v1 解析，也不允许 v2 verifier 直接写 SQLite；未知字段或任一 owner 无法恢复时拒绝整个包 |
+| Desktop / `DesktopWorkspaceStore` | 当前 `workspace_exchange` serialized IR、asset archive、provenance、journal | v1 原子导入已闭合 | v2已实现独立package严格验证、private archive、SQLite transaction与journal/receipt；具体边界只见v2 Desktop原子导入子合同 | 本合同不允许 v1 importer 将 v2 当 v1 解析，也不允许 v2 verifier 直接写 SQLite；未知字段或任一 owner 无法恢复时拒绝整个包 |
 
 ## v2 当前最小实现与停止门
 
 - `protocol/nfai.exchange.v2.schema.json` 与 `protocol/scripts/exchange-v2-lib.mjs` 是 schema/canonical semantic hash 的唯一协议事实；`nfai.exchange.v2.golden.json` 同时由 Android 和 Desktop 定向合同读取。
 - v2 预检为**纯 IR**：不读 Room、SQLite、私有附件、SAF、文件 picker、网络、Provider 或 Key，也不注册 UI。它的功能是把上述 owner 字段缺失/不安全/不可验证的情况明确拒绝，防止 v1 的静默丢失被重新引入。
 - Android 的 `NfaiExchangeV2OwnerMapper` 已能从显式选择的 owner 只读生成并复验 exact IR；它仅在内存中核验附件 bytes/hash，不保留 bytes、不写 Room，也不注册 UI/SAF。它拒绝缺 history、`sourceReference`、定位符、私有 `reference` 外泄、运行时节点与无法证实的附件。这个 owner mapper 不能替代本段的纯 IR validator，后者仍不访问任何 owner。
-- Android 的未注册 `NfaiExchangeV2PackageWriter` 是 mapper 后的本地 serializer，不是 SAF 或持久化 adapter：它只为 IR 账本明确引用的附件再次只读核验 bytes/hash，在内存中写 canonical `manifest.json + exchange.json + assets/<sha256>`，并对成品执行 v2 package preflight。唯一输出是要求原子发布的有限 port；mapper/ledger/preflight 任一步失败时不得调用该 port，receipt 只含 hash、枚举、计数与 `ownerFieldHashes`。没有 app-data archive、Room/SQLite 写入、导入、UI、SAF、picker、网络或 Key。
+- Android的`NfaiExchangeV2PackageWriter`是mapper后的本地serializer；现已由AppContainer注入`AndroidWorkspaceExchangeV2ExportPort`，经用户设置范围选择与SAF CreateDocument实际输出。serializer自身不是SAF或持久化adapter：它只为 IR 账本明确引用的附件再次只读核验 bytes/hash，在内存中写 canonical `manifest.json + exchange.json + assets/<sha256>`，并对成品执行 v2 package preflight。唯一输出是要求原子发布的有限 port；mapper/ledger/preflight 任一步失败时不得调用该 port，receipt 只含 hash、枚举、计数与 `ownerFieldHashes`。serializer不直接访问app-data archive、Room/SQLite写入、导入、UI、SAF、picker、网络或Key；这不否定外层生产导出adapter的已接线能力。
 - Desktop 的独立 schema version、package、private staging、asset archive、SQLite transaction、journal/receipt、失败注入、重开与回导的唯一正文见 [v2 Desktop 原子导入合同](P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md)。Android 只经设置范围选择后的 SAF CreateDocument 输出；Desktop 的受限 native picker 只接纳单一用户选择的 package，不能说成 Desktop 原生 owner 恢复。
 
 ## 文件名、MIME 与回执边界

@@ -104,6 +104,15 @@ class P3CConversationActionLineageContractsTest {
         assertEquals(3, afterChange.nodes.count { it.parentMessageId == old.parentMessageId })
     }
 
+    @Test fun `historical default retry intent replays without rewriting its model selection`() {
+        val source = terminalAssistant(MessageDeliveryState.COMPLETE, "historical reply")
+        val request = ConversationActionRequest(ConversationActionIntentId("legacy-default"), source.conversationId, source.messageId, ConversationActionKind.RETRY, ModelPresetId.CLAUDE_SONNET_5)
+        val started = actions.execute(request) as ConversationActionResult.Started
+        val replay = actions.execute(request.copy(targetPreset = null)) as ConversationActionResult.Replayed
+        assertEquals(started.lineage, replay.lineage)
+        assertEquals(started.lineage.selection, repository.lineageForIntent(request.intentId)!!.selection)
+    }
+
     @Test fun `invalid action duplicate intent and failed transaction have deterministic results`() {
         val complete = terminalAssistant(MessageDeliveryState.COMPLETE, "完整回答")
         val rejectedContinue = actions.execute(ConversationActionRequest(ConversationActionIntentId("bad-continue"), complete.conversationId, complete.messageId, ConversationActionKind.CONTINUE))

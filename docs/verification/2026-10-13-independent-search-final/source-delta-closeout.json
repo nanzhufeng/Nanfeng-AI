@@ -1,0 +1,55 @@
+{
+  "baseline": "source-freeze-final.json (semantic query/cache freeze before final Gemini compatibility diagnosis)",
+  "closeout": "source-hashes-closeout.json",
+  "changed": [
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt",
+      "impact": "test only: actual failed executor reopen and exact original-material retry",
+      "before": "ec623391dc4a59bed421dbec2009c3041a219babdaa14908710e4d69049c6211",
+      "after": "708e258383eff3eb106dabd51b5ccb6ed4862c786621551171d0bb664a2327f3"
+    },
+    {
+      "path": "desktop/src-tauri/src/attachment_search_live_matrix_tests.rs",
+      "impact": "opt-in broker only: empty filter normalized; no runtime provider behavior change",
+      "before": "1c19a386d2227e936b330f6bffd44e4f0176467f246e7f1d4059f613e356403b",
+      "after": "bdcf6f7fcf40933e65815757b0a710e8a215e914716a9f5773dda8b3d12ac83f"
+    },
+    {
+      "path": "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+      "impact": "runtime: only RelayCore Gemini grounded legacy max_tokens omitted (Flash+Pro live retested); empty completed stream classified EMPTY_COMPLETION (successful 16 unchanged); test-only safe counters/probes/regressions",
+      "before": "60db10a6688fdb4515b704e0bfb98803cd9e1acf45f1a51f994991523efd3a19",
+      "after": "b7ab37d123a8707b9e8ee49765f00f7b493390f6c4692dae5ef91527134c1376"
+    },
+    {
+      "path": "desktop/src-tauri/src/independent_web_search_v1.rs",
+      "impact": "test-only selected-model protocol probe; production coordinator/query/cache same as acceptance freeze",
+      "before": "eaaeecc2233f8346be75e0536c14a680a4a56d6ffd073dd24a5032f502813088",
+      "after": "df08fad64d486352882781c5f006968ce2da437f17c2436ee535cd3c0888bd73"
+    },
+    {
+      "path": "desktop/src-tauri/src/lib.rs",
+      "impact": "test-only format cache reopen and exact v3 retry owner regressions; production storage/IPC same as acceptance freeze",
+      "before": "9ab8b0e326b2695cfec7679e309e31067d5061ea3655b8ea8b89fa6141d653d6",
+      "after": "4be084164fb61abdadc11bcf5f258e3cb719b61017b7d0510f3371affd54cd58"
+    },
+    {
+      "path": "protocol/model-service/model-service-v1.json",
+      "impact": "maintenance metadata only: Gemini grounded-output exception; current preset/provider/model IDs unchanged",
+      "before": "0a5675bbbf64c696e98bb1391c7f008126bdc30a1ce28dc133e0bfd8dda9e949",
+      "after": "f81bd307602a4191a29242a0553fce8b7c24de6211ff9f6b159c7195917c9d77"
+    }
+  ],
+  "additional": [
+    {
+      "path": "gradle/verification-metadata.xml",
+      "impact": "strict verification metadata: exact already-declared Guava 33.4.8 parent POM checked against Maven Central bytes and published SHA-1; no verification bypass",
+      "after": "a754b89c9765f54315cc5f9540894d8d6c5c4bec1ed496e539e4717bf199a98f"
+    }
+  ],
+  "liveRetested": [
+    "RELAYCORE_GEMINI_3_8_FLASH",
+    "RELAYCORE_GEMINI_3_1_PRO",
+    "QWEN_3_6_FLASH (initially not run)"
+  ],
+  "noBlindResend": "Mac unaffected 16 kept only after wire-path impact audit; Android 2 GLM + 17 remaining same runtime sources; original failures retained"
+}

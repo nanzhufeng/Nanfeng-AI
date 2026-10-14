@@ -57,6 +57,7 @@ import com.nanzhufeng.ai.domain.InvocationRepository
 import com.nanzhufeng.ai.domain.ScheduledMonitorRepository
 import com.nanzhufeng.ai.domain.ScheduledMonitorRun
 import com.nanzhufeng.ai.domain.withAvailableLocalCostEstimate
+import com.nanzhufeng.ai.domain.ledgerCostFacts
 import com.nanzhufeng.ai.domain.ReminderDraftGenerationRecord
 import com.nanzhufeng.ai.domain.ReminderDraftGenerationRecordStore
 import com.nanzhufeng.ai.domain.ConversationTitleGenerationRecord
@@ -126,12 +127,13 @@ class ConversationCostLedgerViewModel(
     fun dismissDialog() { state = state.copy(dialogVisible = false) }
 
     private suspend fun readLedgerRecords(): CostLedgerRecords = withContext(Dispatchers.IO) {
+        val directCalls=directChatCallAudit.listNewestFirst()
         CostLedgerRecords(
-            conversations = attributions.listCostedNewestFirst().map(AssistantResponseModelAttribution::withAvailableLocalCostEstimate),
+            conversations = com.nanzhufeng.ai.domain.mergeConversationCostRecords(attributions.listCostedNewestFirst().map(AssistantResponseModelAttribution::withAvailableLocalCostEstimate),directCalls.mapNotNull { it.accounting }),
             reminders = reminderDraftRecords.listNewestFirst(),
             titles = titleGenerationRecords.listNewestFirst(),
             monitorRuns = scheduledMonitorRepository.listCostedRunsNewestFirst(),
-            historyCurationCalls = directChatCallAudit.listNewestFirst().filter { it.modelAlias == HISTORY_CURATION_AUDIT_ALIAS },
+            historyCurationCalls = directCalls.filter { it.modelAlias == HISTORY_CURATION_AUDIT_ALIAS },
             historyCurationRun = historyCurationRuns.latest(),
             glmOcrCalls = invocations.listNewestFirst().filter { it.taskId.value.startsWith("glm-ocr:") },
         )
@@ -233,12 +235,16 @@ private fun ConversationCostLedgerUiState.isEmpty() = records.isEmpty() && remin
 }
 
 @Composable private fun ConversationCostSummary(state: ConversationCostLedgerUiState) {
-    val costs = state.records.map { it.cost } +
+    val conversationCosts = state.records.flatMap { it.ledgerCostFacts() }
+    val otherCosts =
         state.reminderDraftRecords.map { it.cost } + state.titleGenerationRecords.map { it.cost } +
         state.scheduledMonitorRuns.mapNotNull(ScheduledMonitorRun::estimatedCost) +
         state.historyCurationCalls.mapNotNull(DirectChatCallAuditRecord::estimatedCost) +
         state.glmOcrCalls.map { it.cost }
+    val costs = conversationCosts + otherCosts
     ConversationCostSummarySection(title = "本机累计") {
+        val unknown=state.records.count { it.ledgerCostFacts().any { cost -> cost.totalMicros == null } } + otherCosts.count { it.totalMicros == null }
+        if(unknown>0) ConversationCostSummaryMetric(label="费用未知",value="$unknown 次")
         if (costs.isEmpty()) {
             ConversationCostSummaryMetric(label = "计费调用", value = "暂无")
         }
@@ -293,7 +299,7 @@ private fun ConversationCostCategoryGrid(state: ConversationCostLedgerUiState) {
 
     val conversationMetrics = buildList {
         add(ConversationCostCategoryMetric("次数", "${state.records.size} 次"))
-        add(ConversationCostCategoryMetric("费用", CnyMoneyDisplay.summaryLabel(state.records.map { it.cost }) ?: "金额未知", true))
+        add(ConversationCostCategoryMetric("费用", CnyMoneyDisplay.summaryLabel(state.records.flatMap { it.ledgerCostFacts() }) ?: "金额未知", true))
     }
     val titleMetrics = listOf(
         ConversationCostCategoryMetric("次数", "${state.titleGenerationRecords.size} 次"),
@@ -482,8 +488,12 @@ private fun ConversationCostCategoryCell(
         Spacer(Modifier.weight(1f))
         Text(record.recordedAt.costTimestamp(), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
     }
-    Text(record.footerCostLabel() ?: "Token 已返回，但此模型暂无本机价目表", color = if (record.cost.totalMicros == null) SecondaryText else AccentOrange, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-    Text("输入 ${record.usage.inputTokens ?: "未知"} · ${record.usage.outputBreakdownLabel()}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    val amount = record.footerCostLabel()
+    Text(amount ?: "接口未报告可确认费用，暂无匹配单价", color = if (amount == null) SecondaryText else AccentOrange, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+    record.physicalCallRole?.let { role -> Text((if(role=="RETRIEVAL") "联网检索" else "模型回答")+" · "+(record.physicalCallStatus ?: "状态未记录"),color=SecondaryText,style=MaterialTheme.typography.bodySmall) }
+    record.physicalActualModelId?.let { Text("实际返回：$it",color=SecondaryText,style=MaterialTheme.typography.bodySmall) }
+    Text("输入 ${record.usage.inputTokens ?: "未知"} · ${record.usage.outputBreakdownLabel()} · 缓存 ${record.usage.cachedInputTokens ?: "未知"}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+    record.physicalContextWindowTokens?.let { Text("上下文窗口 $it Token · 已选来源 ${record.physicalContextSourceCount ?: "未知"}",color=SecondaryText,style=MaterialTheme.typography.bodySmall) }
     Text(record.modelDurationLabel(), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
 }
 
@@ -605,6 +615,7 @@ private fun com.nanzhufeng.ai.domain.ProviderId.titleProviderLabel(): String = w
     com.nanzhufeng.ai.domain.ProviderId.OPENROUTER -> "OpenRouter"
     com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> "DeepSeek"
     com.nanzhufeng.ai.domain.ProviderId.ZHIPU -> "智谱"
+    com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_CLAUDE, com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_GPT, com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_GEMINI -> "RelayCore"
     com.nanzhufeng.ai.domain.ProviderId.MOCK -> "本地模拟"
 }
 

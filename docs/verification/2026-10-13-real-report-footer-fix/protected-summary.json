@@ -1,0 +1,30 @@
+{
+  "baselineCount": 1041,
+  "changedPaths": [
+    "app/src/main/java/com/nanzhufeng/ai/ui/AssistantFooterFormatting.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+    "app/src/main/java/com/nanzhufeng/ai/domain/AssistantResponseModelAttribution.kt",
+    "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ui/AssistantFooterCostDisplayTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanionTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlanTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/domain/ChatCallAccountingTest.kt",
+    "desktop/src/desktop-cost-estimator.mjs",
+    "desktop/src/android-settings-shell.mjs",
+    "desktop/src/chat-shell.mjs",
+    "desktop/src-tauri/src/attachment_web_search_v1.rs",
+    "desktop/src-tauri/src/lib.rs",
+    "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+    "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+    "desktop/tests/chat-first-ui.test.mjs",
+    "protocol/fixtures/attachment-evidence-shape-v1.json",
+    "protocol/fixtures/attachment-search-plan-v1.json"
+  ],
+  "unchangedCount": 1019,
+  "missing": [],
+  "scope": "Compared with previous risk followup; pre-existing WIP preserved"
+}

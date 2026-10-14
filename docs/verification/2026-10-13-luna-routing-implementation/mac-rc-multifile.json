@@ -1,0 +1,293 @@
+[
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "claude-opus-5.5",
+    "nativeSources": [],
+    "physical": [
+      {
+        "elapsedMs": 9025,
+        "input": 17207,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release?utm_source=openai",
+          "https://www.mozilla.org/firefox/139.0/releasenotes/?utm_source=openai"
+        ],
+        "output": 612,
+        "publicFixtureReply": "[A1] **已核实**：Go 1.24.0 于 **2025年2月11日**正式发布。  \n来源：https://go.dev/doc/devel/release ([go.dev](https://go.dev/doc/devel/release?utm_source=openai))\n\n[A2] **已核实**：Firefox 139.0 于 **2025年5月27日**发布；Mozilla 安全公告同日列明 Firefox 139。  \n来源：https://www.mozilla.org/firefox/139.0/releasenotes/；https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/ ([mozilla.org](https://www.mozilla.org/firefox/139.0/releasenotes/?utm_source=openai))\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release?utm_source=openai)\n- [Firefox 139.0, See All New Features, Updates and Fixes](https://www.mozilla.org/firefox/139.0/releasenotes/?utm_source=openai)",
+        "reportedCostMicros": 21611,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "openai/gpt-6-luna",
+        "returned": "openai/gpt-6-luna",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "RELAYCORE_OPUS_5_5",
+    "provider": "RELAYCORE_CLAUDE",
+    "publicAnswer": "两项均已核实：\n\n- Go 1.24.0：2025年2月11日正式发布。\n  来源：https://go.dev/doc/devel/release\n\n- Firefox 139.0：2025年5月27日正式发布，Mozilla 安全公告同日列出了 Firefox 139。\n  来源：https://www.mozilla.org/firefox/139.0/releasenotes/\n\n来源：- [Firefox 139.0, See All New Features, Updates and Fixes](https://www.mozilla.org/firefox/139.0/releasenotes/)\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)",
+    "returned": "claude-opus-5.5",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "gpt-6.1-sol",
+    "nativeSources": [],
+    "physical": [
+      {
+        "elapsedMs": 6975,
+        "input": 15117,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release?utm_source=openai",
+          "https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai"
+        ],
+        "output": 437,
+        "publicFixtureReply": "[A1] **已核实**：Go 官方发布历史记载，Go 1.24.0 于 **2025年2月11日**发布。  \n来源：https://go.dev/doc/devel/release ([go.dev](https://go.dev/doc/devel/release?utm_source=openai))\n\n[A2] **已核实**：Mozilla 官方安全公告记载，Firefox 139 于 **2025年5月27日**公告发布；官方版本说明对应 Firefox 139.0。  \n来源：https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/  \nhttps://www.mozilla.org/firefox/139.0/releasenotes/ ([mozilla.org](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai))\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release?utm_source=openai)\n- [Security Vulnerabilities fixed in Firefox 139 — Mozilla](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai)",
+        "reportedCostMicros": 21306,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "openai/gpt-6-luna",
+        "returned": "openai/gpt-6-luna",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "RELAYCORE_GPT_6_1_SOL",
+    "provider": "RELAYCORE_GPT",
+    "publicAnswer": "当前环境没有可用的网页检索工具，无法完成你要求的逐项真实搜索。以下仅整理你提供的证据，**不算本次独立核验**：\n\n- **Go 1.24.0：2025年2月11日。**所附资料称 Go 官方发布历史记载了该发布日期。[Go 官方发布历史](https://go.dev/doc/devel/release)\n- **Firefox 139.0：2025年5月27日，尚未独立核实正式发布日期。**所附资料指向 Firefox 139 的安全公告日期；仍需读取官方版本说明，确认其正式发布日期。[Mozilla 官方安全公告](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/)\n\n来源：- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)\n- [Security Vulnerabilities fixed in Firefox 139 — Mozilla](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/)",
+    "returned": "gpt-6.1-sol",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "gpt-6-astra",
+    "nativeSources": [],
+    "physical": [
+      {
+        "elapsedMs": 6695,
+        "input": 19237,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release?utm_source=openai",
+          "https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai"
+        ],
+        "output": 509,
+        "publicFixtureReply": "[A1] **已核实**  \nGo 官方发布记录确认 Go 1.24.0 于 **2025年2月11日**发布；Go 官方博客也宣布 Go 1.24 正式发布。  \n来源：https://go.dev/doc/devel/release  \nhttps://go.dev/blog/go1.24 ([go.dev](https://go.dev/doc/devel/release?utm_source=openai))\n\n[A2] **已核实**  \nMozilla 安全公告标明 Firefox 139 的公告日期为 **2025年5月27日**，并列出修复版本为 Firefox 139；Mozilla 发布说明列有 Firefox 139.0。  \n来源：https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/  \nhttps://www.mozilla.org/firefox/139.0/releasenotes/ ([mozilla.org](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai))\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release?utm_source=openai)\n- [Security Vulnerabilities fixed in Firefox 139 — Mozilla](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai)",
+        "reportedCostMicros": 21754,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "openai/gpt-6-luna",
+        "returned": "openai/gpt-6-luna",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "RELAYCORE_GPT_6_ASTRA",
+    "provider": "RELAYCORE_GPT",
+    "publicAnswer": "本轮没有可用的联网检索工具，未进行新的真实搜索；以下日期与所附资料一致，但不能标为本轮独立核实：\n\n- **Go 1.24.0：2025年2月11日。** 官方核验页面：[Go 发布记录](https://go.dev/doc/devel/release)。\n- **Firefox 139.0：2025年5月27日。** 应以[Mozilla 139.0 正式版发布说明](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)核验发布日期；附件中的[安全公告](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/)日期仅作辅助证据。\n\n来源：- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)\n- [Security Vulnerabilities fixed in Firefox 139 — Mozilla](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/)",
+    "returned": "gpt-6-astra",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "error": "Explicit { code: \"EMPTY_COMPLETION\", http_status: Some(200) }",
+    "model": "gemini-3.8-flash",
+    "physical": [
+      {
+        "elapsedMs": 11310,
+        "input": 19198,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release?utm_source=openai",
+          "https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai"
+        ],
+        "output": 709,
+        "publicFixtureReply": "[A1] **已核实**  \ngo.dev 发布记录确认 Go 1.24.0 于 **2025年2月11日**发布。  \n来源：https://go.dev/doc/devel/release ([go.dev](https://go.dev/doc/devel/release?utm_source=openai))\n\n[A2] **已核实**  \nMozilla 公告确认 Firefox 139 于 **2025年5月27日**公布并修复；官方版本发布说明对应 **Firefox 139.0**。  \n来源：https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/  \nhttps://www.mozilla.org/firefox/139.0/releasenotes/ ([mozilla.org](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai))\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release?utm_source=openai)\n- [Security Vulnerabilities fixed in Firefox 139 — Mozilla](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai)",
+        "reportedCostMicros": 31850,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "openai/gpt-6-luna",
+        "returned": "openai/gpt-6-luna",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "preset": "RELAYCORE_GEMINI_3_8_FLASH",
+    "provider": "RELAYCORE_GEMINI",
+    "searchErrors": []
+  },
+  {
+    "error": "Explicit { code: \"INVALID_REQUEST\", http_status: Some(404) }",
+    "model": "gemini-3.1-pro",
+    "physical": [
+      {
+        "elapsedMs": 12297,
+        "input": 25391,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release",
+          "https://www.mozilla.org/firefox/139.0/releasenotes/"
+        ],
+        "output": 536,
+        "publicFixtureReply": "[A1] **已核实**：Go 官方发布历史确认 Go 1.24.0 于 **2025年2月11日**发布。来源：https://go.dev/doc/devel/release ([go.dev](https://go.dev/doc/devel/release))\n\n[A2] **已核实**：Firefox 官方发行说明确认 Firefox 139.0 于 **2025年5月27日**提供给 Release 通道用户。来源：https://www.mozilla.org/firefox/139.0/releasenotes/ ([mozilla.org](https://www.mozilla.org/firefox/139.0/releasenotes/))\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)\n- [Firefox 139.0, See All New Features, Updates and Fixes](https://www.mozilla.org/firefox/139.0/releasenotes/)",
+        "reportedCostMicros": 42383,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "openai/gpt-6-luna",
+        "returned": "openai/gpt-6-luna",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "preset": "RELAYCORE_GEMINI_3_1_PRO",
+    "provider": "RELAYCORE_GEMINI",
+    "searchErrors": []
+  }
+]

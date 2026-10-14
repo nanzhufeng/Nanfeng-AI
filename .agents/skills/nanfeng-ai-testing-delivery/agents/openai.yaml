@@ -1,4 +1,4 @@
 interface:
   display_name: "南枫 AI 测试交付"
-  short_description: "选择并执行分层回归、原生验收和正式交付验证。"
-  default_prompt: "按受影响 owner 选择最小充分验证，分开报告自动测试、设备和真实服务证据。"
+  short_description: "选择最小充分回归与低成本真实验收，分开核对构建签名和交付。"
+  default_prompt: "使用 $nanfeng-ai-testing-delivery 按影响范围选择验证，分别报告离线、原生、真实服务和正式交付。"

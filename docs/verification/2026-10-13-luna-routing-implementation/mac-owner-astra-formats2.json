@@ -1,0 +1,93 @@
+{
+  "actualModel": "gpt-6-astra",
+  "covered": 4,
+  "files": "public-05.xml,public-06.xml,public-07.yaml,public-08.yml",
+  "ledgerCalls": [
+    {
+      "actual": "openai/gpt-6-luna",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 11134,
+      "model": "openai/gpt-6-luna",
+      "source": "PROVIDER_RESPONSE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "openai/gpt-6-luna",
+      "source": null
+    },
+    {
+      "actual": "gpt-6-astra",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 16658,
+      "model": "gpt-6-astra",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "gpt-6-astra",
+      "source": null
+    }
+  ],
+  "physical": [
+    {
+      "input": 12991,
+      "nativeSources": [
+        [
+          "Python Release Python 3.10.0 | Python.org",
+          "https://www.python.org/downloads/release/python-3100/?utm_source=openai"
+        ],
+        [
+          "Python Release Python 3.9.0 | Python.org",
+          "https://www.python.org/downloads/release/python-390/?utm_source=openai"
+        ],
+        [
+          "Python Release Python 3.8.0 | Python.org",
+          "https://www.python.org/downloads/release/python-380/?utm_source=openai"
+        ],
+        [
+          "Python Release Python 3.7.0 | Python.org",
+          "https://www.python.org/downloads/release/python-370/?c=build&utm_source=openai"
+        ]
+      ],
+      "output": 499,
+      "reportedMicros": 11134,
+      "requested": "openai/gpt-6-luna",
+      "returned": "openai/gpt-6-luna"
+    }
+  ],
+  "planned": 4,
+  "preset": "RELAYCORE_GPT_6_ASTRA",
+  "publicAnswer": "根据本轮提供的检索证据，4 项发布日期均已核实，官方来源如下：\n\n| 附件 | 事项 | 核实发布日期 | 官方来源 |\n|---|---|---|---|\n| public-05.xml | Python 3.10.0 | 2021年10月4日 | [Python 官方发布页](https://www.python.org/downloads/release/python-3100/) |\n| public-06.xml | Python 3.9.0 | 2020年10月5日 | [Python 官方发布页](https://www.python.org/downloads/release/python-390/) |\n| public-07.yaml | Python 3.8.0 | 2019年10月14日 | [Python 官方发布页](https://www.python.org/downloads/release/python-380/) |\n| public-08.yml | Python 3.7.0 | 2018年6月27日 | [Python 官方发布页](https://www.python.org/downloads/release/python-370/) |\n\n附件仅列出待查版本及发布日期事项，未给出具体日期或其他数字主张，因此没有发现与附件内容矛盾之处。以上复用本轮提供的检索结果，未另行发起新搜索。\n\n来源：- [Python Release Python 3.10.0 | Python.org](https://www.python.org/downloads/release/python-3100/)\n- [Python Release Python 3.7.0 | Python.org](https://www.python.org/downloads/release/python-370/?c=build)\n- [Python Release Python 3.8.0 | Python.org](https://www.python.org/downloads/release/python-380/)\n- [Python Release Python 3.9.0 | Python.org](https://www.python.org/downloads/release/python-390/)",
+  "reopenedCheckpoints": 4,
+  "reopenedModel": "gpt-6-astra",
+  "reopenedState": "COMPLETED",
+  "requested": "gpt-6-astra",
+  "sources": [
+    [
+      "Python Release Python 3.10.0 | Python.org",
+      "https://www.python.org/downloads/release/python-3100/"
+    ],
+    [
+      "Python Release Python 3.9.0 | Python.org",
+      "https://www.python.org/downloads/release/python-390/"
+    ],
+    [
+      "Python Release Python 3.8.0 | Python.org",
+      "https://www.python.org/downloads/release/python-380/"
+    ],
+    [
+      "Python Release Python 3.7.0 | Python.org",
+      "https://www.python.org/downloads/release/python-370/?c=build"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

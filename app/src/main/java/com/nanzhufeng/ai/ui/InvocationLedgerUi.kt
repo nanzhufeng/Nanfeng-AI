@@ -113,7 +113,7 @@ fun InvocationLedgerCard(state: InvocationLedgerUiState, onOpen: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = onOpen,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
         ) {
@@ -257,6 +257,7 @@ private fun InvocationStatus.uiColor(): Color = when (this) {
 }
 
 private fun ProviderId.uiLabel(): String = when (this) {
+    ProviderId.RELAYCORE_CLAUDE, ProviderId.RELAYCORE_GPT, ProviderId.RELAYCORE_GEMINI -> "RelayCore（身份以响应为准）"
     ProviderId.MOCK -> "本地 Mock（非真实服务）"
     ProviderId.OPENROUTER -> "OpenRouter（未验证真实连接）"
     ProviderId.QWEN -> "Qwen 官方直连（未验证真实连接）"
@@ -265,6 +266,7 @@ private fun ProviderId.uiLabel(): String = when (this) {
 }
 
 private fun InvocationRecord.providerLabel(): String = when (providerId) {
+    ProviderId.RELAYCORE_CLAUDE, ProviderId.RELAYCORE_GPT, ProviderId.RELAYCORE_GEMINI -> providerId.uiLabel()
     ProviderId.MOCK -> providerId.uiLabel()
     // A non-BLOCKED OpenRouter record has an actual ProviderAttempt and therefore represents a
     // real service attempt, including safe failure terminal states.

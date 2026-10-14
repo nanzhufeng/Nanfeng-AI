@@ -255,7 +255,19 @@ import java.time.Clock
 import java.io.File
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
-class AppContainer(baseContext: Context, private val clock: Clock = Clock.systemUTC(), val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT) {
+private object NormalChatProcessRecoveryGate {
+    private val recoveredAreas = mutableSetOf<com.nanzhufeng.ai.domain.ConversationSurface>()
+
+    @Synchronized fun recoverOnce(area: com.nanzhufeng.ai.domain.ConversationSurface, recover: () -> Unit) {
+        if (!recoveredAreas.add(area)) return
+        try { recover() } catch (failure: Throwable) {
+            recoveredAreas.remove(area)
+            throw failure
+        }
+    }
+}
+
+class AppContainer(baseContext: Context, private val clock: Clock = Clock.systemUTC(), val dataArea: com.nanzhufeng.ai.domain.ConversationSurface = com.nanzhufeng.ai.domain.ConversationSurface.CHAT, normalChatTransport: com.nanzhufeng.ai.ai.ProviderChatTransport = OfficialProviderChatTransport()) {
     private val dataStorageLocationOwner = AndroidDataStorageLocationOwner(baseContext.applicationContext)
     // Android framework and third-party initializers must always receive the real application
     // context.  The movable wrapper is deliberately limited to Room's database boundary.
@@ -344,6 +356,8 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         NanfengAiDatabase.MIGRATION_67_68,
         NanfengAiDatabase.MIGRATION_68_69,
         NanfengAiDatabase.MIGRATION_69_70,
+        NanfengAiDatabase.MIGRATION_70_71,
+        NanfengAiDatabase.MIGRATION_71_72,
     ).build().also { com.nanzhufeng.ai.data.ConversationDatabaseHandles.register(requireNotNull(databaseContext.getDatabasePath("nanfeng-ai.db").parentFile), it) }
     private val database = com.nanzhufeng.ai.data.local.ConversationAreaDatabaseOwner.open(databaseContext, dataArea, ::buildAreaDatabase)
     val dataStorageLocationManager = AndroidDataStorageLocationManager(dataStorageLocationOwner) {
@@ -537,7 +551,9 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     val conversationReadMarkerStore = AndroidConversationReadMarkerStore(businessFileContext)
     private val conversationExportStore = AndroidConversationExportStore(businessFileContext)
     val exportConversationPackage = ExportConversationPackageUseCase(conversationRepository, conversationExportStore, clock)
-    val createConversation = CreateConversationUseCase(conversationTreeService, conversationRepository)
+    val createConversation = CreateConversationUseCase(conversationTreeService, conversationRepository) { id ->
+        check(p6gModelSelection.initializeConversationModel(id) is com.nanzhufeng.ai.domain.P6GSelectionMutationResult.Applied)
+    }
     val appendConversationMessage = AppendConversationMessageUseCase(conversationTreeService, conversationRepository)
     val editConversationUserMessage = EditConversationUserMessageUseCase(conversationTreeService, conversationRepository)
     val switchConversationBranch = SwitchConversationBranchUseCase(conversationTreeService, conversationRepository)
@@ -580,6 +596,13 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         conversationRepository, conversationRepository, conversationRuntimeStateMachine, clock,
     )
     val deterministicFixtureStreamingAdapter = DeterministicFixtureStreamingAdapter(clock)
+    private val normalChatSendAttempts = RoomNormalChatSendAttemptStore(database)
+    fun generationModelLabel(id: com.nanzhufeng.ai.domain.ConversationId, userMessageId: com.nanzhufeng.ai.domain.MessageNodeId): String {
+        val attempt=normalChatSendAttempts.findLatestForConversation(id)?.takeIf {it.messageId==userMessageId} ?: return "模型连接中"
+        val relay=com.nanzhufeng.ai.domain.RelayCoreModels.specs.firstOrNull {it.provider==attempt.providerId && it.apiId==attempt.modelId}
+        return relay?.let {"${it.composerName} · RC"} ?: attempt.modelId.substringAfterLast('/')
+    }
+
     /** The confirmation owner remains content-free; the executor receives text only after confirmation. */
     /** P5-B only finalizes interrupted facts at process start; it never schedules or resumes work. */
     val taskRecoveryAudit = TaskRecoveryAudit(
@@ -592,7 +615,14 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         runtime = conversationRepository,
         applyRuntimeEvent = applyConversationRuntimeEvent,
         clock = clock,
+        sendAttempts = normalChatSendAttempts,
+        isConversationRunning = { id -> com.nanzhufeng.ai.background.NormalChatGenerationRegistry.isRunning(id, dataArea) },
     )
+    init {
+        // Finish orphaned local runtimes before the first Activity projection. A live service
+        // in this process remains untouched; recovery never resends user content.
+        NormalChatProcessRecoveryGate.recoverOnce(dataArea) { taskRecoveryAudit.recoverInterruptedConversations() }
+    }
     /** P5-C owns aggregate-only privacy inventory, scoped deletion and user-initiated diagnostics. */
     val privacyDataManager = AndroidPrivacyDataManager(businessFileContext, database, BuildConfig.VERSION_NAME)
     /** P5-D is manual local portability only; it never participates in lifecycle recovery or cloud backup. */
@@ -606,10 +636,9 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
     private val notificationReminderSettingsRepository = AndroidNotificationReminderSettingsRepository(context)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository(context)
     private val providerCredentialStore = createAndroidProviderCredentialStore(context)
-    val directChatCallAudit = AndroidDirectChatCallAuditStore(businessFileContext)
-    val contextSelectionAudits = AndroidContextSelectionAuditStore(businessFileContext)
+    val directChatCallAudit = AndroidDirectChatCallAuditStore(businessFileContext,database)
+    val contextSelectionAudits = AndroidContextSelectionAuditStore(businessFileContext,database)
     val providerDiagnostics = RoomProviderDiagnosticStore(database)
-    private val normalChatSendAttempts = RoomNormalChatSendAttemptStore(database)
     val scheduledMonitorRepository = RoomScheduledMonitorRepository(database)
     val reminderDraftGenerationRecords = RoomReminderDraftGenerationRecordStore(database)
     val conversationTitleGenerationRecords = RoomConversationTitleGenerationRecordStore(database)
@@ -760,7 +789,7 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
         submitDraft = submitConversationDraft,
         appendMessage = appendConversationMessage,
         contextBroker = localContextBroker,
-        transport = OfficialProviderChatTransport(),
+        transport = normalChatTransport,
         audit = directChatCallAudit,
         diagnostics = providerDiagnostics,
         sendAttempts = normalChatSendAttempts,

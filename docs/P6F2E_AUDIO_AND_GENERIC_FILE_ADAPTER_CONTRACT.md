@@ -1,5 +1,10 @@
 # P6-F2-E Audio & Generic File Adapter 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本地搜索与安全预览 ](P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-F2-E Audio & Generic File Adapter 合同
+<!-- contract-governance:end -->
+
 状态：完成（2026-08-14）。本合同是 P6-F2-E 的唯一正文；它是一个 Adapter，包含两个不可互相替代的子路径：Audio 与 Generic File。最终事实见 `P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_EVIDENCE.md`；此完成不授权 P6-G、Provider、Key/HTTP、OPPO、图标或发布。
 
 ## 范围与唯一所有者
@@ -17,7 +22,7 @@
 
 ## 退出门
 
-Desktop 与 Android 都须有 domain/owner/UI 自动契约、lint/build、真实 picker → private-copy → 草稿 → 消息卡 → 显式操作 → 完整退出或 force-stop restart/readback。Android 还须正式签名 Debug/Release、`emulator-5554 install -r --user 0` 和回拉 `base.apk` hash；Desktop 须最新 ad-hoc strict-signed `.app`。模拟器不替代 OPPO，所有证据写入独立 P6F2E evidence 后才能将 P6-F2-E 标为完成。
+Desktop 与 Android 都须有 domain/owner/UI 自动契约、lint/build、真实 picker → private-copy → 草稿 → 消息卡 → 显式操作 → 完整退出或 force-stop restart/readback。Android 还须正式签名 Debug/Release、当次隔离模拟器上的 `install -r --user 0` 和回拉 `base.apk` hash；Desktop须按当前交付入口验签的隔离 `.app`。模拟器不替代 OPPO，所有证据写入独立 P6F2E evidence 后才能将 P6-F2-E 标为完成。
 
 ## 完成记录
 

@@ -1,0 +1,48 @@
+{
+  "scope": "local repair and saved actual receipt replay; zero new provider calls",
+  "newProviderCalls": 0,
+  "newTestFeeCny": 0,
+  "android": {
+    "suites": 321,
+    "tests": 1497,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10
+  },
+  "rust": {
+    "passed": 430,
+    "failed": 0,
+    "ignored": 34
+  },
+  "savedReceiptReplay": {
+    "androidScopeCovered": 6,
+    "planned": 6,
+    "nativeRetrievalReplies": 7,
+    "rustAcceptedCalls": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7
+    ],
+    "rustBatchRequiringSingleQueries": [
+      5
+    ],
+    "verifiedFactsNotImplied": true
+  },
+  "sourceHashes": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt": "15d1af18b3f8e560ffcd7c8bc41971d9b54f6447c43686e4602de90174417cf7",
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchCoordinator.kt": "c70ae63a7f9238a666c0789c9fbe9debaf5f19d75d5d6ec67c7f52766e333387",
+    "desktop/src-tauri/src/attachment_web_search_v1.rs": "d41c6ebc1ff1e2722644202da471cb030d59789d7aa24a9694aa55c2e54c932c",
+    "desktop/src-tauri/src/attachment_web_search_execution_v1.rs": "90faf81cb99a455064686f7db5243c591e6d0e4d62d91d3b59d99d7546d93a48",
+    "desktop/src-tauri/src/lib.rs": "b949c7a3f936de3df32c97c3561b5abebf010f68340c88851ce48166c03e9c24",
+    "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlanTest.kt": "dc69687b25ce13a4e900417d24b08c7b7ac105242b6d7f9d6711b1a583dc4319",
+    "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentWebSearchCoordinatorTest.kt": "45a5a8520580b7f2e6068058e3caa4abab2954a54343d9f9cd469db28fabce6e"
+  },
+  "routingSourcesMatchSnapshot": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt": true,
+    "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt": true,
+    "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs": true
+  }
+}

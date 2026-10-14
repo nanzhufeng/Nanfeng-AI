@@ -1,0 +1,187 @@
+[
+  {
+    "id": 1,
+    "topic": "接收方披露",
+    "contract": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+    "oldRisk": "仍要求发送/重试Composer重复披露Luna材料与费用",
+    "decision": "按当前renderer保留模型菜单状态，Composer重复说明删除，授权owner不变",
+    "evidence": [
+      "desktop/src/chat-shell.mjs",
+      "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt"
+    ]
+  },
+  {
+    "id": 2,
+    "topic": "检索诊断归属",
+    "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "oldRisk": "RC辅助检索仍统一归GPT配置",
+    "decision": "实际Luna接收方为OpenRouter，RC自身GPT独立归组",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt"
+    ]
+  },
+  {
+    "id": 3,
+    "topic": "编号主题范围",
+    "contract": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "oldRisk": "长段拆子项被写成所有材料共用规则",
+    "decision": "编号Markdown保留整主题；其他材料沿既有语义解析",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+      "desktop/src-tauri/src/attachment_web_search_v1.rs"
+    ]
+  },
+  {
+    "id": 4,
+    "topic": "统一字符粒度",
+    "contract": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+    "oldRisk": "将旧180字符粒度当统一现行规则",
+    "decision": "不复制固定拆分粒度；唯一范围/预算规则归C12",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt"
+    ]
+  },
+  {
+    "id": 5,
+    "topic": "设置路由与媒体",
+    "contract": "docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+    "oldRisk": "所有请求同Provider官方工具、所有附件先纯文本",
+    "decision": "当前按渠道/材料路由，附件按真实Adapter能力",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/UniversalChatAttachmentBridge.kt"
+    ]
+  },
+  {
+    "id": 6,
+    "topic": "默认接口越界",
+    "contract": "docs/P3_PROVIDER_TRANSPORT_BOUNDARY_CONTRACT.md",
+    "oldRisk": "DisabledNoNetwork被称为全生产唯一transport",
+    "decision": "只属于该P3模块默认实现；实际普通发送另有owner",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ProviderTransportBoundary.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ]
+  },
+  {
+    "id": 7,
+    "topic": "旧可见连接状态",
+    "contract": "docs/P2K_OPENROUTER_INFERENCE_TRANSPORT_CONTRACT.md",
+    "oldRisk": "未授权UI状态及网络库评估仍用整机当前口吻",
+    "decision": "限定P2-K阶段证据，当前连接UI指向设置主合同",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/ModelSettingsUi.kt"
+    ]
+  },
+  {
+    "id": 8,
+    "topic": "Desktop附件导入",
+    "contract": "docs/P6D_DESKTOP_SIDEBAR_INFORMATION_ARCHITECTURE_CONTRACT.md",
+    "oldRisk": "写成只有交换包picker、无Conversation私有附件owner",
+    "decision": "当前原生对话附件导入已接入；按P6-D2维护能力",
+    "evidence": [
+      "desktop/src-tauri/src/lib.rs"
+    ]
+  },
+  {
+    "id": 9,
+    "topic": "旧WORK入口和设备门",
+    "contract": "docs/P6D_DESKTOP_SIDEBAR_INFORMATION_ARCHITECTURE_CONTRACT.md",
+    "oldRisk": "旧模式矩阵/5554/ad-hoc验证约束仍易当现在入口与授权",
+    "decision": "历史矩阵/验收分层保留，当前UI读领域入口",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+      "desktop/src/product-scope.mjs"
+    ]
+  },
+  {
+    "id": 10,
+    "topic": "消息费用/耗时",
+    "contract": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+    "oldRisk": "页脚只允许时间/模型，耗时只允许旧Invocation",
+    "decision": "消息域约束归因，费用/UI由主合同；普通Attempt真实时长可投影",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/local/RoomAssistantResponseModelAttributionStore.kt",
+      "desktop/src/chat-shell.mjs"
+    ]
+  },
+  {
+    "id": 11,
+    "topic": "历史反馈停开发",
+    "contract": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+    "oldRisk": "旧OPEN/实施中现场条款混入当前规则",
+    "decision": "显式历史父章节保留原状态及锚点，不凭旧场景阻断当前开发",
+    "evidence": [
+      "docs/PROJECT_STATUS.md",
+      "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+      "docs/DESKTOP_CHAT_FIRST_UI_CONTRACT.md"
+    ]
+  },
+  {
+    "id": 12,
+    "topic": "v2 serializer接线",
+    "contract": "docs/P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md",
+    "oldRisk": "serializer写成未注册，混淆自身无SAF与整个流程未接线",
+    "decision": "AppContainer经生产ExportPort注入；保留serializer纯边界",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt"
+    ]
+  },
+  {
+    "id": 13,
+    "topic": "v2 Desktop/恢复状态",
+    "contract": "docs/P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md",
+    "oldRisk": "实际v2事务写成后续迁移；恢复章名仍尚未接入",
+    "decision": "各子owner已实现路径明确，真实picker未验边界不补造；旧锚点保留",
+    "evidence": [
+      "docs/P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md",
+      "docs/P6_ANDROID_V2_ATOMIC_RESTORE_CONTRACT.md"
+    ]
+  },
+  {
+    "id": 14,
+    "topic": "未知金额终态差异",
+    "contract": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+    "oldRisk": "把全部已结束状态写成同一未知占位",
+    "decision": "如实列Android COMPLETE/FAILED与Mac非生成分支，不改取消行为",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "desktop/src/chat-shell.mjs"
+    ]
+  },
+  {
+    "id": 15,
+    "topic": "隐含媒体外发",
+    "contract": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+    "oldRisk": "文字选择合同允许普通聊天自动GLM-OCR/Qwen转媒体",
+    "decision": "现有桥只本机转换或原选原生接口；其他明确拒绝/用户独立转写",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/UniversalChatAttachmentBridge.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ]
+  },
+  {
+    "id": 16,
+    "topic": "GLM阶段/目录复制",
+    "contract": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+    "oldRisk": "每次文本都max、固定某日菜单、复制单模型参数",
+    "decision": "内部检索/普通回答分开，参数归C12、目录归维护矩阵",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt"
+    ]
+  },
+  {
+    "id": 17,
+    "topic": "双端表面权威和维护定位",
+    "contract": "docs/CONTRACT_GOVERNANCE_CURRENT.md",
+    "oldRisk": "子合同多处只路由Android，新检索/费用/导出实际owner漏定位",
+    "decision": "双端UI分开路由；补11源码引用；逆向复核和9已查证回归哨兵",
+    "evidence": [
+      "protocol/contracts/contract-owner-map-v1.json",
+      "protocol/scripts/audit-contract-consistency.py"
+    ]
+  }
+]

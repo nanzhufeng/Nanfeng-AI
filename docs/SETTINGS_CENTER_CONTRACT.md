@@ -1,5 +1,10 @@
 # 南枫 AI Settings Center 历史与领域边界合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ Android设置界面 ](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI Settings Center 历史与领域边界合同
+<!-- contract-governance:end -->
+
 > **当前 Android 设置 UI 读取门（2026-08-26）：** 本文保留 Desktop Settings、Registry、导入路径及历史验收边界。Android 设置首页、二级至四级页面、文案、层级、皮肤、卡片、按钮、图标、弹窗和手势只读取 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)。本文及其关闭证据不得反向覆盖当前 Android UI。
 
 日期：2026-08-14  

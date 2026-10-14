@@ -1,5 +1,10 @@
 # 南枫 AI P0 Usage Ledger 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 当前调用计量与币种 ](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P0 Usage Ledger 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-15  
 状态：P0 独立安全内核与 Android Room / Desktop SQLite sidecar；未接入 UI、Compose、Provider、HTTP、Key、附件外发或 P3 Adapter 注册
 

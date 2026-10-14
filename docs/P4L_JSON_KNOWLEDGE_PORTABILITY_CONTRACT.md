@@ -1,5 +1,10 @@
 # 南枫 AI P4-L 版本化 JSON Knowledge Adapter 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 项目与Knowledge本地领域 ](P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-L 版本化 JSON Knowledge Adapter 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第十二个本地增量，已完成本地验收；Schema 14→15。仅支持 `nfai.knowledge.json` / `schemaVersion: 1`；不实现 JSONL、网页、PDF、Office、通用附件、语音、视频或 Provider payload 导入。
 
@@ -35,9 +40,11 @@
 ## Schema 与证据
 
 - 14→15 只追加 `json_knowledge_import_tasks`、`json_knowledge_import_items` 和索引；不 wipe、destructive migration 或改写 P1–P4-K/Markdown 队列。P4-I 仅增加版本、严格边界、红队、roundtrip、tamper、ID remap、私有复制重建与 `NO_EGRESS` 机械事实，不声称模型质量或成本。
-- 最低验收：严格 parser、重复 key/深度/大小/类型/未知版本、高敏/URI 路径排除、任务重建、确认/跳过/取消/重试、scope 降级、ID 冲突、原子导出/回读/hash/tamper/roundtrip、14→15 迁移及 P4-E–K 回归；再分别跑 Lint、正式签名 Debug/Release/v2-v3 证书及仅 `emulator-5554` DocumentsUI 可见链。不得操作 OPPO。
+- 最低验收：严格 parser、重复 key/深度/大小/类型/未知版本、高敏/URI 路径排除、任务重建、确认/跳过/取消/重试、scope 降级、ID 冲突、原子导出/回读/hash/tamper/roundtrip、14→15 迁移及 P4-E–K 回归；再分别跑 Lint、正式签名 Debug/Release/v2-v3 证书及仅 当次隔离模拟器 DocumentsUI 可见链。不得操作 OPPO。
 
-## 最终验证证据（2026-08-13）
+## 历史P4-L隔离DocumentsUI验证（2026-08-13）
+
+### 最终验证证据（2026-08-13）
 
 - API 35 `emulator-5554` 的真实 DocumentsUI 选择 `p4l-final-visible-chain.json`（严格 UTF-8、两项 `nfai.knowledge.json/v1` fixture）后，新私有任务显示 `AWAITING_CONFIRMATION`。在任务详情明确确认 `P4L Final Alpha`，再明确跳过 `P4L Final Beta`；界面回读 `COMPLETED / CONFIRMED / SKIPPED`。
 - force-stop 后以 `NanfengAiActivity` 冷启动（1.741s），重新打开 JSON 任务仍显示同一 `COMPLETED / Alpha CONFIRMED / Beta SKIPPED` 状态，证明从独立 Room 任务与私有副本恢复，不使用数据库注入或开发后门。

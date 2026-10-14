@@ -1,8 +1,13 @@
 # P6-D：macOS Tauri GUI 黑箱验收与 Desktop 交付收口合同
 
+<!-- contract-governance:start -->
+> **合同口径：历史阶段记录。** 领域入口：[ Mac会话与侧栏界面 ](DESKTOP_CHAT_FIRST_UI_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-D：macOS Tauri GUI 黑箱验收与 Desktop 交付收口合同
+<!-- contract-governance:end -->
+
 ## 状态、目标与范围
 
-P6-D 以已经存在的 P6-B/P6-C Rust-owned、app-private SQLite Desktop 为唯一事实源，完成 macOS 实际 Tauri `.app` 的黑箱验收、必要 Desktop 修复、最终 ad-hoc 开发包与本机交付说明。它不是 P6 或总项目终点，也不构成 Windows 交付、macOS Developer ID 签名或 notarization。
+P6-D 以已经存在的 P6-B/P6-C Rust-owned、app-private SQLite Desktop 为唯一事实源，完成该阶段macOS实际Tauri `.app` 的黑箱验收、必要Desktop修复及当时ad-hoc原型包交付说明；现行构建／签名／覆盖入口只读[合同治理](CONTRACT_GOVERNANCE_CURRENT.md#现行测试与交付入口)。它不是 P6 或总项目终点，也不构成 Windows 交付、macOS Developer ID 签名或 notarization。
 
 本阶段只可触及 Desktop 的窗口、前端呈现、Tauri typed command、现有 Rust SQLite owner、导入导出与非敏感本地交付资料。不得读取或写入 Key、Provider、Prompt、RunSpec、图片、真实费用、Android Room、Android 图标、OPPO、P7/P8、Hub、GitHub 或网络更新。
 
@@ -28,12 +33,12 @@ P6-D 以已经存在的 P6-B/P6-C Rust-owned、app-private SQLite Desktop 为唯
 ## 安全、恢复与更新边界
 
 - capability 仅保留 `core`、dialog 与已合同化的 typed commands；不增加 shell、process、http、updater、global filesystem 或远程页面。CSP 继续禁止 egress。
-- 应用内 About 至少展示版本、ad-hoc/未 notarized 状态、最低 macOS、仅安全摘要的本地数据位置，以及“更新状态：本地静态，未检查网络”。不得显示完整绝对路径、SQLite 文件名、Key 或诊断内容。
+- P6-D原型About分支展示版本、当时ad-hoc/未notarized文字、最低macOS、安全摘要数据位置及本地静态更新状态；旧展示文案不能证明当前已安装包的签名身份，当前包以实际验签与安装记录为准。不得显示完整绝对路径、SQLite 文件名、Key 或诊断内容。
 - 崩溃/关闭后重启恢复最近 workspace 与安全窗口布局；不丢已提交状态，也不自动重放未完成 intent。窗口恢复不替代 transaction/strict-preflight 验证。
 
 ## macOS 开发交付与 Windows 债务
 
-- 最终 macOS 记录精确 app/executable 路径、大小、SHA-256、ad-hoc 签名状态、最低系统、未 notarized 说明、app-private 数据位置说明及卸载与保留数据边界。不得发布或描述为正式签名交付。
+- 该阶段macOS原型记录app/executable路径、大小、SHA-256、ad-hoc状态、最低系统、未notarized说明及本机数据边界；这份原型证据不描述为现行正式签名交付。后续实际包身份、保数据覆盖与验收范围只读当前交付入口和动态交接，不要求沿用ad-hoc或默认迁移Developer ID。
 - Windows 必须在 Windows 本机另行验证 WebView2（在线/离线）、MSI/NSIS、签名、数据路径、系统 file picker、SQLite 锁/升级、缩放和 IME。本 macOS 不生成或伪装 Windows 包；可保留合同/CI 指引但不得宣称已验收。
 
 ## 自动门与退出判定

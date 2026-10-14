@@ -165,7 +165,7 @@ test('search, startup projections and preview reads never run blocking work on t
   ]) {
     const command = rustCommand(name);
     assert.match(command, new RegExp(`async fn ${name}`));
-    assert.match(command, /run_desktop_store(?:_paths)?_blocking/);
+    assert.match(command, /run_desktop_(?:store(?:_paths)?|preview_paths)_blocking/);
   }
   const localIndexQuery = rustCommand('query_desktop_local_index');
   assert.match(localIndexQuery, /run_desktop_store_paths_blocking/);
@@ -183,7 +183,7 @@ test('search, startup projections and preview reads never run blocking work on t
   }
   assert.match(rust, /async fn run_desktop_store_paths_blocking/);
   const imagePreview = rustCommand('read_desktop_image_preview');
-  assert.match(imagePreview, /run_desktop_store_paths_blocking/);
+  assert.match(imagePreview, /run_desktop_preview_paths_blocking/);
   assert.match(imagePreview, /read_desktop_image_preview_from_paths/);
   assert.doesNotMatch(imagePreview, /run_desktop_store_blocking\(/);
   const videoPreview = rustCommand('read_desktop_video_preview');

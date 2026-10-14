@@ -1,0 +1,112 @@
+{
+  "fixtures": [
+    {
+      "file": "public-01.txt",
+      "mime": "text/plain",
+      "claim": "Python 3.14.0 release date python.org",
+      "byteCount": 37
+    },
+    {
+      "file": "public-02.md",
+      "mime": "text/markdown",
+      "claim": "Python 3.13.0 release date python.org",
+      "byteCount": 37
+    },
+    {
+      "file": "public-03.json",
+      "mime": "application/json",
+      "claim": "Python 3.12.0 release date python.org",
+      "byteCount": 49
+    },
+    {
+      "file": "public-04.csv",
+      "mime": "text/csv",
+      "claim": "Python 3.11.0 release date python.org",
+      "byteCount": 37
+    },
+    {
+      "file": "public-05.xml",
+      "mime": "text/xml",
+      "claim": "Python 3.10.0 release date python.org",
+      "byteCount": 53
+    },
+    {
+      "file": "public-06.xml",
+      "mime": "application/xml",
+      "claim": "Python 3.9.0 release date python.org",
+      "byteCount": 62
+    },
+    {
+      "file": "public-07.yaml",
+      "mime": "application/x-yaml",
+      "claim": "Python 3.8.0 release date python.org",
+      "byteCount": 42
+    },
+    {
+      "file": "public-08.yml",
+      "mime": "text/yaml",
+      "claim": "Python 3.7.0 release date python.org",
+      "byteCount": 42
+    },
+    {
+      "file": "public-09.html",
+      "mime": "text/html",
+      "claim": "Rust 1.90.0 release date blog.rust-lang.org",
+      "byteCount": 76
+    },
+    {
+      "file": "public-10.docx",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "claim": "Rust 1.89.0 release date blog.rust-lang.org",
+      "byteCount": 504
+    },
+    {
+      "file": "public-11.xlsx",
+      "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "claim": "Rust 1.88.0 release date blog.rust-lang.org",
+      "byteCount": 538
+    },
+    {
+      "file": "public-12.pptx",
+      "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "claim": "Rust 1.87.0 release date blog.rust-lang.org",
+      "byteCount": 520
+    },
+    {
+      "file": "public-13.pdf",
+      "mime": "application/pdf",
+      "claim": "Rust 1.86.0 release date blog.rust-lang.org",
+      "byteCount": 618
+    },
+    {
+      "file": "public-14.zip",
+      "mime": "application/zip",
+      "claim": "Rust 1.85.0 release date blog.rust-lang.org",
+      "byteCount": 170
+    }
+  ],
+  "groups": [
+    [
+      0,
+      1,
+      2,
+      3
+    ],
+    [
+      4,
+      5,
+      6,
+      7
+    ],
+    [
+      8,
+      9,
+      10,
+      11
+    ],
+    [
+      12,
+      13
+    ]
+  ]
+}

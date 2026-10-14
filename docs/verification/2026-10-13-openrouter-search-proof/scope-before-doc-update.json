@@ -1,0 +1,62 @@
+[
+  {
+    "path": "docs/CURRENT_HANDOFF.md",
+    "changed": false,
+    "beforeSha256": "b564053f6e2b653d621a0a4efe155917c5afef53e0b4bea2e0acc5e67df1ddf4",
+    "afterSha256": "b564053f6e2b653d621a0a4efe155917c5afef53e0b4bea2e0acc5e67df1ddf4"
+  },
+  {
+    "path": "docs/PROJECT_STATUS.md",
+    "changed": false,
+    "beforeSha256": "9589c3db40050c8dee0be1613deaec1dbc44b2a7079f0823d62985693d84f2a1",
+    "afterSha256": "9589c3db40050c8dee0be1613deaec1dbc44b2a7079f0823d62985693d84f2a1"
+  },
+  {
+    "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "changed": false,
+    "beforeSha256": "71c70590ab31f75be8d593a2ca105e26aba033d1a6f25dbea50197fee52fd85a",
+    "afterSha256": "71c70590ab31f75be8d593a2ca105e26aba033d1a6f25dbea50197fee52fd85a"
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_web_search_v1.rs",
+    "changed": false,
+    "beforeSha256": "f6348d492dfd501a451892f3b4dd4b15b3f3757a516adb8ccf73ea8df211eaed",
+    "afterSha256": "f6348d492dfd501a451892f3b4dd4b15b3f3757a516adb8ccf73ea8df211eaed"
+  },
+  {
+    "path": "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+    "changed": false,
+    "beforeSha256": "09068c61e51e14eaa790ebb3705ed440a5834a319f50e7ae40f66fc0e37a2927",
+    "afterSha256": "09068c61e51e14eaa790ebb3705ed440a5834a319f50e7ae40f66fc0e37a2927"
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+    "changed": false,
+    "beforeSha256": "2ff8af9d5faee66ed84cf866cf12ae2e8d4c23b5c158cb4c208fd4f0ae8ff9fb",
+    "afterSha256": "2ff8af9d5faee66ed84cf866cf12ae2e8d4c23b5c158cb4c208fd4f0ae8ff9fb"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+    "changed": false,
+    "beforeSha256": "6d953214eca506f808aa2bc05a5ab005c5fa8b19919a50a63171792683b0304a",
+    "afterSha256": "6d953214eca506f808aa2bc05a5ab005c5fa8b19919a50a63171792683b0304a"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+    "changed": false,
+    "beforeSha256": "54d9740ad8060f54b0ef71f22381fa842ef34090e10226706777de3e4d5e86c2",
+    "afterSha256": "54d9740ad8060f54b0ef71f22381fa842ef34090e10226706777de3e4d5e86c2"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+    "changed": false,
+    "beforeSha256": "92b7cbeb6a32615402a4ed3a38131b354c29ec9705823bb23e57e560f9f3f86c",
+    "afterSha256": "92b7cbeb6a32615402a4ed3a38131b354c29ec9705823bb23e57e560f9f3f86c"
+  },
+  {
+    "path": "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt",
+    "changed": true,
+    "beforeSha256": "538e76184ee6c1e448ac5a29f9f49369e5ba66f0a464805ef9e1deaba7a982eb",
+    "afterSha256": "981ed2bc6dce3e5ea9286ab3493660e4f4e05e4ec580e2484db727b74cdcfdce"
+  }
+]

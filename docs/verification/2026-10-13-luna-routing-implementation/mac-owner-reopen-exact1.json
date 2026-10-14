@@ -1,0 +1,80 @@
+{
+  "actualModel": "claude-opus-5.5",
+  "covered": 2,
+  "files": "public-01.txt,public-13.pdf",
+  "ledgerCalls": [
+    {
+      "actual": "openai/gpt-6-luna",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 10592,
+      "model": "openai/gpt-6-luna",
+      "source": "PROVIDER_RESPONSE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "openai/gpt-6-luna",
+      "source": null
+    },
+    {
+      "actual": "claude-opus-5.5",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 2821,
+      "model": "claude-opus-5.5",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "claude-opus-5.5",
+      "source": null
+    }
+  ],
+  "physical": [
+    {
+      "input": 8661,
+      "nativeSources": [
+        [
+          "Python Release Python 3.14.0 | Python.org",
+          "https://www.python.org/downloads/release/python-3140/?utm_source=openai"
+        ],
+        [
+          "Announcing Rust 1.86.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/04/03/Rust-1.86.0/?utm_source=openai"
+        ]
+      ],
+      "output": 285,
+      "reportedMicros": 10592,
+      "requested": "openai/gpt-6-luna",
+      "returned": "openai/gpt-6-luna"
+    }
+  ],
+  "planned": 2,
+  "preset": "RELAYCORE_OPUS_5_5",
+  "publicAnswer": "两项附件中的发布日期均已通过官方来源核实，与附件所指事项一致。\n\n- Python 3.14.0：已核实，于 2025 年 10 月 7 日正式发布。\n  来源：https://www.python.org/downloads/release/python-3140/\n\n- Rust 1.86.0：已核实，于 2025 年 4 月 3 日正式发布。\n  来源：https://blog.rust-lang.org/2025/04/03/Rust-1.86.0/\n\n附件本身只列出了核验主题，没有给出具体日期或其他数字主张，所以不存在与官方资料矛盾的内容。\n\n来源：- [Announcing Rust 1.86.0 | Rust Blog](https://blog.rust-lang.org/2025/04/03/Rust-1.86.0/)\n- [Python Release Python 3.14.0 | Python.org](https://www.python.org/downloads/release/python-3140/)",
+  "reopenedCheckpoints": 2,
+  "reopenedMessageExact": false,
+  "reopenedModel": "claude-opus-5.5",
+  "reopenedSourcesPresent": true,
+  "reopenedState": "COMPLETED",
+  "reopenedWebProof": true,
+  "requested": "claude-opus-5.5",
+  "sources": [
+    [
+      "Python Release Python 3.14.0 | Python.org",
+      "https://www.python.org/downloads/release/python-3140/"
+    ],
+    [
+      "Announcing Rust 1.86.0 | Rust Blog",
+      "https://blog.rust-lang.org/2025/04/03/Rust-1.86.0/"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

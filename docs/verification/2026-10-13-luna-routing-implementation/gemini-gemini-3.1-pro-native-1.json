@@ -1,0 +1,16 @@
+{
+  "runId": "gemini-gemini-3.1-pro-native-1",
+  "model": "gemini-3.1-pro",
+  "kind": "native",
+  "status": "FAILED",
+  "http": 404,
+  "responseKeys": [
+    "error"
+  ],
+  "errorCode": 404,
+  "errorStatus": "NOT_FOUND",
+  "reasonFields": [
+    "not found"
+  ],
+  "seconds": 6.651
+}

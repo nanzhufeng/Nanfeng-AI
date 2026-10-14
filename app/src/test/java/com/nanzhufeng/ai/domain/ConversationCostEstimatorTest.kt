@@ -7,6 +7,22 @@ import org.junit.Test
 import java.time.Instant
 
 class ConversationCostEstimatorTest {
+    @Test fun `current Beijing Qwen price is native CNY on both sides`() {
+        val at=Instant.parse("2026-10-10T00:00:00Z")
+        val plus=requireNotNull(ConversationCostEstimator.estimate("qwen3.7-plus",ProviderUsage(1_000_000,1_000_000),at))
+        assertEquals("CNY",plus.currencyCode)
+        assertEquals(30_000_000L,plus.totalMicros)
+        val flash=requireNotNull(ConversationCostEstimator.estimate("qwen3.6-flash",ProviderUsage(100_000,100_000),at))
+        assertEquals("CNY",flash.currencyCode)
+        assertEquals(840_000L,flash.totalMicros)
+    }
+
+    @Test fun `Relay selected model token cost has a verified estimate`() {
+        val estimate=requireNotNull(ConversationCostEstimator.estimate("claude-sonnet-5-5",ProviderUsage(1_000,100, cachedInputTokens=500),Instant.parse("2026-10-10T00:00:00Z")))
+        assertEquals("CNY",estimate.currencyCode)
+        assertEquals(735L,estimate.totalMicros)
+    }
+
     @Test fun `Flash current prices include weekday peaks and weekend cache discount`() {
         val usage = ProviderUsage(inputTokens = 1_000_000, outputTokens = 1_000_000, cachedInputTokens = 400_000)
         val peak = requireNotNull(ConversationCostEstimator.estimate("deepseek-flash", usage, Instant.parse("2026-09-10T01:00:00Z")))
@@ -69,7 +85,7 @@ class ConversationCostEstimatorTest {
     }
 
     @Test fun `qwen plus uses the published lower input tier for the reported screenshot tokens`() {
-        val estimate = requireNotNull(ConversationCostEstimator.estimate("qwen3.7-plus", ProviderUsage(1_443, 2_405)))
+        val estimate = requireNotNull(ConversationCostEstimator.estimate("qwen3.7-plus", ProviderUsage(1_443, 2_405),Instant.parse("2026-08-29T00:00:00Z")))
 
         assertEquals(ConversationCostEstimator.QWEN_PRICE_VERSION, estimate.priceVersion)
         assertEquals(3_046L, estimate.totalMicros)
@@ -79,6 +95,7 @@ class ConversationCostEstimatorTest {
         val estimate = requireNotNull(ConversationCostEstimator.estimate(
             "qwen3.8-max",
             ProviderUsage(inputTokens = 83_273, outputTokens = 17_242, cachedInputTokens = 0),
+            Instant.parse("2026-08-29T00:00:00Z"),
         ))
 
         assertEquals(ConversationCostEstimator.QWEN_PRICE_VERSION, estimate.priceVersion)
@@ -101,7 +118,7 @@ class ConversationCostEstimatorTest {
         val peak = requireNotNull(ConversationCostEstimator.estimate(
             "deepseek-v4-pro",
             ProviderUsage(inputTokens = 1_000_000, outputTokens = 0, cachedInputTokens = 400_000),
-            Instant.parse("2026-08-30T06:00:00Z"),
+            Instant.parse("2026-08-31T06:00:00Z"),
         ))
 
         assertEquals(ConversationCostEstimator.DEEPSEEK_PEAK_PRICE_VERSION, peak.priceVersion)

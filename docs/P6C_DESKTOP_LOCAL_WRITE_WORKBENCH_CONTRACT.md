@@ -1,5 +1,10 @@
 # P6-C：Desktop 本地领域写入、可逆动作与模型/成本 metadata 工作台合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v2字段与原子恢复 ](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-C：Desktop 本地领域写入、可逆动作与模型/成本 metadata 工作台合同
+<!-- contract-governance:end -->
+
 ## 状态与目标
 
 P6-C 在 P6-B 的 Rust-owned app-private SQLite 基础上，建立 Desktop 本地领域的明确写入链；它不是 P6 或项目终点。唯一写入入口是 `DesktopWorkspaceStore` 的 typed Tauri command → domain/repository → SQLite transaction。前端只提交结构化 intent，绝不拼 SQL、改 exchange JSON、写本地文件或保留仅内存的业务状态。
@@ -56,4 +61,4 @@ P6-C 在 P6-B 的 Rust-owned app-private SQLite 基础上，建立 Desktop 本�
 - Rust：migration/reopen、Domain CRUD、revision conflict、idempotency、ledger undo/redo、rollback、scope/relation、soft delete/restore、导出 roundtrip 与 malicious input。
 - 前端：state/forms、保存/取消、快捷键、冲突与回收站、metadata、compact/2.0x 和纯白 selection surface；typecheck/lint/test/build。
 - 跨端：Node golden 与 Android `P6AExchangeContractsTest` 定向 preflight。没有 Android write import、协议升级或无关 Android 版本变更。
-- macOS：在新专用 workspace 完成写入→edit→undo/redo→soft delete/restore→重启→export→Node/Android preflight；生成 ad-hoc 开发包/hash/大小/启动证据。macOS Developer ID/notarization 与全部 Windows 交付继续是债务。
+- macOS：在新专用 workspace 完成写入→edit→undo/redo→soft delete/restore→重启→export→Node/Android preflight；记录按当前交付入口验签的隔离app/hash/大小/启动证据。Windows仍需独立真实验收；Developer ID/notarization未实施，不作为既有Apple Development开发交付的前置。

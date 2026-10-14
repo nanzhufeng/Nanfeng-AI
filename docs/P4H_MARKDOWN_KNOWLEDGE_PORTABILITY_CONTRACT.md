@@ -1,5 +1,10 @@
 # 南枫 AI P4-H 本地 Markdown Knowledge 导入/导出与可恢复队列合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 项目与Knowledge本地领域 ](P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-H 本地 Markdown Knowledge 导入/导出与可恢复队列合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第八个本地增量；Schema 12→13。仅支持 UTF-8 `.md` / `.markdown`，不实现 JSON、PDF、Office、网页、语音、视频、通用文件问答、embedding 或网络能力。
 
@@ -27,4 +32,4 @@
 ## Schema 与验证
 
 - 12→13 仅追加 `markdown_import_tasks`、`markdown_import_items` 及索引；不 wipe、不 destructive migration、不改写 P1–P4-G 或正式附件，且没有自动清理正式附件的 GC。
-- 定向合同覆盖 BOM/换行、多项、代码块、Markdown 惰性正文、空白/畸形/高敏/大小、确认/跳过/取消/重建、私有 URI/路径排除、12→13 旧表保留，以及导出筛选/roundtrip。后续仍须独立完成全量测试、Lint、签名构建、仅 emulator-5554 的真实系统选择器链与真正导出范围 UI 验收。
+- 定向合同覆盖 BOM/换行、多项、代码块、Markdown 惰性正文、空白/畸形/高敏/大小、确认/跳过/取消/重建、私有 URI/路径排除、12→13 旧表保留，以及导出筛选/roundtrip。后续仍须独立完成全量测试、Lint、签名构建、仅 当次隔离模拟器 的真实系统选择器链与真正导出范围 UI 验收。

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -73,7 +74,7 @@ internal fun DualPathConnectionCard(state: DualPathConnectionUiState, onOpen: ()
         color = SecondaryText, style = MaterialTheme.typography.bodySmall,
     )
     Spacer(Modifier.height(12.dp))
-    OutlinedButton(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text("查看双路径状态") }
+    OutlinedButton(onClick = onOpen, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)) { Text("查看双路径状态") }
 }
 
 @Composable

@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-10-13T13:20:56.022756+08:00",
+  "frozenFiles": 867,
+  "changedExpectedDocs": [],
+  "unexpectedChanges": [],
+  "missingFrozen": [],
+  "brokenCurrentLinks": [],
+  "models": 19,
+  "missingModelRows": [],
+  "diffCheckExit": 0,
+  "diffCheckOutput": "",
+  "businessTests": "NOT RUN - documentation-only",
+  "newPaidCalls": 0,
+  "installations": 0,
+  "memoryChanged": false,
+  "workflowAudit": {
+    "hardErrors": false,
+    "existingSoftWarning": "Global AGENTS exceeds soft limit; existing eight GSAP skills lack UI metadata. Outside this handoff scope; unchanged."
+  }
+}

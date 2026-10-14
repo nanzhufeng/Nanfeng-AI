@@ -15,6 +15,10 @@ data class P6GGlobalDefault(
 ) { init { require(revision >= 0) } }
 data class P6GConversationOverride(val conversationId: ConversationId, val revision: Long, val modelId: String?) { init { require(revision >= 0) } }
 
+/** A recorded Auto choice is a choice, so another conversation cannot replace it. */
+fun effectiveComposerModelId(override: P6GConversationOverride?, global: P6GGlobalDefault): String? =
+    if (override != null && override.revision > 0) override.modelId else override?.modelId ?: global.modelId
+
 data class P6GRouteMetadata(
     val conversationId: ConversationId,
     val policyVersion: Int,
@@ -93,6 +97,7 @@ class P6GModelSelectionOwner(private val store: P6GModelSelectionStore, private 
     fun replaceCatalog(value: P6GLocalCatalogSnapshot): P6GSelectionMutationResult =
         if (store.saveCatalog(value)) P6GSelectionMutationResult.Applied(0) else P6GSelectionMutationResult.PersistenceFailed
 
+    @Synchronized
     fun setGlobalDefault(tier: P6GModelTier?, expectedRevision: Long): P6GSelectionMutationResult {
         val current = store.readGlobalDefault()
         if (current.revision != expectedRevision) return P6GSelectionMutationResult.Conflict
@@ -100,6 +105,7 @@ class P6GModelSelectionOwner(private val store: P6GModelSelectionStore, private 
         return if (store.saveGlobalDefault(next)) P6GSelectionMutationResult.Applied(next.revision) else P6GSelectionMutationResult.PersistenceFailed
     }
 
+    @Synchronized
     fun setConversationManualOverride(conversationId: ConversationId, modelId: String?, expectedRevision: Long): P6GSelectionMutationResult {
         val current = store.readConversationOverride(conversationId)
         if (current.revision != expectedRevision) return P6GSelectionMutationResult.Conflict
@@ -112,6 +118,7 @@ class P6GModelSelectionOwner(private val store: P6GModelSelectionStore, private 
      * One user pick has two durable meanings: it fixes the current conversation and becomes the
      * default for the next one. Android persists both values in one preferences commit.
      */
+    @Synchronized
     fun setComposerModelSelection(
         conversationId: ConversationId,
         modelId: String?,
@@ -135,13 +142,24 @@ class P6GModelSelectionOwner(private val store: P6GModelSelectionStore, private 
         }
     }
 
+    /** Freeze the next-conversation default once; reopening a draft never overwrites a choice. */
+    @Synchronized
+    fun initializeConversationModel(conversationId: ConversationId): P6GSelectionMutationResult {
+        val current = store.readConversationOverride(conversationId)
+        if (current.revision > 0 || current.modelId != null) return P6GSelectionMutationResult.Applied(current.revision)
+        val next = current.copy(revision = 1, modelId = store.readGlobalDefault().modelId)
+        // Retired/unavailable choices remain exact identities; sending validates availability.
+        return if (store.saveConversationOverride(next)) P6GSelectionMutationResult.Applied(next.revision)
+        else P6GSelectionMutationResult.PersistenceFailed
+    }
+
     fun evaluate(conversationId: ConversationId, request: P6GRouteRequest): P6GRouteDecision {
         val catalog = store.readCatalog()
         val override = store.readConversationOverride(conversationId)
         val global = store.readGlobalDefault()
         val effective = request.copy(
             tier = global.tier ?: request.tier,
-            manualModelId = override.modelId ?: global.modelId ?: request.manualModelId,
+            manualModelId = if (override.revision > 0) override.modelId else effectiveComposerModelId(override, global) ?: request.manualModelId,
         )
         val decision = router.route(effective, catalog.candidates)
         store.appendRouteMetadata(P6GRouteMetadata(conversationId, catalog.policyVersion, catalog.catalogVersion, effective.tier, decision.source, decision.reason, decision.candidate?.modelId, decision.candidate?.displayName, decision.rejectedCandidates))

@@ -107,6 +107,7 @@ pub fn extract(bytes: &[u8]) -> Result<String, String> {
         if item.enclosed_name().is_none() {
             return Err("DOCX 包含不安全路径".into());
         }
+        if item.is_dir() && item.size()!=0 {return Err("DOCX 目录条目含异常内容".into());}
         let name = item.name();
         if name == "word/document.xml"
             || (name.starts_with("word/header") || name.starts_with("word/footer"))
@@ -138,6 +139,9 @@ pub fn extract(bytes: &[u8]) -> Result<String, String> {
                 }
                 Event::Text(e) if in_text => {
                     output.push_str(&e.unescape().map_err(|_| "DOCX 文本编码无效")?)
+                }
+                Event::CData(e) if in_text => {
+                    output.push_str(std::str::from_utf8(e.as_ref()).map_err(|_| "DOCX 文本编码无效")?)
                 }
                 Event::End(e) => {
                     if e.local_name().as_ref() == b"p" {

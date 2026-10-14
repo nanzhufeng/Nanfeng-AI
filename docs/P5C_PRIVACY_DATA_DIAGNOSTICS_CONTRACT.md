@@ -1,5 +1,10 @@
 # 南枫 AI P5-C 隐私、数据管理与安全诊断合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 隐私／诊断领域 ](P5C_PRIVACY_DATA_DIAGNOSTICS_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P5-C 隐私、数据管理与安全诊断合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P5 的第三个独立增量；不是 P5 或项目终点。Schema 保持 17。
 

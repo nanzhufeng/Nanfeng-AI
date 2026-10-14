@@ -10,6 +10,7 @@ class AssistantFooterCostDisplayTest {
         assertEquals("¥0.0350", assistantFooterCostDisplay("约 ¥0.035013"))
         assertEquals("¥0.0003", assistantFooterCostDisplay("≈ ¥0.000336（估算）"))
         assertEquals("¥0.0000", assistantFooterCostDisplay("¥0.00"))
+        assertEquals("¥1.1720 + 未知", assistantFooterCostDisplay("¥1.172031 + 未知"))
         assertEquals("¥0.0205 / ¥0.0350", assistantFooterCostDisplay("≈ ¥0.020470（估算） / 约 ¥0.035013"))
     }
 }

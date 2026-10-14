@@ -1,3 +1,4 @@
+import { renderConfiguredChatShell as renderChatFirstShell } from './helpers/enabled-model-catalog.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -25,7 +26,7 @@ test('DeepSeek pricing uses UTC weekdays and sleeps across the weekend', () => {
 
 test('cached composer metadata upgrades its display and stable choice without rewriting history', () => {
   const legacy = {modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', providerId: 'DEEPSEEK'};
-  const [current] = desktopComposerModelCandidates([], [legacy]);
+  const [current] = desktopComposerModelCandidates([], [legacy], true);
   assert.equal(current.modelId, 'DEEPSEEK_V4_FLASH');
   assert.equal(current.displayName, 'DeepSeek V4.1 Flash');
   assert.equal(legacy.displayName, 'DeepSeek V4 Flash');

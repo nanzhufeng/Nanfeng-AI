@@ -1,5 +1,10 @@
 # P8-D 本地退出与红队审计合同
 
+<!-- contract-governance:start -->
+> **合同口径：本地实验／独立专项合同。** 领域入口：[ 本地受控Agent实验 ](P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P8-D 本地退出与红队审计合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P8 的本地退出审计；不授权真实 Provider、外部工具、文件、跨应用、高风险动作、OPPO、Windows 或发布。
 
@@ -32,4 +37,4 @@ P8-D 不新增 Agent 能力。`ControlledAgentRuntime → AgentLedger` 仍是 An
 
 `P8CProductionLocalAgentController.cancel()` 必须同步废弃同一 Run 的 memory-only approval。取消、过期或重建后不得写入 `PLAN_APPROVED`、Step 或 Receipt；只有新建 plan 后才可再次明确确认。
 
-退出前必须分别记录 Android 定向/全量 JVM、lint、正式 Debug/Release 签名、`emulator-5554` 的同签名覆盖与 base.apk hash；Desktop 的 frontend/Rust/Tauri/ad-hoc verify 与实际 `.app` 只读 inspect。P8-D 只在矩阵逐项成立后声明“P8 本地主体退出”；真实外部工具、Provider 和高风险动作继续为未来授权门。
+退出前必须分别记录 Android 定向/全量 JVM、lint、正式 Debug/Release 签名、当次隔离模拟器的同签名覆盖与 base.apk hash；Desktop的frontend/Rust/Tauri与当前交付入口的验签 与实际 `.app` 只读 inspect。P8-D 只在矩阵逐项成立后声明“P8 本地主体退出”；真实外部工具、Provider 和高风险动作继续为未来授权门。

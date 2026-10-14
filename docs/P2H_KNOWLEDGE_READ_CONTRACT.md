@@ -1,5 +1,10 @@
 # 南枫 AI P2-H 最小 Knowledge 读取合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 普通发送授权与执行 ](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P2-H 最小 Knowledge 读取合同
+<!-- contract-governance:end -->
+
 日期：2026-08-12  
 状态：本地 Knowledge 列表/详情闭环；不包含搜索、图谱、编辑管理、真实导出或真实服务
 

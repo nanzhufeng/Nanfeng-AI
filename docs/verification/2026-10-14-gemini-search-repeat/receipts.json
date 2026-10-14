@@ -1,0 +1,105 @@
+{
+  "verifiedAt": "2026-10-14 09:25:10 +0800",
+  "scope": "WORKTREE",
+  "android": {
+    "fullTests": 1494,
+    "skipped": 10,
+    "scopedPassed": 70,
+    "nativeSourceCount": 7,
+    "finish": "stop",
+    "actualModel": "google/gemini-3.8-flash",
+    "reportedUsdMicros": 33061,
+    "footerCostLabel": "¥0.22218",
+    "reopenNetworkCalls": 0,
+    "answerAndAccountingPreserved": true,
+    "isolatedInstall": {
+      "install": "Success",
+      "serial": "emulator-5592",
+      "package": "com.nanzhufeng.ai.publicmodelacceptance",
+      "uid": "10210",
+      "apkSha256": "22f13032ea3dda2dd240ad2df85426ef074a462bf0f268dbf93a3ed1a9ac6b3a"
+    },
+    "formalInstalledThisFix": false,
+    "formalDelivery": "User confirmed temporarily unavailable; subsequently said do not install",
+    "frozenCandidate": {
+      "apk": "/tmp/nanfeng-gemini-search-repeat-20261014/formal/Nanfeng-AI-1.0.29-Gemini-native.apk",
+      "sha256": "924c797b8e023c3f1c396867cf85fa48bb3c5fc370b95a9b171e5603128102c7",
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "versionCode": 93,
+      "versionName": "1.0.29",
+      "debuggable": false,
+      "bytes": 28688830,
+      "verifiedByPrecheckBeforeDeviceDisconnection": true,
+      "buildOutputApk": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/app/build/outputs/apk/release/南枫AI.apk"
+    }
+  },
+  "mac": {
+    "fullTests": 442,
+    "ignored": 34,
+    "nativeSourceCount": 5,
+    "actualModel": "google/gemini-3.8-flash",
+    "status": "COMPLETED",
+    "reopenedState": "COMPLETED",
+    "reopenedWebProof": true,
+    "reopenedMessageExact": true,
+    "reopenedAccountingExact": true,
+    "reportedUsdMicros": 32051,
+    "formalInstall": {
+      "installed": true,
+      "app": "/Applications/南枫 AI Desktop.app",
+      "backup": "/Applications/.Nanfeng-AI-before-cover-20261014-ed48d7b58791.app",
+      "version": "1.0.29",
+      "bundleId": "com.nanzhufeng.ai.desktop",
+      "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+      "exactCandidateFiles": true,
+      "dataFiles": 1595,
+      "dataBytes": 6069511187,
+      "dataChanges": {
+        "added": 0,
+        "deleted": 0,
+        "changed": 0
+      },
+      "launched": false,
+      "completedAt": "2026-10-14 09:18:52 +0800"
+    },
+    "candidate": {
+      "app": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/desktop/src-tauri/target/release/bundle/macos/南枫 AI Desktop.app",
+      "dmg": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/desktop/src-tauri/target/release/bundle/dmg/Nanfeng-AI-macOS-1.0.29.dmg",
+      "version": "1.0.29",
+      "identifier": "com.nanzhufeng.ai.desktop",
+      "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+      "dmgSha256": "2b3e9561130db5cf025b3e61e5fc3f6a865a2b9f9475569fd92756b718f7657b",
+      "fileCount": 4,
+      "strictSignValid": true,
+      "dmgVerified": true
+    }
+  },
+  "tests": {
+    "modelToolTests": 16,
+    "contractToolTests": 15,
+    "contracts": 114,
+    "domains": 40,
+    "chatModels": 20,
+    "specialModels": 1,
+    "androidLintRelease": "PASS",
+    "androidRelease": "PASS",
+    "macRelease": "PASS",
+    "frontendFullNodeReused": {
+      "passed": 551,
+      "skipped": 12,
+      "unchangedOwners": 86
+    }
+  },
+  "economics": {
+    "physicalProviderRequests": 5,
+    "quantifiedReceipts": 3,
+    "knownUsd": "0.09673375",
+    "knownCnyReferenceAt6_72": "0.6500508",
+    "twoInitialOutputLimitFees": "UNKNOWN; not zero; not automatically retried",
+    "additionalProviderCallsStopped": true
+  },
+  "protectedSourceFiles": 1145,
+  "sourceDrift": false,
+  "physicalDeviceUiNotRun": true,
+  "newMultiFileAndMediaLiveNotRun": true
+}

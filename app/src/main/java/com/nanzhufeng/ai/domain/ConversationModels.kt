@@ -518,6 +518,7 @@ sealed interface ConversationMutationResult {
 class CreateConversationUseCase(
     private val treeService: ConversationTreeService,
     private val repository: ConversationRepository,
+    private val initializeModel: (ConversationId) -> Unit = {},
 ) {
     /** Resume only an unsent draft owned by this exact surface and project. */
     fun resumeOrCreateDraft(
@@ -528,12 +529,13 @@ class CreateConversationUseCase(
             ?: repository.listActive().filter { it.surface == surface }
         val reusable = conversations.asSequence()
             .filter { it.surface == surface && it.projectId == projectId }
+            .filter(NewConversationDraftPolicy::isCandidate)
             .mapNotNull { repository.findById(it.id) }
             .filter(NewConversationDraftPolicy::isUnsentNew)
             .sortedWith(compareByDescending<ConversationSnapshot> { it.draft.text.isNotEmpty() }
                 .thenByDescending { it.draft.updatedAt })
             .firstOrNull()
-        reusable?.let { ConversationMutationResult.Saved(it) }
+        reusable?.let { initializeModel(it.conversation.id); ConversationMutationResult.Saved(it) }
             ?: execute(projectId = projectId, surface = surface)
     }.getOrElse { ConversationMutationResult.Rejected("新对话草稿未能读取，请重试。") }
 
@@ -542,7 +544,9 @@ class CreateConversationUseCase(
         projectId: String? = null,
         surface: ConversationSurface = ConversationSurface.CHAT,
     ): ConversationMutationResult = runCatching {
-        ConversationMutationResult.Saved(repository.save(treeService.create(title, projectId, autoTitlePending = true, surface = surface)))
+        val saved = repository.save(treeService.create(title, projectId, autoTitlePending = true, surface = surface))
+        initializeModel(saved.conversation.id)
+        ConversationMutationResult.Saved(saved)
     }.getOrElse { ConversationMutationResult.Rejected("会话创建未完成，本地数据没有被报告为成功。") }
 }
 

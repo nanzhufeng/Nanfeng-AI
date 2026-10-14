@@ -1,15 +1,28 @@
 # P6-D 双端侧栏生产信息架构增量合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ Mac会话与侧栏界面 ](DESKTOP_CHAT_FIRST_UI_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-D 双端侧栏生产信息架构增量合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：已授权实现；仅限 app-private 隔离 workspace 验收
 
-## 唯一目标
+## 当前适用边界
+
+本文件保留侧栏对象状态、排序、typed mutation与事务读回；可见信息架构以[Desktop会话合同](DESKTOP_CHAT_FIRST_UI_CONTRACT.md)和[Android会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)为准。WORK数据继续隔离，当前聊天产品隐藏WORK可见入口；下方旧模式入口矩阵只解释当时侧栏实现，不要求恢复被隐藏入口。
+
+## 历史P6-D原侧栏设计（不恢复当前隐藏入口）
+
+### 唯一目标
 
 在既有 Desktop chat-first shell 和 Android Compose 对话工作区内，让“对话”和“工作”两种模式共享同一信息架构：顶部功能、置顶会话、内容列表。Conversation 的置顶、取消置顶、归档与恢复必须经各平台 Domain owner 的 typed command 事务持久化，并在重新打开同一隔离 workspace／Activity 后由真实投影读回。
 
 这不是 P6-D 既有长列表/窗口恢复合同的返工，也不是 Provider、同步、跨应用、OPPO、Windows、图标或发布任务；Android 是本轮同步交付对象，不能以“后续规划”替代。
 
-## 概念所有者与入口矩阵
+### 历史模式入口矩阵
+
+#### 概念所有者与入口矩阵
 
 | 入口或消费者 | 是否存在 | 本轮关系 | 唯一所有者/公开路径 | 最小验证 |
 | --- | --- | --- | --- | --- |
@@ -59,7 +72,7 @@
 - Android 会话重命名是无标题的紧凑单字段 Dialog，不得回退为通用 `AlertDialog` 的大块 title/body 留白。Dialog 必须左对齐抽屉侧，最大 `336dp`、左右各 `12dp` 留边，不能按整个屏幕宽度计算而越出 Drawer；输入面固定 `48dp`，操作行固定 `44dp`，仅保留“会话标题”、取消、保存。标签只装饰边框、不占用编辑高度；横向接近抽屉可用宽度，纵向比旧默认 Dialog 压缩约三分之一。命名校验、取消与 `ConversationManagementAction.RENAME` owner 不变。
 - **工作模式菜单独立**：至少保留置顶/取消置顶、重命名、添加/移动/移出项目、归档/恢复和可恢复删除；不实现 Finder、目录、深度链接等非南枫能力。
 - “添加到项目”打开项目选择层而非自由文本；空项目明确空态、当前项目明确标示、跨项目为移动、取消不变更；项目有效性与 Conversation revision 由 Domain owner 原子检查。
-- Composer 左侧固定“＋”在对话与工作模式位置/语义相同，不能替代发送或模型选择。当前能力矩阵：Android `PickVisualMedia(ImageOnly) → AndroidGallerySelectionReader → app-private copy → Room draft attachment → 移除/重建读回` 为可用；Desktop 当前只存在交换包系统选择器，未注册 Conversation 附件 private-copy owner，故“＋”popover 只能诚实显示无可执行附件动作。相机（Android）、文件选择（Conversation）、插件、语音和深度思考均未注册，不显示假可点击项；后续 attachment action registry 必须双端同步立项。
+- Composer左侧“＋”继续由既有action registry和草稿owner持有，不替代发送或模型选择。Android相机／图片／文件经现有系统选择与私有附件导入；Desktop经原生对话附件导入与private-copy owner回读。真实格式、容量、失败和取消只遵从[P6-D2](P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md)，不能再把Desktop说成只有交换包选择器。未注册的插件／语音等入口仍不能伪造可用。
 
 ## 跨端信息架构不变量（本轮双端验收）
 
@@ -68,7 +81,9 @@
 - 仅容器按平台适配：Desktop 采用常驻/可折叠 rail、窄屏 drawer 与 hover/focus 行操作；Android 采用 drawer、分层页面和 trailing action。Android 不得机械压缩 Desktop 宽屏，也不得遗漏对应入口。
 - 两端共享 `pinned/archived/revision/expectedRevision/undo` 语义、排序与状态命名；Desktop Rust SQLite 与 Android Room 分别是各自平台的唯一 owner。UI 不直接写库。
 
-## 自动与真实验收
+## 历史验收方案
+
+### 自动与真实验收
 
 1. Node 合同覆盖三段渲染、排序、归档过滤、hover/focus 操作槽、宽屏 rail 与窄屏 drawer 边界。
 2. Rust 单元测试覆盖 `setPinned/archive/restore` 的 expected revision、归档清置顶、重放/重开 SQLite 投影与消息不变。
@@ -78,6 +93,6 @@
 6. Android 实际 Compose drawer 以“模式功能区 → 置顶区 → 会话或项目内容区”呈现；触控操作置顶/取消置顶、归档/恢复，force-stop/relaunch 后从 Room 读回。
 7. Desktop `.app` 右键菜单与 Android `emulator-5554` 长按 sheet 覆盖菜单差异、取消、重命名、项目选择、置顶、软删除/恢复及重启读回；Composer “＋”的 Esc/返回/点外取消不得丢失文本或已有草稿附件。
 
-## 停止条件
+### 停止条件
 
 达到上述双端本地合同即停止。不得将本轮说成真实模型调用、同步、正式 macOS 发布、Windows/OPPO 验收或总蓝图完成。

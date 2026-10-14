@@ -1,0 +1,169 @@
+{
+  "sourceRun": "android-muse-sol-astra-service-010",
+  "probes": [
+    {
+      "preset": "MUSE_WONDER",
+      "result": "Failed(code=AUTHENTICATION)",
+      "elapsedMs": 1560,
+      "webProof": null,
+      "httpStatus": 403,
+      "actualModel": null,
+      "sourceCount": 0,
+      "wire": {
+        "maxTokens": 943718,
+        "toolsPresent": true,
+        "toolsCount": 1,
+        "tools": [
+          {
+            "type": "openrouter:web_search",
+            "keys": [
+              "type",
+              "parameters"
+            ]
+          }
+        ],
+        "choiceKind": "absent",
+        "input": [],
+        "routingKeyPresent": false,
+        "stream": false
+      },
+      "footerCostLabel": null,
+      "costSource": null
+    },
+    {
+      "preset": "RELAYCORE_GPT_6_1_SOL",
+      "result": "Sent",
+      "elapsedMs": 15721,
+      "webProof": true,
+      "httpStatus": 200,
+      "actualModel": "gpt-6.1-sol",
+      "sourceCount": 24,
+      "wire": {
+        "effort": "low",
+        "toolsPresent": true,
+        "toolsCount": 1,
+        "tools": [
+          {
+            "type": "web_search",
+            "keys": [
+              "type",
+              "external_web_access",
+              "search_context_size"
+            ],
+            "externalWebAccess": true,
+            "searchContextSize": "low"
+          }
+        ],
+        "choiceKind": "string",
+        "choiceValue": "required",
+        "input": [
+          {
+            "role": "developer",
+            "partTypes": [
+              "input_text"
+            ]
+          },
+          {
+            "role": "user",
+            "partTypes": [
+              "input_text"
+            ]
+          }
+        ],
+        "routingKeyPresent": true,
+        "routingKeyFingerprint": "a954d51fe76ab433b0c3f41198d76bba728b1151a03b828f0c68c65d8ab2758d",
+        "stream": true,
+        "store": false
+      },
+      "footerCostLabel": "¥0.003718",
+      "costSource": "LOCAL_ESTIMATE"
+    },
+    {
+      "preset": "RELAYCORE_GPT_6_ASTRA",
+      "result": "Sent",
+      "elapsedMs": 19868,
+      "webProof": true,
+      "httpStatus": 200,
+      "actualModel": "gpt-6-astra",
+      "sourceCount": 24,
+      "wire": {
+        "effort": "low",
+        "toolsPresent": true,
+        "toolsCount": 1,
+        "tools": [
+          {
+            "type": "web_search",
+            "keys": [
+              "type",
+              "external_web_access",
+              "search_context_size"
+            ],
+            "externalWebAccess": true,
+            "searchContextSize": "low"
+          }
+        ],
+        "choiceKind": "string",
+        "choiceValue": "required",
+        "input": [
+          {
+            "role": "developer",
+            "partTypes": [
+              "input_text"
+            ]
+          },
+          {
+            "role": "user",
+            "partTypes": [
+              "input_text"
+            ]
+          }
+        ],
+        "routingKeyPresent": true,
+        "routingKeyFingerprint": "3d196da8bbec1507c816ebed5916d43b37fad6bbdd8e47ee8344276ded784038",
+        "stream": true,
+        "store": false
+      },
+      "footerCostLabel": "¥0.018871",
+      "costSource": "LOCAL_ESTIMATE"
+    }
+  ],
+  "museModelDirectoryReadback": {
+    "facts": [
+      {
+        "errorWordFlags": [],
+        "httpStatus": 200,
+        "modelCount": 461,
+        "museContextLength": 1048576,
+        "musePresent": true,
+        "scope": "PUBLIC_MODELS"
+      },
+      {
+        "errorWordFlags": [],
+        "httpStatus": 200,
+        "modelCount": 458,
+        "museContextLength": 1048576,
+        "musePresent": true,
+        "scope": "CURRENT_KEY_ALLOWED_MODELS"
+      }
+    ],
+    "mutationCount": 0,
+    "paidInferenceCount": 0,
+    "requestCount": 2,
+    "state": "READBACK"
+  },
+  "museShortControl": {
+    "hasAnswer": false,
+    "httpStatus": 403,
+    "inputTokens": null,
+    "maxTokens": 64,
+    "mutationCount": 0,
+    "outputTokens": null,
+    "requestCount": 1,
+    "requestedModel": "meta/muse-wonder",
+    "searchRequested": false,
+    "state": "CONTROL_RECEIPT",
+    "confirmedServiceAccessRequirement": "AGE_CONFIRMATION_18_PLUS"
+  },
+  "accountSettingsChanged": false,
+  "autoRetryUnknown": false
+}

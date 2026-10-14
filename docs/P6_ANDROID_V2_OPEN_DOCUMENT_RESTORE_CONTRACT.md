@@ -1,5 +1,10 @@
 # P6 Android v2 OpenDocument 受控恢复合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v2字段与原子恢复 ](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6 Android v2 OpenDocument 受控恢复合同
+<!-- contract-governance:end -->
+
 ## 用户路径与唯一所有者
 
 唯一普通入口是 Android `设置 → 数据与导入 → 完整工作区交换（v2）→ 选择 v2 交换包并恢复`。它不出现在聊天主页、Composer、会话详情或工作页。首次启动不再隐式写入“新对话”：用户仍可从抽屉显式创建对话，但在此之前空本机可以到达设置恢复入口。`ActivityResultContracts.OpenDocument` 只返回用户明确选择的单个 transient URI；`AndroidWorkspaceExchangeV2OpenDocumentRestorePort` 是唯一可消费该 URI 的 adapter。

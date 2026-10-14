@@ -1,0 +1,12 @@
+{
+  "protectedFiles": 1217,
+  "unchangedFiles": 1214,
+  "maintenanceOnlyChanges": [
+    "protocol/contracts/contract-owner-map-v1.json",
+    "protocol/scripts/audit-contract-consistency.py",
+    "protocol/tests/test_contract_consistency.py"
+  ],
+  "missingFiles": [],
+  "businessSourceConfigSchemaAndAppTestsChanged": false,
+  "installedArtifactsRegenerated": false
+}

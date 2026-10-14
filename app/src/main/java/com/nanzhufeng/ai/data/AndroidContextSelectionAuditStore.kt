@@ -15,13 +15,25 @@ import java.io.File
 import java.time.Instant
 
 /** Bounded local-only context diagnostics; deliberately excludes all selected source bodies. */
-class AndroidContextSelectionAuditStore(context: Context) : ContextSelectionAuditStore {
+class AndroidContextSelectionAuditStore(context: Context, private val database:com.nanzhufeng.ai.data.local.NanfengAiDatabase?=null) : ContextSelectionAuditStore {
     private val file = File(context.filesDir, "context-selection-audit-v1.json")
     private val lock = Any()
 
+    init {
+        database?.runInTransaction(java.util.concurrent.Callable {
+            legacyRecent(MAX_ENTRIES).forEachIndexed { index,record ->
+                database.contextSelectionAuditDao().insert(entity("legacy-context-$index-${record.createdAt.toEpochMilli()}",record))
+            }
+        })
+    }
+    private fun entity(id:String,record:ContextSelectionAuditRecord)=com.nanzhufeng.ai.data.local.ContextSelectionAuditEntity(id,record.attemptId?.value,record.assistantMessageId?.value,record.createdAt.toEpochMilli(),toJson(record).toString(),record.conversationId)
     override fun append(record: ContextSelectionAuditRecord) = synchronized(lock) {
+        if(database!=null) {
+            check(database.contextSelectionAuditDao().insert(entity(java.util.UUID.randomUUID().toString(),record))!=-1L)
+            return@synchronized Unit
+        }
         val entries = recent(MAX_ENTRIES - 1).toMutableList().apply { add(0, record) }
-        runCatching { file.writeText(JSONArray(entries.map(::toJson)).toString()) }
+        check(runCatching { file.writeText(JSONArray(entries.map(::toJson)).toString()) }.isSuccess)
         Unit
     }
 
@@ -30,27 +42,41 @@ class AndroidContextSelectionAuditStore(context: Context) : ContextSelectionAudi
         assistantMessageId: MessageNodeId,
         webSearchUsed: Boolean?,
     ) = synchronized(lock) {
-        val entries = recent(MAX_ENTRIES).toMutableList()
-        val index = entries.indexOfFirst { it.attemptId == attemptId && it.assistantMessageId == null }
-        if (index >= 0) {
-            entries[index] = entries[index].copy(
-                assistantMessageId = assistantMessageId,
-                webSearchUsed = webSearchUsed,
-            )
-            runCatching { file.writeText(JSONArray(entries.map(::toJson)).toString()) }
+        if(database!=null) {
+            database.runInTransaction(java.util.concurrent.Callable {
+                val dao=database.contextSelectionAuditDao()
+                dao.unbound(attemptId.value).forEach { row ->
+                    val record=fromJson(JSONObject(row.recordJson)).copy(assistantMessageId=assistantMessageId,webSearchUsed=webSearchUsed)
+                    check(dao.bind(row.recordId,assistantMessageId.value,toJson(record).toString())==1)
+                }
+            })
+            return@synchronized Unit
         }
+        val entries = recent(MAX_ENTRIES).toMutableList()
+        var changed=false
+        entries.indices.forEach { index ->
+            if(entries[index].attemptId==attemptId && entries[index].assistantMessageId==null) {
+                entries[index]=entries[index].copy(assistantMessageId=assistantMessageId,webSearchUsed=webSearchUsed)
+                changed=true
+            }
+        }
+        if(changed) check(runCatching { file.writeText(JSONArray(entries.map(::toJson)).toString()) }.isSuccess)
         Unit
     }
 
     override fun forAssistantMessages(messageIds: Collection<MessageNodeId>): Map<MessageNodeId, List<ContextSelectionAuditRecord>> {
         if (messageIds.isEmpty()) return emptyMap()
+        if(database!=null) return database.contextSelectionAuditDao().forMessages(messageIds.map { it.value }).map { fromJson(JSONObject(it.recordJson)) }.groupBy { requireNotNull(it.assistantMessageId) }
         val ids = messageIds.toSet()
         return recent(MAX_ENTRIES)
             .mapNotNull { record -> record.assistantMessageId?.takeIf(ids::contains)?.let { it to record } }
             .groupBy({ it.first }, { it.second })
     }
 
-    override fun recent(limit: Int): List<ContextSelectionAuditRecord> = synchronized(lock) {
+    override fun recent(limit:Int):List<ContextSelectionAuditRecord> = synchronized(lock) {
+        database?.contextSelectionAuditDao()?.recent(limit.coerceAtLeast(1))?.map { fromJson(JSONObject(it.recordJson)) } ?: legacyRecent(limit)
+    }
+    private fun legacyRecent(limit: Int): List<ContextSelectionAuditRecord> = synchronized(lock) {
         runCatching {
             val array = JSONArray(file.takeIf(File::isFile)?.readText() ?: "[]")
             buildList { for (index in 0 until minOf(array.length(), limit.coerceIn(1, MAX_ENTRIES))) add(fromJson(array.getJSONObject(index))) }

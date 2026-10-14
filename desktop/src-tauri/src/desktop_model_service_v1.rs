@@ -9,7 +9,7 @@ use aes_gcm::{
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
     fs,
@@ -335,12 +335,12 @@ pub struct ProviderDescriptor {
     pub default_preset_id: &'static str,
 }
 
-pub const PROVIDERS: [ProviderDescriptor; 4] = [
+pub const PROVIDERS: [ProviderDescriptor; 7] = [
     ProviderDescriptor {
         id: "OPENROUTER",
         display_name: "OpenRouter",
         endpoint: "https://openrouter.ai/api/v1",
-        default_preset_id: "GPT_5_6_TERRA",
+        default_preset_id: "GPT_6_LUNA",
     },
     ProviderDescriptor {
         id: "DEEPSEEK",
@@ -360,6 +360,9 @@ pub const PROVIDERS: [ProviderDescriptor; 4] = [
         endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1",
         default_preset_id: "QWEN_3_7_PLUS",
     },
+    ProviderDescriptor { id: "RELAYCORE_CLAUDE", display_name: "RelayCore Claude · Kiro正价", endpoint: "https://api.relaycore.cn/v1", default_preset_id: "RELAYCORE_SONNET_5_5" },
+    ProviderDescriptor { id: "RELAYCORE_GPT", display_name: "RelayCore GPT · Pro3", endpoint: "https://api.relaycore.cn/v1", default_preset_id: "RELAYCORE_GPT_6_1_SOL" },
+    ProviderDescriptor { id: "RELAYCORE_GEMINI", display_name: "RelayCore Gemini", endpoint: "https://api.relaycore.cn/v1", default_preset_id: "RELAYCORE_GEMINI_3_8_FLASH" },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -374,7 +377,59 @@ pub struct PresetDescriptor {
     pub chat_selectable: bool,
 }
 
-pub const PRESETS: [PresetDescriptor; 17] = [
+pub const PRESETS: [PresetDescriptor; 29] = [
+    PresetDescriptor {
+        id: "CLAUDE_OPUS_5_5",
+        provider_id: "OPENROUTER",
+        model_id: "anthropic/claude-opus-5.5",
+        display_name: "Claude Opus 5.5",
+        description: "适合复杂任务，默认 Medium effort。",
+        family: "Anthropic · OpenRouter",
+        chat_selectable: true,
+    },
+    PresetDescriptor {
+        id: "CLAUDE_SONNET_5_5",
+        provider_id: "OPENROUTER",
+        model_id: "anthropic/claude-sonnet-5.5",
+        display_name: "Claude Sonnet 5.5",
+        description: "高效处理日常工作，默认 High effort。",
+        family: "Anthropic · OpenRouter",
+        chat_selectable: true,
+    },
+    PresetDescriptor {
+        id: "CLAUDE_HAIKU_5_5",
+        provider_id: "OPENROUTER",
+        model_id: "anthropic/claude-haiku-5.5",
+        display_name: "Claude Haiku 5.5",
+        description: "快速处理高频、轻量任务。",
+        family: "Anthropic · OpenRouter",
+        chat_selectable: true,
+    },
+    PresetDescriptor {
+        id: "GPT_6_1_SOL",
+        provider_id: "OPENROUTER",
+        model_id: "openai/gpt-6.1-sol",
+        display_name: "GPT-6.1 Sol",
+        description: "适合专业复杂任务和深度分析。",
+        family: "OpenAI · OpenRouter",
+        chat_selectable: true,
+    },
+    PresetDescriptor {
+        id: "GPT_6_LUNA",
+        provider_id: "OPENROUTER",
+        model_id: "openai/gpt-6-luna",
+        display_name: "GPT-6 Luna",
+        description: "适合高频、轻量任务。",
+        family: "OpenAI · OpenRouter",
+        chat_selectable: true,
+    },
+
+    PresetDescriptor {
+        id: "MUSE_WONDER", provider_id: "OPENROUTER", model_id: "meta/muse-wonder",
+        display_name: "Muse Wonder", description: "适合复杂分析与长程任务。",
+        family: "Meta · OpenRouter", chat_selectable: true,
+    },
+
     PresetDescriptor {
         id: "CLAUDE_FABLE_5_1",
         provider_id: "OPENROUTER",
@@ -382,7 +437,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "Claude Fable 5.1",
         description: "适合长程代码、研究与复杂知识工作。",
         family: "Anthropic · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "GPT_6_ASTRA",
@@ -391,7 +446,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "GPT-6 Astra",
         description: "适合高难分析、工程与长程复杂任务。",
         family: "OpenAI · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "CLAUDE_FABLE_5",
@@ -400,7 +455,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "Claude Fable 5",
         description: "应对最棘手的复杂任务。",
         family: "Anthropic · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "CLAUDE_OPUS_5",
@@ -409,7 +464,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "Claude Opus 5",
         description: "适合复杂任务与深度推理。",
         family: "Anthropic · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "CLAUDE_SONNET_5",
@@ -418,7 +473,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "Claude Sonnet 5",
         description: "高效处理日常工作。",
         family: "Anthropic · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "CLAUDE_HAIKU_4_5",
@@ -427,7 +482,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "Claude Haiku 4.5",
         description: "快速获得简洁答案。",
         family: "Anthropic · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "GPT_5_6_SOL",
@@ -436,7 +491,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "GPT-5.6 Sol",
         description: "前沿能力，适合专业复杂任务。",
         family: "OpenAI · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "GPT_5_6_TERRA",
@@ -445,7 +500,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "GPT-5.6 Terra",
         description: "能力与成本更均衡。",
         family: "OpenAI · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "GPT_5_6_LUNA",
@@ -454,7 +509,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "GPT-5.6 Luna",
         description: "适合高频、轻量任务。",
         family: "OpenAI · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "GEMINI_3_8_FLASH",
@@ -472,7 +527,7 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         display_name: "Kimi K3",
         description: "复杂分析 · Agent · 长上下文",
         family: "Moonshot AI · OpenRouter",
-        chat_selectable: true,
+        chat_selectable: false,
     },
     PresetDescriptor {
         id: "DEEPSEEK_V4_PRO",
@@ -528,6 +583,12 @@ pub const PRESETS: [PresetDescriptor; 17] = [
         family: "Qwen · 官方直连",
         chat_selectable: true,
     },
+    PresetDescriptor { id: "RELAYCORE_OPUS_5_5", provider_id: "RELAYCORE_CLAUDE", model_id: "claude-opus-5.5", display_name: "Opus 5.5 · Kiro正价", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
+    PresetDescriptor { id: "RELAYCORE_SONNET_5_5", provider_id: "RELAYCORE_CLAUDE", model_id: "claude-sonnet-5-5", display_name: "Sonnet 5.5 · Kiro正价", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
+    PresetDescriptor { id: "RELAYCORE_GPT_6_1_SOL", provider_id: "RELAYCORE_GPT", model_id: "gpt-6.1-sol", display_name: "GPT-6.1 Sol · Pro3", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
+    PresetDescriptor { id: "RELAYCORE_GPT_6_ASTRA", provider_id: "RELAYCORE_GPT", model_id: "gpt-6-astra", display_name: "GPT-6 Astra · Pro3", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
+    PresetDescriptor { id: "RELAYCORE_GEMINI_3_8_FLASH", provider_id: "RELAYCORE_GEMINI", model_id: "gemini-3.8-flash", display_name: "Gemini 3.8 Flash · Gemini", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
+    PresetDescriptor { id: "RELAYCORE_GEMINI_3_1_PRO", provider_id: "RELAYCORE_GEMINI", model_id: "gemini-3.1-pro", display_name: "Gemini 3.1 Pro · Gemini", description: "平台列出，返回身份以响应为准。", family: "RelayCore", chat_selectable: true },
 ];
 
 pub const QWEN_FLASH: PresetDescriptor = PresetDescriptor {
@@ -595,7 +656,39 @@ pub fn chat_presets() -> Vec<PresetDescriptor> {
         .collect()
 }
 
+pub fn default_reasoning_effort(model_id: &str) -> Option<&'static str> {
+    match model_id {
+        "anthropic/claude-opus-5.5" => Some("medium"),
+        "anthropic/claude-sonnet-5.5" | "openai/gpt-6.1-sol" => Some("high"),
+        _ => None,
+    }
+}
+
+pub fn current_preset_id(value: &str) -> &str {
+    match value {
+        "CLAUDE_OPUS_5" => "CLAUDE_OPUS_5_5",
+        "CLAUDE_SONNET_5" => "CLAUDE_SONNET_5_5",
+        "CLAUDE_HAIKU_4_5" => "CLAUDE_HAIKU_5_5",
+        "GPT_5_6_SOL" => "GPT_6_1_SOL",
+        "GPT_5_6_TERRA" => "GPT_6_LUNA",
+        "GPT_5_6_LUNA" => "GPT_6_LUNA",
+        "anthropic/claude-opus-5" | "claude-opus-5" => "CLAUDE_OPUS_5_5",
+        "anthropic/claude-sonnet-5" | "claude-sonnet-5" => "CLAUDE_SONNET_5_5",
+        "anthropic/claude-haiku-4.5" | "claude-haiku-4.5" => "CLAUDE_HAIKU_5_5",
+        "openai/gpt-5.6-sol" | "gpt-5.6-sol" => "GPT_6_1_SOL",
+        "openai/gpt-5.6-terra" | "gpt-5.6-terra" => "GPT_6_LUNA",
+        "openai/gpt-5.6-luna" | "gpt-5.6-luna" => "GPT_6_LUNA",
+        _ => value,
+    }
+}
+
+/// Published Opus 5.5 aliases in the same Claude-Kiro standard group. No cross-model fallback.
+pub fn canonical_relay_model_id<'a>(provider: &str, id: &'a str) -> &'a str {
+    if provider == "RELAYCORE_CLAUDE" && id == "claude-opus-5-5" { "claude-opus-5.5" } else { id }
+}
+
 pub fn preset(provider_id: &str, preset_id: &str) -> Result<PresetDescriptor, String> {
+    let preset_id = current_preset_id(preset_id);
     presets_for(provider_id)?
         .into_iter()
         .find(|item| item.id == preset_id)
@@ -604,6 +697,25 @@ pub fn preset(provider_id: &str, preset_id: &str) -> Result<PresetDescriptor, St
 
 pub fn validate_provider(provider_id: &str) -> Result<(), String> {
     provider(provider_id).map(|_| ())
+}
+
+#[cfg(test)]
+#[test]
+fn october_catalog_migrates_old_selections_and_excludes_them_from_new_choices() {
+    for (old, new, model) in [
+        ("CLAUDE_OPUS_5", "CLAUDE_OPUS_5_5", "anthropic/claude-opus-5.5"),
+        ("CLAUDE_SONNET_5", "CLAUDE_SONNET_5_5", "anthropic/claude-sonnet-5.5"),
+        ("CLAUDE_HAIKU_4_5", "CLAUDE_HAIKU_5_5", "anthropic/claude-haiku-5.5"),
+        ("GPT_5_6_SOL", "GPT_6_1_SOL", "openai/gpt-6.1-sol"),
+        ("GPT_5_6_TERRA", "GPT_6_LUNA", "openai/gpt-6-luna"),
+        ("GPT_5_6_LUNA", "GPT_6_LUNA", "openai/gpt-6-luna"),
+    ] {
+        assert_eq!(current_preset_id(old), new);
+        assert_eq!(preset("OPENROUTER", old).unwrap().model_id, model);
+        assert!(!presets_for("OPENROUTER").unwrap().iter().any(|p| p.id == old));
+    }
+    assert_eq!(current_preset_id("gpt-5.6-terra"), "GPT_6_LUNA");
+    assert_eq!(current_preset_id("openai/gpt-5.6-sol"), "GPT_6_1_SOL");
 }
 
 pub fn validate_configuration(provider_id: &str, preset_id: &str) -> Result<(), String> {
@@ -617,6 +729,37 @@ pub fn validate_secret(secret: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// OCR is selectable for testing only; persisted chat configuration still rejects it.
+pub fn connection_test_preset(provider_id: &str, preset_id: &str) -> Result<PresetDescriptor, String> {
+    if provider_id == "ZHIPU" && preset_id == "GLM_OCR" { return Ok(GLM_OCR); }
+    preset(provider_id, preset_id)
+}
+
+fn connection_test_request(provider_id: &str, preset_id: &str) -> Result<(String, Value), String> {
+    let provider = provider(provider_id)?;
+    let preset = connection_test_preset(provider_id, preset_id)?;
+    if preset.id == "GLM_OCR" {
+        let fixed_png = include_str!("../../../protocol/fixtures/model-connection-probe-ocr-base64.txt").trim();
+        return Ok(("https://open.bigmodel.cn/api/paas/v4/layout_parsing".to_owned(), json!({
+            "model": "glm-ocr", "file": format!("data:image/png;base64,{fixed_png}")
+        })));
+    }
+    let url = crate::desktop_ordinary_chat_v1::ordinary_provider_endpoint(provider_id, provider.endpoint, "NONE");
+    let mut probe_body = json!({
+        "model": preset.model_id,
+        "messages": [{ "role": "user", "content": "hi" }],
+        "max_tokens": 1,
+        "stream": false
+    });
+    if let Some(effort) = default_reasoning_effort(preset.model_id) {
+        probe_body["reasoning"] = json!({"effort": effort});
+    }
+    if provider_id == "RELAYCORE_CLAUDE" {
+        probe_body["output_config"] = json!({"effort":if matches!(preset.model_id,"claude-opus-5-5"|"claude-opus-5.5") {"medium"}else{"high"}});
+    }
+    Ok((url, probe_body))
+}
+
 /// Sends one bounded, user-triggered connectivity probe to the fixed provider endpoint. The
 /// response body is intentionally discarded so a provider error can never project prompt,
 /// credential, account, or model output into Settings or logs.
@@ -625,31 +768,24 @@ pub async fn test_saved_connection(
     preset_id: &str,
     secret: Zeroizing<Vec<u8>>,
 ) -> Result<(), String> {
-    validate_configuration(provider_id, preset_id)?;
+    let preset = connection_test_preset(provider_id, preset_id)?;
     validate_secret(secret.as_slice())?;
-    let provider = provider(provider_id)?;
-    let preset = preset(provider_id, preset_id)?;
+    let (url, probe_body) = connection_test_request(provider_id, preset_id)?;
     let authorization = Zeroizing::new(
         String::from_utf8(secret.to_vec())
             .map_err(|_| "本机 API Key 格式无效；请重新保存。".to_owned())?,
     );
-    let url = format!(
-        "{}/chat/completions",
-        provider.endpoint.trim_end_matches('/')
-    );
-    let response = reqwest::Client::builder()
+    let mut builder = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(25))
+        .timeout(std::time::Duration::from_secs(if preset.id == "GLM_OCR" { 60 } else { 25 }))
         .build()
         .map_err(|_| "无法创建安全连接；未发送测试请求。".to_owned())?
         .post(url)
-        .bearer_auth(authorization.as_str())
-        .json(&json!({
-            "model": preset.model_id,
-            "messages": [{ "role": "user", "content": "hi" }],
-            "max_tokens": 1,
-            "stream": false
-        }))
+        .bearer_auth(authorization.as_str());
+    if provider_id == "RELAYCORE_CLAUDE" {
+        builder = builder.header("x-api-key",authorization.as_str()).header("anthropic-version","2023-06-01");
+    }
+    let response = builder.json(&probe_body)
         .send()
         .await
         .map_err(|_| "连接测试失败；请检查网络、服务状态和 API Key。".to_owned())?;
@@ -668,6 +804,24 @@ mod tests {
     use std::{cell::RefCell, collections::BTreeMap};
 
     #[test]
+    fn relay_catalogue_matches_observed_exact_models_and_keeps_separate_credentials() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../protocol/fixtures/relaycore-models-20261011.json")).unwrap();
+        let models = fixture["models"].as_array().unwrap();
+        assert_eq!(models.len(), 6);
+        for model in models {
+            let profile = model["providerId"].as_str().unwrap();
+            let descriptor = preset(profile, model["presetId"].as_str().unwrap()).unwrap();
+            assert_eq!(descriptor.model_id, model["modelId"].as_str().unwrap());
+            assert_eq!(descriptor.display_name, format!("{} · {}", model["modelName"].as_str().unwrap(), model["channel"].as_str().unwrap()));
+            assert_eq!(provider(profile).unwrap().endpoint, "https://api.relaycore.cn/v1");
+            assert!(!descriptor.display_name.contains('×'));
+            assert!(preset("OPENROUTER", descriptor.id).is_err());
+        }
+        assert!(!chat_presets().iter().any(|item| item.chat_selectable && matches!(item.id, "CLAUDE_FABLE_5" | "KIMI_K3" | "CLAUDE_FABLE_5_1" | "GPT_6_ASTRA")));
+        assert!(chat_presets().iter().any(|item| item.id == "RELAYCORE_GPT_6_ASTRA"));
+    }
+
+    #[test]
     fn background_text_jobs_start_with_the_same_daily_deepseek_preset() {
         assert_eq!(
             BACKGROUND_TEXT_REFINEMENT_PRESET_IDS.first(),
@@ -679,6 +833,18 @@ mod tests {
             .unwrap();
         assert_eq!(daily.display_name, "DeepSeek V4.1 Flash");
         assert_eq!(daily.model_id, "deepseek-flash");
+    }
+
+    #[test]
+    fn ocr_probe_uses_only_its_fixed_public_fixture_and_never_becomes_a_chat_default() {
+        let (endpoint, body) = connection_test_request("ZHIPU", "GLM_OCR").unwrap();
+        assert_eq!(endpoint, "https://open.bigmodel.cn/api/paas/v4/layout_parsing");
+        assert_eq!(body["model"], "glm-ocr");
+        assert_eq!(body.as_object().unwrap().len(), 2);
+        assert!(body["file"].as_str().unwrap().starts_with("data:image/png;base64,iVBOR"));
+        assert!(validate_configuration("ZHIPU", "GLM_OCR").is_err());
+        assert!(connection_test_request("OPENROUTER", "GLM_OCR").is_err());
+        assert!(!chat_presets().iter().any(|p| p.id == "GLM_OCR"));
     }
 
     struct MemoryCredentials(RefCell<BTreeMap<String, Vec<u8>>>);
@@ -763,7 +929,7 @@ mod tests {
     fn provider_order_endpoints_and_defaults_match_current_android_contract() {
         assert_eq!(
             PROVIDERS.map(|item| item.id),
-            ["OPENROUTER", "DEEPSEEK", "ZHIPU", "QWEN"]
+            ["OPENROUTER", "DEEPSEEK", "ZHIPU", "QWEN", "RELAYCORE_CLAUDE", "RELAYCORE_GPT", "RELAYCORE_GEMINI"]
         );
         assert_eq!(
             provider("DEEPSEEK").unwrap().endpoint,

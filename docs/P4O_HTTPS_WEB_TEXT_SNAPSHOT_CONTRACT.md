@@ -1,5 +1,10 @@
 # 南枫 AI P4-O 严格 HTTPS 网页文本快照 Adapter 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 项目与Knowledge本地领域 ](P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-O 严格 HTTPS 网页文本快照 Adapter 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的独立网页文本快照增量；计划 Schema 16→17。不是 P4 或项目终点。
 
@@ -27,6 +32,6 @@
 
 - 状态为 `QUEUED → FETCHING → EXTRACTING → AWAITING_CONFIRMATION → PARTIALLY_COMPLETED/COMPLETED`，并持久保留 `FAILED/CANCELLED`。进程中断后 `FETCHING/EXTRACTING` 重建为明确可重试的 `FAILED(INTERRUPTED)`，绝不伪装完成；重试需要再次用户确认 URL，不静默网络重放。相同 URL 可创建独立任务，不自动去重或合并。
 - 确认默认关闭，且唯一正式写入为 `CREATE_WEB_TEXT_SNAPSHOT → KnowledgeDomain → ManageKnowledgeUseCase`。取消、失败、重试、逐项确认/跳过均为真实状态。
-- 必测：URL/SSRF/DNS/redirect、header/body/encoding/HTML 边界、高敏与惰性文本、取消/重试/中断、同 URL 独立任务、16→17 迁移保留旧表、Knowledge 唯一写入；再跑全量测试、Lint、正式签名 Debug/Release 和仅 emulator-5554 可见链。真实网络若受环境阻断，只报告为独立网络债务，不伪造成功。
+- 必测：URL/SSRF/DNS/redirect、header/body/encoding/HTML 边界、高敏与惰性文本、取消/重试/中断、同 URL 独立任务、16→17 迁移保留旧表、Knowledge 唯一写入；再跑全量测试、Lint、正式签名 Debug/Release 和仅 当次隔离模拟器 可见链。真实网络若受环境阻断，只报告为独立网络债务，不伪造成功。
 
 不读取/请求/写入 Key，不构造 Prompt/RunSpec、不发 Provider HTTP、不产生模型费用；`OpenRouterEgressPolicy.Disabled` 保持。不操作 OPPO、图标、OCR/图片、分享/拍照、语音/视频、账号/同步/Hub/Tool/Agent/Desktop/P5+。

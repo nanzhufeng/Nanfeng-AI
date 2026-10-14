@@ -1,0 +1,15 @@
+[
+  {
+    "preset": "RELAYCORE_SONNET_5_5",
+    "bootstrapError": true,
+    "errorClass": "SecurityException",
+    "frames": [
+      "android.os.Parcel.createExceptionOrNull",
+      "android.os.Parcel.createException",
+      "android.os.Parcel.readException",
+      "android.os.Parcel.readException",
+      "android.app.IActivityManager$Stub$Proxy.getContentProvider",
+      "android.app.ActivityThread.acquireProvider"
+    ]
+  }
+]

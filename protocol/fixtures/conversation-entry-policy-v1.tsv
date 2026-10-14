@@ -1,0 +1,9 @@
+case	id	backgroundAt	now	running	expected
+short-exit	last-exit	1800000000000	1800000060000	false	last-exit
+before-expiry	last-exit	1800000000000	1800000899999	false	last-exit
+expiry-boundary	last-exit	1800000000000	1800000900000	false	-
+long-exit	last-exit	1800000000000	1800003600000	false	-
+missing-selection	-	1800000000000	1800000060000	false	-
+legacy-timestamp	last-exit	0	1800000060000	false	-
+clock-rollback	last-exit	1800000000000	1799999999999	false	-
+active-generation	last-exit	1800000000000	1800003600000	true	last-exit

@@ -1,5 +1,10 @@
 # 南枫 AI P4-N 本地 PDF 文本资料 Adapter 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 项目与Knowledge本地领域 ](P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-N 本地 PDF 文本资料 Adapter 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第十三个本地增量；计划 Schema 15→16。P4-N 只处理带文本层的 `application/pdf`，不是 P4 或项目终点。
 
@@ -33,5 +38,5 @@
 ## 最小 UI、验证与停止点
 
 - Knowledge 页面提供 PDF 导入入口、纯白 `#FFFFFFFF` 任务 Dialog/选择面、阶段/页进度/安全失败原因、取消/重试和逐项确认。不得显示或记录外部路径、URI 或 token。
-- 自动测试必须覆盖严格 MIME/头、加密/畸形/无文本/高敏/上限、惰性 JS/链接/嵌入语义、分层 hash 与复用/失效、取消/重试/重建、逐项确认/跳过、Schema 15→16 和 P4-H/P4-L 回归；再分层完成 Lint、正式签名 Debug/Release、v2/v3、仅 emulator-5554 的 DocumentsUI、可见确认/取消或失败、force-stop/重建、`install -r` 和 APK 回拉 hash。
+- 自动测试必须覆盖严格 MIME/头、加密/畸形/无文本/高敏/上限、惰性 JS/链接/嵌入语义、分层 hash 与复用/失效、取消/重试/重建、逐项确认/跳过、Schema 15→16 和 P4-H/P4-L 回归；再分层完成 Lint、正式签名 Debug/Release、v2/v3、仅 当次隔离模拟器 的 DocumentsUI、可见确认/取消或失败、force-stop/重建、`install -r` 和 APK 回拉 hash。
 - 不读取 Key、不构造或发送 Prompt/RunSpec、不发 Provider HTTP、不产生费用；`OpenRouterEgressPolicy.Disabled` 保持。不得操作 OPPO、图标、网页/OCR/图片/语音/视频、账号/同步/Hub/Tool/Agent/Desktop/P5+。

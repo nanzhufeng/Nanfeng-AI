@@ -1,4 +1,5 @@
-const TEXT_MIME_TYPES = new Set(['text/plain', 'text/markdown', 'application/json', 'text/csv']);
+import { ATTACHMENT_DOCUMENT_MIME_TYPES } from "./attachment-document-types.mjs";
+const TEXT_MIME_TYPES = new Set(ATTACHMENT_DOCUMENT_MIME_TYPES);
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm']);
 const AUDIO_MIME_TYPES = new Set(['audio/mpeg', 'audio/wav', 'audio/mp4']);
 
@@ -26,7 +27,7 @@ export function attachmentPreviewCapability(attachment = {}) {
   if (mimeType === 'application/pdf') {
     return { kind: 'pdf', action: 'open-pdf-preview', label: '应用内 PDF 阅读', supported: true };
   }
-  const textExtension = /[.。]\s*(md|markdown|txt|json|csv)\s*$/i.test(String(attachment.displayName || ''));
+  const textExtension = /[.。]\s*(md|markdown|txt|json|csv|xml|yaml|yml|html)\s*$/i.test(String(attachment.displayName || ''));
   const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || (mimeType === 'application/octet-stream' && /[.。]\s*docx\s*$/i.test(String(attachment.displayName || '')));
   const isZip = ['application/zip', 'application/x-zip-compressed'].includes(mimeType) || (mimeType === 'application/octet-stream' && /[.。]\s*zip\s*$/i.test(String(attachment.displayName || '')));
   if (isZip) {

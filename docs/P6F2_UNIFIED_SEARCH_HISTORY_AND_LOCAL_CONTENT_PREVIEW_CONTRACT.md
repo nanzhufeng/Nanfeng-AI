@@ -1,5 +1,10 @@
 # P6-F2 统一搜索、搜索历史与本地内容预览合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本地搜索与安全预览 ](P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-F2 统一搜索、搜索历史与本地内容预览合同
+<!-- contract-governance:end -->
+
 状态：P6-F2-A Search Index Adapter、P6-F2-B Image Preview Adapter、P6-F2-C PDF Preview Adapter 与 P6-F2-D Video Preview Adapter 已完成（D 的证据：`P6F2D_VIDEO_PREVIEW_ADAPTER_EVIDENCE.md`）。P6-F2-E、P6-G 仍未实施，须独立启动。平台：Desktop + Android 同阶段。
 
 > **当前 Android UI 路由（2026-08-26）：** 本文保留搜索索引、资料类型、安全预览与本地数据边界。Android 搜索首屏目录、月份分组、卡片视觉、状态栏避让、音频播放器、正文来源入口、主题／暗色皮肤和会话内 UI 均以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为唯一正文；本文历史浮层或媒体展示数值不得成为第二套 Android UI。
@@ -101,7 +106,7 @@
 
 退出必须覆盖：中文/英文/Markdown/代码、空白与超长查询、10 条历史去重、索引重建、归档/恢复/删除、TEMP 零泄漏、导入原始时间、跨日期格式、长列表性能、外点关闭、Activity/窗口重建、图片/PDF/视频/音频/未知文件、损坏文件、超限文件和受控路径边界。
 
-Desktop 需 Node/Rust、lint、SQLite migration/rebuild、最新 ad-hoc strict-signed `.app` 真实搜索/预览/restart；Android 需 Kotlin/Room、lint、既有正式签名 Debug/Release、`emulator-5554 install -r`/base hash、Activity/restart。OPPO Find N5 仍由 `ANDROID_TARGET_DEVICE_PROFILE.md` 的后续真机门单独验收。
+Desktop 需 Node/Rust、lint、SQLite migration/rebuild、按当前交付入口验签的隔离 `.app` 真实搜索/预览/restart；Android 需 Kotlin/Room、lint、既有正式签名 Debug/Release、当次隔离模拟器上的 `install -r`/base hash、Activity/restart。OPPO Find N5 仍由 `ANDROID_TARGET_DEVICE_PROFILE.md` 的后续真机门单独验收。
 
 ## 禁止提前
 

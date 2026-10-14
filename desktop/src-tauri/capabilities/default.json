@@ -1,7 +1,9 @@
 {
   "identifier": "main-capability",
   "description": "Allows local workspace, search, preview, settings and persistent transcription owners. Speech and document transports require explicit task actions, fixed Qwen ASR or GLM-OCR endpoint/model pairs, and the existing system credential owner.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "dialog:default",
@@ -61,6 +63,7 @@
     "allow-read-desktop-privacy-inventory",
     "allow-desktop-privacy-cleanup",
     "allow-permanently-delete-desktop-conversation",
-    "allow-desktop-account-sync"
+    "allow-desktop-account-sync",
+    "allow-generation-island"
   ]
 }

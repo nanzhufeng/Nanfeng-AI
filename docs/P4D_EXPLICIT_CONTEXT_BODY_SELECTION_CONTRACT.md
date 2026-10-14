@@ -1,5 +1,10 @@
 # 南枫 AI P4-D L0-L3 Context 正文选择与显式控制合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 普通生成上下文与临时隔离 ](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-D L0-L3 Context 正文选择与显式控制合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第四个本地增量；Schema 保持 10。只生成瞬时、本机的正文选择 IR，不构造 Prompt、RunSpec、Authorization 或 Provider 请求；不读取 Key、不发 HTTP、不产生费用或图片外发。
 
@@ -48,6 +53,6 @@ Context 控制面（每次明确勾选，不持久化）
 - Context 控制面只能从当前本地对话打开，白色 `#FFFFFFFF`，每一来源有可读范围说明。用户先逐项勾选，才可“本机预览本次正文”；关闭、重开、会话切换或进程重建均丢弃选择，绝不静默恢复。
 - 预览必须明确显示“仅本机瞬时预览，不会发送给 Provider”；不提供发送、导出、保存为 Memory、分享、同步或复制为 Prompt 入口。
 - 定向合同至少覆盖：默认零正文与 `memorySources` 无效、L0/L1/L2 显式 scope 成功、L3 正文排除（P4-M 元数据不伪装正文）、当前路径仅文本且排除草稿/兄弟/附件/Tool、暂停/删除/越权 Memory 拒绝、敏感正文整体拒绝、缺失会话/Project 与重读不一致拒绝、无持久化和 P4-B 回归。
-- 分别报告：定向/全量测试、Lint、正式签名 Debug/Release、API 35 `emulator-5554`。这些本地证据不替代真实 Provider、Token/费用、图片外发、长会话性能、OPPO、图标或发布验收。
+- 分别报告：定向/全量测试、Lint、正式签名 Debug/Release、API 35 当次隔离模拟器。这些本地证据不替代真实 Provider、Token/费用、图片外发、长会话性能、OPPO、图标或发布验收。
 
 达到上述本机选择与预览闭环即停止。P4-D 不是 P4 或总方案终点；检索、摘要/压缩、缓存、Knowledge、文件/网页、Eval、Prompt/RunSpec 和真实 egress 均是独立后续合同。

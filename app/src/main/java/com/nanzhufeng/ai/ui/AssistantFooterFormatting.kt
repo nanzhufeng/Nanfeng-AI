@@ -9,5 +9,5 @@ internal fun assistantFooterCostDisplay(label: String?): String? = label?.split(
             ?.toBigDecimalOrNull()
             ?.setScale(4, RoundingMode.HALF_UP)
             ?.toPlainString()
-        amount?.let { "¥$it" } ?: entry
+        amount?.let { "¥$it" + if (entry.contains("未知")) " + 未知" else "" } ?: entry
     }

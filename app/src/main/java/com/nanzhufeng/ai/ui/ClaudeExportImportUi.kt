@@ -33,7 +33,7 @@ class ClaudeExportImportViewModel(private val imports: ManageClaudeExportImportU
     if (!grouped) Spacer(Modifier.height(12.dp))
     if (state.selected == null) {
         if (grouped) DataStorageGroupedActionRow(label = actionLabel, onClick = onChoose, enabled = !state.working, working = state.working)
-        else Button(onClick = onChoose, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text(actionLabel) }
+        else Button(onClick = onChoose, enabled = !state.working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text(actionLabel) }
         if (showTaskList) state.tasks.forEach { task -> TextButton(onClick = { onOpen(task) }, modifier = Modifier.fillMaxWidth()) { Text("${task.asset?.displayName ?: "导入任务"} · ${task.status}") } }
     } else {
         val task = state.selected

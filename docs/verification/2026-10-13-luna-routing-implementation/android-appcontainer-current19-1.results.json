@@ -1,0 +1,821 @@
+[
+  {
+    "preset": "CLAUDE_SONNET_5_5",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "e1d3ae86-2d1d-4d7e-9db0-914ced29ccec",
+    "elapsedMs": 21194,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "anthropic\/claude-sonnet-5.5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "anthropic\/claude-sonnet-5.5",
+        "returned": "anthropic\/claude-sonnet-5.5",
+        "input": 19180,
+        "output": 664
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED_WITH_SOURCES",
+        "requested": "anthropic\/claude-sonnet-5.5",
+        "returned": "anthropic\/claude-sonnet-5.5",
+        "input": 2015,
+        "output": 831
+      }
+    ],
+    "answerChars": 964,
+    "publicAnswer": "**直接结论：** 两份文件中的发布日期都能核实。但文件名与内容不符：一份名为\"Python发布报告\"，内容却是 Go；另一份名为\"Rust发布报告\"，内容却是 Firefox。\n\n<文件>\n**Go 1.24.0（文件\"公开Python发布报告.md\"）：已核实**\n- Go 1.24 于 2025 年 2 月 11 日发布。go.dev 官方博客当天发文，称团队\"今天\"发布了 Go 1.24（[来源](https:\/\/go.dev\/blog\/go1.24)）。\n- 局限：我没找到 go.dev 上单独标注\"1.24.0\"下载日期的页面，所以日期以该博客为准。\n- 文件名写的是 Python，与内容 Go 不符。\n\n<文件>\n**Firefox 128.0（文件\"公开Rust发布报告.docx\"）：已核实，但来源域名有差异**\n- Firefox 128 于 2024 年 7 月 9 日向 Release 渠道发布，MDN 的发行说明与此一致（[来源](https:\/\/developer.mozilla.org\/en-US\/docs\/Mozilla\/Firefox\/Releases\/128)）。\n- 局限：材料要求核验 mozilla.org 官方发布日期，但这次采用的是 MDN 页面，不是 mozilla.org 域名下的发行说明页。MDN 由 Mozilla 参与维护，日期可信度较高，但严格按要求仍建议再对照 mozilla.org 的 Firefox 128.0 发行说明。\n- 文件名写的是 Rust，与内容 Firefox 不符。\n\n**风险与下一步：** 如果这两份\"报告\"本意是核验 Python 和 Rust 的发布，当前内容就答非所问，需要确认原意后重新核验。\n\n来源：\n- [Go 1.24 is released! - The Go Programming Language](https:\/\/go.dev\/blog\/go1.24)\n- [Firefox 128 release notes for developers - Mozilla](https:\/\/developer.mozilla.org\/en-US\/docs\/Mozilla\/Firefox\/Releases\/128)"
+  },
+  {
+    "preset": "CLAUDE_HAIKU_5_5",
+    "result": "Sent",
+    "conversationId": "0540ce1d-e5c8-4125-83de-0f8286c03fb3",
+    "elapsedMs": 38406,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "anthropic\/claude-haiku-5.5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_WEB_SEARCH_NO_SOURCES",
+        "requested": "anthropic\/claude-haiku-5.5",
+        "input": 40757,
+        "output": 1969
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "anthropic\/claude-haiku-5.5",
+        "returned": "anthropic\/claude-haiku-5.5",
+        "input": 30123,
+        "output": 1036
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "anthropic\/claude-haiku-5.5",
+        "returned": "anthropic\/claude-haiku-5.5",
+        "input": 12342,
+        "output": 790
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED_WITH_SOURCES",
+        "requested": "anthropic\/claude-haiku-5.5",
+        "returned": "anthropic\/claude-haiku-5.5",
+        "input": 2400,
+        "output": 1798
+      }
+    ],
+    "answerChars": 1358,
+    "publicAnswer": "**公开Python发布报告.md（Markdown文本）**\n**公开Rust发布报告.docx（Word文档）**\n\n**结论：** 两项事实都与随附检索资料一致：Go 1.24.0 于 2025 年 2 月 11 日发布，Firefox 128.0 于 2024 年 7 月 9 日发布。但我无法在本轮额外打开页面复核，下面只按资料中给出的来源区分核实程度。\n\n**已有来源支持的事实**\n\n- **Go 1.24.0（Markdown文件）：** Go 官方博客文章署名日期为 2025 年 2 月 11 日，宣布发布 Go 1.24。[Go 1.24 发布博文](https:\/\/go.dev\/blog\/go1.24)\n- **Firefox 128.0（Word文件）：** Mozilla 官方发布说明称该版本于 2024 年 7 月 9 日首次向 Release 渠道用户提供。[Firefox 128.0 发布说明](https:\/\/www.firefox.com\/en-US\/firefox\/128.0\/releasenotes\/?redirect_source=mozilla-org)\n\n**需要注意的问题**\n\n1. **文件数量与标题不完全对应。** 用户称有两份“公开发布报告”，附件中也确实是两份，但 Word 文件标题写的是 Rust 报告，实际检测对象是 Firefox 128.0。Firefox 确有大量 Rust 代码，但标题与内容不一致，建议确认文件标题是否有误。\n2. **Firefox 的“mozilla.org 官方”未直接核到。** 资料中的官方说明链接属于 firefox.com，只带有从 mozilla.org 跳转的参数。因此只能确认 Mozilla 官方发布说明的日期，不能说已在 mozilla.org 页面上逐字核对。\n3. **部分辅助来源缺少可打开链接。** 资料提到“官方发行说明页面”、golang-announce 邮件列表公告、endoflife.date 和 MDN，但没有提供可直接打开的 URL，因此只能视为转述，尚未独立核实。\n4. **资料中的“已核实”标签是检索模型的判断。** 我会以资料中的原始来源为准，不把这些标签直接当作独立证据。\n\n**建议的下一步**\n\n- 打开 go.dev 博文，确认署名日期与正文。\n- 在 mozilla.org 下搜索 Firefox 128.0 发行说明，确认是否存在对应官方页面及发布日期。\n- 若需要 Go 的第二份官方来源，可查 golang-announce 邮件列表归档，但目前资料中没有可直接打开的链接。\n\n来源：\n- [Go 1.24 is released! - The Go Programming Language](https:\/\/go.dev\/blog\/go1.24)\n- [Firefox 128.0, See All New Features, Updates and Fixes](https:\/\/www.firefox.com\/en-US\/firefox\/128.0\/releasenotes\/?redirect_source=mozilla-org)"
+  },
+  {
+    "preset": "DEEPSEEK_V4_FLASH",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "3f3657f5-8f72-4024-b3c9-edf0bbb32f12",
+    "elapsedMs": 28621,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "deepseek-flash",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_WEB_SEARCH_SCOPE_MISMATCH",
+        "requested": "deepseek-flash",
+        "input": 27418,
+        "output": 463
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "deepseek-flash",
+        "returned": "deepseek-flash",
+        "input": 36854,
+        "output": 624
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "deepseek-flash",
+        "returned": "deepseek-flash",
+        "input": 19517,
+        "output": 507
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES",
+        "requested": "deepseek-flash",
+        "returned": "deepseek-flash",
+        "input": 1458,
+        "output": 2044
+      }
+    ],
+    "answerChars": 1234,
+    "publicAnswer": "<文件>\n公开Python发布报告.md\n\n<文件>\n公开Rust发布报告.docx\n\n## 直接结论\n两条“正式发布”声称都与官方公开记录一致，**核验通过**；但两份报告都没写日期、没附官方链接，而且文件名与内容不符：`.md` 里写的是 Go，`.docx` 里写的是 Firefox。\n\n**已核验事实**\n- **Go 1.24.0：2025-02-11 正式发布。** Go 官方博客《Go 1.24 is released!》署期 2025-02-11，官方发布历史页也标注 go1.24.0 为 2025-02-11，后续 1.24.1 为 2025-03-04。来源：[Go 官方博客](https:\/\/go.dev\/blog\/go1.24)、[Go 发布历史](https:\/\/go.dev\/doc\/devel\/release)、[InfoWorld 报道](https:\/\/www.infoworld.com\/article\/3627904\/go-1-24-brings-full-support-for-generic-type-aliases.html)。\n- **Firefox 128.0：2024-07-09 首次向 Release 渠道用户提供。** Mozilla 发布说明写明 “first offered to Release channel users on July 9, 2024”，同日还发布 128.0esr。来源：[Firefox 128.0esr 发布说明](https:\/\/www.firefox.com\/en-CA\/firefox\/128.0esr\/releasenotes\/)。\n\n**材料中的原始观点**\n两份材料各自只有一句“某版本已正式发布，核验官方发布日期”，没有给出日期、链接或版本细节。它们提出的是待核验命题，本身不构成证据。\n\n**推理与可能推翻的条件**\n- Go 以官方博客和发布历史为口径，日期唯一。\n- Firefox 若以“安装包可下载”为准，会得到 7 月 8 日；官方正式发布口径是 7 月 9 日。这是唯一可能引起日期分歧的地方。\n- 文件名暗示 Python\/Rust，与实际内容无关，属于命名误导，不影响发布事实。\n\n**风险与下一步**\n报告应补上具体日期和官方链接，并把文件名改成与内容一致。核对点：[go.dev 发布页](https:\/\/go.dev\/doc\/devel\/release)、[Mozilla 发布说明](https:\/\/www.firefox.com\/en-CA\/firefox\/128.0esr\/releasenotes\/)。两项均未发现与官方记录矛盾。\n\n来源：\n- [Firefox ESR Release Notes](https:\/\/www.firefox.com\/en-CA\/firefox\/128.0esr\/releasenotes\/)"
+  },
+  {
+    "preset": "GPT_6_LUNA",
+    "result": "Sent",
+    "conversationId": "a36c6800-00da-4874-a5a3-d4df9344de03",
+    "elapsedMs": 15834,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "openai\/gpt-6-luna",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 8908,
+        "output": 491
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 1183,
+        "output": 405
+      }
+    ],
+    "answerChars": 477,
+    "publicAnswer": "**结论：**两份报告中的发布日期主张均已核实，但内容分别是 Go 和 Firefox 的发布信息，与文件名中的 Python、Rust 不符。\n\n**公开Python发布报告.md**\n\n- 报告称 Go 1.24.0 正式发布：**已核实**，Go 官方记录显示发布日期为 **2025年2月11日**。[Go 官方发布记录](https:\/\/go.dev\/doc\/devel\/release)\n- **不符之处：**文件名标为 Python，但正文谈的是 Go；这份材料不能作为 Python 发布报告。\n\n**公开Rust发布报告.docx**\n\n- 报告称 Firefox 128.0 正式发布：**已核实**，Mozilla 官方发布说明对应日期为 **2024年7月9日**。[Mozilla 官方发布说明](https:\/\/www.mozilla.org\/en-US\/firefox\/128.0\/releasenotes\/)\n- **不符之处：**文件名标为 Rust，但正文谈的是 Firefox；这份材料不能作为 Rust 发布报告。"
+  },
+  {
+    "preset": "GLM_5_3_FLASH",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "9b29573c-0304-476d-af5e-fac942626ded",
+    "elapsedMs": 44608,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "glm-5.3-flash",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "glm-5.3-flash",
+        "returned": "glm-5.3-flash",
+        "input": 5316,
+        "output": 212
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "glm-5.3-flash",
+        "returned": "glm-5.3-flash",
+        "input": 3543,
+        "output": 106
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES",
+        "requested": "glm-5.3-flash",
+        "returned": "glm-5.3-flash",
+        "input": 1152,
+        "output": 1782
+      }
+    ],
+    "answerChars": 962,
+    "publicAnswer": "【文件】公开Python发布报告.md\n【文件】公开Rust发布报告.docx\n\n**结论：两项“正式发布”事项本身属实方向明确，但本轮检索仅返回第三方博客，均未取得官方页面证据，按合同标注为“检索后仍无法核实（日期未核实）”。**\n\n**1. Go 1.24.0 正式发布（go.dev）**\n- 状态：**未核实**。检索仅返回第三方技术博客（[CSDN，内容为 Go 1.24 特性介绍，未给官方发布日期](https:\/\/moonfdd.blog.csdn.net\/article\/details\/145942647)），无 go.dev 官方出处。\n- 据我的既有知识，发布日期应为 **2025 年 2 月 11 日左右**，此为待验证信息，不作为已核实结论。\n- 可核对点：官方发布历史页 https:\/\/go.dev\/doc\/devel\/release 及发布博客 https:\/\/go.dev\/blog\/go1.24\n\n**2. Firefox 128.0 正式发布（mozilla.org）**\n- 状态：**未核实**。检索仅返回第三方转载页（[低调大师，标题即\"Firefox 128.0 正式发布\"，无 mozilla.org 原始链接](https:\/\/www.xujun.org\/note-173845.html)）。\n- 据我的既有知识，发布日期应为 **2024 年 7 月 9 日左右**，同样为待验证信息。\n- 可核对点：官方发布说明 https:\/\/www.mozilla.org\/firefox\/128.0\/releasenotes\/\n\n**补充说明**：两份文件各仅含一行主张，均未附日期与官方出处，材料本身不构成证据。建议用上述官方页面直接确认日期后，再将“未核实”更新为“已核实”。\n\n来源：\n- [Go1.24版本终于来了！各位开发者，准备好迎接这些激动人心的新功能了吗？让我们一起来探讨下Go1.24中有哪些精彩的亮点？](https:\/\/moonfdd.blog.csdn.net\/article\/details\/145942647)\n- [Firefox 128.0 正式发布-低调大师](https:\/\/www.xujun.org\/note-173845.html)"
+  },
+  {
+    "preset": "QWEN_3_7_PLUS",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "fa3cb62c-da8f-4372-9197-df10bab91e6f",
+    "elapsedMs": 68962,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "qwen3.7-plus",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_WEB_SEARCH_SCOPE_MISMATCH",
+        "requested": "qwen3.7-plus",
+        "input": 2953,
+        "output": 381
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "qwen3.7-plus",
+        "returned": "qwen3.7-plus",
+        "input": 2896,
+        "output": 452
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "qwen3.7-plus",
+        "returned": "qwen3.7-plus",
+        "input": 3034,
+        "output": 237
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES",
+        "requested": "qwen3.7-plus",
+        "returned": "qwen3.7-plus",
+        "input": 1221,
+        "output": 2102
+      }
+    ],
+    "answerChars": 829,
+    "publicAnswer": "<文件> 公开Python发布报告.md\n<文件> 公开Rust发布报告.docx\n\n**直接结论**\n两份文件提及的软件版本发布事项均已通过官方来源核验属实，但文件命名（Python、Rust）与其实际记载的内容（Go、Firefox）存在明显错位。\n\n**已核验事实**\n1. **Go 1.24.0 发布**（出自 md 文件）：Go 1.24.0 已于 **2025年2月11日** 正式发布。\n   - 来源：[Go 官方发布历史 (go.dev)](https:\/\/go.dev\/doc\/devel\/release)\n\n2. **Firefox 128.0 发布**（出自 docx 文件）：Firefox 128.0 已于 **2024年7月9日** 正式发布至 Release 频道（同日 Firefox ESR 128.0 也一并发布）。\n   - 来源：[Firefox 128.0 发布说明 (mozilla.org)](https:\/\/www.mozilla.org\/firefox\/128.0\/releasenotes\/)\n\n**材料原始观点与推理分析**\n- **原始观点**：两份报告分别要求核验 Go 1.24.0 和 Firefox 128.0 的官方发布日期。\n- **推理与风险提示**：经核验，两项发布日期均与官方公告完全一致。但需要指出的是，md 文件名为“Python发布报告”却记录 Go 语言，docx 文件名为“Rust发布报告”却记录 Firefox 浏览器。文件命名与实际内容严重不符，存在文档归档错误或模板复用未修改标题的风险，建议核查相关的文档管理流程。\n\n来源：\n- [go.dev](https:\/\/go.dev\/doc\/devel\/release)\n- [www.mozilla.org](https:\/\/www.mozilla.org\/firefox\/128.0\/releasenotes\/)"
+  },
+  {
+    "preset": "GEMINI_3_8_FLASH",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "f5879ab6-9d4b-4008-8334-92a3b6b6df64",
+    "elapsedMs": 30121,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "google\/gemini-3.8-flash",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_WEB_SEARCH_SCOPE_MISMATCH",
+        "requested": "google\/gemini-3.8-flash",
+        "input": 379,
+        "output": 600
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "google\/gemini-3.8-flash",
+        "returned": "google\/gemini-3.8-flash",
+        "input": 354,
+        "output": 543
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "google\/gemini-3.8-flash",
+        "returned": "google\/gemini-3.8-flash",
+        "input": 353,
+        "output": 441
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED_WITH_SOURCES",
+        "requested": "google\/gemini-3.8-flash",
+        "returned": "google\/gemini-3.8-flash",
+        "input": 1581,
+        "output": 1583
+      }
+    ],
+    "answerChars": 1766,
+    "publicAnswer": "<文件>\n<文件>\n\n### 直接结论\n两份文件分别提出了对 Go 1.24.0 与 Firefox 128.0 官方发布日期的核验事项。经联网检索，两项事项目前均未获得足以确证具体发布日期的原生证据，核验状态判定为**检索后仍无法核实**。\n\n---\n\n### 事项核验与分析\n\n#### 1. Go 1.24.0 正式发布日期核验\n* **材料中的原始观点**：Markdown 文件提出核验 Go 1.24.0 在 `go.dev` 的官方发布日期。\n* **已核验事实**：**检索后仍无法核实**。检索服务虽然访问了相关站点，但反馈结果中未匹配到可直接证实该版本确切发布日期的原生引用记录（参考：[go.dev 检索来源](https:\/\/vertexaisearch.cloud.google.com\/grounding-api-redirect\/AUZIYQHBmjSqnVSRwrJYUtLMQvWt_rxbmCnsoVGtNTmRQlqvMjC70xpqR7e6F3tPh55hOU7Fv5c4erd9WR5nNeZEKBLQyIsG6HkGhAyd_IpBVyf0t3pTXco6)）。\n* **推理与因果链**：缺少版本发行说明（Release Notes）的具体页面文本抓取，无法由现有外部证据链推导出确定的发布日。\n\n#### 2. Firefox 128.0 正式发布日期核验\n* **材料中的原始观点**：Word 文档提出核验 Firefox 128.0 在 `mozilla.org` 的官方发布日期。\n* **已核验事实**：**检索后仍无法核实**。检索服务未返回包含明确发布日期的官方一手说明片段（参考：[mozilla.org 检索来源](https:\/\/vertexaisearch.cloud.google.com\/grounding-api-redirect\/AUZIYQFMDgBGrxwgsrjBool9_Bt9OzuBw6PgZsfiiaaj-vRGhvOAIk0SpzTYoGNlnNIMkXq4x4xJL-49M_hWEQMtwMYher5eWOeoVBqiBS42cdDw_rPG-nWOjUmUlqU1JZg4vMzWbPjNaLvHAOmBLY9mVmfVX2CjszCFVMwXxYwN_WBu)）。\n* **推理与因果链**：缺乏对应版本的官方发行说明页面记录支持，不能将模型内部记忆假定为当前已证实事实。\n\n---\n\n### 推翻条件、风险与下一步\n* **推翻判断的条件**：若补充抓取到 `golang.org\/doc\/devel\/release` 或 `mozilla.org\/en-US\/firefox\/128.0\/releasenotes` 的原始页面文本与时间戳，可推翻“无法核实”的结论并确立具体日期。\n* **风险与下一步**：两份报告文件名（提及 Python 与 Rust）与正文内容（涉及 Go 与 Firefox）存在明显偏差，建议下一步修正文件命名与元数据，并对对应官方 release 专页进行精准重搜以补全确证证据。\n\n来源：\n- [go.dev](https:\/\/vertexaisearch.cloud.google.com\/grounding-api-redirect\/AUZIYQHBmjSqnVSRwrJYUtLMQvWt_rxbmCnsoVGtNTmRQlqvMjC70xpqR7e6F3tPh55hOU7Fv5c4erd9WR5nNeZEKBLQyIsG6HkGhAyd_IpBVyf0t3pTXco6)\n- [mozilla.org](https:\/\/vertexaisearch.cloud.google.com\/grounding-api-redirect\/AUZIYQFMDgBGrxwgsrjBool9_Bt9OzuBw6PgZsfiiaaj-vRGhvOAIk0SpzTYoGNlnNIMkXq4x4xJL-49M_hWEQMtwMYher5eWOeoVBqiBS42cdDw_rPG-nWOjUmUlqU1JZg4vMzWbPjNaLvHAOmBLY9mVmfVX2CjszCFVMwXxYwN_WBu)"
+  },
+  {
+    "preset": "CLAUDE_OPUS_5_5",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "07b57981-0451-4daf-9386-d3fdae286663",
+    "elapsedMs": 22097,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "anthropic\/claude-opus-5.5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "anthropic\/claude-opus-5.5",
+        "returned": "anthropic\/claude-opus-5.5",
+        "input": 19653,
+        "output": 823
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED_WITH_SOURCES",
+        "requested": "anthropic\/claude-opus-5.5",
+        "returned": "anthropic\/claude-opus-5.5",
+        "input": 2139,
+        "output": 915
+      }
+    ],
+    "answerChars": 1183,
+    "publicAnswer": "**结论**：两项发布日期均已核实。但两份文件的名称与内容不符：“Python 报告”写的是 Go，“Rust 报告”写的是 Firefox。\n\n<文件>\n\n**Markdown 文件《公开Python发布报告.md》：Go 1.24.0**\n- **已核实**：Go 1.24 于 **2025年2月11日** 正式发布。go.dev 官方博客当天发文宣布，作者为 Go 团队成员 Junyang Shao。来源：[Go 1.24 is released!](https:\/\/go.dev\/blog\/go1.24)\n- **材料与文件名矛盾**：文件名称为 Python 发布报告，正文却只涉及 Go，没有任何 Python 发布信息。\n- **未单独核实**：检索结果提到 golang-announce 邮件列表也有发布公告，但本轮没有该公告的独立链接，因此只以 go.dev 博客为准。\n\n<文件>\n\n**Word 文档《公开Rust发布报告.docx》：Firefox 128.0**\n- **已核实**：Firefox 128.0 于 **2024年7月9日** 首次推送给正式版（Release）渠道用户。它也是下一个延长支持版（ESR）。来源：[Firefox 128.0 发布说明](https:\/\/www.firefox.com\/en-US\/firefox\/128.0\/releasenotes\/?redirect_source=mozilla-org)\n- **来源说明**：材料要求核验 mozilla.org 上的日期。该发布说明页现已从 mozilla.org 跳转到 Mozilla 自有的 firefox.com 域名，仍属官方来源。\n- **材料与文件名矛盾**：文件名称为 Rust 发布报告，正文却只涉及 Firefox，没有任何 Rust 发布信息。\n\n**判断与风险**\n- 两条事实本身准确。但文件名和内容错配，可能是模板复用或上传错了文件。\n- 如果这两份报告原本应记录 Python 和 Rust 的发布，那么相应内容目前完全缺失。\n- **下一步**：确认原意。如果确实需要 Python 或 Rust 的版本信息，请提供具体版本号，我再逐项核验。\n\n来源：\n- [Go 1.24 is released! - The Go Programming Language](https:\/\/go.dev\/blog\/go1.24)\n- [Firefox 128.0, See All New Features, Updates and Fixes](https:\/\/www.firefox.com\/en-US\/firefox\/128.0\/releasenotes\/?redirect_source=mozilla-org)"
+  },
+  {
+    "preset": "GPT_6_1_SOL",
+    "result": "Sent",
+    "conversationId": "ffc5ded2-0b15-4c94-8bdb-8d60ba277e55",
+    "elapsedMs": 44168,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "openai\/gpt-6.1-sol",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6.1-sol",
+        "returned": "openai\/gpt-6.1-sol",
+        "input": 13256,
+        "output": 882
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "openai\/gpt-6.1-sol",
+        "returned": "openai\/gpt-6.1-sol",
+        "input": 1224,
+        "output": 792
+      }
+    ],
+    "answerChars": 531,
+    "publicAnswer": "**结论：两项正式发布事件均已核实；但两份文件的名称与正文主题不匹配。**\n\n`<文件>`\n\n**公开Python发布报告.md**\n- **原文主张：**Go 1.24.0 正式发布。\n- **已核实事实：**正式发布日期为 **2025年2月11日**，见 [Go 官方发布历史](https:\/\/go.dev\/doc\/devel\/release)。\n- **分析：**发布主张成立，但正文讲的是 Go，并非文件名中的 Python。\n\n`<文件>`\n\n**公开Rust发布报告.docx**\n- **原文主张：**Firefox 128.0 正式发布。\n- **已核实事实：**正式发布日期为 **2024年7月9日**，见 [Mozilla 官方开发者发布说明](https:\/\/developer.mozilla.org\/en-US\/docs\/Mozilla\/Firefox\/Releases\/128)。\n- **分析：**发布主张成立，但正文讲的是 Firefox，并非文件名中的 Rust。\n\n**风险与下一步：**正文均未给出发布日期，不能据文件名推断所述产品。建议补上日期和官方链接，并修正文件名；若文件名只是内部分类，则不能据此认定正文错误。"
+  },
+  {
+    "preset": "DEEPSEEK_V4_PRO",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "a8ed9d47-8015-4c31-a742-1527ee4b8737",
+    "elapsedMs": 110072,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "deepseek-v4-pro",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_WEB_SEARCH_SCOPE_MISMATCH",
+        "requested": "deepseek-v4-pro",
+        "input": 7123,
+        "output": 894
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "deepseek-v4-pro",
+        "returned": "deepseek-v4-pro",
+        "input": 46369,
+        "output": 325
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "deepseek-v4-pro",
+        "returned": "deepseek-v4-pro",
+        "input": 27494,
+        "output": 319
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES",
+        "requested": "deepseek-v4-pro",
+        "returned": "deepseek-v4-pro",
+        "input": 1197,
+        "output": 3996
+      }
+    ],
+    "answerChars": 1176,
+    "publicAnswer": "**公开Python发布报告.md（Markdown 文件）**  \n**公开Rust发布报告.docx（Word 文档）**\n\n**直接结论：**\n- Go 1.24.0 已核实，官方发布日期为 **2025 年 2 月 11 日**。\n- Firefox 128.0 未能通过 mozilla.org 官方来源核实发布日期，**不能视为已核实**。\n- 两份文件名与正文主题不一致：名为“Python”的文件实际写 Go；名为“Rust”的文件实际写 Firefox，存在内容\/命名错配。\n\n**已核验事实：**\n- **Go 1.24.0**：Go 官方博客公告显示，Go 1.24.0 由 Junyang Shao 代表 Go 团队于 **2025-02-11** 发布；官方发布历史页亦列为 2025-02-11。  \n  来源：[Go 官方博客公告](https:\/\/golang.google.cn\/blog\/go1.24)\n\n**材料中的原始观点：**\n- “公开Python发布报告.md”主张：Go 1.24.0 正式发布，需核验 go.dev 官方发布日期。\n- “公开Rust发布报告.docx”主张：Firefox 128.0 正式发布，需核验 mozilla.org 官方发布日期。\n\n**推理与边界：**\n- Go 项：本次可核验的是 Go 官方博客（golang.google.cn），属于 Go 官方站点；若要逐字核对 go.dev 域名页面，应进一步打开 go.dev 官方发布历史\/下载页复核。\n- Firefox 项：本轮实时检索仅返回 Mozilla 支持论坛的 feed（[相关支持页](https:\/\/support.mozilla.com\/ur\/questions\/1453269\/feed)），并非 mozilla.org 官方发布公告或版本说明；因此报告中的“正式发布”及任何具体日期均尚未得到官方来源证实。Firefox 也不是 Rust 发布，主题与文件名不符。\n\n**风险与下一步：**\n- Go 1.24.0 可直接采信 2025-02-11；Firefox 128.0 需回查 mozilla.org 官方 release notes 后再入库，避免使用未核实日期。\n- 建议修正两份文件的命名\/内容错配，确认其实际追踪对象是 Go、Firefox 还是其他软件版本。\n\n来源：\n- [Go 1.24 is released!](https:\/\/golang.google.cn\/blog\/go1.24)\n- [Regarding updates کو حالیہ جوابات](https:\/\/support.mozilla.com\/ur\/questions\/1453269\/feed)"
+  },
+  {
+    "preset": "GLM_5_3",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "b4813c5e-6a86-4a3c-894b-9445a7432f7c",
+    "elapsedMs": 79075,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "glm-5.3",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "glm-5.3",
+        "returned": "glm-5.3",
+        "input": 5318,
+        "output": 236
+      },
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "glm-5.3",
+        "returned": "glm-5.3",
+        "input": 3543,
+        "output": 159
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES",
+        "requested": "glm-5.3",
+        "returned": "glm-5.3",
+        "input": 1137,
+        "output": 3390
+      }
+    ],
+    "answerChars": 967,
+    "publicAnswer": "文件 公开Python发布报告.md\n文件 公开Rust发布报告.docx\n\n**直接结论**：两项“官方发布日期”在本轮联网检索中均未匹配到官方一手来源，目前**尚未核实**，检索仅命中第三方博客。另需指出：两份文件名与内容不符——名为 Python 的 .md 文件写的是 Go 1.24.0，名为 Rust 的 .docx 文件写的是 Firefox 128.0。\n\n**逐项情况**：\n\n- **Go 1.24.0 发布日期**：仅检索到第三方 [CSDN 博文](https:\/\/moonfdd.blog.csdn.net\/article\/details\/145942647)，并非 go.dev 官方页面，无法据此核实日期。\n- **Firefox 128.0 发布日期**：仅检索到第三方 [低调大师博文](https:\/\/www.xujun.org\/note-173845.html)，并非 mozilla.org 官方发布说明，无法据此核实日期。\n\n**性质区分**：本轮检索唯一能确认的事实是上述两篇第三方博文存在且提及相应版本；材料要求的官方日期无一手来源支撑。据模型记忆（未核实，仅供参考）：Go 1.24.0 约 2025 年 2 月、Firefox 128.0 约 2024 年 7 月发布——在查到官方页面前不应作为结论引用。\n\n**下一步核对点**：Go 以 [go.dev 发布历史页](https:\/\/go.dev\/doc\/devel\/release) 为准，Firefox 以 [mozilla.org 的 128.0 发布说明](https:\/\/www.mozilla.org\/en-US\/firefox\/128.0\/releasenotes\/) 为准；第三方博客可能存在转载误差，不宜作为日期依据。\n\n来源：\n- [Go1.24版本终于来了！各位开发者，准备好迎接这些激动人心的新功能了吗？让我们一起来探讨下Go1.24中有哪些精彩的亮点？](https:\/\/moonfdd.blog.csdn.net\/article\/details\/145942647)\n- [Firefox 128.0 正式发布-低调大师](https:\/\/www.xujun.org\/note-173845.html)"
+  },
+  {
+    "preset": "QWEN_3_8_MAX",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "1d832a46-222f-450d-bf79-78203604184a",
+    "elapsedMs": 29037,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "qwen3.8-max",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "qwen3.8-max",
+        "returned": "qwen3.8-max",
+        "input": 4742,
+        "output": 600
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES",
+        "requested": "qwen3.8-max",
+        "returned": "qwen3.8-max",
+        "input": 1351,
+        "output": 353
+      }
+    ],
+    "answerChars": 646,
+    "publicAnswer": "<文件> 公开Python发布报告.md\n<文件> 公开Rust发布报告.docx\n\n## 核验结果\n\n**1. Go 1.24.0 发布日期 — ✅ 已核实**\n\nGo 1.24.0 于 **2025年2月11日** 正式发布，主要新特性包括泛型类型别名、map 性能改进及 FIPS 140 合规支持。\n\n来源：[go.dev\/doc\/devel\/release](https:\/\/go.dev\/doc\/devel\/release)\n\n---\n\n**2. Firefox 128.0 发布日期 — ✅ 已核实**\n\nFirefox 128.0 于 **2024年7月9日** 正式向 Release 通道用户推送，同日推出 Firefox ESR 128.0。\n\n来源：[firefox.com\/en-US\/firefox\/128.0\/releasenotes](https:\/\/www.firefox.com\/en-US\/firefox\/128.0\/releasenotes\/)\n\n---\n\n**补充说明：** 两份文件的文件名分别含\"Python\"\"Rust\"，但实际内容涉及的是 Go 和 Firefox，文件名与内容不符。\n\n来源：\n- [go.dev](https:\/\/go.dev\/doc\/devel\/release)\n- [www.firefox.com](https:\/\/www.firefox.com\/en-US\/firefox\/128.0\/releasenotes\/)"
+  },
+  {
+    "preset": "RELAYCORE_OPUS_5_5",
+    "result": "Sent",
+    "conversationId": "5ab2afc7-ddca-469c-8ed3-dfb7e26b58bc",
+    "elapsedMs": 23419,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "claude-opus-5.5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 8979,
+        "output": 458
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "claude-opus-5.5",
+        "returned": "claude-opus-5.5",
+        "input": 85827,
+        "output": 600
+      }
+    ],
+    "answerChars": 845,
+    "publicAnswer": "结论：两份报告各只有一项内容，经核验均属实。不过两份文件的名称与内容对不上，报告本身的归类有问题。\n\n<文件>\n文件《公开Python发布报告.md》\n\n- 已核实：Go 1.24.0 于 2025 年 2 月 11 日正式发布。来源：[Go 官方版本历史](https:\/\/go.dev\/doc\/devel\/release)\n- 与资料矛盾：文件名写的是 Python，内容却是 Go 的发布信息，里面没有任何 Python 的发布事项。\n\n<文件>\n文件《公开Rust发布报告.docx》\n\n- 已核实：Firefox 128.0 于 2024 年 7 月 9 日正式发布，Mozilla 提供了该版本的官方发布说明。来源：[Mozilla Firefox 128.0 发布说明](https:\/\/www.mozilla.org\/en-US\/firefox\/128.0\/releasenotes\/)\n- 与资料矛盾：文件名写的是 Rust，内容却是 Firefox 的发布信息。Firefox 虽然部分组件用 Rust 编写，但它不是 Rust 语言本身的发布。\n\n材料中的原始观点\n\n两份报告都只是要求\"核验官方发布日期\"，本身没有写出日期，也没有给出其他判断。\n\n推理与判断\n\n- 两条日期都来自官方一手页面，可信度高。\n- 文件名和内容错配，说明报告可能是模板复用或整理时放错了内容。如果读者按文件名去查 Python 或 Rust 的发布信息，会被误导。\n\n可能推翻判断的情况\n\n- 如果这两份报告本来就是按\"测试模板\"随意命名的，那么名称不符就不算错误。\n- 官方页面后续修订的可能性很低，但不能完全排除。\n\n风险与下一步\n\n- 建议把文件更名为《Go 发布报告》和《Firefox 发布报告》，或者补上真正的 Python、Rust 发布事项后再核验。\n- 两份报告目前都没有写明发布日期，建议直接补上 2025-02-11 和 2024-07-09，并附上上面的官方链接。"
+  },
+  {
+    "preset": "RELAYCORE_SONNET_5_5",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "5cb3964e-2a92-4227-81b9-698f16b31118",
+    "elapsedMs": 19095,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "claude-sonnet-5-5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 8919,
+        "output": 706
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "claude-sonnet-5-5",
+        "returned": "claude-sonnet-5-5",
+        "input": 1754,
+        "output": 227
+      }
+    ],
+    "answerChars": 370,
+    "publicAnswer": "<文件>\nMarkdown 文件《公开Python发布报告.md》\n\n- Go 1.24.0：已核实。Go 官方发布记录显示它于 2025 年 2 月 11 日发布。来源：[go.dev 发布历史](https:\/\/go.dev\/doc\/devel\/release)\n\n<文件>\nWord 文档《公开Rust发布报告.docx》\n\n- Firefox 128.0：已核实。Firefox 128.0 于 2024 年 7 月 9 日发布。来源：[Mozilla 官方发布说明](https:\/\/www.mozilla.org\/en-US\/firefox\/128.0\/releasenotes\/)\n\n两份材料的文件名与内容不符。\"Python 发布报告\"实际写的是 Go，\"Rust 发布报告\"实际写的是 Firefox，文件名可能需要更正。"
+  },
+  {
+    "preset": "RELAYCORE_GPT_6_1_SOL",
+    "result": "Sent",
+    "conversationId": "54bd8293-bad3-4af3-aee4-093dda26ada0",
+    "elapsedMs": 30222,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "gpt-6.1-sol",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 9004,
+        "output": 494
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "gpt-6.1-sol",
+        "returned": "gpt-6.1-sol",
+        "input": 5415,
+        "output": 312
+      }
+    ],
+    "answerChars": 581,
+    "publicAnswer": "两份报告中的发布事项均已核实，但文件名与正文涉及的产品不一致。\n\n<文件> 公开Python发布报告.md\n\n- **已核实：**Go 1.24.0 于 **2025年2月11日**正式发布，见 [Go 官方发布历史](https:\/\/go.dev\/doc\/devel\/release)。\n- **材料观点：**“Go 1.24.0 正式发布”与官方记录一致；正文未提供日期。\n- **判断与修正：**文件名标注 Python，正文却讨论 Go，容易造成归类错误，建议改为“公开Go发布报告.md”。\n\n<文件> 公开Rust发布报告.docx\n\n- **已核实：**Firefox 128.0 于 **2024年7月9日**正式发布，见 [Mozilla 官方发布说明](https:\/\/www.mozilla.org\/en-US\/firefox\/128.0\/releasenotes\/)。\n- **材料观点：**“Firefox 128.0 正式发布”与官方记录一致；正文未提供日期。\n- **判断与修正：**文件名标注 Rust，正文却讨论 Firefox，建议改为“公开Firefox发布报告.docx”。\n\n两项事实均无发现与官方资料矛盾之处。若文件名代表某个专题而非正文产品，命名可以保留，但应注明归类依据；正式使用时建议补齐发布日期及上述官方链接。"
+  },
+  {
+    "preset": "RELAYCORE_GPT_6_ASTRA",
+    "result": "Sent",
+    "conversationId": "64496e24-3a3d-488c-83b6-4d335e149f7c",
+    "elapsedMs": 28602,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "gpt-6-astra",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 17795,
+        "output": 522
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES",
+        "requested": "gpt-6-astra",
+        "returned": "gpt-6-astra",
+        "input": 5482,
+        "output": 315
+      }
+    ],
+    "answerChars": 730,
+    "publicAnswer": "两份文件中的发布事项均已核实，但**文件名与正文主题不符**：分别写的是 Go 和 Firefox，而非 Python 和 Rust。正文未列日期，因此不存在日期冲突。\n\n<文件>公开Python发布报告.md\n\n- **已核实事实：**Go 1.24.0 于 **2025年2月11日**正式发布，[Go 官方发布历史](https:\/\/go.dev\/doc\/devel\/release)明确记载该日期。\n- **材料原始表述：**“Go 1.24.0 正式发布”，与官方记录一致。\n\n<文件>公开Rust发布报告.docx\n\n- **已核实事实：**Firefox 128.0 于 **2024年7月9日**正式发布，[Mozilla 官方版本说明](https:\/\/www.mozilla.org\/en-US\/firefox\/128.0\/releasenotes\/)及 [MDN 发布记录](https:\/\/developer.mozilla.org\/en-US\/docs\/Mozilla\/Firefox\/Releases\/128)支持该结论。\n- **材料原始表述：**“Firefox 128.0 正式发布”，与官方记录一致。\n\n**分析与下一步：**两份报告的发布事实准确，但内容仅足以确认版本和发布日期，无法据此判断功能、兼容性或升级价值。建议修正文件名，并在正文补上上述日期及官方链接；若报告原本 intended 覆盖 Python、Rust，则还需更换正文事项。\n\n来源：\n- [Release History - The Go Programming Language](https:\/\/go.dev\/doc\/devel\/release)"
+  },
+  {
+    "preset": "RELAYCORE_GEMINI_3_8_FLASH",
+    "result": "Sent",
+    "conversationId": "08e6536e-46d5-4fe8-966e-f3a1c3c0d2e0",
+    "elapsedMs": 25052,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "gemini-3.8-flash",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 9009,
+        "output": 279
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "gemini-3.8-flash",
+        "returned": "gemini-3.8-flash"
+      }
+    ],
+    "answerChars": 864,
+    "publicAnswer": "**直接结论**：两份文件中提出的软件版本发布事项均已核实，官方发布日期准确无误。\n\n<文件>\n\n### Go 1.24.0 正式发布日期核验（针对文件《公开Python发布报告.md》）\n- **已核验事实**：已核实。Go 1.24.0 于 **2025年2月11日** 正式发布。来源：[Go 官方发布记录 (go.dev)](https:\/\/go.dev\/doc\/devel\/release)。\n- **材料中的原始观点**：需核查 Go 1.24.0 在 go.dev 的官方发布日期。\n- **推理与因果链**：通过 Go 官方开发历史文档确认，该版本为正式生产可用版本，发布日志与版本标签对应日期一致。\n- **推翻判断的条件**：若官方因严重构建缺陷撤回或重新发布构建包，但作为历史稳定发行版，其基准发布日已固化。\n- **风险与下一步**：升级至 1.24.0 前应确认工具链与依赖库的兼容性说明。\n\n<文件>\n\n### Firefox 128.0 正式发布日期核验（针对文件《公开Rust发布报告.docx》）\n- **已核验事实**：已核实。Firefox 128.0 于 **2024年7月9日** 正式发布。来源：[Mozilla Firefox 128.0 发布说明](https:\/\/www.mozilla.org\/en-US\/firefox\/128.0\/releasenotes\/)。\n- **材料中的原始观点**：需核对 Firefox 128.0 在 mozilla.org 的官方发布日期。\n- **推理与因果链**：Mozilla 官方版本说明与发布渠道档案均记录 Firefox 128.0 于 2024年7月9日向全球稳定通道推送。\n- **推翻判断的条件**：不同操作系统与应用商店渠道的本地化分发时间可能有数小时差异，但官方全球基准日确定无误。\n- **风险与下一步**：Firefox 128 是 ESR（长期支持）周期的起始版本，生产或企业部署应注意跟进后续的安全小版本更新。"
+  },
+  {
+    "preset": "RELAYCORE_GEMINI_3_1_PRO",
+    "result": "Failed(code=SERVICE)",
+    "conversationId": "7c963080-8463-42f6-afc4-4db4796a08a4",
+    "elapsedMs": 16032,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "diagnostics": [
+      {
+        "errorClass": "UNKNOWN",
+        "httpStatus": 404,
+        "safeDetail": "HTTP_404_UNKNOWN",
+        "model": "gemini-3.1-pro",
+        "elapsedMs": 3740
+      }
+    ],
+    "physicalCalls": [],
+    "answerChars": 0,
+    "publicAnswer": ""
+  },
+  {
+    "preset": "QWEN_3_6_FLASH",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "bf3e23f8-abae-4d67-9eaa-fa53569ead52",
+    "elapsedMs": 41208,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "qwen3.6-flash",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "qwen3.6-flash",
+        "returned": "qwen3.6-flash",
+        "input": 3610,
+        "output": 913
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_STREAM_SUCCEEDED_WITH_SOURCES",
+        "requested": "qwen3.6-flash",
+        "returned": "qwen3.6-flash",
+        "input": 1111,
+        "output": 2335
+      }
+    ],
+    "answerChars": 1324,
+    "publicAnswer": "直接结论：两份报告中提及的两个软件版本发布日期均已核验确认。Go 1.24.0 发布于 2025年2月11日，Firefox 128.0 发布于 2024年7月9日。需重点提示：两份文件的命名与实际内文主题存在明显错位。\n\n---\n\n### <文件> 公开Python发布报告.md <\/文件>\n**已核验事实**\n- Go 1.24.0 已于 2025年2月11日由 Go 官方正式发布。来源：[https:\/\/go.dev\/blog\/go1.24](https:\/\/go.dev\/blog\/go1.24)\n\n**材料原始内容**\n- 该文件仅含单条记录：“Go 1.24.0 正式发布，核验go.dev官方发布日期。”\n\n### <文件> 公开Rust发布报告.docx <\/文件>\n**已核验事实**\n- Firefox 128.0 已于 2024年7月9日由 Mozilla 官方正式发布。来源：[https:\/\/www.mozilla.org\/firefox\/128.0\/releasenotes\/](https:\/\/www.mozilla.org\/firefox\/128.0\/releasenotes\/)\n\n**材料原始内容**\n- 该文件仅含单条记录：“Firefox 128.0 正式发布，核验mozilla.org官方发布日期。”\n\n---\n\n### 推理与因果链\n1. **事实一致性**：两份材料均为明确的“版本发布+官方链接核验”声明。结合实时检索数据，所涉日期与官方公告完全吻合，无矛盾或未核实项。\n2. **命名错位归因**：`公开Python发布报告.md` 记录的是 Go 语言，`公开Rust发布报告.docx` 记录的是 Firefox。此类错位通常源于报告模板复用时的字段未替换，或目录索引未同步更新。若不修正，易在后续跨项目引用、CI\/CD 自动化拉取或知识图谱构建时引发分类污染。\n3. **信息粒度评估**：当前材料仅停留在“发布日期核验”层面，未提供 release notes 中的核心变更（如 Breaking Changes、依赖升级、性能基准、CVE 修复）。这使其更接近“进度打卡清单”而非完整的技术发布简报。\n\n### 风险与下一步\n- **引用与归档风险**：标题与内容不符会导致元数据检索失准；若用于技术评审或合规存档，可能被视为文档质量缺陷。\n- **技术决策风险**：缺乏更新日志与兼容性说明，无法直接支撑依赖升级或版本迁移决策。\n- **下一步建议**：\n  1. 修正文件命名以匹配实际技术栈，或在首行添加醒目说明（如 `注：本文档为通用模板，本章内容属 Go 生态`）。\n  2. 补充各版本的官方 Changelog 摘要、向下兼容矩阵及主流依赖库的适配状态。\n  3. 若报告为多条目清单，建议将剩余未列出条目纳入本轮核验流程，确保闭环。\n\n来源：\n- [go.dev](https:\/\/go.dev\/blog\/go1.24)\n- [www.mozilla.org](https:\/\/www.mozilla.org\/firefox\/128.0\/releasenotes\/)"
+  }
+]

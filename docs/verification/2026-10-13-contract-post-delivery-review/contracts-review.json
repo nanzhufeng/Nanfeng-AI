@@ -1,0 +1,1994 @@
+[
+  {
+    "path": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+    "domain": "usage",
+    "status": "CURRENT",
+    "scope": "本机物理调用用量/币种/事实等级；余额和跨软件预算仅规划",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "a41f8a1f1cdaf725750ca33e8aaf4c6d0085e176b66ba385fcbbdd3ef43f7804",
+    "bodyHashAfter": "23f8d109a9b8166e99eae12be899c68da2e42d8ce0d4fca7972bd8e8d2ec74f7",
+    "bodyChanged": true,
+    "issues": [
+      14
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatCallAccounting.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+      "desktop/src-tauri/src/chat_call_accounting_v1.rs",
+      "desktop/src-tauri/src/usage_ledger_v1.rs",
+      "app/src/main/java/com/nanzhufeng/ai/domain/AssistantResponseModelAttribution.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ui/AssistantFooterFormatting.kt",
+      "desktop/src/desktop-cost-estimator.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+    "domain": "android-conversation",
+    "status": "CURRENT",
+    "scope": "南枫 AI Android 当前会话与搜索界面合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "839a69982f4d258d830255c0000cc2aa74ad1947b0a02026735e4afc0e187b6b",
+    "bodyHashAfter": "796021ae0edce15de36b2e781b05c7d52c972b5c335cca84de1ed3998e592bdd",
+    "bodyChanged": true,
+    "issues": [
+      15,
+      16
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md",
+    "domain": "runtime-context",
+    "status": "CURRENT",
+    "scope": "南枫 AI Android 当前普通聊天运行时上下文合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "07bc2919479dd0831c7318829cc63ea4a2b1e400fea189fc935ef63073bc5c55",
+    "bodyHashAfter": "07bc2919479dd0831c7318829cc63ea4a2b1e400fea189fc935ef63073bc5c55",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextBroker.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ContextBudget.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+    "domain": "settings",
+    "status": "CURRENT",
+    "scope": "南枫 AI Android 当前设置界面合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "3d5a1174623a8e2f653ddacf206dd910c14a4dada9d6ca4d1266d06dbfbd2119",
+    "bodyHashAfter": "4536cbf21e8fc7b57065c99f22fafc868e1e328b5920ce4819bb8dabf9b5d511",
+    "bodyChanged": true,
+    "issues": [
+      5
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+      "desktop/src/android-settings-shell.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md",
+    "domain": "transcription",
+    "status": "CURRENT",
+    "scope": "Android 南枫转写当前界面合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "f832d7f4fefc0385a80a2301f6ff4c077981f94c8747fd70fddb15007c36ead9",
+    "bodyHashAfter": "f832d7f4fefc0385a80a2301f6ff4c077981f94c8747fd70fddb15007c36ead9",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+      "desktop/src-tauri/src/desktop_transcription_v1.rs",
+      "desktop/src/desktop-transcription-page.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/ANSWER_LANGUAGE_CURRENT_CONTRACT.md",
+    "domain": "language",
+    "status": "CURRENT",
+    "scope": "普通回答语言与外语来源合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "44d13a6e2d79dcc39634eaaa908e4bf7b9bfe9b49ed725ac3cffbc77807fdd93",
+    "bodyHashAfter": "44d13a6e2d79dcc39634eaaa908e4bf7b9bfe9b49ed725ac3cffbc77807fdd93",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/AnswerLanguagePolicy.kt",
+      "desktop/src-tauri/src/answer_language_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "domain": "model-network",
+    "status": "CURRENT",
+    "scope": "普通发送按渠道/材料选择工具、来源与范围终态；旧独立搜索服务只读兼容",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "c0ccd94f2fd0398692b96d3d530db57d61e814ab78b53206742d0c03204bddde",
+    "bodyHashAfter": "31fd11161153c0c04eae693952d6144b2da17bc05a36e68e57fe3306720ef742",
+    "bodyChanged": true,
+    "issues": [
+      2,
+      3
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+      "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+      "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+      "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/attachment_web_search_v1.rs",
+      "desktop/src-tauri/src/relaycore_web_search_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md",
+    "domain": "lifecycle",
+    "status": "CURRENT",
+    "scope": "C-13 对话生命周期 Android → Desktop 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "d1dbdaf94fd07ddc76a1c7fe3ee06784c587e245fd6e33244a8dca74c1130c2e",
+    "bodyHashAfter": "d1dbdaf94fd07ddc76a1c7fe3ee06784c587e245fd6e33244a8dca74c1130c2e",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/C14_LOCAL_DATA_PARITY_CONTRACT.md",
+    "domain": "local-data",
+    "status": "CURRENT",
+    "scope": "C-14 导入导出／本机数据跨端合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "4e277ea2ade6c7e6802074f898d27224a49086f4ef5daf391569cd9181610d86",
+    "bodyHashAfter": "4e277ea2ade6c7e6802074f898d27224a49086f4ef5daf391569cd9181610d86",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+      "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+      "desktop/src/local-data-view.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md",
+    "domain": "workspace",
+    "status": "CURRENT",
+    "scope": "CHAT/WORK存储、恢复与手动引用隔离；WORK隐藏不构成删除或恢复入口授权",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "aceca0dc88a855a33ab35130466c2c1f47e4b1cd3add4f4edee5bf1ac53cad29",
+    "bodyHashAfter": "aceca0dc88a855a33ab35130466c2c1f47e4b1cd3add4f4edee5bf1ac53cad29",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/ConversationAreaFileContext.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md",
+    "domain": "theme",
+    "status": "CURRENT",
+    "scope": "C-16 主题／字体／弹层跨端合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "3c8e075ad793fa0f337198131be5eaff85f81bdd8d8559f43f8b5c6b000a1faf",
+    "bodyHashAfter": "3c8e075ad793fa0f337198131be5eaff85f81bdd8d8559f43f8b5c6b000a1faf",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+      "desktop/src/desktop-theme-owner.mjs",
+      "desktop/src/desktop-parity-preferences.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md",
+    "domain": "product",
+    "status": "CURRENT",
+    "scope": "南枫 AI 意图优先组织合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "191ee6d7fbeca3f03c1745d71f7c53706ab590a545414a95cfa55b6d94ad6c0f",
+    "bodyHashAfter": "191ee6d7fbeca3f03c1745d71f7c53706ab590a545414a95cfa55b6d94ad6c0f",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+      "desktop/src/product-scope.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/CONVERSATION_APP_ENTRY_CONTRACT.md",
+    "domain": "startup",
+    "status": "CURRENT",
+    "scope": "会话启动合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "edbf8fa6991122dc0180808b02243dd1def9b88c1de7b5291f94f706d7b7fecd",
+    "bodyHashAfter": "edbf8fa6991122dc0180808b02243dd1def9b88c1de7b5291f94f706d7b7fecd",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAppEntryPolicy.kt",
+      "desktop/src/desktop-app-entry.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/DESKTOP_CHAT_FIRST_UI_CONTRACT.md",
+    "domain": "desktop-conversation",
+    "status": "CURRENT",
+    "scope": "南枫 AI Desktop 对话优先 UI 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "96cd8d5e06b1d41946ce455fba9b6cbe929ce7c172af6b7a284f29e7b6b97da8",
+    "bodyHashAfter": "8c29053736232ae8634a19df56c457e16417851939ae029cebcdd0ca72705bee",
+    "bodyChanged": true,
+    "issues": [],
+    "ownerPathsChecked": [
+      "desktop/src/chat-shell.mjs",
+      "desktop/src/app.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/DESKTOP_COMPARE_EXECUTION_CONTRACT.md",
+    "domain": "compare",
+    "status": "SCOPED",
+    "scope": "Desktop Compare 真实执行合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "123cff1f2f29136e1f4faa489f41fe29ab42c53fa33cdd6ebedad561984f072e",
+    "bodyHashAfter": "123cff1f2f29136e1f4faa489f41fe29ab42c53fa33cdd6ebedad561984f072e",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/CompareConversationSessionOwner.kt",
+      "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/DESKTOP_HISTORY_KNOWLEDGE_CONTRACT.md",
+    "domain": "history-library",
+    "status": "CURRENT",
+    "scope": "Desktop 历史资料库与隐藏 interests 当前合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "2b3f603ae0c40f25f8499f807772bba9967e5ea84c34d076aea66dec460a6775",
+    "bodyHashAfter": "2b3f603ae0c40f25f8499f807772bba9967e5ea84c34d076aea66dec460a6775",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/HistoryKnowledgeCuration.kt",
+      "desktop/src-tauri/src/desktop_history_knowledge_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md",
+    "domain": "ocr",
+    "status": "CURRENT",
+    "scope": "用户显式发起的独立GLM-OCR材料任务；不自动介入普通搜索",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "aaba1a9bcfe91f6986cb5dc04190c46efd2217b26b9ceb5490057cf026fd1262",
+    "bodyHashAfter": "aaba1a9bcfe91f6986cb5dc04190c46efd2217b26b9ceb5490057cf026fd1262",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/GlmOcr.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/OfficialGlmOcrTransport.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/ICONOGRAPHY_CONTRACT.md",
+    "domain": "icon",
+    "status": "SCOPED",
+    "scope": "图标语汇合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "4b198ce7b39f10a5e247883e93c46ef20088897fedee63c90b16a2a1aaa5cba8",
+    "bodyHashAfter": "4b198ce7b39f10a5e247883e93c46ef20088897fedee63c90b16a2a1aaa5cba8",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "desktop/src/icon-source.mjs",
+      "desktop/src/android-action-icons.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/NANFENG_ISLAND_CURRENT_CONTRACT.md",
+    "domain": "island",
+    "status": "CURRENT",
+    "scope": "持久生成元数据的后台展示/查看/停止；前台隐藏且展示不重发任务",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "4b9c39a5d6a6fa713cacd8aff8bdf7f4895ac1a09fc4816e66df43782f87eb66",
+    "bodyHashAfter": "4b9c39a5d6a6fa713cacd8aff8bdf7f4895ac1a09fc4816e66df43782f87eb66",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/GenerationIsland.kt",
+      "app/src/main/java/com/nanzhufeng/ai/background/GenerationIslandOverlay.kt",
+      "desktop/src-tauri/src/nanfeng_island_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md",
+    "domain": "draft",
+    "status": "CURRENT",
+    "scope": "新对话草稿保留合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "440b955f9ce68a3dc0c15f1a1898cf65ccd6edb62da047914ba14b1e8260851f",
+    "bodyHashAfter": "440b955f9ce68a3dc0c15f1a1898cf65ccd6edb62da047914ba14b1e8260851f",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NewConversationDraftPolicy.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/NFAI_EXCHANGE_V1_CONTRACT.md",
+    "domain": "exchange-v1",
+    "status": "SCOPED",
+    "scope": "nfai.exchange.v1 跨端语义交换合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "413ca6b56f25f6230a74f9e37d47d2bcf6280371c4f9c35a087b2ecd8c59ffbc",
+    "bodyHashAfter": "413ca6b56f25f6230a74f9e37d47d2bcf6280371c4f9c35a087b2ecd8c59ffbc",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NfaiExchangeV1.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P0_USAGE_LEDGER_CONTRACT.md",
+    "domain": "usage",
+    "status": "SCOPED",
+    "scope": "南枫 AI P0 Usage Ledger 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "9225b69f62d2aa786d15843b338cf0470027b4748df7fb54f2a2ff3535c08324",
+    "bodyHashAfter": "9225b69f62d2aa786d15843b338cf0470027b4748df7fb54f2a2ff3535c08324",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatCallAccounting.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+      "desktop/src-tauri/src/chat_call_accounting_v1.rs",
+      "desktop/src-tauri/src/usage_ledger_v1.rs",
+      "app/src/main/java/com/nanzhufeng/ai/domain/AssistantResponseModelAttribution.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ui/AssistantFooterFormatting.kt",
+      "desktop/src/desktop-cost-estimator.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md",
+    "domain": "connection-local",
+    "status": "EXPERIMENTAL",
+    "scope": "P10-A 双路径连接能力、状态与配置表面合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "db619dd46375bad7546db3cd83a55279cc5471731e666805404d5286d22a22b0",
+    "bodyHashAfter": "db619dd46375bad7546db3cd83a55279cc5471731e666805404d5286d22a22b0",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/DualPathConnection.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P10B_DUAL_PATH_SELECTION_FEEDBACK_CONTRACT.md",
+    "domain": "connection-local",
+    "status": "EXPERIMENTAL",
+    "scope": "P10-B 双路径选择反馈合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "86ebe69962588c7eece40858737eadf2a07a2e84444b689662e744d3c9e8c8ce",
+    "bodyHashAfter": "86ebe69962588c7eece40858737eadf2a07a2e84444b689662e744d3c9e8c8ce",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/DualPathConnection.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P1_ATTACHMENT_EGRESS_ELIGIBILITY_CONTRACT.md",
+    "domain": "attachments",
+    "status": "SCOPED",
+    "scope": "南枫 AI P1 附件外发资格与授权投影合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "7a3a9583ceb27f700267c10636e33f693c5bdd501cecac20e24d8d76eebeb264",
+    "bodyHashAfter": "7a3a9583ceb27f700267c10636e33f693c5bdd501cecac20e24d8d76eebeb264",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+      "desktop/src-tauri/src/attachment_document_text_v1.rs",
+      "desktop/src/attachment-document-types.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P1_TASK_CONTRACT.md",
+    "domain": "product",
+    "status": "HISTORICAL",
+    "scope": "南枫 AI P1 任务合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "da39869619dcd8ef2d0792105928db4b3136c6f13fc5fbe5b63d6a7a25ccea28",
+    "bodyHashAfter": "da39869619dcd8ef2d0792105928db4b3136c6f13fc5fbe5b63d6a7a25ccea28",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+      "desktop/src/product-scope.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2A_LOCAL_DATA_AND_ATTACHMENT_CONTRACT.md",
+    "domain": "attachments",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-A 本地数据与附件合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "0730aacda358968ece09a906cec85fcbb612102ae3e216cdf1f56812b4b1fad2",
+    "bodyHashAfter": "0730aacda358968ece09a906cec85fcbb612102ae3e216cdf1f56812b4b1fad2",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+      "desktop/src-tauri/src/attachment_document_text_v1.rs",
+      "desktop/src/attachment-document-types.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2B_CAPTURE_UI_CONTRACT.md",
+    "domain": "attachments",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-B 自适应捕获 UI 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "6d112be3ac04714cd73ddcc9f2d52519fc03545289752917bea821ad85a415e6",
+    "bodyHashAfter": "6d112be3ac04714cd73ddcc9f2d52519fc03545289752917bea821ad85a415e6",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+      "desktop/src-tauri/src/attachment_document_text_v1.rs",
+      "desktop/src/attachment-document-types.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2B_GALLERY_CAPTURE_CONTRACT.md",
+    "domain": "attachments",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-B 相册捕获与真实验收合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "fb2901ade836e3765438cf3a918ec6ea2458c4bb9f9eba6b1178cba289e9690f",
+    "bodyHashAfter": "fb2901ade836e3765438cf3a918ec6ea2458c4bb9f9eba6b1178cba289e9690f",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+      "desktop/src-tauri/src/attachment_document_text_v1.rs",
+      "desktop/src/attachment-document-types.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2C_TEXT_CAPTURE_CONTRACT.md",
+    "domain": "attachments",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-C 文本捕获与系统分享合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "977a85add1b71aa18b7e998dda22301621f1af5e4c788861107b453342938739",
+    "bodyHashAfter": "977a85add1b71aa18b7e998dda22301621f1af5e4c788861107b453342938739",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+      "desktop/src-tauri/src/attachment_document_text_v1.rs",
+      "desktop/src/attachment-document-types.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2D_MODEL_SETTINGS_CONTRACT.md",
+    "domain": "models",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-D 模型设置与本机凭据合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "185e0430a8ce5bd50bb5856135957011c621d2b3168cf31d37f112582a1055a6",
+    "bodyHashAfter": "185e0430a8ce5bd50bb5856135957011c621d2b3168cf31d37f112582a1055a6",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/P6GModelSelectionOwner.kt",
+      "desktop/src/auto-chat-routing.mjs",
+      "desktop/src-tauri/src/desktop_model_service_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2E_OFFLINE_PROVIDER_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-E 离线 Provider 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "de36171e80113797e88a60f4861e8950bfd322bb53d2e5c00024e2ea56b91063",
+    "bodyHashAfter": "de36171e80113797e88a60f4861e8950bfd322bb53d2e5c00024e2ea56b91063",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2F_INVOCATION_LEDGER_CONTRACT.md",
+    "domain": "usage",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-F 本地 Invocation Room Ledger 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "6978aacbdc5a915cd44334127661e6be1d2607e9cefe80dbbd69a51f14260221",
+    "bodyHashAfter": "6978aacbdc5a915cd44334127661e6be1d2607e9cefe80dbbd69a51f14260221",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatCallAccounting.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+      "desktop/src-tauri/src/chat_call_accounting_v1.rs",
+      "desktop/src-tauri/src/usage_ledger_v1.rs",
+      "app/src/main/java/com/nanzhufeng/ai/domain/AssistantResponseModelAttribution.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ui/AssistantFooterFormatting.kt",
+      "desktop/src/desktop-cost-estimator.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2G_MOCK_CANDIDATE_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-G 本地确认、Mock 与候选核对合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "3462fab5e2d78d805d5f3febb8d4654b29bc4777925d6e6af07f895d01d2aec1",
+    "bodyHashAfter": "3462fab5e2d78d805d5f3febb8d4654b29bc4777925d6e6af07f895d01d2aec1",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2H_KNOWLEDGE_READ_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-H 最小 Knowledge 读取合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "8c1aed9aeb6c5cfd96c942f793ab7fb04f89f2ab8c622be49b3e13b87fb0a2d1",
+    "bodyHashAfter": "8c1aed9aeb6c5cfd96c942f793ab7fb04f89f2ab8c622be49b3e13b87fb0a2d1",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2I_LOCAL_EXPORT_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-I 最小本地 Knowledge 导出合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "e8d8e9ee6a41317db2b97a931009a2d2ae2d450ef8375f252c75d57bb261cd07",
+    "bodyHashAfter": "e8d8e9ee6a41317db2b97a931009a2d2ae2d450ef8375f252c75d57bb261cd07",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2J_OPENROUTER_REGISTRY_VERIFICATION_CONTRACT.md",
+    "domain": "models",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-J OpenRouter Model Registry 只读核验合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "a161a89e7d1ca37f3b23967f1069f344f1744ebbb4b1aa7ab15f242b2272cf13",
+    "bodyHashAfter": "a161a89e7d1ca37f3b23967f1069f344f1744ebbb4b1aa7ab15f242b2272cf13",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/P6GModelSelectionOwner.kt",
+      "desktop/src/auto-chat-routing.mjs",
+      "desktop/src-tauri/src/desktop_model_service_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2K_OPENROUTER_INFERENCE_TRANSPORT_CONTRACT.md",
+    "domain": "models",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-K OpenRouter 推理传输与强制门禁合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "a00ef728b0383d10a80c0887a6351c440fa3a628a5e4cf261e6307f5ab9252d9",
+    "bodyHashAfter": "dae28247f3cd7eac936a6e120c1415a8d03b87b1c6cc85fc75f9e7933a7a332f",
+    "bodyChanged": true,
+    "issues": [
+      7
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/P6GModelSelectionOwner.kt",
+      "desktop/src/auto-chat-routing.mjs",
+      "desktop/src-tauri/src/desktop_model_service_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2L_REAL_SERVICE_ACCEPTANCE_CONTRACT.md",
+    "domain": "egress",
+    "status": "HISTORICAL",
+    "scope": "南枫 AI P2-L 真实服务验收准备合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "f847f1db571ccef4ac09cbbf9e445f38846dc73dccd24f3ea007ea2245d85a64",
+    "bodyHashAfter": "f847f1db571ccef4ac09cbbf9e445f38846dc73dccd24f3ea007ea2245d85a64",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2M_P3_BACKGROUND_BRIDGE_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P2-M → P3 后台桥接合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "c28382a49cf9065d168b9ee83bf5a914a05b8af6ec2e7d10773beb8d028cdc8f",
+    "bodyHashAfter": "c28382a49cf9065d168b9ee83bf5a914a05b8af6ec2e7d10773beb8d028cdc8f",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P2M_REAL_TEXT_EXECUTION_CONTRACT.md",
+    "domain": "egress",
+    "status": "HISTORICAL",
+    "scope": "南枫 AI P2-M 一次真实文本执行合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "42d9401789b39134861618c4f6956e8b2ab6597ca0937dbcab36124e1cd070b6",
+    "bodyHashAfter": "42d9401789b39134861618c4f6956e8b2ab6597ca0937dbcab36124e1cd070b6",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3A_CONVERSATION_MESSAGE_TREE_CONTRACT.md",
+    "domain": "lifecycle",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-A Conversation / Message Tree 本地持久化合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "6be7dea5183f57dc02fda64696c03284c867a40bd857c2ede5c17a20366ce7c0",
+    "bodyHashAfter": "6be7dea5183f57dc02fda64696c03284c867a40bd857c2ede5c17a20366ce7c0",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md",
+    "domain": "message-actions",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-B 类型化流事件与本地对话运行状态机合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "dd1af2de9f29bda716ddee2af070b18c90fe6a123e9bcc98cb9a8a1015c45c97",
+    "bodyHashAfter": "dd1af2de9f29bda716ddee2af070b18c90fe6a123e9bcc98cb9a8a1015c45c97",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P3CConversationActions.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "desktop/src/chat-shell.mjs",
+      "app/src/main/java/com/nanzhufeng/ai/domain/TranscriptPresentation.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3C_CONVERSATION_ACTION_LINEAGE_CONTRACT.md",
+    "domain": "lifecycle",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-C 继续、重试与换模型重答合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "7628d604f99cae5068150a7eb2dbfb39005aa47b2cc0d138c7f94b8bc6fb92e5",
+    "bodyHashAfter": "7628d604f99cae5068150a7eb2dbfb39005aa47b2cc0d138c7f94b8bc6fb92e5",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3D_PRESENTATION_VIRTUALIZATION_DRAFT_RECOVERY_CONTRACT.md",
+    "domain": "message-actions",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-D 安全展示、长会话虚拟化与草稿恢复合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "0b79222d9e2b1641880110db3b4164e4717eaa10534f4a018a118e53344351ae",
+    "bodyHashAfter": "0b79222d9e2b1641880110db3b4164e4717eaa10534f4a018a118e53344351ae",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P3CConversationActions.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "desktop/src/chat-shell.mjs",
+      "app/src/main/java/com/nanzhufeng/ai/domain/TranscriptPresentation.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3E_CONVERSATION_MANAGEMENT_SEARCH_EXPORT_CONTRACT.md",
+    "domain": "lifecycle",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-E 会话管理、搜索与本地导出合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "db217eb30749a5b3bcbaa2094c2432c8447450cf6c95764a041c657c900e2c2b",
+    "bodyHashAfter": "db217eb30749a5b3bcbaa2094c2432c8447450cf6c95764a041c657c900e2c2b",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3F_CONVERSATION_EDIT_BRANCH_HISTORY_CONTRACT.md",
+    "domain": "lifecycle",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-F 用户消息编辑与分支历史合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "d7a798afbb98a7355fdffd57d97f6668845f227faa6368720263559ef4ba6cfe",
+    "bodyHashAfter": "d7a798afbb98a7355fdffd57d97f6668845f227faa6368720263559ef4ba6cfe",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3G_CONVERSATION_ATTACHMENT_LIFECYCLE_CONTRACT.md",
+    "domain": "attachment-lifecycle",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-G 对话附件本地引用与生命周期合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "75f3cf3dcf5791787214939206c8486bc6b47402d81df66d6b0a10e68c0daa87",
+    "bodyHashAfter": "75f3cf3dcf5791787214939206c8486bc6b47402d81df66d6b0a10e68c0daa87",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3H_CONVERSATION_ATTEMPT_HISTORY_CONTRACT.md",
+    "domain": "lifecycle",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-H 会话本地尝试历史投影合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "ec668d8bbe2d79bb09c46628bbdfbdd1140c976dc4b4e80b53b5d93afe68d963",
+    "bodyHashAfter": "ec668d8bbe2d79bb09c46628bbdfbdd1140c976dc4b4e80b53b5d93afe68d963",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3I_CONVERSATION_REAL_TEXT_EXECUTION_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3-I ConversationRealTextExecution 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "6df4c663da0706089da56b45b8c0fa15b840077d20b03aaba0169649c8534b74",
+    "bodyHashAfter": "6df4c663da0706089da56b45b8c0fa15b840077d20b03aaba0169649c8534b74",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+    "domain": "egress",
+    "status": "CURRENT",
+    "scope": "普通发送与显式重试的准确材料/接收方授权；旧账本读取不授予外发",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "b11189567f9985ffaef3f14402ddf097d52debf53080b6c516f63307c803fd86",
+    "bodyHashAfter": "b11189567f9985ffaef3f14402ddf097d52debf53080b6c516f63307c803fd86",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3_OPENAI_COMPATIBLE_PROVIDER_HTTP_TRANSPORT_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3 OpenAI-compatible Provider HTTP Transport 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "65bbbb0d7aa604fe0cd019df068737810154ad6dc061e3edb8265c4c3ecd9f52",
+    "bodyHashAfter": "65bbbb0d7aa604fe0cd019df068737810154ad6dc061e3edb8265c4c3ecd9f52",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3_PROVIDER_TRANSPORT_BOUNDARY_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3 Provider Transport Boundary 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "b0a2b45ff175041367b45eb43136010491e5b8f579b58421dcb5027f8db8b53c",
+    "bodyHashAfter": "bca3013380109f4b60176541b04ffacb96f07d2b36de7042cf50b6a839a5b253",
+    "bodyChanged": true,
+    "issues": [
+      6
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3_REAL_TEXT_EXECUTION_COORDINATOR_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3 RealTextExecutionCoordinator 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "ecf7236561f8fe7a853494ebad6a79cbf6e14c1bb2f19c955483d6c1e251acac",
+    "bodyHashAfter": "ecf7236561f8fe7a853494ebad6a79cbf6e14c1bb2f19c955483d6c1e251acac",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P3_REAL_TEXT_EXECUTION_PREFLIGHT_CONTRACT.md",
+    "domain": "egress",
+    "status": "SCOPED",
+    "scope": "南枫 AI P3 RealTextExecution Preflight / Orchestrator 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "26077ab24374a8e402525ce669bfcb706d41a53c8ccb02905c867f258b596854",
+    "bodyHashAfter": "26077ab24374a8e402525ce669bfcb706d41a53c8ccb02905c867f258b596854",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-A Projects、项目指令与知识范围合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "fe5849abd8f09c8ca3c28c6debc6c56a2cf08da0b392cb4e97600416d8d64c0e",
+    "bodyHashAfter": "fe5849abd8f09c8ca3c28c6debc6c56a2cf08da0b392cb4e97600416d8d64c0e",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4B_CONTEXT_SELECTION_OWNERSHIP_CONTRACT.md",
+    "domain": "runtime-context",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-B 上下文选择所有权与 Memory 边界合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "edb6c5350471ff5e3970eeddc8324e646e790a4a0e8996564dacf4e10dabd0cb",
+    "bodyHashAfter": "edb6c5350471ff5e3970eeddc8324e646e790a4a0e8996564dacf4e10dabd0cb",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextBroker.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ContextBudget.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4C_MEMORY_GOVERNANCE_CONTRACT.md",
+    "domain": "memory",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-C 长期 Memory 本地治理合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "f9e32e1811640008a88ba9b7289af80f892fb2175c377037e71cc07142994b14",
+    "bodyHashAfter": "f9e32e1811640008a88ba9b7289af80f892fb2175c377037e71cc07142994b14",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/MemorySummaryPolicy.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/local/RoomMemoryRepository.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4D_EXPLICIT_CONTEXT_BODY_SELECTION_CONTRACT.md",
+    "domain": "runtime-context",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-D L0-L3 Context 正文选择与显式控制合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "16b04dc8daaf1d2d0c658d2abff924fc3b67bc409495d81c9dc801e1bfa05822",
+    "bodyHashAfter": "16b04dc8daaf1d2d0c658d2abff924fc3b67bc409495d81c9dc801e1bfa05822",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextBroker.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ContextBudget.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-E 本地 Knowledge 检索与显式 Context 选择合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "d70410390afbf85d7432f32e512a09d9271b81bc8ba1118bf721fc5d0373ae98",
+    "bodyHashAfter": "d70410390afbf85d7432f32e512a09d9271b81bc8ba1118bf721fc5d0373ae98",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4F_LOCAL_KNOWLEDGE_DEDUPLICATION_CANDIDATES_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-F 本地 Knowledge 去重候选合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "112efbb06290d815f203ac4c6acff0fc950ba8af013471c8f135722f2496f917",
+    "bodyHashAfter": "112efbb06290d815f203ac4c6acff0fc950ba8af013471c8f135722f2496f917",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4G_LOCAL_KNOWLEDGE_RELATIONSHIPS_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-G 本地 Knowledge 人工关系合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "980ca1745f0153e70afda0f1c707025eea362a72397405c93eb63a8a376e0718",
+    "bodyHashAfter": "980ca1745f0153e70afda0f1c707025eea362a72397405c93eb63a8a376e0718",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4H_MARKDOWN_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-H 本地 Markdown Knowledge 导入/导出与可恢复队列合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "7d82a3436f198f25810447b36c4aaa4393233d38586fb0ef58a9dad6ffc2e1c6",
+    "bodyHashAfter": "7d82a3436f198f25810447b36c4aaa4393233d38586fb0ef58a9dad6ffc2e1c6",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4I_OFFLINE_EVAL_BASELINE_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-I 版本化离线 Eval 基线合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "bb16de4828d6f471db85763c2253fc2945fffc54d2a09402fa628f93b1d07473",
+    "bodyHashAfter": "bb16de4828d6f471db85763c2253fc2945fffc54d2a09402fa628f93b1d07473",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4J_LOCAL_CONTEXT_COMPRESSION_CONTRACT.md",
+    "domain": "runtime-context",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-J 版本化本地 Context 摘要/压缩合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "64a31e542f8bff2122af54b34cf8c38e9e5404efa94fdc6a477e90cecdc9c833",
+    "bodyHashAfter": "64a31e542f8bff2122af54b34cf8c38e9e5404efa94fdc6a477e90cecdc9c833",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextBroker.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ContextBudget.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4K_LOCAL_CONTEXT_PREVIEW_STABLE_PREFIX_CONTRACT.md",
+    "domain": "runtime-context",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-K 本机抽取预览与稳定前缀元数据合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "2d24cd5ff70d4261dc01f7506e83a829984fe6d80eccc22dc0dc91609885ed13",
+    "bodyHashAfter": "2d24cd5ff70d4261dc01f7506e83a829984fe6d80eccc22dc0dc91609885ed13",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextBroker.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ContextBudget.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4L_JSON_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-L 版本化 JSON Knowledge Adapter 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "f9e4da44953106345dba7024b1db5889f42727bda717e4c755ada486ef6c19c2",
+    "bodyHashAfter": "f9e4da44953106345dba7024b1db5889f42727bda717e4c755ada486ef6c19c2",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4M_L3_LOCAL_ACTION_TRACE_CONTRACT.md",
+    "domain": "runtime-context",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-M L3 本地短期操作轨迹合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "cf71cbc393c52ea71badd82678d44bacb439161512d089ed5477f3920491ac67",
+    "bodyHashAfter": "cf71cbc393c52ea71badd82678d44bacb439161512d089ed5477f3920491ac67",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextBroker.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/ContextBudget.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4N_PDF_TEXT_KNOWLEDGE_ADAPTER_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-N 本地 PDF 文本资料 Adapter 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "9ee79a0904fdb3121b3bee22e44f78ccbcc85fd775bd72a7dcd54a4a6bb9c858",
+    "bodyHashAfter": "9ee79a0904fdb3121b3bee22e44f78ccbcc85fd775bd72a7dcd54a4a6bb9c858",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P4O_HTTPS_WEB_TEXT_SNAPSHOT_CONTRACT.md",
+    "domain": "knowledge",
+    "status": "SCOPED",
+    "scope": "南枫 AI P4-O 严格 HTTPS 网页文本快照 Adapter 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "dd488ed8c4bfab534821d2961562f180ba881dc50b6b44a6b7795bf3880564da",
+    "bodyHashAfter": "dd488ed8c4bfab534821d2961562f180ba881dc50b6b44a6b7795bf3880564da",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md",
+    "domain": "settings",
+    "status": "SCOPED",
+    "scope": "P5-A Android 自适应布局与无障碍产品化基线合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "1144a938107fcb8b7bc89cdbcc0d6b0df88539e09162d0ea265c6773643f0d25",
+    "bodyHashAfter": "1144a938107fcb8b7bc89cdbcc0d6b0df88539e09162d0ea265c6773643f0d25",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+      "desktop/src/android-settings-shell.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md",
+    "domain": "settings",
+    "status": "SCOPED",
+    "scope": "P5-A 更多本地控制面入口合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "b5d19ab9b5711b633764321416b285393282685e7530b7538aab8b032c0a2891",
+    "bodyHashAfter": "b5d19ab9b5711b633764321416b285393282685e7530b7538aab8b032c0a2891",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+      "desktop/src/android-settings-shell.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P5B_BACKGROUND_CANCELLATION_BATTERY_CONTRACT.md",
+    "domain": "island",
+    "status": "SCOPED",
+    "scope": "南枫 AI P5-B Android 后台、取消/恢复与电量产品化基线合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "3e046cbf3ee3689d797bd8f7375a5d713c3d3cffad5c6cf23c000baaa4ef47bd",
+    "bodyHashAfter": "3e046cbf3ee3689d797bd8f7375a5d713c3d3cffad5c6cf23c000baaa4ef47bd",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/GenerationIsland.kt",
+      "app/src/main/java/com/nanzhufeng/ai/background/GenerationIslandOverlay.kt",
+      "desktop/src-tauri/src/nanfeng_island_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P5C_PRIVACY_DATA_DIAGNOSTICS_CONTRACT.md",
+    "domain": "privacy",
+    "status": "SCOPED",
+    "scope": "南枫 AI P5-C 隐私、数据管理与安全诊断合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "7646e56d75e7b5a60d4cfa9ddc5d46fe0c7a6c8458bd27491c48be2641636018",
+    "bodyHashAfter": "7646e56d75e7b5a60d4cfa9ddc5d46fe0c7a6c8458bd27491c48be2641636018",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/PrivacyData.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidPrivacyDataManager.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md",
+    "domain": "backup",
+    "status": "SCOPED",
+    "scope": "南枫 AI P5-D 本地备份、恢复与交付合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "6a34caefea2eb604c61d221f6b738572ed2f0823175377b462df52438badad30",
+    "bodyHashAfter": "6a34caefea2eb604c61d221f6b738572ed2f0823175377b462df52438badad30",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+      "desktop/src-tauri/src/desktop_local_backup_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6A_ANDROID_TEXT_CONVERSATION_EXCHANGE_EXPORT_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6-A Android 文本会话跨端交换导出合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "7d9290fe035187c334bbdc28d473e039c7904c3d5fe6644a36e78f85c2602440",
+    "bodyHashAfter": "7d9290fe035187c334bbdc28d473e039c7904c3d5fe6644a36e78f85c2602440",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6B_DESKTOP_LOCAL_WORKBENCH_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6-B：离线 Desktop 工作台、本地所有权与交换导入导出合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "70d4ca8d58392ebd121182b26d4352565455d0c6db5af4e4614dbd688a226d0e",
+    "bodyHashAfter": "70d4ca8d58392ebd121182b26d4352565455d0c6db5af4e4614dbd688a226d0e",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6C_DESKTOP_LOCAL_WRITE_WORKBENCH_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6-C：Desktop 本地领域写入、可逆动作与模型/成本 metadata 工作台合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "feceea7ee4c17a77fa5106dc1ea86bd0ed12f64ee72f67ee523d8f7238e8a025",
+    "bodyHashAfter": "feceea7ee4c17a77fa5106dc1ea86bd0ed12f64ee72f67ee523d8f7238e8a025",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+    "domain": "attachments",
+    "status": "CURRENT",
+    "scope": "选择/本机解析/私有副本到已授权普通发送的材料桥；本模块不自行外发",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "421b04709c2a4d976b926b51beb624eca7ea07fbe1c3333d7c91effbd6735664",
+    "bodyHashAfter": "6a4c1f85a40f6f55a9b6b1a9000a08b5e1df35a936adf7c5e064b3d7d34ef52a",
+    "bodyChanged": true,
+    "issues": [
+      4
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+      "desktop/src-tauri/src/attachment_document_text_v1.rs",
+      "desktop/src/attachment-document-types.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6D_COMPACT_CHAT_SCROLL_AND_WINDOW_RECOVERY_CONTRACT.md",
+    "domain": "scroll",
+    "status": "SCOPED",
+    "scope": "P6-D 紧凑态消息长列表滚动与窗口恢复合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "6e743da0fa3e354db37b2faab49adce80e5065d11ea2addfd0d1726f6e8b3aed",
+    "bodyHashAfter": "6e743da0fa3e354db37b2faab49adce80e5065d11ea2addfd0d1726f6e8b3aed",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "desktop/src/chat-shell.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6D_DESKTOP_SIDEBAR_INFORMATION_ARCHITECTURE_CONTRACT.md",
+    "domain": "desktop-conversation",
+    "status": "SCOPED",
+    "scope": "P6-D 双端侧栏生产信息架构增量合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "b318cf4e059c598af472f8137f9a29ded88d82e3d6a98317b337d9c27de1e9f3",
+    "bodyHashAfter": "8d5a5a23eee76f7e916e7087dd88b2eb6d1f1ef78ed3612f587cb2ebb611e957",
+    "bodyChanged": true,
+    "issues": [
+      8,
+      9
+    ],
+    "ownerPathsChecked": [
+      "desktop/src/chat-shell.mjs",
+      "desktop/src/app.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6D_MACOS_GUI_ACCEPTANCE_AND_DESKTOP_DELIVERY_CONTRACT.md",
+    "domain": "desktop-conversation",
+    "status": "HISTORICAL",
+    "scope": "P6-D：macOS Tauri GUI 黑箱验收与 Desktop 交付收口合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "6841fed2a67a7f053218748ef97c7eebbc758398997f37b5a10eeeda7c16ee24",
+    "bodyHashAfter": "6841fed2a67a7f053218748ef97c7eebbc758398997f37b5a10eeeda7c16ee24",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "desktop/src/chat-shell.mjs",
+      "desktop/src/app.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6D_WINDOWS_NATIVE_DELIVERY_CONTRACT.md",
+    "domain": "desktop-conversation",
+    "status": "SCOPED",
+    "scope": "P6-D Windows 原生交付独立合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "f1293a695f51357d81402e22785043798ce60638ed02a90e23d2d47d733b84f3",
+    "bodyHashAfter": "f1293a695f51357d81402e22785043798ce60638ed02a90e23d2d47d733b84f3",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "desktop/src/chat-shell.mjs",
+      "desktop/src/app.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md",
+    "domain": "temporary",
+    "status": "CURRENT",
+    "scope": "仅本地临时消息与隔离24小时恢复记录；不接Provider/普通同步",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "1b063f07bd9f7a40472b6fe1098b48031e22d69d98e512b4479f7fd60759a91c",
+    "bodyHashAfter": "1b063f07bd9f7a40472b6fe1098b48031e22d69d98e512b4479f7fd60759a91c",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/TemporaryConversation.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/local/RoomTemporaryConversationRecoveryStore.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md",
+    "domain": "search-preview",
+    "status": "SCOPED",
+    "scope": "P6-F2-E Audio & Generic File Adapter 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "da15bbae014ddd00ce00d75c84cf985356a991b86bc09a7c1e7eb28b6872ec22",
+    "bodyHashAfter": "da15bbae014ddd00ce00d75c84cf985356a991b86bc09a7c1e7eb28b6872ec22",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextIndex.kt",
+      "desktop/src/desktop-attachment-preview-owner.mjs",
+      "desktop/src/desktop-search-page.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+    "domain": "search-preview",
+    "status": "SCOPED",
+    "scope": "P6-F2 统一搜索、搜索历史与本地内容预览合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "1ffea30e29f465cc9e647aba3b689f52251ee13a1565b4db73a5f776ca949d19",
+    "bodyHashAfter": "1ffea30e29f465cc9e647aba3b689f52251ee13a1565b4db73a5f776ca949d19",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextIndex.kt",
+      "desktop/src/desktop-attachment-preview-owner.mjs",
+      "desktop/src/desktop-search-page.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+    "domain": "message-actions",
+    "status": "SCOPED",
+    "scope": "P6-F Conversation Transcript Presentation & Message Actions Contract",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "9b119eb4197f29a22ff64c2aa9d405c9ec52ac6637d697c5599e4ba9bbb27bf2",
+    "bodyHashAfter": "952e63e84bfd21d7eecadc26e9dcec276bba6ecb368d6b299c987290836b51c2",
+    "bodyChanged": true,
+    "issues": [
+      10,
+      11
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P3CConversationActions.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "desktop/src/chat-shell.mjs",
+      "app/src/main/java/com/nanzhufeng/ai/domain/TranscriptPresentation.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+    "domain": "models",
+    "status": "CURRENT",
+    "scope": "普通会话手动/Auto、下次默认和冻结身份；旧P6-G实验不裁决生产候选",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "c5f256be380262ecafdf58cc3c095437d1608534012b03ab33915ea0d296ea61",
+    "bodyHashAfter": "c5f256be380262ecafdf58cc3c095437d1608534012b03ab33915ea0d296ea61",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/P6GModelSelectionOwner.kt",
+      "desktop/src/auto-chat-routing.mjs",
+      "desktop/src-tauri/src/desktop_model_service_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6H_CHATGPT_EXPORT_JSON_ADAPTER_CONTRACT.md",
+    "domain": "local-data",
+    "status": "SCOPED",
+    "scope": "南枫 AI P6-H ChatGPT export JSON Adapter 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "b4293a92f5ae534d8019ddba7cbde593d4d988b287a94398a62ebec13637926b",
+    "bodyHashAfter": "b4293a92f5ae534d8019ddba7cbde593d4d988b287a94398a62ebec13637926b",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+      "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+      "desktop/src/local-data-view.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md",
+    "domain": "local-data",
+    "status": "SCOPED",
+    "scope": "南枫 AI P6-I Claude export JSON Adapter 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "f68ae697b53f190bf59a722454394a394ee51efdc9c0f08f54ca4fe0c47beae2",
+    "bodyHashAfter": "f68ae697b53f190bf59a722454394a394ee51efdc9c0f08f54ca4fe0c47beae2",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+      "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+      "desktop/src/local-data-view.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6J_NANFENG_KNOWLEDGE_EXPORT_ADAPTER_CONTRACT.md",
+    "domain": "local-data",
+    "status": "SCOPED",
+    "scope": "南枫 AI P6-J 南枫知识库对话／知识 export Adapter 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "4712919f13a001ec578f3b33f387f8adc5c0c71fc2f9ae27e41ec64f9bef809d",
+    "bodyHashAfter": "4712919f13a001ec578f3b33f387f8adc5c0c71fc2f9ae27e41ec64f9bef809d",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+      "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+      "desktop/src/local-data-view.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md",
+    "domain": "local-data",
+    "status": "SCOPED",
+    "scope": "南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "5e9b6270fefebcf1a642844d86b26ced878b934097cbd6697526545ef9ee9349",
+    "bodyHashAfter": "5e9b6270fefebcf1a642844d86b26ced878b934097cbd6697526545ef9ee9349",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+      "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+      "desktop/src/local-data-view.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6K_ZIP_ATTACHMENT_OCCURRENCE_CONTRACT.md",
+    "domain": "local-data",
+    "status": "SCOPED",
+    "scope": "P6-K ChatGPT ZIP 附件口径契约",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "d0aad2c13da65caf49de718b1f111933146bb36f73f677e2dc1c3587d8092ad4",
+    "bodyHashAfter": "d0aad2c13da65caf49de718b1f111933146bb36f73f677e2dc1c3587d8092ad4",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+      "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+      "desktop/src/local-data-view.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6_ANDROID_V2_ATOMIC_RESTORE_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6 Android v2 原子恢复合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "2a6fd65bd8d1ad89a91e48986a909579c5714e1ad1fb4cfa396699ce4d6dc039",
+    "bodyHashAfter": "7ff318d3f28dc3d90284f17be2a23d74846e0d817ec8664c75e672db69321b88",
+    "bodyChanged": true,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6_ANDROID_V2_OPEN_DOCUMENT_RESTORE_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6 Android v2 OpenDocument 受控恢复合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "19f863662df11023ea5caab734bb440e2b8971441414b3e12074e779a0e0b062",
+    "bodyHashAfter": "19f863662df11023ea5caab734bb440e2b8971441414b3e12074e779a0e0b062",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6_WORKSPACE_EXCHANGE_MAPPER_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6 工作区语义交换 Mapper 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "409c0d353a002b2c39457c0412ccef6d9ea33b7e4d2ef2d47690d0c3c2505199",
+    "bodyHashAfter": "409c0d353a002b2c39457c0412ccef6d9ea33b7e4d2ef2d47690d0c3c2505199",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6_WORKSPACE_EXCHANGE_V2_ANDROID_IMPORT_FOUNDATION_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6 工作区交换 v2 Android 严格读取基础合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "a48d44a04b118c226522461a77e54106cb2cc880eaabf983fa0949d3ffafb966",
+    "bodyHashAfter": "a48d44a04b118c226522461a77e54106cb2cc880eaabf983fa0949d3ffafb966",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6 工作区交换 v2 Desktop 私有暂存、原子导入与回导合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "820a41e00e35c17f5fe8a859ed3f5d4f52c2825a6479f81bc7faf9643c1ce150",
+    "bodyHashAfter": "820a41e00e35c17f5fe8a859ed3f5d4f52c2825a6479f81bc7faf9643c1ce150",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md",
+    "domain": "exchange-v2",
+    "status": "SCOPED",
+    "scope": "P6 工作区交换 v2 字段保真与拒绝合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "b6a00056c08665cdccdfef97fbf3a213022e3a3e4d63e1789a67a27cfb5be809",
+    "bodyHashAfter": "cf9357db774898d779ed94e0529eb5ce069bb9b6454cbee6280fe9a7cbf8b27d",
+    "bodyChanged": true,
+    "issues": [
+      12,
+      13
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+      "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+      "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+      "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P7A_LOCAL_E2EE_SYNC_FOUNDATION_CONTRACT.md",
+    "domain": "account-sync",
+    "status": "SCOPED",
+    "scope": "南枫 AI P7-A 本地跨端端到端加密快照基础合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "b0332a7a3041cd568b39e75916573f2eb0ba71733836ee1992cff2fed5147e13",
+    "bodyHashAfter": "b0332a7a3041cd568b39e75916573f2eb0ba71733836ee1992cff2fed5147e13",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+      "desktop/src-tauri/src/desktop_account_sync_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md",
+    "domain": "account-sync",
+    "status": "SCOPED",
+    "scope": "南枫 AI P7-B 账号级本机密钥与同步状态机合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "6cec9185194176423da47e9ca9cb593a17e8a9f62c3f25156fd8542d4bc8642a",
+    "bodyHashAfter": "6cec9185194176423da47e9ca9cb593a17e8a9f62c3f25156fd8542d4bc8642a",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+      "desktop/src-tauri/src/desktop_account_sync_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P7C_REAL_SERVICE_CONFIGURATION_CONTRACT.md",
+    "domain": "account-sync",
+    "status": "SCOPED",
+    "scope": "南枫 AI P7-C Google/Supabase 可部署服务合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "4bb8df2aee2bfd974ea179509caddb81cf85f314c63a157f139131953cbf4db4",
+    "bodyHashAfter": "4bb8df2aee2bfd974ea179509caddb81cf85f314c63a157f139131953cbf4db4",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+      "desktop/src-tauri/src/desktop_account_sync_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P7D_SYNC_COORDINATOR_AND_ACCOUNT_UI_CONTRACT.md",
+    "domain": "account-sync",
+    "status": "SCOPED",
+    "scope": "南枫 AI P7-D 冲突、自动同步协调器与账号页合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "05138fc1897410fbb44563edb621c5642d80a67cfcd52f6f4b96eebd7a94359f",
+    "bodyHashAfter": "05138fc1897410fbb44563edb621c5642d80a67cfcd52f6f4b96eebd7a94359f",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+      "desktop/src-tauri/src/desktop_account_sync_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P7E_CROSS_DEVICE_RESTORE_AND_DEPLOYMENT_READINESS_CONTRACT.md",
+    "domain": "account-sync",
+    "status": "SCOPED",
+    "scope": "南枫 AI P7-E 跨设备加密恢复、冲突与部署验证就绪合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "9b7d31549773ea67a4be69491520be3f036dc18cb8b0688cffdae0ebe8e9820b",
+    "bodyHashAfter": "9b7d31549773ea67a4be69491520be3f036dc18cb8b0688cffdae0ebe8e9820b",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+      "desktop/src-tauri/src/desktop_account_sync_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md",
+    "domain": "account-sync",
+    "status": "CURRENT",
+    "scope": "Google登录后的已选对话direct同步、账号/区域隔离；不以旧恢复码判资格",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "ccd8641262c5dd2b9da23ea823fd028fc76de49fcc95430d554832bf8513c90c",
+    "bodyHashAfter": "ccd8641262c5dd2b9da23ea823fd028fc76de49fcc95430d554832bf8513c90c",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+      "desktop/src-tauri/src/desktop_account_sync_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md",
+    "domain": "agent-local",
+    "status": "EXPERIMENTAL",
+    "scope": "P8-A 受控 Agent 本地基础合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "e69ba0f1abb93e9ad37e2579b03172dbfd8ee9a9b43516bd316c534e89f318a3",
+    "bodyHashAfter": "e69ba0f1abb93e9ad37e2579b03172dbfd8ee9a9b43516bd316c534e89f318a3",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P8ControlledAgentRuntime.kt",
+      "desktop/src-tauri/src/p8_agent_ledger_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P8B_READ_ONLY_AGENT_LEDGER_STATUS_CONTRACT.md",
+    "domain": "agent-local",
+    "status": "EXPERIMENTAL",
+    "scope": "P8-B 受控本地 Agent harness 与生产只读状态合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "1464b79f47f476b6c687a654550b9a234a45b2f68dc6e1ac7a8b14037bd525a4",
+    "bodyHashAfter": "1464b79f47f476b6c687a654550b9a234a45b2f68dc6e1ac7a8b14037bd525a4",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P8ControlledAgentRuntime.kt",
+      "desktop/src-tauri/src/p8_agent_ledger_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P8C_LOCAL_VISIBLE_AGENT_INSPECT_CONTRACT.md",
+    "domain": "agent-local",
+    "status": "EXPERIMENTAL",
+    "scope": "P8-C 本地可见受控运行与退出审计合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "24bcaa979d0682e3128208a387859079a098408a93be0602ea10a45a4153664d",
+    "bodyHashAfter": "24bcaa979d0682e3128208a387859079a098408a93be0602ea10a45a4153664d",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P8ControlledAgentRuntime.kt",
+      "desktop/src-tauri/src/p8_agent_ledger_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P8D_LOCAL_EXIT_RED_TEAM_AUDIT_CONTRACT.md",
+    "domain": "agent-local",
+    "status": "EXPERIMENTAL",
+    "scope": "P8-D 本地退出与红队审计合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "2a51ac043e801508536ec41c951dc05ae7bc7b1b0f40f58bf47f682a009e7010",
+    "bodyHashAfter": "2a51ac043e801508536ec41c951dc05ae7bc7b1b0f40f58bf47f682a009e7010",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P8ControlledAgentRuntime.kt",
+      "desktop/src-tauri/src/p8_agent_ledger_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P9A_READ_ONLY_ECOSYSTEM_ENTRY_AUDIT_CONTRACT.md",
+    "domain": "integration-local",
+    "status": "EXPERIMENTAL",
+    "scope": "南枫 AI P9-A 最小只读生态入口审计合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "a10eff6ff04d501394fead5384d23bb5c7b06ddbb4b053d262c6880527ae59c1",
+    "bodyHashAfter": "a10eff6ff04d501394fead5384d23bb5c7b06ddbb4b053d262c6880527ae59c1",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P9BIntegrationContract.kt",
+      "desktop/src-tauri/src/p9b_integration_contract_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/P9B_LOCAL_TEST_ONLY_INTEGRATION_CONTRACT.md",
+    "domain": "integration-local",
+    "status": "EXPERIMENTAL",
+    "scope": "南枫 AI P9-B 本地 Integration Contract 与 LOCAL_TEST_ONLY harness 合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "3e72a87108c722aab7d3a1023461e81fe23e35907c488464c31d3c923f037c0e",
+    "bodyHashAfter": "3e72a87108c722aab7d3a1023461e81fe23e35907c488464c31d3c923f037c0e",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/P9BIntegrationContract.kt",
+      "desktop/src-tauri/src/p9b_integration_contract_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
+    "domain": "cache",
+    "status": "SCOPED",
+    "scope": "独立本地精确引用索引；不替代搜索检查点/Provider缓存或普通发送",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "432683c3e6638a4f30d08371b6a7c87e76cc3ad5ee566f3ec816bfbae5fbcc47",
+    "bodyHashAfter": "432683c3e6638a4f30d08371b6a7c87e76cc3ad5ee566f3ec816bfbae5fbcc47",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalExactReuseV1.kt",
+      "app/src/main/java/com/nanzhufeng/ai/domain/LocalExactReuseDispatch.kt",
+      "desktop/src-tauri/src/local_exact_reuse_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+    "domain": "relay",
+    "status": "CURRENT",
+    "scope": "RC预设/渠道/别名/历史身份；联网规则归C12，准确授权归P3J",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "d1426bada8f6be1ed3e3f1e925e62cd8f3937b6bd423a00b3dbe96011d04adef",
+    "bodyHashAfter": "12b62487f3a2490b684197d947e85b91304359d0aa7ef62dfdf290508c0d2bb5",
+    "bodyChanged": true,
+    "issues": [
+      1
+    ],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/RelayCoreModels.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+      "desktop/src-tauri/src/relaycore_web_search_v1.rs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  },
+  {
+    "path": "docs/SETTINGS_CENTER_CONTRACT.md",
+    "domain": "settings",
+    "status": "SCOPED",
+    "scope": "南枫 AI Settings Center 历史与领域边界合同",
+    "structureScopeAndReferences": "checked",
+    "bodyHashBefore": "ad1b1484a9e7f1d0b70a72159eb036857de64c7b6027ea7880256a4a058b216d",
+    "bodyHashAfter": "ad1b1484a9e7f1d0b70a72159eb036857de64c7b6027ea7880256a4a058b216d",
+    "bodyChanged": false,
+    "issues": [],
+    "ownerPathsChecked": [
+      "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+      "desktop/src/android-settings-shell.mjs"
+    ],
+    "semanticCoverage": "Full contract registration/scope/history/reference and current-claim risk review; targeted source tracing of identified conflicts; not every clause runtime proof"
+  }
+]

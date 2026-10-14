@@ -1,5 +1,10 @@
 # P6 工作区交换 v2 Android 严格读取基础合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v2字段与原子恢复 ](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6 工作区交换 v2 Android 严格读取基础合同
+<!-- contract-governance:end -->
+
 ## 目标
 
 为未来 Android v2 导入/恢复建立唯一的、纯内存 `NfaiExchangeV2PackageReader`。它只接收调用方已经限定的 package bytes，严格验证 ZIP、manifest、IR、附件账本与 owner-field hash，返回内容无关 receipt、canonical IR 文本和仅本次调用可用的附件字节。

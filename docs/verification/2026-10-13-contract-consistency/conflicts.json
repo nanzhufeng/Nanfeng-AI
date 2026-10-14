@@ -1,0 +1,96 @@
+[
+  {
+    "path": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+    "reason": "旧Auto/深度名单及Sol助手与现行部署冲突",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+      "protocol/fixtures/auto-routing-rc-domestic-20261010.json",
+      "desktop/src/chat-shell.mjs",
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatRoutingSnapshot.kt"
+    ]
+  },
+  {
+    "path": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+    "reason": "现行界面正文仍复制旧Auto链/退役候选/Relay重复分组",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+      "desktop/src/chat-shell.mjs",
+      "protocol/fixtures/auto-routing-rc-domestic-20261010.json"
+    ]
+  },
+  {
+    "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "reason": "旧Sol附件协议、固定19/6数量与当前Luna来源归属冲突",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+      "desktop/src-tauri/src/attachment_web_search_v1.rs",
+      "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs"
+    ]
+  },
+  {
+    "path": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+    "reason": "旧v1预备布局/禁止链以同级标题越过历史边界",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+      "desktop/src-tauri/src/relaycore_web_search_v1.rs"
+    ]
+  },
+  {
+    "path": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+    "reason": "旧末尾复核裁决仍用现行口吻恢复Sol助手",
+    "evidence": [
+      "desktop/src-tauri/src/relaycore_web_search_v1.rs",
+      "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt"
+    ]
+  },
+  {
+    "path": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+    "reason": "计量迁移数字和旧服务空模型字段需与当前Luna物理调用分开",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ChatCallAccounting.kt",
+      "app/src/main/java/com/nanzhufeng/ai/data/local/NanfengAiDatabase.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ]
+  },
+  {
+    "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+    "reason": "输入Adapter局部无HTTP限制不能扩展到普通发送全链",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/attachment_document_text_v1.rs"
+    ]
+  },
+  {
+    "path": "docs/P7A_LOCAL_E2EE_SYNC_FOUNDATION_CONTRACT.md",
+    "reason": "旧envelope格式与direct生产资格边界未在正文入口明确",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+      "desktop/src-tauri/src/sync_v1.rs"
+    ]
+  },
+  {
+    "path": "docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md",
+    "reason": "旧恢复码状态机规则容易重新成为生产同步门",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+      "desktop/src-tauri/src/p7d_sync_coordinator_v1.rs"
+    ]
+  },
+  {
+    "path": "docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md",
+    "reason": "隐藏WORK与保留隔离能力应分开，不能从旧验收恢复入口",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+      "desktop/src/product-scope.mjs"
+    ]
+  },
+  {
+    "path": "docs/architecture-governance.md",
+    "reason": "独立P2 MultiModelOrchestrator不能声明为普通生产唯一owner",
+    "evidence": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "desktop/src-tauri/src/lib.rs"
+    ]
+  }
+]

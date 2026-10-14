@@ -1,5 +1,10 @@
 # 南枫 AI 意图优先组织合同
 
+<!-- contract-governance:start -->
+> **合同口径：现行领域合同。** 领域入口：[ 产品对象与信息架构 ](CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI 意图优先组织合同
+<!-- contract-governance:end -->
+
 日期：2026-08-14  
 状态：FB-P6-025 已登记；与 FB-P6-023/024 共同实施、共同验收
 
@@ -15,7 +20,7 @@
 2. **Progressive Disclosure：** 附件、搜索、来源、预览、编辑、工具和安全 metadata 只在任务或对象需要时出现；不得同时变成首页 Tab、Dashboard、卡片或按钮墙。
 3. **Object-bound state：** 模型 override、上下文、附件、project/workspace 关联和工具适用性绑定 conversation/project/file/task 等真实对象；不要求“工作区→项目→模式→数据源→模型”的串行预选。
 4. **Every-entry burden of proof：** 新入口默认先判断能否由意图或当前对象承担。只有用户必须管理的持久策略、隐私、安全、数据生命周期、账号/费用与明确 override 才进入 Settings。
-5. **Auto-by-default：** P6-G 默认 `Auto`，可直接发送；Composer 的模型控件仅是当前 normal conversation 的可选 override，选回 Auto 即恢复 policy。catalog 与全局 policy 在 Settings，TEMP 独立且不泄漏。
+5. **沿用最后选择：** 新对话继承本数据区最后明确选择的模型，无记忆时才默认 `Auto`；具体保存、草稿与历史边界以 [P6-G当前合同](P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md) 为准。可直接发送；Composer 的模型控件仅是当前 normal conversation 的可选 override，选回 Auto 即恢复 policy。catalog 与全局 policy 在 Settings，TEMP 独立且不泄漏。
 6. **安全不变：** 自动组织不是提前联网、Agent、Provider 或 tool execution 的授权。本地优先；所有 egress、账号、费用和外部副作用继续受独立合同与明确同意控制。
 
 ## 统一 IA 与对象入口
@@ -56,4 +61,4 @@
 
 - Desktop 移除 chat/work switch 旁的 `show-settings` DOM 入口；Settings 只由侧栏底部的既有 `show-settings` 进入 Settings Center。Android 顶栏语义继续只有 drawer、对话/工作及既有 Ghost 右侧主动作；Settings 只在 drawer 底部。
 - 不移除临时聊天 Ghost，不新增 overflow，不改变对话/工作切换、Settings route、焦点顺序、drawer 或持久化 owner。宽窄布局都不得出现幽灵 Settings Tab/semantics。
-- 验收须锁定 Desktop 顶栏 absence + sidebar presence、Android header absence + drawer presence，并以最新 Desktop ad-hoc app 完整退出重开和 AOSP signed Debug force-stop/restart 分别观察；AOSP 不替代 OPPO。
+- 验收须锁定 Desktop 顶栏 absence + sidebar presence、Android header absence + drawer presence，并以按当前交付入口验签的隔离 Desktop app 完整退出重开和 AOSP signed Debug force-stop/restart 分别观察；AOSP 不替代 OPPO。

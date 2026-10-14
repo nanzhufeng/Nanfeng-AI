@@ -1,5 +1,10 @@
 # 图标语汇合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 图标来源与语义 ](ICONOGRAPHY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 图标语汇合同
+<!-- contract-governance:end -->
+
 > **当前 Android UI 路由（2026-08-26）：** 本文保留图标资产来源、语义映射、可访问名称与 launcher 资产边界。圆润／Q 版外观、暗浅色颜色、设置入口图标区分和实际尺寸以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 与 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md) 为准；本文不得反向指定尖锐轮廓或过黑外观。
 
 状态：FB-P6-029 CLOSED；FB-P6-033 PASSED（非 OPPO）。常用动作沿用成熟资产，launcher/Dock 仅可由 FB-P6-033 的不可变用户 master 派生。

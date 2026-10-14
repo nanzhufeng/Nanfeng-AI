@@ -8,6 +8,7 @@ import com.nanzhufeng.ai.domain.MessageNodeId
 import com.nanzhufeng.ai.domain.NormalChatSendAttemptId
 import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.withAvailableLocalCostEstimate
+import com.nanzhufeng.ai.data.ChatAccountingJsonCodec
 import java.time.Instant
 import java.util.concurrent.Callable
 
@@ -40,6 +41,7 @@ class RoomAssistantResponseModelAttributionStore(
                     compatible(existing.costTotalMicros, attribution.cost.totalMicros) &&
                     compatible(existing.costSource, attribution.costSource?.name)
             ) { "助手回复已有冲突的费用事实。" }
+            require(existing.accountingCallsJson==null || attribution.accountingCalls.isEmpty() || ChatAccountingJsonCodec.decodeList(existing.accountingCallsJson)==attribution.accountingCalls.map(ChatAccountingJsonCodec::canonical)) { "已有冲突的物理调用计量事实。" }
             // Model provenance is written before transport for streaming visibility. A completed
             // response may enrich that exact row once; an unknown retry can never erase it.
             check(dao.enrichCompletedFacts(
@@ -48,7 +50,7 @@ class RoomAssistantResponseModelAttributionStore(
                 attribution.usage.inputTokens, attribution.usage.outputTokens, attribution.usage.totalTokens,
                 attribution.usage.cachedInputTokens, attribution.usage.reasoningTokens,
                 attribution.cost.priceVersion, attribution.cost.currencyCode, attribution.cost.totalMicros,
-                attribution.costSource?.name,
+                attribution.costSource?.name,ChatAccountingJsonCodec.encodeList(attribution.accountingCalls),
             ) == 1) { "助手回复完成事实未能写入本机。" }
         }
     })
@@ -102,6 +104,7 @@ private fun AssistantResponseModelAttribution.toEntity() = AssistantResponseMode
     costCurrencyCode = cost.currencyCode,
     costTotalMicros = cost.totalMicros,
     costSource = costSource?.name,
+    accountingCallsJson = ChatAccountingJsonCodec.encodeList(accountingCalls),
 )
 
 private fun AssistantResponseModelAttributionEntity.toDomain() = AssistantResponseModelAttribution(
@@ -118,4 +121,5 @@ private fun AssistantResponseModelAttributionEntity.toDomain() = AssistantRespon
     usage = com.nanzhufeng.ai.domain.ProviderUsage(inputTokens, outputTokens, totalTokens, cachedInputTokens, reasoningTokens),
     cost = com.nanzhufeng.ai.domain.ProviderCost(costPriceVersion, costCurrencyCode, costTotalMicros),
     costSource = costSource?.let(ConversationCostSource::valueOf),
+    accountingCalls = ChatAccountingJsonCodec.decodeList(accountingCallsJson),
 )

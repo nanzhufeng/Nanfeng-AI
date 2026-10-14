@@ -1,0 +1,394 @@
+[
+  {
+    "run": "android-deepseek-baseline-001",
+    "platform": "Android isolated AppContainer/Room",
+    "preset": "DEEPSEEK_V4_FLASH",
+    "result": "Failed(code=RESPONSE_INCOMPLETE)",
+    "elapsedMs": 27318,
+    "actualModel": "deepseek-flash",
+    "finish": "FAILED",
+    "sourceCount": 48,
+    "bodyChars": 3241,
+    "inputTokens": 69055,
+    "outputTokens": 3565,
+    "footerCostLabel": null,
+    "costSource": null,
+    "terminalFrames": [
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 1
+      },
+      {
+        "type": "message_delta",
+        "stopReason": "end_turn"
+      },
+      {
+        "type": "message_stop"
+      }
+    ]
+  },
+  {
+    "run": "android-deepseek-candidate-002",
+    "platform": "Android isolated AppContainer/Room",
+    "preset": "DEEPSEEK_V4_FLASH",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "elapsedMs": 59442,
+    "actualModel": "deepseek-flash",
+    "finish": "COMPLETED",
+    "sourceCount": 49,
+    "bodyChars": 4439,
+    "inputTokens": 68905,
+    "outputTokens": 8642,
+    "footerCostLabel": "¥0.068897",
+    "costSource": "LOCAL_ESTIMATE",
+    "terminalFrames": [
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 1,
+        "itemTypes": [
+          "web_search_tool_result_error"
+        ],
+        "itemErrorCodes": [
+          "max_uses_exceeded"
+        ]
+      },
+      {
+        "type": "message_delta",
+        "stopReason": "end_turn"
+      },
+      {
+        "type": "message_stop"
+      }
+    ]
+  },
+  {
+    "run": "android-deepseek-two-models-004",
+    "platform": "Android isolated AppContainer/Room",
+    "preset": "DEEPSEEK_V4_FLASH",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "elapsedMs": 13196,
+    "actualModel": "deepseek-flash",
+    "finish": "COMPLETED",
+    "sourceCount": 33,
+    "bodyChars": 1202,
+    "inputTokens": 39769,
+    "outputTokens": 1646,
+    "footerCostLabel": "¥0.03383",
+    "costSource": "LOCAL_ESTIMATE",
+    "terminalFrames": [
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "message_delta",
+        "stopReason": "end_turn"
+      },
+      {
+        "type": "message_stop"
+      }
+    ]
+  },
+  {
+    "run": "android-deepseek-two-models-004",
+    "platform": "Android isolated AppContainer/Room",
+    "preset": "DEEPSEEK_V4_PRO",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "elapsedMs": 17942,
+    "actualModel": "deepseek-v4-pro",
+    "finish": "COMPLETED",
+    "sourceCount": 27,
+    "bodyChars": 1049,
+    "inputTokens": 44696,
+    "outputTokens": 1164,
+    "footerCostLabel": "¥0.136348",
+    "costSource": "LOCAL_ESTIMATE",
+    "terminalFrames": [
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "message_delta",
+        "stopReason": "end_turn"
+      },
+      {
+        "type": "message_stop"
+      }
+    ]
+  },
+  {
+    "run": "mac-deepseek-candidate-001",
+    "platform": "Mac Rust owner/isolated SQLite",
+    "preset": "DEEPSEEK_V4_FLASH",
+    "finish": "COMPLETED",
+    "actualModel": "deepseek-flash",
+    "sourceCount": 24,
+    "bodyChars": 5323,
+    "reopenedState": "COMPLETED",
+    "reopenedMessageExact": true,
+    "reopenedAccountingExact": true,
+    "reopenedSourcesPresent": true,
+    "accountingCalls": [
+      {
+        "actualModelId": "deepseek-flash",
+        "cachedInputTokens": 384,
+        "callId": "chat-attempt-bf2d57f61200321e470ef21bfb22ea63-answer-0",
+        "chargeMicros": 3963,
+        "costSource": "LOCAL_ESTIMATE",
+        "currencyCode": "USD",
+        "entryId": "usage-chat-attempt-bf2d57f61200321e470ef21bfb22ea63",
+        "inputTokens": 538,
+        "modelDisplayName": "DeepSeek V4.1 Flash",
+        "occurredAtMs": 1791896219546,
+        "outputTokens": 6565,
+        "priceVersion": "deepseek-v4.1-flash-off-peak-2026-09-10-v1",
+        "reasoningTokens": null,
+        "requestedModelId": "deepseek-flash",
+        "role": "ANSWER",
+        "status": "FINAL_MEASURED"
+      }
+    ]
+  },
+  {
+    "run": "mac-deepseek-pro-candidate-002",
+    "platform": "Mac Rust owner/isolated SQLite",
+    "preset": "DEEPSEEK_V4_PRO",
+    "finish": "COMPLETED",
+    "actualModel": "deepseek-v4-pro",
+    "sourceCount": 24,
+    "bodyChars": 3320,
+    "reopenedState": "COMPLETED",
+    "reopenedMessageExact": true,
+    "reopenedAccountingExact": true,
+    "reopenedSourcesPresent": true,
+    "accountingCalls": [
+      {
+        "actualModelId": "deepseek-v4-pro",
+        "cachedInputTokens": 512,
+        "callId": "chat-attempt-fc6be0dfebca98f428c10af6c5bdeecf-answer-0",
+        "chargeMicros": 3060,
+        "costSource": "LOCAL_ESTIMATE",
+        "currencyCode": "USD",
+        "entryId": "usage-chat-attempt-fc6be0dfebca98f428c10af6c5bdeecf",
+        "inputTokens": 617,
+        "modelDisplayName": "DeepSeek V4 Pro",
+        "occurredAtMs": 1791896905650,
+        "outputTokens": 1505,
+        "priceVersion": "deepseek-off-peak-2026-08-v2",
+        "reasoningTokens": null,
+        "requestedModelId": "deepseek-v4-pro",
+        "role": "ANSWER",
+        "status": "FINAL_MEASURED"
+      }
+    ]
+  },
+  {
+    "run": "android-deepseek-final-owner-009",
+    "platform": "Android isolated AppContainer/Room final required-source gate",
+    "preset": "DEEPSEEK_V4_FLASH",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "elapsedMs": 35668,
+    "actualModel": "deepseek-flash",
+    "finish": "COMPLETED",
+    "sourceCount": 50,
+    "bodyChars": 3422,
+    "inputTokens": 113150,
+    "outputTokens": 4435,
+    "footerCostLabel": "¥0.064549",
+    "costSource": "LOCAL_ESTIMATE",
+    "terminalFrames": [
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 10,
+        "itemTypes": [
+          "web_search_result"
+        ],
+        "itemErrorCodes": []
+      },
+      {
+        "type": "search_result",
+        "resultKind": "array",
+        "items": 1,
+        "itemTypes": [
+          "web_search_tool_result_error"
+        ],
+        "itemErrorCodes": [
+          "max_uses_exceeded"
+        ]
+      },
+      {
+        "type": "message_delta",
+        "stopReason": "end_turn"
+      },
+      {
+        "type": "message_stop"
+      }
+    ],
+    "zeroNetworkReopenRun": "android-final-sol-astra-deepseek-reopen-011"
+  }
+]

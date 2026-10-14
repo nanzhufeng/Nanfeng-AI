@@ -1,5 +1,10 @@
 # 南枫 AI P4-K 本机抽取预览与稳定前缀元数据合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 普通生成上下文与临时隔离 ](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-K 本机抽取预览与稳定前缀元数据合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第十一个本地增量；Schema 保持 14。P4-K 把 P4-J 已冻结的抽取式压缩接入 Context 控制面，并只建立稳定前缀的本地元数据 IR；没有 Prompt、RunSpec、Provider cache、HTTP、Key、费用或外发。
 
@@ -33,4 +38,4 @@
 
 P4-I dataset 升级为 `p4i-baseline-2`，只新增机械事实：默认关闭、显式来源、Unicode 截断、hash/顺序、原子拒绝、预览不持久化、前缀 fingerprint/失效元数据与 `NO_EGRESS`。它不衡量摘要质量、缓存收益、真实用户价值或模型表现。
 
-最低证据为 P4-J/P4-K 定向合同、全量单测、Lint、现有正式签名 Debug/Release、v2/v3 证书核验及 API 35 `emulator-5554` 的默认关闭→明确选择→本机抽取预览→关闭/force-stop/重开丢弃链。不得操作 OPPO。上述本地证据不替代真实 Provider、费用、语义摘要、真实 cache、目标真机、图标或发布验收；P4-K 不是 P4 或项目终点。
+最低证据为 P4-J/P4-K 定向合同、全量单测、Lint、现有正式签名 Debug/Release、v2/v3 证书核验及 API 35 当次隔离模拟器 的默认关闭→明确选择→本机抽取预览→关闭/force-stop/重开丢弃链。不得操作 OPPO。上述本地证据不替代真实 Provider、费用、语义摘要、真实 cache、目标真机、图标或发布验收；P4-K 不是 P4 或项目终点。

@@ -21,10 +21,11 @@ class ConversationPopupLayerContractsTest {
         assertTrue(overlay.contains("ComposerMenu.MODEL -> modelAnchor"))
         assertTrue(source.contains("private const val TransientMenuTextScaleFactor = 0.90f"))
         assertTrue(source.contains("private fun TransientMenuTextScale(content: @Composable () -> Unit)"))
-        assertTrue(overlay.contains("} else TransientMenuTextScale {"))
+        assertTrue(overlay.contains("} else ComposerModelPickerTextScale {"))
+        assertTrue(source.contains("private fun ComposerModelPickerTextScale(content: @Composable () -> Unit)"))
         val actionSheet = source.substring(source.indexOf("private fun ConversationActionSheet"), source.indexOf("private fun ConversationMenuAction"))
         assertTrue(actionSheet.contains("TransientMenuTextScale {"))
         assertTrue(source.contains("fontSize = scaledTransientMenuTextUnit(15.sp)"))
-        assertTrue(source.contains("fontSize = scaledConversationTextUnit(14.sp)"))
+        assertTrue(source.contains("centeredControlTextStyle(scaledConversationTextUnit(14.sp))"))
     }
 }

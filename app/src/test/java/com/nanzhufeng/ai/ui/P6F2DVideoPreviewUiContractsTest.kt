@@ -34,7 +34,7 @@ class P6F2DVideoPreviewUiContractsTest {
         assertTrue(viewer.contains("var isPlaying"))
         assertTrue(viewer.contains("if (controlsVisible && localFile != null)"))
         assertTrue(viewer.contains("VideoPlaybackOverlay(\n                        isPlaying = isPlaying,\n                        onToggle = ::togglePlayback"))
-        assertTrue(viewer.contains("val onCentralButton = kotlin.math.hypot(event.x - centerX, event.y - centerY) <= centralRadiusPx"))
+        assertTrue(viewer.contains("fun onCentralButton(event: android.view.MotionEvent)"))
         assertTrue(viewer.contains("if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow"))
         assertTrue(viewer.contains("videoView?.start()"))
         assertTrue(viewer.contains("view.pause()"))
@@ -45,7 +45,7 @@ class P6F2DVideoPreviewUiContractsTest {
     @Test fun `video timeline previews during drag and seeks only once on release`() {
         val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val viewer = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
-        for (token in listOf("scrubPositionMillis", "previewTimelineSeek", "commitTimelineSeek", "timelineScrubbing", "ACTION_MOVE", "ACTION_UP", "视频播放进度，可左右拖动调整位置", "松手跳转")) {
+        for (token in listOf("scrubPositionMillis", "previewTimelineSeek", "commitTimelineSeek", "timelineScrubbing", "ACTION_MOVE", "ACTION_UP", "视频播放进度，点击跳转或拖动调整位置", "松手跳转")) {
             assertTrue("missing draggable timeline rule: $token", viewer.contains(token))
         }
         assertTrue(viewer.contains("scrubPositionMillis?.let(::seekTo)"))
@@ -60,19 +60,31 @@ class P6F2DVideoPreviewUiContractsTest {
         val prepared = viewer.substring(viewer.indexOf("view.setOnPreparedListener"), viewer.indexOf("view.setOnCompletionListener"))
         assertTrue(prepared.contains("ready.start()"))
         assertTrue(prepared.contains("isPlaying = true"))
+        assertTrue(prepared.contains("Lifecycle.State.STARTED"))
     }
 
-    @Test fun `all local file viewers share a single tap top-control visibility owner`() {
+    @Test fun `timeline uses measured bounds and video position survives backgrounding`() {
+        val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val viewer = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
+        assertTrue(viewer.contains("coordinates.boundsInWindow()"))
+        assertTrue(viewer.contains("getLocationInWindow(windowLocation)"))
+        assertTrue(viewer.contains("onTimeline(event) && !onBottomButton(event) && !onCentralButton(event)"))
+        assertTrue(viewer.contains("Lifecycle.Event.ON_STOP"))
+        assertTrue(viewer.contains("persistPosition(positionMillis)"))
+        org.junit.Assert.assertFalse(viewer.contains("height - 158f * density"))
+    }
+
+    @Test fun `media viewers share one tap chrome while text keeps its header visible`() {
         val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val chrome = source.substring(source.indexOf("private const val FilePreviewChromeAutoHideMillis"), source.indexOf("private fun FilePreviewTopActions"))
         for (token in listOf("FilePreviewChromeState", "rememberFilePreviewChromeState", "delay(FilePreviewChromeAutoHideMillis)", "toggle = { if (visible) visible = false else show() }", "toggleFilePreviewChrome")) {
             assertTrue("missing shared preview chrome token $token", chrome.contains(token))
         }
-        for (functionName in listOf("PdfPreviewDialog", "VideoPreviewDialog", "AudioPreviewDialog", "TextPreviewDialog", "ImagePreviewDialog")) {
+        for (functionName in listOf("PdfPreviewDialog", "VideoPreviewDialog", "AudioPreviewDialog", "ImagePreviewDialog")) {
             val start = source.indexOf("private fun $functionName")
             val next = source.indexOf("\n@Composable\nprivate fun", start + 1).let { if (it < 0) source.length else it }
             val viewer = source.substring(start, next)
-            val sharedChrome = if (functionName == "AudioPreviewDialog" || functionName == "TextPreviewDialog") {
+            val sharedChrome = if (functionName == "AudioPreviewDialog") {
                 "rememberFilePreviewChromeState(preview.id.value, autoHide = false)"
             } else {
                 "rememberFilePreviewChromeState(preview.id.value)"
@@ -82,6 +94,9 @@ class P6F2DVideoPreviewUiContractsTest {
         val video = source.substring(source.indexOf("private fun VideoPreviewDialog"), source.indexOf("private fun AudioPreviewDialog"))
         assertTrue(video.contains("if (controlsVisible) {\n                    PreviewCloseButton"))
         assertTrue(video.contains("onCloseButton && chrome.isVisible()"))
+        val text = source.substring(source.indexOf("internal fun SharedTextPreviewDialog"), source.indexOf("private fun ArchivePreviewDialog"))
+        assertTrue(text.contains("TextPreviewTopActions("))
+        assertTrue(text.contains("Icons.AutoMirrored.Outlined.ArrowBack"))
     }
 
     @Test fun `image thumbnails use the same half-strength corner treatment in search`() {

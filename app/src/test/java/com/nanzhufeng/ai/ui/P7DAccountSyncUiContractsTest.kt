@@ -178,6 +178,17 @@ class P7DAccountSyncUiContractsTest {
         assertTrue(account.contains("本地对话保留"))
     }
 
+    @Test fun `cloud drawer actions resolve cloud rows and cancel sync without local deletion`() {
+        val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
+        val account = File("src/main/java/com/nanzhufeng/ai/ui/P7DAccountSyncUi.kt").readText()
+        assertTrue(workspace.contains("if (target.cloudList) cloudConversations else state.conversations"))
+        assertTrue(workspace.contains("ConversationRowSwipeAction.DELETE -> if (cloudListVisible) onCancelConversationSync(conversation) else onRequestDelete(conversation)"))
+        assertTrue(workspace.contains("label = if (cloudList) \"取消同步 ${'$'}selectedCount\" else \"删除 ${'$'}selectedCount\""))
+        assertTrue(workspace.contains("if (cloudListVisible) onCancelConversationsSync(pendingBatchDelete) else onBatchSoftDelete(pendingBatchDelete)"))
+        assertTrue(workspace.contains("if (cloudList) \"取消同步\" else \"删除\""))
+        assertTrue(account.contains("fun cancelConversationsSync(conversations: List<Conversation>)"))
+    }
+
     @Test fun `every ordinary conversation action menu keeps rename after favorite`() {
         val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val menu = workspace.substringAfter("private fun ConversationActionSheet").substringBefore("private fun ConversationMenuAction")
@@ -221,9 +232,9 @@ class P7DAccountSyncUiContractsTest {
         val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         assertTrue(workspace.contains("DrawerListModeButton(\"本地\""))
         assertTrue(workspace.contains("DrawerListModeButton(\"云端\""))
-        assertTrue(workspace.contains("Modifier.align(Alignment.Center).fillMaxWidth(0.3333f).height(26.dp)"))
+        assertTrue(workspace.contains("Modifier.align(Alignment.CenterStart).offset(x = modeStart).width(modeWidth).height(modeHeight)"))
         assertTrue(workspace.contains(".size(26.dp)\n            .conversationForegroundShadow(CircleShape)"))
-        assertTrue(workspace.contains("Box(Modifier.fillMaxWidth().height(30.dp))"))
+        assertTrue(workspace.contains("BoxWithConstraints(Modifier.fillMaxWidth().height(modeHeight + 4.dp))"))
         assertTrue(workspace.contains("contentDescription = \"读取云端列表\""))
         assertTrue(workspace.contains(".filter { it.id.value in syncedConversationIds }"))
         assertTrue(workspace.contains("projection must not inherit that ordering: its only grouping"))
@@ -235,7 +246,7 @@ class P7DAccountSyncUiContractsTest {
 
     @Test fun `phone cloud switch and utilities use the shared soft foreground shadow`() {
         val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
-        val controls = workspace.substringAfter("private fun DrawerNavigationListControls(").substringBefore("private fun DrawerRoundIconButton(")
+        val controls = workspace.substringAfter("internal fun DrawerNavigationListControls(").substringBefore("private fun DrawerRoundIconButton(")
         val utilities = workspace.substringAfter("private fun DrawerRoundIconButton(").substringBefore("private fun ConversationBatchEditControls(")
         assertTrue(controls.contains("val modeShape = RoundedCornerShape(50)"))
         assertTrue(controls.contains(".conversationForegroundShadow(modeShape)"))
@@ -251,7 +262,7 @@ class P7DAccountSyncUiContractsTest {
 
     @Test fun `phone batch editor uses a two row checklist rather than the rename pen`() {
         val workspace = File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
-        val controls = workspace.substringAfter("private fun DrawerNavigationListControls(").substringBefore("private fun DrawerRoundIconButton(")
+        val controls = workspace.substringAfter("internal fun DrawerNavigationListControls(").substringBefore("private fun DrawerRoundIconButton(")
         assertTrue(controls.contains("icon = null"))
         assertFalse(controls.contains("icon = Icons.Rounded.Edit"))
         assertTrue(controls.contains("\"批量编辑对话\""))

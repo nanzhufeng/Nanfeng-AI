@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -72,8 +73,8 @@ class P6KZipImportViewModel(private val store: P6KZipImportUiStore) : ViewModel(
     } else {
         Text("ZIP 导入", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(10.dp)); Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onChatGpt, enabled = !state.working, modifier = Modifier.weight(1f).height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("ChatGPT") }
-            OutlinedButton(onClick = onClaude, enabled = !state.working, modifier = Modifier.weight(1f).height(48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("Claude") }
+            Button(onClick = onChatGpt, enabled = !state.working, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("ChatGPT") }
+            OutlinedButton(onClick = onClaude, enabled = !state.working, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("Claude") }
         }
     }
 }

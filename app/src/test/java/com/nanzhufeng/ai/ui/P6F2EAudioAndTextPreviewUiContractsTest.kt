@@ -25,7 +25,7 @@ class P6F2EAudioAndTextPreviewUiContractsTest {
         }
         assertTrue(previewOwner.contains("fun openSearchAttachment(reference: ConversationAttachmentReference)"))
         val searchOpen = previewOwner.substringAfter("fun openSearchAttachment(reference: ConversationAttachmentReference)").substringBefore("fun requestAttachmentTransfer")
-        assertTrue(searchOpen.contains("else -> viewModelScope.launch"))
+        assertTrue(searchOpen.contains("else -> launchPreview"))
         assertTrue(searchOpen.contains("attachmentPreview.text(reference)"))
         assertTrue(previewOwner.contains("fun openTextPreview(id: AttachmentId)"))
     }
@@ -65,14 +65,11 @@ class P6F2EAudioAndTextPreviewUiContractsTest {
         val source = java.io.File("src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt").readText()
         val pdf = source.substring(source.indexOf("private fun PdfPreviewDialog"), source.indexOf("private fun VideoPreviewDialog"))
         val text = source.substring(source.indexOf("private fun TextPreviewDialog"), source.indexOf("private fun formatVideoDuration"))
-        for (viewer in listOf(pdf, text)) {
-            assertTrue(viewer.contains("isDarkFilePreviewSurface()"))
-            assertTrue(viewer.contains("localFilePreviewCanvas("))
-        }
+        assertTrue(pdf.contains("isDarkFilePreviewSurface()") && pdf.contains("localFilePreviewCanvas("))
+        assertTrue(text.contains("isDarkFilePreviewSurface()"))
         assertTrue(pdf.contains("PreviewCloseButton(dark = dark"))
         assertTrue(text.contains("TextPreviewTopActions("))
-        assertTrue(text.contains("rememberFilePreviewChromeState(preview.id.value, autoHide = false)"))
-        assertTrue(text.contains("val previewSurface = if (darkTextPreview) ForegroundSurface else Color.White"))
+        assertTrue(text.contains("val previewSurface = if (darkTextPreview) ForegroundSurface else Color(0xFFF7F8F7)"))
         assertTrue(text.contains("Surface(color = previewSurface, shape = RectangleShape, modifier = Modifier.fillMaxSize())"))
         assertTrue(text.contains("decorFitsSystemWindows = false"))
         assertTrue(text.contains("TextPreviewSystemBarsEffect(darkTextPreview)"))
@@ -84,10 +81,22 @@ class P6F2EAudioAndTextPreviewUiContractsTest {
         assertTrue(!text.contains("if (chrome.visible)"))
         assertTrue(!text.contains("toggleFilePreviewChrome"))
         assertTrue(!text.contains("dark = false"))
-        assertTrue(!text.contains("background(Color(0xFFF1F4F2))"))
+        assertTrue(!text.contains(".background(localFilePreviewCanvas(darkTextPreview))"))
+        assertTrue(text.contains("Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = \"返回\""))
+        assertTrue(text.contains("preview.displayName ?: \"未命名文件\""))
+        assertTrue(text.contains("textAlign = TextAlign.Center"))
+        assertTrue(text.contains("(markdownBlocks.firstOrNull() as? PresentationBlock.Heading)?.level != 1"))
         val actions = source.substring(source.indexOf("private fun TextPreviewTopActions"), source.indexOf("private fun PdfPreviewDialog"))
-        assertTrue(actions.contains("Modifier.size(40.dp)"))
-        assertTrue(actions.contains("Modifier.width(62.dp).height(40.dp)"))
-        assertTrue(actions.contains("Arrangement.spacedBy(6.dp)"))
+        assertTrue(actions.contains("modifier = Modifier.size(48.dp)"))
+        assertTrue(actions.contains("Icon(Icons.Rounded.MoreVert, contentDescription = \"文件菜单\""))
+        for ((label, icon, callback) in listOf(
+            Triple("下载文件", "FileDownload", "onDownload()"),
+            Triple("分享文件", "Share", "onShare()"),
+            Triple("复制全文", "ContentCopy", "onCopy()"),
+        )) {
+            assertTrue(actions.contains(label))
+            assertTrue(actions.contains("Icons.Rounded.$icon"))
+            assertTrue(actions.contains(callback))
+        }
     }
 }

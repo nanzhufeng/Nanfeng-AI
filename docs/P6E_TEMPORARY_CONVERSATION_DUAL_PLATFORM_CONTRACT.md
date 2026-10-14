@@ -1,12 +1,17 @@
 # P6-E 双端临时聊天完整生命周期合同
 
+<!-- contract-governance:start -->
+> **合同口径：现行领域合同。** 领域入口：[ 本地临时聊天 ](P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 仅本地临时消息与隔离24小时恢复记录；不接Provider/普通同步
+<!-- contract-governance:end -->
+
 状态：**正式合同，已授权实施**；替代并废止原 `P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT_DRAFT.md`。P6-D 的图标、输入框、侧栏密度与橙色交互 token 已先行收口。
 
 ## 1. 唯一目标、停止条件与禁止项
 
 本合同只交付 Desktop 与 Android 的离线临时聊天完整生命周期：从同义 Ghost 入口直接 NORMAL↔TEMP、在临时会话内编辑本地草稿/发送本地纯文本消息、使用 P6-D2 已完成的图片或文件附件、窗口或进程重建恢复、24 小时到期清理，以及普通功能零泄漏。
 
-- 停止条件：双端均通过领域/入口契约、构建；Desktop 真实 `.app` 与 Android 正式签名 Debug/Release + `emulator-5554` 均完成 NORMAL↔TEMP 直切 → 草稿/本地消息/真实图片或文件附件 → NORMAL 不删除 → 重启读回 → `23h59m/24h` owner 清理的真实路径。
+- 停止条件：双端均通过领域/入口契约、构建；Desktop 真实 `.app` 与 Android 正式签名 Debug/Release + 当次隔离模拟器 均完成 NORMAL↔TEMP 直切 → 草稿/本地消息/真实图片或文件附件 → NORMAL 不删除 → 重启读回 → `23h59m/24h` owner 清理的真实路径。
 - 禁止 Provider、Key、HTTP、Prompt/RunSpec、真实用户数据、OPPO、图标、同步实现、真实缓存、导入导出扩展、普通 Conversation/附件表迁移或任何普通历史兼容捷径。
 - P6-E **复用 P6-D2 已完成的真实附件能力**：Desktop native picker 与 Android Photo Picker/DocumentsUI 继续可用，复用既有 allowlist、MIME+magic、大小限制、app-private content-addressed copy、SHA-256 去重和安全 metadata owner；禁止相机、插件、语音与任何外发。新建附件 Adapter 不在本阶段范围内。
 
@@ -57,7 +62,7 @@
 ## 6. 验收与证据
 
 - 自动覆盖 NORMAL/TEMPORARY 明确区分、普通草稿进入隔离、Ghost 直切不删除、重复入口、窗口/Activity/进程重启、23h59m/24h、picker cancel、附件引用/last-reference 到期清理、model override 隔离及 history/search/project/knowledge/memory/export/sync/cache 零泄漏；另覆盖 topmost overlay、confirmation cancel、焦点回归与草稿保持。
-- Desktop 真实 `.app` 与 Android 正式签名 Debug/Release、`emulator-5554` 同签名安装、重启读回分别证明；不读 Key、不发 HTTP、不改图标。
+- Desktop 真实 `.app` 与 Android 正式签名 Debug/Release、当次隔离模拟器 同签名安装、重启读回分别证明；不读 Key、不发 HTTP、不改图标。
 - 另加静态扫描：temporary owner、Android/Desktop recovery store 和导出/搜索/同步/缓存路径不能引用普通 conversation record 或附件 URI/path/Key；UI token 不得绕过 shared orange semantic token。
 - 报告必须分开陈述：合同、定向测试、构建、Desktop `.app`、Android 正式签名、模拟器重启/readback；不得把任一层替代另一层。
 # P6-E 补充入口矩阵（2026-08-13；收口中）

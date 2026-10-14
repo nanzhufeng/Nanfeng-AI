@@ -33,9 +33,10 @@ object ComposerModelRoutingCatalog {
     private const val LEGACY_GROK_4_6_HIGH_ID = "logical:deep:grok-4.6-high"
     val auto = ComposerModelChoice("${PREFIX}auto", ComposerModelSlot.AUTO, "自动", listOf(ModelPresetId.DEEPSEEK_V4_FLASH))
     val daily = listOf(
-        ComposerModelChoice("${PREFIX}daily:claude-sonnet", ComposerModelSlot.DAILY, "Claude Sonnet 5", listOf(ModelPresetId.CLAUDE_SONNET_5)),
+        ComposerModelChoice("${PREFIX}daily:claude-sonnet", ComposerModelSlot.DAILY, "Claude Sonnet 5.5", listOf(ModelPresetId.CLAUDE_SONNET_5_5)),
+        ComposerModelChoice("${PREFIX}daily:claude-haiku", ComposerModelSlot.DAILY, "Claude Haiku 5.5", listOf(ModelPresetId.CLAUDE_HAIKU_5_5)),
         ComposerModelChoice("${PREFIX}daily:deepseek-flash", ComposerModelSlot.DAILY, "DeepSeek V4.1 Flash", listOf(ModelPresetId.DEEPSEEK_V4_FLASH)),
-        ComposerModelChoice("${PREFIX}daily:gpt-terra", ComposerModelSlot.DAILY, "GPT-5.6 Terra", listOf(ModelPresetId.GPT_5_6_TERRA)),
+        ComposerModelChoice("${PREFIX}daily:gpt-luna", ComposerModelSlot.DAILY, "GPT-6 Luna", listOf(ModelPresetId.GPT_6_LUNA)),
         ComposerModelChoice("${PREFIX}daily:glm-flash", ComposerModelSlot.DAILY, "GLM-5.3 Flash", listOf(ModelPresetId.GLM_5_3_FLASH)),
         ComposerModelChoice("${PREFIX}daily:qwen-plus", ComposerModelSlot.DAILY, "Qwen3.7-Plus", listOf(ModelPresetId.QWEN_3_7_PLUS)),
         ComposerModelChoice("${PREFIX}daily:gemini-flash", ComposerModelSlot.DAILY, "Gemini 3.8 Flash", listOf(ModelPresetId.GEMINI_3_8_FLASH)),
@@ -45,14 +46,14 @@ object ComposerModelRoutingCatalog {
     val dailyDeepSeekFlash: ComposerModelChoice
         get() = daily.single { it.id == "${PREFIX}daily:deepseek-flash" }
     val deep = listOf(
-        ComposerModelChoice("${PREFIX}deep:claude-fable-5.1", ComposerModelSlot.DEEP, "Claude Fable 5.1", listOf(ModelPresetId.CLAUDE_FABLE_5_1)),
-        ComposerModelChoice("${PREFIX}deep:claude-opus", ComposerModelSlot.DEEP, "Claude Opus 5", listOf(ModelPresetId.CLAUDE_OPUS_5)),
-        ComposerModelChoice("${PREFIX}deep:gpt-astra", ComposerModelSlot.DEEP, "GPT-6 Astra", listOf(ModelPresetId.GPT_6_ASTRA)),
+        ComposerModelChoice("${PREFIX}deep:claude-opus", ComposerModelSlot.DEEP, "Claude Opus 5.5", listOf(ModelPresetId.CLAUDE_OPUS_5_5)),
+        ComposerModelChoice("${PREFIX}deep:gpt-sol", ComposerModelSlot.DEEP, "GPT-6.1 Sol", listOf(ModelPresetId.GPT_6_1_SOL)),
         ComposerModelChoice("${PREFIX}deep:deepseek-pro", ComposerModelSlot.DEEP, "DeepSeek V4 Pro", listOf(ModelPresetId.DEEPSEEK_V4_PRO)),
-        ComposerModelChoice("${PREFIX}deep:gpt-sol", ComposerModelSlot.DEEP, "GPT-5.6 Sol", listOf(ModelPresetId.GPT_5_6_SOL)),
+        ComposerModelChoice("${PREFIX}deep:muse-wonder", ComposerModelSlot.DEEP, "Muse Wonder", listOf(ModelPresetId.MUSE_WONDER)),
         ComposerModelChoice("${PREFIX}deep:glm-5.3", ComposerModelSlot.DEEP, "GLM-5.3", listOf(ModelPresetId.GLM_5_3)),
         ComposerModelChoice("${PREFIX}deep:qwen-max", ComposerModelSlot.DEEP, "Qwen3.8-Max", listOf(ModelPresetId.QWEN_3_8_MAX)),
     )
+    val relayCore = RelayCoreModels.specs.map { ComposerModelChoice("logical:relaycore:${it.preset.name}", it.slot, it.pickerName, listOf(it.preset)) }
     val groups: Map<ComposerModelSlot, List<ComposerModelChoice>> = mapOf(
         ComposerModelSlot.DAILY to daily,
         ComposerModelSlot.DEEP to deep,
@@ -60,6 +61,8 @@ object ComposerModelRoutingCatalog {
     // Preserve the persisted legacy ID so it fails visibly at the exact-model gate instead of
     // silently falling through to Auto and sending the user's message to another model.
     private val retired = listOf(
+        ComposerModelChoice("${PREFIX}deep:claude-fable-5.1", ComposerModelSlot.DEEP, "Claude Fable 5.1", listOf(ModelPresetId.CLAUDE_FABLE_5_1)),
+        ComposerModelChoice("${PREFIX}deep:gpt-astra", ComposerModelSlot.DEEP, "GPT-6 Astra", listOf(ModelPresetId.GPT_6_ASTRA)),
         ComposerModelChoice(LEGACY_CLAUDE_FABLE_5_DEEP_ID, ComposerModelSlot.DEEP, "Claude Fable 5（已升级）", listOf(ModelPresetId.CLAUDE_FABLE_5)),
         ComposerModelChoice(LEGACY_KIMI_K3_DEEP_ID, ComposerModelSlot.DEEP, "Kimi K3（已移出选择）", listOf(ModelPresetId.KIMI_K3)),
         ComposerModelChoice(LEGACY_GROK_4_1_FAST_ID, ComposerModelSlot.DAILY, "Grok 4.1 Fast（已下线）", listOf(ModelPresetId.GROK_4_1_FAST)),
@@ -67,12 +70,18 @@ object ComposerModelRoutingCatalog {
         ComposerModelChoice(LEGACY_GROK_4_6_HIGH_ID, ComposerModelSlot.DEEP, "Grok 4.6 High（已移除）", listOf(ModelPresetId.GROK_4_6_HIGH)),
     )
     /** Current selectable choices only; retired routes are deliberately excluded from catalogs. */
-    val choices: List<ComposerModelChoice> = listOf(auto) + groups.values.flatten()
+    val choices: List<ComposerModelChoice> = listOf(auto) + groups.values.flatten() + relayCore
 
     fun isRetired(id: String?): Boolean = retired.any { it.id == id }
 
-    fun choice(id: String?): ComposerModelChoice = (choices + retired).firstOrNull { it.id == id } ?: auto
-    fun label(id: String?): String = if (id == null || id == auto.id) auto.label else choice(id).label
+    fun currentChoiceId(id: String?): String? =
+        if (id == "${PREFIX}daily:gpt-terra") "${PREFIX}daily:gpt-luna" else id
+
+    fun choice(id: String?): ComposerModelChoice {
+        val currentId = currentChoiceId(id)
+        return (choices + retired).firstOrNull { it.id == currentId } ?: auto
+    }
+    fun label(id: String?): String = if (id == null || id == auto.id) auto.label else RelayCoreModels.specByName(choice(id).label)?.let { "${it.uiName} · RC" } ?: choice(id).label
 }
 
 /**
@@ -112,7 +121,7 @@ object AutoModelRouter {
 
     fun resolve(facts: AutoRoutingFacts): ModelPresetId = candidates(facts).first()
 
-    fun label(facts: AutoRoutingFacts): String = "Auto · ${NanfengModelServiceCatalog.preset(resolve(facts)).displayName}"
+    fun label(facts: AutoRoutingFacts): String = "Auto · ${modelDisplayNameForUser(NanfengModelServiceCatalog.preset(resolve(facts)).displayName)}"
 }
 
 /**

@@ -1,0 +1,89 @@
+{
+  "material": "(1) Python 3.14.0发布。\n(2) Rust 1.90.0发布。",
+  "sources": [
+    "https://www.python.org/releases/",
+    "https://blog.rust-lang.org/releases/"
+  ],
+  "cases": [
+    {
+      "name": "plain markdown ID headings",
+      "accepted": true,
+      "reply": "### A1：已核实\nPython发布。\n来源：https://www.python.org/releases/\n### A2：已核实\nRust发布。\n来源：https://blog.rust-lang.org/releases/"
+    },
+    {
+      "name": "inline cross reference is not another result",
+      "accepted": true,
+      "reply": "[A1] 已核实\nPython发布。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust发布，与[A1]分别核实。\n来源：https://blog.rust-lang.org/releases/"
+    },
+    {
+      "name": "unknown extra result remains rejected",
+      "accepted": false,
+      "reply": "[A1] 已核实\nPython发布。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust发布。\n来源：https://blog.rust-lang.org/releases/\n[A3] 已核实\n无授权事项。\n来源：https://www.python.org/releases/"
+    },
+    {
+      "name": "missing result remains rejected",
+      "accepted": false,
+      "reply": "### A1：已核实\nPython发布。\n来源：https://www.python.org/releases/"
+    },
+    {
+      "name": "unrelated actual source remains rejected",
+      "accepted": false,
+      "reply": "A1：已核实\nPython发布。\n来源：https://unverified.example.test/python\nA2：已核实\nRust发布。\n来源：https://unverified.example.test/rust"
+    },
+    {
+      "name": "introductory stream delta joined to first explicit result",
+      "reply": "我会逐项检索官方发布信息，核对版本与发布日期。[A1] 已核实\nPython发布。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust发布，与[A1]分别核实。\n来源：https://blog.rust-lang.org/releases/",
+      "accepted": true
+    },
+    {
+      "name": "nested Markdown citation parentheses preserve actual URL identity",
+      "reply": "[A1] 已核实\nPython发布。\n来源：([官方来源](https://www.python.org/releases/))\n[A2] 已核实\nRust发布，与[A1]分别核实。\n来源：([官方来源](https://blog.rust-lang.org/releases/))",
+      "accepted": true
+    },
+    {
+      "name": "partly verified provider summary is usable but never fully verified",
+      "accepted": true,
+      "reply": "[A1] 部分已核实\nPython发布已获来源支持，但日期细节仍有不确定性。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust发布。\n来源：https://blog.rust-lang.org/releases/",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "name": "partly true provider wording remains unverified",
+      "accepted": true,
+      "reply": "[A1] 部分属实，部分已被后续信息修正\nPython发布已获来源支持，但日期细节仍有不确定性。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust发布。\n来源：https://blog.rust-lang.org/releases/",
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "material": "(1) Python 3.14.0在2025年发布。",
+      "allow_unverified": true,
+      "name": "single native result with unfamiliar qualification remains unverified",
+      "reply": "[A1] 与材料部分矛盾。Python发布日期需要按官方原文逐点核验。\n来源：https://www.python.org/releases/",
+      "accepted": true,
+      "normalized_includes": "证据不足，仍未核实："
+    },
+    {
+      "material": "(1) Python 3.14.0在2025年发布。",
+      "allow_unverified": true,
+      "name": "a source cannot turn explicitly unsearched result into completion",
+      "reply": "[A1] 尚未检索Python，本次没有查询。\n来源：https://www.python.org/releases/",
+      "accepted": false
+    },
+    {
+      "material": "(1) Python 3.14.0在2025年发布。",
+      "allow_unverified": true,
+      "name": "native result cannot bind an unrelated sole topic",
+      "reply": "[A1] 与材料部分矛盾。无关市场评论。\n来源：https://www.python.org/releases/",
+      "accepted": false
+    },
+    {
+      "name": "Markdown source headings and long display titles do not inflate factual summary",
+      "accepted": true,
+      "reply": "[A1] 已核实\nPython正式发布。\n**来源公开URL：**\n- 公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题公开来源展示标题 https://www.python.org/releases/\n\n[A2] 已核实\nRust正式发布。\n来源：https://blog.rust-lang.org/releases/"
+    },
+    {
+      "name": "qualified verified headline cannot certify the entire topic",
+      "accepted": true,
+      "reply": "[A1] 已核实（事件部分）；风险判断未核实\nPython正式发布，但后续预测未证实。\n来源：https://www.python.org/releases/\n\n[A2] 已核实\nRust正式发布。\n来源：https://blog.rust-lang.org/releases/",
+      "normalized_includes": "证据不足，仍未核实："
+    }
+  ]
+}

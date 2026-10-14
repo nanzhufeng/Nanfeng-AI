@@ -1,5 +1,10 @@
 # C-13 对话生命周期 Android → Desktop 合同
 
+<!-- contract-governance:start -->
+> **合同口径：现行领域合同。** 领域入口：[ 对话管理与回收 ](C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** C-13 对话生命周期 Android → Desktop 合同
+<!-- contract-governance:end -->
+
 状态：**2026-09-03 按当前 Android 源码、隔离 AVD 同状态和隔离 Tauri SQLite 主链闭环。** 本合同只覆盖设置 → 对话管理 → 收藏／已归档／回收站，不扩展到 C-14 及后续单元。
 
 ## 1. Android 当前事实
@@ -27,8 +32,15 @@
 5. Rust 必须验证临时根校验、三类固定状态、收藏表、恢复、永久删除、重开不重灌 fixture 和 `PRAGMA integrity_check=ok`。
 6. 隔离 Tauri 必须验证真实 AX／截图、SQLite 投影、无网络 socket、恢复后重启仍保持、收藏会话进入后返回原列表。图形界面的永久删除只检查确认并取消，实际不可逆提交由隔离 Rust 测试执行。
 
-## 4. 已确认边界
+## 历史C13初期隔离验收边界
+
+### 4. 已确认边界
 
 - 本轮没有操作 OPPO、正式 Desktop 数据根、账号、Provider、Key、网页、通知或真实服务。
 - Android 同状态数据由隔离模拟器本地 UI 创建；Provider 未启用的失败消息只用于生成本地会话，不构成真实 Provider 验收。
 - 当前开发 `.app` 是 ad-hoc 签名开发包，不是 Developer ID／公证正式包。
+
+## 2026-10-09 双端补齐
+
+- 云端列表单条及批量取消同步均调用取消同步 owner；删除云端副本后保留本地消息树、收藏及当前选择。云端菜单不同时提供本地回收站删除入口。本地列表删除仍移入回收站。取消获得成功回执后立即移除相应云端投影；失败不得伪装取消成功。
+- 双端原位标题改名及附件阅读、播放的当前交互见 [会话 UI 合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)，验证层见当前交接。

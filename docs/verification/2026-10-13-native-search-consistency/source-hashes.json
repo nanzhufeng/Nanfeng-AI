@@ -1,0 +1,30 @@
+[
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+    "sha256": "cdde8d865f056481da31e1edc1d2e3d33621cabc5608161bb68b973bbc8bc60c"
+  },
+  {
+    "path": "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+    "sha256": "69693f328a725b6c59cca76903c5d4e29522227a6f93158a6290c876eb935c66"
+  },
+  {
+    "path": "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt",
+    "sha256": "cf3bfb5233cb904e2e27a9a0fa6eb13ce621a92c92057225d6e48ddca124f377"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/RelayNativeSearchReliabilityTest.kt",
+    "sha256": "76e2d55503d815b1151128a46c8f5515e5d717033de783884f76c88b08f1060c"
+  },
+  {
+    "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "sha256": "37b3cd36a4b9fa1ed643ada537cb21e507631907c76ff7053b3b713db7b93295"
+  },
+  {
+    "path": "docs/PROJECT_STATUS.md",
+    "sha256": "291564f8ad702405c99fb1f64ceb070b348b768d7f7e7877d8f83ad2b5f2e096"
+  },
+  {
+    "path": "docs/CURRENT_HANDOFF.md",
+    "sha256": "15082556cfdf6e9736689520cf7d8138ef36227632e860142c0d6620b76276c0"
+  }
+]

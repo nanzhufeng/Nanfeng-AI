@@ -1,5 +1,10 @@
 # 南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本机数据与导入导出表面 ](C14_LOCAL_DATA_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同
+<!-- contract-governance:end -->
+
 日期：2026-08-16  
 状态：**Android 已实现 ZIP→严格文本→原子 Conversation/Message Tree 提交，并于 2026-08-28 补齐官方源关系附件恢复。2026-09-01 的 Room Schema 64 再增加独立、不含内容的永久身份账本与 `USER_DELETED` 墓碑：已导入内容即使业务行被用户删除，也不得被后续累积 ZIP 复活。稳定基线 `c1c9ae0`／Room Schema 56 又将数分钟附件恢复迁到持久化后台 job：状态、进度、失败类型与按会话 checkpoint 均不含正文，页面退出后可续跑和显式重试。新实包复查发现，`message.metadata.attachments[].id` 可与 ZIP entry 精确对应，`conversation_asset_file_names.json` 提供原始显示名；这推翻了 K7“全部无可证明关系”的旧结论。只有当前导出路径上、ID 唯一且 entry/hash/size 一致的附件才恢复为普通 `ContentBlock.Attachment`；无官方归属的 entry 仍不猜测。Desktop 仍保持其现有人工精确关联边界，不得由 Android 结论冒充已同步。**
 
@@ -109,7 +114,9 @@
 
 ## 3. 历史缺口与当前顺序
 
-下方 K0–K5 是早期实施顺序，不能再被解释为全部仍未实现。稳定提交 `c1c9ae0` 已完成 P0 标准 JVM 收口和 P1 可续跑恢复；P2 及后续正在进行任务由用户明确排除，只有形成独立 checkpoint 后才更新本合同。
+下方 K0–K5 是早期实施顺序，不能再被解释为全部仍未实现。稳定提交 `c1c9ae0` 曾完成P0标准JVM收口和P1可续跑恢复；后续Android媒体恢复与任务接线按本页当前补充及生产owner核对。旧增量的实施排序和当时任务排除不定义现在功能或延续任务授权；当前进度、平台差异与真实验收缺口只写当前交接。
+
+### 历史K0–K5实施顺序（原阶段范围保留）
 
 1. **最高优先级：K0 format registry + metadata-only envelope parser**。先为 OpenAI/Anthropic 各自建立可审核格式证据；没有 registry entry 不实现解压或 UI 承诺。
 2. K1 的有界 ZIP staging 与 manifest/asset ownership；需要 Android 与 Rust 各自实现、同一拒绝矩阵。
@@ -118,7 +125,9 @@
 5. K4 仅在列出南枫 AI 实际可持久化目标后设计，默认全部 skip。
 6. K5 的真实选择闭环，须用户明确选择具体 ZIP；当前不得索取、扫描或解压 ZIP。
 
-## 4. 0 号增量验收
+## 历史K0号增量验收与准备边界
+
+### 4. 0 号增量验收
 
 - 已审计 P6-H/I/J 的 JSON-only contract、Android/desktop task/receipt、P3-A/G/E 的 Message Tree/Attachment/Preview owner，以及双端 ZIP 缺口。
 - 已证实当前 JSON parser 接口只接受字节 JSON，ZIP 不是被支持的替代输入；本增量以 Android parser 合同锁定原始 ZIP 签名仍被拒绝，防止文档优先级更新意外扩大旧入口。

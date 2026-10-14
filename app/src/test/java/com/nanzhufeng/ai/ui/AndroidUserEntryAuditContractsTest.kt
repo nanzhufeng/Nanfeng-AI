@@ -50,12 +50,21 @@ class AndroidUserEntryAuditContractsTest {
         assertTrue(hierarchy.contains("SettingsDestination.ABOUT -> AboutSettingsCard"))
         assertTrue(categories.contains("SettingsCategoryRow(Icons.Rounded.Info, \"关于\""))
         assertFalse(categories.contains("SettingsCategoryRow(Icons.Rounded.Settings, \"关于\""))
-        for (token in listOf("Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}")) assertTrue("missing about detail: $token", about.contains(token))
+        for (token in listOf("Android 版 \${BuildConfig.VERSION_NAME}", "构建号 \${BuildConfig.VERSION_CODE}", "构建基准 Commit：\${BuildConfig.GIT_COMMIT}", "开发时间：\${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}")) assertTrue("missing about detail: $token", about.contains(token))
         assertFalse("about must not repeat the data-management destination", about.contains("数据与隐私") || about.contains("隐私与安全") || about.contains("数据管理"))
         assertTrue("about modules must share one full-width rounded foreground card", about.contains("modifier = Modifier.fillMaxWidth()") && about.contains("shape = CardShape"))
         assertTrue("brand, version and developer sections retain shared canvas separators", Regex("SettingsCategoryDivider\\(\\)").findAll(about).count() == 2)
         assertTrue("about sections must not shrink to their text", about.contains("AboutSettingsSection") && about.contains("Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp)"))
         for (forbidden in listOf("帮助中心", "使用条款", "许可证")) assertFalse("invented about action: $forbidden", about.contains(forbidden))
+    }
+
+    @Test
+    fun aboutCommitIsSuppliedByTheBuildWithoutReadingLocalUserData() {
+        val gradle = File("build.gradle.kts").readText()
+
+        assertTrue(gradle.contains("buildConfigField(\"String\", \"GIT_COMMIT\""))
+        assertTrue(gradle.contains("NANFENG_AI_GIT_COMMIT"))
+        assertTrue(gradle.contains("git\", \"rev-parse\", \"--short=12\", \"HEAD\""))
     }
 
     @Test

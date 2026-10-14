@@ -1,0 +1,82 @@
+[
+  {
+    "preset": "RELAYCORE_OPUS_5_5",
+    "result": "Sent",
+    "conversationId": "5f41e4ef-1bc2-4af9-a9d1-2e0b6295e1af",
+    "elapsedMs": 23577,
+    "coverage": "4\/4项检索结果",
+    "attachmentCount": 4,
+    "mimes": [
+      "text\/html",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application\/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application\/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ],
+    "fixture": "formats",
+    "group": 2,
+    "fileCount": 4,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "claude-opus-5.5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 13014,
+        "output": 424
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "claude-opus-5.5",
+        "returned": "claude-opus-5.5",
+        "input": 82183,
+        "output": 602
+      }
+    ],
+    "answerChars": 1023,
+    "publicAnswer": "结论：四份文件各自只有一个检索主题（Rust 1.87.0 至 1.90.0 的发布日期），不含观点或数字主张。四个版本的发布日期都已通过 Rust 官方博客核实，间隔均为 6 周，符合 Rust 的固定发布节奏。\n\n<文件>\nHTML 文件 public-09.html：Rust 1.90.0 于 2025 年 9 月 18 日发布，已核实。来源：[Announcing Rust 1.90.0](https:\/\/blog.rust-lang.org\/2025\/09\/18\/Rust-1.90.0\/)\n\n<文件>\nWord 文件 public-10.docx：Rust 1.89.0 于 2025 年 8 月 7 日发布，已核实。来源：[Announcing Rust 1.89.0](https:\/\/blog.rust-lang.org\/2025\/08\/07\/Rust-1.89.0\/)\n\n<文件>\nExcel 文件 public-11.xlsx：Rust 1.88.0 于 2025 年 6 月 26 日发布，已核实。来源：[Announcing Rust 1.88.0](https:\/\/blog.rust-lang.org\/2025\/06\/26\/Rust-1.88.0\/)\n\n<文件>\nPPT 文件 public-12.pptx：Rust 1.87.0 于 2025 年 5 月 15 日发布，同时也是 Rust 1.0 发布十周年，已核实。来源：[Announcing Rust 1.87.0 and ten years of Rust!](https:\/\/blog.rust-lang.org\/2025\/05\/15\/Rust-1.87.0\/)\n\n材料中的原始观点：没有。文件只列出了查询关键词，没有主张需要评判。\n\n推理：以上四个日期依次相隔 6 周（5\/15 → 6\/26 → 8\/7 → 9\/18），与 Rust 稳定版每 6 周发布一次的机制相符，互相印证，没有矛盾。\n\n反例或条件：如果需要的是具体补丁版本（如 1.88.x、1.89.x）的日期，或者 crates.io、各发行版的上线日期，可能与上述 .0 版本的博客日期不同。这次没有检索这些。\n\n风险与下一步：按当前日期 2026-10-13 推算，这四个版本都已经不是最新稳定版。如果材料用于判断“当前版本”，建议再查官方博客的最新发布公告，这一项本轮尚未核实。"
+  },
+  {
+    "preset": "RELAYCORE_OPUS_5_5",
+    "result": "Sent",
+    "conversationId": "dca863be-7944-4367-b5df-253a6c72eb4e",
+    "elapsedMs": 21705,
+    "coverage": "2\/2项检索结果",
+    "attachmentCount": 2,
+    "mimes": [
+      "application\/pdf",
+      "application\/zip"
+    ],
+    "fixture": "formats",
+    "group": 3,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "claude-opus-5.5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 8945,
+        "output": 329
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "claude-opus-5.5",
+        "returned": "claude-opus-5.5",
+        "input": 83702,
+        "output": 453
+      }
+    ],
+    "answerChars": 842,
+    "publicAnswer": "结论：两份材料都只是检索查询字符串，没有任何主张或观点。它们问到的两个发布日期都已通过 Rust 官方博客核实，彼此之间没有矛盾。\n\n<PDF>\nPDF public-13.pdf 内容只有一行：\"Rust 1.86.0 release date blog.rust-lang.org\"。\n- 已核实：Rust 1.86.0 于 2025 年 4 月 3 日发布。来源：[Announcing Rust 1.86.0](https:\/\/blog.rust-lang.org\/2025\/04\/03\/Rust-1.86.0\/)\n\n<文件>\n文件 public-tail.md 内容只有一行：\"Rust 1.85.0 release date blog.rust-lang.org\"。\n- 已核实：Rust 1.85.0 于 2025 年 2 月 20 日发布，同时稳定了 Rust 2024 Edition。来源：[Announcing Rust 1.85.0 and Rust 2024](https:\/\/blog.rust-lang.org\/2025\/02\/20\/Rust-1.85.0.html)\n\n材料中的原始观点：无。两份材料都没有提出论点、数据或判断，只是指向官方博客的查询。\n\n推理：两个版本相隔 6 周，符合 Rust 每 6 周发布一次稳定版的节奏。博客 URL 中的日期路径与检索结果一致，可信度较高。\n\n可推翻条件：只有官方博客事后修改发布日期或撤回文章，才会推翻上述结论，目前没有发现这种情况。另外，博客文章的发布日期和 GitHub tag、rustup 分发时间可能存在时区上的几小时偏差。\n\n风险与下一步：如果需要精确到工具链可用时间（比如 CI 锁定版本），建议同时核对 [Rust 发布说明 RELEASES.md](https:\/\/github.com\/rust-lang\/rust\/blob\/master\/RELEASES.md) 里对应版本的条目。"
+  }
+]

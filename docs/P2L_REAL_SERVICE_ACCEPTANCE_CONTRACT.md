@@ -1,5 +1,10 @@
 # 南枫 AI P2-L 真实服务验收准备合同
 
+<!-- contract-governance:start -->
+> **合同口径：历史阶段记录。** 领域入口：[ 普通发送授权与执行 ](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P2-L 真实服务验收准备合同
+<!-- contract-governance:end -->
+
 日期：2026-08-12  
 状态：已实现离线合同、合成夹具、DryRun 和单次令牌；真实 OpenRouter 推理仍未授权且生产 egress 保持 `Disabled`
 

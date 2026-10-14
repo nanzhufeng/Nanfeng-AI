@@ -2,10 +2,39 @@
 
 唯一用途：为后续复盘、路线追踪和交接提供结构化项目事实索引；规则正文只在对应合同，阶段路线只在总蓝图。本文件不授权复盘 UI、Provider 或外部调用。
 
+## 2026-10-13：分场景联网与 Muse Wonder
+
+| 用户已确定 | 双端当前实现 | 证据与边界 |
+|---|---|---|
+| 正常OpenRouter／官方自身联网保留；RC文字Sol/Astra自身、其余Luna；RC附件Luna后原RC回答 | AutomaticWebSearchPolicy／NormalChatOpenRouterExecutor；lib／relaycore_web_search_v1 | [C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)、[授权P3J](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md)、[本轮报告](verification/2026-10-13-luna-routing-implementation/REPORT.md)；不是全部服务绿灯 |
+| Muse Wonder 经OpenRouter，深度档放在智谱上方 | MUSE_WONDER / meta/muse-wonder；双方顺序为DeepSeek Pro→Muse Wonder→GLM | [模型维护矩阵](model-service/MODEL_SERVICE_MATRIX.md)；双端真实请求403，保留服务缺口 |
+| “不安装”永远指真机，模拟器可以自主操作 | 仅emulator-5592独立验收包；正式Android/Mac无覆盖 | 已按用户明确要求记录偏好；无connected或OPPO测试 |
+
+## 2026-10-10：上文全部反馈的双端核对索引
+
+本表是核对入口，不复制各合同规则，也不把源码／单测通过标作两端安装或实机完成。当前用户要求暂不覆盖安装；以下按现有源码及已记录测试证据核对，未新增付费调用。每项后续变更须同时核对Android与Desktop各自owner、历史数据、重开恢复和测试；平台布局可适配，功能语义一致。
+
+| 反馈 | Android核对入口 | Desktop核对入口 | 权威规则／证据入口 |
+|---|---|---|---|
+| 云端取消同步、及时刷新、长按菜单 | ConversationWorkspace、选中同步owner | chat-shell、云列表及同步owner | [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) |
+| 文件标题、文首标题、返回／三点菜单与浅灰画布 | ConversationWorkspace文本预览 | app文本预览 | [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) |
+| 中断恢复、可用重试、移除持续悬浮失败卡、未完成终态 | NormalChatOpenRouterExecutor、运行态及发送记录owner | app／chat-shell、desktop_ordinary_chat_v1 | [恢复合同](C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md)及[运行时合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md) |
+| 侧栏／主界面标题双击原位改名、全选、回车 | ConversationWorkspace原位标题组件 | chat-shell＋app改名事件 | [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) |
+| 视频圆点、点按／拖动、暂停／后台／重开位置记忆 | ConversationWorkspace、AndroidVideoPreviewPositionStore | app播放器＋原生位置owner | [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)；CURRENT_HANDOFF播放器条目 |
+| 模型升级、顺序、Claude effort、隐藏高价候选 | ModelService、ChatProviderAdapters | p6g-model-router、desktop_model_service_v1、desktop_ordinary_chat_v1 | [会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) |
+| Relay独立入口、日常／深度、名称／渠道／倍率 | RelayCoreModels、模型选择与ModelSettingsUi | relaycore-models、chat-shell、android-settings-shell | [Relay合同](RELAYCORE_MODEL_CURRENT_CONTRACT.md) |
+| 五平台／三分组尺寸、外屏布局及独立保存／连接提示 | ModelSettingsUi、ModelSettingsViewModel.providerFeedback | android-settings-shell、app.modelProviderFeedback | [设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md) |
+| Relay自身检索优先、同平台Sol协作、原模型回答 | AutomaticWebSearchPolicy、RelayCoreWebSearchCompanion | lib检索路由、relaycore_web_search_v1 | [Relay合同](RELAYCORE_MODEL_CURRENT_CONTRACT.md) |
+| 费用／用量／实际模型／缓存／思考／上下文及分笔计量 | ChatCallAccounting、Room审计及上下文owner | chat_call_accounting_v1、usage_ledger_v1、原生上下文owner | [费用台账合同](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md) |
+| Relay人民币名义金额、避免二次换算、旧估算只读显示纠正 | ConversationCostEstimator、ChatCallAccounting、助手归因／费用页 | chat_call_accounting_v1、desktop-cost-estimator、设置费用汇总 | [费用台账合同](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md#relaycore-人民币实际计费用户确认长期规则) |
+| 聊天定位、隐藏工作区并保留数据、放大字体居中 | ConversationWorkspace、设置／启动恢复路径 | product-scope、chat-shell、设置／启动恢复路径 | [设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)及[C16字体合同](C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md) |
+
+最新动态证据及未验项仅看[CURRENT_HANDOFF](CURRENT_HANDOFF.md)顶部；历史段落中的安装或测试结果不能自动覆盖当前源码。真实服务19项生成／合成上下文及18项聊天联网的验证与本地UI／数据库验证分开；本轮人民币修正后的Android定向69项、Rust计费1项、Node全量485pass／12skip也不替代两端新包的实际显示与用户设备验收。
+
 ## 当前可见 UI 覆盖（2026-08-14，优先于历史 CLOSED 标签）
 
 - 用户最新截图与明确反馈是当前视觉真相；历史 `CLOSED` 只代表当时证据，不能覆盖新包或新截图中的回归。正常对话不得显示 fixture、重试、换模型或本地尝试历史等工程控制。
-- **交接覆盖（2026-08-14，用户再次明确）：** 本 ledger 中所有用户提出的可见 UI 反馈均视为 **Desktop 与 Android 同步交付项**。Android AOSP 近似截图、Desktop static/Node 检查或任一平台单独通过，都不能关闭双端反馈；只有两端最新包的真实路径、交互与 restart/readback 分层证据齐备才能关闭。当前 UI 反馈队列优先于总蓝图下一阶段，且普通对话、临时对话、工作区必须共享同一壳层和同一 Composer，不允许空态/临时/工作任一处添加工程说明或省略输入框。
+- **交接覆盖（2026-08-14，用户再次明确）：** 用户提出的界面、交互、模型／Provider、联网、计费／用量、上下文及恢复反馈均视为 **Desktop 与 Android 同步交付项**（2026-10-10再次确认）。Android AOSP 近似截图、Desktop static/Node 检查或任一平台单独通过，都不能关闭双端反馈；只有两端最新包的真实路径、交互与 restart/readback 分层证据齐备才能关闭。当前 UI 反馈队列优先于总蓝图下一阶段，且普通对话、临时对话、工作区必须共享同一壳层和同一 Composer，不允许空态/临时/工作任一处添加工程说明或省略输入框。
 - FB-P6-046/047：双端侧栏只保留搜索输入/历史与普通会话列表；已移除冗余搜索说明和第二个搜索按钮。设置与“新对话”收为底部同一行的紧凑浮层；新对话使用既有方框斜笔图标与居中文本，导入只在 Settings 发起，确认导入后会话进入普通历史。
 - FB-P6-051：Drawer 底部的设置与新对话是两个完全独立的浮动控件，分别靠左/靠右；新对话保留独立阴影。不得用共同白色 tray、卡片或胶囊包裹它们。
 - FB-P6-040（Desktop 回归修复）：模型选择与发送键必须构成右侧同一操作组；模型胶囊紧贴发送键左侧，不能被发送键自身的自动边距遗留在 Composer 左侧。

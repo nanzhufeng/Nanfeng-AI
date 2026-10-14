@@ -1,3 +1,4 @@
+import {MODEL_SERVICE_PREVIEW_SETTINGS} from '../src/android-settings-shell.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -131,7 +132,7 @@ test('conversation header branches from visible transcript content like Android'
     data: { summary: data.summary, exchange: { conversations: [emptyConversation] } }, native: true,
     selectedConversationId: emptyConversation.id, pane: 'chat', status: '', error: '', connection: {},
   }));
-  assert.match(emptyHtml, /class="chat-mode-switch"/);
+  assert.doesNotMatch(emptyHtml, /class="chat-mode-switch"/);
   assert.match(emptyHtml, /data-action="toggle-temporary-chat"/);
   assert.doesNotMatch(emptyHtml, /data-action="new-chat"[^>]*aria-label="新对话"/);
   assert.doesNotMatch(emptyHtml, /data-action="open-conversation-header-menu"/);
@@ -178,15 +179,23 @@ test('settings expose the latest phone values in the desktop primary and seconda
   for (const token of ['aria-label="设置一级菜单"', 'aria-label="设置二级页面"', '外观', '深色', '字体大小', '大', '主题色', '绿色', 'open-settings-picker']) assert.ok(appearance.includes(token));
   const favorites = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'favorites', status: '', error: '', connection: {}, favoriteConversationIds: new Set([conversation.id]) });
   for (const token of ['收藏', 'toggle-conversation-favorite', '双端同步']) assert.ok(favorites.includes(token));
-  const about = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo: { version: '0.0.1', platform: 'macos', arch: 'aarch64', buildEpochSeconds: 1767225600 } });
-  for (const token of ['Desktop 版 0.0.1', '开发者信息', '开发者：席瑞', 'nanzhufeng.studio@gmail.com', 'GitHub · nanzhufeng/Nanfeng-AI', '版权所有 © 2026 席瑞']) assert.ok(about.includes(token));
-  assert.match(about, /开发时间 2026-01-01 \d{2}:\d{2}/u);
+  const about = renderChatFirstShell({ data, native: true, pane: 'settings', settingsSection: 'about', status: '', error: '', connection: {}, runtimeInfo: { version: '0.0.1', gitCommit: 'dafc64d9b336', platform: 'macos', arch: 'aarch64', buildEpochSeconds: 1767225600 } });
+  for (const token of ['Desktop 版 0.0.1', '构建基准 Commit：dafc64d9b336', '开发者信息', '开发者：席瑞', 'nanzhufeng.studio@gmail.com', 'GitHub · nanzhufeng/Nanfeng-AI', '版权所有 © 2026 席瑞']) assert.ok(about.includes(token));
+  assert.match(about, /开发时间：2026-01-01 \d{2}:\d{2}/u);
   assert.ok(!about.includes('aarch64'));
   assert.ok(!about.includes('读取中'));
   const css = await readFile(resolve(import.meta.dirname, '../src/chat-shell.css'), 'utf8');
   assert.match(css, /\.android-settings-about small \{ display: block; margin-top: 6px; \}/);
   assert.match(css, /\.android-settings-about > div:not\(\.android-settings-divider\)/);
   assert.match(css, /\.android-settings-about > \.android-settings-divider \{ height: 1px; min-height: 1px; padding: 0;/);
+});
+
+test('desktop about receives the Git commit from native build metadata', async () => {
+  const build = await readFile(resolve(import.meta.dirname, '../src-tauri/build.rs'), 'utf8');
+  const native = await readFile(resolve(import.meta.dirname, '../src-tauri/src/lib.rs'), 'utf8');
+  assert.match(build, /NANFENG_AI_GIT_COMMIT/);
+  assert.match(build, /Command::new\("git"\)[\s\S]*\.args\(\["rev-parse", "--short=12", "HEAD"\]\)/);
+  assert.match(native, /git_commit: option_env!\("NANFENG_AI_GIT_COMMIT"\)/);
 });
 
 test('native settings enable only implemented consumers and keep remaining owners fail closed', () => {
@@ -256,10 +265,11 @@ test('native parity commands are explicitly least-privilege allowed for the main
 test('current Android model catalog keeps GLM-OCR visible but outside chat selection', async () => {
   const zhipu = renderChatFirstShell({
     data, native: true, pane: 'settings', settingsSection: 'model-configuration', status: '', error: '', connection: {},
-    settingsPicker: 'modelPreset', modelProviderId: 'ZHIPU',
+    modelProviderId: 'ZHIPU',
   });
-  for (const token of ['GLM-5.3', 'GLM-5.3 Flash', 'GLM-OCR', '图片与 PDF 转 Markdown · 使用同一智谱 API Key', '仅在左侧栏“南枫转写”中调用，不加入聊天模型选择。']) assert.ok(zhipu.includes(token));
-  assert.ok(!zhipu.includes('data-preset-id="GLM_OCR"'));
+  for (const token of ['GLM-5.3', 'GLM-5.3 Flash', 'GLM-OCR', '图片、PDF 转 Markdown · 共用智谱 Key']) assert.ok(zhipu.includes(token));
+  assert.ok(zhipu.includes('data-preset-id="GLM_OCR" role="radio"'));
+  assert.ok(!MODEL_SERVICE_PREVIEW_SETTINGS.find(p => p.providerId === 'ZHIPU').presets.some(p => p.id === 'GLM_OCR'));
   for (const retired of ['Grok 4.1', 'Grok 4.5', 'Grok 4.6']) assert.ok(!zhipu.includes(retired));
 
   const qwen = renderChatFirstShell({

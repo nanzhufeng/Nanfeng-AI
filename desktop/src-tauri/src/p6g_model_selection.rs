@@ -100,6 +100,10 @@ pub struct CatalogSnapshot {
 pub struct GlobalDefault {
     pub revision: u64,
     pub tier: Option<ModelTier>,
+    #[serde(default)]
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub composer_revision: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

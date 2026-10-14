@@ -38,6 +38,7 @@ const INBOX_FILE: &str = "inbox/pending.nfai-backup";
 /// Device-only state is never exported. Tables tied to restored objects are intentionally
 /// left empty after restore; only the stable device-level subset below is copied forward.
 const EXCLUDED_TABLES: &[&str] = &[
+    "desktop_attachment_search_checkpoints",
     "desktop_attachment_staging",
     "desktop_app_settings",
     "desktop_background_runtime_v1",
@@ -50,6 +51,7 @@ const EXCLUDED_TABLES: &[&str] = &[
     "desktop_provider_settings",
     "desktop_video_preview_positions",
     "p6g_catalog",
+    "p6g_composer_default",
     "p6g_conversation_override",
     "p6g_global_default",
     "p6g_route_metadata",
@@ -64,6 +66,7 @@ const PRESERVED_DEVICE_TABLES: &[&str] = &[
     "desktop_conversation_read_markers_v1",
     "desktop_provider_settings",
     "p6g_catalog",
+    "p6g_composer_default",
     "p6g_global_default",
     "sync_account_metadata",
     "sync_intents",

@@ -1,5 +1,10 @@
 # P10-B 双路径选择反馈合同
 
+<!-- contract-governance:start -->
+> **合同口径：本地实验／独立专项合同。** 领域入口：[ 双路径本地配置实验 ](P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P10-B 双路径选择反馈合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：本地、瞬时的路径选择反馈；不含 Key 读取/写入、Provider HTTP、Prompt、RunSpec、费用、账号或跨网络同步
 

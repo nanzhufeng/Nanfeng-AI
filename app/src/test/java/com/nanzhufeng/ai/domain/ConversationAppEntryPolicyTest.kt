@@ -42,4 +42,15 @@ class ConversationAppEntryPolicyTest {
         val work = previous.copy(surface = ConversationSurface.WORK, pinnedAt = Instant.EPOCH)
         assertEquals(work, ConversationAppEntryPolicy.restorableConversation(work))
     }
+    @Test fun sharedDesktopAndroidEntryCases() {
+        val rows = java.io.File("../protocol/fixtures/conversation-entry-policy-v1.tsv").readLines().drop(1)
+        for (row in rows.filter(String::isNotBlank)) {
+            val cells = row.split('\t')
+            val actual = ConversationAppEntryPolicy.retainedId(
+                cells[1].takeUnless { it == "-" }, cells[2].toLong(), cells[3].toLong(), cells[4].toBoolean(),
+            )?.value
+            assertEquals(cells[0], cells[5].takeUnless { it == "-" }, actual)
+        }
+    }
+
 }

@@ -1,0 +1,10 @@
+{
+  "apk": "/Users/nanzhufeng/Documents/\u5de5\u5177\u5f00\u53d1/Nanfeng_AI/app/build/outputs/apk/release/\u5357\u67abAI.apk",
+  "sha256": "da8e6d2447e12df3faf5f5026fc969cb97bc6f995260d42226dc5111e1db6d78",
+  "bytes": 28672427,
+  "signatureSHA256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+  "package": "com.nanzhufeng.ai",
+  "versionCode": 93,
+  "versionName": "1.0.29",
+  "debuggable": false
+}

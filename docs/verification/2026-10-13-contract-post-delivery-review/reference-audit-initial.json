@@ -1,0 +1,11 @@
+{
+  "relativeLinks": 327,
+  "brokenLinks": [],
+  "unresolvedInlineOwners": [
+    {
+      "contract": "docs/P1_TASK_CONTRACT.md",
+      "line": 82,
+      "path": "app/build/outputs/apk/debug/app-debug.apk"
+    }
+  ]
+}

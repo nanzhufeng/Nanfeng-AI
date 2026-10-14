@@ -14,7 +14,7 @@ internal data class AnswerInformationDisclosure(
 ) {
     val networkLabel: String get() = when {
         webSearchUsed == true -> "已实际使用"
-        webSearchRequested == true -> "联网未完成"
+        webSearchRequested == true -> "联网未核实"
         webSearchRequested == false && webSearchUsed == false -> "本次未使用"
         else -> "无法确认（旧记录）"
     }

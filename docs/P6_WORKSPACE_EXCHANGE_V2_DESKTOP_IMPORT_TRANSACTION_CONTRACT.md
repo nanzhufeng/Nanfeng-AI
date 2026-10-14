@@ -1,5 +1,10 @@
 # P6 工作区交换 v2 Desktop 私有暂存、原子导入与回导合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v2字段与原子恢复 ](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6 工作区交换 v2 Desktop 私有暂存、原子导入与回导合同
+<!-- contract-governance:end -->
+
 ## 结论、范围与停止门
 
 本合同冻结 `nfai.exchange.v2` 在 Desktop 的**未来内部导入 owner**。它只消费已由 `protocol/nfai.exchange.v2.schema.json`、`protocol/scripts/exchange-v2-lib.mjs` 和 `NfaiExchangeV2Ir` 确认的 exact IR；不重新解释、不补默认值、不把 v2 降级为 v1，也不把 v1 的 `workspaces/workspace_exchange/import_journal` 当作 v2 owner。

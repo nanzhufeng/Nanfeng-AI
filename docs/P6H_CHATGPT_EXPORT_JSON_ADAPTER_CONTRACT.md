@@ -1,5 +1,10 @@
 # 南枫 AI P6-H ChatGPT export JSON Adapter 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本机数据与导入导出表面 ](C14_LOCAL_DATA_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P6-H ChatGPT export JSON Adapter 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-14  
 状态：已完成（非 OPPO 退出门，2026-08-14）。数据/任务机及独立 Settings Center → 数据 → 数据导入的双端真实路径均已由最终证据重新关闭；不因 OPPO 未授权重开。详见 `P6H_CHATGPT_EXPORT_JSON_ADAPTER_EVIDENCE.md` 与 `CURRENT_HANDOFF.md` 的当前权威状态；下一 Adapter 为 P6-I Claude export JSON。
 
@@ -37,10 +42,10 @@ Desktop 原生文件选择器 / Android OpenDocument
 
 - Android Schema 24→25、Desktop SQLite user_version 12→13 仅追加本 Adapter 的 task/item/provenance/receipt 表和索引；不 wipe、不 destructive migration、不改变既有 Conversation、P6-G catalog、TEMP 或已完成 Adapter 表。
 - 自动合同至少覆盖：UTF-8/BOM、大小/深度/重复 key、结构/角色/content type、分支与顺序、未知字段安全忽略、部分失败、private-copy 路径排除、确认/跳过/取消/中断重试、幂等/冲突 reimport、rollback、迁移、重启回读及 provenance 不进入 Invocation/route/egress。
-- 真正退出还需两端各自：系统文件选择器 → 私有复制 → 会话确认/跳过 → 关闭/force-stop 重开读回 → 导出回读；Android 仅 `emulator-5554`、正式签名 install/base hash，Desktop 为最新隔离 `.app`。未达到前不得以 fixture、解析成功、JVM/Node/Rust 测试或构建宣称阶段完成。
+- 真正退出还需两端各自：系统文件选择器 → 私有复制 → 会话确认/跳过 → 关闭/force-stop 重开读回 → 导出回读；Android 仅 当次隔离模拟器、正式签名 install/base hash，Desktop 为最新隔离 `.app`。未达到前不得以 fixture、解析成功、JVM/Node/Rust 测试或构建宣称阶段完成。
 
 ## 2026-08-14 已完成的数据与任务机证据（Settings UI 门重新打开）
 
 - Android Schema 24→25 与 Desktop SQLite 12→13 均为仅追加迁移；两端严格 JSON、private-copy、专属任务机、原子 Conversation/Message Tree/provenance/receipt 写入、恢复、确认/跳过/取消/重试均有自动合同。`org.json` JVM 未实现桩方案没有恢复或接入。
-- Android 已以 `emulator-5554` 的 DocumentsUI 完成最小非敏感 `conversations.json` 真选、Alpha 确认与 Skip 跳过、force-stop/restart 后普通会话/树/时间/角色/来源读回，以及导出/hash；最终 APK `install -r` 后回拉 `base.apk` 与本地 hash 一致，正式签名 v2/v3 通过。
+- Android 已以 当次隔离模拟器 的 DocumentsUI 完成最小非敏感 `conversations.json` 真选、Alpha 确认与 Skip 跳过、force-stop/restart 后普通会话/树/时间/角色/来源读回，以及导出/hash；最终 APK `install -r` 后回拉 `base.apk` 与本地 hash 一致，正式签名 v2/v3 通过。
 - Desktop 最新隔离 acceptance `.app` 已以原生 Open panel 真选同类 fixture，显示 `stage-succeeded` / `task-read` 诊断与候选弹窗；Alpha 确认后写入 `conversation-chatgpt-bc54a6844edc282000ba9d00`，Skip 已保存。重启后普通历史、用户/助手消息、时间、分支动作和“从 ChatGPT 导入”provenance 均可见；同一包重复确认回读同一 ConversationId。应用导出已严格回读、zip 完整性与 SHA-256 均核验。完整可复核记录见 `P6H_CHATGPT_EXPORT_JSON_ADAPTER_EVIDENCE.md`。

@@ -1,5 +1,10 @@
 # 南枫 AI P6-J 南枫知识库对话／知识 export Adapter 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本机数据与导入导出表面 ](C14_LOCAL_DATA_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P6-J 南枫知识库对话／知识 export Adapter 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-15  
 状态：**CLOSED（非 OPPO 退出门，2026-08-15）**；本文件是 P6-J 的唯一合同，不复用 P6-H/P6-I 的格式断言。
 
@@ -28,7 +33,7 @@ Desktop 原生文件选择器 / Android OpenDocument
 
 - 状态、私有副本、重试、幂等／冲突、单项确认事务、来源撤销及恢复语义与 P6-I 相同，但 storage key、Room 表、Desktop SQLite 表和 provenance/receipt 必须 P6-J 专属，不能共用 Claude 或 ChatGPT 表。
 - 成功会话标明“从南枫知识库导入 · 本地静态文本”，不关联模型、Provider、费用或调用记录；TEMPORARY 不显示入口或接收结果。知识型但非会话记录是 item-level `NOT_CONVERSATION_RECORD`，绝不伪造 Conversation。
-- Android Schema 28→29、Desktop SQLite 14→15 只追加 P6-J 私有表与索引。最终闭环必须分别完成 Desktop 隔离最新 app 与 Android `emulator-5554`：系统 picker → Alpha 确认／知识记录 Skip → 完整关闭或 force-stop 重开读回 → Settings 导出严格回读与 SHA-256。不得触碰 OPPO。
+- Android Schema 28→29、Desktop SQLite 14→15 只追加 P6-J 私有表与索引。最终闭环必须分别完成 Desktop 隔离最新 app 与 Android 当次隔离模拟器：系统 picker → Alpha 确认／知识记录 Skip → 完整关闭或 force-stop 重开读回 → Settings 导出严格回读与 SHA-256。不得触碰 OPPO。
 - 验收只能使用合成 fixture；当前闭环 fixture 为 `p6j-nanfeng-knowledge-export-acceptance.json`，含两个有效静态会话：Alpha 必须确认、第二项必须 Skip。导出 payload 必须只含 Alpha 的可见 USER/ASSISTANT 文本，且排除 Skip、`sender=tool`、tool block 与 thinking。
 
 ## 明确排除

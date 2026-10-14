@@ -15,12 +15,12 @@ class ConversationPerformanceUiContractsTest {
         assertTrue(workspace.contains("LaunchedEffect(attachmentBlocks)"))
         assertTrue(workspace.contains("onEnsureAttachmentPreview(block.attachment)"))
         assertTrue(workspace.contains("private fun rememberDecodedBitmap("))
-        assertTrue(workspace.contains("withContext(Dispatchers.Default)"))
-        assertEquals(1, "BitmapFactory.decodeByteArray".toRegex().findAll(workspace).count())
+        assertTrue(workspace.contains("withContext(com.nanzhufeng.ai.domain.AttachmentPreviewWork.dispatcher)"))
+        assertEquals(2, "BitmapFactory.decodeByteArray".toRegex().findAll(workspace).count())
 
         assertTrue(viewModel.contains("fun ensureAttachmentPreview(reference: ConversationAttachmentReference)"))
         assertTrue(viewModel.contains("attachmentPreviewRequests.add(reference.id)"))
-        assertTrue(viewModel.contains("withContext(Dispatchers.IO) { attachmentPreview.original(reference) }"))
+        assertTrue(viewModel.contains("withContext(com.nanzhufeng.ai.domain.AttachmentPreviewWork.dispatcher) { attachmentPreview.original(reference) }"))
         assertFalse(
             viewModel.contains(
                 "attachmentReferences.distinctBy { it.id }.associate { it.id to attachmentPreview.project(it) }",

@@ -1,0 +1,34 @@
+{
+  "actualModel": "gpt-6.1-sol",
+  "covered": 0,
+  "files": "",
+  "ledgerCalls": [
+    {
+      "actual": "gpt-6.1-sol",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 1215,
+      "model": "gpt-6.1-sol",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "gpt-6.1-sol",
+      "source": null
+    }
+  ],
+  "physical": [],
+  "planned": 0,
+  "preset": "RELAYCORE_GPT_6_1_SOL",
+  "publicAnswer": "我会查阅 Go 和 Mozilla 的官方发布记录，核对日期后简要比较发布节奏。当前会话没有可用的联网工具，因此我无法完成你要求的“实际联网核验”，也不能将下面的信息称为本次已核验结果。根据已有知识，日期及对应官方来源如下：\n\n| 版本 | 官方发布日期 | 官方来源 |\n|---|---|---|\n| Go 1.22.0 | 2024 年 2 月 6 日 | [Go 发布历史](https://go.dev/doc/devel/release#go1.22.0) |\n| Firefox 137.0 | 2025 年 4 月 1 日 | [Mozilla 137.0 发行说明](https://www.mozilla.org/en-US/firefox/137.0/releasenotes/) |\n\n发布节奏方面，Go 通常每 **6 个月**发布一个主要版本；Firefox 通常每 **4 周**发布一个正式版本，因此 Firefox 的版本迭代明显更频繁。两者的版本编号规则不同，不能直接用编号大小比较更新幅度。",
+  "reopenedCheckpoints": 0,
+  "reopenedModel": "gpt-6.1-sol",
+  "reopenedState": "COMPLETED",
+  "requested": "gpt-6.1-sol",
+  "sources": [],
+  "status": "PARTIAL",
+  "webProof": false
+}

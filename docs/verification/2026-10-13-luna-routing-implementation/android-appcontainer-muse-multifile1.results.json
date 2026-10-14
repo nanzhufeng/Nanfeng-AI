@@ -1,0 +1,36 @@
+[
+  {
+    "preset": "MUSE_WONDER",
+    "result": "Failed(code=AUTHENTICATION)",
+    "conversationId": "d149b844-7847-4844-822d-5166c37249f6",
+    "elapsedMs": 772,
+    "attachmentCount": 2,
+    "mimes": [
+      "text\/markdown",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "fixture": "go-firefox",
+    "group": 0,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "diagnostics": [
+      {
+        "errorClass": "AUTHENTICATION",
+        "httpStatus": 403,
+        "safeDetail": "HTTP_403_AUTHENTICATION",
+        "model": "meta\/muse-wonder",
+        "elapsedMs": 187
+      },
+      {
+        "errorClass": "AUTHENTICATION",
+        "httpStatus": 403,
+        "safeDetail": "RETRIEVAL_HTTP_403",
+        "model": "meta\/muse-wonder",
+        "elapsedMs": 377
+      }
+    ],
+    "physicalCalls": [],
+    "answerChars": 0,
+    "publicAnswer": ""
+  }
+]

@@ -1,5 +1,10 @@
 # P5-A Android 自适应布局与无障碍产品化基线合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ Android设置界面 ](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P5-A Android 自适应布局与无障碍产品化基线合同
+<!-- contract-governance:end -->
+
 > **当前 Android 会话 UI 路由（2026-08-24）：** 本文保留历史自适应/无障碍基线和非会话页面边界。Android `ConversationWorkspace` 的导航、抽屉、顶栏、Composer、表面层级、文字和手势统一以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为准；本文早期 NavigationBar/NavigationRail 壳层不能反向覆盖当前会话 UI。
 
 ## 目标与边界
@@ -7,7 +12,7 @@
 本合同只为既有 Android 本地优先产品建立可测试的紧凑/展开 UI 壳层、可访问性与窗口连续性基线。它不改变任何 Domain、Room Schema（保持 17）、Repository、Provider、RunSpec、egress、导入导出语义或 launcher icon。
 
 - `OpenRouterEgressPolicy.Disabled` 保持；不读取、写入或测试 Key，不构造 Prompt/RunSpec，不发 Provider HTTP。
-- 只允许 `emulator-5554` 的自动化与可见验收；不得操作 OPPO，不安装任何 test/helper APK 到 OPPO。
+- 只允许 当次隔离模拟器 的自动化与可见验收；不得操作 OPPO，不安装任何 test/helper APK 到 OPPO。
 - 所有 app-owned light Dialog、DropdownMenu、Popup 与 picker selection 内容面为 `#FFFFFFFF`；灰色只可用于外部 scrim。
 - 不做 P5-B（后台/电量）、P5-C（隐私/数据管理/诊断）、P5-D（备份恢复/发布）、P6–P8 或图标工作。
 
@@ -51,7 +56,7 @@
 
 1. 纯逻辑测试：窗口分类、字体回退、route 保存/恢复、显式 Intent route 解析、不可识别 route 安全回退。
 2. Compose/Robolectric 可行测试：导航 label/selected state、heading、触摸几何/形状 token、白色 selection surface、Compact/Expanded 的 route 一致性与草稿入口连续性。
-3. 全量 unit、Lint、Debug/Release 正式签名构建；connected/instrumentation 只在 `emulator-5554` 且不触及 OPPO。
+3. 全量 unit、Lint、Debug/Release 正式签名构建；connected/instrumentation 只在 当次隔离模拟器 且不触及 OPPO。
 4. 可见模拟器验收：phone portrait/landscape、tablet/foldable-like 大窗口；`1.3x/2.0x`、IME 开关、旋转/resize、force-stop 恢复、同签名 `install -r` 与 `base.apk` hash 回读。
 
 ## 非完成声明

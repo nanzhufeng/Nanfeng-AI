@@ -2,10 +2,12 @@ package com.nanzhufeng.ai.data.local
 
 import android.database.sqlite.SQLiteDatabase
 
-/** Version 69 ownership manifest. No column-name inference or destructive fallback. */
+/** Version 72 ownership manifest. No column-name inference or destructive fallback. */
 internal object LegacyConversationAreaPartition {
     data class Edge(val parent: String, val parentColumns: String, val child: String, val childColumns: String)
-    val tables = """capture_drafts
+    val tables = """direct_chat_call_audits
+context_selection_audits
+capture_drafts
 capture_draft_evidence
 capture_draft_attachments
 knowledge_items
@@ -39,6 +41,7 @@ conversation_memory_sources
 ai_runtime_events
 conversation_runtime_states
 normal_chat_send_attempts
+normal_chat_search_checkpoints
 resumable_attachment_uploads
 assistant_response_model_attributions
 cloud_response_model_usages
@@ -135,6 +138,8 @@ scheduled_monitor_runs
 reminder_draft_generation_records
 conversation_title_generation_records""".trim().split(Regex("\\s+"))
     private val edges = listOf(
+        Edge("conversations","id","direct_chat_call_audits","conversationId"),
+        Edge("conversations","id","context_selection_audits","conversationId"),
         Edge("message_nodes","id","local_exact_reuse_entries","responseMessageId"),
         Edge("generated_candidates","invocationId","invocation_records","id"),
         Edge("knowledge_items","candidateId","generated_candidates","id"),
@@ -169,6 +174,7 @@ conversation_title_generation_records""".trim().split(Regex("\\s+"))
         Edge("conversations","id","reminder_draft_generation_records","sourceConversationId"),
         Edge("conversations","id","conversation_title_generation_records","sourceConversationId"),
         Edge("message_nodes","id","assistant_response_model_attributions","assistantMessageId"),
+        Edge("normal_chat_send_attempts","attemptId","normal_chat_search_checkpoints","attemptId"),
         Edge("normal_chat_send_attempts","attemptId","resumable_attachment_uploads","normalChatAttemptId"),
         Edge("conversations","id","p6k_import_identity_ledger","localConversationId"),
         Edge("conversations","id","p6k_zip_asset_candidates","linkedConversationId"),

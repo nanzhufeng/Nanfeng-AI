@@ -69,6 +69,7 @@ class ConversationStyleRequestContractsTest {
             ProviderId.QWEN -> "qwen-test"
             ProviderId.DEEPSEEK -> "deepseek-test"
             ProviderId.ZHIPU -> "glm-test"
+            ProviderId.RELAYCORE_CLAUDE, ProviderId.RELAYCORE_GPT, ProviderId.RELAYCORE_GEMINI -> "relay-test"
             ProviderId.MOCK -> "mock"
         },
         displayName = "test",

@@ -24,7 +24,9 @@ const script=`try {
  const act=name=>'[data-action="'+name+'"]';
  await click(act('toggle-batch-select-all'));await click(act('toggle-batch-select-all'));await click(act('toggle-conversation-batch-edit'));
  for(const name of ['toggle-composer-add','toggle-p6g-model-picker']){await click(act(name));await click(act(name));}
- await click(act('open-conversation-row-menu'));await click(act('context-menu-rename'));await click(act('close-dialog'));
+ await click(act('open-conversation-row-menu'));await click(act('context-menu-rename'));
+ const renameInput=document.querySelector('[data-inline-conversation-rename]');if(!renameInput)throw Error('missing inline rename editor');
+ renameInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,0));controls.push({action:'cancel-inline-conversation-rename',detail:'',ms:0});
  await click(act('open-conversation-row-menu'));await click(act('context-menu-delete'));await click(act('close-dialog'));
  const chatDetachments=detachments;observer.disconnect();
  await click(act('show-settings'));

@@ -7,3 +7,16 @@ test('generic MIME text attachments use safe text preview, not unsupported bound
   }
   assert.equal(attachmentPreviewCapability({displayName:'notes.md.exe',mimeType:'application/octet-stream'}).supported, false);
 });
+
+test('shared supported document catalog reaches both preview and Auto routing', async () => {
+  const { readFileSync }=await import('node:fs');
+  const { ATTACHMENT_DOCUMENT_MIME_TYPES }=await import('../src/attachment-document-types.mjs');
+  const { autoCandidate }=await import('../src/auto-chat-routing.mjs');
+  const fixture=JSON.parse(readFileSync(new URL('../../protocol/fixtures/attachment-document-types-v1.json',import.meta.url)));
+  assert.deepEqual(ATTACHMENT_DOCUMENT_MIME_TYPES,fixture.mimeTypes);
+  const services=[{providerId:'QWEN',enabled:true,credentialStored:true,presets:[{id:'QWEN_3_7_PLUS'}]}];
+  for (const mimeType of fixture.mimeTypes) {
+    assert.equal(attachmentPreviewCapability({mimeType}).kind,'text',mimeType);
+    assert.equal(autoCandidate(services,{mimeTypes:[mimeType]}).id,'QWEN_3_7_PLUS',mimeType);
+  }
+});

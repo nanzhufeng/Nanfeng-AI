@@ -1,5 +1,10 @@
 # 南枫 AI P4-G 本地 Knowledge 人工关系合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 项目与Knowledge本地领域 ](P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-G 本地 Knowledge 人工关系合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第七个本地增量；Schema 11→12。只允许用户确认两个既有本地 Knowledge 的关系并可撤销；不读取 Key、不构造 Prompt/RunSpec、不发 HTTP、不产生费用或图片外发。
 
@@ -35,4 +40,4 @@ Knowledge 详情中的明确用户操作
 
 - 域合同覆盖类型方向/对称性、同 scope、隐藏、自指向、过期 revision/hash、高敏和重复边。
 - Room 合同覆盖确认、intent 回放、撤销、审计 revision、Schema 11→12 与旧表保留。
-- 回归 P4-E/F 的搜索/归档/回收站/Context 默认关闭/候选关闭丢弃；随后分层运行全量测试、Lint、正式签名 Debug/Release、v2/v3 核验和仅 `emulator-5554` 的真实点击链路。
+- 回归 P4-E/F 的搜索/归档/回收站/Context 默认关闭/候选关闭丢弃；随后分层运行全量测试、Lint、正式签名 Debug/Release、v2/v3 核验和仅 当次隔离模拟器 的真实点击链路。

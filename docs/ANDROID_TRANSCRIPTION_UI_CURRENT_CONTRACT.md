@@ -1,5 +1,10 @@
 # Android 南枫转写当前界面合同
 
+<!-- contract-governance:start -->
+> **合同口径：现行领域合同。** 领域入口：[ Android转写表面 ](ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** Android 南枫转写当前界面合同
+<!-- contract-governance:end -->
+
 > 适用范围：`Nanfeng_AI` 的“南枫转写”当前产品能力。当前事实以 `GlmOcrWorkspace.kt`、`GlmOcr.kt` 和对应 JVM 合同为准；本文不把历史 Desktop 语音转写或另一个 App 的能力反向写入当前 Android。
 
 ## 当前产品边界

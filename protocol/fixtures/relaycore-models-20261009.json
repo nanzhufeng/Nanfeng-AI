@@ -1,0 +1,79 @@
+{
+  "source": "https://relaycore.cn/model-market",
+  "observedAt": "2026-10-09",
+  "verification": "PLATFORM_LISTING_ONLY",
+  "models": [
+    {
+      "presetId": "RELAYCORE_OPUS_5_5",
+      "providerId": "RELAYCORE_CLAUDE",
+      "modelId": "claude-opus-5-5",
+      "modelName": "Opus 5.5",
+      "channel": "Kiro",
+      "multiplier": "0.08",
+      "tier": "DEEP",
+      "inputPerMillion": 0.32,
+      "outputPerMillion": 1.6,
+      "cachedInputPerMillion": 0.016000000000000004
+    },
+    {
+      "presetId": "RELAYCORE_SONNET_5_5",
+      "providerId": "RELAYCORE_CLAUDE",
+      "modelId": "claude-sonnet-5-5",
+      "modelName": "Sonnet 5.5",
+      "channel": "Kiro",
+      "multiplier": "0.08",
+      "tier": "DAILY",
+      "inputPerMillion": 0.16,
+      "outputPerMillion": 0.8,
+      "cachedInputPerMillion": 0.016000000000000004
+    },
+    {
+      "presetId": "RELAYCORE_GPT_6_1_SOL",
+      "providerId": "RELAYCORE_GPT",
+      "modelId": "gpt-6.1-sol",
+      "modelName": "GPT-6.1 Sol",
+      "channel": "Pro1",
+      "multiplier": "0.12",
+      "tier": "DEEP",
+      "inputPerMillion": 0.24,
+      "outputPerMillion": 1.2000000000000002,
+      "cachedInputPerMillion": 0.012
+    },
+    {
+      "presetId": "RELAYCORE_GPT_6_ASTRA",
+      "providerId": "RELAYCORE_GPT",
+      "modelId": "gpt-6-astra",
+      "modelName": "GPT-6 Astra",
+      "channel": "Pro1",
+      "multiplier": "0.12",
+      "tier": "DEEP",
+      "inputPerMillion": 1.2000000000000002,
+      "outputPerMillion": 6.0,
+      "cachedInputPerMillion": 0.12
+    },
+    {
+      "presetId": "RELAYCORE_GEMINI_3_8_FLASH",
+      "providerId": "RELAYCORE_GEMINI",
+      "modelId": "gemini-3.8-flash",
+      "modelName": "Gemini 3.8 Flash",
+      "channel": "Gemini",
+      "multiplier": "0.28",
+      "tier": "DAILY",
+      "inputPerMillion": 0.21,
+      "outputPerMillion": 1.05,
+      "cachedInputPerMillion": 0.021
+    },
+    {
+      "presetId": "RELAYCORE_GEMINI_3_1_PRO",
+      "providerId": "RELAYCORE_GEMINI",
+      "modelId": "gemini-3.1-pro",
+      "modelName": "Gemini 3.1 Pro",
+      "channel": "Gemini",
+      "multiplier": "0.28",
+      "tier": "DEEP",
+      "inputPerMillion": 0.56,
+      "outputPerMillion": 3.36,
+      "cachedInputPerMillion": 0.056
+    }
+  ]
+}

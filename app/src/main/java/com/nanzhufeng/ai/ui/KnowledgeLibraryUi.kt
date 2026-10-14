@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -331,7 +332,7 @@ fun KnowledgeLibraryCard(state: KnowledgeLibraryUiState, onOpen: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = onOpen,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
         ) {
@@ -441,17 +442,17 @@ private fun KnowledgeStatusSelector(
                 val isSelected = status == selected
                 Surface(
                     onClick = { onSelect(status) },
-                    modifier = Modifier.weight(1f).height(38.dp),
+                    modifier = Modifier.weight(1f).height(singleLineControlHeight(38.dp, MaterialTheme.typography.labelLarge.fontSize)),
                     color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                     contentColor = if (isSelected) Color.White else BodyText,
                     shape = P5AInteractiveShape,
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(status.filterLabel(), style = MaterialTheme.typography.labelLarge)
+                        Text(status.filterLabel(), style = centeredControlTextStyle(MaterialTheme.typography.labelLarge.fontSize, MaterialTheme.typography.labelLarge), maxLines = 1, softWrap = false)
                     }
                 }
             }
@@ -468,7 +469,7 @@ private fun KnowledgePrimaryActions(
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
             onClick = onStartCreate,
-            modifier = Modifier.weight(1f).height(46.dp),
+            modifier = Modifier.weight(1f).heightIn(min = 46.dp),
             shape = P5AInteractiveShape,
             colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText),
         ) {
@@ -479,7 +480,7 @@ private fun KnowledgePrimaryActions(
         if (canOrganizeConversation) {
             Button(
                 onClick = onOrganizeConversation,
-                modifier = Modifier.weight(1f).height(46.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 46.dp),
                 shape = P5AInteractiveShape,
                 colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText),
             ) {

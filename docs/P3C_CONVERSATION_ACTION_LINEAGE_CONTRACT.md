@@ -1,5 +1,10 @@
 # 南枫 AI P3-C 继续、重试与换模型重答合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 对话管理与回收 ](C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P3-C 继续、重试与换模型重答合同
+<!-- contract-governance:end -->
+
 日期：2026-08-12  
 状态：本地确定性编排、Schema 5→6；不含真实 Provider、Key、RunSpec、HTTP 或图片调用
 

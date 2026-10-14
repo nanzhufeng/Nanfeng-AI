@@ -6,6 +6,12 @@ import org.junit.Test
 import java.time.Instant
 
 class ModelProfileUpgradeTest {
+    @Test fun `cached Opus legacy alias cannot undo the verified bundled route`() {
+        val seed=ResolvedModel(ProviderId.RELAYCORE_CLAUDE,"claude-opus-5.5","Opus 5.5 · Kiro正价",ModelCapabilities(true,false,true),200000,ModelHealth.UNKNOWN,Instant.parse("2026-10-11T00:00:00Z"),null,8192)
+        val cached=seed.copy(modelId="claude-opus-5-5",metadataUpdatedAt=Instant.parse("2026-10-12T00:00:00Z"),health=ModelHealth.DEGRADED)
+        assertEquals(seed,mergeCachedProfiles(mapOf(ModelPresetId.RELAYCORE_OPUS_5_5 to seed),mapOf(ModelPresetId.RELAYCORE_OPUS_5_5 to cached))[ModelPresetId.RELAYCORE_OPUS_5_5])
+    }
+
     @Test fun `retired cached Flash ID and health cannot mask upgraded seed while current metadata survives reopen merge`() {
         val seed = ResolvedModel(ProviderId.DEEPSEEK, "deepseek-flash", "DeepSeek V4.1 Flash",
             ModelCapabilities(true, true, true), 1_000_000, ModelHealth.UNKNOWN,

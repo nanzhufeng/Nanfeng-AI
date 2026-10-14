@@ -1,0 +1,93 @@
+{
+  "actualModel": "claude-opus-5.5",
+  "covered": 4,
+  "files": "public-09.html,public-10.docx,public-11.xlsx,public-12.pptx",
+  "ledgerCalls": [
+    {
+      "actual": "openai/gpt-6-luna",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 11195,
+      "model": "openai/gpt-6-luna",
+      "source": "PROVIDER_RESPONSE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "openai/gpt-6-luna",
+      "source": null
+    },
+    {
+      "actual": "claude-opus-5.5",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 4432,
+      "model": "claude-opus-5.5",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "claude-opus-5.5",
+      "source": null
+    }
+  ],
+  "physical": [
+    {
+      "input": 12899,
+      "nativeSources": [
+        [
+          "Announcing Rust 1.90.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/?utm_source=openai"
+        ],
+        [
+          "Announcing Rust 1.89.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/?utm_source=openai"
+        ],
+        [
+          "Announcing Rust 1.88.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/06/26/Rust-1.88.0/?utm_source=openai"
+        ],
+        [
+          "Announcing Rust 1.87.0 and ten years of Rust! | Rust Blog",
+          "https://blog.rust-lang.org/2025/05/15/Rust-1.87.0/?utm_source=openai"
+        ]
+      ],
+      "output": 640,
+      "reportedMicros": 11195,
+      "requested": "openai/gpt-6-luna",
+      "returned": "openai/gpt-6-luna"
+    }
+  ],
+  "planned": 4,
+  "preset": "RELAYCORE_OPUS_5_5",
+  "publicAnswer": "四份附件都只写了\"版本号 + release date + blog.rust-lang.org\"，没有给出具体日期或其他数字。因此核验内容是各版本在 Rust 官方博客上的实际发布日期。四项均已核实，与附件所列版本和来源域名一致，没有发现矛盾。\n\n- **Rust 1.90.0**（public-09.html）：2025年9月18日发布。来源：https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/\n- **Rust 1.89.0**（public-10.docx）：2025年8月7日发布。来源：https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/\n- **Rust 1.88.0**（public-11.xlsx）：2025年6月26日发布。来源：https://blog.rust-lang.org/2025/06/26/Rust-1.88.0/\n- **Rust 1.87.0**（public-12.pptx）：2025年5月15日发布。来源：https://blog.rust-lang.org/2025/05/15/Rust-1.87.0/\n\n相邻版本均间隔 6 周，符合 Rust 稳定版的固定发布周期。\n\n来源：- [Announcing Rust 1.87.0 and ten years of Rust! | Rust Blog](https://blog.rust-lang.org/2025/05/15/Rust-1.87.0/)\n- [Announcing Rust 1.88.0 | Rust Blog](https://blog.rust-lang.org/2025/06/26/Rust-1.88.0/)\n- [Announcing Rust 1.89.0 | Rust Blog](https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/)\n- [Announcing Rust 1.90.0 | Rust Blog](https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/)",
+  "reopenedCheckpoints": 4,
+  "reopenedModel": "claude-opus-5.5",
+  "reopenedState": "COMPLETED",
+  "requested": "claude-opus-5.5",
+  "sources": [
+    [
+      "Announcing Rust 1.90.0 | Rust Blog",
+      "https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/"
+    ],
+    [
+      "Announcing Rust 1.89.0 | Rust Blog",
+      "https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/"
+    ],
+    [
+      "Announcing Rust 1.88.0 | Rust Blog",
+      "https://blog.rust-lang.org/2025/06/26/Rust-1.88.0/"
+    ],
+    [
+      "Announcing Rust 1.87.0 and ten years of Rust! | Rust Blog",
+      "https://blog.rust-lang.org/2025/05/15/Rust-1.87.0/"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

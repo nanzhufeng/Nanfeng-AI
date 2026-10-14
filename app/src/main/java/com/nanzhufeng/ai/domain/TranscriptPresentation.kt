@@ -141,9 +141,9 @@ class ConversationTranscriptPresentation(
         // conceal its settled amount.  Local attribution remains the source for answers that
         // have never carried a cloud response fact.
         val responseModel = (if (cloudModelUsages.isNotEmpty()) {
-            cloudModelUsages.distinctBy(CloudResponseModelUsage::assistantMessageId).map(CloudResponseModelUsage::footerLabel)
+            cloudModelUsages.distinctBy(CloudResponseModelUsage::assistantMessageId).map { assistantResponseFooterNameForUser(it.modelDisplayName) }
         } else {
-            responseAttributions.distinctBy { it.attemptId }.map(AssistantResponseModelAttribution::footerLabel)
+            responseAttributions.distinctBy { it.attemptId }.map { assistantResponseFooterNameForUser(it.modelDisplayName, it.providerId) }
         }).joinToString(" / ")
             .takeIf { it.isNotBlank() }
         val responseCost = (if (cloudModelUsages.isNotEmpty()) {

@@ -1,0 +1,44 @@
+[
+  {
+    "name": "ordinary continuation",
+    "checkpoint": "原先已经收到的一段内容。",
+    "generated": "这是新的后续内容。",
+    "suffix": "这是新的后续内容。"
+  },
+  {
+    "name": "whole checkpoint echo",
+    "checkpoint": "这是断点之前已经生成的一整段回答，需要完整保存而且不能重复。",
+    "generated": "这是断点之前已经生成的一整段回答，需要完整保存而且不能重复。新的结尾。",
+    "suffix": "新的结尾。"
+  },
+  {
+    "name": "long exact tail echo",
+    "checkpoint": "beginning 0123456789abcdefghijklmnop",
+    "generated": "0123456789abcdefghijklmnop ending",
+    "suffix": " ending"
+  },
+  {
+    "name": "short repetition remains literal",
+    "checkpoint": "哈哈",
+    "generated": "哈哈",
+    "suffix": "哈哈"
+  },
+  {
+    "name": "unicode checkpoint echo",
+    "checkpoint": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+    "generated": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀继续",
+    "suffix": "继续"
+  },
+  {
+    "name": "empty checkpoint",
+    "checkpoint": "",
+    "generated": "完整回答",
+    "suffix": "完整回答"
+  },
+  {
+    "name": "interrupted without new output",
+    "checkpoint": "已经保留的完整断点内容",
+    "generated": "",
+    "suffix": ""
+  }
+]

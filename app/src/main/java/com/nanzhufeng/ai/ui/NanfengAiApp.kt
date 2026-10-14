@@ -535,6 +535,10 @@ internal fun NanfengAiApp(
     onConversationDrawerChanged: (Boolean) -> Unit,
     onExitSettingsToConversationDrawer: () -> Unit,
 ) {
+    LaunchedEffect(modelSettingsViewModel.state.providerEnableRevision) {
+        if (modelSettingsViewModel.state.providerEnableRevision > 0) conversationFoundationViewModel.reload(keepSending = conversationFoundationViewModel.state.isSending)
+    }
+
     val context = LocalContext.current
     val dataStorageLocationState = dataStorageLocationViewModel.state
     val pickerIoScope = rememberCoroutineScope()
@@ -744,6 +748,7 @@ internal fun NanfengAiApp(
             LocalAppIconScale provides appearance.fontSize.iconScale,
             LocalAppTextScale provides appearance.fontSize.scale,
         ) {
+        ForegroundActionFeedbackHost()
         // Settings can enter a third-level route (Memory, Projects, import, diagnostics and
         // similar workbenches).  Those routes used to fall back to [PageBackground] while the
         // settings home used [SettingsPageBackground], producing a visible dark-gray flash on
@@ -806,6 +811,8 @@ internal fun NanfengAiApp(
                 glmOcrWorkspaceState = glmOcrWorkspaceViewModel.state,
                 glmOcrWorkspaceViewModel = glmOcrWorkspaceViewModel,
                 onSaveModelSettings = modelSettingsViewModel::save,
+                onSetProviderEnabled = modelSettingsViewModel::setEnabled,
+                onSetProviderPreset = modelSettingsViewModel::setPreset,
                 onSaveChatRoutingPolicy = modelSettingsViewModel::saveRoutingPolicy,
                 onRevealModelCredential = modelSettingsViewModel::revealStoredCredential,
                 onTestModelConnection = modelSettingsViewModel::testConnection,
@@ -835,6 +842,7 @@ internal fun NanfengAiApp(
                 onOpenAccountSync = accountSyncViewModel::open,
                 onSyncConversation = accountSyncViewModel::requestConversationSync,
                 onCancelConversationSync = accountSyncViewModel::cancelConversationSync,
+                onCancelConversationsSync = accountSyncViewModel::cancelConversationsSync,
                 onReadCloudConversations = accountSyncViewModel::readCloudDocuments,
                 onToggleCloudConversationPinned = accountSyncViewModel::setCloudConversationPinned,
                 syncNotice = accountSyncViewModel.state.notice,
@@ -1020,10 +1028,12 @@ private fun CaptureScreen(
     modelSettingsState: ModelSettingsUiState,
     glmOcrWorkspaceState: GlmOcrWorkspaceUiState,
     glmOcrWorkspaceViewModel: GlmOcrWorkspaceViewModel,
-    onSaveModelSettings: (ProviderId, Boolean, ModelPresetId, String?) -> Unit,
+    onSaveModelSettings: (ProviderId, String?) -> Unit,
+    onSetProviderEnabled: (ProviderId, Boolean) -> Unit,
+    onSetProviderPreset: (ProviderId, ModelPresetId) -> Unit,
     onSaveChatRoutingPolicy: (com.nanzhufeng.ai.domain.ChatRoutingPolicy) -> Unit,
     onRevealModelCredential: (ProviderId) -> Unit,
-    onTestModelConnection: (ProviderId) -> Unit,
+    onTestModelConnection: (ProviderId, ModelPresetId?) -> Unit,
     invocationLedgerState: InvocationLedgerUiState,
     onLoadInvocationLedger: () -> Unit,
     conversationCostLedgerState: ConversationCostLedgerUiState,
@@ -1048,6 +1058,7 @@ private fun CaptureScreen(
     onOpenAccountSync: () -> Unit,
     onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onCancelConversationSync: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onCancelConversationsSync: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
     onReadCloudConversations: () -> Unit,
     onToggleCloudConversationPinned: (com.nanzhufeng.ai.domain.Conversation, Boolean) -> Unit,
     syncNotice: String?,
@@ -1261,6 +1272,7 @@ private fun CaptureScreen(
             notificationReminderSettingsState.settings,
             onSyncConversation,
             onCancelConversationSync,
+            onCancelConversationsSync,
             onReadCloudConversations,
             syncNotice,
             syncOperation,
@@ -1441,6 +1453,8 @@ private fun CaptureScreen(
                 },
                 modelSettingsState = modelSettingsState,
                 onSaveModelSettings = onSaveModelSettings,
+                onSetProviderEnabled = onSetProviderEnabled,
+                onSetProviderPreset = onSetProviderPreset,
                 onSaveChatRoutingPolicy = onSaveChatRoutingPolicy,
                 onRevealModelCredential = onRevealModelCredential,
                 onTestModelConnection = onTestModelConnection,
@@ -1694,7 +1708,7 @@ private fun WorkspaceExchangeV2ExportCard(
                 working = restoreState.working,
             )
         } else {
-            OutlinedButton(onClick = onSelectRestoreDocument, enabled = !restoreState.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) {
+            OutlinedButton(onClick = onSelectRestoreDocument, enabled = !restoreState.working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) {
                 if (restoreState.working) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 else Text("导入工作区")
             }
@@ -1712,7 +1726,7 @@ private fun WorkspaceExchangeV2ExportCard(
                 working = state.working,
             )
         } else {
-            Button(onClick = onSelectScope, enabled = !state.working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) {
+            Button(onClick = onSelectScope, enabled = !state.working, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) {
                 if (state.working) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = AccentOnPrimary)
                 else Text("导出工作区")
             }
@@ -1768,17 +1782,17 @@ private fun LocalKnowledgeImportEntryCard(
     Spacer(Modifier.height(6.dp))
     Text("选择文件即可导入或导出；不会读取模型 Key。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
-    Button(onClick = onOpenMarkdownImport, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导入 Markdown 文件") }
+    Button(onClick = onOpenMarkdownImport, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导入 Markdown 文件") }
     Spacer(Modifier.height(8.dp))
-    OutlinedButton(onClick = onOpenMarkdownExport, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导出 Markdown 知识") }
+    OutlinedButton(onClick = onOpenMarkdownExport, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导出 Markdown 知识") }
     Spacer(Modifier.height(8.dp))
-    Button(onClick = onOpenJsonKnowledgeImport, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导入知识 JSON") }
+    Button(onClick = onOpenJsonKnowledgeImport, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导入知识 JSON") }
     Spacer(Modifier.height(8.dp))
-    OutlinedButton(onClick = onOpenJsonKnowledgeExport, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导出知识 JSON") }
+    OutlinedButton(onClick = onOpenJsonKnowledgeExport, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导出知识 JSON") }
     Spacer(Modifier.height(8.dp))
-    Button(onClick = onOpenPdfTextImport, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导入 PDF 文本") }
+    Button(onClick = onOpenPdfTextImport, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, colors = ButtonDefaults.buttonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("导入 PDF 文本") }
     Spacer(Modifier.height(8.dp))
-    OutlinedButton(onClick = onOpenWebTextSnapshot, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("保存网页文本快照") }
+    OutlinedButton(onClick = onOpenWebTextSnapshot, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText)) { Text("保存网页文本快照") }
 }
 
 @Composable
@@ -1853,10 +1867,12 @@ private fun SettingsHierarchy(
     onUpdateAppearanceSettings: ((com.nanzhufeng.ai.domain.AppearanceSettings) -> com.nanzhufeng.ai.domain.AppearanceSettings) -> Unit,
     onOpenMemoryManager: () -> Unit,
     modelSettingsState: ModelSettingsUiState,
-    onSaveModelSettings: (ProviderId, Boolean, ModelPresetId, String?) -> Unit,
+    onSaveModelSettings: (ProviderId, String?) -> Unit,
+    onSetProviderEnabled: (ProviderId, Boolean) -> Unit,
+    onSetProviderPreset: (ProviderId, ModelPresetId) -> Unit,
     onSaveChatRoutingPolicy: (com.nanzhufeng.ai.domain.ChatRoutingPolicy) -> Unit,
     onRevealModelCredential: (ProviderId) -> Unit,
-    onTestModelConnection: (ProviderId) -> Unit,
+    onTestModelConnection: (ProviderId, ModelPresetId?) -> Unit,
     invocationLedgerState: InvocationLedgerUiState,
     onLoadInvocationLedger: () -> Unit,
     conversationCostLedgerState: ConversationCostLedgerUiState,
@@ -1959,6 +1975,8 @@ private fun SettingsHierarchy(
             SettingsDestination.MODEL_CONFIGURATION -> ModelSettingsConfigurationPage(
                 state = modelSettingsState,
                 onSave = onSaveModelSettings,
+                onSetProviderEnabled = onSetProviderEnabled,
+                onSetProviderPreset = onSetProviderPreset,
                 onRevealStoredCredential = onRevealModelCredential,
                 onTestConnection = onTestModelConnection,
             )
@@ -2008,10 +2026,13 @@ private fun SettingsHierarchy(
                 onOpenProjects = onOpenProjectManager,
                 onOpenKnowledge = onOpenKnowledgeLibrary,
             )
-            SettingsDestination.DEVELOPMENT -> DevelopmentDiagnosticsSettingsCard(
-                onOpenContext = onOpenContext,
-                onOpenOfflineEval = onOpenOfflineEval,
-            )
+            SettingsDestination.DEVELOPMENT -> Column(verticalArrangement = Arrangement.spacedBy(26.dp)) {
+                DevelopmentDiagnosticsSettingsCard(
+                    onOpenContext = onOpenContext,
+                    onOpenOfflineEval = onOpenOfflineEval,
+                )
+                FeatureReviewSettingsCard()
+            }
             SettingsDestination.DATA_STORAGE -> Column(verticalArrangement = Arrangement.spacedBy(26.dp)) {
                 dataStorageImportContent()
                 DataStorageFunctionalGroup(title = "本机备份与恢复") {
@@ -2207,9 +2228,11 @@ private fun SettingsCategoryList(
             SettingsCategoryDivider()
             SettingsCategoryRow(Icons.Rounded.Info, "关于", iconTint = settingsUtilityIconTint(), grouped = true) { onSelect(SettingsDestination.ABOUT) }
         }
-        SettingsCategoryGroup(title = "工作区") {
-            SettingsCategoryRow(Icons.Rounded.FolderOpen, "项目与知识", grouped = true) { onSelect(SettingsDestination.WORKSPACE) }
-            SettingsCategoryDivider()
+        SettingsCategoryGroup(title = "高级") {
+            if (com.nanzhufeng.ai.domain.ProductScope.workspacesVisible) {
+                SettingsCategoryRow(Icons.Rounded.FolderOpen, "项目与知识", grouped = true) { onSelect(SettingsDestination.WORKSPACE) }
+                SettingsCategoryDivider()
+            }
             SettingsCategoryRow(Icons.Rounded.Tune, "开发与诊断", grouped = true) { onSelect(SettingsDestination.DEVELOPMENT) }
         }
     }
@@ -2321,7 +2344,7 @@ private fun AssistantPersonalizationSettingsCard(
         style = MaterialTheme.typography.bodySmall,
     )
     Spacer(Modifier.height(12.dp))
-    OutlinedButton(onClick = onOpenMemoryManager, modifier = Modifier.fillMaxWidth().height(52.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface)) {
+    OutlinedButton(onClick = onOpenMemoryManager, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = P5AInteractiveShape, border = null, colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface)) {
         Column(Modifier.weight(1f)) {
             Text("记忆摘要", color = BodyText, fontWeight = FontWeight.Medium)
         }
@@ -2827,6 +2850,8 @@ private fun NotificationReminderSettingsCard(
         shadowElevation = 1.dp,
     ) {
         Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(horizontal=20.dp,vertical=16.dp)) { BackgroundIslandPermissionRow() }
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SubtleDivider)
             Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
                 SettingsSwitchRow(
                     title = "计划监控结果通知",
@@ -2855,7 +2880,6 @@ private fun NotificationReminderSettingsCard(
             }
         }
     }
-    state.notice?.let { Spacer(Modifier.height(10.dp)); Text(it, color = BrandGreen, style = MaterialTheme.typography.bodySmall) }
     state.error?.let { Spacer(Modifier.height(10.dp)); Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall) }
 }
 
@@ -2937,6 +2961,26 @@ private fun DevelopmentDiagnosticsSettingsCard(
 
 @Composable
 private fun FeatureReviewSettingsCard() {
+    if (!com.nanzhufeng.ai.domain.ProductScope.workspacesVisible) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("功能审阅", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("已确认：定位为多模型聊天 AI，默认只显示对话区。", color = SecondaryText)
+            Text("已确认：南枫岛仅在后台生成时显示；前台不显示灵动岛，设置反馈沿用页面内提示，无新增常驻按钮。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("真实阶段、模型与已保存文字量帮助确认后台任务；语音、Agent步骤及跨App任务中心待评估，暂不新增入口。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("已确认：附件联网核验覆盖文本、表格、Office正文、可读PDF及ZIP文档；单附件、多附件和混合类型共同取要点，沿用原入口。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("已确认保留：OpenRouter／官方模型和 RC 普通文字 Sol／Astra 使用自身联网；其余 RC 普通文字及全部 RC 附件由 OpenRouter GPT-6 Luna 搜索，再交回原选 RC 模型回答。入口：原发送与显式重试，不新增常驻按钮。",color=SecondaryText,style=MaterialTheme.typography.bodySmall)
+            Text("理由：按渠道与材料选择稳定路径；发送流程核验 Luna 接收方和当前材料；对话界面去掉重复说明，逐事项保留真实来源，原模型、原渠道及费用分别记录。",color=SecondaryText,style=MaterialTheme.typography.labelSmall)
+            Text("理由：避免只搜报告写法或遗漏后面的文件；来源对应事项。扫描件和媒体按模型能力或转写结果处理，不以截取或目录代替全文，无新增常驻按钮。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("已确认：深度档加入 Muse Wonder，经 OpenRouter，位于智谱 GLM 上方；沿用原模型选择入口。已确认：新对话沿用上一次最后选择的模型；重启后保留，只有最后选择自动才沿用自动。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("已确认：模型选择弹窗默认字号缩小一档；小、标准、大仅轻微变化，保持辨认稳定。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("已确认：所有模型选择入口的具体模型项显示所属平台图标，便于辨认；沿用原入口，不新增按钮。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("已确认：模型选择增加 RelayCore 独立入口，内部按日常／深度分组。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("理由：集中展示这些模型与渠道，原日常／深度列表不再重复；入口仍在模型选择内。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("工作区暂时隐藏，Harness 暂停发展；已有工作区数据继续隔离保存。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("入口：现有聊天输入框和模型选择；保留新对话、历史、附件、搜索及模型设置，无新增常驻按键。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+        }
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("新增功能审阅", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -2944,9 +2988,9 @@ private fun FeatureReviewSettingsCard() {
             Text("新增能力在进入常用界面前，先在这里列出用途、现有入口与待您判断项。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("工作区独立对话", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text("已确认保留：工作区与对话区分别存储、分别同步；可人工引用选中的消息文字，原消息不会改动。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            Text("入口：原有工作区入口和消息长按菜单；引用进入另一区的新对话草稿，核对后按原发送键发送，无需新增常驻按钮。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("多模型聊天定位", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("已确认：只显示对话区，保留多模型切换；工作区暂时隐藏，Harness 暂停发展，已有数据继续隔离保存。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("入口：原有对话输入框与模型选择；不新增常驻按钮，不删除或合并工作区数据。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("新对话草稿", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -3058,7 +3102,7 @@ private fun AboutSettingsCard() = Surface(
             AboutSettingsSection {
                 Text("南枫 AI", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
-                Text("本机对话、项目与知识工作区。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("多模型聊天 AI，支持切换模型与服务商。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             }
             SettingsCategoryDivider()
             AboutSettingsSection {
@@ -3068,7 +3112,9 @@ private fun AboutSettingsCard() = Surface(
                 Spacer(Modifier.height(3.dp))
                 Text("构建号 ${BuildConfig.VERSION_CODE}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(3.dp))
-                Text("开发时间 ${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text("构建基准 Commit：${BuildConfig.GIT_COMMIT}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(3.dp))
+                Text("开发时间：${formatDevelopmentTime(BuildConfig.BUILD_TIME_EPOCH_SECONDS)}", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             }
             SettingsCategoryDivider()
             AboutSettingsSection {
@@ -3211,7 +3257,7 @@ private fun ContextControlCard(state: ConversationFoundationUiState, viewModel: 
     OutlinedButton(
         onClick = { viewModel.showDialog(state.selectedConversationId) },
         enabled = state.selectedConversationId != null,
-        modifier = Modifier.fillMaxWidth().height(48.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         shape = P5AInteractiveShape,
     ) { Text("打开 Context 控制面") }
 }
@@ -3223,7 +3269,7 @@ private fun ControlHub(onRouteSelected: (P5ARoute) -> Unit) = WhiteCard {
     Text("入口只切换工作区，不复制 Projects、Memory、Context 或离线 Eval 的业务状态。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
     listOf(P5ARoute.PROJECTS, P5ARoute.KNOWLEDGE, P5ARoute.MEMORY, P5ARoute.CONTEXT, P5ARoute.EVAL, P5ARoute.ADAPTERS).forEach { item ->
-        OutlinedButton(onClick = { onRouteSelected(item) }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = P5AInteractiveShape) { Text(item.label) }
+        OutlinedButton(onClick = { onRouteSelected(item) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = P5AInteractiveShape) { Text(item.label) }
         Spacer(Modifier.height(8.dp))
     }
 }
@@ -3250,6 +3296,7 @@ private fun ConversationFoundationCard(
     notificationReminderSettings: com.nanzhufeng.ai.domain.NotificationReminderSettings,
     onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onCancelConversationSync: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onCancelConversationsSync: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
     onReadCloudConversations: () -> Unit,
     syncNotice: String?,
     syncOperation: P7DAccountSyncOperation?,
@@ -3305,9 +3352,9 @@ private fun ConversationFoundationCard(
             color = SecondaryText, style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(10.dp))
-        Button(onClick = { workspaceVisible = true }, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(16.dp)) { Text("进入本地对话") }
+        Button(onClick = { workspaceVisible = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp), shape = RoundedCornerShape(16.dp)) { Text("进入本地对话") }
         Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = { contextBodySelectionViewModel.showDialog(state.selectedConversationId) }, enabled = state.selectedConversationId != null, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(16.dp)) { Text("选择本次 Context 正文") }
+        OutlinedButton(onClick = { contextBodySelectionViewModel.showDialog(state.selectedConversationId) }, enabled = state.selectedConversationId != null, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp), shape = RoundedCornerShape(16.dp)) { Text("选择本次 Context 正文") }
     }
     if (workspaceVisible) ConversationWorkspaceDialog(
         state = state,
@@ -3325,6 +3372,7 @@ private fun ConversationFoundationCard(
         onManage = viewModel::manage, onMarkWatchLater = viewModel::markConversationWatchLater, onBatchSoftDelete = viewModel::softDeleteConversations, onExport = viewModel::exportCurrentConversation,
         onSyncConversation = onSyncConversation,
         onCancelConversationSync = onCancelConversationSync,
+        onCancelConversationsSync = onCancelConversationsSync,
         onReadCloudConversations = onReadCloudConversations,
         syncNotice = syncNotice,
         syncOperation = syncOperation,
@@ -3355,6 +3403,7 @@ private fun ConversationFoundationCard(
         onClosePdfPreview = viewModel::closePdfPreview,
         onOpenVideoPreview = viewModel::openVideoPreview,
         onCloseVideoPreview = viewModel::closeVideoPreview,
+        onSaveVideoPreviewPosition = viewModel::saveVideoPreviewPosition,
         onOpenAudioPreview = viewModel::openAudioPreview,
         onCloseAudioPreview = viewModel::closeAudioPreview,
         onOpenTextPreview = viewModel::openTextPreview,
@@ -3415,7 +3464,7 @@ private fun ProjectCard(state: ProjectUiState, viewModel: ProjectViewModel) = Wh
     Spacer(Modifier.height(6.dp))
     Text(if (state.projects.isEmpty()) "项目用于本地指令、会话与知识范围隔离。" else "${state.projects.size} 个本地项目；系统与安全规则始终优先。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(10.dp))
-    Button(onClick = viewModel::showDialog, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(16.dp)) { Text("管理 Projects") }
+    Button(onClick = viewModel::showDialog, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp), shape = RoundedCornerShape(16.dp)) { Text("管理 Projects") }
 }
 
 @Composable
@@ -3424,7 +3473,7 @@ private fun MemoryCard(state: MemoryUiState, viewModel: MemoryViewModel) = White
     Spacer(Modifier.height(6.dp))
     Text(if (state.memories.isEmpty()) "显式创建、可暂停、可删除；启用记忆后会按当前问题自动检索。" else "${state.memories.size} 条可见本地记忆；启用记忆后会按当前问题自动检索。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(10.dp))
-    Button(onClick = viewModel::showDialog, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(16.dp)) { Text("管理长期 Memory") }
+    Button(onClick = viewModel::showDialog, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp), shape = RoundedCornerShape(16.dp)) { Text("管理长期 Memory") }
 }
 
 @Composable
@@ -3433,7 +3482,7 @@ private fun PrivacyDataCard(state: PrivacyDataUiState, onOpen: () -> Unit) = Col
     Spacer(Modifier.height(6.dp))
     Text("本地优先；可查看各类数据占用、范围删除或手动导出不含正文的安全诊断。模型外发遵循当前模型设置。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(10.dp))
-    Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(46.dp), shape = P5AInteractiveShape) { Text("打开隐私与数据") }
+    Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp), shape = P5AInteractiveShape) { Text("打开隐私与数据") }
     state.notice?.let { Text(it, color = BrandGreen, style = MaterialTheme.typography.bodySmall) }
 }
 
@@ -3635,7 +3684,7 @@ private fun ActionCard(
         Button(
             onClick = { onSaveText(text) },
             enabled = !state.isRestoring && !state.isSavingText && !state.isImporting && state.pendingCandidate == null,
-            modifier = Modifier.fillMaxWidth().height(52.dp).bringIntoViewRequester(saveActionRequester),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).bringIntoViewRequester(saveActionRequester),
             shape = RoundedCornerShape(16.dp),
         ) {
             if (state.isSavingText) {
@@ -3656,7 +3705,7 @@ private fun ActionCard(
         Button(
             onClick = onChooseImage,
             enabled = !state.isImporting && !state.isRestoring && !state.isSavingText && state.pendingCandidate == null,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ActionOrange),
         ) {
@@ -3679,7 +3728,7 @@ private fun ActionCard(
             onClick = onRequestAi,
             enabled = !state.isRestoring && !state.isImporting && !state.isSavingText && !state.isRunningAi &&
                 state.currentDraft() != null && state.pendingCandidate == null,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             shape = RoundedCornerShape(16.dp),
         ) {
             if (state.isRunningAi) {

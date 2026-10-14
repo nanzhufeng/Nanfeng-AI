@@ -47,8 +47,8 @@ class ModelNameTypographyContractsTest {
         assertTrue(pickerHeader.contains("fontWeight = FontWeight.Bold"))
         assertTrue(assistantFooter.contains("assistantFooterMetadataText"))
         assertTrue(workspace.contains("modelNameAnnotatedText(") && workspace.contains("fontWeight = FontWeight.Bold"))
-        assertTrue(settings.contains("Text(selected.displayName, fontWeight = FontWeight.Bold)"))
-        assertTrue(settings.contains("Text(preset.displayName, fontWeight = FontWeight.Bold"))
+        assertTrue(settings.contains("Text(com.nanzhufeng.ai.domain.modelPresetNameForUser(selected), fontWeight = FontWeight.Bold)"))
+        assertTrue(settings.contains("Text(com.nanzhufeng.ai.domain.modelPresetNameForUser(preset), fontWeight = FontWeight.Bold"))
         assertTrue(ledgers.first().contains("modelDisplayNameForUser(modelId)"))
         assertTrue(ledgers.all { it.contains("modelNameAnnotatedText") || it.contains("fontWeight = FontWeight.Bold") })
     }

@@ -6,10 +6,12 @@ import java.time.Instant
 object NewConversationDraftPolicy {
     const val RETENTION_MILLIS = 60L * 60L * 1_000L
 
+    fun isCandidate(conversation: Conversation): Boolean =
+        conversation.pinnedAt == null && conversation.archivedAt == null && conversation.deletedAt == null &&
+            (conversation.autoTitlePending || conversation.title == ConversationAutoTitle.NEW_CONVERSATION_TITLE)
+
     fun isUnsentNew(snapshot: ConversationSnapshot): Boolean =
-        snapshot.nodes.isEmpty() && snapshot.conversation.pinnedAt == null &&
-            snapshot.conversation.archivedAt == null && snapshot.conversation.deletedAt == null &&
-            (snapshot.conversation.autoTitlePending || snapshot.conversation.title == ConversationAutoTitle.NEW_CONVERSATION_TITLE)
+        isCandidate(snapshot.conversation) && snapshot.nodes.isEmpty()
 
     fun isExpired(snapshot: ConversationSnapshot, now: Instant): Boolean =
         isUnsentNew(snapshot) && snapshot.draft.text.isNotEmpty() &&

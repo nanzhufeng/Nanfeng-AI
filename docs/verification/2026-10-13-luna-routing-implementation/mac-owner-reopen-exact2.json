@@ -1,0 +1,83 @@
+{
+  "actualModel": "claude-sonnet-5-5",
+  "changedProjectionFields": [
+    "accountingCalls"
+  ],
+  "covered": 2,
+  "files": "public-04.csv,public-09.html",
+  "ledgerCalls": [
+    {
+      "actual": "openai/gpt-6-luna",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 10617,
+      "model": "openai/gpt-6-luna",
+      "source": "PROVIDER_RESPONSE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "openai/gpt-6-luna",
+      "source": null
+    },
+    {
+      "actual": "claude-sonnet-5-5",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 1103,
+      "model": "claude-sonnet-5-5",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "claude-sonnet-5-5",
+      "source": null
+    }
+  ],
+  "physical": [
+    {
+      "input": 8802,
+      "nativeSources": [
+        [
+          "Python Release Python 3.11.0 | Python.org",
+          "https://www.python.org/downloads/release/python-3110/?utm_source=openai"
+        ],
+        [
+          "Announcing Rust 1.90.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/?utm_source=openai"
+        ]
+      ],
+      "output": 305,
+      "reportedMicros": 10617,
+      "requested": "openai/gpt-6-luna",
+      "returned": "openai/gpt-6-luna"
+    }
+  ],
+  "planned": 2,
+  "preset": "RELAYCORE_SONNET_5_5",
+  "publicAnswer": "两份附件都只有检索关键词，没有附带具体主张，所以我核验的是各自对应的发布日期。\n\n- Python 3.11.0：已核实，发布日期为 2022 年 10 月 24 日。来源：https://www.python.org/downloads/release/python-3110/\n- Rust 1.90.0：已核实，官方发布公告日期为 2025 年 9 月 18 日。来源：https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/\n\n这两项日期均来自本轮检索到的官方页面。Rust 的日期是官方博客公告日，也就是该版本的发布日。\n\n来源：- [Announcing Rust 1.90.0 | Rust Blog](https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/)\n- [Python Release Python 3.11.0 | Python.org](https://www.python.org/downloads/release/python-3110/)",
+  "reopenedCheckpoints": 2,
+  "reopenedMessageExact": true,
+  "reopenedModel": "claude-sonnet-5-5",
+  "reopenedSourcesPresent": true,
+  "reopenedState": "COMPLETED",
+  "reopenedWebProof": true,
+  "requested": "claude-sonnet-5-5",
+  "sources": [
+    [
+      "Python Release Python 3.11.0 | Python.org",
+      "https://www.python.org/downloads/release/python-3110/"
+    ],
+    [
+      "Announcing Rust 1.90.0 | Rust Blog",
+      "https://blog.rust-lang.org/2025/09/18/Rust-1.90.0/"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

@@ -19,7 +19,8 @@ data class OfficeOpenXmlText(val text: String, val truncated: Boolean)
  * objects and external relationships are never interpreted. Old binary Office files are not
  * mislabeled as OOXML.
  */
-fun extractOfficeOpenXmlText(bytes: ByteArray, mimeType: String): OfficeOpenXmlText? = runCatching {
+fun extractOfficeOpenXmlText(bytes: ByteArray, mimeType: String, maxChars: Int = MAX_OFFICE_PREVIEW_CHARS): OfficeOpenXmlText? = runCatching {
+    require(maxChars in 1..800_000)
     if (mimeType !in OFFICE_OPEN_XML_MIME_TYPES || bytes.size < 4 || bytes[0] != 'P'.code.toByte() || bytes[1] != 'K'.code.toByte()) return null
     val parts = readBoundedOfficeParts(bytes, mimeType)
     val raw = when (mimeType) {
@@ -30,33 +31,37 @@ fun extractOfficeOpenXmlText(bytes: ByteArray, mimeType: String): OfficeOpenXmlT
     } ?: return null
     val normalized = raw.replace(Regex("[ \\t]+\\n"), "\n").replace(Regex("\\n{3,}"), "\n\n").trim()
     if (normalized.isBlank()) return null
-    OfficeOpenXmlText(normalized.take(MAX_OFFICE_PREVIEW_CHARS), normalized.length > MAX_OFFICE_PREVIEW_CHARS)
+    OfficeOpenXmlText(normalized.take(maxChars), normalized.length > maxChars)
 }.getOrNull()
 
 private fun readBoundedOfficeParts(bytes: ByteArray, mimeType: String): Map<String, ByteArray> {
     val selected = linkedMapOf<String, ByteArray>()
     var entryCount = 0
     var selectedBytes = 0L
+    var expandedBytes = 0L
     ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
         while (true) {
             val entry = zip.nextEntry ?: break
             entryCount += 1
             require(entryCount <= MAX_OFFICE_ZIP_ENTRIES)
             val path = safeOfficePath(entry.name) ?: error("unsafe OOXML path")
-            if (!entry.isDirectory && isRequiredOfficePart(path, mimeType)) {
-                val output = ByteArrayOutputStream()
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                var partBytes = 0L
-                while (true) {
-                    val count = zip.read(buffer)
-                    if (count < 0) break
-                    partBytes += count
+            val required = !entry.isDirectory && isRequiredOfficePart(path, mimeType)
+            val output = if (required) ByteArrayOutputStream() else null
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            var partBytes = 0L
+            while (true) {
+                val count = zip.read(buffer)
+                if (count < 0) break
+                partBytes += count
+                expandedBytes += count
+                require(!entry.isDirectory && partBytes <= 16L * 1024L * 1024L && expandedBytes <= 40L * 1024L * 1024L)
+                if (required) {
                     selectedBytes += count
                     require(partBytes <= MAX_OFFICE_XML_PART_BYTES && selectedBytes <= MAX_OFFICE_SELECTED_XML_BYTES)
-                    output.write(buffer, 0, count)
+                    output!!.write(buffer, 0, count)
                 }
-                selected[path] = output.toByteArray()
             }
+            if (required) selected[path] = output!!.toByteArray()
             zip.closeEntry()
         }
     }

@@ -1,0 +1,39 @@
+{
+  "scope": "WORKTREE: read-only retrieval fee presentation, immutable physical ledger unchanged",
+  "android": {
+    "suites": 319,
+    "tests": 1486,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 9,
+    "passed": 1477,
+    "assembleDebug": "PASS"
+  },
+  "desktopRust": {
+    "passed": 424,
+    "failed": 0,
+    "ignored": 33,
+    "nativeSqliteRootProjectionReopen": "PASS"
+  },
+  "desktopNode": {
+    "passed": 551,
+    "failed": 0,
+    "skipped": 12,
+    "build": "PASS",
+    "lint": "PASS",
+    "staticTypecheck": "PASS"
+  },
+  "contracts": {
+    "toolTests": 25,
+    "contracts": 114,
+    "domains": 40,
+    "state": "PASS"
+  },
+  "notRun": [
+    "formal installation",
+    "Android or Mac native fee UI",
+    "new paid Provider calls"
+  ],
+  "privateEvidence": "/tmp/nanfeng-search-cost-group-20261013",
+  "timestamp": "2026-10-13 19:54 +0800"
+}

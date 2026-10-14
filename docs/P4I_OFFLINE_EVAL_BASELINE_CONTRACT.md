@@ -1,5 +1,10 @@
 # 南枫 AI P4-I 版本化离线 Eval 基线合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 项目与Knowledge本地领域 ](P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-I 版本化离线 Eval 基线合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第九个本地增量；Schema 13→14。它是本地回归与人工审阅基础设施，不是 Provider、Prompt、模型质量、Token、TTFT、费用、缓存收益或用户价值证据。
 
@@ -43,6 +48,6 @@ Schema 13→14 仅追加 `offline_eval_runs`、`offline_eval_case_results`、`of
 
 最小 UI 显示 dataset/run 列表、开始本地回归、运行中/通过/失败/未评分、单例断言、红队 case、人工评分录入、两次运行比较及报告导出。所有 App 自有 Dialog 和选择面内容底色为 `#FFFFFFFF`。
 
-定向测试覆盖 fixture 版本/篡改语义、自动断言、红队惰性隔离、未评分、run immutability/重建、比较、报告 roundtrip/hash/tamper 与 13→14 迁移；再分别运行全量 P1–P4-H 回归、Lint、正式签名 Debug/Release、v2/v3 和 API 35 `emulator-5554` 可见链/进程重建。上述本地证据不替代真实 Provider/费用/模型质量/用户价值、OPPO、图标或发布验收。
+定向测试覆盖 fixture 版本/篡改语义、自动断言、红队惰性隔离、未评分、run immutability/重建、比较、报告 roundtrip/hash/tamper 与 13→14 迁移；再分别运行全量 P1–P4-H 回归、Lint、正式签名 Debug/Release、v2/v3 和 API 35 当次隔离模拟器 可见链/进程重建。上述本地证据不替代真实 Provider/费用/模型质量/用户价值、OPPO、图标或发布验收。
 
 达到本地 Eval 基线即停止。摘要、压缩、缓存、JSON/网页/其他 Adapter、同步/账号、Tool/Agent 和真实模型调用仍是各自独立阶段；P4-I 不是 P4 或项目终点。

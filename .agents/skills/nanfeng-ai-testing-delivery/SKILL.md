@@ -22,6 +22,13 @@ description: Validate Nanfeng AI Android, Desktop, protocol, and service changes
 7. 网关在 upload-gateway 执行 `go test -count=1 ./...`；Supabase 使用 `node --test supabase/tests/p7c_static_contract.test.mjs supabase/functions/google-avatar/policy.test.mjs`。SQL 静态测试不替代真实 Postgres／RLS／RPC／Edge Function。
 8. 格式／脚本检查按真实解释器和文件类型执行；历史 UI dump 可能夹带日志，先区分业务配置与历史证据。源码字符串测试、模拟 transport 和预览 fixture 必须明确分类。
 
+## 有成本的联网验收
+
+- 先跑请求封装／解码／状态／账本重开与共享fixture，再回放已有安全回执；只对未证明的服务边界做最小真实请求，成本约束见AGENTS。
+- 用模型×平台×材料的结果矩阵记录精确身份、来源、覆盖、终态、币种与费用、重开；代表格式正交测试不是全部组合通过，旧链路成功不证明新链路。
+- 长报告先核对真实planner输出与预算。最小事实样本验证逐项返回后再评估原件；短答cap造成截断仍记失败，未返回费用记UNKNOWN，不以测试上限当实测Token。
+- 构建、安装、前置条件和发送分步核对退出状态；前置失败不得继续触发真实请求。定向补查以执行owner规则为准，不重发UNKNOWN。
+
 ## 原生与交付门
 
 9. 永久不运行任何 connected Android 测试。主设备禁止 Debug／仪器测试、自动部署、卸载和清数据；同 ID／同签名的 Debug 包也不能覆盖。只有明确授权才对正式包做版本／非 Debug／证书／数据指纹预检、一次保数据覆盖及读回。

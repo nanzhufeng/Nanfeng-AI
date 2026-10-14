@@ -1,0 +1,27 @@
+{
+  "time": "2026-10-13 17:06 +0800",
+  "scope": "最新WORKTREE；HEAD不代表全部已构建改动",
+  "Android": {
+    "apk": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/app/build/outputs/apk/release/南枫AI.apk",
+    "sha256": "da8e6d2447e12df3faf5f5026fc969cb97bc6f995260d42226dc5111e1db6d78",
+    "bytes": 28672427,
+    "signatureSHA256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "package": "com.nanzhufeng.ai",
+    "versionCode": 93,
+    "versionName": "1.0.29",
+    "debuggable": false
+  },
+  "Mac": {
+    "app": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/desktop/src-tauri/target/release/bundle/macos/南枫 AI Desktop.app",
+    "installed": "/Applications/南枫 AI Desktop.app",
+    "identifier": "com.nanzhufeng.ai.desktop",
+    "version": "1.0.29",
+    "originalCertificateSHA256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+    "dmg": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/desktop/src-tauri/target/release/bundle/dmg/Nanfeng-AI-macOS-1.0.29.dmg",
+    "dmgSHA256": "9509d02571d79c62b9b400dd96f70d68db0771f081113514919f7019f7ec6612",
+    "dmgBytes": 17395641,
+    "candidateFiles": "mac-candidate-files.json",
+    "backup": "/Applications/.Nanfeng-AI-before-cover-20261013T170123-279bed8f.app"
+  },
+  "codeSourceSnapshot": "protected-source-hashes.json"
+}

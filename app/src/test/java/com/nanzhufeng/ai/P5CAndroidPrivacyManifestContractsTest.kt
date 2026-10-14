@@ -18,6 +18,7 @@ class P5CAndroidPrivacyManifestContractsTest {
             "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
             // Held only by GenerationForegroundService during a short active sync interval.
             "android.permission.WAKE_LOCK",
+            "android.permission.SYSTEM_ALERT_WINDOW",
         ), permissions)
         assertFalse(manifest.contains("MANAGE_EXTERNAL_STORAGE"))
         assertFalse(manifest.contains("READ_MEDIA"))

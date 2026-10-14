@@ -1,0 +1,60 @@
+{
+  "state": "IN_PROGRESS_INTERRUPTED",
+  "androidCurrent20": {
+    "total": 20,
+    "sent": 17,
+    "nonPassing": [
+      {
+        "preset": "DEEPSEEK_V4_FLASH",
+        "result": "Failed(code=RESPONSE_INCOMPLETE)",
+        "answerChars": 1525,
+        "webSearchUsed": null
+      },
+      {
+        "preset": "MUSE_WONDER",
+        "result": "Failed(code=AUTHENTICATION)",
+        "answerChars": 0,
+        "webSearchUsed": null
+      },
+      {
+        "preset": "RELAYCORE_GPT_6_1_SOL",
+        "result": "Failed(code=TIMEOUT)",
+        "answerChars": 0,
+        "webSearchUsed": null
+      }
+    ]
+  },
+  "solOriginalQuestion": {
+    "mac": "COMPLETED_WITH_SOURCES_AND_SQLITE_REOPEN",
+    "android": "COMPLETED_WITH_24_SOURCES_AND_USAGE",
+    "androidPriorCandidateAttempt": "FAILED_TERMINAL_NOT_COUNTED_AS_SUCCESS"
+  },
+  "automated": {
+    "android": {
+      "tests": 1488,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 9,
+      "failureOwner": "CurrentRuntimeContextContractTest: handoff first-three-line contract gate"
+    },
+    "rust": {
+      "passed": 425,
+      "failed": 0,
+      "ignored": 33
+    }
+  },
+  "macMatrixHarnessGap": "Pure-text RC companion cases incorrectly invoked direct transport; four WEB_SEARCH_UNAVAILABLE rows are not production failure evidence",
+  "cleanup": {
+    "savedRows": {
+      "results": 20,
+      "physical": 24
+    },
+    "isolatedPackageStopped": true,
+    "reverseEmpty": true,
+    "disposableCredentialPreferencesRemoved": true,
+    "isolatedHostCredentialCopyRemoved": true,
+    "originalCredentialOwnerUntouched": true,
+    "noUnknownResend": true
+  },
+  "formalInstall": "NOT RUN"
+}

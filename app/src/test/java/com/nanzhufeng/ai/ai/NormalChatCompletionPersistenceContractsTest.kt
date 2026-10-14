@@ -36,24 +36,24 @@ class NormalChatCompletionPersistenceContractsTest {
         assertTrue(viewModel.contains("normalChatCompletionNoticeLabel"))
     }
 
-    @Test fun `enabled search gates completion on provider execution evidence`() {
+    @Test fun `complete provider text without search evidence stays readable and unverified`() {
         val nonStreaming = executor.substringAfter("is ProviderChatOutcome.HttpResponse").substringBefore("is ProviderChatOutcome.StreamedResponse")
         val streaming = executor.substringAfter("is ProviderChatOutcome.StreamedResponse").substringBefore("ProviderChatOutcome.TimedOut")
 
         for (branch in listOf(nonStreaming, streaming)) {
             assertTrue(branch.contains("WebSearchGroundingPolicy.completedAuditStatus"))
-            assertTrue(branch.contains("OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)"))
-            assertTrue(branch.indexOf("OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)") < branch.indexOf("runtime?.complete(visibleReply)"))
+            assertFalse(branch.contains("OneResult.Failed(Code.WEB_SEARCH_NO_SOURCES)"))
+            assertTrue(branch.contains("CompletionNotice.WEB_SEARCH_NOT_VERIFIED"))
             assertTrue(branch.contains("runtime?.complete(visibleReply)"))
         }
         assertTrue(viewModel.contains("WEB_SEARCH_UNAVAILABLE"))
-        assertTrue(viewModel.contains("本次未保存为完整回答"))
+        assertTrue(workspace.contains("联网未核实：服务商返回了完整文字"))
     }
 
     @Test fun `failed provider runtime stays visible inside the transcript after reload`() {
         assertTrue(transcript.contains("val safeErrorCode: String? = null"))
         assertTrue(transcript.contains("node.deliveryState == MessageDeliveryState.FAILED"))
-        assertTrue(workspace.contains("AssistantGenerationFailure(transcript.metadata.safeErrorCode)"))
+        assertTrue(workspace.contains("AssistantGenerationFailure(transcript.metadata.safeErrorCode, onRetryFailedAssistant, failedAssistantDetailOverride)"))
         assertTrue(workspace.contains("回答未完成"))
         assertTrue(workspace.contains("normalChatResultLabel(code, sent = true)"))
     }
@@ -64,7 +64,8 @@ class NormalChatCompletionPersistenceContractsTest {
         assertTrue(requestOne.contains("configuration.execute(executionProviderId)"))
         assertTrue(requestOne.contains("credentials.hasCredential(executionProviderId)"))
         assertFalse(requestOne.contains("config.settings.presetId"))
-        assertTrue(requestOne.contains("modelId, resolvedModel.displayName"))
+        assertTrue(requestOne.contains("else resolvedModel.displayName"))
+        assertTrue(requestOne.contains("RelayCoreModels.responseName(preset,"))
         assertTrue(executor.contains("receiverProviderId, reply.modelId, reply.modelDisplayName"))
     }
 }

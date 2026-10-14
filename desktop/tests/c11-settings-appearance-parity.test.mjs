@@ -41,7 +41,7 @@ const renderSettings = overrides => renderChatFirstShell({
 test('C11 settings home keeps the current Android four groups and one appearance owner', () => {
   const html = renderSettings();
   const groups = [...html.matchAll(/<section class="android-settings-group"><h2>([^<]+)<\/h2>/g)].map(match => match[1]);
-  assert.deepEqual(groups, ['对话', '外观', '数据管理', '工作区']);
+  assert.deepEqual(groups, ['对话', '外观', '数据管理', '高级']);
 
   const appearance = html.slice(html.indexOf('<h2>外观</h2>'), html.indexOf('<h2>数据管理</h2>'));
   for (const value of ['外观', '系统（默认）', '字体大小', '标准', '主题色', '橙色']) assert.ok(appearance.includes(value), value);

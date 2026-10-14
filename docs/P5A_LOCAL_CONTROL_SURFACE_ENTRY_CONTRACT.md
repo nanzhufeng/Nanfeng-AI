@@ -1,5 +1,10 @@
 # P5-A 更多本地控制面入口合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ Android设置界面 ](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P5-A 更多本地控制面入口合同
+<!-- contract-governance:end -->
+
 ## 目标与停止边界
 
 恢复紧凑 Android 和 Desktop 正常用户界面对既有 Project、Knowledge（含关系）与长期 Memory owner 的可达路径，为 P6 完整 owner 文件链重新建立前置条件。

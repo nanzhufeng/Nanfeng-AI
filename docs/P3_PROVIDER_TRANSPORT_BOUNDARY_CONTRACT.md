@@ -1,5 +1,10 @@
 # 南枫 AI P3 Provider Transport Boundary 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 普通发送授权与执行 ](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P3 Provider Transport Boundary 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-15  
 状态：纯领域、未注册、无网络的将来 Provider transport 边界
 
@@ -15,7 +20,7 @@ future explicit-confirmation owner
 → existing P3-I / runtime / ledger owners (本阶段不接线)
 ```
 
-当前唯一 production transport 是 `DisabledNoNetworkProviderTransport`：不读取 Key、不构造 Authorization、不含 endpoint、不访问网络、不发事件，也不生成任何假回复。
+本P3类型边界的默认实现是 `DisabledNoNetworkProviderTransport`；它不是现行普通聊天生产运输的唯一实现，当前生产发送链见[P3-J](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md#当前普通发送与授权口径)及[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)。该默认实现：不读取 Key、不构造 Authorization、不含 endpoint、不访问网络、不发事件，也不生成任何假回复。
 
 ## 类型与隐私边界
 

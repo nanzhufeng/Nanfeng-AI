@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only tracked-file and local Git-history inventory; never copies file bodies."""
+"""Read-only project-file and local Git-history inventory; never copies file bodies."""
 import argparse
 import collections
 import hashlib
@@ -16,10 +16,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--include-untracked', action='store_true',
+                        help='Also inventory non-ignored untracked files; never includes ignored private configuration')
     args = parser.parse_args()
     repo = args.repo.resolve()
     output = args.output.resolve()
-    paths = git(repo, 'ls-files', '-z').decode().split('\0')
+    tracked = set(filter(None, git(repo, 'ls-files', '-z').decode().split('\0')))
+    paths = sorted(tracked | (set(filter(None, git(repo, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
+                              if args.include_untracked else set()))
     rows = []
     for name in filter(None, paths):
         path = repo / name
@@ -36,7 +40,7 @@ def main():
                 text = data.decode('utf-8')
         except UnicodeDecodeError:
             pass
-        rows.append({'path': name, 'kind': 'text' if text is not None else 'binary',
+        rows.append({'path': name, 'tracked': name in tracked, 'kind': 'text' if text is not None else 'binary',
                      'bytes': len(data), 'lines': len(text.splitlines()) if text is not None else None,
                      'sha256': hashlib.sha256(data).hexdigest()})
     raw = git(repo, '-c', 'core.quotepath=false', 'log', '--all', '--reverse', '--numstat',
@@ -55,11 +59,14 @@ def main():
                 current['files'].append({'path': name, 'added': int(added) if added.isdigit() else None,
                                          'deleted': int(deleted) if deleted.isdigit() else None})
     summary = {'head': git(repo, 'rev-parse', 'HEAD').decode().strip(),
-               'scope': 'Tracked working-tree bytes and all locally available Git refs; no file bodies or secrets emitted',
-               'tracked_files': len(rows), 'bytes': sum(row.get('bytes', 0) for row in rows),
+               'scope': ('Tracked and non-ignored untracked' if args.include_untracked else 'Tracked') +
+                        ' working-tree bytes and all locally available Git refs; no file bodies or secrets emitted',
+               'tracked_files': len(tracked), 'inventory_files': len(rows),
+               'untracked_files': len(paths) - len(tracked),
+               'bytes': sum(row.get('bytes', 0) for row in rows),
                'kinds': dict(collections.Counter(row['kind'] for row in rows)),
                'commits': len(history),
-               'limitations': ['No ignored or untracked data read', 'No binary visual verification',
+               'limitations': [('No ignored data read' if args.include_untracked else 'No ignored or untracked data read'), 'No binary visual verification',
                                'Not a line-by-line semantic or external deployment audit']}
     # Never overwrite a tracked file or source directory with generated evidence.
     if any(output == (repo / name).parent or output == repo / name for name in filter(None, paths)):

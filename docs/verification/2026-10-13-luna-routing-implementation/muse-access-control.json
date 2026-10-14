@@ -1,0 +1,11 @@
+{
+  "model": "meta/muse-wonder",
+  "scenario": "separate plain-text access control",
+  "status": "FAILED",
+  "http": 403,
+  "errorCode": 403,
+  "reasonTokens": [],
+  "providerName": null,
+  "actualModel": null,
+  "answerChars": 0
+}

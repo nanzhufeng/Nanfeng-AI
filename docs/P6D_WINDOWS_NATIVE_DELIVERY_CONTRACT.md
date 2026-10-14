@@ -1,5 +1,10 @@
 # P6-D Windows 原生交付独立合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ Mac会话与侧栏界面 ](DESKTOP_CHAT_FIRST_UI_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-D Windows 原生交付独立合同
+<!-- contract-governance:end -->
+
 ## 前提
 
 本合同不是 macOS 构建的延伸。不得从 macOS 生成、签名或声称验证任何 Windows 安装包；本轮也不产生 MSI、NSIS 或 Windows 伪包。

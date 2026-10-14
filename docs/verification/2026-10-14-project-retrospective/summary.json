@@ -1,0 +1,148 @@
+{
+  "reviewedAt": "2026-10-14T12:24:57+08:00",
+  "head": "dafc64d9b33661dc4f792fd1434ff1ddca9cdfa3",
+  "workingTree": "pre-existing dirty worktree; HEAD is not a WIP snapshot",
+  "baseline": {
+    "trackedFiles": 1410,
+    "untrackedNonIgnoredFiles": 673,
+    "allFiles": 2083,
+    "binaryFiles": 101,
+    "markdownFiles": 276,
+    "commits": 182,
+    "dateRange": [
+      "2026-08-20",
+      "2026-09-19"
+    ],
+    "shallow": false,
+    "refsCount": 5
+  },
+  "structure": {
+    "not-checked": 1323,
+    "python:passed": 15,
+    "json:passed": 331,
+    "xml:passed": 87,
+    "non-text": 101,
+    "node:passed": 213,
+    "failed:ParseError": 7,
+    "bash:passed": 5,
+    "zsh:passed": 1
+  },
+  "governance": {
+    "state": "PASS",
+    "contracts": 114,
+    "domains": 40,
+    "ownerReferences": 122
+  },
+  "models": {
+    "state": "PASS",
+    "chatModels": 20,
+    "specialModels": 1,
+    "credentialGroups": 7
+  },
+  "freshTests": {
+    "contractMaintenance": 27,
+    "modelMaintenance": 16,
+    "scriptForwardCases": 8
+  },
+  "skills": {
+    "mode": "maintain-codex-workflow standard-library frontmatter plus strict simple UI mapping checks",
+    "passed": true,
+    "quick_validate": "UNAVAILABLE: PyYAML absent in host and bundled Python; no packages installed",
+    "skills": [
+      {
+        "skill": "nanfeng-ai-code-review",
+        "frontmatter": true,
+        "ui_metadata": true,
+        "lines": 37,
+        "metadata_bytes": 249
+      },
+      {
+        "skill": "nanfeng-ai-debugging",
+        "frontmatter": true,
+        "ui_metadata": true,
+        "lines": 36,
+        "metadata_bytes": 222
+      },
+      {
+        "skill": "nanfeng-ai-development",
+        "frontmatter": true,
+        "ui_metadata": true,
+        "lines": 35,
+        "metadata_bytes": 226
+      },
+      {
+        "skill": "nanfeng-ai-document-sync",
+        "frontmatter": true,
+        "ui_metadata": true,
+        "lines": 32,
+        "metadata_bytes": 251
+      },
+      {
+        "skill": "nanfeng-ai-testing-delivery",
+        "frontmatter": true,
+        "ui_metadata": true,
+        "lines": 41,
+        "metadata_bytes": 212
+      }
+    ]
+  },
+  "unresolvedHistoricalLinks": {
+    "beforeDocsSnapshot": 40,
+    "oldLocalBackupPaths": 3
+  },
+  "scope": [
+    "all-file identity and applicable structural syntax",
+    "all local Git history statistics and representative path review",
+    "composition/storage/provider/billing/sync/delivery semantic inspection",
+    "current vs historical document conflict review"
+  ],
+  "notPerformed": [
+    "line-by-line proof of every source or history diff",
+    "binary visual review",
+    "Kotlin/Rust/SQL compilation or execution in this round",
+    "new full app tests or builds",
+    "installation or production-data changes",
+    "provider requests or remote deployment/release lookup"
+  ],
+  "newProviderRequests": 0,
+  "newProviderCost": 0,
+  "externalState": "UNKNOWN; repository receipts are dated evidence",
+  "privateEvidenceId": "nanfeng-project-retrospective-20261014-76qu_asz",
+  "final": {
+    "modifiedFiles": 17,
+    "newFiles": 2,
+    "fileChanges": [
+      ".agents/skills/nanfeng-ai-code-review/SKILL.md",
+      ".agents/skills/nanfeng-ai-code-review/agents/openai.yaml",
+      ".agents/skills/nanfeng-ai-debugging/SKILL.md",
+      ".agents/skills/nanfeng-ai-debugging/agents/openai.yaml",
+      ".agents/skills/nanfeng-ai-development/SKILL.md",
+      ".agents/skills/nanfeng-ai-development/agents/openai.yaml",
+      ".agents/skills/nanfeng-ai-document-sync/SKILL.md",
+      ".agents/skills/nanfeng-ai-document-sync/agents/openai.yaml",
+      ".agents/skills/nanfeng-ai-document-sync/scripts/audit_inventory.py",
+      ".agents/skills/nanfeng-ai-document-sync/scripts/inventory_project.py",
+      ".agents/skills/nanfeng-ai-testing-delivery/SKILL.md",
+      ".agents/skills/nanfeng-ai-testing-delivery/agents/openai.yaml",
+      "AGENTS.md",
+      "docs/CURRENT_HANDOFF.md",
+      "docs/PROJECT_STATUS.md",
+      "docs/南枫AI完整开发档案.md",
+      "docs/可迁移开发经验.md",
+      "docs/verification/2026-10-14-project-retrospective/REPORT.md",
+      "docs/verification/2026-10-14-project-retrospective/summary.json"
+    ],
+    "protectedBaselineFilesUnchanged": 2066,
+    "outsideScopeHashChanges": [],
+    "missingBaselineFiles": [],
+    "headUnchanged": true,
+    "allMarkdownFiles": 277,
+    "allLocalLinks": 1492,
+    "historicalLocalLinkErrors": 43,
+    "affectedLocalLinks": 330,
+    "newWorkflowAndArchiveLinkErrors": 0,
+    "affectedHistoricalHandoffErrors": 3,
+    "diffCheck": "PASS",
+    "newFileWhitespace": "PASS"
+  }
+}

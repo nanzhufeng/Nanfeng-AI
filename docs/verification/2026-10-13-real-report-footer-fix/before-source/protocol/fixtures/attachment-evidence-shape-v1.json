@@ -1,0 +1,44 @@
+{
+  "material": "(1) Python 3.14.0发布。\n(2) Rust 1.90.0发布。",
+  "sources": [
+    "https://www.python.org/releases/",
+    "https://blog.rust-lang.org/releases/"
+  ],
+  "cases": [
+    {
+      "name": "plain markdown ID headings",
+      "accepted": true,
+      "reply": "### A1：已核实\nPython发布。\n来源：https://www.python.org/releases/\n### A2：已核实\nRust发布。\n来源：https://blog.rust-lang.org/releases/"
+    },
+    {
+      "name": "inline cross reference is not another result",
+      "accepted": true,
+      "reply": "[A1] 已核实\nPython发布。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust发布，与[A1]分别核实。\n来源：https://blog.rust-lang.org/releases/"
+    },
+    {
+      "name": "unknown extra result remains rejected",
+      "accepted": false,
+      "reply": "[A1] 已核实\nPython发布。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust发布。\n来源：https://blog.rust-lang.org/releases/\n[A3] 已核实\n无授权事项。\n来源：https://www.python.org/releases/"
+    },
+    {
+      "name": "missing result remains rejected",
+      "accepted": false,
+      "reply": "### A1：已核实\nPython发布。\n来源：https://www.python.org/releases/"
+    },
+    {
+      "name": "unrelated actual source remains rejected",
+      "accepted": false,
+      "reply": "A1：已核实\nPython发布。\n来源：https://unverified.example.test/python\nA2：已核实\nRust发布。\n来源：https://unverified.example.test/rust"
+    },
+    {
+      "name": "introductory stream delta joined to first explicit result",
+      "reply": "我会逐项检索官方发布信息，核对版本与发布日期。[A1] 已核实\nPython发布。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust发布，与[A1]分别核实。\n来源：https://blog.rust-lang.org/releases/",
+      "accepted": true
+    },
+    {
+      "name": "nested Markdown citation parentheses preserve actual URL identity",
+      "reply": "[A1] 已核实\nPython发布。\n来源：([官方来源](https://www.python.org/releases/))\n[A2] 已核实\nRust发布，与[A1]分别核实。\n来源：([官方来源](https://blog.rust-lang.org/releases/))",
+      "accepted": true
+    }
+  ]
+}

@@ -1,5 +1,10 @@
 # 南枫 AI P5-B Android 后台、取消/恢复与电量产品化基线合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 后台生成展示 ](NANFENG_ISLAND_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P5-B Android 后台、取消/恢复与电量产品化基线合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P5 的第二个独立增量；不是 P5 或项目终点。Schema 保持 17。
 
@@ -32,6 +37,6 @@ Web 只在用户处于前台并明确确认后单次访问；网络变化、后�
 
 ## 验收与禁止项
 
-自动合同覆盖政策矩阵、无 WorkManager/receiver/service/wakelock 合同、旋转与 ViewModel clear、进程/force-stop 映射、取消竞态、完成后取消、重复 retry、导入/PDF 不重复 Knowledge、Eval 不伪造继续及 Web 网络失败无自动重试。真实验证仅用 `emulator-5554`：取消、恢复、Web 失败、force-stop/冷启动；最终恢复 portrait / 1.0x / Capture。
+自动合同覆盖政策矩阵、无 WorkManager/receiver/service/wakelock 合同、旋转与 ViewModel clear、进程/force-stop 映射、取消竞态、完成后取消、重复 retry、导入/PDF 不重复 Knowledge、Eval 不伪造继续及 Web 网络失败无自动重试。真实验证仅用 当次隔离模拟器：取消、恢复、Web 失败、force-stop/冷启动；最终恢复 portrait / 1.0x / Capture。
 
 不修改图标，不操作 OPPO，不清数据，不初始化 Git，不做 P5-C/P5-D/P6+。TalkBack 人工听觉仍是独立债务。

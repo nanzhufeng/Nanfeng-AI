@@ -8,6 +8,7 @@ import com.nanzhufeng.ai.domain.ProviderCredentialStore
 import com.nanzhufeng.ai.domain.ProviderDiagnosticErrorClass
 import com.nanzhufeng.ai.domain.ProviderDiagnosticRecord
 import com.nanzhufeng.ai.domain.ProviderDiagnosticStore
+import com.nanzhufeng.ai.domain.ModelPresetId
 import com.nanzhufeng.ai.domain.ProviderId
 import com.nanzhufeng.ai.domain.classifyProviderFailure
 import java.time.Clock
@@ -28,19 +29,25 @@ class ProviderConnectionProbe(
     private val diagnostics: ProviderDiagnosticStore,
     private val clock: Clock,
 ) {
-    fun execute(providerId: ProviderId): ProviderConnectionProbeResult {
+    fun execute(providerId: ProviderId, probePreset: ModelPresetId? = null): ProviderConnectionProbeResult {
+        val ocr = probePreset == ModelPresetId.GLM_OCR
+        if (probePreset != null && (!ocr || providerId != ProviderId.ZHIPU)) return ProviderConnectionProbeResult.Blocked("测试模型不属于该服务商。")
         if (providerId == ProviderId.MOCK) return ProviderConnectionProbeResult.Blocked("本地 Mock 不需要连接测试。")
         val configuration = configuration.execute(providerId)
             ?.takeIf { it.settings.enabled }
             ?: return ProviderConnectionProbeResult.Blocked("请先启用该服务商并保存设置。")
-        val modelId = (modelResolver.resolve(configuration.settings.presetId) as? ResolvedModelResult.Resolved)
+        val modelId = if (ocr) "glm-ocr" else (modelResolver.resolve(configuration.settings.presetId) as? ResolvedModelResult.Resolved)
             ?.model?.takeIf { it.providerId == providerId && it.capabilities.supportsText }?.modelId
             ?: return ProviderConnectionProbeResult.Blocked("该服务商的模型档案尚未确认或不支持文本。")
+        val endpoint = if (ocr) "https://open.bigmodel.cn/api/paas/v4/layout_parsing" else ChatProviderAdapters().adapter(providerId)?.endpoint(configuration.provider.fixedEndpoint, ChatRequestOptions.Standard)
+            ?: return ProviderConnectionProbeResult.Blocked("该服务商暂无连接测试适配。")
         val credential = credentials.loadCredential(providerId)
             ?: return ProviderConnectionProbeResult.Blocked("该服务商尚未保存 API Key。")
         val startedAt = clock.instant()
-        val endpoint = "${configuration.provider.fixedEndpoint}/chat/completions"
-        val request = ProviderChatRequest(endpoint, probeBody(providerId, modelId))
+        val request = if (ocr) ProviderChatRequest(
+            endpoint, "{\"model\":\"glm-ocr\",\"file\":\"data:image/png;base64,$OCR_CONNECTION_PROBE_BASE64\"}",
+            readTimeoutMillis = 60_000,
+        ) else ProviderChatRequest(endpoint, probeBody(providerId, modelId))
         val outcome = try {
             transport.execute(request, credential)
         } finally {
@@ -73,13 +80,16 @@ class ProviderConnectionProbe(
         diagnostics.append(ProviderDiagnosticRecord(
             createdAt = clock.instant(), providerId = provider, endpointHost = ProviderDiagnosticRecord.endpointHost(endpoint),
             apiModelId = model, httpStatus = status, errorClass = error, redactedBody = body?.takeIf { it.isNotBlank() },
-            requestShape = "fields=model,messages,max_output;probe=fixed_1_token", latencyMs = latencyMs,
+            requestShape = if (model == "glm-ocr") "fields=model,file;probe=fixed_public_image" else "fields=model,messages,max_output;probe=fixed_1_token", latencyMs = latencyMs,
         ))
     }
 
     private fun probeBody(provider: ProviderId, modelId: String): String {
         val limit = if (provider == ProviderId.OPENROUTER) "max_completion_tokens" else "max_tokens"
-        return "{\"model\":\"${modelId.probeJsonEscaped()}\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"$limit\":1,\"stream\":false}"
+        val effort = if (provider == ProviderId.OPENROUTER) openRouterDefaultReasoningEffort(modelId) else null
+        val reasoning = effort?.let { ",\"reasoning\":{\"effort\":\"${it.wireValue}\"}" }.orEmpty()
+        val nativeEffort = if (provider == ProviderId.RELAYCORE_CLAUDE) ",\"output_config\":{\"effort\":\"${if (modelId in setOf("claude-opus-5-5","claude-opus-5.5")) "medium" else "high"}\"}" else ""
+        return "{\"model\":\"${modelId.probeJsonEscaped()}\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"$limit\":1,\"stream\":false$reasoning$nativeEffort}"
     }
 }
 

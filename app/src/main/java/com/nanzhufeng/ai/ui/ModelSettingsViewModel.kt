@@ -41,7 +41,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+data class ModelProviderFeedback(val notice: String? = null, val error: CaptureUiError? = null)
+
+/** Feedback belongs to the exact credential/profile, never the whole settings page. */
+internal fun ModelSettingsUiState.feedbackFor(providerId: ProviderId): ModelSettingsUiState = copy(
+    notice = providerFeedback[providerId]?.notice,
+    error = providerFeedback[providerId]?.error,
+)
+
+private fun ModelSettingsUiState.recordProviderFeedback(providerId: ProviderId): ModelSettingsUiState = copy(
+    providerFeedback = providerFeedback + (providerId to ModelProviderFeedback(notice, error)),
+)
+
 data class ModelSettingsUiState(
+    val pendingProviderEnabled: Map<ProviderId, Boolean> = emptyMap(),
+    val pendingProviderPresets: Map<ProviderId, ModelPresetId> = emptyMap(),
+    val providerEnableRevision: Long = 0,
+    val keySaveRevision: Long = 0,
+    val keySavedProvider: ProviderId? = null,
     val loading: Boolean = true,
     val saving: Boolean = false,
     val verifyingRegistry: Boolean = false,
@@ -62,6 +79,10 @@ data class ModelSettingsUiState(
     val routingPolicy: ChatRoutingPolicy = ChatRoutingPolicy(),
     /** Ephemeral screen-only value, cleared when this dialog closes or saves. */
     val revealedCredential: String? = null,
+    val revealedCredentialProviderId: ProviderId? = null,
+    val probingProviderId: ProviderId? = null,
+    val savingProviderId: ProviderId? = null,
+    val providerFeedback: Map<ProviderId, ModelProviderFeedback> = emptyMap(),
     val notice: String? = null,
     val error: CaptureUiError? = null,
     val registryStatus: RegistryVerificationStatusView = RegistryVerificationStatusView(RegistryVerificationDisplayStatus.NOT_VERIFIED),
@@ -85,6 +106,8 @@ class ModelSettingsViewModel(
     private val saveRoutingPolicy: SaveChatRoutingPolicyUseCase,
     private val providerConnectionProbe: ProviderConnectionProbe,
 ) : ViewModel() {
+    private val settingsMutationMutex = kotlinx.coroutines.sync.Mutex()
+    private val enableRequests = mutableMapOf<ProviderId, Long>()
     var state by mutableStateOf(ModelSettingsUiState())
         private set
 
@@ -109,7 +132,7 @@ class ModelSettingsViewModel(
                     try { chars.concatToString() } finally { chars.fill('\u0000') }
                 }
             }
-            state = state.copy(revealedCredential = revealed)
+            state = state.copy(revealedCredential = revealed, revealedCredentialProviderId = providerId)
         }
     }
 
@@ -218,56 +241,106 @@ class ModelSettingsViewModel(
     }
 
     /** User-initiated fixed "hi" probe; no conversation text or attachment is used. */
-    fun testConnection(providerId: ProviderId) {
+    fun testConnection(providerId: ProviderId, probePreset: ModelPresetId? = null) {
         if (state.probingConnection || state.saving || state.verifyingRegistry) return
-        state = state.copy(probingConnection = true, notice = null, error = null)
+        state = state.copy(probingConnection = true, probingProviderId = providerId, notice = null, error = null).recordProviderFeedback(providerId)
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { providerConnectionProbe.execute(providerId) }
+            settingsMutationMutex.lock()
+            settingsMutationMutex.unlock()
+            val result = withContext(Dispatchers.IO) { providerConnectionProbe.execute(providerId, probePreset) }
             val diagnostics = withContext(Dispatchers.IO) { providerDiagnostics.recent(8) }
             state = when (result) {
                 is ProviderConnectionProbeResult.Connected -> state.copy(
-                    probingConnection = false, recentDiagnostics = diagnostics,
+                    probingConnection = false, recentDiagnostics = diagnostics, error = null,
                     notice = "连接成功：${result.endpointHost} · ${result.apiModelId} · ${result.latencyMs} ms。",
                 )
                 is ProviderConnectionProbeResult.Failed -> state.copy(
-                    probingConnection = false, recentDiagnostics = diagnostics,
+                    probingConnection = false, recentDiagnostics = diagnostics, notice = null,
                     error = CaptureUiError(
                         "连接测试失败：${result.errorClass.connectionTestLabel()}",
                         "${result.httpStatus?.let { "HTTP $it；" } ?: "未建立连接；"}${result.errorClass.connectionTestNextStep()} 可到“运行诊断”查看本机脱敏记录。",
                     ),
                 )
                 is ProviderConnectionProbeResult.Blocked -> state.copy(
-                    probingConnection = false, recentDiagnostics = diagnostics,
+                    probingConnection = false, recentDiagnostics = diagnostics, notice = null,
                     error = CaptureUiError("连接测试未发送", result.reason),
                 )
+            }.recordProviderFeedback(providerId)
+        }
+    }
+
+    fun setEnabled(providerId: ProviderId, enabled: Boolean) {
+        val request = (enableRequests[providerId] ?: 0) + 1
+        enableRequests[providerId] = request
+        state = state.copy(pendingProviderEnabled = state.pendingProviderEnabled + (providerId to enabled))
+        viewModelScope.launch {
+            settingsMutationMutex.lock()
+            try {
+                val result = withContext(Dispatchers.IO) { saveConfiguration.setEnabled(providerId, enabled) }
+                if (result is SaveModelServiceConfigurationResult.Saved) state = state.copy(
+                    configuration = if (providerId == ProviderId.OPENROUTER) result.configuration else state.configuration,
+                    providerConfigurations = state.providerConfigurations + (providerId to result.configuration),
+                    providerEnableRevision = state.providerEnableRevision + 1,
+                ) else state = state.copy(error = (result as SaveModelServiceConfigurationResult.Rejected).error.toModelSettingsUiError()).recordProviderFeedback(providerId)
+            } finally {
+                if (enableRequests[providerId] == request) state = state.copy(pendingProviderEnabled = state.pendingProviderEnabled - providerId)
+                settingsMutationMutex.unlock()
             }
         }
     }
 
-    fun save(providerId: ProviderId, enabled: Boolean, presetId: ModelPresetId, replacementCredential: String?) {
-        if (state.saving) return
-        state = state.copy(saving = true, notice = null, error = null)
+    private val presetRequests = mutableMapOf<ProviderId, Long>()
+    fun setPreset(providerId: ProviderId, presetId: ModelPresetId) {
+        val request = (presetRequests[providerId] ?: 0) + 1
+        presetRequests[providerId] = request
+        state = state.copy(pendingProviderPresets = state.pendingProviderPresets + (providerId to presetId), error = null, notice = null).recordProviderFeedback(providerId)
         viewModelScope.launch {
+            settingsMutationMutex.lock()
+            try {
+                val result = withContext(Dispatchers.IO) { saveConfiguration.setPreset(providerId, presetId) }
+                if (result is SaveModelServiceConfigurationResult.Saved) state = state.copy(
+                    configuration = if (providerId == ProviderId.OPENROUTER) result.configuration else state.configuration,
+                    providerConfigurations = state.providerConfigurations + (providerId to result.configuration),
+                    providerEnableRevision = state.providerEnableRevision + 1,
+                    error = null, notice = null,
+                ).recordProviderFeedback(providerId) else state = state.copy(error = (result as SaveModelServiceConfigurationResult.Rejected).error.toModelSettingsUiError()).recordProviderFeedback(providerId)
+            } finally {
+                if (presetRequests[providerId] == request) state = state.copy(pendingProviderPresets = state.pendingProviderPresets - providerId)
+                settingsMutationMutex.unlock()
+            }
+        }
+    }
+    fun save(providerId: ProviderId, replacementCredential: String?) {
+        if (state.saving || state.probingConnection) return
+        state = state.copy(saving = true, savingProviderId = providerId, notice = null, error = null).recordProviderFeedback(providerId)
+        viewModelScope.launch {
+            settingsMutationMutex.lock()
+            try {
             val result = withContext(Dispatchers.IO) {
-                saveConfiguration.execute(providerId, enabled, presetId, replacementCredential)
+                saveConfiguration.saveCredential(providerId, replacementCredential)
             }
             state = when (result) {
                 is SaveModelServiceConfigurationResult.Saved -> state.copy(
+                    providerEnableRevision = state.providerEnableRevision + 1,
+                    keySaveRevision = state.keySaveRevision + 1,
+                    keySavedProvider = providerId,
                     saving = false,
+                    error = null,
                     dialogVisible = false,
                     revealedCredential = null,
                     configuration = if (providerId == ProviderId.OPENROUTER) result.configuration else state.configuration,
                     providerConfigurations = state.providerConfigurations + (providerId to result.configuration),
-                    notice = if (replacementCredential != null) {
-                        "API Key 已安全保存在本机。"
-                    } else {
-                        "模型服务设置已安全保存在本机。"
-                    },
+                    notice = "API Key 已安全保存在本机。",
                 )
                 is SaveModelServiceConfigurationResult.Rejected -> state.copy(
                     saving = false,
+                    notice = null,
                     error = result.error.toModelSettingsUiError(),
                 )
+            }.recordProviderFeedback(providerId)
+            } finally {
+                state = state.copy(saving = false)
+                settingsMutationMutex.unlock()
             }
         }
     }
@@ -286,9 +359,10 @@ class ModelSettingsViewModel(
 
     private fun refresh() {
         viewModelScope.launch {
+            val enabledRevision = state.providerEnableRevision
             val dialogVisible = state.dialogVisible
             val providerConfigurations = withContext(Dispatchers.IO) {
-                listOf(ProviderId.OPENROUTER, ProviderId.QWEN, ProviderId.DEEPSEEK, ProviderId.ZHIPU)
+                (listOf(ProviderId.OPENROUTER, ProviderId.QWEN, ProviderId.DEEPSEEK, ProviderId.ZHIPU) + com.nanzhufeng.ai.domain.RelayCoreModels.providers)
                     .mapNotNull { provider -> loadConfiguration.execute(provider)?.let { provider to it } }
                     .toMap()
             }
@@ -302,7 +376,14 @@ class ModelSettingsViewModel(
             val routingPolicy = withContext(Dispatchers.IO) { loadRoutingPolicy.execute() }
             withContext(Dispatchers.IO) { realServiceExecutor.ensureSuccessfulTranscriptBinding() }
             val summary = withContext(Dispatchers.IO) { realServiceExecutor.readPersistedSummary() }
+            if (enabledRevision != state.providerEnableRevision || state.saving || state.pendingProviderEnabled.isNotEmpty() || state.pendingProviderPresets.isNotEmpty()) {
+                state = state.copy(loading = false)
+                return@launch
+            }
             state = ModelSettingsUiState(
+                providerEnableRevision = state.providerEnableRevision,
+                pendingProviderEnabled = state.pendingProviderEnabled,
+                pendingProviderPresets = state.pendingProviderPresets,
                 loading = false, dialogVisible = dialogVisible, configuration = configuration, providerConfigurations = providerConfigurations, callAuditSummary = callAuditSummary, registryStatus = registryStatus,
                 recentDiagnostics = recentDiagnostics,
                 recentContextSelections = recentContextSelections,

@@ -149,7 +149,7 @@ class AssistantResponseModelAttributionRoomContractsTest {
                 while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
             }
         }
-        assertEquals(setOf("assistantMessageId", "attemptId", "providerId", "receiverProviderId", "modelId", "modelDisplayName", "conversationStyleId", "webSearchUsed", "webSearchRequested", "recordedAtEpochMs", "inputTokens", "outputTokens", "totalTokens", "cachedInputTokens", "reasoningTokens", "costPriceVersion", "costCurrencyCode", "costTotalMicros", "costSource"), columns)
+        assertEquals(setOf("assistantMessageId", "attemptId", "providerId", "receiverProviderId", "modelId", "modelDisplayName", "conversationStyleId", "webSearchUsed", "webSearchRequested", "recordedAtEpochMs", "inputTokens", "outputTokens", "totalTokens", "cachedInputTokens", "reasoningTokens", "costPriceVersion", "costCurrencyCode", "costTotalMicros", "costSource", "accountingCallsJson"), columns)
         val indexNames = reopened.openHelper.writableDatabase.query("PRAGMA index_list(assistant_response_model_attributions)").use { cursor ->
             buildSet { while (cursor.moveToNext()) add(cursor.getString(cursor.getColumnIndexOrThrow("name"))) }
         }

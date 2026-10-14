@@ -1,0 +1,206 @@
+{
+  "verifiedAt": "2026-10-14 01:17 +0800",
+  "android": {
+    "tests": 1503,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10
+  },
+  "rust": {
+    "passed": 439,
+    "failed": 0,
+    "ignored": 34
+  },
+  "freshPaidRuns": [
+    {
+      "run": "mac-gemini-intent-012",
+      "platform": "MAC",
+      "preset": "GEMINI_3_8_FLASH",
+      "status": "COMPLETED",
+      "safeError": null,
+      "actualModel": "google/gemini-3.8-flash",
+      "nativeSourceCount": 2,
+      "webProof": true,
+      "reopenedState": "COMPLETED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": 15158
+    },
+    {
+      "run": "mac-gemini-required-001",
+      "platform": "MAC",
+      "preset": "GEMINI_3_8_FLASH",
+      "status": "COMPLETED",
+      "safeError": null,
+      "actualModel": "google/gemini-3.8-flash",
+      "nativeSourceCount": 2,
+      "webProof": true,
+      "reopenedState": "COMPLETED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": 29542
+    },
+    {
+      "run": "mac-gemini-required-009",
+      "platform": "MAC",
+      "preset": "GEMINI_3_8_FLASH",
+      "status": "FAILED",
+      "safeError": "Explicit { code: \"EMPTY_COMPLETION\", http_status: Some(200) }",
+      "actualModel": null,
+      "nativeSourceCount": 0,
+      "webProof": null,
+      "reopenedState": "FAILED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": null
+    },
+    {
+      "run": "mac-muse-named-005",
+      "platform": "MAC",
+      "preset": "MUSE_WONDER",
+      "status": "FAILED",
+      "safeError": "Explicit { code: \"INVALID_REQUEST\", http_status: Some(400) }",
+      "actualModel": null,
+      "nativeSourceCount": 0,
+      "webProof": null,
+      "reopenedState": "FAILED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": null
+    },
+    {
+      "run": "mac-muse-native-auto-006",
+      "platform": "MAC",
+      "preset": "MUSE_WONDER",
+      "status": "FAILED",
+      "safeError": "Explicit { code: \"WEB_SEARCH_NO_SOURCES\", http_status: Some(200), quantified_reply_present: true }",
+      "actualModel": "meta/muse-wonder",
+      "nativeSourceCount": 0,
+      "webProof": false,
+      "reopenedState": "FAILED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": 54757
+    },
+    {
+      "run": "mac-muse-native-json-007",
+      "platform": "MAC",
+      "preset": "MUSE_WONDER",
+      "status": "FAILED",
+      "safeError": "Explicit { code: \"WEB_SEARCH_NO_SOURCES\", http_status: Some(200), quantified_reply_present: true }",
+      "actualModel": "meta/muse-wonder",
+      "nativeSourceCount": 0,
+      "webProof": false,
+      "reopenedState": "FAILED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": 84380
+    },
+    {
+      "run": "mac-muse-required-002",
+      "platform": "MAC",
+      "preset": "MUSE_WONDER",
+      "status": "FAILED",
+      "safeError": "Explicit { code: \"INVALID_REQUEST\", http_status: Some(400) }",
+      "actualModel": null,
+      "nativeSourceCount": 0,
+      "webProof": null,
+      "reopenedState": "FAILED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": null
+    },
+    {
+      "run": "mac-muse-required-003",
+      "platform": "MAC",
+      "preset": "MUSE_WONDER",
+      "status": "FAILED",
+      "safeError": "Explicit { code: \"INVALID_REQUEST\", http_status: Some(400) }",
+      "actualModel": null,
+      "nativeSourceCount": 0,
+      "webProof": null,
+      "reopenedState": "FAILED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": null
+    },
+    {
+      "run": "mac-muse-required-004",
+      "platform": "MAC",
+      "preset": "MUSE_WONDER",
+      "status": "FAILED",
+      "safeError": "Explicit { code: \"INVALID_REQUEST\", http_status: Some(400) }",
+      "actualModel": null,
+      "nativeSourceCount": 0,
+      "webProof": null,
+      "reopenedState": "FAILED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": null
+    },
+    {
+      "run": "mac-muse-responses-008",
+      "platform": "MAC",
+      "preset": "MUSE_WONDER",
+      "status": "COMPLETED",
+      "safeError": null,
+      "actualModel": "meta/muse-wonder",
+      "nativeSourceCount": 1,
+      "webProof": true,
+      "reopenedState": "COMPLETED",
+      "reopenedAccountingExact": true,
+      "knownChargeUsdMicros": 133231
+    },
+    {
+      "run": "android-bounded-gemini-muse-011",
+      "platform": "ANDROID",
+      "preset": "GEMINI_3_8_FLASH",
+      "status": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+      "model": "google/gemini-3.8-flash",
+      "nativeSourceCount": 2,
+      "endpointPath": "/api/v1/chat/completions",
+      "webProof": true,
+      "footerCostLabel": "¥0.199035",
+      "knownChargeUsdMicros": 29617,
+      "reopenNetworkCalls": 0
+    },
+    {
+      "run": "android-bounded-gemini-muse-011",
+      "platform": "ANDROID",
+      "preset": "MUSE_WONDER",
+      "status": "Sent",
+      "model": "meta/muse-wonder",
+      "nativeSourceCount": 1,
+      "endpointPath": "/api/v1/responses",
+      "webProof": true,
+      "footerCostLabel": "¥0.320162",
+      "knownChargeUsdMicros": 47641,
+      "reopenNetworkCalls": 0
+    }
+  ],
+  "knownChargeUsdMicros": 394326,
+  "unknownChargeReceipts": [
+    "mac-gemini-required-009",
+    "mac-muse-named-005",
+    "mac-muse-required-002",
+    "mac-muse-required-003",
+    "mac-muse-required-004"
+  ],
+  "formalInstallation": false,
+  "sourceHashes": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt": "c675709a42c729c52a7b0b6030eb636d8e703887c9cb402b34c722c299730f48",
+    "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt": "b710e6a69af16bb3d1a8ae6ae401430a868d1fc0414fd7cae140f723f372ff51",
+    "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt": "2b202bac511e975833b3b76453205ebef24370dcbb793dccf633f85b3323351e",
+    "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt": "6e94c3dcc3e7364b479f9595d39ee8728df1462b568ae64bbb248021fc13a230",
+    "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs": "210ccdf46d378737f231a79081668938ca0b4179ad251fd5e457395f6d4020a7",
+    "desktop/src-tauri/src/lib.rs": "c8087725ef77c9efb280c917daa110e2c0a2ebfaf88fb543a5f0929064a746f9",
+    "protocol/model-service/model-service-v1.json": "e18a879c6d6ebbb685ae4b978595fc8f1cb19cea60e2cb3d5a8714989fe229af"
+  },
+  "knownCnyReferenceAt6_72": 2.649871,
+  "isolatedInstall": {
+    "install": "Success",
+    "uid": "10210",
+    "apkSha256": "26fd53e7981b0a323b541e0affb87877592dd9c578008d34096da12ec6d09451"
+  },
+  "isolatedCleanup": {
+    "encryptedCredentialsCleared": true,
+    "capabilityConsumed": true
+  },
+  "localGuardRun010": {
+    "state": "LOCAL_EXECUTION_INTERRUPTED",
+    "reachedTransport": false,
+    "reason": "test-only cap initially rejected Utf8Json wrapper; fixed before actualTransport.execute",
+    "newPaidCalls": 0
+  }
+}

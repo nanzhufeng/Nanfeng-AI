@@ -23,6 +23,22 @@ fun privateClientValue(name: String): String =
 fun userGradleValue(name: String): String = userGradleProperties.getProperty(name).orEmpty()
 fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
+/** Public provenance only: a release can be matched to the source revision without any network call. */
+fun buildGitCommit(): String {
+    val configured = providers.environmentVariable("NANFENG_AI_GIT_COMMIT").orNull?.trim()
+    if (!configured.isNullOrEmpty() && configured.matches(Regex("[0-9a-fA-F]{7,64}"))) return configured.lowercase()
+    return runCatching {
+        val process = ProcessBuilder("git", "rev-parse", "--short=12", "HEAD")
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .start()
+        val commit = process.inputStream.bufferedReader().use { it.readText().trim() }
+        if (process.waitFor() == 0 && commit.matches(Regex("[0-9a-fA-F]{7,64}"))) commit.lowercase() else "unknown"
+    }.getOrDefault("unknown")
+}
+
+val gitCommit = buildGitCommit()
+
 data class NanfengAiReleaseV2SigningConfig(
     val storeFilePath: String,
     val storePassword: String,
@@ -79,14 +95,15 @@ android {
     testOptions { unitTests.isIncludeAndroidResources = true }
 
     defaultConfig {
+        buildConfigField("String", "GIT_COMMIT", buildConfigString(gitCommit))
         buildConfigField("boolean", "P6E_ACCEPTANCE", "false")
         buildConfigField("boolean", "P6_V2_JOURNAL_INTERRUPT_ACCEPTANCE", "false")
         buildConfigField("boolean", "P6_V2_SCHEMA38_UPGRADE_ACCEPTANCE", "false")
         applicationId = "com.nanzhufeng.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 86
-        versionName = "1.0.22"
+        versionCode = 93
+        versionName = "1.0.29"
         buildConfigField("long", "BUILD_TIME_EPOCH_SECONDS", "${System.currentTimeMillis() / 1000L}L")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -197,6 +214,12 @@ android {
             initWith(getByName("debug"))
             applicationIdSuffix = ".searchattachmentacceptance"
             versionNameSuffix = "-search-attachment-acceptance"
+            signingConfig = signingConfigs.findByName("formal")
+        }
+        create("publicModelAcceptance") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".publicmodelacceptance"
+            versionNameSuffix = "-public-model-acceptance"
             signingConfig = signingConfigs.findByName("formal")
         }
     }

@@ -61,7 +61,7 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertTrue(submitLambda.contains("onSubmitDraft(state.selectedConversationId, authorization)"))
         assertTrue(workspace.contains("private val ComposerSendSurfaceSize = 36.dp"))
         assertTrue(workspace.contains("ComposerModelEntry("))
-        assertTrue(workspace.contains("state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId"))
+        assertTrue(workspace.contains("effectiveComposerModelId(state.p6gConversationOverride, state.p6gGlobalDefault)"))
         assertFalse(workspace.contains("ComposerCompareEntry("))
     }
 
@@ -69,9 +69,9 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertTrue(executor.contains("fun retryLatestAttempt("))
         assertTrue(executor.contains("existingAttempt = attempt"))
         assertTrue(executor.contains("attempt.idempotencyKey"))
-        assertTrue(executor.contains("failureReason = recoveryFailureReason"))
+        assertTrue(executor.contains("recoveryFailureReason(attempt.status, attempt.safeErrorCode)"))
         assertTrue(workspace.contains("Text(\"重试\")"))
-        assertTrue(workspace.contains("recovery.failureReason"))
+        assertTrue(workspace.contains("state.normalSendRecovery?.failureReason"))
         assertFalse(workspace.contains("按原编号重试"))
         assertFalse(workspace.contains("标记失败"))
         assertFalse(workspace.contains("原接收方："))
@@ -87,7 +87,10 @@ class P3JNormalChatExplicitEgressContractsTest {
         val retry = executor.substringAfter("fun retryLatestAttempt(").substringBefore("fun markLatestAttemptFailed")
         assertTrue(viewModel.contains("normalSendRecovery = null"))
         assertTrue(viewModel.contains("normalSendRetryInProgress = true"))
-        assertTrue(workspace.contains("state.normalSendRecovery?.takeIf { !state.isSending }"))
+        assertTrue(workspace.contains("onRetryFailedAssistant = onRetryNormalSend.takeIf"))
+        assertTrue(workspace.contains("TextButton(onClick = retry) { Text(\"重试\") }"))
+        assertFalse(workspace.contains(".padding(start = 28.dp, end = 28.dp, bottom = floatingComposerHeight + 84.dp)"))
+        assertTrue(viewModel.contains("leaf.parentMessageId == recovery.userMessageId"))
         assertTrue(retry.contains("startProviderRuntimeForExistingUser.execute(conversationId, user.id)"))
         assertTrue(retry.contains("val resumedRuntime = ActiveProviderRuntime(restarted.runtime)"))
         assertTrue(retry.contains("onLocalSubmission()"))
@@ -131,9 +134,9 @@ class P3JNormalChatExplicitEgressContractsTest {
     @Test fun `Qwen Responses search streams the final answer without accepting tool traces or partial EOF`() {
         assertTrue(adapters.contains("OfficialWebSearchRoute.QWEN_RESPONSES -> ProviderStreamTextMode.RESPONSES_API"))
         assertTrue(adapters.contains("\\\"store\\\":false,\\\"stream\\\":"))
-        assertTrue(executor.contains("adapter.decodeStreamingEvent(event, requestOptions)"))
-        assertTrue(executor.contains("adapter.readTimeoutMillis(resolvedModel, providerAttachments, stream, requestOptions)"))
-        assertTrue(executor.contains("outcome.finishReason in setOf(\"INCOMPLETE\", \"FAILED\", \"MISSING_COMPLETION\")"))
+        assertTrue(executor.contains("adapter.decodeStreamingEvent(event, answerOptions)"))
+        assertTrue(executor.contains("adapter.readTimeoutMillis(resolvedModel, providerAttachments, stream, answerOptions)"))
+        assertTrue(executor.contains("outcome.finishReason in setOf(\"INCOMPLETE\", \"FAILED\", \"MISSING_COMPLETION\", \"CONTENT_FILTER\", \"sensitive\", \"content_filter\", \"STREAM_PROVIDER_ERROR\")"))
         assertTrue(executor.contains("appendProviderWebSources(reply, outcome.webSources)"))
     }
 
@@ -141,6 +144,10 @@ class P3JNormalChatExplicitEgressContractsTest {
         assertFalse(appContainer.contains("RoomNormalChatSendAttemptStore(database).also"))
         assertFalse(appContainer.contains("fun recoverInterruptedNormalChatAttemptsAfterProcessStart"))
         assertFalse(activity.contains("recoverInterruptedNormalChatAttemptsAfterProcessStart()"))
-        assertTrue(activity.contains("GenerationForegroundService.  This Activity"))
+        assertTrue(appContainer.contains("taskRecoveryAudit.recoverInterruptedConversations()"))
+        assertTrue(activity.contains("recoverOtherTasksAfterProcessStart()"))
+        val recovery = File("src/main/java/com/nanzhufeng/ai/domain/TaskExecutionPolicy.kt").readText()
+        assertTrue(recovery.contains("if (isConversationRunning(conversation.id)) return@count false"))
+        assertTrue(recovery.contains("NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), \"PROCESS_INTERRUPTED\""))
     }
 }

@@ -1,11 +1,16 @@
+import { composerModelBrand } from './model-settings-browser.mjs';
+import { autoCandidate, conversationAutoMimeTypes } from "./auto-chat-routing.mjs";
+import { RELAYCORE_MODELS, relayCoreUiModelName, relayCoreFooterName, relayCoreShortModelName, relayCoreModel, relayCoreCompactName, relayCorePickerName, relayCoreNeedsCompanion } from "./relaycore-models.mjs";
+import { WORKSPACES_VISIBLE } from './product-scope.mjs';
 import { icon, icons, settingsIcons } from './icon-source.mjs';
 import { renderSafeMarkdown } from './safe-markdown.mjs';
+import { createReplyEmphasisBudget } from './reply-text-emphasis.mjs';
 import { APPEARANCE_MODES, CONVERSATION_TONES, DESKTOP_SETTINGS_CAPABILITIES, FONT_SIZES, THEME_COLORS, conversationToneDefinition } from './desktop-parity-preferences.mjs';
 import { MODEL_SERVICE_PREVIEW_SETTINGS, renderAndroidSettingsShell } from './android-settings-shell.mjs';
 import { renderDesktopSearchPage } from './desktop-search-page.mjs';
 import { attachmentPreviewCapability } from './desktop-attachment-preview-owner.mjs';
 import { isWorkspaceRoot, renderWorkspaceNavigation, renderWorkspaceSidebar, renderWorkConversationState, resolveWorkConversationState } from './workspace-view.mjs';
-import { cnyCostLabel, projectedMessageCost } from './desktop-cost-estimator.mjs';
+import { cnyCostLabel, messageFooterCostLabel } from './desktop-cost-estimator.mjs';
 import { orderedConversationMessages } from './conversation-message-order.mjs';
 
 export { orderedConversationMessages } from './conversation-message-order.mjs';
@@ -129,7 +134,7 @@ export function deriveDesktopDualPathState({ connection } = {}) {
   };
 }
 
-function conversationRows(conversations, selectedConversationId, { archived = false, favoriteIds = new Set(), unreadIds = new Set(), manualUnreadAtMs = new Map(), batchEditing = false, batchSelectedKeys = new Set(), syncedConversationKeys = new Set(), localWorkspaceId = null } = {}) {
+function conversationRows(conversations, selectedConversationId, { archived = false, favoriteIds = new Set(), unreadIds = new Set(), manualUnreadAtMs = new Map(), batchEditing = false, batchSelectedKeys = new Set(), syncedConversationKeys = new Set(), localWorkspaceId = null, inlineRename = null } = {}) {
   if (!conversations.length) return `<p class="chat-history-empty">${archived ? '还没有已归档会话' : '还没有本地会话'}</p>`;
   return conversations.map(item => {
     const manuallyUnread = manualUnreadTimestamp(manualUnreadAtMs, item.id) > 0;
@@ -143,18 +148,18 @@ function conversationRows(conversations, selectedConversationId, { archived = fa
     const syncedToCloud = syncedConversationKeys.has(syncKey);
     const batchSelected = batchSelectedKeys.has(batchKey);
     const rowAction = batchEditing ? 'toggle-batch-conversation' : 'select-chat';
-    return `
-    <div class="chat-history-row ${item.id === selectedConversationId ? 'selected' : ''} ${batchEditing ? 'batch-editing' : ''}" data-conversation-row data-id="${escapeHtml(item.id)}" data-revision="${item.revision}" data-pinned="${Boolean(item.pinned)}" data-favorite="${favorite}" data-archived="${Boolean(item.archived)}" data-cloud-conversation="${cloud}" data-batch-key="${escapeHtml(batchKey)}"${workspaceId}>
-      ${batchEditing ? `<button class="chat-batch-select" data-action="toggle-batch-conversation" data-batch-key="${escapeHtml(batchKey)}" data-id="${escapeHtml(item.id)}" data-revision="${item.revision}"${workspaceId} role="checkbox" aria-checked="${batchSelected}" aria-label="${batchSelected ? '取消选择' : '选择'}${escapeHtml(item.title || '未命名会话')}">${batchSelected ? icon(icons.check, '已选择') : ''}</button>` : ''}
-      <button class="chat-history-select" data-action="${rowAction}" data-id="${escapeHtml(item.id)}"${workspaceId} data-batch-key="${escapeHtml(batchKey)}" data-revision="${item.revision}" ${batchEditing ? `aria-pressed="${batchSelected}"` : ''} title="${escapeHtml(item.title || '未命名会话')} · ${escapeHtml(conversationLocalDate(item))}">
-        <span class="chat-history-title-line">
+    const renaming = !batchEditing && !archived && inlineRename?.surface === 'sidebar' && inlineRename.id === item.id && inlineRename.workspaceId === (item.workspaceId || null);
+    const titleLine = `<span class="chat-history-title-line">
           ${syncedToCloud ? `<i class="chat-history-cloud-sync" aria-label="已同步到云端">${icon(icons.cloudDone, '已同步到云端')}</i>` : ''}
           ${item.pinned ? `<i class="chat-history-conversation-icon" aria-label="已置顶">${icon(settingsIcons.conversation, '对话')}</i>` : ''}
           ${unread ? `<i class="chat-history-unread" aria-label="${manuallyUnread ? '已标记未读' : '有未查看的新内容'}"></i>` : ''}
           ${running ? '<i class="chat-history-running" aria-label="正在生成"></i>' : ''}
-          <span class="chat-history-title">${escapeHtml(item.title || '未命名会话')}</span>
-        </span>
-      </button>
+          ${renaming ? `<input class="chat-inline-title-input" data-inline-conversation-rename aria-label="编辑会话标题" maxlength="120" value="${escapeHtml(inlineRename.draft)}">` : `<span class="chat-history-title">${escapeHtml(item.title || '未命名会话')}</span>`}
+        </span>`;
+    return `
+    <div class="chat-history-row ${item.id === selectedConversationId ? 'selected' : ''} ${batchEditing ? 'batch-editing' : ''} ${renaming ? 'renaming' : ''}" data-conversation-row data-id="${escapeHtml(item.id)}" data-revision="${item.revision}" data-pinned="${Boolean(item.pinned)}" data-favorite="${favorite}" data-archived="${Boolean(item.archived)}" data-cloud-conversation="${cloud}" data-batch-key="${escapeHtml(batchKey)}"${workspaceId}>
+      ${batchEditing ? `<button class="chat-batch-select" data-action="toggle-batch-conversation" data-batch-key="${escapeHtml(batchKey)}" data-id="${escapeHtml(item.id)}" data-revision="${item.revision}"${workspaceId} role="checkbox" aria-checked="${batchSelected}" aria-label="${batchSelected ? '取消选择' : '选择'}${escapeHtml(item.title || '未命名会话')}">${batchSelected ? icon(icons.check, '已选择') : ''}</button>` : ''}
+      ${renaming ? `<div class="chat-history-select chat-history-edit">${titleLine}</div>` : `<button class="chat-history-select" data-action="${rowAction}" data-id="${escapeHtml(item.id)}"${workspaceId} data-batch-key="${escapeHtml(batchKey)}" data-revision="${item.revision}" ${batchEditing ? `aria-pressed="${batchSelected}"` : ''} title="${escapeHtml(item.title || '未命名会话')} · ${escapeHtml(conversationLocalDate(item))}">${titleLine}</button>`}
       <small class="chat-history-date">${escapeHtml(conversationLocalDate(item))}</small>
       ${batchEditing ? '' : `<div class="chat-row-actions" aria-label="${escapeHtml(item.title || '未命名会话')}的操作">
         ${archived
@@ -207,18 +212,46 @@ export function transcriptMetadata(message) {
   // Android deliberately presents the model frozen with the message, rather
   // than a provider-returned route identifier.  The latter remains in the
   // persisted attempt/usage record, but is not a user-facing footer label.
-  const model = snapshot?.displayName || snapshot?.modelId || (typeof message?.importedModel === 'string' && message.importedModel.trim()) || actual || null;
+  let model = snapshot?.displayName || snapshot?.modelId || (typeof message?.importedModel === 'string' && message.importedModel.trim()) || actual || null;
+  const relayResponse = String(snapshot?.providerId || '').startsWith('RELAYCORE_');
+  const modelVerification = relayResponse ? (actual ? (actual === snapshot?.modelId ? 'matched' : 'mismatch') : 'not_returned') : null;
+  if (relayResponse) {
+    const returned = RELAYCORE_MODELS.find(item => item.modelId === actual);
+    model = `${returned?.modelName || actual || '返回模型未验证'} · RC`;
+  } else if (model) {
+    // Portable historical labels retain channel evidence even without a local route snapshot.
+    const parts = String(model).split(' · ');
+    const channel = parts.findIndex(part => ['Kiro', 'Kiro正价', 'Pro1', 'Pro2', 'Pro3', 'Gemini'].includes(part));
+    if (channel > 0) model = snapshot?.providerId ? parts.slice(0, channel).join(' · ') : `${parts.slice(0, channel).join(' · ')} · RC`;
+  }
+  if (snapshot?.providerId && !relayResponse && String(model || '').endsWith(' · RC')) model = String(model).slice(0,-5);
+  if (String(model || '').endsWith(' · RC')) model = compactModelName(model);
   const created = Date.parse(message?.createdAt || '');
   const timestamp = Number.isFinite(created)
     ? new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(created))
     : null;
   const source = ['IMPORTED', 'CACHE', 'PROVIDER', 'LOCAL_FIXTURE'].includes(message?.source) ? message.source : null;
-  return { source, model, timestamp, workDuration: assistantWorkDuration(message) };
+  return { source, model, timestamp, workDuration: assistantWorkDuration(message), ...(relayResponse ? { modelVerification } : {}) };
 }
 
 export function compactModelName(value) {
+  if (String(value || '').endsWith(' · RC')) {
+    const name=String(value).trim().slice(0,-5);
+    const model=RELAYCORE_MODELS.find(item=>name===item.modelName || name===item.modelId || name===relayCoreShortModelName(item) || name==='Astra' && item.presetId==='RELAYCORE_GPT_6_ASTRA');
+    return model ? relayCoreFooterName(model) : String(value).trim();
+  }
+  if (/^(?:GPT-6\.1 Sol|GPT-6 Astra) · Pro[123](?: · [0-9.]+×)?$/u.test(String(value || ''))) return compactModelName(`${String(value).split(' · ')[0]} · RC`);
+  if (/^(?:Opus 5\.5|Sonnet 5\.5) · Kiro(?:正价)?(?: · [0-9.]+×)?$/u.test(String(value || ''))) return compactModelName(`${String(value).split(' · ')[0]} · RC`);
+  const relay = RELAYCORE_MODELS.find(model => value === relayCoreCompactName(model) || value === relayCorePickerName(model) || value === `${model.modelName} · ${model.channel}` || value === `${model.modelName} · ${model.channel} · ${model.multiplier}×`);
+  if (relay && String(value).includes(' · ')) return relayCoreFooterName(relay);
   const normalized = String(value || '').replace(/^(?:OpenRouter|Google|通义千问|Qwen 官方直连|DeepSeek 官方直连|智谱 BigModel 官方直连|智谱官方直连)\s*(?:[·:：]\s*)/u, '').split(' · ')[0].trim();
   return ({
+    'Claude Opus 5.5': 'Opus 5.5', 'anthropic/claude-opus-5.5': 'Opus 5.5',
+    'Claude Sonnet 5.5': 'Sonnet 5.5', 'anthropic/claude-sonnet-5.5': 'Sonnet 5.5',
+    'Claude Haiku 5.5': 'Haiku 5.5', 'anthropic/claude-haiku-5.5': 'Haiku 5.5',
+    'GPT-6.1 Sol': '6.1 Sol', 'openai/gpt-6.1-sol': '6.1 Sol',
+    'GPT-6 Astra': '6 Astra', 'openai/gpt-6-astra': '6 Astra', 'Astra': '6 Astra',
+    'GPT-6 Luna': '6 Luna', 'openai/gpt-6-luna': '6 Luna',
     'Claude Fable 5': 'Fable 5', 'Claude Opus 5': 'Opus 5', 'Claude Sonnet 5': 'Sonnet 5', 'Claude Haiku 4.5': 'Haiku 4.5',
     'GPT-5.6 Sol': '5.6 Sol', 'GPT-5.6 Terra': '5.6 Terra', 'GPT-5.6 Luna': '5.6 Luna',
     'Grok 4.1 Fast': '4.1 Fast', 'Grok 4.6 High': '4.6 High', 'Gemini 3.7 Flash': 'Gemini 3.7', 'Gemini 3.8 Flash': 'Gemini 3.8',
@@ -230,17 +263,18 @@ export function compactModelName(value) {
     'anthropic/claude-fable-5': 'Fable 5', 'anthropic/claude-opus-5': 'Opus 5', 'anthropic/claude-opus-5-fast': 'Opus 5', 'anthropic/claude-sonnet-5': 'Sonnet 5',
     'openai/gpt-5.6-sol': '5.6 Sol', 'openai/gpt-5.6-terra': '5.6 Terra', 'google/gemini-3.7-flash': 'Gemini 3.7', 'google/gemini-3.8-flash': 'Gemini 3.8',
     'deepseek-v4-pro': 'DS V4', 'deepseek-v4-flash': 'DS V4', 'deepseek-flash': 'DS V4.1',
+    'meta/muse-wonder': 'Muse Wonder',
     'qwen3.7-plus': 'Qwen 3.7', 'qwen3.8-max': 'Qwen 3.8', 'glm-5.3-flash': 'GLM 5.3', 'x-ai/grok-4.6': '4.6 High', 'moonshotai/kimi-k3': 'Kimi K3',
   })[normalized] || normalized;
 }
 
 const DAILY_COMPOSER_MODEL_IDS = Object.freeze([
-  'CLAUDE_SONNET_5', 'DEEPSEEK_V4_FLASH', 'GPT_5_6_TERRA',
+  'CLAUDE_SONNET_5_5', 'CLAUDE_HAIKU_5_5', 'DEEPSEEK_V4_FLASH', 'GPT_6_LUNA',
   'GLM_5_3_FLASH', 'QWEN_3_7_PLUS', 'GEMINI_3_8_FLASH',
 ]);
 const DEEP_COMPOSER_MODEL_IDS = Object.freeze([
-  'CLAUDE_FABLE_5_1', 'CLAUDE_OPUS_5', 'GPT_6_ASTRA', 'DEEPSEEK_V4_PRO',
-  'GPT_5_6_SOL', 'GLM_5_3', 'QWEN_3_8_MAX',
+  'CLAUDE_OPUS_5_5', 'GPT_6_1_SOL', 'DEEPSEEK_V4_PRO',
+  'MUSE_WONDER', 'GLM_5_3', 'QWEN_3_8_MAX',
 ]);
 
 const COMPOSER_MODEL_PROVIDER_LABELS = Object.freeze({
@@ -272,6 +306,12 @@ export function millisecondsUntilDeepSeekPricingTransition(value = Date.now()) {
 
 export function composerModelRuntimeDetail(candidate, webSearchEnabled, now = Date.now()) {
   const providerId = String(candidate?.providerId || '').toUpperCase();
+  if (providerId.startsWith('RELAYCORE_')) {
+    const model = relayCoreModel(candidate.modelId);
+    const channel = null;
+    const search = !webSearchEnabled ? '未联网' : relayCoreNeedsCompanion(candidate.modelId, true) ? 'Luna · OpenRouter 检索' : '实时联网';
+    return { text: [channel, search].filter(Boolean).join(' · ') };
+  }
   const state = webSearchEnabled ? '实时联网' : '未联网';
   if (providerId === 'DEEPSEEK') {
     const emphasizedPrefix = deepSeekPricingLabelAt(now);
@@ -280,14 +320,14 @@ export function composerModelRuntimeDetail(candidate, webSearchEnabled, now = Da
   return { text: `${COMPOSER_MODEL_PROVIDER_LABELS[providerId] || '模型服务'} · ${state}` };
 }
 
-function renderComposerModelSheetCard({ action, attributes = '', label, detail = null, selected = false, showNext = false, disabled = false }) {
+function renderComposerModelSheetCard({ action, attributes = '', label, brand = null, detail = null, selected = false, showNext = false, disabled = false }) {
   const detailHtml = detail?.text
     ? `<small>${detail.emphasizedPrefix ? `<b>${escapeHtml(detail.emphasizedPrefix)}</b>${escapeHtml(detail.text.slice(detail.emphasizedPrefix.length))}` : escapeHtml(detail.text)}</small>`
     : '';
   const trailing = selected
     ? icon(icons.check, '当前模型')
     : showNext ? icon(icons.chevronRight, `展开${label}`) : '';
-  return `<button class="composer-model-sheet-card" data-action="${action}" ${attributes} aria-selected="${selected}" ${disabled ? 'disabled' : ''}><span><strong>${escapeHtml(label)}</strong>${detailHtml}</span>${trailing ? `<i class="composer-model-sheet-trailing">${trailing}</i>` : ''}</button>`;
+  return `<button class="composer-model-sheet-card" data-action="${action}" ${attributes} aria-selected="${selected}" ${disabled ? 'disabled' : ''}>${brand ? `<img class="composer-model-brand" data-model-brand="${brand}" src="./assets/model-brands/${brand}.png" alt="" width="24" height="24">` : ''}<span><strong>${escapeHtml(label)}</strong>${detailHtml}</span>${trailing ? `<i class="composer-model-sheet-trailing">${trailing}</i>` : ''}</button>`;
 }
 
 function renderComposerModelSheetFrame({ title, root = true, closeAction = 'close-p6g-model-picker', body, ariaLabel = '选择模型' }) {
@@ -312,16 +352,20 @@ function renderComposerAddSheetFrame({ page = 'root', body }) {
  * The model-service catalog is the product catalog. P6-G may carry historical selections, but
  * its local acceptance fixture is never a user-selectable Composer model.
  */
-const currentComposerModelId = value => ['deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'deepseek-flash'].includes(value) ? 'DEEPSEEK_V4_FLASH' : value;
+const upgradedModelIds = Object.freeze({"claude-opus-5": "CLAUDE_OPUS_5_5", "claude-sonnet-5": "CLAUDE_SONNET_5_5", "claude-haiku-4.5": "CLAUDE_HAIKU_5_5", "gpt-5.6-sol": "GPT_6_1_SOL", "gpt-5.6-terra": "GPT_6_LUNA", "gpt-5.6-luna": "GPT_6_LUNA", "anthropic/claude-opus-5": "CLAUDE_OPUS_5_5", "anthropic/claude-sonnet-5": "CLAUDE_SONNET_5_5", "anthropic/claude-haiku-4.5": "CLAUDE_HAIKU_5_5", "openai/gpt-5.6-sol": "GPT_6_1_SOL", "openai/gpt-5.6-terra": "GPT_6_LUNA", "openai/gpt-5.6-luna": "GPT_6_LUNA", "CLAUDE_OPUS_5": "CLAUDE_OPUS_5_5", "CLAUDE_SONNET_5": "CLAUDE_SONNET_5_5", "CLAUDE_HAIKU_4_5": "CLAUDE_HAIKU_5_5", "GPT_5_6_SOL": "GPT_6_1_SOL", "GPT_5_6_TERRA": "GPT_6_LUNA", "GPT_5_6_LUNA": "GPT_6_LUNA"});
+const currentComposerModelId = value => upgradedModelIds[value] || (['deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'deepseek-flash'].includes(value) ? 'DEEPSEEK_V4_FLASH' : value);
 const currentComposerModelName = value => value === 'DeepSeek V4 Flash' ? 'DeepSeek V4.1 Flash' : value;
 
-export function desktopComposerModelCandidates(modelServiceSettings = [], p6gCandidates = []) {
-  const presetById = new Map((modelServiceSettings || []).flatMap(service =>
+export function desktopComposerModelCandidates(modelServiceSettings = [], p6gCandidates = [], includeDisabled = false) {
+  const enabledProviders = new Set(modelServiceSettings.filter(service => service.enabled === true).map(service => service.providerId));
+  const presetOwners = new Map(modelServiceSettings.flatMap(service => (service.presets || []).map(preset => [preset.id, service.providerId])));
+  const presetById = new Map((modelServiceSettings || []).filter(service => includeDisabled || service.enabled === true).flatMap(service =>
     (service.presets || []).filter(item => item.chatSelectable !== false).map(item => [item.id, { ...item, providerId: service.providerId }]),
   ));
   const reviewed = [
     ...DAILY_COMPOSER_MODEL_IDS.map(modelId => ({ modelId, tier: 'BALANCED' })),
     ...DEEP_COMPOSER_MODEL_IDS.map(modelId => ({ modelId, tier: 'DEEP' })),
+    ...RELAYCORE_MODELS.map(model => ({ modelId: model.presetId, tier: model.tier === 'DAILY' ? 'BALANCED' : 'DEEP' })),
   ].map(({ modelId, tier }) => {
     const preset = presetById.get(modelId);
     return preset ? {
@@ -339,11 +383,12 @@ export function desktopComposerModelCandidates(modelServiceSettings = [], p6gCan
   const extras = (p6gCandidates || []).map(item => ({ ...item, modelId: currentComposerModelId(item?.modelId), displayName: currentComposerModelName(item?.displayName) })).filter(item => item?.modelId
     && !reviewedIds.has(item.modelId)
     && item.modelId !== 'KIMI_K3'
+    && !['CLAUDE_FABLE_5_1', 'GPT_6_ASTRA'].includes(item.modelId)
     && item.displayName !== 'Kimi K3'
     && item.providerFamily !== 'LOCAL'
     && item.providerId !== 'local-fixture'
     && !String(item.modelId).startsWith('local-p6g-fixture-'));
-  return [...reviewed, ...extras];
+  return [...reviewed, ...extras.filter(item => includeDisabled || enabledProviders.has(presetOwners.get(item.modelId) || String(item.providerId || 'OPENROUTER').toUpperCase()))];
 }
 
 export function assistantCostCny(chargeMicros, currencyCode = 'USD') {
@@ -539,6 +584,7 @@ function ordinaryChatFailureCopy(code) {
     CREDENTIAL_DENIED: '本次无法读取服务商 API Key；请在模型设置中重新保存后重试。',
     CREDENTIAL_MISSING: '尚未保存该服务商密钥，请在模型设置中保存。',
     CREDENTIAL_UNAVAILABLE: '应用私有凭据不可用；请在模型设置中重新保存 API Key 后重试。',
+    WEB_SEARCH_SCOPE_INCOMPLETE: '本轮附件检索尚未覆盖全部事项，已保留分析和实际来源；未完成的部分没有标为已核实。',
     WEB_SEARCH_NO_SOURCES: '联网搜索未完成，本次回答未标为成功。请重试联网搜索。',
     WEB_SEARCH_NO_VERIFIED_SOURCES: '联网搜索未完成，本次回答未标为成功。请重试联网搜索。',
   })[String(code || '')] || '本次没有形成完整回答。请检查模型与网络设置后显式重试。';
@@ -600,6 +646,7 @@ function messageList(conversation, options = {}) {
       ${messages.map((message, index) => {
         const role = canonicalMessageRole(message);
         const isAssistant = role === 'assistant';
+        const replyEmphasis = isAssistant ? createReplyEmphasisBudget() : null;
         const metadata = transcriptMetadata(message);
         const payload = messagePlainText(message);
         const reasoningBlocks = message.blocks.filter(block => block.kind === 'REASONING');
@@ -619,9 +666,9 @@ function messageList(conversation, options = {}) {
         const continuationState = String(message.continuationState || '');
         const continuingFromSavedText = Boolean(message.continuationOf);
         const hasPreservedText = textBlocks.some(block => String(block.text || '').trim());
-        const missingSearchEvidence = ['WEB_SEARCH_NO_SOURCES', 'WEB_SEARCH_NO_VERIFIED_SOURCES'].includes(String(runtimeSafeErrorCode));
+        const missingSearchEvidence = ['WEB_SEARCH_NO_SOURCES', 'WEB_SEARCH_NO_VERIFIED_SOURCES', 'WEB_SEARCH_SCOPE_INCOMPLETE'].includes(String(runtimeSafeErrorCode));
         const failureTitle = missingSearchEvidence ? '联网搜索未完成' : '回答未完成';
-        const recoveryActionLabel = hasPreservedText && !missingSearchEvidence ? '从断点继续' : '重新生成';
+        const recoveryActionLabel = (hasPreservedText || continuingFromSavedText) && !missingSearchEvidence ? '从断点继续' : '重新生成';
         const compareExecutionId = typeof message.compareExecutionId === 'string' ? message.compareExecutionId : '';
         const compareLogicalModel = message.compareLogicalModel === 'CHATGPT' ? 'ChatGPT' : message.compareLogicalModel === 'CLAUDE' ? 'Claude' : '';
         const sourceUser = index > 0 ? messages[index - 1] : null;
@@ -635,11 +682,11 @@ function messageList(conversation, options = {}) {
             ? `<div class="chat-runtime-state unknown" role="status"><span><strong>连接结果未知，未自动重发${runtimeSafeErrorCode ? ` · ${escapeHtml(runtimeSafeErrorCode)}` : ''}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))} 历史 Compare 不再提供重试；内容与归因保持只读。</small></span></div>`
             : message.attemptId ? `<div class="chat-runtime-state unknown" role="status"><span><strong>连接结果未知，未自动重发${runtimeSafeErrorCode ? ` · ${escapeHtml(runtimeSafeErrorCode)}` : ''}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))} 已保留现有内容；请明确恢复。</small></span><button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId)}">${recoveryActionLabel}</button></div>`
             : `<div class="chat-runtime-state unknown" role="status"><span><strong>生成已中断，未收到明确完成结果 · ${escapeHtml(runtimeSafeErrorCode || 'LOCAL_RUNTIME_STATE_MISSING')}</strong><small>${escapeHtml(ordinaryChatUnknownCopy(runtimeSafeErrorCode))}</small></span></div>`
-          : effectiveDelivery === 'CANCELLED' ? `<div class="chat-runtime-state cancelled" role="status"><strong>已停止，已生成内容已保留</strong></div>`
+          : effectiveDelivery === 'CANCELLED' ? `<div class="chat-runtime-state cancelled" role="status"><strong>已停止，已生成内容已保留</strong>${message.attemptId && !compareExecutionId ? `<button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId)}">${recoveryActionLabel}</button>` : ''}</div>`
           : compareExecutionId
             ? `<div class="chat-runtime-state failed" role="status"><span><strong>${failureTitle}</strong><small>${escapeHtml(ordinaryChatFailureCopy(runtimeSafeErrorCode))} · 历史 Compare 不再提供重试。</small></span></div>`
             : `<div class="chat-runtime-state failed" role="status"><span><strong>${failureTitle}</strong><small>${escapeHtml(ordinaryChatFailureCopy(runtimeSafeErrorCode))}</small></span><button data-action="retry-ordinary-chat" data-attempt-id="${escapeHtml(message.attemptId || '')}">${recoveryActionLabel}</button></div>`;
-        const cost = isAssistant ? (cnyCostLabel(projectedMessageCost(message), { maximumFractionDigits: 4, trimTrailingZeros: false }) || (isRunning ? null : '金额未知')) : null;
+        const cost = isAssistant ? (messageFooterCostLabel(message, { maximumFractionDigits: 4, trimTrailingZeros: false }) || (isRunning ? null : '金额未知')) : null;
         if (metadata.model) metadata.model = compactModelName(metadata.model);
         const metadataPrimary = [
           metadata.timestamp ? escapeHtml(metadata.timestamp) : '',
@@ -649,6 +696,7 @@ function messageList(conversation, options = {}) {
           metadataPrimary ? `<span class="chat-message-metadata-primary">${metadataPrimary}</span>` : '',
           metadataPrimary && cost ? '<span class="chat-message-metadata-separator chat-message-metadata-cost-separator" aria-hidden="true"> · </span>' : '',
           cost ? `<span class="chat-message-metadata-cost">${escapeHtml(cost)}</span>` : '',
+          metadata.modelVerification === 'mismatch' ? '<span class="chat-message-model-warning" role="status">返回模型不一致</span>' : '',
         ].filter(Boolean).join('');
         const messageActions = interactive && payload ? `<div class="chat-message-actions"><button class="chat-message-action-icon" data-action="copy-message" data-copy-action data-message-id="${escapeHtml(message.id)}" aria-label="复制消息" title="复制消息">${icon(icons.copy, '复制')}</button>${role !== 'user' ? `<button class="chat-message-action-icon" data-action="share-message" data-message-id="${escapeHtml(message.id)}" aria-label="分享" title="分享">${icon(icons.share, '分享')}</button>` : ''}${isAssistant ? `<button class="chat-message-action-icon chat-message-action-more" data-action="open-assistant-message-menu" data-message-id="${escapeHtml(message.id)}" aria-label="更多操作" title="更多操作">${icon(icons.more, '更多操作')}</button>` : ''}</div>` : '';
         const messageMetadata = metadataFacts ? `<p class="chat-message-metadata">${metadataFacts}</p>` : '';
@@ -663,7 +711,7 @@ function messageList(conversation, options = {}) {
             ${metadata.workDuration ? `<p class="chat-message-work-duration">${escapeHtml(metadata.workDuration)}</p>` : ''}
             ${attachmentBlocks.length ? `${assistantImageBlocks.length ? assistantImageGallery(message.id, assistantImageBlocks, imageThumbnails, selectedAssistantImageId) : ''}${remainingAttachmentBlocks.length ? `<div class="chat-message-attachments" aria-label="本地附件预览">${remainingAttachmentBlocks.map(block => localAttachmentDisplay(block.asset, imageThumbnails, videoThumbnails, attachmentPreviews)).join('')}</div>` : ''}` : ''}
             ${reasoningBlocks.length ? `<details class="chat-reasoning"><summary>思考过程</summary><div class="chat-markdown-body">${reasoningBlocks.map(block => renderSafeMarkdown(block.text || '', { query: findQuery })).join('')}</div></details>` : ''}
-            ${textBlocks.length ? `<div class="chat-message-bubble"><div class="chat-message-body ${isAssistant ? 'chat-markdown-body' : ''}">${textBlocks.map(block => isAssistant ? renderSafeMarkdown(block.text || '', { query: findQuery }) : `<p>${highlightedText(block.text || '', findQuery)}</p>`).join('')}</div></div>` : ''}
+            ${textBlocks.length ? `<div class="chat-message-bubble"><div class="chat-message-body ${isAssistant ? 'chat-markdown-body' : ''}">${textBlocks.map(block => isAssistant ? renderSafeMarkdown(block.text || '', { query: findQuery, emphasis: replyEmphasis }) : `<p>${highlightedText(block.text || '', findQuery)}</p>`).join('')}</div></div>` : ''}
             ${runtimeStatus}
             ${messageTools ? `<div class="chat-message-tools">${messageTools}</div>` : ''}
             ${reminderSuggestion}
@@ -687,7 +735,7 @@ function conversationContextMenu(menu, workMode, accountSync = {}) {
   const syncAction = cloudConversation ? 'context-menu-cancel-sync' : 'context-menu-sync';
   const common = `${item('context-menu-pin', icon(menu.pinned ? icons.pushPinOff : icons.pushPin, menu.pinned ? '取消置顶' : '置顶'), menu.pinned ? '取消置顶' : '置顶')}${item('context-menu-unread', icon(icons.visibility, '未读'), '未读')}${item('context-menu-favorite', icon(menu.favorite ? icons.bookmark : icons.bookmarkBorder, menu.favorite ? '取消收藏' : '收藏'), menu.favorite ? '取消收藏' : '收藏')}${item('context-menu-rename', icon(icons.edit, '重命名'), '重命名')}${item('context-menu-share', icon(icons.share, '分享'), '分享')}${item(syncAction, icon(cloudConversation ? icons.cloudOff : icons.cloudUploadSolid, syncLabel), syncLabel)}${item('context-menu-find', icon(icons.search, '在聊天中查找'), '在聊天中查找')}`;
   const archive = item('context-menu-archive', icon(menu.archived ? icons.restore : icons.archive, menu.archived ? '恢复' : '归档'), menu.archived ? '恢复' : '归档', { extra: `data-archived="${menu.archived}"` });
-  const remove = item('context-menu-delete', icon(icons.trash, '删除'), '删除', { danger: true });
+  const remove = cloudConversation ? '' : item('context-menu-delete', icon(icons.trash, '删除'), '删除', { danger: true });
   return `<div class="chat-context-menu" role="menu" aria-label="${workMode ? '工作会话菜单' : '对话会话菜单'}" data-menu-source="${menu.source === 'header' ? 'header' : 'sidebar'}" data-positioned="false"><div class="chat-context-menu-title">${escapeHtml(menu.title || '对话操作')}</div>${common}${archive}${remove}</div>`;
 }
 
@@ -695,7 +743,7 @@ function assistantMessageMenu(menu, area) {
   if (!menu?.messageId) return '';
   const messageId = escapeHtml(menu.messageId);
   const item = (action, glyph, label) => `<button type="button" role="menuitem" data-action="${action}" data-message-id="${messageId}">${icon(glyph, label)}<span>${label}</span></button>`;
-  return `<div class="assistant-message-menu" role="menu" aria-label="更多操作" data-positioned="false">${menu.role === 'user' ? item('copy-message', icons.copy, '复制') : item('show-assistant-answer-information', icons.info, '本次回答信息') + item('branch-from-message', icons.branch, '创建分支')}${item('reference-message-to-other-area', icons.copy, area === 'WORK' ? '引用文字到对话区' : '引用文字到工作区')}</div>`;
+  return `<div class="assistant-message-menu" role="menu" aria-label="更多操作" data-positioned="false">${menu.role === 'user' ? item('copy-message', icons.copy, '复制') : item('show-assistant-answer-information', icons.info, '本次回答信息') + item('branch-from-message', icons.branch, '创建分支')}${WORKSPACES_VISIBLE ? item('reference-message-to-other-area', icons.copy, area === 'WORK' ? '引用文字到对话区' : '引用文字到工作区') : ''}</div>`;
 }
 
 function workNavigation(pane, data, _workspaces, selectedWorkProjectId, selectedConversationId, workspaceReturn) {
@@ -745,7 +793,7 @@ export function renderChatFirstShell({
   p6gCatalog = null,
   p6gGlobalDefault = null,
   p6gSelection = null,
-  pendingNewConversationModelId = null,
+  pendingNewConversationModelId = undefined,
   modelPickerNow = new Date(),
   chatgptTask = null,
   claudeTask = null,
@@ -778,6 +826,7 @@ export function renderChatFirstShell({
   conversationFindQuery = '',
   conversationFindMatches = [],
   conversationFindIndex = 0,
+  inlineRename = globalThis.__nanfengDesktopWorkState?.inlineConversationRename || null,
   runtimeInfo = {},
   productSettings = {},
   conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null },
@@ -791,6 +840,7 @@ export function renderChatFirstShell({
   modelProviderId = 'OPENROUTER',
   modelServiceDraft = null,
   modelCredentialDraft = '',
+  modelCredentialEdited = false,
   modelCredentialVisible = false,
   modelSettingsSaving = false,
   modelSettingsTesting = false,
@@ -857,6 +907,7 @@ export function renderChatFirstShell({
   const title = temporaryConversation ? '临时聊天' : pane === 'work'
     ? (conversation?.title || workState.project?.title || '工作')
     : workPaneTitle || (cloudConversationOpening?.title || conversation?.title || '新对话');
+  const editingHeaderTitle = !lifecycleReadOnly && inlineRename?.surface === 'header' && conversation?.id === inlineRename.id && (!inlineRename.workspaceId || data?.summary?.id === inlineRename.workspaceId);
   const visibleAttachments = temporaryConversation
     ? (temporaryConversation.attachments || []).filter(item => (temporaryConversation.draftAttachmentIds || []).includes(item.id))
     : composerAttachments;
@@ -873,25 +924,24 @@ export function renderChatFirstShell({
   const p6gCandidates = desktopComposerModelCandidates(modelServiceSettings, storedP6gCandidates);
   const manualModelId = currentComposerModelId(selectedConversationId
     ? p6gSelection?.conversationOverride?.modelId || null
-    : pendingNewConversationModelId ?? p6gSelection?.conversationOverride?.modelId ?? null);
-  const manualCandidate = p6gCandidates.find(item => item.modelId === manualModelId);
-  const automaticModelLabel = currentComposerModelName(p6gSelection?.lastRoute?.displayName)
-    || p6gCandidates.find(item => item.modelId === 'DEEPSEEK_V4_FLASH')?.displayName
-    || p6gCandidates.find(item => item.available)?.displayName
-    || '等待可用模型';
+    : (pendingNewConversationModelId !== undefined ? pendingNewConversationModelId : p6gGlobalDefault?.modelId ?? null));
+  const manualCandidate = desktopComposerModelCandidates(modelServiceSettings, storedP6gCandidates, true).find(item => item.modelId === manualModelId);
+  const automaticCandidate = autoCandidate(modelServiceSettings, {text: composerDraft || '', mimeTypes: conversationAutoMimeTypes(conversation, composerAttachments), webSearchEnabled: conversationPreferences?.webSearchOverride ?? productSettings.webSearchEnabled});
+  const automaticModelLabel = automaticCandidate ? (relayCoreModel(automaticCandidate.id) ? `${relayCoreUiModelName(relayCoreModel(automaticCandidate.id))} · RC` : automaticCandidate.displayName) : '等待可用模型';
   // The composer has enough horizontal room on Desktop to show the catalog name
   // verbatim. Keep compactModelName for dense transcript metadata only.
-  const p6gLabel = manualModelId ? (manualCandidate?.displayName || manualModelId) : automaticModelLabel;
-  const dailyCandidates = p6gCandidates.filter(item => item.available && (item.tiers || []).some(tier => ['FAST', 'BALANCED'].includes(tier)));
-  const deepCandidates = p6gCandidates.filter(item => item.available && (item.tiers || []).some(tier => ['DEEP', 'APEX_REVIEW'].includes(tier)));
-  const pickerTier = p6gSelection?.pickerTier === 'DEEP' ? 'DEEP' : p6gSelection?.pickerTier === 'DAILY' ? 'DAILY' : null;
+  const p6gLabel = manualModelId ? (relayCoreModel(manualModelId) ? relayCorePickerName(relayCoreModel(manualModelId)) : manualCandidate?.displayName || manualModelId) : automaticModelLabel;
+  const relayCandidates = p6gCandidates.filter(item => item.available && relayCoreModel(item.modelId));
+  const dailyCandidates = p6gCandidates.filter(item => item.available && !relayCoreModel(item.modelId) && (item.tiers || []).some(tier => ['FAST', 'BALANCED'].includes(tier)));
+  const deepCandidates = p6gCandidates.filter(item => item.available && !relayCoreModel(item.modelId) && (item.tiers || []).some(tier => ['DEEP', 'APEX_REVIEW'].includes(tier)));
+  const pickerTier = ['DAILY', 'DEEP', 'RELAYCORE'].includes(p6gSelection?.pickerTier) ? p6gSelection.pickerTier : null;
   const tierCandidates = pickerTier === 'DEEP' ? deepCandidates : dailyCandidates;
   const dailySelected = Boolean(manualModelId && dailyCandidates.some(item => item.modelId === manualModelId));
   const deepSelected = Boolean(manualModelId && deepCandidates.some(item => item.modelId === manualModelId));
   const p6gRoot = `${composerModelSheetSection('自动选择')}${renderComposerModelSheetCard({
     action: 'select-p6g-auto',
     label: '自动',
-    detail: { text: `Auto · ${automaticModelLabel}` },
+    detail: { text: `Auto · ${automaticModelLabel}${relayCoreNeedsCompanion(automaticCandidate?.id, effectiveWebSearch, visibleAttachments.length > 0) ? ' · Luna · OpenRouter 检索' : ''}` },
     selected: !manualModelId,
   })}${composerModelSheetSection('按任务选择')}${renderComposerModelSheetCard({
     action: 'select-p6g-tier',
@@ -909,27 +959,47 @@ export function renderChatFirstShell({
     selected: deepSelected,
     showNext: !deepSelected,
     disabled: !deepCandidates.length,
-  })}`;
-  const p6gTier = `${composerModelSheetSection('选择具体模型')}${tierCandidates.map(item => renderComposerModelSheetCard({
+  })}${relayCandidates.length ? renderComposerModelSheetCard({
+    action: 'select-p6g-tier',
+    attributes: 'data-tier="RELAYCORE"',
+    label: 'RelayCore',
+    brand: 'relaycore',
+    detail: { text: '日常与深度模型' },
+    selected: Boolean(manualModelId && relayCoreModel(manualModelId)),
+    showNext: !relayCoreModel(manualModelId),
+    disabled: !relayCandidates.length,
+  }) : ''}`;
+  const renderModelCandidates = candidates => candidates.map(item => renderComposerModelSheetCard({
     action: 'select-p6g-model',
+    brand: composerModelBrand(item.modelId, item.providerId),
     attributes: `data-model-id="${escapeHtml(item.modelId)}"`,
-    label: item.displayName,
+    label: relayCoreModel(item.modelId) ? relayCorePickerName(relayCoreModel(item.modelId)) : item.displayName,
     detail: composerModelRuntimeDetail(item, effectiveWebSearch, modelPickerNow),
     selected: item.modelId === manualModelId,
-  })).join('')}`;
+  })).join('');
+  const p6gTier = pickerTier === 'RELAYCORE'
+    ? ['DAILY', 'DEEP'].map(tier => `${composerModelSheetSection(tier === 'DAILY' ? '日常' : '深度')}${renderModelCandidates(relayCandidates.filter(item => relayCoreModel(item.modelId).tier === tier))}`).join('')
+    : `${composerModelSheetSection('选择具体模型')}${renderModelCandidates(tierCandidates)}`;
   const p6gModelSheet = renderComposerModelSheetFrame({
-    title: pickerTier ? (pickerTier === 'DEEP' ? '深度' : '日常') : '选择模型',
+    title: pickerTier ? ({ DAILY: '日常', DEEP: '深度', RELAYCORE: 'RelayCore' })[pickerTier] : '选择模型',
     root: !pickerTier,
     body: pickerTier ? p6gTier : p6gRoot,
   });
   const temporaryModelId = temporaryConversation?.modelOverrideId || null;
   const temporaryCandidate = p6gCandidates.find(item => item.modelId === temporaryModelId);
-  const temporaryModelLabel = temporaryModelId ? (temporaryCandidate?.displayName || temporaryModelId) : '自动';
+  const temporaryModelLabel = temporaryModelId ? (relayCoreModel(temporaryModelId) ? relayCorePickerName(relayCoreModel(temporaryModelId)) : temporaryCandidate?.displayName || temporaryModelId) : '自动';
+  const relayComposerMark = relayCoreModel(manualModelId || automaticCandidate?.id) ? '<sup class="composer-provider-mark" aria-hidden="true">RC</sup>' : '';
+  const relayTemporaryMark = relayCoreModel(temporaryModelId) ? '<sup class="composer-provider-mark" aria-hidden="true">RC</sup>' : '';
+  const temporaryModelCandidates = p6gCandidates.filter(item => item.available).map(item => {
+    const relay = relayCoreModel(item.modelId);
+    const detail = relay ? { text: '本地恢复标识' } : null;
+    return renderComposerModelSheetCard({ brand: composerModelBrand(item.modelId, item.providerId), action: 'select-temporary-model', attributes: `data-model-id="${escapeHtml(item.modelId)}"`, label: relay ? relayCorePickerName(relay) : item.displayName, detail, selected: item.modelId === temporaryModelId });
+  }).join('');
   const temporaryModelSheet = renderComposerModelSheetFrame({
     title: '临时模型标识',
     closeAction: 'close-temporary-model-picker',
     ariaLabel: '选择临时模型标识',
-    body: `${composerModelSheetSection('仅用于本机恢复标识')}${renderComposerModelSheetCard({ action: 'select-temporary-auto', label: '自动', selected: !temporaryModelId })}${p6gCandidates.filter(item => item.available).map(item => renderComposerModelSheetCard({ action: 'select-temporary-model', attributes: `data-model-id="${escapeHtml(item.modelId)}"`, label: item.displayName, selected: item.modelId === temporaryModelId })).join('')}`,
+    body: `${composerModelSheetSection('仅用于本机恢复标识')}${renderComposerModelSheetCard({ action: 'select-temporary-auto', label: '自动', selected: !temporaryModelId })}${temporaryModelCandidates}`,
   });
   // The retained sidebar is reinserted unchanged by the app owner. Do not
   // still sort and serialize every historical conversation merely to discard
@@ -944,15 +1014,15 @@ export function renderChatFirstShell({
     const localPinned = localRows.filter(item => item.pinned);
     const localRecent = localRows.filter(item => !item.pinned);
     const renderedLocalRows = localRows.length
-      ? `${localPinned.length ? `<div class="chat-history-group" role="group" aria-label="置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(localPinned, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null })}</div>` : ''}${localRecent.length ? `<div class="chat-history-group" role="group" aria-label="最近会话"><p class="chat-history-label">最近</p>${conversationRows(localRecent, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null })}</div>` : ''}`
-      : conversationRows([], selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null });
+      ? `${localPinned.length ? `<div class="chat-history-group" role="group" aria-label="置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(localPinned, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null, inlineRename })}</div>` : ''}${localRecent.length ? `<div class="chat-history-group" role="group" aria-label="最近会话"><p class="chat-history-label">最近</p>${conversationRows(localRecent, selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null, inlineRename })}</div>` : ''}`
+      : conversationRows([], selectedConversationId, { favoriteIds: favoriteConversationIds, unreadIds: visibleUnreadIds, manualUnreadAtMs: visibleManualUnreadAtMs, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, syncedConversationKeys, localWorkspaceId: data?.summary?.id || null, inlineRename });
     if (sidebarConversationList !== 'cloud') return renderedLocalRows;
     const cloudRows = activeCloudConversations(cloudConversations);
     if (!cloudRows.length) return '<div class="chat-cloud-empty"><p>尚未读取云端会话。</p></div>';
     const cloudFavorites = new Set(cloudRows.filter(item => item.favorite).map(item => item.id));
     const cloudPinned = cloudRows.filter(item => item.pinned);
     const cloudRecent = cloudRows.filter(item => !item.pinned);
-    return `<div class="chat-cloud-list" role="group" aria-label="云端会话">${cloudPinned.length ? `<div class="chat-history-group" role="group" aria-label="云端置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(cloudPinned, selectedConversationId, { favoriteIds: cloudFavorites, batchEditing, batchSelectedKeys: batchSelectedConversationKeys })}</div>` : ''}${cloudRecent.length ? `<div class="chat-history-group" role="group" aria-label="云端最近会话"><p class="chat-history-label">最近</p>${conversationRows(cloudRecent, selectedConversationId, { favoriteIds: cloudFavorites, batchEditing, batchSelectedKeys: batchSelectedConversationKeys })}</div>` : ''}</div>`;
+    return `<div class="chat-cloud-list" role="group" aria-label="云端会话">${cloudPinned.length ? `<div class="chat-history-group" role="group" aria-label="云端置顶会话"><p class="chat-history-label">置顶</p>${conversationRows(cloudPinned, selectedConversationId, { favoriteIds: cloudFavorites, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, inlineRename })}</div>` : ''}${cloudRecent.length ? `<div class="chat-history-group" role="group" aria-label="云端最近会话"><p class="chat-history-label">最近</p>${conversationRows(cloudRecent, selectedConversationId, { favoriteIds: cloudFavorites, batchEditing, batchSelectedKeys: batchSelectedConversationKeys, inlineRename })}</div>` : ''}</div>`;
   })();
   const batchCandidates = sidebarConversationList === 'cloud'
     ? cloudConversations.filter(item => !item.archived && !item.deleted)
@@ -962,7 +1032,7 @@ export function renderChatFirstShell({
   const allBatchSelected = batchCandidateKeys.length > 0 && batchSelectedCount === batchCandidateKeys.length;
   // Batch actions stay in the fixed footer, like Android's selection strip.
   // Keeping them after the scrollable history made them disappear below long lists.
-  const sidebarBatchControls = activeWorkMode || !batchEditing ? '' : `<div class="chat-sidebar-batch-controls" aria-label="批量编辑对话"><button data-action="toggle-batch-select-all">${icon(icons.selectAll, allBatchSelected ? '取消全选' : '全选')}<span>${allBatchSelected ? '取消全选' : '全选'}</span></button><button class="danger" data-action="request-batch-conversation-delete" ${batchSelectedCount ? '' : 'disabled'}>${icon(icons.trash, '删除')}<span>删除 ${batchSelectedCount}</span></button><button class="done" data-action="toggle-conversation-batch-edit">${icon(icons.check, '完成')}<span>完成</span></button></div>`;
+  const sidebarBatchControls = activeWorkMode || !batchEditing ? '' : `<div class="chat-sidebar-batch-controls" aria-label="批量编辑对话"><button data-action="toggle-batch-select-all">${icon(icons.selectAll, allBatchSelected ? '取消全选' : '全选')}<span>${allBatchSelected ? '取消全选' : '全选'}</span></button><button class="danger" data-action="request-batch-conversation-delete" ${batchSelectedCount ? '' : 'disabled'}>${icon(sidebarConversationList === 'cloud' ? icons.cloudOff : icons.trash, sidebarConversationList === 'cloud' ? '取消同步' : '删除')}<span>${sidebarConversationList === 'cloud' ? '取消同步' : '删除'} ${batchSelectedCount}</span></button><button class="done" data-action="toggle-conversation-batch-edit">${icon(icons.check, '完成')}<span>完成</span></button></div>`;
   const sidebarListTabs = `<div class="chat-sidebar-list-selector"><div class="chat-sidebar-list-tabs" role="tablist" aria-label="会话来源"><button data-action="show-recent-conversation-list" role="tab" aria-label="本地会话" aria-selected="${sidebarConversationList !== 'cloud'}" class="${sidebarConversationList !== 'cloud' ? 'selected' : ''}">本地</button><button data-action="show-cloud-conversation-list" role="tab" aria-label="云端会话" aria-selected="${sidebarConversationList === 'cloud'}" class="${sidebarConversationList === 'cloud' ? 'selected' : ''}">云端</button></div><div class="chat-sidebar-list-utilities"><button class="chat-sidebar-list-utility ${batchEditing ? 'selected' : ''}" data-action="toggle-conversation-batch-edit" aria-label="${batchEditing ? '退出批量编辑' : '批量编辑对话'}" title="${batchEditing ? '退出批量编辑' : '批量编辑对话'}" aria-pressed="${batchEditing}" ${batchCandidates.length ? '' : 'disabled'}>${icon(icons.listChecks, '批量编辑对话')}</button><button class="chat-sidebar-list-utility chat-sidebar-cloud-read" data-action="load-account-cloud-documents" aria-label="读取云端列表" title="读取云端列表">${icon(icons.cloudDownloadSolid, '读取云端列表')}</button></div></div>`;
   const composer = `
     <section class="chat-composer-wrap" aria-label="消息输入">
@@ -973,7 +1043,7 @@ export function renderChatFirstShell({
             <span class="composer-add-anchor"><button class="chat-composer-icon chat-composer-add" data-action="toggle-composer-add" data-overlay-trigger aria-label="添加到草稿" title="添加到草稿" aria-expanded="${composerAddOpen}">${icon(icons.plus, '添加到草稿')}</button>${composerAddOpen ? renderComposerAddSheetFrame({ page: composerAddPage, body: composerAddPage === 'tone' && !temporaryConversation ? composerTonePicker : composerAddRoot }) : ''}</span>
             <textarea id="chat-composer" rows="1" maxlength="12000" placeholder="回复 南枫AI" aria-label="输入内容" aria-description="可直接粘贴或拖入图片、PDF、视频和文件">${escapeHtml(composerDraft)}</textarea>
             <div class="chat-composer-primary-actions">
-              ${temporaryConversation ? `<span class="p6g-model-anchor"><button class="chat-composer-icon p6g-model-trigger" data-action="toggle-temporary-model" data-overlay-trigger aria-label="选择模型：${escapeHtml(temporaryModelLabel)}" title="选择模型 · ${escapeHtml(temporaryModelLabel)}" aria-expanded="${temporaryModelOpen}"><span>${escapeHtml(temporaryModelLabel)}</span></button>${temporaryModelOpen ? temporaryModelSheet : ''}</span>` : `<span class="p6g-model-anchor"><button class="chat-composer-icon p6g-model-trigger" data-action="toggle-p6g-model-picker" data-overlay-trigger aria-label="选择模型：${escapeHtml(p6gLabel)}" title="选择模型 · ${escapeHtml(p6gLabel)}" aria-expanded="${p6gModelPickerOpen}" ${data && p6gCandidates.length ? '' : 'disabled'}><span>${escapeHtml(p6gLabel)}</span></button>${p6gModelPickerOpen ? p6gModelSheet : ''}</span>`}
+              ${temporaryConversation ? `<span class="p6g-model-anchor"><button ${relayTemporaryMark ? 'aria-description="RelayCore"' : ''} class="chat-composer-icon p6g-model-trigger" data-action="toggle-temporary-model" data-overlay-trigger aria-label="选择模型：${escapeHtml(temporaryModelLabel)}" title="选择模型 · ${escapeHtml(temporaryModelLabel)}" aria-expanded="${temporaryModelOpen}"><span class="composer-model-caption"><span>${escapeHtml(temporaryModelLabel)}</span>${relayTemporaryMark}</span></button>${temporaryModelOpen ? temporaryModelSheet : ''}</span>` : `<span class="p6g-model-anchor"><button ${relayComposerMark ? 'aria-description="RelayCore"' : ''} class="chat-composer-icon p6g-model-trigger" data-action="toggle-p6g-model-picker" data-overlay-trigger aria-label="选择模型：${escapeHtml(p6gLabel)}" title="选择模型 · ${escapeHtml(p6gLabel)}" aria-expanded="${p6gModelPickerOpen}" ${data && p6gCandidates.length ? '' : 'disabled'}><span class="composer-model-caption"><span>${escapeHtml(p6gLabel)}</span>${relayComposerMark}</span></button>${p6gModelPickerOpen ? p6gModelSheet : ''}</span>`}
               ${activeAssistantRun
                 ? `<button class="chat-send chat-composer-icon chat-send-stop" data-action="${composerStopAction}" ${composerStopAttributes} aria-label="停止生成" title="停止生成"><span class="chat-send-stop-mark" aria-hidden="true"></span></button>`
                 : `<button class="chat-send chat-composer-icon" data-action="save-local-message" aria-label="发送消息" title="发送消息" ${path.enabled && (String(composerDraft || '').trim() || visibleAttachments.length) ? '' : 'disabled'}>${icon(icons.send, '发送消息')}</button>`}
@@ -997,7 +1067,7 @@ export function renderChatFirstShell({
   const findBar = conversationFindOpen && conversation ? `<section class="conversation-find" aria-label="在当前对话中查找"><label>${icon(icons.search, '查找')}<input id="conversation-find-input" type="search" placeholder="在当前对话中查找" value="${escapeHtml(conversationFindQuery)}"></label><span>${conversationFindMatches.length ? `${conversationFindIndex + 1} / ${conversationFindMatches.length}` : '0 / 0'}</span><button data-action="conversation-find-previous" ${conversationFindMatches.length ? '' : 'disabled'} aria-label="上一个匹配">${icon(icons.chevronLeft, '上一个匹配')}</button><button data-action="conversation-find-next" ${conversationFindMatches.length ? '' : 'disabled'} aria-label="下一个匹配">${icon(icons.chevronRight, '下一个匹配')}</button><button data-action="close-conversation-find" aria-label="关闭查找">${icon(icons.close, '关闭查找')}</button></section>` : '';
   const transcriptSurface = preserveTranscript
     ? '<div data-preserved-transcript-slot aria-hidden="true"></div>'
-    : `<div class="chat-scroll" data-scroll-owner="message-list" data-conversation-id="${escapeHtml(transcript?.id || '')}" ${temporaryConversation ? 'data-temporary-transcript="true"' : ''} tabindex="0">${messageList(transcript, { imageThumbnails, videoThumbnails, attachmentPreviews: searchAttachmentPreviews, assistantImageSelections, interactive: !temporaryConversation && !lifecycleReadOnly, ariaLabel: temporaryConversation ? '临时聊天消息' : '当前会话消息', findQuery: temporaryConversation ? '' : conversationFindQuery, activeFindMessageId: activeFindMatch?.messageId || null, contextSelectionRecords: temporaryConversation ? [] : contextSelectionRecords, productSettings, settingsCapabilities, reminders })}</div>`;
+    : `<div class="chat-scroll" data-scroll-owner="message-list" data-conversation-id="${escapeHtml(transcript?.id || '')}" ${temporaryConversation ? 'data-temporary-transcript="true"' : ''} tabindex="0">${messageList(transcript, { imageThumbnails, videoThumbnails, attachmentPreviews: searchAttachmentPreviews, assistantImageSelections, interactive: !temporaryConversation && !lifecycleReadOnly, ariaLabel: temporaryConversation ? '临时聊天消息' : '当前会话消息', findQuery: temporaryConversation ? '' : conversationFindQuery, activeFindMessageId: activeFindMatch?.messageId || null, contextSelectionRecords: temporaryConversation ? [] : contextSelectionRecords, productSettings: { ...productSettings, webSearchEnabled: effectiveWebSearch }, settingsCapabilities, reminders })}</div>`;
   const cloudOpeningStage = cloudConversationOpening
     ? `<section class="chat-cloud-opening" aria-live="polite" aria-label="正在打开云端对话"><i aria-hidden="true"></i><span>正在打开云端对话</span></section>`
     : '';
@@ -1012,10 +1082,10 @@ export function renderChatFirstShell({
   const header = `
       <header class="chat-main-header">
         <button class="chat-sidebar-toggle" data-action="toggle-chat-sidebar" aria-label="${sidebarOpen ? '关闭导航' : '打开导航'}" title="${sidebarOpen ? '关闭导航' : '打开导航'}" aria-expanded="${sidebarOpen}">${icon(icons.menu, '打开导航')}</button>
-        <div class="chat-title"><h1>${escapeHtml(title)}</h1></div>
+        <div class="chat-title">${editingHeaderTitle ? `<input class="chat-inline-title-input" data-inline-conversation-rename aria-label="编辑会话标题" maxlength="120" value="${escapeHtml(inlineRename.draft)}">` : `<h1${conversation && !lifecycleReadOnly ? ' title="双击重命名"' : ''}>${escapeHtml(title)}</h1>`}</div>
         ${settingsConversationReturn ? `<button class="chat-search-return" data-action="return-to-settings-conversation-list" aria-label="返回${escapeHtml(settingsConversationReturn.label)}">${icon(icons.chevronLeft, `返回${settingsConversationReturn.label}`)}<span>${escapeHtml(settingsConversationReturn.label)}</span></button>` : ''}
         ${globalThis.__nanfengDesktopSearchState?.searchReturnActive ? `<button class="chat-search-return" data-action="return-to-search" aria-label="返回搜索">${icon(icons.chevronLeft, '返回搜索')}<span>搜索</span></button>` : ''}
-        ${!activeWorkMode && !hasConversationContent ? `<div class="chat-mode-switch" aria-label="产品模式">
+        ${WORKSPACES_VISIBLE && !activeWorkMode && !hasConversationContent ? `<div class="chat-mode-switch" aria-label="产品模式">
           <button class="${activeWorkMode ? '' : 'selected'}" data-action="show-chat" aria-pressed="${!activeWorkMode}">对话</button>
           <button class="${activeWorkMode ? 'selected' : ''}" data-action="show-work" aria-pressed="${activeWorkMode}">工作</button>
         </div>` : ''}
@@ -1071,6 +1141,7 @@ export function renderChatFirstShell({
     modelProviderId,
     modelServiceDraft,
     modelCredentialDraft,
+    modelCredentialEdited,
     modelCredentialVisible,
     modelSettingsSaving,
     modelSettingsTesting,

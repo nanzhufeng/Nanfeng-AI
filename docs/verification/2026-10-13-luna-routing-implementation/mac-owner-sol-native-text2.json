@@ -1,0 +1,22 @@
+{
+  "error": "Unknown { code: \"INCOMPLETE_RESPONSE\" }",
+  "files": "",
+  "ledgerCalls": [
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "gpt-6.1-sol",
+      "source": null
+    }
+  ],
+  "physical": [],
+  "planned": 0,
+  "preset": "RELAYCORE_GPT_6_1_SOL",
+  "reopenedCheckpoints": 0,
+  "reopenedModel": null,
+  "reopenedState": "UNKNOWN",
+  "requested": "gpt-6.1-sol",
+  "status": "UNKNOWN"
+}

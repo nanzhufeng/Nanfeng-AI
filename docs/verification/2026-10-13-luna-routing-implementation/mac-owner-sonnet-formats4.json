@@ -1,0 +1,77 @@
+{
+  "actualModel": "claude-sonnet-5-5",
+  "covered": 2,
+  "files": "public-13.pdf,public-14.zip",
+  "ledgerCalls": [
+    {
+      "actual": "openai/gpt-6-luna",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 10611,
+      "model": "openai/gpt-6-luna",
+      "source": "PROVIDER_RESPONSE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "openai/gpt-6-luna",
+      "source": null
+    },
+    {
+      "actual": "claude-sonnet-5-5",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 1319,
+      "model": "claude-sonnet-5-5",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "claude-sonnet-5-5",
+      "source": null
+    }
+  ],
+  "physical": [
+    {
+      "input": 8850,
+      "nativeSources": [
+        [
+          "Announcing Rust 1.86.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/04/03/Rust-1.86.0/?utm_source=openai"
+        ],
+        [
+          "Announcing Rust 1.85.0 and Rust 2024 | Rust Blog",
+          "https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html?utm_source=openai"
+        ]
+      ],
+      "output": 284,
+      "reportedMicros": 10611,
+      "requested": "openai/gpt-6-luna",
+      "returned": "openai/gpt-6-luna"
+    }
+  ],
+  "planned": 2,
+  "preset": "RELAYCORE_SONNET_5_5",
+  "publicAnswer": "两项发布日期均已核实：\n\n- Rust 1.85.0：2025 年 2 月 20 日发布。来源：https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html\n- Rust 1.86.0：2025 年 4 月 3 日发布。来源：https://blog.rust-lang.org/2025/04/03/Rust-1.86.0/\n\n两项结论依据本轮提供的检索结果，两个日期与官方博客的 URL 路径一致。我这边没有另外发起新的联网查询。\n\n附件里 public-13.pdf 和 public-tail.md 只有检索关键词，没有数字或其他主张可核验。public-14.zip 没有可读内容，无法分析。\n\n来源：- [Announcing Rust 1.85.0 and Rust 2024 | Rust Blog](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)\n- [Announcing Rust 1.86.0 | Rust Blog](https://blog.rust-lang.org/2025/04/03/Rust-1.86.0/)",
+  "reopenedCheckpoints": 2,
+  "reopenedModel": "claude-sonnet-5-5",
+  "reopenedState": "COMPLETED",
+  "requested": "claude-sonnet-5-5",
+  "sources": [
+    [
+      "Announcing Rust 1.86.0 | Rust Blog",
+      "https://blog.rust-lang.org/2025/04/03/Rust-1.86.0/"
+    ],
+    [
+      "Announcing Rust 1.85.0 and Rust 2024 | Rust Blog",
+      "https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

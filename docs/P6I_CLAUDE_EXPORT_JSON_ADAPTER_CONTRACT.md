@@ -1,5 +1,10 @@
 # 南枫 AI P6-I Claude export JSON Adapter 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本机数据与导入导出表面 ](C14_LOCAL_DATA_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P6-I Claude export JSON Adapter 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-14  
 状态：实施中；本文件是 P6-I 的唯一合同，不复用或重新打开 P6-H。
 
@@ -36,7 +41,7 @@ Desktop 原生文件选择器 / Android OpenDocument
 - Android 仅 `ActivityResultContracts.OpenDocument` 的 JSON MIME；Desktop 仅 Tauri native dialog。Settings Center → 数据 → 数据导入保持 chat-first 的独立入口，不在主对话或 Work 中新增复杂面板。
 - Android Schema 27→28、Desktop SQLite `user_version` 13→14 仅新增 P6-I 私有 task/item/message/provenance/receipt 表与索引；25→26 已由既有自动标题使用，不能重占。不改写 P6-H、Conversation、TEMP、P6-G 或已完成 adapter 表，禁止 destructive migration/wipe。
 - 自动合同必须覆盖 UTF-8/BOM、大小、深度、重复 key、无效 JSON、顶层/字段类型、ISO 时间、树/顺序、未知字段、非文本内容、部分失败、private-copy 排除、确认/跳过/取消/中断重试、幂等/冲突、rollback、迁移、重启与 provenance 不进入 Invocation/route/egress。
-- 最终退出必须分别在 Desktop 最新隔离 `.app` 和 Android `emulator-5554` 完成：系统 picker → private copy → Alpha 确认/Skip 跳过 → 完整关闭/force-stop 重开读回 → Settings 导出 → 严格回读与 SHA-256。Android 另需正式签名 `install -r` 与实际 `base.apk` hash。测试/构建/解析成功均不能替代该门。
+- 最终退出必须分别在 Desktop 最新隔离 `.app` 和 Android 当次隔离模拟器 完成：系统 picker → private copy → Alpha 确认/Skip 跳过 → 完整关闭/force-stop 重开读回 → Settings 导出 → 严格回读与 SHA-256。Android 另需正式签名 `install -r` 与实际 `base.apk` hash。测试/构建/解析成功均不能替代该门。
 
 ## 明确不在本阶段
 

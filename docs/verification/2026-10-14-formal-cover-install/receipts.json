@@ -1,0 +1,118 @@
+{
+  "verifiedAt": "2026-10-14 08:33:13 +0800",
+  "head": "dafc64d9b33661dc4f792fd1434ff1ddca9cdfa3",
+  "scope": "WORKTREE",
+  "protectedSourceFiles": 1144,
+  "sourceDrift": false,
+  "android": {
+    "installed": true,
+    "package": "com.nanzhufeng.ai",
+    "versionCode": 93,
+    "versionName": "1.0.29",
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "sha256": "ed8757d1c32fbed1cd7466308b20c858618da9d307ab7251fd04061e78912ba0",
+    "exactCandidateBytes": true,
+    "dataMetadataPreserved": true,
+    "before": {
+      "versionCode": 93,
+      "versionName": "1.0.29",
+      "firstInstallTime": "2026-08-20 15:15:31",
+      "lastUpdateTime": "2026-10-13 18:53:03",
+      "dataDir": "/data/user/0/com.nanzhufeng.ai",
+      "uid": 10611,
+      "debuggable": false,
+      "ceDataInode": 1459104,
+      "deDataInode": 1433378
+    },
+    "after": {
+      "versionCode": 93,
+      "versionName": "1.0.29",
+      "firstInstallTime": "2026-08-20 15:15:31",
+      "lastUpdateTime": "2026-10-14 08:32:00",
+      "dataDir": "/data/user/0/com.nanzhufeng.ai",
+      "uid": 10611,
+      "debuggable": false,
+      "ceDataInode": 1459104,
+      "deDataInode": 1433378
+    },
+    "remoteTempRemoved": true,
+    "launched": false,
+    "completedAt": "2026-10-14 08:32:03 +0800"
+  },
+  "mac": {
+    "installed": true,
+    "app": "/Applications/南枫 AI Desktop.app",
+    "backup": "/Applications/.Nanfeng-AI-before-cover-20261014-6d01a77a3b2e.app",
+    "version": "1.0.29",
+    "bundleId": "com.nanzhufeng.ai.desktop",
+    "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+    "exactCandidateFiles": true,
+    "dataFiles": 1595,
+    "dataBytes": 6069511187,
+    "dataChanges": {
+      "added": 0,
+      "deleted": 0,
+      "changed": 0
+    },
+    "launched": false,
+    "completedAt": "2026-10-14 08:29:06 +0800"
+  },
+  "artifacts": {
+    "android": {
+      "apk": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/app/build/outputs/apk/release/南枫AI.apk",
+      "sha256": "ed8757d1c32fbed1cd7466308b20c858618da9d307ab7251fd04061e78912ba0",
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "versionCode": 93,
+      "versionName": "1.0.29",
+      "debuggable": false,
+      "bytes": 28688825
+    },
+    "mac": {
+      "app": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/desktop/src-tauri/target/release/bundle/macos/南枫 AI Desktop.app",
+      "dmg": "/Users/nanzhufeng/Documents/工具开发/Nanfeng_AI/desktop/src-tauri/target/release/bundle/dmg/Nanfeng-AI-macOS-1.0.29.dmg",
+      "version": "1.0.29",
+      "identifier": "com.nanzhufeng.ai.desktop",
+      "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+      "dmgSha256": "4b42c2f5a97a2e90c6b521d65030acff25746a4579d9dd93409f99fd13204b60",
+      "fileCount": 4,
+      "strictSignValid": true,
+      "dmgVerified": true
+    }
+  },
+  "tests": {
+    "androidJUnit": {
+      "suites": 321,
+      "tests": 1503,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 10,
+      "passed": 1493
+    },
+    "androidLintRelease": "PASS",
+    "androidAssembleRelease": "PASS",
+    "desktopNode": {
+      "tests": 563,
+      "passed": 551,
+      "failed": 0,
+      "skipped": 12
+    },
+    "desktopLint": "PASS",
+    "desktopTypecheck": "PASS",
+    "macReleaseBundle": "PASS",
+    "rust": {
+      "passed": 439,
+      "ignored": 34,
+      "failed": 0,
+      "rerunThisStage": false,
+      "source": "../2026-10-14-gemini-muse-risk-fix/receipts.json",
+      "bothChangedRustOwnersHashRechecked": true
+    }
+  },
+  "buildRecovery": {
+    "initialAndroidPackaging": "Java heap space / OutOfMemoryError",
+    "retry": "temporary -Xmx6144m and --max-workers=2",
+    "projectConfigModified": false
+  },
+  "paidProviderCalls": 0,
+  "launchedFormalApps": false
+}

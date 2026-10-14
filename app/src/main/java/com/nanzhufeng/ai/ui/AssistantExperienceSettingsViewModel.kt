@@ -31,6 +31,7 @@ class AssistantExperienceSettingsViewModel(
         val saved = runCatching { save.execute(next) }
         state = saved.fold(
             onSuccess = {
+                NanfengIslandFeedback.show("个性化设置已保存。")
                 if (it.historyLibraryEnabled != state.settings.historyLibraryEnabled) onAutoHistoryKnowledgeChanged(it.historyLibraryEnabled)
                 // Every successful personalization edit already updates its visible control.
                 // Do not obscure the page with a redundant success dialog; failures remain explicit.

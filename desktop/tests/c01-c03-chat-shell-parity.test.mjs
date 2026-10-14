@@ -46,10 +46,10 @@ const render = overrides => renderChatFirstShell({
 
 test('C01 empty conversation is a quiet canvas with the shared bottom Composer and no Hero copy', () => {
   const html = render();
+  assert.ok(!html.includes('class="chat-mode-switch"'));
 
   for (const token of [
     'class="chat-empty-canvas"',
-    'class="chat-mode-switch"',
     'aria-label="临时聊天"',
     'data-composer-dock="fixed"',
     'class="chat-composer-controls"',

@@ -1,5 +1,10 @@
 # 南枫 AI P2-K OpenRouter 推理传输与强制门禁合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 模型选择与Auto ](P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P2-K OpenRouter 推理传输与强制门禁合同
+<!-- contract-governance:end -->
+
 日期：2026-08-12  
 状态：已实现本地传输合同与 loopback/fake 验证代码；生产真实推理仍未授权，默认阻止
 
@@ -44,11 +49,11 @@ ConfirmAiRequest（逐次确认、价格版本提示）
 
 - 新增 `P2KOpenRouterInferenceTransportContractsTest`：默认生产门禁、无 Attempt、无 Key load；127.0.0.1 真正 POST 的请求头、内存 Authorization、JSON 与响应投影；401/402/408/413/429/5xx、超时、取消、畸形响应、上下文溢出、重试与同一幂等 Key；不安全文本与缺少费用提示的预检阻止。
 - loopback stub 只绑定 `127.0.0.1`，不会访问 OpenRouter 官方推理端点；fixture 使用 `test-key-not-real`，不读取本机真实 Key。
-- 没有新增网络库。实现使用 Android/JDK 既有 `HttpsURLConnection`，无新增许可证、传递依赖、遥测或远程组件。替代方案是 OkHttp；当前不采用以避免增加供应链和日志拦截器边界，后续若为 HTTP/2、取消或可观测性确有证据需求，再单独评估精确版本、Apache-2.0 许可证、传递依赖和外发面。
+- 没有新增网络库。实现使用 Android/JDK 既有 `HttpsURLConnection`，无新增许可证、传递依赖、遥测或远程组件。P2-K当时评估的替代方案是 OkHttp；该独立owner在该阶段未采用，以避免增加供应链和日志拦截器边界，后续若为 HTTP/2、取消或可观测性确有证据需求，再单独评估精确版本、Apache-2.0 许可证、传递依赖和外发面。
 - 已执行证据：Android Studio JBR 21.0.10 下 `testDebugUnitTest` 56 项（含本类 4 项）通过，`lintDebug`、正式签名 Debug/Release 构建与 v2/v3 验签通过；API 35 模拟器同签名覆盖/冷启动只验证未授权状态，未访问官方推理端点。
 
 ## 5. 可见状态、验证等级与停止条件
 
-- 模型设置明确显示“传输准备就绪 · 真实服务尚未授权”。它不表示 Key 可用、真实模型可用、请求已发出、额度可用或真实服务成功。
+- P2-K隔离阶段的模型设置状态为“传输准备就绪 · 真实服务尚未授权”；它是该阶段证据，不是当前五平台连接设置的用户文案，现行表面见[设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)。它不表示 Key 可用、真实模型可用、请求已发出、额度可用或真实服务成功。
 - P2-K 的 API 35 只允许验证该未授权状态和门禁，不能点击或绕过以触发官方推理。
 - 真实推理必须由后续独立任务取得用户针对本机测试 Key、额度、非敏感资料和真实外发的明确授权后才能启用，并分别复验文本、图片、Token、费用与真机；本合同和 loopback 证据不能替代。

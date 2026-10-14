@@ -74,6 +74,25 @@ class P6FTranscriptPresentationContractsTest {
         assertEquals("Claude Opus 5", projected.metadata.modelSnapshotLabel)
     }
 
+    @Test fun `Relay footer uses RC for local and restored answers without rewriting route facts`() {
+        val node = message("relay-footer", MessageRole.ASSISTANT)
+        val local = AssistantResponseModelAttribution(
+            assistantMessageId = node.id, attemptId = NormalChatSendAttemptId("relay-footer-attempt"),
+            providerId = ProviderId.RELAYCORE_CLAUDE, receiverProviderId = ProviderId.RELAYCORE_CLAUDE,
+            modelId = "claude-sonnet-5-5", modelDisplayName = "Sonnet 5.5 · Kiro正价", recordedAt = Instant.EPOCH,
+        )
+        val presentation = ConversationTranscriptPresentation(MessagePresentationRenderer())
+        assertEquals("Sonnet 5.5 · RC", presentation.render(listOf(node), emptyList(), responseModelAttributions = mapOf(node.id to listOf(local))).single().metadata.modelSnapshotLabel)
+        assertEquals("Sonnet 5.5 · Kiro正价", local.modelDisplayName)
+        val restored = CloudResponseModelUsage(node.id, "gpt-6.1-sol", "GPT-6.1 Sol · Pro1")
+        assertEquals("6.1 Sol · RC", presentation.render(listOf(node), emptyList(), cloudResponseModelUsages = mapOf(node.id to listOf(restored))).single().metadata.modelSnapshotLabel)
+        assertEquals("GPT-6.1 Sol · Pro1", restored.modelDisplayName)
+        assertEquals("Gemini 3.1 · RC", assistantResponseFooterNameForUser("Gemini 3.1 Pro · Gemini"))
+        assertEquals("Gemini 3.8 Flash", assistantResponseFooterNameForUser("Gemini 3.8 Flash", ProviderId.OPENROUTER))
+        assertEquals("返回模型未验证 · RC", assistantResponseFooterNameForUser("返回模型未验证 · Kiro正价"))
+        assertEquals("Sonnet 5.5", assistantResponseFooterNameForUser("Sonnet 5.5 · Kiro正价", ProviderId.OPENROUTER))
+    }
+
     @Test fun `provider response amount is shown after the model without an estimate annotation`() {
         val node = message("provider-cost", MessageRole.ASSISTANT)
         val exact = AssistantResponseModelAttribution(

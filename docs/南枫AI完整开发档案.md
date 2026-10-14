@@ -1,139 +1,236 @@
 # 南枫 AI 完整开发档案
 
-> **复盘快照：2026-09-18，`HEAD=1580faf50874bf1833b6e581c6a75170a410c6e5`。** 本文依据当前跟踪文件、配置、测试、现行合同与全部本地可达 Git 历史整理；不修改业务代码、配置、schema 或测试。动态设备、服务与发布状态以 [当前交接](CURRENT_HANDOFF.md) 为准。
+> 复盘日期：2026-10-14。复盘时提交基线 `dafc64d9b33661dc4f792fd1434ff1ddca9cdfa3`，当时工作树含大量未提交实现，不能据该 HEAD 重建现有软件。该轮只整理文档、长期规则及流程工具，不改业务代码、应用配置、schema 或应用测试。后续[代码checkpoint](verification/2026-10-14-code-checkpoint/REPORT.md)与[增量经验审计](南枫AI开发经验增量审计.md)记录核心文件纳Git及最终回归；不安装、不新增收费验收，旧复盘数字保留执行日期。
+
+当前行为从[合同索引](contracts/CONTRACT_INDEX.md)和[合同治理](CONTRACT_GOVERNANCE_CURRENT.md)进入；模型规则从[统一架构](model-service/MODEL_SERVICE_ARCHITECTURE.md)进入。动态事实看[项目状态](PROJECT_STATUS.md)与[当前交接](CURRENT_HANDOFF.md)。本文保存带日期的复盘，不建立第二套行为权威。
 
 ## 1. 复盘方法、范围与证据等级
 
-| 层级 | 本次核查 | 结论边界 |
-| --- | --- | --- |
-| 全库身份与结构 | 1,401 个跟踪文件、68,632,395 bytes、173 条可达提交；JSON/XML/Node/Python/Shell 做适用结构检查 | 证明当前跟踪文件身份与部分格式，不是逐行形式证明或二进制视觉验收 |
-| 关键语义 | Android 组合根／Room、Desktop ESM→Tauri→Rust、协议 golden、Supabase 迁移、Go 网关、CI 与交付脚本 | 证明所列调用链与配置；不代表线上环境已部署 |
-| 自动回归 | Android、Desktop Node/Rust、协议、Supabase 静态测试、Go 测试 | 证明合成／本机边界；不代替主设备、真实 Provider 或 Google 双端同步 |
-| 运行外事实 | 不读取私有数据库、凭据、用户正文、忽略构建物或未跟踪预览图 | 未被读取的内容不作推断 |
+| 检查层 | 当前覆盖 | 结论边界 |
+|---|---|---|
+| 全文件清单 | 1,410 跟踪文件；补充 673 个非忽略未跟踪文件，共 2,083 个；逐文件大小、类型、SHA-256、目录归属 | 排除 ignored 私有配置、构建物、正式数据库；101 个二进制只核身份，未逐图／逐包验收 |
+| 全库结构 | 对全部清单文件做适用 JSON/XML/Python/Node/Shell 语法及定位标记扫描；276 个 Markdown 做标题／引用目录 | 不编译 Kotlin／Rust，不执行 SQL；不是所有代码逐行语义证明 |
+| Git 历史 | 全部本地可达 refs 的 182 条提交，日期 2026-08-20 至 2026-09-19；逐提交路径和增删统计，代表性记录定向核对 | 未 fetch；不等于远端全部历史。提交日期／主题不证明开发工时、作者动机或真实部署 |
+| 语义核对 | 双端组合根、数据库／迁移、模型目录与 Adapter、附件计划／执行／检查点、费用、同步、网关、CI、签名构建；测试与合同交叉定位 | 源码存在、入口接线、行为测试与真实运行分别表述；不宣称全模块原生验收 |
+| 合同与近期证据 | 114 合同／40 领域的登记、分类、owner 与前轮全合同裁决；本轮复核关键源文件及报告 | 分类为 CURRENT 24、SCOPED 78、EXPERIMENTAL 8、HISTORICAL 4；122 个 owner 引用只作导航，不证明功能通过 |
 
-本次清单与结构审计位于 `release-evidence/2026-09-18-project-retrospective/`：结构审计记录 7 个历史 `docs/evidence/` XML ParseError；它们是既有取证文本，不属于本次业务源码，未被改写掩盖。
+本轮证据：[复盘报告](verification/2026-10-14-project-retrospective/REPORT.md)、[检查摘要](verification/2026-10-14-project-retrospective/summary.json)。清单和全历史结构记录在报告所列私有目录，不复制用户正文或 Provider 原始回执。7 个既有 `docs/evidence/p6f2d-android-*.xml` 格式失败保留原件；它们是历史 UI dump，不是本次新源码错误。
 
 ## 2. 项目目标与产品边界
 
-南枫 AI 是 Android 与 macOS 的本地优先个人 AI 工作台：管理对话、附件、知识、记忆、项目、导入记录与本机备份；在用户发送时调用已披露 Provider，并可按 Google 身份同步选定对话。项目不把 Android Room 当成 Desktop 数据文件，也不把 Desktop 包当 Windows 交付物。[根 README](../README.md)、[产品简介](product-brief.md)、[P6 Desktop ADR](ADR-002-P6A_DESKTOP_AND_EXCHANGE.md) 是该结论的来源。
+### 项目身份
 
-- 选择、编辑、预览和本地索引不外发；普通发送才授权该次材料给当前 Provider，实际模型／费用／用量／失败须保留归因。[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)、[Android 执行器](../app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt)。
-- 工作区与普通对话复用交互组件，但 CHAT 与 WORK 是独立数据库、独立同步身份和独立恢复范围；跨区只允许用户选中的文本引用。[C-15 合同](C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md)、[区域 owner](../app/src/main/java/com/nanzhufeng/ai/data/local/ConversationAreaDatabaseOwner.kt)、[Desktop area](../desktop/src-tauri/src/desktop_data_area.rs)。
-- 账号同步当前新写入为 Google 登录、HTTPS、账号隔离与 direct 格式；历史加密 envelope 仅作为兼容读取／源设备迁移材料，不得成为日常同步门槛。[P7-F 合同](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)、[最新迁移](../supabase/migrations/202609180007_p8_account_isolated_sync.sql)。
+南枫 AI 当前是 Android 与 macOS 的本地优先多模型 AI 工作台，管理对话、附件、项目、知识、记忆、本机备份和选定对话的账号同步；在用户发送时调用准确模型部署。依据：[README](../README.md)、[组合根](../app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt)、[Desktop 入口](../desktop/src-tauri/src/lib.rs)、[ADR-002](ADR-002-P6A_DESKTOP_AND_EXCHANGE.md)。
+
+[产品简报](product-brief.md)的“首个捕获闭环、暂不做账号／Desktop”等是 2026-08-15 的 V1 范围，不是当前功能禁令。Compare／Agent 的早期优先级也不能证明当前普通发送已启用该实验能力。[模型架构](model-service/MODEL_SERVICE_ARCHITECTURE.md)明确区分生产、独立任务与实验模块。
+
+### 数据安全与产品边界
+
+- CHAT 与 WORK 共用部分交互，持久数据、同步与恢复物理隔离；`projectId=null` 不改变 WORK 身份。TEMP 的模型标识用于本地恢复，不触发 Provider。[C15](C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md)、[数据区 owner](../app/src/main/java/com/nanzhufeng/ai/data/local/ConversationAreaDatabaseOwner.kt)、[Desktop area](../desktop/src-tauri/src/desktop_data_area.rs)。
+- 本地选择／预览不授权外发；普通发送和检索协作绑定精确材料及接收方，原模型身份和未知结果不被静默替换。[运行时合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)、[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)。
+- Google 账号同步新写入为账号隔离的 direct 格式，经 HTTPS/RPC 传输；历史加密 envelope 保留兼容读取与源设备迁移。TLS、账号鉴权、hash 与端到端加密是不同保证。[最新 SQL](../supabase/migrations/202609180007_p8_account_isolated_sync.sql)、[P7F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)。
+- Windows 是独立待验交付目标；macOS 包、浏览器预览和当前 Tauri 源码不能代替 Windows 安装器。[Windows 合同](P6D_WINDOWS_NATIVE_DELIVERY_CONTRACT.md)。
 
 ## 3. 技术栈、配置与目录
 
-| 层 | 实际实现 | 主要配置／入口 |
-| --- | --- | --- |
-| Android | Kotlin、Compose/Material 3、Room、WorkManager、Credentials/Google ID、PDFBox Android；单模块 `:app` | [根 Gradle](../build.gradle.kts)、[app Gradle](../app/build.gradle.kts)、[Manifest](../app/src/main/AndroidManifest.xml) |
-| Android 数据 | `NanfengAiDatabase` 当前 Schema 69；CHAT／WORK 使用不同数据库文件，私有附件与后台任务按 area owner 路由 | [数据库](../app/src/main/java/com/nanzhufeng/ai/data/local/NanfengAiDatabase.kt)、[AppContainer](../app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt) |
-| Desktop | 原生 HTML/CSS/ESM + Tauri 2 + Rust 2021 + SQLite/rusqlite；不是 React/Vite 应用 | [package scripts](../desktop/package.json)、[Cargo](../desktop/src-tauri/Cargo.toml)、[Tauri 配置](../desktop/src-tauri/tauri.conf.json) |
-| 跨端协议 | JSON v1/v2 exchange、sync 语义 golden 与严格脚本验证；不直接复制平台数据库 | [protocol](../protocol)、[v1 合同](NFAI_EXCHANGE_V1_CONTRACT.md) |
-| 云端 | Supabase SQL migration/RPC/RLS、Google 账号；当前远端部署状态不在仓库内 | [migrations](../supabase/migrations)、[同步合同](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md) |
-| 附件网关 | 独立 Go 服务与 Docker；用于受控上传边界 | [gateway](../upload-gateway/main.go)、[Dockerfile](../upload-gateway/Dockerfile) |
+以下为仓库声明，未查询上游最新版本或价格。
 
-目录职责：`app/` 是 Android 源码、测试与 Room schema；`desktop/` 是 ESM 前端、Tauri/Rust、Node/Rust 测试与桌面构建；`protocol/` 是跨端格式与 golden；`supabase/` 是迁移和头像函数；`upload-gateway/` 是独立 Go 网关；`docs/` 保存现行合同、决策、交接与历史证据；`.agents/skills/` 保存重复开发流程。
+| 层 | 当前配置／实现 | 依据 |
+|---|---|---|
+| Android 构建 | 单 `:app`；AGP 9.3.1、Gradle 9.5.0、Compose plugin 2.2.10、KSP 2.2.10-2.0.2；minSdk 26、compile/targetSdk 36；正式 1.0.29/code 93 | [根 Gradle](../build.gradle.kts)、[wrapper](../gradle/wrapper/gradle-wrapper.properties)、[app Gradle](../app/build.gradle.kts) |
+| Android 业务 | Kotlin、Compose/Material 3、Room 2.8.4、WorkManager、Credentials/Google ID、PDFBox Android；Keystore 与私有文件 | [依赖及签名门](../app/build.gradle.kts)、[Manifest](../app/src/main/AndroidManifest.xml) |
+| Android 数据 | `NanfengAiDatabase` 注解 version 72，连续迁移与 Room schema；CHAT/WORK 各自文件 | [数据库](../app/src/main/java/com/nanzhufeng/ai/data/local/NanfengAiDatabase.kt)、[schemas](../app/schemas)、[area owner](../app/src/main/java/com/nanzhufeng/ai/data/local/ConversationAreaDatabaseOwner.kt) |
+| Desktop | HTML/CSS/ESM，无 React/Vite；Tauri 2、Rust 2021、rusqlite 0.37、reqwest 0.12、serde、PDF/ZIP/XML adapter | [package](../desktop/package.json)、[Cargo](../desktop/src-tauri/Cargo.toml) |
+| Desktop 身份与存储 | bundle 1.0.29／`com.nanzhufeng.ai.desktop`；`lib.rs` 主库迁移推进至 user_version 44，TEMP 与模型配置另有版本 owner | [Tauri 配置](../desktop/src-tauri/tauri.conf.json)、[主 store](../desktop/src-tauri/src/lib.rs)、[area](../desktop/src-tauri/src/desktop_data_area.rs) |
+| 共享协议／维护目录 | exchange v1/v2、sync golden、模型维护 JSON、合同 registry/owner map；不是共享运行时数据库或第二个 ModelRegistry | [protocol](../protocol)、[模型架构](model-service/MODEL_SERVICE_ARCHITECTURE.md) |
+| 云服务 | Supabase SQL/RPC/RLS，Google avatar Edge Function 与来源策略 | [migrations](../supabase/migrations)、[头像函数](../supabase/functions/google-avatar/index.ts) |
+| 附件中转 | Go 1.24 独立服务、Docker、断点 offset／SHA-256／短时签名 URL | [go.mod](../upload-gateway/go.mod)、[服务](../upload-gateway/main.go)、[部署说明](../upload-gateway/README.md) |
+
+Desktop 的 npm/Cargo 包版本仍为 `0.0.1` 且包名保留 spike；安装包产品版本由 Tauri 配置定义，两者不是同一字段。不能用 npm version 判已安装版本。
+
+### 目录结构
+
+| 目录 | 当前清单及职责 |
+|---|---|
+| `app/` | 818 文件；main Kotlin 359（ai 31、domain 141、data 112、ui 66 等），test Kotlin 322；资源、schemas、隔离验收入口 |
+| `desktop/` | 286 文件；src 78、Rust 生产目录 48、Node 测试 118、scripts 20；前端、IPC、持久 owner、原生封装 |
+| `protocol/` | 42 文件；版本化格式、公开 fixture、模型／合同维护门 |
+| `supabase/`／`upload-gateway/` | 17／5 文件；SQL/头像函数与独立网关源码、测试和部署材料 |
+| `docs/` | 858 文件；包括合同、ADR、决策、交接、报告、历史原件及差异附件；文件数不是现行合同数 |
+| `.agents/skills/`／`scripts/` | 五类项目流程及清单工具；根 scripts 管签名准备、证据、协议／图标等专项验证 |
+| `.github/`／`delivery/`／`artwork/` | CI 声明、旧交付清单、预览和图标资产；旧产物摘要不证明最新软件交付 |
+
+目录数字取本轮修改前快照，新生成的报告不会反向计入。大文件如 `lib.rs` 30,264 行、`ConversationWorkspace.kt` 11,908 行、`app.mjs` 6,989 行是维护集中度事实；本轮未据行数推断功能错误或进行重构。
 
 ## 4. 架构与数据流
 
 ```mermaid
 flowchart LR
   A[Android Compose / ViewModel] --> B[AppContainer / domain / ai]
-  B --> C[Room + 私有文件 + WorkManager]
-  B --> D[Provider transport / streaming Attempt]
-  E[Desktop ESM] --> F[Tauri command + capability]
-  F --> G[Rust owner + SQLite + 私有资产]
-  F --> H[Desktop Provider / account adapter]
-  C <-->|版本化语义 exchange / sync| I[protocol + Supabase RPC]
-  G <-->|版本化语义 exchange / sync| I
+  B --> C[Room / 私有文件 / 后台 owner]
+  B --> P[Provider Adapter / HTTP / SSE]
+  D[Desktop ESM] --> E[Tauri IPC / 权限与参数]
+  E --> F[Rust owner / SQLite / 私有资产]
+  F --> P
+  C <-->|版本化语义| X[exchange / sync 协议]
+  F <-->|版本化语义| X
+  X --> S[Supabase 账号 RPC]
+  P --> R[终态 / 来源 / 物理用量]
+  R --> C
+  R --> F
 ```
 
-### Android
+图表示职责关系，不新增统一状态机或把两端 adapter 当同一代码。Android 的 [Activity](../app/src/main/java/com/nanzhufeng/ai/NanfengAiActivity.kt)、[ViewModel](../app/src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt)、[AppContainer](../app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt)组装真实入口；Desktop 的 [app.mjs](../desktop/src/app.mjs)、[chat-shell](../desktop/src/chat-shell.mjs)、[runtime-chat-commit](../desktop/src/runtime-chat-commit.mjs)、[lib.rs](../desktop/src-tauri/src/lib.rs)负责事件、稳定 DOM、IPC 与持久事实。浏览器 fixture 不读取正式 SQLite。
 
-`NanfengAiActivity` 启动 Compose；`ConversationFoundationViewModel` 投影会话状态；`AppContainer` 组装 database、repository、Provider、同步、备份和后台 owner。`data/local` 管 Room 与实体持久化，`domain` 管策略和用例，`ai` 管模型协议／流，`background` 管可续任务。新增业务状态必须进入该链，不能让 UI 形成第二份真相。[Activity](../app/src/main/java/com/nanzhufeng/ai/NanfengAiActivity.kt)、[ViewModel](../app/src/main/java/com/nanzhufeng/ai/ui/ConversationFoundationViewModel.kt)、[Container](../app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt)。
+### 普通发送与附件联网
 
-### Desktop
+1. 草稿／材料本地准备 → 当前路由与精确身份冻结 → 接收方／材料资格校验 → 持久 Attempt → 实际 Adapter／运输 → 正常完成、已知失败、取消或 UNKNOWN → 正文、来源与独立用量事实落库 → UI 回读。依据：[Android executor](../app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt)、[Desktop 普通回答 owner](../desktop/src-tauri/src/desktop_ordinary_chat_v1.rs)、[P3B](P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md)。
+2. 正常 OpenRouter／官方模型维持各自联网。RC 普通文字 Sol/Astra 自身 Responses；另外四款 RC 文字及六款 RC 附件通过固定 OpenRouter Luna 检索，再交回原 RC 模型／渠道／Key 回答。维护目录当前 20 个聊天部署：OpenRouter 7／官方 7／RC 6，另 1 个独立 OCR 与 7 组凭据。不是上游可用性承诺。[生成矩阵](model-service/MODEL_SERVICE_MATRIX.md)、[RC 合同](RELAYCORE_MODEL_CURRENT_CONTRACT.md)、[Luna 实施报告](verification/2026-10-13-luna-routing-implementation/REPORT.md)。
+3. Muse Wonder 位于深度档 DeepSeek Pro 后、智谱前，经 OpenRouter；可读文字材料使用已登记 Responses 例外，媒体保持原路线。OpenRouter Gemini Flash 自身搜索使用 native web plugin 例外，关闭搜索／grounded 回答不注入；不把其他模型一起切到 Luna。[Adapter](../app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt)、[维护矩阵](model-service/MODEL_SERVICE_MATRIX.md)、[Gemini/Muse 报告](verification/2026-10-14-gemini-muse-risk-fix/REPORT.md)、[Gemini 同题报告](verification/2026-10-14-gemini-search-repeat/REPORT.md)。
+4. 编号报告按完整事实句／分号提取独立 ID，保留必要段落上下文与参考 URL，过滤个人材料／评述控制句；逐项来源与实际搜索状态独立判定。Android 常规四项一批，智谱一项；执行受 48 次／600 秒边界约束。已知完成但缺证可以定向补查，UNKNOWN 停止；补查失败不能删除已有证据。[Android planner](../app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt)、[coordinator](../app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchCoordinator.kt)、[Rust planner](../desktop/src-tauri/src/attachment_web_search_v1.rs)、[执行](../desktop/src-tauri/src/attachment_web_search_execution_v1.rs)。
+5. 检索检查点验证任务／ID／query／原模型／来源／完成调用与有效期，当前语义 v5 不复用旧 v4；它不是 Provider token cache 或未接入的 LocalExactReuse。[Android cache](../app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchCheckpointCache.kt)、[Rust checkpoint](../desktop/src-tauri/src/attachment_search_checkpoint_v1.rs)、[缓存合同](PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md)。
 
-`desktop/src/app.mjs` 管页面事件与内存投影，`chat-shell.mjs` 管会话 shell，`runtime-chat-commit.mjs` 保持流式更新时的滚动与 DOM 所有权；前端只能通过 Tauri invoke 调用 Rust。`lib.rs` 装配命令和应用状态，模块分别拥有普通聊天、账户同步、备份、提醒、转写、搜索、设置和 area migration。浏览器预览 fixture 不读取生产 SQLite。[前端入口](../desktop/src/app.mjs)、[渲染提交](../desktop/src/runtime-chat-commit.mjs)、[Rust 入口](../desktop/src-tauri/src/lib.rs)。
+### 费用、导入、同步与后台
 
-### 主要业务流
-
-1. **普通对话**：输入草稿 → 本地校验与材料选择 → 创建持久 Attempt → Provider 流事件 → 完整回复／UNKNOWN／失败事务落库 → 标题、费用、来源和 UI 回读。未知结果不自动重发。[Android transport](../app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt)、[Desktop chat owner](../desktop/src-tauri/src/desktop_ordinary_chat_v1.rs)。
-2. **工作区**：界面共用 Composer 和消息能力，但 area 决定 database、私有文件、背景任务、cloud document/list 与 restore target；同 ID 也不跨区合并。人工引用只复制选中消息文字和来源版本到目标草稿。[C-15 合同](C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md)、[引用 bridge](../desktop/src-tauri/src/desktop_manual_area_reference.rs)。
-3. **导入／附件／备份**：格式预检 → app-private staging → hash／source identity／occurrence 校验 → 原子提交与 receipt → 重开回读；未知路径或结构拒绝。Android 与 Desktop 保持各自格式 owner，v1/v2 exchange 只在协议边界转换。[P5-D](P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md)、[P6-K](P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md)。
-4. **同步**：人工选择对话 → area 绑定的 document identity → 账号范围 RPC / optimistic revision → 回读合并 → 本地 receipt；CHAT 只对 CHAT，WORK 只对 WORK。历史 envelope 仅经可核验源记录迁移。[P7-F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)、[Android owner](../app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt)、[Desktop owner](../desktop/src-tauri/src/desktop_account_sync_v1.rs)。
+- 每次物理 Call 保存准确身份、usage、币种／结算或估算快照；失败不抹掉已返回费用，未知不当零。费用页把同一次提问的多笔 Luna 检索合并展示，原回答单列；消息页脚统计该次总额，已知＋未知保持可见。账本物理调用不合并或重算历史。[费用合同](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)、[Desktop 投影](../desktop/src/usage-ledger-display.mjs)、[双端分组证据](verification/2026-10-13-retrieval-cost-grouping/REPORT.md)。
+- 附件／ZIP／备份：格式与大小预检 → 私有 staging → 资产 hash／source identity／occurrence → 事务或 journal 提交 → receipt／关闭重开。Android 与 Desktop 的资产、数据库及备份 owner 独立，exchange 转换只在边界。[P2A](P2A_LOCAL_DATA_AND_ATTACHMENT_CONTRACT.md)、[P5D](P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md)、[P6K](P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md)。
+- 同步：用户选择 → area/document identity → 账号范围 RPC 与 optimistic revision → serializer／字段版本合并 → 本地 receipt 与 UI 刷新。标题、列表成员、正文与费用各有事实来源；source/target 两端均需验证。[Android sync](../app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt)、[Desktop sync](../desktop/src-tauri/src/desktop_account_sync_v1.rs)、[P7F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)。
+- 长任务由持久执行／后台 owner 管，不因返回页面生成第二次请求；通知、转写、提醒、岛与取消投影不能从显示文案猜进度。Android Manifest 的前台服务与 WorkManager、Desktop background/通知 owner 分别有平台边界。[后台合同](P5B_BACKGROUND_CANCELLATION_BATTERY_CONTRACT.md)、[南枫岛](NANFENG_ISLAND_CURRENT_CONTRACT.md)、[Desktop runtime](../desktop/src-tauri/src/desktop_background_runtime_v1.rs)。
 
 ## 5. 核心模块
 
-| 模块 | 职责 | 代码与合同依据 |
-| --- | --- | --- |
-| 会话、消息树、草稿、生命周期 | 创建、分支、归档、回收、恢复、标题与消息操作 | `data/local/RoomConversationRepository.kt`、`ui/ConversationWorkspace.kt`、[会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) |
-| 模型与正常发送 | 多 Provider 目录、路由、材料桥、流、Attempt、费用与失败投影 | `ai/ChatProviderAdapters.kt`、`ai/NormalChatOpenRouterExecutor.kt`、[模型选择](P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md) |
-| 本地数据与附件 | 私有资产、搜索、预览、导入、备份与恢复 | `data/AndroidLocalBackupRestoreManager.kt`、`desktop_local_backup_v1.rs`、[本地数据合同](P2A_LOCAL_DATA_AND_ATTACHMENT_CONTRACT.md) |
-| 项目／知识／记忆 | 本地 scope、检索、上下文、版本与关系 | `domain/`、`data/local/`、[C-15](C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md) |
-| 同步与账号 | Google 会话、Supabase RPC、area 文档、receipt、冲突与旧格式兼容 | `data/P7F*`、`desktop_account_sync_v1.rs`、[P7-F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md) |
-| Desktop 体验 | chat-first shell、设置、媒体、滚动、原生窗口与通知 | `desktop/src/*.mjs`、`desktop/src-tauri/src/desktop_*`、[Desktop 合同](DESKTOP_CHAT_FIRST_UI_CONTRACT.md) |
+| 模块 | owner／行为依据 | 审核重点 |
+|---|---|---|
+| 会话、分支、草稿、生命周期 | [RoomConversationRepository](../app/src/main/java/com/nanzhufeng/ai/data/local/RoomConversationRepository.kt)、[C13](C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md)、[Desktop chat](../desktop/src-tauri/src/desktop_ordinary_chat_v1.rs) | 身份、revision、恢复、取消、迟到回读与失败保稿 |
+| 模型选择、发送、联网 | [ChatProviderAdapters](../app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt)、[Desktop model](../desktop/src-tauri/src/desktop_model_service_v1.rs)、[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md) | 目录／实际协议／授权／来源／终态／费用共同验证 |
+| 项目、知识、记忆、上下文 | [domain](../app/src/main/java/com/nanzhufeng/ai/domain)、[Desktop history](../desktop/src-tauri/src/desktop_history_knowledge_v1.rs)、[C15](C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md) | scope、人工选择、资料修订、派生索引与跨区引用 |
+| 资产、解析、搜索、备份 | [Android backup](../app/src/main/java/com/nanzhufeng/ai/data/AndroidLocalBackupRestoreManager.kt)、[Desktop backup](../desktop/src-tauri/src/desktop_local_backup_v1.rs)、[C14](C14_LOCAL_DATA_PARITY_CONTRACT.md) | 物理文件／引用计数／预览／恢复 journal 不混用 |
+| 账号、同步、凭据 | [P7F session](../app/src/main/java/com/nanzhufeng/ai/data/P7FGoogleAccountSession.kt)、[Desktop sync](../desktop/src-tauri/src/desktop_account_sync_v1.rs)、[P7F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md) | 账号隔离、精确材料、Secret 读取时机、源迁移 |
+| 提醒、监控、转写 | [Desktop reminders](../desktop/src-tauri/src/desktop_reminders_v1.rs)、[transcription](../desktop/src-tauri/src/desktop_transcription_v1.rs)、[Android 转写 UI 合同](ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md) | 本地状态、付费外部动作、通知权限／OS 生命周期分别验收 |
+| UI、皮肤、字体、复制 | [ConversationWorkspace](../app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt)、[app.mjs](../desktop/src/app.mjs)、[C16](C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md)、[页脚复制证据](verification/2026-10-14-footer-text-copy/REPORT.md) | 原生选择、窄屏、大字体、滚动／焦点与持久事实投影 |
+| 协议、云端、网关、治理 | [protocol](../protocol)、[Supabase](../supabase)、[网关](../upload-gateway)、[领域 owner map](contracts/DOMAIN_OWNER_MAP.md) | 格式兼容、RPC/RLS、offset／TTL、部署事实及模块限定 |
+
+完整领域导航由 owner map 维护，本文不复制 122 项列表。实验 Compare、离线捕获、旧协议与普通聊天分别读适用 scope，不能凭文件存在启用外部动作。
 
 ## 6. 关键决策与原因
 
-| 决策 | 原因与约束 | 依据 |
-| --- | --- | --- |
-| 本地优先、发送时才外发 | 附件／正文需要在选择和预览阶段保持本地，调用方与材料必须可追溯 | [运行时合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)、[决策日志](decision-log.md) |
-| 双端不共享数据库文件 | Room 与 Desktop SQLite 的表、迁移和文件生命周期不同；只共享版本化协议 | [ADR-002](ADR-002-P6A_DESKTOP_AND_EXCHANGE.md)、`protocol/` |
-| CHAT/WORK 物理隔离 | UI 相似不应导致消息、草稿、搜索、同步或恢复串区；无项目 WORK 仍属 WORK | [C-15](C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md)、提交 `1580faf` |
-| direct Google 同步 + 旧格式兼容 | 日常同步不应被恢复材料阻塞，同时不删除仍需源设备迁移的旧云记录 | [P7-F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)、`202609180007_p8_account_isolated_sync.sql` |
-| UNKNOWN 保留而非自动重发 | 外部 Provider／网络结果无法确认时，重发可能重复消耗或覆盖事实 | [P3 运行时合同](P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md)、`desktop_ordinary_chat_v1.rs` |
-| 按平台独立正式安装器 | Android、macOS 与未来 Windows 的签名、构建和验收环境不同 | [发布策略](GITHUB_REPOSITORY_AND_RELEASE_POLICY.md)、[Windows 合同](P6D_WINDOWS_NATIVE_DELIVERY_CONTRACT.md) |
+仅记录文档明确陈述的原因；代码形状或提交主题不足以补造动机。
+
+| 决策 | 已记录原因／取舍 | 依据 |
+|---|---|---|
+| 本地优先、发送绑定材料与接收方 | 选择／预览不应外发；实际调用必须归因，不静默扩大范围 | [运行时合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)、[决策日志](decision-log.md) |
+| 双端独立数据库、共享版本化语义 | Room 与 Desktop SQLite 的表／资产生命周期不同；协议边界允许兼容，不复制数据库 | [ADR-002](ADR-002-P6A_DESKTOP_AND_EXCHANGE.md)、[exchange](NFAI_EXCHANGE_V1_CONTRACT.md) |
+| CHAT/WORK 物理隔离 | 仅 `projectId` 过滤不能隔离消息、搜索、同步与恢复；无项目 WORK 仍需身份 | 提交 `1580faf50874`、[C15](C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md) |
+| direct 同步、保留旧 envelope | 已确认账号隔离方案不以恢复材料阻塞日常同步，同时不能删除尚需源迁移的旧记录 | [P7F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)、[SQL](../supabase/migrations/202609180007_p8_account_isolated_sync.sql) |
+| RC Luna 搜索后原模型回答 | 保留有效自身联网；将存在缺口的 RC 场景按最终目标分流，搜索与最终分析分工，禁静默 fallback | [10月13日目标方案](model-service/SEARCH_ROUTING_TARGET_PLAN_2026-10-13.md)、[实施证据](verification/2026-10-13-luna-routing-implementation/REPORT.md) |
+| 原生来源＋正常终态决定联网成功 | HTTP 200、模型自述、正文 URL 或局部工具事件不足；局部失败也不能覆盖真实最终完成 | [10月10/13日决策](decision-log.md)、[DeepSeek 修复](verification/2026-10-13-deepseek-terminal-fix/REPORT.md) |
+| 物理记账与费用展示分开 | 用户允许多次搜索，但要求检索统计合并、回答独立；历史调用与币种必须保真 | [费用分组决策](decision-log.md)、[分组报告](verification/2026-10-13-retrieval-cost-grouping/REPORT.md) |
+| 事实粒度与检查点隔代 | 一主题有来源不代表全部数字／断言已核实；旧主题回执不能证明新事实范围 | [事实优化](verification/2026-10-14-attachment-fact-granularity/REPORT.md)、[风险复核](verification/2026-10-14-attachment-fact-risk-review/REPORT.md) |
+| 平台独立正式交付与证据绑定 | 签名、环境、保数据和原生接受条件不同；截图与 Release 需绑定真实候选 | [发布策略](GITHUB_REPOSITORY_AND_RELEASE_POLICY.md)、[决策日志](decision-log.md) |
+| 合同按 scope 和 owner 治理 | 旧阶段或实验规则不能倒灌现行实现；路径与分类只作维护导航 | [全合同裁决](verification/2026-10-14-contract-implementation-unification/REPORT.md)、[治理](CONTRACT_GOVERNANCE_CURRENT.md) |
 
 ## 7. 开发过程与代表性修复
 
-Git 历史共 173 条提交，主要集中于 2026-08-20 至 2026-09-18：初始基线与签名／本地数据，普通聊天与 Provider、导入与媒体恢复，Desktop 工作台与跨端协议，随后是同步、标题、流式滚动、性能和工作区分库。提交主题只能证明代码记录，不能证明实际工时或线上部署。
+### 已提交历史
 
-| 阶段 | 代表记录 | 得到的结论 |
-| --- | --- | --- |
-| 基线、签名、数据 | `e56d666`、2026-08-20 系列 | 建立 Android 正式签名门、Room/导入/备份合同和独立验收包 |
-| 普通聊天与 Provider | `1ded3da`、`d61805c` | 真实聊天须与旧 mock/预览边界区分，Attempt 和流终态持久化 |
-| 导入与媒体 | 2026-08-28 多个 `fix` | 文件恢复、引用生命周期、预览与搜索必须围绕真实资产身份处理 |
-| Desktop 工作台 | `242ed1e`、`50f4b32` | 前端 shell、Tauri IPC、Rust owner 和 SQLite 要共同验证，浏览器 fixture 不替代原生数据 |
-| 同步与标题 | `b11d3a0`、`ff9fd33` | 标题、列表、正文和 receipt 的版本语义应分开；历史同步格式要显式兼容 |
-| 独立数据区 | `1580faf` | 旧 `projectId` 过滤不足以满足隔离；需物理数据库、migration、area document identity 与回归一起改变 |
+本地可达提交 8 月 142 条、9 月 40 条。下表只描述记录和对应代码范围，不推断历时或部署结果。
 
-已记录的典型坑与修复：
+| 日期／提交 | 记录与演进 |
+|---|---|
+| 2026-08-20 `e56d666d89ac` | 建立项目基线（756 路径）：Android、本地数据、合同与工具初始集合 |
+| 2026-08-23 `d61805cea24e` | 普通聊天直接发送 OpenRouter，与 mock／预览区分 |
+| 2026-08-24 `1ded3da7e486` | Provider 聊天和会话 shell checkpoint（138 路径） |
+| 2026-09-01 `242ed1ec8200` | Android/Desktop checkpoint（186 路径），双端功能与入口推进 |
+| 2026-09-13 `b11d3a0735f1` | Desktop 自动标题持久化修复 |
+| 2026-09-15 `50f4b32f5284`／`ff9fd332636a` | 同步事实统一、双端修复及交付证据归档 |
+| 2026-09-18 `1580faf50874` | 工作区物理分库与同步加固（97 路径） |
+| 2026-09-18 `d1929634c9dd` | 双端 Markdown 格式与来源保留，版本 1.0.21 |
+| 2026-09-19 `4ced523f73cf`／`dafc64d9b336` | 原生联网／消息操作修复至 1.0.22；记录当时 Release 交付，后者为当前 HEAD |
 
-- PostgreSQL 大密文校验用过大的正则上限会在执行期失败，改为字符集与长度分开验证。[`202609130003_p7g_fix_large_ciphertext_validator.sql`](../supabase/migrations/202609130003_p7g_fix_large_ciphertext_validator.sql)。
-- Desktop 流式更新重建 shell 会丢滚动与选择，改为保留 DOM owner 的提交路径并测试迟到读回。[`runtime-chat-commit.mjs`](../desktop/src/runtime-chat-commit.mjs)、[当前交接](CURRENT_HANDOFF.md)。
-- 自动标题与普通回答不是同一终态；完整正文不能因标题失败被丢弃，标题重试需受长度与手工标题保护。[`desktop_conversation_title_v1.rs`](../desktop/src-tauri/src/desktop_conversation_title_v1.rs)、[当前交接](CURRENT_HANDOFF.md)。
-- 备份合同曾把历史 Schema 37 写成“当前”，当前代码已到 69；合同现改为读取实际打开数据库的 Schema，避免文档反向限制迁移。[P5-D](P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md)、提交 `1580faf`。
+### 当前未提交演进
+
+10 月阶段不能写成新 Git 提交。过程依据仓库内带日期报告与工作树实现，旧失败保留。
+
+| 阶段 | 记录的变化与验证边界 |
+|---|---|
+| 10月9–12日模型／协议维护 | 精确部署身份、RC 分组、接口/推理参数和任务 routing 演进；[模型架构](model-service/MODEL_SERVICE_ARCHITECTURE.md)与[矩阵](model-service/MODEL_SERVICE_MATRIX.md)汇总当前实现，不等于全部服务可用 |
+| 10月13日 Luna 接线 | 来源映射、材料授权、原 RC 回答、20 部署及14格式实测；RC Pro404／当时Muse403仍失败，[报告](verification/2026-10-13-luna-routing-implementation/REPORT.md)逐模型限定 |
+| 10月13日长报告／费用 | 删除重复 Composer 提示、混合币种页脚、物理费用保留／展示合并；原长报告部分覆盖和 Mac UNKNOWN 未被小样本抹去，[报告](verification/2026-10-13-real-report-footer-fix/REPORT.md) |
+| 10月13日终态／用量 | DeepSeek 局部工具错误误锁失败、Sol/RC协议终态及Gemini usage 缺失分别修复；[DeepSeek](verification/2026-10-13-deepseek-terminal-fix/REPORT.md)、[RC用量](verification/2026-10-13-rc-gemini-usage/REPORT.md) |
+| 10月14日 Gemini/Muse | Muse Responses 可读材料例外、Gemini native plugin 同题短答、失败计量恢复；双端普通文字实际通过，新媒体／完整原件未全验，[两模型](verification/2026-10-14-gemini-muse-risk-fix/REPORT.md)、[Gemini同题](verification/2026-10-14-gemini-search-repeat/REPORT.md) |
+| 10月14日原位复制／事实优化 | 页脚选择、完整事实句、v5缓存及五类解析遗漏修复；原件离线66项/17批只证明计划，[复制](verification/2026-10-14-footer-text-copy/REPORT.md)、[事实风险](verification/2026-10-14-attachment-fact-risk-review/REPORT.md) |
+| 10月14日正式覆盖／合同收口 | 双端1.0.29原签名保数据覆盖；之后40合同＋治理与维护工具统一，没有改变已装包或增加费用，[安装](verification/2026-10-14-fact-risk-cover-install/REPORT.md)、[合同](verification/2026-10-14-contract-implementation-unification/REPORT.md) |
+
+### 踩坑与修复证据
+
+| 触发／问题 | 修复与证据 | 仍需区分 |
+|---|---|---|
+| PostgreSQL 大密文正则上限执行失败 | 字符集与长度分开验证，[SQL](../supabase/migrations/202609130003_p7g_fix_large_ciphertext_validator.sql) | SQL 存在不证明已部署 |
+| Desktop 流式重建 shell 丢滚动／选择 | 稳定 DOM 提交与迟到回读处理，[runtime](../desktop/src/runtime-chat-commit.mjs) | 浏览器行为不覆盖原生系统选择 |
+| 自动标题失败影响正文或手动标题 | 标题独立终态、长度与手工保护，[title owner](../desktop/src-tauri/src/desktop_conversation_title_v1.rs)、[决策](decision-log.md) | 标题服务仍有真实上游边界 |
+| Luna annotations／跟踪 URL 对应不上来源 | 原生来源映射、严格项ID/相关性，[实施报告](verification/2026-10-13-luna-routing-implementation/REPORT.md) | 不能把正文自写链接当证明 |
+| DeepSeek 搜索额度耗尽被判整段未完成 | 最终实际来源＋正常终态优先，保留用量，[红绿/同题](verification/2026-10-13-deepseek-terminal-fix/REPORT.md) | 截断／缺来源仍失败 |
+| 有回复但金额未知、失败后费用丢失 | RC 请求 usage、双端计量交接、cost-only 本地恢复，[RC](verification/2026-10-13-rc-gemini-usage/REPORT.md)、[双端补漏](verification/2026-10-14-gemini-muse-risk-fix/REPORT.md) | 旧无回执费用无法凭空补账 |
+| Gemini 短题有源但截图同题跳搜索 | 精确模型 native plugin 兼容例外＋同题短答双端真验，[报告](verification/2026-10-14-gemini-search-repeat/REPORT.md) | 例外有后续接口维护风险，不能泛化全部模型 |
+| 开篇／BOM／点评链接／元数据误删／多URL粘连 | 9个公开用例/25事实断言，两端实际planner一致，[报告](verification/2026-10-14-attachment-fact-risk-review/REPORT.md) | 提取正确不等于事实已核实 |
+| 历史标题编号漏排或“历史资料库”被误隐藏 | 维护 parser 区分显式历史章节与当前业务主题，27项回归，[合同统一](verification/2026-10-14-contract-implementation-unification/REPORT.md) | 元数据绿灯不替代逐条行为语义 |
 
 ## 8. 测试、验证与交付方式
 
-本次重新运行、且源码仍为 `1580faf` 的自动验证：
+### 最新证据及本轮执行范围
 
-| 命令 | 结果 | 能证明什么 |
-| --- | --- | --- |
-| `:app:testDebugUnitTest :app:lintRelease` | 1,235 tests，0 failures，0 errors，3 skipped；lint 通过 | Android JVM、Room/owner 行为和 Release 静态 lint；不是主设备安装 |
-| `npm run test && npm run lint && npm run typecheck && npm run build` | Node 447 pass，0 fail，12 skipped；其余命令通过 | Desktop ESM、静态入口与构建；不是 Tauri 原生行为或真实数据 |
-| `cargo test --manifest-path desktop/src-tauri/Cargo.toml` | 301 pass，0 fail，3 ignored | Rust/SQLite owner 行为；ignored 不构成通过 |
-| 三个 protocol golden 脚本 | 全部通过 | v1/v2/sync 合成载荷兼容；不是真实账号同步 |
-| Supabase Node 静态测试与 `go test -count=1 ./...` | 8 pass；Go 通过 | SQL/头像策略静态约束与网关单测；不是已部署 RPC/RLS/Edge Function |
+本次是复盘文档，不重跑完整应用构建或付费链路。以下旧执行结果均注明阶段；测试数不是覆盖率。
 
-Android 可安装构建要求完整正式签名配置，Release 使用 v1/v2/v3/v4 签名；Desktop 由 `desktop/scripts/build.mjs` 生成前端静态产物，再由 Tauri macOS bundle 流程封装。正式安装、签名、保数据覆盖、GitHub 附件回读和真实服务均需单独授权与证据，不能由上述测试替代。[app Gradle](../app/build.gradle.kts)、[测试交付 Skill](../.agents/skills/nanfeng-ai-testing-delivery/SKILL.md)。
+| 验证层 | 已记录结果／本轮用途 | 依据与边界 |
+|---|---|---|
+| Android JVM | 10月14日事实风险阶段1495 PASS、10 opt-in skip、0失败，322套件；正式覆盖阶段复核owner hash复用 | [风险报告](verification/2026-10-14-attachment-fact-risk-review/REPORT.md)；不是主设备UI或新逐项Provider验收 |
+| Rust | 同阶段443 PASS、34 ignored、0失败；覆盖阶段复用 | 同报告；本地SQLite重开与运输边界，不是全部原生Mac |
+| Desktop Node | 先前完整551 PASS／12 skip；后续覆盖核对94前端／工具hash复用，相关合同21 PASS | [覆盖报告](verification/2026-10-14-fact-risk-cover-install/REPORT.md)；不是本轮新全量运行 |
+| 构建／静态／签名 | 覆盖阶段Android Release/Lint、Mac lint/typecheck/正式app与DMG、严格验签通过 | 同报告；签名／安装与业务验收分开 |
+| 真实模型／材料 | Luna阶段20部署有双端调用、14格式有代表模型真实成功；18款多附件完整成功，Pro404／Muse当时403 | [逐模型报告](verification/2026-10-13-luna-routing-implementation/REPORT.md)；不是20×14全部组合通过 |
+| 后续真实复验 | DeepSeek两个型号及Mac四RC文字；Muse普通文字双端；Gemini同四问短答Android7/Mac5来源及金额/重开 | 相应报告见第7节；不能替代完整长答、多媒体或旧失败场景 |
+| 原报告新版计划 | 原17918字节材料双端66事实/初始17批/limited=false完全一致 | [事实风险](verification/2026-10-14-attachment-fact-risk-review/REPORT.md)；0新网络，不能称66/66核实 |
+| 本轮复盘门 | 全清单／结构、离线合同与模型维护、Skill/链接校验、差异及业务hash保护 | [本轮报告](verification/2026-10-14-project-retrospective/REPORT.md)；具体运行结果以报告为准 |
+
+可用验证入口见[测试交付 Skill](../.agents/skills/nanfeng-ai-testing-delivery/SKILL.md)。Android JVM XML 的 skip 与 Rust ignored 必须单列；`verify-test-xml.sh` 将任意 skip 判非零，不能把合法 opt-in skip 混成通过或业务失败。定向测试会覆盖报告目录，复用前先保存对应源码点摘要。
+
+[CI](../.github/workflows/source-verification.yml)当前声明协议／Supabase静态／Go、模型及合同门、Desktop语法/typecheck/build/Rust、Android compile-only。未声明完整 Android JVM／Node 全套／正式签名包／原生和真实服务；CI 定义存在不代表云端最近运行成功，本轮未查远端。
+
+### 部署与保数据交付
+
+- **Android**：正式候选通过 `:app:lintRelease :app:assembleRelease`，完整签名配置由环境变量优先／用户级专属 Gradle 属性备用；任一可安装包构建受签名门保护。独立验收变体有后缀身份；同签名 Debug 也不得覆盖主设备。[app Gradle](../app/build.gradle.kts)、[正式签名](ANDROID_FORMAL_SIGNING.md)。
+- **macOS**：`npm --prefix desktop run bundle:macos` 先构建静态产物，再 Tauri app；脚本读取本机公开云配置并选择环境指定／可用 Apple Development 身份，codesign严格验签和DMG验证。脚本选到证书不保证与已装一致，覆盖前仍需比对身份与数据。未在该脚本实现 notarization。[bundle脚本](../desktop/scripts/bundle-macos.mjs)、[Tauri配置](../desktop/src-tauri/tauri.conf.json)。
+- **已完成的本地覆盖**：10月14日10:49前后双端正式1.0.29原证书覆盖。Android安装成功与候选APK字节一致、UID/首装/数据目录/CE-DE inode保持；不等于完整私有DB内容hash。Mac1595数据文件逐项hash不变，4个bundle文件与候选一致；未启动正式包做业务验收。[安全回执及报告](verification/2026-10-14-fact-risk-cover-install/REPORT.md)。
+- **Supabase／网关**：按有序migration与头像函数部署，网关需要HTTPS、持久卷、专属token、TTL与offset/hash校验。仓库没有证明目标服务现部署版本；本轮不读取secret或创建资源。[SQL](../supabase/migrations)、[头像](../supabase/functions/google-avatar)、[网关部署](../upload-gateway/README.md)。
+- **GitHub**：平台安装包／校验独立交付，预览图保留仓库。README当前指向公开1.0.22，本地1.0.29覆盖不等于该版本已上传。未执行fetch／commit／push／Release回读。[README](../README.md)、[发布策略](GITHUB_REPOSITORY_AND_RELEASE_POLICY.md)。
 
 ## 9. 文档冲突与裁决
 
-| 来源 | 冲突／过期断言 | 当前代码或验证 | 裁决 |
-| --- | --- | --- | --- |
-| 本文旧版本 | 复盘 HEAD 为 `ff9fd33`，Android 版本、目录数量与测试记录停在 9 月 15 日 | 当前 HEAD 为 `1580faf`；`app/build.gradle.kts` 为 1.0.20／84，Room Schema 69 | 已在本档案整体替换；旧事实保留在 Git 历史 |
-| `MASTER_DEVELOPMENT_BLUEPRINT.md` 历史段 | 曾把 Schema 63／旧 checkpoint 标成当前 | 数据库注解实际为 version 69，当前状态在 `CURRENT_HANDOFF.md` 顶部 | 历史蓝图不改写；开发时以现行合同、交接和源码优先 |
-| 根 README | 公开下载链接仍为 v1.0.12，而本地配置为 1.0.20 | README 描述公开 Release，配置描述本地源码候选；本次未读取 GitHub 远端 | 不是代码矛盾；当前远端发布状态仍待远端回读确认 |
-| 旧 E2EE SQL／合同 | 仍存在恢复码和 envelope 逻辑 | 当前迁移 `202609180007` 与 P7-F 规定 direct 新写入、旧格式仅兼容迁移 | 保留迁移历史，不把旧模块当日常同步前置条件 |
+| 旧来源／断言 | 当前证据与裁决 | 本轮处理 |
+|---|---|---|
+| 本档案及经验停在9月18日／173提交／Schema69／1.0.20 | 当前182提交、Schema72、1.0.29与WIP；旧测试1235/447/301仅当时结果 | 更新正文为当前快照，旧版保留Git／改前副本，不只顶部免责 |
+| 档案只统计跟踪文件，当前有大量未跟踪owner | 全清单补673文件；维护脚本新增可选非ignored未跟踪覆盖 | 两种范围分别报告，不把未提交内容当已提交 |
+| 早期产品简报排除Desktop／账号、Compare优先 | 当前双端与同步入口已存在；实验Compare不因此自动进普通发送 | 保留注明日期的早期规划，档案明确历史范围，不重写历史动机 |
+| 旧“所有RC都自身”／智谱旧检索成功等 | 当前C12/RC/manifest与Luna实际报告定义新分工 | 引用现行唯一合同，不以旧链路通过替代新验收 |
+| “整章有来源”当报告核验完成 | v5事实计划与逐项证明；原件66项是离线候选 | 引用事实优化/风险报告，不补造核实结论 |
+| 原提示复制／缓存／Astra／侧栏／ZIP/旧签名约束冲突 | 前轮已裁决9类，40登记合同＋治理修正；旧锚点/历史证据保留 | 引用[前轮裁决](verification/2026-10-14-contract-implementation-unification/REPORT.md)，本轮不再改合同正文 |
+| 旧handoff“未安装”与最新已覆盖 | 下方是当时执行边界；当前10:49覆盖报告优先 | 保留历史失败与日期，当前状态顶部明确，不逐段改写旧记录 |
+| README1.0.22与本地1.0.29 | 公开发布声明与本地配置不同范围；远端本轮未回读 | 不伪称最新Release已发布，不擅改下载链接 |
+| Desktop About源分支写ad-hoc／未配置 | 当前bundle脚本与已装回执为原Apple Development；源码分支不代表实际签名或账号状态 | 记录已确认源码占位及待确认原生可达性；不改业务文案 |
+| npm/Cargo0.0.1与Tauri1.0.29 | 包内部版本与产品bundle版本不同 | 指定读取真实产品身份owner；不无授权修改配置 |
 
 ## 10. 已知问题与后续路线
 
-1. 当前 Supabase migration、RLS/RPC 与 Edge Function 是否已部署到目标环境，以及真实 Google 账号的双端全量读取／合并。
-2. OPPO 保数据覆盖后的首次启动迁移、长代码／表格横滑和完整原生 UI 回放；本仓库禁止以 `connected*AndroidTest` 替代。
-3. 最新 1.0.20 Android APK、macOS DMG 是否已作为 GitHub Release 资产上传并可下载校验；README 指向的公开 1.0.12 不证明更高版本已发布。
-4. Windows 原生构建、签名、安装与验收；macOS Tauri 包不能替代。
-5. 真实 Provider 端到端稳定性、用量／费用账单对账和生产网络故障恢复；本次未读取凭据或发起请求。
+| 状态 | 问题／缺口 | 下一步及依据 |
+|---|---|---|
+| 未完成验收 | 新v5事实粒度的Provider逐项返回、原长报告完整核验与原模型长答 | 先回放已有安全回执，最小事实样本贯通；原件全量前评估费用，离线66项不替代。[风险报告](verification/2026-10-14-attachment-fact-risk-review/REPORT.md) |
+| 既有真实失败 | RC Gemini Pro附件回答404；旧Mac原件UNKNOWN、Sol另一题504仍有历史证据 | 精确场景、渠道与终态定位，不静默换模型／自动重发UNKNOWN。[状态](PROJECT_STATUS.md) |
+| 部分已解决、范围未全验 | Muse年龄已确认且普通文字双端通过；新Responses可读多附件及媒体未全部闭环。Gemini短答同题通过，完整长答/新媒体边界未全验 | 不继续笼统称“都未联网”，也不把短题成功扩大成全场景。[Muse](verification/2026-10-14-gemini-muse-risk-fix/REPORT.md)、[Gemini](verification/2026-10-14-gemini-search-repeat/REPORT.md) |
+| 原生验证缺口 | 正式双端新版UI/picker/生命周期/扫描与媒体；页脚原位复制Mac只有浏览器证据 | 对准确候选与隔离根进行原生回放；模拟器不能冒充OPPO，浏览器不能冒充Mac。[复制报告](verification/2026-10-14-footer-text-copy/REPORT.md) |
+| 源码事实／运行待确认 | About旧占位与巨型入口集中度 | 先确认当前可达路径与实际状态投影；若后续获修复授权，按owner拆小增量并复验，不在纯文档任务重构 |
+| 外部状态未确认 | Supabase实际迁移/RLS/RPC/头像部署、真实Google跨端同步、网关现部署状态 | 仓库检查先完成，外部验证另按授权与真实账号范围；静态SQL不证明线上隔离 |
+| 交付未确认 | 最新1.0.29远端Release/下载hash、Windows构建/签名/安装、公证 | 原证书本地覆盖已完成，不承诺公开分发或Windows。[发布策略](GITHUB_REPOSITORY_AND_RELEASE_POLICY.md) |
+| 维护残余 | 7历史XML原件非标准格式、模型例外与外部协议可能变化 | 格式失败分类保留；精确例外迁移需真实同题来源、用量与身份。上游当前价格/能力本轮未查询 |
+| 历史引用待恢复 | 全库链接扫描有43项既有缺失：40项在迁移位置的before-docs快照，3项是旧交接中的本机备份路径 | 不改写冻结原件或伪造文件；恢复历史证据时按原始文档基址解释链接，并另建可用证据入口。[本轮报告](verification/2026-10-14-project-retrospective/REPORT.md) |
 
-后续增量应先选择一个已定义合同和 owner，建立可观察红灯，再补最小实现与同层回归；涉及 area、同步、迁移、签名或真实服务时，应把代码、协议、测试、交接与真实验收分开记录。
+后续路线是上述证据缺口的建议顺序，不是已授权开发或服务部署：先消除具体当前失败与新事实链路缺口，再补原生入口与材料正交矩阵，最后做账号／发布／其他平台验收。保持正常自身联网、原模型回答、历史费用与用户数据；不以“大重构”或更多测试数量代替可观察闭环。

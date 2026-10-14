@@ -10,9 +10,9 @@ description: Synchronize Nanfeng AI contracts, handoff, development archive, dec
 ## 输入与全库复盘
 
 1. 读取 AGENTS、当前交接、目标文档、HEAD／工作树与用户范围；文档任务默认不改业务代码、配置值、schema 或测试逻辑。旧版本由 Git 或快照保全。
-2. 完整复盘先运行本 Skill 的 `scripts/inventory_project.py --repo <仓库绝对路径> --output <证据目录>`，生成全部跟踪文件 hash／类型／规模和完整可达 Git 历史统计；输出不复制正文、密钥或 raw payload。
+2. 完整复盘先运行本 Skill 的 `scripts/inventory_project.py --repo <仓库绝对路径> --output <证据目录>`，生成全部跟踪文件 hash／类型／规模和完整可达 Git 历史统计；存在未提交实现的完整复盘加 `--include-untracked`，纳入非ignored未跟踪文件并标记tracked身份；输出不复制正文、密钥或 raw payload。
 3. 按代码、配置、测试、协议、服务、交付工具、文档／历史证据分组检查。大文件先符号／关键字定位；二进制默认只看身份，视觉验收另立范围。全量机器扫描不等于逐行语义审核，报告必须诚实写覆盖层级。
-   - 完整复盘再运行 `scripts/audit_inventory.py --repo <仓库> --inventory <证据目录>/files.json --output <证据目录>/structure.json`；逐文件记录结构路由、适用格式语法结果与快照一致性，不输出正文。此脚本不编译 Kotlin／Rust、不执行 SQL，也不替代定向语义检查。缺失工具和历史证据格式失败单列，不修改原件掩盖。
+   - 完整复盘再运行 `scripts/audit_inventory.py --repo <仓库> --inventory <证据目录>/files.json --output <证据目录>/structure.json`；逐文件记录清单范围内的结构路由、适用格式语法结果与快照一致性，不输出正文。此脚本不编译 Kotlin／Rust、不执行 SQL，也不替代定向语义检查。缺失工具和历史证据格式失败单列，不修改原件掩盖。
 4. 核查组合根、真实入口、持久化／迁移、发送／导入链、凭据、IPC、后台／部署配置及相关测试。提交主题／日期只证明仓库记录，不补作者动机或实际工作时长。
 
 ## 写入唯一位置
@@ -29,3 +29,5 @@ description: Synchronize Nanfeng AI contracts, handoff, development archive, dec
 11. 回读全部修改文件及差异，核对业务源码／配置／schema／测试未变；确认未跟踪用户资产未纳入或删除。全库 inventory 是生成时快照，不要求它自包含新生成文件。
    - 收尾重新比对 inventory 的业务文件哈希、缺失状态和 HEAD；只允许本次授权文档／流程变化。历史测试证据绑定源码点，当前失败不得被较早绿灯覆盖；未重跑的层明确标为复用。将当前事实直接修正到档案正文，旧阶段数字保留明确日期，避免只在顶部追加免责声明。
 12. 输出新增／修改文件、证据与冲突摘要、仍未确认项和恢复基线。只有用户要求时才提交／发布；流程审计软警告不得驱动范围外规则修复。
+13. 复盘单列已提交历史与当前WIP过程、已安装产物与最新代码；不凭提交主题推导原因，不把旧测试数字写成当前执行。完整清单／语法扫描与定向语义／真实业务验收的覆盖分别标注。
+14. 再次正式沉淀只记录新证据、裁决和风险，复用已完成资产；按 [增量模板](assets/experience-increment-template.md) 划分基准、排除项、反馈—根因—实现矩阵与验证等级，不把模板内容当当前事实。

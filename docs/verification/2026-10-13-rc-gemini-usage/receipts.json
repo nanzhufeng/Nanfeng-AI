@@ -1,0 +1,79 @@
+{
+  "android": {
+    "suites": 321,
+    "tests": 1499,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10
+  },
+  "rust": {
+    "passed": 433,
+    "failed": 0,
+    "ignored": 34
+  },
+  "newInferenceAttempts": 3,
+  "knownLocalEstimateCnyMicros": 235,
+  "completeRoundCostKnown": false,
+  "androidReal": [
+    {
+      "preset": "RELAYCORE_GEMINI_3_8_FLASH",
+      "result": "Sent",
+      "elapsedMs": 7098,
+      "physicalCalls": [
+        {
+          "role": "ANSWER",
+          "status": "STREAM_SUCCEEDED",
+          "requested": "gemini-3.8-flash",
+          "returned": "gemini-3.8-flash",
+          "input": 572,
+          "output": 109
+        }
+      ],
+      "footerCostLabel": "¥0.000235",
+      "costSource": "LOCAL_ESTIMATE",
+      "webSearchUsed": false
+    },
+    {
+      "preset": "RELAYCORE_GEMINI_3_1_PRO",
+      "result": "Failed(code=SERVICE)",
+      "elapsedMs": 5229,
+      "physicalCalls": [],
+      "footerCostLabel": null,
+      "costSource": null,
+      "webSearchUsed": null
+    }
+  ],
+  "macMuse": {
+    "httpStatus": 200,
+    "errorCode": "WEB_SEARCH_NO_SOURCES",
+    "nativeSources": 0,
+    "age403NotReproduced": true,
+    "feeKnown": false,
+    "receiptProjectionAtCapture": "UNKNOWN",
+    "failureClass": "KNOWN_NO_SOURCE",
+    "retryCount": 0
+  },
+  "routingAndPricingUnchanged": true,
+  "formalInstallCount": 0,
+  "zeroNetworkReopen": {
+    "calls": 0,
+    "bodyModelAndPhysicalCallsPreserved": true,
+    "flashFooter": "¥0.000235"
+  },
+  "macMissingProofMetadataRepair": {
+    "state": "LOCAL_VERIFIED",
+    "newPaidRequests": 0,
+    "transportRedGreen": true,
+    "nativeSqliteReopenPreservesFailedBodyUsageAndMoney": true,
+    "privacyDebugElidesGeneratedText": true,
+    "originalMuseBillRecovered": false
+  },
+  "sourceHashes": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt": "824bd09cf89494aad5f5c7b8f6f47e3605d85b0c2bbeb82b98d1a994ea1943f5",
+    "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs": "335632929044106c14bc05726fc965b22cdda92e2979f19a4f50c3f8b71e9583",
+    "desktop/src-tauri/src/lib.rs": "e507227f0eb8cf79c3bd08ff034ebb5275a6a3a1745db0d33e4a508c2d4fae26",
+    "desktop/src-tauri/src/attachment_web_search_execution_v1.rs": "ab138601d24e94e772a5968c2736d5d0c74f5337982e7a884b20c49c255335fb",
+    "desktop/src-tauri/src/relaycore_web_search_v1.rs": "20661aa2e671f470b63152f748908e8001759415f67c8a7129eae55be59f47db",
+    "desktop/src-tauri/src/independent_web_search_v1.rs": "b77342ad94dea7d890026ca95423e383ab60849c20d46b12836d6e57c7bd6feb"
+  }
+}

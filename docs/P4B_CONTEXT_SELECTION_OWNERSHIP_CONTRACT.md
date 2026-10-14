@@ -1,5 +1,10 @@
 # 南枫 AI P4-B 上下文选择所有权与 Memory 边界合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 普通生成上下文与临时隔离 ](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-B 上下文选择所有权与 Memory 边界合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第二个本地增量；Schema 保持 9。只建立可审计的本地“选择快照”，不构造 Prompt、不读取任何 Key、不发 HTTP 或图片。
 

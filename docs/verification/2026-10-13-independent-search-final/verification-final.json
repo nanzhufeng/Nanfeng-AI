@@ -1,0 +1,62 @@
+{
+  "objectiveComplete": true,
+  "scope": "current 19 models per platform, real public multi-document generation; native picker/UI/background/media excluded and NOT RUN",
+  "macCurrent19": 19,
+  "androidCurrent19": 19,
+  "matrixEvidence": "same frozen runtime owners; preserve initial failures and use targeted affected-path controls; not a single uninterrupted 19-run",
+  "chinese": {
+    "mac": "11/11; related native tail sources; owner reopen 11/11 service checkpoints",
+    "android": "11/11; all four university entities retained"
+  },
+  "formats": {
+    "mac": "14 public fixtures / four groups / real private file import, local document/PDF/ZIP projection, search and original Sonnet reply",
+    "android": "14 public fixtures / four groups / AppContainer, private import, Room, bridge, HTTPS and original Sonnet reply"
+  },
+  "retry": {
+    "android": "actual executor failure -> UNKNOWN -> close/reopen -> no request -> explicit retry; exact original materials, prior search facts reused, edited draft excluded",
+    "mac": "actual SQLite failed owner reopens; old v2 or changed-material service grants rejected; fresh v3 preserves original model/files and exact material; normalized source cache with original ledger facts retained"
+  },
+  "androidJVM": {
+    "tests": 1475,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 9
+  },
+  "rust": {
+    "passed": 418,
+    "ignored": 32,
+    "failed": 0
+  },
+  "node": {
+    "passed": 543,
+    "skipped": 12,
+    "failed": 0
+  },
+  "builds": {
+    "android": "lintRelease + assembleRelease PASS; task-local single worker / compiler heap, strict dependency verification kept",
+    "mac": "cargo release PASS",
+    "desktop": "build PASS"
+  },
+  "formalInstalled": false,
+  "mainDeviceTouched": false,
+  "connectedAndroidTest": false,
+  "commitOrPush": false,
+  "notRun": [
+    "Mac native picker/UI",
+    "formal Android UI",
+    "background/suspend/kill flows",
+    "scanned PDF/media/OCR actual provider acceptance"
+  ],
+  "evidenceRoot": "/tmp/nanfeng-search-final-20261013",
+  "runtimeDeltaSinceAcceptance": "test diagnostics cleanup only",
+  "verifiedAt": "2026-10-13 02:27 +0800",
+  "git": {
+    "branch": "main",
+    "head": "dafc64d9b33661dc4f792fd1434ff1ddca9cdfa3",
+    "paths": 433,
+    "untracked": 156,
+    "committedOrPushed": false
+  },
+  "hashCloseoutVerified": true,
+  "lastRustRun": "rust-final-owner-closeout.log: 418 passed / 32 ignored / 0 failed"
+}

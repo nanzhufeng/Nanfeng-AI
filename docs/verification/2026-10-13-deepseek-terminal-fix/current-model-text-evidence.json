@@ -1,0 +1,353 @@
+{
+  "scope": "observed true ordinary-text evidence per model; sample inputs differ, not universal reliability or attachment acceptance",
+  "modelCount": 20,
+  "androidSuccessfulSamples": 19,
+  "macSuccessfulSamples": 19,
+  "rows": [
+    {
+      "preset": "CLAUDE_SONNET_5_5",
+      "android": {
+        "run": "android-sonnet-search-proof-007",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=WEB_SEARCH_NOT_VERIFIED)",
+        "priorMatrixProof": false
+      },
+      "mac": {
+        "run": "mac-matrix-CLAUDE_SONNET_5_5",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 8,
+        "error": null
+      }
+    },
+    {
+      "preset": "CLAUDE_HAIKU_5_5",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "Sent",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Sent",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-CLAUDE_HAIKU_5_5",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 5,
+        "error": null
+      }
+    },
+    {
+      "preset": "DEEPSEEK_V4_FLASH",
+      "android": {
+        "run": "android-deepseek-final-owner-009",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Failed(code=RESPONSE_INCOMPLETE)",
+        "priorMatrixProof": null,
+        "previousSuccessfulOrFailedSample": "android-deepseek-two-models-004"
+      },
+      "mac": {
+        "run": "mac-deepseek-candidate-001",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 24,
+        "error": null
+      }
+    },
+    {
+      "preset": "GPT_6_LUNA",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "Sent",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Sent",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-GPT_6_LUNA",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 3,
+        "error": null
+      }
+    },
+    {
+      "preset": "GLM_5_3_FLASH",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-GLM_5_3_FLASH",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 14,
+        "error": null
+      }
+    },
+    {
+      "preset": "QWEN_3_7_PLUS",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-QWEN_3_7_PLUS",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 20,
+        "error": null
+      }
+    },
+    {
+      "preset": "GEMINI_3_8_FLASH",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-GEMINI_3_8_FLASH",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 6,
+        "error": null
+      }
+    },
+    {
+      "preset": "CLAUDE_OPUS_5_5",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-CLAUDE_OPUS_5_5",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 8,
+        "error": null
+      }
+    },
+    {
+      "preset": "GPT_6_1_SOL",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "Sent",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Sent",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-GPT_6_1_SOL",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 4,
+        "error": null
+      }
+    },
+    {
+      "preset": "DEEPSEEK_V4_PRO",
+      "android": {
+        "run": "android-deepseek-two-models-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-deepseek-pro-candidate-002",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 24,
+        "error": null
+      }
+    },
+    {
+      "preset": "MUSE_WONDER",
+      "android": {
+        "run": "android-muse-sol-astra-service-010",
+        "result": "Failed(code=AUTHENTICATION)",
+        "verified": false,
+        "hasAnswer": false,
+        "priorMatrixResult": "Failed(code=AUTHENTICATION)",
+        "priorMatrixProof": null,
+        "previousSuccessfulOrFailedSample": "android-native-current20-text-004"
+      },
+      "mac": {
+        "run": "mac-matrix-MUSE_WONDER",
+        "verifiedWithReopen": false,
+        "nativeSourceCount": 0,
+        "error": "Explicit { code: \"AUTHORIZATION\", http_status: Some(403) }"
+      },
+      "serviceAccessRequirement": "AGE_CONFIRMATION_18_PLUS"
+    },
+    {
+      "preset": "GLM_5_3",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-GLM_5_3",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 14,
+        "error": null
+      }
+    },
+    {
+      "preset": "QWEN_3_8_MAX",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-QWEN_3_8_MAX",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 19,
+        "error": null
+      }
+    },
+    {
+      "preset": "RELAYCORE_OPUS_5_5",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "Sent",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Sent",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-rc-text-owner-relaycore_opus_5_5-006",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 3,
+        "error": null
+      }
+    },
+    {
+      "preset": "RELAYCORE_SONNET_5_5",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-rc-text-owner-relaycore_sonnet_5_5-006",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 3,
+        "error": null
+      }
+    },
+    {
+      "preset": "RELAYCORE_GPT_6_1_SOL",
+      "android": {
+        "run": "android-muse-sol-astra-service-010",
+        "result": "Sent",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Failed(code=TIMEOUT)",
+        "priorMatrixProof": null,
+        "previousSuccessfulOrFailedSample": "android-native-sol-lifan-terminal-003"
+      },
+      "mac": {
+        "run": "mac-sol-candidate",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 24,
+        "error": null
+      }
+    },
+    {
+      "preset": "RELAYCORE_GPT_6_ASTRA",
+      "android": {
+        "run": "android-muse-sol-astra-service-010",
+        "result": "Sent",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Sent",
+        "priorMatrixProof": true,
+        "previousSuccessfulOrFailedSample": "android-native-current20-text-004"
+      },
+      "mac": {
+        "run": "mac-matrix-RELAYCORE_GPT_6_ASTRA",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 24,
+        "error": null
+      }
+    },
+    {
+      "preset": "RELAYCORE_GEMINI_3_8_FLASH",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "Sent",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Sent",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-rc-text-owner-relaycore_gemini_3_8_flash-006",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 3,
+        "error": null
+      }
+    },
+    {
+      "preset": "RELAYCORE_GEMINI_3_1_PRO",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "Sent",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "Sent",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-rc-text-owner-relaycore_gemini_3_1_pro-006",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 3,
+        "error": null
+      }
+    },
+    {
+      "preset": "QWEN_3_6_FLASH",
+      "android": {
+        "run": "android-native-current20-text-004",
+        "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "verified": true,
+        "hasAnswer": true,
+        "priorMatrixResult": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+        "priorMatrixProof": true
+      },
+      "mac": {
+        "run": "mac-matrix-QWEN_3_6_FLASH",
+        "verifiedWithReopen": true,
+        "nativeSourceCount": 20,
+        "error": null
+      }
+    }
+  ]
+}

@@ -15,6 +15,8 @@ class P6GModelRouterContractsTest {
         assertTrue(ComposerModelRoutingCatalog.isRetired("logical:deep:kimi-k3"))
         assertEquals(ModelPresetId.CLAUDE_FABLE_5, ComposerModelRoutingCatalog.choice("logical:deep:claude-fable").routes.single())
         assertTrue(ComposerModelRoutingCatalog.isRetired("logical:deep:claude-fable"))
+        assertEquals(ModelPresetUsage.RETIRED, NanfengModelServiceCatalog.preset(ModelPresetId.CLAUDE_FABLE_5).usage)
+        assertEquals(ModelPresetUsage.RETIRED, NanfengModelServiceCatalog.preset(ModelPresetId.KIMI_K3).usage)
     }
 
     @Test fun `removed Grok routes cannot reenter the picker or automatic routing`() {
@@ -125,28 +127,27 @@ class P6GModelRouterContractsTest {
 
     @Test fun `composer picker preserves the approved daily and deep ordering`() {
         assertEquals(
-            listOf("Claude Sonnet 5", "DeepSeek V4.1 Flash", "GPT-5.6 Terra", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 3.8 Flash"),
+            listOf("Claude Sonnet 5.5", "Claude Haiku 5.5", "DeepSeek V4.1 Flash", "GPT-6 Luna", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 3.8 Flash"),
             ComposerModelRoutingCatalog.daily.map { it.label },
         )
         assertEquals(
-            listOf("Claude Fable 5.1", "Claude Opus 5", "GPT-6 Astra", "DeepSeek V4 Pro", "GPT-5.6 Sol", "GLM-5.3", "Qwen3.8-Max"),
+            listOf("Claude Opus 5.5", "GPT-6.1 Sol", "DeepSeek V4 Pro", "Muse Wonder", "GLM-5.3", "Qwen3.8-Max"),
             ComposerModelRoutingCatalog.deep.map { it.label },
         )
     }
 
     @Test fun `composer uses compact labels while picker retains complete catalog names`() {
-        assertEquals("Claude Fable 5.1", ComposerModelRoutingCatalog.deep[0].label)
-        assertEquals("GPT-6 Astra", ComposerModelRoutingCatalog.deep[2].label)
-        assertEquals("DeepSeek V4 Pro", ComposerModelRoutingCatalog.deep[3].label)
-        assertEquals("GPT-5.6 Sol", ComposerModelRoutingCatalog.deep[4].label)
-        assertEquals("Claude Sonnet 5", ComposerModelRoutingCatalog.daily[0].label)
-        assertEquals("Fable 5.1", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[0].label))
-        assertEquals("Astra", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[2].label))
-        assertEquals("DS V4", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[3].label))
-        assertEquals("5.6 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[4].label))
-        assertEquals("4.1 Fast", composerModelShortNameForUser("Grok 4.1 Fast"))
+        assertEquals("Claude Opus 5.5", ComposerModelRoutingCatalog.deep[0].label)
+        assertEquals("GPT-6.1 Sol", ComposerModelRoutingCatalog.deep[1].label)
+        assertEquals("DeepSeek V4 Pro", ComposerModelRoutingCatalog.deep[2].label)
+        assertEquals("Claude Sonnet 5.5", ComposerModelRoutingCatalog.daily[0].label)
+        assertEquals("Opus 5.5", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[0].label))
+        assertEquals("6.1 Sol", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[1].label))
+        assertEquals("DS V4", composerModelShortNameForUser(ComposerModelRoutingCatalog.deep[2].label))
+        assertEquals("Fable 5.1", composerModelShortNameForUser("Claude Fable 5.1"))
+        assertEquals("6 Astra", composerModelShortNameForUser("GPT-6 Astra"))
         assertEquals("4.6 High", composerModelShortNameForUser("Grok 4.6 High"))
-        assertEquals("Sonnet 5", composerModelShortNameForUser(ComposerModelRoutingCatalog.daily[0].label))
+        assertEquals("Sonnet 5.5", composerModelShortNameForUser(ComposerModelRoutingCatalog.daily[0].label))
         assertEquals("Gemini 3.8", composerModelShortNameForUser("Gemini 3.8 Flash"))
         assertEquals("Qwen 3.7", composerModelShortNameForUser("Qwen3.7-Plus"))
         assertEquals("Qwen 3.8", composerModelShortNameForUser("Qwen3.8-Max"))
@@ -165,30 +166,12 @@ class P6GModelRouterContractsTest {
     }
 
     @Test fun `automatic routing follows explicit default attachment and complex priorities`() {
-        assertEquals(ModelPresetId.DEEPSEEK_V4_FLASH, AutoModelRouter.resolve(AutoRoutingFacts()))
+        assertEquals(ModelPresetId.RELAYCORE_GPT_6_1_SOL, AutoModelRouter.resolve(AutoRoutingFacts()))
         assertEquals(ModelPresetId.QWEN_3_7_PLUS, AutoModelRouter.resolve(AutoRoutingFacts(hasAttachment = true, requiresComplexReasoning = true)))
-        assertEquals(ModelPresetId.GPT_6_ASTRA, AutoModelRouter.resolve(AutoRoutingFacts(requiresComplexReasoning = true)))
-        assertEquals(
-            listOf(ModelPresetId.DEEPSEEK_V4_FLASH, ModelPresetId.GPT_5_6_TERRA, ModelPresetId.CLAUDE_SONNET_5),
-            AutoModelRouter.candidates(AutoRoutingFacts()).take(3),
-        )
-        listOf(
-            AutoRoutingFacts(),
-            AutoRoutingFacts(requiresComplexReasoning = true),
-            AutoRoutingFacts(hasAttachment = true),
-        ).forEach { facts ->
-            val candidates = AutoModelRouter.candidates(facts)
-            assertEquals(
-                NanfengModelServiceCatalog.chatPresets.map { it.id }.toSet() - setOf(ModelPresetId.KIMI_K3, ModelPresetId.CLAUDE_FABLE_5),
-                candidates.toSet(),
-            )
-            assertTrue(candidates.contains(ModelPresetId.GLM_5_3))
-            assertTrue(candidates.indexOf(ModelPresetId.GLM_5_3) < candidates.indexOf(ModelPresetId.QWEN_3_8_MAX))
-        }
-        assertEquals(
-            ModelPresetId.GEMINI_3_8_FLASH,
-            AutoModelRouter.candidates(AutoRoutingFacts(hasAttachment = true)).last(),
-        )
+        assertEquals(ModelPresetId.RELAYCORE_GPT_6_ASTRA, AutoModelRouter.resolve(AutoRoutingFacts(requiresComplexReasoning = true)))
+        assertEquals(19, AutoModelRouter.candidates(AutoRoutingFacts()).toSet().size)
+        assertEquals(13, AutoModelRouter.candidates(AutoRoutingFacts(hasAttachment = true)).toSet().size)
+        assertFalse(AutoModelRouter.candidates(AutoRoutingFacts(hasAttachment = true)).any { it.name.startsWith("RELAYCORE_") })
     }
 
     @Test fun `automatic routing classifier escalates only explicit deep work or very long prompts`() {

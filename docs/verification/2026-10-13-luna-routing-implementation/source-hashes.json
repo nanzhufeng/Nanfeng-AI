@@ -1,0 +1,450 @@
+[
+  {
+    "path": "app/src/main/assets/model_profiles.json",
+    "beforeExists": true,
+    "beforeSha256": "9c884a6b96d10c9130a81f59007bdc872861c63aa3be8750099a98008fce0308",
+    "afterSha256": "3c5265eb19c6865b1cb1c9adfe05e7bd1d202b2227be79c3d39e1de3f8dd1eec",
+    "bytes": 9970,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt",
+    "beforeExists": true,
+    "beforeSha256": "cbca4654a10580c30726d4540acf6f32d54320c43aba57a8ec1302d659a3eca2",
+    "afterSha256": "9f5917bd8e937e2f358b08289e8d2b50f5b9ac281b8eff67e44cdad439f3ae32",
+    "bytes": 3306,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+    "beforeExists": true,
+    "beforeSha256": "4d3aac534aa52f316fe68d80acff0afca8dfc81fd17b981de185bd82aa9a8286",
+    "afterSha256": "cb08f1a0fe56907b8a309f85f71335e1bb5af67289bf3d4f350524fff9e75152",
+    "bytes": 84422,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+    "beforeExists": true,
+    "beforeSha256": "275ced33f8e57a167998b875e9ed3ab14d00d8e17158c25bd0b1e06fb93f8c27",
+    "afterSha256": "fe743f3a28f1d1a98ce4bd45c52c9ad78f90de0b79a08bfbd24d96bc2ce48324",
+    "bytes": 119346,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+    "beforeExists": true,
+    "beforeSha256": "2d383d579d39991c1b98a742c6f6bc8b0aefe9df6e61083c05bdb49cb138b73c",
+    "afterSha256": "4c39d39d6c638d9d62553e0c3eff7e74871d8cb9d036fc7887a00c59c5befcf7",
+    "bytes": 9499,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+    "beforeExists": true,
+    "beforeSha256": "1e0c704dee88782f68dee81cf4325d11ba79f87ff1d98ec93d88af37a9abb434",
+    "afterSha256": "e9e2e5c9acd2b1d33bdcdb757fbbc0ce68d03a8bf32ef1e211b89c721a3e41c8",
+    "bytes": 9672,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+    "beforeExists": true,
+    "beforeSha256": "1b0c53e40a22f9036a6ea078c38157a44ba27026d3be078698f1502bdaf16844",
+    "afterSha256": "943960e1024bedc1857466c7361b7c797566c993ab65ebe63b1fbfea950f61f5",
+    "bytes": 11840,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/DomainModels.kt",
+    "beforeExists": true,
+    "beforeSha256": "d67784f81ec3909e6f2c939d2f58cfa5128d2e5edd2e735a59a77ed8a4a585f2",
+    "afterSha256": "c30b6db2cc8012a146cae3e90becd9f4e8e6ba38aa30f81efaebadf8b454a669",
+    "bytes": 23577,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ModelRegistry.kt",
+    "beforeExists": true,
+    "beforeSha256": "77b15542385afac7eeca5de20a25b208d1ce2665c3de04ef5fef86c9f8211ef6",
+    "afterSha256": "64205ae55ae795776c71ce23191f819dbc2b92a8b7f55ec56ed07bc40fbd8ff1",
+    "bytes": 5329,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ModelService.kt",
+    "beforeExists": true,
+    "beforeSha256": "c3d7ffa86de96aeb3779e1548d92979395df5cfb4182bc92f4d61305453a0d82",
+    "afterSha256": "3ea07145d98bfe7fe0cb6a42c0910e0e59f7f7f54c285009754c25564da9a718",
+    "bytes": 25926,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+    "beforeExists": true,
+    "beforeSha256": "fea67160a5947eac2825c1fadfa32aba189529eadeff6a017481db2e14393576",
+    "afterSha256": "fea67160a5947eac2825c1fadfa32aba189529eadeff6a017481db2e14393576",
+    "bytes": 4981,
+    "changed": false
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatRoutingSnapshot.kt",
+    "beforeExists": true,
+    "beforeSha256": "7711e45896a462691d14df3d9b4ee9563558d287fc51955729776a5862e2f628",
+    "afterSha256": "119ca9f4b96c1ca6c5a5708a11ea0b541183e3dbaaffaf869ee88f11cf7e7575",
+    "bytes": 3513,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/RegistryVerification.kt",
+    "beforeExists": true,
+    "beforeSha256": "5bd5f70fb86155a7f1c56d6674eba1315050c379155a9ba50f59390300124f1b",
+    "afterSha256": "609fbf18e34ae80ecf73dcebb0efaa390fec649afec59dbdb8799f927709499d",
+    "bytes": 12390,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/RelayCoreModels.kt",
+    "beforeExists": true,
+    "beforeSha256": "a9f897f24adaa0d874d49640618d1dd365f04a57e021955745d57ea11e4b3234",
+    "afterSha256": "508140fc24b5de0082df960fae9248f41e84f4be37c7e773b8ebab8a3410440a",
+    "bytes": 5078,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ResolvedModel.kt",
+    "beforeExists": true,
+    "beforeSha256": "4669628b34ee1711178b2d64911579903281720603770d47a099dcd4b072d15a",
+    "afterSha256": "438c580eba7bd81315c270fc55ad543b2707d62781506bb7f2dd2194c53d5fbc",
+    "bytes": 9112,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+    "beforeExists": true,
+    "beforeSha256": "b204d804bdc880f70df93d217d4fba8d5d85e057622356832c30f0ac051fbbd8",
+    "afterSha256": "79d9721ca641c57372c4869291c507f86771fcf63b0906811a1a5da0e9bd1a46",
+    "bytes": 635850,
+    "changed": true
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+    "beforeExists": true,
+    "beforeSha256": "57e225cdefce36b8199e8dbc27938255e7684e610ae1a9d0846e60dabc65ef2e",
+    "afterSha256": "7b643ede96ba8e59abc4615bf81870f96e8713e2ed925c49ea4045e8f342fd37",
+    "bytes": 220358,
+    "changed": true
+  },
+  {
+    "path": "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt",
+    "beforeExists": true,
+    "beforeSha256": "2b478020779c9db17a540152eda0496c0a419801f8d82b6535d68248514daa63",
+    "afterSha256": "b0db649bfc591490cb6051cb58c0d6ceb9434633c5d95a02e833dcad8745c17b",
+    "bytes": 19586,
+    "changed": true
+  },
+  {
+    "path": "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/ai/LunaRoutingNativeOwner.kt",
+    "beforeExists": false,
+    "beforeSha256": null,
+    "afterSha256": "9170f4f78b6f1a39e9075c4f98fb44f8fcbcf720ce8f49922ecd16e3a908890b",
+    "bytes": 14989,
+    "changed": true
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt",
+    "beforeExists": true,
+    "beforeSha256": "708e258383eff3eb106dabd51b5ccb6ed4862c786621551171d0bb664a2327f3",
+    "afterSha256": "4447789eef82052bfd7e06e3da9675310bc68a2970d679eb7b2fd7d6525c3918",
+    "bytes": 55084,
+    "changed": true
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/RelayCoreIntegrationTest.kt",
+    "beforeExists": true,
+    "beforeSha256": "9b96f6bdaaf513bed5207a50cd570922ef5f89abd22fe2abfa3227e88022b39e",
+    "afterSha256": "3ad7964f751f684a11822f40d8030f0aba2be369fcc2dd49a27025c0f0d024ec",
+    "bytes": 14827,
+    "changed": true
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/RelayCoreNativeSearchTest.kt",
+    "beforeExists": true,
+    "beforeSha256": "851fd3dfe305d2278fefd6d348007e797bf29dec1a9a66a3f612941a891bcb3f",
+    "afterSha256": "2e5fe44b23a6a35ea2057e31d44c2c90c1077713532f87325fc1be8191d5ad56",
+    "bytes": 14059,
+    "changed": true
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanionTest.kt",
+    "beforeExists": true,
+    "beforeSha256": "748301190f18ae434b325d2947af338fae8dabbf6cb3dfeae33f474a3d56c9cd",
+    "afterSha256": "1633383b1e9886e0480993a672c4128c6576518dc0ac5f9eb6891bbbc8e21891",
+    "bytes": 23834,
+    "changed": true
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/SearchRoutingTargetTest.kt",
+    "beforeExists": false,
+    "beforeSha256": null,
+    "afterSha256": "57ba57188d7962764d3e82296f45ad0ae46ef5801e802afd49ef819e41281f1b",
+    "bytes": 3244,
+    "changed": true
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/domain/P6GModelRouterContractsTest.kt",
+    "beforeExists": true,
+    "beforeSha256": "76d5706bdd72cabcc577378a89372c0d180fc1a404cc09b58c7c26f5d2881071",
+    "afterSha256": "559f31eff445942205ab41c8d79dad5bfeb322837c6e7de1b228e5ff75869546",
+    "bytes": 13769,
+    "changed": true
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_search_live_matrix_tests.rs",
+    "beforeExists": true,
+    "beforeSha256": "bdcf6f7fcf40933e65815757b0a710e8a215e914716a9f5773dda8b3d12ac83f",
+    "afterSha256": "76a4517b64d38b549a3682836c3d492d1c533156952a04442f09c554f0612610",
+    "bytes": 30703,
+    "changed": true
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+    "beforeExists": true,
+    "beforeSha256": "44ae92fc1de662fbe548d96a3d92851d1595699b61379d66379cf882d344d1d0",
+    "afterSha256": "6587dcaee8111581948ee57c0d72f313d111bd57e7c900ae03e51d31d7495893",
+    "bytes": 43598,
+    "changed": true
+  },
+  {
+    "path": "desktop/src-tauri/src/chat_call_accounting_v1.rs",
+    "beforeExists": true,
+    "beforeSha256": "f3abef3e2c4cfed85741c3daad331a8e56b950e906fa972269ee2e543a94a6e2",
+    "afterSha256": "d045b234418d3c4ceeeda71e3585096e618d2ef93ce309731cf00efc44e286ce",
+    "bytes": 8982,
+    "changed": true
+  },
+  {
+    "path": "desktop/src-tauri/src/desktop_model_service_v1.rs",
+    "beforeExists": true,
+    "beforeSha256": "bcb07d7aa3246e3878fa7b836bbebda557602fdc6ce25f007fbe3b08524bdba8",
+    "afterSha256": "b00e2a8639ca6db6d483fc231e99ce1cad237544fcd7b734751cb8717431b7a7",
+    "bytes": 41273,
+    "changed": true
+  },
+  {
+    "path": "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+    "beforeExists": true,
+    "beforeSha256": "b7ab37d123a8707b9e8ee49765f00f7b493390f6c4692dae5ef91527134c1376",
+    "afterSha256": "2f5255ed1541d33621733d488ce2d45c5264c35866f63535767f490ed20dcaaa",
+    "bytes": 178554,
+    "changed": true
+  },
+  {
+    "path": "desktop/src-tauri/src/lib.rs",
+    "beforeExists": true,
+    "beforeSha256": "4be084164fb61abdadc11bcf5f258e3cb719b61017b7d0510f3371affd54cd58",
+    "afterSha256": "9f2513bd830047d163be81610c18f82e9690fcb559c34d1a6a27cc3b42c773d4",
+    "bytes": 1400085,
+    "changed": true
+  },
+  {
+    "path": "desktop/src-tauri/src/relaycore_web_search_v1.rs",
+    "beforeExists": true,
+    "beforeSha256": "3c208a5ae16326c817ef378179fb8080029fdb35ad4734726905c1841244b395",
+    "afterSha256": "c5464586d4eeb50d8c29e89c42a0fb2102fb5cb54102d097cf50de84e43cb0e7",
+    "bytes": 48231,
+    "changed": true
+  },
+  {
+    "path": "desktop/src/android-settings-shell.mjs",
+    "beforeExists": true,
+    "beforeSha256": "f7dc9b39c3d68b5d3c2bae8cff967406fca3b86b69e43bc1ad6a381e24bc8a7d",
+    "afterSha256": "6967b5f4976cb5964f64fc0b3b2b987d18b0ff51398bac447e15deae133a6948",
+    "bytes": 56124,
+    "changed": true
+  },
+  {
+    "path": "desktop/src/app.mjs",
+    "beforeExists": true,
+    "beforeSha256": "53af4a0e1d835d55786c108849dfe5e4498241a7f71271bd67fcc07fe3de47d5",
+    "afterSha256": "06e7e56b74a8793285ea7e5477a9d84adb1851fba3f470a68e1fd5fe0c3b5a8c",
+    "bytes": 464457,
+    "changed": true
+  },
+  {
+    "path": "desktop/src/auto-chat-routing.mjs",
+    "beforeExists": true,
+    "beforeSha256": "d712e6841114601ee8609dea3987737ec0d4cc28ebf22174b18a5d61cf13756c",
+    "afterSha256": "05334b844992d07512774e66dcfe4c8133dd55eb5e48b09660c12889e169716f",
+    "bytes": 3548,
+    "changed": true
+  },
+  {
+    "path": "desktop/src/chat-shell.mjs",
+    "beforeExists": true,
+    "beforeSha256": "f1bd85b41fa42e284829a8ea688608533777784fb03c7c82a296653bf8fef21f",
+    "afterSha256": "2952ee192669a6bfec16e84b31f5f99aa83a0a1c17f49867793050b971807edf",
+    "bytes": 106209,
+    "changed": true
+  },
+  {
+    "path": "desktop/src/independent-web-search.mjs",
+    "beforeExists": true,
+    "beforeSha256": "af1b0120b057320d71233f21ddd0d85fa3b7c2d04f595e783a0f15ad25123990",
+    "afterSha256": "eddb12c3ef074405b0d6fddec96e0b3203bb3b59221a7e5fa3c8857af427de3c",
+    "bytes": 1627,
+    "changed": true
+  },
+  {
+    "path": "desktop/src/relaycore-models.mjs",
+    "beforeExists": true,
+    "beforeSha256": "52b7e0a1cf916957d404ab5407726a94860cd047aafdb4c429abf3ada45ec043",
+    "afterSha256": "fde84d090133fb78f7ad48ef166e0daf2a6672a9d0d5b8c9203dcd1b80a21cf0",
+    "bytes": 4026,
+    "changed": true
+  },
+  {
+    "path": "desktop/tests/auto-chat-routing.test.mjs",
+    "beforeExists": true,
+    "beforeSha256": "93366715d5c6be03a9515b20136322edfd24952643c04dde1c54fa82415d4c0b",
+    "afterSha256": "b063ce70d65a710ea820426635b28fed7782b001446673d24a89d6bee1b4fc71",
+    "bytes": 2804,
+    "changed": true
+  },
+  {
+    "path": "desktop/tests/independent-web-search.test.mjs",
+    "beforeExists": true,
+    "beforeSha256": "fb0a6e477f17aaca2503fecea2819d8169956225c132dde26056b1ccf23a9f1f",
+    "afterSha256": "ccfd7e2bb8c49955412267a00d21b2742cf622692306f7b7b8e3371a7ffe47a9",
+    "bytes": 1785,
+    "changed": true
+  },
+  {
+    "path": "desktop/tests/model-settings-browser.test.mjs",
+    "beforeExists": true,
+    "beforeSha256": "685b296bbf9f115306a2869862e99b694ca1d756675328ebd3dbff07d60f5719",
+    "afterSha256": "ea6d4eda93b169385415efb89de763cf92d168ec2ce1e83602dbf399e731c0a6",
+    "bytes": 5862,
+    "changed": true
+  },
+  {
+    "path": "desktop/tests/relaycore-models.test.mjs",
+    "beforeExists": true,
+    "beforeSha256": "279a64d922204f5d88f31b3f6ac238c8810c9e061c2ccd847ded745d6eef7e77",
+    "afterSha256": "e5b4d4ac6172f1fbd7d7fb9007ee7c494658570706b98179dcbe74414730a192",
+    "bytes": 13638,
+    "changed": true
+  },
+  {
+    "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "beforeExists": true,
+    "beforeSha256": "83d90a41b85588d9cf6699ccabcb9977da03c5243a15653682f64cc367d55e84",
+    "afterSha256": "60bc4460a5bc48b74671cdf91ba1309e37f8265e33e6b3b21b44025b02b76930",
+    "bytes": 28815,
+    "changed": true
+  },
+  {
+    "path": "docs/CURRENT_HANDOFF.md",
+    "beforeExists": true,
+    "beforeSha256": "a9b1a8472f8400fdc1fe1bd18f0dd7ede9618459a29a5a85e0cade4b4b5a55b0",
+    "afterSha256": "ad300f55de3b77468d926aabcd687ec405a571c10290b87b83700b3fbaa6a63c",
+    "bytes": 395160,
+    "changed": true
+  },
+  {
+    "path": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+    "beforeExists": true,
+    "beforeSha256": "7872e84c456a30eaeaffb57856e6a0e957b392cdf3f96b4148512347cd97ec91",
+    "afterSha256": "10ec4f96812be0d9eda73953f07344bf2a6457ffab0fe42294f1602de985cdb7",
+    "bytes": 17739,
+    "changed": true
+  },
+  {
+    "path": "docs/PRODUCT_FEEDBACK_DECISION_LEDGER.md",
+    "beforeExists": true,
+    "beforeSha256": "8f760ec04240ff13f6cd767d84008a11cc9f8c7aa8c3ec4bc9d0d848b86955d6",
+    "afterSha256": "02231816d9d27c87dd07bfd773fc6933bc1548574e30ccee774090d6ab75c004",
+    "bytes": 87085,
+    "changed": true
+  },
+  {
+    "path": "docs/PROJECT_STATUS.md",
+    "beforeExists": true,
+    "beforeSha256": "53062b9dabe0cec07ee7171547d25ff6c9e0287cf8b7619d5aa5c7eced30bdfd",
+    "afterSha256": "c33f22dd3f5547c70715b2370a701ec63972e351810a9d1d57903d1d4199b787",
+    "bytes": 4169,
+    "changed": true
+  },
+  {
+    "path": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+    "beforeExists": true,
+    "beforeSha256": "f9404712107107e6fee163b5b6f2e13cdfb56ecbf1fb1a2327dbc64211c217dc",
+    "afterSha256": "0f9a73b8a7810716d6fe5809423cdae183fa87829daa45b6a6da87c16018cdfc",
+    "bytes": 24040,
+    "changed": true
+  },
+  {
+    "path": "docs/handoffs/2026-10-13-search-routing-prompt.md",
+    "beforeExists": true,
+    "beforeSha256": "2c0745034c485dc788c01d4d971f22f00e0623270113691abce7704eff43245f",
+    "afterSha256": "73f28d1b45f899413466a81d15a113fa0cdb681d613d9cdcad035af2268ad113",
+    "bytes": 1726,
+    "changed": true
+  },
+  {
+    "path": "docs/model-service/MODEL_SERVICE_MATRIX.md",
+    "beforeExists": true,
+    "beforeSha256": "9f6202e1441ca4d225b08d1e88a9c4208bb11f1ee1c5b41f5c8ec22b426c1d3a",
+    "afterSha256": "daa6795dfcc0c3f241570f5c2f51ef15b14b43ce55ddfdc8122e6bb6d12e91c6",
+    "bytes": 7378,
+    "changed": true
+  },
+  {
+    "path": "docs/model-service/SEARCH_ROUTING_TARGET_PLAN_2026-10-13.md",
+    "beforeExists": true,
+    "beforeSha256": "6ec7ba015d87b55f32760fc499c8738d0f1e359dcccb81ac51c941f5070ec387",
+    "afterSha256": "ce02424b256d7122d362798846b9db74bef4590174dae0350d369a9de0a7fab8",
+    "bytes": 17533,
+    "changed": true
+  },
+  {
+    "path": "protocol/fixtures/luna-retrieval-grant-v1.json",
+    "beforeExists": false,
+    "beforeSha256": null,
+    "afterSha256": "af2d3534ea8662e2ad798e45a6887b67900c0953a111773a4bea8b1c7af2cb13",
+    "bytes": 192,
+    "changed": true
+  },
+  {
+    "path": "protocol/fixtures/openrouter-luna-sources-20261013.json",
+    "beforeExists": false,
+    "beforeSha256": null,
+    "afterSha256": "0239385266b4b29268c4bde4401ad2aae1ebe2e93de02eb5186d3659e220d708",
+    "bytes": 9251,
+    "changed": true
+  },
+  {
+    "path": "protocol/model-service/model-service-v1.json",
+    "beforeExists": true,
+    "beforeSha256": "f81bd307602a4191a29242a0553fce8b7c24de6211ff9f6b159c7195917c9d77",
+    "afterSha256": "6e60034185b8fe9cb7ba50a573aa09e7a1b5f064133e50c4a0f443adc3a00577",
+    "bytes": 20545,
+    "changed": true
+  },
+  {
+    "path": "protocol/scripts/verify-model-service-contract.py",
+    "beforeExists": true,
+    "beforeSha256": "20190af0035d0d943bd9911417a748f6e6acb4b5641d3bd5ff860731c6267938",
+    "afterSha256": "5e8b8eae9b6944de70223cc7345b294ffa8229d8c552c5e12f8596be5ad3ba89",
+    "bytes": 20786,
+    "changed": true
+  },
+  {
+    "path": "protocol/tests/test_model_service_contract.py",
+    "beforeExists": true,
+    "beforeSha256": "ef4386504a9a610d310043971d9f14f1f25643cc47989fdb12532bd28708204f",
+    "afterSha256": "73b0bddf427717a31e5a9b2c3f245bfbfe028bd506ddbc441d4e0947b986cec7",
+    "bytes": 7518,
+    "changed": true
+  }
+]

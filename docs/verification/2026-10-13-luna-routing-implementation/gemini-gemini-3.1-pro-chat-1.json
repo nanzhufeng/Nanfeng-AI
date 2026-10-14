@@ -1,0 +1,16 @@
+{
+  "runId": "gemini-gemini-3.1-pro-chat-1",
+  "model": "gemini-3.1-pro",
+  "kind": "chat",
+  "status": "FAILED",
+  "http": 404,
+  "responseKeys": [
+    "error"
+  ],
+  "errorCode": null,
+  "errorStatus": null,
+  "reasonFields": [
+    "not found"
+  ],
+  "seconds": 1.429
+}

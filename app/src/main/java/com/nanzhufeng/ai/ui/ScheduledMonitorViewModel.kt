@@ -124,7 +124,7 @@ class ScheduledMonitorViewModel(
                 sourceConversationId = draft.sourceConversationId,
                 cadence = draft.cadence,
                 // Standard Terra is intentional: scheduled work never silently selects a Pro tier.
-                modelPresetId = ModelPresetId.GPT_5_6_TERRA,
+                modelPresetId = ModelPresetId.GPT_6_LUNA,
                 status = ScheduledMonitorStatus.ACTIVE,
                 nextRunAt = now,
                 createdAt = now,

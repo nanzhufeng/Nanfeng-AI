@@ -595,3 +595,21 @@
 :root[data-appearance-mode="dark"] .chat-text-content-preview pre { color: #e3e9e4; }
 :root[data-appearance-mode="dark"] .chat-file-format-label,
 :root[data-appearance-mode="dark"] .chat-file-preview-fallback { color: #b8c3bb; }
+
+/* Text reader: one light canvas, circular navigation and a labelled action menu. */
+.scrim.attachment-preview-overlay.text-preview-overlay,
+.attachment-preview-overlay > .text-preview-surface { background: color-mix(in srgb, var(--page-background, #f5f6f5) 96%, #888 4%); color: var(--body-text, #202722); border: 0; }
+.text-preview-overlay .text-preview-header { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 16px; }
+.text-preview-title { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-preview-overlay .file-preview-action { background: var(--foreground-surface, #fff); border-radius: 50%; width: 44px; height: 44px; display: grid; place-items: center; border: 0; cursor: pointer; }
+.text-preview-menu { position: relative; }
+.text-preview-menu summary { list-style: none; }
+.text-preview-menu summary::-webkit-details-marker { display: none; }
+.text-preview-menu-items { position: absolute; right: 0; top: 50px; min-width: 160px; padding: 8px; border-radius: 16px; background: var(--foreground-surface, #fff); box-shadow: 0 8px 28px #0002; z-index: 2; }
+.text-preview-menu-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border: 0; background: transparent; border-radius: 10px; }
+.text-preview-overlay .local-text-preview { background: transparent; color: var(--body-text, #202722); border: 0; border-radius: 0; }
+.text-preview-overlay .local-text-preview h1 { font-size: 1.8em; font-weight: 700; }
+.text-preview-overlay .text-preview-facts { margin: 8px 24px; }
+.preview-progress-range { min-height: 44px; touch-action: none; }
+
+.text-preview-overlay .local-text-preview > h2:first-child { font-size: 1.8em; font-weight: 700; }

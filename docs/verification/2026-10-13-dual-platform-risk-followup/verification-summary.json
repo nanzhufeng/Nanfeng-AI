@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-13",
+  "Android": {
+    "suites": 318,
+    "pass": 1470,
+    "skip": 9,
+    "fail": 0,
+    "errors": 0,
+    "assembleDebug": "PASS"
+  },
+  "MacRust": {
+    "pass": 423,
+    "ignored": 33,
+    "fail": 0
+  },
+  "DesktopESM": {
+    "pass": 544,
+    "skip": 12,
+    "fail": 0
+  },
+  "contracts": {
+    "contracts": 114,
+    "domains": 40,
+    "testsPass": 22
+  },
+  "modelGate": {
+    "chat": 20,
+    "special": 1,
+    "credentialGroups": 7
+  },
+  "nativeProcess": "NOT RUN",
+  "realProvider": "NOT RUN",
+  "installations": 0
+}

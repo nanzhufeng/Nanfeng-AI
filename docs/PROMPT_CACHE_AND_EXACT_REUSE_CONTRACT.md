@@ -1,6 +1,17 @@
-# Prompt Cache 与精确复用合同（P6-L4 本地消息引用有效性门已实现；Provider 缓存仍未实现）
+# 本地精确引用复用合同（P6-L4；不替代联网检查点或Provider缓存计量）
+
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本地精确引用复用 ](PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 独立本地精确引用索引；不替代搜索检查点/Provider缓存或普通发送
+<!-- contract-governance:end -->
+
+<a id="prompt-cache-与精确复用合同p6-l4-本地消息引用有效性门已实现provider-缓存仍未实现"></a>
 
 本合同不编号为 P6-H，避免路线冲突；P6-E 不读取 Key、不构造 Provider 请求或联网。集成时必须复核实时 catalog/capability/policy 表；2026-08-13 官方依据：[Claude](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)、[OpenAI](https://developers.openai.com/api/docs/guides/prompt-caching)、[data controls](https://platform.openai.com/docs/models/default-usage-policies-by-endpoint)。
+
+## 当前机制分域
+
+本合同仅持有LocalExactReuse索引／分派／引用有效性门；它们的持久化与接线状态按下方各增量说明，不代表普通生成或服务商自动缓存的状态。当前附件检索检查点及旧证据版本隔离只读[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)，已返回缓存Token和费用事实只读[费用合同](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)。检索检查点命中、返回缓存Token、prompt_cache_key路由元数据与本地消息精确复用是不同机制，不相互冒充命中或节省证明。
 
 ## P6-L1：双端本地精确复用索引（2026-08-20）
 
@@ -25,6 +36,10 @@
 - L3 只能分派 `responseMessageId`，L4 要求 Android `LocalExactReuseResponseReferenceVerifier` 与 Desktop `ResponseReferenceVerifier` 先以 `scopeId + responseMessageId` 作 content-free authority check。仅 `VALID` 才能复用；`MISSING`、`SCOPE_MISMATCH`、`UNREADABLE` 或无效 scope 都统一降级 `UNKNOWN`，不把悬空/跨 scope 引用交给未来执行层。
 - verifier 不读取或复制消息正文，也不承担 renderer、Conversation/Message Tree mutation、Provider Attempt、Usage/Cost Ledger、Provider cache 或网络职责。L4 未注册至 AppContainer、Tauri/UI、P2/P3 dispatch 或 Provider adapter。
 - 定向合同覆盖有效引用、三种无效引用及非命中不查询引用。它不产生真实复用、Provider 请求节省、费用节省或用户可见功能；不新增设置条目或聊天/Composer 常驻入口。
+
+## 历史Provider缓存接入规划（非当前Adapter参数合同）
+
+以下保留早期设计与术语；未作为当前普通生成的TTL、断点或型号能力承诺。未来实施须重新核对实际Adapter、目录与官方能力，不据本段恢复旧参数或付费预热。
 
 - 结果层固定为 `LOCAL_EXACT_HIT`（本地精确复用、零网络）、`PROVIDER_PREFIX_HIT`（仍有 Provider 请求/外发）、`MISS`、`INELIGIBLE`、`UNKNOWN`；预计或缺 usage 绝不冒充命中。
 - Prompt 顺序：工具/schema → 安全/system/template version → 产品/workspace/project 指令 → 规范排序的显式 Knowledge/Memory Context → root-to-leaf 对话历史 → 当前用户内容及时间/随机/requestId 动态后缀；动态字段不在断点前。

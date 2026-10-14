@@ -1,0 +1,173 @@
+{
+  "CLAUDE_OPUS_5_5": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "anthropic/claude-opus-5.5",
+    "actualModel": "anthropic/claude-opus-5.5",
+    "chars": 1747,
+    "nativeSourceCount": 12
+  },
+  "CLAUDE_SONNET_5_5": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "anthropic/claude-sonnet-5.5",
+    "actualModel": "anthropic/claude-sonnet-5.5",
+    "chars": 878,
+    "nativeSourceCount": 12
+  },
+  "CLAUDE_HAIKU_5_5": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "anthropic/claude-haiku-5.5",
+    "actualModel": "anthropic/claude-haiku-5.5",
+    "chars": 943,
+    "nativeSourceCount": 12
+  },
+  "GPT_6_1_SOL": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "openai/gpt-6.1-sol",
+    "actualModel": "openai/gpt-6.1-sol",
+    "chars": 758,
+    "nativeSourceCount": 12
+  },
+  "GPT_6_LUNA": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "openai/gpt-6-luna",
+    "actualModel": "openai/gpt-6-luna",
+    "chars": 396,
+    "nativeSourceCount": 12
+  },
+  "GEMINI_3_8_FLASH": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "google/gemini-3.8-flash",
+    "actualModel": "google/gemini-3.8-flash",
+    "chars": 447,
+    "nativeSourceCount": 12
+  },
+  "DEEPSEEK_V4_PRO": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "deepseek-v4-pro",
+    "actualModel": "deepseek-v4-pro",
+    "chars": 521,
+    "nativeSourceCount": 12
+  },
+  "DEEPSEEK_V4_FLASH": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "deepseek-flash",
+    "actualModel": "deepseek-flash",
+    "chars": 680,
+    "nativeSourceCount": 12
+  },
+  "GLM_5_3": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "glm-5.3",
+    "actualModel": "glm-5.3",
+    "chars": 963,
+    "nativeSourceCount": 12
+  },
+  "GLM_5_3_FLASH": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "glm-5.3-flash",
+    "actualModel": "glm-5.3-flash",
+    "chars": 1077,
+    "nativeSourceCount": 12
+  },
+  "QWEN_3_7_PLUS": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "qwen3.7-plus",
+    "actualModel": "qwen3.7-plus",
+    "chars": 469,
+    "nativeSourceCount": 12
+  },
+  "QWEN_3_8_MAX": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "qwen3.8-max",
+    "actualModel": "qwen3.8-max",
+    "chars": 687,
+    "nativeSourceCount": 12
+  },
+  "RELAYCORE_OPUS_5_5": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "claude-opus-5.5",
+    "actualModel": "claude-opus-5.5",
+    "chars": 1065,
+    "nativeSourceCount": 12
+  },
+  "RELAYCORE_SONNET_5_5": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "claude-sonnet-5-5",
+    "actualModel": "claude-sonnet-5-5",
+    "chars": 1139,
+    "nativeSourceCount": 12
+  },
+  "RELAYCORE_GPT_6_1_SOL": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "gpt-6.1-sol",
+    "actualModel": "gpt-6.1-sol",
+    "chars": 1150,
+    "nativeSourceCount": 12
+  },
+  "RELAYCORE_GPT_6_ASTRA": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "gpt-6-astra",
+    "actualModel": "gpt-6-astra",
+    "chars": 925,
+    "nativeSourceCount": 12
+  },
+  "RELAYCORE_GEMINI_3_8_FLASH": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "gemini-3.8-flash",
+    "actualModel": "gemini-3.8-flash",
+    "chars": 729,
+    "nativeSourceCount": 12
+  },
+  "RELAYCORE_GEMINI_3_1_PRO": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "gemini-3.1-pro",
+    "actualModel": "gemini-3.1-pro",
+    "chars": 877,
+    "nativeSourceCount": 12
+  },
+  "QWEN_3_6_FLASH": {
+    "status": "COMPLETED",
+    "planned": 4,
+    "covered": 4,
+    "requestedModel": "qwen3.6-flash",
+    "actualModel": "qwen3.6-flash",
+    "chars": 1004,
+    "nativeSourceCount": 12
+  }
+}

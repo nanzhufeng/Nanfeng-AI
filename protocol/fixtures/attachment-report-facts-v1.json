@@ -1,0 +1,125 @@
+{
+  "cases": [
+    {
+      "id": "separate_metrics_and_dates",
+      "material": "# (1) 制造业财报\n甲公司第三季度营收1.4944万亿元，同比+51%。营业利润107.4亿元。\n相关链接：https://example.org/quarter\n# (2) 经济日程\n10月14日公布CPI；10月15日公布PPI。",
+      "facts": [
+        "甲公司第三季度营收1.4944万亿元，同比+51%。",
+        "营业利润107.4亿元。",
+        "10月14日公布CPI；",
+        "10月15日公布PPI。"
+      ],
+      "first_fact_urls": [
+        "https://example.org/quarter"
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "privacy_and_source_boundaries",
+      "material": "# (1) 发布报告\n甲公司2026年10月7日发布产品。乙公司2026年10月8日发布产品。\n相关链接：https://example.org/releases\n我持仓40%，我的预算100万元。\n相关链接：https://private.example.org/account\n# (2) 后续公告\n丙公司2026年10月9日公布季度利润。",
+      "facts": [
+        "甲公司2026年10月7日发布产品。",
+        "乙公司2026年10月8日发布产品。",
+        "丙公司2026年10月9日公布季度利润。"
+      ],
+      "first_fact_urls": [
+        "https://example.org/releases"
+      ],
+      "forbidden": [
+        "我持仓",
+        "我的预算",
+        "private.example.org"
+      ]
+    },
+    {
+      "id": "keep_complete_sentences_not_comma_fragments",
+      "material": "# (1) 财务数据\n甲公司2026年营收1,000.25亿元，利润率5.3%，同比增长12%，报告含多处解释，不能把数字按逗号拆散。\n# (2) Unicode事项\n公司🌿在2026年10月1日发布产品。公司🌿在2026年10月2日公布利润。",
+      "facts": [
+        "甲公司2026年营收1,000.25亿元，利润率5.3%，同比增长12%，报告含多处解释，不能把数字按逗号拆散。",
+        "公司🌿在2026年10月1日发布产品。",
+        "公司🌿在2026年10月2日公布利润。"
+      ],
+      "first_fact_urls": [],
+      "forbidden": []
+    },
+    {
+      "id": "public_preamble_is_not_lost",
+      "material": "# 每周订阅内容20261011\n大家好！\n甲公司2026年10月1日发布报告。\n相关链接：https://example.org/preamble\n# (1) 营收\n乙公司2026年营收10亿元。\n# (2) 利润\n丙公司2026年利润2亿元。",
+      "facts": [
+        "甲公司2026年10月1日发布报告。",
+        "乙公司2026年营收10亿元。",
+        "丙公司2026年利润2亿元。"
+      ],
+      "first_fact_urls": [
+        "https://example.org/preamble"
+      ],
+      "forbidden": [
+        "每周订阅内容",
+        "大家好"
+      ]
+    },
+    {
+      "id": "bom_numbered_header_stays_in_fact_mode",
+      "material": "﻿# (1) 公告\n甲公司2026年发布报告。利润3亿元。\n# (2) 产品\n乙公司2026年发布产品。",
+      "facts": [
+        "甲公司2026年发布报告。",
+        "利润3亿元。",
+        "乙公司2026年发布产品。"
+      ],
+      "first_fact_urls": [],
+      "forbidden": [
+        "﻿"
+      ]
+    },
+    {
+      "id": "comment_heading_breaks_source_inheritance",
+      "material": "# (1) 发布报告\n甲公司2026年发布报告。\n\n点评：\n相关链接：https://example.org/opinion\n\n乙公司2026年发布产品。\n相关链接：https://example.org/product\n# (2) 后续\n丙公司2026年公布季度营收。",
+      "facts": [
+        "甲公司2026年发布报告。",
+        "乙公司2026年发布产品。",
+        "丙公司2026年公布季度营收。"
+      ],
+      "first_fact_urls": [],
+      "forbidden": [
+        "example.org/opinion"
+      ]
+    },
+    {
+      "id": "all_data_fact_is_not_a_meta_request",
+      "material": "# (1) 数据\n所有数据截至2026年10月1日，甲公司营收10亿元。\n# (2) 利润\n乙公司2026年利润2亿元。",
+      "facts": [
+        "所有数据截至2026年10月1日，甲公司营收10亿元。",
+        "乙公司2026年利润2亿元。"
+      ],
+      "first_fact_urls": [],
+      "forbidden": []
+    },
+    {
+      "id": "multiple_public_links_do_not_concatenate",
+      "material": "# (1) 发布报告\n甲公司2026年发布报告。\n相关链接：https://www.bbc.com/zh ongwen/articles/demo https://example.org/notice\n# (2) 季度利润\n乙公司2026年利润2亿元。",
+      "facts": [
+        "甲公司2026年发布报告。",
+        "乙公司2026年利润2亿元。"
+      ],
+      "first_fact_urls": [
+        "https://www.bbc.com/zhongwen/articles/demo",
+        "https://example.org/notice"
+      ],
+      "forbidden": [
+        "demohttps://"
+      ]
+    },
+    {
+      "id": "nested_url_is_part_of_one_reference",
+      "material": "# (1) 发布报告\n甲公司2026年发布报告。\n相关链接：https://example.org/notice?target=https://source.example.org/report\n# (2) 季度利润\n乙公司2026年利润2亿元。",
+      "facts": [
+        "甲公司2026年发布报告。",
+        "乙公司2026年利润2亿元。"
+      ],
+      "first_fact_urls": [
+        "https://example.org/notice?target=https://source.example.org/report"
+      ],
+      "forbidden": []
+    }
+  ]
+}

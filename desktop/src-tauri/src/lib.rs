@@ -9,10 +9,21 @@ pub mod desktop_background_runtime_v1;
 pub mod desktop_conversation_read_state_v1;
 pub mod desktop_conversation_title_v1;
 mod desktop_docx_preview;
+mod attachment_document_text_v1;
 pub mod desktop_history_knowledge_v1;
 pub mod desktop_local_backup_v1;
 pub mod desktop_model_service_v1;
 pub mod desktop_ordinary_chat_v1;
+mod generation_continuity_v1;
+mod nanfeng_island_v1;
+static GENERATION_EXIT_DRAIN: generation_continuity_v1::ExitDrainEpoch = generation_continuity_v1::ExitDrainEpoch::new();
+mod auto_chat_routing_v1;
+pub mod answer_language_v1;
+mod relaycore_web_search_v1;
+mod attachment_web_search_v1;
+mod independent_web_search_v1;
+mod attachment_web_search_execution_v1;
+mod attachment_search_checkpoint_v1;
 mod desktop_pdf_page_render;
 pub mod desktop_reminder_notification_v1;
 pub mod desktop_reminders_v1;
@@ -37,6 +48,8 @@ pub mod p9b_integration_contract_v1;
 pub mod sync_state_v1;
 pub mod sync_v1;
 pub mod usage_ledger_v1;
+pub mod chat_call_accounting_v1;
+pub mod chat_continuation_v1;
 
 use crate::desktop_model_service_v1::ProviderCredentialStore;
 use crate::p6g_model_selection::{
@@ -602,6 +615,7 @@ struct DesktopMarkdownWriteReceipt {
 #[serde(rename_all = "camelCase")]
 struct DesktopRuntimeInfo {
     version: String,
+    git_commit: &'static str,
     platform: &'static str,
     arch: &'static str,
     build_epoch_seconds: u64,
@@ -1062,7 +1076,15 @@ struct DesktopModelServiceSaveArgs {
     preset_id: String,
     expected_revision: u64,
     api_key: Option<String>,
+    #[serde(default)]
+    preserve_enabled: bool,
+    #[serde(default)]
+    preserve_preset: bool,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopModelServiceEnabledArgs { provider_id: String, enabled: bool }
 
 #[derive(Debug, Clone)]
 struct DesktopModelServiceSettingRecord {
@@ -1122,12 +1144,18 @@ struct DesktopOrdinaryChatEgressAuthorization {
     /// Content-free UI receipt used only to bind runtime events to this Send.
     #[serde(default)]
     client_submission_id: Option<String>,
+    #[serde(default)]
+    search_service:Option<independent_web_search_v1::ServiceGrant>,
+    #[serde(default)]
+    retrieval_recipient:Option<relaycore_web_search_v1::RetrievalGrant>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopOrdinaryChatRetryArgs {
     attempt_id: String,
+    #[serde(default)]
+    egress_authorization: Option<DesktopOrdinaryChatEgressAuthorization>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1222,6 +1250,7 @@ struct DesktopOrdinaryChatPrepared {
     web_search_route: String,
     preflight_failure_code: Option<String>,
     client_submission_id: String,
+    search_service:Option<independent_web_search_v1::ServiceGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -1325,6 +1354,9 @@ struct DesktopOrdinaryChatDiagnosticProjection {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopUsageLedgerRecordProjection {
+    attempt_id: String,
+    requested_model_id: String,
+    call_metadata: Option<chat_call_accounting_v1::Metadata>,
     entry_id: String,
     conversation_id: String,
     model_id: String,
@@ -2080,7 +2112,7 @@ fn canonical_desktop_model_choice(value: &str) -> &str {
     match value {
         "deepseek-v4-flash" | "deepseek-v4-flash-vision-exp" => "DEEPSEEK_V4_FLASH",
         "GEMINI_3_7_FLASH" | "google/gemini-3.7-flash" => "GEMINI_3_8_FLASH",
-        _ => value,
+        _ => desktop_model_service_v1::current_preset_id(value),
     }
 }
 
@@ -2280,12 +2312,28 @@ fn desktop_attachment_kind(
     if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" && &bytes[8..12] == b"M4A " && ext == "m4a" {
         return Some(("audio/mp4", ".m4a"));
     }
-    if !bytes.is_empty() && !bytes.contains(&0) {
+    if bytes.starts_with(b"PK\x03\x04") {
+        let office=match ext.as_str() {
+            "docx"=>Some((attachment_document_text_v1::DOCX,".docx")),
+            "xlsx"=>Some((attachment_document_text_v1::XLSX,".xlsx")),
+            "pptx"=>Some((attachment_document_text_v1::PPTX,".pptx")),
+            _=>None,
+        };
+        if let Some((mime,suffix))=office {
+            attachment_document_text_v1::extract(bytes,mime).ok()?;
+            return Some((mime,suffix));
+        }
+        if ext=="zip" { desktop_docx_preview::archive_entries(bytes).ok()?;return Some(("application/zip",".zip")); }
+    }
+    if !bytes.is_empty() && !bytes.contains(&0) && std::str::from_utf8(bytes).is_ok() {
         return match ext.as_str() {
             "txt" => Some(("text/plain", ".txt")),
             "md" | "markdown" => Some(("text/markdown", ".md")),
             "json" => Some(("application/json", ".json")),
             "csv" => Some(("text/csv", ".csv")),
+            "xml" => Some(("application/xml", ".xml")),
+            "yaml" | "yml" => Some(("application/x-yaml", ".yaml")),
+            "html" | "htm" => Some(("text/html", ".html")),
             _ => None,
         };
     }
@@ -5342,6 +5390,7 @@ impl DesktopWorkspaceStore {
         }
         if startup_mode.work_plan().recovers_business_state() {
             store.recover_interrupted_ordinary_chats()?;
+            store.recover_ordinary_chat_accounting()?;
             store.recover_desktop_conversation_title_accounting()?;
             desktop_history_knowledge_v1::recover_interrupted(
                 &store.connection()?,
@@ -5747,6 +5796,17 @@ impl DesktopWorkspaceStore {
             .collect()
     }
 
+    fn set_desktop_model_service_enabled(&self, provider_id: &str, enabled: bool) -> Result<DesktopModelServiceSettingRecord, String> {
+        let provider = desktop_model_service_v1::provider(provider_id)?;
+        let mut connection = self.configuration_connection()?;
+        let transaction = connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate).map_err(|_| json_error("模型开关暂时无法保存"))?;
+        let (preset, revision) = transaction.query_row("SELECT preset_id,revision FROM desktop_provider_settings WHERE provider_id=?1", [provider_id], |row| Ok((row.get::<_,String>(0)?,row.get::<_,u64>(1)?))).optional().map_err(|_| json_error("模型开关不可读"))?.unwrap_or((provider.default_preset_id.to_owned(),0));
+        let revision = revision.checked_add(1).ok_or_else(|| json_error("模型开关revision溢出"))?;
+        transaction.execute("INSERT INTO desktop_provider_settings(provider_id,enabled,preset_id,revision,updated_at_ms) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(provider_id) DO UPDATE SET enabled=excluded.enabled,revision=excluded.revision,updated_at_ms=excluded.updated_at_ms",params![provider_id,i64::from(enabled),preset,revision,local_now_millis()]).map_err(|_| json_error("模型开关未保存"))?;
+        transaction.commit().map_err(|_| json_error("模型开关未保存"))?;
+        Ok(DesktopModelServiceSettingRecord { provider_id: provider_id.into(), enabled, preset_id: preset, revision })
+    }
+
     fn save_desktop_model_service_setting_record(
         &self,
         provider_id: &str,
@@ -5754,23 +5814,40 @@ impl DesktopWorkspaceStore {
         preset_id: &str,
         expected_revision: u64,
     ) -> Result<DesktopModelServiceSettingRecord, String> {
+        self.save_desktop_model_service_setting_record_guarded(provider_id, Some(enabled), preset_id, expected_revision, false, || Ok(()))
+    }
+
+    // Hold the shared configuration write transaction before touching a replacement credential.
+    // A stale revision must reject without partially replacing the saved Key.
+    fn save_desktop_model_service_setting_record_guarded(
+        &self,
+        provider_id: &str,
+        enabled: Option<bool>,
+        preset_id: &str,
+        expected_revision: u64,
+        preserve_preset: bool,
+        save_credential: impl FnOnce() -> Result<(), String>,
+    ) -> Result<DesktopModelServiceSettingRecord, String> {
         desktop_model_service_v1::validate_configuration(provider_id, preset_id)?;
         let mut connection = self.configuration_connection()?;
         let transaction = connection
-            .transaction()
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|_| json_error("无法开启模型服务设置 transaction"))?;
-        let current = transaction
+        let (current, current_enabled, current_preset) = transaction
             .query_row(
-                "SELECT revision FROM desktop_provider_settings WHERE provider_id=?1",
+                "SELECT revision,enabled,preset_id FROM desktop_provider_settings WHERE provider_id=?1",
                 [provider_id],
-                |row| row.get::<_, u64>(0),
+                |row| Ok((row.get::<_, u64>(0)?, row.get::<_, i64>(1)? != 0, row.get::<_, String>(2)?)),
             )
             .optional()
             .map_err(|_| json_error("无法读取模型服务设置 revision"))?
-            .unwrap_or(0);
+            .unwrap_or((0, false, preset_id.to_owned()));
         if current != expected_revision {
             return Err(json_error("模型服务设置已在其他窗口更新；请刷新后重试"));
         }
+        let enabled = enabled.unwrap_or(current_enabled);
+        let preset_id = if preserve_preset { current_preset.as_str() } else { preset_id };
+        desktop_model_service_v1::validate_configuration(provider_id, preset_id)?;
         let revision = current
             .checked_add(1)
             .ok_or_else(|| json_error("模型服务设置 revision 溢出"))?;
@@ -5781,6 +5858,7 @@ impl DesktopWorkspaceStore {
                 params![provider_id, i64::from(enabled), preset_id, revision, local_now_millis()],
             )
             .map_err(|_| json_error("模型服务设置未写入"))?;
+        save_credential()?;
         transaction
             .commit()
             .map_err(|_| json_error("模型服务设置未提交"))?;
@@ -6820,7 +6898,7 @@ impl DesktopWorkspaceStore {
         let current: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|_| json_error("无法读取 SQLite schema version"))?;
-        if current > 43 {
+        if current > 45 {
             return Err(json_error("SQLite schema 版本比当前客户端更新"));
         }
         if current == 0 {
@@ -7474,6 +7552,20 @@ impl DesktopWorkspaceStore {
             transaction.pragma_update(None, "user_version", 43).map_err(|_| json_error("无法保存区域 schema"))?;
             transaction.commit().map_err(|_| json_error("区域 schema 无法提交"))?;
         }
+        if current < 44 {
+            let transaction = connection.transaction().map_err(|_| json_error("无法开启模型默认选择迁移"))?;
+            transaction.execute_batch("CREATE TABLE IF NOT EXISTS p6g_composer_default (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, model_id TEXT);")
+                .map_err(|_| json_error("模型默认选择迁移失败"))?;
+            transaction.pragma_update(None, "user_version", 44).map_err(|_| json_error("模型默认选择版本未保存"))?;
+            transaction.commit().map_err(|_| json_error("模型默认选择迁移未提交"))?;
+        }
+        if current<45 {
+            let tx=connection.transaction().map_err(|_|json_error("无法开启核验检查点迁移"))?;
+            attachment_search_checkpoint_v1::migrate(&tx).map_err(|_|json_error("核验检查点迁移失败"))?;
+            tx.pragma_update(None,"user_version",45).map_err(|_|json_error("核验检查点版本未保存"))?;
+            tx.commit().map_err(|_|json_error("核验检查点迁移未提交"))?;
+        }
+
         Ok(())
     }
 
@@ -8379,10 +8471,14 @@ impl DesktopWorkspaceStore {
     /// The sole Desktop PDF reader adapter. It validates the workspace-owned private copy and
     /// parses page count locally before returning only a rasterized PNG page to the reader.
     fn pdf_preview(&self, args: &DesktopPdfPreviewArgs) -> Result<DesktopPdfPreview, String> {
+        Self::pdf_preview_at(&DesktopStoreReadPaths { root: self.root.clone(), database: self.database.clone() }, args)
+    }
+
+    fn pdf_preview_at(paths: &DesktopStoreReadPaths, args: &DesktopPdfPreviewArgs) -> Result<DesktopPdfPreview, String> {
         if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
             return Err(json_error("PDF 预览引用无效"));
         }
-        let connection = self.connection()?;
+        let connection = open_desktop_workspace_connection(&paths.root, &paths.database)?;
         let metadata = connection.query_row(
             "SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
             params![args.workspace_id, args.attachment_id],
@@ -8391,7 +8487,7 @@ impl DesktopWorkspaceStore {
         if metadata.0 != "application/pdf" || !is_sha256(&metadata.3) {
             return Err(json_error("该本地附件不是受支持的 PDF"));
         }
-        let bytes = fs::read(self.root.join("assets").join(&metadata.3))
+        let bytes = read_bounded_preview_asset(&paths.root, &metadata.3, metadata.2)
             .map_err(|_| json_error("本地 PDF 附件缺失"))?;
         if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
             return Err(json_error("本地 PDF 附件校验不一致"));
@@ -8456,10 +8552,14 @@ impl DesktopWorkspaceStore {
 
     /// The only Desktop audio reader. It verifies the workspace-owned private copy before a data URL exists.
     fn audio_preview(&self, args: &DesktopAudioPreviewArgs) -> Result<DesktopAudioPreview, String> {
+        Self::audio_preview_at(&DesktopStoreReadPaths { root: self.root.clone(), database: self.database.clone() }, args)
+    }
+
+    fn audio_preview_at(paths: &DesktopStoreReadPaths, args: &DesktopAudioPreviewArgs) -> Result<DesktopAudioPreview, String> {
         if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
             return Err(json_error("音频预览引用无效"));
         }
-        let connection = self.connection()?;
+        let connection = open_desktop_workspace_connection(&paths.root, &paths.database)?;
         let metadata = connection.query_row(
             "SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
             params![args.workspace_id, args.attachment_id],
@@ -8472,8 +8572,8 @@ impl DesktopWorkspaceStore {
         {
             return Err(json_error("该本地附件不是受支持的音频"));
         }
-        let bytes = fs::read(self.root.join("assets").join(&metadata.3))
-            .map_err(|_| json_error("本地音频附件缺失"))?;
+        let bytes = read_bounded_preview_asset(&paths.root, &metadata.3, metadata.2)
+            .map_err(|error| json_error(if error.kind() == std::io::ErrorKind::InvalidData { "本地音频附件校验不一致" } else { "本地音频附件缺失" }))?;
         if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
             return Err(json_error("本地音频附件校验不一致"));
         }
@@ -8530,10 +8630,18 @@ impl DesktopWorkspaceStore {
         workspace_id: &str,
         attachment_id: &str,
     ) -> Result<(String, String, u64, Vec<u8>), String> {
+        Self::archive_attachment_bytes_at(&DesktopStoreReadPaths { root: self.root.clone(), database: self.database.clone() }, workspace_id, attachment_id)
+    }
+
+    fn archive_attachment_bytes_at(
+        paths: &DesktopStoreReadPaths,
+        workspace_id: &str,
+        attachment_id: &str,
+    ) -> Result<(String, String, u64, Vec<u8>), String> {
         if !is_stable_id(workspace_id) || !is_stable_id(attachment_id) {
             return Err(json_error("压缩包预览引用无效"));
         }
-        let connection = self.connection()?;
+        let connection = open_desktop_workspace_connection(&paths.root, &paths.database)?;
         let metadata = connection.query_row(
             "SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2",
             params![workspace_id, attachment_id],
@@ -8553,8 +8661,8 @@ impl DesktopWorkspaceStore {
         if !is_zip || !is_sha256(&metadata.3) {
             return Err(json_error("该本地附件不是可安全浏览的 ZIP"));
         }
-        let bytes = fs::read(self.root.join("assets").join(&metadata.3))
-            .map_err(|_| json_error("本地压缩包附件缺失"))?;
+        let bytes = read_bounded_preview_asset(&paths.root, &metadata.3, metadata.2)
+            .map_err(|error| json_error(if error.kind() == std::io::ErrorKind::InvalidData { "本地压缩包附件校验不一致" } else { "本地压缩包附件缺失" }))?;
         if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
             return Err(json_error("本地压缩包附件校验不一致"));
         }
@@ -8565,8 +8673,15 @@ impl DesktopWorkspaceStore {
         &self,
         args: &DesktopArchivePreviewArgs,
     ) -> Result<DesktopArchivePreview, String> {
+        Self::archive_preview_at(&DesktopStoreReadPaths { root: self.root.clone(), database: self.database.clone() }, args)
+    }
+
+    fn archive_preview_at(
+        paths: &DesktopStoreReadPaths,
+        args: &DesktopArchivePreviewArgs,
+    ) -> Result<DesktopArchivePreview, String> {
         let (mime_type, display_name, byte_count, bytes) =
-            self.archive_attachment_bytes(&args.workspace_id, &args.attachment_id)?;
+            Self::archive_attachment_bytes_at(paths, &args.workspace_id, &args.attachment_id)?;
         let entries = desktop_docx_preview::archive_entries(&bytes)?
             .into_iter()
             .map(|entry| {
@@ -8602,8 +8717,15 @@ impl DesktopWorkspaceStore {
         &self,
         args: &DesktopArchiveEntryPreviewArgs,
     ) -> Result<DesktopArchiveEntryPreview, String> {
+        Self::archive_entry_preview_at(&DesktopStoreReadPaths { root: self.root.clone(), database: self.database.clone() }, args)
+    }
+
+    fn archive_entry_preview_at(
+        paths: &DesktopStoreReadPaths,
+        args: &DesktopArchiveEntryPreviewArgs,
+    ) -> Result<DesktopArchiveEntryPreview, String> {
         let (_, _, _, archive_bytes) =
-            self.archive_attachment_bytes(&args.workspace_id, &args.attachment_id)?;
+            Self::archive_attachment_bytes_at(paths, &args.workspace_id, &args.attachment_id)?;
         let (entry, bytes) = desktop_docx_preview::read_archive_entry(
             &archive_bytes,
             &args.entry_path,
@@ -8686,10 +8808,14 @@ impl DesktopWorkspaceStore {
     }
 
     fn text_preview(&self, args: &DesktopTextPreviewArgs) -> Result<DesktopTextPreview, String> {
+        Self::text_preview_at(&DesktopStoreReadPaths { root: self.root.clone(), database: self.database.clone() }, args)
+    }
+
+    fn text_preview_at(paths: &DesktopStoreReadPaths, args: &DesktopTextPreviewArgs) -> Result<DesktopTextPreview, String> {
         if !is_stable_id(&args.workspace_id) || !is_stable_id(&args.attachment_id) {
             return Err(json_error("文本预览引用无效"));
         }
-        let connection = self.connection()?;
+        let connection = open_desktop_workspace_connection(&paths.root, &paths.database)?;
         let metadata = connection.query_row("SELECT mime_type,display_name,byte_count,sha256 FROM desktop_conversation_attachments WHERE workspace_id=?1 AND attachment_id=?2", params![args.workspace_id, args.attachment_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, u64>(2)?, row.get::<_, String>(3)?))).map_err(|_| json_error("本地文本附件不可用"))?;
         let extension = metadata
             .1
@@ -8701,7 +8827,7 @@ impl DesktopWorkspaceStore {
         let inferred_text = matches!(metadata.0.trim(), "" | "application/octet-stream")
             && matches!(
                 extension.as_str(),
-                "md" | "markdown" | "txt" | "json" | "csv"
+                "md" | "markdown" | "txt" | "json" | "csv" | "xml" | "yaml" | "yml" | "html"
             );
         let is_docx = metadata.0
             == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -8712,22 +8838,20 @@ impl DesktopWorkspaceStore {
         ) || (metadata.0 == "application/octet-stream" && extension == "zip");
         if !(is_docx
             || is_zip
-            || matches!(
-                metadata.0.as_str(),
-                "text/plain" | "text/markdown" | "application/json" | "text/csv"
-            )
+            || attachment_document_text_v1::supports(metadata.0.as_str())
             || inferred_text)
             || !is_sha256(&metadata.3)
         {
             return Err(json_error("该本地附件不是可安全预览的文本"));
         }
-        let bytes = fs::read(self.root.join("assets").join(&metadata.3))
-            .map_err(|_| json_error("本地文本附件缺失"))?;
+        let bytes = read_bounded_preview_asset(&paths.root, &metadata.3, metadata.2)
+            .map_err(|error| json_error(if error.kind() == std::io::ErrorKind::InvalidData { "本地文本附件校验不一致" } else { "本地文本附件缺失" }))?;
         if bytes.len() as u64 != metadata.2 || sha256(&bytes) != metadata.3 {
             return Err(json_error("本地文本附件校验不一致"));
         }
-        let bytes = if is_docx {
-            desktop_docx_preview::extract(&bytes)?.into_bytes()
+        let bytes = if is_docx || matches!(metadata.0.as_str(), attachment_document_text_v1::XLSX | attachment_document_text_v1::PPTX) {
+            let mime=if is_docx {attachment_document_text_v1::DOCX} else {metadata.0.as_str()};
+            attachment_document_text_v1::extract(&bytes,mime)?.into_bytes()
         } else if is_zip {
             desktop_docx_preview::archive_directory(&bytes)?.into_bytes()
         } else {
@@ -12681,6 +12805,7 @@ impl DesktopWorkspaceStore {
     }
 
     fn p6g_global_default(&self, connection: &Connection) -> Result<GlobalDefault, String> {
+        let (composer_revision, model_id) = self.p6g_composer_default(connection)?;
         let shared = self.shared_configuration_for(connection)?;
         let connection = shared.as_ref().unwrap_or(connection);
         let row: Option<(u64, Option<String>)> = connection
@@ -12690,19 +12815,37 @@ impl DesktopWorkspaceStore {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .ok();
-        Ok(row
-            .and_then(|(revision, encoded)| {
-                encoded
-                    .and_then(|value| serde_json::from_value(Value::String(value)).ok())
-                    .map(|tier| GlobalDefault {
-                        revision,
-                        tier: Some(tier),
-                    })
-            })
-            .unwrap_or(GlobalDefault {
-                revision: 0,
-                tier: None,
-            }))
+        let (revision, encoded) = row.unwrap_or((0, None));
+        Ok(GlobalDefault {
+            revision,
+            tier: encoded.and_then(|value| serde_json::from_value(Value::String(value)).ok()),
+            model_id,
+            composer_revision,
+        })
+    }
+
+    fn p6g_composer_default(&self, connection: &Connection) -> Result<(u64, Option<String>), String> {
+        connection.query_row("SELECT revision,model_id FROM p6g_composer_default WHERE id=1", [],
+            |row| Ok((row.get(0)?, row.get(1)?))).optional()
+            .map(|row| row.unwrap_or((0, None))).map_err(|_| json_error("新对话默认模型不可读"))
+    }
+
+    fn save_p6g_composer_default(&self, connection: &Connection, model_id: Option<&str>) -> Result<u64, String> {
+        let (current, _) = self.p6g_composer_default(connection)?;
+        let revision = current.checked_add(1).ok_or_else(|| json_error("模型默认选择版本溢出"))?;
+        connection.execute("INSERT INTO p6g_composer_default(id,revision,model_id) VALUES(1,?1,?2) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,model_id=excluded.model_id",
+            params![revision,model_id]).map_err(|_| json_error("新对话默认模型未保存"))?;
+        Ok(revision)
+    }
+
+    fn p6g_set_new_conversation_model(&self, model_id: Option<String>, expected_revision: u64) -> Result<P6gMutationReceipt, String> {
+        if model_id.as_deref().is_some_and(|id| !is_desktop_chat_model_id(id)) { return Err(json_error("模型不在当前目录")); }
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction().map_err(|_| json_error("模型选择事务无法开启"))?;
+        if self.p6g_composer_default(&transaction)?.0 != expected_revision { return Err(json_error("REVISION_CONFLICT：默认模型已变化")); }
+        let revision = self.save_p6g_composer_default(&transaction, model_id.as_deref())?;
+        transaction.commit().map_err(|_| json_error("模型选择未提交"))?;
+        Ok(P6gMutationReceipt { revision })
     }
 
     fn require_p6g_conversation(
@@ -12878,7 +13021,7 @@ impl DesktopWorkspaceStore {
         let transaction = connection
             .transaction()
             .map_err(|_| json_error("无法开启 P6-G global transaction"))?;
-        let current = self.p6g_global_default(&transaction)?;
+        let current = self.p6g_global_default(&self.connection()?)?;
         if current.revision != args.expected_revision {
             return Err(json_error("REVISION_CONFLICT：P6-G 全局默认已变化"));
         }
@@ -12927,6 +13070,7 @@ impl DesktopWorkspaceStore {
             .checked_add(1)
             .ok_or_else(|| json_error("P6-G override revision 溢出"))?;
         transaction.execute("INSERT INTO p6g_conversation_override(workspace_id,conversation_id,revision,model_id) VALUES(?1,?2,?3,?4) ON CONFLICT(workspace_id,conversation_id) DO UPDATE SET revision=excluded.revision,model_id=excluded.model_id", params![args.workspace_id, args.conversation_id, revision, args.model_id]).map_err(|_| json_error("无法保存 P6-G 会话选择"))?;
+        self.save_p6g_composer_default(&transaction, args.model_id.as_deref())?;
         transaction
             .commit()
             .map_err(|_| json_error("P6-G 会话选择未提交；已回滚"))?;
@@ -13251,19 +13395,21 @@ fn ordinary_chat_tone_instruction(tone: &str) -> &'static str {
 
 fn ordinary_chat_web_search_route(
     provider_id: &str,
-    model_id: &str,
+    _model_id: &str,
     enabled: bool,
     has_attachments: bool,
 ) -> &'static str {
     if !enabled {
         return "NONE";
     }
+    if has_attachments && provider_id.starts_with("RELAYCORE_") { return "RELAYCORE_COMPANION"; }
     match provider_id {
         "OPENROUTER" => "OPENROUTER_SERVER_TOOL",
-        "QWEN" if !has_attachments && model_id != "qwen3.8-max" => "QWEN_RESPONSES",
-        "QWEN" => "QWEN_CHAT_COMPLETIONS",
+        "QWEN" => "QWEN_RESPONSES",
         "DEEPSEEK" => "DEEPSEEK_MESSAGES",
         "ZHIPU" => "ZHIPU_CHAT_COMPLETIONS",
+        "RELAYCORE_GPT" => "RELAYCORE_GPT_RESPONSES",
+        "RELAYCORE_CLAUDE" | "RELAYCORE_GEMINI" => "RELAYCORE_COMPANION",
         _ => "NONE",
     }
 }
@@ -13359,6 +13505,13 @@ impl DesktopWorkspaceStore {
         conversation_id: &str,
         mock_endpoint: Option<&str>,
     ) -> Result<(String, String, String, String), String> {
+        self.ordinary_chat_route_for_task(connection, workspace_id, conversation_id, mock_endpoint, "", &[], false)
+    }
+
+    fn ordinary_chat_route_for_task(
+        &self, connection: &Connection, workspace_id: &str, conversation_id: &str,
+        mock_endpoint: Option<&str>, text: &str, mimes: &[String], web: bool,
+    ) -> Result<(String, String, String, String), String> {
         if let Some(endpoint) = mock_endpoint {
             return Ok((
                 "OPENROUTER".into(),
@@ -13376,7 +13529,7 @@ impl DesktopWorkspaceStore {
         let credentials = &self.credentials;
         let presets = desktop_model_service_v1::chat_presets();
         let choose = |preset: &desktop_model_service_v1::PresetDescriptor| {
-            settings
+            preset.chat_selectable && settings
                 .iter()
                 .any(|setting| setting.provider_id == preset.provider_id && setting.enabled)
                 && credentials.presence(preset.provider_id)
@@ -13391,32 +13544,17 @@ impl DesktopWorkspaceStore {
                 .copied()
                 .ok_or_else(|| json_error("当前会话指定的模型未启用或缺少凭据，未自动换模型"))?
         } else {
-            const ORDER: [&str; 17] = [
-                desktop_model_service_v1::DAILY_DEEPSEEK_PRESET_ID,
-                "GPT_5_6_TERRA",
-                "CLAUDE_SONNET_5",
-                "GLM_5_3_FLASH",
-                "QWEN_3_7_PLUS",
-                "GEMINI_3_8_FLASH",
-                "QWEN_3_6_FLASH",
-                "GPT_5_6_LUNA",
-                "CLAUDE_HAIKU_4_5",
-                "DEEPSEEK_V4_PRO",
-                "GLM_5_3",
-                "QWEN_3_8_MAX",
-                "GPT_5_6_SOL",
-                "CLAUDE_OPUS_5",
-                "CLAUDE_FABLE_5_1",
-                "GPT_6_ASTRA",
-                "CLAUDE_FABLE_5",
-            ];
-            ORDER
+            auto_chat_routing_v1::candidates(text, mimes)
                 .iter()
                 .find_map(|id| {
                     presets
                         .iter()
-                        .find(|preset| preset.id == *id)
-                        .filter(|preset| choose(preset))
+                        .find(|preset| preset.id == id.as_str())
+                        .filter(|preset| choose(preset)
+                            && mimes.iter().all(|mime| auto_chat_routing_v1::projects_with_search(preset.provider_id, preset.model_id, mime, web))
+                            && (!web || !(matches!(preset.provider_id, "RELAYCORE_CLAUDE" | "RELAYCORE_GEMINI") || preset.provider_id=="RELAYCORE_GPT" && !mimes.is_empty()) ||
+                                settings.iter().any(|setting| setting.provider_id == "OPENROUTER" && setting.enabled)
+                                && credentials.presence("OPENROUTER") == desktop_model_service_v1::CredentialPresence::Stored))
                         .copied()
                 })
                 .ok_or_else(|| json_error("没有已启用且凭据可用的聊天模型"))?
@@ -13684,7 +13822,7 @@ impl DesktopWorkspaceStore {
             source: usage_ledger_v1::Source::DesktopLocal,
             occurred_at_ms: prepared.occurred_at_ms,
         };
-        match ledger.append(&entry)? {
+        match ledger.append_background(&entry,completed.usage.reasoning_tokens)? {
             usage_ledger_v1::AppendResult::Conflict => Err(json_error("会话标题用量账本幂等冲突")),
             usage_ledger_v1::AppendResult::Appended(_)
             | usage_ledger_v1::AppendResult::Replayed(_) => Ok(()),
@@ -13750,7 +13888,7 @@ impl DesktopWorkspaceStore {
                 idempotency_key: String::new(),
                 occurred_at_ms,
             };
-            let completed = desktop_ordinary_chat_v1::Completed {
+            let completed = desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),
                 text: String::new(),
                 reasoning: None,
                 usage: desktop_ordinary_chat_v1::Usage {
@@ -13854,6 +13992,13 @@ impl DesktopWorkspaceStore {
         let query_terms = ordinary_chat_context_terms(&current_user_text);
         let project_id = conversation.get("projectId").and_then(Value::as_str);
         let mut selected_sources = Vec::<DesktopOrdinaryChatSelectedSource>::new();
+        if ordinary_chat_web_search_route(provider_id, model_id,
+            self.ordinary_chat_web_search_enabled(connection, workspace_id, conversation_id)?, false) == "RELAYCORE_COMPANION" {
+            selected_sources.push(DesktopOrdinaryChatSelectedSource { kind:"联网检索模型".into(), source_id:"relay-web-search".into(), title:"GPT-6.1 Sol · Pro3（问题、必要上下文与附件核验要点）".into() });
+        }
+
+        // Trusted answer policy is separate from quoted memory / library evidence.
+        result.push(json!({"role":"system","content":answer_language_v1::INSTRUCTION}));
         let mut context_sections = Vec::<String>::new();
 
         let conversation_preferences =
@@ -14079,15 +14224,9 @@ impl DesktopWorkspaceStore {
                 if sha256(&bytes) != hash {
                     return Err(json_error("附件完整性校验失败"));
                 }
-                if matches!(
-                    mime,
-                    "text/plain" | "text/markdown" | "application/json" | "text/csv"
-                ) {
-                    if bytes.len() > 2 * 1024 * 1024 {
-                        return Err(json_error("文本附件超过 2 MB 投影上限"));
-                    }
-                    let body = std::str::from_utf8(&bytes)
-                        .map_err(|_| json_error("文本附件不是 UTF-8"))?;
+                if attachment_document_text_v1::supports(mime) {
+                    let body = attachment_document_text_v1::extract(&bytes, mime)
+                        .map_err(|error| json_error(&error))?;
                     content.push(json!({"type":"text","text":format!("\n\n### 附件：{display_name}\n{body}")}));
                 } else if matches!(
                     mime,
@@ -14099,8 +14238,16 @@ impl DesktopWorkspaceStore {
                         return Err(json_error("DeepSeek 图片超过 32 MiB 上限"));
                     }
                     content.push(json!({"type":"image_url","image_url":{"url":format!("data:{mime};base64,{}", BASE64.encode(bytes))}}));
+                } else if mime == "application/pdf" && provider_id != "OPENROUTER" {
+                    let body=attachment_document_text_v1::pdf_text(&bytes).map_err(|error| json_error(&error))?;
+                    content.push(json!({"type":"text","text":format!("\n\n### 附件：{display_name}\n{body}")}));
                 } else if mime == "application/pdf" && provider_id == "OPENROUTER" {
-                    content.push(json!({"type":"file","file":{"filename":display_name,"file_data":format!("data:application/pdf;base64,{}", BASE64.encode(bytes))}}));
+                    content.push(json!({"type":"file","file":{"filename":display_name,"file_data":format!("data:application/pdf;base64,{}", BASE64.encode(&bytes))}}));
+                    if self.ordinary_chat_web_search_enabled(connection,workspace_id,conversation_id)? {
+                        if let Ok(text)=attachment_document_text_v1::pdf_text(&bytes) {
+                            content.push(json!({"type":"text","text":format!("本机 PDF 文本层\n### 附件：{display_name}\n{text}")}));
+                        }
+                    }
                 } else {
                     return Err(json_error(
                         "当前模型不支持该附件原文投影，未发送缩略图或封面代替",
@@ -14110,7 +14257,12 @@ impl DesktopWorkspaceStore {
             result.push(json!({"role":role,"content":content}));
         }
         if continues_saved_reply {
-            result.push(json!({"role":"user","content":"上一段回答因连接中断而未完成。请只从上面已生成内容的末尾自然继续，不要重复、改写或概述已有文字；继续完成原问题。"}));
+            result.push(json!({"role":"user","content":chat_continuation_v1::INSTRUCTION}));
+        }
+        let plan=attachment_web_search_v1::from_messages(&Value::Array(result.clone()));
+        if !plan.items.is_empty() && self.ordinary_chat_web_search_enabled(connection,workspace_id,conversation_id)? {
+            result.push(json!({"role":"system","content":format!("{}\n{}",attachment_web_search_v1::ANSWER_INSTRUCTION,plan.answer_scope_instruction().unwrap_or_default())}));
+            selected_sources.push(DesktopOrdinaryChatSelectedSource{kind:"联网核验范围".into(),source_id:"attachment-search-plan-v1".into(),title:format!("当前附件{}项核验要点",plan.items.len())});
         }
         if provider_id == "DEEPSEEK"
             && serde_json::to_vec(&result)
@@ -14200,7 +14352,8 @@ impl DesktopWorkspaceStore {
         };
         self.hydrate_conversation_attachment_blocks(&transaction, &mut mutation)?;
         let (conversation_id, revision) = apply_domain_mutation(&mut after, &mutation)?;
-        if args.model_id.is_some()
+        if args.conversation_id.is_none()
+            || args.model_id.is_some()
             || args.tone_override.is_some()
             || args.web_search_override.is_some()
         {
@@ -14230,15 +14383,24 @@ impl DesktopWorkspaceStore {
             .ok_or_else(|| json_error("会话消息树无效"))?;
         let ordinal = messages.len() as u64;
         messages.push(json!({"id":assistant_message_id,"parentId":user_message_id,"ordinal":ordinal,"role":"assistant","delivery":"PARTIAL","revision":1,"createdAt":local_now(),"attemptId":attempt_id,"blocks":[{"kind":"TEXT","text":""}]}));
+        let mut route_mimes = Vec::new();
+        let by_id: BTreeMap<&str, &Value> = messages.iter().filter_map(|message| message.get("id").and_then(Value::as_str).map(|id| (id, message))).collect();
+        let mut cursor = Some(assistant_message_id.as_str());
+        while let Some(id) = cursor {
+            let message = by_id.get(id).ok_or_else(|| json_error("会话分支无效"))?;
+            for block in message.get("blocks").and_then(Value::as_array).into_iter().flatten() {
+                if block.get("kind").and_then(Value::as_str) == Some("ASSET_REF") {
+                    route_mimes.push(block["asset"]["mimeType"].as_str().unwrap_or("application/octet-stream").to_owned());
+                }
+            }
+            cursor = message.get("parentId").and_then(Value::as_str);
+        }
         conversation["currentLeafId"] = Value::String(assistant_message_id.clone());
         conversation["revision"] = Value::Number((revision + 1).into());
         conversation["updatedAt"] = Value::String(local_now().into());
-        let route = self.ordinary_chat_route(
-            &transaction,
-            &args.workspace_id,
-            &conversation_id,
-            mock_endpoint,
-        );
+        let route = self.ordinary_chat_route_for_task(&transaction, &args.workspace_id, &conversation_id, mock_endpoint,
+            text, &route_mimes, self.ordinary_chat_web_search_enabled(&transaction, &args.workspace_id, &conversation_id)?);
+
         let (provider_id, model_id, model_display_name, mut endpoint, preflight_failure_code) =
             match route {
                 Ok((provider_id, model_id, model_display_name, endpoint)) => {
@@ -14263,6 +14425,12 @@ impl DesktopWorkspaceStore {
                 }
                 Err(error) => return Err(error),
             };
+        if let Some(expected) = args.egress_authorization.as_ref().and_then(|receipt| receipt.disclosure_version.split_once(":auto=").map(|(_, id)| id)) {
+            let actual = desktop_model_service_v1::chat_presets().iter().find(|preset| preset.provider_id == provider_id && preset.model_id == model_id).map(|preset| preset.id);
+            if actual != Some(expected) && preflight_failure_code.is_none() {
+                return Err(json_error("Auto 配置已变化，请确认当前模型后再次发送；未建立连接"));
+            }
+        }
         let web_search_route = ordinary_chat_web_search_route(
             &provider_id,
             &model_id,
@@ -14274,14 +14442,29 @@ impl DesktopWorkspaceStore {
             !args.attachment_ids.is_empty(),
         )
         .to_owned();
+        let service_grant=args.egress_authorization.as_ref().and_then(|r|r.search_service.as_ref());
+        if service_grant.is_some() {return Err(json_error("旧搜索服务授权不适用于当前路由；请重新披露接收方"));}
+        if let Some(grant)=service_grant {
+            let mut ids=args.attachment_ids.clone();ids.sort();
+            let fingerprint=sha256(serde_json::to_string(&json!([text,ids])).map_err(|_|json_error("材料授权指纹无效"))?.as_bytes());
+            if web_search_route=="NONE" || ids.is_empty() || !grant.allows(&fingerprint) {return Err(json_error("搜索服务授权与本次材料不一致；未发送"));}
+            self.require_independent_search_config()?;
+        }
+        if web_search_route == "RELAYCORE_COMPANION" && service_grant.is_none() {
+            if mock_endpoint.is_none() && !args.egress_authorization.as_ref().and_then(|r|r.retrieval_recipient.as_ref()).is_some_and(|g|g.allows(text,&args.attachment_ids)) {return Err(json_error("Luna接收方授权与本次材料不一致；未发送"));}
+            if !args.egress_authorization.as_ref().is_some_and(|receipt| receipt.approved_at_ms > 0 && receipt.disclosure_version.split(":auto=").next() == Some(relaycore_web_search_v1::DISCLOSURE_VERSION)) {
+                return Err(json_error("本次发送未披露 GPT-6 Luna · OpenRouter 检索接收方；未发送"));
+            }
+            self.require_relay_search_config()?;
+        }
         if mock_endpoint.is_none()
-            && matches!(
+            && (provider_id == "RELAYCORE_CLAUDE" || matches!(
                 web_search_route.as_str(),
-                "QWEN_RESPONSES" | "DEEPSEEK_MESSAGES"
-            )
+                "QWEN_RESPONSES" | "DEEPSEEK_MESSAGES" | "RELAYCORE_GPT_RESPONSES"
+            ))
         {
             let provider = desktop_model_service_v1::provider(&provider_id)?;
-            endpoint = desktop_ordinary_chat_v1::provider_endpoint(provider.endpoint, &web_search_route);
+            endpoint = desktop_ordinary_chat_v1::ordinary_provider_endpoint(&provider_id, provider.endpoint, &web_search_route);
         }
         let route_revision: u64 = transaction.query_row("SELECT COALESCE(MAX(revision),0)+1 FROM p6g_route_metadata WHERE workspace_id=?1 AND conversation_id=?2",params![args.workspace_id,conversation_id],|row|row.get(0)).map_err(|_|json_error("无法读取路由修订"))?;
         transaction.execute("INSERT INTO p6g_route_metadata(workspace_id,conversation_id,revision,metadata_json,created_at_ms) VALUES(?1,?2,?3,?4,?5)",params![args.workspace_id,conversation_id,route_revision,canonical_json(&json!({"policyVersion":2,"source":"ORDINARY_CHAT_ANDROID_PARITY","providerId":provider_id,"modelId":model_id,"displayName":model_display_name}))?,now]).map_err(|_|json_error("无法保存普通聊天路由摘要"))?;
@@ -14358,6 +14541,7 @@ impl DesktopWorkspaceStore {
             web_search_route,
             preflight_failure_code,
             client_submission_id,
+            search_service:args.egress_authorization.as_ref().and_then(|r|r.search_service.clone()),
         })
     }
 
@@ -14372,8 +14556,8 @@ impl DesktopWorkspaceStore {
         )>,
         String,
     > {
-        let chatgpt = desktop_model_service_v1::preset("OPENROUTER", "GPT_5_6_TERRA")?;
-        let claude = desktop_model_service_v1::preset("OPENROUTER", "CLAUDE_SONNET_5")?;
+        let chatgpt = desktop_model_service_v1::preset("OPENROUTER", "GPT_6_LUNA")?;
+        let claude = desktop_model_service_v1::preset("OPENROUTER", "CLAUDE_SONNET_5_5")?;
         let endpoint = if let Some(endpoint) = mock_endpoint {
             endpoint.to_owned()
         } else {
@@ -14568,6 +14752,7 @@ impl DesktopWorkspaceStore {
                 web_search_route,
                 preflight_failure_code: None,
                 client_submission_id: ordinary_chat_random_id("compare-client")?,
+                search_service:None,
             });
         }
         let after_hash = refresh_exchange_hash(&mut after)?;
@@ -14680,12 +14865,15 @@ impl DesktopWorkspaceStore {
         attempt_id: &str,
         mock_endpoint: Option<&str>,
     ) -> Result<DesktopOrdinaryChatPrepared, String> {
+        self.prepare_ordinary_chat_retry_with_service(attempt_id,mock_endpoint,None,None)
+    }
+    fn prepare_ordinary_chat_retry_with_service(&self,attempt_id:&str,mock_endpoint:Option<&str>,service_grant:Option<independent_web_search_v1::ServiceGrant>,retrieval_grant:Option<relaycore_web_search_v1::RetrievalGrant>)->Result<DesktopOrdinaryChatPrepared,String> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction()
             .map_err(|_| json_error("无法开启重试 transaction"))?;
         let previous = Self::ordinary_chat_projection(&transaction, attempt_id)?;
-        if !matches!(previous.state.as_str(), "FAILED" | "UNKNOWN") {
+        if !matches!(previous.state.as_str(), "FAILED" | "UNKNOWN" | "CANCELLED") {
             return Err(json_error("只能重试失败或结果未知的 Attempt"));
         }
         let provider_id = previous
@@ -14696,6 +14884,8 @@ impl DesktopWorkspaceStore {
             .requested_model_id
             .clone()
             .ok_or_else(|| json_error("重试模型缺失"))?;
+        // Keep the original Attempt ID snapshot; this explicit retry sends the verified same-group alias.
+        let model_id = desktop_model_service_v1::canonical_relay_model_id(&provider_id,&model_id).to_owned();
         let idempotency_key: String = transaction
             .query_row(
                 "SELECT idempotency_key FROM desktop_ordinary_chat_attempts WHERE attempt_id=?1",
@@ -14720,7 +14910,7 @@ impl DesktopWorkspaceStore {
             String::new()
         } else {
             let provider = desktop_model_service_v1::provider(&provider_id)?;
-            desktop_ordinary_chat_v1::provider_endpoint(provider.endpoint, &web_search_route)
+            desktop_ordinary_chat_v1::ordinary_provider_endpoint(&provider_id, provider.endpoint, &web_search_route)
         };
         let exchange_text: String = transaction
             .query_row(
@@ -14747,28 +14937,19 @@ impl DesktopWorkspaceStore {
             .ok_or_else(|| json_error("重试消息树无效"))?;
         // Keep already-durable text in the active path. Retrying after a partial/unknown reply
         // therefore means “continue from here”, not silently branch to an empty replacement.
-        let continuation_of = messages
-            .iter()
-            .find(|message| {
-                message.get("id").and_then(Value::as_str)
-                    == Some(previous.assistant_message_id.as_str())
-            })
-            // Missing citations do not imply truncated text. Explicit retry must regenerate
-            // from the original user message while retaining the old branch for inspection.
-            .filter(|_| {
-                !matches!(
-                    previous.safe_error_code.as_deref(),
-                    Some("WEB_SEARCH_NO_SOURCES" | "WEB_SEARCH_NO_VERIFIED_SOURCES")
-                )
-            })
-            .filter(|message| !ordinary_chat_message_text(message).trim().is_empty())
-            .map(|message| {
-                message
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned()
-            });
+        let continuation_of = if matches!(previous.safe_error_code.as_deref(),Some("WEB_SEARCH_NO_SOURCES" | "WEB_SEARCH_NO_VERIFIED_SOURCES" | "WEB_SEARCH_SCOPE_INCOMPLETE")) { None } else {
+            let mut cursor=Some(previous.assistant_message_id.clone());
+            let mut checkpoint=None;
+            let mut visited=std::collections::HashSet::new();
+            while let Some(id)=cursor {
+                if !visited.insert(id.clone()) { return Err(json_error("续写断点链路无效")); }
+                let Some(message)=messages.iter().find(|m|m["id"].as_str()==Some(&id)) else {break};
+                if message["role"]!="assistant" || message["attemptId"].as_str()!=Some(attempt_id) {break}
+                if !ordinary_chat_message_text(message).trim().is_empty() {checkpoint=Some(id);break}
+                cursor=message["continuationOf"].as_str().map(ToOwned::to_owned);
+            }
+            checkpoint
+        };
         if let Some(previous_assistant) = continuation_of.as_deref() {
             if let Some(message) = messages.iter_mut().find(|message| {
                 message.get("id").and_then(Value::as_str) == Some(previous_assistant)
@@ -14801,7 +14982,7 @@ impl DesktopWorkspaceStore {
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
-            .any(|block| block.get("kind").and_then(Value::as_str) == Some("ATTACHMENT"));
+            .any(|block| block.get("kind").and_then(Value::as_str) == Some("ASSET_REF"));
         web_search_route = ordinary_chat_web_search_route(
             &provider_id,
             &model_id,
@@ -14813,9 +14994,20 @@ impl DesktopWorkspaceStore {
             has_attachments,
         )
         .to_owned();
+        if web_search_route=="RELAYCORE_COMPANION" && mock_endpoint.is_none() {
+            let ids=original_user["blocks"].as_array().into_iter().flatten().filter_map(|b|b["asset"]["id"].as_str()).map(str::to_owned).collect::<Vec<_>>();
+            if !retrieval_grant.as_ref().is_some_and(|g|g.allows(&ordinary_chat_message_text(original_user),&ids)){return Err(json_error("Luna检索授权与原材料不一致；未重试"));}
+        }
+        if service_grant.is_some() {return Err(json_error("旧搜索服务授权不适用于当前重试；请重新披露接收方"));}
+        if let Some(grant)=service_grant.as_ref() {
+            let mut ids=original_user["blocks"].as_array().into_iter().flatten().filter_map(|b|b["asset"]["id"].as_str()).map(str::to_owned).collect::<Vec<_>>();ids.sort();
+            let fingerprint=sha256(serde_json::to_string(&json!([ordinary_chat_message_text(original_user).trim(),ids])).map_err(|_|json_error("原材料指纹无效"))?.as_bytes());
+            if !has_attachments || web_search_route=="NONE" || !grant.allows(&fingerprint) {return Err(json_error("新检索服务授权与原材料不一致；未重试"));}
+            self.require_independent_search_config()?;
+        }
         if mock_endpoint.is_none() && preflight_failure_code.is_none() {
             let provider = desktop_model_service_v1::provider(&provider_id)?;
-            endpoint = desktop_ordinary_chat_v1::provider_endpoint(provider.endpoint, &web_search_route);
+            endpoint = desktop_ordinary_chat_v1::ordinary_provider_endpoint(&provider_id, provider.endpoint, &web_search_route);
         }
         conversation["currentLeafId"] = Value::String(assistant_message_id.clone());
         conversation["revision"] = Value::Number(
@@ -14875,10 +15067,11 @@ impl DesktopWorkspaceStore {
             provider_id,
             model_id,
             messages: request_messages,
-            idempotency_key,
+            idempotency_key: format!("{idempotency_key}-retry-{}",previous.retry_count+1),
             web_search_route,
             preflight_failure_code,
             client_submission_id: ordinary_chat_random_id("chat-retry")?,
+            search_service:service_grant,
         })
     }
 
@@ -14915,7 +15108,8 @@ impl DesktopWorkspaceStore {
                 })
             })
             .ok_or_else(|| json_error("会话不存在"))?;
-        let first_successful_answer = delivery == "COMPLETE"
+        let resumes_answer=conversation["messages"].as_array().is_some_and(|items|items.iter().any(|m|m["id"].as_str()==Some(projection.assistant_message_id.as_str()) && m["continuationOf"].as_str().is_some()));
+        let first_successful_answer = !resumes_answer && delivery == "COMPLETE"
             && conversation
                 .get("messages")
                 .and_then(Value::as_array)
@@ -14966,6 +15160,9 @@ impl DesktopWorkspaceStore {
                 })
             })
             .ok_or_else(|| json_error("助手消息不存在"))?;
+        if projection.web_search_route == "RELAYCORE_COMPANION" {
+            message["retrievalModelId"] = json!(relaycore_web_search_v1::RETRIEVAL_PRESET);
+        }
         message["delivery"] = Value::String(delivery.into());
         message["blocks"] = json!([{"kind":"TEXT","text":rendered_text}]);
         message["safeErrorCode"] = safe_error_code
@@ -14988,7 +15185,7 @@ impl DesktopWorkspaceStore {
                 .unwrap_or(Value::Null);
             message["currencyCode"] = completed
                 .reported_cost_micros
-                .map(|_| Value::String("USD".into()))
+                .and_then(|_|chat_call_accounting_v1::provider_billing_currency(projection.provider_id.as_deref().unwrap_or_default()).map(|c|Value::String(c.into())))
                 .unwrap_or(Value::Null);
             message["run"] = json!({"durationMs":completed.elapsed_ms});
         }
@@ -15073,7 +15270,7 @@ impl DesktopWorkspaceStore {
             "SELECT attempt_id,conversation_id,assistant_message_id,COALESCE(provider_id,''),COALESCE(requested_model_id,''),COALESCE(input_tokens,0),web_search_route,web_search_verified,created_at_ms
              FROM desktop_ordinary_chat_attempts
              WHERE state IN ('COMPLETED','COMPLETED_ACCOUNTING_PENDING','RESPONSE_COMMITTED')
-             ORDER BY created_at_ms DESC LIMIT 200"
+             ORDER BY created_at_ms DESC"
         ).map_err(|_| json_error("无法读取上下文记录"))?;
         let rows = attempts
             .query_map([], |row| {
@@ -15152,6 +15349,19 @@ impl DesktopWorkspaceStore {
                 created_at_ms,
             });
         }
+        let ledger=usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
+        for entry in ledger.all_entries()?.into_iter().filter(|entry|entry.kind==usage_ledger_v1::Kind::FinalMeasured) {
+            let Some(metadata)=ledger.call_metadata(&entry.entry_id)? else {continue};
+            if metadata.role!="RETRIEVAL" {continue}
+            // The helper receives the current query and up to two previous user queries. No answer body enters this audit.
+            records.push(DesktopOrdinaryChatContextRecordProjection {
+                attempt_id:entry.invocation_id,conversation_id:entry.conversation_id,assistant_message_id:entry.branch_leaf_message_id,
+                provider_id:"RELAYCORE_GPT".into(),provider_label:"RelayCore".into(),model_id:metadata.model_display_name,
+                fixed_input_tokens:entry.input_tokens.unwrap_or(0).max(0) as u64,web_search_requested:true,web_search_verified:Some(true),
+                selected_sources:vec![DesktopOrdinaryChatContextSourceProjection{kind:"联网检索问题".into(),title:"当前问题及必要历史问题".into()}],created_at_ms:entry.occurred_at_ms,
+            });
+        }
+        records.sort_by_key(|record|std::cmp::Reverse(record.created_at_ms));
         Ok(records)
     }
 
@@ -15250,6 +15460,147 @@ impl DesktopWorkspaceStore {
         Ok(records)
     }
 
+    fn require_relay_search_config(&self) -> Result<(), String> {
+        if !self.read_desktop_model_service_setting_records()?.iter().any(|setting| setting.provider_id == "OPENROUTER" && setting.enabled)
+            || self.credentials.presence("OPENROUTER") != desktop_model_service_v1::CredentialPresence::Stored {
+            return Err(json_error("联网检索需要启用并保存 OpenRouter 凭据；未发送"));
+        }
+        Ok(())
+    }
+
+    fn require_independent_search_config(&self)->Result<(),String> {
+        if self.credentials.presence("ZHIPU")!=desktop_model_service_v1::CredentialPresence::Stored {
+            return Err(json_error("已披露的智谱网页搜索服务不可用；未发送，不自动切换接收方"));
+        }
+        Ok(())
+    }
+    fn record_service_search_usage(&self,parent:&DesktopOrdinaryChatAttemptProjection,call_id:&str,completed:Option<&independent_web_search_v1::SearchResult>)->Result<(),String> {
+        let ledger=usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
+        let child=format!("{}-service-{}",parent.attempt_id,sha256(call_id.as_bytes()));
+        let phase=if completed.is_some(){"final"}else{"pending"};let entry_id=format!("usage-{child}-{phase}");
+        let entry=usage_ledger_v1::Entry {entry_id:entry_id.clone(),replay_token:entry_id.clone(),execution_id:parent.attempt_id.clone(),conversation_id:parent.conversation_id.clone(),
+            branch_leaf_message_id:parent.assistant_message_id.clone(),invocation_id:child.clone(),attempt_id:child.clone(),
+            kind:if completed.is_some(){usage_ledger_v1::Kind::FinalMeasured}else{usage_ledger_v1::Kind::StreamPending},fact_grade:if completed.is_some(){usage_ledger_v1::FactGrade::ProviderReported}else{usage_ledger_v1::FactGrade::Estimated},
+            requested_model_id:String::new(),actual_model_id:None,input_tokens:None,output_tokens:None,cached_input_tokens:None,
+            charge_micros:None,budget_micros:None,adjustment_micros:None,currency_code:None,cost_source:None,reconciliation_fingerprint:Some(sha256(child.as_bytes())),
+            reconciles_entry_id:completed.map(|_|format!("usage-{child}-pending")),source:usage_ledger_v1::Source::DesktopLocal,occurred_at_ms:ledger.stable_occurred_at(&entry_id,system_now_millis())?};
+        let metadata=chat_call_accounting_v1::Metadata{role:"RETRIEVAL".into(),model_display_name:"智谱网页搜索 · 高级版".into(),service_id:Some(independent_web_search_v1::SERVICE_ID.into()),service_engine_id:Some(independent_web_search_v1::ENGINE_ID.into()),..Default::default()};
+        match ledger.append_call(&entry,&metadata)? {usage_ledger_v1::AppendResult::Conflict=>Err(json_error("搜索服务账本幂等冲突")),_=>{self.persist_message_accounting(parent,&ledger)?;Ok(())}}
+    }
+
+    fn call_metadata(&self, parent:&DesktopOrdinaryChatAttemptProjection, role:&str, reply:Option<&desktop_ordinary_chat_v1::Completed>, price_version:Option<String>) -> Result<chat_call_accounting_v1::Metadata,String> {
+        let model=if role=="RETRIEVAL" {relaycore_web_search_v1::RETRIEVAL_MODEL} else {parent.requested_model_id.as_deref().unwrap_or_default()};
+        let display=if role=="RETRIEVAL" {desktop_model_service_v1::chat_presets().iter().find(|p|p.model_id==model).map(|p|p.display_name).unwrap_or(model).to_owned()}else{parent.model_display_name.clone().unwrap_or_else(||model.to_owned())};
+        let sources:i64=self.connection()?.query_row("SELECT COUNT(*) FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1",[&parent.attempt_id],|r|r.get(0)).map_err(|_|json_error("上下文记录读取失败"))?;
+        Ok(chat_call_accounting_v1::Metadata {role:role.into(),model_display_name:display,reasoning_tokens:reply.and_then(|r|r.usage.reasoning_tokens),price_version,context_window_tokens:None,context_source_count:if role=="RETRIEVAL" {None}else{Some(sources)},..Default::default()})
+    }
+    fn record_answer_pending(&self,parent:&DesktopOrdinaryChatAttemptProjection)->Result<(),String>{
+        let ledger=usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
+        let id=format!("usage-{}-answer-{}-pending",parent.attempt_id,parent.retry_count);
+        let entry=usage_ledger_v1::Entry {entry_id:id.clone(),replay_token:id.clone(),execution_id:parent.attempt_id.clone(),conversation_id:parent.conversation_id.clone(),branch_leaf_message_id:parent.assistant_message_id.clone(),invocation_id:format!("{}-answer-{}",parent.attempt_id,parent.retry_count),attempt_id:parent.attempt_id.clone(),kind:usage_ledger_v1::Kind::StreamPending,fact_grade:usage_ledger_v1::FactGrade::Estimated,requested_model_id:parent.requested_model_id.clone().unwrap_or_default(),actual_model_id:None,input_tokens:None,output_tokens:None,cached_input_tokens:None,charge_micros:None,budget_micros:None,adjustment_micros:None,currency_code:None,cost_source:None,reconciliation_fingerprint:Some(sha256(format!("answer-{}-{}",parent.attempt_id,parent.retry_count).as_bytes())),reconciles_entry_id:None,source:usage_ledger_v1::Source::DesktopLocal,occurred_at_ms:ledger.stable_occurred_at(&id,system_now_millis())?};
+        match ledger.append_call(&entry,&self.call_metadata(parent,"ANSWER",None,None)?)? {usage_ledger_v1::AppendResult::Conflict=>Err(json_error("调用记录幂等冲突")),_=>Ok(())}
+    }
+
+    fn record_relay_search_usage(&self, parent: &DesktopOrdinaryChatAttemptProjection, completed: Option<&desktop_ordinary_chat_v1::Completed>) -> Result<(), String> {
+        let child = format!("{}-retrieval-{}", parent.attempt_id, parent.retry_count);
+        let phase = if completed.is_some() { "final" } else { "pending" };
+        let ledger = usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
+        let metadata=self.call_metadata(parent,"RETRIEVAL",completed,None)?;
+        let at=ledger.stable_occurred_at(&format!("usage-{child}-{phase}"),ledger.stable_occurred_at(&format!("usage-{child}-pending"),system_now_millis())?)?;
+        let estimate=completed.and_then(|reply|chat_call_accounting_v1::estimate(reply.actual_model_id.as_deref().unwrap_or(relaycore_web_search_v1::RETRIEVAL_MODEL),&metadata.model_display_name,reply.usage.input_tokens,reply.usage.output_tokens,reply.usage.cached_input_tokens,at));
+        let reported=completed.and_then(|reply|reply.reported_cost_micros);
+        let charge=reported.or_else(||estimate.as_ref().map(|e|e.micros));
+        let currency=if reported.is_some(){Some("USD".into())}else{estimate.as_ref().map(|e|e.currency.clone())};
+        let source=charge.map(|_|if reported.is_some(){"PROVIDER_RESPONSE".into()}else{"LOCAL_ESTIMATE".into()});
+        let metadata=chat_call_accounting_v1::Metadata {price_version:estimate.as_ref().map(|e|e.version.clone()).filter(|_|source.as_deref()==Some("LOCAL_ESTIMATE")),..metadata};
+        let entry = usage_ledger_v1::Entry {
+            entry_id: format!("usage-{child}-{phase}"), replay_token: format!("relay-search-{child}-{phase}"),
+            execution_id: parent.attempt_id.clone(), conversation_id: parent.conversation_id.clone(),
+            branch_leaf_message_id: parent.assistant_message_id.clone(), invocation_id: child.clone(), attempt_id: child.clone(),
+            kind: if completed.is_some() { usage_ledger_v1::Kind::FinalMeasured } else { usage_ledger_v1::Kind::StreamPending },
+            fact_grade: if completed.is_some() { usage_ledger_v1::FactGrade::ProviderReported } else { usage_ledger_v1::FactGrade::Estimated }, requested_model_id: relaycore_web_search_v1::RETRIEVAL_MODEL.into(),
+            actual_model_id: completed.and_then(|reply| reply.actual_model_id.clone()),
+            input_tokens: completed.and_then(|reply| reply.usage.input_tokens), output_tokens: completed.and_then(|reply| reply.usage.output_tokens),
+            cached_input_tokens: completed.and_then(|reply| reply.usage.cached_input_tokens), charge_micros: charge, budget_micros: None, adjustment_micros: None,
+            currency_code: currency, cost_source: source, reconciliation_fingerprint: Some(sha256(format!("relay-search-{child}").as_bytes())), reconciles_entry_id: completed.map(|_| format!("usage-{child}-pending")),
+            source: usage_ledger_v1::Source::DesktopLocal, occurred_at_ms: at,
+        };
+        match ledger.append_call(&entry,&metadata)? {
+            usage_ledger_v1::AppendResult::Conflict => Err(json_error("检索用量账本幂等冲突")),
+            _ => { self.persist_message_accounting(parent,&ledger)?; Ok(()) },
+        }
+    }
+
+    fn load_service_search_checkpoint(&self,attempt:&str,scope:&str,key:&str)->Result<Option<independent_web_search_v1::ServiceEvidence>,String>{
+        let value:Option<String>=self.connection()?.query_row("SELECT evidence_json FROM desktop_attachment_search_checkpoints WHERE attempt_id=?1 AND scope_fingerprint=?2 AND item_id=?3",params![attempt,scope,key],|r|r.get(0)).optional().map_err(|_|json_error("搜索服务证据读取失败"))?;
+        let Some(entry):Option<independent_web_search_v1::ServiceEvidence>=value.and_then(|v|serde_json::from_str(&v).ok()) else{return Ok(None)};
+        if !entry.valid_for(&entry.query){return Ok(None);}
+        if regex::Regex::new("当前|最新|实时|今日|今天|股价|汇率|收益率|天气|气温|价格").unwrap().is_match(&entry.query){return Ok(None);}
+        let child=format!("{attempt}-service-{}",sha256(entry.call_id.as_bytes()));
+        let ledger=usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
+        let entry_id=format!("usage-{child}-final");
+        let accounted=ledger.entries_for_execution(attempt)?.iter().any(|r|r.entry_id==entry_id && r.kind==usage_ledger_v1::Kind::FinalMeasured && r.requested_model_id.is_empty() && r.actual_model_id.is_none() && (0..=600_000).contains(&(system_now_millis()-r.occurred_at_ms)));
+        let metadata=ledger.call_metadata(&entry_id)?;
+        Ok((accounted && metadata.is_some_and(|m|m.service_id.as_deref()==Some(independent_web_search_v1::SERVICE_ID) && m.service_engine_id.as_deref()==Some(independent_web_search_v1::ENGINE_ID))).then_some(entry))
+    }
+    fn save_service_search_checkpoint(&self,attempt:&str,scope:&str,key:&str,entry:independent_web_search_v1::ServiceEvidence)->Result<(),String>{
+        if !entry.valid_for(&entry.query){return Err(json_error("搜索服务证据无效"));}
+        let value=serde_json::to_string(&entry).map_err(|_|json_error("搜索服务证据序列化失败"))?;
+        self.connection()?.execute("INSERT INTO desktop_attachment_search_checkpoints(attempt_id,scope_fingerprint,item_id,evidence_json) VALUES(?1,?2,?3,?4) ON CONFLICT(attempt_id,scope_fingerprint,item_id) DO UPDATE SET evidence_json=excluded.evidence_json",params![attempt,scope,key,value]).map_err(|_|json_error("搜索服务证据保存失败"))?;Ok(())
+    }
+
+    fn load_attachment_search_checkpoint(&self,attempt:&str,fingerprint:&str,item:&str)->Result<Option<attachment_search_checkpoint_v1::Entry>,String>{
+        let value:Option<String>=self.connection()?.query_row("SELECT evidence_json FROM desktop_attachment_search_checkpoints WHERE attempt_id=?1 AND scope_fingerprint=?2 AND item_id=?3",params![attempt,fingerprint,item],|r|r.get(0)).optional().map_err(|_|json_error("核验检查点读取失败"))?;
+        let Some(entry):Option<attachment_search_checkpoint_v1::Entry>=value.and_then(|json|serde_json::from_str(&json).ok()) else {return Ok(None)};
+        let suffix=format!("-{}",sha256(entry.invocation.as_bytes()));
+        let ledger=usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
+        let original=ledger.entries_for_execution(attempt)?.into_iter().any(|row|row.kind==usage_ledger_v1::Kind::FinalMeasured && row.invocation_id.ends_with(&suffix) && row.requested_model_id==entry.model && row.actual_model_id.as_deref()==Some(entry.model.as_str()));
+        Ok(original.then_some(entry))
+    }
+    fn save_attachment_search_checkpoint(&self,attempt:&str,fingerprint:&str,item:&str,value:attachment_search_checkpoint_v1::Entry)->Result<(),String>{
+        let json=serde_json::to_string(&value).map_err(|_|json_error("核验检查点编码失败"))?;
+        self.connection()?.execute("INSERT OR REPLACE INTO desktop_attachment_search_checkpoints(attempt_id,scope_fingerprint,item_id,evidence_json) VALUES(?1,?2,?3,?4)",params![attempt,fingerprint,item,json]).map_err(|_|json_error("核验检查点保存失败"))?;Ok(())
+    }
+
+    fn record_attachment_search_coverage(&self,attempt_id:&str,planned:usize,covered:usize)->Result<(),String>{
+        let mut connection=self.connection()?;let tx=connection.transaction().map_err(|_|json_error("核验范围保存失败"))?;
+        tx.execute("DELETE FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1 AND source_id='attachment-search-coverage-v2'",[attempt_id]).map_err(|_|json_error("核验范围保存失败"))?;
+        let ordinal:i64=tx.query_row("SELECT COALESCE(MAX(ordinal),-1)+1 FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1",[attempt_id],|r|r.get(0)).map_err(|_|json_error("核验范围保存失败"))?;
+        tx.execute("INSERT INTO desktop_ordinary_chat_context_sources(attempt_id,ordinal,source_kind,source_id,title) VALUES(?1,?2,'联网核验范围','attachment-search-coverage-v2',?3)",params![attempt_id,ordinal,format!("{covered}/{planned}项检索结果")]).map_err(|_|json_error("核验范围保存失败"))?;
+        tx.commit().map_err(|_|json_error("核验范围保存失败"))
+    }
+
+    fn record_scoped_search_usage(&self, parent: &DesktopOrdinaryChatAttemptProjection, request:&desktop_ordinary_chat_v1::TransportRequest, completed: Option<&desktop_ordinary_chat_v1::Completed>) -> Result<(), String> {
+        let child = format!("{}-retrieval-{}-{}",parent.attempt_id,parent.retry_count,sha256(request.idempotency_key.as_bytes()));
+        let phase = if completed.is_some() { "final" } else { "pending" };
+        let ledger = usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
+        let mut metadata=self.call_metadata(parent,"RETRIEVAL",completed,None)?;
+        metadata.model_display_name=desktop_model_service_v1::chat_presets().iter().find(|p|p.model_id==request.model_id).map(|p|p.display_name.to_owned()).unwrap_or_else(||request.model_id.clone());
+        let at=ledger.stable_occurred_at(&format!("usage-{child}-{phase}"),ledger.stable_occurred_at(&format!("usage-{child}-pending"),system_now_millis())?)?;
+        let estimate=completed.and_then(|reply|chat_call_accounting_v1::estimate(reply.actual_model_id.as_deref().unwrap_or(&request.model_id),&metadata.model_display_name,reply.usage.input_tokens,reply.usage.output_tokens,reply.usage.cached_input_tokens,at));
+        let reported=completed.and_then(|reply|reply.reported_cost_micros).filter(|_|chat_call_accounting_v1::provider_billing_currency(&request.provider_id).is_some());
+        let charge=reported.or_else(||estimate.as_ref().map(|e|e.micros));
+        let currency=charge.map(|_|if reported.is_some(){chat_call_accounting_v1::provider_billing_currency(&request.provider_id).unwrap().into()}else{estimate.as_ref().unwrap().currency.clone()});
+        let source=charge.map(|_|if reported.is_some(){"PROVIDER_RESPONSE"}else{"LOCAL_ESTIMATE"}.into());
+        let metadata=chat_call_accounting_v1::Metadata {price_version:estimate.as_ref().map(|e|e.version.clone()).filter(|_|source.as_deref()==Some("LOCAL_ESTIMATE")),..metadata};
+        let entry = usage_ledger_v1::Entry {
+            entry_id: format!("usage-{child}-{phase}"), replay_token: format!("relay-search-{child}-{phase}"),
+            execution_id: parent.attempt_id.clone(), conversation_id: parent.conversation_id.clone(),
+            branch_leaf_message_id: parent.assistant_message_id.clone(), invocation_id: child.clone(), attempt_id: child.clone(),
+            kind: if completed.is_some() { usage_ledger_v1::Kind::FinalMeasured } else { usage_ledger_v1::Kind::StreamPending },
+            fact_grade: if completed.is_some() { usage_ledger_v1::FactGrade::ProviderReported } else { usage_ledger_v1::FactGrade::Estimated }, requested_model_id: request.model_id.clone(),
+            actual_model_id: completed.and_then(|reply| reply.actual_model_id.clone()),
+            input_tokens: completed.and_then(|reply| reply.usage.input_tokens), output_tokens: completed.and_then(|reply| reply.usage.output_tokens),
+            cached_input_tokens: completed.and_then(|reply| reply.usage.cached_input_tokens), charge_micros: charge, budget_micros: None, adjustment_micros: None,
+            currency_code: currency, cost_source: source, reconciliation_fingerprint: Some(sha256(format!("relay-search-{child}").as_bytes())), reconciles_entry_id: completed.map(|_| format!("usage-{child}-pending")),
+            source: usage_ledger_v1::Source::DesktopLocal, occurred_at_ms: at,
+        };
+        match ledger.append_call(&entry,&metadata)? {
+            usage_ledger_v1::AppendResult::Conflict => Err(json_error("检索用量账本幂等冲突")),
+            _ => { self.persist_message_accounting(parent,&ledger)?; Ok(()) },
+        }
+    }
+
     fn complete_ordinary_chat_accounting(
         &self,
         attempt_id: &str,
@@ -15257,13 +15608,23 @@ impl DesktopWorkspaceStore {
     ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
         let projection = Self::ordinary_chat_projection(&self.connection()?, attempt_id)?;
         let ledger = usage_ledger_v1::Ledger::open(&self.root.join("usage-ledger"))?;
-        let entry = usage_ledger_v1::Entry {
-            entry_id: format!("usage-{attempt_id}"),
-            replay_token: format!("ordinary-chat-final-{attempt_id}"),
+        let id=if projection.retry_count==0 {format!("usage-{attempt_id}")}else{format!("usage-{attempt_id}-retry-{}",projection.retry_count)};
+        let original:i64=self.connection()?.query_row("SELECT COALESCE(terminal_at_ms,updated_at_ms) FROM desktop_ordinary_chat_attempts WHERE attempt_id=?1",[attempt_id],|r|r.get(0)).map_err(|_|json_error("计费时间读取失败"))?;
+        let at=ledger.stable_occurred_at(&id,ledger.stable_occurred_at(&format!("usage-{attempt_id}-answer-{}-pending",projection.retry_count),original)?)?;
+        let metadata=self.call_metadata(&projection,"ANSWER",Some(completed),None)?;
+        let estimate=chat_call_accounting_v1::estimate(&chat_call_accounting_v1::pricing_model_id(projection.requested_model_id.as_deref().unwrap_or_default(),completed.actual_model_id.as_deref()),&metadata.model_display_name,completed.usage.input_tokens,completed.usage.output_tokens,completed.usage.cached_input_tokens,at);
+        let reported=completed.reported_cost_micros.filter(|_|chat_call_accounting_v1::provider_billing_currency(projection.provider_id.as_deref().unwrap_or_default()).is_some());
+        let charge=reported.or_else(||estimate.as_ref().map(|e|e.micros));
+        let source=charge.map(|_|if reported.is_some(){"PROVIDER_RESPONSE"}else{"LOCAL_ESTIMATE"}.to_owned());
+        let currency=charge.map(|_|if reported.is_some(){chat_call_accounting_v1::provider_billing_currency(projection.provider_id.as_deref().unwrap_or_default()).unwrap().into()}else{estimate.as_ref().unwrap().currency.clone()});
+        let mut metadata=chat_call_accounting_v1::Metadata {price_version:estimate.as_ref().map(|e|e.version.clone()).filter(|_|source.as_deref()==Some("LOCAL_ESTIMATE")),..metadata};
+        let mut entry = usage_ledger_v1::Entry {
+            entry_id: id.clone(),
+            replay_token: format!("ordinary-chat-final-{attempt_id}-{}",projection.retry_count),
             execution_id: attempt_id.into(),
             conversation_id: projection.conversation_id.clone(),
             branch_leaf_message_id: projection.assistant_message_id.clone(),
-            invocation_id: attempt_id.into(),
+            invocation_id: format!("{attempt_id}-answer-{}",projection.retry_count),
             attempt_id: attempt_id.into(),
             kind: usage_ledger_v1::Kind::FinalMeasured,
             fact_grade: usage_ledger_v1::FactGrade::ProviderReported,
@@ -15272,35 +15633,72 @@ impl DesktopWorkspaceStore {
             input_tokens: completed.usage.input_tokens,
             output_tokens: completed.usage.output_tokens,
             cached_input_tokens: completed.usage.cached_input_tokens,
-            charge_micros: completed.reported_cost_micros,
+            charge_micros: charge,
             budget_micros: None,
             adjustment_micros: None,
-            currency_code: completed.reported_cost_micros.map(|_| "USD".into()),
-            cost_source: completed
-                .reported_cost_micros
-                .map(|_| "PROVIDER_RESPONSE".into()),
-            reconciliation_fingerprint: None,
-            reconciles_entry_id: None,
+            currency_code: currency.clone(),
+            cost_source: source.clone(),
+            reconciliation_fingerprint: Some(sha256(format!("answer-{attempt_id}-{}",projection.retry_count).as_bytes())),
+            reconciles_entry_id: Some(format!("usage-{attempt_id}-answer-{}-pending",projection.retry_count)),
             source: usage_ledger_v1::Source::DesktopLocal,
-            occurred_at_ms: system_now_millis(),
+            occurred_at_ms: at,
         };
-        match ledger.append(&entry)? {
+        if let Some(existing)=ledger.entry(&id)? {
+            if ledger.call_metadata(&id)?.is_none() && existing.requested_model_id==entry.requested_model_id && existing.actual_model_id==entry.actual_model_id && existing.input_tokens==entry.input_tokens && existing.output_tokens==entry.output_tokens && existing.cached_input_tokens==entry.cached_input_tokens && completed.reported_cost_micros.is_none_or(|cost|existing.charge_micros==Some(cost)) {
+                entry=existing;metadata.price_version=None;
+            }
+        }
+        match ledger.append_call(&entry,&metadata)? {
             usage_ledger_v1::AppendResult::Conflict => return Err(json_error("用量账本幂等冲突")),
             usage_ledger_v1::AppendResult::Appended(_)
             | usage_ledger_v1::AppendResult::Replayed(_) => {}
         }
+        self.connection()?.execute("UPDATE desktop_ordinary_chat_attempts SET charge_micros=?1,currency_code=?2,cost_source=?3 WHERE attempt_id=?4",params![entry.charge_micros,entry.currency_code,entry.cost_source,attempt_id]).map_err(|_|json_error("费用事实保存失败"))?;
+        self.persist_message_accounting(&projection,&ledger)?;
         self.connection()?.execute(
-            "UPDATE desktop_ordinary_chat_attempts SET state='COMPLETED',updated_at_ms=?1 WHERE attempt_id=?2 AND state='RESPONSE_COMMITTED'",
+            "UPDATE desktop_ordinary_chat_attempts SET state='COMPLETED',updated_at_ms=?1 WHERE attempt_id=?2 AND state IN ('RESPONSE_COMMITTED','COMPLETED_ACCOUNTING_PENDING')",
             params![system_now_millis(), attempt_id],
         ).map_err(|_| json_error("用量账本已写入，但 Attempt 收口失败"))?;
         Self::ordinary_chat_projection(&self.connection()?, attempt_id)
+    }
+
+    fn persist_message_accounting(&self,parent:&DesktopOrdinaryChatAttemptProjection,ledger:&usage_ledger_v1::Ledger)->Result<(),String>{
+        let entries=ledger.entries_for_execution(&parent.attempt_id)?;
+        let reconciled:std::collections::BTreeSet<_>=entries.iter().filter_map(|e|e.reconciles_entry_id.as_deref()).collect();
+        let calls=entries.iter().filter(|e|e.branch_leaf_message_id==parent.assistant_message_id && (e.kind==usage_ledger_v1::Kind::FinalMeasured || e.kind==usage_ledger_v1::Kind::StreamPending && !reconciled.contains(e.entry_id.as_str()))).map(|e|{
+            let metadata=ledger.call_metadata(&e.entry_id)?;
+            Ok(json!({"callId":e.invocation_id,"entryId":e.entry_id,"requestedModelId":e.requested_model_id,"actualModelId":e.actual_model_id,"modelDisplayName":metadata.as_ref().map(|m|&m.model_display_name),"role":metadata.as_ref().map(|m|&m.role),"status":e.kind.as_str(),"inputTokens":e.input_tokens,"outputTokens":e.output_tokens,"cachedInputTokens":e.cached_input_tokens,"reasoningTokens":metadata.as_ref().and_then(|m|m.reasoning_tokens),"chargeMicros":e.charge_micros,"currencyCode":e.currency_code,"costSource":e.cost_source,"priceVersion":metadata.as_ref().and_then(|m|m.price_version.as_deref()),"occurredAtMs":e.occurred_at_ms}))
+        }).collect::<Result<Vec<Value>,String>>()?;
+        let mut connection=self.connection()?;
+        let transaction=connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate).map_err(|_|json_error("费用记录事务失败"))?;
+        let raw:String=transaction.query_row("SELECT exchange_json FROM workspace_exchange WHERE workspace_id=?1",[&parent.workspace_id],|r|r.get(0)).map_err(|_|json_error("会话不存在"))?;
+        let mut state:Value=serde_json::from_str(&raw).map_err(|_|json_error("会话格式无效"))?;
+        let conversation=state.get_mut("conversations").and_then(Value::as_array_mut).and_then(|items|items.iter_mut().find(|item|item.get("id").and_then(Value::as_str)==Some(&parent.conversation_id))).ok_or_else(||json_error("会话记录不存在"))?;
+        let message=conversation.get_mut("messages").and_then(Value::as_array_mut).and_then(|items|items.iter_mut().find(|item|item.get("id").and_then(Value::as_str)==Some(&parent.assistant_message_id))).ok_or_else(||json_error("回答记录不存在"))?;
+        message["accountingCalls"]=json!(calls);
+        let hash=refresh_exchange_hash(&mut state)?;
+        validate_exchange(&state)?;
+        transaction.execute("UPDATE workspace_exchange SET exchange_json=?1 WHERE workspace_id=?2",params![canonical_json(&state)?,parent.workspace_id]).map_err(|_|json_error("费用记录写入失败"))?;
+        transaction.execute("UPDATE workspaces SET semantic_hash=?1 WHERE id=?2",params![hash,parent.workspace_id]).map_err(|_|json_error("费用记录Hash写入失败"))?;
+        transaction.commit().map_err(|_|json_error("费用记录提交失败"))?;
+        Ok(())
+    }
+
+    fn recover_ordinary_chat_accounting(&self)->Result<(),String>{
+        let ids={let connection=self.connection()?;let mut q=connection.prepare("SELECT attempt_id FROM desktop_ordinary_chat_attempts WHERE state IN ('RESPONSE_COMMITTED','COMPLETED_ACCOUNTING_PENDING') OR (state='FAILED' AND safe_error_code IN ('WEB_SEARCH_NO_SOURCES','WEB_SEARCH_SCOPE_INCOMPLETE','EMPTY_COMPLETION','STREAM_PROVIDER_ERROR','OUTPUT_LIMIT','CONTENT_FILTER') AND (input_tokens IS NOT NULL OR output_tokens IS NOT NULL OR (charge_micros IS NOT NULL AND cost_source IN ('PROVIDER_RESPONSE','PROVIDER_REPORTED'))))").map_err(|_|json_error("无法读取待恢复费用"))?;let ids=q.query_map([],|r|r.get::<_,String>(0)).map_err(|_|json_error("无法读取待恢复费用"))?.collect::<Result<Vec<_>,_>>().map_err(|_|json_error("费用记录无效"))?;ids};
+        for id in ids {
+            let p=Self::ordinary_chat_projection(&self.connection()?,&id)?;
+            let completed=desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),text:String::new(),reasoning:None,usage:desktop_ordinary_chat_v1::Usage{input_tokens:p.input_tokens,output_tokens:p.output_tokens,cached_input_tokens:p.cached_input_tokens,reasoning_tokens:p.reasoning_tokens},reported_cost_micros:p.charge_micros.filter(|_|matches!(p.cost_source.as_deref(),Some("PROVIDER_RESPONSE"|"PROVIDER_REPORTED"))),actual_model_id:p.actual_model_id.clone(),web_search_verified:p.web_search_verified.unwrap_or(false),elapsed_ms:p.latency_ms.unwrap_or(0)};
+            self.complete_ordinary_chat_accounting(&id,&completed)?;
+        }
+        Ok(())
     }
 
     fn mark_ordinary_chat_accounting_pending(
         &self,
         attempt_id: &str,
     ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
-        self.connection()?.execute("UPDATE desktop_ordinary_chat_attempts SET state='COMPLETED_ACCOUNTING_PENDING',safe_error_code='LOCAL_ACCOUNTING_PERSISTENCE',updated_at_ms=?1 WHERE attempt_id=?2 AND state='RESPONSE_COMMITTED'",params![system_now_millis(),attempt_id]).map_err(|_| json_error("无法标记账本待恢复状态"))?;
+        self.connection()?.execute("UPDATE desktop_ordinary_chat_attempts SET state='COMPLETED_ACCOUNTING_PENDING',safe_error_code='LOCAL_ACCOUNTING_PERSISTENCE',updated_at_ms=?1 WHERE attempt_id=?2 AND state IN ('RESPONSE_COMMITTED','COMPLETED_ACCOUNTING_PENDING')",params![system_now_millis(),attempt_id]).map_err(|_| json_error("无法标记账本待恢复状态"))?;
         Self::ordinary_chat_projection(&self.connection()?, attempt_id)
     }
 
@@ -15431,7 +15829,7 @@ impl DesktopWorkspaceStore {
             source: usage_ledger_v1::Source::DesktopLocal,
             occurred_at_ms: system_now_millis(),
         };
-        match ledger.append(&entry)? {
+        match ledger.append_background(&entry,completed.usage.reasoning_tokens)? {
             usage_ledger_v1::AppendResult::Conflict => {
                 Err(json_error("历史资料库用量账本幂等冲突"))
             }
@@ -15662,7 +16060,7 @@ impl DesktopWorkspaceStore {
             return Ok(None);
         };
         let (provider_id, model_id, endpoint) =
-            match self.reminder_route("OPENROUTER", "GPT_5_6_TERRA", mock_endpoint) {
+            match self.reminder_route("OPENROUTER", "GPT_6_LUNA", mock_endpoint) {
                 Ok(route) => route,
                 Err(error) => {
                     let code = if error.contains("凭据") {
@@ -15674,7 +16072,7 @@ impl DesktopWorkspaceStore {
                         &connection,
                         &reservation,
                         Some("OPENROUTER"),
-                        Some("openai/gpt-5.6-terra"),
+                        desktop_model_service_v1::preset("OPENROUTER", "GPT_6_LUNA").ok().map(|preset| preset.model_id),
                         false,
                         code,
                         system_now_millis(),
@@ -15726,7 +16124,7 @@ impl DesktopWorkspaceStore {
             source: usage_ledger_v1::Source::DesktopLocal,
             occurred_at_ms: system_now_millis(),
         };
-        match ledger.append(&entry)? {
+        match ledger.append_background(&entry,completed.usage.reasoning_tokens)? {
             usage_ledger_v1::AppendResult::Conflict => Err(json_error("提醒用量账本幂等冲突")),
             usage_ledger_v1::AppendResult::Appended(_)
             | usage_ledger_v1::AppendResult::Replayed(_) => Ok(()),
@@ -16282,25 +16680,36 @@ fn save_desktop_model_service_settings(
         return Err(json_error("模型服务设置已在其他窗口更新；请刷新后重试"));
     }
 
+    let preset_id = if args.preserve_preset { current.preset_id.as_str() } else { args.preset_id.as_str() };
     let credential_store = &state.credentials;
-    if let Some(api_key) = args.api_key {
-        let api_key = Zeroizing::new(api_key);
-        let trimmed = api_key.trim();
-        if !trimmed.is_empty() {
-            credential_store.save_user_provided_secret(&args.provider_id, trimmed.as_bytes())?;
-        }
-    }
     let record = state
         .store
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
-        .save_desktop_model_service_setting_record(
+        .save_desktop_model_service_setting_record_guarded(
             &args.provider_id,
-            args.enabled,
-            &args.preset_id,
+            if args.preserve_enabled { None } else { Some(args.enabled) },
+            preset_id,
             args.expected_revision,
+            args.preserve_preset,
+            || {
+                if let Some(api_key) = args.api_key {
+                    let api_key = Zeroizing::new(api_key);
+                    let trimmed = api_key.trim();
+                    if !trimmed.is_empty() {
+                        credential_store.save_user_provided_secret(&args.provider_id, trimmed.as_bytes())?;
+                    }
+                }
+                Ok(())
+            },
         )?;
     desktop_model_service_projection(record, credential_store)
+}
+
+#[tauri::command]
+fn set_desktop_model_service_enabled(state: AreaState<'_>, args: DesktopModelServiceEnabledArgs) -> Result<DesktopModelServiceSettingProjection, String> {
+    let record = state.store.lock().map_err(|_| json_error("模型开关暂时无法保存"))?.set_desktop_model_service_enabled(&args.provider_id,args.enabled)?;
+    desktop_model_service_projection(record, &state.credentials)
 }
 
 /// Credential plaintext crosses IPC only after the user explicitly presses the reveal control.
@@ -16353,7 +16762,7 @@ async fn test_desktop_model_service_connection(
     state: AreaState<'_>,
 ) -> Result<DesktopModelServiceConnectionTestProjection, String> {
     state.require_external_access()?;
-    desktop_model_service_v1::validate_configuration(&args.provider_id, &args.preset_id)?;
+    desktop_model_service_v1::connection_test_preset(&args.provider_id, &args.preset_id)?;
     let secret = read_user_authorized_provider_secret(&state.credentials, &args.provider_id)?;
     desktop_model_service_v1::test_saved_connection(&args.provider_id, &args.preset_id, secret)
         .await?;
@@ -16364,6 +16773,52 @@ async fn test_desktop_model_service_connection(
         message: "连接测试通过。".to_owned(),
         tested_at_ms: local_now_millis(),
     })
+}
+
+fn desktop_usage_ledger_records(
+    ledger: &usage_ledger_v1::Ledger,
+    ordinary_chat_fallbacks: &HashMap<String, (i64, i64, i64)>,
+) -> Result<Vec<DesktopUsageLedgerRecordProjection>, String> {
+    let entries = ledger.all_entries()?;
+    let reconciled:std::collections::BTreeSet<_>=entries.iter().filter_map(|e|e.reconciles_entry_id.clone()).collect();
+    let records = entries
+        .into_iter()
+        .filter(|entry| entry.kind == usage_ledger_v1::Kind::FinalMeasured || entry.kind==usage_ledger_v1::Kind::StreamPending && !reconciled.contains(&entry.entry_id))
+        .map(|entry| {
+            let provider_usage_complete =
+                entry.input_tokens.is_some() && entry.output_tokens.is_some();
+            let fallback = (!provider_usage_complete && entry.kind==usage_ledger_v1::Kind::FinalMeasured)
+                .then(|| ordinary_chat_fallbacks.get(&entry.attempt_id).copied())
+                .flatten();
+            let local_estimate = fallback.is_some() && entry.charge_micros.is_none();
+            Ok(DesktopUsageLedgerRecordProjection {
+                attempt_id: entry.attempt_id,
+                call_metadata: ledger.call_metadata(&entry.entry_id)?,
+                requested_model_id:entry.requested_model_id.clone(),
+                entry_id: entry.entry_id,
+                conversation_id: entry.conversation_id,
+                model_id: entry.actual_model_id.unwrap_or(entry.requested_model_id),
+                kind: entry.kind.as_str().to_owned(),
+                fact_grade: if local_estimate {
+                    usage_ledger_v1::FactGrade::Estimated.as_str().to_owned()
+                } else {
+                    entry.fact_grade.as_str().to_owned()
+                },
+                input_tokens: fallback.map(|value| value.0).or(entry.input_tokens),
+                output_tokens: fallback.map(|value| value.1).or(entry.output_tokens),
+                cached_input_tokens: fallback
+                    .map(|value| value.2)
+                    .or(entry.cached_input_tokens),
+                charge_micros: entry.charge_micros,
+                currency_code: entry.currency_code,
+                cost_source: entry
+                    .cost_source
+                    .or_else(|| local_estimate.then(|| "LOCAL_ESTIMATE".to_owned())),
+                occurred_at_ms: entry.occurred_at_ms,
+            })
+        })
+        .collect::<Result<Vec<_>,String>>()?;
+    Ok(records)
 }
 
 #[tauri::command]
@@ -16388,41 +16843,8 @@ async fn read_desktop_usage_ledger(
                 cached_input_tokens: 0,
             });
         }
-        let entries = usage_ledger_v1::Ledger::open(&root)?.all_entries()?;
-        let records = entries
-            .into_iter()
-            .filter(|entry| entry.kind == usage_ledger_v1::Kind::FinalMeasured)
-            .map(|entry| {
-                let provider_usage_complete =
-                    entry.input_tokens.is_some() && entry.output_tokens.is_some();
-                let fallback = (!provider_usage_complete)
-                    .then(|| ordinary_chat_fallbacks.get(&entry.attempt_id).copied())
-                    .flatten();
-                let local_estimate = fallback.is_some() && entry.charge_micros.is_none();
-                DesktopUsageLedgerRecordProjection {
-                    entry_id: entry.entry_id,
-                    conversation_id: entry.conversation_id,
-                    model_id: entry.actual_model_id.unwrap_or(entry.requested_model_id),
-                    kind: entry.kind.as_str().to_owned(),
-                    fact_grade: if local_estimate {
-                        usage_ledger_v1::FactGrade::Estimated.as_str().to_owned()
-                    } else {
-                        entry.fact_grade.as_str().to_owned()
-                    },
-                    input_tokens: fallback.map(|value| value.0).or(entry.input_tokens),
-                    output_tokens: fallback.map(|value| value.1).or(entry.output_tokens),
-                    cached_input_tokens: fallback
-                        .map(|value| value.2)
-                        .or(entry.cached_input_tokens),
-                    charge_micros: entry.charge_micros,
-                    currency_code: entry.currency_code,
-                    cost_source: entry
-                        .cost_source
-                        .or_else(|| local_estimate.then(|| "LOCAL_ESTIMATE".to_owned())),
-                    occurred_at_ms: entry.occurred_at_ms,
-                }
-            })
-            .collect::<Vec<_>>();
+        let ledger=usage_ledger_v1::Ledger::open(&root)?;
+        let records = desktop_usage_ledger_records(&ledger, &ordinary_chat_fallbacks)?;
         Ok(DesktopUsageLedgerProjection {
             input_tokens: records
                 .iter()
@@ -17004,6 +17426,30 @@ where
 
 const DESKTOP_MEDIA_RANGE_CHUNK_BYTES: u64 = 2 * 1024 * 1024;
 
+// Heavy preview decoding queues independently of the generation store writer.
+static DESKTOP_PREVIEW_LANE: Mutex<()> = Mutex::new(());
+async fn run_desktop_preview_paths_blocking<T, F>(app: AreaAppHandle, lock_error: &'static str, task_error: &'static str, operation: F) -> Result<T, String>
+where T: Send + 'static, F: FnOnce(DesktopStoreReadPaths) -> Result<T, String> + Send + 'static {
+    run_desktop_store_paths_blocking(app, lock_error, task_error, move |paths| {
+        let _slot = DESKTOP_PREVIEW_LANE.lock().map_err(|_| json_error("本地预览工作队列不可用"))?;
+        operation(paths)
+    }).await
+}
+
+fn read_bounded_preview_asset(root: &Path, hash: &str, registered_bytes: u64) -> Result<Vec<u8>, std::io::Error> {
+    use std::io::Read;
+    if registered_bytes > MAX_CONVERSATION_ATTACHMENT_BYTES || !is_sha256(hash) {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "preview asset limit"));
+    }
+    let file = fs::File::open(root.join("assets").join(hash))?;
+    if file.metadata()?.len() != registered_bytes {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "preview asset size"));
+    }
+    let mut bytes = Vec::new();
+    file.take(registered_bytes + 1).read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
 fn parse_desktop_media_range(value: &str, byte_count: u64) -> Result<(u64, u64), ()> {
     if byte_count == 0 {
         return Err(());
@@ -17566,7 +18012,7 @@ async fn read_desktop_image_preview(
     app: AreaAppHandle,
     args: DesktopImagePreviewArgs,
 ) -> Result<DesktopImagePreview, String> {
-    run_desktop_store_paths_blocking(
+    run_desktop_preview_paths_blocking(
         app,
         "Desktop store 被锁定",
         "本地图片后台读取线程异常",
@@ -17580,11 +18026,11 @@ async fn read_desktop_pdf_preview(
     app: AreaAppHandle,
     args: DesktopPdfPreviewArgs,
 ) -> Result<DesktopPdfPreview, String> {
-    run_desktop_store_blocking(
+    run_desktop_preview_paths_blocking(
         app,
         "本地 PDF 预览锁不可用",
         "本地 PDF 后台读取线程异常",
-        move |store| store.pdf_preview(&args),
+        move |paths| DesktopWorkspaceStore::pdf_preview_at(&paths, &args),
     )
     .await
 }
@@ -17715,11 +18161,11 @@ async fn read_desktop_audio_preview(
     app: AreaAppHandle,
     args: DesktopAudioPreviewArgs,
 ) -> Result<DesktopAudioPreview, String> {
-    run_desktop_store_blocking(
+    run_desktop_preview_paths_blocking(
         app,
         "本地音频预览锁不可用",
         "本地音频后台读取线程异常",
-        move |store| store.audio_preview(&args),
+        move |paths| DesktopWorkspaceStore::audio_preview_at(&paths, &args),
     )
     .await
 }
@@ -17741,11 +18187,11 @@ async fn read_desktop_text_preview(
     app: AreaAppHandle,
     args: DesktopTextPreviewArgs,
 ) -> Result<DesktopTextPreview, String> {
-    run_desktop_store_blocking(
+    run_desktop_preview_paths_blocking(
         app,
         "本地文本预览锁不可用",
         "本地文本后台读取线程异常",
-        move |store| store.text_preview(&args),
+        move |paths| DesktopWorkspaceStore::text_preview_at(&paths, &args),
     )
     .await
 }
@@ -17755,11 +18201,11 @@ async fn read_desktop_archive_preview(
     app: AreaAppHandle,
     args: DesktopArchivePreviewArgs,
 ) -> Result<DesktopArchivePreview, String> {
-    run_desktop_store_blocking(
+    run_desktop_preview_paths_blocking(
         app,
         "本地压缩包预览锁不可用",
         "本地压缩包目录后台读取线程异常",
-        move |store| store.archive_preview(&args),
+        move |paths| DesktopWorkspaceStore::archive_preview_at(&paths, &args),
     )
     .await
 }
@@ -17769,11 +18215,11 @@ async fn read_desktop_archive_entry_preview(
     app: AreaAppHandle,
     args: DesktopArchiveEntryPreviewArgs,
 ) -> Result<DesktopArchiveEntryPreview, String> {
-    run_desktop_store_blocking(
+    run_desktop_preview_paths_blocking(
         app,
         "本地压缩包预览锁不可用",
         "本地压缩包文件后台读取线程异常",
-        move |store| store.archive_entry_preview(&args),
+        move |paths| DesktopWorkspaceStore::archive_entry_preview_at(&paths, &args),
     )
     .await
 }
@@ -17966,6 +18412,7 @@ fn read_desktop_runtime_info(
 ) -> DesktopRuntimeInfo {
     DesktopRuntimeInfo {
         version: app.package_info().version.to_string(),
+        git_commit: option_env!("NANFENG_AI_GIT_COMMIT").unwrap_or("unknown"),
         platform: std::env::consts::OS,
         arch: std::env::consts::ARCH,
         build_epoch_seconds: option_env!("NANFENG_AI_BUILD_EPOCH_SECONDS")
@@ -18044,7 +18491,7 @@ async fn execute_desktop_history_knowledge_prepared(
         max_output_tokens: 768,
         web_search_route: "NONE".into(),
         structured_json: false,
-        disable_thinking: false,
+        disable_thinking: false, grounded_answer:false,explicit_search_query:None,
     };
     let worker_app = app.clone();
     let worker_prepared = prepared.clone();
@@ -18091,7 +18538,7 @@ async fn execute_desktop_history_knowledge_prepared(
             Err(failure) => {
                 let (unknown, code) = match failure {
                     desktop_ordinary_chat_v1::Failure::Cancelled => (false, "CANCELLED"),
-                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => (false, code),
+                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } | desktop_ordinary_chat_v1::Failure::Quantified { code, .. } => (false, code),
                     desktop_ordinary_chat_v1::Failure::Unknown { code } => (true, code),
                 };
                 desktop_history_knowledge_v1::fail(
@@ -18288,7 +18735,7 @@ async fn execute_desktop_reminder_draft_prepared(
         max_output_tokens: 1024,
         web_search_route: "NONE".into(),
         structured_json: false,
-        disable_thinking: false,
+        disable_thinking: false, grounded_answer:false,explicit_search_query:None,
     };
     let worker = prepared.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -18350,7 +18797,7 @@ async fn execute_desktop_reminder_draft_prepared(
             Err(failure) => {
                 let (unknown, code) = match failure {
                     desktop_ordinary_chat_v1::Failure::Cancelled => (false, "CANCELLED"),
-                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => (false, code),
+                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } | desktop_ordinary_chat_v1::Failure::Quantified { code, .. } => (false, code),
                     desktop_ordinary_chat_v1::Failure::Unknown { code } => (true, code),
                 };
                 let _ = desktop_reminders_v1::fail_draft(
@@ -18406,7 +18853,7 @@ async fn execute_desktop_reminder_run_prepared(
         max_output_tokens: 4096,
         web_search_route: "OPENROUTER_SERVER_TOOL".into(),
         structured_json: false,
-        disable_thinking: false,
+        disable_thinking: false, grounded_answer:false,explicit_search_query:None,
     };
     let worker = prepared.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -18454,7 +18901,7 @@ async fn execute_desktop_reminder_run_prepared(
             Err(failure) => {
                 let (unknown, code) = match failure {
                     desktop_ordinary_chat_v1::Failure::Cancelled => (false, "CANCELLED"),
-                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => (false, code),
+                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } | desktop_ordinary_chat_v1::Failure::Quantified { code, .. } => (false, code),
                     desktop_ordinary_chat_v1::Failure::Unknown { code } => (true, code),
                 };
                 desktop_reminders_v1::fail_run(
@@ -18916,6 +19363,7 @@ fn emit_ordinary_chat_event(
     projection: &DesktopOrdinaryChatAttemptProjection,
     client_submission_id: &str,
 ) {
+    nanfeng_island_v1::record(app, projection);
     let _ = app.emit(
         "desktop-ordinary-chat-runtime-v1",
         DesktopOrdinaryChatRuntimeEvent {
@@ -18933,6 +19381,7 @@ async fn execute_desktop_ordinary_chat_prepared(
     app: AreaAppHandle,
     prepared: DesktopOrdinaryChatPrepared,
 ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
+    let _island_guard = nanfeng_island_v1::RunGuard::new(app.area().wire(), &prepared.projection.assistant_message_id);
     let state = app.area_state();
     let client_submission_id = prepared.client_submission_id.clone();
     if let Some(code) = prepared.preflight_failure_code.as_deref() {
@@ -18959,6 +19408,13 @@ async fn execute_desktop_ordinary_chat_prepared(
         .entry(prepared.projection.conversation_id.clone())
         .or_default()
         .push(signal.clone());
+    let finish_app=app.clone();let finish_id=prepared.projection.conversation_id.clone();let finish_signal=signal.clone();
+    let cancellation_guard=nanfeng_island_v1::OnFinish::new(move || {
+        let state=finish_app.area_state();
+        if let Ok(mut values)=state.ordinary_chat_cancellations.lock() {
+            if let Some(signals)=values.get_mut(&finish_id) {signals.retain(|signal|!Arc::ptr_eq(signal,&finish_signal));if signals.is_empty() {values.remove(&finish_id);}}
+        };
+    });
     let running = state
         .store
         .lock()
@@ -18972,6 +19428,26 @@ async fn execute_desktop_ordinary_chat_prepared(
             None,
         )?;
     emit_ordinary_chat_event(&app, &running, &client_submission_id);
+    let search_secret = if prepared.web_search_route == "RELAYCORE_COMPANION" || prepared.search_service.is_some() {
+        let config = if prepared.search_service.is_some(){state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.require_independent_search_config()}else{state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.require_relay_search_config()};
+        if config.is_err() {
+            let failed = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.update_ordinary_chat_message(&prepared.projection.attempt_id, "", "FAILED", None, None, Some("WEB_SEARCH_COMPANION_NOT_CONFIGURED"))?;
+            emit_ordinary_chat_event(&app, &failed, &client_submission_id);
+            if let Ok(mut values) = state.ordinary_chat_cancellations.lock() { values.remove(&prepared.projection.conversation_id); }
+            return Ok(failed);
+        }
+        match read_user_authorized_provider_secret(&state.credentials, if prepared.search_service.is_some(){"ZHIPU"}else{"OPENROUTER"}) {
+            Ok(secret) => Some(secret),
+            Err(_) => {
+                let failed = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.update_ordinary_chat_message(&prepared.projection.attempt_id, "", "FAILED", None, None, Some("WEB_SEARCH_COMPANION_CREDENTIAL_UNAVAILABLE"))?;
+                emit_ordinary_chat_event(&app, &failed, &client_submission_id);
+                if let Ok(mut values) = state.ordinary_chat_cancellations.lock() {
+                    if let Some(signals) = values.get_mut(&prepared.projection.conversation_id) { signals.retain(|candidate| !Arc::ptr_eq(candidate, &signal)); }
+                }
+                return Ok(failed);
+            }
+        }
+    } else { None };
     let secret = if state.ordinary_chat_mock_endpoint.is_some() {
         Zeroizing::new(b"local-acceptance-mock-only".to_vec())
     } else {
@@ -19019,18 +19495,24 @@ async fn execute_desktop_ordinary_chat_prepared(
         ),
         web_search_route: prepared.web_search_route.clone(),
         structured_json: false,
-        disable_thinking: false,
+        disable_thinking: false, grounded_answer:false,explicit_search_query:None,
     };
     let attempt_id = prepared.projection.attempt_id.clone();
     let conversation_id = prepared.projection.conversation_id.clone();
     let cleanup_signal = signal.clone();
     let worker_app = app.clone();
+    let continuation_prefix=chat_continuation_v1::checkpoint_text(&prepared.messages);
     let result = tauri::async_runtime::spawn_blocking(move || {
+        let _cancellation_guard=cancellation_guard;
+        let _island_guard=_island_guard;
+        let mut continuity = generation_continuity_v1::Trace::begin(&worker_app.area_state().store_paths.root, &attempt_id);
+        let activity = generation_continuity_v1::ActivityGuard::begin();
         let mut visible = String::new();
         let mut persisted_visible_bytes = 0usize;
         let mut last_checkpoint = std::time::Instant::now() - std::time::Duration::from_secs(1);
-        let transport = tauri::async_runtime::block_on(
-            desktop_ordinary_chat_v1::execute_streaming(request, secret, signal, |delta| {
+        let companion_projection = prepared.projection.clone();
+        let on_delta = |delta: &str| {
+                continuity.progress();
                 visible.push_str(delta);
                 // Persist the first visible text immediately, then coalesce tiny provider
                 // chunks. This retains crash/retry safety without serialising a full workspace
@@ -19041,6 +19523,8 @@ async fn execute_desktop_ordinary_chat_prepared(
                 if !should_checkpoint {
                     return Ok(());
                 }
+                if !continuation_prefix.is_empty() && continuation_prefix.starts_with(&visible) { return Ok(()); }
+                let checkpoint_visible=chat_continuation_v1::strip_echo(&continuation_prefix,&visible);
                 let state = worker_app.area_state();
                 let projection = state
                     .store
@@ -19050,7 +19534,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                     })?
                     .update_ordinary_chat_message(
                         &attempt_id,
-                        &visible,
+                        &checkpoint_visible,
                         "PARTIAL",
                         None,
                         None,
@@ -19059,15 +19543,73 @@ async fn execute_desktop_ordinary_chat_prepared(
                     .map_err(|_| desktop_ordinary_chat_v1::Failure::Unknown {
                         code: "LOCAL_PERSISTENCE",
                     })?;
+                nanfeng_island_v1::checkpoint(worker_app.area().wire(), &projection.assistant_message_id, checkpoint_visible.chars().count());
                 persisted_visible_bytes = visible.len();
                 last_checkpoint = std::time::Instant::now();
                 emit_ordinary_chat_event(&worker_app, &projection, &client_submission_id);
                 Ok(())
-            }),
-        );
+            };
+        let answer_start_signal=signal.clone();
+        let before_answer=|| {
+            if answer_start_signal.load(std::sync::atomic::Ordering::SeqCst) {return Err(desktop_ordinary_chat_v1::Failure::Cancelled);}
+            worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"}).and_then(|store|store.record_answer_pending(&companion_projection).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"}))
+        };
+        let service_grant=prepared.search_service.clone();
+        let scoped_search_requested=service_grant.is_none() && attachment_web_search_execution_v1::required(&request);
+        let companion_requested=request.web_search_route=="RELAYCORE_COMPANION" || scoped_search_requested;
+        let transport = tauri::async_runtime::block_on(async {
+            if let Some(grant)=service_grant {
+                let fingerprint=grant.material_fingerprint.clone();
+                let scope=independent_web_search_v1::evidence_scope(&request,&fingerprint);
+                let mut cache=independent_web_search_v1::ServiceCallbacks {
+                    load:|key:&str|worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"})?.load_service_search_checkpoint(&companion_projection.attempt_id,&scope,key).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),
+                    save:|key:&str,e:independent_web_search_v1::ServiceEvidence|worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"})?.save_service_search_checkpoint(&companion_projection.attempt_id,&scope,key,e).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),
+                };
+                independent_web_search_v1::execute_attachment_cached(request,secret,search_secret.ok_or(desktop_ordinary_chat_v1::Failure::Explicit{code:"CREDENTIAL_MISSING",http_status:None})?,grant,&fingerprint,signal,&mut cache,
+                    |call_id,completed,failure| {
+                        if failure.is_some(){return Ok(());}
+                        worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})?
+                            .record_service_search_usage(&companion_projection,call_id,completed).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})
+                    },|planned,covered|worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"})?
+                        .record_attachment_search_coverage(&companion_projection.attempt_id,planned,covered).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),before_answer,on_delta).await.map(|r|(r.reply,Some(r.complete)))
+            } else if scoped_search_requested {
+                let fingerprint=attachment_web_search_execution_v1::cache_fingerprint(&request);
+                let cache=attachment_search_checkpoint_v1::Callbacks {
+                    load:|item:&str|worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"})?
+                        .load_attachment_search_checkpoint(&companion_projection.attempt_id,&fingerprint,item).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),
+                    save:|item:&str,value:attachment_search_checkpoint_v1::Entry|worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"})?
+                        .save_attachment_search_checkpoint(&companion_projection.attempt_id,&fingerprint,item,value).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),
+                    coverage:|planned,covered|worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"})?
+                        .record_attachment_search_coverage(&companion_projection.attempt_id,planned,covered).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),
+                };
+                attachment_web_search_execution_v1::execute(request,secret,search_secret,signal,cache,|search_request,retrieval| {
+                    worker_app.area_state().store.lock().map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})?
+                        .record_scoped_search_usage(&companion_projection,search_request,retrieval).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})
+                },before_answer,on_delta).await.map(|result|(result.reply,Some(result.complete)))
+            } else if let Some(search_secret) = search_secret {
+                relaycore_web_search_v1::execute_companion(request, secret, search_secret, signal, |retrieval| {
+                    worker_app.area_state().store.lock()
+                        .map_err(|_| desktop_ordinary_chat_v1::Failure::Unknown { code:"LOCAL_ACCOUNTING_PERSISTENCE" })?
+                        .record_relay_search_usage(&companion_projection, retrieval)
+                        .map_err(|_| desktop_ordinary_chat_v1::Failure::Unknown { code:"LOCAL_ACCOUNTING_PERSISTENCE" })
+                }, before_answer, on_delta).await.map(|reply|(reply,None))
+            } else {
+                before_answer()?;
+                desktop_ordinary_chat_v1::execute_streaming(request, secret, signal, on_delta).await.map(|reply|(reply,None))
+            }
+        });
+        continuity.finish(match &transport {
+            Ok(_) => "TRANSPORT_COMPLETED",
+            Err(desktop_ordinary_chat_v1::Failure::Cancelled) => "USER_STOP",
+            Err(desktop_ordinary_chat_v1::Failure::Explicit { code, .. }) | Err(desktop_ordinary_chat_v1::Failure::Quantified { code, .. }) | Err(desktop_ordinary_chat_v1::Failure::Unknown { code }) => code,
+        });
         let state = worker_app.area_state();
         let final_projection = match transport {
-            Ok(completed) => {
+            Ok((mut completed,scope_complete)) => {
+                let continuation_text=chat_continuation_v1::completed_suffix(&continuation_prefix,&completed.text);
+                let no_progress=continuation_text.is_none();
+                let attachment_search_incomplete=scope_complete==Some(false) || (companion_requested && !completed.web_search_verified);
+                completed.text=continuation_text.unwrap_or_default();
                 let committed = state
                     .store
                     .lock()
@@ -19075,11 +19617,12 @@ async fn execute_desktop_ordinary_chat_prepared(
                     .update_ordinary_chat_message(
                         &attempt_id,
                         &completed.text,
-                        "COMPLETE",
+                        if no_progress || attachment_search_incomplete { "FAILED" } else { "COMPLETE" },
                         completed.reasoning.as_deref(),
                         Some(&completed),
-                        None,
+                        if no_progress { Some("RESPONSE_INCOMPLETE") } else if attachment_search_incomplete {Some(if scope_complete==Some(false){"WEB_SEARCH_SCOPE_INCOMPLETE"}else{"WEB_SEARCH_NO_SOURCES"})} else { None },
                     )?;
+                nanfeng_island_v1::final_checkpoint(worker_app.area().wire(), &committed.assistant_message_id, completed.text.chars().count());
                 emit_ordinary_chat_event(&worker_app, &committed, &client_submission_id);
                 let accounted = {
                     let store = state
@@ -19097,7 +19640,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                 let mut attempted_title_providers = Vec::new();
                 let mut title_format_correction =
                     desktop_conversation_title_v1::FormatCorrection::default();
-                loop {
+                while !no_progress && !attachment_search_incomplete {
                     let title_prepared = state.store.lock().ok().and_then(|store| {
                         store
                             .prepare_desktop_conversation_title(
@@ -19135,7 +19678,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                             },
                             web_search_route: "NONE".into(),
                             structured_json: title_prepared.provider_id == "DEEPSEEK",
-                            disable_thinking: title_prepared.provider_id == "DEEPSEEK",
+                            disable_thinking: title_prepared.provider_id == "DEEPSEEK", grounded_answer:false,explicit_search_query:None,
                         };
                         match tauri::async_runtime::block_on(
                             desktop_ordinary_chat_v1::execute_non_streaming(
@@ -19227,9 +19770,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                                     desktop_ordinary_chat_v1::Failure::Cancelled => {
                                         ("CANCELLED", "CANCELLED")
                                     }
-                                    desktop_ordinary_chat_v1::Failure::Explicit {
-                                        code, ..
-                                    } => ("FAILED", code),
+                                    desktop_ordinary_chat_v1::Failure::Explicit {code,..} | desktop_ordinary_chat_v1::Failure::Quantified {code,..} => ("FAILED", code),
                                     desktop_ordinary_chat_v1::Failure::Unknown { code } => {
                                         ("UNKNOWN", code)
                                     }
@@ -19259,23 +19800,29 @@ async fn execute_desktop_ordinary_chat_prepared(
                 accounted
             }
             Err(failure) => {
+                let quantitative=failure.quantified_reply().cloned();
                 let (delivery, code) = match failure {
                     desktop_ordinary_chat_v1::Failure::Cancelled => ("CANCELLED", "CANCELLED"),
-                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } => ("FAILED", code),
+                    desktop_ordinary_chat_v1::Failure::Explicit { code, .. } | desktop_ordinary_chat_v1::Failure::Quantified { code, .. } => ("FAILED", code),
                     desktop_ordinary_chat_v1::Failure::Unknown { code } => ("UNKNOWN", code),
                 };
-                let failed = state
+                let mut failed = state
                     .store
                     .lock()
                     .map_err(|_| json_error("Desktop store 被锁定"))?
                     .update_ordinary_chat_message(
                         &attempt_id,
-                        &visible,
+                        &chat_continuation_v1::strip_echo(&continuation_prefix,quantitative.as_ref().map(|r|r.text.as_str()).unwrap_or(&visible)),
                         delivery,
-                        None,
-                        None,
+                        quantitative.as_ref().and_then(|r|r.reasoning.as_deref()),
+                        quantitative.as_ref(),
                         Some(code),
                     )?;
+                if let Some(reply)=quantitative.as_ref() {
+                    // The reply stays failed. Recovery can repair this local accounting
+                    // from the saved quantities without sending another provider request.
+                    if let Ok(value)=state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.complete_ordinary_chat_accounting(&attempt_id,reply) {failed=value;}
+                }
                 emit_ordinary_chat_event(&worker_app, &failed, &client_submission_id);
                 failed
             }
@@ -19293,6 +19840,7 @@ async fn execute_desktop_ordinary_chat_prepared(
                     values.remove(&conversation_id);
                 }
             });
+        drop(activity);
         Ok::<_, String>(final_projection)
     })
     .await
@@ -19311,7 +19859,7 @@ async fn submit_desktop_ordinary_chat(
         .as_ref()
         .ok_or_else(|| json_error("本次发送未形成外发授权事实；未向服务商建立连接"))?;
     if authorization.approved_at_ms <= 0
-        || authorization.disclosure_version != "normal-chat-egress-v1"
+        || !matches!(authorization.disclosure_version.split(":auto=").next().unwrap_or(""), "normal-chat-egress-v1" | "normal-chat-egress-v3" | relaycore_web_search_v1::DISCLOSURE_VERSION)
     {
         return Err(json_error("本次发送授权事实无效；未向服务商建立连接"));
     }
@@ -19507,14 +20055,33 @@ async fn retry_desktop_ordinary_chat(
     args: DesktopOrdinaryChatRetryArgs,
 ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
     state.require_external_access()?;
+    {
+        let store = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?;
+        let connection = store.connection()?;
+        let previous = DesktopWorkspaceStore::ordinary_chat_projection(&connection, &args.attempt_id)?;
+        let route = ordinary_chat_web_search_route(previous.provider_id.as_deref().unwrap_or(""), previous.requested_model_id.as_deref().unwrap_or(""),
+            store.ordinary_chat_web_search_enabled(&connection, &previous.workspace_id, &previous.conversation_id)?, false);
+        if route == "RELAYCORE_COMPANION" && !args.egress_authorization.as_ref().is_some_and(|receipt| receipt.approved_at_ms > 0 && receipt.disclosure_version == relaycore_web_search_v1::DISCLOSURE_VERSION) {
+            return Err(json_error("恢复前需披露 GPT-6 Luna · OpenRouter 检索接收方"));
+        }
+    }
     let prepared = state
         .store
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
-        .prepare_ordinary_chat_retry(
+        .prepare_ordinary_chat_retry_with_service(
             &args.attempt_id,
             state.ordinary_chat_mock_endpoint.as_deref(),
+            args.egress_authorization.as_ref().and_then(|r|r.search_service.clone()),
+            args.egress_authorization.as_ref().and_then(|r|r.retrieval_recipient.clone()),
         )?;
+    if prepared.web_search_route == "RELAYCORE_COMPANION" {
+        let receipt = args.egress_authorization.as_ref().ok_or_else(|| json_error("检索授权缺失"))?;
+        state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.connection()?.execute(
+            "UPDATE desktop_ordinary_chat_attempts SET egress_approved_at_ms=?1,egress_disclosure_version=?2 WHERE attempt_id=?3",
+            params![receipt.approved_at_ms,receipt.disclosure_version,args.attempt_id],
+        ).map_err(|_| json_error("恢复授权未保存；未发送"))?;
+    }
     execute_desktop_ordinary_chat_prepared(app, prepared).await
 }
 
@@ -19862,6 +20429,12 @@ fn set_desktop_p6g_global_default(
         .lock()
         .map_err(|_| json_error("Desktop store 被锁定"))?
         .p6g_set_global_default(args)
+}
+
+#[tauri::command]
+fn set_desktop_new_conversation_model(state: AreaState<'_>, model_id: Option<String>, expected_revision: u64) -> Result<P6gMutationReceipt, String> {
+    state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?
+        .p6g_set_new_conversation_model(model_id, expected_revision)
 }
 
 #[tauri::command]
@@ -21951,6 +22524,7 @@ pub fn run() {
             app.manage(chat_state);
             if startup_mode == DesktopStartupMode::Normal {
                 desktop_window_state_v1::install_desktop_window_state_persistence(app);
+                nanfeng_island_v1::install(app.handle());
             }
             if background_cycle_enabled {
                 if let Some(window) = app.get_webview_window("main") {
@@ -22006,6 +22580,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            nanfeng_island_v1::read_generation_island,
+            nanfeng_island_v1::generation_island_action,
+            nanfeng_island_v1::generation_island_visibility,
             read_desktop_c16_visual_acceptance_state,
             read_desktop_transcription_state,
             read_desktop_app_settings,
@@ -22056,6 +22633,7 @@ pub fn run() {
             export_desktop_transcription_task,
             read_desktop_model_service_settings,
             save_desktop_model_service_settings,
+            set_desktop_model_service_enabled,
             reveal_desktop_model_service_credential,
             test_desktop_model_service_connection,
             read_desktop_usage_ledger,
@@ -22177,6 +22755,7 @@ pub fn run() {
             remove_desktop_p6g_catalog_candidate,
             read_desktop_p6g_selection,
             set_desktop_p6g_global_default,
+            set_desktop_new_conversation_model,
             set_desktop_p6g_conversation_override,
             clear_desktop_p6g_conversation_override,
             set_desktop_conversation_preferences,
@@ -22186,9 +22765,33 @@ pub fn run() {
             read_p6e_temporary_maintenance_acceptance_status,
             run_p6e_temporary_maintenance_acceptance
         ])
+        .on_window_event(|window, event| {
+            if window.label() != "main" { return; }
+            let state = window.app_handle().state::<AppState>();
+            if matches!(event, tauri::WindowEvent::Focused(_)) { nanfeng_island_v1::foreground_changed(window.app_handle()); }
+            if matches!(event, tauri::WindowEvent::Focused(true)) {
+                GENERATION_EXIT_DRAIN.advance();
+                state.deferred_exit_started.store(false, Ordering::SeqCst);
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if data_areas_have_active_execution(&state) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    nanfeng_island_v1::foreground_changed(window.app_handle());
+                }
+            }
+        })
         .build(tauri::generate_context!())
         .expect("tauri desktop startup failed")
         .run(|app, event| {
+            if matches!(&event, tauri::RunEvent::Exit) {nanfeng_island_v1::remove_outside_monitor();}
+            #[cfg(target_os = "macos")]
+            if matches!(&event, tauri::RunEvent::Reopen { .. }) {
+                GENERATION_EXIT_DRAIN.advance();
+                app.state::<AppState>().deferred_exit_started.store(false, Ordering::SeqCst);
+                if let Some(window) = app.get_webview_window("main") { let _ = window.show(); let _ = window.set_focus(); }
+                return;
+            }
             let tauri::RunEvent::ExitRequested { code, api, .. } = event else {
                 return;
             };
@@ -22208,6 +22811,7 @@ pub fn run() {
                 let _ = window.hide();
             }
             let exit_app = app.clone();
+            let exit_epoch = GENERATION_EXIT_DRAIN.advance();
             let _ = std::thread::Builder::new()
                 .name("nanfeng-exit-generation-drain".into())
                 .spawn(move || {
@@ -22217,6 +22821,9 @@ pub fn run() {
                     let mut cancellation_sent = false;
                     loop {
                         std::thread::sleep(std::time::Duration::from_millis(100));
+                        // Returning to the app revokes this exit request. A stale drain must
+                        // not quit a reopened window when its generation later finishes.
+                        if !GENERATION_EXIT_DRAIN.owns(exit_epoch) { break; }
                         let state = exit_app.state::<AppState>();
                         let active = data_areas_have_active_execution(&state);
                         if !active {
@@ -22396,7 +23003,7 @@ mod tests {
             .unwrap();
         assert_eq!(repaired_columns, 2);
         assert_eq!(settings_revision, 7);
-        assert_eq!(schema_version, 43);
+        assert_eq!(schema_version, 45);
         drop(connection);
         drop(reopened);
         DesktopWorkspaceStore::open(root)
@@ -22434,7 +23041,7 @@ mod tests {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
         assert_eq!(preference_columns, 2);
-        assert_eq!(schema_version, 43);
+        assert_eq!(schema_version, 45);
     }
 
     #[test]
@@ -22795,6 +23402,30 @@ mod tests {
             "/tmp/nanfeng-ai-desktop-c07-c12-acceptance"
         ))
         .is_err());
+    }
+
+    #[test]
+    fn due_reminder_route_failure_records_current_luna_without_actual_model() {
+        let directory = tempdir().unwrap();
+        let store = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        seed_c07_c12_offline_acceptance(&store).unwrap();
+        let connection = store.connection().unwrap();
+        connection.execute("UPDATE desktop_reminder_plans_v1 SET next_run_at_ms=?1 WHERE status='ACTIVE'", [system_now_millis()]).unwrap();
+        assert!(store.prepare_due_reminder(None).is_err());
+        let (requested, actual): (String, Option<String>) = connection.query_row(
+            "SELECT requested_model_id,actual_model_id FROM desktop_reminder_runs_v1 WHERE status='FAILED' ORDER BY started_at_ms DESC LIMIT 1",
+            [], |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap();
+        assert_eq!(requested, "openai/gpt-6-luna");
+        assert_eq!(actual, None);
+        drop(connection);
+        drop(store);
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let requested: String = reopened.connection().unwrap().query_row(
+            "SELECT requested_model_id FROM desktop_reminder_runs_v1 WHERE status='FAILED' ORDER BY started_at_ms DESC LIMIT 1",
+            [], |row| row.get(0),
+        ).unwrap();
+        assert_eq!(requested, "openai/gpt-6-luna");
     }
 
     #[test]
@@ -24085,8 +24716,8 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
                 .unwrap(),
-            // Schema 42 adds durable recovery-confirmation metadata.
-            43
+            // Schema 45 adds attempt-owned search checkpoints after area-local Composer selection.
+            45
         );
         assert_eq!(
             reopened
@@ -24148,6 +24779,85 @@ mod tests {
             desktop_attachment_kind(&normalized, extension),
             Some(("image/png", ".png"))
         );
+    }
+
+    #[test]
+    fn credential_only_save_preserves_the_current_model_and_enabled_state_after_reopen() {
+        let (_directory, store, _) = imported_store();
+        let selected = store.save_desktop_model_service_setting_record("OPENROUTER", false, "CLAUDE_HAIKU_5_5", 0).unwrap();
+        let saved = store.save_desktop_model_service_setting_record_guarded("OPENROUTER", None, "CLAUDE_OPUS_5_5", selected.revision, true, || Ok(())).unwrap();
+        assert_eq!(saved.preset_id, "CLAUDE_HAIKU_5_5");
+        assert!(!saved.enabled);
+        let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
+        let record = reopened.read_desktop_model_service_setting_records().unwrap().into_iter().find(|r| r.provider_id == "OPENROUTER").unwrap();
+        assert_eq!(record.preset_id, saved.preset_id);
+        assert!(!record.enabled);
+    }
+
+    #[test]
+    fn stale_details_save_never_touches_replacement_credential_and_preserves_switch() {
+        let (_directory, store, _) = imported_store();
+        let provider = &desktop_model_service_v1::PROVIDERS[0];
+        let off = store.set_desktop_model_service_enabled(provider.id, false).unwrap();
+        let on = store.set_desktop_model_service_enabled(provider.id, true).unwrap();
+        let touched = std::cell::Cell::new(false);
+        assert!(store.save_desktop_model_service_setting_record_guarded(provider.id, None, provider.default_preset_id, off.revision, false, || { touched.set(true); Ok(()) }).is_err());
+        assert!(!touched.get());
+        let saved = store.save_desktop_model_service_setting_record_guarded(provider.id, None, provider.default_preset_id, on.revision, false, || { touched.set(true); Ok(()) }).unwrap();
+        assert!(touched.get());
+        assert!(saved.enabled);
+        let failed = store.save_desktop_model_service_setting_record_guarded(provider.id, Some(false), provider.default_preset_id, saved.revision, false, || Err("synthetic credential failure".into()));
+        assert!(failed.is_err());
+        let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
+        let readback = reopened.read_desktop_model_service_setting_records().unwrap().into_iter().find(|r| r.provider_id == provider.id).unwrap();
+        assert!(readback.enabled);
+        assert_eq!(readback.revision, saved.revision);
+    }
+
+    #[test]
+    fn platform_switch_is_independent_of_credentials_and_preserves_selected_preset() {
+        let (_directory, store, _) = imported_store();
+        for provider in desktop_model_service_v1::PROVIDERS {
+            let initial = store.read_desktop_model_service_setting_records().unwrap().into_iter().find(|r| r.provider_id == provider.id).unwrap();
+            let on = store.set_desktop_model_service_enabled(provider.id, true).unwrap();
+            assert!(on.enabled);
+            assert_eq!(on.preset_id, initial.preset_id);
+            let off = store.set_desktop_model_service_enabled(provider.id, false).unwrap();
+            assert!(!off.enabled);
+            let readback = store.read_desktop_model_service_setting_records().unwrap().into_iter().find(|r|r.provider_id==provider.id).unwrap();
+            assert!(!readback.enabled);
+            assert_eq!(readback.preset_id,initial.preset_id);
+        }
+        let reopened = DesktopWorkspaceStore::open(store.root.clone()).unwrap();
+        assert!(reopened.read_desktop_model_service_setting_records().unwrap().iter().all(|r| !r.enabled));
+    }
+
+    #[test]
+    fn file_preview_read_does_not_wait_for_generation_store_owner() {
+        let (_directory, store, imported) = imported_store();
+        let bytes = b"public preview marker";
+        let digest = sha256(bytes);
+        fs::write(store.root.join("assets").join(&digest), bytes).unwrap();
+        store.connection().unwrap().execute(
+            "INSERT INTO desktop_conversation_attachments(workspace_id,attachment_id,mime_type,display_name,byte_count,sha256,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            params![imported.summary.id, "preview-isolated", "text/plain", "public.txt", bytes.len() as u64, digest, local_now()],
+        ).unwrap();
+        let paths = DesktopStoreReadPaths { root: store.root.clone(), database: store.database.clone() };
+        let owner = std::sync::Mutex::new(store);
+        let _generation_owner = owner.lock().unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = DesktopWorkspaceStore::text_preview_at(&paths, &DesktopTextPreviewArgs { workspace_id: imported.summary.id, attachment_id: "preview-isolated".into() });
+            sender.send(result.map(|preview| preview.text)).unwrap();
+        });
+        assert_eq!(receiver.recv_timeout(std::time::Duration::from_secs(2)).unwrap().unwrap(), "public preview marker");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn oversized_preview_metadata_is_rejected_before_reading() {
+        let root = tempfile::tempdir().unwrap();
+        assert_eq!(read_bounded_preview_asset(root.path(), &"a".repeat(64), MAX_CONVERSATION_ATTACHMENT_BYTES + 1).unwrap_err().kind(), std::io::ErrorKind::InvalidData);
     }
 
     #[cfg(target_os = "macos")]
@@ -24709,7 +25419,7 @@ mod tests {
         assert!(store.list_workspaces().unwrap().is_empty());
     }
 
-    fn imported_store() -> (
+    pub(super) fn imported_store() -> (
         tempfile::TempDir,
         DesktopWorkspaceStore,
         WorkspaceProjection,
@@ -24820,6 +25530,95 @@ mod tests {
             .file_type()
             .is_symlink());
         assert_eq!(fs::read(presentation).unwrap(), bytes);
+    }
+
+    #[test]
+    fn ordinary_auto_prefers_relay_over_configured_domestic_and_openrouter() {
+        let (_directory,store,imported)=imported_store();
+        let conversation=store.mutate_domain(DomainMutationArgs {intent_id:"auto-priority-fixture".into(),workspace_id:imported.summary.id.clone(),entity:"conversation".into(),action:"create".into(),object_id:None,expected_revision:None,fields:json!({"title":"Auto","projectId":null,"firstMessage":"local only"})}).unwrap();
+        for (provider,preset) in [("OPENROUTER","CLAUDE_SONNET_5_5"),("DEEPSEEK","DEEPSEEK_V4_FLASH"),("RELAYCORE_GPT","RELAYCORE_GPT_6_1_SOL")] {
+            store.save_desktop_model_service_setting_record(provider,true,preset,0).unwrap();
+            desktop_model_service_v1::ProviderCredentialStore::save_user_provided_secret(&store.credentials,provider,b"fixture-credential-only").unwrap();
+        }
+        let route=store.ordinary_chat_route(&store.connection().unwrap(),&imported.summary.id,&conversation.object_id,None).unwrap();
+        assert_eq!(route.0,"RELAYCORE_GPT");assert_eq!(route.1,"gpt-6.1-sol");
+        let connection=store.connection().unwrap();
+        let deep=store.ordinary_chat_route_for_task(&connection,&imported.summary.id,&conversation.object_id,None,"架构设计与权衡",&[],false).unwrap();
+        assert_eq!(deep.1,"gpt-6-astra");
+        let image=store.ordinary_chat_route_for_task(&connection,&imported.summary.id,&conversation.object_id,None,"",&["image/png".into()],false).unwrap();
+        assert_eq!(image.0,"DEEPSEEK");
+        let pdf=store.ordinary_chat_route_for_task(&connection,&imported.summary.id,&conversation.object_id,None,"",&["application/pdf".into()],false).unwrap();
+        assert_eq!(pdf.0,"OPENROUTER");
+        let denied=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {
+            workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,
+            text:"public local fixture".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:Some(false),
+            egress_authorization:Some(DesktopOrdinaryChatEgressAuthorization {approved_at_ms:1,disclosure_version:"normal-chat-egress-v1:auto=RELAYCORE_GPT_6_ASTRA".into(),client_submission_id:None,search_service:None, retrieval_recipient:None}),
+        },None).err().expect("changed Auto parent must fail before external request");
+        assert!(denied.contains("Auto 配置已变化"));
+
+
+    }
+
+    #[test]
+    fn manual_opus_choice_survives_reopen_and_other_conversation_astra_choice() {
+        let (directory,store,imported)=imported_store();
+        let mut ids=vec![];
+        for name in ["opus","astra"] {
+            let conversation=store.mutate_domain(DomainMutationArgs { intent_id:format!("fixed-model-{name}"),workspace_id:imported.summary.id.clone(),entity:"conversation".into(),action:"create".into(),object_id:None,expected_revision:None,fields:json!({"title":name,"projectId":null,"firstMessage":"local only"}) }).unwrap();
+            ids.push(conversation.object_id);
+        }
+        for (conversation,model) in [(&ids[0],"CLAUDE_OPUS_5_5"),(&ids[1],"RELAYCORE_GPT_6_ASTRA")] {
+            store.p6g_set_conversation_override(P6gConversationOverrideArgs {workspace_id:imported.summary.id.clone(),conversation_id:conversation.clone(),expected_revision:0,model_id:Some(model.into())}).unwrap();
+        }
+        drop(store);
+        let reopened=DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        assert_eq!(reopened.p6g_selection(&imported.summary.id,&ids[0]).unwrap().conversation_override.model_id.as_deref(),Some("CLAUDE_OPUS_5_5"));
+        assert_eq!(reopened.p6g_selection(&imported.summary.id,&ids[1]).unwrap().conversation_override.model_id.as_deref(),Some("RELAYCORE_GPT_6_ASTRA"));
+        reopened.p6g_set_conversation_override(P6gConversationOverrideArgs {workspace_id:imported.summary.id.clone(),conversation_id:ids[0].clone(),expected_revision:1,model_id:Some("GPT_6_1_SOL".into())}).unwrap();
+        assert_eq!(reopened.p6g_selection(&imported.summary.id,&ids[0]).unwrap().conversation_override.model_id.as_deref(),Some("GPT_6_1_SOL"));
+    }
+
+    #[test]
+    fn last_composer_model_persists_auto_rejects_conflicts_and_rolls_back_with_conversation() {
+        let (directory, store, imported) = imported_store();
+        let conversation = store.mutate_domain(DomainMutationArgs {
+            intent_id: "last-model-create".into(), workspace_id: imported.summary.id.clone(), entity: "conversation".into(), action: "create".into(), object_id: None, expected_revision: None,
+            fields: json!({"title":"Model fixture","projectId":null,"firstMessage":"local only"}),
+        }).unwrap();
+        store.p6g_set_conversation_override(P6gConversationOverrideArgs {workspace_id: imported.summary.id.clone(), conversation_id: conversation.object_id.clone(), expected_revision: 0, model_id: Some("RELAYCORE_SONNET_5_5".into())}).unwrap();
+        assert_eq!(store.p6g_global_default(&store.connection().unwrap()).unwrap().model_id.as_deref(), Some("RELAYCORE_SONNET_5_5"));
+        store.connection().unwrap().execute_batch("CREATE TRIGGER reject_default BEFORE UPDATE ON p6g_composer_default BEGIN SELECT RAISE(ABORT,'fixture'); END;").unwrap();
+        assert!(store.p6g_set_conversation_override(P6gConversationOverrideArgs {workspace_id: imported.summary.id.clone(), conversation_id: conversation.object_id.clone(), expected_revision: 1, model_id: None}).is_err());
+        assert_eq!(store.p6g_selection(&imported.summary.id, &conversation.object_id).unwrap().conversation_override.model_id.as_deref(), Some("RELAYCORE_SONNET_5_5"));
+        store.connection().unwrap().execute_batch("DROP TRIGGER reject_default").unwrap();
+        assert!(store.p6g_set_new_conversation_model(None, 0).unwrap_err().contains("REVISION_CONFLICT"));
+        assert!(store.p6g_set_new_conversation_model(Some("not-a-model".into()), 1).is_err());
+        drop(store);
+        let reopened = DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        assert_eq!(reopened.p6g_global_default(&reopened.connection().unwrap()).unwrap().model_id.as_deref(), Some("RELAYCORE_SONNET_5_5"));
+        reopened.p6g_set_new_conversation_model(None, 1).unwrap();
+        assert!(reopened.p6g_global_default(&reopened.connection().unwrap()).unwrap().model_id.is_none());
+        assert_eq!(reopened.p6g_selection(&imported.summary.id, &conversation.object_id).unwrap().conversation_override.model_id.as_deref(), Some("RELAYCORE_SONNET_5_5"));
+    }
+
+    #[test]
+    fn last_composer_model_is_area_local_and_v43_upgrade_preserves_old_conversations() {
+        let (directory, store, imported) = imported_store();
+        let before = store.workspace_projection(&imported.summary.id).unwrap().exchange;
+        store.connection().unwrap().execute_batch("DROP TABLE p6g_composer_default; PRAGMA user_version=43;").unwrap();
+        drop(store);
+        let root = directory.path().join("app-data");
+        let chat = DesktopWorkspaceStore::open(root.clone()).unwrap();
+        assert_eq!(chat.workspace_projection(&imported.summary.id).unwrap().exchange, before);
+        assert_eq!(chat.p6g_composer_default(&chat.connection().unwrap()).unwrap(), (0, None));
+        chat.p6g_set_new_conversation_model(Some("GLM_5_3".into()), 0).unwrap();
+        let area_root = directory.path().join("isolated-areas");
+        let area_chat = DesktopWorkspaceStore::open_area(area_root.clone(), DesktopDataArea::Chat).unwrap();
+        let work = DesktopWorkspaceStore::open_area(area_root, DesktopDataArea::Work).unwrap();
+        area_chat.p6g_set_new_conversation_model(Some("RELAYCORE_SONNET_5_5".into()), 0).unwrap();
+        assert_eq!(work.p6g_composer_default(&work.connection().unwrap()).unwrap(), (0, None));
+        assert_eq!(area_chat.p6g_global_default(&area_chat.connection().unwrap()).unwrap().model_id.as_deref(), Some("RELAYCORE_SONNET_5_5"));
+        assert_eq!(chat.p6g_composer_default(&chat.connection().unwrap()).unwrap().1.as_deref(), Some("GLM_5_3"));
     }
 
     #[test]
@@ -25879,7 +26678,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            43
+            45
         );
     }
 
@@ -26003,7 +26802,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            43
+            45
         );
         assert!(reopened
             .retry_nanfeng_knowledge_import_task(&task.id)
@@ -26044,7 +26843,7 @@ mod tests {
                 .iter()
                 .map(|item| item.provider_id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["OPENROUTER", "DEEPSEEK", "ZHIPU", "QWEN"]
+            vec!["OPENROUTER", "DEEPSEEK", "ZHIPU", "QWEN", "RELAYCORE_CLAUDE", "RELAYCORE_GPT", "RELAYCORE_GEMINI"]
         );
         let saved = store
             .save_desktop_model_service_setting_record("DEEPSEEK", true, "DEEPSEEK_V4_FLASH", 0)
@@ -26315,7 +27114,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, u64>(0))
                 .unwrap(),
-            43
+            45
         );
         assert_eq!(
             fs::read_dir(directory.path())
@@ -26943,6 +27742,135 @@ mod tests {
     }
 
     #[test]
+    fn fee_ledger_ipc_preserves_root_and_seven_original_calls_after_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let ledger = usage_ledger_v1::Ledger::open(directory.path()).unwrap();
+        for n in 0..7 {
+            let is_answer = n == 6;
+            let id = format!("usage-group-{n}");
+            let entry = usage_ledger_v1::Entry {
+                entry_id: id.clone(), replay_token: id.clone(), execution_id: "question".into(),
+                conversation_id: "conversation".into(), branch_leaf_message_id: "reply".into(),
+                invocation_id: format!("call-{n}"), attempt_id: "question".into(),
+                kind: usage_ledger_v1::Kind::FinalMeasured, fact_grade: usage_ledger_v1::FactGrade::ProviderReported,
+                requested_model_id: if is_answer { "claude-sonnet-5-5" } else { "openai/gpt-6-luna" }.into(),
+                actual_model_id: None, input_tokens: Some(100), output_tokens: Some(20), cached_input_tokens: Some(10),
+                charge_micros: Some(if is_answer { 18087 } else { 100000 }),
+                currency_code: Some(if is_answer { "CNY" } else { "USD" }.into()), cost_source: Some("PROVIDER_RESPONSE".into()),
+                budget_micros: None, adjustment_micros: None, reconciliation_fingerprint: None,
+                reconciles_entry_id: None, source: usage_ledger_v1::Source::DesktopLocal, occurred_at_ms: 100,
+            };
+            let metadata = chat_call_accounting_v1::Metadata {
+                role: if is_answer { "ANSWER" } else { "RETRIEVAL" }.into(),
+                model_display_name: if is_answer { "Sonnet 5.5 · RC" } else { "GPT-6 Luna" }.into(),
+                reasoning_tokens: Some(5), ..Default::default()
+            };
+            ledger.append_call(&entry, &metadata).unwrap();
+            ledger.append_call(&entry, &metadata).unwrap();
+        }
+        drop(ledger);
+        let reopened = usage_ledger_v1::Ledger::open(directory.path()).unwrap();
+        let records = desktop_usage_ledger_records(&reopened, &HashMap::new()).unwrap();
+        let json = serde_json::to_value(&records).unwrap();
+        assert_eq!(records.len(), 7);
+        assert!(json.as_array().unwrap().iter().all(|row| row["attemptId"] == "question"));
+        assert_eq!(records.iter().filter(|row| row.call_metadata.as_ref().unwrap().role == "RETRIEVAL").count(), 6);
+        assert_eq!(records.iter().filter(|row| row.currency_code.as_deref() == Some("USD")).map(|row| row.charge_micros.unwrap()).sum::<i64>(), 600000);
+        assert_eq!(records.iter().find(|row| row.currency_code.as_deref() == Some("CNY")).unwrap().charge_micros, Some(18087));
+        assert_eq!(reopened.all_entries().unwrap().len(), 7);
+    }
+
+    #[test]
+    fn ordinary_call_accounting_recovers_on_open_and_combines_helper_without_double_counting() {
+        let (_directory,store,imported)=imported_store();
+        let conversation=&imported.exchange["conversations"][0];
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {workspace_id:imported.summary.id.clone(),conversation_id:conversation["id"].as_str().map(ToOwned::to_owned),project_id:None,expected_revision:conversation["revision"].as_u64(),text:"synthetic public fixture".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let id=&prepared.projection.attempt_id;
+        store.connection().unwrap().execute("UPDATE desktop_ordinary_chat_attempts SET provider_id='RELAYCORE_CLAUDE',requested_model_id='claude-sonnet-5-5',model_display_name='Sonnet 5.5 · Kiro正价',web_search_route='RELAYCORE_COMPANION' WHERE attempt_id=?1",[id]).unwrap();
+        let parent=DesktopWorkspaceStore::ordinary_chat_projection(&store.connection().unwrap(),id).unwrap();
+        store.record_answer_pending(&parent).unwrap();
+        store.record_relay_search_usage(&parent,None).unwrap();
+        let helper=desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),text:"public evidence".into(),reasoning:None,usage:desktop_ordinary_chat_v1::Usage{input_tokens:Some(120),output_tokens:Some(30),cached_input_tokens:Some(20),reasoning_tokens:Some(5)},reported_cost_micros:None,actual_model_id:Some("gpt-6.1-sol".into()),web_search_verified:true,elapsed_ms:10};
+        store.record_relay_search_usage(&parent,Some(&helper)).unwrap();
+        let answer=desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),text:"synthetic answer".into(),reasoning:None,usage:desktop_ordinary_chat_v1::Usage{input_tokens:Some(1000),output_tokens:Some(100),cached_input_tokens:Some(500),reasoning_tokens:Some(20)},reported_cost_micros:None,actual_model_id:Some("claude-sonnet-5-5".into()),web_search_verified:true,elapsed_ms:20};
+        store.update_ordinary_chat_message(id,&answer.text,"COMPLETE",None,Some(&answer),None).unwrap();
+        store.mark_ordinary_chat_accounting_pending(id).unwrap();
+        let root=store.root.clone();drop(store);
+        let reopened=DesktopWorkspaceStore::open(root.clone()).unwrap();
+        let restored=DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),id).unwrap();
+        assert_eq!(restored.state,"COMPLETED");assert_eq!(restored.charge_micros,Some(735));assert_eq!(restored.cost_source.as_deref(),Some("LOCAL_ESTIMATE"));
+        let ledger=usage_ledger_v1::Ledger::open(&root.join("usage-ledger")).unwrap();
+        let facts=ledger.read_model_for_execution(id).unwrap();assert!(facts.pending_stream_entries.is_empty());assert_eq!(facts.input_tokens,1120);assert_eq!(facts.output_tokens,130);assert_eq!(facts.charge_micros,861);
+        let exchange=reopened.workspace_projection(&imported.summary.id).unwrap().exchange;
+        let message=exchange["conversations"].as_array().unwrap().iter().flat_map(|c|c["messages"].as_array().unwrap()).find(|m|m["id"]==restored.assistant_message_id).unwrap();
+        assert_eq!(message["accountingCalls"].as_array().unwrap().len(),2);assert_eq!(message["usage"]["inputTokens"],1000);
+        assert_eq!(reopened.ordinary_chat_context_records().unwrap().iter().filter(|r|r.assistant_message_id==restored.assistant_message_id).count(),2);
+        reopened.recover_ordinary_chat_accounting().unwrap();assert_eq!(ledger.entries_for_execution(id).unwrap().len(),4);
+    }
+
+    #[test]
+    fn attachment_coverage_survives_unknown_final_answer_and_database_reopen() {
+        let (_directory, store, imported) = imported_store();
+        let conversation = &imported.exchange["conversations"][0];
+        let prepared = store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {
+            workspace_id: imported.summary.id.clone(), conversation_id: conversation["id"].as_str().map(ToOwned::to_owned),
+            project_id: None, expected_revision: conversation["revision"].as_u64(), text: "public query".into(), attachment_ids: vec![],
+            model_id: None, tone_override: None, web_search_override: None, egress_authorization: None,
+        }, Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let id = prepared.projection.attempt_id.clone();
+        store.record_attachment_search_coverage(&id, 16, 0).unwrap();
+        store.record_attachment_search_coverage(&id, 16, 8).unwrap();
+        store.update_ordinary_chat_message(&id, "保留部分回答", "UNKNOWN", None, None, Some("NETWORK")).unwrap();
+        let root = store.root.clone(); drop(store);
+        let reopened = DesktopWorkspaceStore::open(root).unwrap();
+        let connection = reopened.connection().unwrap();
+        let projection = DesktopWorkspaceStore::ordinary_chat_projection(&connection, &id).unwrap();
+        assert_eq!(projection.state, "UNKNOWN");
+        let (count, title): (i64, String) = connection.query_row(
+            "SELECT COUNT(*),title FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1 AND source_id='attachment-search-coverage-v2'",
+            [&id], |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(title, "8/16项检索结果");
+        assert_eq!(projection.web_search_verified, None);
+    }
+
+    #[test]
+    fn relay_retrieval_usage_survives_failed_answer_and_reopen_without_inventing_cost() {
+        let (_directory, store, imported) = imported_store();
+        let conversation = &imported.exchange["conversations"][0];
+        let prepared = store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {
+            workspace_id: imported.summary.id.clone(), conversation_id: conversation["id"].as_str().map(ToOwned::to_owned),
+            project_id: None, expected_revision: conversation["revision"].as_u64(), text:"public query".into(), attachment_ids:vec![],
+            model_id:None, tone_override:None, web_search_override:None, egress_authorization:None,
+        }, Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        store.connection().unwrap().execute("UPDATE desktop_ordinary_chat_attempts SET web_search_route='RELAYCORE_COMPANION' WHERE attempt_id=?1",[&prepared.projection.attempt_id]).unwrap();
+        store.record_relay_search_usage(&prepared.projection, None).unwrap();
+        let reply = desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(), text:"public evidence".into(), reasoning:None,
+            usage:desktop_ordinary_chat_v1::Usage { input_tokens:Some(120), output_tokens:Some(30), cached_input_tokens:Some(20), reasoning_tokens:None },
+            reported_cost_micros:Some(900), actual_model_id:Some("openai/gpt-6-luna".into()), web_search_verified:true, elapsed_ms:10 };
+        store.record_relay_search_usage(&prepared.projection, Some(&reply)).unwrap();
+        store.update_ordinary_chat_message(&prepared.projection.attempt_id,"","FAILED",None,None,Some("NETWORK")).unwrap();
+        let ledger = usage_ledger_v1::Ledger::open(&store.root.join("usage-ledger")).unwrap();
+        let facts = ledger.read_model_for_execution(&prepared.projection.attempt_id).unwrap();
+        assert_eq!(facts.input_tokens,120);
+        assert_eq!(facts.output_tokens,30);
+        assert!(facts.pending_stream_entries.is_empty());
+        let entries = ledger.entries_for_execution(&prepared.projection.attempt_id).unwrap();
+        assert_eq!(entries.len(),2);
+        assert!(entries.iter().all(|entry| entry.requested_model_id == "openai/gpt-6-luna"));
+        let measured=entries.iter().find(|entry|entry.kind==usage_ledger_v1::Kind::FinalMeasured).unwrap();
+        assert_eq!(measured.charge_micros,Some(900));
+        assert_eq!(measured.cost_source.as_deref(),Some("PROVIDER_RESPONSE"));
+        assert_eq!(measured.currency_code.as_deref(),Some("USD"));
+        assert_eq!(ledger.call_metadata(&measured.entry_id).unwrap().unwrap().role,"RETRIEVAL");
+        assert_eq!(DesktopWorkspaceStore::ordinary_chat_projection(&store.connection().unwrap(),&prepared.projection.attempt_id).unwrap().state,"FAILED");
+        let exchange = store.workspace_projection(&imported.summary.id).unwrap().exchange;
+        let message = exchange["conversations"].as_array().unwrap().iter().flat_map(|conversation| conversation["messages"].as_array().unwrap()).find(|message| message["id"] == prepared.projection.assistant_message_id).unwrap();
+        assert_eq!(message["retrievalModelId"],"GPT_6_LUNA");
+    }
+
+    #[test]
     fn ordinary_chat_same_text_creates_independent_attempts_and_persists_stream_completion() {
         let (_directory, store, imported) = imported_store();
         let conversation = imported.exchange["conversations"]
@@ -27023,7 +27951,7 @@ mod tests {
             )
             .unwrap();
         writer.join().unwrap();
-        let completed = desktop_ordinary_chat_v1::Completed {
+        let completed = desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),
             text: "streamed answer".into(),
             reasoning: Some("retained after completion".into()),
             usage: desktop_ordinary_chat_v1::Usage {
@@ -27074,7 +28002,7 @@ mod tests {
             .conversations
             .iter()
             .all(|item| item.conversation_id != conversation_id || !item.unread));
-        let missing_usage = desktop_ordinary_chat_v1::Completed {
+        let missing_usage = desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),
             text: "provider omitted usage".into(),
             reasoning: None,
             usage: desktop_ordinary_chat_v1::Usage::default(),
@@ -27200,7 +28128,7 @@ mod tests {
         assert!(!audit_text.contains("先给结论"));
         assert!(!audit_text.contains("跨端可靠性与数据保全"));
         drop(connection);
-        let completed = desktop_ordinary_chat_v1::Completed {
+        let completed = desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),
             text: "南烛枫，结论。".into(),
             reasoning: None,
             usage: desktop_ordinary_chat_v1::Usage {
@@ -27303,8 +28231,9 @@ mod tests {
         );
         assert_eq!(
             ordinary_chat_web_search_route("QWEN", "qwen3.8-max", true, false),
-            "QWEN_CHAT_COMPLETIONS"
+            "QWEN_RESPONSES"
         );
+        assert_eq!(ordinary_chat_web_search_route("QWEN", "qwen3.7-plus", true, true), "QWEN_RESPONSES");
         assert_eq!(
             ordinary_chat_web_search_route("DEEPSEEK", "deepseek-v4-pro", true, true),
             "DEEPSEEK_MESSAGES"
@@ -27363,6 +28292,11 @@ mod tests {
             )
             .unwrap();
         assert!(prepared.messages.to_string().contains("专业可靠"));
+        let system=prepared.messages.as_array().unwrap().iter().filter(|m|m["role"]=="system").map(|m|m["content"].as_str().unwrap()).collect::<Vec<_>>().join("\n");
+        assert!(system.contains("默认使用简体中文"));
+        assert!(system.contains("用户明确指定其他语言"));
+        assert!(system.contains("先用回答语言译述"));
+        assert!(system.contains("不得逐段夹带外语原文"));
         assert_eq!(prepared.web_search_route, "OPENROUTER_SERVER_TOOL");
         store
             .update_ordinary_chat_message(
@@ -27390,8 +28324,9 @@ mod tests {
                 Some("http://127.0.0.1:1/chat/completions"),
             )
             .unwrap();
-        assert_eq!(retried.idempotency_key, prepared.idempotency_key);
+        assert_eq!(retried.idempotency_key, format!("{}-retry-1",prepared.idempotency_key));
         assert!(retried.messages.to_string().contains("高效务实"));
+        assert!(retried.messages.to_string().contains("默认使用简体中文"));
         assert_eq!(retried.web_search_route, "NONE");
         let source_id: String = store.connection().unwrap().query_row(
             "SELECT source_id FROM desktop_ordinary_chat_context_sources WHERE attempt_id=?1 AND source_kind='对话风格'",
@@ -27505,7 +28440,7 @@ mod tests {
                 Some("http://127.0.0.1:1/chat/completions"),
             )
             .unwrap();
-        let completed = desktop_ordinary_chat_v1::Completed {
+        let completed = desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),
             text: "结论。".into(),
             reasoning: None,
             usage: desktop_ordinary_chat_v1::Usage::default(),
@@ -27603,6 +28538,180 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_resume_uses_new_wire_key_without_changing_logical_attempt_key() {
+        let (_directory,store,imported)=imported_store();
+        let conversation=&imported.exchange["conversations"][0];
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {workspace_id:imported.summary.id.clone(),conversation_id:conversation["id"].as_str().map(ToOwned::to_owned),project_id:None,expected_revision:conversation["revision"].as_u64(),text:"synthetic query".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let id=&prepared.projection.attempt_id;
+        store.update_ordinary_chat_message(id,"saved checkpoint","UNKNOWN",None,None,Some("NETWORK")).unwrap();
+        let retry=store.prepare_ordinary_chat_retry(id,Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        assert_ne!(retry.idempotency_key,prepared.idempotency_key);
+        assert_eq!(retry.projection.attempt_id,*id);
+        let key:String=store.connection().unwrap().query_row("SELECT idempotency_key FROM desktop_ordinary_chat_attempts WHERE attempt_id=?1",[id],|r|r.get(0)).unwrap();
+        assert_eq!(key,prepared.idempotency_key);
+    }
+
+    #[test]
+    fn ordinary_resume_before_new_tokens_keeps_checkpoint_after_reopen_and_second_retry() {
+        let (_directory,store,imported)=imported_store();
+        let conversation=&imported.exchange["conversations"][0];
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {workspace_id:imported.summary.id.clone(),conversation_id:conversation["id"].as_str().map(ToOwned::to_owned),project_id:None,expected_revision:conversation["revision"].as_u64(),text:"synthetic query".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let id=prepared.projection.attempt_id.clone();
+        store.update_ordinary_chat_message(&id,"persistent checkpoint","UNKNOWN",None,None,Some("NETWORK")).unwrap();
+        let first=store.prepare_ordinary_chat_retry(&id,Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        store.update_ordinary_chat_message(&id,"","UNKNOWN",None,None,Some("NETWORK")).unwrap();
+        let root=store.root.clone();drop(store);
+        let reopened=DesktopWorkspaceStore::open(root).unwrap();
+        let second=reopened.prepare_ordinary_chat_retry(&id,Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        assert!(second.messages.to_string().contains("persistent checkpoint"));
+        assert!(second.messages.to_string().contains("只从上面已生成内容的末尾自然继续"));
+        assert_ne!(first.idempotency_key,second.idempotency_key);
+        assert_eq!(second.projection.retry_count,2);
+    }
+
+    #[test]
+    fn ordinary_resume_after_explicit_cancel_retains_checkpoint_and_model() {
+        let (_directory,store,imported)=imported_store();
+        let conversation=&imported.exchange["conversations"][0];
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {workspace_id:imported.summary.id.clone(),conversation_id:conversation["id"].as_str().map(ToOwned::to_owned),project_id:None,expected_revision:conversation["revision"].as_u64(),text:"synthetic query".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let id=&prepared.projection.attempt_id;
+        store.update_ordinary_chat_message(id,"cancelled checkpoint","CANCELLED",None,None,Some("CANCELLED")).unwrap();
+        let retry=store.prepare_ordinary_chat_retry(id,Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        assert_eq!(retry.model_id,prepared.model_id);
+        assert!(retry.messages.to_string().contains("cancelled checkpoint"));
+    }
+
+    #[test]
+    fn explicit_service_retry_reopens_with_original_files_and_rejects_old_or_changed_grants() {
+        use desktop_model_service_v1::ProviderCredentialStore;
+        let (dir,store,imported)=imported_store();let conv=&imported.exchange["conversations"][0];let cid=conv["id"].as_str().unwrap().to_owned();
+        store.credentials.save_user_provided_secret("ZHIPU",b"synthetic-local-service-key").unwrap();
+        store.set_conversation_preferences(DesktopConversationPreferencesArgs{workspace_id:imported.summary.id.clone(),conversation_id:cid.clone(),expected_revision:0,tone_override:None,web_search_override:Some(true)}).unwrap();
+        let mut ids=Vec::new();for (name,text) in [("one.md","Python 3.14.0公开发布。"),("two.md","Rust 1.90.0公开发布。")]{let path=dir.path().join(name);fs::write(&path,text).unwrap();ids.push(store.import_conversation_attachment(DesktopAttachmentImportArgs{workspace_id:imported.summary.id.clone(),selected_path:path.to_string_lossy().into_owned()}).unwrap().id);}
+        ids.sort();let text="核验原始公开双文件";let fp=sha256(serde_json::to_string(&json!([text,ids])).unwrap().as_bytes());
+        let grant=independent_web_search_v1::ServiceGrant{disclosure_version:"normal-chat-egress-v3".into(),service_id:independent_web_search_v1::SERVICE_ID.into(),engine_id:independent_web_search_v1::ENGINE_ID.into(),material_fingerprint:fp.clone()};
+        let revision=store.workspace_projection(&imported.summary.id).unwrap().exchange["conversations"].as_array().unwrap().iter().find(|c|c["id"]==cid).unwrap()["revision"].as_u64();
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:Some(cid.clone()),project_id:None,expected_revision:revision,text:text.into(),attachment_ids:ids,model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let attempt=prepared.projection.attempt_id.clone();store.update_ordinary_chat_message(&attempt,"","UNKNOWN",None,None,Some("NETWORK")).unwrap();let root=store.root.clone();drop(store);let reopened=DesktopWorkspaceStore::open(root).unwrap();
+        assert_eq!(DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),&attempt).unwrap().state,"UNKNOWN");
+        let mut old=grant.clone();old.disclosure_version="normal-chat-egress-v2".into();assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(old),None).is_err());
+        let mut changed=grant.clone();changed.material_fingerprint="b".repeat(64);assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(changed),None).is_err());
+        assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(grant),None).is_err());
+        let retry=reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),None,None).unwrap();
+        assert_eq!(retry.provider_id,prepared.provider_id);assert_eq!(retry.model_id,prepared.model_id);assert!(retry.search_service.is_none());
+        assert_eq!(attachment_web_search_v1::current_material(&retry.messages),attachment_web_search_v1::current_material(&prepared.messages));assert!(retry.messages.to_string().contains("Python 3.14.0"));assert!(retry.messages.to_string().contains("Rust 1.90.0"));
+    }
+
+    #[test]
+    fn independent_service_evidence_survives_failed_owner_reopen_with_exact_scope() {
+        let (_dir,store,imported)=imported_store();let conv=&imported.exchange["conversations"][0];
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:conv["id"].as_str().map(ToOwned::to_owned),project_id:None,expected_revision:conv["revision"].as_u64(),text:"public fact".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let id=&prepared.projection.attempt_id;let scope="a".repeat(64);let key="public-query";
+        let result=independent_web_search_v1::SearchResult{sources:vec![json!({"url":"https://python.org/","content":"public normalized evidence"})],elapsed_ms:5,request_id:"original-service-call".into()};
+        store.record_service_search_usage(&prepared.projection,&result.request_id,None).unwrap();store.record_service_search_usage(&prepared.projection,&result.request_id,Some(&result)).unwrap();
+        let entry=independent_web_search_v1::ServiceEvidence{service:independent_web_search_v1::SERVICE_ID.into(),engine:independent_web_search_v1::ENGINE_ID.into(),plan_version:independent_web_search_v1::PLAN_VERSION.into(),query:"Python 3.14.0".into(),call_id:result.request_id.clone(),sources:result.sources.clone(),elapsed_ms:5};
+        store.save_service_search_checkpoint(id,&scope,key,entry).unwrap();store.update_ordinary_chat_message(id,"","UNKNOWN",None,None,Some("NETWORK")).unwrap();
+        let root=store.root.clone();let projection=prepared.projection.clone();drop(store);let reopened=DesktopWorkspaceStore::open(root).unwrap();
+        let entry=reopened.load_service_search_checkpoint(id,&scope,key).unwrap().unwrap();assert_eq!(entry.call_id,"original-service-call");assert!(entry.valid_for("Python 3.14.0"));assert!(!entry.valid_for("Python 3.13.0"));
+        assert!(reopened.load_service_search_checkpoint(id,&"b".repeat(64),key).unwrap().is_none());
+        let mut changed=entry.clone();changed.engine="other".into();assert!(reopened.save_service_search_checkpoint(id,&scope,key,changed).is_err());
+        let mut changed=entry;changed.plan_version="old".into();assert!(reopened.save_service_search_checkpoint(id,&scope,key,changed).is_err());
+        let ledger=usage_ledger_v1::Ledger::open(&reopened.root.join("usage-ledger")).unwrap();assert_eq!(ledger.entries_for_execution(id).unwrap().len(),2);
+        assert_eq!(DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),id).unwrap().state,"UNKNOWN");
+        assert!(projection.requested_model_id.is_some());
+    }
+
+    #[test]
+    fn public_format_owner_prepare_without_network() { public_format_owner(false); }
+
+    #[test]
+    #[ignore="explicit paid public files through private import and production search owner"]
+    fn authorized_public_format_owner() { public_format_owner(true); }
+
+    fn public_format_owner(paid:bool) {
+        use desktop_model_service_v1::{AppPrivateProviderCredentialStore,ProviderCredentialStore};
+        let fixtures=std::env::var("NFAI_FORMAT_FIXTURES").map(PathBuf::from).unwrap_or_else(|_|PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../app/src/publicModelAcceptance/assets/public-search-fixtures"));
+        let manifest:Value=serde_json::from_slice(&fs::read(fixtures.join("manifest.json")).unwrap()).unwrap();
+        let mode=std::env::var("NFAI_FORMAT_MODE").unwrap_or_else(|_|"formats".into());
+        let groups=if mode=="chinese" {vec![vec![json!({"file":"chinese-first.md"}),json!({"file":"chinese-tail.md"})]]} else {
+            manifest["groups"].as_array().unwrap().iter().map(|g|g.as_array().unwrap().iter().map(|i|manifest["fixtures"][i.as_u64().unwrap() as usize].clone()).collect::<Vec<_>>()).collect::<Vec<_>>()};
+        let output=std::env::var("NFAI_FORMAT_OUTPUT").ok();if paid {assert_eq!(std::env::var("NFAI_DIRECT_SEARCH_AUTH").as_deref(),Ok("public-only-once"));assert!(!Path::new(output.as_ref().unwrap()).exists());}
+        let mut rows=Vec::new();
+        for (index,group) in groups.iter().enumerate() {
+            let (_dir,store,imported)=imported_store();let conv=&imported.exchange["conversations"][0];
+            let mut ids=Vec::new();let mut imported_files=Vec::new();
+            for fixture in group {
+                let file=fixture["file"].as_str().unwrap();let path=fixtures.join(file);
+                let a=store.import_conversation_attachment(DesktopAttachmentImportArgs{workspace_id:imported.summary.id.clone(),selected_path:path.to_string_lossy().into_owned()}).unwrap();
+                assert_eq!(a.sha256,sha256(&fs::read(&path).unwrap()));
+                imported_files.push(json!({"file":file,"mime":a.mime_type,"sha256":a.sha256}));ids.push(a.id);
+            }
+            let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:conv["id"].as_str().map(ToOwned::to_owned),project_id:None,expected_revision:conv["revision"].as_u64(),text:"对本次所有公开附件逐项联网核验，简短中文说明证据支持或未核实，引用对应官方来源。".into(),attachment_ids:ids,model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+            let plan=attachment_web_search_v1::from_messages(&prepared.messages);assert!(!plan.limited);assert!(plan.items.len()>=group.len());
+            let queries=plan.items.iter().flat_map(|i|independent_web_search_v1::queries(&i.query).unwrap_or_else(|e|panic!("public fixture {}: {e}: {}",index,i.query))).collect::<Vec<_>>();assert!(queries.len()<=48);
+            if mode=="formats" {for fixture in group {let c=fixture["claim"].as_str().unwrap();let entity=c.split(" release").next().unwrap();assert!(plan.items.iter().any(|i|i.query.contains(entity)),"missing {entity}");}}
+            let mut row=json!({"group":index,"files":imported_files,"planned":plan.items.len(),"queries":queries,"status":"PREPARED"});
+            if paid {
+                let owner=AppPrivateProviderCredentialStore::at(std::env::var("NFAI_CREDENTIAL_ROOT").unwrap());
+                let p=desktop_model_service_v1::chat_presets().into_iter().find(|p|p.id=="RELAYCORE_SONNET_5_5").unwrap();
+                let request=desktop_ordinary_chat_v1::TransportRequest{endpoint:desktop_ordinary_chat_v1::ordinary_provider_endpoint(p.provider_id,desktop_model_service_v1::provider(p.provider_id).unwrap().endpoint,"RELAYCORE_COMPANION"),provider_id:p.provider_id.into(),model_id:p.model_id.into(),messages:prepared.messages.clone(),idempotency_key:format!("public-format-{}-{index}",system_now_millis()),max_output_tokens:32768,web_search_route:"RELAYCORE_COMPANION".into(),structured_json:false,disable_thinking:false,grounded_answer:false,explicit_search_query:None};
+                let fp=attachment_search_checkpoint_v1::fingerprint(&request.messages.to_string());
+                let grant=independent_web_search_v1::ServiceGrant{disclosure_version:"normal-chat-egress-v3".into(),service_id:independent_web_search_v1::SERVICE_ID.into(),engine_id:independent_web_search_v1::ENGINE_ID.into(),material_fingerprint:fp.clone()};
+                let key=owner.with_secret(p.provider_id,|s|Ok(Zeroizing::new(s.to_vec()))).unwrap();let search=owner.with_secret("ZHIPU",|s|Ok(Zeroizing::new(s.to_vec()))).unwrap();
+                let mut native=Vec::new();let runtime=tokio::runtime::Runtime::new().unwrap();
+                let scope=independent_web_search_v1::evidence_scope(&request,&fp);
+                let mut cache=independent_web_search_v1::ServiceCallbacks {
+                    load:|key:&str|store.load_service_search_checkpoint(&prepared.projection.attempt_id,&scope,key).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),
+                    save:|key:&str,e:independent_web_search_v1::ServiceEvidence|store.save_service_search_checkpoint(&prepared.projection.attempt_id,&scope,key,e).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),
+                };
+                let result=runtime.block_on(independent_web_search_v1::execute_attachment_cached(request,key,search,grant,&fp,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),&mut cache,|id,r,e|{
+                    if let Some(r)=r {native.push(json!({"callId":id,"sources":r.sources}));} else if let Some(e)=e {native.push(json!({"callId":id,"failure":format!("{e:?}")}));}
+                    if e.is_none(){store.record_service_search_usage(&prepared.projection,id,r).unwrap();}Ok(())
+                },|p,c|{store.record_attachment_search_coverage(&prepared.projection.attempt_id,p,c).unwrap();Ok(())},||{store.record_answer_pending(&prepared.projection).unwrap();Ok(())},|_|Ok(())));
+                match result {Ok(r)=>{row["status"]=json!("COMPLETED");row["covered"]=json!(r.covered);row["complete"]=json!(r.complete);row["actualModel"]=json!(r.reply.actual_model_id);row["publicAnswer"]=json!(r.reply.text);row["nativeSources"]=json!(r.reply.native_sources);},Err(e)=>{row["status"]=json!("FAILED");row["error"]=json!(format!("{e:?}"));}}
+                row["searchCalls"]=json!(native);
+                drop(cache);let root=store.root.clone();drop(store);
+                let reopened=DesktopWorkspaceStore::open(root).unwrap();
+                let retained=queries.iter().filter(|q|reopened.load_service_search_checkpoint(&prepared.projection.attempt_id,&scope,&attachment_search_checkpoint_v1::fingerprint(q)).unwrap().is_some()).count();
+                row["reopenedServiceCheckpoints"]=json!(retained);
+                if row["status"]=="COMPLETED" {assert_eq!(retained,queries.len());}
+            }
+            println!("PUBLIC_FORMAT group={index} status={} queries={}",row["status"],queries.len());
+            let success=!paid || row["status"]=="COMPLETED" && row["complete"]==true && row["actualModel"]=="claude-sonnet-5-5";
+            rows.push(row);if let Some(path)=&output {fs::write(path,serde_json::to_vec_pretty(&json!({"rows":rows})).unwrap()).unwrap();}assert!(success,"no automatic retry");
+        }
+    }
+
+    #[test]
+    fn ordinary_chat_document_formats_import_and_project_complete_contents() {
+        use std::io::Write;
+        fn office(path:&str,xml:&str)->Vec<u8> {
+            let mut writer=zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+            writer.start_file(path,zip::write::SimpleFileOptions::default()).unwrap();writer.write_all(xml.as_bytes()).unwrap();
+            writer.finish().unwrap().into_inner()
+        }
+        let claim="(1) Python 3.14.0 released in 2025.";
+        let mut cases=vec!["txt","md","json","csv","xml","yaml","yml","html"].into_iter().map(|ext|(ext,claim.as_bytes().to_vec())).collect::<Vec<_>>();
+        cases.extend([
+            ("docx",office("word/document.xml",&format!("<w:document xmlns:w='urn:w'><w:p><w:r><w:t>{claim}</w:t></w:r></w:p></w:document>"))),
+            ("xlsx",office("xl/worksheets/sheet1.xml",&format!("<worksheet><row><c t='inlineStr'><is><t>{claim}</t></is></c></row></worksheet>"))),
+            ("pptx",office("ppt/slides/slide1.xml",&format!("<p:sld xmlns:p='urn:p' xmlns:a='urn:a'><a:p><a:r><a:t>{claim}</a:t></a:r></a:p></p:sld>"))),
+            ("zip",office("public.md",claim)),
+        ]);
+        for (extension,bytes) in cases {
+            let (directory,store,imported)=imported_store();
+            let source=directory.path().join(format!("document.{extension}"));fs::write(&source,&bytes).unwrap();
+            let attachment=store.import_conversation_attachment(DesktopAttachmentImportArgs{workspace_id:imported.summary.id.clone(),selected_path:source.to_string_lossy().into_owned()}).unwrap();
+            assert_eq!(attachment.sha256,sha256(&bytes));
+            let conversation=&imported.exchange["conversations"][0];
+            let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:conversation["id"].as_str().map(ToOwned::to_owned),project_id:None,expected_revision:conversation["revision"].as_u64(),text:"核验公开报告".into(),attachment_ids:vec![attachment.id],model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+            let plan=attachment_web_search_v1::from_messages(&prepared.messages);
+            assert!(plan.items.iter().any(|item|item.query.contains("Python 3.14.0")),"{extension}");
+            assert!(!plan.query_text().contains("document."),"{extension}");
+        }
+    }
+
+    #[test]
     fn ordinary_chat_text_attachment_is_hash_verified_and_retry_reuses_logical_attempt() {
         let (directory, store, imported) = imported_store();
         let conversation = imported.exchange["conversations"]
@@ -27612,7 +28721,8 @@ mod tests {
             .unwrap();
         let conversation_id = conversation["id"].as_str().unwrap().to_owned();
         let source = directory.path().join("ordinary-chat.txt");
-        fs::write(&source, b"attachment body").unwrap();
+        let complete_file=format!("# 完整文档🙂\r\n{}RC-FILE-TAIL-816", "保留每行🙂\n".repeat(1000));
+        fs::write(&source, &complete_file).unwrap();
         let attachment = store
             .import_conversation_attachment(DesktopAttachmentImportArgs {
                 workspace_id: imported.summary.id.clone(),
@@ -27636,7 +28746,9 @@ mod tests {
                 Some("http://127.0.0.1:1/chat/completions"),
             )
             .unwrap();
-        assert!(prepared.messages.to_string().contains("attachment body"));
+        let attachment_text=prepared.messages.as_array().unwrap().iter().flat_map(|message| message["content"].as_array().into_iter().flatten()).filter_map(|part|part["text"].as_str()).collect::<Vec<_>>();
+        assert_eq!(attachment_text.iter().filter(|text|text.contains(&complete_file)).count(),1);
+        assert_eq!(attachment_text.iter().filter(|text|text.contains("RC-FILE-TAIL-816")).count(),1);
         store
             .update_ordinary_chat_message(
                 &prepared.projection.attempt_id,
@@ -27654,7 +28766,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(retry.projection.attempt_id, prepared.projection.attempt_id);
-        assert_eq!(retry.idempotency_key, prepared.idempotency_key);
+        assert_eq!(retry.idempotency_key, format!("{}-retry-1",prepared.idempotency_key));
         assert_ne!(
             retry.projection.assistant_message_id,
             prepared.projection.assistant_message_id
@@ -27783,7 +28895,7 @@ mod tests {
                     max_output_tokens: 1024,
                     web_search_route: route.into(),
                     structured_json: false,
-                    disable_thinking: false,
+                    disable_thinking: false, grounded_answer:false,explicit_search_query:None,
                 },
                 secret,
                 std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -27839,6 +28951,92 @@ mod tests {
             "inputTokens":completed.usage.input_tokens,"outputTokens":completed.usage.output_tokens,
             "elapsedMs":completed.elapsed_ms,"reopened":true})
         );
+    }
+
+    #[test]
+    fn legacy_opus_retry_uses_verified_same_group_alias_without_rewriting_original_id() {
+        let (_directory,store,imported)=imported_store();
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:"synthetic material analysis".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:Some(false),egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        store.update_ordinary_chat_message(&prepared.projection.attempt_id,"","FAILED",None,None,Some("TIMEOUT")).unwrap();
+        store.connection().unwrap().execute("UPDATE desktop_ordinary_chat_attempts SET provider_id='RELAYCORE_CLAUDE',requested_model_id='claude-opus-5-5',model_display_name='Opus 5.5 · Kiro正价' WHERE attempt_id=?1",[&prepared.projection.attempt_id]).unwrap();
+        let retry=store.prepare_ordinary_chat_retry(&prepared.projection.attempt_id,Some("http://127.0.0.1:1/messages")).unwrap();
+        assert_eq!(retry.model_id,"claude-opus-5.5");
+        assert_eq!(retry.projection.requested_model_id.as_deref(),Some("claude-opus-5-5"));
+        assert_eq!(retry.provider_id,"RELAYCORE_CLAUDE");
+    }
+
+    #[test]
+    fn actual_no_source_failure_quantities_recover_without_network_or_success_after_reopen() {
+        use std::io::{Read,Write};
+        let (directory,store,imported)=imported_store();
+        let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let endpoint=format!("http://{}/chat/completions",listener.local_addr().unwrap());
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:"public failed-search fixture".into(),attachment_ids:vec![],model_id:Some("GPT_6_LUNA".into()),tone_override:None,web_search_override:Some(true),egress_authorization:None},Some(&endpoint)).unwrap();
+        let requested=prepared.model_id.clone();
+        let server=std::thread::spawn(move ||{
+            let (mut socket,_)=listener.accept().unwrap();let mut bytes=[0u8;8192];socket.read(&mut bytes).unwrap();
+            let body=format!("data: {{\"model\":\"{requested}\",\"choices\":[{{\"delta\":{{\"content\":\"public answer remains unverified\"}},\"finish_reason\":\"stop\"}}]}}\n\ndata: {{\"choices\":[],\"usage\":{{\"prompt_tokens\":100,\"completion_tokens\":20,\"cost\":0.0001}}}}\n\ndata: [DONE]\n\n");
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{body}").as_bytes()).unwrap();
+        });
+        store.record_answer_pending(&prepared.projection).unwrap();
+        let request=desktop_ordinary_chat_v1::TransportRequest{endpoint,provider_id:prepared.provider_id.clone(),model_id:prepared.model_id.clone(),messages:prepared.messages.clone(),idempotency_key:prepared.idempotency_key.clone(),max_output_tokens:64,web_search_route:prepared.web_search_route.clone(),structured_json:false,disable_thinking:false,grounded_answer:false,explicit_search_query:None};
+        let error=tokio::runtime::Runtime::new().unwrap().block_on(desktop_ordinary_chat_v1::execute_streaming(request,Zeroizing::new(b"local-fixture".to_vec()),std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),|_|Ok(()))).unwrap_err();server.join().unwrap();
+        let facts=error.quantified_reply().unwrap();assert!(!facts.web_search_verified);
+        store.update_ordinary_chat_message(&prepared.projection.attempt_id,&facts.text,"FAILED",facts.reasoning.as_deref(),Some(facts),Some("WEB_SEARCH_NO_SOURCES")).unwrap();
+        // Stop between the reply commit and accounting commit; reopen repairs only locally.
+        let root=store.root.clone();drop(store);let reopened=DesktopWorkspaceStore::open(root.clone()).unwrap();
+        let projection=DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),&prepared.projection.attempt_id).unwrap();
+        assert_eq!(projection.state,"FAILED");assert_eq!(projection.safe_error_code.as_deref(),Some("WEB_SEARCH_NO_SOURCES"));assert_eq!(projection.web_search_verified,Some(false));
+        let entry=usage_ledger_v1::Ledger::open(&root.join("usage-ledger")).unwrap().entry(&format!("usage-{}",prepared.projection.attempt_id)).unwrap().unwrap();
+        assert_eq!(entry.input_tokens,Some(100));assert_eq!(entry.output_tokens,Some(20));assert_eq!(entry.charge_micros,Some(100));assert_eq!(entry.currency_code.as_deref(),Some("USD"));assert_eq!(entry.cost_source.as_deref(),Some("PROVIDER_RESPONSE"));
+        let content=reopened.workspace_projection(&imported.summary.id).unwrap();let message=content.exchange["conversations"].as_array().unwrap().iter().flat_map(|c|c["messages"].as_array().unwrap()).find(|m|m["id"]==prepared.projection.assistant_message_id).unwrap();
+        assert_eq!(ordinary_chat_message_text(message),facts.text);assert_eq!(message["accountingCalls"].as_array().unwrap().len(),1);
+        drop(directory);
+    }
+    #[test]
+    fn empty_cost_only_failure_recovers_fee_without_network_or_success_after_reopen() {
+        use std::io::{Read,Write};
+        for (finish,safe_code) in [("stop","EMPTY_COMPLETION"),("length","OUTPUT_LIMIT"),("content_filter","CONTENT_FILTER")] {
+        let (directory,store,imported)=imported_store();
+        let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let endpoint=format!("http://{}/chat/completions",listener.local_addr().unwrap());
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:"public failed-search fixture".into(),attachment_ids:vec![],model_id:Some("GPT_6_LUNA".into()),tone_override:None,web_search_override:Some(true),egress_authorization:None},Some(&endpoint)).unwrap();
+        let requested=prepared.model_id.clone();
+        let server=std::thread::spawn(move ||{
+            let (mut socket,_)=listener.accept().unwrap();let mut bytes=[0u8;8192];socket.read(&mut bytes).unwrap();
+            let body=format!("data: {{\"model\":\"{requested}\",\"choices\":[{{\"delta\":{{\"content\":\"\"}},\"finish_reason\":\"{finish}\"}}]}}\n\ndata: {{\"choices\":[],\"usage\":{{\"cost\":0.0001}}}}\n\ndata: [DONE]\n\n");
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{body}").as_bytes()).unwrap();
+        });
+        store.record_answer_pending(&prepared.projection).unwrap();
+        let request=desktop_ordinary_chat_v1::TransportRequest{endpoint,provider_id:prepared.provider_id.clone(),model_id:prepared.model_id.clone(),messages:prepared.messages.clone(),idempotency_key:prepared.idempotency_key.clone(),max_output_tokens:64,web_search_route:prepared.web_search_route.clone(),structured_json:false,disable_thinking:false,grounded_answer:false,explicit_search_query:None};
+        let error=tokio::runtime::Runtime::new().unwrap().block_on(desktop_ordinary_chat_v1::execute_streaming(request,Zeroizing::new(b"local-fixture".to_vec()),std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),|_|Ok(()))).unwrap_err();server.join().unwrap();
+        let facts=error.quantified_reply().unwrap();assert!(!facts.web_search_verified);
+        store.update_ordinary_chat_message(&prepared.projection.attempt_id,&facts.text,"FAILED",facts.reasoning.as_deref(),Some(facts),Some(safe_code)).unwrap();
+        // Stop between the reply commit and accounting commit; reopen repairs only locally.
+        let root=store.root.clone();drop(store);let reopened=DesktopWorkspaceStore::open(root.clone()).unwrap();
+        let projection=DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),&prepared.projection.attempt_id).unwrap();
+        assert_eq!(projection.state,"FAILED");assert_eq!(projection.safe_error_code.as_deref(),Some(safe_code));assert_eq!(projection.web_search_verified,Some(false));
+        let entry=usage_ledger_v1::Ledger::open(&root.join("usage-ledger")).unwrap().entry(&format!("usage-{}",prepared.projection.attempt_id)).unwrap().unwrap();
+        assert_eq!(entry.input_tokens,None);assert_eq!(entry.output_tokens,None);assert_eq!(entry.charge_micros,Some(100));assert_eq!(entry.currency_code.as_deref(),Some("USD"));assert_eq!(entry.cost_source.as_deref(),Some("PROVIDER_RESPONSE"));
+        let content=reopened.workspace_projection(&imported.summary.id).unwrap();let message=content.exchange["conversations"].as_array().unwrap().iter().flat_map(|c|c["messages"].as_array().unwrap()).find(|m|m["id"]==prepared.projection.assistant_message_id).unwrap();
+        assert_eq!(ordinary_chat_message_text(message),facts.text);assert_eq!(message["accountingCalls"].as_array().unwrap().len(),1);
+        drop(directory);
+        }
+    }
+    #[test]
+    fn attachment_analysis_with_unverified_search_preserves_failed_state_and_usage_after_reopen() {
+        let (directory,store,imported)=imported_store();
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:"synthetic attachment analysis".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:Some(true),egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
+        let completed=desktop_ordinary_chat_v1::Completed{native_sources:Vec::new(),text:"材料失败率5%，外部事实未核实。".into(),reasoning:None,usage:desktop_ordinary_chat_v1::Usage{input_tokens:Some(100),output_tokens:Some(20),cached_input_tokens:None,reasoning_tokens:None},reported_cost_micros:None,actual_model_id:Some("fixture-model".into()),web_search_verified:false,elapsed_ms:1};
+        store.update_ordinary_chat_message(&prepared.projection.attempt_id,&completed.text,"FAILED",None,Some(&completed),Some("WEB_SEARCH_NO_SOURCES")).unwrap();
+        // Simulate interruption after durable answer commit, before its accounting commit.
+        assert!(usage_ledger_v1::Ledger::open(&store.root.join("usage-ledger")).unwrap().entry(&format!("usage-{}",prepared.projection.attempt_id)).unwrap().is_none());
+        drop(store);
+        let reopened=DesktopWorkspaceStore::open(directory.path().join("app-data")).unwrap();
+        let projection=reopened.workspace_projection(&imported.summary.id).unwrap();
+        let message=projection.exchange["conversations"].as_array().unwrap().iter().flat_map(|c|c["messages"].as_array().unwrap()).find(|m|m["id"]==prepared.projection.assistant_message_id).unwrap();
+        assert_eq!(ordinary_chat_message_text(message),completed.text);assert_eq!(message["delivery"],"FAILED");assert_eq!(message["safeErrorCode"],"WEB_SEARCH_NO_SOURCES");
+        let entry=usage_ledger_v1::Ledger::open(&reopened.root.join("usage-ledger")).unwrap().entry(&format!("usage-{}",prepared.projection.attempt_id)).unwrap().expect("durable failed attachment answer must recover accounting without becoming COMPLETE");
+        assert_eq!(entry.input_tokens,Some(100));
+        assert_eq!(DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),&prepared.projection.attempt_id).unwrap().input_tokens,Some(100));
     }
 
     #[test]
@@ -27937,6 +29135,11 @@ mod tests {
             .conversation_id
             .starts_with("conversation-"));
         assert_eq!(prepared.projection.state, "PENDING");
+        let selection = store.p6g_selection(&imported.summary.id, &prepared.projection.conversation_id).unwrap();
+        assert_eq!(selection.conversation_override.revision, 1);
+        assert!(selection.conversation_override.model_id.is_none());
+        store.p6g_set_new_conversation_model(Some("GLM_5_3".into()), 0).unwrap();
+        assert!(store.p6g_selection(&imported.summary.id, &prepared.projection.conversation_id).unwrap().conversation_override.model_id.is_none());
         let projection = store.workspace_projection(&imported.summary.id).unwrap();
         let conversation = projection.exchange["conversations"]
             .as_array()
@@ -27982,7 +29185,7 @@ mod tests {
                 Some("http://127.0.0.1:1/chat/completions"),
             )
             .unwrap();
-        let completed = desktop_ordinary_chat_v1::Completed {
+        let completed = desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),
             text: "下面是 KFK 资料的完整整理。".into(),
             reasoning: None,
             usage: desktop_ordinary_chat_v1::Usage {
@@ -28482,7 +29685,7 @@ mod tests {
                 .iter()
                 .map(|branch| branch.requested_model_id.as_deref().unwrap())
                 .collect::<Vec<_>>(),
-            ["openai/gpt-5.6-terra", "anthropic/claude-sonnet-5"]
+            ["openai/gpt-6-luna", "anthropic/claude-sonnet-5.5"]
         );
         assert_ne!(
             prepared.branches[0].projection.attempt_id,
@@ -28523,7 +29726,7 @@ mod tests {
             .iter()
             .all(|message| message["source"] == "PROVIDER"));
 
-        let completed = desktop_ordinary_chat_v1::Completed {
+        let completed = desktop_ordinary_chat_v1::Completed { native_sources: Vec::new(),
             text: "chatgpt answer".into(),
             reasoning: None,
             usage: desktop_ordinary_chat_v1::Usage {
@@ -28824,8 +30027,18 @@ mod tests {
             )
             .unwrap();
         let root = store.root.clone();
+        // Historical disclosure is audit evidence, not permission to issue another request.
+        store.connection().unwrap().execute(
+            "UPDATE desktop_ordinary_chat_attempts SET egress_disclosure_version='normal-chat-relay-search-v1' WHERE attempt_id=?1",
+            [&prepared.projection.attempt_id],
+        ).unwrap();
         drop(store);
         let reopened = DesktopWorkspaceStore::open(root).unwrap();
+        let historical_disclosure: String = reopened.connection().unwrap().query_row(
+            "SELECT egress_disclosure_version FROM desktop_ordinary_chat_attempts WHERE attempt_id=?1",
+            [&prepared.projection.attempt_id], |row| row.get(0),
+        ).unwrap();
+        assert_eq!(historical_disclosure, "normal-chat-relay-search-v1");
         let attempt = DesktopWorkspaceStore::ordinary_chat_projection(
             &reopened.connection().unwrap(),
             &prepared.projection.attempt_id,
@@ -28944,5 +30157,108 @@ mod tests {
             projection.summary.conversation_count,
             imported.summary.conversation_count
         );
+    }
+}
+
+#[cfg(test)]
+mod search_routing_target_tests {
+    use super::*;
+    #[test]
+    #[ignore="explicit authorized real Luna retrieval, original model answer and isolated SQLite reopen"]
+    fn authorized_luna_original_model_owner_chain() {
+        use desktop_model_service_v1::ProviderCredentialStore;
+        assert_eq!(std::env::var("NFAI_PUBLIC_MATRIX").as_deref(),Ok("1"));
+        let output=std::env::var("NFAI_OWNER_OUTPUT").unwrap();assert!(!Path::new(&output).exists(),"UNKNOWN is not a retry trigger");
+        let preset_id=std::env::var("NFAI_OWNER_PRESET").unwrap();let p=desktop_model_service_v1::chat_presets().into_iter().find(|p|p.id==preset_id).unwrap();
+        let (dir,mut store,imported)=tests::imported_store();
+        let source_credentials=desktop_model_service_v1::AppPrivateProviderCredentialStore::at(std::env::var("NFAI_CREDENTIAL_ROOT").unwrap());
+        if std::env::var("NFAI_OWNER_EXACT_KEYS").as_deref()==Ok("1") {
+            store.credentials=desktop_model_service_v1::AppPrivateProviderCredentialStore::at(store.root.join("exact-recipient-credentials"));
+            for provider in [p.provider_id,"OPENROUTER"].into_iter().collect::<std::collections::BTreeSet<_>>() {let secret=source_credentials.with_secret(provider,|secret|Ok(Zeroizing::new(secret.to_vec()))).unwrap();store.credentials.save_user_provided_secret(provider,&secret).unwrap();}
+        } else {store.credentials=source_credentials;}
+        for provider in [p.provider_id,"OPENROUTER"] {let current=store.read_desktop_model_service_setting_records().unwrap().into_iter().find(|s|s.provider_id==provider).unwrap();store.save_desktop_model_service_setting_record(provider,true,desktop_model_service_v1::provider(provider).unwrap().default_preset_id,current.revision).unwrap();}
+        let fixture_dir=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../app/src/publicModelAcceptance/assets/public-search-fixtures");
+        let files=std::env::var("NFAI_OWNER_FILES").unwrap_or_else(|_|"public-02.md,public-10.docx".into());let mut ids=Vec::new();
+        for name in files.split(',').filter(|name|!name.is_empty()) {let a=store.import_conversation_attachment(DesktopAttachmentImportArgs{workspace_id:imported.summary.id.clone(),selected_path:fixture_dir.join(name).to_string_lossy().into_owned()}).unwrap();ids.push(a.id);}
+        let text_value=std::env::var("NFAI_OWNER_TEXT").unwrap_or_else(|_|"分析本次全部公开附件，逐项实际联网核验发布日期、数字与主张，用简短中文给出结论和对应官方来源。".into());let text=text_value.as_str();
+        let grant=relaycore_web_search_v1::RetrievalGrant{disclosure_version:relaycore_web_search_v1::DISCLOSURE_VERSION.into(),provider_id:"OPENROUTER".into(),preset_id:relaycore_web_search_v1::RETRIEVAL_PRESET.into(),model_id:relaycore_web_search_v1::RETRIEVAL_MODEL.into(),material_fingerprint:relaycore_web_search_v1::material_fingerprint(text,&ids)};
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:text.into(),attachment_ids:ids,model_id:Some(p.id.into()),tone_override:None,web_search_override:Some(true),egress_authorization:Some(DesktopOrdinaryChatEgressAuthorization{approved_at_ms:system_now_millis(),disclosure_version:relaycore_web_search_v1::DISCLOSURE_VERSION.into(),client_submission_id:None,search_service:None,retrieval_recipient:Some(grant)})},None).unwrap();
+        assert_eq!(prepared.provider_id,p.provider_id);assert_eq!(prepared.model_id,p.model_id);
+        let request=desktop_ordinary_chat_v1::TransportRequest{endpoint:prepared.endpoint.clone(),provider_id:prepared.provider_id.clone(),model_id:prepared.model_id.clone(),messages:prepared.messages.clone(),idempotency_key:prepared.idempotency_key.clone(),max_output_tokens:std::env::var("NFAI_OWNER_OUTPUT_LIMIT").ok().map(|v|v.parse::<u32>().expect("test output limit")).map(|v|{assert!((32..=2048).contains(&v));v}).unwrap_or_else(||desktop_ordinary_chat_v1::ordinary_output_token_limit(p.provider_id,p.model_id)),web_search_route:prepared.web_search_route.clone(),structured_json:false,disable_thinking:false,grounded_answer:false,explicit_search_query:None};
+        let plan=attachment_web_search_v1::from_messages(&request.messages);let fingerprint=attachment_web_search_execution_v1::cache_fingerprint(&request);let attempt=&prepared.projection.attempt_id;
+        let cache=attachment_search_checkpoint_v1::Callbacks{load:|item:&str|store.load_attachment_search_checkpoint(attempt,&fingerprint,item).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),save:|item:&str,value:attachment_search_checkpoint_v1::Entry|store.save_attachment_search_checkpoint(attempt,&fingerprint,item,value).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),coverage:|planned,covered|store.record_attachment_search_coverage(attempt,planned,covered).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"})};
+        let key=store.credentials.with_secret(p.provider_id,|k|Ok(Zeroizing::new(k.to_vec()))).unwrap();let search=if prepared.web_search_route=="RELAYCORE_COMPANION" {Some(store.credentials.with_secret("OPENROUTER",|k|Ok(Zeroizing::new(k.to_vec()))).unwrap())}else{None};
+        let mut physical=Vec::new();let runtime=tokio::runtime::Runtime::new().unwrap();
+        let result=if attachment_web_search_execution_v1::required(&request) {runtime.block_on(attachment_web_search_execution_v1::execute(request,key,search,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),cache,|r,reply|{
+            store.record_scoped_search_usage(&prepared.projection,r,reply).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})?;
+            if let Some(c)=reply {physical.push(json!({"requested":r.model_id,"returned":c.actual_model_id,"nativeSources":c.native_sources,"reportedMicros":c.reported_cost_micros,"input":c.usage.input_tokens,"output":c.usage.output_tokens}));}Ok(())
+        },||store.record_answer_pending(&prepared.projection).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"}),|_|Ok(())))} else if let Some(search_secret)=search {
+            // Mirror the production no-attachment companion branch, including both physical calls.
+            runtime.block_on(relaycore_web_search_v1::execute_companion(request,key,search_secret,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),|reply| {
+                store.record_relay_search_usage(&prepared.projection,reply).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})?;
+                if let Some(c)=reply {physical.push(json!({"requested":relaycore_web_search_v1::RETRIEVAL_MODEL,"returned":c.actual_model_id,"nativeSources":c.native_sources,"reportedMicros":c.reported_cost_micros,"input":c.usage.input_tokens,"output":c.usage.output_tokens}));}Ok(())
+            },||store.record_answer_pending(&prepared.projection).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"}),|_|Ok(()))).map(|reply|attachment_web_search_execution_v1::ScopedCompleted{complete:true,planned:0,covered:0,reply})
+        } else {
+            store.record_answer_pending(&prepared.projection).unwrap();
+            runtime.block_on(desktop_ordinary_chat_v1::execute_streaming(request,key,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),|_|Ok(()))).map(|reply|attachment_web_search_execution_v1::ScopedCompleted{complete:true,planned:0,covered:0,reply})
+        };
+        // Companion citations originate in the retrieval call and are appended to the answer body.
+        // Do not require the answering provider to repeat them as its own native tool output.
+        let companion_sources=physical.iter().flat_map(|call|call["nativeSources"].as_array().into_iter().flatten().cloned()).collect::<Vec<_>>();
+        let mut row=json!({"unusedRelayGptCredentialPresent":store.credentials.presence("RELAYCORE_GPT")==desktop_model_service_v1::CredentialPresence::Stored,"preset":p.id,"requested":p.model_id,"planned":plan.items.len(),"files":files,"physical":physical,"status":"UNKNOWN"});
+        match result {
+            Ok(r)=>{row["status"]=json!(if r.complete{"COMPLETED"}else{"PARTIAL"});row["covered"]=json!(r.covered);row["actualModel"]=json!(r.reply.actual_model_id);row["publicAnswer"]=json!(r.reply.text);row["sources"]=if r.reply.native_sources.is_empty() && prepared.web_search_route=="RELAYCORE_COMPANION" {json!(companion_sources)} else {json!(r.reply.native_sources)};row["sourceOrigin"]=json!(if prepared.web_search_route=="RELAYCORE_COMPANION" {"RETRIEVAL_NATIVE"}else{"ANSWER_NATIVE"});row["webProof"]=json!(r.reply.web_search_verified);store.update_ordinary_chat_message(attempt,&r.reply.text,if r.complete {"COMPLETE"} else {"FAILED"},r.reply.reasoning.as_deref(),Some(&r.reply),if r.complete {None} else {Some("WEB_SEARCH_SCOPE_INCOMPLETE")}).unwrap();store.complete_ordinary_chat_accounting(attempt,&r.reply).unwrap();},
+            Err(e)=>{row["error"]=json!(format!("{e:?}"));let (code,state)=match &e {desktop_ordinary_chat_v1::Failure::Explicit{code,..}|desktop_ordinary_chat_v1::Failure::Quantified{code,..}=>(*code,"FAILED"),desktop_ordinary_chat_v1::Failure::Unknown{code}=>(*code,"UNKNOWN"),_=>("USER_CANCELLED","CANCELLED")};row["status"]=json!(state);let facts=e.quantified_reply();if let Some(r)=facts {row["actualModel"]=json!(r.actual_model_id);row["publicAnswer"]=json!(r.text);row["webProof"]=json!(r.web_search_verified);row["sources"]=json!(r.native_sources);}store.update_ordinary_chat_message(attempt,facts.map(|r|r.text.as_str()).unwrap_or(""),state,facts.and_then(|r|r.reasoning.as_deref()),facts,Some(code)).unwrap();if let Some(r)=facts {store.complete_ordinary_chat_accounting(attempt,r).unwrap();}}
+        }
+        let message_for=|projection:WorkspaceProjection|projection.exchange["conversations"].as_array().unwrap().iter().flat_map(|c|c["messages"].as_array().into_iter().flatten()).find(|m|m["id"].as_str()==Some(prepared.projection.assistant_message_id.as_str())).unwrap().clone();
+        let before_reopen=message_for(store.workspace_projection(&imported.summary.id).unwrap());
+        let root=store.root.clone();let id=attempt.clone();drop(store);let reopened=DesktopWorkspaceStore::open(root.clone()).unwrap();let ledger=usage_ledger_v1::Ledger::open(&root.join("usage-ledger")).unwrap();let facts=ledger.entries_for_execution(&id).unwrap();row["ledgerCalls"]=json!(facts.iter().map(|f|json!({"model":f.requested_model_id,"actual":f.actual_model_id,"micros":f.charge_micros,"currency":f.currency_code,"source":f.cost_source,"kind":f.kind.as_str()})).collect::<Vec<_>>());
+        let restored=DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),&id).unwrap();row["reopenedState"]=json!(restored.state);row["reopenedModel"]=json!(restored.actual_model_id);row["reopenedCheckpoints"]=json!(plan.items.iter().filter(|i|reopened.load_attachment_search_checkpoint(&id,&fingerprint,&i.id).unwrap().is_some()).count());
+        let after_reopen=message_for(reopened.workspace_projection(&imported.summary.id).unwrap());
+        row["reopenedAccountingCalls"]=after_reopen["accountingCalls"].clone();row["reopenedMessageExact"]=json!(ordinary_chat_message_text(&before_reopen)==ordinary_chat_message_text(&after_reopen));row["reopenedAccountingExact"]=json!(before_reopen["accountingCalls"]==after_reopen["accountingCalls"]);row["changedProjectionFields"]=json!(before_reopen.as_object().unwrap().keys().filter(|k|before_reopen[*k]!=after_reopen[*k]).collect::<Vec<_>>());row["reopenedWebProof"]=json!(restored.web_search_verified);
+        let restored_text=ordinary_chat_message_text(&after_reopen);row["reopenedSourcesPresent"]=json!(row["sources"].as_array().is_some_and(|sources|!sources.is_empty() && sources.iter().all(|s|s[1].as_str().is_some_and(|url|restored_text.contains(url)))));
+        fs::write(output,serde_json::to_vec_pretty(&row).unwrap()).unwrap();println!("LUNA_OWNER preset={} status={} covered={} sources={} ledger={}",p.id,row["status"],row["covered"],row["sources"].as_array().map(Vec::len).unwrap_or(0),facts.len());
+        assert_eq!(row["status"],"COMPLETED");assert!(row["publicAnswer"].as_str().is_some_and(|s|!s.trim().is_empty()));assert_eq!(row["reopenedCheckpoints"],plan.items.len());assert!(row["sources"].as_array().is_some_and(|s|!s.is_empty()));assert_eq!(row["actualModel"],p.model_id);assert_eq!(row["reopenedState"],"COMPLETED");assert_eq!(row["reopenedMessageExact"],true);assert_eq!(row["reopenedSourcesPresent"],true);assert_eq!(row["reopenedAccountingExact"],true);assert_eq!(row["reopenedWebProof"],true);assert!(facts.iter().any(|f|f.requested_model_id==p.model_id));drop(dir);
+    }
+
+    #[test]
+    fn luna_configuration_needs_only_openrouter_credential() {
+        use desktop_model_service_v1::ProviderCredentialStore;
+        let (_dir,mut store,_imported)=tests::imported_store();
+        store.credentials=desktop_model_service_v1::AppPrivateProviderCredentialStore::at(store.root.join("isolated-credential-fixture"));
+        store.credentials.save_user_provided_secret("OPENROUTER",b"synthetic-fixture-only").unwrap();
+        assert_eq!(store.credentials.presence("RELAYCORE_GPT"),desktop_model_service_v1::CredentialPresence::MissingOrUnavailable);
+        let setting=store.read_desktop_model_service_setting_records().unwrap().into_iter().find(|s|s.provider_id=="OPENROUTER").unwrap();
+        store.save_desktop_model_service_setting_record("OPENROUTER",true,"GPT_6_LUNA",setting.revision).unwrap();
+        assert!(store.require_relay_search_config().is_ok());
+        store.credentials.delete_user_secret("OPENROUTER").unwrap();
+        assert!(store.require_relay_search_config().is_err());
+    }
+
+    #[test]
+    fn actual_luna_sources_bind_each_item_without_promoting_prose_urls() {
+        let fixture:serde_json::Value=serde_json::from_str(include_str!("../../../protocol/fixtures/openrouter-luna-sources-20261013.json")).unwrap();
+        let material=fixture["queries"].as_array().unwrap().iter().map(|q|q.as_str().unwrap()).collect::<Vec<_>>().join("\n");
+        let plan=super::attachment_web_search_v1::build(&material);
+        assert_eq!(plan.items.len(),4);
+        for row in fixture["results"].as_array().unwrap() {
+            let reply=super::desktop_ordinary_chat_v1::decode_non_streaming(row["response"].to_string().as_bytes(),1).unwrap();
+            assert_eq!(reply.native_sources.len(),4);
+            let urls=reply.native_sources.iter().map(|(_,u)|u.clone()).collect::<Vec<_>>();
+            let mut entries=std::collections::BTreeMap::new();
+            assert!(plan.evidence_collect(&reply.text,&urls,false,&mut entries).is_some());
+            for (id,host) in [("A1","ec.europa.eu"),("A2","python.org"),("A3","microsoft.com"),("A4","apple.com")] {assert!(entries[id].contains(host));}
+            assert!(plan.evidence(&reply.text,&[]).is_none());
+        }
+    }
+
+    #[test]
+    fn rc_attachment_routes_and_native_text_are_separate() {
+        for provider in ["RELAYCORE_GPT", "RELAYCORE_CLAUDE", "RELAYCORE_GEMINI"] {
+            assert_eq!(super::ordinary_chat_web_search_route(provider,"unused",true,true),"RELAYCORE_COMPANION");
+        }
+        assert_eq!(super::ordinary_chat_web_search_route("RELAYCORE_GPT","gpt-6.1-sol",true,false),"RELAYCORE_GPT_RESPONSES");
+        assert_eq!(super::ordinary_chat_web_search_route("OPENROUTER","openai/gpt-6-luna",true,true),"OPENROUTER_SERVER_TOOL");
+        assert_eq!(super::relaycore_web_search_v1::RETRIEVAL_MODEL,"openai/gpt-6-luna");
     }
 }

@@ -1,0 +1,5 @@
+{
+  "androidLocalFrozenArtifactMatchesDeliveredSHA256": true,
+  "macInstalledBundleMatchesDeliveredHashes": true,
+  "scope": "local file bytes only; no new install or business run"
+}

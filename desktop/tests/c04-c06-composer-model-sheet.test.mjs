@@ -1,8 +1,9 @@
+import { renderConfiguredChatShell as renderChatFirstShell } from './helpers/enabled-model-catalog.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { renderChatFirstShell } from '../src/chat-shell.mjs';
+import { } from '../src/chat-shell.mjs';
 
 const data = {
   summary: { id: 'workspace-c04-c06' },
@@ -40,9 +41,10 @@ test('C04 model root is a Composer-linked sheet with scrim, handle, hierarchy, a
     'data-action="select-p6g-auto"',
     'data-tier="DAILY"',
     'data-tier="DEEP"',
+    'data-tier="RELAYCORE"',
     'aria-selected="true"',
   ]) assert.ok(html.includes(token), token);
-  assert.equal((html.match(/class="composer-model-sheet-card/g) || []).length, 3);
+  assert.equal((html.match(/class="composer-model-sheet-card/g) || []).length, 4);
   assert.ok(!html.includes('p6g-model-popover'));
 });
 
@@ -51,9 +53,10 @@ test('C05 daily candidates show the section title and runtime Provider plus live
   const text = visibleText(html);
   for (const token of [
     '选择具体模型',
-    'Claude Sonnet 5',
+    'Claude Sonnet 5.5',
+    'Claude Haiku 5.5',
     'DeepSeek V4.1 Flash',
-    'GPT-5.6 Terra',
+    'GPT-6 Luna',
     'GLM-5.3 Flash',
     'Qwen3.7-Plus',
     'Gemini 3.8 Flash',
@@ -77,10 +80,9 @@ test('C06 deep candidates use Qwen3.8-Max and truthful offline runtime labels', 
   const text = visibleText(html);
   for (const token of [
     '选择具体模型',
-    'Claude Fable 5',
-    'Claude Opus 5',
+    'Claude Opus 5.5',
     'DeepSeek V4 Pro',
-    'GPT-5.6 Sol',
+    'GPT-6.1 Sol',
     'GLM-5.3',
     'Qwen3.8-Max',
     'OpenRouter · 未联网',
@@ -89,6 +91,8 @@ test('C06 deep candidates use Qwen3.8-Max and truthful offline runtime labels', 
     '千问 · 未联网',
   ]) assert.ok(text.includes(token), token);
   assert.ok(!text.includes('Kimi K3'));
+  assert.ok(!text.includes('Claude Fable 5.1'));
+  assert.ok(!text.includes('GPT-6 Astra · OpenRouter'));
 });
 
 test('C04-C06 CSS has one shared rounded sheet owner and no legacy model popover selector', async () => {

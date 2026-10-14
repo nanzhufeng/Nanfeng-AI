@@ -24,8 +24,8 @@ class AppearanceSettingsViewModel(
     fun update(transform: (AppearanceSettings) -> AppearanceSettings) {
         val saved = runCatching { save.execute(transform(state.settings)) }
         state = saved.fold(
-            onSuccess = { AppearanceSettingsUiState(it) },
-            onFailure = { state.copy(error = "保存失败；已有外观保持不变。") },
+            onSuccess = { NanfengIslandFeedback.show("外观设置已保存。"); AppearanceSettingsUiState(it) },
+            onFailure = { NanfengIslandFeedback.show("保存失败；已有外观保持不变。",true); state.copy(error = "保存失败；已有外观保持不变。") },
         )
     }
 

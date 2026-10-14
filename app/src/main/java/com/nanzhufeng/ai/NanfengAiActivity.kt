@@ -9,6 +9,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.graphics.Color
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -134,12 +136,20 @@ open class NanfengAiActivity : ComponentActivity() {
     }
     private lateinit var routePreferences: android.content.SharedPreferences
     private lateinit var appEntryPreferences: android.content.SharedPreferences
-    private var hasStartedOnce = false
     private var startWithFreshChat = false
     private var entryConversationId: ConversationId? = null
+    private lateinit var firstContentGate: com.nanzhufeng.ai.ui.MainContentDrawGate
+    private var areaInitializationInProgress by androidx.compose.runtime.mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!com.nanzhufeng.ai.domain.ProductScope.canOpen(dataArea)) {
+            startActivity(Intent(this, NanfengAiActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            finish()
+            return
+        }
+        firstContentGate = com.nanzhufeng.ai.ui.MainContentDrawGate(window.decorView)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
@@ -157,26 +167,52 @@ open class NanfengAiActivity : ComponentActivity() {
     }
 
     private fun startAreaInitialization(savedInstanceState: Bundle?) {
-        val panel=android.widget.LinearLayout(this).apply {
-            orientation=android.widget.LinearLayout.VERTICAL
-            gravity=android.view.Gravity.CENTER
-            addView(android.widget.ProgressBar(this@NanfengAiActivity))
-            addView(android.widget.TextView(this@NanfengAiActivity).apply { text="正在准备本地数据…"; textSize=16f })
-        }
-        setContentView(panel)
+        if (areaInitializationInProgress) return
+        areaInitializationInProgress = true
         lifecycleScope.launch {
+            var initializationStage = "container"
             try {
                 container=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AppContainer(applicationContext, dataArea=dataArea) }
+                initializationStage = "views"
                 startWithFreshChat = shouldStartWithFreshChat(intent)
                 initializeAreaViews(savedInstanceState)
+                initializationStage = "foreground"
                 if(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) startAreaForeground()
+                firstContentGate.release()
             } catch(cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
               catch(error: Exception) {
-                panel.removeAllViews()
-                panel.addView(android.widget.TextView(this@NanfengAiActivity).apply { text="本地数据暂未就绪，原数据已保留。"; textSize=16f })
-                panel.addView(android.widget.Button(this@NanfengAiActivity).apply { text="重试";setOnClickListener { startAreaInitialization(savedInstanceState) } })
+                android.util.Log.e("NanfengStartup", com.nanzhufeng.ai.app.startupFailureDiagnostic(initializationStage, error))
+                showAreaInitializationFailure(savedInstanceState)
+                firstContentGate.release()
+            } finally {
+                areaInitializationInProgress = false
             }
         }
+    }
+
+    private fun showAreaInitializationFailure(savedInstanceState: Bundle?) {
+        setContent {
+            androidx.compose.material3.MaterialTheme {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = {},
+                    title = { androidx.compose.material3.Text("暂时无法打开") },
+                    text = { androidx.compose.material3.Text("本地数据已保留，请重试。") },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(
+                            enabled = !areaInitializationInProgress,
+                            onClick = { startAreaInitialization(savedInstanceState) },
+                        ) {
+                            androidx.compose.material3.Text("重试")
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        if (::firstContentGate.isInitialized) firstContentGate.dispose()
+        super.onDestroy()
     }
 
     private fun initializeAreaViews(savedInstanceState: Bundle?) {
@@ -289,6 +325,9 @@ open class NanfengAiActivity : ComponentActivity() {
                 startWithFreshChat,
                 entryConversationId = entryConversationId.takeUnless { isExplicitAppLaunch(intent) },
                 ownedSurface = dataArea,
+                saveAppEntryCheckpoint = { conversationId, running ->
+                    com.nanzhufeng.ai.data.AndroidConversationEntryCheckpoint(appEntryPreferences).remember(conversationId, running)
+                },
                 onReferenceMessage = { conversationId, messageId ->
                     lifecycleScope.launch {
                         val targetArea = if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT)
@@ -322,9 +361,9 @@ open class NanfengAiActivity : ComponentActivity() {
                 },
             ),
         )[ConversationFoundationViewModel::class.java]
-        // Normal generation recovery belongs to GenerationForegroundService.  This Activity
-        // observes the persisted conversation state only; it never changes an in-flight task.
-        lifecycleScope.launch { withContext(Dispatchers.IO) { container.taskRecoveryAudit.recoverAfterProcessStart() } }
+        // AppContainer has reconciled orphaned local runs before this screen reads its state.
+        // This Activity never replays or mutates an active foreground generation.
+        lifecycleScope.launch { withContext(Dispatchers.IO) { container.taskRecoveryAudit.recoverOtherTasksAfterProcessStart() } }
         projectViewModel = ViewModelProvider(this, ProjectViewModel.Factory(container.projectRepository, container.manageProject))[ProjectViewModel::class.java]
         memoryViewModel = ViewModelProvider(this, MemoryViewModel.Factory(container.manageMemory))[MemoryViewModel::class.java]
         lifecycleScope.launch {
@@ -445,6 +484,7 @@ open class NanfengAiActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        com.nanzhufeng.ai.background.GenerationIslandRuntime.visibility(this, true)
         if (::conversationFoundationViewModel.isInitialized) startAreaForeground()
     }
 
@@ -457,13 +497,13 @@ open class NanfengAiActivity : ComponentActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         normalChatExecutionReceiverRegistered = true
-        if (hasStartedOnce && conversationFoundationViewModel.onAppForeground(SystemClock.elapsedRealtime())) {
+        if (conversationFoundationViewModel.onAppForeground(SystemClock.elapsedRealtime())) {
             selectP5ARoute(P5ARoute.CONVERSATION)
         }
-        hasStartedOnce = true
     }
 
     override fun onStop() {
+        com.nanzhufeng.ai.background.GenerationIslandRuntime.visibility(this, false)
         if (normalChatExecutionReceiverRegistered) {
             unregisterReceiver(normalChatExecutionReceiver)
             normalChatExecutionReceiverRegistered = false
@@ -540,6 +580,10 @@ open class NanfengAiActivity : ComponentActivity() {
 
     @Suppress("UseKtx") // Keep this UI-only preference write dependency-free in the single Android module.
     private fun selectP5ARoute(route: P5ARoute) {
+        if (route.visibleRoute() != route) {
+            selectP5ARoute(route.visibleRoute())
+            return
+        }
         if (dataArea == com.nanzhufeng.ai.domain.ConversationSurface.CHAT && route == P5ARoute.PROJECTS) {
             startActivity(Intent(this, NanfengWorkActivity::class.java).apply {
                 putExtra(P5A_ROUTE_EXTRA, route.wireValue)
@@ -585,9 +629,9 @@ open class NanfengAiActivity : ComponentActivity() {
     companion object {
         const val TEXT_SHARE_FINGERPRINT = "handled_text_share_fingerprint"
         const val APP_ENTRY_PREFERENCES = "conversation_app_entry"
-        const val APP_ENTRY_LAST_CONVERSATION_ID = "last_conversation_id"
-        const val APP_ENTRY_HAD_RUNNING_GENERATION = "had_running_generation"
-        const val APP_ENTRY_LAST_BACKGROUND_AT_MILLIS = "last_background_at_millis"
+        const val APP_ENTRY_LAST_CONVERSATION_ID = com.nanzhufeng.ai.data.AndroidConversationEntryCheckpoint.LAST_CONVERSATION_ID
+        const val APP_ENTRY_HAD_RUNNING_GENERATION = com.nanzhufeng.ai.data.AndroidConversationEntryCheckpoint.HAD_RUNNING_GENERATION
+        const val APP_ENTRY_LAST_BACKGROUND_AT_MILLIS = com.nanzhufeng.ai.data.AndroidConversationEntryCheckpoint.LAST_BACKGROUND_AT_MILLIS
         const val FRESH_CHAT_AFTER_BACKGROUND_MS = com.nanzhufeng.ai.domain.ConversationAppEntryPolicy.RETENTION_MILLIS
         const val ACTION_OPEN_SCHEDULED_MONITOR = "com.nanzhufeng.ai.action.OPEN_SCHEDULED_MONITOR"
         const val EXTRA_SCHEDULED_MONITOR_TASK_ID = "com.nanzhufeng.ai.extra.SCHEDULED_MONITOR_TASK_ID"

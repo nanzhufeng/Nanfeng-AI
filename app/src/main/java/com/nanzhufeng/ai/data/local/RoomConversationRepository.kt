@@ -490,6 +490,10 @@ class RoomConversationRepository(
         }
     }
 
+    fun savedTextCharacters(messageId: MessageNodeId): Int = database.openHelper.readableDatabase.query(
+        "SELECT COALESCE(SUM(length(textContent)),0) FROM message_content_blocks WHERE messageId=? AND kind='TEXT'", arrayOf(messageId.value),
+    ).use { cursor -> if(cursor.moveToFirst()) cursor.getLong(0).coerceIn(0,Int.MAX_VALUE.toLong()).toInt() else 0 }
+
     override fun findById(id: ConversationId): ConversationSnapshot? {
         val dao = database.conversationDao()
         val snapshot = dao.loadSnapshot(id) ?: return null

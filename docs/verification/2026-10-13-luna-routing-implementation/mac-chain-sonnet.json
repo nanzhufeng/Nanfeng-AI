@@ -1,0 +1,55 @@
+[
+  {
+    "error": "Unknown { code: \"NETWORK\" }",
+    "model": "claude-sonnet-5-5",
+    "physical": [
+      {
+        "elapsedMs": 4898,
+        "input": 8873,
+        "nativeSources": [
+          "https://www.python.org/downloads/release/python-3140/?utm_source=openai"
+        ],
+        "output": 193,
+        "publicFixtureReply": "**[A1] 已核实**  \nPython 3.14.0 于 **2025年10月7日**发布；Python.org 官方发布页确认日期，Python 官方博客也宣布该版本正式可用。([python.org](https://www.python.org/downloads/release/python-3140/?utm_source=openai))  \n来源：Python.org — *Python Release Python 3.14.0*  \nhttps://www.python.org/downloads/release/python-3140/\n\n来源：\n- [Python Release Python 3.14.0 | Python.org](https://www.python.org/downloads/release/python-3140/?utm_source=openai)",
+        "reportedCostMicros": 11101,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "openai/gpt-6-luna",
+        "returned": "openai/gpt-6-luna",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "preset": "RELAYCORE_SONNET_5_5",
+    "provider": "RELAYCORE_CLAUDE",
+    "searchErrors": []
+  }
+]

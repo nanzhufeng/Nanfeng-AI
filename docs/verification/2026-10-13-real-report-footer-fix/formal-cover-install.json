@@ -1,0 +1,30 @@
+{
+  "time": "2026-10-13 18:54 +0800",
+  "version": "1.0.29",
+  "androidCandidate": {
+    "signatureSHA256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "package": "com.nanzhufeng.ai",
+    "versionCode": 93,
+    "versionName": "1.0.29",
+    "debuggable": false,
+    "sha256": "fdf17df27e0cfdd1b04574b8a345352bb9a73495aa5adbf48d8c93fbfc1ed6ae",
+    "bytes": 28672447
+  },
+  "androidInstalledSHA256": "fdf17df27e0cfdd1b04574b8a345352bb9a73495aa5adbf48d8c93fbfc1ed6ae",
+  "androidDataMetadataPreserved": true,
+  "androidTemporaryApksRemoved": true,
+  "macCertificateSHA256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+  "macBundleFilesExact": true,
+  "macBundleHashes": {
+    "Contents/Info.plist": "2db1fd8afa3222df834c205ccc056e8bf74c427a0bd5cc74ba55f907ab27f70e",
+    "Contents/_CodeSignature/CodeResources": "0bee0966319956711ce7ab2ee8b06571edbbcc41e256e91f355feb48a092187c",
+    "Contents/MacOS/nanfeng-ai-desktop-spike": "ac42fc9bf0c727f6b294941a5dcd82aa7a285cf6be283218abb1cd5dbf056750",
+    "Contents/Resources/nanfeng_ai_icon.icns": "49a7012adf6e2f9acdd23b79eda5d1c64746225c1bd06bb7d128c93681baa431"
+  },
+  "macDataFiles": 1595,
+  "macDataBytes": 6069511187,
+  "macDataAddedDeletedChanged": 0,
+  "dmgSHA256": "f73d14324a7527bad36399be9a318aab9cd68846827163a1aa9baa9bf55c3276",
+  "formalAppsLaunchedForValidation": false,
+  "businessBoundary": "Installation and data-preservation metadata do not complete Mac actual report live acceptance"
+}

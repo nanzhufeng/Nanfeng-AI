@@ -1,5 +1,10 @@
 # P8-B 受控本地 Agent harness 与生产只读状态合同
 
+<!-- contract-governance:start -->
+> **合同口径：本地实验／独立专项合同。** 领域入口：[ 本地受控Agent实验 ](P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P8-B 受控本地 Agent harness 与生产只读状态合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：纯本地 P8-B 内部 harness + 不可见 production-safe 状态入口；不是 production Agent executor、工具 UI 或外部工具。
 

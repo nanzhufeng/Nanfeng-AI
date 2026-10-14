@@ -104,7 +104,7 @@ internal fun mergeCachedProfiles(bundled: Map<ModelPresetId, ResolvedModel>, cac
     return bundled.mapValues { (preset, seed) ->
         // Stable preset identity survives upgrades; a retired API ID must not override the seed.
         val cachedProfile = cached[preset]?.takeUnless {
-            preset == ModelPresetId.DEEPSEEK_V4_FLASH && it.modelId != seed.modelId
+            preset in setOf(ModelPresetId.DEEPSEEK_V4_FLASH,ModelPresetId.RELAYCORE_OPUS_5_5) && it.modelId != seed.modelId
         }
         cachedProfile?.copy(
             providerId = seed.providerId,

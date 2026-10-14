@@ -1,5 +1,10 @@
 # 南枫 AI P9-A 最小只读生态入口审计合同
 
+<!-- contract-governance:start -->
+> **合同口径：本地实验／独立专项合同。** 领域入口：[ 只读生态／本地Integration实验 ](P9A_READ_ONLY_ECOSYSTEM_ENTRY_AUDIT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P9-A 最小只读生态入口审计合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：合同与现状审计完成；**没有生态应用接入，P9 的真实只读闭环尚未开始。**
 

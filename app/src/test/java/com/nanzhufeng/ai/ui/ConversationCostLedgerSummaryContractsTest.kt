@@ -34,7 +34,7 @@ class ConversationCostLedgerSummaryContractsTest {
         assertFalse(section.contains("HorizontalDivider"))
 
         assertTrue(grid.contains("ConversationCostCategoryMetric(\"次数\", \"\${state.records.size} 次\")"))
-        assertTrue(grid.contains("ConversationCostCategoryMetric(\"费用\", CnyMoneyDisplay.summaryLabel(state.records.map { it.cost }) ?: \"金额未知\", true)"))
+        assertTrue(grid.contains("ConversationCostCategoryMetric(\"费用\", CnyMoneyDisplay.summaryLabel(state.records.flatMap { it.ledgerCostFacts() }) ?: \"金额未知\", true)"))
         assertTrue(grid.contains("CnyMoneyDisplay.summaryLabel(state.titleGenerationRecords.map { it.cost })"))
         assertTrue(grid.contains("state.titleGenerationRecords.map { it.cost }"))
         assertTrue(grid.contains("state.historyCurationCalls.mapNotNull(DirectChatCallAuditRecord::estimatedCost)"))
@@ -68,10 +68,10 @@ class ConversationCostLedgerSummaryContractsTest {
         val ui = File("src/main/java/com/nanzhufeng/ai/ui/ConversationCostLedgerUi.kt").readText()
         val attribution = File("src/main/java/com/nanzhufeng/ai/domain/AssistantResponseModelAttribution.kt").readText()
         assertTrue(ui.contains("scheduledMonitorRepository.listCostedRunsNewestFirst()"))
-        assertTrue(ui.contains("directChatCallAudit.listNewestFirst().filter"))
+        assertTrue(ui.contains("directCalls.filter"))
         assertTrue(ui.contains("ScheduledMonitorCostSummary"))
         assertTrue(ui.contains("state.historyCurationCalls.mapNotNull(DirectChatCallAuditRecord::estimatedCost)"))
-        assertTrue(attribution.contains("ConversationCostEstimator.estimate(modelId, usage, recordedAt)"))
+        assertTrue(attribution.contains("ConversationCostEstimator.estimate(modelId, usage, recordedAt,modelDisplayName)"))
     }
 
     @Test fun `conversation title history and ocr costs stay visible together while one detail type is selected`() {

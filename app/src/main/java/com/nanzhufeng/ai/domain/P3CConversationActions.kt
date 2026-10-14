@@ -96,6 +96,11 @@ object P3CLocalFixtureRegistry {
         ),
         presetMappings = listOf(
             ModelPresetMapping(ModelPresetId.CLAUDE_FABLE_5, "fixture-local-flagship-v1"),
+            ModelPresetMapping(ModelPresetId.CLAUDE_OPUS_5_5, "fixture-local-flagship-v1"),
+            ModelPresetMapping(ModelPresetId.CLAUDE_SONNET_5_5, "fixture-local-balanced-v1"),
+            ModelPresetMapping(ModelPresetId.CLAUDE_HAIKU_5_5, "fixture-local-fast-v1"),
+            ModelPresetMapping(ModelPresetId.GPT_6_1_SOL, "fixture-local-flagship-v1"),
+            ModelPresetMapping(ModelPresetId.GPT_6_LUNA, "fixture-local-fast-v1"),
             ModelPresetMapping(ModelPresetId.CLAUDE_OPUS_5, "fixture-local-flagship-v1"),
             ModelPresetMapping(ModelPresetId.CLAUDE_SONNET_5, "fixture-local-balanced-v1"),
             ModelPresetMapping(ModelPresetId.CLAUDE_HAIKU_4_5, "fixture-local-fast-v1"),
@@ -116,11 +121,12 @@ class ConversationActionOrchestrator(
 ) {
     fun execute(request: ConversationActionRequest): ConversationActionResult {
         actions.lineageForIntent(request.intentId)?.let { existing ->
-            val selection = resolveSelection(request.targetPreset ?: ModelPresetId.CLAUDE_SONNET_5)
+            val selection = resolveSelection(request.targetPreset ?: ModelPresetId.CLAUDE_SONNET_5_5)
             val sameRequest = existing.conversationId == request.conversationId &&
                 existing.originMessageId == request.sourceMessageId &&
                 existing.actionKind == request.actionKind &&
-                selection == existing.selection
+                (selection == existing.selection || (request.targetPreset == null &&
+                    resolveSelection(ModelPresetId.CLAUDE_SONNET_5) == existing.selection))
             if (!sameRequest) return ConversationActionResult.Rejected("重复 intent 的动作内容不一致。")
             val snapshot = conversations.findById(request.conversationId)
                 ?: return ConversationActionResult.Rejected("重放 intent 缺少会话投影。")
@@ -144,7 +150,7 @@ class ConversationActionOrchestrator(
         if (source.deliveryState !in setOf(MessageDeliveryState.COMPLETE, MessageDeliveryState.FAILED, MessageDeliveryState.CANCELLED)) {
             return ConversationActionResult.Rejected("来源回答尚未终态，不能创建新尝试。")
         }
-        val selection = resolveSelection(request.targetPreset ?: ModelPresetId.CLAUDE_SONNET_5)
+        val selection = resolveSelection(request.targetPreset ?: ModelPresetId.CLAUDE_SONNET_5_5)
             ?: return ConversationActionResult.Rejected("本地模型目录未验证或能力不满足；未创建网络请求。")
         val parent = when (request.actionKind) {
             ConversationActionKind.CONTINUE -> {

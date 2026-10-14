@@ -1,5 +1,10 @@
 # 南枫 AI P3-E 会话管理、搜索与本地导出合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 对话管理与回收 ](C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P3-E 会话管理、搜索与本地导出合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P3 的第五个本地增量；不含删除、导入、分享、真实 Provider、Key、HTTP、图片外发、Projects、Memory 或 Knowledge 扩展
 

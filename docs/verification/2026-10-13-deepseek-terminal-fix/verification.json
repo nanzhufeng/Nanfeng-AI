@@ -1,0 +1,49 @@
+{
+  "jvm": {
+    "suites": 321,
+    "tests": 1494,
+    "passed": 1485,
+    "skipped": 9,
+    "failures": 0,
+    "assembleDebug": "PASS",
+    "assemblePublicModelAcceptance": "PASS"
+  },
+  "rust": {
+    "passed": 428,
+    "ignored": 33,
+    "failures": 0
+  },
+  "contractTools": {
+    "tests": 25,
+    "state": "PASS"
+  },
+  "contractCoverage": {
+    "contracts": 114,
+    "domains": 40,
+    "ownerReferences": 122,
+    "state": "PASS"
+  },
+  "modelConsistency": {
+    "chatModels": 20,
+    "specialModels": 1,
+    "credentialGroups": 7,
+    "state": "PASS"
+  },
+  "formalInstall": false,
+  "liveAndroidFinalOwnerApk": {
+    "package": "com.nanzhufeng.ai.publicmodelacceptance",
+    "emulator": "emulator-5592",
+    "apkSha256": "e448b0f36c52b80d34cc2487914dea011bf7fed9aa27932e6bd8ec3ef3087949",
+    "sameCertificate": true,
+    "formalInstall": false
+  },
+  "museDiagnosticApk": {
+    "apkSha256": "b7e188d890096f9080d733c638322a37933de8cac7ef8fc22227775dacaabbc9",
+    "sameCertificate": true,
+    "formalInstall": false
+  },
+  "finalSourceProbeOnlyMetadataAgeTagAdded": true,
+  "nativeChatUiAcceptance": false,
+  "jsonProviderLiveAcceptance": false,
+  "nodeRerun": false
+}

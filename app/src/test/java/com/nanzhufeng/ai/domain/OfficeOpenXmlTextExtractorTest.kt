@@ -48,6 +48,11 @@ class OfficeOpenXmlTextExtractorTest {
         assertNull(extractOfficeOpenXmlText(zipBytes("word/document.xml" to "<!DOCTYPE x [<!ENTITY y SYSTEM \"file:///x\">]><x>&y;</x>"), DOCX_MIME_TYPE))
     }
 
+    @Test fun `unused compressed members still obey expansion limits`() {
+        val bytes=zipBytes("word/document.xml" to "<w:document xmlns:w=\"urn:w\"><w:p><w:r><w:t>公开正文</w:t></w:r></w:p></w:document>","word/media/large.bin" to "x".repeat(16*1024*1024+1))
+        assertNull(extractOfficeOpenXmlText(bytes,DOCX_MIME_TYPE))
+    }
+
     private fun zipBytes(vararg entries: Pair<String, String>): ByteArray = ByteArrayOutputStream().use { bytes ->
         ZipOutputStream(bytes).use { output ->
             entries.forEach { (name, value) ->

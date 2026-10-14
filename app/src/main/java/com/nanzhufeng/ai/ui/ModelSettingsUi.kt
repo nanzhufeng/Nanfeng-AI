@@ -1,18 +1,24 @@
 package com.nanzhufeng.ai.ui
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalConfiguration
+
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
@@ -98,6 +104,7 @@ internal fun ModelServiceStatusCard(
             ProviderReadinessLine("Qwen", qwen)
             ProviderReadinessLine("DeepSeek", deepSeek)
             ProviderReadinessLine("智谱 GLM", zhipu)
+            com.nanzhufeng.ai.domain.RelayCoreModels.providers.forEach { id -> ProviderReadinessLine(id.userLabel(), state.providerConfigurations[id]) }
         }
         if (state.error != null) {
             Spacer(Modifier.height(10.dp))
@@ -170,14 +177,18 @@ private fun WebSearchSettingsRow(
 @Composable
 internal fun ModelSettingsConfigurationPage(
     state: ModelSettingsUiState,
-    onSave: (ProviderId, Boolean, ModelPresetId, String?) -> Unit,
+    onSave: (ProviderId, String?) -> Unit,
+    onSetProviderEnabled: (ProviderId, Boolean) -> Unit,
+    onSetProviderPreset: (ProviderId, ModelPresetId) -> Unit,
     onRevealStoredCredential: (ProviderId) -> Unit,
-    onTestConnection: (ProviderId) -> Unit,
+    onTestConnection: (ProviderId, ModelPresetId?) -> Unit,
 ) {
     var selectedProvider by remember { mutableStateOf(ProviderId.OPENROUTER) }
+    var lastRelayProvider by remember { mutableStateOf(ProviderId.RELAYCORE_CLAUDE) }
     val configuration = state.providerConfigurations[selectedProvider] ?: return
-    var enabled by remember(selectedProvider, configuration.settings.enabled) { mutableStateOf(configuration.settings.enabled) }
-    var presetId by remember(selectedProvider, configuration.settings.presetId) { mutableStateOf(configuration.settings.presetId) }
+    var probePreset by remember(selectedProvider) { mutableStateOf<ModelPresetId?>(null) }
+    val enabled = state.pendingProviderEnabled[selectedProvider] ?: configuration.settings.enabled
+    val presetId = state.pendingProviderPresets[selectedProvider] ?: configuration.settings.presetId
     // The stored-key state is deliberately a stable, full-length visual mask.  It never reflects
     // the actual key length and must look identical before and after the visibility control is used.
     val savedKeyMask = "••••••••••••••••••••••••••••••••"
@@ -185,99 +196,59 @@ internal fun ModelSettingsConfigurationPage(
         mutableStateOf(if (configuration.credentialState == CredentialState.STORED) savedKeyMask else "")
     }
     var keyEdited by remember(selectedProvider, configuration.credentialState) { mutableStateOf(false) }
-    var keyVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(state.revealedCredential) {
-        if (!keyEdited && state.revealedCredential != null) {
+    var keyVisible by remember(selectedProvider) { mutableStateOf(false) }
+    var revealRequested by remember(selectedProvider) { mutableStateOf(false) }
+    LaunchedEffect(revealRequested, state.revealedCredential, state.revealedCredentialProviderId) {
+        if (revealRequested && !keyEdited && state.revealedCredential != null && state.revealedCredentialProviderId == selectedProvider) {
             keyInput = state.revealedCredential
             keyVisible = true
         }
     }
 
+    LaunchedEffect(state.keySaveRevision) {
+        if (state.keySaveRevision > 0 && state.keySavedProvider == selectedProvider) {
+            keyInput = savedKeyMask
+            keyEdited = false
+            keyVisible = false
+            revealRequested = false
+        }
+    }
+    val unsavedChanges = keyEdited
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(999.dp),
-            color = ForegroundSurface,
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                listOf(ProviderId.OPENROUTER, ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN).forEach { provider ->
-                    val label = when (provider) {
-                        ProviderId.OPENROUTER -> "OpenRouter"
-                        ProviderId.QWEN -> "Qwen"
-                        ProviderId.DEEPSEEK -> "DeepSeek"
-                        ProviderId.ZHIPU -> "智谱"
-                        ProviderId.MOCK -> ""
-                    }
-                    val selected = selectedProvider == provider
-                    Surface(
-                        onClick = { selectedProvider = provider },
-                        modifier = Modifier.weight(1f).height(32.dp),
-                        shape = RoundedCornerShape(999.dp),
-                        color = if (selected) AccentOrange else Color.Transparent,
-                        contentColor = if (selected) Color.White else BodyText,
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = P5AInteractiveShape,
-                    color = ForegroundSurface,
-        ) {
-            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(configuration.provider.displayName, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = BodyText)
-                SettingsSwitch(
-                    checked = enabled,
-                    onCheckedChange = { enabled = it },
-                    enabled = !state.saving,
-                )
-            }
-        }
-
-        AiPresetSelectionSurface(
-                    selected = NanfengModelServiceCatalog.preset(presetId),
-                    enabled = !state.saving,
-                    allowedProvider = selectedProvider,
-                    onSelected = { presetId = it.id },
+        Text("服务商与模型", color = BodyText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        ModelSettingsProviderBrowser(
+            selectedProvider = selectedProvider,
+            selectedPreset = probePreset ?: presetId,
+            enabled = !state.probingConnection,
+            onProviderSelected = { provider, platform ->
+                val target = if (platform && provider == ProviderId.RELAYCORE_CLAUDE) lastRelayProvider else provider
+                selectedProvider = target
+                if (target in com.nanzhufeng.ai.domain.RelayCoreModels.providers) lastRelayProvider = target
+            },
+            onPresetSelected = {
+                probePreset = it.takeIf { id -> id == ModelPresetId.GLM_OCR }
+                if (probePreset == null) onSetProviderPreset(selectedProvider, it)
+            },
         )
-
-        OutlinedButton(
-                    onClick = { onTestConnection(selectedProvider) },
-                    enabled = !state.saving && !state.probingConnection,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = P5AInteractiveShape,
-                    border = null,
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText),
-        ) {
-            if (state.probingConnection) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Text("正在测试…")
-            } else Text("测试连接")
+        Text("线路配置", color = BodyText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Surface(modifier = Modifier.fillMaxWidth(), shape = P5AInteractiveShape, color = ForegroundSurface) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ModelProviderBrand(selectedProvider, platform = selectedProvider !in com.nanzhufeng.ai.domain.RelayCoreModels.providers)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val group = when (selectedProvider) {
+                        ProviderId.RELAYCORE_CLAUDE -> "Claude 分组"
+                        ProviderId.RELAYCORE_GPT -> "GPT 分组"
+                        ProviderId.RELAYCORE_GEMINI -> "Gemini 分组"
+                        else -> configuration.provider.displayName
+                    }
+                    Text(group, fontWeight = FontWeight.SemiBold, color = BodyText, fontSize = 14.sp)
+                }
+                SettingsSwitch(checked = enabled, onCheckedChange = { onSetProviderEnabled(selectedProvider, it) }, enabled = true)
+            }
         }
-        ConnectionTestFeedback(state)
-        ModelSettingsSaveFeedback(state)
-
         Text("API Key", color = BodyText, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
         OutlinedTextField(
                     value = keyInput,
@@ -307,8 +278,8 @@ internal fun ModelSettingsConfigurationPage(
                     leadingIcon = { Icon(Icons.Rounded.Key, contentDescription = null) },
                     trailingIcon = {
                         IconButton(onClick = {
-                            if (keyVisible) keyVisible = false
-                            else if (!keyEdited && configuration.credentialState == CredentialState.STORED) onRevealStoredCredential(selectedProvider)
+                            if (keyVisible) { keyVisible = false; revealRequested = false }
+                            else if (!keyEdited && configuration.credentialState == CredentialState.STORED) { revealRequested = true; onRevealStoredCredential(selectedProvider) }
                             else keyVisible = true
                         }) {
                             Icon(
@@ -318,51 +289,44 @@ internal fun ModelSettingsConfigurationPage(
                         }
                     },
         )
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = { onTestConnection(selectedProvider, probePreset) },
+                enabled = !state.saving && !state.probingConnection && !unsavedChanges,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                shape = P5AInteractiveShape, border = null,
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText),
+            ) {
+                if (state.probingConnection && state.probingProviderId == selectedProvider) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("正在测试…")
+                } else Text("测试连接")
+            }
             Button(
-                        onClick = { onSave(selectedProvider, enabled, presetId, keyInput.takeIf { keyEdited && it.isNotBlank() }) },
-                        enabled = !state.saving,
+                        onClick = { onSave(selectedProvider, keyInput.takeIf { keyEdited && it.isNotBlank() }) },
+                        enabled = keyEdited && keyInput.isNotBlank() && !state.saving && !state.probingConnection,
+                        modifier = Modifier.widthIn(min = 92.dp).heightIn(min = 48.dp),
                         shape = P5AInteractiveShape,
                         colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
             ) {
-                if (state.saving) {
+                if (state.saving && state.savingProviderId == selectedProvider) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(if (state.saving) "正在保存…" else "保存")
+                Text(if (state.saving && state.savingProviderId == selectedProvider) "正在保存…" else "保存")
             }
         }
+        if (unsavedChanges) Text("API Key 尚未保存，请先保存再测试连接。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+        val feedback = if (unsavedChanges) state.feedbackFor(selectedProvider).copy(notice = null, error = null) else state.feedbackFor(selectedProvider)
+        ConnectionTestFeedback(feedback)
+        ModelSettingsSaveFeedback(feedback)
     }
 }
 
 @Composable
 private fun ConnectionTestFeedback(state: ModelSettingsUiState) {
     when {
-        state.probingConnection -> Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primaryContainer,
-        ) {
-            Text(
-                "正在检查连接，请稍候。",
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                color = BodyText,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        state.notice?.startsWith("连接成功：") == true -> Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = NeutralAssistantSurface,
-        ) {
-            Text(
-                state.notice,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                color = AccentOrange,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-            )
-        }
         state.error?.title?.startsWith("连接测试") == true -> Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -380,29 +344,6 @@ private fun ConnectionTestFeedback(state: ModelSettingsUiState) {
 private fun ModelSettingsSaveFeedback(state: ModelSettingsUiState) {
     val saveError = state.error?.takeUnless { it.title.startsWith("连接测试") }
     when {
-        state.notice == "API Key 已安全保存在本机。" -> Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = NeutralAssistantSurface,
-        ) {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(state.notice, color = AccentOrange, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                Text("尚未测试连接；请点击“测试连接”确认 API Key 是否可用。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        state.notice == "模型服务设置已安全保存在本机。" -> Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = NeutralAssistantSurface,
-        ) {
-            Text(
-                state.notice,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                color = AccentOrange,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-            )
-        }
         saveError != null -> {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -414,6 +355,13 @@ private fun ModelSettingsSaveFeedback(state: ModelSettingsUiState) {
                     Text(saveError.suggestion, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                 }
             }
+        }
+        state.error == null && state.notice != null -> Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(state.notice, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            if (state.notice == "API Key 已安全保存在本机。") Text(
+                "尚未测试连接；请点击“测试连接”确认 API Key 是否可用。",
+                color = SecondaryText, style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -624,6 +572,9 @@ private fun ProviderId.userLabel(): String = when (this) {
     ProviderId.QWEN -> "Qwen"
     ProviderId.DEEPSEEK -> "DeepSeek"
     ProviderId.ZHIPU -> "智谱"
+    ProviderId.RELAYCORE_CLAUDE -> "RelayCore Claude"
+    ProviderId.RELAYCORE_GPT -> "RelayCore GPT"
+    ProviderId.RELAYCORE_GEMINI -> "RelayCore Gemini"
     ProviderId.MOCK -> "本地测试"
 }
 
@@ -642,14 +593,14 @@ private fun AiPresetSelectionSurface(
         OutlinedButton(
             onClick = { expanded = true },
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             shape = RoundedCornerShape(16.dp),
             border = null,
             colors = ButtonDefaults.outlinedButtonColors(containerColor = ForegroundSurface, contentColor = BodyText),
         ) {
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                Text(selected.displayName, fontWeight = FontWeight.Bold)
-                Text(selected.modelFamilyHint, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                Text(com.nanzhufeng.ai.domain.modelPresetNameForUser(selected), fontWeight = FontWeight.Bold)
+                Text(com.nanzhufeng.ai.domain.RelayCoreModels.spec(selected.id)?.let { "RC" } ?: selected.modelFamilyHint, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             }
             Icon(Icons.Rounded.ArrowDropDown, contentDescription = "展开模型预设")
         }
@@ -660,7 +611,7 @@ private fun AiPresetSelectionSurface(
                 DropdownMenuItem(
                     text = {
                         Column {
-                            Text(preset.displayName, fontWeight = FontWeight.Bold, color = BodyText)
+                            Text(com.nanzhufeng.ai.domain.modelPresetNameForUser(preset), fontWeight = FontWeight.Bold, color = BodyText)
                             Text(preset.description, color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                         }
                     },
@@ -699,4 +650,40 @@ private fun AiSelectionSurface(expanded: Boolean, onDismiss: () -> Unit, content
         shadowElevation = 8.dp,
         content = content,
     )
+}
+
+/** Platform and Relay profile rows share geometry, typography and the interaction shape. */
+@Composable
+internal fun ModelProviderSegmentedTabs(
+    choices: List<Pair<ProviderId, String>>,
+    selectedProvider: ProviderId,
+    widthFraction: Float = 1f,
+    horizontalInset: Dp = 16.dp,
+    onSelect: (ProviderId) -> Unit,
+) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = horizontalInset), contentAlignment = Alignment.Center) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(widthFraction),
+            shape = RoundedCornerShape(999.dp),
+            color = ForegroundSurface,
+        ) {
+            Row(Modifier.fillMaxWidth().padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                choices.forEach { (provider, label) ->
+                    val selected = selectedProvider == provider
+                    Surface(
+                        onClick = { onSelect(provider) },
+                        modifier = Modifier.weight(1f).height(singleLineControlHeight(32.dp, 10.sp)),
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (selected) AccentOrange else Color.Transparent,
+                        contentColor = if (selected) Color.White else BodyText,
+                    ) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(label, style = centeredControlTextStyle(10.sp, MaterialTheme.typography.labelMedium),
+                                fontWeight = FontWeight.Medium, softWrap = false, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

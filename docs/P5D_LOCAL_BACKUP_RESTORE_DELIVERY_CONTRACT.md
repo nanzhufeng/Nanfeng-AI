@@ -1,5 +1,10 @@
 # 南枫 AI P5-D 本地备份、恢复与交付合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 本机备份恢复 ](P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P5-D 本地备份、恢复与交付合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P5 的第四个独立增量；不是 P5 或项目终点。备份 owner 从实际打开的 Room 数据库读取当前 Schema，不另存硬编码副本；本合同不得以历史 Schema 号限制后续已验证迁移。
 
@@ -23,10 +28,16 @@
 
 ## Android Auto Backup 与交付
 
-`allowBackup=false` 且 `dataExtractionRules/fullBackupContent` 均拒绝所有 app 数据；不得让 Room、私有资产、SharedPreferences 或 Keystore 静默进入 Google 云备份。P5-D 最终构建必须提升版本/code，Debug/Release 同正式证书，v2/v3 验证、SHA256SUMS、仅公开指纹的 SIGNING_CERTIFICATE 与本地交付清单齐全。不得上传 GitHub、商店或操作 OPPO。
+`allowBackup=false` 且 `dataExtractionRules/fullBackupContent` 均拒绝所有 app 数据；不得让 Room、私有资产、SharedPreferences 或 Keystore 静默进入 Google 云备份。
+
+## 历史P5-D阶段交付约束
+
+P5-D 最终构建必须提升版本/code，Debug/Release 同正式证书，v2/v3 验证、SHA256SUMS、仅公开指纹的 SIGNING_CERTIFICATE 与本地交付清单齐全。不得上传 GitHub、商店或操作 OPPO。
 
 ## 验收边界
 
-自动覆盖 manifest/hash roundtrip、manifest 与当前打开数据库 Schema 一致、空库恢复、非空取消/替换、rollback/interrupt、资产引用、运行态降级、恶意 ZIP/高敏拒绝、Auto Backup 规则和从初始版本到当前 Schema 的完整连续迁移链。预检同时要求 manifest 与候选 SQLite 都精确匹配当前 Schema。真实验收只在 `emulator-5554`：先成功导出并回读，再创建专用非敏感变更，强确认恢复并核对回到备份状态；force-stop 后不自动恢复。迁移使用同正式证书旧 APK `install -r` 升级且不卸载、不清数据。P5-D 不能证明 P5 整体退出、OPPO、发布、云同步或真实 Provider。
+自动覆盖 manifest/hash roundtrip、manifest 与当前打开数据库 Schema 一致、空库恢复、非空取消/替换、rollback/interrupt、资产引用、运行态降级、恶意 ZIP/高敏拒绝、Auto Backup 规则和从初始版本到当前 Schema 的完整连续迁移链。预检同时要求 manifest 与候选 SQLite 都精确匹配当前 Schema。真实验收在当次隔离模拟器进行：先成功导出并回读，再创建专用非敏感变更，强确认恢复并核对回到备份状态；force-stop 后不自动恢复。迁移使用同正式证书旧 APK `install -r` 升级且不卸载、不清数据。P5-D 不能证明 P5 整体退出、OPPO、发布、云同步或真实 Provider。
+
+## 历史P5-D隔离验收记录（2026-08-20）
 
 2026-08-20 已按该边界以独立 `com.nanzhufeng.ai.p5dacceptance` 包完成 SAF 导出/回读、受控替换与 force-stop/cold-start readback；该验收包的本地与 installed `base.apk` SHA-256 均为 `e07de2cc1aa4438592bf0aa83d467b3b92c3faaf1941b3d4faf537bb3aad2965`。未安装、清除、重置或读取 OPPO/legacy app-data，未触及 Keychain 或 HTTP。旧 APK 迁移仍是独立门槛。

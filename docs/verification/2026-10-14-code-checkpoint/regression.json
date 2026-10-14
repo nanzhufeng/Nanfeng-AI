@@ -1,0 +1,268 @@
+{
+  "verifiedAt": "2026-10-14T13:23:17+08:00",
+  "baselineHead": "dafc64d9b33661dc4f792fd1434ff1ddca9cdfa3",
+  "checkpointTag": "checkpoint-search-routing-20261014",
+  "scope": "fresh local final regression; no installation or live provider acceptance",
+  "android": {
+    "tests": 1505,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10,
+    "passed": 1495,
+    "suites": 322,
+    "lintRelease": "PASS",
+    "testForced": true,
+    "execution": {
+      "exit": 0,
+      "seconds": 161.51394200325012,
+      "command": [
+        "./gradlew",
+        ":app:testDebugUnitTest",
+        "--rerun",
+        ":app:lintRelease",
+        "--no-daemon",
+        "--max-workers=2",
+        "-Dorg.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8 -XX:ReservedCodeCacheSize=320m"
+      ]
+    },
+    "skipNames": [
+      "com.nanzhufeng.ai.domain.P6KUserSelectedChatGptZipAssetAcceptanceTest.selected official export maps every source-owned current-path asset without guessing",
+      "com.nanzhufeng.ai.ai.RelayCoreAttachmentWireReplayTest.public multiple attachment wire passes actual Android decoder and item coverage",
+      "com.nanzhufeng.ai.data.P6KUserSelectedChatGptZipAttachmentChainAcceptanceTest.selected real source package restores every officially owned attachment into Room",
+      "com.nanzhufeng.ai.ai.RelayCoreNativeSearchTest.authorized production adapter verifies Opus own live search",
+      "com.nanzhufeng.ai.ai.RelayCoreNativeSearchTest.authorized live Android adapter and transport return real Relay search evidence",
+      "com.nanzhufeng.ai.data.P6KUserSelectedChatGptZipMergeAcceptanceTest.older selected ChatGPT export then newer selected cumulative export deduplicates and preserves navigation search and task history",
+      "com.nanzhufeng.ai.ai.AttachmentWebSearchPlanTest.private saved topic receipts cannot prove complete fact scope without network",
+      "com.nanzhufeng.ai.ai.RelayCoreWebSearchCompanionTest.authorized live Android companion and selected model produce sourced answer",
+      "com.nanzhufeng.ai.ai.RelayCoreWebSearchCompanionTest.authorized selected models answer actual recorded Sol evidence with production JSON transport",
+      "com.nanzhufeng.ai.ai.RelayCoreWebSearchCompanionTest.recorded approved Astra response passes production decoder without another paid call"
+    ]
+  },
+  "rust": {
+    "passed": 443,
+    "failed": 0,
+    "ignored": 34,
+    "execution": {
+      "exit": 0,
+      "seconds": 44.440632820129395,
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "--manifest-path",
+        "desktop/src-tauri/Cargo.toml",
+        "--lib"
+      ]
+    },
+    "ignoredNames": [
+      "attachment_web_search_execution_v1::live_matrix_tests::all_current_models_public_search_and_original_answer",
+      "attachment_web_search_execution_v1::live_matrix_tests::public_android_one_shot_credential_broker",
+      "attachment_web_search_execution_v1::live_matrix_tests::public_gemini_grounded_answer_shape_control",
+      "attachment_web_search_execution_v1::live_matrix_tests::public_glm_matched_retrieval_effort_control",
+      "attachment_web_search_execution_v1::live_matrix_tests::public_glm_official_search_engine_control",
+      "attachment_web_search_execution_v1::live_matrix_tests::public_recorded_initial_tools_rejection_route_recovery_control",
+      "attachment_web_search_execution_v1::live_matrix_tests::public_relay_claude_model_metadata",
+      "attachment_web_search_execution_v1::live_matrix_tests::public_relay_single_query_granularity_control",
+      "attachment_web_search_execution_v1::live_matrix_tests::public_sonnet_compatible_endpoint_control",
+      "attachment_web_search_v1::tests::saved_search_receipts_zero_network_replay",
+      "desktop_ordinary_chat_v1::tests::authorized_opus_native_messages_probe",
+      "desktop_ordinary_chat_v1::tests::authorized_opus_public_markdown_probe",
+      "desktop_ordinary_chat_v1::tests::authorized_remaining_models_public_file_audit",
+      "desktop_ordinary_chat_v1::tests::authorized_unified_stream_live_probe",
+      "desktop_ordinary_chat_v1::tests::live_deepseek_messages_search",
+      "desktop_ordinary_chat_v1::tests::real_stream_reasoning_past_old_75_second_limit_completes",
+      "desktop_ordinary_chat_v1::tests::recorded_public_multi_file_retrieval_passes_native_decoder_and_coverage",
+      "desktop_ordinary_chat_v1::tests::relay_astra_recorded_public_response_production_decoder",
+      "desktop_ordinary_chat_v1::tests::relay_native_search_live_transport",
+      "independent_web_search_v1::tests::authorized_public_direct_search_control",
+      "independent_web_search_v1::tests::authorized_public_original_sonnet_answer",
+      "independent_web_search_v1::tests::authorized_public_production_direct_matrix",
+      "independent_web_search_v1::tests::authorized_public_rc_gpt_ordinary_answer_control",
+      "independent_web_search_v1::tests::authorized_public_selected_ordinary_protocol_probe",
+      "model_generation_live_audit::configured_model_generation_audit",
+      "relaycore_web_search_v1::tests::android_public_attachment_wire_probe",
+      "relaycore_web_search_v1::tests::authorized_live_relay_companion_keeps_selected_answer_model",
+      "relaycore_web_search_v1::tests::authorized_live_relay_selected_generation_matrix",
+      "relaycore_web_search_v1::tests::current_account_attachment_fact_scope_probe",
+      "relaycore_web_search_v1::tests::current_account_attachment_generation_matrix",
+      "relaycore_web_search_v1::tests::current_account_generation_failure_probe",
+      "search_routing_target_tests::authorized_luna_original_model_owner_chain",
+      "tests::authorized_public_format_owner",
+      "tests::live_completion_probe_preserves_answer_and_reopens_terminal_attempt"
+    ]
+  },
+  "node": {
+    "passed": 551,
+    "failed": 0,
+    "skipped": 12,
+    "execution": [
+      {
+        "name": "test",
+        "exit": 0,
+        "seconds": 15.563212871551514,
+        "command": [
+          "npm",
+          "--prefix",
+          "desktop",
+          "test"
+        ]
+      },
+      {
+        "name": "lint",
+        "exit": 0,
+        "seconds": 2.0208399295806885,
+        "command": [
+          "npm",
+          "--prefix",
+          "desktop",
+          "run",
+          "lint"
+        ]
+      },
+      {
+        "name": "typecheck",
+        "exit": 0,
+        "seconds": 0.23724889755249023,
+        "command": [
+          "npm",
+          "--prefix",
+          "desktop",
+          "run",
+          "typecheck"
+        ]
+      },
+      {
+        "name": "inventory",
+        "exit": 0,
+        "seconds": 0.4929211139678955,
+        "command": [
+          "npm",
+          "--prefix",
+          "desktop",
+          "run",
+          "inventory:audit"
+        ]
+      },
+      {
+        "name": "build",
+        "exit": 0,
+        "seconds": 0.302839994430542,
+        "command": [
+          "npm",
+          "--prefix",
+          "desktop",
+          "run",
+          "build"
+        ]
+      }
+    ]
+  },
+  "gates": [
+    {
+      "name": "contract-governance",
+      "exit": 0,
+      "seconds": 0.1018381118774414,
+      "command": [
+        "python3",
+        "protocol/scripts/verify-contract-governance.py"
+      ]
+    },
+    {
+      "name": "contract-owner",
+      "exit": 0,
+      "seconds": 0.13797664642333984,
+      "command": [
+        "python3",
+        "protocol/scripts/audit-contract-consistency.py"
+      ]
+    },
+    {
+      "name": "models",
+      "exit": 0,
+      "seconds": 0.09130382537841797,
+      "command": [
+        "python3",
+        "protocol/scripts/verify-model-service-contract.py"
+      ]
+    },
+    {
+      "name": "maintenance-tests",
+      "exit": 0,
+      "seconds": 2.5310850143432617,
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "protocol/tests",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "name": "golden-v1",
+      "exit": 0,
+      "seconds": 0.07243609428405762,
+      "command": [
+        "node",
+        "protocol/scripts/run-golden.mjs"
+      ]
+    },
+    {
+      "name": "golden-v2",
+      "exit": 0,
+      "seconds": 0.05322384834289551,
+      "command": [
+        "node",
+        "protocol/scripts/run-v2-golden.mjs"
+      ]
+    },
+    {
+      "name": "golden-sync",
+      "exit": 0,
+      "seconds": 0.1024789810180664,
+      "command": [
+        "node",
+        "protocol/scripts/run-sync-golden.mjs"
+      ]
+    },
+    {
+      "name": "supabase-static",
+      "exit": 0,
+      "seconds": 0.14948511123657227,
+      "command": [
+        "node",
+        "--test",
+        "supabase/tests/p7c_static_contract.test.mjs",
+        "supabase/tests/p8_direct_sync_cancel_contract.test.mjs",
+        "supabase/tests/p8_restore_e2ee_sync_contract.test.mjs",
+        "supabase/functions/google-avatar/policy.test.mjs"
+      ]
+    },
+    {
+      "name": "gateway",
+      "exit": 0,
+      "seconds": 3.2780020236968994,
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./..."
+      ]
+    }
+  ],
+  "maintenanceTestsPassed": 43,
+  "supabaseStaticTestsPassed": 10,
+  "productionFilesProtected": 1189,
+  "productionDrift": [],
+  "providerOptInEnvironmentPresence": 0,
+  "newProviderRequests": 0,
+  "installations": 0,
+  "limitations": [
+    "opt-in tests not executed",
+    "no new physical/native UI or real-provider matrix",
+    "previous signed installation is dated separate evidence",
+    "checkpoint retains unresolved service and scope gaps"
+  ]
+}

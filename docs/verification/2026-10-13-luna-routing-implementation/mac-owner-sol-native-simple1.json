@@ -1,0 +1,115 @@
+{
+  "actualModel": "gpt-6.1-sol",
+  "covered": 0,
+  "files": "",
+  "ledgerCalls": [
+    {
+      "actual": "gpt-6.1-sol",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 2716,
+      "model": "gpt-6.1-sol",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "gpt-6.1-sol",
+      "source": null
+    }
+  ],
+  "physical": [],
+  "planned": 0,
+  "preset": "RELAYCORE_GPT_6_1_SOL",
+  "publicAnswer": "我会查询 python.org 官方发布页面。\n根据 python.org 官方发布页面，Python 3.12.0 的正式发布日期是 **2023 年 10 月 2 日**。([python.org](https://www.python.org/downloads/release/python-3120/?mode=reply&utm_source=openai))\n\n来源：\n- [https://blog.python.org/2023/10/python-3120-final-now-available/](https://blog.python.org/2023/10/python-3120-final-now-available/)\n- [https://www.python.org/downloads/release/python-3120/?mode=reply](https://www.python.org/downloads/release/python-3120/?mode=reply)\n- [https://blog.python.org/2023/08/python-3120-release-candidate-1-released/](https://blog.python.org/2023/08/python-3120-release-candidate-1-released/)\n- [https://mail.python.org/pipermail/python-list/2023-October/911124.html](https://mail.python.org/pipermail/python-list/2023-October/911124.html)\n- [https://blog.python.org/2023/09/python-3120-release-candidate-3-now/](https://blog.python.org/2023/09/python-3120-release-candidate-3-now/)\n- [https://www.python.org/downloads/release/python-31210/](https://www.python.org/downloads/release/python-31210/)\n- [https://blog.python.org/2023/09/python-3120-release-candidate-2-now/](https://blog.python.org/2023/09/python-3120-release-candidate-2-now/)\n- [https://pythonlang.cn/downloads/release/python-3120/](https://pythonlang.cn/downloads/release/python-3120/)\n- [https://discuss.python.org/t/python-3-12-0-final-is-here/35186](https://discuss.python.org/t/python-3-12-0-final-is-here/35186)\n- [https://blog.python.org/blog/year/2023/](https://blog.python.org/blog/year/2023/)\n- [https://blog.python.org/2023/04/its-time-for-another-set-of-python/](https://blog.python.org/2023/04/its-time-for-another-set-of-python/)\n- [https://discuss.python.org/t/python-3-12-0-final-is-here/35186?u=hugovk](https://discuss.python.org/t/python-3-12-0-final-is-here/35186?u=hugovk)\n- [https://www.crich-jun.derbyshire.sch.uk/attachments/documents.asp?id=16](https://www.crich-jun.derbyshire.sch.uk/attachments/documents.asp?id=16)\n- [https://assets-global.website-files.com/6827cf9ec5433520e7b30791/682d39c8f13b90b4940d87e4_57050935933.pdf](https://assets-global.website-files.com/6827cf9ec5433520e7b30791/682d39c8f13b90b4940d87e4_57050935933.pdf)\n- [https://huggingface.co/spaces/GenAILearniverse/TextSummarizer/resolve/main/Installation.pdf?download=true](https://huggingface.co/spaces/GenAILearniverse/TextSummarizer/resolve/main/Installation.pdf?download=true)\n- [https://bityob.github.io/python-312-upgrade-presentation/pdf/python_312_upgrade_pyweb_meetup_27_07_2025.pdf](https://bityob.github.io/python-312-upgrade-presentation/pdf/python_312_upgrade_pyweb_meetup_27_07_2025.pdf)\n- [https://img1.wsimg.com/blobby/go/09d65df2-8b8a-44ae-afb5-18c16af5fbf2/downloads/wozabidapagogepemiwej.pdf](https://img1.wsimg.com/blobby/go/09d65df2-8b8a-44ae-afb5-18c16af5fbf2/downloads/wozabidapagogepemiwej.pdf)\n- [https://www.reddit.com/r/chocolatey/comments/13sb2lb](https://www.reddit.com/r/chocolatey/comments/13sb2lb)\n- [https://www.reddit.com/r/freebsd/comments/1ugdsdk/default_python_has_been_upgraded_to_312/](https://www.reddit.com/r/freebsd/comments/1ugdsdk/default_python_has_been_upgraded_to_312/)\n- [Python Release Python 3.12.0 | Python.org](https://www.python.org/downloads/release/python-3120/?mode=reply&utm_source=openai)",
+  "reopenedCheckpoints": 0,
+  "reopenedModel": "gpt-6.1-sol",
+  "reopenedState": "COMPLETED",
+  "requested": "gpt-6.1-sol",
+  "sources": [
+    [
+      "https://blog.python.org/2023/10/python-3120-final-now-available/",
+      "https://blog.python.org/2023/10/python-3120-final-now-available/"
+    ],
+    [
+      "https://www.python.org/downloads/release/python-3120/?mode=reply",
+      "https://www.python.org/downloads/release/python-3120/?mode=reply"
+    ],
+    [
+      "https://blog.python.org/2023/08/python-3120-release-candidate-1-released/",
+      "https://blog.python.org/2023/08/python-3120-release-candidate-1-released/"
+    ],
+    [
+      "https://mail.python.org/pipermail/python-list/2023-October/911124.html",
+      "https://mail.python.org/pipermail/python-list/2023-October/911124.html"
+    ],
+    [
+      "https://blog.python.org/2023/09/python-3120-release-candidate-3-now/",
+      "https://blog.python.org/2023/09/python-3120-release-candidate-3-now/"
+    ],
+    [
+      "https://www.python.org/downloads/release/python-31210/",
+      "https://www.python.org/downloads/release/python-31210/"
+    ],
+    [
+      "https://blog.python.org/2023/09/python-3120-release-candidate-2-now/",
+      "https://blog.python.org/2023/09/python-3120-release-candidate-2-now/"
+    ],
+    [
+      "https://pythonlang.cn/downloads/release/python-3120/",
+      "https://pythonlang.cn/downloads/release/python-3120/"
+    ],
+    [
+      "https://discuss.python.org/t/python-3-12-0-final-is-here/35186",
+      "https://discuss.python.org/t/python-3-12-0-final-is-here/35186"
+    ],
+    [
+      "https://blog.python.org/blog/year/2023/",
+      "https://blog.python.org/blog/year/2023/"
+    ],
+    [
+      "https://blog.python.org/2023/04/its-time-for-another-set-of-python/",
+      "https://blog.python.org/2023/04/its-time-for-another-set-of-python/"
+    ],
+    [
+      "https://discuss.python.org/t/python-3-12-0-final-is-here/35186?u=hugovk",
+      "https://discuss.python.org/t/python-3-12-0-final-is-here/35186?u=hugovk"
+    ],
+    [
+      "https://www.crich-jun.derbyshire.sch.uk/attachments/documents.asp?id=16",
+      "https://www.crich-jun.derbyshire.sch.uk/attachments/documents.asp?id=16"
+    ],
+    [
+      "https://assets-global.website-files.com/6827cf9ec5433520e7b30791/682d39c8f13b90b4940d87e4_57050935933.pdf",
+      "https://assets-global.website-files.com/6827cf9ec5433520e7b30791/682d39c8f13b90b4940d87e4_57050935933.pdf"
+    ],
+    [
+      "https://huggingface.co/spaces/GenAILearniverse/TextSummarizer/resolve/main/Installation.pdf?download=true",
+      "https://huggingface.co/spaces/GenAILearniverse/TextSummarizer/resolve/main/Installation.pdf?download=true"
+    ],
+    [
+      "https://bityob.github.io/python-312-upgrade-presentation/pdf/python_312_upgrade_pyweb_meetup_27_07_2025.pdf",
+      "https://bityob.github.io/python-312-upgrade-presentation/pdf/python_312_upgrade_pyweb_meetup_27_07_2025.pdf"
+    ],
+    [
+      "https://img1.wsimg.com/blobby/go/09d65df2-8b8a-44ae-afb5-18c16af5fbf2/downloads/wozabidapagogepemiwej.pdf",
+      "https://img1.wsimg.com/blobby/go/09d65df2-8b8a-44ae-afb5-18c16af5fbf2/downloads/wozabidapagogepemiwej.pdf"
+    ],
+    [
+      "https://www.reddit.com/r/chocolatey/comments/13sb2lb",
+      "https://www.reddit.com/r/chocolatey/comments/13sb2lb"
+    ],
+    [
+      "https://www.reddit.com/r/freebsd/comments/1ugdsdk/default_python_has_been_upgraded_to_312/",
+      "https://www.reddit.com/r/freebsd/comments/1ugdsdk/default_python_has_been_upgraded_to_312/"
+    ],
+    [
+      "Python Release Python 3.12.0 | Python.org",
+      "https://www.python.org/downloads/release/python-3120/?mode=reply&utm_source=openai"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

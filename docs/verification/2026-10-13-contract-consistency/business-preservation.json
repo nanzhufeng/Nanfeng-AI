@@ -1,0 +1,22 @@
+{
+  "time": "2026-10-13 16:17 +0800",
+  "scope": "既有业务源码、配置、Schema、fixture和测试文件；不包括新增维护工具测试",
+  "protectedExistingFiles": 1041,
+  "changedExistingFiles": [],
+  "maintenanceTestAddition": "protocol/tests/test_contract_consistency.py",
+  "sourceHashes": "protected-business-hashes.json",
+  "finalLocalReferencesChecked": 680,
+  "missingLocalReferences": [],
+  "substantiveContractBodies": [
+    "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+    "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+    "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md",
+    "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+    "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+    "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+    "docs/P7A_LOCAL_E2EE_SYNC_FOUNDATION_CONTRACT.md",
+    "docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md",
+    "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md"
+  ]
+}

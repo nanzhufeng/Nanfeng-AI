@@ -1,0 +1,173 @@
+{
+  "GLM_5_3_FLASH": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "glm-5.3-flash",
+    "answerChars": 3107,
+    "actualAnswerModel": [
+      "glm-5.3-flash"
+    ]
+  },
+  "GLM_5_3": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "glm-5.3",
+    "answerChars": 3005,
+    "actualAnswerModel": [
+      "glm-5.3"
+    ]
+  },
+  "CLAUDE_SONNET_5_5": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "anthropic/claude-sonnet-5.5",
+    "answerChars": 2681,
+    "actualAnswerModel": [
+      "anthropic/claude-sonnet-5.5"
+    ]
+  },
+  "CLAUDE_HAIKU_5_5": {
+    "result": "Sent",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "anthropic/claude-haiku-5.5",
+    "answerChars": 3027,
+    "actualAnswerModel": [
+      "anthropic/claude-haiku-5.5"
+    ]
+  },
+  "DEEPSEEK_V4_FLASH": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "deepseek-flash",
+    "answerChars": 3292,
+    "actualAnswerModel": [
+      "deepseek-flash"
+    ]
+  },
+  "GPT_6_LUNA": {
+    "result": "Sent",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "openai/gpt-6-luna",
+    "answerChars": 1955,
+    "actualAnswerModel": [
+      "openai/gpt-6-luna"
+    ]
+  },
+  "QWEN_3_7_PLUS": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "qwen3.7-plus",
+    "answerChars": 2378,
+    "actualAnswerModel": [
+      "qwen3.7-plus"
+    ]
+  },
+  "GEMINI_3_8_FLASH": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "google/gemini-3.8-flash",
+    "answerChars": 2933,
+    "actualAnswerModel": [
+      "google/gemini-3.8-flash"
+    ]
+  },
+  "CLAUDE_OPUS_5_5": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "anthropic/claude-opus-5.5",
+    "answerChars": 2994,
+    "actualAnswerModel": [
+      "anthropic/claude-opus-5.5"
+    ]
+  },
+  "GPT_6_1_SOL": {
+    "result": "Sent",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "openai/gpt-6.1-sol",
+    "answerChars": 2396,
+    "actualAnswerModel": [
+      "openai/gpt-6.1-sol"
+    ]
+  },
+  "DEEPSEEK_V4_PRO": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "deepseek-v4-pro",
+    "answerChars": 3126,
+    "actualAnswerModel": [
+      "deepseek-v4-pro"
+    ]
+  },
+  "QWEN_3_8_MAX": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "qwen3.8-max",
+    "answerChars": 3230,
+    "actualAnswerModel": [
+      "qwen3.8-max"
+    ]
+  },
+  "RELAYCORE_OPUS_5_5": {
+    "result": "Sent",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "claude-opus-5.5",
+    "answerChars": 3103,
+    "actualAnswerModel": [
+      "claude-opus-5.5"
+    ]
+  },
+  "RELAYCORE_SONNET_5_5": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "claude-sonnet-5-5",
+    "answerChars": 2451,
+    "actualAnswerModel": [
+      "claude-sonnet-5-5"
+    ]
+  },
+  "RELAYCORE_GPT_6_1_SOL": {
+    "result": "Sent",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "gpt-6.1-sol",
+    "answerChars": 2180,
+    "actualAnswerModel": [
+      "gpt-6.1-sol"
+    ]
+  },
+  "RELAYCORE_GPT_6_ASTRA": {
+    "result": "Sent",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "gpt-6-astra",
+    "answerChars": 2501,
+    "actualAnswerModel": [
+      "gpt-6-astra"
+    ]
+  },
+  "RELAYCORE_GEMINI_3_8_FLASH": {
+    "result": "Sent",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "gemini-3.8-flash",
+    "answerChars": 3187,
+    "actualAnswerModel": [
+      "gemini-3.8-flash"
+    ]
+  },
+  "RELAYCORE_GEMINI_3_1_PRO": {
+    "result": "Sent",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "gemini-3.1-pro",
+    "answerChars": 2843,
+    "actualAnswerModel": [
+      "gemini-3.1-pro"
+    ]
+  },
+  "QWEN_3_6_FLASH": {
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "coverage": "4/4\u9879\u68c0\u7d22\u7ed3\u679c",
+    "requestedModel": "qwen3.6-flash",
+    "answerChars": 3289,
+    "actualAnswerModel": [
+      "qwen3.6-flash"
+    ]
+  }
+}

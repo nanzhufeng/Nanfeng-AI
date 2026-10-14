@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -700,7 +701,7 @@ private fun OcrStartCard(onStart: () -> Unit) {
             Text("开始转写", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Button(
                 onClick = onStart,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
                 shape = P5AInteractiveShape,
                 colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
             ) { Text("开始转写", fontWeight = FontWeight.Bold) }
@@ -729,7 +730,7 @@ private fun OcrFailureCard(task: GlmOcrTask, onRetry: (GlmOcrTaskId) -> Unit) {
             Text(task.safeErrorCode.userErrorLabel(), color = ErrorRed, fontWeight = FontWeight.Bold)
             Button(
                 onClick = { onRetry(task.id) },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 shape = P5AInteractiveShape,
                 colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
             ) { Text("重新转写", fontWeight = FontWeight.Bold) }

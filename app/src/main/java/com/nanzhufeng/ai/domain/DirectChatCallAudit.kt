@@ -15,6 +15,12 @@ data class DirectChatCallAuditRecord(
     val inputTokens: Long?,
     val outputTokens: Long?,
     val status: String,
+    val actualModelId: String? = null,
+    val cachedInputTokens: Long? = null,
+    val reasoningTokens: Long? = null,
+    val cost: ProviderCost = ProviderCost(),
+    val costSource: ConversationCostSource? = null,
+    val accounting: ChatCallAccounting? = null,
 )
 
 data class DirectChatCallAuditSummary(val recordCount: Int = 0, val storageBytes: Long = 0)

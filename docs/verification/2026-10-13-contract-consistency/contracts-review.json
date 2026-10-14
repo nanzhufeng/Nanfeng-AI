@@ -1,0 +1,921 @@
+{
+  "state": "PASS",
+  "contracts": 114,
+  "domains": 40,
+  "errors": [],
+  "review": [
+    {
+      "path": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+      "domain": "usage",
+      "status": "CURRENT",
+      "scope": "本机物理调用用量/币种/事实等级；余额和跨软件预算仅规划",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+      "domain": "android-conversation",
+      "status": "CURRENT",
+      "scope": "南枫 AI Android 当前会话与搜索界面合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "CURRENT",
+      "scope": "南枫 AI Android 当前普通聊天运行时上下文合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+      "domain": "settings",
+      "status": "CURRENT",
+      "scope": "南枫 AI Android 当前设置界面合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md",
+      "domain": "transcription",
+      "status": "CURRENT",
+      "scope": "Android 南枫转写当前界面合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/ANSWER_LANGUAGE_CURRENT_CONTRACT.md",
+      "domain": "language",
+      "status": "CURRENT",
+      "scope": "普通回答语言与外语来源合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "domain": "model-network",
+      "status": "CURRENT",
+      "scope": "普通发送按渠道/材料选择工具、来源与范围终态；旧独立搜索服务只读兼容",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "CURRENT",
+      "scope": "C-13 对话生命周期 Android → Desktop 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/C14_LOCAL_DATA_PARITY_CONTRACT.md",
+      "domain": "local-data",
+      "status": "CURRENT",
+      "scope": "C-14 导入导出／本机数据跨端合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md",
+      "domain": "workspace",
+      "status": "CURRENT",
+      "scope": "CHAT/WORK存储、恢复与手动引用隔离；WORK隐藏不构成删除或恢复入口授权",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md",
+      "domain": "theme",
+      "status": "CURRENT",
+      "scope": "C-16 主题／字体／弹层跨端合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md",
+      "domain": "product",
+      "status": "CURRENT",
+      "scope": "南枫 AI 意图优先组织合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/CONVERSATION_APP_ENTRY_CONTRACT.md",
+      "domain": "startup",
+      "status": "CURRENT",
+      "scope": "会话启动合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/DESKTOP_CHAT_FIRST_UI_CONTRACT.md",
+      "domain": "desktop-conversation",
+      "status": "CURRENT",
+      "scope": "南枫 AI Desktop 对话优先 UI 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/DESKTOP_COMPARE_EXECUTION_CONTRACT.md",
+      "domain": "compare",
+      "status": "SCOPED",
+      "scope": "Desktop Compare 真实执行合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/DESKTOP_HISTORY_KNOWLEDGE_CONTRACT.md",
+      "domain": "history-library",
+      "status": "CURRENT",
+      "scope": "Desktop 历史资料库与隐藏 interests 当前合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md",
+      "domain": "ocr",
+      "status": "CURRENT",
+      "scope": "用户显式发起的独立GLM-OCR材料任务；不自动介入普通搜索",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/ICONOGRAPHY_CONTRACT.md",
+      "domain": "icon",
+      "status": "SCOPED",
+      "scope": "图标语汇合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/NANFENG_ISLAND_CURRENT_CONTRACT.md",
+      "domain": "island",
+      "status": "CURRENT",
+      "scope": "持久生成元数据的后台展示/查看/停止；前台隐藏且展示不重发任务",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md",
+      "domain": "draft",
+      "status": "CURRENT",
+      "scope": "新对话草稿保留合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/NFAI_EXCHANGE_V1_CONTRACT.md",
+      "domain": "exchange-v1",
+      "status": "SCOPED",
+      "scope": "nfai.exchange.v1 跨端语义交换合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P0_USAGE_LEDGER_CONTRACT.md",
+      "domain": "usage",
+      "status": "SCOPED",
+      "scope": "南枫 AI P0 Usage Ledger 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md",
+      "domain": "connection-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P10-A 双路径连接能力、状态与配置表面合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P10B_DUAL_PATH_SELECTION_FEEDBACK_CONTRACT.md",
+      "domain": "connection-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P10-B 双路径选择反馈合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P1_ATTACHMENT_EGRESS_ELIGIBILITY_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P1 附件外发资格与授权投影合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P1_TASK_CONTRACT.md",
+      "domain": "product",
+      "status": "HISTORICAL",
+      "scope": "南枫 AI P1 任务合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2A_LOCAL_DATA_AND_ATTACHMENT_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-A 本地数据与附件合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2B_CAPTURE_UI_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-B 自适应捕获 UI 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2B_GALLERY_CAPTURE_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-B 相册捕获与真实验收合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2C_TEXT_CAPTURE_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-C 文本捕获与系统分享合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2D_MODEL_SETTINGS_CONTRACT.md",
+      "domain": "models",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-D 模型设置与本机凭据合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2E_OFFLINE_PROVIDER_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-E 离线 Provider 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2F_INVOCATION_LEDGER_CONTRACT.md",
+      "domain": "usage",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-F 本地 Invocation Room Ledger 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2G_MOCK_CANDIDATE_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-G 本地确认、Mock 与候选核对合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2H_KNOWLEDGE_READ_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-H 最小 Knowledge 读取合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2I_LOCAL_EXPORT_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-I 最小本地 Knowledge 导出合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2J_OPENROUTER_REGISTRY_VERIFICATION_CONTRACT.md",
+      "domain": "models",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-J OpenRouter Model Registry 只读核验合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2K_OPENROUTER_INFERENCE_TRANSPORT_CONTRACT.md",
+      "domain": "models",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-K OpenRouter 推理传输与强制门禁合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2L_REAL_SERVICE_ACCEPTANCE_CONTRACT.md",
+      "domain": "egress",
+      "status": "HISTORICAL",
+      "scope": "南枫 AI P2-L 真实服务验收准备合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2M_P3_BACKGROUND_BRIDGE_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-M → P3 后台桥接合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P2M_REAL_TEXT_EXECUTION_CONTRACT.md",
+      "domain": "egress",
+      "status": "HISTORICAL",
+      "scope": "南枫 AI P2-M 一次真实文本执行合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3A_CONVERSATION_MESSAGE_TREE_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-A Conversation / Message Tree 本地持久化合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md",
+      "domain": "message-actions",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-B 类型化流事件与本地对话运行状态机合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3C_CONVERSATION_ACTION_LINEAGE_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-C 继续、重试与换模型重答合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3D_PRESENTATION_VIRTUALIZATION_DRAFT_RECOVERY_CONTRACT.md",
+      "domain": "message-actions",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-D 安全展示、长会话虚拟化与草稿恢复合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3E_CONVERSATION_MANAGEMENT_SEARCH_EXPORT_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-E 会话管理、搜索与本地导出合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3F_CONVERSATION_EDIT_BRANCH_HISTORY_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-F 用户消息编辑与分支历史合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3G_CONVERSATION_ATTACHMENT_LIFECYCLE_CONTRACT.md",
+      "domain": "attachment-lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-G 对话附件本地引用与生命周期合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3H_CONVERSATION_ATTEMPT_HISTORY_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-H 会话本地尝试历史投影合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3I_CONVERSATION_REAL_TEXT_EXECUTION_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-I ConversationRealTextExecution 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+      "domain": "egress",
+      "status": "CURRENT",
+      "scope": "普通发送与显式重试的准确材料/接收方授权；旧账本读取不授予外发",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3_OPENAI_COMPATIBLE_PROVIDER_HTTP_TRANSPORT_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3 OpenAI-compatible Provider HTTP Transport 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3_PROVIDER_TRANSPORT_BOUNDARY_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3 Provider Transport Boundary 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3_REAL_TEXT_EXECUTION_COORDINATOR_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3 RealTextExecutionCoordinator 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P3_REAL_TEXT_EXECUTION_PREFLIGHT_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3 RealTextExecution Preflight / Orchestrator 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-A Projects、项目指令与知识范围合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4B_CONTEXT_SELECTION_OWNERSHIP_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-B 上下文选择所有权与 Memory 边界合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4C_MEMORY_GOVERNANCE_CONTRACT.md",
+      "domain": "memory",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-C 长期 Memory 本地治理合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4D_EXPLICIT_CONTEXT_BODY_SELECTION_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-D L0-L3 Context 正文选择与显式控制合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-E 本地 Knowledge 检索与显式 Context 选择合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4F_LOCAL_KNOWLEDGE_DEDUPLICATION_CANDIDATES_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-F 本地 Knowledge 去重候选合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4G_LOCAL_KNOWLEDGE_RELATIONSHIPS_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-G 本地 Knowledge 人工关系合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4H_MARKDOWN_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-H 本地 Markdown Knowledge 导入/导出与可恢复队列合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4I_OFFLINE_EVAL_BASELINE_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-I 版本化离线 Eval 基线合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4J_LOCAL_CONTEXT_COMPRESSION_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-J 版本化本地 Context 摘要/压缩合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4K_LOCAL_CONTEXT_PREVIEW_STABLE_PREFIX_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-K 本机抽取预览与稳定前缀元数据合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4L_JSON_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-L 版本化 JSON Knowledge Adapter 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4M_L3_LOCAL_ACTION_TRACE_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-M L3 本地短期操作轨迹合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4N_PDF_TEXT_KNOWLEDGE_ADAPTER_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-N 本地 PDF 文本资料 Adapter 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P4O_HTTPS_WEB_TEXT_SNAPSHOT_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-O 严格 HTTPS 网页文本快照 Adapter 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md",
+      "domain": "settings",
+      "status": "SCOPED",
+      "scope": "P5-A Android 自适应布局与无障碍产品化基线合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md",
+      "domain": "settings",
+      "status": "SCOPED",
+      "scope": "P5-A 更多本地控制面入口合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P5B_BACKGROUND_CANCELLATION_BATTERY_CONTRACT.md",
+      "domain": "island",
+      "status": "SCOPED",
+      "scope": "南枫 AI P5-B Android 后台、取消/恢复与电量产品化基线合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P5C_PRIVACY_DATA_DIAGNOSTICS_CONTRACT.md",
+      "domain": "privacy",
+      "status": "SCOPED",
+      "scope": "南枫 AI P5-C 隐私、数据管理与安全诊断合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md",
+      "domain": "backup",
+      "status": "SCOPED",
+      "scope": "南枫 AI P5-D 本地备份、恢复与交付合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6A_ANDROID_TEXT_CONVERSATION_EXCHANGE_EXPORT_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6-A Android 文本会话跨端交换导出合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6B_DESKTOP_LOCAL_WORKBENCH_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6-B：离线 Desktop 工作台、本地所有权与交换导入导出合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6C_DESKTOP_LOCAL_WRITE_WORKBENCH_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6-C：Desktop 本地领域写入、可逆动作与模型/成本 metadata 工作台合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "domain": "attachments",
+      "status": "CURRENT",
+      "scope": "选择/本机解析/私有副本到已授权普通发送的材料桥；本模块不自行外发",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6D_COMPACT_CHAT_SCROLL_AND_WINDOW_RECOVERY_CONTRACT.md",
+      "domain": "scroll",
+      "status": "SCOPED",
+      "scope": "P6-D 紧凑态消息长列表滚动与窗口恢复合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6D_DESKTOP_SIDEBAR_INFORMATION_ARCHITECTURE_CONTRACT.md",
+      "domain": "desktop-conversation",
+      "status": "SCOPED",
+      "scope": "P6-D 双端侧栏生产信息架构增量合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6D_MACOS_GUI_ACCEPTANCE_AND_DESKTOP_DELIVERY_CONTRACT.md",
+      "domain": "desktop-conversation",
+      "status": "HISTORICAL",
+      "scope": "P6-D：macOS Tauri GUI 黑箱验收与 Desktop 交付收口合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6D_WINDOWS_NATIVE_DELIVERY_CONTRACT.md",
+      "domain": "desktop-conversation",
+      "status": "SCOPED",
+      "scope": "P6-D Windows 原生交付独立合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md",
+      "domain": "temporary",
+      "status": "CURRENT",
+      "scope": "仅本地临时消息与隔离24小时恢复记录；不接Provider/普通同步",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md",
+      "domain": "search-preview",
+      "status": "SCOPED",
+      "scope": "P6-F2-E Audio & Generic File Adapter 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+      "domain": "search-preview",
+      "status": "SCOPED",
+      "scope": "P6-F2 统一搜索、搜索历史与本地内容预览合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+      "domain": "message-actions",
+      "status": "SCOPED",
+      "scope": "P6-F Conversation Transcript Presentation & Message Actions Contract",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "domain": "models",
+      "status": "CURRENT",
+      "scope": "普通会话手动/Auto、下次默认和冻结身份；旧P6-G实验不裁决生产候选",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6H_CHATGPT_EXPORT_JSON_ADAPTER_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "南枫 AI P6-H ChatGPT export JSON Adapter 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "南枫 AI P6-I Claude export JSON Adapter 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6J_NANFENG_KNOWLEDGE_EXPORT_ADAPTER_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "南枫 AI P6-J 南枫知识库对话／知识 export Adapter 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6K_ZIP_ATTACHMENT_OCCURRENCE_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "P6-K ChatGPT ZIP 附件口径契约",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6_ANDROID_V2_ATOMIC_RESTORE_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 Android v2 原子恢复合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6_ANDROID_V2_OPEN_DOCUMENT_RESTORE_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 Android v2 OpenDocument 受控恢复合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6_WORKSPACE_EXCHANGE_MAPPER_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 工作区语义交换 Mapper 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6_WORKSPACE_EXCHANGE_V2_ANDROID_IMPORT_FOUNDATION_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 工作区交换 v2 Android 严格读取基础合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 工作区交换 v2 Desktop 私有暂存、原子导入与回导合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 工作区交换 v2 字段保真与拒绝合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P7A_LOCAL_E2EE_SYNC_FOUNDATION_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-A 本地跨端端到端加密快照基础合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-B 账号级本机密钥与同步状态机合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P7C_REAL_SERVICE_CONFIGURATION_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-C Google/Supabase 可部署服务合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P7D_SYNC_COORDINATOR_AND_ACCOUNT_UI_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-D 冲突、自动同步协调器与账号页合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P7E_CROSS_DEVICE_RESTORE_AND_DEPLOYMENT_READINESS_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-E 跨设备加密恢复、冲突与部署验证就绪合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "CURRENT",
+      "scope": "Google登录后的已选对话direct同步、账号/区域隔离；不以旧恢复码判资格",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md",
+      "domain": "agent-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P8-A 受控 Agent 本地基础合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P8B_READ_ONLY_AGENT_LEDGER_STATUS_CONTRACT.md",
+      "domain": "agent-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P8-B 受控本地 Agent harness 与生产只读状态合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P8C_LOCAL_VISIBLE_AGENT_INSPECT_CONTRACT.md",
+      "domain": "agent-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P8-C 本地可见受控运行与退出审计合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P8D_LOCAL_EXIT_RED_TEAM_AUDIT_CONTRACT.md",
+      "domain": "agent-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P8-D 本地退出与红队审计合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P9A_READ_ONLY_ECOSYSTEM_ENTRY_AUDIT_CONTRACT.md",
+      "domain": "integration-local",
+      "status": "EXPERIMENTAL",
+      "scope": "南枫 AI P9-A 最小只读生态入口审计合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/P9B_LOCAL_TEST_ONLY_INTEGRATION_CONTRACT.md",
+      "domain": "integration-local",
+      "status": "EXPERIMENTAL",
+      "scope": "南枫 AI P9-B 本地 Integration Contract 与 LOCAL_TEST_ONLY harness 合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
+      "domain": "cache",
+      "status": "SCOPED",
+      "scope": "独立本地精确引用索引；不替代搜索检查点/Provider缓存或普通发送",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "domain": "relay",
+      "status": "CURRENT",
+      "scope": "RC预设/渠道/别名/历史身份；联网规则归C12，准确授权归P3J",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    },
+    {
+      "path": "docs/SETTINGS_CENTER_CONTRACT.md",
+      "domain": "settings",
+      "status": "SCOPED",
+      "scope": "南枫 AI Settings Center 历史与领域边界合同",
+      "knownDrift": [],
+      "coverage": "full structure/scope; domain owners and reviewed conflict hotspots; no runtime acceptance"
+    }
+  ],
+  "scope": "offline metadata/owner links and explicitly reviewed obsolete clauses; not complete semantic or runtime proof"
+}

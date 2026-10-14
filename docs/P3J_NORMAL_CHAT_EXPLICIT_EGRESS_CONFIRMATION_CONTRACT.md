@@ -1,9 +1,28 @@
 # 南枫 AI P3-J 普通聊天显式外发确认、运行状态与失败恢复合同
 
-日期：2026-08-15  
-状态：**合同与纯静态守卫已建立；无 production 注册、无可见布局改动、无 Provider/HTTP/Key/Room schema 改动。2026-08-16 仅隔离 Composer 的错误 confirmation callback。**
+<!-- contract-governance:start -->
+> **合同口径：现行领域合同。** 领域入口：[ 普通发送授权与执行 ](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 普通发送与显式重试的准确材料/接收方授权；旧账本读取不授予外发
+<!-- contract-governance:end -->
 
-## 结论与唯一 owner
+日期：2026-08-15  
+历史阶段状态：**合同与纯静态守卫已建立；无 production 注册、无可见布局改动、无 Provider/HTTP/Key/Room schema 改动。2026-08-16 仅隔离 Composer 的错误 confirmation callback。**
+
+## 当前普通发送与授权口径
+
+当前Android普通发送链为Compose/ViewModel → NormalChatEgressAuthorization → NormalChatOpenRouterExecutor → Provider Adapter／HTTP／SSE → ConversationRuntime／Room正文及独立调用计量；后台由已有生成服务持有请求与持久检查点。Mac为ESM → Tauri prepare／submit／retry → desktop_ordinary_chat_v1／SQLite。选择、预览或打开设置不自动外发。
+
+授权绑定本次准确材料、回答Provider／模型及已披露的检索接收方，不因文档整理新增重复确认。新发送使用当前授权版本；历史disclosureVersion保留原值，读取兼容不产生网络权限。具体当前范围、版本及已验API别名见[RelayCore合同](RELAYCORE_MODEL_CURRENT_CONTRACT.md)和[模型架构](model-service/MODEL_SERVICE_ARCHITECTURE.md)。
+
+按用户2026-10-13明确要求，Android／Mac Composer正常与重试状态不再常驻接收方、附件清单及费用的重复说明；不新增同类显而易见提示。接收方与准确材料继续在既有发送选择／授权owner冻结并校验，去掉文案不扩大授权，不恢复旧授权权限；必要失败状态与真实账目仍保留。
+
+普通／工作生成和显式重试沿原持久owner收尾；UNKNOWN不自动重发，不换Provider／模型／协议。临时聊天仍只追加本地消息，不读取模型凭据或发送网络请求。当前恢复、上下文、计量与后台规则分别归运行时、费用和南枫岛合同。
+
+下方P3-J记录约束当时的fail-closed预备owner／静态守卫，不得将其“只有本地USER”“尚无生产注册”等历史阶段状态套到现在的普通生成流程。
+
+## 历史P3-J预备链与验收记录（2026-08-15／16）
+
+### 结论与唯一 owner
 
 普通聊天未来若获得单独授权接入真实文本执行，唯一生产编排 owner 必须是新增的
 `NormalChatRealTextExecutionOwner`。它是一个明确命名、可审计的应用层 owner；不是
@@ -12,7 +31,7 @@
 Ledger 任一方的反向入口。
 
 源码存在 fail-closed `NormalChatRealTextExecutionOwner` 及其 ViewModel/AppContainer 注入，但它没有 P3
-ports、confirm/send API、credential、transport、receipt 或 ledger 能力，且 Composer 不再触发它。当前普通
+ports、confirm/send API、credential、transport、receipt 或 ledger 能力，且 Composer 不再触发它。当时普通
 聊天的发送链仍然只有：
 
 ```text
@@ -24,7 +43,7 @@ chat-first Composer → ConversationFoundationViewModel.submitCurrentDraft()
 这不是已接通、已确认或已调用的替代说法。P2-M 的桥接只处理固定合成文本和默认拒绝端口，
 其结果被 legacy executor 忽略；它永远不能成为普通聊天的快捷入口。
 
-## 冻结布局内允许的未来新增内容
+### 冻结布局内允许的未来新增内容
 
 `UI_LAYOUT_FREEZE_BASELINE.md` 继续优先。未来实现只能在既有 chat-first 信息架构中增加下列
 必要内容，不能移动、改尺、重着色、重排或合并现有 Composer、菜单、顶部栏、抽屉或消息控件。
@@ -39,9 +58,9 @@ chat-first Composer → ConversationFoundationViewModel.submitCurrentDraft()
 本合同不固定新增文案的视觉设计；它只冻结必须披露的内容、状态与交互门。任何实际 Compose
 变更仍须先按冻结基线单独获得视觉授权。
 
-## 显式外发确认合同
+### 显式外发确认合同
 
-### 何时可出现
+#### 何时可出现
 
 1. 只在普通 `CHAT`、用户对当前非空草稿发起一次“请求第三方生成”的明确意图后出现。
    当前普通 `submitCurrentDraft()` 的本地提交语义在本增量不变，不得偷偷转换为外发。
@@ -51,7 +70,7 @@ chat-first Composer → ConversationFoundationViewModel.submitCurrentDraft()
 3. `RealTextExecutionPreflightOrchestrator` 仅返回 `ReadyPlan` 或受限 `Blocked`。只有 `ReadyPlan`
    与同一冻结 scope 匹配，才可以显示可确认面；`Blocked` 只显示安全原因和本机下一步。
 
-### 确认面必须同时展示
+#### 确认面必须同时展示
 
 - 第三方服务商的显示名，以及本次精确 provider handle。
 - 本次模型显示名、精确 model ID、preset 和已验证 registry snapshot；不得拿 P6-G 本地 fixture
@@ -71,7 +90,7 @@ chat-first Composer → ConversationFoundationViewModel.submitCurrentDraft()
 模型/registry/价格变化、附件出现，或超过 **5 分钟**，均立即过期、撤销勾选并回到重新 preflight；
 不能用旧确认继续发送。
 
-## 未来唯一接线顺序
+### 未来唯一接线顺序
 
 只有 `NormalChatRealTextExecutionOwner` 可以把确认后的瞬时文本连接到 P3；所有箭头均由该 owner
 正向调用，任何后端端口不得反向触发 UI 或 egress。
@@ -101,7 +120,7 @@ chat-first Composer → ConversationFoundationViewModel.submitCurrentDraft()
 4. 当前 `OpenAiCompatibleProviderTransport` 的 disabled client、P3 coordinator 默认拒绝 ports 和
    P3-I/Room test adapters 继续 fail-closed/test-only；不可将它们注册为生产入口。
 
-## 运行状态、取消与恢复
+### 运行状态、取消与恢复
 
 | 可见状态 | 最小事实 | 用户可做什么 | 禁止的推断或行为 |
 |---|---|---|---|
@@ -122,7 +141,7 @@ chat-first Composer → ConversationFoundationViewModel.submitCurrentDraft()
 credential 或执行 transport。任何失败后的“重试”都必须是新的草稿 scope、新 execution/invocation/
 attempt identity、新费用确认和新的未勾选确认框。
 
-## 调用记录语义
+### 调用记录语义
 
 - 一条 `ConversationRealTextExecution` receipt 表示一次逻辑执行；`Invocation` 连接会话 assistant
   位置；`ProviderAttempt` 表示一个物理外发尝试。三者 ID、request fingerprint、requested/actual
@@ -136,7 +155,7 @@ attempt identity、新费用确认和新的未勾选确认框。
 - 本地 fixture、scripted transport、P2-M 历史和 test port 必须显式保持各自来源；不得合并、排序或
   贴标为普通聊天 Provider 成功。
 
-## 后端入口矩阵与验收
+### 后端入口矩阵与验收
 
 | 入口/owner | 当前事实 | P3-J 后续允许的职责 | 当前禁止 |
 |---|---|---|---|
@@ -147,7 +166,7 @@ attempt identity、新费用确认和新的未勾选确认框。
 | P3 preflight/coordinator/P3-I | 已实现但未在普通聊天注册 | 作为 owner 的受限端口 | 把 Ready/receipt 当 egress 授权或真实成功 |
 | Provider/credential/HTTP | disabled 或未授权生产 broker/client | 只在最终确认后的 owner 调用栈 | P2-M 复用、附件 egress、自动网络/重试 |
 
-### 自动验收（未来实现前不得跳过）
+#### 自动验收（未来实现前不得跳过）
 
 1. 静态/单元：普通 `submitCurrentDraft()` 仍无 Provider；无 `NormalChatRealTextExecutionOwner`
    注册时，P3 端口只能 fail-closed。确认字段、未勾选默认、scope/TTL 过期、附件拒绝、重复点击与
@@ -158,7 +177,7 @@ attempt identity、新费用确认和新的未勾选确认框。
 3. transport fake：严格 provider/model/body、取消、401/402/429/timeout/5xx/解析失败映射、安全
    metadata 白名单以及无自动 retry；不以 fake 代替真实服务。
 
-### 真实验收（需要新授权，当前未执行）
+#### 真实验收（需要新授权，当前未执行）
 
 1. 在正常 chat-first Composer 路径实际看见未勾选确认、服务商/模型/文本类别/费用/附件排除，并验证
    取消、过期、重复点击与失败恢复均不移动冻结布局。
@@ -170,7 +189,7 @@ attempt identity、新费用确认和新的未勾选确认框。
 在新的实现授权到来前，本合同的正确状态就是：普通聊天本地提交保持不变，P3 普通聊天 egress 保持
 未注册且 fail-closed。
 
-## 2026-08-16 MM-O3-A P3-J WIP 隔离修正
+### 2026-08-16 MM-O3-A P3-J WIP 隔离修正
 
 审查发现 `ConversationWorkspace` 曾在同一个 Composer `onSubmit` 回调中先创建未注册的
 `ExternalSendConfirmation`、再调用既有本地 `onSubmitDraft()`。这会使本地草稿提交/清理之后仍出现
@@ -180,3 +199,16 @@ attempt identity、新费用确认和新的未勾选确认框。
 此修正不得改变任何 Composable 结构、测量、位置、尺寸、颜色、圆角、阴影、文案或 Dialog 外观。
 `P3JNormalChatExplicitEgressContractsTest` 同时锁定本地 `onSubmitDraft()`、无 confirmation callback、既有
 工作/聊天计数更新，以及 composer 的既有 overlay、padding、36dp token 与 `DraftComposer` 结构。
+
+## 当前Luna辅助接收方授权
+
+Android复用v3的精确auxiliaryRecipientModelIds，将当前Luna预设、Provider/API ID与原回答模型、文字及附件身份／hash同时纳入发送指纹；后台Intent完整传递该映射。旧Sol辅助映射或旧独立服务授权不满足本次Luna校验，新发送不继承旧搜索接收方。
+
+Mac的Lunareceipt版本为`normal-chat-luna-search-v1`，包含`OPENROUTER / GPT_6_LUNA / openai/gpt-6-luna`和`SHA256(JSON([trim后的本次文字,排序后的不可变附件ID]))`。正常发送在读Key／建立连接前核验；显式重试绑定原文字及原附件，不使用后来编辑的草稿。无receipt、旧版本、模型或材料变化均拒绝，不能靠读取兼容扩大外发。普通自身联网沿用原发送语义，不增设弹窗或常驻按键。来源、失败与计量唯一正文见[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)。
+
+## 历史附件独立搜索服务授权（只读）
+
+以下用于解释旧v3记录；新发送及重试拒绝旧服务grant，不把它作为Luna授权。
+
+
+独立搜索服务不是auxiliary模型：serviceId=`ZHIPU_WEB_SEARCH`、engineId=`search_pro`；正常Send前在原入口显示接收本次所有附件公开核验要点、原选模型回答及可能费用。Android的v3指纹绑定auxiliaryServiceEngines，后台Intent严格保留映射；旧无服务字段v3及历史v2只读不扩大授权。Mac服务receipt自身为normal-chat-egress-v3，并校验当前文字与不可变附件ID材料指纹。无授权／材料变化不读Key或发送。显式重试从原材料重新构建当前已披露服务授权，仍用原回答模型；读取历史及后台UNKNOWN恢复不构成新发送。独立服务接口、覆盖、空来源和计量唯一规则见[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)。

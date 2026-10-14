@@ -1,5 +1,10 @@
 # 南枫 AI P4-J 版本化本地 Context 摘要/压缩合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 普通生成上下文与临时隔离 ](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P4-J 版本化本地 Context 摘要/压缩合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：P4 的第十个本地增量；Schema 保持 14。P4-J 只提供由用户明确选择正文派生的、确定性抽取式压缩 IR；不构造 Prompt、RunSpec、Authorization 或 Provider 请求，不读取 Key、不发 HTTP、不产生费用或图片外发。
 
@@ -62,4 +67,4 @@ P4-J 必须先委托 P4-D；若 P4-D 拒绝缺失会话、Project 不一致、�
 
 定向合同至少覆盖：默认零来源、仅显式 P4-D 正文、跨 scope/过期/高敏整体拒绝、稳定排序、Unicode code point 截断、前后片段与省略计数、来源 hash/revision、Markdown/代码/恶意文本惰性保真、无 Room/Export/egress 与 P4-B/P4-D 不变。
 
-达到领域合同、定向/全量测试、Lint、正式签名构建和仅 `emulator-5554` 的可见本机预览（如本阶段接入 UI）后停止，并分别报告证据。它们不替代真实 Provider、Token/费用、模型质量、真实长会话性能、OPPO、图标或发布验收。P4-J 不是 P4 或总方案终点；语义摘要、缓存、Prompt/RunSpec、真实 egress、JSON/网页/附件 Adapter 仍须各自另立合同。
+达到领域合同、定向/全量测试、Lint、正式签名构建和仅 当次隔离模拟器 的可见本机预览（如本阶段接入 UI）后停止，并分别报告证据。它们不替代真实 Provider、Token/费用、模型质量、真实长会话性能、OPPO、图标或发布验收。P4-J 不是 P4 或总方案终点；语义摘要、缓存、Prompt/RunSpec、真实 egress、JSON/网页/附件 Adapter 仍须各自另立合同。

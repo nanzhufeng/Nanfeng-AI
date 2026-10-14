@@ -40,7 +40,7 @@ class OfflineEvalViewModel(private val eval: RunOfflineEvalUseCase, private val 
 @Composable fun OfflineEvalCard(onOpen: () -> Unit) = WhiteCard {
     Text("离线 Eval 基线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(6.dp)); Text("版本化本地回归、红队和人工审阅。仅前台运行；中断不会伪造继续，需手动重新运行。不会调用模型、发送内容或报告 Token、TTFT、费用、缓存收益或模型质量。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-    Spacer(Modifier.height(12.dp)); Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { Text("打开本地 Eval") }
+    Spacer(Modifier.height(12.dp)); Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)) { Text("打开本地 Eval") }
 }
 
 @Composable fun OfflineEvalPage(state: OfflineEvalUiState, onStart: () -> Unit, onSelect: (EvalRun) -> Unit, onExport: () -> Unit, onAlias: (String) -> Unit, onCase: (EvalCaseId) -> Unit, onScore: (String) -> Unit, onDimension: () -> Unit, onSaveScore: () -> Unit, comparison: EvalComparison?) = Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {

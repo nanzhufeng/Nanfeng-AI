@@ -1,5 +1,10 @@
 # P8-C 本地可见受控运行与退出审计合同
 
+<!-- contract-governance:start -->
+> **合同口径：本地实验／独立专项合同。** 领域入口：[ 本地受控Agent实验 ](P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P8-C 本地可见受控运行与退出审计合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：完成。Android 最小可见本地闭环与 Desktop 用户可达只读 inspect 页面均已验证；P9 尚未开始。
 
@@ -25,7 +30,7 @@ Android Settings → P8ControlledAgentViewModel → P8CProductionLocalAgentContr
 
 1. Android 真实 UI 证明空账本、计划、显式确认成功、暂停→重启→恢复、取消→重启和 durable event order。
 2. Desktop 需要完成用户可达的只读 inspect 页面，并在实际 `.app` 回读“无 production executor”；不得新增执行 command。
-3. 定向与全量 JVM、lint、正式 Debug/Release 签名、同签名 emulator 覆盖/base.apk hash；Desktop frontend/Rust/Tauri/ad-hoc verify 均分别记录。
+3. 定向与全量 JVM、lint、正式 Debug/Release 签名、同签名 emulator 覆盖/base.apk hash；Desktop frontend/Rust/Tauri与当前交付入口的验签 均分别记录。
 4. UNKNOWN、budget、injection、duplicate receipt/event、failure/cancel、timeout/crash、rollback 等仍由 P8-A/B test-only harness 回归，不得把 fixture 说成真实工具成功。
 
 P8-C 未满足以上全部条件前，不进入 P9。真实 Provider、外部工具、高风险动作、OPPO/Windows 和发布仍为独立授权门。

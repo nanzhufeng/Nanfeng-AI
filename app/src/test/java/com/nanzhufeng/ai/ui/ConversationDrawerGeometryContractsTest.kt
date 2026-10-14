@@ -20,7 +20,7 @@ class ConversationDrawerGeometryContractsTest {
         assertTrue(drawer.contains("drawerShape = RectangleShape"))
         assertTrue(drawer.contains("windowInsets = WindowInsets(0, 0, 0, 0)"))
         assertTrue(source.contains("Modifier.fillMaxSize().statusBarsPadding().padding("))
-        assertTrue(row.contains("val rowHeight = if (batchEditing) 44.dp else 36.dp"))
+        assertTrue(row.contains("val baseRowHeight = if (batchEditing) 44.dp else 36.dp"))
         assertTrue(source.contains("verticalArrangement = Arrangement.spacedBy(8.dp)"))
     }
 }

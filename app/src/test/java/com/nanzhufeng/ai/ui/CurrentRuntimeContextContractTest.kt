@@ -29,7 +29,8 @@ class CurrentRuntimeContextContractTest {
         assertTrue(current.contains("不连接模型服务"))
         assertTrue(settings.contains("ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md"))
         assertTrue(conversation.contains("ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md"))
-        assertTrue(agents.contains("ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md"))
+        assertTrue(agents.contains("contracts/CONTRACT_INDEX.md"))
+        assertTrue(projectFile("docs/contracts/CONTRACT_INDEX.md").readText().contains("ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md"))
         assertTrue(router.contains("includeRelevantMemory = experience.memoryEnabled"))
         assertTrue(router.contains("includeRelevantKnowledge = experience.historyLibraryEnabled"))
         assertTrue(broker.contains("const val MEMORY_LIMIT = 6"))
@@ -58,9 +59,10 @@ class CurrentRuntimeContextContractTest {
         val masterGate = projectFile("docs/MASTER_PLAN_COMPLETION_AUDIT_20260816.md")
             .readLines().take(45).joinToString("\n")
         val handoffGate = projectFile("docs/CURRENT_HANDOFF.md")
-            .readLines().take(96).joinToString("\n")
+            .readLines().take(3).joinToString("\n")
+        val contractIndex = projectFile("docs/contracts/CONTRACT_INDEX.md").readText()
 
-        for (source in listOf(masterGate, handoffGate)) {
+        for (source in listOf(masterGate, contractIndex)) {
             assertTrue(source.contains("ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md"))
             assertTrue(source.contains("ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md"))
             assertTrue(source.contains("ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md"))
@@ -68,6 +70,8 @@ class CurrentRuntimeContextContractTest {
         assertTrue(masterGate.contains("2026-09-03 当前总控门"))
         assertTrue(masterGate.contains("[当前交接](CURRENT_HANDOFF.md) 顶部"))
         assertTrue(handoffGate.contains("当前合同读取门"))
+        assertTrue(handoffGate.contains("contracts/CONTRACT_INDEX.md"))
+        assertTrue(handoffGate.contains("CONTRACT_GOVERNANCE_CURRENT.md"))
         assertFalse(masterGate.contains("## 2026-08-31 当前总控门"))
         assertFalse(masterGate.contains("2026-08-28 当前总控门"))
     }

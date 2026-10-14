@@ -1,0 +1,12 @@
+{
+  "identifier": "generation-island-capability",
+  "description": "Presentation-only island; no workspace bodies, credentials, files or Provider commands.",
+  "windows": [
+    "generation-island"
+  ],
+  "permissions": [
+    "allow-generation-island",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

@@ -58,27 +58,50 @@ class TaskRecoveryAudit(
     private val runtime: ConversationRuntimeRepository,
     private val applyRuntimeEvent: ApplyConversationRuntimeEventUseCase,
     private val clock: Clock,
+    private val sendAttempts: NormalChatSendAttemptStore? = null,
+    private val isConversationRunning: (ConversationId) -> Boolean = { false },
 ) {
     fun recoverAfterProcessStart(): TaskRecoveryAuditResult {
+        val conversationInterrupted = recoverInterruptedConversations()
+        return recoverOtherTasksAfterProcessStart().copy(conversationInterrupted = conversationInterrupted)
+    }
+
+    /** Must finish before the first transcript projection; never sends a network request. */
+    fun recoverInterruptedConversations(): Int {
         val conversationInterrupted = conversationList.list(ConversationListScope.ALL).count { conversation ->
-            val state = runtime.stateFor(conversation.id) ?: return@count false
-            if (state.status != ConversationRuntimeStatus.STREAMING) return@count false
-            val result = applyRuntimeEvent.execute(
-                RuntimeFailed(
-                    eventId = AiRuntimeEventId.new(), invocationId = state.invocationId,
-                    conversationId = state.conversationId, messageId = state.messageId,
-                    sequence = state.nextExpectedSequence, emittedAt = clock.instant(),
-                    safeErrorCode = "INTERRUPTED", security = AiRuntimeSecurityMetadata("LOCAL_PROCESS_RECOVERY"),
-                ),
-            )
-            result is ConversationRuntimePersistenceResult.Applied || result is ConversationRuntimePersistenceResult.Replayed
+            if (isConversationRunning(conversation.id)) return@count false
+            val state = runtime.stateFor(conversation.id)
+            val recovered = if (state?.status == ConversationRuntimeStatus.STREAMING) {
+                val result = applyRuntimeEvent.execute(
+                    RuntimeFailed(
+                        eventId = AiRuntimeEventId.new(), invocationId = state.invocationId,
+                        conversationId = state.conversationId, messageId = state.messageId,
+                        sequence = state.nextExpectedSequence, emittedAt = clock.instant(),
+                        safeErrorCode = "PROCESS_INTERRUPTED", security = AiRuntimeSecurityMetadata("LOCAL_PROCESS_RECOVERY"),
+                    ),
+                )
+                result is ConversationRuntimePersistenceResult.Applied || result is ConversationRuntimePersistenceResult.Replayed
+            } else false
+            if (state?.status != ConversationRuntimeStatus.STREAMING || recovered) {
+                sendAttempts?.findLatestForConversation(conversation.id)?.let { attempt ->
+                    sendAttempts.transition(
+                    attempt.attemptId,
+                    setOf(NormalChatSendAttemptStatus.PENDING, NormalChatSendAttemptStatus.SENDING,
+                        NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING),
+                    NormalChatSendAttemptStatus.UNKNOWN, clock.instant(), "PROCESS_INTERRUPTED",
+                    )
+                }
+            }
+            recovered
         }
-        return TaskRecoveryAuditResult(
+        return conversationInterrupted
+    }
+
+    fun recoverOtherTasksAfterProcessStart(): TaskRecoveryAuditResult = TaskRecoveryAuditResult(
             markdownInterrupted = markdown.recoverInterrupted(),
             jsonInterrupted = json.recoverInterrupted(),
             pdfInterrupted = pdf.recoverInterrupted(),
             webInterrupted = web.recoverInterrupted(),
-            conversationInterrupted = conversationInterrupted,
+            conversationInterrupted = 0,
         )
-    }
 }

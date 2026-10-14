@@ -1,0 +1,10 @@
+{
+  "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt": "49e73c559fca0823a442e87948df09b1d5cbca9e8fab048485e3b754cadfc5ef",
+  "desktop/src-tauri/src/attachment_web_search_v1.rs": "030a70a5d97eb53be26b1abc840ae7cdd14c59884d61831622658d05e4a8ac1d",
+  "protocol/fixtures/attachment-report-facts-v1.json": "4ca52100f99ace2897c1e8a2e4445fe8e976b319c5a4d2711745a5e5d806282c",
+  "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchCoordinator.kt": "c70ae63a7f9238a666c0789c9fbe9debaf5f19d75d5d6ec67c7f52766e333387",
+  "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchCheckpointCache.kt": "140274281ca2dab421285cf3cdc4ce565837405847e7b246bdfd474241c61742",
+  "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "762602f6f8ea54d45f19f77aad9a864c5d2efde6ce42a114e165d1cab82230ba",
+  "desktop/src-tauri/src/attachment_web_search_execution_v1.rs": "c14d521362d82a5a16dbcce4c397b0adc43c0ae5e2feba962ecae8c9846d384e",
+  "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md": "a5ec738a7bd8528c50931e72b01ad77dc2baf71a1d914e1ac9f8fddf5924af47"
+}

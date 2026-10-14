@@ -81,7 +81,7 @@ commands.allow = ["upsert_desktop_model_metadata"]
 [[permission]]
 identifier = "allow-desktop-p6g-model-selection"
 description = "Allows only revisioned local catalog candidates, global tier, one ordinary-conversation manual model override, conversation-local style/web-search preferences, and safe route metadata. It grants no API key, URL, request body, Prompt, HTTP, Provider invocation, cache body, export, filesystem or temporary-conversation access."
-commands.allow = ["read_desktop_p6g_catalog", "read_desktop_p6g_global_default", "upsert_desktop_p6g_catalog_candidate", "remove_desktop_p6g_catalog_candidate", "read_desktop_p6g_selection", "set_desktop_p6g_global_default", "set_desktop_p6g_conversation_override", "clear_desktop_p6g_conversation_override", "set_desktop_conversation_preferences", "evaluate_desktop_p6g_auto_route"]
+commands.allow = ["read_desktop_p6g_catalog", "read_desktop_p6g_global_default", "upsert_desktop_p6g_catalog_candidate", "remove_desktop_p6g_catalog_candidate", "read_desktop_p6g_selection", "set_desktop_p6g_global_default", "set_desktop_new_conversation_model", "set_desktop_p6g_conversation_override", "clear_desktop_p6g_conversation_override", "set_desktop_conversation_preferences", "evaluate_desktop_p6g_auto_route"]
 
 [[permission]]
 identifier = "allow-inspect-p8-agent-runs"
@@ -226,7 +226,7 @@ commands.allow = ["write_desktop_markdown_to_selected_path"]
 [[permission]]
 identifier = "allow-desktop-model-service-settings"
 description = "Allows the latest Android model-service settings contract: safe provider projections, revisioned local selection, system-Keychain credential save or explicit reveal, and an explicit fixed-endpoint connection probe. It grants no arbitrary URL, hidden credential read, background test, prompt, conversation or model invocation."
-commands.allow = ["read_desktop_model_service_settings", "save_desktop_model_service_settings", "reveal_desktop_model_service_credential", "test_desktop_model_service_connection"]
+commands.allow = ["read_desktop_model_service_settings", "save_desktop_model_service_settings", "set_desktop_model_service_enabled", "reveal_desktop_model_service_credential", "test_desktop_model_service_connection"]
 
 [[permission]]
 identifier = "allow-desktop-app-settings"
@@ -282,3 +282,8 @@ commands.allow = ["permanently_delete_desktop_conversation"]
 identifier = "allow-desktop-account-sync"
 description = "Allows explicit Google system-browser sign-in, safe account status readback, direct selected-conversation sync, an explicit cloud-list read, and changing only the account-owned cloud-list pin projection for an authenticated listed conversation. It grants no webview credential access, arbitrary endpoint, hidden account switching, local deletion or broad filesystem access."
 commands.allow = ["read_desktop_account_sync", "read_desktop_google_avatar", "sign_in_desktop_google_account", "sign_out_desktop_google_account", "sync_selected_desktop_conversation", "cancel_desktop_conversation_sync", "reconcile_desktop_conversation_sync", "set_desktop_periodic_sync", "choose_desktop_selected_sync_start", "list_desktop_cloud_documents", "restore_desktop_cloud_conversation", "restore_all_desktop_cloud_conversations", "set_desktop_cloud_list_pinned"]
+
+[[permission]]
+identifier = "allow-generation-island"
+description = "Read content-free generation metadata and open or stop only registered tasks."
+commands.allow = ["read_generation_island", "generation_island_action", "generation_island_visibility"]

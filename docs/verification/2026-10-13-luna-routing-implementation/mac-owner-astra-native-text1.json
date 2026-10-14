@@ -1,0 +1,131 @@
+{
+  "actualModel": "gpt-6-astra",
+  "covered": 0,
+  "files": "",
+  "ledgerCalls": [
+    {
+      "actual": "gpt-6-astra",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 54221,
+      "model": "gpt-6-astra",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "gpt-6-astra",
+      "source": null
+    }
+  ],
+  "physical": [],
+  "planned": 0,
+  "preset": "RELAYCORE_GPT_6_ASTRA",
+  "publicAnswer": "我会查阅两者的官方发布记录，核对日期和发布周期。已实际联网核验官方记录：\n\n| 版本 | 官方发布日期 | 官方来源 |\n|---|---|---|\n| Go 1.21.0 | **2023 年 8 月 8 日** | Go 官方《发布历史》明确记录该日期。([go.dev](https://go.dev/doc/devel/release?utm_source=openai)) |\n| Firefox 136.0 | **2025 年 3 月 4 日** | Firefox 官方发布说明确认当天首次向正式版用户提供。([mozilla.org](https://www.mozilla.org/en-US/firefox/136.0/releasenotes/)) |\n\n**发布节奏：**以这些版本所处时期的功能版本为口径，Go 约 **每半年**发布一次；Firefox 当时约 **每 4 周**发布一次，因此 Firefox 的功能迭代更频繁。这里不计补丁版本。([go.dev](https://go.dev/wiki/Go-Release-Cycle))\n\n时间上的补充：Mozilla 已宣布从 **2026 年 9 月 1 日的 Firefox 155** 起改为每两周发布，因此“每 4 周”描述的是 Firefox 136 时期的节奏。([blog.mozilla.org](https://blog.mozilla.org/sumo/2026/08/19/firefox-new-release-cadence-and-what-to-expect/?utm_source=openai))\n\n来源：\n- [https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/136](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/136)\n- [https://go.dev/doc/devel/release](https://go.dev/doc/devel/release)\n- [https://blog.mozilla.org/sumo/2026/08/19/firefox-new-release-cadence-and-what-to-expect/](https://blog.mozilla.org/sumo/2026/08/19/firefox-new-release-cadence-and-what-to-expect/)\n- [https://blog.mozilla.org/l10n/2026/07/23/firefox-release-changes-and-localization/](https://blog.mozilla.org/l10n/2026/07/23/firefox-release-changes-and-localization/)\n- [https://go.dev/blog/all](https://go.dev/blog/all)\n- [https://www.mozilla.org/en-US/firefox/releases/](https://www.mozilla.org/en-US/firefox/releases/)\n- [https://wiki.mozilla.org/RapidRelease/Calendar](https://wiki.mozilla.org/RapidRelease/Calendar)\n- [https://hacks.mozilla.org/2019/09/moving-firefox-to-a-faster-4-week-release-cycle/](https://hacks.mozilla.org/2019/09/moving-firefox-to-a-faster-4-week-release-cycle/)\n- [https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/136](https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/136)\n- [https://wiki.mozilla.org/Release_Management/Release_Process](https://wiki.mozilla.org/Release_Management/Release_Process)\n- [https://go.googlesource.com/wiki/%2B/f2079bdd42a1fa82f305ffa66e620cdae3e144cb/Go-Release-Cycle.md](https://go.googlesource.com/wiki/%2B/f2079bdd42a1fa82f305ffa66e620cdae3e144cb/Go-Release-Cycle.md)\n- [https://release.mozilla.org/firefox/release/2017/04/17/dawn-project-faq](https://release.mozilla.org/firefox/release/2017/04/17/dawn-project-faq)\n- [https://research.mozilla.org/files/2022/10/Mozilla-Five-Walled-Gardens.pdf](https://research.mozilla.org/files/2022/10/Mozilla-Five-Walled-Gardens.pdf)\n- [https://archive.fosdem.org/2024/events/attachments/fosdem-2024-1681-the-state-of-go/slides/22088/State_of_Go_FOSDEM_2024_7JSNhAR.pdf](https://archive.fosdem.org/2024/events/attachments/fosdem-2024-1681-the-state-of-go/slides/22088/State_of_Go_FOSDEM_2024_7JSNhAR.pdf)\n- [https://www.reddit.com/r/firefox/comments/1j3bu61/firefox_1360_see_all_new_features_updates_and/](https://www.reddit.com/r/firefox/comments/1j3bu61/firefox_1360_see_all_new_features_updates_and/)\n- [https://en.wikipedia.org/wiki/Firefox_version_history](https://en.wikipedia.org/wiki/Firefox_version_history)\n- [https://zh.wikipedia.org/wiki/Go%E8%AA%9E%E8%A8%80](https://zh.wikipedia.org/wiki/Go%E8%AA%9E%E8%A8%80)\n- [https://en.wikipedia.org/wiki/Firefox](https://en.wikipedia.org/wiki/Firefox)\n- [https://www.reddit.com/r/firefox/comments/jfer26](https://www.reddit.com/r/firefox/comments/jfer26)\n- [https://www.reddit.com/r/firefox/comments/1usr4yp/firefox_will_start_pushing_new_releases_every_two/](https://www.reddit.com/r/firefox/comments/1usr4yp/firefox_will_start_pushing_new_releases_every_two/)\n- [https://www.reddit.com/r/firefox/comments/1j0yp33](https://www.reddit.com/r/firefox/comments/1j0yp33)\n- [https://pt.wikipedia.org/wiki/Mozilla_Firefox](https://pt.wikipedia.org/wiki/Mozilla_Firefox)\n- [https://www.reddit.com/r/firefox/comments/1uwa1oh/mozilla_firefox_to_follow_google_chrome_microsoft/](https://www.reddit.com/r/firefox/comments/1uwa1oh/mozilla_firefox_to_follow_google_chrome_microsoft/)\n- [https://www.reddit.com/r/PDQDeploy/comments/1j3jqhi](https://www.reddit.com/r/PDQDeploy/comments/1j3jqhi)",
+  "reopenedCheckpoints": 0,
+  "reopenedModel": "gpt-6-astra",
+  "reopenedState": "COMPLETED",
+  "requested": "gpt-6-astra",
+  "sources": [
+    [
+      "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/136",
+      "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/136"
+    ],
+    [
+      "https://go.dev/doc/devel/release",
+      "https://go.dev/doc/devel/release"
+    ],
+    [
+      "https://blog.mozilla.org/sumo/2026/08/19/firefox-new-release-cadence-and-what-to-expect/",
+      "https://blog.mozilla.org/sumo/2026/08/19/firefox-new-release-cadence-and-what-to-expect/"
+    ],
+    [
+      "https://blog.mozilla.org/l10n/2026/07/23/firefox-release-changes-and-localization/",
+      "https://blog.mozilla.org/l10n/2026/07/23/firefox-release-changes-and-localization/"
+    ],
+    [
+      "https://go.dev/blog/all",
+      "https://go.dev/blog/all"
+    ],
+    [
+      "https://www.mozilla.org/en-US/firefox/releases/",
+      "https://www.mozilla.org/en-US/firefox/releases/"
+    ],
+    [
+      "https://wiki.mozilla.org/RapidRelease/Calendar",
+      "https://wiki.mozilla.org/RapidRelease/Calendar"
+    ],
+    [
+      "https://hacks.mozilla.org/2019/09/moving-firefox-to-a-faster-4-week-release-cycle/",
+      "https://hacks.mozilla.org/2019/09/moving-firefox-to-a-faster-4-week-release-cycle/"
+    ],
+    [
+      "https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/136",
+      "https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/136"
+    ],
+    [
+      "https://wiki.mozilla.org/Release_Management/Release_Process",
+      "https://wiki.mozilla.org/Release_Management/Release_Process"
+    ],
+    [
+      "https://go.googlesource.com/wiki/%2B/f2079bdd42a1fa82f305ffa66e620cdae3e144cb/Go-Release-Cycle.md",
+      "https://go.googlesource.com/wiki/%2B/f2079bdd42a1fa82f305ffa66e620cdae3e144cb/Go-Release-Cycle.md"
+    ],
+    [
+      "https://release.mozilla.org/firefox/release/2017/04/17/dawn-project-faq",
+      "https://release.mozilla.org/firefox/release/2017/04/17/dawn-project-faq"
+    ],
+    [
+      "https://research.mozilla.org/files/2022/10/Mozilla-Five-Walled-Gardens.pdf",
+      "https://research.mozilla.org/files/2022/10/Mozilla-Five-Walled-Gardens.pdf"
+    ],
+    [
+      "https://archive.fosdem.org/2024/events/attachments/fosdem-2024-1681-the-state-of-go/slides/22088/State_of_Go_FOSDEM_2024_7JSNhAR.pdf",
+      "https://archive.fosdem.org/2024/events/attachments/fosdem-2024-1681-the-state-of-go/slides/22088/State_of_Go_FOSDEM_2024_7JSNhAR.pdf"
+    ],
+    [
+      "https://www.reddit.com/r/firefox/comments/1j3bu61/firefox_1360_see_all_new_features_updates_and/",
+      "https://www.reddit.com/r/firefox/comments/1j3bu61/firefox_1360_see_all_new_features_updates_and/"
+    ],
+    [
+      "https://en.wikipedia.org/wiki/Firefox_version_history",
+      "https://en.wikipedia.org/wiki/Firefox_version_history"
+    ],
+    [
+      "https://zh.wikipedia.org/wiki/Go%E8%AA%9E%E8%A8%80",
+      "https://zh.wikipedia.org/wiki/Go%E8%AA%9E%E8%A8%80"
+    ],
+    [
+      "https://en.wikipedia.org/wiki/Firefox",
+      "https://en.wikipedia.org/wiki/Firefox"
+    ],
+    [
+      "https://www.reddit.com/r/firefox/comments/jfer26",
+      "https://www.reddit.com/r/firefox/comments/jfer26"
+    ],
+    [
+      "https://www.reddit.com/r/firefox/comments/1usr4yp/firefox_will_start_pushing_new_releases_every_two/",
+      "https://www.reddit.com/r/firefox/comments/1usr4yp/firefox_will_start_pushing_new_releases_every_two/"
+    ],
+    [
+      "https://www.reddit.com/r/firefox/comments/1j0yp33",
+      "https://www.reddit.com/r/firefox/comments/1j0yp33"
+    ],
+    [
+      "https://pt.wikipedia.org/wiki/Mozilla_Firefox",
+      "https://pt.wikipedia.org/wiki/Mozilla_Firefox"
+    ],
+    [
+      "https://www.reddit.com/r/firefox/comments/1uwa1oh/mozilla_firefox_to_follow_google_chrome_microsoft/",
+      "https://www.reddit.com/r/firefox/comments/1uwa1oh/mozilla_firefox_to_follow_google_chrome_microsoft/"
+    ],
+    [
+      "https://www.reddit.com/r/PDQDeploy/comments/1j3jqhi",
+      "https://www.reddit.com/r/PDQDeploy/comments/1j3jqhi"
+    ]
+  ],
+  "status": "COMPLETED",
+  "webProof": true
+}

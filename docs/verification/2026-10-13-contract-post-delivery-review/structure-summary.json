@@ -1,0 +1,20 @@
+{
+  "inventory_files": 1410,
+  "syntax": {
+    "not-checked": 935,
+    "python:passed": 9,
+    "json:passed": 114,
+    "xml:passed": 83,
+    "non-text": 78,
+    "node:passed": 178,
+    "failed:ParseError": 7,
+    "bash:passed": 5,
+    "zsh:passed": 1
+  },
+  "changed_since_inventory": [],
+  "limitations": [
+    "Marker counts are routing hints, not findings or coverage.",
+    "No Kotlin/Rust/SQL type or runtime validation in this script.",
+    "No private, untracked or ignored input; no file bodies emitted."
+  ]
+}

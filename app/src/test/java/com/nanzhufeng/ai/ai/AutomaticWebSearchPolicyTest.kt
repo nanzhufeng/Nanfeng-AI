@@ -50,7 +50,7 @@ class AutomaticWebSearchPolicyTest {
     }
 
     @Test
-    fun `Qwen attachment search retains chat completions while text-only search uses Responses`() {
+    fun `Qwen search uses Responses after local text projection for attachments`() {
         val attachment = ChatAttachment(ChatAttachmentKind.IMAGE, "image/png", "chart.png", byteArrayOf(1))
 
         assertEquals(
@@ -58,15 +58,15 @@ class AutomaticWebSearchPolicyTest {
             AutomaticWebSearchPolicy.requestOptions(ProviderId.QWEN, ChatRequestOptions.Standard, true, "查询今天的股价", emptyList()).webSearchRoute,
         )
         assertEquals(
-            OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS,
+            OfficialWebSearchRoute.QWEN_RESPONSES,
             AutomaticWebSearchPolicy.requestOptions(ProviderId.QWEN, ChatRequestOptions.Standard, true, "结合图片查询今天的股价", listOf(attachment)).webSearchRoute,
         )
     }
 
     @Test
-    fun `Qwen38 Max text search avoids the Responses tool loop without changing other Qwen models`() {
+    fun `Qwen38 Max text search uses source bearing Responses like other Qwen models`() {
         assertEquals(
-            OfficialWebSearchRoute.QWEN_CHAT_COMPLETIONS,
+            OfficialWebSearchRoute.QWEN_RESPONSES,
             AutomaticWebSearchPolicy.requestOptions(
                 ProviderId.QWEN,
                 ChatRequestOptions.Standard,
@@ -171,12 +171,12 @@ class AutomaticWebSearchPolicyTest {
     }
 
     @Test
-    fun `enabled search cannot succeed without provider execution evidence`() {
+    fun `enabled search without provider execution evidence is labeled unverified`() {
         OfficialWebSearchRoute.entries.forEach { route ->
             for (streamed in listOf(false, true)) {
                 val options = ChatRequestOptions(route)
                 assertEquals(
-                    if (options.liveWebSearch) "WEB_SEARCH_NO_SOURCES" else if (streamed) "STREAM_SUCCEEDED" else "SUCCEEDED",
+                    if (options.liveWebSearch) "WEB_SEARCH_ANSWER_UNVERIFIED" else if (streamed) "STREAM_SUCCEEDED" else "SUCCEEDED",
                     WebSearchGroundingPolicy.completedAuditStatus(options, emptyList(), streamed),
                 )
                 if (options.liveWebSearch) assertEquals(

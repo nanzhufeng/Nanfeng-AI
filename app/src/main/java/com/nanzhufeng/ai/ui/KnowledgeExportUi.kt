@@ -89,7 +89,7 @@ fun KnowledgeExportCard(onOpen: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = onOpen,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
         ) {

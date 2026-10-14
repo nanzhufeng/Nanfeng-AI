@@ -1,3 +1,10 @@
+import { modelSettingsProviderTarget, installModelSettingsKeyboardNavigation } from './model-settings-browser.mjs';
+import { autoCandidate, conversationAutoMimeTypes } from "./auto-chat-routing.mjs";
+import { RELAYCORE_MODELS, relayCoreEgressVersion, relayCoreNeedsCompanion, createLunaRetrievalGrant } from './relaycore-models.mjs';
+import { usesIndependentSearch, createSearchServiceGrant, retrySearchMaterial } from './independent-web-search.mjs';
+import { WORKSPACES_VISIBLE, canOpenDataArea } from './product-scope.mjs';
+import { DesktopAppEntry } from './desktop-app-entry.mjs';
+import { generationRefreshInterval, hasRunningGeneration } from './generation-continuity.mjs';
 import { createUtilityPageNavigation } from './utility-page-navigation.mjs';
 import { commitRetainedChatShell, commitRuntimeChatShell, installRuntimeChatScrolling } from './runtime-chat-commit.mjs';
 import { renderAnswerInformation } from './answer-information.mjs';
@@ -123,7 +130,10 @@ function clearCloudConversationCache() {
 const initialProductSettings = parityPreferences.readProductSettings();
 function createAreaState(dataArea = 'CHAT') { return { dataArea, workspaces: [], current: null, pane: 'chat', selectedConversationId: null, sidebarConversationList: 'recent', cloudConversations: [], batchEditing: false, batchSelectedConversationKeys: new Set(), chatgptTask: null, claudeTask: null, p6kTask: null, composerDraft: '', composerAttachments: [], temporaryConversation: null, profileOpen: false, sidebarOpen: false, railCollapsed: false, sidebarWidth: readSidebarWidth(), settingsSection: 'personalization', settingsSearch: '', settingsPicker: null, productSettings: initialProductSettings, personalizationDraft: { ...initialProductSettings }, personalizationDirty: false, modelServiceSettings: MODEL_SERVICE_PREVIEW_SETTINGS.map(item => ({ ...item, presets: [...item.presets], nonChatCapabilities: [...item.nonChatCapabilities] })), modelProviderId: 'OPENROUTER', modelServiceDraft: null, modelCredentialDraft: null, modelCredentialEdited: false, modelCredentialVisible: false, modelSettingsSaving: false, modelSettingsTesting: false, modelSettingsNotice: '', modelSettingsError: '', usageLedger: { records: [], inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }, usageSection: 'conversation', contextSelectionRecords: [], diagnosticRecords: [], invocationRecords: [], privacyInventory: { totalBytes: 0, aggregates: [] }, localBackup: { working: false, operation: null, preflight: null, replaceLocal: false, notice: '', error: '', restartRequired: false, interrupted: false }, showArchived: false, showDeleted: false, contextMenu: null, composerAddOpen: false, composerAddPage: 'root', cameraCaptureOpen: false, cameraCaptureReady: false, cameraCaptureBusy: false, cameraCaptureError: '', conversationPreferences: { revision: 0, toneOverride: null, webSearchOverride: null }, temporaryModelOpen: false, p6gModelPickerOpen: false, p6gCatalog: null, p6gGlobalDefault: { revision: 0, tier: null }, p6gSelection: null, chatScrollPositions: new Map(), chatAtLatest: true, transcriptRailTrackingConversationId: null, pendingChatScrollToLatestId: null, pendingChatSendScrollToLatestId: null, scrollToLatestAnimationId: null, focusComposerAfterScrollToLatest: false, inspectorOpen: true, treeOpen: false, preflight: null, dialog: null, history: { canUndo: false, canRedo: false, recycleBin: [], modelMetadata: [] }, agentRuns: [], connection: previewConnection, p6eAcceptance: { enabled: false, receipt: null }, status: native ? '本地工作区已就绪；正在读取联网模型配置。' : 'Web 预览不会读写 Desktop 数据库。', error: '', accountSyncProgress: null, scale: 1, searchResults: [], searchPage: { hits: [], textCount: 0, attachmentCount: 0, totalCount: 0, hasMore: false, indexCurrent: true }, searchPanel: false, searchCategory: 'all', searchSortMode: 'default', searchFileType: 'all', searchFileTypeOpen: false, searchLoading: false, searchLoadingMore: false, searchError: '', searchEvidenceLabel: '', searchAnchorMessageId: null, searchAnchorAttachmentId: null, searchRevealTarget: null, searchHistory: [], searchHistoryOpen: false, searchHistoryHighlighted: null, searchHistoryManuallyOpened: false, searchScrollSnapshot: null, searchAttachmentMenu: null, suppressSearchHistoryFocus: false, imageThumbnails: {}, imageThumbnailPending: new Set(), videoThumbnails: {}, videoThumbnailPending: new Set(), searchAttachmentPreviews: {}, searchAttachmentPreviewPending: new Set(), assistantImageSelections: new Map(), imagePreview: null, pdfPreview: null, videoPreview: null, audioPreview: null, textPreview: null, previewBoundary: null, previewWorkspaceId: null, appearance: parityPreferences.readAppearance(), favoriteConversationIds: new Set(), unreadConversationIds: new Set(), manualUnreadAtMs: new Map(), conversationFindOpen: false, conversationFindQuery: '', conversationFindMatches: [], conversationFindIndex: 0, runtimeInfo: { version: '读取中', platform: navigator.platform || 'Desktop', arch: '本机架构', buildEpochSeconds: 0 } }; }
 let state = createAreaState();
+state.inlineConversationRename = null;
 const dataAreaStates = new Map([['CHAT', state]]);
+const desktopAppEntry = new DesktopAppEntry(window.localStorage);
+let desktopWorkspaceRefreshGeneration = 0;
 
 state.selectedWorkProjectId = null;
 state.assistantMessageMenu = null;
@@ -198,14 +208,23 @@ const openCloudConversationRoute = createCloudConversationOpenRoute({
   },
 });
 
+const foregroundToastHost = document.createElement('div');
+document.body.append(foregroundToastHost);
+window.addEventListener('blur', () => {
+  transientToast = null;
+  window.clearTimeout(transientToastTimer);
+  foregroundToastHost.innerHTML = '';
+});
+
 function showTransientToast(message, kind = 'success') {
+  if (!message || !document.hasFocus() || document.visibilityState !== 'visible') return;
   transientToast = { message, kind };
   window.clearTimeout(transientToastTimer);
-  render();
+  foregroundToastHost.innerHTML = transientToastMarkup();
   transientToastTimer = window.setTimeout(() => {
     transientToast = null;
-    render();
-  }, 2600);
+    foregroundToastHost.innerHTML = '';
+  }, kind === 'error' ? 8000 : 2600);
 }
 
 const ACCOUNT_SYNC_PROGRESS_MIN_VISIBLE_MS = 520;
@@ -241,7 +260,7 @@ async function completeAccountSyncProgress(message, kind = 'success') {
   }, kind === 'success' ? ACCOUNT_SYNC_RESULT_VISIBLE_MS : 8000);
 }
 let composerModelPricingRefreshTimer = null;
-state.pendingNewConversationModelId = null;
+state.pendingNewConversationModelId = undefined;
 state.p6gModelPickerTier = null;
 
 if (c16PreviewState) {
@@ -286,7 +305,6 @@ state.pendingCreatedConversationRouteWorkspaceId = null;
 // or conversation ID alone is not sufficient to identify the originating Send.
 state.pendingChatSubmission = null;
 
-const ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS = 80;
 let ordinaryChatRuntimeRefreshPending = null;
 let ordinaryChatRuntimeRefreshTimer = null;
 let ordinaryChatRuntimeRefreshInFlight = false;
@@ -296,7 +314,7 @@ function scheduleOrdinaryChatRuntimeRefresh() {
   ordinaryChatRuntimeRefreshTimer = window.setTimeout(() => {
     ordinaryChatRuntimeRefreshTimer = null;
     void flushOrdinaryChatRuntimeRefresh();
-  }, ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS);
+  }, generationRefreshInterval(state, document.hidden));
 }
 
 async function syncPersistedConversationContinuation(workspaceId, conversationId) {
@@ -380,7 +398,19 @@ async function flushOrdinaryChatRuntimeRefresh() {
 }
 
 const tauriEvents = window.__TAURI__?.event;
+const ordinaryChatAttemptRegistry = new Set();
 if (native && tauriEvents?.listen) {
+  void tauriEvents.listen('nanfeng-island-open-v1', async event => {
+    const task=event.payload;
+    if (!task?.workspaceId || !task?.conversationId) return;
+    if (task.dataArea !== state.dataArea) { await switchDataArea(task.dataArea, 'chat'); if(task.dataArea !== state.dataArea) return; }
+    try {
+      await flushOrdinaryComposerDraft();
+      state.current=await invoke('read_desktop_workspace',{workspaceId:task.workspaceId});
+      state.selectedConversationId=task.conversationId;state.pane='chat';state.profileOpen=false;
+      await loadConversationReadState({observeSelected:true});await loadOrdinaryComposerDraft();render();
+    } catch {showTransientToast('对话未打开，请从历史列表查看。','error');}
+  });
   void tauriEvents.listen('desktop-ordinary-chat-runtime-v1', event => { if ((event?.payload?.dataArea || 'CHAT') === state.dataArea) queueOrdinaryChatRuntimeRefresh(event?.payload || {}); });
   void tauriEvents.listen('desktop-reminder-runtime-v1', async event => {
     if ((event?.payload?.dataArea || 'CHAT') !== state.dataArea) return;
@@ -554,11 +584,13 @@ async function updateAppearance(field, value) {
   try {
     await persistNativeAppSettings({ [field]: value }, {});
     state.status = '';
+    showTransientToast('外观设置已保存。');
     state.error = '';
   } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.appearance = previous;
     applyAppearance();
     state.error = `外观偏好未保存：${String(error)}`;
+    showTransientToast(state.error, 'error');
   }
   render();
 }
@@ -687,6 +719,9 @@ app.addEventListener('click', event => {
   const target = event.target.closest('[data-action]');
   const action = target?.dataset.action;
   const workspaceAction = ['show-work', 'show-workspace', 'show-projects'].includes(action);
+  if (!WORKSPACES_VISIBLE && ['show-work', 'show-workspace', 'show-projects', 'show-knowledge', 'show-memory', 'reference-message-to-other-area'].includes(action)) {
+    event.preventDefault(); event.stopImmediatePropagation(); return;
+  }
   const returningToChat = ['return-workspace-origin', 'show-chat'].includes(action) && state.dataArea === 'WORK';
   if ((workspaceAction && state.dataArea === 'CHAT') || returningToChat) {
     event.preventDefault(); event.stopImmediatePropagation();
@@ -972,6 +1007,7 @@ window.addEventListener('unhandledrejection', event => {
   if (event.reason?.code === 'STALE_DATA_AREA') event.preventDefault();
 });
 async function switchDataArea(area, pane) {
+  if (!canOpenDataArea(area)) return;
   if (state.dataArea === area) { state.pane = pane; render(); return; }
   await flushOrdinaryComposerDraft();
   ordinaryChatRuntimeRefreshPending = null;
@@ -995,7 +1031,9 @@ function applyConversationReadState(projection) {
   state.manualUnreadAtMs = new Map(rows.filter(item => item.manualUnreadAtMs != null).map(item => [item.conversationId, Number(item.manualUnreadAtMs)]));
 }
 async function loadConversationReadState({ observeSelected = true } = {}) {
-  const workspaceId = state.current?.summary?.id;
+  const owner = state;
+  const selectedId = owner.selectedConversationId;
+  const workspaceId = owner.current?.summary?.id;
   if (!workspaceId || !native) {
     applyConversationReadState({ workspaceId: workspaceId || null, conversations: [] });
     return state.conversationReadState;
@@ -1004,7 +1042,7 @@ async function loadConversationReadState({ observeSelected = true } = {}) {
     workspaceId,
     observedConversationId: observeSelected ? state.selectedConversationId : null,
   });
-  applyConversationReadState(projection);
+  if (state === owner && state.current?.summary?.id === workspaceId && state.selectedConversationId === selectedId) applyConversationReadState(projection);
   return projection;
 }
 async function markConversationOpened(conversationId) {
@@ -1029,13 +1067,23 @@ function modelServiceConfigurationStatus(settings = state.modelServiceSettings) 
   if (enabled.length) return `本地工作区已就绪；已有 ${enabled.length} 个联网服务商启用，尚未检测到已保存凭据。`;
   return '本地工作区已就绪；尚未启用联网模型。';
 }
+function setModelProviderFeedback(providerId, notice = '', error = '') {
+  state.modelProviderFeedback ||= {};
+  state.modelProviderFeedback[providerId] = { notice, error };
+  if (state.modelProviderId === providerId) {
+    state.modelSettingsNotice = notice;
+    state.modelSettingsError = error;
+  }
+}
 function resetModelServiceDraft(service = selectedModelService()) {
   state.modelServiceDraft = service ? { providerId: service.providerId, enabled: service.enabled, presetId: service.presetId, revision: service.revision } : null;
   state.modelCredentialDraft = '';
   state.modelCredentialEdited = false;
   state.modelCredentialVisible = false;
-  state.modelSettingsNotice = '';
-  state.modelSettingsError = '';
+  state.modelCredentialRevealRequest = null;
+  const feedback = state.modelProviderFeedback?.[service?.providerId];
+  state.modelSettingsNotice = feedback?.notice || '';
+  state.modelSettingsError = feedback?.error || '';
   state.settingsPicker = null;
 }
 function clearModelCredentialDraftOutsideEditor(force = false) {
@@ -1049,14 +1097,23 @@ function clearModelCredentialDraftOutsideEditor(force = false) {
 function replaceModelService(next) {
   state.modelServiceSettings = state.modelServiceSettings.map(item => item.providerId === next.providerId ? next : item);
 }
-async function loadModelServiceSettings() {
+let modelServiceReadSequence = 0;
+async function loadModelServiceSettings({ preserveDraft = false } = {}) {
   if (!native) return;
-  const settings = await invoke('read_desktop_model_service_settings');
+  const owner = state;
+  const sequence = ++modelServiceReadSequence;
+  const settings = await invoke('read_desktop_model_service_settings', undefined, owner);
+  if (state !== owner || sequence !== modelServiceReadSequence) return;
   if (Array.isArray(settings) && settings.length) {
-    state.modelServiceSettings = settings;
+    state.modelServiceSettings = settings.map(service => {
+      const current = state.modelServiceSettings.find(item => item.providerId === service.providerId);
+      const latest = Number(current?.revision || 0) > Number(service.revision || 0) ? current : service;
+      return mergeModelServiceIntents(latest, owner);
+    });
     if (!settings.some(item => item.providerId === state.modelProviderId)) state.modelProviderId = settings[0].providerId;
-    resetModelServiceDraft();
-    state.status = modelServiceConfigurationStatus(settings);
+    if (!preserveDraft) resetModelServiceDraft();
+    state.status = modelServiceConfigurationStatus(state.modelServiceSettings);
+    return settings;
   }
 }
 async function loadDesktopAppSettings() {
@@ -1492,45 +1549,180 @@ app.addEventListener('click', async event => {
   if (action === 'ask-delete-transcription-task') { state.dialog = { kind: 'transcription-delete', taskId: target.dataset.taskId, submitting: false, failure: '' }; render(); return; }
   if (action === 'confirm-delete-transcription-task') { state.dialog = { ...state.dialog, submitting: true, failure: '' }; render(); try { await invoke('delete_desktop_transcription_task', { taskId: target.dataset.taskId }); state.dialog = null; state.selectedTranscriptionTaskId = null; state.status = '转写任务已删除；无引用私有字节进入安全清理期。'; await loadTranscriptionState(); } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.dialog = { ...state.dialog, submitting: false, failure: String(error) }; } render(); }
 }, true);
+let modelEnabledQueue = Promise.resolve();
+const modelEnabledIntents = new Map();
+const modelPresetIntents = new Map();
+function mergeModelServiceIntents(record, owner = state) {
+  const enabled = modelEnabledIntents.get(record.providerId);
+  const preset = modelPresetIntents.get(record.providerId);
+  return { ...record,
+    enabled: enabled?.owner === owner ? enabled.enabled : record.enabled,
+    presetId: preset?.owner === owner ? preset.presetId : record.presetId,
+    presetDisplayName: preset?.owner === owner ? preset.displayName : record.presetDisplayName,
+  };
+}
+function rememberModelServiceReceipt(record, owner = state) {
+  for (const intents of [modelEnabledIntents, modelPresetIntents]) {
+    const pending = intents.get(record.providerId);
+    if (pending?.owner === owner) pending.confirmed = record;
+  }
+  return mergeModelServiceIntents(record, owner);
+}
+function queueModelSettingsWrite(operation) {
+  const result = modelEnabledQueue.catch(() => {}).then(operation);
+  modelEnabledQueue = result;
+  return result;
+}
+async function setModelServiceEnabled() {
+  const service = selectedModelService();
+  if (!native || !service) return;
+  const owner = state;
+  const providerId = service.providerId;
+  const previous = modelEnabledIntents.get(providerId);
+  const pending = previous?.owner === owner ? previous : null;
+  const enabled = !Boolean(pending?.enabled ?? state.modelServiceDraft?.enabled ?? service.enabled);
+  const intent = { enabled, owner, confirmed: pending?.confirmed ?? service };
+  modelEnabledIntents.set(providerId, intent);
+  replaceModelService({ ...service, enabled });
+  if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, enabled };
+  render();
+  await queueModelSettingsWrite(async () => {
+    try {
+      if (state !== owner) return;
+      const saved = await invoke('set_desktop_model_service_enabled', { args: { providerId, enabled } }, owner);
+      if (state !== owner) return;
+      const latest = modelEnabledIntents.get(providerId);
+      if (latest?.owner === owner) latest.confirmed = saved;
+      replaceModelService(rememberModelServiceReceipt(saved, owner));
+      if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, revision: saved.revision };
+      setModelProviderFeedback(providerId, '启用状态已保存。');
+    } catch {
+      if (state !== owner) return;
+      // Remove only this failed final intent before reading persisted state.
+      if (modelEnabledIntents.get(providerId) === intent) {
+        modelEnabledIntents.delete(providerId);
+        replaceModelService(mergeModelServiceIntents(intent.confirmed, owner));
+        if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, enabled: intent.confirmed.enabled, revision: intent.confirmed.revision };
+      }
+      let readback = false;
+      try {
+        const records = await loadModelServiceSettings({ preserveDraft: true });
+        readback = state === owner && Array.isArray(records);
+        const persisted = records?.find(item => item.providerId === providerId);
+        const latest = modelEnabledIntents.get(providerId);
+        if (persisted && latest?.owner === owner && persisted.revision >= latest.confirmed.revision) latest.confirmed = persisted;
+      } catch { /* Keep the last confirmed state and the user's draft. */ }
+      if (state !== owner) return;
+      const current = state.modelServiceSettings.find(item => item.providerId === providerId);
+      if (state.modelServiceDraft?.providerId === providerId && current) state.modelServiceDraft = { ...state.modelServiceDraft, enabled: current.enabled, revision: current.revision };
+      setModelProviderFeedback(providerId, '', readback ? '启用状态未确认保存；已重新读取本机设置。' : '启用状态未确认保存；请稍后重新读取本机设置。');
+    } finally {
+      if (modelEnabledIntents.get(providerId) === intent) modelEnabledIntents.delete(providerId);
+      if (state === owner) render();
+    }
+  });
+}
+function providerOcrProbeSelected(service, presetId) {
+  return service?.providerId === 'ZHIPU' && presetId === 'GLM_OCR' && service.nonChatCapabilities?.some(item => item.id === presetId);
+}
+
+async function setModelServicePreset(presetId) {
+  const service = selectedModelService();
+  if (!native || !service) return;
+  if (providerOcrProbeSelected(service, presetId)) {
+    state.modelServiceDraft = { ...state.modelServiceDraft, presetId };
+    setModelProviderFeedback(service.providerId);
+    render();
+    return;
+  }
+  if (!service.presets?.some(item => item.id === presetId)) return;
+  const owner = state;
+  const providerId = service.providerId;
+  const previous = modelPresetIntents.get(providerId);
+  const choice = service.presets.find(item => item.id === presetId);
+  const intent = { owner, presetId, displayName: choice.displayName, confirmed: previous?.owner === owner ? previous.confirmed : service };
+  modelPresetIntents.set(providerId, intent);
+  replaceModelService(mergeModelServiceIntents(service, owner));
+  if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, presetId };
+  setModelProviderFeedback(providerId);
+  render();
+  await queueModelSettingsWrite(async () => {
+    try {
+      if (state !== owner) return;
+      const current = state.modelServiceSettings.find(item => item.providerId === providerId);
+      const saved = await invoke('save_desktop_model_service_settings', { args: {
+        providerId, presetId, enabled: Boolean(current.enabled), preserveEnabled: true,
+        expectedRevision: current.revision, apiKey: null,
+      } }, owner);
+      if (state !== owner) return;
+      replaceModelService(rememberModelServiceReceipt(saved, owner));
+      if (state.modelServiceDraft?.providerId === providerId) state.modelServiceDraft = { ...state.modelServiceDraft, revision: saved.revision };
+      if (modelPresetIntents.get(providerId) === intent) setModelProviderFeedback(providerId);
+    } catch {
+      if (state !== owner) return;
+      if (modelPresetIntents.get(providerId) === intent) {
+        modelPresetIntents.delete(providerId);
+        const current = state.modelServiceSettings.find(item => item.providerId === providerId);
+        replaceModelService(mergeModelServiceIntents({ ...current, presetId: intent.confirmed.presetId, presetDisplayName: intent.confirmed.presetDisplayName }, owner));
+      }
+      try { await loadModelServiceSettings({ preserveDraft: true }); } catch { /* Keep the last confirmed choice, never write credentials. */ }
+      if (state !== owner) return;
+      const current = state.modelServiceSettings.find(item => item.providerId === providerId);
+      if (state.modelServiceDraft?.providerId === providerId && current) state.modelServiceDraft = { ...state.modelServiceDraft, presetId: providerOcrProbeSelected(current, state.modelServiceDraft.presetId) ? 'GLM_OCR' : current.presetId, revision: current.revision };
+      setModelProviderFeedback(providerId, '', '模型选择未确认保存，请稍后重新读取设置。');
+    } finally {
+      if (modelPresetIntents.get(providerId) === intent) modelPresetIntents.delete(providerId);
+      if (state === owner) render();
+    }
+  });
+}
 async function saveModelServiceSettings() {
   const service = selectedModelService();
-  const draft = state.modelServiceDraft;
-  if (!service || !draft || state.modelSettingsSaving) return;
+  const owner = state;
+  if (!service || state.modelSettingsSaving || state.modelSettingsTesting || !state.modelCredentialEdited || !state.modelCredentialDraft.trim()) return;
   if (!native) {
     state.modelSettingsError = 'Web 预览不会保存 API Key；请在 Desktop 应用中操作。';
     render();
     return;
   }
+  const replacementCredential = state.modelCredentialEdited && state.modelCredentialDraft.trim() ? state.modelCredentialDraft.trim() : null;
   state.modelSettingsSaving = true;
-  state.modelSettingsNotice = '';
-  state.modelSettingsError = '';
+  state.modelCredentialRevealRequest = null;
+  setModelProviderFeedback(service.providerId);
   render();
-  try {
-    const saved = await invoke('save_desktop_model_service_settings', { args: {
-      providerId: service.providerId,
-      enabled: Boolean(draft.enabled),
-      presetId: draft.presetId,
-      expectedRevision: service.revision,
-      apiKey: state.modelCredentialEdited && state.modelCredentialDraft.trim() ? state.modelCredentialDraft.trim() : null,
-    } });
-    replaceModelService(saved);
-    state.status = modelServiceConfigurationStatus();
-    state.modelServiceDraft = { providerId: saved.providerId, enabled: saved.enabled, presetId: saved.presetId, revision: saved.revision };
-    if (state.modelCredentialEdited && state.modelCredentialDraft.trim()) {
-      state.modelSettingsNotice = '';
-      state.dialog = { kind: 'model-credential-saved' };
-    } else {
-      state.modelSettingsNotice = '模型设置已保存。';
+  await queueModelSettingsWrite(async () => {
+    try {
+      if (state !== owner) return;
+      const current = state.modelServiceSettings.find(item => item.providerId === service.providerId);
+      if (!current) throw new Error('模型服务设置尚未加载。');
+      const saved = await invoke('save_desktop_model_service_settings', { args: {
+        providerId: service.providerId,
+        enabled: Boolean(current.enabled),
+        preserveEnabled: true,
+        preservePreset: true,
+        presetId: current.presetId,
+        expectedRevision: current.revision,
+        apiKey: replacementCredential,
+      } }, owner);
+      if (state !== owner) return;
+      const pending = modelEnabledIntents.get(service.providerId);
+      if (pending?.owner === owner) pending.confirmed = saved;
+      replaceModelService(rememberModelServiceReceipt(saved, owner));
+      state.status = modelServiceConfigurationStatus();
+      setModelProviderFeedback(service.providerId, 'API Key 已安全保存在本机。');
+      if (state.modelProviderId === service.providerId) {
+        state.modelServiceDraft = { ...mergeModelServiceIntents(saved, owner), ...(providerOcrProbeSelected(service, state.modelServiceDraft?.presetId) ? {presetId:'GLM_OCR'} : {}) };
+        state.modelCredentialDraft = '';
+        state.modelCredentialEdited = false;
+        state.modelCredentialVisible = false;
+      }
+    } catch (error) { if (state !== owner) return; if (error?.code === 'STALE_DATA_AREA') throw error;
+      setModelProviderFeedback(service.providerId, '', `保存失败：${String(error)}`);
+    } finally {
+      owner.modelSettingsSaving = false;
+      if (state === owner) render();
     }
-    state.modelCredentialDraft = '';
-    state.modelCredentialEdited = false;
-    state.modelCredentialVisible = false;
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.modelSettingsError = `保存失败：${String(error)}`;
-  } finally {
-    state.modelSettingsSaving = false;
-    render();
-  }
+  });
 }
 async function revealModelServiceCredential() {
   const service = selectedModelService();
@@ -1551,35 +1743,48 @@ async function revealModelServiceCredential() {
     render();
     return;
   }
+  const request = {};
+  state.modelCredentialRevealRequest = request;
   try {
-    state.modelCredentialDraft = await invoke('reveal_desktop_model_service_credential', { providerId: service.providerId });
+    const revealed = await invoke('reveal_desktop_model_service_credential', { providerId: service.providerId });
+    if (state.modelCredentialRevealRequest !== request || state.modelProviderId !== service.providerId || state.modelCredentialEdited || state.pane !== 'settings' || state.settingsSection !== 'model-configuration') return;
+    state.modelCredentialDraft = revealed;
     state.modelCredentialVisible = true;
     state.modelSettingsError = '';
   } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.modelSettingsError = `无法显示 API Key：${String(error)}`;
+    if (state.modelCredentialRevealRequest === request) setModelProviderFeedback(service.providerId, '', `无法显示 API Key：${String(error)}`);
   }
   render();
 }
 async function testModelServiceConnection() {
   const service = selectedModelService();
-  if (!service || state.modelSettingsTesting || !service.credentialStored) return;
+  const owner = state;
+  if (!service || state.modelSettingsTesting || state.modelSettingsSaving || !service.credentialStored) return;
+  if (state.modelCredentialEdited) {
+    setModelProviderFeedback(service.providerId, '', 'API Key 尚未保存，请先保存再测试连接。');
+    render(); return;
+  }
   if (!native) {
     state.modelSettingsError = 'Web 预览不会发送连接测试。';
     render();
     return;
   }
+  const ocrProbe = providerOcrProbeSelected(service, state.modelServiceDraft?.presetId);
   state.modelSettingsTesting = true;
-  state.modelSettingsNotice = '';
-  state.modelSettingsError = '';
+  setModelProviderFeedback(service.providerId);
   render();
   try {
-    await invoke('test_desktop_model_service_connection', { args: { providerId: service.providerId, presetId: service.presetId } });
-    state.modelSettingsNotice = `连接成功：${service.providerDisplayName} · ${service.presetDisplayName}`;
-  } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
-    state.modelSettingsError = `连接测试失败：${String(error)}`;
+    await modelEnabledQueue.catch(() => {});
+    if (state !== owner) return;
+    const current = state.modelServiceSettings.find(item => item.providerId === service.providerId);
+    await invoke('test_desktop_model_service_connection', { args: { providerId: service.providerId, presetId: ocrProbe ? 'GLM_OCR' : current.presetId } }, owner);
+    if (state !== owner) return;
+    setModelProviderFeedback(service.providerId, `连接成功：${service.providerDisplayName} · ${ocrProbe ? 'GLM-OCR' : current.presetDisplayName}`);
+  } catch (error) { if (state !== owner) return; if (error?.code === 'STALE_DATA_AREA') throw error;
+    setModelProviderFeedback(service.providerId, '', `连接测试失败：${String(error)}`);
   } finally {
-    state.modelSettingsTesting = false;
-    render();
+    owner.modelSettingsTesting = false;
+    if (state === owner) render();
   }
 }
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
@@ -1672,6 +1877,7 @@ function currentSidebarRetention(data) {
   return {
     data,
     selectedConversationId: state.selectedConversationId,
+    inlineConversationRename: state.inlineConversationRename,
     sidebarOpen: state.sidebarOpen,
     railCollapsed: state.railCollapsed,
     profileOpen: state.profileOpen,
@@ -1708,6 +1914,7 @@ function canRetainSidebar(previous, next) {
   return previous && next
     && previous.data === next.data
     && previous.sidebarOpen === next.sidebarOpen
+    && previous.inlineConversationRename === next.inlineConversationRename
     && previous.railCollapsed === next.railCollapsed
     && previous.profileOpen === next.profileOpen
     // Cloud rows participate in the same sidebar projection as local rows.
@@ -2104,7 +2311,7 @@ async function openSearchAttachment(hit) {
 const icons = { check: 'M20 6 9 17l-5-5', workspace: 'M3 5.5A2.5 2.5 0 0 1 5.5 3H10l2 2h6.5A2.5 2.5 0 0 1 21 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z', conversation: 'M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11L7 20v-4H6.5A2.5 2.5 0 0 1 4 13.5z', knowledge: 'M5 3.5h11A3 3 0 0 1 19 6.5v13l-6.5-3-6.5 3v-13a3 3 0 0 1 3-3z', import: 'M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3', export: 'M12 15V3m0 0 4 4m-4-4L8 7M5 17v3h14v-3', download: 'M12 3v12m0 0 4-4m-4 4-4-4M5 19h14', copy: 'M9 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3M5 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z', close: 'M6 6l12 12M18 6 6 18', chevronLeft: 'm14.5 5-7 7 7 7', chevronRight: 'm9.5 5 7 7-7 7', undo: 'M9 7 4 12l5 5M5 12h9a5 5 0 1 1 0 10', redo: 'm15 7 5 5-5 5m4-5h-9a5 5 0 1 0 0 10', trash: 'M4 7h16M10 11v6m4-6v6M9 7l1-2h4l1 2M6 7l1 14h10l1-14', plus: 'M12 5v14M5 12h14', edit: 'm4 16 9-9 3 3-9 9H4zM14 6l2-2 3 3-2 2', info: 'M12 17v-6m0-3.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', branch: 'M5 4v4c0 1.1.9 2 2 2h12m0 0-3-3m3 3-3 3M5 4v12c0 1.1.9 2 2 2h12m0 0-3-3m3 3-3 3', link: 'M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1m3.1 5.9a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 9 20l1.1-1.1' };
 function workspace() { return state.current || (!native ? fixture : null); }
 function selectWorkspaceDefaultConversation(data = workspace()) {
-  state.selectedConversationId = data ? activeConversations(data)[0]?.id || null : null;
+  state.selectedConversationId = !native && data ? activeConversations(data)[0]?.id || null : null;
 }
 function active(data, key) { return data.exchange[key].filter(item => key === 'relations' ? item.status === 'ACTIVE' : item.status !== 'DELETED' && !item.archived && !item.deleted); }
 function dialog() {
@@ -2148,10 +2355,9 @@ if (state.dialog?.kind === 'memory-summary-editor') return `<div class="scrim cu
   if (state.dialog?.kind === 'transcription-delete') { const task = state.transcription.tasks.find(item => item.id === state.dialog.taskId); const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除这条转写任务？</h2><p>将删除“${escape(task?.sourceDisplayName || '转写任务')}”的任务记录与时间轴。原文件或结果仍被会话引用时，私有字节不会删除；无引用字节进入安全清理期。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-transcription-task" data-task-id="${escape(state.dialog.taskId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除任务'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'search-attachment-delete') { const hit = state.dialog.hit; const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除此附件引用？</h2><p>只会从这条消息移除“${escape(hit.displayName || '附件')}”。若其他消息仍在引用，私有副本会继续保留；最后一个引用移除后进入安全清理期。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-search-attachment" data-entry-id="${escape(hit.entryId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除此引用'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'p6k-batch-delete') { const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-busy="${busy}"><h2>删除这个 ZIP 导入批次？</h2><p>将移除该批次导入的本地对话与 ZIP 私有副本。对话的删除标记会长期保留，以后重新导入同一官方会话也不会复活。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-delete-p6k-zip-batch" data-task-id="${escape(state.dialog.taskId)}" ${busy ? 'disabled' : ''}>${busy ? '正在删除…' : '删除批次'}</button></div></section></div>`; }
-  if (state.dialog?.kind === 'conversation-rename') return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true"><label>会话标题<input id="conversation-rename" maxlength="120" value="${escape(state.dialog.title)}"></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-conversation-rename" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}">保存</button></div></section></div>`;
   if (state.dialog?.kind === 'conversation-project') { const projects = active(workspace(), 'projects'); const options = [`<option value="">不归入项目</option>`, ...projects.map(project => `<option value="${escape(project.id)}" ${project.id === state.dialog.projectId ? 'selected' : ''}>${escape(project.title)}</option>`)].join(''); return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true"><h2>项目归属</h2><p>${projects.length ? '选择现有本地项目；切换即为移动，取消不变更。' : '当前没有可选项目。'}</p><label>项目<select id="conversation-project">${options}</select></label><div class="dialog-actions"><button data-action="close-dialog">取消</button><button class="primary" data-action="save-conversation-project" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}">保存</button></div></section></div>`; }
   if (state.dialog?.kind === 'conversation-delete') { const busy = state.dialog.submitting; const copy = state.dialog.source === 'archived' ? `“${escape(state.dialog.title)}”将移入回收站，可恢复。` : '删除不同于归档：消息树不会物理删除，可从回收站恢复。'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>移入回收站？</h2><p>${copy}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary" data-action="confirm-conversation-delete" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}" ${busy ? 'disabled' : ''}>${busy ? '正在移入…' : '移入回收站'}</button></div></section></div>`; }
-  if (state.dialog?.kind === 'conversation-batch-delete') { const busy = state.dialog.submitting; const count = state.dialog.items?.length || 0; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>移入回收站？</h2><p>${count} 个会话将移入回收站，可恢复。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary" data-action="confirm-conversation-batch-delete" ${busy ? 'disabled' : ''}>${busy ? '正在移入…' : '移入回收站'}</button></div></section></div>`; }
+  if (state.dialog?.kind === 'conversation-batch-delete') { const busy = state.dialog.submitting; const count = state.dialog.items?.length || 0; const cloud = state.dialog.items?.every(item => item.workspaceId); const label = cloud ? '取消同步' : '移入回收站'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>${label}？</h2><p>${cloud ? `${count} 个会话将取消同步，本地对话保留。` : `${count} 个会话将移入回收站，可恢复。`}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary" data-action="confirm-conversation-batch-delete" ${busy ? 'disabled' : ''}>${busy ? '正在处理…' : label}</button></div></section></div>`; }
   if (state.dialog?.kind === 'conversation-permanent-delete') { const busy = state.dialog.submitting; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>永久删除？</h2><p>将永久删除“${escape(state.dialog.title)}”，无法恢复。</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary danger" data-action="confirm-conversation-permanent-delete" data-id="${escape(state.dialog.id)}" data-revision="${state.dialog.revision}" ${busy ? 'disabled' : ''}>${busy ? '正在永久删除…' : '永久删除'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'conversation-bulk-cleanup') { const busy = state.dialog.submitting; const recycle = state.dialog.scope === 'recycle'; return `<div class="scrim"><section class="dialog" role="dialog" aria-modal="true" aria-busy="${busy}"><h2>${recycle ? '清空回收站？' : '清空已归档？'}</h2><p>${recycle ? `将永久删除 ${state.dialog.count} 个会话，无法恢复。` : `${state.dialog.count} 个会话将移入回收站，可恢复。`}</p>${state.dialog.failure ? `<p class="dialog-error" role="alert">${escape(state.dialog.failure)}</p>` : ''}<div class="dialog-actions"><button data-action="close-dialog" ${busy ? 'disabled' : ''}>取消</button><button class="primary ${recycle ? 'danger' : ''}" data-action="confirm-conversation-bulk-cleanup" data-scope="${state.dialog.scope}" ${busy ? 'disabled' : ''}>${busy ? '正在处理…' : recycle ? '永久删除' : '移入回收站'}</button></div></section></div>`; }
   if (state.dialog?.kind === 'local-backup-restart-required') return `<div class="scrim"><section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title"><p class="overline">本机恢复已完成</p><h2 id="dialog-title">请完全重启 App</h2><p>数据库和受控资产已经替换并通过回读。为避免旧 SQLite、页面和任务引用，现请手动完全退出并重新打开 App；不会自动继续任何任务。</p></section></div>`;
@@ -2262,10 +2468,33 @@ async function refresh() {
     render({ runtimeRefresh });
     return;
   }
-  state.runtimeInfo = await invoke('read_desktop_runtime_info');
-  state.workspaces = await invoke('list_desktop_workspaces');
-  state.current = state.workspaces.length ? await invoke('read_desktop_workspace', { workspaceId: state.current?.summary?.id || state.workspaces[0].id }) : null;
-  if (state.current && !resolveConversation(state.current, state.selectedConversationId)) selectWorkspaceDefaultConversation(state.current);
+  const owner = state;
+  const request = ++desktopWorkspaceRefreshGeneration;
+  let expectedWorkspaceId = owner.current?.summary?.id;
+  let expectedConversationId = owner.selectedConversationId;
+  const ownsRoute = () => state === owner && request === desktopWorkspaceRefreshGeneration
+    && state.current?.summary?.id === expectedWorkspaceId && state.selectedConversationId === expectedConversationId;
+  const runtimeInfo = await invoke('read_desktop_runtime_info');
+  if (!ownsRoute()) return;
+  const workspaces = await invoke('list_desktop_workspaces');
+  if (!ownsRoute()) return;
+  const entry = owner.entryResolved ? null : desktopAppEntry.read(owner.dataArea);
+  const workspaceId = workspaces.find(item => item.id === expectedWorkspaceId)?.id
+    || workspaces.find(item => item.id === entry?.workspaceId)?.id || workspaces[0]?.id;
+  const current = workspaceId ? await invoke('read_desktop_workspace', { workspaceId }) : null;
+  if (!ownsRoute()) return;
+  owner.runtimeInfo = runtimeInfo;
+  owner.workspaces = workspaces;
+  owner.current = current;
+  if (!owner.entryResolved) {
+    owner.selectedConversationId = entry?.workspaceId === workspaceId && resolveConversation(current, entry.conversationId)
+      ? entry.conversationId : null;
+    owner.entryResolved = true;
+  } else if (!resolveConversation(current, owner.selectedConversationId)) {
+    owner.selectedConversationId = null;
+  }
+  expectedWorkspaceId = owner.current?.summary?.id;
+  expectedConversationId = owner.selectedConversationId;
   reloadFavoriteConversationIds({ runtimeRefresh });
   // These are independent read projections after the workspace and selected
   // conversation are known. Waiting for each IPC receipt serially delayed the
@@ -2289,6 +2518,7 @@ async function refresh() {
     invoke('read_p6e_temporary_maintenance_acceptance_status'),
     loadTranscriptionState(),
   ]);
+  if (!ownsRoute()) return;
   recomputeConversationFind();
   state.p6gCatalog = p6gCatalog;
   state.p6gGlobalDefault = p6gGlobalDefault;
@@ -2438,11 +2668,13 @@ async function savePersonalization() {
     state.personalizationDraft = { ...state.productSettings };
     state.personalizationDirty = false;
     if (state.dialog?.kind === 'custom-instructions-fullscreen') state.dialog = null;
+    showTransientToast('个性化设置已保存。');
     state.status = '';
     state.error = '';
   } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
     state.productSettings = previous;
     state.error = `个性化设置未保存：${String(error)}`;
+    showTransientToast(state.error, 'error');
   }
   render();
 }
@@ -2537,17 +2769,14 @@ app.addEventListener('click', event => {
   } else if (action === 'save-custom-instructions-fullscreen') {
     void savePersonalization();
   } else if (action === 'select-model-service-provider') {
-    state.modelProviderId = target.dataset.providerId || 'OPENROUTER';
+    state.modelProviderId = modelSettingsProviderTarget(state.modelProviderId, target.dataset.providerId || 'OPENROUTER', target.dataset.providerPlatform === 'true', state.modelLastRelayProviderId);
+    if (state.modelProviderId.startsWith('RELAYCORE_')) state.modelLastRelayProviderId = state.modelProviderId;
     resetModelServiceDraft();
   } else if (action === 'toggle-model-service-enabled') {
-    if (state.modelServiceDraft) state.modelServiceDraft = { ...state.modelServiceDraft, enabled: !state.modelServiceDraft.enabled };
-    state.modelSettingsNotice = '';
-    state.modelSettingsError = '';
+    void setModelServiceEnabled();
   } else if (action === 'select-model-service-preset') {
-    if (state.modelServiceDraft) state.modelServiceDraft = { ...state.modelServiceDraft, presetId: target.dataset.presetId || state.modelServiceDraft.presetId };
     state.settingsPicker = null;
-    state.modelSettingsNotice = '';
-    state.modelSettingsError = '';
+    void setModelServicePreset(target.dataset.presetId);
   } else if (action === 'reveal-model-service-credential') {
     void revealModelServiceCredential();
   } else if (action === 'save-model-service-settings') {
@@ -2767,7 +2996,7 @@ async function cancelLocalRestore() {
 app.addEventListener('click', event => {
   const action = event.target.closest?.('[data-action]')?.dataset.action;
   if (!['new-chat', 'select-chat', 'select-workspace'].includes(action)) return;
-  state.pendingNewConversationModelId = null;
+  state.pendingNewConversationModelId = undefined;
   if (action === 'new-chat') state.p6gSelection = null;
 }, true);
 app.addEventListener('click', event => {
@@ -3169,7 +3398,7 @@ function openConversationContextMenu(row, trigger = row) {
     workspaceId: row.dataset.workspaceId || null,
     source: 'sidebar',
     anchorRect: menuAnchorRect(trigger),
-    title: row.querySelector('.chat-history-select > span')?.textContent || '',
+    title: row.querySelector('.chat-history-title')?.textContent || '',
   });
 }
 
@@ -3443,6 +3672,16 @@ function renderUnified() {
   queueMicrotask(() => resizeComposer(document.getElementById('chat-composer')));
   const focusedComposer = document.activeElement?.id === 'chat-composer' ? document.activeElement : null;
   const composerSelection = focusedComposer ? [focusedComposer.selectionStart, focusedComposer.selectionEnd] : null;
+  const focusedInlineRename = document.activeElement?.matches?.('[data-inline-conversation-rename]') ? document.activeElement : null;
+  const inlineRenameSelection = focusedInlineRename ? [focusedInlineRename.selectionStart, focusedInlineRename.selectionEnd] : null;
+  if (inlineRenameSelection) queueMicrotask(() => {
+    if (!state.inlineConversationRename) return;
+    const replacement = app.querySelector('[data-inline-conversation-rename]');
+    if (replacement && !replacement.isSameNode(focusedInlineRename)) {
+      replacement.focus({ preventScroll: true });
+      replacement.setSelectionRange(...inlineRenameSelection);
+    }
+  });
   if (composerSelection) queueMicrotask(() => {
     if (state.dialog || state.contextMenu || state.assistantMessageMenu || state.composerAddOpen || state.p6gModelPickerOpen) return;
     const replacement = document.getElementById('chat-composer');
@@ -3451,11 +3690,6 @@ function renderUnified() {
       replacement.setSelectionRange(...composerSelection);
     }
   });
-  if (state.modelSettingsError || state.modelSettingsNotice) {
-    state.dialog = { kind: 'model-settings-feedback', message: state.modelSettingsError || state.modelSettingsNotice, failed: Boolean(state.modelSettingsError) };
-    state.modelSettingsError = '';
-    state.modelSettingsNotice = '';
-  }
   rememberChatScroll();
   rememberSidebarScroll();
   rememberSettingsScroll();
@@ -3500,7 +3734,7 @@ function renderUnified() {
     .map(node => ({ node, top: node.scrollTop, left: node.scrollLeft })) : [];
   if (retainedPreview) retainedPreview.remove();
   app.className = `app-shell chat-first ${standaloneWorkspacePage ? 'workspace-standalone-shell' : ''} ${visiblePane === 'settings' ? 'settings-mode' : ''} ${sidebarWorkMode ? 'work-mode' : ''} ${state.sidebarOpen ? 'fallback-sidebar-open' : ''} ${state.searchPanel ? 'search-mode' : ''}`;
-  const nextShellHtml = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: state.pendingNewConversationModelId, chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, syncedConversationKeys: new Set(state.accountSync?.syncedConversationKeys || []), conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
+  const nextShellHtml = renderChatFirstShell({ data, native, selectedConversationId: state.selectedConversationId, settingsConversationReturn: state.settingsConversationReturn, composerDraft: state.composerDraft, composerAttachments: state.composerAttachments, temporaryConversation: state.temporaryConversation, chatSearch: state.chatSearch, searchResults: state.searchResults, searchPanel: state.searchPanel, searchCategory: state.searchCategory, searchHistory: state.searchHistory, searchHistoryOpen: state.searchHistoryOpen, searchLoadingMore: state.searchLoadingMore, profileOpen: state.profileOpen, sidebarOpen: state.sidebarOpen, railCollapsed: state.railCollapsed, sidebarWidth: state.sidebarWidth, settingsSection: state.settingsSection, settingsSearch: state.settingsSearch, settingsPicker: state.settingsPicker, productSettings: state.productSettings, conversationPreferences: state.conversationPreferences, personalizationDraft: state.personalizationDraft, personalizationDirty: state.personalizationDirty, memorySummaryNotice: state.memorySummaryNotice, modelServiceSettings: state.modelServiceSettings, modelProviderId: state.modelProviderId, modelServiceDraft: state.modelServiceDraft, modelCredentialDraft: state.modelCredentialDraft, modelCredentialEdited: state.modelCredentialEdited, modelCredentialVisible: state.modelCredentialVisible, modelSettingsSaving: state.modelSettingsSaving, modelSettingsTesting: state.modelSettingsTesting, modelSettingsNotice: state.modelSettingsNotice, modelSettingsError: state.modelSettingsError, usageLedger: state.usageLedger, usageSection: state.usageSection, contextSelectionRecords: state.contextSelectionRecords, diagnosticRecords: state.diagnosticRecords, invocationRecords: state.invocationRecords, privacyInventory: state.privacyInventory, localBackup: state.localBackup, accountSync: state.accountSync, accountRecovery: state.accountRecovery, settingsCapabilities: state.settingsCapabilities, reminders: state.reminders, reminderNotificationPermission: state.reminderNotificationPermission, reminderNotificationBridge: state.reminderNotificationBridge, backgroundRuntime: state.backgroundRuntime, showArchived: state.showArchived, showDeleted: state.showDeleted, contextMenu: state.contextMenu, assistantMessageMenu: state.assistantMessageMenu, composerAddOpen: state.composerAddOpen, composerAddPage: state.composerAddPage, temporaryModelOpen: state.temporaryModelOpen, p6gModelPickerOpen: state.p6gModelPickerOpen, p6gCatalog: state.p6gCatalog, p6gGlobalDefault: state.p6gGlobalDefault, p6gSelection: state.p6gSelection, pendingNewConversationModelId: newConversationModelId(), chatgptTask: state.chatgptTask, claudeTask: state.claudeTask, p6kTask: state.p6kTask, workMode: sidebarWorkMode, workspaces: state.workspaces, workPanel, pane: visiblePane, status: state.status, error: state.error, connection: state.connection, p6eAcceptance: state.p6eAcceptance, imageThumbnails: state.imageThumbnails, videoThumbnails: state.videoThumbnails, searchAttachmentPreviews: state.searchAttachmentPreviews, assistantImageSelections: state.assistantImageSelections, showScrollToLatest: !state.chatAtLatest, appearance: state.appearance, favoriteConversationIds: state.favoriteConversationIds, unreadConversationIds: state.unreadConversationIds, manualUnreadAtMs: state.manualUnreadAtMs, syncedConversationKeys: new Set(state.accountSync?.syncedConversationKeys || []), conversationFindOpen: state.conversationFindOpen, conversationFindQuery: state.conversationFindQuery, conversationFindMatches: state.conversationFindMatches, conversationFindIndex: state.conversationFindIndex, runtimeInfo: state.runtimeInfo, preserveTranscript: Boolean(retainedTranscript), preserveSidebar: Boolean(retainedSidebar) });
   const runtimePatched = runtimeRefresh && commitRuntimeChatShell(app, nextShellHtml);
   const shellPatched = !runtimeRefresh && commitRetainedChatShell(app, nextShellHtml, retainedTranscript, retainedSidebar);
   if (!runtimePatched && !shellPatched) {
@@ -3656,15 +3890,16 @@ function audioPreviewDialog() {
 function textPreviewDialog() {
   const preview = state.textPreview;
   if (!preview) return '';
-  const facts = !preview.loading && !preview.error
-    ? `<p class="pdf-preview-note text-preview-facts">${escape(preview.displayName)} · ${escape(preview.mimeType)} · ${bytes(preview.byteCount)}${preview.truncated ? ' · 仅显示前 128 KiB' : ''}</p>`
-    : '';
+  const ready = Boolean(preview.attachmentId && preview.workspaceId && !preview.loading && !preview.error);
+  const menuItem = (action, glyph, label) => `<button class="text-preview-menu-item" data-action="${action}" data-preview-kind="text" ${ready ? '' : 'disabled'}>${icon(glyph, label)}<span>${label}</span></button>`;
+  const facts = !preview.loading && !preview.error ? `<p class="pdf-preview-note text-preview-facts">${escape(preview.mimeType)} · ${bytes(preview.byteCount)}${preview.truncated ? ' · 仅显示前 128 KiB' : ''}</p>` : '';
+  const title = /^\s*#\s+/.test(preview.text || '') ? '' : `<h1>${escape((preview.displayName || '文件').replace(/\.[^.]+$/, ''))}</h1>`;
   const content = preview.loading ? '<div class="media-preview-loading" role="status" aria-label="正在读取文本"></div>'
     : preview.error ? `<p class="image-preview-error">${escape(preview.error)}</p>`
       : /[.。]\s*zip\s*$/i.test(preview.displayName || '') || ['application/zip', 'application/x-zip-compressed'].includes(preview.mimeType)
-        ? `<article class="local-text-preview" aria-label="压缩包目录"><pre>${escape(preview.text)}</pre></article>`
-        : `<article class="local-text-preview local-markdown-preview chat-markdown">${renderSafeMarkdown(preview.text, { inert: true })}</article>`;
-  return `<div class="scrim attachment-preview-overlay text-preview-overlay"><section class="dialog image-preview-dialog text-preview-surface" role="dialog" aria-modal="true" aria-label="文本预览"><header class="text-preview-header">${facts}${previewTopActions('text', preview, { copy: true })}</header>${content}</section></div>`;
+        ? `<article class="local-text-preview" aria-label="压缩包目录">${title}<pre>${escape(preview.text)}</pre></article>`
+        : `<article class="local-text-preview local-markdown-preview chat-markdown">${title}${renderSafeMarkdown(preview.text, { inert: true })}</article>`;
+  return `<div class="scrim attachment-preview-overlay text-preview-overlay"><section class="dialog image-preview-dialog text-preview-surface" role="dialog" aria-modal="true" aria-label="文本预览"><header class="text-preview-header"><button class="file-preview-action" data-action="close-text-preview" aria-label="返回">${icon(icons.chevronLeft, '返回')}</button><span class="text-preview-title">${escape(preview.displayName || '文件')}</span><details class="text-preview-menu"><summary class="file-preview-action" aria-label="文件菜单">${icon(icons.moreVertical, '文件菜单')}</summary><div class="text-preview-menu-items">${menuItem('save-preview-attachment', icons.download, '下载文件')}${menuItem('share-preview-attachment', icons.share, '分享文件')}${menuItem('copy-text-preview', icons.copy, '复制文本')}${facts}</div></details></header>${content}</section></div>`;
 }
 
 function archiveDirectoryRows(entries, directory = '') {
@@ -4255,6 +4490,22 @@ app.addEventListener('wheel', event => {
   }
 }, { passive: false });
 
+function persistVideoPreviewPosition(force = false) {
+  const preview = state.videoPreview;
+  const video = document.querySelector('[data-video-preview]');
+  if (!native || !preview?.attachmentId || !preview.workspaceId || !video?.isConnected || !preview.resumeReady || video.readyState < 1) return;
+  const positionMillis = Math.max(0, Math.round(video.currentTime * 1000));
+  if (!Number.isFinite(positionMillis)) return;
+  preview.lastPlaybackPositionMillis = positionMillis;
+  if (!force && Date.now() - (preview.lastResumeSaveAt || 0) < 2000) return;
+  preview.lastResumeSaveAt = Date.now();
+  const args = { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis };
+  // Serialize writes so an older checkpoint cannot replace a later seek.
+  videoResumeWrite = videoResumeWrite.catch(() => {}).then(() => invoke('save_desktop_video_preview_position', { args }));
+  void videoResumeWrite.catch(() => {});
+}
+let videoResumeWrite = Promise.resolve();
+
 async function openVideoPreview(attachmentId, positionMillis = undefined, workspaceId = state.current?.summary?.id) {
   if (!native || !workspaceId || !attachmentId) return;
   const request = {};
@@ -4270,11 +4521,14 @@ async function openVideoPreview(attachmentId, positionMillis = undefined, worksp
   const restorePosition = Math.max(0, Number(state.videoPreview?.positionMillis) || 0) / 1000;
   queueMicrotask(() => {
     const video = document.querySelector('[data-video-preview]');
-    if (!video) return;
+    if (!video || state.videoPreview?.attachmentId !== attachmentId || state.videoPreview?.workspaceId !== workspaceId) return;
     const syncVideoUi = () => syncPreviewPlaybackUi('video', video);
     const restoreAndPlay = async () => {
-      if (restorePosition > 0) video.currentTime = Math.min(restorePosition, Math.max(0, video.duration || restorePosition));
-      try { await video.play(); }
+      if (!video.isConnected || state.videoPreview?.attachmentId !== attachmentId || state.videoPreview?.workspaceId !== workspaceId) return;
+      const desiredPosition = (state.videoPreview.pendingSeekMillis ?? restorePosition * 1000) / 1000;
+      if (desiredPosition >= 0) video.currentTime = Math.min(desiredPosition, Math.max(0, video.duration || desiredPosition));
+      state.videoPreview.resumeReady = true;
+      try { if (!document.hidden) await video.play(); }
       catch (_) { video.dataset.autoplayFailed = 'true'; }
       syncVideoUi();
     };
@@ -4284,24 +4538,24 @@ async function openVideoPreview(attachmentId, positionMillis = undefined, worksp
       if (!video.isConnected || state.videoPreview?.attachmentId !== attachmentId || state.videoPreview?.workspaceId !== workspaceId) return;
       const milliseconds = Math.round(video.currentTime * 1000);
       syncVideoUi();
-      if (milliseconds > 0 && milliseconds < Math.round(video.duration * 1000)) {
-        state.videoPreview = { ...state.videoPreview, lastPlaybackPositionMillis: milliseconds };
-      }
+      if (state.videoPreview.resumeReady) state.videoPreview.lastPlaybackPositionMillis = milliseconds;
+      persistVideoPreviewPosition();
     });
     video.addEventListener('play', syncVideoUi);
-    video.addEventListener('pause', syncVideoUi);
+    video.addEventListener('pause', () => { syncVideoUi(); persistVideoPreviewPosition(true); });
+    video.addEventListener('seeked', () => persistVideoPreviewPosition(true));
   });
 }
 
 async function closeVideoPreview() {
   const video = document.querySelector('[data-video-preview]');
   const preview = state.videoPreview;
-  const currentPosition = Math.round((video?.currentTime || 0) * 1000);
-  const positionMillis = preview?.lastPlaybackPositionMillis || currentPosition;
+  const currentPosition = preview?.resumeReady && video?.readyState >= 1 ? Math.round(video.currentTime * 1000) : undefined;
+  const positionMillis = currentPosition ?? preview?.lastPlaybackPositionMillis ?? preview?.positionMillis ?? 0;
   state.videoPreview = null;
   render();
   if (!preview?.attachmentId || !preview.workspaceId) return;
-  try { await invoke('save_desktop_video_preview_position', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis } }); }
+  try { await (videoResumeWrite = videoResumeWrite.catch(() => {}).then(() => invoke('save_desktop_video_preview_position', { args: { workspaceId: preview.workspaceId, attachmentId: preview.attachmentId, positionMillis } }))); }
   catch (_) { /* Closing an overlay never waits for a non-critical resume write. */ }
 }
 
@@ -4878,9 +5132,25 @@ async function updateTemporaryModelOverride(value) {
   } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `临时模型选择未保存：${String(error)}`; render(); }
 }
 
+function newConversationModelId() {
+  return state.pendingNewConversationModelId !== undefined
+    ? state.pendingNewConversationModelId : state.p6gGlobalDefault?.modelId ?? null;
+}
+
 async function updateP6GConversationOverride(modelId) {
   if (!state.current || state.temporaryConversation) return;
   if (!state.selectedConversationId) {
+    if (native) {
+      try {
+        await invoke('set_desktop_new_conversation_model', { modelId: modelId || null, expectedRevision: state.p6gGlobalDefault?.composerRevision || 0 });
+        state.p6gGlobalDefault = await invoke('read_desktop_p6g_global_default');
+      } catch (error) {
+        if (error?.code === 'STALE_DATA_AREA') throw error;
+        state.error = `模型选择未保存：${String(error)}`;
+        render();
+        return;
+      }
+    }
     state.pendingNewConversationModelId = modelId || null;
     state.p6gSelection = {
       ...(state.p6gSelection || {}),
@@ -5005,8 +5275,11 @@ async function sendLocalMessage() {
   const conversation = resolveConversation(state.current, state.selectedConversationId);
   const sentDraft = state.composerDraft;
   const sentAttachments = [...state.composerAttachments];
-  const pendingModelId = conversation ? null : state.pendingNewConversationModelId;
+  const pendingModelId = conversation ? null : newConversationModelId();
   const pendingPreferences = conversation ? null : { ...state.conversationPreferences };
+  const autoSelected = !(conversation ? state.p6gSelection?.conversationOverride?.modelId : pendingModelId);
+  const selectedPresetId = (conversation ? state.p6gSelection?.conversationOverride?.modelId : pendingModelId) || autoCandidate(state.modelServiceSettings, {text, mimeTypes: conversationAutoMimeTypes(conversation, sentAttachments), webSearchEnabled: state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled})?.id;
+
   let clientSubmissionId = null;
   try {
     const workspaceId = state.current.summary.id;
@@ -5017,20 +5290,24 @@ async function sendLocalMessage() {
       conversationId: conversation?.id || null,
       clientSubmissionId,
     };
+    ordinaryChatAttemptRegistry.add(clientSubmissionId);
+    const directSearch = usesIndependentSearch(state.modelServiceSettings, sentAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
+    const searchService = directSearch ? await createSearchServiceGrant(text, sentAttachments.map(item => item.id)) : null;
+    const retrievalRecipient = relayCoreNeedsCompanion(selectedPresetId,state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled,sentAttachments.length>0) ? await createLunaRetrievalGrant(text,sentAttachments.map(item=>item.id)) : null;
     const execution = invoke('submit_desktop_ordinary_chat', { args: {
       workspaceId,
       conversationId: conversation?.id || null,
       projectId: conversation ? null : state.pane === 'work' ? state.selectedWorkProjectId : null,
       expectedRevision: conversation?.revision ?? null,
       text,
-      attachmentIds: state.composerAttachments.map(item => item.id),
+      attachmentIds: sentAttachments.map(item => item.id),
       modelId: pendingModelId,
       toneOverride: pendingPreferences?.toneOverride ?? null,
       webSearchOverride: typeof pendingPreferences?.webSearchOverride === 'boolean' ? pendingPreferences.webSearchOverride : null,
       // The visible Send press is the only authorization action; the Rust boundary refuses
       // to construct a provider request without this short, content-free receipt.
-      egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: 'normal-chat-egress-v1', clientSubmissionId },
-    } });
+      egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: (directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(selectedPresetId, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled, sentAttachments.length > 0)) + (autoSelected && selectedPresetId ? `:auto=${selectedPresetId}` : ''), clientSubmissionId, searchService, retrievalRecipient },
+    } }).finally(() => ordinaryChatAttemptRegistry.delete(clientSubmissionId));
     state.composerAttachments = []; writeComposerAttachments();
     state.composerDraft = '';
     state.error = '';
@@ -5043,7 +5320,7 @@ async function sendLocalMessage() {
     // A short request can settle before its first runtime refresh reaches this
     // window. Claim that one submission here; never re-arm it after streaming.
     claimSubmittedChatRoute({ workspaceId, conversationId: result.conversationId, clientSubmissionId });
-    if (!conversation) state.pendingNewConversationModelId = null;
+    if (!conversation) state.pendingNewConversationModelId = undefined;
     if (state.pendingCreatedConversationRouteWorkspaceId === workspaceId) state.pendingCreatedConversationRouteWorkspaceId = null;
     state.status = result.state === 'COMPLETED' ? '回复已完成并写入用量账本。'
       : result.state === 'COMPLETED_ACCOUNTING_PENDING' ? '回复已保存；用量账本待本地恢复。'
@@ -5175,6 +5452,96 @@ async function pickComposerAttachment(kind) {
     state.composerAddOpen = false; state.error = ''; render();
   } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error; state.error = `附件未加入草稿：${String(error)}`; render(); }
 }
+
+function startInlineConversationRename({ id, revision, workspaceId = null, title, surface = 'sidebar' }) {
+  if (!id || state.batchEditing || state.settingsConversationReturn?.readOnly) return;
+  const original = String(title || '未命名会话');
+  state.contextMenu = null;
+  state.inlineConversationRename = { id, revision: Number(revision), workspaceId, original, draft: original, surface };
+  render();
+  requestAnimationFrame(() => {
+    const input = app.querySelector('[data-inline-conversation-rename]');
+    if (!input || state.inlineConversationRename?.id !== id) return;
+    input.focus({ preventScroll: true });
+    input.select();
+  });
+}
+
+function cancelInlineConversationRename() {
+  if (!state.inlineConversationRename) return;
+  state.inlineConversationRename = null;
+  render();
+}
+
+async function commitInlineConversationRename(input) {
+  const edit = state.inlineConversationRename;
+  if (!edit || !input?.isConnected || !input.matches('[data-inline-conversation-rename]')) return;
+  const title = input.value.trim();
+  if (!title) {
+    state.error = '会话标题不能为空。';
+    input.setCustomValidity('会话标题不能为空。');
+    input.reportValidity();
+    input.focus({ preventScroll: true });
+    input.select();
+    return;
+  }
+  state.inlineConversationRename = null;
+  if (title === edit.original.trim()) { render(); return; }
+  if (!native) { state.error = 'Web 预览不能保存会话标题。'; render(); return; }
+  render();
+  await mutateConversationLifecycle({ dataset: { id: edit.id, revision: String(edit.revision), ...(edit.workspaceId ? { workspaceId: edit.workspaceId } : {}) } }, 'update', { title }, '会话已重命名。');
+}
+
+function startInlineRenameFromTitle(target) {
+  const sidebarTitle = target.closest('.chat-history-title');
+  if (sidebarTitle) {
+    const row = sidebarTitle.closest('[data-conversation-row]');
+    if (!row || row.dataset.archived === 'true') return false;
+    if (state.inlineConversationRename?.id === row.dataset.id && state.inlineConversationRename.surface === 'sidebar') return false;
+    startInlineConversationRename({ id: row.dataset.id, revision: row.dataset.revision, workspaceId: row.dataset.workspaceId || null, title: sidebarTitle.textContent, surface: 'sidebar' });
+    return true;
+  }
+  if (!target.closest('.chat-title h1')) return false;
+  const conversation = currentConversation();
+  if (!conversation) return false;
+  if (state.inlineConversationRename?.id === conversation.id && state.inlineConversationRename.surface === 'header') return false;
+  startInlineConversationRename({ id: conversation.id, revision: conversation.revision, title: conversation.title, surface: 'header' });
+  return true;
+}
+
+app.addEventListener('click', event => {
+  if (event.detail < 2 || !startInlineRenameFromTitle(event.target)) return;
+  event.preventDefault();
+  event.stopPropagation();
+}, true);
+app.addEventListener('dblclick', event => {
+  if (!startInlineRenameFromTitle(event.target)) return;
+  event.preventDefault();
+  event.stopPropagation();
+}, true);
+app.addEventListener('input', event => {
+  if (event.target.matches('[data-inline-conversation-rename]') && state.inlineConversationRename) {
+    state.inlineConversationRename.draft = event.target.value;
+    event.target.setCustomValidity('');
+  }
+});
+app.addEventListener('keydown', event => {
+  if (!event.target.matches('[data-inline-conversation-rename]') || event.isComposing) return;
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    event.stopPropagation();
+    void commitInlineConversationRename(event.target);
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    cancelInlineConversationRename();
+  }
+}, true);
+app.addEventListener('focusout', event => {
+  if (event.target.matches('[data-inline-conversation-rename]') && state.inlineConversationRename) {
+    void commitInlineConversationRename(event.target);
+  }
+});
 
 async function mutateConversationLifecycle(target, action, fields, success) {
   const sidebarWorkspace = captureCloudSidebarWorkspace();
@@ -5312,33 +5679,28 @@ async function confirmConversationBatchDelete() {
   state.dialog = { ...dialog, submitting: true, failure: '' };
   render();
   let completed = 0;
-  let cloudSyncVerificationPending = false;
+  const cloudOnly = dialog.items.every(item => item.workspaceId);
   try {
     for (const item of dialog.items) {
       await ensureConversationActionWorkspace(item);
       if (!state.current) throw new Error('本机工作区不可用');
+      if (item.workspaceId) {
+        await invoke('cancel_desktop_conversation_sync', { workspaceId: state.current.summary.id, conversationId: item.id });
+        state.cloudConversations = state.cloudConversations.filter(row => batchConversationKey(row) !== batchConversationKey(item));
+        cloudListReadGeneration += 1;
+        persistCloudConversationCache();
+        completed += 1;
+        continue;
+      }
       await invoke('mutate_desktop_domain', { args: {
         intentId: intent('conversation-lifecycle'), workspaceId: state.current.summary.id,
         entity: 'conversation', action: 'softDelete', objectId: item.id,
         expectedRevision: Number(item.revision), fields: {},
       } });
       removeFavoriteConversation(item.id);
-      if (item.workspaceId) {
-        const receipt = await invoke('sync_selected_desktop_conversation', {
-          workspaceId: state.current.summary.id,
-          conversationId: item.id,
-        });
-        if (receipt.status === 'UNKNOWN') {
-          cloudSyncVerificationPending = true;
-          state.accountSync = { ...state.accountSync, pendingUnknown: { workspaceId: state.current.summary.id, conversationId: item.id } };
-          scheduleUnknownSyncReconciliation(state.current.summary.id, item.id);
-        } else if (!['SYNCED', 'UP_TO_DATE'].includes(receipt.status)) {
-          throw new Error(`云端回写未完成：${receipt.status}`);
-        }
-      }
       completed += 1;
     }
-    if (state.selectedConversationId && dialog.items.some(item => item.id === state.selectedConversationId && (!item.workspaceId || item.workspaceId === state.current?.summary?.id))) state.selectedConversationId = null;
+    if (state.selectedConversationId && dialog.items.some(item => !item.workspaceId && item.id === state.selectedConversationId)) state.selectedConversationId = null;
     const cloudKeys = new Set(dialog.items.filter(item => item.workspaceId).map(batchConversationKey));
     if (cloudKeys.size) {
       state.cloudConversations = state.cloudConversations.filter(item => !cloudKeys.has(batchConversationKey(item)));
@@ -5348,9 +5710,10 @@ async function confirmConversationBatchDelete() {
     state.dialog = null;
     finishConversationBatchEditing();
     state.error = '';
-    state.status = cloudSyncVerificationPending
-      ? `已将 ${completed} 个会话移入回收站；云端提交正在后台核对。`
+    state.status = cloudOnly
+      ? `已取消 ${completed} 个会话的同步，本地对话保留。`
       : `已将 ${completed} 个会话移入回收站，可恢复。`;
+    if (cloudOnly) await loadDesktopAccountSync();
     await restoreCloudSidebarWorkspace(sidebarWorkspace);
     await refresh();
   } catch (error) { if (error?.code === 'STALE_DATA_AREA') throw error;
@@ -5378,6 +5741,24 @@ app.addEventListener('click', event => {
 /** FB-P6-037: dialog state follows the typed receipt, never a CSS-only hide. */
 async function confirmConversationDelete(target) {
   const dialog = state.dialog;
+  if (dialog?.workspaceId) {
+    if (!native || dialog.submitting) return;
+    const sidebarWorkspace = captureCloudSidebarWorkspace();
+    state.dialog = { ...dialog, submitting: true, failure: '' }; render();
+    try {
+      await ensureConversationActionWorkspace(dialog);
+      await invoke('cancel_desktop_conversation_sync', { workspaceId: dialog.workspaceId, conversationId: dialog.id });
+      state.cloudConversations = state.cloudConversations.filter(row => row.workspaceId !== dialog.workspaceId || row.id !== dialog.id);
+      cloudListReadGeneration += 1; persistCloudConversationCache();
+      state.dialog = null; state.status = '已取消同步，本地对话保留。';
+      await loadDesktopAccountSync();
+      await restoreCloudSidebarWorkspace(sidebarWorkspace); await refresh();
+    } catch (error) {
+      await restoreCloudSidebarWorkspace(sidebarWorkspace).catch(() => {});
+      state.dialog = { ...dialog, submitting: false, failure: String(error) }; render();
+    }
+    return;
+  }
   const pending = beginConversationRecycle(dialog, target.dataset.id);
   if (!native || !state.current || !pending) return;
   state.dialog = pending;
@@ -5476,7 +5857,7 @@ async function confirmConversationBulkCleanup(scope) {
 
 app.addEventListener('contextmenu', event => {
   const message = event.target.closest?.('.chat-message[data-message-id]');
-  if (!message || event.target.closest?.('[data-attachment-id]') || window.getSelection()?.toString().trim()) return;
+  if (!message || event.target.closest?.('[data-attachment-id], .chat-message-metadata') || window.getSelection()?.toString().trim()) return;
   event.preventDefault();
   openTransientOverlay('assistant-message-menu', message, {
     messageId: message.dataset.messageId,
@@ -5672,12 +6053,22 @@ app.addEventListener('click', async event => {
     const attemptId = target.dataset.attemptId;
     if (!attemptId) return;
     const retryWorkspaceId = state.current?.summary?.id;
-    state.status = '已按原 Provider、原模型和原幂等键开始重试。';
+    const retryOwnerId = createChatSubmissionId();
+    state.status = '正在按原模型恢复回答。';
     state.error = '';
     render();
     try {
-      const result = await invoke('retry_desktop_ordinary_chat', { args: { attemptId } });
-      state.status = result.state === 'COMPLETED' ? '重试已完成并写入用量账本。' : result.state === 'UNKNOWN' ? '重试结果仍未知，未再次自动重发。' : '重试未完成。';
+      const original = orderedConversationMessages(resolveConversation(state.current, state.selectedConversationId)).find(message => message.attemptId === attemptId);
+      const messages = orderedConversationMessages(resolveConversation(state.current, state.selectedConversationId));
+      const originalMaterial = retrySearchMaterial(messages, attemptId);
+      const originalAttachments = originalMaterial?.attachments || [];
+      const directSearch = usesIndependentSearch(state.modelServiceSettings, originalAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
+      const searchService = directSearch ? await createSearchServiceGrant(originalMaterial.text, originalAttachments.map(item => item.id)) : null;
+      const originalPreset = RELAYCORE_MODELS.find(model => model.providerId === original?.modelSnapshot?.providerId && (model.modelId === original?.modelSnapshot?.modelId || (model.presetId === "RELAYCORE_OPUS_5_5" && original?.modelSnapshot?.modelId === "claude-opus-5-5")))?.presetId;
+      const retrievalRecipient = relayCoreNeedsCompanion(originalPreset,state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled,originalAttachments.length>0) ? await createLunaRetrievalGrant(originalMaterial.text,originalAttachments.map(item=>item.id)) : null;
+      ordinaryChatAttemptRegistry.add(retryOwnerId);
+      const result = await invoke('retry_desktop_ordinary_chat', { args: { attemptId, egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(originalPreset, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled, originalAttachments.length > 0), searchService, retrievalRecipient } } }).finally(() => ordinaryChatAttemptRegistry.delete(retryOwnerId));
+      state.status = result.state === 'COMPLETED' ? '重试已完成并写入用量账本。' : ['COMPLETED_ACCOUNTING_PENDING', 'RESPONSE_COMMITTED'].includes(result.state) ? '回答已保存，计量记录待恢复。' : result.state === 'UNKNOWN' ? '重试结果仍未知，未再次自动重发。' : '重试未完成。';
       await loadDesktopContextRecords();
       await loadDesktopDiagnosticRecords();
       await syncPersistedConversationContinuation(retryWorkspaceId, result.conversationId);
@@ -5951,18 +6342,13 @@ app.addEventListener('click', async event => {
     return;
   }
   if (action === 'context-menu-rename') {
-    await ensureConversationActionWorkspace(target);
-    const conversation = workspace()?.exchange?.conversations?.find(item => item.id === target.dataset.id);
-    state.contextMenu = null;
-    state.dialog = { kind: 'conversation-rename', id: target.dataset.id, revision: Number(target.dataset.revision), title: conversation?.title || '', workspaceId: target.dataset.workspaceId || null };
-    render();
+    const menu = state.contextMenu;
+    startInlineConversationRename({ id: target.dataset.id, revision: target.dataset.revision, workspaceId: target.dataset.workspaceId || null, title: menu?.title || currentConversation()?.title, surface: menu?.source === 'header' ? 'header' : 'sidebar' });
     return;
   }
   if (action === 'open-conversation-rename') {
-    await ensureConversationActionWorkspace(target);
-    const conversation = workspace()?.exchange?.conversations?.find(item => item.id === target.dataset.id);
-    state.dialog = { kind: 'conversation-rename', id: target.dataset.id, revision: Number(target.dataset.revision), title: conversation?.title || '', workspaceId: target.dataset.workspaceId || null };
-    render();
+    const title = target.closest('[data-conversation-row]')?.querySelector('.chat-history-title')?.textContent;
+    startInlineConversationRename({ id: target.dataset.id, revision: target.dataset.revision, workspaceId: target.dataset.workspaceId || null, title, surface: 'sidebar' });
     return;
   }
   if (action === 'context-menu-project') {
@@ -5977,10 +6363,6 @@ app.addEventListener('click', async event => {
     state.contextMenu = null;
     state.dialog = { kind: 'conversation-delete', id: target.dataset.id, revision: Number(target.dataset.revision), workspaceId: target.dataset.workspaceId || null };
     render();
-    return;
-  }
-  if (action === 'save-conversation-rename') {
-    await mutateConversationLifecycle(target, 'update', { title: document.querySelector('#conversation-rename')?.value || '' }, '会话已重命名。');
     return;
   }
   if (action === 'save-conversation-project') {
@@ -6163,7 +6545,7 @@ app.addEventListener('click', async event => {
     void updateP6GConversationOverride(null);
   } else if (action === 'select-p6g-tier') {
     event.preventDefault();
-    state.p6gSelection = { ...(state.p6gSelection || {}), pickerTier: target.dataset.tier === 'DEEP' ? 'DEEP' : 'DAILY' };
+    state.p6gSelection = { ...(state.p6gSelection || {}), pickerTier: ['DAILY', 'DEEP', 'RELAYCORE'].includes(target.dataset.tier) ? target.dataset.tier : null };
     render();
   } else if (action === 'p6g-picker-back') {
     event.preventDefault();
@@ -6204,14 +6586,24 @@ app.addEventListener('input', event => {
       : event.target.value;
     state.modelCredentialDraft = value;
     state.modelCredentialEdited = true;
-    state.modelSettingsNotice = '';
+    state.modelSettingsNotice = '当前修改尚未保存，请先保存再测试连接。';
     state.modelSettingsError = '';
+    const feedback = app.querySelector('[data-model-provider-feedback]');
+    if (feedback?.dataset.providerId === state.modelProviderId) {
+      feedback.hidden = false; feedback.textContent = state.modelSettingsNotice;
+      feedback.classList.remove('error'); feedback.setAttribute('role', 'status');
+    }
   }
   const previewRange = event.target.closest?.('[data-video-preview-range], [data-audio-preview-range]');
   if (previewRange) {
     const kind = previewRange.hasAttribute('data-video-preview-range') ? 'video' : 'audio';
     const media = document.querySelector(`[data-${kind}-preview]`);
-    if (media) { media.currentTime = Math.max(0, Number(previewRange.value) || 0) / 1000; syncPreviewPlaybackUi(kind, media); }
+    if (media) {
+      const positionMillis = Math.max(0, Number(previewRange.value) || 0);
+      if (kind === 'video' && state.videoPreview) state.videoPreview.pendingSeekMillis = positionMillis;
+      if (media.readyState >= 1) media.currentTime = positionMillis / 1000;
+      syncPreviewPlaybackUi(kind, media);
+    }
   }
   const volumeRange = event.target.closest?.('[data-video-preview-volume], [data-audio-preview-volume]');
   if (volumeRange) {
@@ -6517,6 +6909,42 @@ async function bootDesktopShell() {
   }
 }
 
+function rememberDesktopExit() {
+  if (!native) return;
+  desktopAppEntry.leave(state.dataArea, state.current?.summary?.id, state.selectedConversationId, hasRunningGeneration(state, ordinaryChatAttemptRegistry.size));
+  void flushOrdinaryComposerDraft();
+}
+function resumeDesktopEntry() {
+  if (!native) return;
+  if (!desktopAppEntry.enter(hasRunningGeneration(state, ordinaryChatAttemptRegistry.size))) {
+    if (state.current?.summary?.id) queueOrdinaryChatRuntimeRefresh({ workspaceId: state.current.summary.id });
+    return;
+  }
+  desktopWorkspaceRefreshGeneration += 1;
+  state.entryResolved = true;
+  state.selectedConversationId = null;
+  state.pane = state.dataArea === 'WORK' ? 'work' : 'chat';
+  state.p6gSelection = null;
+  state.conversationPreferences = { revision: 0, toneOverride: null, webSearchOverride: null };
+  state.assistantMessageMenu = null;
+  state.contextMenu = null;
+  resetNewConversationComposer();
+  render();
+}
+const checkpointVideoOnExit = () => { persistVideoPreviewPosition(true); document.querySelector('[data-video-preview]')?.pause(); };
+window.addEventListener('blur', checkpointVideoOnExit);
+window.addEventListener('pagehide', checkpointVideoOnExit);
+document.addEventListener('visibilitychange', () => { if (document.hidden) checkpointVideoOnExit(); });
+window.addEventListener('blur', rememberDesktopExit);
+window.addEventListener('pagehide', rememberDesktopExit);
+window.addEventListener('focus', resumeDesktopEntry);
+document.addEventListener('visibilitychange', () => { if (document.hidden) rememberDesktopExit(); else resumeDesktopEntry(); });
+app.addEventListener('click', event => {
+  const action = event.target.closest?.('[data-action]')?.dataset.action;
+  if (!native || !['new-chat', 'select-chat'].includes(action)) return;
+  state.entryResolved = true;
+  if (state.current) desktopWorkspaceRefreshGeneration += 1;
+}, true);
 void bootDesktopShell();
 
 // Dismiss only the memory overflow surface; its actions retain their existing owners.
@@ -6557,3 +6985,5 @@ const composerResizeObserver = new ResizeObserver(entries => {
   if (entries.length) resizeComposer(document.getElementById("chat-composer"));
 });
 composerResizeObserver.observe(app);
+
+installModelSettingsKeyboardNavigation();

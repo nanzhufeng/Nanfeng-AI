@@ -2,6 +2,7 @@ import { renderCodeSyntax } from './code-syntax.mjs';
 import { markdownLinkAt, replaceMarkdownLinks } from './markdown-link.mjs';
 import { icon, icons } from './icon-source.mjs';
 import { sourceDisplayTitle, sourceWebsiteColor, sourceWebsiteName } from './source-link-presentation.mjs';
+import { isCautionHeading } from './reply-text-emphasis.mjs';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character]);
 
@@ -143,7 +144,7 @@ function renderMathExpression(value, { display = false } = {}) {
   return `<span class="chat-markdown-math${display ? ' chat-markdown-math-display' : ''}" role="math" aria-label="${escapeHtml(readable)}">${html}</span>`;
 }
 
-function renderInlineMarkdown(value, query = '', inert = false) {
+function renderInlineMarkdown(value, query = '', inert = false, emphasis = null) {
   const tokens = [];
   const sources = [];
   const token = html => {
@@ -177,9 +178,14 @@ function renderInlineMarkdown(value, query = '', inert = false) {
   // empty parentheses and parenthesized code/math remain authored content.
   source = source.replace(/\(\s*(NFMARKDOWNTOKEN(\d+)X)\s*\)/g,
     (whole, key, index) => tokens[Number(index)] === '' ? key : whole);
+  const strong = (_whole, stars, underscores) => {
+    const content = stars ?? underscores;
+    const visible = content.replace(/&(amp|lt|gt|quot|#039);/g, (_entity, name) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#039': "'" })[name]);
+    const tone = emphasis?.take(visible);
+    return `<strong${tone ? ` class="chat-text-${tone}"` : ''}>${content}</strong>`;
+  };
   let html = escapeHtml(source)
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+    .replace(/\*\*([^*\n]+)\*\*|__([^_\n]+)__/g, strong)
     .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
     .replace(/(^|[\s（(])\*([^*\n]+)\*(?=$|[\s，。！？、；：,.!?;)）])/g, '$1<em>$2</em>')
     .replace(/(^|[\s（(])_([^_\n]+)_(?=$|[\s，。！？、；：,.!?;)）])/g, '$1<em>$2</em>');
@@ -217,8 +223,8 @@ const blockStart = (lines, index) => {
  * Small, dependency-free Markdown projection for persisted Assistant and OCR text.
  * Raw HTML is always escaped; only allow-listed http(s)/mailto links become active.
  */
-export function renderSafeMarkdown(value, { query = '', inert = false } = {}) {
-  const inlineMarkdown = (text, needle) => renderInlineMarkdown(text, needle, inert);
+export function renderSafeMarkdown(value, { query = '', inert = false, emphasis = null } = {}) {
+  const inlineMarkdown = (text, needle, eligible = true) => renderInlineMarkdown(text, needle, inert, eligible ? emphasis : null);
   const blockCopy = (label, text) => inert ? '' : markdownBlockCopyButton(label, text);
   // Some historical Android transcripts split a Markdown destination onto the
   // following physical line.  Normalize only that harmless source form before
@@ -294,7 +300,8 @@ export function renderSafeMarkdown(value, { query = '', inert = false } = {}) {
     const heading = headingLine(line);
     if (heading) {
       const level = Math.min(6, heading[1].length + 1);
-      output.push(`<h${level}>${inlineMarkdown(heading[2], query)}</h${level}>`);
+      if (emphasis) emphasis.cautionSection = isCautionHeading(heading[2]);
+      output.push(`<h${level}>${inlineMarkdown(heading[2], query, false)}</h${level}>`);
       index += 1;
       continue;
     }
@@ -304,7 +311,7 @@ export function renderSafeMarkdown(value, { query = '', inert = false } = {}) {
       const hasHeader = rawRows.length > 1 && tableDivider(lines[index - rawRows.length + 1]);
       const rows = hasHeader ? rawRows.slice(2) : rawRows;
       const columnCount = Math.max(...rawRows.map(row => row.length));
-      const cells = row => Array.from({ length: columnCount }, (_, cellIndex) => inlineMarkdown(row[cellIndex] || '', query));
+      const cells = row => Array.from({ length: columnCount }, (_, cellIndex) => inlineMarkdown(row[cellIndex] || '', query, false));
       const header = hasHeader ? `<thead><tr>${cells(rawRows[0]).map(cell => `<th>${cell}</th>`).join('')}</tr></thead>` : '';
       const tableMarkdown = rawRows.map(row => `| ${row.join(' | ')} |`).join('\n');
       output.push(`<div class="chat-markdown-copyable chat-markdown-table-copyable"><div class="chat-markdown-table-wrap"><table>${header}<tbody>${rows.map(row => `<tr>${cells(row).map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${blockCopy('表格（保留 Markdown 格式）', tableMarkdown)}</div>`);
@@ -313,7 +320,7 @@ export function renderSafeMarkdown(value, { query = '', inert = false } = {}) {
     if (/^\s*>/.test(line)) {
       const quote = [];
       while (index < lines.length && /^\s*>/.test(lines[index])) quote.push(lines[index++].replace(/^\s*>\s?/, ''));
-      output.push(`<blockquote>${quote.map(item => inlineMarkdown(item, query)).join('<br>')}</blockquote>`);
+      output.push(`<blockquote>${quote.map(item => inlineMarkdown(item, query, false)).join('<br>')}</blockquote>`);
       continue;
     }
     const listMatch = line.match(/^(\s*)([-+*]|\d+[.)])\s+(.+)$/);

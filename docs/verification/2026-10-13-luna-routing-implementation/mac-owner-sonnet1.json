@@ -1,0 +1,68 @@
+{
+  "actualModel": "claude-sonnet-5-5",
+  "covered": 2,
+  "files": "public-02.md,public-10.docx",
+  "ledgerCalls": [
+    {
+      "actual": "openai/gpt-6-luna",
+      "currency": "USD",
+      "kind": "FINAL_MEASURED",
+      "micros": 10610,
+      "model": "openai/gpt-6-luna",
+      "source": "PROVIDER_RESPONSE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "openai/gpt-6-luna",
+      "source": null
+    },
+    {
+      "actual": "claude-sonnet-5-5",
+      "currency": "CNY",
+      "kind": "FINAL_MEASURED",
+      "micros": 1460,
+      "model": "claude-sonnet-5-5",
+      "source": "LOCAL_ESTIMATE"
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "claude-sonnet-5-5",
+      "source": null
+    }
+  ],
+  "physical": [
+    {
+      "input": 8581,
+      "nativeSources": [
+        [
+          "Python Release Python 3.13.0 | Python.org",
+          "https://www.python.org/downloads/release/python-3130/?utm_source=openai"
+        ],
+        [
+          "Announcing Rust 1.89.0 | Rust Blog",
+          "https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/?utm_source=openai"
+        ]
+      ],
+      "output": 336,
+      "reportedMicros": 10610,
+      "requested": "openai/gpt-6-luna",
+      "returned": "openai/gpt-6-luna"
+    }
+  ],
+  "planned": 2,
+  "preset": "RELAYCORE_SONNET_5_5",
+  "publicAnswer": "两份附件只有检索标题，没有写出具体日期或数字，所以没有可以逐条比对的主张。下面是核验到的发布日期。\n\nPython 3.13.0：已核实，发布于 2024 年 10 月 7 日。\n来源：https://www.python.org/downloads/release/python-3130/\n\nRust 1.89.0：已核实，发布于 2025 年 8 月 7 日。\n来源：https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/\n\n两项都来自官方发布页或官方博客。若你要核对的是别处文档里写的日期，把原文发给我，我可以逐条比对。\n\n来源：- [Announcing Rust 1.89.0 | Rust Blog](https://blog.rust-lang.org/2025/08/07/Rust-1.89.0/)\n- [Python Release Python 3.13.0 | Python.org](https://www.python.org/downloads/release/python-3130/)",
+  "reopenedCheckpoints": 2,
+  "reopenedModel": "claude-sonnet-5-5",
+  "reopenedState": "COMPLETED",
+  "requested": "claude-sonnet-5-5",
+  "sources": [],
+  "status": "COMPLETED",
+  "webProof": true
+}

@@ -1,0 +1,82 @@
+[
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ChatCallAccounting.kt",
+    "beforeSha256": "947f5c4db8a342c583e3b12cac2ac5b7f1c653050a9fa5978d38cbb0db3c4c58",
+    "afterSha256": "55d5b21e87657875011ed8c1ca1c349e71b8fcc6e263ac50c108ef9714dec02c"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ui/ConversationCostLedgerUi.kt",
+    "beforeSha256": "89703772f0ea2f8794040afbbc59383c484aec312458341eddedab99f4b1455e",
+    "afterSha256": "19e876cc9e91cd6f55300fccecf0e6a75dd130e824df917b77d6c03ed630f7c2"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/data/ChatAccountingPersistenceTest.kt",
+    "beforeSha256": "7eb23fba730caa06c6b9f2679502506a916fb69175cb2e04f141f494cf0719a9",
+    "afterSha256": "97f9dfdac2d84b74c06b87bd2421c31dec363a150a36fc3c09a131eb2abd7108"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/domain/RetrievalCostGroupingTest.kt",
+    "beforeSha256": null,
+    "afterSha256": "6cb993074559b77d40a2cef28e8d3ce8ab91834d01177db70683a288fc0cac4a"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ui/ConversationCostLedgerSummaryContractsTest.kt",
+    "beforeSha256": "47d4b36278a6effa569216f993e7c81acfd35ac7e606681642dc3c96d9b32942",
+    "afterSha256": "6ea9b1896e78dd03563082e5d9e8a11544cb0a7b9d371d21c030a768e6920658"
+  },
+  {
+    "path": "desktop/scripts/build.mjs",
+    "beforeSha256": "ba02a81b4152ddb89d913034a097385d2d94bd8a45472b3b54e90f5d35eb321d",
+    "afterSha256": "c9d040790a4aae6a0b2bed6483d15c66e1f53cfddc15478d78452a410ed7fff7"
+  },
+  {
+    "path": "desktop/src-tauri/src/lib.rs",
+    "beforeSha256": "17350e9cbb579278d714de98694ff360077f54d511a8c70aa80cd41eee87ce07",
+    "afterSha256": "002a95deb73af79b826802c7bb090c7a7388b1541c88fcd3520c89429d6a97d6"
+  },
+  {
+    "path": "desktop/src/android-settings-shell.mjs",
+    "beforeSha256": "e8042ef2c7c21072550667258c2981bd9c9c1c38768bca20966dc2644177b97a",
+    "afterSha256": "eb376d37a36edc47d23e3089801a91fff80d582219800047b04d3811341c8dcd"
+  },
+  {
+    "path": "desktop/src/usage-ledger-display.mjs",
+    "beforeSha256": null,
+    "afterSha256": "c5c971a9409e874b70ad2349b858f182d036e916c955ce35b8b5d832d993dc9d"
+  },
+  {
+    "path": "desktop/tests/usage-ledger-display.test.mjs",
+    "beforeSha256": null,
+    "afterSha256": "c4af0d9d7de21544f8ebb434b5ce6ec6d8e109dfff92827515fc68c3ef871acf"
+  },
+  {
+    "path": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+    "beforeSha256": "23f8d109a9b8166e99eae12be899c68da2e42d8ce0d4fca7972bd8e8d2ec74f7",
+    "afterSha256": "7ffc9b8672295d5bcd0eb0e03c0f19fe84c40ecef57e8f7e8adb51d50996bac2"
+  },
+  {
+    "path": "docs/CURRENT_HANDOFF.md",
+    "beforeSha256": "60e67205652554c0d7b57ba1e8acaa76b6280f1a7f086e9f9af464c431ba0cee",
+    "afterSha256": "fb058aa1afd9f0ac516c4f1498f4fcd145ec3d68e90ef4a18eb0f1ed0557127a"
+  },
+  {
+    "path": "docs/PROJECT_STATUS.md",
+    "beforeSha256": "17069264c43f8567c8b69eb47a1c7aef7c0c3508f32939cdfaf2972d905faa1f",
+    "afterSha256": "1d36d8bead34cb40c23dbd3bdb9f599886fc8955d433f84ca4699b504ae7c7a7"
+  },
+  {
+    "path": "docs/contracts/DOMAIN_OWNER_MAP.md",
+    "beforeSha256": "9e7727eb2b5cdb34a3f69df2c2e8b3499e44afb6fc77a3edb7221f9a98b9dc59",
+    "afterSha256": "f353fc878439479c6aa72d7b40dfb382fbcd7c7c48b0096126c0e218e4fefaef"
+  },
+  {
+    "path": "docs/decision-log.md",
+    "beforeSha256": "e852154b8fbdc01e6edd88e13c1da2d3f0d4faeb1cbfdec4a7e46cfd1953dbaf",
+    "afterSha256": "0e3a77c039a8b8b1f1f525dbed9f67236ba68ee0f9d0476ec4963abb1f6e55c7"
+  },
+  {
+    "path": "protocol/contracts/contract-owner-map-v1.json",
+    "beforeSha256": "87d2052413b2a5ea45279c02af843afd573974e4353b84c5ffc0f73f49e4ebc2",
+    "afterSha256": "b777f69ef419fb4e3ff8f3e39765dbd3e0cc301bdbb01491cf463810d22f23c6"
+  }
+]

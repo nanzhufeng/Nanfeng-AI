@@ -1,5 +1,10 @@
 # P10-A 双路径连接能力、状态与配置表面合同
 
+<!-- contract-governance:start -->
+> **合同口径：本地实验／独立专项合同。** 领域入口：[ 双路径本地配置实验 ](P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P10-A 双路径连接能力、状态与配置表面合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
 状态：本地状态/配置面与 fake/loopback 合同；不含真实 Key、Provider HTTP、Google/Supabase/OAuth 或跨网络同步
 

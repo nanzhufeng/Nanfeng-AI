@@ -1,0 +1,11 @@
+{
+  "isolatedPackage": "com.nanzhufeng.ai.publicmodelacceptance",
+  "device": "emulator-5592",
+  "credentialsCleared": true,
+  "capabilityConsumed": true,
+  "bootstrapAbsent": true,
+  "reverseCount": 0,
+  "forceStopped": true,
+  "formalAppInstalled": false,
+  "mainDeviceTouched": false
+}

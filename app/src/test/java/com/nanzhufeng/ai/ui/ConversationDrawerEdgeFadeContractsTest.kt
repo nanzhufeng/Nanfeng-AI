@@ -70,7 +70,7 @@ class ConversationDrawerEdgeFadeContractsTest {
         assertTrue(drawer.contains("\"定时任务\","))
         assertFalse(drawer.contains("\"已计划\","))
         assertTrue(drawer.countOccurrences("fontSize = scaledConversationTextUnit(16.sp)") >= 2)
-        assertTrue(conversationRow.contains("Text(conversation.title, modifier = Modifier.weight(1f), color = if (selected) AccentOrange else BodyText, fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal"))
+        assertTrue(conversationRow.contains("InlineConversationTitle(title = conversation.title, modifier = Modifier.weight(1f), style = titleTextStyle.copy(color = if (selected) AccentOrange else BodyText)"))
     }
 
     private fun String.countOccurrences(token: String): Int = split(token).size - 1

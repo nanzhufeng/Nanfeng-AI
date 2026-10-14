@@ -1,10 +1,15 @@
 # Desktop Compare 真实执行合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ Desktop历史Compare执行兼容 ](DESKTOP_COMPARE_EXECUTION_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** Desktop Compare 真实执行合同
+<!-- contract-governance:end -->
+
 ## 当前结论
 
-Desktop Compare 已从 fail-closed 占位升级为真实 Tauri／HTTP／SQLite／UI 执行链。它是 Android 当前公开模型选择面的明确 Desktop 例外：Android 继续不公开 Compare；Desktop 只保留 Composer 右侧一个“对比”入口，不再保留模型菜单行、长按或第二确认面。
+历史Desktop Compare专项已实现Tauri／HTTP／SQLite执行链及分支数据。当前chat-shell／app不再提供新“对比”Composer入口；既有Compare身份、分支状态与停止／重试兼容仍由原owner保留。不能根据下面旧入口说明重新添加按钮；当前可见表面以Desktop会话合同为准。
 
-## 固定目标与 Provider
+## 历史专项目标与Provider（现有分支兼容语义保持）
 
 - Provider 固定为已存在的 `OPENROUTER` 设置、固定 OpenAI-compatible endpoint 与同一 Security.framework scoped credential owner。
 - ChatGPT 分支固定为 `GPT_5_6_TERRA`／`openai/gpt-5.6-terra`。

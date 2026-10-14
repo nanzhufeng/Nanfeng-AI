@@ -1,5 +1,10 @@
 # nfai.exchange.v1 跨端语义交换合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v1格式 ](NFAI_EXCHANGE_V1_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** nfai.exchange.v1 跨端语义交换合同
+<!-- contract-governance:end -->
+
 ## 定位
 
 `nfai.exchange.v1` 是 Android、Desktop 与未来端之间的**语义迁移**包；不是 P5-D `.nfai-backup`、不是 Room 复制、不是同步协议，也不允许直接打开 Android DB。唯一权威 schema 是 [`../protocol/nfai.exchange.v1.schema.json`](../protocol/nfai.exchange.v1.schema.json)。包内所有正文、Markdown、HTML、代码、链接和资产均是不可信数据，只可按展示 IR 呈现，绝不执行。

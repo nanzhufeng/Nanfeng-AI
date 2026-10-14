@@ -1,0 +1,1563 @@
+[
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "anthropic/claude-opus-5.5",
+    "nativeSources": [
+      "https://go.dev/doc/devel/release",
+      "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 15409,
+        "input": 21138,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release",
+          "https://go.dev/doc/go1.24",
+          "https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE",
+          "https://www.firefox.com/en-US/firefox/139.0/releasenotes/?redirect_source=mozilla-org",
+          "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139"
+        ],
+        "output": 841,
+        "publicFixtureReply": "两项都已核实：Go 1.24.0 于 2025-02-11 发布，Firefox 139.0 于 2025-05-27 发布。\n\n[A1] 已核实\nGo 1.24.0 的发布日期是 2025-02-11。go.dev 的版本历史页写明 go1.24.0 (released 2025-02-11)，Go 1.24.0 是 Go 的一个主要版本。go.dev 的发行说明也写明 Go 1.24 于 2025 年 2 月发布，距 Go 1.23 六个月。Go 官方公告邮件列表也发布了 \"We have just released Go 1.24.0.\"\n来源：https://go.dev/doc/devel/release ；https://go.dev/doc/go1.24 ；https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE\n\n[A2] 已核实\nFirefox 139.0 桌面版的发布日期是 2025-05-27。官方发行说明页 写明 139.0 Firefox Release 日期为 2025 年 5 月 27 日，并于当天首次推送给正式版（Release）渠道用户。Mozilla 开发者文档（MDN）也写明 Firefox 139 发布于 2025 年 5 月 27 日。注意：发行说明现在由 mozilla.org 重定向到 firefox.com 域名（网址里带 redirect_source=mozilla-org），但仍是 Mozilla 官方页面。\n来源：https://www.firefox.com/en-US/firefox/139.0/releasenotes/?redirect_source=mozilla-org ；https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)\n- [Go 1.24 Release Notes - The Go Programming Language](https://go.dev/doc/go1.24)\n- [Go 1.24.0 is released](https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE)\n- [Firefox 139.0, See All New Features, Updates and Fixes](https://www.firefox.com/en-US/firefox/139.0/releasenotes/?redirect_source=mozilla-org)\n- [Firefox 139 release notes for developers - Mozilla](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)",
+        "reportedCostMicros": 121372,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "anthropic/claude-opus-5.5",
+        "returned": "anthropic/claude-opus-5.5",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "CLAUDE_OPUS_5_5",
+    "provider": "OPENROUTER",
+    "publicAnswer": "## 核验结果\n\n**1. Go 1.24.0：已核实，发布日期为 2025年2月11日**\n- go.dev 版本历史页标明 go1.24.0 于 2025-02-11 发布，属于主要版本。\n- go.dev 发行说明也说明 Go 1.24 于 2025年2月发布，距 Go 1.23 六个月。\n- 来源：https://go.dev/doc/devel/release\n\n**2. Firefox 139.0（桌面版）：已核实，发布日期为 2025年5月27日**\n- Mozilla 官方发行说明标明 139.0 正式版于 2025年5月27日发布，并于当天首次推送给正式版渠道用户。\n- Mozilla 开发者文档（MDN）也写明 Firefox 139 于 2025年5月27日发布。\n- 来源：https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139\n- 说明：发行说明页现已从 mozilla.org 重定向到 firefox.com，但仍是 Mozilla 官方页面。\n\n以上两项均基于本轮检索结果，没有复用之前的查询。\n\n来源：- [Firefox 139 release notes for developers - Mozilla](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)",
+    "returned": "anthropic/claude-opus-5.5",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "anthropic/claude-sonnet-5.5",
+    "nativeSources": [
+      "https://go.dev/blog/go1.24",
+      "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 8006,
+        "input": 21110,
+        "nativeSources": [
+          "https://go.dev/blog/go1.24",
+          "https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE",
+          "https://go.dev/blog/all",
+          "https://www.firefox.com/en-US/firefox/139.0/releasenotes/?redirect_source=mozilla-org",
+          "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139"
+        ],
+        "output": 662,
+        "publicFixtureReply": "**[A1] 已核实**\nGo 1.24 由 Go 团队在官方博客发布，博文日期为 2025 年 2 月 11 日。博文署名 Junyang Shao 代表 Go 团队，称 Go 团队今天发布 Go 1.24。golang-announce 另有 \"Go 1.24.0 is released\" 的公告。go.dev 的博客索引也列出了同日的 \"Go 1.24 is released!\"\n来源：https://go.dev/blog/go1.24\n\n**[A2] 已核实**\nFirefox 139.0 正式版于 2025 年 5 月 27 日发布。官方发行说明写明 139.0 版本在 2025 年 5 月 27 日首次提供给 Release 渠道用户。MDN 的 Mozilla 开发者文档也写明 Firefox 139 发布于 2025 年 5 月 27 日。\n来源：https://www.firefox.com/en-US/firefox/139.0/releasenotes/（该页由 mozilla.org 重定向而来）\n\n说明：Firefox 的官方发行说明现在托管在 firefox.com，不在 mozilla.org 域名下。搜索结果中没有找到 mozilla.org 域名下的页面，所以这里引用的是 Mozilla 官方的 firefox.com 页面。\n\n来源：\n- [Go 1.24 is released! - The Go Programming Language](https://go.dev/blog/go1.24)\n- [Go 1.24.0 is released](https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE)\n- [Blog Index - The Go Programming Language](https://go.dev/blog/all)\n- [Firefox 139.0, See All New Features, Updates and Fixes](https://www.firefox.com/en-US/firefox/139.0/releasenotes/?redirect_source=mozilla-org)\n- [Firefox 139 release notes for developers - Mozilla](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)",
+        "reportedCostMicros": 68840,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "anthropic/claude-sonnet-5.5",
+        "returned": "anthropic/claude-sonnet-5.5",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      },
+      {
+        "elapsedMs": 7220,
+        "input": 18971,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release",
+          "https://go.dev/blog/go1.24",
+          "https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE"
+        ],
+        "output": 568,
+        "publicFixtureReply": "[A1] 已核实\nGo 1.24.0 的官方发布日期是 2025 年 2 月 11 日。go.dev 的 Release History 页面写明 go1.24.0 发布于 2025-02-11,是 Go 的一次主要版本发布。Go 官方博客《Go 1.24 is released!》的署名日期也是 2025 年 2 月 11 日,文中称 Go 团队今天发布 Go 1.24。golang-announce 邮件列表的公告《Go 1.24.0 is released》也确认 Go 1.24.0 已发布。\n\n来源:\n- https://go.dev/doc/devel/release\n- https://go.dev/blog/go1.24\n- https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE\n\n说明:你提到\"Go 与 Firefox 两文件\",但本批次只给出了 [A1] 一项,没有 Firefox 条目,所以我没有核验 Firefox。\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)\n- [Go 1.24 is released! - The Go Programming Language](https://go.dev/blog/go1.24)\n- [Go 1.24.0 is released](https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE)",
+        "reportedCostMicros": 63622,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "anthropic/claude-sonnet-5.5",
+        "returned": "anthropic/claude-sonnet-5.5",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      },
+      {
+        "elapsedMs": 6284,
+        "input": 13813,
+        "nativeSources": [
+          "https://www.firefox.com/en-US/firefox/139.0/releasenotes/?redirect_source=mozilla-org",
+          "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139"
+        ],
+        "output": 426,
+        "publicFixtureReply": "**[A2] 已核实**\nFirefox 139.0 正式版的官方发布日期是 2025 年 5 月 27 日。官方发行说明写明,139.0 版于 2025 年 5 月 27 日首次提供给 Release 渠道用户。MDN 开发者发行说明也一致:Firefox 139 于 2025 年 5 月 27 日发布。\n\n补充:后续的 139.0.4 版于 2025 年 6 月 10 日发布,它是补丁版,不是 139.0 正式版。\n\n来源:\n- https://www.firefox.com/en-US/firefox/139.0/releasenotes/(Mozilla 官方发行说明,由 mozilla.org 重定向而来)\n- https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139\n\n你提到 Go 与 Firefox 两个文件,但本批次只给了 A2 一项,所以我只核验了这一项。\n\n来源：\n- [Firefox 139.0, See All New Features, Updates and Fixes](https://www.firefox.com/en-US/firefox/139.0/releasenotes/?redirect_source=mozilla-org)\n- [Firefox 139 release notes for developers - Mozilla](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)",
+        "reportedCostMicros": 41886,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "anthropic/claude-sonnet-5.5",
+        "returned": "anthropic/claude-sonnet-5.5",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "CLAUDE_SONNET_5_5",
+    "provider": "OPENROUTER",
+    "publicAnswer": "**说明：** 我这里无法自行联网搜索，下面只是对你提供的检索材料做核对，不算我独立完成的新搜索。\n\n- **Go 1.24.0：已核实。** 官方发布日期是 2025 年 2 月 11 日。来源是 go.dev 官方博客《Go 1.24 is released!》，与要求的 go.dev 域名相符。材料还提到 Release History 页面和 golang-announce 公告，但没有给出链接，这两项我不采信。\n  来源：https://go.dev/blog/go1.24\n\n- **Firefox 139.0：日期一致，但官方来源未满足要求，暂列为部分核实。** 材料称发布日期是 2025 年 5 月 27 日，依据的是 MDN 页面。任务要求核验的是 mozilla.org 的发布说明，而 MDN（developer.mozilla.org）不是该来源。材料中提到的“官方发行说明”没有给出 mozilla.org 链接，所以这一项不能算已核实。\n  来源（实际引用的）：https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139\n  待核页面：mozilla.org 的 Firefox 139.0 Release Notes。\n\n- **补充：** 材料称 139.0.4 于 2025 年 6 月 10 日发布，没有可靠来源，且与本题无关，不采信。\n\n**结论：** Go 1.24.0 的发布日期已核实，为 2025-02-11。Firefox 139.0 的 2025-05-27 目前只有 MDN 佐证，还需要直接核对 mozilla.org 发布说明页。\n\n来源：- [Firefox 139 release notes for developers - Mozilla](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)\n- [Go 1.24 is released! - The Go Programming Language](https://go.dev/blog/go1.24)",
+    "returned": "anthropic/claude-sonnet-5.5",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "anthropic/claude-haiku-5.5",
+    "nativeSources": [
+      "https://go.dev/blog/go1.24",
+      "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 12879,
+        "input": 44451,
+        "nativeSources": [
+          "https://go.dev/blog/go1.24",
+          "https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE",
+          "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139"
+        ],
+        "output": 1572,
+        "publicFixtureReply": "**[A1] Go 1.24.0：已核实，发布日期为 2025年2月11日。**\n\nGo 官方博客的文章署名为 Junyang Shao（代表 Go 团队）并标注 2025 年 2 月 11 日，文中宣布正式发布 Go 1.24（Junyang Shao, on behalf of the Go team 11 February 2025. Today the Go team is excited to release Go 1.24）。Go 官方发布说明页面 go.dev/doc/go1.24 也存在，但搜索摘要中未显示日期。另有 Go 团队的公告邮件确认 1.24.0 已发布，并给出下载页链接（We have just released Go 1.24.0. You can download binary and source distributions from our download page），该邮件摘要未显示具体日期。\n\n来源：\n- https://go.dev/blog/go1.24\n- https://go.dev/doc/go1.24\n- https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE\n\n**[A2] Firefox 139.0：已核实，正式发布日期为 2025年5月27日。**\n\nMozilla 官方发行说明页面 firefox.com（由 mozilla.org 重定向）的 139.0 版本页面标注 May 27, 2025，并写明该版本首先向 Release 频道用户提供的日期也是 2025 年 5 月 27 日。Mozilla 开发者文档（MDN）的 Firefox 139 发行说明也记载：Firefox 139 was released on May 27, 2025.\n\n来源：\n- https://www.firefox.com/en-US/firefox/139.0/releasenotes/ （Mozilla 官方发行说明，经 mozilla.org 重定向）\n- https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139\n\n说明：我未能直接打开 mozilla.org 的 139.0 页面，上述日期来自 firefox.com 官方发行说明及 MDN 的记载；两者一致。Go 1.24.0 的日期以 go.dev 官方博客为准，第三方资料（如 mariocarrion.com 博文）也引用了相同日期。\n\n来源：\n- [Go 1.24 is released! - The Go Programming Language](https://go.dev/blog/go1.24)\n- [Go 1.24.0 is released](https://groups.google.com/g/golang-announce/c/_G2hEiKx8SE)\n- [Firefox 139 release notes for developers - Mozilla](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)",
+        "reportedCostMicros": 35231,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "anthropic/claude-haiku-5.5",
+        "returned": "anthropic/claude-haiku-5.5",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "CLAUDE_HAIKU_5_5",
+    "provider": "OPENROUTER",
+    "publicAnswer": "**核验结果：两项均已核实。**\n\n1. **Go 1.24.0**：正式发布日期为 **2025年2月11日**。Go 官方博客文章标注该日期，并宣布发布 Go 1.24。\n   来源：https://go.dev/blog/go1.24\n   说明：go.dev/doc/go1.24 发行说明页存在，但检索摘要中未显示日期，因此日期依据是官方博客。\n\n2. **Firefox 139.0**：正式发布日期为 **2025年5月27日**。Mozilla 发行说明页标注该日期，并说明该版本首先向 Release 频道用户推送，同日 MDN 的 Firefox 139 发行说明也记载了此日期。\n   来源：https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139（mozilla.org 发行说明由 firefox.com 重定向）\n\n注：本次结果基于所提供的检索资料并与公开记录交叉比对，我无法在此实时访问网页。如需正式留档，建议打开上述链接再次确认。\n\n来源：- [Firefox 139 release notes for developers - Mozilla](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)\n- [Go 1.24 is released! - The Go Programming Language](https://go.dev/blog/go1.24)",
+    "returned": "anthropic/claude-haiku-5.5",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "openai/gpt-6.1-sol",
+    "nativeSources": [
+      "https://go.dev/doc/devel/release",
+      "https://www.mozilla.org/en-US/firefox/139.0/releasenotes/"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 16976,
+        "input": 27153,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release",
+          "https://www.mozilla.org/en-US/firefox/139.0/releasenotes/"
+        ],
+        "output": 512,
+        "publicFixtureReply": "**[A1] 已核实**  \nGo 1.24.0 正式发布日期为 **2025年2月11日**。go.dev 官方发布历史明确列出该版本及日期。([go.dev](https://go.dev/doc/devel/release))  \n来源：Release History - The Go Programming Language  \nURL：`https://go.dev/doc/devel/release#go1.24.0`\n\n**[A2] 已核实**  \nFirefox 139.0 正式发布日期为 **2025年5月27日**。官方发布说明明确记载，该版本于当天首次向正式发布渠道用户提供；mozilla.org 原页面现跳转至 firefox.com。([mozilla.org](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/))  \n来源：Firefox 139.0, See All New Features, Updates and Fixes  \nURL：`https://www.mozilla.org/en-US/firefox/139.0/releasenotes/`\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)\n- [Firefox 139.0, See All New Features, Updates and Fixes](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)",
+        "reportedCostMicros": 91783,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "openai/gpt-6.1-sol",
+        "returned": "openai/gpt-6.1-sol",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "GPT_6_1_SOL",
+    "provider": "OPENROUTER",
+    "publicAnswer": "本轮未提供联网检索工具，我**未进行真实搜索，不能称为已独立核验**。按你提供的资料，两项日期为：\n\n- **Go 1.24.0：2025年2月11日**。来源：[go.dev 官方发布历史](https://go.dev/doc/devel/release)。\n- **Firefox 139.0：2025年5月27日**。来源：[mozilla.org 官方发布说明](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)。\n\n以上日期是对所附资料的整理，不是本次重新查询所得。\n\n来源：- [Firefox 139.0, See All New Features, Updates and Fixes](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)",
+    "returned": "openai/gpt-6.1-sol",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "openai/gpt-6-luna",
+    "nativeSources": [
+      "https://go.dev/doc/devel/release",
+      "https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 7536,
+        "input": 14979,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release?utm_source=openai",
+          "https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai"
+        ],
+        "output": 588,
+        "publicFixtureReply": "[A1] **已核实**：Go 官方发布历史记载，Go 1.24.0 于 **2025年2月11日**发布；Go 官方博客同日宣布 Go 1.24 发布。  \n来源：https://go.dev/doc/devel/release；https://go.dev/blog/go1.24 ([go.dev](https://go.dev/doc/devel/release?utm_source=openai))\n\n[A2] **已核实**：Mozilla 官方安全公告标注 **2025年5月27日**，列明 Firefox 139 为修复版本；Firefox 139.0 发布说明确认该版本。  \n来源：https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/；https://www.mozilla.org/firefox/139.0/releasenotes/ ([mozilla.org](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai))\n\n来源：\n- [Release History - The Go Programming Language](https://go.dev/doc/devel/release?utm_source=openai)\n- [Security Vulnerabilities fixed in Firefox 139 — Mozilla](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/?utm_source=openai)",
+        "reportedCostMicros": 21376,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "openai/gpt-6-luna",
+        "returned": "openai/gpt-6-luna",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "GPT_6_LUNA",
+    "provider": "OPENROUTER",
+    "publicAnswer": "- **Go 1.24.0：2025年2月11日发布。** [Go 官方发布历史](https://go.dev/doc/devel/release)\n- **Firefox 139.0：2025年5月27日发布。** [Mozilla 官方安全公告](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/)；[Firefox 139.0 发布说明](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)\n\n说明：我无法在当前对话中执行网页实时检索，因此不能声称已独立完成本轮搜索核验。\n\n来源：- [Release History - The Go Programming Language](https://go.dev/doc/devel/release)\n- [Security Vulnerabilities fixed in Firefox 139 — Mozilla](https://www.mozilla.org/en-US/security/advisories/mfsa2025-42/)",
+    "returned": "openai/gpt-6-luna",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "google/gemini-3.8-flash",
+    "nativeSources": [
+      "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE1w9tzFStgQO08mzxfq9BL_sXBcK8cvKyOfK9hM_gbSdsLqGOBcC-ew-ZYzayTkVfyXugDg6S5d6ExnxTuryCJfDPV1Fu4LEe3Qyjrqx2kiooY_SFPqTvMVzJu",
+      "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF3yzfz7py5iIm3JN-hM5MnvSPVOMG-eqMr1UJTFSPTMKxqCqBn8uXEZw5g55cr7ljcQL76J7Dx2v4eKkIAOykXwrsSgFYYuOLPHNWeNB9ZKsgxeFAQWUVPaa2K4fTXo4-n19hX2UFxjlNRC2HG"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 12037,
+        "input": 287,
+        "nativeSources": [
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHQr_iO3tSM1toGyd5OXrwL8XAb-SIJdCOV80aXcDx989AjuEJWWtU9fBAGRYZTC25GnCiQhslhqiM59vwBZmi-J5kB9ZdmMSRDsnMHXWuWMOqSpDjr",
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEa0Db9_cpG-TUrLXm1Js1BJIK7QxrB8rzf16WLQEIz83XUHm0DiySFGkDSlmhCuxhp6lCQcLpVFlzRuGS2zG7gyr5bWgNRs0ocI-P2FRRKHhwHLvSDStgsyJD8",
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGXJLP8iW6FnmpDlz2jukANa0Ok_zb2rlaT6ft75u4-R9iWOB0bic3RMSQOr44CaAZYqJNxSgox2v7irw9-fgO9072nWBwoC6sKFXZle6bFMes8mhFJAvLmxdn2tWUmYCixLUMIYmWQ4nj8sXgzy4JVDluTNbX0dDm3mpJHXX0HWg==",
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQElq1fW-3l0ZKM66BLIAQ94yL7VHSY0ba1JO2z5vDxstVlyu1OpB4S29AVnQp01MaTfitT1ZJ4px7g1jUg02emoggfcbaAOJ44_IoEDnNfamnZXrR0v2QzzwuUuzHlT4Hfj2vc43fmfUlXKA6CwPQ=="
+        ],
+        "output": 1008,
+        "publicFixtureReply": "[A1] 已核实\n根据 Go 官方网站（go.dev）发布的版本历史与官方博客公告，Go 1.24.0 正式发布日期为 2025 年 2 月 11 日。\n来源：Go Release History (https://go.dev/doc/devel/release)、Go Blog (https://go.dev/blog/go1.24)\n\n[A2] 已核实\n根据 Mozilla 官方发行说明页面及 MDN 文档记录，Firefox 139.0 稳定版正式发布日期为 2025 年 5 月 27 日。\n来源：Firefox 139.0 Release Notes (https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)、MDN Web Docs (https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)\n\n来源：\n- [go.dev](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHQr_iO3tSM1toGyd5OXrwL8XAb-SIJdCOV80aXcDx989AjuEJWWtU9fBAGRYZTC25GnCiQhslhqiM59vwBZmi-J5kB9ZdmMSRDsnMHXWuWMOqSpDjr)\n- [go.dev](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEa0Db9_cpG-TUrLXm1Js1BJIK7QxrB8rzf16WLQEIz83XUHm0DiySFGkDSlmhCuxhp6lCQcLpVFlzRuGS2zG7gyr5bWgNRs0ocI-P2FRRKHhwHLvSDStgsyJD8)\n- [mozilla.org](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGXJLP8iW6FnmpDlz2jukANa0Ok_zb2rlaT6ft75u4-R9iWOB0bic3RMSQOr44CaAZYqJNxSgox2v7irw9-fgO9072nWBwoC6sKFXZle6bFMes8mhFJAvLmxdn2tWUmYCixLUMIYmWQ4nj8sXgzy4JVDluTNbX0dDm3mpJHXX0HWg==)\n- [firefox.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQElq1fW-3l0ZKM66BLIAQ94yL7VHSY0ba1JO2z5vDxstVlyu1OpB4S29AVnQp01MaTfitT1ZJ4px7g1jUg02emoggfcbaAOJ44_IoEDnNfamnZXrR0v2QzzwuUuzHlT4Hfj2vc43fmfUlXKA6CwPQ==)",
+        "reportedCostMicros": 45995,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "google/gemini-3.8-flash",
+        "returned": "google/gemini-3.8-flash",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      },
+      {
+        "elapsedMs": 8289,
+        "input": 262,
+        "nativeSources": [
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHufu8us7YF1hSIh-7RtN4C5pOEny-rVKJvr8FK5oAROCakLo7fslYC3wMtZI1ZQAWYA_p4gD9ftLCo0jkX_WiY3nFDFTD8Rw4wRCbcSEhNHUi4Ycph",
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE1w9tzFStgQO08mzxfq9BL_sXBcK8cvKyOfK9hM_gbSdsLqGOBcC-ew-ZYzayTkVfyXugDg6S5d6ExnxTuryCJfDPV1Fu4LEe3Qyjrqx2kiooY_SFPqTvMVzJu"
+        ],
+        "output": 609,
+        "publicFixtureReply": "[A1] 已核实\n根据 Go 官方网站（go.dev）发布的官方博客及版本发布历史记录，Go 1.24.0 正式发布日期为 2025 年 2 月 11 日。该版本带来了对泛型类型别名的完整支持、运行时性能优化（如基于 Swiss Tables 的内置 map）以及工具链等多项改进。\n来源公开URL：https://go.dev/blog/go1.24 与 https://go.dev/doc/devel/release\n\n来源：\n- [go.dev](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHufu8us7YF1hSIh-7RtN4C5pOEny-rVKJvr8FK5oAROCakLo7fslYC3wMtZI1ZQAWYA_p4gD9ftLCo0jkX_WiY3nFDFTD8Rw4wRCbcSEhNHUi4Ycph)\n- [go.dev](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE1w9tzFStgQO08mzxfq9BL_sXBcK8cvKyOfK9hM_gbSdsLqGOBcC-ew-ZYzayTkVfyXugDg6S5d6ExnxTuryCJfDPV1Fu4LEe3Qyjrqx2kiooY_SFPqTvMVzJu)",
+        "reportedCostMicros": 30480,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "google/gemini-3.8-flash",
+        "returned": "google/gemini-3.8-flash",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      },
+      {
+        "elapsedMs": 13605,
+        "input": 261,
+        "nativeSources": [
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHeQToROD5EhpSAzZCpNgInHKeAGZgXP7T-5Ok6tBu9diXjMxFq_RWqs-hPEmA8rihTTO-g51s5hF9Q9F8msPdIHB7WVF20_pepwJfhTBqO4DCLYNJyZxK7sSR4iB7fb7G4YKOHn2FOUqSKFzZDr9yZtp9dNUgbkS2dArf2EieY",
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG46_kO2Vra4vS7aM_mrRyjLXfmTrTM_WFmxlGtWgrUZQ5iFD0QbZCDaaAO2nKGRO-LKM1cZBtIgfBgCjNfNUFVPXrqF80fYaEJec4iPUNTmEQRp_IocigiQqGm62mG0g_kUVwYTGkummPWWfRKHXJHq_IU",
+          "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF3yzfz7py5iIm3JN-hM5MnvSPVOMG-eqMr1UJTFSPTMKxqCqBn8uXEZw5g55cr7ljcQL76J7Dx2v4eKkIAOykXwrsSgFYYuOLPHNWeNB9ZKsgxeFAQWUVPaa2K4fTXo4-n19hX2UFxjlNRC2HG"
+        ],
+        "output": 690,
+        "publicFixtureReply": "[A2] 已核实\n根据 Mozilla 官方发布的发行说明，Firefox 139.0 正式版于 2025 年 5 月 27 日面向 Release 通道用户正式推出。该版本新增了对扩展程序页面的全页翻译支持、新标签页自定义壁纸与主题色功能、实验性链接预览以及 Web 平台 Temporal 规范支持等改进和安全性修复。\n\n来源：Firefox 139.0 Release Notes (https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)\n\n来源：\n- [mozilla.org](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHeQToROD5EhpSAzZCpNgInHKeAGZgXP7T-5Ok6tBu9diXjMxFq_RWqs-hPEmA8rihTTO-g51s5hF9Q9F8msPdIHB7WVF20_pepwJfhTBqO4DCLYNJyZxK7sSR4iB7fb7G4YKOHn2FOUqSKFzZDr9yZtp9dNUgbkS2dArf2EieY)\n- [firefox.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG46_kO2Vra4vS7aM_mrRyjLXfmTrTM_WFmxlGtWgrUZQ5iFD0QbZCDaaAO2nKGRO-LKM1cZBtIgfBgCjNfNUFVPXrqF80fYaEJec4iPUNTmEQRp_IocigiQqGm62mG0g_kUVwYTGkummPWWfRKHXJHq_IU)\n- [firefox.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF3yzfz7py5iIm3JN-hM5MnvSPVOMG-eqMr1UJTFSPTMKxqCqBn8uXEZw5g55cr7ljcQL76J7Dx2v4eKkIAOykXwrsSgFYYuOLPHNWeNB9ZKsgxeFAQWUVPaa2K4fTXo4-n19hX2UFxjlNRC2HG)",
+        "reportedCostMicros": 58783,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "parameters",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": null
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "google/gemini-3.8-flash",
+        "returned": "google/gemini-3.8-flash",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "GEMINI_3_8_FLASH",
+    "provider": "OPENROUTER",
+    "publicAnswer": "经核验官方记录，两项版本的发布信息如下：\n\n1. **Go 1.24.0**\n   * **官方发布日期**：2025 年 2 月 11 日。\n   * **官方来源**：[Go 官方发行说明 (go.dev)](https://go.dev/doc/devel/release#go1.24.0) 及 [Go 官方博客 (go.dev)](https://go.dev/blog/go1.24)\n\n2. **Firefox 139.0**\n   * **核验结果**：尚未正式发布。根据 Mozilla 官方发布日程计划，其预定发布日期为 2025 年 5 月 27 日。\n   * **官方来源**：[Mozilla Wiki 发行日历 (mozilla.org)](https://wiki.mozilla.org/Release_Management/Calendar)\n\n来源：- [firefox.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF3yzfz7py5iIm3JN-hM5MnvSPVOMG-eqMr1UJTFSPTMKxqCqBn8uXEZw5g55cr7ljcQL76J7Dx2v4eKkIAOykXwrsSgFYYuOLPHNWeNB9ZKsgxeFAQWUVPaa2K4fTXo4-n19hX2UFxjlNRC2HG)\n- [go.dev](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE1w9tzFStgQO08mzxfq9BL_sXBcK8cvKyOfK9hM_gbSdsLqGOBcC-ew-ZYzayTkVfyXugDg6S5d6ExnxTuryCJfDPV1Fu4LEe3Qyjrqx2kiooY_SFPqTvMVzJu)",
+    "returned": "google/gemini-3.8-flash",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "deepseek-v4-pro",
+    "nativeSources": [
+      "https://forest.watch.impress.co.jp/docs/news/2017688.html",
+      "https://bbs.huaweicloud.com/blogs/446785"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 23848,
+        "input": 576,
+        "nativeSources": [
+          "https://golang.google.cn/blog/go1.24",
+          "https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0%5E%21/#F0#1",
+          "https://golang.google.cn/blog/16years",
+          "https://golang.com.tw/doc/go1.24",
+          "https://www.infoworld.com/article/3627904/go-1-24-brings-full-support-for-generic-type-aliases.html?utm_campaign=organic#1",
+          "https://golang.com.tw/doc/devel/release",
+          "https://go.googlesource.com/website/+/5a4283b3777f8b73a0acfac03e686cbe8e098ebe%5E%21/#F0#1",
+          "https://developer.aliyun.com/article/1651940#1",
+          "https://www.suse.com/de-de/support/update/announcement/2025/suse-ru-20250509-1/",
+          "https://cloud.tencent.cn/developer/article/2495759?policyId=1003#1",
+          "https://mdn.org.cn/en-US/docs/Mozilla/Firefox/Releases/139",
+          "https://github.com/mdn/content/blob/0383405c/files/en-us/mozilla/firefox/releases/139/index.md?plain=1#1",
+          "https://gigazine.net/gsc_news/en/20250528-firefox-139#gsc.tab=0#1",
+          "https://prod.whattrainisitnow.prod.webservices.mozgcp.net/release/?version=139.0",
+          "https://en.wikipedia.org/api/rest_v1/page/pdf/Firefox_early_version_history#19#6",
+          "https://m.163.com/dy/article/K0I41G4F0511B8LM.html?referFrom=",
+          "https://forest.watch.impress.co.jp/docs/news/2017688.html#image1_l.png",
+          "https://github.com/mdn/translated-content-de/blob/main/files/de/mozilla/firefox/releases/139/index.md?plain=1#1",
+          "https://gigazine.net/news/20250528-firefox-139/",
+          "https://m2.cn.bing.com/news/search?q=Firefox&form=PTFTNR&ubiroff=1&setlang=zh-hans&sid=2498E8DD87FF6CE418DDFDA486A56D26",
+          "https://web.archive.org/web/20260317122438/https://go.dev/blog/go1.24#1",
+          "https://huggingface.co/api/resolve-cache/datasets/mrdayl/Go-Lil-Messy-COT/64e9aae0d7f4a083ac9a886350342c12dd5c24f7/all_qa_pairs_2025-05-29_06-25-03.jsonl?download=true&etag=%2291c2115d985a3cd0ecfdf77d5b309fc045d225b3%22#1",
+          "https://files.speakerdeck.com/presentations/da92de5043d042b58eb228f2a89ad68c/Go1.24__Release_Party.pdf#1#1",
+          "https://huggingface.co/datasets/mrdayl/Go-Lil-Messy-COT/commit/64e9aae0d7f4a083ac9a886350342c12dd5c24f7.diff?file=all_qa_pairs_2025-05-29_06-25-03.jsonl#1"
+        ],
+        "output": 1149,
+        "publicFixtureReply": "[A1] 已核实\nGo 1.24.0 的官方发布日期为 **2025年2月11日**。go.dev 官方博客文章《Go 1.24 is released!》由 Junyang Shao 代表 Go 团队署名，日期为 11 February 2025，宣布 Go 1.24 正式发布。\n来源：https://go.dev/blog/go1.24\n\n[A2] 已核实\nFirefox 139.0 的官方发布日期为 **2025年5月27日**。Mozilla 官方发布说明写明 \"Version 139.0, first offered to Release channel users on 27 May 2025\"（139.0 版本于 2025 年 5 月 27 日首次提供给 Release 渠道用户）；MDN 的 Firefox 139 开发者发布说明同样记录发布于 2025 年 5 月 27 日。\n来源：https://www.mozilla.org/en-US/firefox/139.0/releasenotes/ ；https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139\n\n来源：\n- [Go 1.24 is released!](https://golang.google.cn/blog/go1.24)\n- [Diff - 8b2902f950802f3da01f9eb53daaf15de7639fc0^! - website - - commit](https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0%5E%21/#F0#1)\n- [Go’s Sweet 16 - The Go Programming Language](https://golang.google.cn/blog/16years)\n- [Go 1.24 發行說明](https://golang.com.tw/doc/go1.24)\n- [Go 1.24 arrives with generic type aliases, boosted WebAssembly support - Updated](https://www.infoworld.com/article/3627904/go-1-24-brings-full-support-for-generic-type-aliases.html?utm_campaign=organic#1)\n- [發佈歷史](https://golang.com.tw/doc/devel/release)\n- [Diff - 5a4283b3777f8b73a0acfac03e686cbe8e098ebe^! - website - - commit](https://go.googlesource.com/website/+/5a4283b3777f8b73a0acfac03e686cbe8e098ebe%5E%21/#F0#1)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - Go 1.24.0 重磅发布：新特性、新工具，开发者必看！](https://developer.aliyun.com/article/1651940#1)\n- [Recommended update for go1.24 SUSE-RU-2025:0509-1 | SUSE...](https://www.suse.com/de-de/support/update/announcement/2025/suse-ru-20250509-1/)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - 陈明勇](https://cloud.tencent.cn/developer/article/2495759?policyId=1003#1)\n- [Firefox 139 for Developers 发布说明](https://mdn.org.cn/en-US/docs/Mozilla/Firefox/Releases/139)\n- [content/files/en-us/mozilla/firefox/releases/139/index.md at 0383405cdb7e96b2f572206c0f35d2076edee953 · mdn/content · GitHub - ---](https://github.com/mdn/content/blob/0383405c/files/en-us/mozilla/firefox/releases/139/index.md?plain=1#1)\n- ['Firefox 139' official release, full page translation possible within extension page - 'Firefox 139' official release, full page translation possible within extension page](https://gigazine.net/gsc_news/en/20250528-firefox-139#gsc.tab=0#1)\n- [« Firefox 139 » Go to Release channel](https://prod.whattrainisitnow.prod.webservices.mozgcp.net/release/?version=139.0)\n- [Firefox 130 was released on September 3, 2024, introducing a new Firefox Labs page in Settings for trying experimental features ...](https://en.wikipedia.org/api/rest_v1/page/pdf/Firefox_early_version_history#19#6)\n- [火狐 Firefox 浏览器 139 发布：扩展页面支持全页翻译](https://m.163.com/dy/article/K0I41G4F0511B8LM.html?referFrom=)\n- [新規タブに壁紙を設定できる「Firefox 139」が正式リリース／セキュリティ関連の修正は「Critical」を含む10件](https://forest.watch.impress.co.jp/docs/news/2017688.html#image1_l.png)\n- [translated-content-de/files/de/mozilla/firefox/releases/139/index.md at main · mdn/translated-content-de · GitHub - ---](https://github.com/mdn/translated-content-de/blob/main/files/de/mozilla/firefox/releases/139/index.md?plain=1#1)\n- [「Firefox 139」正式版リリース、拡張機能ページ内での全ページ翻訳が可能に](https://gigazine.net/news/20250528-firefox-139/)\n- [Firefox](https://m2.cn.bing.com/news/search?q=Firefox&form=PTFTNR&ubiroff=1&setlang=zh-hans&sid=2498E8DD87FF6CE418DDFDA486A56D26)\n- [Go 1.24 is released! - The Wayback Machine - https://web](https://web.archive.org/web/20260317122438/https://go.dev/blog/go1.24#1)\n- [{\"question\":\"Given that the Go 1.24 release article is dated 11 February 2025, and there's a blog post about 'More predictable b...](https://huggingface.co/api/resolve-cache/datasets/mrdayl/Go-Lil-Messy-COT/64e9aae0d7f4a083ac9a886350342c12dd5c24f7/all_qa_pairs_2025-05-29_06-25-03.jsonl?download=true&etag=%2291c2115d985a3cd0ecfdf77d5b309fc045d225b3%22#1)\n- [Go1.24](https://files.speakerdeck.com/presentations/da92de5043d042b58eb228f2a89ad68c/Go1.24__Release_Party.pdf#1#1)\n- [diff --git \"a/all_qa_pairs_2025-05-29_06-25-03.jsonl\" \"b/all_qa_pairs_2025-05-29_06-25-03.jsonl\"](https://huggingface.co/datasets/mrdayl/Go-Lil-Messy-COT/commit/64e9aae0d7f4a083ac9a886350342c12dd5c24f7.diff?file=all_qa_pairs_2025-05-29_06-25-03.jsonl#1)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "object",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "max_uses",
+                "name",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search_20250305"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "deepseek-v4-pro",
+        "returned": "deepseek-v4-pro",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      },
+      {
+        "elapsedMs": 17740,
+        "input": 556,
+        "nativeSources": [
+          "https://golang.google.cn/blog/go1.24",
+          "https://golang.google.cn/blog/16years",
+          "https://golang.com.tw/doc/go1.24",
+          "https://golang.com.tw/doc/devel/release",
+          "https://developer.aliyun.com/article/1651940#1",
+          "https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0#1",
+          "https://cloud.google.com/blog/ja/products/application-development/go-1-24-expands-support-for-wasm?e=48754805&hl=ja",
+          "https://cloud.tencent.cn/developer/article/2495759?policyId=1003#1",
+          "https://bbs.huaweicloud.com/blogs/446785#1",
+          "https://www.suse.com/de-de/support/update/announcement/2025/suse-ru-20250509-1/",
+          "https://tip.golang.org/doc/go1.24",
+          "https://www.infoworld.com/article/3627904/go-1-24-brings-full-support-for-generic-type-aliases.html?utm_campaign=organic#1",
+          "https://www.phoronix.com/news/Go-1.24-Released",
+          "https://golangweekly.com/issues/542",
+          "https://codezine.jp/news/detail/21060",
+          "https://developer.upsun.com/posts/discussions/go-124",
+          "https://web.archive.org/web/20260317122438/https://go.dev/blog/go1.24#1",
+          "https://huggingface.co/api/resolve-cache/datasets/mrdayl/Go-Lil-Messy-COT/64e9aae0d7f4a083ac9a886350342c12dd5c24f7/all_qa_pairs_2025-05-29_06-25-03.jsonl?download=true&etag=%2291c2115d985a3cd0ecfdf77d5b309fc045d225b3%22#1",
+          "https://files.speakerdeck.com/presentations/da92de5043d042b58eb228f2a89ad68c/Go1.24__Release_Party.pdf#1#1",
+          "https://www.heise.de/news/Programmiersprache-Go-1-24-unterstuetzt-WebAssembly-und-generische-Typ-Aliasse-10280985.html?view=print#1",
+          "https://huggingface.co/datasets/mrdayl/Go-Lil-Messy-COT/commit/64e9aae0d7f4a083ac9a886350342c12dd5c24f7.diff?file=all_qa_pairs_2025-05-29_06-25-03.jsonl#1",
+          "https://blog.csdn.net/weixin_43025343/article/details/145608764#1",
+          "https://golang.google.cn/doc/go1.24",
+          "https://io.google/2025/explore/pa-keynote-17/"
+        ],
+        "output": 685,
+        "publicFixtureReply": "[A1] 已核实\nGo 官方博客于 2025 年 2 月 11 日发布《Go 1.24 is released!》，宣布 Go 1.24 正式发布，并可通过下载页获取，版本号对应 Go 1.24.0。\n来源：https://go.dev/blog/go1.24\n\n来源：\n- [Go 1.24 is released!](https://golang.google.cn/blog/go1.24)\n- [Go’s Sweet 16 - The Go Programming Language](https://golang.google.cn/blog/16years)\n- [Go 1.24 發行說明](https://golang.com.tw/doc/go1.24)\n- [發佈歷史](https://golang.com.tw/doc/devel/release)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - Go 1.24.0 重磅发布：新特性、新工具，开发者必看！](https://developer.aliyun.com/article/1651940#1)\n- [Go website - go/website/8b2902f950802f3da01f9eb53daaf15de7639fc0](https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0#1)\n- [Go 1.24 における Wasm のサポートについてのお知らせ | Google Cloud 公式ブログ](https://cloud.google.com/blog/ja/products/application-development/go-1-24-expands-support-for-wasm?e=48754805&hl=ja)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - 陈明勇](https://cloud.tencent.cn/developer/article/2495759?policyId=1003#1)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - 云宝助手](https://bbs.huaweicloud.com/blogs/446785#1)\n- [Recommended update for go1.24 SUSE-RU-2025:0509-1 | SUSE...](https://www.suse.com/de-de/support/update/announcement/2025/suse-ru-20250509-1/)\n- [Go 1.24 Release Notes](https://tip.golang.org/doc/go1.24)\n- [Go 1.24 arrives with generic type aliases, boosted WebAssembly support - Updated](https://www.infoworld.com/article/3627904/go-1-24-brings-full-support-for-generic-type-aliases.html?utm_campaign=organic#1)\n- [Go 1.24 Brings Performance Improvements, Better WebAssembly Support](https://www.phoronix.com/news/Go-1.24-Released)\n- [Go 1.24 arrives](https://golangweekly.com/issues/542)\n- [Go 1.24リリース、WebAssembly（Wasm）機能が強化](https://codezine.jp/news/detail/21060)\n- [Golang 1.24 is looking seriously awesome - Upsun Developer](https://developer.upsun.com/posts/discussions/go-124)\n- [Go 1.24 is released! - The Wayback Machine - https://web](https://web.archive.org/web/20260317122438/https://go.dev/blog/go1.24#1)\n- [{\"question\":\"Given that the Go 1.24 release article is dated 11 February 2025, and there's a blog post about 'More predictable b...](https://huggingface.co/api/resolve-cache/datasets/mrdayl/Go-Lil-Messy-COT/64e9aae0d7f4a083ac9a886350342c12dd5c24f7/all_qa_pairs_2025-05-29_06-25-03.jsonl?download=true&etag=%2291c2115d985a3cd0ecfdf77d5b309fc045d225b3%22#1)\n- [Go1.24](https://files.speakerdeck.com/presentations/da92de5043d042b58eb228f2a89ad68c/Go1.24__Release_Party.pdf#1#1)\n- [Programmiersprache: Go 1.24 unterstützt WebAssembly und generische Typ-Aliasse - zurück zum Artikel](https://www.heise.de/news/Programmiersprache-Go-1-24-unterstuetzt-WebAssembly-und-generische-Typ-Aliasse-10280985.html?view=print#1)\n- [diff --git \"a/all_qa_pairs_2025-05-29_06-25-03.jsonl\" \"b/all_qa_pairs_2025-05-29_06-25-03.jsonl\"](https://huggingface.co/datasets/mrdayl/Go-Lil-Messy-COT/commit/64e9aae0d7f4a083ac9a886350342c12dd5c24f7.diff?file=all_qa_pairs_2025-05-29_06-25-03.jsonl#1)\n- [Go 1.24 发布：性能更快，工具更强大，引领编程语言的新纪元 - Go 1.24 发布：性能更快，工具更强大，引领编程语言的新纪元](https://blog.csdn.net/weixin_43025343/article/details/145608764#1)\n- [Go 1.24 Release Notes](https://golang.google.cn/doc/go1.24)\n- [Google I/O 2025: What's new in Go](https://io.google/2025/explore/pa-keynote-17/)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "object",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "max_uses",
+                "name",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search_20250305"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "deepseek-v4-pro",
+        "returned": "deepseek-v4-pro",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      },
+      {
+        "elapsedMs": 13479,
+        "input": 555,
+        "nativeSources": [
+          "https://mdn.org.cn/en-US/docs/Mozilla/Firefox/Releases/139",
+          "https://raw.githubusercontent.com/mdn/content/refs/heads/main/files/en-us/mozilla/firefox/releases/139/index.md#1",
+          "https://gigazine.net/gsc_news/en/20250528-firefox-139#gsc.tab=0#1",
+          "https://github.com/mdn/content/blob/0383405c/files/en-us/mozilla/firefox/releases/139/index.md?plain=1#1",
+          "https://prod.whattrainisitnow.prod.webservices.mozgcp.net/release/?version=139.0",
+          "https://m.163.com/dy/article/K0I41G4F0511B8LM.html?referFrom=",
+          "https://forest.watch.impress.co.jp/docs/news/2017688.html#image1_l.png",
+          "https://github.com/mdn/translated-content-de/blob/main/files/de/mozilla/firefox/releases/139/index.md?plain=1#1",
+          "https://gigazine.net/news/20250528-firefox-139/",
+          "https://m2.cn.bing.com/news/search?q=Firefox&form=PTFTNR&ubiroff=1&setlang=zh-hans&sid=2498E8DD87FF6CE418DDFDA486A56D26",
+          "https://www.firefox.com/en-GB/firefox/139.0/releasenotes/",
+          "https://wiki.mozilla.org/index.php?title=Support/Firefox139&oldid=1254215",
+          "https://web.developers.google.cn/blog/web-platform-05-2025?hl=vi",
+          "https://web.developers.google.cn/blog/web-platform-05-2025?authuser=409650959&hl=bn",
+          "https://m.ithome.com/html/856171.htm",
+          "https://www.tweakpc.de/news/50700/firefox-139-verbesserte-sicherheit-und-synchronisation-die-neue-version-im-detail"
+        ],
+        "output": 548,
+        "publicFixtureReply": "[A2] 已核实\n\nFirefox 139.0 于 **2025 年 5 月 27 日** 正式发布。Mozilla 官方发布说明明确标注\"Version 139.0, first offered to Release channel users on 27 May 2025\"，即该版本于 2025 年 5 月 27 日首次提供给 Release 频道用户。MDN 开发者发布说明同样记载\"Firefox 139 was released on May 27, 2025\"，与官方口径一致。\n\n来源：\n- https://www.mozilla.org/en-US/firefox/139.0/releasenotes/ （官方发布说明，经 firefox.com 重定向指向的同一页面显示发布日期）\n- https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139 （MDN 记载 2025 年 5 月 27 日）\n\n来源：\n- [Firefox 139 for Developers 发布说明](https://mdn.org.cn/en-US/docs/Mozilla/Firefox/Releases/139)\n- [---](https://raw.githubusercontent.com/mdn/content/refs/heads/main/files/en-us/mozilla/firefox/releases/139/index.md#1)\n- ['Firefox 139' official release, full page translation possible within extension page - 'Firefox 139' official release, full page translation possible within extension page](https://gigazine.net/gsc_news/en/20250528-firefox-139#gsc.tab=0#1)\n- [content/files/en-us/mozilla/firefox/releases/139/index.md at 0383405cdb7e96b2f572206c0f35d2076edee953 · mdn/content · GitHub - ---](https://github.com/mdn/content/blob/0383405c/files/en-us/mozilla/firefox/releases/139/index.md?plain=1#1)\n- [« Firefox 139 » Go to Release channel](https://prod.whattrainisitnow.prod.webservices.mozgcp.net/release/?version=139.0)\n- [火狐 Firefox 浏览器 139 发布：扩展页面支持全页翻译](https://m.163.com/dy/article/K0I41G4F0511B8LM.html?referFrom=)\n- [新規タブに壁紙を設定できる「Firefox 139」が正式リリース／セキュリティ関連の修正は「Critical」を含む10件](https://forest.watch.impress.co.jp/docs/news/2017688.html#image1_l.png)\n- [translated-content-de/files/de/mozilla/firefox/releases/139/index.md at main · mdn/translated-content-de · GitHub - ---](https://github.com/mdn/translated-content-de/blob/main/files/de/mozilla/firefox/releases/139/index.md?plain=1#1)\n- [「Firefox 139」正式版リリース、拡張機能ページ内での全ページ翻訳が可能に](https://gigazine.net/news/20250528-firefox-139/)\n- [Firefox](https://m2.cn.bing.com/news/search?q=Firefox&form=PTFTNR&ubiroff=1&setlang=zh-hans&sid=2498E8DD87FF6CE418DDFDA486A56D26)\n- [Firefox Release Notes](https://www.firefox.com/en-GB/firefox/139.0/releasenotes/)\n- [Support/Firefox139](https://wiki.mozilla.org/index.php?title=Support/Firefox139&oldid=1254215)\n- [Điểm mới trên nền tảng web vào tháng 5 | Blog | web.dev for China](https://web.developers.google.cn/blog/web-platform-05-2025?hl=vi)\n- [মে মাসে ওয়েব প্ল্যাটফর্মে নতুন | Blog | web.dev for China](https://web.developers.google.cn/blog/web-platform-05-2025?authuser=409650959&hl=bn)\n- [火狐 Firefox 浏览器 139 发布：扩展页面支持全页翻译，优化文件上传速度](https://m.ithome.com/html/856171.htm)\n- [Firefox 139: Verbesserte Sicherheit und Synchronisation - Die neue Version im Detail](https://www.tweakpc.de/news/50700/firefox-139-verbesserte-sicherheit-und-synchronisation-die-neue-version-im-detail)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "object",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "max_uses",
+                "name",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search_20250305"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "deepseek-v4-pro",
+        "returned": "deepseek-v4-pro",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "DEEPSEEK_V4_PRO",
+    "provider": "DEEPSEEK",
+    "publicAnswer": "已按官方来源核验：\n\n- **Go 1.24.0**：正式发布日期为 **2025年2月11日**。  \n  来源：https://go.dev/doc/devel/release.html#go1.24.0\n\n- **Firefox 139.0**：正式发布日期为 **2025年5月27日**。  \n  来源：https://www.mozilla.org/en-US/firefox/139.0/releasenotes/\n\n未采用你提供的第三方链接作为依据。\n\n来源：- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - 云宝助手](https://bbs.huaweicloud.com/blogs/446785)\n- [新規タブに壁紙を設定できる「Firefox 139」が正式リリース／セキュリティ関連の修正は「Critical」を含む10件](https://forest.watch.impress.co.jp/docs/news/2017688.html)",
+    "returned": "deepseek-v4-pro",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "deepseek-flash",
+    "nativeSources": [
+      "https://bbs.huaweicloud.com/blogs/446785",
+      "https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/139"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 7955,
+        "input": 513,
+        "nativeSources": [
+          "https://golang.google.cn/blog/go1.24",
+          "https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0%5E%21/#F0#1",
+          "https://golang.google.cn/blog/16years",
+          "https://golang.com.tw/doc/go1.24",
+          "https://golang.com.tw/doc/devel/release",
+          "https://go.googlesource.com/website/+/5a4283b3777f8b73a0acfac03e686cbe8e098ebe%5E%21/#F0#1",
+          "https://developer.aliyun.com/article/1651940#1",
+          "https://github.com/tamnd/godev-index#2",
+          "https://www.suse.com/de-de/support/update/announcement/2025/suse-ru-20250509-1/",
+          "https://cloud.tencent.cn/developer/article/2495759?policyId=1003#1",
+          "https://mdn.org.cn/en-US/docs/Mozilla/Firefox/Releases/139",
+          "https://github.com/mdn/content/blob/0383405c/files/en-us/mozilla/firefox/releases/139/index.md?plain=1#1",
+          "https://gigazine.net/gsc_news/en/20250528-firefox-139#gsc.tab=0#1",
+          "https://prod.whattrainisitnow.prod.webservices.mozgcp.net/release/?version=139.0",
+          "https://en.wikipedia.org/api/rest_v1/page/pdf/Firefox_early_version_history#19#6",
+          "https://m.163.com/dy/article/K0I41G4F0511B8LM.html?referFrom=",
+          "https://forest.watch.impress.co.jp/docs/news/2017688.html#image1_l.png",
+          "https://github.com/mdn/translated-content-de/blob/main/files/de/mozilla/firefox/releases/139/index.md?plain=1#1",
+          "https://gigazine.net/news/20250528-firefox-139/",
+          "https://m2.cn.bing.com/news/search?q=Firefox&form=PTFTNR&ubiroff=1&setlang=zh-hans&sid=2498E8DD87FF6CE418DDFDA486A56D26",
+          "https://go.googlesource.com/website/+/7512f72bc91728411e0b5cf4a850e0c1dbb7144a%5E%21/#1",
+          "https://golang.google.cn/doc/go1.24",
+          "https://www.infoworld.com/article/3627904/go-1-24-brings-full-support-for-generic-type-aliases.html?utm_campaign=organic#1",
+          "https://cloud.google.com/blog/products/application-development/go-1-24-expands-support-for-wasm?e=48754805#1"
+        ],
+        "output": 848,
+        "publicFixtureReply": "## [A1] 已核实\n\nGo 1.24.0 于 **2025 年 2 月 11 日**正式发布。go.dev 官方博客《Go 1.24 is released!》发布于 2025 年 2 月 11 日，公告称\"Today the Go team is excited to release Go 1.24\"；Go 1.24 发行说明亦记载该版本于 2025 年 2 月发布，距 Go 1.23 约六个月。第三方（SUSE、InfoWorld）也记载 go1.24 发布日为 2025-02-11。\n\n来源: [Go 1.24 is released! (golang.google.cn/blog/go1.24)](https://golang.google.cn/blog/go1.24) · [Go 1.24 Release Notes](https://golang.google.cn/doc/go1.24)\n\n## [A2] 已核实\n\nFirefox 139.0 于 **2025 年 5 月 27 日**正式发布。mozilla.org 官方发行说明写明\"Version 139.0, first offered to Release channel users on 27 May 2025\"，并列出扩展页面全页翻译、新标签页壁纸自定义、Temporal API 默认启用等更新；MDN 面向开发者的说明亦记载 Firefox 139 was released on May 27, 2025。\n\n来源: [Firefox 139.0 Release Notes (mozilla.org)](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/) · [Firefox 139 release notes for developers (MDN)](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)\n\n来源：\n- [Go 1.24 is released!](https://golang.google.cn/blog/go1.24)\n- [Diff - 8b2902f950802f3da01f9eb53daaf15de7639fc0^! - website - - commit](https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0%5E%21/#F0#1)\n- [Go’s Sweet 16 - The Go Programming Language](https://golang.google.cn/blog/16years)\n- [Go 1.24 發行說明](https://golang.com.tw/doc/go1.24)\n- [發佈歷史](https://golang.com.tw/doc/devel/release)\n- [Diff - 5a4283b3777f8b73a0acfac03e686cbe8e098ebe^! - website - - commit](https://go.googlesource.com/website/+/5a4283b3777f8b73a0acfac03e686cbe8e098ebe%5E%21/#F0#1)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - Go 1.24.0 重磅发布：新特性、新工具，开发者必看！](https://developer.aliyun.com/article/1651940#1)\n- [GitHub - tamnd/godev-index: A curated guide to everything on go.dev, organized for learners and practitioners · GitHub - * **2014-09-26** Deploying Go servers with Docker - Containerizing Go apps](https://github.com/tamnd/godev-index#2)\n- [Recommended update for go1.24 SUSE-RU-2025:0509-1 | SUSE...](https://www.suse.com/de-de/support/update/announcement/2025/suse-ru-20250509-1/)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - 陈明勇](https://cloud.tencent.cn/developer/article/2495759?policyId=1003#1)\n- [Firefox 139 for Developers 发布说明](https://mdn.org.cn/en-US/docs/Mozilla/Firefox/Releases/139)\n- [content/files/en-us/mozilla/firefox/releases/139/index.md at 0383405cdb7e96b2f572206c0f35d2076edee953 · mdn/content · GitHub - ---](https://github.com/mdn/content/blob/0383405c/files/en-us/mozilla/firefox/releases/139/index.md?plain=1#1)\n- ['Firefox 139' official release, full page translation possible within extension page - 'Firefox 139' official release, full page translation possible within extension page](https://gigazine.net/gsc_news/en/20250528-firefox-139#gsc.tab=0#1)\n- [« Firefox 139 » Go to Release channel](https://prod.whattrainisitnow.prod.webservices.mozgcp.net/release/?version=139.0)\n- [Firefox 130 was released on September 3, 2024, introducing a new Firefox Labs page in Settings for trying experimental features ...](https://en.wikipedia.org/api/rest_v1/page/pdf/Firefox_early_version_history#19#6)\n- [火狐 Firefox 浏览器 139 发布：扩展页面支持全页翻译](https://m.163.com/dy/article/K0I41G4F0511B8LM.html?referFrom=)\n- [新規タブに壁紙を設定できる「Firefox 139」が正式リリース／セキュリティ関連の修正は「Critical」を含む10件](https://forest.watch.impress.co.jp/docs/news/2017688.html#image1_l.png)\n- [translated-content-de/files/de/mozilla/firefox/releases/139/index.md at main · mdn/translated-content-de · GitHub - ---](https://github.com/mdn/translated-content-de/blob/main/files/de/mozilla/firefox/releases/139/index.md?plain=1#1)\n- [「Firefox 139」正式版リリース、拡張機能ページ内での全ページ翻訳が可能に](https://gigazine.net/news/20250528-firefox-139/)\n- [Firefox](https://m2.cn.bing.com/news/search?q=Firefox&form=PTFTNR&ubiroff=1&setlang=zh-hans&sid=2498E8DD87FF6CE418DDFDA486A56D26)\n- [Diff - 7512f72bc91728411e0b5cf4a850e0c1dbb7144a^! - website - - commit](https://go.googlesource.com/website/+/7512f72bc91728411e0b5cf4a850e0c1dbb7144a%5E%21/#1)\n- [Go 1.24 Release Notes](https://golang.google.cn/doc/go1.24)\n- [Go 1.24 arrives with generic type aliases, boosted WebAssembly support - Updated](https://www.infoworld.com/article/3627904/go-1-24-brings-full-support-for-generic-type-aliases.html?utm_campaign=organic#1)\n- [Go 1.24 expands support for Wasm | Google Cloud Blog - Application Development](https://cloud.google.com/blog/products/application-development/go-1-24-expands-support-for-wasm?e=48754805#1)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "object",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "max_uses",
+                "name",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search_20250305"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "deepseek-flash",
+        "returned": "deepseek-flash",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      },
+      {
+        "elapsedMs": 8417,
+        "input": 493,
+        "nativeSources": [
+          "https://golang.google.cn/blog/go1.24",
+          "https://tip.golang.org/doc/go1.24",
+          "https://golang.com.tw/doc/go1.24",
+          "https://www.infoworld.com/article/3627904/go-1-24-brings-full-support-for-generic-type-aliases.html?utm_campaign=organic#1",
+          "https://www.heise.de/en/news/Programming-language-Go-1-24-supports-WebAssembly-and-generic-type-aliases-10281487.html#1",
+          "https://github.com/kkdai/bookmarks/issues/1934#1",
+          "https://go.googlesource.com/website/+/4ccfb99db16b1419ac640fb08dd654053bd819ee%5E%21/#1",
+          "https://developer.aliyun.com/article/1651940#1",
+          "https://cloud.tencent.com.cn/developer/article/2518197?policyId=1003#1",
+          "https://cloud.tencent.cn/developer/article/2495759?policyId=1003#1",
+          "https://go.googlesource.com/website/+/7512f72bc91728411e0b5cf4a850e0c1dbb7144a%5E%21/#1",
+          "https://build-dot-golang-org.appspot.com/go.dev/blog/go1.24",
+          "https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0%5E%21/#F0#1",
+          "https://devblogs.microsoft.com/go/go-1-24-0-1-microsoft-build-now-available/?wt_mc_id=AZ-MVP-4038156#respond",
+          "https://bbs.huaweicloud.com/blogs/446785#1",
+          "https://golangweekly.com/issues/542",
+          "https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0#1",
+          "https://www.bugs.gentoo.org/show_bug.cgi?id=949647",
+          "https://mariocarrion.com/2025/02/23/what-is-new-in-go-1-24.html",
+          "https://golang.google.cn/doc/go1.24",
+          "https://pages.goframe.org/release/golang/go1.24",
+          "https://pages.goframe.org/en/release/golang/go1.24",
+          "https://www.getgnu.org/tag/go-programlama-dili-1-24-0",
+          "https://web.archive.org/web/20260317122438/https://go.dev/blog/go1.24#1"
+        ],
+        "output": 918,
+        "publicFixtureReply": "## [A1] Go 1.24.0 正式发布，核验 go.dev 官方发布日期\n\n**已核实**\n\nGo 官方博客《Go 1.24 is released!》由 Junyang Shao 代表 Go 团队署名，发布日期为 2025 年 2 月 11 日；文中称“Today the Go team is excited to release Go 1.24”。go.dev 发行历史页将 go1.24.0 记为 2025-02-11（该主要版本即通常所说的 Go 1.24.0 正式版，此前为预发布版本）。因此“Go 1.24.0 于 2025 年 2 月 11 日正式发布”与官方来源一致。\n\n来源：\n- Go Blog《Go 1.24 is released!》：https://go.dev/blog/go1.24\n- Go 官方发行历史（go1.24.0，February 2025）：https://go.dev/doc/devel/release\n\n【批次说明】本次仅提供 [A1] 一项；用户提到的 Firefox 相关文件在本批材料中未列出任何对应 [A编号]，故无 Firefox 条目可逐项核验，未作核实，亦不编造证据。\n\n来源：\n- [Go 1.24 is released!](https://golang.google.cn/blog/go1.24)\n- [Go 1.24 Release Notes](https://tip.golang.org/doc/go1.24)\n- [Go 1.24 發行說明](https://golang.com.tw/doc/go1.24)\n- [Go 1.24 arrives with generic type aliases, boosted WebAssembly support - Updated](https://www.infoworld.com/article/3627904/go-1-24-brings-full-support-for-generic-type-aliases.html?utm_campaign=organic#1)\n- [Programming language: Go 1.24 supports WebAssembly and generic type aliases - Advertisement](https://www.heise.de/en/news/Programming-language-Go-1-24-supports-WebAssembly-and-generic-type-aliases-10281487.html#1)\n- [Go 1.24 正式釋出，主要改進工具鏈、執行時期和函式庫，支援泛型類型別名，`go` 命令新增追蹤可執行檔相依性、JSON 格式輸出建置資訊、`GOAUTH` 環境變數驗證私有模組等功能，`cgo` 改進效能和錯誤偵測，`objdump` 支援更多架構，`vet` 也進行改進。 · Issue #1934 - Skip to content](https://github.com/kkdai/bookmarks/issues/1934#1)\n- [Diff - 4ccfb99db16b1419ac640fb08dd654053bd819ee^! - website - - commit](https://go.googlesource.com/website/+/4ccfb99db16b1419ac640fb08dd654053bd819ee%5E%21/#1)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - Go 1.24.0 重磅发布：新特性、新工具，开发者必看！](https://developer.aliyun.com/article/1651940#1)\n- [Go 1.24 相比 Go 1.23 有哪些值得注意的改动？](https://cloud.tencent.com.cn/developer/article/2518197?policyId=1003#1)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - 陈明勇](https://cloud.tencent.cn/developer/article/2495759?policyId=1003#1)\n- [Diff - 7512f72bc91728411e0b5cf4a850e0c1dbb7144a^! - website - - commit](https://go.googlesource.com/website/+/7512f72bc91728411e0b5cf4a850e0c1dbb7144a%5E%21/#1)\n- [Go 1.24 is released!](https://build-dot-golang-org.appspot.com/go.dev/blog/go1.24)\n- [Diff - 8b2902f950802f3da01f9eb53daaf15de7639fc0^! - website - - commit](https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0%5E%21/#F0#1)\n- [Go 1.24.0-1 Microsoft build now available](https://devblogs.microsoft.com/go/go-1-24-0-1-microsoft-build-now-available/?wt_mc_id=AZ-MVP-4038156#respond)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - 云宝助手](https://bbs.huaweicloud.com/blogs/446785#1)\n- [Go 1.24 arrives](https://golangweekly.com/issues/542)\n- [Go website - go/website/8b2902f950802f3da01f9eb53daaf15de7639fc0](https://go.googlesource.com/website/+/8b2902f950802f3da01f9eb53daaf15de7639fc0#1)\n- [949647 – dev-lang/go-1.24.0: version bump](https://www.bugs.gentoo.org/show_bug.cgi?id=949647)\n- [What is new in Go 1.24?](https://mariocarrion.com/2025/02/23/what-is-new-in-go-1-24.html)\n- [Go 1.24 Release Notes](https://golang.google.cn/doc/go1.24)\n- [Go 1.24 (2025-02-11)](https://pages.goframe.org/release/golang/go1.24)\n- [Go 1.24 (2025-02-11) | GoFrame - A powerful framework for faster, easier, and more efficient project development](https://pages.goframe.org/en/release/golang/go1.24)\n- [Go programlama dili 1.24.0 | get GNU](https://www.getgnu.org/tag/go-programlama-dili-1-24-0)\n- [Go 1.24 is released! - The Wayback Machine - https://web](https://web.archive.org/web/20260317122438/https://go.dev/blog/go1.24#1)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "object",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "max_uses",
+                "name",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search_20250305"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "deepseek-flash",
+        "returned": "deepseek-flash",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      },
+      {
+        "elapsedMs": 7766,
+        "input": 492,
+        "nativeSources": [
+          "https://mdn.org.cn/en-US/docs/Mozilla/Firefox/Releases/139",
+          "https://github.com/mdn/content/blob/0383405c/files/en-us/mozilla/firefox/releases/139/index.md?plain=1#1",
+          "https://gigazine.net/gsc_news/en/20250528-firefox-139#gsc.tab=0#1",
+          "https://prod.whattrainisitnow.prod.webservices.mozgcp.net/release/?version=139.0",
+          "https://en.wikipedia.org/api/rest_v1/page/pdf/Firefox_early_version_history#19#6",
+          "https://m.163.com/dy/article/K0I41G4F0511B8LM.html?referFrom=",
+          "https://forest.watch.impress.co.jp/docs/news/2017688.html#image1_l.png",
+          "https://github.com/mdn/translated-content-de/blob/main/files/de/mozilla/firefox/releases/139/index.md?plain=1#1",
+          "https://gigazine.net/news/20250528-firefox-139/",
+          "https://m2.cn.bing.com/news/search?q=Firefox&form=PTFTNR&ubiroff=1&setlang=zh-hans&sid=2498E8DD87FF6CE418DDFDA486A56D26",
+          "https://developer.mozilla.org/de/docs/Mozilla/Firefox/Releases/139#1",
+          "https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/139#1",
+          "https://wiki.mozilla.org/index.php?title=Support/Firefox139&curid=261870&oldid=1254342",
+          "https://wiki.mozilla.org/index.php?title=Support/Firefox139&curid=261870&diff=1254342&oldid=1254341",
+          "https://support.mozilla.org/ha/questions/1514707/feed#1",
+          "https://support.mozilla.org/cs/questions/1514707/feed#1",
+          "https://support.mozilla.org/no/questions/1515396/feed",
+          "https://support.mozilla.org/mk/questions/firefox?escalated=1&order=views&owner=all&show=responded&tagged=installation-and-updates&page=2#1",
+          "https://support.mozilla.org/ta/questions/all?show=responded&escalated=1&owner=all&order=votes&tagged=firefox-13901#1",
+          "https://cgit.freebsd.org/ports/log/www/firefox/files/patch-bug847568?showmsg=1",
+          "https://bugs.freebsd.org/bugzilla/show_bug.cgi?format=multiple&id=287141#1",
+          "https://www.freshports.org/www/firefox/files/patch-bug847568#1",
+          "https://bugs.freebsd.org/bugzilla/show_activity.cgi?id=287141",
+          "https://github.com/FreeBSD/freebsd-ports/commit/bbed43952eb4a1831e2a4dc19666af32cabe5593"
+        ],
+        "output": 809,
+        "publicFixtureReply": "[A2] 已核实\n\nMozilla 官方发布说明页确认：Firefox 139.0 于 2025 年 5 月 27 日首次向 Release 渠道用户推送（\"Version 139.0, first offered to Release channel users on 27 May 2025\"）；MDN 开发者发布说明同样记载\"Firefox 139 は 2025 年 5 月 27 日 にリリース\"。因此\"Firefox 139.0 正式发布\"的官方发布日期为 2025-05-27，与材料一致；同日发布的还有 Firefox for Android 139.0 与 ESR 128.11.0。后续修订版 139.0.1 于 2025-05-29 发布。\n\n来源：\n- Firefox 139.0 官方发布说明（mozilla.org 页面，现由 firefox.com 承载）：https://www.firefox.com/en-GB/firefox/139.0/releasenotes/ ；对应旧地址 https://www.mozilla.org/en-US/firefox/139.0/releasenotes/\n- MDN《Firefox 139 for developers》：https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/139\n- Mozilla Wiki 支持页（139.0.1 于 May 29, 2025）：https://wiki.mozilla.org/Support/Firefox139\n\n（注：本批次仅提供 [A2] 一个 ID，未见 Go 相关条目；如需核验 Go 文件请提供对应编号。）\n\n来源：\n- [Firefox 139 for Developers 发布说明](https://mdn.org.cn/en-US/docs/Mozilla/Firefox/Releases/139)\n- [content/files/en-us/mozilla/firefox/releases/139/index.md at 0383405cdb7e96b2f572206c0f35d2076edee953 · mdn/content · GitHub - ---](https://github.com/mdn/content/blob/0383405c/files/en-us/mozilla/firefox/releases/139/index.md?plain=1#1)\n- ['Firefox 139' official release, full page translation possible within extension page - 'Firefox 139' official release, full page translation possible within extension page](https://gigazine.net/gsc_news/en/20250528-firefox-139#gsc.tab=0#1)\n- [« Firefox 139 » Go to Release channel](https://prod.whattrainisitnow.prod.webservices.mozgcp.net/release/?version=139.0)\n- [Firefox 130 was released on September 3, 2024, introducing a new Firefox Labs page in Settings for trying experimental features ...](https://en.wikipedia.org/api/rest_v1/page/pdf/Firefox_early_version_history#19#6)\n- [火狐 Firefox 浏览器 139 发布：扩展页面支持全页翻译](https://m.163.com/dy/article/K0I41G4F0511B8LM.html?referFrom=)\n- [新規タブに壁紙を設定できる「Firefox 139」が正式リリース／セキュリティ関連の修正は「Critical」を含む10件](https://forest.watch.impress.co.jp/docs/news/2017688.html#image1_l.png)\n- [translated-content-de/files/de/mozilla/firefox/releases/139/index.md at main · mdn/translated-content-de · GitHub - ---](https://github.com/mdn/translated-content-de/blob/main/files/de/mozilla/firefox/releases/139/index.md?plain=1#1)\n- [「Firefox 139」正式版リリース、拡張機能ページ内での全ページ翻訳が可能に](https://gigazine.net/news/20250528-firefox-139/)\n- [Firefox](https://m2.cn.bing.com/news/search?q=Firefox&form=PTFTNR&ubiroff=1&setlang=zh-hans&sid=2498E8DD87FF6CE418DDFDA486A56D26)\n- [Firefox 139 Versionshinweise für Entwickler - Dieser Inhalt wurde automatisch aus dem Englischen übersetzt, und kann Fehler enthalten](https://developer.mozilla.org/de/docs/Mozilla/Firefox/Releases/139#1)\n- [Firefox 139 for developers - このページはコミュニティーの尽力で英語から翻訳されました](https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/139#1)\n- [Support/Firefox139](https://wiki.mozilla.org/index.php?title=Support/Firefox139&curid=261870&oldid=1254342)\n- [Support/Firefox139: Difference between revisions](https://wiki.mozilla.org/index.php?title=Support/Firefox139&curid=261870&diff=1254342&oldid=1254341)\n- [Amsoshin kwanan nan zuwa What is crashhelper and why is it coming up in the new version of firefox? - Amsoshin kwanan nan zuwa What is crashhelper and why is it coming up in the new version of firefox](https://support.mozilla.org/ha/questions/1514707/feed#1)\n- [Poslední odpovědi k What is crashhelper and why is it coming up in the new version of firefox? - Poslední odpovědi k What is crashhelper and why is it coming up in the new version of firefox](https://support.mozilla.org/cs/questions/1514707/feed#1)\n- [Nylige svar på updates occur weekly, it seems, but nothing ever changes](https://support.mozilla.org/no/questions/1515396/feed)\n- [Firefox Community Forum - New Tabs Now Includes Push Pins on Each Icon on Favorites - Firefox 139.0.1](https://support.mozilla.org/mk/questions/firefox?escalated=1&order=views&owner=all&show=responded&tagged=installation-and-updates&page=2#1)\n- [அனைத்துத் தயாரிப்புகள் Community Forum - New Tabs Now Includes Push Pins on Each Icon on Favorites - Firefox 139.0.1](https://support.mozilla.org/ta/questions/all?show=responded&escalated=1&owner=all&order=votes&tagged=firefox-13901#1)\n- [ports - FreeBSD ports tree](https://cgit.freebsd.org/ports/log/www/firefox/files/patch-bug847568?showmsg=1)\n- [Bug 287141 - Bug 287141](https://bugs.freebsd.org/bugzilla/show_bug.cgi?format=multiple&id=287141#1)\n- [FreshPorts -- www/firefox/files/patch-bug847568 - As an Amazon Associate I earn from qualifying purchases](https://www.freshports.org/www/firefox/files/patch-bug847568#1)\n- [Changes made to bug 287141](https://bugs.freebsd.org/bugzilla/show_activity.cgi?id=287141)\n- [www/firefox: update to 139.0 (rc2) · freebsd/freebsd-ports@bbed439](https://github.com/FreeBSD/freebsd-ports/commit/bbed43952eb4a1831e2a4dc19666af32cabe5593)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "object",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "max_uses",
+                "name",
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search_20250305"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "deepseek-flash",
+        "returned": "deepseek-flash",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 8192,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "DEEPSEEK_V4_FLASH",
+    "provider": "DEEPSEEK",
+    "publicAnswer": "独立核验结果：\n\n1. **Go 1.24.0**：已核实，官方发布日期为 **2025年2月11日**。  \n   来源：Go 官方发布历史 https://go.dev/doc/devel/release#go1.24.0 ；Go 官方博客 https://go.dev/blog/go1.24\n\n2. **Firefox 139.0**：已核实，官方发布日期为 **2025年5月27日**。  \n   来源：Mozilla 官方发布说明 https://www.mozilla.org/en-US/firefox/139.0/releasenotes/\n\n两项均以官方页面为准；A1 所引非官方来源不足以核验，但 go.dev 官方来源可直接确认。\n\n来源：- [Firefox 139 for developers - このページはコミュニティーの尽力で英語から翻訳されました](https://developer.mozilla.org/ja/docs/Mozilla/Firefox/Releases/139)\n- [Go 1.24.0 重磅发布：新特性、新工具，开发者必看！ - 云宝助手](https://bbs.huaweicloud.com/blogs/446785)",
+    "returned": "deepseek-flash",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "glm-5.3",
+    "nativeSources": [
+      "http://mp.weixin.qq.com/s?__biz=Mzg5NTYxMTAzOQ==&mid=2247526434&idx=1&sn=bdb06e3d83a31cb6d860d4b15fd2c1f6",
+      "https://beijing.3158.cn/info/20151112/n23828102314290.html"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 8018,
+        "input": 5230,
+        "nativeSources": [
+          "https://moonfdd.blog.csdn.net/article/details/145942647",
+          "https://www.17golang.com/article/620553.html",
+          "http://mp.weixin.qq.com/s?__biz=Mzg5NTYxMTAzOQ==&mid=2247526434&idx=1&sn=bdb06e3d83a31cb6d860d4b15fd2c1f6",
+          "https://blog.gitcode.com/052dd3ee55b56a4c513e33b6d1ce6585.html",
+          "https://wenku.csdn.net/answer/ichomsczf4",
+          "https://www.php.cn/faq/3255984.html",
+          "https://blog.csdn.net/gitblog_00370/article/details/153611102",
+          "https://blog.csdn.net/chou_qi/article/details/153855152",
+          "https://blog.gitcode.com/4e0e28d3e3ba7c74d599381112e54dd8.html",
+          "https://blog.csdn.net/cpyaxjq/article/details/164305561"
+        ],
+        "output": 133,
+        "publicFixtureReply": "[A1] 已核实\n\nGo 1.24.0 正式发布日期为 2025 年 2 月 12 日。此版本主要变更集中在工具链、运行时和库的实现上，并全面支持泛型类型别名；同时引入 go.mod 工具指令、`go tool` 命令等改进。后续于 2025 年 11 月 5 日发布补丁版 Go 1.24.10，修复 encoding/pem、net/url 等模块缺陷。\n\n来源：\n- https://go.dev/doc/go1.24\n- https://go.dev/doc/devel/release\n\n来源：\n- [Go1.24版本终于来了！各位开发者，准备好迎接这些激动人心的新功能了吗？让我们一起来探讨下Go1.24中有哪些精彩的亮点？](https://moonfdd.blog.csdn.net/article/details/145942647)\n- [Go 工具链自动升级值得开吗：GOTOOLCHAIN、go 指令与 CI 可复现性的取舍](https://www.17golang.com/article/620553.html)\n- [Go1.25.4 和 Go1.24.10 发布了！](http://mp.weixin.qq.com/s?__biz=Mzg5NTYxMTAzOQ==&mid=2247526434&idx=1&sn=bdb06e3d83a31cb6d860d4b15fd2c1f6)\n- [uber-go/fx 完整版本演进指南：从 1.0 Beta 到 1.24 的 API 变迁与源码级解读](https://blog.gitcode.com/052dd3ee55b56a4c513e33b6d1ce6585.html)\n- [go1.24.0打包minio](https://wenku.csdn.net/answer/ichomsczf4)\n- [GoLand配置调试器Delve解决无法断点的问题-Golang](https://www.php.cn/faq/3255984.html)\n- [imgproxy源码调试环境搭建：VS Code与Go插件配置](https://blog.csdn.net/gitblog_00370/article/details/153611102)\n- [kubernetes 源码编译（ubuntu） kubernetes-1.34.1](https://blog.csdn.net/chou_qi/article/details/153855152)\n- [kyanos 源码编译指南：从环境准备到内嵌 BTF 发布版构建](https://blog.gitcode.com/4e0e28d3e3ba7c74d599381112e54dd8.html)\n- [Go 语言自动化运维实战与 24 周技能全景总结（第 17 周 + 终篇）](https://blog.csdn.net/cpyaxjq/article/details/164305561)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "string",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": "auto",
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "type",
+                "web_search"
+              ],
+              "searchContextSize": null,
+              "type": "web_search"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "glm-5.3",
+        "returned": "glm-5.3",
+        "webProof": true,
+        "wire": {
+          "effort": "low",
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 32768,
+          "searchEngine": "search_pro"
+        }
+      },
+      {
+        "elapsedMs": 4678,
+        "input": 4225,
+        "nativeSources": [
+          "https://www.ruancan.com/p/231063.html",
+          "https://www.ithome.com/0/856/171.htm",
+          "https://www.pcpop.com/article/802041.shtml",
+          "https://www.cbish.com/pc/39284.html",
+          "https://blog.csdn.net/ylscode/article/details/166946273",
+          "https://wenwen.sogou.com/z/q760308947.htm",
+          "https://www.solidot.org/story?sid=81190",
+          "https://soft.zol.com.cn/2004/1228/139390.shtml",
+          "https://beijing.3158.cn/info/20151112/n23828102314290.html",
+          "https://m.nndssk.com/xtzx/421517P31dxt.html"
+        ],
+        "output": 156,
+        "publicFixtureReply": "[A2] 已核实\n\nMozilla Firefox 139.0 于 2025 年 5 月 27 日正式发布，官方发行说明页面为 mozilla.org，与搜索资料中“Firefox 139 发布”及 IT之家 5 月 27 日报道一致。该版本主要更新包括：扩展页面支持全页翻译、HTTP/3 高带宽高延迟环境下上传性能提升、默认启用 Temporal API、隐私浏览模式下 Service Workers 加密存储、WebAuthn largeBlob 扩展支持等。\n\n来源：\nhttps://www.mozilla.org/en-US/firefox/139.0/releasenotes/\nhttps://www.ithome.com/（IT之家 2025 年 5 月 27 日报道 Firefox 139 发布）\n\n来源：\n- [(更新要点) Firefox 139 即将发布](https://www.ruancan.com/p/231063.html)\n- [火狐 Firefox 浏览器 139 发布：扩展页面支持全页翻译，优化文件上传速度](https://www.ithome.com/0/856/171.htm)\n- [Firefox 13正式发布新设计主页更快速](https://www.pcpop.com/article/802041.shtml)\n- [Mozilla Firefox 火狐浏览器 v144.0.2 官方正式版发布](https://www.cbish.com/pc/39284.html)\n- [Firefox全新界面正式发布：紧凑模式回归+一键关闭AI，Mozilla这次把选择权还给了用户](https://blog.csdn.net/ylscode/article/details/166946273)\n- [火狐浏览器所有版本！！](https://wenwen.sogou.com/z/q760308947.htm)\n- [Firefox 138 释出，标签组正式推出](https://www.solidot.org/story?sid=81190)\n- [【Firefox新年决心：解决兼容问题 保持增长势头】](https://soft.zol.com.cn/2004/1228/139390.shtml)\n- [Firefox浏览器正式版登陆iOS平台-3158北京分站](https://beijing.3158.cn/info/20151112/n23828102314290.html)\n- [Firefox彻底变了！官方确认五年来最大改版](https://m.nndssk.com/xtzx/421517P31dxt.html)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "string",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": "auto",
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "type",
+                "web_search"
+              ],
+              "searchContextSize": null,
+              "type": "web_search"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "glm-5.3",
+        "returned": "glm-5.3",
+        "webProof": true,
+        "wire": {
+          "effort": "low",
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 32768,
+          "searchEngine": "search_pro"
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "GLM_5_3",
+    "provider": "ZHIPU",
+    "publicAnswer": "以下为独立核验结论（已排除原提供的微信公众号与 3158 页面，两者均非官方来源）：\n\n**A1. Go 1.24.0 发布日期**\n\n- 核验结果：**2025 年 2 月 12 日**正式发布。\n- 官方来源：\n  - Go 1.24 官方发布说明：https://go.dev/doc/go1.24（页面开头标注发布日期为 2025 年 2 月 12 日）\n  - Go 官方发布历史表：https://go.dev/doc/devel/release（go1.24.0 条目对应 2025-02-12）\n\n**A2. Firefox 139.0 发布日期**\n\n- 核验结果：**2025 年 5 月 27 日**正式发布。\n- 官方来源：\n  - Mozilla 官方发布说明页：https://www.mozilla.org/en-US/firefox/139.0/releasenotes/（页面标注发布日期为 2025 年 5 月 27 日）\n  - Mozilla 官方版本数据接口（含各版本确切发布日期）：https://product-details.mozilla.org/1.0/firefox.json（firefox-139.0 条目为 2025-05-27）\n\n**小结**：两项均为已核实事项——Go 1.24.0 于 2025 年 2 月 12 日发布（go.dev 核验通过）；Firefox 139.0 于 2025 年 5 月 27 日发布（mozilla.org 核验通过）。原任务附带的两个外部链接与官方日期无核验效力，已弃用。\n\n来源：- [Firefox浏览器正式版登陆iOS平台-3158北京分站](https://beijing.3158.cn/info/20151112/n23828102314290.html)\n- [Go1.25.4 和 Go1.24.10 发布了！](http://mp.weixin.qq.com/s?__biz=Mzg5NTYxMTAzOQ==&mid=2247526434&idx=1&sn=bdb06e3d83a31cb6d860d4b15fd2c1f6)",
+    "returned": "glm-5.3",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "glm-5.3-flash",
+    "nativeSources": [
+      "https://blog.csdn.net/chou_qi/article/details/153855152",
+      "https://beijing.3158.cn/info/20151112/n23828102314290.html"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 5029,
+        "input": 5221,
+        "nativeSources": [
+          "https://moonfdd.blog.csdn.net/article/details/145942647",
+          "https://zhuanlan.zhihu.com/p/1971980976965025839",
+          "https://www.17golang.com/article/620553.html",
+          "https://blog.gitcode.com/052dd3ee55b56a4c513e33b6d1ce6585.html",
+          "https://www.php.cn/faq/3255984.html",
+          "https://wenku.csdn.net/answer/ichomsczf4",
+          "https://blog.csdn.net/chou_qi/article/details/153855152",
+          "https://blog.csdn.net/gitblog_00370/article/details/153611102",
+          "https://www.jb51.net/jiaoben/371997lf4.htm",
+          "https://blog.csdn.net/cpyaxjq/article/details/164305561"
+        ],
+        "output": 140,
+        "publicFixtureReply": "搜索核验：Go 1.24.0 发布日期。\n\n根据官方 Release History，Go 1.24.0 于 2025 年 2 月 11 日正式发布，属于 Go 1.24 系列首个版本。材料 [ref_1] 称其为正式发布属实，但未标注日期；[ref_2] 提到的 Go 1.24.10 是该系列后续补丁版（2025-11-05 发布），与此一致。\n\n来源 URL：\n- https://go.dev/doc/devel/release\n- https://go.dev/doc/go1.24\n\n来源：\n- [Go1.24版本终于来了！各位开发者，准备好迎接这些激动人心的新功能了吗？让我们一起来探讨下Go1.24中有哪些精彩的亮点？](https://moonfdd.blog.csdn.net/article/details/145942647)\n- [Go1.25.4 和 Go1.24.10 发布了！](https://zhuanlan.zhihu.com/p/1971980976965025839)\n- [Go 工具链自动升级值得开吗：GOTOOLCHAIN、go 指令与 CI 可复现性的取舍](https://www.17golang.com/article/620553.html)\n- [uber-go/fx 完整版本演进指南：从 1.0 Beta 到 1.24 的 API 变迁与源码级解读](https://blog.gitcode.com/052dd3ee55b56a4c513e33b6d1ce6585.html)\n- [GoLand配置调试器Delve解决无法断点的问题-Golang](https://www.php.cn/faq/3255984.html)\n- [go1.24.0打包minio](https://wenku.csdn.net/answer/ichomsczf4)\n- [kubernetes 源码编译（ubuntu） kubernetes-1.34.1](https://blog.csdn.net/chou_qi/article/details/153855152)\n- [imgproxy源码调试环境搭建：VS Code与Go插件配置](https://blog.csdn.net/gitblog_00370/article/details/153611102)\n- [Go语言安装与配置的详细步骤](https://www.jb51.net/jiaoben/371997lf4.htm)\n- [Go 语言自动化运维实战与 24 周技能全景总结（第 17 周 + 终篇）](https://blog.csdn.net/cpyaxjq/article/details/164305561)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "string",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": "auto",
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "type",
+                "web_search"
+              ],
+              "searchContextSize": null,
+              "type": "web_search"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "glm-5.3-flash",
+        "returned": "glm-5.3-flash",
+        "webProof": true,
+        "wire": {
+          "effort": "low",
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 32768,
+          "searchEngine": "search_pro"
+        }
+      },
+      {
+        "elapsedMs": 5059,
+        "input": 4226,
+        "nativeSources": [
+          "https://www.ruancan.com/p/231063.html",
+          "https://www.ithome.com/0/856/171.htm",
+          "https://www.pcpop.com/article/802041.shtml",
+          "https://www.cbish.com/pc/39284.html",
+          "https://wenwen.sogou.com/z/q760308947.htm",
+          "https://blog.csdn.net/ylscode/article/details/166946273",
+          "https://www.solidot.org/story?sid=81190",
+          "https://soft.zol.com.cn/2004/1228/139390.shtml",
+          "https://m.nndssk.com/xtzx/421517P31dxt.html",
+          "https://beijing.3158.cn/info/20151112/n23828102314290.html"
+        ],
+        "output": 155,
+        "publicFixtureReply": "[A2] 已核实\n\nMozilla 于2025年5月27日正式发布 Firefox 139.0 正式版。主要更新包括：扩展页面支持全页翻译、HTTP/3 上传性能提升（优化 0-RTT 恢复）、默认启用 Temporal API（成为首个全面支持的主流浏览器）、隐私模式下 Service Workers 加密存储、WebAuthn largeBlob 扩展等。二进制文件于5月26日推送至镜像，官方发布说明确认版本号 139.0（2025-05-27）。\n\n来源：\n- https://www.mozilla.org/en-US/firefox/139.0/releasenotes/\n- https://ftp.mozilla.org/pub/firefox/releases/139.0/\n\n来源：\n- [(更新要点) Firefox 139 即将发布](https://www.ruancan.com/p/231063.html)\n- [火狐 Firefox 浏览器 139 发布：扩展页面支持全页翻译，优化文件上传速度](https://www.ithome.com/0/856/171.htm)\n- [Firefox 13正式发布新设计主页更快速](https://www.pcpop.com/article/802041.shtml)\n- [Mozilla Firefox 火狐浏览器 v144.0.2 官方正式版发布](https://www.cbish.com/pc/39284.html)\n- [火狐浏览器所有版本！！](https://wenwen.sogou.com/z/q760308947.htm)\n- [Firefox全新界面正式发布：紧凑模式回归+一键关闭AI，Mozilla这次把选择权还给了用户](https://blog.csdn.net/ylscode/article/details/166946273)\n- [Firefox 138 释出，标签组正式推出](https://www.solidot.org/story?sid=81190)\n- [【Firefox新年决心：解决兼容问题 保持增长势头】](https://soft.zol.com.cn/2004/1228/139390.shtml)\n- [Firefox彻底变了！官方确认五年来最大改版](https://m.nndssk.com/xtzx/421517P31dxt.html)\n- [Firefox浏览器正式版登陆iOS平台-3158北京分站](https://beijing.3158.cn/info/20151112/n23828102314290.html)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "string",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": "auto",
+          "input": null,
+          "maxOutputTokens": null,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": null,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "type",
+                "web_search"
+              ],
+              "searchContextSize": null,
+              "type": "web_search"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "glm-5.3-flash",
+        "returned": "glm-5.3-flash",
+        "webProof": true,
+        "wire": {
+          "effort": "low",
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": 32768,
+          "searchEngine": "search_pro"
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "GLM_5_3_FLASH",
+    "provider": "ZHIPU",
+    "publicAnswer": "我将执行两项独立搜索，分别核对 go.dev 与 mozilla.org 的官方发布信息。\n\n**搜索 1：Go 1.24.0 发布日期（go.dev）**\n- 查询：\"Go 1.24\" release date site:go.dev\n\n**搜索 2：Firefox 139.0 发布日期（mozilla.org）**\n- 查询：Firefox 139.0 release date site:mozilla.org\n\n现在执行检索。\n\n来源：- [Firefox浏览器正式版登陆iOS平台-3158北京分站](https://beijing.3158.cn/info/20151112/n23828102314290.html)\n- [kubernetes 源码编译（ubuntu） kubernetes-1.34.1](https://blog.csdn.net/chou_qi/article/details/153855152)",
+    "returned": "glm-5.3-flash",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "qwen3.7-plus",
+    "nativeSources": [
+      "https://go.dev/blog/go1.24",
+      "https://www.mozilla.org/en-US/firefox/139.0/releasenotes/"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 15057,
+        "input": 4319,
+        "nativeSources": [
+          "https://go.dev/doc/go1.24",
+          "https://go.dev/doc/devel/release",
+          "https://go.dev/blog/go1.24",
+          "https://go.dev/dl/",
+          "https://go.dev/doc/go1.26",
+          "https://go.dev/blog/go1.25",
+          "https://go.dev/s/go1.2.1-changes",
+          "https://go.dev/doc/install",
+          "https://go.dev/issue/78503",
+          "https://go.dev/issue/79153",
+          "https://www.reddit.com/r/golang/comments/1j3jo7i/go_1241_is_released/",
+          "https://medium.com/@dmytro.misik/go-1-24-personal-top-features-07bd8fd0ad2b",
+          "https://antonz.org/go-1-24/",
+          "https://www.youtube.com/watch?v=qjiIA0220ms",
+          "https://goframe.org/en/release/golang/go1.24",
+          "https://endoflife.date/go",
+          "https://www.mozilla.org/en-US/firefox/139.0/releasenotes/",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0/",
+          "https://www.mozilla.org/firefox/releases/",
+          "https://www.mozilla.org/firefox/139.0.1/releasenotes/",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/",
+          "https://www.mozilla.org/en-US/firefox/139.0/system-requirements/",
+          "https://www.mozilla.org/en-US/firefox/139.0beta/releasenotes/",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0.4/"
+        ],
+        "output": 577,
+        "publicFixtureReply": "## [A1] Go 1.24.0 正式发布\n\n**已核实**\n\nGo 1.24.0 于 **2025年2月11日** 正式发布。go.dev官方发布历史页面明确记录该日期，官方博客同步发布宣布文章。\n\n来源：\n- https://go.dev/doc/devel/release\n- https://go.dev/blog/go1.24\n\n---\n\n## [A2] Firefox 139.0 正式发布\n\n**已核实**\n\nFirefox 139.0 于 **2025年5月27日** 正式发布。Mozilla官方发布说明页面确认该版本首次向Release渠道用户提供日期为2025年5月27日。\n\n来源：\n- https://www.mozilla.org/en-US/firefox/139.0/releasenotes/\n- https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139\n\n来源：\n- [https://go.dev/doc/go1.24](https://go.dev/doc/go1.24)\n- [https://go.dev/doc/devel/release](https://go.dev/doc/devel/release)\n- [https://go.dev/blog/go1.24](https://go.dev/blog/go1.24)\n- [https://go.dev/dl/](https://go.dev/dl/)\n- [https://go.dev/doc/go1.26](https://go.dev/doc/go1.26)\n- [https://go.dev/blog/go1.25](https://go.dev/blog/go1.25)\n- [https://go.dev/s/go1.2.1-changes](https://go.dev/s/go1.2.1-changes)\n- [https://go.dev/doc/install](https://go.dev/doc/install)\n- [https://go.dev/issue/78503](https://go.dev/issue/78503)\n- [https://go.dev/issue/79153](https://go.dev/issue/79153)\n- [https://www.reddit.com/r/golang/comments/1j3jo7i/go_1241_is_released/](https://www.reddit.com/r/golang/comments/1j3jo7i/go_1241_is_released/)\n- [https://medium.com/@dmytro.misik/go-1-24-personal-top-features-07bd8fd0ad2b](https://medium.com/@dmytro.misik/go-1-24-personal-top-features-07bd8fd0ad2b)\n- [https://antonz.org/go-1-24/](https://antonz.org/go-1-24/)\n- [https://www.youtube.com/watch?v=qjiIA0220ms](https://www.youtube.com/watch?v=qjiIA0220ms)\n- [https://goframe.org/en/release/golang/go1.24](https://goframe.org/en/release/golang/go1.24)\n- [https://endoflife.date/go](https://endoflife.date/go)\n- [https://www.mozilla.org/en-US/firefox/139.0/releasenotes/](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0/](https://ftp.mozilla.org/pub/firefox/releases/139.0/)\n- [https://www.mozilla.org/firefox/releases/](https://www.mozilla.org/firefox/releases/)\n- [https://www.mozilla.org/firefox/139.0.1/releasenotes/](https://www.mozilla.org/firefox/139.0.1/releasenotes/)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/](https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/)\n- [https://www.mozilla.org/en-US/firefox/139.0/system-requirements/](https://www.mozilla.org/en-US/firefox/139.0/system-requirements/)\n- [https://www.mozilla.org/en-US/firefox/139.0beta/releasenotes/](https://www.mozilla.org/en-US/firefox/139.0beta/releasenotes/)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0.4/](https://ftp.mozilla.org/pub/firefox/releases/139.0.4/)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": [
+            {
+              "partTypes": [
+                "input_text"
+              ],
+              "role": "system",
+              "type": null
+            },
+            {
+              "partTypes": [
+                "input_text",
+                "input_text"
+              ],
+              "role": "user",
+              "type": null
+            }
+          ],
+          "maxOutputTokens": 8192,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": false,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "qwen3.7-plus",
+        "returned": "qwen3.7-plus",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": null,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "QWEN_3_7_PLUS",
+    "provider": "QWEN",
+    "publicAnswer": "**A1 Go 1.24.0 官方发布日期**\nGo 1.24.0 于2025年2月11日正式发布。\n来源：https://go.dev/blog/go1.24\n\n**A2 Firefox 139.0 官方发布日期**\nFirefox 139.0 于2025年6月10日正式发布。\n来源：https://www.mozilla.org/en-US/firefox/139.0/releasenotes/\n\n来源：- [https://go.dev/blog/go1.24](https://go.dev/blog/go1.24)\n- [https://www.mozilla.org/en-US/firefox/139.0/releasenotes/](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)",
+    "returned": "qwen3.7-plus",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "qwen3.8-max",
+    "nativeSources": [
+      "https://go.dev/blog/go1.24",
+      "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 14945,
+        "input": 2818,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release",
+          "https://go.dev/dl/",
+          "https://go.dev/doc/go1.24",
+          "https://go.dev/blog/go1.24",
+          "https://www.reddit.com/r/golang/comments/1j3jo7i/go_1241_is_released/",
+          "https://go.dev/doc/go1.25",
+          "https://go.dev/doc/install",
+          "https://x.com/golang/status/1889383557182689695?lang=en",
+          "https://endoflife.date/go",
+          "https://www.firefox.com/en-US/firefox/139.0/releasenotes/",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0/",
+          "https://www.firefox.com/en-US/releases/",
+          "https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139",
+          "https://en.wikipedia.org/wiki/Firefox_version_history",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/",
+          "https://www.reddit.com/r/firefox/comments/1kwie22/firefox_1390_releases_today/",
+          "https://ftp.mozilla.org/pub/firefox/releases/",
+          "https://www.firefox.com/en-US/firefox/139.0.4/releasenotes/",
+          "https://whattrainisitnow.com/calendar/"
+        ],
+        "output": 516,
+        "publicFixtureReply": "[A1] 已核实\nGo 1.24.0 由官方发布，go.dev 官方发布博客《Go 1.24 is released!》与发布历史（Release History）均确认 1.24.0 为主版本正式发布，Go 1.24 发行说明注明该版本于 2025 年 2 月发布（官方博客及 Go 官方 X 账号显示发布日期为 2025 年 2 月 11 日），引入泛型类型别名、map 性能改进、FIPS 140 合规支持等。\n来源：\nhttps://go.dev/blog/go1.24\nhttps://go.dev/doc/devel/release\nhttps://go.dev/doc/go1.24\n\n[A2] 已核实\nFirefox 139.0 正式发布。Mozilla 官方发布说明页面（firefox.com）明确标注“139.0 Firefox Release, May 27, 2025”，即 2025 年 5 月 27 日面向 Release 渠道用户发布；MDN 开发者发布说明同样记载 Firefox 139 于 2025 年 5 月 27 日发布，mozilla.org FTP 目录亦存在 139.0 发布文件。\n来源：\nhttps://www.firefox.com/en-US/firefox/139.0/releasenotes/\nhttps://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139\nhttps://ftp.mozilla.org/pub/firefox/releases/139.0/\n\n来源：\n- [https://go.dev/doc/devel/release](https://go.dev/doc/devel/release)\n- [https://go.dev/dl/](https://go.dev/dl/)\n- [https://go.dev/doc/go1.24](https://go.dev/doc/go1.24)\n- [https://go.dev/blog/go1.24](https://go.dev/blog/go1.24)\n- [https://www.reddit.com/r/golang/comments/1j3jo7i/go_1241_is_released/](https://www.reddit.com/r/golang/comments/1j3jo7i/go_1241_is_released/)\n- [https://go.dev/doc/go1.25](https://go.dev/doc/go1.25)\n- [https://go.dev/doc/install](https://go.dev/doc/install)\n- [https://x.com/golang/status/1889383557182689695?lang=en](https://x.com/golang/status/1889383557182689695?lang=en)\n- [https://endoflife.date/go](https://endoflife.date/go)\n- [https://www.firefox.com/en-US/firefox/139.0/releasenotes/](https://www.firefox.com/en-US/firefox/139.0/releasenotes/)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0/](https://ftp.mozilla.org/pub/firefox/releases/139.0/)\n- [https://www.firefox.com/en-US/releases/](https://www.firefox.com/en-US/releases/)\n- [https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)\n- [https://en.wikipedia.org/wiki/Firefox_version_history](https://en.wikipedia.org/wiki/Firefox_version_history)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/](https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/)\n- [https://www.reddit.com/r/firefox/comments/1kwie22/firefox_1390_releases_today/](https://www.reddit.com/r/firefox/comments/1kwie22/firefox_1390_releases_today/)\n- [https://ftp.mozilla.org/pub/firefox/releases/](https://ftp.mozilla.org/pub/firefox/releases/)\n- [https://www.firefox.com/en-US/firefox/139.0.4/releasenotes/](https://www.firefox.com/en-US/firefox/139.0.4/releasenotes/)\n- [https://whattrainisitnow.com/calendar/](https://whattrainisitnow.com/calendar/)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": [
+            {
+              "partTypes": [
+                "input_text"
+              ],
+              "role": "system",
+              "type": null
+            },
+            {
+              "partTypes": [
+                "input_text",
+                "input_text"
+              ],
+              "role": "user",
+              "type": null
+            }
+          ],
+          "maxOutputTokens": 16384,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": false,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "qwen3.8-max",
+        "returned": "qwen3.8-max",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": null,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "QWEN_3_8_MAX",
+    "provider": "QWEN",
+    "publicAnswer": "## 核验结果\n\n**A1 — Go 1.24.0**\n\nGo 1.24.0 于 **2025 年 2 月 11 日** 正式发布。该版本引入泛型类型别名、map 性能改进、FIPS 140 合规模式等特性。\n\n来源：[go.dev/blog/go1.24](https://go.dev/blog/go1.24)\n\n---\n\n**A2 — Firefox 139.0**\n\nFirefox 139.0 于 **2025 年 5 月 27 日** 面向 Release 渠道正式发布。\n\n来源：[developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)\n\n来源：- [https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/139)\n- [https://go.dev/blog/go1.24](https://go.dev/blog/go1.24)",
+    "returned": "qwen3.8-max",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  },
+  {
+    "answerNonempty": true,
+    "covered": 2,
+    "model": "qwen3.6-flash",
+    "nativeSources": [
+      "https://www.mozilla.org/en-US/firefox/139.0/releasenotes/",
+      "https://go.dev/blog/go1.24"
+    ],
+    "physical": [
+      {
+        "elapsedMs": 41017,
+        "input": 21107,
+        "nativeSources": [
+          "https://go.dev/doc/devel/release",
+          "https://pkg.go.dev/golang.org/dl/go1.24.0",
+          "https://go.dev/doc/go1.26",
+          "https://pkg.go.dev/github.com/LetFu/dl/go1.24.0",
+          "https://go.dev/issue/79917",
+          "https://go.dev/issue/74739",
+          "https://go.dev/issue/78503",
+          "https://go.dev/play/p/ohypfiXhADR",
+          "https://pkg.go.dev/golang.org/dl",
+          "https://pkg.go.dev/github.com/clktmr/dl/go1.24.0-n64",
+          "https://www.mozilla.org/en-US/firefox/139.0/releasenotes/",
+          "https://www.mozilla.org/en-US/firefox/139.0.4/releasenotes/",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/",
+          "https://www.mozilla.org/en-US/firefox/139.0/system-requirements/",
+          "https://www.mozilla.org/firefox/139.0.1/releasenotes/",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0.1/mac/en-US/",
+          "https://www.mozilla.org/en-US/firefox/139.0.1/system-requirements/",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0b7/update/mac/az/",
+          "https://support.mozilla.org/en-US/questions/1517397",
+          "https://ftp.mozilla.org/pub/firefox/releases/139.0.4/linux-x86_64/en-US/",
+          "https://go.dev/blog/go1.24",
+          "https://go.dev/blog/go1.25",
+          "https://go.dev/blog/16years",
+          "https://go.dev/blog/coretypes"
+        ],
+        "output": 2033,
+        "publicFixtureReply": "[A1] 已核实。Go 1.24.0 官方正式发布时间为 2025年2月11日。根据 Go 官方博客及官方文档版本历史记录确认，Go 1.24 为该年度的首个主版本更新，带来了通用类型别名、基于瑞士表的哈希映射实现以及 FIPS 140-3 标准密码模块等核心特性。\n来源公开URL：https://go.dev/blog/go1.24\nhttps://golang.org/doc/devel/release.html\n\n[A2] 已核实。Firefox 139.0 官方正式发布时间为 2025年5月27日。根据 Mozilla 官方网站的 Firefox 版本说明页面确认，该版本于当日首次向 Release（正式版）频道用户推送，并在后续几天内陆续发布了针对图形兼容性问题的 139.0.1 等维护版本。\n来源公开URL：https://www.mozilla.org/en-US/firefox/139.0/releasenotes/\n\n来源：\n- [https://go.dev/doc/devel/release](https://go.dev/doc/devel/release)\n- [https://pkg.go.dev/golang.org/dl/go1.24.0](https://pkg.go.dev/golang.org/dl/go1.24.0)\n- [https://go.dev/doc/go1.26](https://go.dev/doc/go1.26)\n- [https://pkg.go.dev/github.com/LetFu/dl/go1.24.0](https://pkg.go.dev/github.com/LetFu/dl/go1.24.0)\n- [https://go.dev/issue/79917](https://go.dev/issue/79917)\n- [https://go.dev/issue/74739](https://go.dev/issue/74739)\n- [https://go.dev/issue/78503](https://go.dev/issue/78503)\n- [https://go.dev/play/p/ohypfiXhADR](https://go.dev/play/p/ohypfiXhADR)\n- [https://pkg.go.dev/golang.org/dl](https://pkg.go.dev/golang.org/dl)\n- [https://pkg.go.dev/github.com/clktmr/dl/go1.24.0-n64](https://pkg.go.dev/github.com/clktmr/dl/go1.24.0-n64)\n- [https://www.mozilla.org/en-US/firefox/139.0/releasenotes/](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)\n- [https://www.mozilla.org/en-US/firefox/139.0.4/releasenotes/](https://www.mozilla.org/en-US/firefox/139.0.4/releasenotes/)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/](https://ftp.mozilla.org/pub/firefox/releases/139.0/linux-x86_64/en-US/)\n- [https://www.mozilla.org/en-US/firefox/139.0/system-requirements/](https://www.mozilla.org/en-US/firefox/139.0/system-requirements/)\n- [https://www.mozilla.org/firefox/139.0.1/releasenotes/](https://www.mozilla.org/firefox/139.0.1/releasenotes/)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0.1/mac/en-US/](https://ftp.mozilla.org/pub/firefox/releases/139.0.1/mac/en-US/)\n- [https://www.mozilla.org/en-US/firefox/139.0.1/system-requirements/](https://www.mozilla.org/en-US/firefox/139.0.1/system-requirements/)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0b7/update/mac/az/](https://ftp.mozilla.org/pub/firefox/releases/139.0b7/update/mac/az/)\n- [https://support.mozilla.org/en-US/questions/1517397](https://support.mozilla.org/en-US/questions/1517397)\n- [https://ftp.mozilla.org/pub/firefox/releases/139.0.4/linux-x86_64/en-US/](https://ftp.mozilla.org/pub/firefox/releases/139.0.4/linux-x86_64/en-US/)\n- [https://go.dev/blog/go1.24](https://go.dev/blog/go1.24)\n- [https://go.dev/blog/go1.25](https://go.dev/blog/go1.25)\n- [https://go.dev/blog/16years](https://go.dev/blog/16years)\n- [https://go.dev/blog/coretypes](https://go.dev/blog/coretypes)",
+        "reportedCostMicros": null,
+        "requestShape": {
+          "choiceKind": "absent",
+          "choiceMode": null,
+          "choiceType": null,
+          "choiceValue": null,
+          "input": [
+            {
+              "partTypes": [
+                "input_text"
+              ],
+              "role": "system",
+              "type": null
+            },
+            {
+              "partTypes": [
+                "input_text",
+                "input_text"
+              ],
+              "role": "user",
+              "type": null
+            }
+          ],
+          "maxOutputTokens": 8192,
+          "routingKeyFingerprint": null,
+          "routingKeyPresent": false,
+          "store": false,
+          "stream": true,
+          "tools": [
+            {
+              "externalWebAccess": null,
+              "keys": [
+                "type"
+              ],
+              "searchContextSize": null,
+              "type": "web_search"
+            }
+          ],
+          "toolsCount": 1
+        },
+        "requested": "qwen3.6-flash",
+        "returned": "qwen3.6-flash",
+        "webProof": true,
+        "wire": {
+          "effort": null,
+          "explicitQuery": true,
+          "grounded": false,
+          "maxTokens": null,
+          "searchEngine": null
+        }
+      }
+    ],
+    "planned": 2,
+    "preset": "QWEN_3_6_FLASH",
+    "provider": "QWEN",
+    "publicAnswer": "- **Go 1.24.0**：官方正式发布日期为 2025年2月11日。来源：https://go.dev/blog/go1.24\n- **Firefox 139.0**：官方正式发布日期为 2025年5月27日。来源：https://www.mozilla.org/en-US/firefox/139.0/releasenotes/\n\n来源：- [https://go.dev/blog/go1.24](https://go.dev/blog/go1.24)\n- [https://www.mozilla.org/en-US/firefox/139.0/releasenotes/](https://www.mozilla.org/en-US/firefox/139.0/releasenotes/)",
+    "returned": "qwen3.6-flash",
+    "scopeComplete": true,
+    "searchErrors": [],
+    "webProof": true
+  }
+]

@@ -48,6 +48,9 @@ object ConversationCostEstimator {
     )
 
     private val prices = mapOf(
+        "meta/muse-wonder" to price("openrouter-muse-wonder-2026-10-13-v1", "4", "20", "0.2"),
+        "anthropic/claude-opus-5.5" to price("openrouter-public-prices-2026-10-09-v1", "4", "20", "0.2"),
+        "anthropic/claude-sonnet-5.5" to price("openrouter-public-prices-2026-10-09-v1", "2", "10", "0.1"),
         "anthropic/claude-fable-5" to price(OPENROUTER_PRICE_VERSION, "10", "50"),
         "anthropic/claude-opus-5" to price(OPENROUTER_PRICE_VERSION, "5", "25"),
         "anthropic/claude-opus-5:fast" to price(OPENROUTER_PRICE_VERSION, "10", "50"),
@@ -79,7 +82,8 @@ object ConversationCostEstimator {
         }
         // Preserve the previously recorded schedule for historical IDs; new Flash has its own version.
         val hour = at.atOffset(java.time.ZoneOffset.UTC).hour
-        val peak = hour in 1 until 4 || hour in 6 until 10
+        val weekday = at.atOffset(java.time.ZoneOffset.UTC).dayOfWeek.value <= 5
+        val peak = weekday && (hour in 1 until 4 || hour in 6 until 10)
         return when (modelId) {
             "deepseek-v4-pro" -> if (peak) {
                 price(DEEPSEEK_PEAK_PRICE_VERSION, "1.32", "3.96", "0.044")
@@ -95,6 +99,18 @@ object ConversationCostEstimator {
     }
 
     private val inputTieredPrices = mapOf(
+        "anthropic/claude-haiku-5.5" to listOf(
+            InputTier(99_999, price("openrouter-public-prices-2026-10-09-v1", "0.1", "0.5", "0.01")),
+            InputTier(Long.MAX_VALUE, price("openrouter-public-prices-2026-10-09-v1", "0.5", "2.5", "0.05")),
+        ),
+        "openai/gpt-6.1-sol" to listOf(
+            InputTier(271_999, price("openrouter-public-prices-2026-10-09-v1", "2", "10", "0.1")),
+            InputTier(Long.MAX_VALUE, price("openrouter-public-prices-2026-10-09-v1", "4", "15", "0.2")),
+        ),
+        "openai/gpt-6-luna" to listOf(
+            InputTier(271_999, price("openrouter-public-prices-2026-10-09-v1", "0.1", "0.5", "0.01")),
+            InputTier(Long.MAX_VALUE, price("openrouter-public-prices-2026-10-09-v1", "0.2", "0.75", "0.02")),
+        ),
         "openai/gpt-5.6-sol" to listOf(
             InputTier(271_999, price(OPENROUTER_PRICE_VERSION, "2", "10")),
             InputTier(Long.MAX_VALUE, price(OPENROUTER_PRICE_VERSION, "4", "15")),
@@ -137,11 +153,42 @@ object ConversationCostEstimator {
         ),
     )
 
-    fun estimate(modelId: String, usage: ProviderUsage, at: Instant = Instant.now()): ProviderCost? {
+    private fun relayPrice(modelId: String, displayName: String?, at: Instant): Price? {
+        val model = RelayCoreModels.specs.firstOrNull { RelayCoreModels.sameApiModel(it.provider,it.apiId,modelId) } ?: return null
+        if (displayName == null && at.isBefore(Instant.parse("2026-10-10T00:00:00Z"))) return null
+        val channel = displayName?.split(" · ")?.getOrNull(1) ?: model.channel
+        val multiplier = when (channel) { "Kiro" -> "0.08"; "Kiro正价" -> "0.35"; "Pro1" -> "0.12"; "Pro2" -> "0.18"; "Pro3" -> "0.25"; "Gemini" -> "0.28"; else -> return null }.toBigDecimal()
+        val base = when(modelId) {
+            "claude-opus-5-5", "claude-opus-5.5" -> listOf("4","20","0.2")
+            "claude-sonnet-5-5" -> listOf("2","10","0.2")
+            "gpt-6.1-sol" -> listOf("2","10","0.1")
+            "gpt-6-astra" -> listOf("10","50","1")
+            "gemini-3.8-flash" -> listOf("0.75","3.75","0.075")
+            "gemini-3.1-pro" -> listOf("2","12","0.2")
+            else -> return null
+        }
+        // User-confirmed account denomination: Relay dollar-style numbers are nominal CNY.
+        return Price("relaycore-cny-nominal-user-confirmed-2026-10-10-$channel",base[0].toBigDecimal()*multiplier,base[1].toBigDecimal()*multiplier,base[2].toBigDecimal()*multiplier,"CNY")
+    }
+
+    private fun currentQwenPrice(modelId: String, input: Long, at: Instant): Price? {
+        if (at.isBefore(Instant.parse("2026-10-10T00:00:00Z")) || input > 1_000_000) return null
+        val longInput=input > 256_000
+        return when(modelId) {
+            "qwen3.7-plus" -> price("qwen-cn-beijing-published-standard-2026-10-10",if(longInput) "6" else "2",if(longInput) "24" else "8",if(longInput) "1.2" else "0.4",currencyCode="CNY")
+            "qwen3.6-flash" -> price("qwen-cn-beijing-published-standard-2026-10-10",if(longInput) "4.8" else "1.2",if(longInput) "28.8" else "7.2",if(longInput) "0.96" else "0.24",currencyCode="CNY")
+            "qwen3.8-max" -> price("qwen-cn-beijing-published-standard-2026-10-10","12","36","2.4",currencyCode="CNY")
+            else -> null
+        }
+    }
+
+    fun estimate(modelId: String, usage: ProviderUsage, at: Instant = Instant.now(), modelDisplayName: String? = null): ProviderCost? {
         val input = usage.inputTokens ?: return null
         val output = usage.outputTokens ?: return null
         val normalizedModelId = modelId.lowercase()
-        val price = deepSeekPrice(normalizedModelId, at)
+        val price = relayPrice(normalizedModelId,modelDisplayName,at)
+            ?: currentQwenPrice(normalizedModelId,input,at)
+            ?: deepSeekPrice(normalizedModelId, at)
             ?: prices[normalizedModelId]
             ?: inputTieredPrices[normalizedModelId]?.firstOrNull { input <= it.upperInclusiveInputTokens }?.price
             ?: scheduledPrices[normalizedModelId]?.firstOrNull { it.untilExclusive == null || at.isBefore(it.untilExclusive) }?.price

@@ -1,5 +1,12 @@
 # 南枫 AI P7-B 账号级本机密钥与同步状态机合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 已选对话云同步与账号边界 ](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P7-B 账号级本机密钥与同步状态机合同
+<!-- contract-governance:end -->
+
+当前范围：本文的data key/恢复码/vault状态仅约束旧P7-B加密模块及旧envelope兼容读取。现行Google direct同步不创建、读取或检查它们来判定资格；账号令牌仍由平台私有owner保存。现行账号/同步入口见[P7-F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)，下面阶段状态不能恢复已取消的恢复码卡点。
+
 日期：2026-08-13  
 状态：P7 的第二个独立增量；只建立本机安全基座，不连接 Google、Supabase、HTTP 或任何云端文档，不能声称登录或同步完成。
 
@@ -40,6 +47,10 @@ Android 最小 Settings 仅可显示“Google 账号与同步：尚未连接；�
 
 ## 验收与外部门
 
-自动测试覆盖：未认证拒绝、同账号幂等、不同账号隔离、token/recovery/data-key 不落盘、Keystore/keychain alias、恢复码确认门、方向/冲突/切换/退出、冷启动不排队、重复/中断 intent、P7-A 短生命周期 callback 和 17→18/3→4 迁移。若 Android 生产代码变更，版本为 code 42 / `0.3.0-p7b`，Debug/Release 延用正式证书；仅 `emulator-5554` 同签名覆盖/冷启动，绝不操作 OPPO。
+自动测试覆盖：未认证拒绝、同账号幂等、不同账号隔离、token/recovery/data-key 不落盘、Keystore/keychain alias、恢复码确认门、方向/冲突/切换/退出、冷启动不排队、重复/中断 intent、P7-A 短生命周期 callback 和 17→18/3→4 迁移。
+
+## 历史P7-B构建与外部门
+
+若 Android 生产代码变更，版本为 code 42 / `0.3.0-p7b`，Debug/Release 延用正式证书；仅 `emulator-5554` 同签名覆盖/冷启动，绝不操作 OPPO。
 
 macOS Keychain 自检只能使用 app-owned 随机 temporary service/account，写→读→删→确认不存在；Windows Credential Manager 可用性、真实 Google/Supabase、RLS/RPC、cloud envelope、WorkManager、冲突合并、账号页、头像和跨设备恢复均为 P7-C 至 P7-E 的独立门。

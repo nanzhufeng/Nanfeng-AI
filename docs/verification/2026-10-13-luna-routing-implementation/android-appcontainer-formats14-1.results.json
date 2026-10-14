@@ -1,0 +1,145 @@
+[
+  {
+    "preset": "RELAYCORE_SONNET_5_5",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "e74f537e-80b1-4c97-9f30-6be3f63d4348",
+    "elapsedMs": 28628,
+    "coverage": "4\/4项检索结果",
+    "attachmentCount": 4,
+    "mimes": [
+      "text\/plain",
+      "text\/markdown",
+      "application\/json",
+      "text\/csv"
+    ],
+    "fixture": "formats",
+    "group": 0,
+    "fileCount": 4,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "claude-sonnet-5-5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 15253,
+        "output": 445
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "claude-sonnet-5-5",
+        "returned": "claude-sonnet-5-5",
+        "input": 1949,
+        "output": 533
+      }
+    ],
+    "answerChars": 798,
+    "publicAnswer": "直接结论：四份文件都只是检索语句，没有给出可供核验的结论。我按语句查了 python.org 上各版本的发布日期，结果如下，均已核实。\n\n<文件>\n文本文件 public-01.txt：Python 3.14.0 发布于 2025 年 10 月 7 日。来源：[Python 3.14.0](https:\/\/www.python.org\/downloads\/release\/python-3140\/)\n\n<文件>\nMarkdown 文件 public-02.md：Python 3.13.0 发布于 2024 年 10 月 7 日。来源：[Python 3.13.0](https:\/\/www.python.org\/downloads\/release\/python-3130\/)\n\n<文件>\nJSON 文件 public-03.json：Python 3.12.0 发布于 2023 年 10 月 2 日。文件里的 \"fact\" 字段只是一句检索语句，不是事实陈述。来源：[Python 3.12.0](https:\/\/www.python.org\/downloads\/release\/python-3120\/)\n\n<文件>\nCSV 文件 public-04.csv：Python 3.11.0 发布于 2022 年 10 月 24 日。来源：[Python 3.11.0](https:\/\/www.python.org\/downloads\/release\/python-3110\/)\n\n规律是 3.11 到 3.14 的正式版都在每年 10 月发布，符合 CPython 的年度发布节奏。这是我根据上面四个日期做的推断，不是官方来源的原话。\n\n没有发现与材料矛盾的内容，也没有无法核实的事项。如果要核对 PEP 中的计划日期与实际日期是否一致，需要另查各版本对应的发布计划 PEP，这次没有查。"
+  },
+  {
+    "preset": "RELAYCORE_SONNET_5_5",
+    "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+    "conversationId": "6a1f02d8-53a6-4fac-b56c-2d333d785bfa",
+    "elapsedMs": 17064,
+    "coverage": "4\/4项检索结果",
+    "attachmentCount": 4,
+    "mimes": [
+      "text\/xml",
+      "application\/xml",
+      "application\/x-yaml",
+      "text\/yaml"
+    ],
+    "fixture": "formats",
+    "group": 1,
+    "fileCount": 4,
+    "assistantPresent": true,
+    "webSearchUsed": true,
+    "diagnostics": [],
+    "requestedModel": "claude-sonnet-5-5",
+    "physicalCalls": [
+      {
+        "role": "RETRIEVAL",
+        "status": "RELAY_WEB_RETRIEVAL_SUCCEEDED",
+        "requested": "openai\/gpt-6-luna",
+        "returned": "openai\/gpt-6-luna",
+        "input": 13016,
+        "output": 444
+      },
+      {
+        "role": "ANSWER",
+        "status": "WEB_SEARCH_SUCCEEDED",
+        "requested": "claude-sonnet-5-5",
+        "returned": "claude-sonnet-5-5",
+        "input": 2007,
+        "output": 382
+      }
+    ],
+    "answerChars": 714,
+    "publicAnswer": "结论：四个文件都只是一行检索语句，不是报告，数量也是四份而非两份。其中的发布日期均已在 python.org 核实，没有矛盾项。\n\n<文件>\npublic-05.xml（Python 3.10.0）：已核实，发布于 2021 年 10 月 4 日。来源：[Python 3.10.0 发布页](https:\/\/www.python.org\/downloads\/release\/python-3100\/)\n\n<文件>\npublic-06.xml（Python 3.9.0）：已核实，发布于 2020 年 10 月 5 日。来源：[Python 3.9.0 发布页](https:\/\/www.python.org\/downloads\/release\/python-390\/)\n\n<文件>\npublic-07.yaml（Python 3.8.0）：已核实，发布于 2019 年 10 月 14 日。来源：[Python 3.8.0 发布页](https:\/\/www.python.org\/downloads\/release\/python-380\/)\n\n<文件>\npublic-08.yml（Python 3.7.0）：已核实，发布于 2018 年 6 月 27 日。来源：[Python 3.7.0 发布页](https:\/\/www.python.org\/downloads\/release\/python-370\/?c=build)\n\n这些文件只写了\"查询某版本发布日期\"，没有给出待验证的日期，所以上面是查到的结果，不是对原文断言的核对。另外，这里的日期指 x.y.0 正式版的发布日。各版本的候选版或后续补丁版日期不同，不能混用。"
+  },
+  {
+    "preset": "RELAYCORE_SONNET_5_5",
+    "result": "Failed(code=NETWORK)",
+    "conversationId": "bc1fe0e7-6691-4480-a753-7afbae0ecbde",
+    "elapsedMs": 14486,
+    "coverage": "4\/4项检索结果",
+    "attachmentCount": 4,
+    "mimes": [
+      "text\/html",
+      "application\/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application\/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application\/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ],
+    "fixture": "formats",
+    "group": 2,
+    "fileCount": 4,
+    "assistantPresent": true,
+    "diagnostics": [
+      {
+        "errorClass": "NETWORK",
+        "safeDetail": "TRANSPORT_IO_IOException",
+        "model": "claude-sonnet-5-5",
+        "elapsedMs": 6673
+      }
+    ],
+    "physicalCalls": [],
+    "answerChars": 0,
+    "publicAnswer": ""
+  },
+  {
+    "preset": "RELAYCORE_SONNET_5_5",
+    "result": "Failed(code=NETWORK)",
+    "conversationId": "b895fb59-d2b2-4d86-bc3b-f59b2832a7ac",
+    "elapsedMs": 6217,
+    "attachmentCount": 2,
+    "mimes": [
+      "application\/pdf",
+      "application\/zip"
+    ],
+    "fixture": "formats",
+    "group": 3,
+    "fileCount": 2,
+    "assistantPresent": true,
+    "diagnostics": [
+      {
+        "errorClass": "NETWORK",
+        "safeDetail": "TRANSPORT_TLS_SSLHandshakeException",
+        "model": "claude-sonnet-5-5",
+        "elapsedMs": 1664
+      },
+      {
+        "errorClass": "NETWORK",
+        "safeDetail": "RETRIEVAL_NETWORK",
+        "model": "openai\/gpt-6-luna",
+        "elapsedMs": 4328
+      }
+    ],
+    "physicalCalls": [],
+    "answerChars": 0,
+    "publicAnswer": ""
+  }
+]

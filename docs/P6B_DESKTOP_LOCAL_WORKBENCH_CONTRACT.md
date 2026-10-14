@@ -1,5 +1,10 @@
 # P6-B：离线 Desktop 工作台、本地所有权与交换导入导出合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v2字段与原子恢复 ](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6-B：离线 Desktop 工作台、本地所有权与交换导入导出合同
+<!-- contract-governance:end -->
+
 ## 状态与范围
 
 P6-B 建立 Tauri 2 Desktop 的可运行离线基础；它不是 P6 或项目终点。唯一 Desktop 业务真值是 Rust 层拥有的 app-data SQLite，前端只通过受控 Tauri command 读取投影或请求用户发起的动作。禁止打开、复制或迁移 Android Room；`.nfai-backup` 不是 Desktop 输入。

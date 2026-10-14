@@ -1,0 +1,26 @@
+{
+  "scope": "footer native text selection, no model calls",
+  "android": {
+    "scopedTests": 2,
+    "failures": 0,
+    "skipped": 0,
+    "isolatedNativeClipboardPasteExact": true,
+    "phoneCostLineSelectable": true,
+    "wmSizeRestored": "1600x1800",
+    "formalInstall": false
+  },
+  "desktop": {
+    "scopedTests": 10,
+    "failures": 0,
+    "browserDraggedMetadata": true,
+    "metadataContextMenuPrevented": false,
+    "bodyMenuPreserved": true,
+    "staticBuild": true,
+    "nativeMacNotRun": true
+  },
+  "sourceHashes": {
+    "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt": "ec092aad45e3579f03ab0aacc05d3ff2c3e7375895482b05dc83905e39e34ebc",
+    "desktop/src/chat-shell.css": "3e4d9a2bda1c75f4b8a88f739a31ea094069acb755781aa4468639cb3d2d50b0",
+    "desktop/src/app.mjs": "2ddb991d6636916bd106619a631fa5da8f02be5f9aa5f607856d33637de3b1c1"
+  }
+}

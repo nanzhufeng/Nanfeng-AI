@@ -1,3 +1,4 @@
+import { renderConfiguredChatShell as renderChatFirstShell } from './helpers/enabled-model-catalog.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -11,7 +12,7 @@ import {
   messagePlainText,
   transcriptLocalDateKey,
   pinnedConversations,
-  renderChatFirstShell,
+
   resolveAssistantMessageMenuAnchor,
   resolveConversationMenuAnchor,
   resolveConversation,
@@ -198,14 +199,15 @@ test('P6-K exposes current ZIP imports and keeps recovery controls inside ZIP im
 
 test('settings primary menu is the latest Android hierarchy and contains no retired desktop registry', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, pane: 'settings', settingsSection: 'personalization', status: '', error: '', connection: {} });
-  const labels = ['个性化', '模型与联网', '提醒', '对话管理', '外观', '字体大小', '主题色', 'Google 账号与同步', '导入与导出', '本机数据', '关于', '工作区', '项目与知识', '开发与诊断'];
+  const labels = ['个性化', '模型与联网', '提醒', '对话管理', '外观', '字体大小', '主题色', 'Google 账号与同步', '导入与导出', '本机数据', '关于', '高级', '开发与诊断'];
   labels.forEach(label => assert.ok(rendered.includes(label)));
   for (const retired of ['搜索设置', '功能审阅', 'AI 模型服务', '基础</p>']) assert.ok(!rendered.includes(retired));
 });
 
-test('current workspace settings route preserves existing project and knowledge owners', () => {
+test('retained workspace settings route returns to chat settings without work navigation', () => {
   const control = renderChatFirstShell({ data: fixture, native: true, pane: 'settings', settingsSection: 'workspace', status: '', error: '', connection: {} });
-  for (const token of ['项目与知识', 'data-action="show-projects"', 'data-action="show-knowledge"', '管理 Projects', '管理知识库']) assert.ok(control.includes(token));
+  for (const token of ['项目与知识', 'data-action="show-projects"', 'data-action="show-knowledge"', '管理 Projects', '管理知识库']) assert.ok(!control.includes(token));
+  assert.ok(control.includes('个性化'));
   for (const forbidden of ['chat-composer', 'data-action="save-local-message"']) assert.ok(!control.includes(forbidden));
 });
 
@@ -341,9 +343,17 @@ test('conversation context menu uses the standard compact text and icon density'
   assert.ok(menu.indexOf("item('context-menu-rename'") < menu.indexOf("item('context-menu-share'"));
 });
 
-test('FB-P6-067 desktop rename dialog keeps the field and actions without a redundant heading', () => {
-  for (const token of ["state.dialog?.kind === 'conversation-rename'", '会话标题<input id="conversation-rename"', 'save-conversation-rename', 'data-action="close-dialog">取消']) assert.ok(source.includes(token));
-  assert.ok(!source.includes("kind === 'conversation-rename') return `<div class=\"scrim\"><section class=\"dialog\" role=\"dialog\" aria-modal=\"true\"><h2>重命名会话</h2>"));
+test('conversation titles edit in place in sidebar and main header', () => {
+  const options = { data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, railCollapsed: false, showArchived: false, pane: 'chat', status: '', error: '', connection: {} };
+  const sidebar = renderChatFirstShell({ ...options, inlineRename: { id: 'new', revision: 2, workspaceId: null, surface: 'sidebar', draft: '<新标题>' } });
+  assert.match(sidebar, /class="chat-history-row selected\s+renaming"/);
+  assert.match(sidebar, /class="chat-history-select chat-history-edit"/);
+  assert.match(sidebar, /data-inline-conversation-rename aria-label="编辑会话标题" maxlength="120" value="&lt;新标题&gt;"/);
+  const header = renderChatFirstShell({ ...options, inlineRename: { id: 'new', revision: 2, workspaceId: null, surface: 'header', draft: '改名中' } });
+  assert.match(header, /<div class="chat-title"><input class="chat-inline-title-input" data-inline-conversation-rename/);
+  assert.match(header, /value="改名中"/);
+  for (const token of ["event.detail < 2", "app.addEventListener('dblclick'", 'input.select()', "event.key === 'Enter'", "event.key === 'Escape'", "'update', { title }"]) assert.ok(source.includes(token), token);
+  assert.ok(!source.includes("kind === 'conversation-rename'"));
 });
 
 test('FB-P6-024 gives only user messages an orange bounded bubble while assistant stays open', () => {
@@ -443,7 +453,7 @@ test('startup caption uses the persisted provider projections instead of the iso
   assert.match(source, /credentialStored/);
   assert.match(source, /联网模型已配置：\$\{configured\.length\} 个服务商已启用且凭据已保存/);
   assert.match(source, /正在读取联网模型配置/);
-  assert.match(source, /state\.status = modelServiceConfigurationStatus\(settings\)/);
+  assert.match(source, /state\.status = modelServiceConfigurationStatus\(state\.modelServiceSettings\)/);
   assert.match(source, /实际模型设置会按服务商和凭据存在性另行读取/);
   assert.ok(!source.includes("status: native ? '本地工作区已就绪；联网模型尚未配置。'"));
 });
@@ -456,9 +466,9 @@ test('default desktop shell is chat-first and local save uses the existing typed
 
 test('rendered first screen follows the lightweight sidebar, single canvas and fixed composer contract', () => {
   const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', profileOpen: false, pane: 'chat', status: '本地就绪', error: '', connection: {} });
-  for (const token of ['chat-sidebar', '新对话', 'chat-main', 'chat-empty-canvas', 'chat-composer', '对话', '工作']) assert.ok(html.includes(token));
+  for (const token of ['chat-sidebar', '新对话', 'chat-main', 'chat-empty-canvas', 'chat-composer', '对话']) assert.ok(html.includes(token));
   assert.ok(!html.includes('今天想一起做什么？'));
-  for (const token of ['title="选择模型 · DeepSeek V4.1 Flash"', 'aria-label="发送消息"', 'title="发送消息"']) assert.ok(html.includes(token));
+  for (const token of ['title="选择模型 · 等待可用模型"', 'aria-label="发送消息"', 'title="发送消息"']) assert.ok(html.includes(token));
   assert.ok(!html.match(/data-action="toggle-p6g-model-picker"[^>]*disabled/));
   assert.ok(!html.includes('open-compare-confirmation'));
   for (const removed of ['发送时自动保存到当前工作区', '不调用模型', '配置模型后可生成回答']) assert.ok(!html.includes(removed));
@@ -496,7 +506,7 @@ test('P6-G composer mirrors the Android Auto Daily Deep hierarchy while preservi
 
 test('Composer trigger keeps the full catalog model name while the picker uses that same source of truth', () => {
   const selection = { catalog: { snapshot: { candidates: [{ providerId: 'deepseek', modelId: 'deepseek-flash', displayName: 'DeepSeek V4.1 Flash', available: true, tiers: ['FAST'] }] } }, conversationOverride: { revision: 1, modelId: null }, lastRoute: { displayName: 'DeepSeek V4.1 Flash' } };
-  const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true, p6gSelection: selection });
+  const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, modelServiceSettings: [{providerId:'DEEPSEEK',enabled:true,credentialStored:true,presets:[{id:'DEEPSEEK_V4_FLASH',displayName:'DeepSeek V4.1 Flash',chatSelectable:true}]}], p6gModelPickerOpen: true, p6gSelection: selection });
   assert.match(html, /aria-label="选择模型：DeepSeek V4.1 Flash"/);
   assert.match(html, /Auto · DeepSeek V4.1 Flash/);
 });
@@ -512,13 +522,13 @@ test('Desktop composer preserves every supported catalog label without compact-n
 });
 
 test('empty new-chat canvas keeps the Android Auto Daily Deep picker available before a conversation exists', () => {
-  assert.ok(source.includes('pendingNewConversationModelId: state.pendingNewConversationModelId'));
+  assert.ok(source.includes('pendingNewConversationModelId: newConversationModelId()'));
   const root = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true });
-  for (const token of ['title="选择模型 · DeepSeek V4.1 Flash"', 'Auto · DeepSeek V4.1 Flash', 'select-p6g-auto', 'select-p6g-tier', '日常', '深度']) assert.ok(root.includes(token), token);
+  for (const token of ['title="选择模型 · 等待可用模型"', 'Auto · 等待可用模型', 'select-p6g-auto', 'select-p6g-tier', '日常', '深度']) assert.ok(root.includes(token), token);
   assert.ok(!root.match(/data-action="toggle-p6g-model-picker"[^>]*disabled/));
 
   const daily = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: null, composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true, p6gSelection: { pickerTier: 'DAILY' } });
-  for (const token of ['DeepSeek V4.1 Flash', 'Claude Sonnet 5', 'GPT-5.6 Terra', 'GLM-5.3 Flash', 'Qwen3.7-Plus', 'Gemini 3.8 Flash']) assert.ok(daily.includes(token), token);
+  for (const token of ['DeepSeek V4.1 Flash', 'Claude Sonnet 5.5', 'Claude Haiku 5.5', 'GPT-6 Luna', 'GLM-5.3 Flash', 'Qwen3.7-Plus', 'Gemini 3.8 Flash']) assert.ok(daily.includes(token), token);
   for (const token of ['选择具体模型', 'OpenRouter · 未联网', '智谱 · 未联网', '千问 · 未联网']) assert.ok(daily.includes(token), token);
   for (const removed of ['高效处理日常工作。', '适合快速问答与高频文本任务。', '能力与成本更均衡。', '智谱官方直连的快速文本任务。', '日常问答与轻量多媒体任务。', '快速处理文字、图片和文件任务。', '<small>OPENROUTER</small>', '<small>DEEPSEEK</small>', '<small>ZHIPU</small>', '<small>QWEN</small>', '本地确定性 fixture']) assert.ok(!daily.includes(removed), removed);
   assert.ok(css.includes('.composer-model-sheet-header > strong {'));
@@ -532,7 +542,7 @@ test('P6-G Daily and Deep groups open a complete manual candidate list instead o
     { providerId: 'openrouter', modelId: 'gpt-5.6-sol', displayName: 'GPT-5.6 Sol', available: true, tiers: ['DEEP'] },
   ] } }, conversationOverride: { revision: 1, modelId: null }, lastRoute: { displayName: 'DeepSeek V4.1 Flash' }, pickerTier: 'DAILY' };
   const html = renderChatFirstShell({ data: fixture, native: true, selectedConversationId: 'new', composerDraft: '', pane: 'chat', status: '', error: '', connection: {}, p6gModelPickerOpen: true, p6gSelection: selection });
-  for (const token of ['p6g-picker-back', 'DeepSeek V4.1 Flash', 'GPT-5.6 Terra', 'select-p6g-model', 'data-model-id="DEEPSEEK_V4_FLASH"']) assert.ok(html.includes(token), token);
+  for (const token of ['p6g-picker-back', 'DeepSeek V4.1 Flash', 'GPT-6 Luna', 'select-p6g-model', 'data-model-id="DEEPSEEK_V4_FLASH"']) assert.ok(html.includes(token), token);
   assert.ok(!html.includes('data-model-id="gpt-5.6-sol"'));
   for (const token of ["state.p6gSelection = { ...(state.p6gSelection || {}), pickerTier:", "action === 'p6g-picker-back'", 'updateP6GConversationOverride(target.dataset.modelId']) assert.ok(source.includes(token), token);
 });
@@ -591,9 +601,9 @@ test('latest model settings shows the Android provider order without exposing th
   for (const token of ['read_desktop_model_service_settings', 'save_desktop_model_service_settings', 'reveal_desktop_model_service_credential', 'test_desktop_model_service_connection']) assert.ok(source.includes(token));
 });
 
-test('model configuration uses the current Android provider segmented layout', () => {
+test('model configuration uses the compact two-column provider browser', () => {
   const html = renderChatFirstShell({ data: fixture, native: true, pane: 'settings', settingsSection: 'model-configuration', status: '', error: '', connection: {}, p6gCatalog: { snapshot: { candidates: [{ modelId: 'safe-model' }] } } });
-  for (const token of ['android-settings-segments', 'OpenRouter', 'DeepSeek', '智谱', 'Qwen', 'GPT-5.6 Terra', '测试连接', 'API Key', '显示 API Key', '保存']) assert.ok(html.includes(token));
+  for (const token of ['model-settings-browser', 'model-settings-platform-rail', 'role="radiogroup"', 'OpenRouter', 'DeepSeek', '智谱', 'Qwen', 'GPT-6 Luna', '测试连接', 'API Key', '显示 API Key', '保存']) assert.ok(html.includes(token));
   for (const forbidden of ['Grok 4.1', 'Grok 4.5', 'Grok 4.6', 'Authorization', 'save-api-key', '检查钥匙串']) assert.ok(!html.includes(forbidden));
   assert.match(css, /\.android-settings-segments > button \{[^}]*display: flex;[^}]*align-items: center;[^}]*justify-content: center;[^}]*text-align: center;/s);
 });
@@ -662,7 +672,7 @@ test('chat-first work mode directly imports a selected typed exchange after stri
 });
 
 test('ordinary send durably submits one native streaming attempt and retains the draft only on pre-submit rejection', () => {
-  for (const token of ['function sendLocalMessage', "invoke('submit_desktop_ordinary_chat'", 'egressAuthorization', "disclosureVersion: 'normal-chat-egress-v1'", 'sentDraft', 'sentAttachments', '正在等待模型回复', "result.state === 'UNKNOWN'", '未自动重发']) assert.ok(source.includes(token), token);
+  for (const token of ['function sendLocalMessage', "invoke('submit_desktop_ordinary_chat'", 'egressAuthorization', "disclosureVersion: (directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(", 'sentDraft', 'sentAttachments', '正在等待模型回复', "result.state === 'UNKNOWN'", '未自动重发']) assert.ok(source.includes(token), token);
   const ordinarySend = source.slice(source.indexOf('async function sendLocalMessage()'), source.indexOf('saveLocalMessage = sendLocalMessage'));
   assert.ok(!ordinarySend.includes('localStorage'), 'ordinary send must clear only the native draft transaction');
   for (const token of ['发送即授权给', '按量计费', 'chat-composer-egress-disclosure']) assert.ok(!`${shell}\n${css}`.includes(token), token);
@@ -687,7 +697,7 @@ test('model credential drafts are erased whenever the configuration editor is no
 });
 
 test('ordinary assistant messages expose persisted running stop failure unknown retry and provider cost facts', () => {
-  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'runtime', title: '流式', revision: 2, messages: [{ id: 'assistant-runtime', role: 'assistant', delivery: 'UNKNOWN', attemptId: 'attempt-runtime', source: 'PROVIDER', modelSnapshot: { displayName: 'GPT-5.6 Terra' }, chargeMicros: 8, blocks: [{ kind: 'TEXT', text: '已保留增量' }] }] }] } }, native: true, selectedConversationId: 'runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
+  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'runtime', title: '流式', revision: 2, messages: [{ id: 'assistant-runtime', role: 'assistant', delivery: 'UNKNOWN', attemptId: 'attempt-runtime', source: 'PROVIDER', modelSnapshot: { displayName: 'GPT-5.6 Terra' }, chargeMicros: 8, currencyCode: 'USD', blocks: [{ kind: 'TEXT', text: '已保留增量' }] }] }] } }, native: true, selectedConversationId: 'runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
   for (const token of ['chat-runtime-state unknown', '连接结果未知', 'retry-ordinary-chat', 'attempt-runtime', '从断点继续', '5.6 Terra', '¥0.0001']) assert.ok(rendered.includes(token), token);
   for (const token of ["action === 'stop-ordinary-chat'", "invoke('cancel_desktop_ordinary_chat'", "action === 'retry-ordinary-chat'", "invoke('retry_desktop_ordinary_chat'"]) assert.ok(source.includes(token), token);
   for (const token of ['allow-desktop-ordinary-chat', 'submit_desktop_ordinary_chat', 'retry_desktop_ordinary_chat', 'cancel_desktop_ordinary_chat', 'read_latest_desktop_ordinary_chat_attempt']) assert.ok(`${temporaryPermission}\n${capability}`.includes(token), token);
@@ -733,7 +743,7 @@ test('partial ordinary replies continue from the durable answer instead of repla
     { id: 'continuation', parentId: 'partial', continuationOf: 'partial', role: 'assistant', delivery: 'PARTIAL', runtimeState: 'RUNNING', attemptId: 'attempt-partial', blocks: [{ kind: 'TEXT', text: '' }] },
   ] }] } }, native: true, selectedConversationId: 'continued-runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
   for (const token of ['此处内容已保留，后续回答见下方', '正在从断点继续生成', '已保留前段内容，仅生成缺失部分。']) assert.ok(rendered.includes(token), token);
-  for (const token of ['ORDINARY_CHAT_RUNTIME_REFRESH_INTERVAL_MS', 'queueOrdinaryChatRuntimeRefresh', 'ordinaryChatRuntimeRefreshInFlight']) assert.ok(source.includes(token), token);
+  for (const token of ['generationRefreshInterval', 'queueOrdinaryChatRuntimeRefresh', 'ordinaryChatRuntimeRefreshInFlight']) assert.ok(source.includes(token), token);
 });
 
 test('temporary chat uses the isolated owner and the Ghost directly toggles back to NORMAL', () => {
@@ -933,7 +943,7 @@ test('assistant footer retains an unknown amount for unpriced replies in every d
 });
 
 test('assistant footer keeps Android’s time, short model, and RMB amount on one line', () => {
-  assert.match(shell, /cnyCostLabel\(projectedMessageCost\(message\), \{ maximumFractionDigits: 4, trimTrailingZeros: false \}\)/);
+  assert.match(shell, /messageFooterCostLabel\(message, \{ maximumFractionDigits: 4, trimTrailingZeros: false \}\)/);
   assert.match(shell, /<strong>\$\{escapeHtml\(metadata\.model\)\}<\/strong>/);
   assert.match(shell, /chat-message-metadata-separator/);
   assert.doesNotMatch(shell, /chat-message-cost/);
@@ -1013,7 +1023,7 @@ test('P6-F2-D keeps MP4 preview local, auto-playing and attachment-ID scoped', a
   assert.match(source, /timeupdate[\s\S]+lastPlaybackPositionMillis/);
   assert.match(source, /if \(state\.videoPreview\) \{ void closeVideoPreview\(\); return; \}/);
   assert.match(source, /event\.key === 'Escape' && state\.videoPreview[\s\S]+closeVideoPreview\(\)/);
-  assert.match(source, /await invoke\('save_desktop_video_preview_position'[\s\S]+positionMillis/);
+  assert.match(source, /invoke\('save_desktop_video_preview_position'[\s\S]+positionMillis/);
   assert.match(tauriConfig, /media-src 'self' data: blob: nfai-media:/);
   const videoDialog = source.slice(source.indexOf('function videoPreviewDialog()'), source.indexOf('function audioPreviewDialog()'));
   assert.match(videoDialog, /video-preview-stage[\s\S]*<video class="video-preview-frame" autoplay playsinline preload="auto"[\s\S]*video-preview-controls/);
@@ -1068,7 +1078,7 @@ test('P6-F2-E keeps audio closeable without replaying its byte payload and text 
   assert.doesNotMatch(audioDialog, /pdf-preview-note|开始本地播放|仅在明确点击后播放|仅从本机私有副本播放|本地音频播放|<h2>/);
   const textDialog = source.slice(source.indexOf('function textPreviewDialog()'), source.indexOf('function previewBoundaryDialog()'));
   assert.doesNotMatch(textDialog, /本地安全文本预览|本机私有副本|不会执行内容|不会渲染 HTML、执行链接、脚本或 Markdown 指令|<h2>/);
-  for (const token of ['text-preview-overlay', 'text-preview-surface', 'text-preview-header', 'text-preview-facts', 'local-text-preview', "previewTopActions('text', preview, { copy: true })"]) assert.ok(textDialog.includes(token), token);
+  for (const token of ['text-preview-overlay', 'text-preview-surface', 'text-preview-header', 'text-preview-facts', 'local-text-preview', "text-preview-menu-items"]) assert.ok(textDialog.includes(token), token);
   const actions = source.slice(source.indexOf('function previewTopActions('), source.indexOf('function imagePreviewDialog()'));
   assert.match(actions, /class="file-preview-top-actions \$\{copy \? 'text-preview-actions' : 'media-preview-actions'\}"[\s\S]+data-action="save-preview-attachment"[\s\S]+data-action="share-preview-attachment"[\s\S]+data-action="copy-text-preview"[\s\S]+data-action="\$\{closeAction\}"/);
   assert.match(actions, /data-action="save-preview-attachment"[^>]+aria-label="下载文件"[^>]*>[\s\S]*?icon\(icons\.download/);
@@ -1133,4 +1143,25 @@ test('historical missing search evidence explains the failure and never offers c
   assert.match(rendered, /联网搜索未完成/);
   assert.match(rendered, /重新生成/);
   assert.doesNotMatch(rendered, /从断点继续|回答未完成|请检查模型与网络设置/);
+});
+
+
+test('cancelled native reply keeps the explicit checkpoint recovery action', () => {
+  const rendered = renderChatFirstShell({ data: { ...fixture, exchange: { ...fixture.exchange, conversations: [{ id: 'cancelled-runtime', title: '停止后恢复', revision: 2, messages: [{ id: 'cancelled-answer', role: 'assistant', delivery: 'CANCELLED', attemptId: 'cancelled-attempt', source: 'PROVIDER', blocks: [{ kind: 'TEXT', text: '保留的断点内容' }] }] }] } }, native: true, selectedConversationId: 'cancelled-runtime', composerDraft: '', chatSearch: '', profileOpen: false, sidebarOpen: false, pane: 'chat', status: '', error: '', connection: {} });
+  assert.ok(rendered.includes('已停止，已生成内容已保留'));
+  assert.ok(rendered.includes('data-action="retry-ordinary-chat"'));
+  assert.ok(rendered.includes('从断点继续'));
+});
+
+
+test('assistant footer keeps known Luna USD and RC CNY charges visible, with unknown calls separate', () => {
+  const calls=[{callId:'luna',requestedModelId:'openai/gpt-6-luna',chargeMicros:100000,currencyCode:'USD',costSource:'PROVIDER_RESPONSE',status:'SUCCEEDED'},
+    {callId:'answer',requestedModelId:'claude-sonnet-5-5',chargeMicros:500000,currencyCode:'CNY',costSource:'LOCAL_ESTIMATE',status:'SUCCEEDED'}];
+  for (const unknown of [false,true]) {
+    const message={id:'mixed-fee-answer',role:'assistant',delivery:unknown?'FAILED':'COMPLETE',blocks:[{kind:'TEXT',text:'回答'}],accountingCalls:unknown?[...calls,{callId:'uncertain',requestedModelId:'openai/gpt-6-luna',status:'UNKNOWN'}]:calls};
+    const saved=JSON.stringify(message);
+    const html=renderChatFirstShell({data:{...fixture,exchange:{...fixture.exchange,conversations:[{id:'fee',title:'费用',revision:1,messages:[message]}]}},native:true,selectedConversationId:'fee',pane:'chat',connection:{}});
+    assert.match(html,unknown?/chat-message-metadata-cost">¥1\.1720 \+ 未知<\/span>/:/chat-message-metadata-cost">¥1\.1720<\/span>/);
+    assert.equal(JSON.stringify(message),saved);
+  }
 });

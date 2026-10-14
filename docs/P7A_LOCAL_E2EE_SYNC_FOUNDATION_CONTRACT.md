@@ -1,5 +1,12 @@
 # 南枫 AI P7-A 本地跨端端到端加密快照基础合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 已选对话云同步与账号边界 ](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P7-A 本地跨端端到端加密快照基础合同
+<!-- contract-governance:end -->
+
+当前范围：本文只约束旧nfai.sync.envelope加密格式和NfaiSyncV1/sync_v1独立owner，保留格式/安全/兼容规则；不作为现行Google已选对话direct同步的资格门。当前入口见[P7-F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)。下文阶段无云调用、恢复材料及golden只证明该旧格式。
+
 日期：2026-08-13  
 状态：P7 的第一个独立增量；只建立无账号、无网络、跨端可互操作的密码学和数据协议，不代表 P7、同步或项目完成。
 
@@ -40,9 +47,13 @@ envelope 最大 2 MiB，ciphertext 最大 1 MiB，payload plaintext 最大 1 MiB
 3. 将对方产生的同一 golden 作为输入完成 open，形成 Android→Desktop 与 Desktop→Android 的精确互操作证据；
 4. 覆盖错误恢复码、header/ciphertext/tag/hash 篡改、未知/重复字段、截断、跨 app/document、revision rollback、大小超限与高敏拒绝。
 
+
+
+## 历史P7-A构建与后续阶段计划
+
 P7-A 自动门包括 Android 定向/全量风险相称单测、lint/build，Rust fmt/test/clippy/check，Node fixture 检查。若 Android production source 改动，版本升至 code 41，并继续由仓库外现有正式证书签名；仅可在 `emulator-5554` 同签名覆盖和冷启动，绝不操作 OPPO。Desktop 仅本地无网络验证，不等同于 Developer ID/notarization。真实 Google/Supabase、账号/会话、本机密钥保存、冲突/自动同步/账号页和真实跨设备验收仍分别属于 P7-B、P7-C、P7-D、P7-E。
 
-## 后续阶段
+### 后续阶段
 
 - **P7-B**：每账号 CSPRNG data-key 生成、平台本机 data-key 会话/Keystore 或桌面安全存储、恢复码展示确认和同步状态机；仍无真实服务。
 - **P7-C**：经单独配置与安全审计后接入 Google/Supabase、RLS/RPC 和真实加密容器回读。

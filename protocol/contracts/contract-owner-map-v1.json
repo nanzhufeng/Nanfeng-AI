@@ -1,0 +1,407 @@
+{
+  "schemaVersion": 1,
+  "domains": [
+    {
+      "domain": "android-conversation",
+      "authority": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "desktop-conversation",
+      "authority": "docs/DESKTOP_CHAT_FIRST_UI_CONTRACT.md",
+      "owners": [
+        "desktop/src/chat-shell.mjs",
+        "desktop/src/app.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "settings",
+      "authority": "docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+        "desktop/src/android-settings-shell.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "runtime-context",
+      "authority": "docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextBroker.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ContextBudget.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "product",
+      "authority": "docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+        "desktop/src/product-scope.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "models",
+      "authority": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/P6GModelSelectionOwner.kt",
+        "desktop/src/auto-chat-routing.mjs",
+        "desktop/src-tauri/src/desktop_model_service_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "model-network",
+      "authority": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+        "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+        "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+        "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+        "desktop/src-tauri/src/attachment_web_search_v1.rs",
+        "desktop/src-tauri/src/relaycore_web_search_v1.rs",
+        "app/src/main/java/com/nanzhufeng/ai/ai/MessagesProviderSseCodec.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "relay",
+      "authority": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/RelayCoreModels.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+        "desktop/src-tauri/src/relaycore_web_search_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "language",
+      "authority": "docs/ANSWER_LANGUAGE_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/AnswerLanguagePolicy.kt",
+        "desktop/src-tauri/src/answer_language_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "egress",
+      "authority": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "island",
+      "authority": "docs/NANFENG_ISLAND_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/GenerationIsland.kt",
+        "app/src/main/java/com/nanzhufeng/ai/background/GenerationIslandOverlay.kt",
+        "desktop/src-tauri/src/nanfeng_island_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "startup",
+      "authority": "docs/CONVERSATION_APP_ENTRY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAppEntryPolicy.kt",
+        "desktop/src/desktop-app-entry.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "draft",
+      "authority": "docs/NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/NewConversationDraftPolicy.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "account-sync",
+      "authority": "docs/P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+        "desktop/src-tauri/src/desktop_account_sync_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "workspace",
+      "authority": "docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/ConversationAreaFileContext.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "local-data",
+      "authority": "docs/C14_LOCAL_DATA_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+        "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+        "desktop/src/local-data-view.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "lifecycle",
+      "authority": "docs/C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "theme",
+      "authority": "docs/C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+        "desktop/src/desktop-theme-owner.mjs",
+        "desktop/src/desktop-parity-preferences.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "icon",
+      "authority": "docs/ICONOGRAPHY_CONTRACT.md",
+      "owners": [
+        "desktop/src/icon-source.mjs",
+        "desktop/src/android-action-icons.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "attachments",
+      "authority": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+        "desktop/src-tauri/src/attachment_document_text_v1.rs",
+        "desktop/src/attachment-document-types.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "attachment-lifecycle",
+      "authority": "docs/P3G_CONVERSATION_ATTACHMENT_LIFECYCLE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "search-preview",
+      "authority": "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextIndex.kt",
+        "desktop/src/desktop-attachment-preview-owner.mjs",
+        "desktop/src/desktop-search-page.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "message-actions",
+      "authority": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P3CConversationActions.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+        "desktop/src/chat-shell.mjs",
+        "app/src/main/java/com/nanzhufeng/ai/domain/TranscriptPresentation.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "scroll",
+      "authority": "docs/P6D_COMPACT_CHAT_SCROLL_AND_WINDOW_RECOVERY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+        "desktop/src/chat-shell.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "usage",
+      "authority": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ChatCallAccounting.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+        "desktop/src-tauri/src/chat_call_accounting_v1.rs",
+        "desktop/src-tauri/src/usage_ledger_v1.rs",
+        "app/src/main/java/com/nanzhufeng/ai/domain/AssistantResponseModelAttribution.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ui/AssistantFooterFormatting.kt",
+        "desktop/src/desktop-cost-estimator.mjs",
+        "desktop/src/usage-ledger-display.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "backup",
+      "authority": "docs/P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+        "desktop/src-tauri/src/desktop_local_backup_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "privacy",
+      "authority": "docs/P5C_PRIVACY_DATA_DIAGNOSTICS_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/PrivacyData.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/AndroidPrivacyDataManager.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "temporary",
+      "authority": "docs/P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/TemporaryConversation.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomTemporaryConversationRecoveryStore.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "ocr",
+      "authority": "docs/GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/GlmOcr.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/OfficialGlmOcrTransport.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "transcription",
+      "authority": "docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+        "desktop/src-tauri/src/desktop_transcription_v1.rs",
+        "desktop/src/desktop-transcription-page.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "history-library",
+      "authority": "docs/DESKTOP_HISTORY_KNOWLEDGE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/HistoryKnowledgeCuration.kt",
+        "desktop/src-tauri/src/desktop_history_knowledge_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "compare",
+      "authority": "docs/DESKTOP_COMPARE_EXECUTION_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/CompareConversationSessionOwner.kt",
+        "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "cache",
+      "authority": "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/LocalExactReuseV1.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/LocalExactReuseDispatch.kt",
+        "desktop/src-tauri/src/local_exact_reuse_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "exchange-v1",
+      "authority": "docs/NFAI_EXCHANGE_V1_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/NfaiExchangeV1.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "exchange-v2",
+      "authority": "docs/P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+        "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+        "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+        "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "knowledge",
+      "authority": "docs/P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "memory",
+      "authority": "docs/P4C_MEMORY_GOVERNANCE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/MemorySummaryPolicy.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomMemoryRepository.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "agent-local",
+      "authority": "docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P8ControlledAgentRuntime.kt",
+        "desktop/src-tauri/src/p8_agent_ledger_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "integration-local",
+      "authority": "docs/P9A_READ_ONLY_ECOSYSTEM_ENTRY_AUDIT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P9BIntegrationContract.kt",
+        "desktop/src-tauri/src/p9b_integration_contract_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "connection-local",
+      "authority": "docs/P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/DualPathConnection.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    }
+  ]
+}

@@ -1,5 +1,10 @@
 # P6 工作区语义交换 Mapper 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 交换v2字段与原子恢复 ](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** P6 工作区语义交换 Mapper 合同
+<!-- contract-governance:end -->
+
 ## 目标与停止条件
 
 本增量让 Android 可从既有 Project、Conversation、Knowledge、Memory、Knowledge Relationship 与私有附件 owner 生成一个 `nfai.exchange.v1` 安全**语义投影**。它不是 Android domain 的逐字段备份或迁移格式：不写 Room、不做 Android 导入、不启动 SAF、不新增界面或常驻按键，也不调用 Provider、Key、HTTP、同步或设备。

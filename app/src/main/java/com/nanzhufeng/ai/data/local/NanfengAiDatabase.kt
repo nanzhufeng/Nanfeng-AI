@@ -2,6 +2,7 @@ package com.nanzhufeng.ai.data.local
 
 import androidx.room.Dao
 import androidx.room.Database
+import androidx.room.PrimaryKey
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -677,6 +678,7 @@ data class AssistantResponseModelAttributionEntity(
     val costTotalMicros: Long?,
     val costSource: String?,
     val webSearchRequested: Boolean? = null,
+    val accountingCallsJson: String? = null,
 )
 
 /** Cross-device answer facts without local Provider route or attempt identity. */
@@ -2732,6 +2734,14 @@ interface WorkspaceExchangeV2RestoreDao {
     @Query("SELECT COUNT(*) FROM workspace_exchange_v2_restore_settings") fun settingsCount(): Int
 }
 
+@Entity(tableName="normal_chat_search_checkpoints",primaryKeys=["attemptId","scopeFingerprint","itemId"],
+    foreignKeys=[ForeignKey(entity=NormalChatSendAttemptEntity::class,parentColumns=["attemptId"],childColumns=["attemptId"],onDelete=ForeignKey.CASCADE)],indices=[Index("attemptId")])
+data class NormalChatSearchCheckpointEntity(val attemptId:String,val scopeFingerprint:String,val itemId:String,val evidenceText:String,val sourcesJson:String,val actualModelId:String,val sourceLabel:String,val createdAtEpochMs:Long,val originCallId:String)
+@Dao interface NormalChatSearchCheckpointDao {
+    @Insert(onConflict=OnConflictStrategy.REPLACE) fun put(value:NormalChatSearchCheckpointEntity)
+    @Query("SELECT * FROM normal_chat_search_checkpoints WHERE attemptId=:id AND scopeFingerprint=:fingerprint AND itemId=:item") fun get(id:String,fingerprint:String,item:String):NormalChatSearchCheckpointEntity?
+}
+
 @Dao
 interface ProviderDiagnosticDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -2758,13 +2768,41 @@ interface NormalChatSendAttemptDao {
     @Query("UPDATE normal_chat_send_attempts SET status='UNKNOWN', updatedAtEpochMs=:updatedAtEpochMs, safeErrorCode='PROCESS_INTERRUPTED' WHERE status IN ('PENDING','SENDING','ACCEPTED','STREAMING')") fun markInterruptedAsUnknown(updatedAtEpochMs: Long): Int
 }
 
+@Entity(tableName="context_selection_audits", indices=[Index(value=["attemptId"]),Index(value=["assistantMessageId"]),Index(value=["createdAtEpochMs"])])
+data class ContextSelectionAuditEntity(@PrimaryKey val recordId:String,val attemptId:String?,val assistantMessageId:String?,val createdAtEpochMs:Long,val recordJson:String,val conversationId:String?=null)
+@Dao interface ContextSelectionAuditDao {
+    @Insert(onConflict=OnConflictStrategy.IGNORE) fun insert(record:ContextSelectionAuditEntity):Long
+    @Query("SELECT * FROM context_selection_audits ORDER BY createdAtEpochMs DESC,recordId DESC LIMIT :limit") fun recent(limit:Int):List<ContextSelectionAuditEntity>
+    @Query("SELECT * FROM context_selection_audits WHERE assistantMessageId IN (:ids)") fun forMessages(ids:List<String>):List<ContextSelectionAuditEntity>
+    @Query("SELECT * FROM context_selection_audits WHERE attemptId=:attemptId AND assistantMessageId IS NULL") fun unbound(attemptId:String):List<ContextSelectionAuditEntity>
+    @Query("UPDATE context_selection_audits SET assistantMessageId=:messageId,recordJson=:recordJson WHERE recordId=:id AND assistantMessageId IS NULL") fun bind(id:String,messageId:String,recordJson:String):Int
+}
+
+@Entity(tableName = "direct_chat_call_audits", indices = [Index(value=["requestedAtEpochMs"])])
+data class DirectChatCallAuditEntity(
+    @PrimaryKey val recordId: String,
+    val requestedAtEpochMs: Long,
+    val recordJson: String,
+    val conversationId:String?=null,
+)
+
+@Dao
+interface DirectChatCallAuditDao {
+    @Insert(onConflict=OnConflictStrategy.ABORT) fun insert(record:DirectChatCallAuditEntity)
+    @Query("SELECT * FROM direct_chat_call_audits WHERE recordId=:recordId") fun find(recordId:String):DirectChatCallAuditEntity?
+    @Query("UPDATE direct_chat_call_audits SET recordJson=:recordJson WHERE recordId=:recordId") fun enrich(recordId:String,recordJson:String):Int
+    @Query("SELECT * FROM direct_chat_call_audits ORDER BY requestedAtEpochMs DESC, recordId DESC") fun newestFirst():List<DirectChatCallAuditEntity>
+    @Query("SELECT COUNT(*) FROM direct_chat_call_audits") fun count():Int
+    @Query("SELECT COALESCE(SUM(LENGTH(CAST(recordJson AS BLOB))),0) FROM direct_chat_call_audits") fun storageBytes():Long
+}
+
 @Dao
 interface AssistantResponseModelAttributionDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insert(value: AssistantResponseModelAttributionEntity)
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun find(assistantMessageId: String, attemptId: String): AssistantResponseModelAttributionEntity?
     @Query("SELECT * FROM assistant_response_model_attributions WHERE assistantMessageId IN (:assistantMessageIds) ORDER BY recordedAtEpochMs ASC, attemptId ASC") fun forMessages(assistantMessageIds: List<String>): List<AssistantResponseModelAttributionEntity>
     @Query("SELECT * FROM assistant_response_model_attributions WHERE inputTokens IS NOT NULL OR outputTokens IS NOT NULL OR costTotalMicros IS NOT NULL ORDER BY recordedAtEpochMs DESC, attemptId DESC") fun listCostedNewestFirst(): List<AssistantResponseModelAttributionEntity>
-    @Query("UPDATE assistant_response_model_attributions SET conversationStyleId=COALESCE(conversationStyleId,:conversationStyleId), webSearchUsed=COALESCE(webSearchUsed,:webSearchUsed), webSearchRequested=COALESCE(webSearchRequested,:webSearchRequested), inputTokens=COALESCE(inputTokens,:inputTokens), outputTokens=COALESCE(outputTokens,:outputTokens), totalTokens=COALESCE(totalTokens,:totalTokens), cachedInputTokens=COALESCE(cachedInputTokens,:cachedInputTokens), reasoningTokens=COALESCE(reasoningTokens,:reasoningTokens), costPriceVersion=COALESCE(costPriceVersion,:costPriceVersion), costCurrencyCode=COALESCE(costCurrencyCode,:costCurrencyCode), costTotalMicros=COALESCE(costTotalMicros,:costTotalMicros), costSource=COALESCE(costSource,:costSource) WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichCompletedFacts(assistantMessageId: String, attemptId: String, conversationStyleId: String?, webSearchUsed: Boolean?, webSearchRequested: Boolean?, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, reasoningTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?): Int
+    @Query("UPDATE assistant_response_model_attributions SET conversationStyleId=COALESCE(conversationStyleId,:conversationStyleId), webSearchUsed=COALESCE(webSearchUsed,:webSearchUsed), webSearchRequested=COALESCE(webSearchRequested,:webSearchRequested), inputTokens=COALESCE(inputTokens,:inputTokens), outputTokens=COALESCE(outputTokens,:outputTokens), totalTokens=COALESCE(totalTokens,:totalTokens), cachedInputTokens=COALESCE(cachedInputTokens,:cachedInputTokens), reasoningTokens=COALESCE(reasoningTokens,:reasoningTokens), costPriceVersion=COALESCE(costPriceVersion,:costPriceVersion), costCurrencyCode=COALESCE(costCurrencyCode,:costCurrencyCode), costTotalMicros=COALESCE(costTotalMicros,:costTotalMicros), costSource=COALESCE(costSource,:costSource), accountingCallsJson=COALESCE(accountingCallsJson,:accountingCallsJson) WHERE assistantMessageId=:assistantMessageId AND attemptId=:attemptId") fun enrichCompletedFacts(assistantMessageId: String, attemptId: String, conversationStyleId: String?, webSearchUsed: Boolean?, webSearchRequested: Boolean?, inputTokens: Long?, outputTokens: Long?, totalTokens: Long?, cachedInputTokens: Long?, reasoningTokens: Long?, costPriceVersion: String?, costCurrencyCode: String?, costTotalMicros: Long?, costSource: String?, accountingCallsJson: String? = null): Int
 }
 
 @Dao
@@ -2821,6 +2859,7 @@ interface ResumableAttachmentUploadDao {
         AiRuntimeEventEntity::class,
         ConversationRuntimeStateEntity::class,
         NormalChatSendAttemptEntity::class,
+        NormalChatSearchCheckpointEntity::class,
         ResumableAttachmentUploadEntity::class,
         AssistantResponseModelAttributionEntity::class,
         CloudResponseModelUsageEntity::class,
@@ -2916,8 +2955,10 @@ interface ResumableAttachmentUploadDao {
         ScheduledMonitorRunEntity::class,
         ReminderDraftGenerationRecordEntity::class,
         ConversationTitleGenerationRecordEntity::class,
+        DirectChatCallAuditEntity::class,
+        ContextSelectionAuditEntity::class,
     ],
-    version = 70,
+    version = 72,
     exportSchema = true,
 )
 abstract class NanfengAiDatabase : RoomDatabase() {
@@ -2938,7 +2979,10 @@ abstract class NanfengAiDatabase : RoomDatabase() {
     abstract fun invocationLedgerDao(): InvocationLedgerDao
     abstract fun providerDiagnosticDao(): ProviderDiagnosticDao
     abstract fun normalChatSendAttemptDao(): NormalChatSendAttemptDao
+    abstract fun normalChatSearchCheckpointDao():NormalChatSearchCheckpointDao
     abstract fun assistantResponseModelAttributionDao(): AssistantResponseModelAttributionDao
+    abstract fun contextSelectionAuditDao(): ContextSelectionAuditDao
+    abstract fun directChatCallAuditDao(): DirectChatCallAuditDao
     abstract fun cloudResponseModelUsageDao(): CloudResponseModelUsageDao
     abstract fun resumableAttachmentUploadDao(): ResumableAttachmentUploadDao
     abstract fun conversationRealTextExecutionDao(): ConversationRealTextExecutionDao
@@ -3665,6 +3709,23 @@ abstract class NanfengAiDatabase : RoomDatabase() {
             }
         }
         /** Never backfill ambiguous legacy false values from current settings. */
+        val MIGRATION_71_72=object:Migration(71,72){
+            override fun migrate(db:SupportSQLiteDatabase){
+                db.execSQL("CREATE TABLE IF NOT EXISTS normal_chat_search_checkpoints (attemptId TEXT NOT NULL,scopeFingerprint TEXT NOT NULL,itemId TEXT NOT NULL,evidenceText TEXT NOT NULL,sourcesJson TEXT NOT NULL,actualModelId TEXT NOT NULL,sourceLabel TEXT NOT NULL,createdAtEpochMs INTEGER NOT NULL,originCallId TEXT NOT NULL,PRIMARY KEY(attemptId,scopeFingerprint,itemId),FOREIGN KEY(attemptId) REFERENCES normal_chat_send_attempts(attemptId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_normal_chat_search_checkpoints_attemptId ON normal_chat_search_checkpoints(attemptId)")
+            }
+        }
+        val MIGRATION_70_71 = object : Migration(70, 71) {
+            override fun migrate(db:SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS context_selection_audits (recordId TEXT NOT NULL PRIMARY KEY,attemptId TEXT,assistantMessageId TEXT,createdAtEpochMs INTEGER NOT NULL,recordJson TEXT NOT NULL,conversationId TEXT)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_context_selection_audits_attemptId ON context_selection_audits(attemptId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_context_selection_audits_assistantMessageId ON context_selection_audits(assistantMessageId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_context_selection_audits_createdAtEpochMs ON context_selection_audits(createdAtEpochMs)")
+                db.execSQL("ALTER TABLE assistant_response_model_attributions ADD COLUMN accountingCallsJson TEXT")
+                db.execSQL("CREATE TABLE IF NOT EXISTS direct_chat_call_audits (recordId TEXT NOT NULL, requestedAtEpochMs INTEGER NOT NULL, recordJson TEXT NOT NULL, conversationId TEXT, PRIMARY KEY(recordId))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_direct_chat_call_audits_requestedAtEpochMs ON direct_chat_call_audits (requestedAtEpochMs)")
+            }
+        }
         val MIGRATION_69_70 = object : Migration(69, 70) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `assistant_response_model_attributions` ADD COLUMN `webSearchRequested` INTEGER")

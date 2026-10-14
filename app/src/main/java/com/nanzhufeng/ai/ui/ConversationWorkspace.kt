@@ -203,10 +203,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.input.pointer.pointerInput
@@ -318,7 +320,7 @@ private val ComposerSendSurfaceSize = 36.dp
 private val ComposerSendGlyphSize = 24.dp
 private val ComposerStopGlyphSize = 22.5.dp
 private val ComposerModelPickerHeaderHeight = 62.dp
-private val ComposerModelPickerRootContentHeight = 280.dp
+private val ComposerModelPickerRootContentHeight = 352.dp
 // Conversation overlays have an explicit stacking contract. The scroll-to-latest control stays
 // above the composer, but every in-canvas transient surface must cover that control.
 private const val ConversationScrollToLatestZIndex = 1f
@@ -477,14 +479,16 @@ private val ComposerModelRoundedBoldFontFamily = FontFamily(
 /** Compact outer-display labels keep the phone composer usable; the picker and inner display use catalog names. */
 private fun composerModelDisplayLabel(presets: List<ModelPresetId>): String =
     presets.joinToString(" / ") { preset ->
-        com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName
-            .let { com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
+        com.nanzhufeng.ai.domain.RelayCoreModels.spec(preset)?.composerName
+            ?: com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName
+                .let { com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
     }
 
 /** Wide inner displays have room to disclose the selected catalog name without abbreviation. */
 private fun composerModelFullDisplayLabel(presets: List<ModelPresetId>): String =
     presets.joinToString(" / ") { preset ->
-        com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName
+        com.nanzhufeng.ai.domain.RelayCoreModels.spec(preset)?.pickerName
+            ?: com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.preset(preset).displayName
     }
 
 @Composable
@@ -509,6 +513,31 @@ private fun TransientMenuTextScale(content: @Composable () -> Unit) {
         typography = compactTypography,
         content = content,
     )
+}
+
+private fun TextStyle.forComposerModelPicker(appScale: Float): TextStyle {
+    val restrainedScale = appScale.coerceIn(0.95f, 1.05f)
+    return copy(
+        fontSize = ((fontSize.value / appScale - 1f) * restrainedScale).sp,
+        lineHeight = (lineHeight.value / appScale * restrainedScale).sp,
+    )
+}
+
+@Composable
+private fun ComposerModelPickerTextScale(content: @Composable () -> Unit) {
+    val appScale = LocalAppTextScale.current
+    TransientMenuTextScale {
+        val typography = MaterialTheme.typography
+        val smaller = remember(typography, appScale) {
+            typography.copy(
+                titleMedium = typography.titleMedium.forComposerModelPicker(appScale),
+                bodyLarge = typography.bodyLarge.forComposerModelPicker(appScale),
+                bodySmall = typography.bodySmall.forComposerModelPicker(appScale),
+                labelSmall = typography.labelSmall.forComposerModelPicker(appScale),
+            )
+        }
+        MaterialTheme(typography = smaller, content = content)
+    }
 }
 
 /** A root overlay is deliberately outside the composer measurement tree. */
@@ -544,6 +573,7 @@ private val LocalAttachmentSearchLocateRequest = staticCompositionLocalOf<(Messa
 
 /** Find is a visual projection over the current transcript, never a message mutation. */
 private val LocalConversationFindQuery = staticCompositionLocalOf<String?> { null }
+private val LocalReplyEmphasisPlan = staticCompositionLocalOf<List<com.nanzhufeng.ai.domain.ReplyEmphasisSelection>> { emptyList() }
 
 private data class ConversationFindMatch(
     val messageId: MessageNodeId,
@@ -610,6 +640,7 @@ internal fun ConversationWorkspaceDialog(
     onExport: () -> Unit,
     onSyncConversation: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onCancelConversationSync: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onCancelConversationsSync: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
     onReadCloudConversations: () -> Unit,
     syncNotice: String?,
     syncOperation: P7DAccountSyncOperation?,
@@ -629,6 +660,7 @@ internal fun ConversationWorkspaceDialog(
     onClosePdfPreview: () -> Unit,
     onOpenVideoPreview: (AttachmentId) -> Unit,
     onCloseVideoPreview: (Long) -> Unit,
+    onSaveVideoPreviewPosition: (AttachmentId, Long) -> Unit,
     onOpenAudioPreview: (AttachmentId) -> Unit,
     onCloseAudioPreview: (Long) -> Unit,
     onOpenTextPreview: (AttachmentId) -> Unit,
@@ -690,8 +722,7 @@ internal fun ConversationWorkspaceDialog(
         Modifier.conversationEdgeGrayFade()
     }
     var choosingModel by rememberSaveable { mutableStateOf(false) }
-    var renameVisible by rememberSaveable { mutableStateOf(false) }
-    var renameText by rememberSaveable { mutableStateOf("") }
+    var renameConversationId by remember { mutableStateOf<String?>(null) }
     var editingMessageId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingText by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
@@ -1070,9 +1101,13 @@ internal fun ConversationWorkspaceDialog(
                             },
                             onManage = onManage,
                             onBatchSoftDelete = onBatchSoftDelete,
+                            onCancelConversationSync = onCancelConversationSync,
+                            onCancelConversationsSync = onCancelConversationsSync,
                             workMode = workMode,
                             onModeChanged = { enabled -> onSurfaceChanged(if (enabled) com.nanzhufeng.ai.domain.ConversationSurface.WORK else com.nanzhufeng.ai.domain.ConversationSurface.CHAT) },
-                            onRequestRename = { conversation -> onSelect(conversation.id); renameText = conversation.title; renameVisible = true },
+                            onRequestRename = { conversation -> renameConversationId = conversation.id.value },
+                            renameConversationId = renameConversationId,
+                            onRenameFinished = { renameConversationId = null },
                             onRequestProject = { conversation -> onSelect(conversation.id); choosingProject = true },
                             onRequestDelete = { conversation -> onSelect(conversation.id); confirmingDelete = true },
                             onRequestConversationActions = { conversation, anchor, cloudList ->
@@ -1107,7 +1142,10 @@ internal fun ConversationWorkspaceDialog(
             if (state.temporaryRecovery != null) {
                 TemporaryConversationPane(
                     recovery = state.temporaryRecovery,
-                    modelOptions = listOf(null to "Auto · DeepSeek V4.1 Flash"),
+                    modelOptions = listOf(null to "Auto · DeepSeek V4.1 Flash") + com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choices
+                        .filterNot { it == com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.auto }
+                        .filter { state.normalChatRouting?.isVisible(it) == true }
+                        .map { it.id to it.label },
                     onDraftChanged = onUpdateTemporaryDraft,
                     onModelOverrideChanged = onUpdateTemporaryModelOverride,
                     onSubmit = onSubmitTemporaryDraft,
@@ -1338,8 +1376,17 @@ internal fun ConversationWorkspaceDialog(
                                     responseAttributions = state.answerResponseAttributions[message.message.messageId].orEmpty(),
                                     assistantGenerationPhaseOverride = if (
                                         state.normalSendRetryInProgress && message.message.messageId == state.currentLeafId
-                                    ) "正在重新生成…" else null,
+                                    ) (if(message.message.blocks.isNotEmpty()) "正在从断点继续…" else "正在重新生成…") else null,
                                     assistantGenerationIsRetry = state.normalSendRetryInProgress && message.message.messageId == state.currentLeafId,
+                                    onRetryFailedAssistant = onRetryNormalSend.takeIf {
+                                        message.message.messageId == state.currentLeafId &&
+                                            message.message.deliveryState in setOf(com.nanzhufeng.ai.domain.MessageDeliveryState.FAILED,com.nanzhufeng.ai.domain.MessageDeliveryState.CANCELLED) &&
+                                            state.normalSendRecovery?.canRetry == true && !state.isSending
+                                    },
+                                    failedAssistantDetailOverride = (state.sendError ?: state.normalSendRecovery?.failureReason).takeIf {
+                                        message.message.messageId == state.currentLeafId &&
+                                            state.sendErrorConversationId == state.selectedConversationId
+                                    },
                                     searchAnchorAttachmentId = state.searchAnchorAttachmentId,
                                     searchAnchorRequestId = state.searchAnchorRequestId,
                                     onLongPress = { messageId, anchorBounds, pressPosition -> messageActionTarget = MessageActionMenuTarget(messageId.value, anchorBounds, pressPosition) },
@@ -1389,6 +1436,10 @@ internal fun ConversationWorkspaceDialog(
                     onTemporaryAction = onEnterTemporary,
                     temporaryTint = ConversationControlGlyph,
                     showContentActions = hasConversationContent,
+                    title = selectedConversation?.title,
+                    renameRequested = selectedConversation?.id?.value == renameConversationId,
+                    onRename = { title -> selectedConversation?.let { onManage(it, ConversationManagementAction.RENAME, title) }; renameConversationId = null },
+                    onRenameFinished = { renameConversationId = null },
                     onCreateConversation = onCreate,
                     onConversationActionsRequested = { anchor ->
                         selectedConversation?.let { conversation ->
@@ -1447,35 +1498,6 @@ internal fun ConversationWorkspaceDialog(
                             )
                         }
                     }
-                    state.normalSendRecovery?.takeIf { !state.isSending }?.let { recovery ->
-                        Surface(
-                            color = ForegroundSurface,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(start = 28.dp, end = 28.dp, bottom = floatingComposerHeight + 84.dp),
-                        ) {
-                            Column(
-                                Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Text(
-                                    "发送未完成",
-                                    color = ErrorRed,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    textAlign = TextAlign.Center,
-                                )
-                                Text(
-                                    recovery.failureReason,
-                                    color = SecondaryText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    textAlign = TextAlign.Center,
-                                )
-                                Button(onClick = onRetryNormalSend, enabled = recovery.canRetry && !state.isSending) { Text("重试") }
-                            }
-                        }
-                    }
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -1501,7 +1523,7 @@ internal fun ConversationWorkspaceDialog(
                                 // Bind the actual rendered disclosure, not a later ViewModel state.
                                 val shownDraft = state.draft
                                 val shownRouting = state.normalChatRouting
-                                val shownModelId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId
+                                val shownModelId = com.nanzhufeng.ai.domain.effectiveComposerModelId(state.p6gConversationOverride, state.p6gGlobalDefault)
                                 val authorization = if (shownRouting != null &&
                                     shownRouting.canAuthorize(shownDraft, shownModelId) &&
                                     state.surface == com.nanzhufeng.ai.domain.ConversationSurface.CHAT
@@ -1592,15 +1614,11 @@ internal fun ConversationWorkspaceDialog(
                     onToggleConversationWebSearch = { enabled -> onSetCurrentConversationWebSearchEnabled(enabled) },
                     conversationStyle = state.conversationStyleOverride?.style ?: state.globalConversationStyle,
                     onSelectConversationStyle = onSetCurrentConversationStyle,
-                    modelOptions = listOf(null to com.nanzhufeng.ai.domain.AutoModelRouter.label(
-                        com.nanzhufeng.ai.domain.AutoRoutingFacts(
-                            hasAttachment = state.draft?.attachments?.isNotEmpty() == true,
-                            requiresComplexReasoning = com.nanzhufeng.ai.domain.AutoRoutingTaskClassifier.requiresComplexReasoning(state.draft?.text.orEmpty()),
-                        ),
-                    )) + com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choices
+                    modelOptions = listOf(null to (state.draft?.let { state.normalChatRouting?.autoLabel(it) } ?: "Auto · 等待可用模型")) + com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choices
                         .filterNot { it == com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.auto }
+                        .filter { state.normalChatRouting?.isVisible(it) == true }
                         .map { it.id to it.label },
-                    selectedModelId = (state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId)
+                    selectedModelId = (com.nanzhufeng.ai.domain.effectiveComposerModelId(state.p6gConversationOverride, state.p6gGlobalDefault))
                         ?.let(com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog::choice)?.id,
                     onDismiss = { composerMenu = ComposerMenu.NONE },
                     onSelectModel = { modelId -> composerMenu = ComposerMenu.NONE; onSelectP6GModel(modelId) },
@@ -1812,7 +1830,8 @@ internal fun ConversationWorkspaceDialog(
         BackHandler(onBack = ::returnToSearchAfterSearchOpen)
     }
     conversationActionTarget?.let { target ->
-        val conversation = state.conversations.firstOrNull { it.id.value == target.conversationId }
+        val conversation = (if (target.cloudList) cloudConversations else state.conversations)
+            .firstOrNull { it.id.value == target.conversationId }
         if (conversation == null) conversationActionTarget = null else ConversationActionSheet(
             conversation = conversation,
             anchor = target.anchor,
@@ -1825,9 +1844,7 @@ internal fun ConversationWorkspaceDialog(
             onMarkWatchLater = onMarkWatchLater,
             onRequestRename = { target ->
                 conversationActionTarget = null
-                onSelect(target.id)
-                renameText = target.title
-                renameVisible = true
+                renameConversationId = target.id.value
             },
             onRequestProject = { target ->
                 conversationActionTarget = null
@@ -1915,8 +1932,8 @@ internal fun ConversationWorkspaceDialog(
             title = { Text("换模型重答") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NanfengModelServiceCatalog.presets.forEach { preset ->
-                        OutlinedButton(onClick = { choosingModel = false; onAction(ConversationActionKind.CHANGE_MODEL, preset.id) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text(preset.displayName, fontWeight = FontWeight.Bold) }
+                    NanfengModelServiceCatalog.chatPresets.forEach { preset ->
+                        OutlinedButton(onClick = { choosingModel = false; onAction(ConversationActionKind.CHANGE_MODEL, preset.id) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text(com.nanzhufeng.ai.domain.modelPresetNameForUser(preset), fontWeight = FontWeight.Bold) }
                     }
                 }
             },
@@ -1967,17 +1984,6 @@ internal fun ConversationWorkspaceDialog(
             onDismiss = { selectingTextMessageId = null },
         )
     }
-    if (renameVisible) CompactConversationRenameDialog(
-        value = renameText,
-        onValueChange = { renameText = it },
-        onDismiss = { renameVisible = false },
-        onConfirm = {
-            state.conversations.firstOrNull { it.id == state.selectedConversationId }?.let { conversation ->
-                onManage(conversation, ConversationManagementAction.RENAME, renameText)
-            }
-            renameVisible = false
-        },
-    )
     if (confirmingDelete) AlertDialog(
         onDismissRequest = { confirmingDelete = false }, containerColor = ForegroundSurface, shape = RoundedCornerShape(24.dp),
         title = { Text("移入回收站？") },
@@ -2016,7 +2022,7 @@ internal fun ConversationWorkspaceDialog(
         ImagePreviewDialog(preview, generatedImageIds, onOpenImagePreview, onCloseImagePreview, onRequestAttachmentTransfers)
     }
     state.pdfPreview?.let { preview -> PdfPreviewDialog(preview, state.pdfPreviewLoading, onOpenPdfPage, onClosePdfPreview) }
-    state.videoPreview?.let { preview -> VideoPreviewDialog(preview, onCloseVideoPreview) }
+    state.videoPreview?.let { preview -> VideoPreviewDialog(preview, onCloseVideoPreview, onSaveVideoPreviewPosition) }
     state.audioPreview?.let { preview -> AudioPreviewDialog(preview, onCloseAudioPreview) }
     state.textPreview?.let { preview -> TextPreviewDialog(preview, onCloseTextPreview) }
     state.archivePreview?.let { preview -> ArchivePreviewDialog(preview, onOpenArchiveEntry, onCloseTextPreview) }
@@ -2036,6 +2042,10 @@ private fun ConversationShellHeader(
     onTemporaryAction: () -> Unit,
     temporaryTint: Color,
     showContentActions: Boolean,
+    title: String? = null,
+    renameRequested: Boolean = false,
+    onRename: (String) -> Unit = {},
+    onRenameFinished: () -> Unit = {},
     onCreateConversation: () -> Unit,
     onConversationActionsRequested: (androidx.compose.ui.geometry.Rect) -> Unit,
     modifier: Modifier = Modifier,
@@ -2045,7 +2055,11 @@ private fun ConversationShellHeader(
             ConversationHeaderFloatingIconButton(onClick = onLeftAction) {
                 Icon(leftIcon, contentDescription = leftDescription, tint = ConversationControlGlyph)
             }
-            Spacer(Modifier.weight(1f))
+            if (!title.isNullOrBlank()) InlineConversationTitle(
+                title = title, modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                style = centeredControlTextStyle(scaledConversationTextUnit(16.sp)),
+                renameRequested = renameRequested, onRename = onRename, onRenameFinished = onRenameFinished,
+            ) else Spacer(Modifier.weight(1f))
             if (showContentActions) {
                 ConversationHeaderContentActions(
                     onCreateConversation = onCreateConversation,
@@ -2057,7 +2071,7 @@ private fun ConversationShellHeader(
                 }
             }
         }
-        if (!showContentActions) ConversationModeSwitch(
+        if (com.nanzhufeng.ai.domain.ProductScope.workspacesVisible && !showContentActions) ConversationModeSwitch(
             workMode = workMode,
             onModeChanged = onModeChanged,
             modifier = Modifier.align(Alignment.Center),
@@ -2559,9 +2573,13 @@ private fun ConversationNavigationDrawer(
     onOpenSearchPage: () -> Unit,
     onManage: (com.nanzhufeng.ai.domain.Conversation, ConversationManagementAction, String?) -> Unit,
     onBatchSoftDelete: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
+    onCancelConversationSync: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    onCancelConversationsSync: (List<com.nanzhufeng.ai.domain.Conversation>) -> Unit,
     workMode: Boolean,
     onModeChanged: (Boolean) -> Unit,
     onRequestRename: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
+    renameConversationId: String? = null,
+    onRenameFinished: () -> Unit = {},
     onRequestProject: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestDelete: (com.nanzhufeng.ai.domain.Conversation) -> Unit,
     onRequestConversationActions: (com.nanzhufeng.ai.domain.Conversation, androidx.compose.ui.geometry.Rect, Boolean) -> Unit,
@@ -2624,7 +2642,7 @@ private fun ConversationNavigationDrawer(
                 null,
             )
             ConversationRowSwipeAction.RENAME -> onRequestRename(conversation)
-            ConversationRowSwipeAction.DELETE -> onRequestDelete(conversation)
+            ConversationRowSwipeAction.DELETE -> if (cloudListVisible) onCancelConversationSync(conversation) else onRequestDelete(conversation)
         }
     }
     if (workMode) {
@@ -2865,6 +2883,9 @@ private fun ConversationNavigationDrawer(
                                 if (!dismissRevealedConversation()) onRequestConversationActions(target, anchor, cloudListVisible)
                             },
                             onSwipeAction = onConversationSwipeAction,
+                            renameRequested = renameConversationId == conversation.id.value,
+                            onRename = { title -> onManage(conversation, ConversationManagementAction.RENAME, title); onRenameFinished() },
+                            onRenameFinished = onRenameFinished,
                             revealed = revealedConversationId == conversation.id.value,
                             onRevealChanged = { opened -> revealedConversationId = conversation.id.value.takeIf { opened } },
                             batchEditing = batchEditing,
@@ -2898,6 +2919,9 @@ private fun ConversationNavigationDrawer(
                             if (!dismissRevealedConversation()) onRequestConversationActions(target, anchor, cloudListVisible)
                         },
                         onSwipeAction = onConversationSwipeAction,
+                            renameRequested = renameConversationId == conversation.id.value,
+                            onRename = { title -> onManage(conversation, ConversationManagementAction.RENAME, title); onRenameFinished() },
+                            onRenameFinished = onRenameFinished,
                         revealed = revealedConversationId == conversation.id.value,
                         onRevealChanged = { opened -> revealedConversationId = conversation.id.value.takeIf { opened } },
                         batchEditing = batchEditing,
@@ -2952,6 +2976,7 @@ private fun ConversationNavigationDrawer(
             }
             if (batchEditing) {
                 ConversationBatchEditControls(
+                    cloudList = cloudListVisible,
                     selectedCount = selectedBatchConversationIds.size,
                     allSelected = allBatchSelected,
                     onSelectAll = {
@@ -2990,14 +3015,14 @@ private fun ConversationNavigationDrawer(
                     onClick = { if (!dismissRevealedConversation()) onCreate() },
                     shape = CircleShape,
                     modifier = Modifier
-                        .height(44.dp)
+                        .height(singleLineControlHeight(44.dp, MaterialTheme.typography.labelLarge.fontSize, 16.dp))
                         .conversationForegroundShadow(shape = CircleShape),
                     colors = ButtonDefaults.buttonColors(containerColor = AccentOrange, contentColor = Color.White),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
                 ) {
                     Icon(painterResource(R.drawable.ic_lucide_file_pen), contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("新对话")
+                    Text("新对话", style = centeredControlTextStyle(MaterialTheme.typography.labelLarge.fontSize), maxLines = 1)
                 }
             }
         }
@@ -3007,15 +3032,15 @@ private fun ConversationNavigationDrawer(
                 onDismissRequest = { pendingBatchDelete = emptyList() },
                 containerColor = ForegroundSurface,
                 shape = RoundedCornerShape(24.dp),
-                title = { Text("移入回收站？") },
-                text = { Text("$batchCount 个会话将移入回收站，可恢复。") },
+                title = { Text(if (cloudListVisible) "取消云端同步？" else "移入回收站？") },
+                text = { Text(if (cloudListVisible) "$batchCount 个云端副本将移除，本地对话保留。" else "$batchCount 个会话将移入回收站，可恢复。") },
                 confirmButton = {
                     Button(onClick = {
-                        onBatchSoftDelete(pendingBatchDelete)
+                        if (cloudListVisible) onCancelConversationsSync(pendingBatchDelete) else onBatchSoftDelete(pendingBatchDelete)
                         pendingBatchDelete = emptyList()
                         batchEditing = false
                         selectedBatchConversationIds = emptySet()
-                    }, shape = RoundedCornerShape(14.dp)) { Text("移入回收站") }
+                    }, shape = RoundedCornerShape(14.dp)) { Text(if (cloudListVisible) "取消同步" else "移入回收站") }
                 },
                 dismissButton = { TextButton(onClick = { pendingBatchDelete = emptyList() }, shape = RoundedCornerShape(14.dp)) { Text("取消") } },
             )
@@ -3039,13 +3064,14 @@ private fun DrawerListModeButton(
         modifier = modifier.fillMaxHeight().clip(shape),
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(label, fontSize = scaledConversationTextUnit(12.sp), fontWeight = FontWeight.Bold)
+            Text(label, style = centeredControlTextStyle(scaledConversationTextUnit(12.sp)), fontWeight = FontWeight.Bold,
+                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
-private fun DrawerNavigationListControls(
+internal fun DrawerNavigationListControls(
     cloudListVisible: Boolean,
     batchEditing: Boolean,
     batchEnabled: Boolean,
@@ -3058,13 +3084,19 @@ private fun DrawerNavigationListControls(
     // the drawer; the two circular utilities share that same compact scale instead
     // of leaving the pen/cloud actions visually oversized beside it.
     val modeShape = RoundedCornerShape(50)
-    Box(Modifier.fillMaxWidth().height(30.dp)) {
+    val labelStyle = centeredControlTextStyle(scaledConversationTextUnit(12.sp))
+    val modeHeight = singleLineControlHeight(26.dp, labelStyle.fontSize)
+    val labelPixels = androidx.compose.ui.text.rememberTextMeasurer().measure("本地", style = labelStyle).size.width
+    val labelWidth = with(androidx.compose.ui.platform.LocalDensity.current) { labelPixels.toDp() }
+    BoxWithConstraints(Modifier.fillMaxWidth().height(modeHeight + 4.dp)) {
+        val modeWidth = maxOf(maxWidth / 3f, labelWidth * 2f + 28.dp).coerceAtMost((maxWidth - 82.dp).coerceAtLeast(0.dp))
+        val modeStart = minOf((maxWidth - modeWidth) / 2f, maxWidth - 82.dp - modeWidth).coerceAtLeast(0.dp)
         Surface(
             color = ForegroundSurface,
             shape = modeShape,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
-            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.3333f).height(26.dp).conversationForegroundShadow(modeShape),
+            modifier = Modifier.align(Alignment.CenterStart).offset(x = modeStart).width(modeWidth).height(modeHeight).conversationForegroundShadow(modeShape),
         ) {
             Row(Modifier.fillMaxSize().padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
                 DrawerListModeButton("本地", selected = !cloudListVisible, modifier = Modifier.weight(1f), onClick = onShowLocal)
@@ -3140,6 +3172,7 @@ private fun DrawerRoundIconButton(
 
 @Composable
 private fun ConversationBatchEditControls(
+    cloudList: Boolean,
     selectedCount: Int,
     allSelected: Boolean,
     onSelectAll: () -> Unit,
@@ -3165,22 +3198,22 @@ private fun ConversationBatchEditControls(
                 color = BodyText,
                 onClick = onSelectAll,
                 iconSize = 16.dp,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(if (cloudList) 0.85f else 1f),
             )
             ConversationBatchEditAction(
                 icon = Icons.Rounded.DeleteOutline,
-                label = "删除 $selectedCount",
+                label = if (cloudList) "取消同步 $selectedCount" else "删除 $selectedCount",
                 color = ErrorRed,
                 enabled = selectedCount > 0,
                 onClick = onDelete,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(if (cloudList) 1.3f else 1f),
             )
             ConversationBatchEditAction(
                 icon = Icons.Rounded.Check,
                 label = "完成",
                 color = BrandGreen,
                 onClick = onDone,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(if (cloudList) 0.85f else 1f),
             )
         }
     }
@@ -3532,7 +3565,8 @@ private fun FavoriteConversationSwipeRow(
     onOpenConversation: () -> Unit,
     onUnfavorite: () -> Unit,
 ) {
-    val rowHeight = 58.dp
+    val rowHeight = (measuredControlTextHeight(MaterialTheme.typography.bodyMedium) +
+        measuredControlTextHeight(MaterialTheme.typography.labelSmall) + 18.dp).coerceAtLeast(58.dp)
     val revealWidth = 72.dp
     val density = LocalDensity.current
     val revealWidthPx = with(density) { revealWidth.toPx() }
@@ -3796,7 +3830,8 @@ private fun ConversationLifecycleSwipeRow(
     onDelete: () -> Unit,
     onOpenConversation: () -> Unit,
 ) {
-    val rowHeight = 58.dp
+    val rowHeight = (measuredControlTextHeight(MaterialTheme.typography.bodyMedium) +
+        measuredControlTextHeight(MaterialTheme.typography.labelSmall) + 18.dp).coerceAtLeast(58.dp)
     val revealWidth = 124.dp
     val density = LocalDensity.current
     val revealWidthPx = with(density) { revealWidth.toPx() }
@@ -4141,7 +4176,7 @@ private fun ConversationSearchPage(
                     }
                 }
                 Box(
-                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(36.dp),
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(singleLineControlHeight(36.dp, MaterialTheme.typography.labelMedium.fontSize)),
                 ) {
                     if (state.searchCategory == ConversationSearchCategory.FILE) {
                         SearchAttachmentFileTypeControl(
@@ -4304,7 +4339,7 @@ private fun SearchAttachmentSortControl(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.height(36.dp),
+        modifier = modifier.height(singleLineControlHeight(36.dp, MaterialTheme.typography.labelMedium.fontSize)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -4335,7 +4370,7 @@ private fun SearchAttachmentSortControl(
                 Text(
                     "还原",
                     modifier = Modifier.padding(horizontal = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = centeredControlTextStyle(MaterialTheme.typography.labelMedium.fontSize, MaterialTheme.typography.labelMedium),
                     fontWeight = FontWeight.SemiBold,
                 )
             }
@@ -4380,7 +4415,7 @@ private fun SearchAttachmentSortColumn(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
-            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Text(label, style = centeredControlTextStyle(MaterialTheme.typography.labelMedium.fontSize, MaterialTheme.typography.labelMedium), fontWeight = FontWeight.SemiBold)
             Icon(
                 imageVector = when {
                     !active -> Icons.Rounded.SwapVert
@@ -4412,14 +4447,14 @@ private fun SearchAttachmentFileTypeControl(
             // explicit width the fillMaxSize child can consume the whole sort row,
             // merging its gray surface with the three right-side sort controls and
             // leaving the category label effectively invisible.
-            modifier = Modifier.width(128.dp).height(36.dp),
+            modifier = Modifier.width(128.dp).height(singleLineControlHeight(36.dp, MaterialTheme.typography.labelMedium.fontSize)),
         ) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                Text(selected.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Text(selected.label, style = centeredControlTextStyle(MaterialTheme.typography.labelMedium.fontSize, MaterialTheme.typography.labelMedium), fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(14.dp))
             }
@@ -4751,8 +4786,17 @@ private fun SearchAttachmentRows(
 @Composable
 private fun rememberDecodedBitmap(bytes: ByteArray?, cacheKey: Any?): android.graphics.Bitmap? {
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, cacheKey, bytes) {
-        value = withContext(Dispatchers.Default) {
-            bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+        value = withContext(com.nanzhufeng.ai.domain.AttachmentPreviewWork.dispatcher) {
+            if (bytes == null) return@withContext null
+            try {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                val sample = com.nanzhufeng.ai.domain.previewBitmapSampleSize(bounds.outWidth, bounds.outHeight)
+                if (sample == 0) return@withContext null
+                val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+            } catch (_: OutOfMemoryError) { null }
+            catch (_: IllegalArgumentException) { null }
         }
     }
     return bitmap
@@ -5296,6 +5340,9 @@ private fun ConversationNavigationRow(
     onSwipeAction: ((com.nanzhufeng.ai.domain.Conversation, ConversationRowSwipeAction) -> Unit)? = null,
     revealed: Boolean = false,
     onRevealChanged: (Boolean) -> Unit = {},
+    renameRequested: Boolean = false,
+    onRename: (String) -> Unit = {},
+    onRenameFinished: () -> Unit = {},
     batchEditing: Boolean = false,
     batchSelected: Boolean = false,
     onBatchSelectionChanged: (Boolean) -> Unit = {},
@@ -5308,7 +5355,9 @@ private fun ConversationNavigationRow(
     // visually aligned with the ordinary one-line conversation row.
     // Preserve the 8dp gap between cards.  The visual density requested for the drawer comes
     // from reducing each row's vertical text breathing room, not by making card gaps merge.
-    val rowHeight = if (batchEditing) 44.dp else 36.dp
+    val baseRowHeight = if (batchEditing) 44.dp else 36.dp
+    val titleTextStyle = centeredControlTextStyle(scaledConversationTextUnit(14.sp)).copy(lineHeight = scaledConversationTextUnit(18.sp))
+    val rowHeight = (measuredControlTextHeight(titleTextStyle) + 8.dp).coerceAtLeast(baseRowHeight)
     val density = LocalDensity.current
     // The four shortcuts are one compact part of the row: they only exist visually while
     // the row moves right, and remain at the exact row height when the gesture settles open.
@@ -5429,11 +5478,60 @@ private fun ConversationNavigationRow(
                             .semantics { contentDescription = "正在生成回复" },
                     )
                 }
-                Text(conversation.title, modifier = Modifier.weight(1f), color = if (selected) AccentOrange else BodyText, fontSize = scaledConversationTextUnit(14.sp), lineHeight = scaledConversationTextUnit(18.sp), fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(conversationListLocalDate(conversation.createdAt), modifier = Modifier.wrapContentWidth(Alignment.End), style = MaterialTheme.typography.labelSmall, color = SecondaryText, maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                InlineConversationTitle(title = conversation.title, modifier = Modifier.weight(1f), style = titleTextStyle.copy(color = if (selected) AccentOrange else BodyText), enabled = !batchEditing, renameRequested = renameRequested, onRename = onRename, onRenameFinished = onRenameFinished,
+                    onClick = { if (batchEditing) onBatchSelectionChanged(!batchSelected) else if (revealed) onRevealChanged(false) else onSelect(conversation.id) },
+                    onLongClick = { if (!batchEditing) rowBounds?.let { onRequestConversationActions(conversation, it) } },
+                )
+                Text(conversationListLocalDate(conversation.createdAt), modifier = Modifier.wrapContentWidth(Alignment.End), style = centeredControlTextStyle(MaterialTheme.typography.labelSmall.fontSize, MaterialTheme.typography.labelSmall), color = SecondaryText, maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
             }
         }
     }
+}
+
+@Composable
+internal fun InlineConversationTitle(
+    title: String,
+    modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle,
+    enabled: Boolean = true,
+    renameRequested: Boolean = false,
+    onRename: (String) -> Unit,
+    onRenameFinished: () -> Unit = {},
+    onClick: () -> Unit = {},
+    onLongClick: () -> Unit = {},
+) {
+    var editing by remember(title) { mutableStateOf(false) }
+    var value by remember(title) { mutableStateOf(TextFieldValue(title, TextRange(0, title.length))) }
+    var hadFocus by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    val currentClick by rememberUpdatedState(onClick)
+    val currentLongClick by rememberUpdatedState(onLongClick)
+    fun finish(save: Boolean) {
+        if (!editing) return
+        editing = false
+        val updated = value.text.trim()
+        if (save && updated.isNotBlank() && updated != title) onRename(updated)
+        onRenameFinished()
+    }
+    LaunchedEffect(renameRequested) { if (renameRequested && enabled) { value = TextFieldValue(title, TextRange(0, title.length)); editing = true } }
+    LaunchedEffect(editing) { if (editing) { hadFocus = false; focus.requestFocus() } }
+    if (editing) BasicTextField(
+        value = value, onValueChange = { value = it }, singleLine = true,
+        textStyle = style.copy(color = BodyText),
+        keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { finish(true) }),
+        modifier = modifier.focusRequester(focus)
+            .onFocusChanged { if (it.isFocused) hadFocus = true else if (hadFocus) finish(true) }
+            .onPreviewKeyEvent {
+                if (it.type == KeyEventType.KeyDown && (it.key == Key.Enter || it.key == Key.NumPadEnter)) { finish(true); true }
+                else if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { finish(false); true } else false
+            },
+    ) else Text(
+        title, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = modifier.pointerInput(title, enabled) {
+            detectTapGestures(onTap = { currentClick() }, onLongPress = { currentLongClick() }, onDoubleTap = { if (enabled) { value = TextFieldValue(title, TextRange(0, title.length)); editing = true } })
+        },
+    )
 }
 
 /** A compact visual checkbox; the full conversation row remains the primary batch-selection hit area. */
@@ -5691,6 +5789,7 @@ private fun ConversationActionSheet(
     val menuWidth = 224.dp
     val rowCount = when {
         conversation.deletedAt != null -> 1
+        cloudList -> 8
         // The ordinary conversation menu stays focused on reading and managing the chat.
         // Workspace keeps its existing project, attachment and launcher actions.
         workMode -> 12
@@ -5738,31 +5837,31 @@ private fun ConversationActionSheet(
                         ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
                         ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
-                        ConversationMenuAction(
+                        if (!cloudList) ConversationMenuAction(
                             Icons.Rounded.CloudUpload,
                             if (isSyncedToCloud) "取消同步" else "同步到南枫云",
                             onClick = { if (isSyncedToCloud) onCancelConversationSync(conversation) else onSyncConversation(conversation) },
                         )
-                        ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove, if (conversation.projectId == null) "添加到项目" else "移动或移出项目", trailing = Icons.Rounded.ChevronRight, onClick = { onRequestProject(conversation) })
+                        if (com.nanzhufeng.ai.domain.ProductScope.workspacesVisible) ConversationMenuAction(Icons.AutoMirrored.Outlined.DriveFileMove, if (conversation.projectId == null) "添加到项目" else "移动或移出项目", trailing = Icons.Rounded.ChevronRight, onClick = { onRequestProject(conversation) })
                         ConversationMenuAction(Icons.Rounded.AttachFile, "已上传文件", onClick = { onShowUploadedFiles(conversation) })
                         ConversationMenuAction(Icons.Rounded.Search, "在聊天中查找", onClick = { onFindInConversation(conversation) })
                         ConversationMenuAction(Icons.Rounded.Home, "添加到主屏幕", onClick = { onAddToHomeScreen(conversation) })
                         ConversationMenuAction(if (conversation.archivedAt == null) Icons.Rounded.Archive else Icons.Rounded.Unarchive, if (conversation.archivedAt == null) "归档" else "恢复", onClick = { onDismiss(); onManage(conversation, if (conversation.archivedAt == null) ConversationManagementAction.ARCHIVE else ConversationManagementAction.UNARCHIVE, null) })
-                        ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
+                        ConversationMenuAction(Icons.Rounded.DeleteOutline, if (cloudList) "取消同步" else "删除", danger = true, onClick = { if (cloudList) onCancelConversationSync(conversation) else onRequestDelete(conversation) })
                     } else {
                         ConversationMenuAction(Icons.Rounded.PushPin, if (cloudList) if (cloudPinned) "取消置顶" else "置顶" else if (conversation.pinnedAt == null) "置顶" else "取消置顶", onClick = { onDismiss(); if (cloudList) onToggleCloudPinned(!cloudPinned) else onManage(conversation, if (conversation.pinnedAt == null) ConversationManagementAction.PIN else ConversationManagementAction.UNPIN, null) })
                         ConversationMenuAction(Icons.Rounded.Visibility, "未读", onClick = { onDismiss(); onMarkWatchLater(conversation) })
                         ConversationMenuAction(if (conversation.favoritedAt == null) Icons.Rounded.BookmarkBorder else Icons.Rounded.Bookmark, if (conversation.favoritedAt == null) "收藏" else "取消收藏", onClick = { onDismiss(); onManage(conversation, if (conversation.favoritedAt == null) ConversationManagementAction.FAVORITE else ConversationManagementAction.UNFAVORITE, null) })
                         ConversationMenuAction(Icons.Rounded.Edit, "重命名", onClick = { onRequestRename(conversation) })
                         ConversationMenuAction(Icons.Rounded.Share, "分享", onClick = { onShareConversation(conversation) })
-                        ConversationMenuAction(
+                        if (!cloudList) ConversationMenuAction(
                             Icons.Rounded.CloudUpload,
                             if (isSyncedToCloud) "取消同步" else "同步到南枫云",
                             onClick = { if (isSyncedToCloud) onCancelConversationSync(conversation) else onSyncConversation(conversation) },
                         )
                         ConversationMenuAction(Icons.Rounded.Search, "在聊天中查找", onClick = { onFindInConversation(conversation) })
                         ConversationMenuAction(if (conversation.archivedAt == null) Icons.Rounded.Archive else Icons.Rounded.Unarchive, if (conversation.archivedAt == null) "归档" else "恢复", onClick = { onDismiss(); onManage(conversation, if (conversation.archivedAt == null) ConversationManagementAction.ARCHIVE else ConversationManagementAction.UNARCHIVE, null) })
-                        ConversationMenuAction(Icons.Rounded.DeleteOutline, "删除", danger = true, onClick = { onRequestDelete(conversation) })
+                        ConversationMenuAction(Icons.Rounded.DeleteOutline, if (cloudList) "取消同步" else "删除", danger = true, onClick = { if (cloudList) onCancelConversationSync(conversation) else onRequestDelete(conversation) })
                     }
                 }
             }
@@ -6069,6 +6168,8 @@ private fun MessageBubble(
     responseAttributions: List<AssistantResponseModelAttribution>,
     assistantGenerationPhaseOverride: String? = null,
     assistantGenerationIsRetry: Boolean = false,
+    onRetryFailedAssistant: (() -> Unit)? = null,
+    failedAssistantDetailOverride: String? = null,
     searchAnchorAttachmentId: AttachmentId? = null,
     searchAnchorRequestId: Long = 0L,
     onLongPress: (MessageNodeId, androidx.compose.ui.geometry.Rect, androidx.compose.ui.geometry.Offset) -> Unit,
@@ -6104,32 +6205,38 @@ private fun MessageBubble(
     // USER is the only bubble role. The remaining transcript roles may use their own surface,
     // but share the document-sized text metrics instead of the bubble's compact inset.
     val isAssistantDocument = message.role != com.nanzhufeng.ai.domain.MessageRole.USER
+    // Keep selected span references tied to this projection even when a new render is value-equal.
+    val replyEmphasis = if (message.role == com.nanzhufeng.ai.domain.MessageRole.ASSISTANT) {
+        com.nanzhufeng.ai.domain.replyEmphasisSelections(message.blocks)
+    } else emptyList()
     val textContent: @Composable () -> Unit = {
-        ConversationTextScale {
-            // Text selection belongs to the rendered transcript, so Android keeps the handles and
-            // copy toolbar at the original message position instead of moving to a separate dialog.
-            SelectionContainer {
-                // Assistant replies are an open reading document. User prose keeps the compact
-                // padding of its own right-aligned bubble, so the two roles never share a fake
-                // card geometry merely because they use the same Markdown renderer.
-                Column(
-                    modifier = if (isAssistantDocument) {
-                        Modifier.padding(
-                            start = ConversationAssistantReadingStartInset,
-                            top = 8.dp,
-                            end = ConversationAssistantReadingEndInset,
-                            bottom = 8.dp,
-                        )
-                    } else Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (isAssistantDocument) 16.dp else 7.dp),
-                ) {
-                    if (message.blocks.isEmpty()) Text("正在等待本地输出…", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
-                    textBlocks.forEachIndexed { blockIndex, block ->
-                        PresentationBlockView(
-                            block, attachmentPreviews, roleVisual.body, transcript.metadata.createdAt, isAssistantDocument,
-                            onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview,
-                            findBlockIndex = blockIndex,
-                        )
+        CompositionLocalProvider(LocalReplyEmphasisPlan provides replyEmphasis) {
+            ConversationTextScale {
+                // Text selection belongs to the rendered transcript, so Android keeps the handles and
+                // copy toolbar at the original message position instead of moving to a separate dialog.
+                SelectionContainer {
+                    // Assistant replies are an open reading document. User prose keeps the compact
+                    // padding of its own right-aligned bubble, so the two roles never share a fake
+                    // card geometry merely because they use the same Markdown renderer.
+                    Column(
+                        modifier = if (isAssistantDocument) {
+                            Modifier.padding(
+                                start = ConversationAssistantReadingStartInset,
+                                top = 8.dp,
+                                end = ConversationAssistantReadingEndInset,
+                                bottom = 8.dp,
+                            )
+                        } else Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isAssistantDocument) 16.dp else 7.dp),
+                    ) {
+                        if (message.blocks.isEmpty()) Text("正在等待本地输出…", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                        textBlocks.forEachIndexed { blockIndex, block ->
+                            PresentationBlockView(
+                                block, attachmentPreviews, roleVisual.body, transcript.metadata.createdAt, isAssistantDocument,
+                                onOpenImagePreview, onOpenPdfPreview, onOpenVideoPreview, onOpenAudioPreview, onOpenTextPreview,
+                                findBlockIndex = blockIndex,
+                            )
+                        }
                     }
                 }
             }
@@ -6223,10 +6330,27 @@ private fun MessageBubble(
                     },
                     hasPartialText = textBlocks.isNotEmpty(),
                     isRetrying = assistantGenerationIsRetry,
+                    phaseOverride = assistantGenerationPhaseOverride,
                 )
             }
             if (message.deliveryState == com.nanzhufeng.ai.domain.MessageDeliveryState.FAILED) {
-                AssistantGenerationFailure(transcript.metadata.safeErrorCode)
+                AssistantGenerationFailure(transcript.metadata.safeErrorCode, onRetryFailedAssistant, failedAssistantDetailOverride)
+            } else if (message.deliveryState == com.nanzhufeng.ai.domain.MessageDeliveryState.CANCELLED) {
+                AssistantGenerationFailure("USER_CANCELLED", onRetryFailedAssistant, failedAssistantDetailOverride ?: "已保留生成内容；可以点击重试继续回答。")
+            }
+            if (message.deliveryState == com.nanzhufeng.ai.domain.MessageDeliveryState.COMPLETE &&
+                responseAttributions.any { it.webSearchRequested == true } &&
+                responseAttributions.none { it.webSearchUsed == true }
+            ) {
+                Text(
+                    "联网未核实：服务商返回了完整文字，但没有提供可验证的搜索结果。以下内容仅供参考。",
+                    color = ErrorRed,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(
+                        start = ConversationAssistantReadingStartInset,
+                        end = ConversationAssistantReadingEndInset,
+                    ),
+                )
             }
             if (textBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth()) { textContent() }
             if (attachmentBlocks.isNotEmpty()) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) { assistantAttachmentContent() }
@@ -6288,6 +6412,7 @@ private fun AssistantGenerationStatus(
     waitingPreview: com.nanzhufeng.ai.domain.AssistantWaitingPreview?,
     hasPartialText: Boolean,
     isRetrying: Boolean,
+    phaseOverride: String? = null,
 ) {
     val pulse by rememberInfiniteTransition(label = "assistant-generation").animateFloat(
         initialValue = 0.55f,
@@ -6309,14 +6434,6 @@ private fun AssistantGenerationStatus(
             ).semantics { liveRegion = LiveRegionMode.Polite },
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (isRetrying) {
-                Text(
-                    "正在重新生成",
-                    color = AccentOrange,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
             Text(
                 preview.preface,
                 color = BodyText,
@@ -6345,7 +6462,7 @@ private fun AssistantGenerationStatus(
     ) {
         CircularProgressIndicator(color = AccentOrange, strokeWidth = 2.dp, modifier = Modifier.size(14.dp).graphicsLayer(alpha = pulse))
         Text(
-            if (isRetrying) "正在重新生成…" else "南枫 AI 正在继续生成…",
+            phaseOverride ?: if (isRetrying) "正在重新生成…" else "南枫 AI 正在继续生成…",
             color = SecondaryText.copy(alpha = pulse),
             style = MaterialTheme.typography.bodySmall,
         )
@@ -6354,8 +6471,8 @@ private fun AssistantGenerationStatus(
 
 /** Durable in-transcript failure feedback; it remains visible after broadcasts, reloads and restarts. */
 @Composable
-private fun AssistantGenerationFailure(safeErrorCode: String?) {
-    val detail = safeErrorCode
+private fun AssistantGenerationFailure(safeErrorCode: String?, onRetry: (() -> Unit)? = null, detailOverride: String? = null) {
+    val detail = detailOverride ?: safeErrorCode
         ?.let { raw -> runCatching { NormalChatOpenRouterExecutor.Code.valueOf(raw) }.getOrNull() }
         ?.let { code -> normalChatResultLabel(code, sent = true) }
         ?: "本次回答未完成；没有保存为空白的完整回答。你可以检查模型与联网设置后重试。"
@@ -6376,8 +6493,11 @@ private fun AssistantGenerationFailure(safeErrorCode: String?) {
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Text("回答未完成", color = ErrorRed, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Text(if(safeErrorCode=="USER_CANCELLED") "已停止生成" else "回答未完成", color = ErrorRed, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
             Text(detail, color = BodyText, style = MaterialTheme.typography.bodySmall)
+            onRetry?.let { retry ->
+                TextButton(onClick = retry) { Text("重试") }
+            }
         }
     }
 }
@@ -6432,6 +6552,7 @@ private fun AssistantMessageActionRow(
     // label without estimate provenance and rounds only this rendered amount; settings and the
     // cost ledger keep their full source-qualified accounting label.
     val cost = assistantFooterCostDisplay(transcript.metadata.costLabel)
+        ?: if (transcript.message.deliveryState in setOf(com.nanzhufeng.ai.domain.MessageDeliveryState.COMPLETE, com.nanzhufeng.ai.domain.MessageDeliveryState.FAILED)) "金额未知" else null
     val answerInformation = contextSelections.answerInformationDisclosure(responseAttributions)
     var answerInformationVisible by remember(transcript.message.messageId) { mutableStateOf(false) }
     val metadataStyle = MaterialTheme.typography.labelSmall
@@ -6512,24 +6633,26 @@ private fun AssistantMessageActionRow(
                 ).size.width
                 val costOnOwnLine = cost != null && inlineWidth > with(LocalDensity.current) { maxWidth.roundToPx() }
 
-                Column(Modifier.fillMaxWidth()) {
-                    Text(
-                        text = if (costOnOwnLine) primaryMetadata else inlineMetadata,
-                        color = SecondaryText,
-                        style = metadataStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (costOnOwnLine) {
+                SelectionContainer {
+                    Column(Modifier.fillMaxWidth()) {
                         Text(
-                            text = cost.orEmpty(),
-                            modifier = Modifier.fillMaxWidth(),
+                            text = if (costOnOwnLine) primaryMetadata else inlineMetadata,
                             color = SecondaryText,
                             style = metadataStyle,
-                            textAlign = TextAlign.End,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (costOnOwnLine) {
+                            Text(
+                                text = cost.orEmpty(),
+                                modifier = Modifier.fillMaxWidth(),
+                                color = SecondaryText,
+                                style = metadataStyle,
+                                textAlign = TextAlign.End,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
@@ -6624,7 +6747,7 @@ private fun AnswerContextSourceRow(source: AnswerContextSourceGroup) {
 
 /** The footer is a reading aid, not a technical route ledger. */
 private fun assistantFooterModelName(label: String?): String? = label
-    ?.let { com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
+    ?.let { if (it.endsWith(" · RC")) it else com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
     ?.trim()
     ?.takeIf { it.isNotBlank() }
 
@@ -6802,17 +6925,17 @@ private fun EditUserMessageDialog(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                         TextButton(
                             onClick = onDismiss,
-                            modifier = Modifier.width(44.dp).height(30.dp),
+                            modifier = Modifier.width(singleLineControlWidth(44.dp, "取消", 13.sp)).height(singleLineControlHeight(30.dp, 13.sp)),
                             shape = RoundedCornerShape(15.dp),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                        ) { Text("取消", fontSize = 13.sp) }
+                        ) { Text("取消", style = centeredControlTextStyle(13.sp), maxLines = 1) }
                         Button(
                             onClick = onCreateBranch,
                             enabled = value.isNotBlank(),
-                            modifier = Modifier.width(76.dp).height(32.dp),
+                            modifier = Modifier.width(singleLineControlWidth(76.dp, "创建分支", 13.sp)).height(singleLineControlHeight(32.dp, 13.sp)),
                             shape = RoundedCornerShape(16.dp),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                        ) { Text("创建分支", fontSize = 13.sp) }
+                        ) { Text("创建分支", style = centeredControlTextStyle(13.sp), maxLines = 1) }
                     }
                 }
             }
@@ -6929,8 +7052,8 @@ private fun CompactConversationRenameDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        TextButton(onClick = onDismiss, modifier = Modifier.height(34.dp), shape = RoundedCornerShape(17.dp)) { Text("取消") }
-                        Button(onClick = onConfirm, modifier = Modifier.height(32.dp), shape = RoundedCornerShape(16.dp)) { Text("保存") }
+                        TextButton(onClick = onDismiss, modifier = Modifier.height(singleLineControlHeight(34.dp, MaterialTheme.typography.labelLarge.fontSize, 16.dp)), shape = RoundedCornerShape(17.dp)) { Text("取消", style = centeredControlTextStyle(MaterialTheme.typography.labelLarge.fontSize), maxLines = 1) }
+                        Button(onClick = onConfirm, modifier = Modifier.height(singleLineControlHeight(32.dp, MaterialTheme.typography.labelLarge.fontSize, 16.dp)), shape = RoundedCornerShape(16.dp)) { Text("保存", style = centeredControlTextStyle(MaterialTheme.typography.labelLarge.fontSize), maxLines = 1) }
                     }
                 }
             }
@@ -7302,11 +7425,11 @@ private val UserBubbleTypography = ConversationMessageTypography(
     body = 15.sp, bodyLineHeight = 23.sp, note = 13.sp, noteLineHeight = 19.sp, list = 15.sp, listLineHeight = 23.sp,
 )
 
-/** File preview hierarchy: Markdown remains legible without page-sized heading jumps. */
+/** A file reads like a document: its first Markdown heading is the visible document title. */
 private val TextPreviewTypography = ConversationMessageTypography(
-    headingOne = 19.sp, headingTwo = 18.sp, headingMinor = 17.sp,
-    headingOneLineHeight = 27.sp, headingTwoLineHeight = 26.sp, headingMinorLineHeight = 25.sp,
-    headingOneWeight = FontWeight.SemiBold, headingTwoWeight = FontWeight.SemiBold, headingMinorWeight = FontWeight.Medium,
+    headingOne = 25.sp, headingTwo = 21.sp, headingMinor = 18.sp,
+    headingOneLineHeight = 34.sp, headingTwoLineHeight = 29.sp, headingMinorLineHeight = 26.sp,
+    headingOneWeight = FontWeight.Bold, headingTwoWeight = FontWeight.SemiBold, headingMinorWeight = FontWeight.SemiBold,
     body = 15.sp, bodyLineHeight = 23.sp, note = 13.sp, noteLineHeight = 20.sp, list = 15.sp, listLineHeight = 23.sp,
 )
 
@@ -7795,10 +7918,20 @@ private fun inlineText(
     appendSourceShortcut: Boolean = false,
     suppressEmphasis: Boolean = false,
     highlightQuery: String? = null,
+    emphasis: List<com.nanzhufeng.ai.domain.ReplyEmphasisSelection> = emptyList(),
+    darkEmphasis: Boolean = false,
 ) = buildAnnotatedString {
     spans.forEach { span -> when (span) {
         is InlinePresentation.Text -> appendChatGptImportedText(span.value)
-        is InlinePresentation.Strong -> withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) { appendChatGptImportedText(span.value) }
+        is InlinePresentation.Strong -> {
+            val tone = emphasis.firstOrNull { it.span === span }?.tone
+            val emphasisColor = when (tone) {
+                com.nanzhufeng.ai.domain.ReplyEmphasisTone.IMPORTANT -> if (darkEmphasis) Color(0xFF9AC8BC) else Color(0xFF2C655D)
+                com.nanzhufeng.ai.domain.ReplyEmphasisTone.CAUTION -> if (darkEmphasis) Color(0xFFE4B182) else Color(0xFF92522E)
+                null -> Color.Unspecified
+            }
+            withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, color = emphasisColor)) { appendChatGptImportedText(span.value) }
+        }
         is InlinePresentation.Emphasis -> if (suppressEmphasis) appendChatGptImportedText(span.value) else withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) { appendChatGptImportedText(span.value) }
         is InlinePresentation.Code -> {
             pushStringAnnotation(InlineCodeChipAnnotationTag, span.value)
@@ -7883,6 +8016,8 @@ private fun InlinePresentationText(
         appendSourceShortcut = sources.isNotEmpty(),
         suppressEmphasis = suppressEmphasis,
         highlightQuery = findQuery,
+        emphasis = LocalReplyEmphasisPlan.current,
+        darkEmphasis = darkCode,
     )
     var textLayoutResult by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
     val findTarget = LocalConversationFindTarget.current
@@ -8047,7 +8182,7 @@ private fun ImportedChatGptMarkerChip(label: String) {
         contentColor = SecondaryText,
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, NeutralBorder.copy(alpha = 0.58f)),
-        modifier = Modifier.height(28.dp),
+        modifier = Modifier.heightIn(min = 28.dp),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 9.dp),
@@ -8055,7 +8190,7 @@ private fun ImportedChatGptMarkerChip(label: String) {
             horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Icon(Icons.Rounded.Language, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(15.dp))
-            Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(label, style = centeredControlTextStyle(MaterialTheme.typography.labelSmall.fontSize, MaterialTheme.typography.labelSmall), fontWeight = FontWeight.Medium, maxLines = 1)
         }
     }
 }
@@ -8135,7 +8270,7 @@ private fun SourceLinkShortcut(sources: List<InlinePresentation.Link>) {
         contentColor = BodyText,
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, NeutralBorder.copy(alpha = 0.58f)),
-        modifier = Modifier.height(28.dp).semantics { contentDescription = "打开 ${sources.size} 个来源网站" },
+        modifier = Modifier.heightIn(min = 28.dp).semantics { contentDescription = "打开 ${sources.size} 个来源网站" },
     ) {
         Row(
             modifier = Modifier.padding(start = 5.dp, end = 9.dp),
@@ -8143,7 +8278,7 @@ private fun SourceLinkShortcut(sources: List<InlinePresentation.Link>) {
             horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             if (sources.size > 1) OverlappingSourceWebsiteGlyphs(sources) else SourceWebsiteGlyph(primary)
-            Text(sourceShortcutLabel(sources), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(sourceShortcutLabel(sources), style = centeredControlTextStyle(scaledConversationTextUnit(12.sp)), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
     if (visible) SourceLinksDialog(sources = sources, onDismiss = { visible = false })
@@ -8277,7 +8412,7 @@ private fun DraftComposer(
     }
     val canStopRuntime = state.runtime?.isTerminal == false
     val canSubmit = !state.isSending && (state.surface != com.nanzhufeng.ai.domain.ConversationSurface.CHAT || state.normalChatRouting != null) && (draft.text.isNotBlank() || draft.attachments.isNotEmpty())
-    val manualId = state.p6gConversationOverride?.modelId ?: state.p6gGlobalDefault.modelId
+    val manualId = com.nanzhufeng.ai.domain.effectiveComposerModelId(state.p6gConversationOverride, state.p6gGlobalDefault)
     val selectedPresets = state.normalChatRouting?.presets(draft, manualId)
         ?: com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(manualId).routes
     val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
@@ -8286,6 +8421,7 @@ private fun DraftComposer(
     } else {
         composerModelDisplayLabel(selectedPresets)
     }
+    Column {
     ConversationComposerDock(
         value = draft.text,
         onValueChange = onDraftChanged,
@@ -8319,11 +8455,13 @@ private fun DraftComposer(
     ) {
         ComposerModelEntry(
             label = modelLabel,
+            relayCore = selectedPresets.any { com.nanzhufeng.ai.domain.RelayCoreModels.spec(it) != null },
             enabled = !state.isSending,
             onClick = onToggleModel,
             onAnchorChanged = onModelAnchorChanged,
         )
         ComposerSendButton(onClick = if (canStopRuntime) onStop else onSubmit, enabled = canStopRuntime || canSubmit, isSending = state.isSending, showStop = canStopRuntime, contentDescription = "发送消息")
+    }
     }
 }
 
@@ -8331,6 +8469,7 @@ private fun DraftComposer(
 @Composable
 private fun ComposerModelEntry(
     label: String,
+    relayCore: Boolean = false,
     enabled: Boolean = true,
     onClick: () -> Unit,
     onAnchorChanged: (androidx.compose.ui.geometry.Rect) -> Unit,
@@ -8355,23 +8494,42 @@ private fun ComposerModelEntry(
                 onClick = onClick,
                 onLongClick = null,
             )
-            .semantics { contentDescription = "选择模型：$label" },
+            .semantics { contentDescription = "选择模型：$label" + if (relayCore) "，RelayCore" else "" },
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().height(36.dp),
+            modifier = Modifier.fillMaxWidth().height(singleLineControlHeight(36.dp, 12.sp)),
             shape = shape,
             color = if (pressed) NeutralSystemSurface else Color.Transparent,
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text(
-                    label,
-                    fontSize = 13.sp,
-                    fontFamily = ComposerModelRoundedBoldFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    modifier = Modifier.widthIn(max = modelWidth),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        label,
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = centeredControlTextStyle(12.sp),
+                        fontFamily = ComposerModelRoundedBoldFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (relayCore) {
+                        Text(
+                            "RC",
+                            color = SecondaryText,
+                            fontSize = 7.sp,
+                            lineHeight = 9.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.align(Alignment.Top).padding(start = 2.dp).offset(y = (-3).dp)
+                                .semantics { hideFromAccessibility() },
+                        )
+                    }
+                }
             }
         }
     }
@@ -8623,11 +8781,12 @@ private fun ComposerMenuOverlay(
     onSelectModel: ((String?) -> Unit)? = null,
 ) {
     if (menu == ComposerMenu.NONE) return
+    var relayCorePage by remember(menu) { mutableStateOf(false) }
     var selectedSlot by remember(menu) { mutableStateOf<com.nanzhufeng.ai.domain.ComposerModelSlot?>(null) }
     var styleMenuVisible by remember(menu) { mutableStateOf(false) }
     val onOverlayBack: () -> Unit = {
         when {
-            menu == ComposerMenu.MODEL && selectedSlot != null -> selectedSlot = null
+            menu == ComposerMenu.MODEL && (selectedSlot != null || relayCorePage) -> { selectedSlot = null; relayCorePage = false }
             menu == ComposerMenu.ATTACHMENTS && styleMenuVisible -> styleMenuVisible = false
             else -> onDismiss()
         }
@@ -8641,8 +8800,10 @@ private fun ComposerMenuOverlay(
         ComposerMenu.NONE -> null
     } ?: return
     val density = LocalDensity.current
-    val currentChoices = selectedSlot?.let { com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.groups[it].orEmpty() }.orEmpty()
+    val currentChoices = (if (relayCorePage) com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.relayCore.sortedBy { it.slot != com.nanzhufeng.ai.domain.ComposerModelSlot.DAILY } else selectedSlot?.let { com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.groups[it].orEmpty() }.orEmpty())
+        .filter { choice -> modelOptions.any { it.first == choice.id } }
     val normalizedSelectedChoice = com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.choice(selectedModelId)
+    val activeRelayCore = normalizedSelectedChoice in com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.relayCore
     val activeModelSlot = normalizedSelectedChoice.slot
     val deepSeekPricingPeriod by produceState(
         initialValue = com.nanzhufeng.ai.domain.DeepSeekPricingWindow.periodAt(java.time.Instant.now()),
@@ -8657,13 +8818,15 @@ private fun ComposerMenuOverlay(
             )
         }
     }
-    val menuWidth = if (menu == ComposerMenu.MODEL) 336.dp else 280.dp
+    val viewportWidthPx = LocalWindowInfo.current.containerSize.width
+    val availableMenuWidth = with(density) { viewportWidthPx.toDp() } - 24.dp
+    val menuWidth = minOf(if (menu == ComposerMenu.MODEL) 336.dp else 280.dp, availableMenuWidth.coerceAtLeast(1.dp))
     // The root needs room for one automatic row and the Daily/Deep task rows. A child list uses the same
     // header plus only the rows it actually owns, so it never has a blank lower tray.
-    val modelPickerContentHeight = if (selectedSlot == null) {
+    val modelPickerContentHeight = if (selectedSlot == null && !relayCorePage) {
         ComposerModelPickerRootContentHeight
     } else {
-        32.dp + 72.dp * currentChoices.size.toFloat()
+        (if (relayCorePage) 64.dp else 32.dp) + 72.dp * currentChoices.size.toFloat()
     }
     val menuHeight = if (menu == ComposerMenu.ATTACHMENTS) {
         if (styleMenuVisible) {
@@ -8680,7 +8843,6 @@ private fun ComposerMenuOverlay(
     val verticalGap = with(density) { 8.dp.toPx() }
     val widthPx = with(density) { menuWidth.toPx() }
     val heightPx = with(density) { menuHeight.toPx() }
-    val viewportWidthPx = LocalWindowInfo.current.containerSize.width
     val x = when (menu) {
         ComposerMenu.ATTACHMENTS -> maxOf(horizontalPadding, anchor.left)
         // The model affordance lives on the composer's trailing side.  Its layered root and
@@ -8745,22 +8907,22 @@ private fun ComposerMenuOverlay(
                         )
                     }
                 }
-            } else TransientMenuTextScale {
+            } else ComposerModelPickerTextScale {
                 Column {
                     ComposerModelPickerHeader(
-                    title = selectedSlot?.label ?: "选择模型",
+                    title = if (relayCorePage) "RelayCore" else selectedSlot?.label ?: "选择模型",
                     onBackOrClose = onOverlayBack,
-                    isRoot = selectedSlot == null,
+                    isRoot = selectedSlot == null && !relayCorePage,
                 )
                     Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = modelPickerContentHeight)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(remember(selectedSlot, relayCorePage) { androidx.compose.foundation.ScrollState(0) })
                         .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                if (selectedSlot == null) {
+                if (selectedSlot == null && !relayCorePage) {
                     val autoDetail = modelOptions.firstOrNull()?.second ?: "Auto · DeepSeek V4.1 Flash"
                     ComposerModelPickerSectionLabel("自动选择")
                     ComposerModelOverlayRow(
@@ -8784,17 +8946,30 @@ private fun ComposerMenuOverlay(
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.MULTIMODAL -> "图像、视频与 PDF"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.AUTO -> ""
                             },
-                            selected = slot == activeModelSlot,
-                            showNext = slot != activeModelSlot,
+                            selected = !activeRelayCore && slot == activeModelSlot,
+                            showNext = activeRelayCore || slot != activeModelSlot,
                             onClick = { selectedSlot = slot },
                         )
                     }
+                    if (com.nanzhufeng.ai.domain.ComposerModelRoutingCatalog.relayCore.any { choice -> modelOptions.any { it.first == choice.id } }) {
+                    ComposerModelOverlayRow(
+                        label = "RelayCore",
+                        brandProvider = com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_CLAUDE,
+                        detail = "日常与深度模型",
+                        selected = activeRelayCore,
+                        showNext = !activeRelayCore,
+                        onClick = { relayCorePage = true },
+                    )
+                    }
                 } else {
-                    ComposerModelPickerSectionLabel("选择具体模型")
+                    if (!relayCorePage) ComposerModelPickerSectionLabel("选择具体模型")
                     val webSearchStateLabel = conversationWebSearchEnabled?.let { enabled ->
                         if (enabled) "实时联网" else "未联网"
                     }
-                    currentChoices.forEach { choice ->
+                    currentChoices.forEachIndexed { index, choice ->
+                        if (relayCorePage && (index == 0 || currentChoices[index - 1].slot != choice.slot)) {
+                            ComposerModelPickerSectionLabel(choice.slot.label)
+                        }
                         val providerId = com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.providerFor(choice.routes.single())
                         val isDeepSeek = providerId == com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK
                         val webSearchDetail = webSearchStateLabel?.let {
@@ -8803,16 +8978,20 @@ private fun ComposerMenuOverlay(
                                 com.nanzhufeng.ai.domain.ProviderId.QWEN -> "千问 · $webSearchStateLabel"
                                 com.nanzhufeng.ai.domain.ProviderId.DEEPSEEK -> null
                                 com.nanzhufeng.ai.domain.ProviderId.ZHIPU -> "智谱 · $webSearchStateLabel"
+                                com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_CLAUDE,
+                                com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_GEMINI,
+                                com.nanzhufeng.ai.domain.ProviderId.RELAYCORE_GPT -> com.nanzhufeng.ai.domain.RelayCoreModels.spec(choice.routes.single())?.pickerDetail(conversationWebSearchEnabled == true)
                                 com.nanzhufeng.ai.domain.ProviderId.MOCK -> null
                             }
                         }
                         ComposerModelOverlayRow(
                             label = choice.label,
+                            brandPreset = choice.routes.single(),
                             detail = if (isDeepSeek && webSearchStateLabel != null) {
                                 "${deepSeekPricingPeriod.pickerLabel} · $webSearchStateLabel"
                             } else if (isDeepSeek) {
                                 deepSeekPricingPeriod.pickerLabel
-                            } else webSearchDetail ?: when (choice.slot) {
+                            } else webSearchDetail ?: com.nanzhufeng.ai.domain.RelayCoreModels.spec(choice.routes.single())?.pickerDetail(conversationWebSearchEnabled == true) ?: when (choice.slot) {
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.COMPARE -> "两个模型并行回答，便于对照"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.DAILY -> "适合日常问答与轻量任务"
                                 com.nanzhufeng.ai.domain.ComposerModelSlot.DEEP -> "适合复杂推理与专业分析"
@@ -8874,6 +9053,8 @@ private fun ComposerModelPickerSectionLabel(label: String) {
 private fun ComposerModelOverlayRow(
     label: String,
     detail: String,
+    brandPreset: com.nanzhufeng.ai.domain.ModelPresetId? = null,
+    brandProvider: com.nanzhufeng.ai.domain.ProviderId? = null,
     selected: Boolean = false,
     showNext: Boolean = false,
     detailModelName: String? = null,
@@ -8892,8 +9073,10 @@ private fun ComposerModelOverlayRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (brandPreset != null) ModelPresetBrand(brandPreset, modifier = Modifier.size(24.dp))
+            else if (brandProvider != null) ModelProviderBrand(brandProvider, platform = true, modifier = Modifier.size(24.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(label, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(label, fontWeight = FontWeight.Bold, maxLines = if (brandPreset != null) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
                 if (detail.isNotBlank()) Text(
                     detailModelName?.let { modelNameAnnotatedTextIn(detail, it) }
                         ?: emphasizedDetailPrefix
@@ -8927,7 +9110,7 @@ private fun ComposerOverlayAction(icon: ImageVector, label: String, onClick: () 
     TextButton(
         onClick = onClick,
         colors = ButtonDefaults.textButtonColors(contentColor = BodyText),
-        modifier = Modifier.fillMaxWidth().height(52.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         shape = RoundedCornerShape(0.dp),
     ) {
         ComposerMenuIconSurface(icon = icon, tint = BodyText)
@@ -9606,7 +9789,7 @@ private fun AttachmentPopupAction(
 ) {
     TextButton(
         onClick = onClick,
-        modifier = modifier.height(38.dp),
+        modifier = modifier.height(singleLineControlHeight(38.dp, MaterialTheme.typography.labelMedium.fontSize)),
         shape = RoundedCornerShape(19.dp),
         colors = ButtonDefaults.textButtonColors(
             containerColor = NeutralSystemSurface,
@@ -9616,7 +9799,7 @@ private fun AttachmentPopupAction(
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium)
+        Text(label, style = centeredControlTextStyle(MaterialTheme.typography.labelMedium.fontSize, MaterialTheme.typography.labelMedium), maxLines = 1)
     }
 }
 
@@ -9727,7 +9910,7 @@ private fun FilePreviewTopActions(
             }
             Button(
                 onClick = onShare,
-                modifier = Modifier.width(78.dp).height(48.dp),
+                modifier = Modifier.width(78.dp).heightIn(min = 48.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
@@ -9793,7 +9976,7 @@ private fun AudioPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShar
             }
             Button(
                 onClick = onShare,
-                modifier = Modifier.width(68.dp).height(44.dp),
+                modifier = Modifier.width(68.dp).heightIn(min = 44.dp),
                 shape = RoundedCornerShape(22.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
@@ -9807,48 +9990,57 @@ private fun AudioPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShar
     }
 }
 
-/** Text reading keeps a smaller persistent action group so the full-screen title still breathes. */
+/** Text reading keeps file actions in one labeled menu. */
 @Composable
-private fun TextPreviewTopActions(dark: Boolean, onDownload: () -> Unit, onShare: () -> Unit, onCopy: () -> Boolean, onClose: () -> Unit, showTransferActions: Boolean = true, showCopy: Boolean = true) {
-    val container = if (dark) Color.White.copy(alpha = 0.16f) else Color(0xFFF1F4F2)
+private fun TextPreviewTopActions(dark: Boolean, fileInfo: String = "", onDownload: () -> Unit, onShare: () -> Unit, onCopy: () -> Boolean, onClose: (() -> Unit)? = null, showTransferActions: Boolean = true, showCopy: Boolean = true) {
+    val container = if (dark) Color.White.copy(alpha = 0.16f) else Color.White
     val content = if (dark) Color.White else BodyText
+    var menuExpanded by remember { mutableStateOf(false) }
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) {
         if (copied) {
             delay(1_200)
             copied = false
+            menuExpanded = false
         }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (showTransferActions) {
-            IconButton(onClick = onDownload, modifier = Modifier.size(40.dp)) {
-                Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
-                    Icon(Icons.Rounded.FileDownload, contentDescription = "下载文件", tint = content, modifier = Modifier.padding(10.dp).size(20.dp))
-                }
-            }
-            Button(
-                onClick = onShare,
-                modifier = Modifier.width(62.dp).height(40.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-            ) { Text("分享", style = MaterialTheme.typography.labelMedium) }
-        }
-        if (showCopy) {
-            IconButton(onClick = { if (onCopy()) copied = true }, modifier = Modifier.size(40.dp)) {
-                Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
-                        contentDescription = if (copied) "已复制" else "复制全文",
-                        tint = if (copied) BrandGreen else content,
-                        modifier = Modifier.padding(10.dp).size(20.dp),
-                    )
-                }
+    Box {
+        Surface(onClick = { copied = false; menuExpanded = true }, color = container, contentColor = content, shape = CircleShape, modifier = Modifier.size(48.dp)) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.MoreVert, contentDescription = "文件菜单", modifier = Modifier.size(24.dp))
             }
         }
-        IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-            Surface(color = container, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
-                Icon(Icons.Rounded.Close, contentDescription = "关闭文件预览", tint = content, modifier = Modifier.padding(10.dp).size(20.dp))
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+            containerColor = ForegroundSurface,
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            if (showTransferActions) {
+                DropdownMenuItem(
+                    text = { Text("下载文件") },
+                    leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
+                    onClick = { menuExpanded = false; onDownload() },
+                )
+                DropdownMenuItem(
+                    text = { Text("分享文件") },
+                    leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null) },
+                    onClick = { menuExpanded = false; onShare() },
+                )
+            }
+            if (showCopy) DropdownMenuItem(
+                text = { Text(if (copied) "已复制" else "复制全文") },
+                leadingIcon = { Icon(if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy, contentDescription = if (copied) "已复制" else "复制全文", tint = if (copied) BrandGreen else content) },
+                onClick = { if (onCopy()) copied = true },
+            )
+            if (onClose != null) DropdownMenuItem(
+                text = { Text("关闭预览") },
+                leadingIcon = { Icon(Icons.Rounded.Close, contentDescription = null) },
+                onClick = { menuExpanded = false; onClose() },
+            )
+            if (fileInfo.isNotBlank()) {
+                HorizontalDivider()
+                Text(fileInfo, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), color = SecondaryText, style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -10089,8 +10281,9 @@ private fun rememberLocalPlaybackFile(
 }
 
 @Composable
-private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onClose: (Long) -> Unit) {
+private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onClose: (Long) -> Unit, onSavePosition: (AttachmentId, Long) -> Unit) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val requestAttachmentTransfer = LocalAttachmentTransferRequest.current
     var videoView by remember(preview.id.value) { mutableStateOf<VideoView?>(null) }
     var isPlaying by rememberSaveable(preview.id.value) { mutableStateOf(false) }
@@ -10101,7 +10294,9 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
     // Dragging the timeline previews a transient position. The actual VideoView is sought only
     // on release, so a finger move never turns into dozens of decoder seeks and dropped frames.
     var scrubPositionMillis by rememberSaveable(preview.id.value) { mutableStateOf<Long?>(null) }
+    var timelineBounds by remember(preview.id.value) { mutableStateOf<VideoTimelineTrackBounds?>(null) }
     val localFile = rememberLocalPlaybackFile(preview.id, ".mp4", preview.bytes, preview.open)
+    fun persistPosition(position: Long) = onSavePosition(preview.id, position)
     fun showControls() {
         chrome.show()
     }
@@ -10114,6 +10309,8 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
         videoView?.let { view ->
             if (view.isPlaying) {
                 view.pause()
+                positionMillis = view.currentPosition.toLong().coerceAtLeast(0L)
+                persistPosition(positionMillis)
                 isPlaying = false
             } else startPlayback()
             showControls()
@@ -10123,6 +10320,7 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
         val safePosition = position.coerceIn(0L, durationMillis.coerceAtLeast(0L))
         videoView?.seekTo(safePosition.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
         positionMillis = safePosition
+        persistPosition(safePosition)
         showControls()
     }
     fun previewTimelineSeek(position: Long) {
@@ -10133,13 +10331,38 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
         scrubPositionMillis?.let(::seekTo)
         scrubPositionMillis = null
     }
-    fun closeVideo() = onClose(videoView?.currentPosition?.toLong() ?: preview.positionMillis)
+    fun closeVideo() = onClose(positionMillis)
+    DisposableEffect(lifecycleOwner, videoView, preview.id.value) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                videoView?.let { view ->
+                    if (view.isPlaying && view.duration > 0) positionMillis = view.currentPosition.toLong().coerceAtLeast(0L)
+                    view.pause()
+                }
+                isPlaying = false
+                persistPosition(positionMillis)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (videoView != null) persistPosition(positionMillis)
+        }
+    }
     LaunchedEffect(videoView) {
+        var lastSavedAt = android.os.SystemClock.elapsedRealtime()
         while (videoView != null) {
             videoView?.let { view ->
                 isPlaying = view.isPlaying
-                if (scrubPositionMillis == null) positionMillis = view.currentPosition.toLong().coerceAtLeast(0L)
-                durationMillis = view.duration.toLong().coerceAtLeast(0L)
+                if (view.duration > 0) {
+                    if (scrubPositionMillis == null) positionMillis = view.currentPosition.toLong().coerceAtLeast(0L)
+                    durationMillis = view.duration.toLong()
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (view.isPlaying && now - lastSavedAt >= 2_000L) {
+                        persistPosition(positionMillis)
+                        lastSavedAt = now
+                    }
+                }
             }
             delay(250)
         }
@@ -10154,14 +10377,16 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                         VideoView(androidContext).also { view ->
                             view.setVideoURI(Uri.fromFile(localFile))
                             view.setOnPreparedListener { ready ->
-                                ready.seekTo(preview.positionMillis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+                                val restored = positionMillis.coerceIn(0L, ready.duration.toLong().coerceAtLeast(0L))
+                                ready.seekTo(restored.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                                 durationMillis = ready.duration.toLong().coerceAtLeast(0L)
-                                positionMillis = preview.positionMillis.coerceAtMost(durationMillis)
-                                // Opening a local video is the explicit play action.  Start only
-                                // after the verified local source is prepared, so a video never
-                                // needs a second tap before it begins (including when resuming).
-                                ready.start()
-                                isPlaying = true
+                                positionMillis = restored
+                                // A file can finish preparing after the Activity has stopped.
+                                // Restore its position, but never begin playback in the background.
+                                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                                    ready.start()
+                                    isPlaying = true
+                                }
                                 showControls()
                             }
                             view.setOnCompletionListener { isPlaying = false; showControls() }
@@ -10176,6 +10401,7 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                         positionMillis = scrubPositionMillis ?: positionMillis,
                         durationMillis = durationMillis,
                         isScrubbing = scrubPositionMillis != null,
+                        onTimelineBounds = { timelineBounds = it },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
@@ -10205,6 +10431,8 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                             val minimumEdgeSwipePx = 72f * density
                             val centralRadiusPx = 42f * density
                             val bottomButtonRadiusPx = 36f * density
+                            val timelineHorizontalSlopPx = 24f * density
+                            val timelineVerticalSlopPx = 20f * density
                             android.view.View(androidContext).apply {
                                 isClickable = true
                                 setOnClickListener {
@@ -10213,25 +10441,39 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                                 var edgeStartX: Float? = null
                                 var edgeExitHandled = false
                                 var timelineScrubbing = false
+                                val windowLocation = IntArray(2)
+                                fun onCentralButton(event: android.view.MotionEvent): Boolean =
+                                    kotlin.math.hypot(event.x - width / 2f, event.y - height / 2f) <= centralRadiusPx
+                                fun onBottomButton(event: android.view.MotionEvent): Boolean =
+                                    kotlin.math.hypot(event.x - width / 2f, event.y - (height - 58f * density)) <= bottomButtonRadiusPx
+                                fun timelineWindowX(event: android.view.MotionEvent): Float {
+                                    getLocationInWindow(windowLocation)
+                                    return windowLocation[0] + event.x
+                                }
+                                fun onTimeline(event: android.view.MotionEvent): Boolean {
+                                    val bounds = timelineBounds ?: return false
+                                    getLocationInWindow(windowLocation)
+                                    return bounds.contains(
+                                        windowLocation[0] + event.x,
+                                        windowLocation[1] + event.y,
+                                        timelineHorizontalSlopPx,
+                                        timelineVerticalSlopPx,
+                                    )
+                                }
                                 fun timelinePosition(event: android.view.MotionEvent): Long =
-                                    (event.x / width.coerceAtLeast(1) * durationMillis).toLong()
+                                    timelineBounds?.positionAt(timelineWindowX(event), durationMillis) ?: positionMillis
                                 val gestures = android.view.GestureDetector(androidContext, object : android.view.GestureDetector.SimpleOnGestureListener() {
                                     override fun onDown(event: android.view.MotionEvent): Boolean = true
                                     override fun onSingleTapConfirmed(event: android.view.MotionEvent): Boolean {
-                                        val centerX = width / 2f
-                                        val centerY = height / 2f
                                         val onCloseButton = event.x <= 76f * density && event.y <= 76f * density
                                         val onDownloadButton = event.x in (width - 160f * density)..(width - 98f * density) && event.y <= 76f * density
                                         val onShareButton = event.x >= width - 98f * density && event.y <= 76f * density
-                                        val onCentralButton = kotlin.math.hypot(event.x - centerX, event.y - centerY) <= centralRadiusPx
-                                        val onBottomButton = kotlin.math.hypot(event.x - centerX, event.y - (height - 58f * density)) <= bottomButtonRadiusPx
-                                        val onTimeline = event.y in (height - 158f * density)..(height - 108f * density)
                                         when {
                                             onCloseButton && chrome.isVisible() -> closeVideo()
                                             onDownloadButton && chrome.isVisible() -> requestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD)
                                             onShareButton && chrome.isVisible() -> requestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE)
-                                            onCentralButton || onBottomButton -> togglePlayback()
-                                            onTimeline && durationMillis > 0L -> seekTo((event.x / width.coerceAtLeast(1) * durationMillis).toLong())
+                                            onCentralButton(event) || onBottomButton(event) -> togglePlayback()
+                                            chrome.isVisible() && onTimeline(event) && durationMillis > 0L -> seekTo(timelinePosition(event))
                                             else -> performClick()
                                         }
                                         return true
@@ -10267,7 +10509,11 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
                                             edgeStartX = event.x
                                             edgeExitHandled = false
                                             timelineScrubbing = chrome.isVisible() && durationMillis > 0L &&
-                                                event.y in (height - 158f * density)..(height - 108f * density)
+                                                onTimeline(event) && !onBottomButton(event) && !onCentralButton(event)
+                                            if (timelineScrubbing) {
+                                                previewTimelineSeek(timelinePosition(event))
+                                                return@setOnTouchListener true
+                                            }
                                         }
                                         android.view.MotionEvent.ACTION_MOVE -> {
                                             if (timelineScrubbing) {
@@ -10315,7 +10561,7 @@ private fun VideoPreviewDialog(preview: ConversationAttachmentVideoPreview, onCl
 
 /** Drawn beneath the single gesture owner, so edge swipes always leave the viewer first. */
 @Composable
-private fun VideoControlOverlay(isPlaying: Boolean, positionMillis: Long, durationMillis: Long, isScrubbing: Boolean, modifier: Modifier = Modifier) {
+private fun VideoControlOverlay(isPlaying: Boolean, positionMillis: Long, durationMillis: Long, isScrubbing: Boolean, onTimelineBounds: (VideoTimelineTrackBounds) -> Unit, modifier: Modifier = Modifier) {
     val progress = if (durationMillis > 0L) (positionMillis.toFloat() / durationMillis).coerceIn(0f, 1f) else 0f
     Surface(
         color = Color.Black.copy(alpha = 0.44f),
@@ -10331,11 +10577,23 @@ private fun VideoControlOverlay(isPlaying: Boolean, positionMillis: Long, durati
                 Text(formatVideoDuration(positionMillis), color = Color.White, style = MaterialTheme.typography.labelSmall)
                 Text(if (isScrubbing) "松手跳转" else formatVideoDuration(durationMillis), color = Color.White.copy(alpha = 0.82f), style = MaterialTheme.typography.labelSmall)
             }
-            Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).height(18.dp).semantics { contentDescription = "视频播放进度，可左右拖动调整位置" }, contentAlignment = Alignment.CenterStart) {
-                Box(Modifier.fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.38f), CircleShape)) {
-                Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(Color.White, CircleShape))
-                }
-            }
+            Spacer(
+                Modifier.fillMaxWidth().padding(vertical = 14.dp).height(18.dp)
+                    .onGloballyPositioned { coordinates ->
+                        val bounds = coordinates.boundsInWindow()
+                        onTimelineBounds(VideoTimelineTrackBounds(bounds.left, bounds.top, bounds.right, bounds.bottom))
+                    }
+                    .drawBehind {
+                        val centerY = size.height / 2f
+                        val currentX = size.width * progress
+                        val trackWidth = 3.dp.toPx()
+                        drawLine(Color.White.copy(alpha = 0.38f), Offset(0f, centerY), Offset(size.width, centerY), trackWidth, cap = StrokeCap.Round)
+                        drawLine(Color.White, Offset(0f, centerY), Offset(currentX, centerY), trackWidth, cap = StrokeCap.Round)
+                        drawCircle(Color.Black.copy(alpha = 0.52f), radius = 9.dp.toPx(), center = Offset(currentX, centerY))
+                        drawCircle(Color.White, radius = 6.5.dp.toPx(), center = Offset(currentX, centerY))
+                    }
+                    .semantics { contentDescription = "视频播放进度，点击跳转或拖动调整位置" },
+            )
             Surface(
                 color = Color.Black.copy(alpha = 0.56f),
                 shape = CircleShape,
@@ -10522,10 +10780,8 @@ internal fun SharedTextPreviewDialog(
 ) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
-    // A text preview is a reading surface, so its compact top-right actions stay visible.
-    rememberFilePreviewChromeState(preview.id.value, autoHide = false)
     val darkTextPreview = isDarkFilePreviewSurface()
-    val previewSurface = if (darkTextPreview) ForegroundSurface else Color.White
+    val previewSurface = if (darkTextPreview) ForegroundSurface else Color(0xFFF7F8F7)
     val markdownBlocks = remember(preview.id, preview.text) {
         preview.text?.let { text ->
             MessagePresentationRenderer().renderText(
@@ -10546,11 +10802,31 @@ internal fun SharedTextPreviewDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 18.dp, top = 12.dp, end = 14.dp, bottom = 10.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
-                    Text("本地安全文本预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(end = 8.dp))
+                    Surface(
+                        onClick = onClose,
+                        color = if (darkTextPreview) Color.White.copy(alpha = 0.16f) else Color.White,
+                        contentColor = if (darkTextPreview) Color.White else BodyText,
+                        shape = CircleShape,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", modifier = Modifier.size(24.dp))
+                        }
+                    }
+                    Text(
+                        preview.displayName ?: "未命名文件",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = BodyText,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    )
                     TextPreviewTopActions(
                         dark = darkTextPreview,
+                        fileInfo = "${preview.mimeType} · ${formatAttachmentBytes(preview.byteCount)}",
                         onDownload = { onRequestAttachmentTransfer(preview.id, AttachmentTransferAction.DOWNLOAD) },
                         onShare = { onRequestAttachmentTransfer(preview.id, AttachmentTransferAction.SHARE) },
                         onCopy = {
@@ -10559,7 +10835,6 @@ internal fun SharedTextPreviewDialog(
                                 true
                             } ?: false
                         },
-                        onClose = onClose,
                         showTransferActions = preview.canTransfer,
                         showCopy = preview.text != null,
                     )
@@ -10573,25 +10848,30 @@ internal fun SharedTextPreviewDialog(
                         Modifier
                             .weight(1f)
                             .navigationBarsPadding()
-                            .padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
+                            .padding(start = 32.dp, end = 32.dp, bottom = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("${preview.displayName ?: "未命名文件"} · ${preview.mimeType} · ${formatAttachmentBytes(preview.byteCount)}", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
                         if (preview.truncated) Text("仅显示前 128 KiB；原文件未执行或外发。", style = MaterialTheme.typography.labelSmall, color = SecondaryText)
                         SelectionContainer(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(localFilePreviewCanvas(darkTextPreview)),
+                                .weight(1f),
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    .padding(vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
+                                if ((markdownBlocks.firstOrNull() as? PresentationBlock.Heading)?.level != 1) {
+                                    Text(
+                                        preview.displayName?.substringBeforeLast('.') ?: "未命名文件",
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BodyText,
+                                    )
+                                }
                                 markdownBlocks.forEach { block ->
                                     PresentationBlockView(
                                         block = block,
@@ -11596,6 +11876,7 @@ private fun TemporaryConversationPane(
         ) {
             ComposerModelEntry(
                 label = modelLabel,
+                relayCore = selectedPresets.any { com.nanzhufeng.ai.domain.RelayCoreModels.spec(it) != null },
                 onClick = { composerMenu = if (composerMenu == ComposerMenu.MODEL) ComposerMenu.NONE else ComposerMenu.MODEL },
                 onAnchorChanged = { composerModelAnchor = it },
             )

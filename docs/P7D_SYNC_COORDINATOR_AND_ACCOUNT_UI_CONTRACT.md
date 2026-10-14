@@ -1,7 +1,20 @@
 # 南枫 AI P7-D 冲突、自动同步协调器与账号页合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 已选对话云同步与账号边界 ](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P7-D 冲突、自动同步协调器与账号页合同
+<!-- contract-governance:end -->
+
 日期：2026-08-13  
-状态：P7-D 本地协调器、账本、离线账号页与 Desktop 离线入口；真实身份、Google OAuth、Supabase HTTP、远端恢复和跨设备验收仍属 P7-E 外部门。
+历史阶段状态：P7-D 本地协调器、账本、离线账号页与 Desktop 离线入口；真实身份、Google OAuth、Supabase HTTP、远端恢复和跨设备验收仍属 P7-E 外部门。
+
+## 当前同步与历史协调器的边界
+
+当前已选对话由P7FManualConversationSync／P7FSelectedConversationSyncScheduling及Desktop account-sync owner按P7-F合同处理；当前账号资格不要求P7-B恢复码确认。当前12小时任务只更新本账号已手动同步成功的对话，不因下方旧allowlist扩展为全项目／知识／Memory／设置同步。
+
+P7DSyncCoordinator的旧本地加密快照、READY／方向／恢复码守卫及离线账号页属于原增量的独立实现与兼容记录，不裁决当前direct生产同步。其源设备密文处理与本地数据保真仍可作兼容依据，不能恢复已取消的账号前置或扩张当前接收范围。
+
+## 历史P7-D本地协调与加密快照记录
 
 ## 真值、数据边界与快照
 
@@ -11,7 +24,7 @@ Provider Key/ref、Prompt/RunSpec、诊断、URI/path、头像缓存、Adapter �
 
 ## 唯一协调器与调度守卫
 
-`P7DSyncCoordinator` 是唯一可同步业务写入的调度裁决点：真实 allowlist business mutation 才递增 generation 并申请约 30 秒 unique one-time work；12 小时 periodic 仅作兜底。两类任务均要求网络，且必须同时满足：P7-C 配置完整、瞬时 verified session、P7-B `READY`、恢复码确认与方向明确。当前 App 没有私有配置或会话，故真实生产路径为 disabled：零 WorkManager enqueue、零 worker 网络、零 HTTP、零假登录。
+`P7DSyncCoordinator` 是该旧加密快照模块内的调度裁决点：真实 allowlist business mutation 才递增 generation 并申请约 30 秒 unique one-time work；12 小时 periodic 仅作兜底。两类任务均要求网络，且必须同时满足：P7-C 配置完整、瞬时 verified session、P7-B `READY`、恢复码确认与方向明确。当时 App 没有私有配置或会话，故该阶段生产路径为 disabled：零 WorkManager enqueue、零 worker 网络、零 HTTP、零假登录。
 
 冷启动、登录会话恢复、打开账号页、刷新头像均不得申请 one-time sync；它们最多恢复安全 metadata，并在全部 guard 满足时启用 periodic。正在运行时产生新 generation 必须保留下一代 work，成功的旧 generation 不得吞掉它。唯一 job name 按 opaque account ref 隔离；退出/切换取消该账号 one-time 与 periodic work。
 
@@ -36,5 +49,9 @@ Desktop 只实现同等 coordinator/state contract 与离线-disabled入口，�
 ## 验证与退出
 
 自动覆盖：启动/账号页/头像读取不排队、真实 mutation 才 30 秒、运行中新 generation、periodic guard、恢复码/方向、回读 hash、冲突、账号切换、退出保留/取消、worker 幂等/中断、敏感数据不落账、头像策略/cache 隔离、纯白/disabled/返回 UI。无配置模拟器验收必须可见“尚未配置 / 离线可用”、无假身份、force-stop 后精确 JobStatus 为零。当前验证中 P7-D 定向 Android 测试、lint/Debug+Release、Node/Rust/Desktop 门均通过；最终全量 JVM rerun 受 Android Studio JBR SIGSEGV 阻断，非断言失败，需在稳定/备用 JDK 环境补跑。
+
+
+
+## 历史P7-D版本与产物交付要求
 
 Android production source 变更升 code 44 / `0.3.0-p7d`；Debug/Release 都须既定正式证书，同签名仅 `emulator-5554` 覆盖。Desktop 完整前端/Rust/Tauri build 后重作 ad-hoc并 strict verify。真实 Google/Supabase、远端 restore/replace、真机身份/头像、Android/Desktop 跨设备仍由 P7-E 逐项验收，不能由本合同或本地测试替代。

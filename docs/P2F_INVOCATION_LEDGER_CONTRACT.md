@@ -1,5 +1,10 @@
 # 南枫 AI P2-F 本地 Invocation Room Ledger 合同
 
+<!-- contract-governance:start -->
+> **合同口径：领域／模块限定合同。** 领域入口：[ 当前调用计量与币种 ](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 南枫 AI P2-F 本地 Invocation Room Ledger 合同
+<!-- contract-governance:end -->
+
 日期：2026-08-12  
 状态：已实现本地 Room Ledger、Schema 1→2 迁移与最小调用记录 UI；未连接 HTTP、未读取真实 Key、未外发文字或图片
 

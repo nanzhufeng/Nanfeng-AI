@@ -1,0 +1,146 @@
+[
+  {
+    "name": "openrouter",
+    "official_source": "https://openrouter.ai/brand/logos/transparent/glyph/png/glyph-grape@2x.png",
+    "sha256": "3217516de35eb84fa4bc933566cdc4e124a9dabab69262de91537f6be3a1eb21",
+    "scope": "provider and RelayCore subgroup identity in model settings; original source colors retained",
+    "desktop": "desktop/src/assets/model-brands/openrouter.png",
+    "android": "app/src/main/res/drawable-nodpi/model_brand_openrouter.png",
+    "sourcePngSha256": "010c2a3811aad28e152047016bd40ac13a6487cab02df3166afeba7e7c7ee1c9",
+    "sourceDimensions": [
+      2048,
+      1460
+    ],
+    "displayAssetDimensions": [
+      96,
+      68
+    ],
+    "conversion": "whole original icon, aspect-preserving downsample <=96px, no crop/recolor/backing"
+  },
+  {
+    "name": "relaycore",
+    "official_source": "https://relaycore.cn/logo.svg",
+    "sha256": "44dafda78a5eff937e95a8c3a22cd7b0ba97962ca8d33b9f313291f517ca3339",
+    "scope": "provider and RelayCore subgroup identity in model settings; original source colors retained",
+    "desktop": "desktop/src/assets/model-brands/relaycore.png",
+    "android": "app/src/main/res/drawable-nodpi/model_brand_relaycore.png",
+    "sourcePngSha256": "fe9ceccaa8586dcdd6cb685cbdc1c907f97c8032edd9f4e5614919c64b9c41cd",
+    "sourceDimensions": [
+      128,
+      128
+    ],
+    "displayAssetDimensions": [
+      96,
+      96
+    ],
+    "conversion": "whole original icon, aspect-preserving downsample <=96px, no crop/recolor/backing"
+  },
+  {
+    "name": "deepseek",
+    "official_source": "https://www.deepseek.com/favicon.ico",
+    "sha256": "1c28f4a163642a7ec2f3c22674866f1a037320df8488a09cbee1c314b32db3c1",
+    "scope": "provider and RelayCore subgroup identity in model settings; original source colors retained",
+    "desktop": "desktop/src/assets/model-brands/deepseek.png",
+    "android": "app/src/main/res/drawable-nodpi/model_brand_deepseek.png",
+    "sourcePngSha256": "cba0168e484cf74016847e09aff47c839f4198000a52f19e76f44a73dafe24e4",
+    "sourceDimensions": [
+      225,
+      225
+    ],
+    "displayAssetDimensions": [
+      96,
+      96
+    ],
+    "conversion": "whole original icon, aspect-preserving downsample <=96px, no crop/recolor/backing"
+  },
+  {
+    "name": "zhipu",
+    "official_source": "https://bigmodel.cn/static/images/favicon.png",
+    "sha256": "1be07acc89a80bebccb3ef79e7a1649854a37833d646979cd53608a1b48b9d3a",
+    "scope": "provider and RelayCore subgroup identity in model settings; original source colors retained",
+    "desktop": "desktop/src/assets/model-brands/zhipu.png",
+    "android": "app/src/main/res/drawable-nodpi/model_brand_zhipu.png",
+    "sourcePngSha256": "94ff9c00af67774e5178428942a6e0a9952c7e2f3aba4c25f3b05c782841ee4c",
+    "sourceDimensions": [
+      90,
+      90
+    ],
+    "displayAssetDimensions": [
+      90,
+      90
+    ],
+    "conversion": "whole original icon, aspect-preserving downsample <=96px, no crop/recolor/backing"
+  },
+  {
+    "name": "qwen",
+    "official_source": "https://img.alicdn.com/imgextra/i4/O1CN01OXv3EM1FN8t9W4P79_!!6000000000474-2-tps-80-80.png",
+    "sha256": "47a769cda8708a9773d7b0da1393dcb7a3139d6c0c138e5d4a857f6e95258685",
+    "scope": "provider and RelayCore subgroup identity in model settings; original source colors retained",
+    "desktop": "desktop/src/assets/model-brands/qwen.png",
+    "android": "app/src/main/res/drawable-nodpi/model_brand_qwen.png",
+    "sourcePngSha256": "cd9390bc4209c319121d111f3a1f535b3c7dd909b8f860d41acc9744138d58df",
+    "sourceDimensions": [
+      80,
+      80
+    ],
+    "displayAssetDimensions": [
+      80,
+      80
+    ],
+    "conversion": "whole original icon, aspect-preserving downsample <=96px, no crop/recolor/backing"
+  },
+  {
+    "name": "claude",
+    "official_source": "https://assets.claude.com/95a868946ac8a31e5ff832e2899f294aa368b836.png?w=128&h=128",
+    "sha256": "2848fb7d489a54e963829809f628da66b142f3e0716b4ef6ded903309dfd73dc",
+    "scope": "provider and RelayCore subgroup identity in model settings; original source colors retained",
+    "desktop": "desktop/src/assets/model-brands/claude.png",
+    "android": "app/src/main/res/drawable-nodpi/model_brand_claude.png",
+    "sourcePngSha256": "4004381309500f25e49a1ae639912ce307ea81da74cc383954a1ac8b9d343fe6",
+    "sourceDimensions": [
+      32,
+      32
+    ],
+    "displayAssetDimensions": [
+      32,
+      32
+    ],
+    "conversion": "whole original icon, aspect-preserving downsample <=96px, no crop/recolor/backing"
+  },
+  {
+    "name": "gpt",
+    "official_source": "https://cdn.oaistatic.com/assets/favicon-eex17e9e.ico",
+    "sha256": "b1a0587fabe85b986bf2a537530ae0d1f3a90480dde6ea6dc5c633a868873e7f",
+    "scope": "provider and RelayCore subgroup identity in model settings; original source colors retained",
+    "desktop": "desktop/src/assets/model-brands/gpt.png",
+    "android": "app/src/main/res/drawable-nodpi/model_brand_gpt.png",
+    "sourcePngSha256": "4ff1718a15cf0bbf3a089ea72a95247a48ba291e59c5fac75f6f4cc3637a7034",
+    "sourceDimensions": [
+      48,
+      48
+    ],
+    "displayAssetDimensions": [
+      48,
+      48
+    ],
+    "conversion": "whole original icon, aspect-preserving downsample <=96px, no crop/recolor/backing"
+  },
+  {
+    "name": "gemini",
+    "official_source": "https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png",
+    "sha256": "1ec92148c74ffc0b856817ae6363ea6b3948bc05eebb1bf5f25ae4b709f76b80",
+    "scope": "provider and RelayCore subgroup identity in model settings; original source colors retained",
+    "desktop": "desktop/src/assets/model-brands/gemini.png",
+    "android": "app/src/main/res/drawable-nodpi/model_brand_gemini.png",
+    "sourcePngSha256": "5e7cfecaa53f4f65a313fe89b0f389548126544a78fad8489510c70ae641a4a1",
+    "sourceDimensions": [
+      512,
+      512
+    ],
+    "displayAssetDimensions": [
+      96,
+      96
+    ],
+    "conversion": "whole original icon, aspect-preserving downsample <=96px, no crop/recolor/backing"
+  }
+]

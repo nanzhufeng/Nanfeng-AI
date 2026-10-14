@@ -1,0 +1,16 @@
+{
+  "protectedExistingFiles": 1041,
+  "changedExistingFiles": [
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt",
+    "desktop/src-tauri/src/attachment_web_search_v1.rs",
+    "protocol/fixtures/attachment-search-plan-v1.json"
+  ],
+  "unchangedExistingFiles": 1035,
+  "scope": "限定6个既有业务/fixture/测试文件；其余保护文件hash不变。文档单列。",
+  "noProviderCalls": true,
+  "noDeviceActions": true,
+  "noInstallation": true
+}

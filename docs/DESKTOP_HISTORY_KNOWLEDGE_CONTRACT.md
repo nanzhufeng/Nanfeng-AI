@@ -1,5 +1,10 @@
 # Desktop 历史资料库与隐藏 interests 当前合同
 
+<!-- contract-governance:start -->
+> **合同口径：现行领域合同。** 领域入口：[ Mac历史资料与隐藏字段 ](DESKTOP_HISTORY_KNOWLEDGE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** Desktop 历史资料库与隐藏 interests 当前合同
+<!-- contract-governance:end -->
+
 ## 结论
 
 Desktop “历史资料库”是一个低频、可恢复、先审阅后入库的本地 owner。模型输出只能进入“资料候选”，未经用户确认不得进入长期 Memory 或 Knowledge。Android 当前页面已隐藏但 domain 仍保留的 `interests`（关注方向）必须跨导入、持久化、备份和账号同步保真；Desktop 页面不得重新显示该字段。
@@ -9,7 +14,7 @@ Desktop “历史资料库”是一个低频、可恢复、先审阅后入库的
 - SQLite 真值为 `desktop_portable_personalization_v1`，与设备专属 `desktop_app_settings` 分离。
 - 普通聊天仅在“启用记忆”开启时把非空 `interests` 作为“关注方向”加入请求；回答上下文审计只记录类型和标题，不复制字段正文。
 - P6-K profile `publicBio` 仅在本地 `interests` 为空时一次性补入，不覆盖现有值。
-- 本机备份／恢复保留该表；Google 账号同步把它作为 `safe_settings/profile-interests` 加密记录随用户明确选择的对话同步。
+- 本机备份／恢复保留该表；Desktop当前已选对话的direct封包可附属携带既有`safe_settings/profile-interests`兼容记录；它不是恢复码加密或独立设置同步，Android恢复对话时忽略该邻接记录。原币种／正文／隐藏字段的本机和可移植保真不变。
 - UI 继续只显示昵称、职业和自定义指令，不新增 `interests` 输入框。
 
 ## 自动整理来源

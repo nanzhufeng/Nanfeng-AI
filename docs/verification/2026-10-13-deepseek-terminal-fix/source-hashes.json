@@ -1,0 +1,112 @@
+{
+  "scope": "independent before snapshots protect prior WIP; not HEAD diff or a complete untouched-file proof",
+  "files": [
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+      "changedThisScope": true,
+      "beforeSha256": "cdde8d865f056481da31e1edc1d2e3d33621cabc5608161bb68b973bbc8bc60c",
+      "afterSha256": "54d9740ad8060f54b0ef71f22381fa842ef34090e10226706777de3e4d5e86c2",
+      "bytes": 84887
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ai/MessagesProviderSseCodec.kt",
+      "changedThisScope": true,
+      "beforeSha256": "05faf9c23e03ddb226264067333ba660f505d663e075025eaf9bc98930403a24",
+      "afterSha256": "1cbf0509337ce086297d1f53d49ff2dd576d08b60b904b78380feefd1a4eb6a6",
+      "bytes": 3397
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt",
+      "changedThisScope": true,
+      "beforeSha256": "eea2fbb7602952bb0d1155f7db55e80b3873d19640889e5ff7d9eeb6c0b13b61",
+      "afterSha256": "46cdb83eca86052edd5c4afc1faf578c385000fd8b17141cfb2eb3024c2a9263",
+      "bytes": 27361
+    },
+    {
+      "path": "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt",
+      "changedThisScope": true,
+      "beforeSha256": "cf3bfb5233cb904e2e27a9a0fa6eb13ce621a92c92057225d6e48ddca124f377",
+      "afterSha256": "538e76184ee6c1e448ac5a29f9f49369e5ba66f0a464805ef9e1deaba7a982eb",
+      "bytes": 25051
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt",
+      "changedThisScope": true,
+      "beforeSha256": "51ea68ff7e17f50d7952145c74e3e06c4ffe1591b5ce76dbffadf298f2d5558e",
+      "afterSha256": "832ac770b8aa6c8dfad7542ac3fed2defc19e8ad99b24368f4f0183249cacf00",
+      "bytes": 53934
+    },
+    {
+      "path": "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+      "changedThisScope": true,
+      "beforeSha256": "69693f328a725b6c59cca76903c5d4e29522227a6f93158a6290c876eb935c66",
+      "afterSha256": "09068c61e51e14eaa790ebb3705ed440a5834a319f50e7ae40f66fc0e37a2927",
+      "bytes": 185247
+    },
+    {
+      "path": "desktop/src-tauri/src/lib.rs",
+      "changedThisScope": true,
+      "beforeSha256": "002a95deb73af79b826802c7bb090c7a7388b1541c88fcd3520c89429d6a97d6",
+      "afterSha256": "45cb00c5ad218365b773777f66e001207afc29665ea42ca7226a242285b0f2f1",
+      "bytes": 1404752
+    },
+    {
+      "path": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+      "changedThisScope": true,
+      "beforeSha256": "7ffc9b8672295d5bcd0eb0e03c0f19fe84c40ecef57e8f7e8adb51d50996bac2",
+      "afterSha256": "c803372177339180e2989b95c8c010ab5819a7f4c96879f1ec1bfb3ef2f3065b",
+      "bytes": 13542
+    },
+    {
+      "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "changedThisScope": true,
+      "beforeSha256": "37b3cd36a4b9fa1ed643ada537cb21e507631907c76ff7053b3b713db7b93295",
+      "afterSha256": "71c70590ab31f75be8d593a2ca105e26aba033d1a6f25dbea50197fee52fd85a",
+      "bytes": 32633
+    },
+    {
+      "path": "docs/CURRENT_HANDOFF.md",
+      "changedThisScope": true,
+      "beforeSha256": "15082556cfdf6e9736689520cf7d8138ef36227632e860142c0d6620b76276c0",
+      "afterSha256": "b564053f6e2b653d621a0a4efe155917c5afef53e0b4bea2e0acc5e67df1ddf4",
+      "bytes": 416251
+    },
+    {
+      "path": "docs/PROJECT_STATUS.md",
+      "changedThisScope": true,
+      "beforeSha256": "291564f8ad702405c99fb1f64ceb070b348b768d7f7e7877d8f83ad2b5f2e096",
+      "afterSha256": "9589c3db40050c8dee0be1613deaec1dbc44b2a7079f0823d62985693d84f2a1",
+      "bytes": 9578
+    },
+    {
+      "path": "docs/contracts/DOMAIN_OWNER_MAP.md",
+      "changedThisScope": true,
+      "beforeSha256": "f353fc878439479c6aa72d7b40dfb382fbcd7c7c48b0096126c0e218e4fefaef",
+      "afterSha256": "3322908847dc59a85b55349f4d2fd3deca19947826c1eab7c16c45e40657825b",
+      "bytes": 17105
+    },
+    {
+      "path": "docs/decision-log.md",
+      "changedThisScope": true,
+      "beforeSha256": "0e3a77c039a8b8b1f1f525dbed9f67236ba68ee0f9d0476ec4963abb1f6e55c7",
+      "afterSha256": "3efdbb6d23e292a50bb62483e659c570c6fa55620d31162a18d644f5c46be8e6",
+      "bytes": 98274
+    },
+    {
+      "path": "protocol/contracts/contract-owner-map-v1.json",
+      "changedThisScope": true,
+      "beforeSha256": "b777f69ef419fb4e3ff8f3e39765dbd3e0cc301bdbb01491cf463810d22f23c6",
+      "afterSha256": "87133cf20e442f4a6a8a58494df46d951123e630d8dcc65d4903e0a40a6d586f",
+      "bytes": 18529
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/MessagesSearchResultLifecycleTest.kt",
+      "changedThisScope": true,
+      "beforeSha256": null,
+      "afterSha256": "aca9f6a78c749d30ae78f35933e0b8540ebeda36d8959cb4bfdfa9c793d4c79f",
+      "bytes": 6131
+    }
+  ],
+  "changedCount": 15,
+  "addedLineWhitespaceErrors": 0
+}

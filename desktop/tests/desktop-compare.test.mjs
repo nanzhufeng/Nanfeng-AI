@@ -13,7 +13,7 @@ const fixture = {
     messages: [
       { id: 'user-1', role: 'user', blocks: [{ kind: 'TEXT', text: 'compare this' }] },
       { id: 'assistant-chatgpt', parentId: 'user-1', role: 'assistant', delivery: 'PARTIAL', runtimeState: 'RUNNING', attemptId: 'attempt-chatgpt', compareExecutionId: 'execution-1', compareLogicalModel: 'CHATGPT', source: 'PROVIDER', modelSnapshot: { providerId: 'OPENROUTER', modelId: 'openai/gpt-5.6-terra', displayName: 'GPT-5.6 Terra' }, blocks: [{ kind: 'TEXT', text: 'partial' }] },
-      { id: 'assistant-claude', parentId: 'user-1', role: 'assistant', delivery: 'UNKNOWN', safeErrorCode: 'MISSING_COMPLETION', attemptId: 'attempt-claude', compareExecutionId: 'execution-1', compareLogicalModel: 'CLAUDE', source: 'PROVIDER', modelSnapshot: { providerId: 'OPENROUTER', modelId: 'anthropic/claude-sonnet-5', displayName: 'Claude Sonnet 5' }, chargeMicros: 7, blocks: [{ kind: 'TEXT', text: 'uncertain' }] },
+      { id: 'assistant-claude', parentId: 'user-1', role: 'assistant', delivery: 'UNKNOWN', safeErrorCode: 'MISSING_COMPLETION', attemptId: 'attempt-claude', compareExecutionId: 'execution-1', compareLogicalModel: 'CLAUDE', source: 'PROVIDER', modelSnapshot: { providerId: 'OPENROUTER', modelId: 'anthropic/claude-sonnet-5', displayName: 'Claude Sonnet 5' }, chargeMicros: 7, currencyCode: 'USD', blocks: [{ kind: 'TEXT', text: 'uncertain' }] },
     ],
   }] },
 };

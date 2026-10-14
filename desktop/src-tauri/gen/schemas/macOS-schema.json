@@ -291,6 +291,12 @@
           "markdownDescription": "Allows a typed workspace ID to export only to a user-selected .nfai-exchange path."
         },
         {
+          "description": "Read content-free generation metadata and open or stop only registered tasks.",
+          "type": "string",
+          "const": "allow-generation-island",
+          "markdownDescription": "Read content-free generation metadata and open or stop only registered tasks."
+        },
+        {
           "description": "Allows only a user-mediated native-picker selection, focused-Composer clipboard File bytes, or a current-window PNG camera frame into the same private content-addressed owner; it grants no clipboard path or URI, arbitrary camera control, filesystem API, transport, or credential access.",
           "type": "string",
           "const": "allow-import-desktop-conversation-attachment",

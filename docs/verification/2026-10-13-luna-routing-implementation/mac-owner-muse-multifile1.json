@@ -1,0 +1,30 @@
+{
+  "error": "Explicit { code: \"AUTHORIZATION\", http_status: Some(403) }",
+  "files": "public-03.json,public-11.xlsx",
+  "ledgerCalls": [
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "meta/muse-wonder",
+      "source": null
+    },
+    {
+      "actual": null,
+      "currency": null,
+      "kind": "STREAM_PENDING",
+      "micros": null,
+      "model": "meta/muse-wonder",
+      "source": null
+    }
+  ],
+  "physical": [],
+  "planned": 2,
+  "preset": "MUSE_WONDER",
+  "reopenedCheckpoints": 0,
+  "reopenedModel": null,
+  "reopenedState": "UNKNOWN",
+  "requested": "meta/muse-wonder",
+  "status": "UNKNOWN"
+}

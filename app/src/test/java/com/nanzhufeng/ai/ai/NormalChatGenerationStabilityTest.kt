@@ -1,0 +1,723 @@
+package com.nanzhufeng.ai.ai
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.nanzhufeng.ai.data.*
+import com.nanzhufeng.ai.data.local.*
+import com.nanzhufeng.ai.domain.*
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+import java.util.concurrent.CancellationException
+
+/** Production executor + Room owners; only provider I/O and credentials are synthetic. */
+@RunWith(RobolectricTestRunner::class)
+class NormalChatGenerationStabilityTest {
+    private class Fixture(databaseName: String? = null, presetId: ModelPresetId = ModelPresetId.RELAYCORE_SONNET_5_5, private val webSearch: Boolean = false, private val customInstructions: String = "", modelContextWindow: Long? = 200000,private val independentSearch:Boolean=false,clockOverride:Clock?=null) : AutoCloseable {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = (if(databaseName==null) Room.inMemoryDatabaseBuilder(context,NanfengAiDatabase::class.java) else Room.databaseBuilder(context,NanfengAiDatabase::class.java,databaseName)).allowMainThreadQueries().build()
+        val clock = clockOverride ?: Clock.fixed(Instant.parse("2026-10-10T07:38:57.123456789Z"), ZoneOffset.UTC)
+        val tree = ConversationTreeService(clock)
+        val conversations = RoomConversationRepository(db)
+        val attempts = RoomNormalChatSendAttemptStore(db)
+        val attribution = RoomAssistantResponseModelAttributionStore(db)
+        val durableAudit = AndroidDirectChatCallAuditStore(context, db)
+        val preset = presetId
+        private val spec = RelayCoreModels.spec(preset)!!
+        val model = ResolvedModel(spec.provider,spec.apiId,spec.compactName,
+            ModelCapabilities(true,false,true),modelContextWindow,ModelHealth.AVAILABLE,clock.instant(),null,8192)
+        var extraAttachmentTexts: List<String> = emptyList()
+        var attachmentText = "公开附件测试：系统处理100个请求，出现5次超时。"
+        var retrievalFactory:((ProviderChatRequest)->ProviderChatOutcome)?=null
+        var retrievalOutcome: ProviderChatOutcome = ProviderChatOutcome.HttpResponse(504,"synthetic private upstream body")
+        var requestCount = 0
+        val requests = mutableListOf<ProviderChatRequest>()
+        var partialText = "已收到的部分内容"
+        var replyText = "完整回答"
+        var returnsCancelled = false
+        var streamChunks: List<String>? = null
+        var credential: CharArray? = null
+        var auditFailure: (DirectChatCallAuditRecord) -> Boolean = { false }
+        var providerFailure: Exception? = null
+        var answerOutcome: ProviderChatOutcome? = null
+        var streamed = false
+        var afterPartial: () -> Unit = {}
+        var afterChunk: () -> Unit = {}
+        var completedCallbackFails = false
+        var lastConversationId: ConversationId? = null
+        private val credentials = object : ProviderCredentialStore {
+            override fun hasCredential(providerId: ProviderId) = providerId == model.providerId || (webSearch && providerId == ProviderId.OPENROUTER) || (independentSearch && providerId==ProviderId.ZHIPU)
+            override fun saveCredential(providerId: ProviderId, credential: CharArray) = false
+            override fun loadCredential(providerId: ProviderId) = if(hasCredential(providerId)) "synthetic-test-key".toCharArray().also { credential=it } else null
+        }
+        private val settings = object : ModelServiceSettingsRepository {
+            override fun load(providerId: ProviderId) = ProviderSettings(providerId,providerId==model.providerId || (webSearch && providerId == ProviderId.OPENROUTER),NanfengModelServiceCatalog.defaultPreset(providerId))
+            override fun save(settings: ProviderSettings) = settings
+        }
+        private val registry = InMemoryVersionedModelRegistry()
+        private val verification = VerifyOpenRouterRegistryUseCase(object : OpenRouterRegistryCatalogClient {
+            override fun fetchCatalog(): OpenRouterCatalogFetchResult = error("Relay must not refresh OpenRouter")
+        },OpenRouterRegistrySnapshotVerifier(),registry,object : ModelRegistrySnapshotStore {
+            override fun load() = StoredModelRegistrySnapshots(null,null)
+            override fun persist(snapshots: StoredModelRegistrySnapshots) = false
+        },clock)
+        private val index = object : LocalContextIndex {
+            override fun searchActiveMemories(queryTerms: Set<String>,scope: ContextRetrievalScope,limit: Int) = emptyList<LocalContextIndexHit>()
+            override fun searchActiveKnowledge(queryTerms: Set<String>,scope: ContextRetrievalScope,limit: Int) = emptyList<LocalContextIndexHit>()
+            override fun searchActiveHistory(queryTerms: Set<String>,scope: ContextRetrievalScope,limit: Int) = emptyList<LocalContextIndexHit>()
+            override fun activeKnowledgeCount() = 0
+            override fun status() = LocalContextIndexStatus.AVAILABLE
+        }
+        private val machine = ConversationRuntimeStateMachine(clock)
+        val executor = NormalChatOpenRouterExecutor(
+            configuration=LoadModelServiceConfigurationUseCase(settings,credentials),conversations=conversations,
+            registry=registry,credentials=credentials,submitDraft=SubmitConversationDraftUseCase(conversations,conversations,tree),
+            appendMessage=AppendConversationMessageUseCase(tree,conversations),contextBroker=LocalContextBroker(index),
+            transport=object : ProviderChatTransport {
+                override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome {
+                    requestCount++;requests+=request;request.onAccepted()
+                    if(request.endpoint==IndependentSearchServiceGrant.ENDPOINT) return retrievalFactory?.invoke(request) ?: retrievalOutcome
+                    if (webSearch && request.endpoint.startsWith("https://openrouter.ai/")) return retrievalFactory?.invoke(request) ?: retrievalOutcome
+                    if (streamed || providerFailure!=null || returnsCancelled) { (streamChunks ?: listOf(partialText)).forEach {request.onTextDelta(it);afterChunk()} }
+                    afterPartial()
+                    providerFailure?.let { throw it }
+                    if(returnsCancelled) return ProviderChatOutcome.Cancelled
+                    answerOutcome?.let { return it }
+                    return if(streamed) ProviderChatOutcome.StreamedResponse(200,replyText,null,100,20,null,false,returnedModelId=model.modelId)
+                    else ProviderChatOutcome.HttpResponse(200,"""{"id":"synthetic","model":"${model.modelId}","choices":[{"message":{"role":"assistant","content":"$replyText"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}}""")
+                }
+            },audit=object : DirectChatCallAuditStore by durableAudit {
+                override fun append(record: DirectChatCallAuditRecord) {
+                    if(auditFailure(record)) throw IllegalStateException("synthetic disk failure")
+                    durableAudit.append(record)
+                }
+            },diagnostics=RoomProviderDiagnosticStore(db),sendAttempts=attempts,responseModelAttributions=attribution,
+            attachmentBridge=UniversalChatAttachmentBridge(),adapters=ChatProviderAdapters(),modelResolver=ModelResolver { if(it==preset) ResolvedModelResult.Resolved(model) else if(webSearch && it==ModelPresetId.GPT_6_LUNA) ResolvedModelResult.Resolved(model.copy(providerId=ProviderId.OPENROUTER,modelId="openai/gpt-6-luna")) else ResolvedModelResult.Unavailable("fixture") },
+            modelHealthReporter=object : ModelHealthReporter {
+                override fun recordSuccess(presetId: ModelPresetId) = Unit
+                override fun recordFailure(presetId: ModelPresetId,error: ProviderDiagnosticErrorClass) = Unit
+            },contextSelectionAudits=AndroidContextSelectionAuditStore(context,db),clock=clock,
+            verifyOpenRouterRegistry=verification,loadRoutingPolicy=LoadChatRoutingPolicyUseCase(object : ChatRoutingPolicyRepository {
+                override fun load() = ChatRoutingPolicy(autoRoutingEnabled=false)
+                override fun save(policy: ChatRoutingPolicy) = policy
+            }),attachmentRepository=RoomPrivateAttachmentRepository(db),attachmentStore=AndroidPrivateAttachmentStore(context),
+            submitDraftAndStartProviderRuntime=SubmitConversationDraftAndStartProviderRuntimeUseCase(conversations,conversations,conversations,machine,tree,clock),
+            startProviderRuntimeForExistingUser=StartProviderRuntimeForExistingUserUseCase(conversations,conversations,machine,clock),
+            applyRuntimeEvent=ApplyConversationRuntimeEventUseCase(conversations,conversations,machine),runtimeRepository=conversations,
+            conversationTitleRefiner=object : ConversationTitleRefiner {
+                override fun refine(sourceConversationId: ConversationId,source: ConversationTitleSource) = ConversationTitleRefinementResult.Failed("SYNTHETIC_DISABLED")
+            },loadAssistantExperienceSettings={AssistantExperienceSettings(webSearchEnabled=webSearch,customInstructions=customInstructions)},
+            onConversationCompleted={if(completedCallbackFails) throw IllegalStateException("synthetic completion callback")},
+        )
+        fun send(withAttachment: Boolean = false): Pair<ConversationId,NormalChatOpenRouterExecutor.Result> {
+            val snapshot=conversations.save(tree.create("稳定性测试"));val id=snapshot.conversation.id;lastConversationId=id
+            val refs=if(withAttachment) {
+                (listOf(attachmentText)+extraAttachmentTexts).mapIndexed {index,text ->
+                    val imported=AndroidPrivateAttachmentStore(context).import(AttachmentImportRequest(text.byteInputStream(),"text/markdown","public-fixture-$index.md")) as AttachmentImportResult.Imported
+                    RoomPrivateAttachmentRepository(db).save(imported.attachment).toConversationReference()
+                }
+            } else emptyList()
+            val draft=conversations.saveDraft(id,ConversationDraft(text=if(withAttachment) "分析报告" else "合成测试问题",attachments=refs,updatedAt=clock.instant()))
+            val choice=ComposerModelRoutingCatalog.choices.single {it.routes==listOf(preset)}
+            val approval=NormalChatEgressAuthorization.forUserSend(draft,clock.millis(),choice.id,executor.routingSnapshot().copy(webSearchEnabled=webSearch))
+            return id to executor.execute(id,approval)
+        }
+        override fun close() = db.close()
+    }
+
+    @Test fun `Luna retrieval keeps provider settlement for both grounded and rejected results`() {
+        for (verified in listOf(true, false)) {
+            val databaseName="luna-billing-risk-$verified-${java.util.UUID.randomUUID()}.db"
+            try { Fixture(databaseName=databaseName,webSearch=true).use { f ->
+            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(statusCode=200,text="公开事实摘要",reasoning=null,inputTokens=100,outputTokens=20,toolCallEncountered=false,
+                webSources=if(verified) listOf(ProviderWebSource("https://example.org/release")) else emptyList(),
+                webSearchPerformed=verified,returnedModelId="openai/gpt-6-luna",
+                reportedProviderCost=ProviderReportedCost(9001,"USD","synthetic-settlement-v1"),
+                cachedInputTokens=40,reasoningTokens=5)
+            val (id,result)=f.send()
+            if(verified) assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            else assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+            val call=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}
+                .single {it.conversationId==id.value && it.role=="RETRIEVAL"}
+            assertEquals("provider amount must survive verified=$verified",9001L,call.cost.totalMicros)
+            assertEquals("USD",call.cost.currencyCode)
+            assertEquals("synthetic-settlement-v1",call.cost.priceVersion)
+            assertEquals(ConversationCostSource.PROVIDER_RESPONSE,call.costSource)
+            assertEquals(40L,call.usage.cachedInputTokens)
+            assertEquals(5L,call.usage.reasoningTokens)
+            assertEquals("openai/gpt-6-luna",call.actualModelId)
+            f.db.close()
+            val reopened=Room.databaseBuilder(f.context,NanfengAiDatabase::class.java,databaseName).allowMainThreadQueries().build()
+            try {
+                val saved=AndroidDirectChatCallAuditStore(f.context,reopened).listNewestFirst().mapNotNull {it.accounting}
+                    .single {it.conversationId==id.value && it.role=="RETRIEVAL"}
+                assertEquals(call,saved)
+            } finally { reopened.close() }
+            } } finally { ApplicationProvider.getApplicationContext<Context>().deleteDatabase(databaseName) }
+        }
+    }
+
+    @Test fun `Luna retrieval timestamps survive real Room persistence without a global search override`() {
+        val movingClock=object:Clock() {
+            var time=1_800_000_000_000L
+            override fun getZone()=ZoneOffset.UTC
+            override fun withZone(zone:java.time.ZoneId)=this
+            override fun instant()=Instant.ofEpochMilli(++time)
+        }
+        Fixture(webSearch=true,independentSearch=true,clockOverride=movingClock).use {f->
+            f.attachmentText="- Python 3.14.0正式发布，核验官方发布日期。"
+            f.extraAttachmentTexts=listOf("- Rust 1.90.0正式发布，核验官方发布日期。")
+            f.retrievalFactory={ProviderChatOutcome.StreamedResponse(200,(1..2).joinToString("\n\n") {"[A$it] 已核实\n公开发布事项的日期已确认。\n来源：https://example.org/release/$it"},null,100,20,null,false,webSources=(1..2).map {ProviderWebSource("https://example.org/release/$it","官方来源")},webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")}
+            f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"Python 3.14.0于2025年10月7日发布，Rust 1.90.0于2025年9月18日发布。",null,100,20,null,false,finishReason="end_turn",returnedModelId=f.model.modelId)
+            val (id,result)=f.send(withAttachment=true)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            val calls=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value}
+            val service=calls.filter {it.role=="RETRIEVAL"}
+            assertEquals(1,service.size);assertTrue(service.all {it.finishedAt!=null && it.requestedModelId=="openai/gpt-6-luna" && it.actualModelId=="openai/gpt-6-luna" && it.usage.inputTokens==100L})
+            assertEquals(1,calls.count {it.role=="ANSWER"});assertEquals(2,f.requestCount)
+            assertTrue(f.executor.routingSnapshot().independentSearchAvailable)
+            assertFalse(ProviderId.ZHIPU in f.executor.routingSnapshot().enabledProviders)
+        }
+    }
+
+    @Test fun `Luna failed owner reopens quietly and explicit retry reuses original evidence and materials`() {
+        val name="service-owner-retry-${java.util.UUID.randomUUID()}.db"
+        var conversationId:ConversationId?=null
+        Fixture(databaseName=name,webSearch=true,independentSearch=true).use {f->
+            f.attachmentText="- Python 3.14.0正式发布，核验官方日期。";f.extraAttachmentTexts=listOf("- Rust 1.90.0正式发布，核验官方日期。")
+            f.retrievalFactory={ProviderChatOutcome.StreamedResponse(200,(1..2).joinToString("\n\n") {"[A$it] 已核实\n公开发布事项的日期已确认。\n来源：https://example.org/release/$it"},null,100,20,null,false,webSources=(1..2).map {ProviderWebSource("https://example.org/release/$it","官方来源")},webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")}
+            f.answerOutcome=ProviderChatOutcome.NetworkFailure(ProviderNetworkFailureKind.IO)
+            val (id,result)=f.send(withAttachment=true);conversationId=id
+            assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.NETWORK),result)
+            assertEquals(2,f.requestCount);assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(id)?.status)
+            f.conversations.saveDraft(id,ConversationDraft(text="草稿修改不能进入旧重试",updatedAt=f.clock.instant()))
+        }
+        Fixture(databaseName=name,webSearch=true,independentSearch=true).use {f->
+            val id=requireNotNull(conversationId);assertEquals(0,f.requestCount)
+            assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(id)?.status)
+            f.retrievalFactory={error("completed service evidence must not be resent")}
+            f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"基于原始两份公开材料继续回答。",null,100,20,null,false,finishReason="end_turn",returnedModelId=f.model.modelId)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id))
+            assertEquals(1,f.requestCount);val body=f.requests.single().jsonBody
+            assertTrue(body.contains("Python 3.14.0"));assertTrue(body.contains("Rust 1.90.0"));assertFalse(body.contains("草稿修改不能进入旧重试"))
+            val calls=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==id.value && it.role=="RETRIEVAL"}
+            assertEquals(1,calls.size);assertTrue(calls.all {it.finishedAt!=null && it.actualModelId=="openai/gpt-6-luna"})
+        }
+        ApplicationProvider.getApplicationContext<Context>().deleteDatabase(name)
+    }
+
+    @Test fun `Luna search final RC GPT uses the ordinary answer endpoint and its decoder`() {
+        Fixture(presetId=ModelPresetId.RELAYCORE_GPT_6_1_SOL,webSearch=true,independentSearch=true).use {f->
+            f.attachmentText="- Go 1.24.0正式发布，核验官方发布日期。"
+            f.retrievalFactory={ProviderChatOutcome.StreamedResponse(200,(1..1).joinToString("\n\n") {"[A$it] 已核实\n公开发布事项的日期已确认。\n来源：https://example.org/release/$it"},null,100,20,null,false,webSources=(1..1).map {ProviderWebSource("https://example.org/release/$it","官方来源")},webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")}
+            f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"Go 1.24.0于2025年2月11日发布。",null,100,20,null,false,finishReason="stop",returnedModelId=f.model.modelId)
+            val (_,result)=f.send(withAttachment=true)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            val final=f.requests.last();assertEquals("https://api.relaycore.cn/v1/chat/completions",final.endpoint)
+            assertEquals(ProviderStreamTextMode.COMPLETIONS_API,final.streamTextMode)
+            assertFalse(org.json.JSONObject(final.jsonBody).has("tools"))
+        }
+    }
+
+    @Test fun `predicted attachment evidence cannot reject fitting material with the production fallback capacity`() {
+        Fixture(webSearch=true,modelContextWindow=null).use { f ->
+            f.attachmentText=(1..60).joinToString("\n") { "- 公开发布事项$it：Python版本在2025年10月7日发布，请核验官方公告。" }
+            val (_,result)=f.send(withAttachment=true)
+            assertTrue("input fits the real 32768 fallback; predicted future evidence must not reject it: $result",result != NormalChatOpenRouterExecutor.Result.Blocked(NormalChatOpenRouterExecutor.Code.CONTEXT_LIMIT))
+            assertEquals("retrieval and original material analysis must actually reach the transport",2,f.requestCount)
+            assertTrue(f.requests.last().jsonBody.contains("公开发布事项60"))
+        }
+    }
+
+    @Test fun `unknown retrieval terminal never triggers a targeted paid resend`() {
+        Fixture(webSearch=true,modelContextWindow=null).use { f ->
+            f.attachmentText="- Python 3.14.0在2025年10月7日正式发布。"
+            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(200,"检索未确认的部分内容",null,100,20,null,false,finishReason="MISSING_COMPLETION")
+            f.send(withAttachment=true)
+            assertEquals("one uncertain search plus independent authorized material answer, with no search resend",2,f.requestCount)
+        }
+    }
+    @Test fun `explicit content rejection stops all remaining searches without paid supplements`() {
+        Fixture(webSearch=true,modelContextWindow=null).use { f ->
+            f.attachmentText=(1..8).joinToString("\n") {"- Python 3.14.${it}在2025年发布，请核验官方公告。"}
+            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(200,"",null,100,20,null,false,finishReason="CONTENT_FILTER")
+            f.send(withAttachment=true)
+            assertEquals("one rejected retrieval plus independent material answer; no supplemental searches",2,f.requestCount)
+        }
+    }
+
+    @Test fun `actual evidence overflow after search reports the external search separately`() {
+        Fixture(webSearch=true,modelContextWindow=8192).use { f ->
+            f.attachmentText="- Python 3.14.0在2025年10月7日发布。\n我的持仓："+"测试".repeat(1400)
+            val url="https://www.python.org/releases/"
+            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(200,"[A1] 已核实\nPython "+"公开事实".repeat(105)+"\n来源：$url",null,100,20,null,false,
+                webSources=listOf(ProviderWebSource(url,"Python")),webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")
+            val(_,result)=f.send(withAttachment=true)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.ANSWER_CONTEXT_LIMIT),result)
+            assertEquals("completed search is preserved; final answer must not be sent",1,f.requestCount)
+        }
+    }
+
+    @Test fun `actual final assembly uses the selected large capacity rather than a universal evidence cap`() {
+        Fixture(webSearch=true,modelContextWindow=200000).use { f ->
+            f.attachmentText=(1..90).joinToString("\n") { "- 公开发布事项$it：Python在2025年发布，请核验官方公告。" }
+            f.retrievalFactory={ request ->
+                val ids=Regex("\\[(A\\d+)\\]").findAll(request.jsonBody.substringAfter("附件待核验要点")).map {it.groupValues[1]}.distinct().toList()
+                val urls=ids.map {"https://www.python.org/releases/$it"}
+                val evidence=ids.zip(urls).joinToString("\n\n") {(id,url)-> "[$id] 已核实\nPython "+"公开事实".repeat(100)+"\n来源：$url" }
+                ProviderChatOutcome.StreamedResponse(200,evidence,null,100,20,null,false,
+                    webSources=urls.map {ProviderWebSource(it,"Python")},webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")
+            }
+            val(_,result)=f.send(withAttachment=true)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertTrue(f.requests.last().jsonBody.contains("公开发布事项90"))
+            assertTrue(f.requests.last().jsonBody.length>32768)
+        }
+    }
+
+    @Test fun `actual mandatory attachment overflow still rejects before any external call`() {
+        Fixture(webSearch=true,modelContextWindow=null).use { f ->
+            f.attachmentText="公开资料".repeat(10000)
+            val (_,result)=f.send(withAttachment=true)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Blocked(NormalChatOpenRouterExecutor.Code.CONTEXT_LIMIT),result)
+            assertEquals(0,f.requestCount)
+        }
+    }
+
+    @Test fun `companion timeout records a safe retrieval diagnostic without calling the answer model`() {
+        Fixture(webSearch=true).use { f ->
+            val (_,result)=f.send()
+            assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.WEB_SEARCH_COMPANION_FAILED),result)
+            assertEquals(1,f.requestCount)
+            val rows=RoomProviderDiagnosticStore(f.db).recent()
+            assertEquals(1,rows.size)
+            val record=rows.single()
+            assertEquals(ProviderId.OPENROUTER,record.providerId)
+            assertEquals("openai/gpt-6-luna",record.apiModelId)
+            assertEquals(504,record.httpStatus)
+            assertEquals(ProviderDiagnosticErrorClass.TIMEOUT,record.errorClass)
+            assertEquals("RETRIEVAL_HTTP_504",record.redactedBody)
+            assertFalse(record.toString().contains("synthetic private upstream body"))
+        }
+    }
+
+    @Test fun `ordinary generation carries a language contract independently of personalization and source language`() {
+        Fixture().use { f ->
+            f.send()
+            val body=f.requests.single().jsonBody
+            assertTrue(body.contains("默认使用简体中文"))
+            assertTrue(body.contains("用户明确指定其他语言"))
+            assertTrue(body.contains("先用回答语言译述"))
+            assertTrue(body.contains("不得逐段夹带外语原文"))
+        }
+    }
+
+    @Test fun `an explicit user language preference remains in the request alongside the default contract`() {
+        Fixture(customInstructions="Please answer in English.").use { f ->
+            f.send()
+            val body=f.requests.single().jsonBody
+            assertTrue(body.contains("Please answer in English."))
+            assertTrue(body.contains("用户明确指定其他语言"))
+            assertTrue(body.contains("当前用户明确要求优先"))
+        }
+    }
+
+    @Test fun `Opus sends verified platform alias and old failure retry keeps its historical identity`() {
+        Fixture(presetId=ModelPresetId.RELAYCORE_OPUS_5_5).use {f ->
+            f.providerFailure=IllegalStateException("synthetic failure")
+            val (id,_)=f.send(withAttachment=true)
+            assertEquals("claude-opus-5.5",org.json.JSONObject(f.requests.first().jsonBody).getString("model"))
+            val attempt=f.attempts.findLatestForConversation(id)!!
+            f.db.openHelper.writableDatabase.execSQL("UPDATE normal_chat_send_attempts SET modelId='claude-opus-5-5' WHERE attemptId=?",arrayOf(attempt.attemptId.value))
+            f.providerFailure=null;f.replyText="附件分析成功"
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id))
+            assertEquals("claude-opus-5.5",org.json.JSONObject(f.requests.last().jsonBody).getString("model"))
+            assertTrue(f.requests.last().jsonBody.contains("系统处理100个请求"))
+            assertEquals("claude-opus-5-5",f.attempts.findLatestForConversation(id)!!.modelId)
+            assertEquals(2,f.requestCount)
+        }
+    }
+
+    @Test fun `attachment retrieval searches document claims instead of generic report methods`() {
+        Fixture(webSearch=true).use {f ->
+            f.attachmentText="# 公开报告\n(1) Python 3.14.0在2025年10月7日发布。\n相关链接：https://www.python.org/downloads/release/python-3140/\n(2) Rust 1.90.0在2025年9月18日发布。"
+            f.send(withAttachment=true)
+            assertTrue(f.requests.first().jsonBody.contains("Python 3.14.0"))
+            assertTrue(f.requests.first().jsonBody.contains("Rust 1.90.0"))
+            assertFalse(f.requests.first().jsonBody.contains("public-fixture-"))
+        }
+    }
+
+    @Test fun `each companion model receives covered attachment facts and completes original answer`() {
+        for(preset in listOf(ModelPresetId.RELAYCORE_OPUS_5_5,ModelPresetId.RELAYCORE_SONNET_5_5,ModelPresetId.RELAYCORE_GEMINI_3_8_FLASH,ModelPresetId.RELAYCORE_GEMINI_3_1_PRO)) Fixture(presetId=preset,webSearch=true).use {f ->
+            f.attachmentText="(1) Python 3.14.0在2025年10月8日发布。"
+            f.extraAttachmentTexts=listOf("(1) Rust 1.90.0在2025年9月18日发布。")
+            val evidence="[A1] 与材料矛盾\nPython官方发布日期为2025年10月7日。\n来源：https://www.python.org/releases/\n[A2] 已核实\nRust官方发布日期为2025年9月18日。\n来源：https://blog.rust-lang.org/releases/"
+            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(200,evidence,null,100,20,null,false,webSources=listOf(ProviderWebSource("https://www.python.org/releases/","来源网站 https://publisher.example.test/"),ProviderWebSource("https://blog.rust-lang.org/releases/","Rust")),webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")
+            val(id,result)=f.send(withAttachment=true)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(2,f.requestCount)
+            assertTrue(f.requests.first().jsonBody.contains("Python 3.14.0"))
+            assertTrue(f.requests.first().jsonBody.contains("Rust 1.90.0"))
+            assertFalse(f.requests.first().jsonBody.contains("public-fixture-"))
+            assertTrue(f.requests.last().jsonBody.contains("2025年10月7日"))
+            assertTrue(f.requests.last().jsonBody.contains("与材料矛盾"))
+            assertTrue(f.requests.last().jsonBody.contains("不得只搜索分析报告的方法"))
+            assertTrue(f.requests.last().jsonBody.contains(f.model.modelId))
+            assertEquals(MessageDeliveryState.COMPLETE,f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}.deliveryState)
+        }
+    }
+
+    @Test fun `completed attachment retrieval survives failed final answer with message bound coverage and original usage`() {
+        val databaseName="attachment-failed-answer-${java.util.UUID.randomUUID()}.db"
+        val fixture=Fixture(databaseName=databaseName,webSearch=true)
+        var answerId: MessageNodeId? = null
+        var conversationId: ConversationId? = null
+        fixture.use {f ->
+            f.attachmentText="(1) Python 3.14.0在2025年10月7日发布。"
+            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(200,"[A1] 已核实\nPython官方日期为2025年10月7日。\n来源：https://www.python.org/releases/",null,100,20,null,false,
+                webSources=listOf(ProviderWebSource("https://www.python.org/releases/","Python")),webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")
+            f.answerOutcome=ProviderChatOutcome.NetworkFailure(ProviderNetworkFailureKind.IO)
+            val(id,result)=f.send(withAttachment=true)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.NETWORK),result)
+            assertEquals(2,f.requestCount)
+            val attempt=f.attempts.findLatestForConversation(id)!!
+            assertEquals(NormalChatSendAttemptStatus.UNKNOWN,attempt.status)
+            val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+            answerId=answer.id;conversationId=id
+            val records=AndroidContextSelectionAuditStore(f.context,f.db).forAssistantMessages(listOf(answer.id))[answer.id].orEmpty()
+            assertTrue(records.flatMap {it.selectedSources}.any {it.title=="1/1项检索结果" && it.kind=="联网核验范围"})
+            assertTrue(records.all {it.webSearchUsed==null})
+            val calls=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.rootAttemptId==attempt.attemptId.value}
+            assertEquals(2,calls.size)
+            assertEquals(100L,calls.single {it.role=="RETRIEVAL"}.usage.inputTokens)
+            assertNull(calls.single {it.role=="ANSWER"}.usage.inputTokens)
+            assertNull(calls.single {it.role=="ANSWER"}.cost.totalMicros)
+        }
+        val reopened=Room.databaseBuilder(fixture.context,NanfengAiDatabase::class.java,databaseName).allowMainThreadQueries().build()
+        try {
+            assertEquals(NormalChatSendAttemptStatus.UNKNOWN,RoomNormalChatSendAttemptStore(reopened).findLatestForConversation(requireNotNull(conversationId))!!.status)
+            val records=AndroidContextSelectionAuditStore(fixture.context,reopened).forAssistantMessages(listOf(requireNotNull(answerId)))[answerId].orEmpty()
+            assertTrue(records.flatMap {it.selectedSources}.any {it.title=="1/1项检索结果"})
+            val calls=AndroidDirectChatCallAuditStore(fixture.context,reopened).listNewestFirst().mapNotNull {it.accounting}.filter {it.conversationId==requireNotNull(conversationId).value}
+            assertEquals(2,calls.size)
+            assertEquals(100L,calls.single {it.role=="RETRIEVAL"}.usage.inputTokens)
+            assertNull(calls.single {it.role=="ANSWER"}.cost.totalMicros)
+        } finally {reopened.close();fixture.context.deleteDatabase(databaseName)}
+    }
+    @Test fun `missing final stream completion retains text and unknown attempt without becoming a format error`() {
+        Fixture().use {f ->
+            f.streamed=true;f.streamChunks=listOf("已收到的内容")
+            f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"已收到的内容",null,100,20,null,false,finishReason="MISSING_COMPLETION")
+            val(id,result)=f.send()
+            assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.RESPONSE_INCOMPLETE),result)
+            assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(id)!!.status)
+            assertEquals(1,f.requestCount)
+            val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+            assertEquals("已收到的内容",answer.content.filterIsInstance<ContentBlock.Text>().joinToString(""){it.text})
+            assertEquals(MessageDeliveryState.FAILED,answer.deliveryState)
+        }
+    }
+    @Test fun `no public attachment clues never searches generic report methods`() {
+        Fixture(webSearch=true).use {f ->
+            f.attachmentText="这是没有外部核验事项的普通说明。"
+            val(id,result)=f.send(withAttachment=true)
+            assertEquals(1,f.requestCount)
+            assertFalse(f.requests.single().endpoint.endsWith("/responses"))
+            assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+            assertEquals(MessageDeliveryState.FAILED,f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}.deliveryState)
+        }
+    }
+
+    @Test fun `unrelated verified webpage cannot complete document fact checking`() {
+        Fixture(webSearch=true).use {f ->
+            f.attachmentText="(1) Python 3.14.0在2025年10月7日发布。"
+            f.retrievalOutcome=ProviderChatOutcome.StreamedResponse(200,"分析报告应该严谨，要引用证据。",null,100,20,null,false,webSources=listOf(ProviderWebSource("https://example.test/report-method","报告方法")),webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")
+            val(id,result)=f.send(withAttachment=true)
+            assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+            assertEquals(MessageDeliveryState.FAILED,f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}.deliveryState)
+        }
+    }
+
+    @Test fun `failed web retrieval does not suppress an authorized attachment analysis`() {
+        for (preset in listOf(ModelPresetId.RELAYCORE_OPUS_5_5, ModelPresetId.RELAYCORE_SONNET_5_5, ModelPresetId.RELAYCORE_GEMINI_3_8_FLASH, ModelPresetId.RELAYCORE_GEMINI_3_1_PRO)) Fixture(presetId=preset,webSearch=true).use {f ->
+            val (id,result)=f.send(withAttachment=true)
+            assertEquals(2,f.requestCount)
+            assertTrue(f.requests.last().jsonBody.contains("\"model\":\"${f.model.modelId}\""))
+            assertEquals("https://api.relaycore.cn/v1/" + if (preset in listOf(ModelPresetId.RELAYCORE_OPUS_5_5,ModelPresetId.RELAYCORE_SONNET_5_5)) "messages" else "chat/completions", f.requests.last().endpoint)
+            val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+            assertTrue(answer.content.filterIsInstance<ContentBlock.Text>().joinToString(""){it.text}.contains(f.replyText))
+            assertEquals(MessageDeliveryState.FAILED,answer.deliveryState)
+            assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+            assertTrue(f.requests.last().jsonBody.contains("系统处理100个请求"))
+            assertTrue(f.requests.last().jsonBody.contains("外部检索未完成"))
+            assertTrue(f.requests.first().jsonBody.contains("系统处理100个请求"))
+            assertFalse(f.requests.first().jsonBody.contains("public-fixture-"))
+        }
+    }
+
+    @Test fun `attachment analysis retains the streamed final suffix when retrieval failed`() {
+        Fixture(webSearch=true).use {f ->
+            f.streamed=true;f.streamChunks=listOf("完整");f.replyText="完整回答"
+            val(id,result)=f.send(withAttachment=true)
+            assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+            val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+            assertEquals("完整回答",answer.content.filterIsInstance<ContentBlock.Text>().joinToString(""){it.text})
+            assertEquals(MessageDeliveryState.FAILED,answer.deliveryState)
+            assertEquals(2,f.requestCount)
+        }
+    }
+
+    @Test fun `stopping retrieval prevents any subsequent attachment generation`() {
+        Fixture(webSearch=true).use {f ->
+            f.retrievalOutcome=ProviderChatOutcome.Cancelled
+            val(id,_)=f.send(withAttachment=true)
+            assertEquals(1,f.requestCount)
+            assertEquals(MessageDeliveryState.CANCELLED,f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}.deliveryState)
+        }
+    }
+
+    @Test fun `background metadata observes durable unicode checkpoints without retaining body`() {
+        Fixture().use {f ->
+            f.streamed=true;f.streamChunks=listOf("甲🙂\n", "乙 ");f.replyText="甲🙂\n乙 "
+            val ledger=GenerationIslandLedger();var checkpoints=0
+            f.afterChunk={
+                val id=f.lastConversationId!!;val snapshot=f.conversations.findById(id)!!
+                val answer=snapshot.nodes.first {it.id==snapshot.conversation.currentLeafMessageId}
+                val count=f.conversations.savedTextCharacters(answer.id)
+                if(checkpoints++==0) assertEquals(3,count)
+                ledger.begin(ConversationSurface.CHAT,id,0);ledger.checkpoint(ConversationSurface.CHAT,id,count,1000,"Sonnet 5.5 · RC")
+            }
+            val (id,result)=f.send()
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+            assertEquals(4,f.conversations.savedTextCharacters(answer.id))
+            assertEquals(1,f.requestCount)
+            assertTrue(ledger.snapshot().single().savedCharacters in 3..5)
+            assertEquals("Sonnet 5.5 · RC",ledger.snapshot().single().modelLabel)
+        }
+    }
+    @Test fun `all Relay presets persist visible text before completion and retain selected identity`() {
+        for(spec in RelayCoreModels.specs) Fixture(presetId=spec.preset).use {f ->
+            f.streamed=true;f.streamChunks=listOf("第一段","第二段");f.replyText="第一段第二段"
+            var observed=false
+            f.afterPartial={
+                val id=f.lastConversationId!!
+                val state=f.conversations.stateFor(id)!!
+                assertFalse(state.isTerminal)
+                val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+                assertTrue(answer.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text}.contains("第一段"))
+                observed=true
+            }
+            val (id,result)=f.send();assertTrue(observed);assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            val request=f.requests.single();assertTrue(request.expectsStream);assertTrue(request.jsonBody.contains("\"stream\":true"));assertTrue(request.jsonBody.contains(spec.apiId))
+            assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
+            val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+            assertEquals("第一段第二段",answer.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+        }
+    }
+
+    @Test fun `real precision non streaming and streaming finish without crashing`() {
+        for(stream in listOf(false,true)) Fixture().use {f ->
+            f.streamed=stream;val (id,result)=f.send()
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
+            assertEquals(1,f.requestCount);assertTrue(f.credential!!.all {it=='\u0000'})
+            assertEquals(1,f.durableAudit.summary().recordCount)
+            val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+            assertEquals("完整回答",answer.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+            assertEquals(100L,f.attribution.forMessages(listOf(answer.id)).getValue(answer.id).single().accountingCalls.single().usage.inputTokens)
+        }
+    }
+    @Test fun `pending audit failure blocks provider without leaving an active placeholder`() = Fixture().use {f ->
+        f.auditFailure={true};val (id,result)=f.send()
+        assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+        assertEquals(0,f.requestCount);assertTrue(f.credential!!.all {it=='\u0000'})
+        assertTrue(f.conversations.stateFor(id)!!.isTerminal)
+        assertEquals(NormalChatSendAttemptStatus.FAILED,f.attempts.findLatestForConversation(id)!!.status)
+    }
+    @Test fun `final audit failure preserves complete text and measured attribution`() = Fixture().use {f ->
+        f.auditFailure={!it.status.endsWith("PENDING")};val (id,result)=f.send()
+        assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.LOCAL_ACCOUNTING_PERSISTENCE),result)
+        assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
+        val answer=f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}
+        assertEquals("完整回答",answer.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+        assertEquals(20L,f.attribution.forMessages(listOf(answer.id)).getValue(answer.id).single().usage.outputTokens)
+        assertEquals(1,f.requestCount)
+    }
+    @Test fun `unexpected provider exception preserves partial marks unknown and allows another conversation`() = Fixture().use {f ->
+        f.providerFailure=IllegalStateException("synthetic failure");val (id,result)=f.send()
+        assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+        assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(id)!!.status)
+        assertEquals(ConversationRuntimeStatus.FAILED,f.conversations.stateFor(id)!!.status)
+        assertEquals("已收到的部分内容",f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+        assertTrue(f.credential!!.all {it=='\u0000'});assertEquals(1,f.requestCount)
+        f.providerFailure=null;assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.send().second)
+        assertEquals(2,f.requestCount)
+    }
+    @Test fun `interrupted stream preserves standalone whitespace in durable checkpoint`() = Fixture().use { f ->
+        f.streamChunks = listOf("第一段", "\n\n", "第二段", " ", "保留")
+        f.providerFailure = IllegalStateException("synthetic interruption")
+        val (id, _) = f.send()
+        val checkpoint = f.conversations.findById(id)!!.nodes.single { it.role == MessageRole.ASSISTANT }.content.filterIsInstance<ContentBlock.Text>().joinToString("") { it.text }
+        assertEquals("第一段\n\n第二段 保留", checkpoint)
+        assertEquals(1, f.requestCount)
+    }
+    @Test fun `retry retains durable prefix at submission and sends it to the original model for continuation`() = Fixture().use {f ->
+        f.partialText="这是一段已生成的回答，必须完整保留在当前可见回复里。"
+        f.providerFailure=IllegalStateException("synthetic failure");val (id,_)=f.send()
+        val original=f.conversations.stateFor(id)!!.messageId
+        f.providerFailure=null;f.replyText="这是紧接断点的后续内容。"
+        var visibleAtSubmission=""
+        val result=f.executor.retryLatestAttempt(id,onLocalSubmission={
+            val state=f.conversations.stateFor(id)!!
+            visibleAtSubmission=f.conversations.findById(id)!!.nodes.single {it.id==state.messageId}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text}
+        })
+        assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+        assertEquals(f.partialText,visibleAtSubmission)
+        assertTrue(f.requests.last().jsonBody.contains("默认使用简体中文"))
+        val state=f.conversations.stateFor(id)!!
+        val snapshot=f.conversations.findById(id)!!
+        assertEquals(f.partialText+f.replyText,snapshot.nodes.single {it.id==state.messageId}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+        assertEquals(f.partialText,snapshot.nodes.single {it.id==original}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+        val body=org.json.JSONObject(f.requests.last().jsonBody)
+        assertTrue(body.toString().contains(f.partialText))
+        assertTrue(body.toString().contains("继续"))
+        assertEquals("claude-sonnet-5-5",body.getString("model"))
+        assertNotEquals(f.requests.first().idempotencyKey,f.requests.last().idempotencyKey)
+        assertEquals(2,f.requestCount)
+    }
+    @Test fun `retry repeating checkpoint text keeps exactly one prefix in final answer`() = Fixture().use {f ->
+        f.partialText="这是断点之前已经生成的一整段回答，需要完整保存而且不能重复。"
+        f.providerFailure=IllegalStateException("synthetic failure");val (id,_)=f.send()
+        f.providerFailure=null;f.replyText=f.partialText+"新的结尾。"
+        assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id))
+        val message=f.conversations.stateFor(id)!!.messageId
+        assertEquals(f.replyText,f.conversations.findById(id)!!.nodes.single {it.id==message}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+    }
+    @Test fun `echo only continuation stays incomplete and retains the original checkpoint`() {
+        for (stream in listOf(false,true)) Fixture().use {f ->
+            f.partialText="这是中断之前已经生成的长段落，需要保留，不能把重复回显当作补全。"
+            f.providerFailure=IllegalStateException("synthetic failure");val (id,_)=f.send()
+            f.providerFailure=null;f.streamed=stream;f.replyText=f.partialText;f.streamChunks=listOf(f.partialText)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.RESPONSE_INCOMPLETE),f.executor.retryLatestAttempt(id))
+            val state=f.conversations.stateFor(id)!!
+            assertEquals(ConversationRuntimeStatus.FAILED,state.status)
+            assertTrue(f.executor.recoveryForConversation(id)!!.canRetry)
+            assertEquals(f.partialText,f.conversations.findById(id)!!.nodes.single {it.id==state.messageId}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+        }
+    }
+    @Test fun `explicit stop retains prefix and can be retried without an active spinner`() = Fixture().use {f ->
+        f.returnsCancelled=true;f.partialText="用户停止前已生成的内容。";val (id,_)=f.send()
+        assertEquals(ConversationRuntimeStatus.CANCELLED,f.conversations.stateFor(id)!!.status)
+        assertTrue(f.executor.recoveryForConversation(id)!!.canRetry)
+        f.returnsCancelled=false;f.replyText="继续完成。"
+        assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id))
+        val message=f.conversations.stateFor(id)!!.messageId
+        assertEquals(f.partialText+f.replyText,f.conversations.findById(id)!!.nodes.single {it.id==message}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+    }
+    @Test fun `repeated interruptions resume the latest persisted prefix without a second automatic call`() = Fixture().use {f ->
+        val first="第一段在第一次中断前保存。";val second="第二段在第二次中断前保存。"
+        f.partialText=first;f.providerFailure=IllegalStateException("synthetic failure");val (id,_)=f.send()
+        f.partialText=second
+        assertTrue(f.executor.retryLatestAttempt(id) is NormalChatOpenRouterExecutor.Result.Failed)
+        var state=f.conversations.stateFor(id)!!
+        assertEquals(first+second,f.conversations.findById(id)!!.nodes.single {it.id==state.messageId}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+        assertEquals(2,f.requestCount)
+        f.providerFailure=null;f.replyText="第三段最后完成。"
+        assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id))
+        state=f.conversations.stateFor(id)!!
+        assertEquals(first+second+f.replyText,f.conversations.findById(id)!!.nodes.single {it.id==state.messageId}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+        assertEquals(3,f.requestCount);assertEquals(3,f.requests.map {it.idempotencyKey}.distinct().size)
+    }
+    @Test fun `streamed continuation echo is merged with the checkpoint exactly once`() = Fixture().use {f ->
+        val prefix="这是先前生成的完整断点段落，包含足够长的文字用于精确识别重复。"
+        f.partialText=prefix;f.providerFailure=IllegalStateException("synthetic failure");val (id,_)=f.send()
+        f.providerFailure=null;f.streamed=true;f.replyText=prefix+"新的结尾。";f.streamChunks=listOf(prefix.take(7),prefix.drop(7),"新的结尾。")
+        assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id))
+        val message=f.conversations.stateFor(id)!!.messageId
+        assertEquals(f.replyText,f.conversations.findById(id)!!.nodes.single {it.id==message}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+    }
+    @Test fun `reopened database exposes manual recovery and retains its exact checkpoint`() {
+        val name="resume-reopen-${java.util.UUID.randomUUID()}.db";val prefix="退出进程之前已持久保存的断点文字。";var id: ConversationId?=null
+        try {
+            Fixture(name).use {f ->f.partialText=prefix;f.providerFailure=IllegalStateException("synthetic failure");id=f.send().first}
+            Fixture(name).use {f ->
+                assertEquals(0,f.requestCount);assertTrue(f.executor.recoveryForConversation(id!!)!!.canRetry)
+                f.replyText="重开后接着完成。";assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id!!))
+                val message=f.conversations.stateFor(id!!)!!.messageId
+                assertEquals(prefix+f.replyText,f.conversations.findById(id!!)!!.nodes.single {it.id==message}.content.filterIsInstance<ContentBlock.Text>().joinToString("") {it.text})
+                assertEquals(1,f.requestCount)
+            }
+        } finally {ApplicationProvider.getApplicationContext<Context>().deleteDatabase(name)}
+    }
+    @Test fun `duplicate retry while invocation is active does not create a second request`() = Fixture().use {f ->
+        f.providerFailure=IllegalStateException("synthetic failure");val (id,_)=f.send();f.providerFailure=null
+        var duplicate: NormalChatOpenRouterExecutor.Result?=null
+        assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id,onLocalSubmission={duplicate=f.executor.retryLatestAttempt(id)}))
+        assertTrue(duplicate is NormalChatOpenRouterExecutor.Result.Failed || duplicate is NormalChatOpenRouterExecutor.Result.Blocked)
+        assertEquals(2,f.requestCount);assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
+    }
+    @Test fun `unexpected failure seals physical call instead of leaving pending forever`() = Fixture().use {f ->
+        f.providerFailure=IllegalStateException("synthetic failure");f.send()
+        val record=f.durableAudit.listNewestFirst().single()
+        assertEquals("LOCAL_EXECUTION_INTERRUPTED",record.status)
+        assertNotNull(record.accounting!!.finishedAt)
+        assertNull(record.inputTokens);assertNull(record.outputTokens);assertNull(record.cost.totalMicros)
+        assertEquals(1,f.requestCount)
+    }
+    @Test fun `manual retry after exception completes original attempt with a separate physical call`() = Fixture().use {f ->
+        f.providerFailure=IllegalStateException("synthetic failure");val (id,_)=f.send()
+        val before=f.attempts.findLatestForConversation(id)!!
+        assertEquals(1,f.requestCount)
+        f.providerFailure=null
+        assertEquals(NormalChatOpenRouterExecutor.Result.Sent,f.executor.retryLatestAttempt(id))
+        val after=f.attempts.findLatestForConversation(id)!!
+        assertEquals(before.attemptId,after.attemptId);assertEquals(before.idempotencyKey,after.idempotencyKey)
+        assertEquals(NormalChatSendAttemptStatus.COMPLETED,after.status)
+        assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
+        assertEquals(2,f.requestCount);assertEquals(2,f.durableAudit.summary().recordCount)
+    }
+    @Test fun `exception after committed answer cannot revoke text usage or completion`() = Fixture().use {f ->
+        f.completedCallbackFails=true;val (id,result)=f.send()
+        assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+        assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
+        assertEquals(NormalChatSendAttemptStatus.COMPLETED,f.attempts.findLatestForConversation(id)!!.status)
+        assertEquals(1,f.durableAudit.summary().recordCount)
+        assertEquals(20L,f.durableAudit.listNewestFirst().single().outputTokens)
+        assertEquals(1,f.requestCount)
+    }
+    @Test fun `coroutine cancellation remains cancellation and cleans local execution state`() = Fixture().use {f ->
+        f.providerFailure=CancellationException("synthetic cancel")
+        val thrown=runCatching {f.send()}.exceptionOrNull();assertTrue(thrown is CancellationException)
+        assertTrue(f.credential!!.all {it=='\u0000'});assertEquals(1,f.requestCount)
+        assertTrue(f.conversations.stateFor(f.lastConversationId!!)!!.isTerminal)
+        assertEquals(NormalChatSendAttemptStatus.UNKNOWN,f.attempts.findLatestForConversation(f.lastConversationId!!)!!.status)
+    }
+    @Test fun `native and companion full attachment scopes keep each physical call and finish the original model`() {
+        for(preset in listOf(ModelPresetId.RELAYCORE_SONNET_5_5,ModelPresetId.RELAYCORE_GPT_6_1_SOL)) Fixture(presetId=preset,webSearch=true).use {f ->
+            f.attachmentText=(1..20).joinToString("\n") {"- 公开事项${it}：公开机构在2026年发布第${it}项数据。"}
+            f.retrievalFactory={request ->
+                val body=org.json.JSONObject(request.jsonBody)
+                if(!body.has("tools")) ProviderChatOutcome.StreamedResponse(200,"完整回答",null,100,20,null,false,returnedModelId=f.model.modelId)
+                else {
+                    val text=body.toString();val ids=Regex("\\[(A[1-9][0-9]*)\\]").findAll(text.substringAfter("本次问题")).map {it.groupValues[1]}.distinct().toList()
+                    ProviderChatOutcome.StreamedResponse(200,ids.joinToString("\n\n") {"[$it] 已核实\n公开机构在2026年发布该项数据。\n来源：https://example.org/$it"},null,100,20,null,false,
+                        webSources=ids.map {ProviderWebSource("https://example.org/$it","公开来源")},webSearchPerformed=true,returnedModelId="openai/gpt-6-luna")
+                }
+            }
+            val (id,result)=f.send(withAttachment=true)
+            assertTrue("$preset:$result",result is NormalChatOpenRouterExecutor.Result.Sent || result is NormalChatOpenRouterExecutor.Result.SentWithNotice)
+            assertEquals(6,f.requestCount);assertEquals(NormalChatSendAttemptStatus.COMPLETED,f.attempts.findLatestForConversation(id)!!.status)
+            val answer=f.conversations.findById(id)!!.nodes.last {it.role==MessageRole.ASSISTANT}
+            val calls=f.attribution.forMessages(listOf(answer.id)).getValue(answer.id).single().accountingCalls
+            assertEquals(6,calls.size);assertEquals(6,calls.map {it.callId}.distinct().size);assertEquals(5,calls.count {it.role=="RETRIEVAL"});assertEquals(f.model.modelId,calls.single {it.role=="ANSWER"}.actualModelId)
+        }
+    }
+
+}
