@@ -4,26 +4,26 @@
 
 ## 下载
 
-当前发布：[v1.0.22](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.22)
+当前发布：[v1.0.29](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.29)
 
-- Android：[APK](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.22/Nanfeng-AI-Android-1.0.22.apk)
-- macOS：[DMG](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.22/Nanfeng-AI-macOS-1.0.22.dmg)（开发签名，未公证）
+- Android：[APK](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.29/Nanfeng-AI-Android-1.0.29.apk)
+- macOS：[DMG](https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.29/Nanfeng-AI-macOS-1.0.29.dmg)（开发签名，未公证）
 
 ## 预览
 
 ### Android
 
-| 对话侧栏 | 设置 |
+| 对话 | 设置 |
 | --- | --- |
-| ![Android 对话侧栏](docs/preview/android-navigation.png) | ![Android 设置界面](docs/preview/android-settings.png) |
+| ![Android 对话](docs/preview/android-conversation-1.0.29.png) | ![Android 设置界面](docs/preview/android-settings-1.0.29.png) |
 
 ### macOS
 
-| 对话 | 工作区 |
+| 对话 | 模型与联网 |
 | --- | --- |
-| ![macOS 正常对话界面](docs/preview/macos-conversation.png) | ![macOS 工作区界面](docs/preview/macos-workspace.png) |
+| ![macOS 正常对话界面](docs/preview/macos-conversation-1.0.29.png) | ![macOS 模型与联网](docs/preview/macos-settings-1.0.29.png) |
 
-以上预览沿用 v1.0.20 的正常界面，未作为 v1.0.22 本次联网与菜单修复验收图。预览图作为仓库独立资源维护；Release 只提供安装包和校验文件。
+以上为 v1.0.29 正式候选包正常运行界面：Android 在隔离模拟器采集，macOS 在原生应用采集。图片来自已验签、冻结且与上传包一致的版本，仅证明所示界面。Release 提供安装包和校验文件。
 
 ## 源码
 

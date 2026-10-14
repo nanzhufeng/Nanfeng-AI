@@ -1,5 +1,12 @@
 > 当前合同读取门：[全项目合同索引](contracts/CONTRACT_INDEX.md) · [合同治理](CONTRACT_GOVERNANCE_CURRENT.md)。
 
+## 2026-10-14：v1.0.29 GitHub 双端发布
+
+- [发布候选与验证](verification/2026-10-14-github-release/REPORT.md)：正式双端构建与验签、1189输入无漂移、Android模拟器实装读回、Mac用户授权正常启动采图及数据保留核对完成；四张当前正常预览更新。正式 Mac 未覆盖安装、Android 真机未连接。
+- 当前远端为公开仓库，修正旧私有规划与默认 Pre-release 冲突；原私有 checkpoint 留本机，仅公开 main 和产品 tag 上传。原包构建 SHA 与公开脱敏文档提交 SHA 分列。
+- 本轮仅发布与必要采图，无新业务改动／主动付费请求；既有真实验收缺口继续见项目状态，不能以发布成功关闭。
+
+
 ## 2026-10-14：最终回归、当前代码checkpoint与经验增量固化
 
 - [本轮报告](verification/2026-10-14-code-checkpoint/REPORT.md)、[回归结果](verification/2026-10-14-code-checkpoint/regression.json)、[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)：最终Android1495PASS/10skip＋Release Lint、Rust443PASS/34ignored、Desktop551PASS/12skip＋lint/typecheck/inventory/build；维护43、协议golden、Supabase静态10与Go通过，0新Provider请求／0安装。

@@ -13,6 +13,8 @@
 
 ## Current
 
+- [v1.0.29 发布候选](verification/2026-10-14-github-release/REPORT.md)：双端正式构建／签名、模拟器精确实装与 Mac 授权正式包正常启动采图完成，数据保留核对；README 四张当前预览更新。公开发布不改变既有真实业务验收边界。
+
 - [本地代码checkpoint与最终回归（已提交）](verification/2026-10-14-code-checkpoint/REPORT.md)：当前生产owner、资源、Schema、公共fixture及依赖测试纳Git；排除原始回答/回执、before、日志和重复源码。只建本地提交与标签，不推送/发布。
 - 正常OpenRouter/官方自身联网保持；RC普通文字Sol/Astra自身，另四款文字与六款附件Luna检索后交回原RC模型/渠道/Key；[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)与[模型矩阵](model-service/MODEL_SERVICE_MATRIX.md)为当前行为入口。
 - 当前维护目录20聊天部署/1独立OCR/7凭据组；Muse经OpenRouter、深度档智谱上方。Muse可读材料Responses及Gemini Flash native web plugin为精确场景例外，非家族统一变更。两款普通文字均有双端实际来源/金额/持久重开证据，范围见[两模型](verification/2026-10-14-gemini-muse-risk-fix/REPORT.md)及[Gemini同题](verification/2026-10-14-gemini-search-repeat/REPORT.md)。
@@ -54,7 +56,7 @@
 ## Sync & Safety
 
 - Git working tree: 651文件变更已提交为源码checkpoint，358新增文件纳Git；排除原始/临时证据保留本地。323个原始/临时证据文件仍未跟踪且字节保留；准确提交与剩余集合见[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)。
-- Remote sync: LOCAL ONLY；本轮无fetch/push/Release，远端状态不推断。
+- Remote sync: 本轮按新授权发布 main 与 v1.0.29；公开仓库已回读，原私有checkpoint不推送，结果见发布回执。
 - Installed sync: 最新业务输入保持10月14日10:49前后正式候选源码；本輪纯文档/模板变化不进入包，本地Git SHA不代表重新安装。
 - Rollback point: 本轮源码checkpoint/tag及限定改前副本；禁止全仓reset/clean/stash覆盖排除证据。
 - Secrets/config: 原凭据与正式数据不操作；测试opt-in未启用，新增Provider请求0。原始回执/正文/before/日志不进入提交。
