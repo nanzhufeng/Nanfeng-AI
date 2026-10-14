@@ -43,4 +43,4 @@
 
 ## 本地 checkpoint 回填
 
-准确源码commit、tag读回、文档提交与排除集合在提交完成后据Git实际结果回填；未发生的操作不提前当成功。完整私有回归日志与原件保留本机隔离目录，标识nanfeng-checkpoint-20261014-bv18srn9；持久证据以本目录结构化结果、源码hash和本地Git对象为准。
+源码commit为d519e83ccb6d9d715936f9e9dcc29c3d2f7fd4d9；annotated tag checkpoint-search-routing-20261014已建立且解引用读回一致。本次651个变更文件/358新增文件纳Git；187个Android/Desktop/协议新增核心依赖无遗漏。323个原始/临时证据文件继续未跟踪且字节保持。回归内容与1189项源码输入hash一致。后续薄文档提交只回填该源码SHA与实际验证结论，不改变业务输入；当前文档HEAD可由Git读取，不在正文递归追踪自身SHA。完整私有回归日志与原件保留本机隔离目录，标识nanfeng-checkpoint-20261014-bv18srn9；持久证据以本目录结构化结果、源码hash和本地Git对象为准。

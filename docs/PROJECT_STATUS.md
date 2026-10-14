@@ -4,16 +4,16 @@
 
 ## Verified
 
-- Last verified: 2026-10-14（最终回归；精确运行时间见[回归结果](verification/2026-10-14-code-checkpoint/regression.json)）
+- Last verified: 2026-10-14 13:56:12 +0800（最终回归内容与本地源码checkpoint一致；无新真实验收）
 - Verified branch: main
-- Code baseline: dafc64d9b33661dc4f792fd1434ff1ddca9cdfa3；本轮回归为其上WORKTREE，源码checkpoint提交后按实际SHA回填。
-- Verification scope: WORKTREE / 1189源码、配置、Schema、应用测试及维护输入hash无漂移；强制Android全JVM及Release Lint、Rust全lib、Desktop全Node及静态build、合同/模型/协议/Supabase静态/Go通过。未安装、未新原生或真实服务验收。
+- Code baseline: d519e83ccb6d9d715936f9e9dcc29c3d2f7fd4d9；本地annotated tag checkpoint-search-routing-20261014
+- Verification scope: COMMIT / 回归在提交前WORKTREE执行，1189个已验输入与源码checkpoint逐项相同； 1189源码、配置、Schema、应用测试及维护输入hash无漂移；强制Android全JVM及Release Lint、Rust全lib、Desktop全Node及静态build、合同/模型/协议/Supabase静态/Go通过。未安装、未新原生或真实服务验收。
 - Verified by: Codex
 - Status: Active
 
 ## Current
 
-- [本地代码checkpoint与最终回归](verification/2026-10-14-code-checkpoint/REPORT.md)：当前生产owner、资源、Schema、公共fixture及依赖测试纳Git；排除原始回答/回执、before、日志和重复源码。只建本地提交与标签，不推送/发布。
+- [本地代码checkpoint与最终回归（已提交）](verification/2026-10-14-code-checkpoint/REPORT.md)：当前生产owner、资源、Schema、公共fixture及依赖测试纳Git；排除原始回答/回执、before、日志和重复源码。只建本地提交与标签，不推送/发布。
 - 正常OpenRouter/官方自身联网保持；RC普通文字Sol/Astra自身，另四款文字与六款附件Luna检索后交回原RC模型/渠道/Key；[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)与[模型矩阵](model-service/MODEL_SERVICE_MATRIX.md)为当前行为入口。
 - 当前维护目录20聊天部署/1独立OCR/7凭据组；Muse经OpenRouter、深度档智谱上方。Muse可读材料Responses及Gemini Flash native web plugin为精确场景例外，非家族统一变更。两款普通文字均有双端实际来源/金额/持久重开证据，范围见[两模型](verification/2026-10-14-gemini-muse-risk-fix/REPORT.md)及[Gemini同题](verification/2026-10-14-gemini-search-repeat/REPORT.md)。
 - 检索费用按同次提问合并展示、回答单列，物理Call账本保留；页脚为本次已知总费及未知事实。失败/取消不抹已返回usage，UNKNOWN不自动重发。[费用分组](verification/2026-10-13-retrieval-cost-grouping/REPORT.md)、[失败计量](verification/2026-10-13-rc-gemini-usage/REPORT.md)。
@@ -53,7 +53,7 @@
 
 ## Sync & Safety
 
-- Git working tree: 核心文件将通过本轮明确清单建立源码checkpoint；排除原始/临时证据保留本地。准确提交与剩余集合见[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)。
+- Git working tree: 651文件变更已提交为源码checkpoint，358新增文件纳Git；排除原始/临时证据保留本地。323个原始/临时证据文件仍未跟踪且字节保留；准确提交与剩余集合见[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)。
 - Remote sync: LOCAL ONLY；本轮无fetch/push/Release，远端状态不推断。
 - Installed sync: 最新业务输入保持10月14日10:49前后正式候选源码；本輪纯文档/模板变化不进入包，本地Git SHA不代表重新安装。
 - Rollback point: 本轮源码checkpoint/tag及限定改前副本；禁止全仓reset/clean/stash覆盖排除证据。

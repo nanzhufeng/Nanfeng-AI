@@ -4,8 +4,8 @@
 
 - [本轮报告](verification/2026-10-14-code-checkpoint/REPORT.md)、[回归结果](verification/2026-10-14-code-checkpoint/regression.json)、[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)：最终Android1495PASS/10skip＋Release Lint、Rust443PASS/34ignored、Desktop551PASS/12skip＋lint/typecheck/inventory/build；维护43、协议golden、Supabase静态10与Go通过，0新Provider请求／0安装。
 - C12当前v5/旧独立service-v2缓存分域已据双端源码修正，治理增加版本控制依赖闭包；经验只增量矩阵/模板/路由，不重复复盘、模型比较、五Skill主体或已完成安装。原正式1.0.29覆盖及真实服务范围继续读原报告，不关闭新逐事实/Muse材料/Pro404/旧UNKNOWN/504/正式原生/线上/发布缺口。
-- 当前651变更文件已按明确清单暂存；所有新增core源代码、资源、Schema、共享fixture及测试纳入，原始回答/before/日志/重复副本等323个未跟踪证据保留本地。暂存导出1189源码hash无漂移，合同/owner/模型门及前端静态构建独立通过；PDF binary属性保护原fixture xref字节。下一步仅本地commit/tag及准确SHA回填，不推送/发布/安装。
-- 回归日志及原件的本机隔离目录标识nanfeng-checkpoint-20261014-bv18srn9；持久证据为本轮结构化结果和Git checkpoint。本轮不reset/clean/stash，不改正式数据/凭据或业务源码。按实际Git结果回填后任务收口，不继续扩张业务修复。
+- 当前651变更文件已提交为源码checkpoint d519e83ccb6d9d715936f9e9dcc29c3d2f7fd4d9，annotated tag checkpoint-search-routing-20261014读回一致；所有新增core源代码、资源、Schema、共享fixture及测试纳入，原始回答/before/日志/重复副本等323个未跟踪证据保留本地。暂存导出1189源码hash无漂移，合同/owner/模型门及前端静态构建独立通过；PDF binary属性保护原fixture xref字节。核心新增纳Git与SHA回填已完成；仅后续薄文档提交记录实际结果，不推送/发布/安装。
+- 回归日志及原件的本机隔离目录标识nanfeng-checkpoint-20261014-bv18srn9；持久证据为本轮结构化结果和Git checkpoint。本轮不reset/clean/stash，不改正式数据/凭据或业务源码。实际Git结果已回填，任务收口；不继续扩张业务修复。
 
 ## 2026-10-14：全项目开发复盘与流程固化完成（不改业务／不安装／0收费）
 

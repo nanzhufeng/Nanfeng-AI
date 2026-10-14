@@ -1105,5 +1105,9 @@
   },
   "finalWhitespace": "PASS: PDF binary attributes preserve fixed-width xref",
   "experienceAuditValidation": "PASS: 191 local links, required evidence matrix/classification, no placeholders or secret patterns",
-  "reviewedAt": "2026-10-14T13:54:08+08:00"
+  "reviewedAt": "2026-10-14T13:54:08+08:00",
+  "codeCommit": "d519e83ccb6d9d715936f9e9dcc29c3d2f7fd4d9",
+  "tagResolvedTo": "d519e83ccb6d9d715936f9e9dcc29c3d2f7fd4d9",
+  "completedAt": "2026-10-14 13:56:12 +0800",
+  "documentationFollowup": "four documentation files backfill exact code commit; business source hashes unchanged"
 }
