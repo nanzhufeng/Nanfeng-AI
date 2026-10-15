@@ -1,0 +1,55 @@
+{
+  "verifiedAt": "2026-10-15T15:26:45+08:00",
+  "release": "https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.30",
+  "tag": "v1.0.30",
+  "tagCommit": "0494e0f23069c89e9fec2c0eb359e992a30b6670",
+  "buildSourceCommit": "7c4245666bf9bf1d1bac1247a09c9793442053fa",
+  "draft": false,
+  "prerelease": false,
+  "publishedAt": "2026-10-15T07:25:40Z",
+  "assets": [
+    {
+      "name": "Nanfeng-AI-Android-1.0.30.apk",
+      "bytes": 28688880,
+      "url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.30/Nanfeng-AI-Android-1.0.30.apk",
+      "sha256": "0fba5dd2341b4a2ef05cd7bbf95b2b34d81775e7db61393ece224cdad3b01a06",
+      "downloadedAndMatched": true
+    },
+    {
+      "name": "Nanfeng-AI-macOS-1.0.30.dmg",
+      "bytes": 17471627,
+      "url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.30/Nanfeng-AI-macOS-1.0.30.dmg",
+      "sha256": "e6e6838c941747b24f64f639520f1a36997a089c153f98fc60a2d8543439101c",
+      "downloadedAndMatched": true
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 190,
+      "url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.30/SHA256SUMS.txt",
+      "sha256": "a9d3e44fdb1a4a0a0ddc4d0f91b2449e6cd7ef09242bb68cea620b87da0fc2ce",
+      "downloadedAndMatched": true
+    }
+  ],
+  "sourceFreezeDrift": 0,
+  "ci": {
+    "url": "https://github.com/nanzhufeng/Nanfeng-AI/actions/runs/38696770697",
+    "headSha": "0494e0f23069c89e9fec2c0eb359e992a30b6670",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "Desktop source checks",
+        "conclusion": "success"
+      },
+      {
+        "name": "Android compile only",
+        "conclusion": "success"
+      },
+      {
+        "name": "Protocol, Supabase contracts, and gateway",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "uploadRecovery": "Same draft; recovered EOF interruptions with existing local proxy and alternate HTTP client; no global network changes; no rebuilt artifacts",
+  "scope": "Final receipt only; no main-device reinstall or new model calls"
+}

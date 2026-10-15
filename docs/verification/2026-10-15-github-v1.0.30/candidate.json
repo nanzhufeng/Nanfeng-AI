@@ -134,5 +134,6 @@
   },
   "mainDeviceReinstallation": false,
   "newProviderCalls": 0,
-  "remoteRelease": "PENDING"
+  "remoteRelease": "COMPLETE",
+  "remoteReceipt": "release-receipt.json"
 }
