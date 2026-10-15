@@ -1,0 +1,138 @@
+{
+  "verifiedAt": "2026-10-15T15:07:57+08:00",
+  "buildSourceCommit": "7c4245666bf9bf1d1bac1247a09c9793442053fa",
+  "release": "v1.0.30",
+  "androidVersionCode": 94,
+  "assets": {
+    "Nanfeng-AI-macOS-1.0.30.dmg": {
+      "sha256": "e6e6838c941747b24f64f639520f1a36997a089c153f98fc60a2d8543439101c",
+      "bytes": 17471627
+    },
+    "Nanfeng-AI-Android-1.0.30.apk": {
+      "sha256": "0fba5dd2341b4a2ef05cd7bbf95b2b34d81775e7db61393ece224cdad3b01a06",
+      "bytes": 28688880
+    },
+    "SHA256SUMS.txt": {
+      "sha256": "a9d3e44fdb1a4a0a0ddc4d0f91b2449e6cd7ef09242bb68cea620b87da0fc2ce",
+      "bytes": 190
+    }
+  },
+  "previews": {
+    "docs/preview/macos-conversation-1.0.30.png": {
+      "sha256": "72f20528cedfc91c6e15243f44af3e40f4c6396b995f91462e2857e4bb9f1a41",
+      "sourceSize": [
+        3456,
+        2182
+      ],
+      "publishedSize": [
+        1600,
+        981
+      ],
+      "crop": "remove 64px native capture/window header; app viewport intact"
+    },
+    "docs/preview/macos-settings-1.0.30.png": {
+      "sha256": "e3668dd29f7674d2f34a1a89a5e32b98f16348f8c9ec268945e13bf5783e4dc4",
+      "sourceSize": [
+        3456,
+        2182
+      ],
+      "publishedSize": [
+        1600,
+        981
+      ],
+      "crop": "remove 64px native capture/window header; app viewport intact"
+    },
+    "docs/preview/android-conversation-1.0.30.png": {
+      "sha256": "036e19d0d08d58b2ad1db7116b2ce178cd73f99ad68e460091894c38e91d72c4",
+      "sourceSize": [
+        1768,
+        2054
+      ],
+      "publishedSize": [
+        1080,
+        1216
+      ],
+      "crop": "remove 64px native capture/window header; app viewport intact"
+    },
+    "docs/preview/android-settings-1.0.30.png": {
+      "sha256": "43178501957c8779c088f456df76f85ead0a550eae250d0b2228c23d1ef3a2ac",
+      "sourceSize": [
+        1768,
+        2054
+      ],
+      "publishedSize": [
+        1080,
+        1216
+      ],
+      "crop": "remove 64px native capture/window header; app viewport intact"
+    }
+  },
+  "sourceInputs": 1176,
+  "sourceDrift": 0,
+  "changesSinceLastFullRegression": [
+    "app/build.gradle.kts",
+    "desktop/src-tauri/tauri.conf.json"
+  ],
+  "androidFullApplicable": {
+    "passed": 1509,
+    "skipped": 10,
+    "failed": 0
+  },
+  "rustFullApplicable": {
+    "passed": 449,
+    "ignored": 36,
+    "failed": 0
+  },
+  "thisRoundReleaseBuildAndLint": "PASS",
+  "exactEmulatorApkReadback": "PASS",
+  "exactMacDmgBundle": "PASS 4 files",
+  "evidenceManifestVerifier": "PASS both platforms",
+  "macData": {
+    "unchangedTables": 190,
+    "changes": [
+      {
+        "database": "p6b-workspace/workspace.sqlite3",
+        "table": "desktop_attachment_assets",
+        "before": 1576,
+        "after": 1576,
+        "removedHashes": 1576,
+        "addedHashes": 1576
+      },
+      {
+        "database": "p6b-workspace/workspace.sqlite3",
+        "table": "desktop_history_knowledge_schedule_v1",
+        "before": 1,
+        "after": 1,
+        "removedHashes": 1,
+        "addedHashes": 1
+      },
+      {
+        "database": "p6b-workspace/workspace.sqlite3",
+        "table": "desktop_history_knowledge_candidates_v1",
+        "before": 58,
+        "after": 59,
+        "removedHashes": 0,
+        "addedHashes": 1
+      },
+      {
+        "database": "p6b-workspace/workspace.sqlite3",
+        "table": "desktop_history_knowledge_checkpoints_v1",
+        "before": 58,
+        "after": 59,
+        "removedHashes": 0,
+        "addedHashes": 1
+      },
+      {
+        "database": "p6b-workspace/workspace.sqlite3",
+        "table": "desktop_background_runtime_v1",
+        "before": 1,
+        "after": 1,
+        "removedHashes": 1,
+        "addedHashes": 1
+      }
+    ]
+  },
+  "mainDeviceReinstallation": false,
+  "newProviderCalls": 0,
+  "remoteRelease": "PENDING"
+}

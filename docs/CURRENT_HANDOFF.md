@@ -1,5 +1,10 @@
 > 当前合同读取门：[全项目合同索引](contracts/CONTRACT_INDEX.md) · [合同治理](CONTRACT_GOVERNANCE_CURRENT.md)。
 
+## 2026-10-15：v1.0.30正式GitHub发布
+
+- 用户授权打包上传；构建源码 `7c4245666bf9bf1d1bac1247a09c9793442053fa`，Android94／双端1.0.30，业务较上轮仅版本元数据变化。双端正式构建与验签、隔离Android精确读回、Mac原身份正常采图／只读DMG比对完成；[候选与预览回执](verification/2026-10-15-github-v1.0.30/REPORT.md)。四张新预览进README，原始／临时证据不上传。
+- 不再重建已冻结产物、不重做付费模型矩阵，不重新覆盖主设备。待同一Release上传／远端附件读回；完成后在本节补公开链接和准确远端状态。
+
 ## 2026-10-15：双端当前修复正式保数据覆盖完成
 
 - 用户“覆盖安装”已完成：[安装回执](verification/2026-10-15-title-search-formal-cover/REPORT.md)。OPPO 2026-10-15T14:34:04+08:00，Mac 2026-10-15T14:30:47+08:00；原正式身份1.0.29／Android93。Android精确APK读回及appId／首次安装时间／dataDir／CE-DE inode保持；Mac4文件逐项一致，1599数据文件0变化，原bundle保留。

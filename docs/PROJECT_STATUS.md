@@ -6,12 +6,14 @@
 
 - Last verified: 2026-10-15T14:35:04+08:00（双端当前修复正式保数据覆盖与读回）
 - Verified branch: main
-- Code baseline: d64d71026418b9325931b6cbbb94544b28a81309；Argon／标题／联网修复均为未提交WORKTREE增量，生产输入与验证范围见本轮报告。
+- Code baseline: 7c4245666bf9bf1d1bac1247a09c9793442053fa；v1.0.30构建源码已提交；后续预览／发布文档提交不改变产物输入。
 - Verification scope: WORKTREE / 纯标题保留排序（双端保存／重开、Android等活动时间同步、38相关测试／Debug、Rust449／列表7通过）；开关语义与完成门统一、Haiku请求入口检索、标题独立短任务；本地回归／Debug／Mac编译PASS，Haiku及标题双端真实原生owner通过，双端当前增量正式覆盖及读回PASS；正式业务UI缺口保持。
 - Verified by: Codex
 - Status: Active
 
 ## Current
+
+- [v1.0.30发布候选](verification/2026-10-15-github-v1.0.30/REPORT.md)：双端原签名正式包、Android隔离实装读回及Mac精确包正常采图完成，README四张当前预览；main和Release上传本轮继续执行，远端结果另记。主设备仍上一轮1.0.29同业务修复包，本轮不重装。
 
 - [当前修复双端正式覆盖](verification/2026-10-15-title-search-formal-cover/REPORT.md)：OPPO原签名非Debug覆盖，精确APK读回、应用身份／首次安装时间／数据目录标识保持；Mac原证书覆盖，1599数据文件0变化。包含当前标题／联网和改名增量；未新增Provider调用或正式UI业务验收。
 
