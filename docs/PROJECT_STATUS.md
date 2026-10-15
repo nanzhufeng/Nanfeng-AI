@@ -6,14 +6,14 @@
 
 - Last verified: 2026-10-15T18:49:08+08:00（最终离线回归与暂存源码闭包）
 - Verified branch: main
-- Code baseline: 5a52aa2a8928cc46bad136cb608fd1eb3b62517e；本轮回归WORKTREE，准确checkpoint提交及本地tag见本轮报告回填。
-- Verification scope: WORKTREE / Android1525 PASS/10 skip/Release Lint，Node554 PASS/12 skip及静态构建，Rust457 PASS/36 ignored，45维护、协议/Supabase静态10/Go通过；87路径暂存导出/1222输入一致，六项独立导出门通过。真实服务/原生/安装沿原报告，不扩大。
+- Code baseline: d92b0daf70597f7447b6dc7ad6649938692f8f5b；本地tag checkpoint-model-network-20261015，源提交包含已验WORKTREE增量；后续仅文档回填。
+- Verification scope: COMMIT / 源码checkpoint绑定1222输入；Android1525 PASS/10skip/ReleaseLint，Node554 PASS/12skip与静态构建，Rust457 PASS/36ignored，45维护、协议/Supabase静态10/Go通过；独立索引导出六门PASS。运行发生于提交前同字节WORKTREE，原生/服务/安装不扩大。
 - Verified by: Codex
 - Status: Active
 
 ## Current
 
-- [代码checkpoint与最终回归](verification/2026-10-15-code-checkpoint/REPORT.md)：准确纳入当前联网/协议/思考/设置/合同WIP与两份新增测试；最终全套通过。仅修两条陈旧Node断言，323份原始/临时证据保留本地，实际本地提交/标签由报告回填；无推送/发布/安装/新收费。
+- [代码checkpoint与最终回归](verification/2026-10-15-code-checkpoint/REPORT.md)：准确纳入当前联网/协议/思考/设置/合同WIP与两份新增测试；最终全套通过。仅修两条陈旧Node断言，323份原始/临时证据保留本地，本地源码d92b0da/标签checkpoint-model-network-20261015已读回；无推送/发布/安装/新收费。
 
 - [全项目完整复盘](verification/2026-10-15-project-retrospective/REPORT.md)：更新[开发档案](南枫AI完整开发档案.md)、AGENTS、五类Skill与[可迁移经验](可迁移开发经验.md)。纠正旧版本/模型数/证据版本与Git/WIP归属，区分已发布包和同版本覆盖包；45维护测试通过，业务输入不变。
 
@@ -109,9 +109,11 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 ## Sync & Safety
 
-- 当前未提交／推送的联网、流式／TLS与设置入口增量已双端正式覆盖；现装源码与最新安全验证报告绑定，不由底层HEAD或同版本GitHub包推断。
+- 本轮源码checkpoint d92b0daf70597f7447b6dc7ad6649938692f8f5b 与本地tag已读回；同步观察为LOCAL ONLY，未push。该同步快照取最终文档提交前，当时仅7份文档待回填提交，业务输入1222项无漂移；最终文档HEAD由Git读取，不要求本字段与自身提交SHA相等。
 
-- 2026-10-15：Argon源码／合同增量LOCAL ONLY，未提交／推送，正式双端已保数据覆盖；底层HEAD保留，原始未跟踪证据未处理。历史已发布范围仍见下方，不代表此次增量已同步远端。
+- 联网、流式／TLS、设置与合同增量已纳入本地源码checkpoint d92b0daf70597f7447b6dc7ad6649938692f8f5b，未推送；原双端覆盖与候选hash按原安全报告保留，不由新Git提交或同版本GitHub包推断新安装。
+
+- 2026-10-15当前：相关源码/合同已本地提交，尚未推送；323份原始/临时未跟踪证据保留。历史v1.0.30已发布范围与本地checkpoint不同，不能据同版本号推断远端已有此次修复。
 
 - Git working tree: 651文件变更已提交为源码checkpoint，358新增文件纳Git；排除原始/临时证据保留本地。323个原始/临时证据文件仍未跟踪且字节保留；准确提交与剩余集合见[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)。
 - Remote sync: main 与 v1.0.29 已推送／正式发布，三个资产下载hash一致，云端源码三项PASS；原私有checkpoint不推送，结果见发布回执。

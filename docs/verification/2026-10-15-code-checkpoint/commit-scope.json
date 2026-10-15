@@ -115,7 +115,7 @@
     "No GitHub push or release",
     "Staged snapshot source identity must match source-hashes.json"
   ],
-  "status": "staged source closure verified; source commit readback recorded after commit",
+  "status": "COMPLETE: local source commit and annotated tag read back; no push/release",
   "indexIdentity": {
     "stagedPaths": 87,
     "exportedTrackedFiles": 1839,
@@ -182,5 +182,14 @@
       "exitCode": 0,
       "elapsedSeconds": 0.2
     }
-  ]
+  ],
+  "sourceCommit": "d92b0daf70597f7447b6dc7ad6649938692f8f5b",
+  "localTag": "checkpoint-model-network-20261015",
+  "sourceCommitReadback": true,
+  "committedSourceReadback": {
+    "sourceCommit": "d92b0daf70597f7447b6dc7ad6649938692f8f5b",
+    "exactCommittedInputBlobs": 1222,
+    "excludedUntrackedUnchanged": 323,
+    "metadataBackfillFiles": 7
+  }
 }

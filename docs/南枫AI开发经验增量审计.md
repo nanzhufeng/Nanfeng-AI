@@ -7,7 +7,7 @@
 
 | 层 | 本次固化口径 |
 |---|---|
-| 源码 | 准确commit／本地tag与1222份输入hash由checkpoint报告绑定；两份核心新增回归测试纳入索引，不依赖未跟踪测试 |
+| 源码 | 源码 `d92b0daf70597f7447b6dc7ad6649938692f8f5b`／本地tag `checkpoint-model-network-20261015` 与1222份输入hash已由checkpoint报告绑定；两份核心新增回归测试纳入索引，不依赖未跟踪测试 |
 | 本次回归 | Android全JVM＋Release Lint、Rust、Node全套及静态构建、45维护测试、协议golden、Supabase静态与Go；数量/skip/ignored/源码范围只读本轮regression.json |
 | 唯一修正 | Desktop两条旧断言仍要求隐藏入口；改为验证正式主菜单不显示开发与诊断/空高级组、仍检查可见入口与图标。产品源码保持 |
 | 复用证据 | 现装1.0.30原证书覆盖、精确APK读回、Mac数据hash与真实服务样例继续绑定原执行时间；本轮没有新安装/Provider调用或签名重打包 |

@@ -1,6 +1,6 @@
 # 南枫 AI 完整开发档案
 
-> 复盘日期：2026-10-15。当前 main 基线 `5a52aa2a8928cc46bad136cb608fd1eb3b62517e`；工作树仍含未提交的联网／协议／思考保存修复及合同整理，不能仅按HEAD重建现装软件。本次只更新档案、长期规则、五类Skill与经验，不改业务源码、配置、Schema或应用测试。旧复盘及代码checkpoint保留原日期；完整范围与本轮验证见[复盘报告](verification/2026-10-15-project-retrospective/REPORT.md)。
+> 复盘日期：2026-10-15。本次复盘时main基线为 `5a52aa2a8928cc46bad136cb608fd1eb3b62517e`；当时未提交的联网／协议／思考保存和合同增量，后由本地checkpoint `d92b0daf70597f7447b6dc7ad6649938692f8f5b` 纳入，见[最终回归与源码固化](verification/2026-10-15-code-checkpoint/REPORT.md)。同版本现装包仍按原候选hash核对。本次只更新档案、长期规则、五类Skill与经验，不改业务源码、配置、Schema或应用测试。旧复盘及代码checkpoint保留原日期；完整范围与本轮验证见[复盘报告](verification/2026-10-15-project-retrospective/REPORT.md)。
 
 当前行为从[合同索引](contracts/CONTRACT_INDEX.md)和[合同治理](CONTRACT_GOVERNANCE_CURRENT.md)进入；模型规则从[统一架构](model-service/MODEL_SERVICE_ARCHITECTURE.md)进入。动态事实看[项目状态](PROJECT_STATUS.md)与[当前交接](CURRENT_HANDOFF.md)。本文保存带日期的复盘，不建立第二套行为权威。
 
@@ -150,11 +150,11 @@ flowchart LR
 | 2026-10-14 `196233296e5d`／`cd49d91242eb` | 主链代码checkpoint纳入651路径及最终回归回执；旧d519e83/8d434cb仍在其他ref可达，不作为另一轮主线实现 |
 | 2026-10-14 `a69447ded567`／`d64d71026418` | 1.0.29候选与GitHub交付记录；发布事实以当时回执为准 |
 | 2026-10-15 `7c4245666bf9` | 1.0.30联网、Argon与自动标题增量，95路径；不是后续Haiku/TLS/全主题修复的源码点 |
-| 2026-10-15 `0494e0f23069`／`5a52aa2a8928` | v1.0.30产物／四张预览及远端下载、CI回执；后者为当前HEAD，仍不包含本轮工作树修复 |
+| 2026-10-15 `0494e0f23069`／`5a52aa2a8928` | v1.0.30产物／四张预览及远端下载、CI回执；后者为本次复盘基线，尚不包含随后固化的工作树修复 |
 
 ### 当前未提交演进
 
-10月14日checkpoint已把此前大量WIP纳入主链；下表保留阶段过程，不能再将整段十月工作统称未提交。10月15日HEAD之后的全主题、隐藏诊断、Haiku/TLS、其他模型与合同修复仍为工作树增量，范围以本轮清单、差异和带日期报告为准，旧失败保留。
+10月14日checkpoint已把此前大量WIP纳入主链；下表保留阶段过程，不能再将整段十月工作统称未提交。10月15日复盘基线HEAD之后的全主题、隐藏诊断、Haiku/TLS、其他模型与合同修复当时为工作树增量，后续已纳入上述checkpoint；本节仍解释复盘时的过程归属，旧失败保留。
 
 | 阶段 | 记录的变化与验证边界 |
 |---|---|
@@ -216,14 +216,14 @@ flowchart LR
 - **macOS**：`npm --prefix desktop run bundle:macos` 先构建静态产物，再 Tauri app；脚本读取本机公开云配置并选择环境指定／可用 Apple Development 身份，codesign严格验签和DMG验证。脚本选到证书不保证与已装一致，覆盖前仍需比对身份与数据。未在该脚本实现 notarization。[bundle脚本](../desktop/scripts/bundle-macos.mjs)、[Tauri配置](../desktop/src-tauri/tauri.conf.json)。
 - **已完成的本地覆盖**：10月15日同版本1.0.30双端原证书保数据覆盖；Android最后思考补丁候选SHA以[模型复查安全摘要](verification/2026-10-15-other-model-network-review/verification.json)为准，精确APK读回、应用/首装/数据目录身份保持。该身份检查不等于完整私有数据库hash；Mac1595数据文件逐项不变。覆盖不替代主设备新业务生成。
 - **Supabase／网关**：按有序migration与头像函数部署，网关需要HTTPS、持久卷、专属token、TTL与offset/hash校验。仓库没有证明目标服务现部署版本；本轮不读取secret或创建资源。[SQL](../supabase/migrations)、[头像](../supabase/functions/google-avatar)、[网关部署](../upload-gateway/README.md)。
-- **GitHub**：README与[仓库发布回执](verification/2026-10-15-github-v1.0.30/release-receipt.json)记录v1.0.30，标签0494e0f、构建7c42456，APK／DMG／校验文件均曾下载比对成功。当前HEAD后的同版本修复覆盖包尚未提交／上传；相同版本不代表相同源码或字节。本轮未fetch／提交／推送或查询远端当前状态。
+- **GitHub**：README与[仓库发布回执](verification/2026-10-15-github-v1.0.30/release-receipt.json)记录v1.0.30，标签0494e0f、构建7c42456，APK／DMG／校验文件均曾下载比对成功。复盘基线后的同版本修复现已本地checkpoint固化，尚未上传；相同版本不代表相同源码或字节。本轮未fetch／提交／推送或查询远端当前状态。
 
 ## 9. 文档冲突与裁决
 
 | 旧来源／断言 | 当前证据与裁决 | 本轮处理 |
 |---|---|---|
 | 档案仍写182提交／20模型／1.0.29／v5 | 当前191条本地可达、189主链；manifest21聊天模型，产品1.0.30，附件证据v6 | 更新对应正文/目录/技术栈/测试，不只顶部免责 |
-| 十月工作全部未提交 | 1962332/7c42456已纳入前期工作；HEAD后的修复仍是WIP | 阶段过程与提交归属分开；两条非主链checkpoint不重复叙述为新主线 |
+| 十月工作全部未提交 | 1962332/7c42456已纳入前期工作；复盘时HEAD后的修复当时是WIP，现已由后续checkpoint固化 | 阶段过程与提交归属分开；两条非主链checkpoint不重复叙述为新主线 |
 | README仍指1.0.22、最新1.0.29远端未确认 | 当前README和仓库回执记录v1.0.30下载校验及CI；后续同版本覆盖另有hash | 更新交付正文，保留本轮未查远端边界 |
 | 旧fixture禁联网／无production caller／未连接账号等 | [全合同统一](verification/2026-10-15-contract-unification/REPORT.md)按当前owner分清平台、模块与历史范围 | 复用18份已修合同裁决，不再修改业务或重做合同 |
 | “服务未返回思考” | 实际有reasoning，失败发生在本地不可变save；Room专用追加owner已修 | 记录纠正因果和测试边界，不回写旧真实回执 |
@@ -241,7 +241,7 @@ flowchart LR
 | 原生验证缺口 | 正式双端新版UI/picker/生命周期/扫描与媒体；页脚原位复制Mac只有浏览器证据 | 对准确候选与隔离根进行原生回放；模拟器不能冒充OPPO，浏览器不能冒充Mac。[复制报告](verification/2026-10-14-footer-text-copy/REPORT.md) |
 | 源码事实／运行待确认 | About旧占位与巨型入口集中度 | 先确认当前可达路径与实际状态投影；若后续获修复授权，按owner拆小增量并复验，不在纯文档任务重构 |
 | 外部状态未确认 | Supabase实际迁移/RLS/RPC/头像部署、真实Google跨端同步、网关现部署状态 | 仓库检查先完成，外部验证另按授权与真实账号范围；静态SQL不证明线上隔离 |
-| 交付未确认 | HEAD后同版本覆盖修复的后续公开发布、Windows构建/签名/安装、公证 | 仓库已有v1.0.30旧发布回执；最新WIP覆盖包没有新的公开发布回执，不承诺Windows。[发布策略](GITHUB_REPOSITORY_AND_RELEASE_POLICY.md) |
+| 交付未确认 | HEAD后同版本覆盖修复的后续公开发布、Windows构建/签名/安装、公证 | 仓库已有v1.0.30旧发布回执；后续覆盖修复没有新的公开发布回执，不承诺Windows。[发布策略](GITHUB_REPOSITORY_AND_RELEASE_POLICY.md) |
 | 维护门覆盖缺口 | CI未接入当前合同一致性脚本/测试 | 后续获准配置任务再补，当前本地检查正常；不能把云端三项历史成功算作此门已运行。[workflow](../.github/workflows/source-verification.yml) |
 | 维护残余 | 7历史XML原件非标准格式、模型例外与外部协议可能变化 | 格式失败分类保留；精确例外迁移需真实同题来源、用量与身份。上游当前价格/能力本轮未查询 |
 | 历史引用待恢复 | 本轮相对链接扫描有37项既有缺失，全部在迁移位置的before-docs快照；绝对本机路径不作为便携链接通过的证明 | 不改写冻结原件或伪造文件；恢复历史证据时按原始文档基址解释链接，并另建可用证据入口。[本轮报告](verification/2026-10-15-project-retrospective/REPORT.md) |

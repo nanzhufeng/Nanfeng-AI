@@ -7,7 +7,7 @@
 - [输入hash](source-hashes.json)冻结1222份业务、配置、资源、Schema、应用测试和维护输入。除下述两份陈旧Node测试断言，本次不改产品源码/配置/Schema；已有联网/协议/Room/设置WIP准确纳Git。
 - 新增核心为 `CurrentModelNetworkReadinessTest.kt` 与 `ProviderTlsConnectionRecoveryTest.kt`：前者走生产resolver/profile/policy/adapter检查当前manifest搜索开关与身份，后者走生产transport边界验证握手前有限恢复、证书失败与已发正文不重试。二者不调用真实服务。
 - [提交范围](commit-scope.json)列全部选中路径和排除统计。323份原始回执/临时before/日志/旧重复材料/设计草案保留本地，未删除、不混入提交；14份近期安全报告/摘要与两份新增测试纳入。
-- 代码提交与本地标签 `checkpoint-model-network-20261015` 绑定准确源码；发生后在本页回填。后续薄文档提交仅记录已发生事实，不递归追求文档自身SHA相等。
+- 源码提交 `d92b0daf70597f7447b6dc7ad6649938692f8f5b` 与本地annotated标签 `checkpoint-model-network-20261015` 已建立并解引用读回一致，绑定上述准确源码。后续薄文档提交仅记录已发生事实，不递归追求文档自身SHA相等。
 
 ## 本轮实际最终回归
 
@@ -38,3 +38,9 @@
 ## 未关闭的缺口
 
 RCPro历史404/本轮中断未知及未知费用、旧Mac原件UNKNOWN/Sol另一题504，更广v6主题/全部模型格式/原生UI/picker/生命周期/媒体、线上Google/Supabase/网关、Windows/公证仍按原范围待验。未知请求不自动重发。CI未接入一致性审计的既有配置缺口仅记录，本轮未改CI；历史7XML/37 before-docs引用失败保留原件。
+
+## 本地提交完成回执
+
+- 源码commit：`d92b0daf70597f7447b6dc7ad6649938692f8f5b`；标签：`checkpoint-model-network-20261015`，解引用一致。87变更文件、20新增文件已纳入Git；其中两份核心新增回归测试可从该commit读取。
+- 323份排除的原始/临时证据逐文件hash保持；不删除、不改.gitignore、不混入提交。1222份冻结输入与源码commit一致，产品功能未因最终回归改变。
+- 本页及PROJECT_STATUS/CURRENT_HANDOFF随后只做薄文档回填；代码基线保持上述源码commit，文档提交自身由Git读取，不重复回归同一应用输入。本地提交/标签未推送，未创建Release或重新安装。

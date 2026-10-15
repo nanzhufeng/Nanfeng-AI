@@ -84,5 +84,8 @@
     "inputs": 1222,
     "sourceDrift": 0,
     "exportGates": "6 PASS"
-  }
+  },
+  "sourceCommit": "d92b0daf70597f7447b6dc7ad6649938692f8f5b",
+  "localTag": "checkpoint-model-network-20261015",
+  "sourceCommitReadback": true
 }

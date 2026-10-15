@@ -8,7 +8,7 @@
 - [checkpoint报告](verification/2026-10-15-code-checkpoint/REPORT.md)、[回归](verification/2026-10-15-code-checkpoint/regression.json)、[提交范围](verification/2026-10-15-code-checkpoint/commit-scope.json)、[增量正式审计](南枫AI开发经验增量审计.md)持有本轮事实，完整复盘/五Skill/已安装与真实模型比较不重做。
 - 最终Android1525 PASS/10skip/326套件、ReleaseLint；Rust457/36ignored；Node554/12skip与lint/typecheck/inventory/build；维护45、协议golden、Supabase静态10/Go通过。两条Node初次失败是仍要求隐藏设置入口的陈旧断言，已修并补设置合同负向验收，产品行为未改。
 - 暂存87变更/20新增，独立导出1839跟踪文件；1222源码/配置/资源/测试/维护输入精确一致，导出三合同/模型门与Desktop三静态门均PASS。两份核心新增测试纳索引；323旧原始/before/日志/设计草案未删除且不入提交。
-- 本地源码提交及tag建立后由报告回填；文档薄提交不递归追自身SHA。无Provider/主设备/正式数据动作，不推送/发布；RCPro与完整模型/原生/云端/Windows等旧缺口保留。
+- 本地源码 d92b0daf70597f7447b6dc7ad6649938692f8f5b 与tag checkpoint-model-network-20261015 已建立、解引用读回一致；文档薄提交不递归追自身SHA。无Provider/主设备/正式数据动作，不推送/发布；RCPro与完整模型/原生/云端/Windows等旧缺口保留。
 
 ## 2026-10-15：完整项目复盘完成（文档与五类Skill）
 
