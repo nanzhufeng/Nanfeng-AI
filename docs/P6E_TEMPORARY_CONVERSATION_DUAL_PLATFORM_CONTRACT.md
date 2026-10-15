@@ -5,7 +5,7 @@
 > **适用范围：** 仅本地临时消息与隔离24小时恢复记录；不接Provider/普通同步
 <!-- contract-governance:end -->
 
-状态：**正式合同，已授权实施**；替代并废止原 `P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT_DRAFT.md`。P6-D 的图标、输入框、侧栏密度与橙色交互 token 已先行收口。
+状态：**正式合同，已授权实施**；替代并废止原 `P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT_DRAFT.md`。TEMP的数据与生命周期由本文持有；图标、输入框、侧栏、颜色和字号沿[C16主题合同](C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md)与当前平台会话合同，不将早期橙色写成不可配置规则。
 
 ## 1. 唯一目标、停止条件与禁止项
 
@@ -40,19 +40,19 @@
 
 | 功能 | Desktop | Android | 真值与验证 |
 | --- | --- | --- | --- |
-| 进入临时聊天 | 右上角同义橙色图标入口 | 右上角同义橙色图标入口 | typed temporary owner；重复点击幂等 |
+| 进入临时聊天 | 右上角同义临时图标入口 | 右上角同义临时图标入口 | typed temporary owner；重复点击幂等 |
 | 顶栏状态 | 明示“临时聊天” | 明示“临时聊天” | 普通与临时草稿/消息/附件/model override 严格隔离 |
 | 返回 NORMAL | 再点右上 Ghost 直接返回 | 再点右上 Ghost 直接返回 | 不删除 TEMP；24h 内恢复同一 session |
 | 重建恢复 | `.app` 关闭/重开 | Activity/process 重建 | 隔离 recovery record；24h 过期清理 |
-| Ghost | icon-only、无菜单/确认 | icon-only、无菜单/确认 | idle neutral，TEMP active orange-soft/orange |
+| Ghost | icon-only、无菜单/确认 | icon-only、无菜单/确认 | idle neutral，TEMP active当前主题强调色 |
 
 ## 5. 交互、生命周期与视觉
 
 - 两端从普通聊天右上角同义 Ghost 进入；Ghost 直接 NORMAL↔TEMP，无 modal/menu/确认，重复进入只恢复同一 active temporary record。`title`/`aria-label`/`ContentDescription` 均为“临时聊天”。
 - temporary 顶栏明确显示“临时聊天”，不得显示普通会话标题或项目范围；Back/Escape 返回 NORMAL，不丢 TEMP 草稿。没有置顶、归档、项目、搜索、导出、同步或回收站动作。
-- P6-D 视觉收敛继续适用：composer outer shell 无 focus accent；只有 inner input 有稳定单一 1px/1dp border，idle neutral、focus `accent-subtle-border` 浅柔橙，无 outline/glow/shadow/indicator 叠加；主橙只用于 CTA。行标题下限 12px/12sp、section label 再小一级；成功仍为绿色、危险操作仍为红色。
-- Composer 的 `＋`与模型沿用既有线性语义图标：Desktop 为 26px SVG box 内约 20–22px 的可见 glyph、Android 为 24dp glyph；其外层 hit target 保持 Desktop 40px、Android 48dp。TEMP 模型入口显示清晰模型图标及当前本地安全标识（或同等可访问名称），只编辑 temporary recovery 的 `model override`；它不是已配置模型，不读取 Key、不调用 Provider/HTTP。
-- **FB-P6-021 最终发送例外**：发送与 add/model 使用独立 token：橙色 surface 固定为缩小后的 Desktop 30px/Android 36dp，但内部 arrow/真实 stop 保持 Desktop 25px/Android 22.5dp；外层仍分别是 40px/48dp 的透明、可访问 hit target。发送 idle 是向上箭头，只有真实运行中的既有状态才显示 stop，不伪造运行状态；disabled、idle 与真实 stop 共享 surface 尺寸，不改变 composer 高度、右侧间距或圆角比例。
+- TEMP复用各平台当前Composer、共享主题token与角色表面，不维护第二份边框、字体、焦点或橙色常量。轮廓和关闭／焦点行为继续遵循当前会话、主题合同；临时状态的可识别性不授权修改皮肤。
+- TEMP的添加与模型控件消费当前平台共享图标／命中面，只编辑temporary recovery的安全model override；显示本地标识不代表已配置模型，不读取Key或调用Provider。
+- 发送／停止的尺寸、箭头和反馈只遵循当前平台会话合同；TEMP只追加本地消息，没有Provider运行时不得伪造stop或模型生成状态。
 
 ## 5.1 共享 app-owned overlay 关闭合同
 
@@ -65,7 +65,9 @@
 - Desktop 真实 `.app` 与 Android 正式签名 Debug/Release、当次隔离模拟器 同签名安装、重启读回分别证明；不读 Key、不发 HTTP、不改图标。
 - 另加静态扫描：temporary owner、Android/Desktop recovery store 和导出/搜索/同步/缓存路径不能引用普通 conversation record 或附件 URI/path/Key；UI token 不得绕过 shared orange semantic token。
 - 报告必须分开陈述：合同、定向测试、构建、Desktop `.app`、Android 正式签名、模拟器重启/readback；不得把任一层替代另一层。
-# P6-E 补充入口矩阵（2026-08-13；收口中）
+## 历史2026-08-13补充入口记录
+
+### P6-E 补充入口矩阵（2026-08-13；收口中）
 
 - 临时聊天右上入口使用同一 Lucide Ghost（MIT）几何语义，idle 中性、active accent orange/soft，Desktop `title/aria-label` 与 Android `ContentDescription` 均为“临时聊天”；Ghost 直接 NORMAL↔TEMP，绝不显示退出/清除 modal/menu。
 - 常规 sidebar/drawer 不再放 archive/recycle；它们只能由“设置 → 数据与存储 → 会话管理”的真实 archived/soft-delete owner 投影访问。work 的 workspace 管理与本地受控记录也分别进入真实 Settings 二级页，不能只隐藏。

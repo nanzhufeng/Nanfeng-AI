@@ -226,7 +226,7 @@ sealed interface ProviderChatOutcome {
      * A bounded local transport fact. It deliberately contains no exception message, URL,
      * credential, request body, or response data, so it is safe to persist in diagnostics.
      */
-    data class NetworkFailure(val kind: ProviderNetworkFailureKind, val exceptionClass: String? = null) : ProviderChatOutcome
+    data class NetworkFailure(val kind: ProviderNetworkFailureKind, val exceptionClass: String? = null, val causeClass: String? = null) : ProviderChatOutcome
     data object ResponseTooLarge : ProviderChatOutcome
     data object Cancelled : ProviderChatOutcome
 }
@@ -245,10 +245,17 @@ interface ProviderChatTransport {
     fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome
 }
 
-class OfficialProviderChatTransport : ProviderChatTransport {
-    override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome = runCatching {
+class OfficialProviderChatTransport(
+    private val openConnection: (String) -> HttpsURLConnection = { java.net.URL(it).openConnection() as HttpsURLConnection },
+) : ProviderChatTransport {
+    override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome =
+        executeAttempt(request, credential, reconnectBeforeBody = true)
+
+    private fun executeAttempt(request: ProviderChatRequest, credential: CharArray, reconnectBeforeBody: Boolean): ProviderChatOutcome {
+        var bodyStarted = false
+        return runCatching {
         val requestBody = request.effectiveBody()
-        val connection = (java.net.URL(request.endpoint).openConnection() as HttpsURLConnection).apply {
+        val connection = openConnection(request.endpoint).apply {
             requestMethod = "POST"
             instanceFollowRedirects = false
             doInput = true
@@ -269,7 +276,10 @@ class OfficialProviderChatTransport : ProviderChatTransport {
                 connection.setRequestProperty("x-api-key", credential.concatToString())
                 connection.setRequestProperty("anthropic-version", "2023-06-01")
             }
-            connection.outputStream.use { requestBody.writeTo(it) }
+            connection.outputStream.use {
+                bodyStarted = true
+                requestBody.writeTo(it)
+            }
             if (request.cancellation?.isCancelled() == true) return ProviderChatOutcome.Cancelled
             val status = connection.responseCode
             if (status in 200..299) request.onAccepted()
@@ -302,10 +312,25 @@ class OfficialProviderChatTransport : ProviderChatTransport {
     }.getOrElse { error ->
         when {
             request.cancellation?.isCancelled() == true -> ProviderChatOutcome.Cancelled
+            // A peer reset/EOF during TLS setup has sent no request body. Reconnect once
+            // with the same request/recipient; never retry after writing begins, or for
+            // certificate validation/protocol errors. TLS verification stays untouched.
+            reconnectBeforeBody && !bodyStarted && transientTlsDisconnect(error) ->
+                executeAttempt(request, credential, reconnectBeforeBody = false)
             error is SocketTimeoutException -> ProviderChatOutcome.TimedOut
             error is ProviderResponseTooLargeException -> ProviderChatOutcome.ResponseTooLarge
-            else -> ProviderChatOutcome.NetworkFailure(classifyProviderNetworkFailure(error),error.javaClass.simpleName.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) })
+            else -> ProviderChatOutcome.NetworkFailure(classifyProviderNetworkFailure(error),
+                error.javaClass.simpleName.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) },
+                generateSequence(error.cause) { it.cause }.take(8).lastOrNull()?.javaClass?.simpleName?.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) })
         }
+    }
+    }
+
+    private fun transientTlsDisconnect(error: Throwable): Boolean {
+        if (error !is javax.net.ssl.SSLHandshakeException) return false
+        val causes = generateSequence(error.cause) { it.cause }.take(8).toList()
+        if (causes.any { it is java.security.cert.CertificateException || it is java.security.cert.CertPathValidatorException }) return false
+        return causes.any { it is java.io.EOFException || it is java.net.SocketException }
     }
 
     private companion object {

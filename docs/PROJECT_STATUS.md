@@ -4,14 +4,28 @@
 
 ## Verified
 
-- Last verified: 2026-10-15T15:26:45+08:00（v1.0.30正式发布／远端附件下载校验及CI）
+- Last verified: 2026-10-15T18:49:08+08:00（最终离线回归与暂存源码闭包）
 - Verified branch: main
-- Code baseline: 7c4245666bf9bf1d1bac1247a09c9793442053fa；v1.0.30构建源码已提交；后续预览／发布文档提交不改变产物输入。
-- Verification scope: WORKTREE / 纯标题保留排序（双端保存／重开、Android等活动时间同步、38相关测试／Debug、Rust449／列表7通过）；开关语义与完成门统一、Haiku请求入口检索、标题独立短任务；本地回归／Debug／Mac编译PASS，Haiku及标题双端真实原生owner通过，双端当前增量正式覆盖及读回PASS；正式业务UI缺口保持。
+- Code baseline: 5a52aa2a8928cc46bad136cb608fd1eb3b62517e；本轮回归WORKTREE，准确checkpoint提交及本地tag见本轮报告回填。
+- Verification scope: WORKTREE / Android1525 PASS/10 skip/Release Lint，Node554 PASS/12 skip及静态构建，Rust457 PASS/36 ignored，45维护、协议/Supabase静态10/Go通过；87路径暂存导出/1222输入一致，六项独立导出门通过。真实服务/原生/安装沿原报告，不扩大。
 - Verified by: Codex
 - Status: Active
 
 ## Current
+
+- [代码checkpoint与最终回归](verification/2026-10-15-code-checkpoint/REPORT.md)：准确纳入当前联网/协议/思考/设置/合同WIP与两份新增测试；最终全套通过。仅修两条陈旧Node断言，323份原始/临时证据保留本地，实际本地提交/标签由报告回填；无推送/发布/安装/新收费。
+
+- [全项目完整复盘](verification/2026-10-15-project-retrospective/REPORT.md)：更新[开发档案](南枫AI完整开发档案.md)、AGENTS、五类Skill与[可迁移经验](可迁移开发经验.md)。纠正旧版本/模型数/证据版本与Git/WIP归属，区分已发布包和同版本覆盖包；45维护测试通过，业务输入不变。
+
+- [全项目合同统一](verification/2026-10-15-contract-unification/REPORT.md)：114合同／40领域全量扫描与热点裁决，18份正文、8项范围标签、4个领域owner索引已统一；旧恢复入口任务归历史，保留原兼容与验收事实。29维护测试通过，业务输入不变，无功能修改／新收费／发布。
+
+- [其他模型联网复查与正式覆盖](verification/2026-10-15-other-model-network-review/REPORT.md)：21模型42请求准备通过；修DeepSeek最终阶段重复要求来源、Mac千问／DeepSeek／RC Claude非流式协议分发及RC Opus既有别名误判。DeepSeek Flash／GLM Flash双附件2/2及重开通过，RC Flash仅基础调用通过。联网／协议已双端原签名覆盖，另修Android完成后思考保存入口（JVM重开通过，正式包已保数据覆盖）；RC Pro历史404／本轮中断未知仍未闭环，未重发或换模型。
+
+- [Haiku TLS／流式修复与双端正式覆盖](verification/2026-10-15-haiku-tls-streaming/REPORT.md)：实际主设备记录为TLS握手失败；目录流式误判已修，握手前有限重连不扩展到已发请求；隔离 Android 保持原网络设置真实样例 76.8 秒完成并重开，最终1519 JVM／10 skip及正式检查通过。双端原签名覆盖，OPPO设置隐藏入口实看通过；原失败未重发；后续用户确认Haiku问题解决（用户反馈），不扩展为其他模型主设备验收。
+
+- [正式设置隐藏开发与诊断](verification/2026-10-15-hide-development-settings/REPORT.md)：Android／Desktop 设置导航已移除，空“高级”组同时隐藏，诊断实现与数据保留；19 JVM＋8 Desktop检查及双端相关构建通过。已随本轮连接修复正式覆盖，OPPO设置实看通过。
+
+- [附件不限主题联网修复与正式覆盖](verification/2026-10-15-attachment-search-all-topics/REPORT.md)：读图请求体、主题筛选、原件／提取／证据混淆及无关来源已修；双端混合 PNG＋Markdown 实际相关搜索／重开通过。OPPO94／双端1.0.30已原签名覆盖，Android精确APK读回与数据目录身份保持、Mac1595数据文件0变化；未发布，正式UI及全模型格式矩阵未验。
 
 - [v1.0.30正式发布](verification/2026-10-15-github-v1.0.30/REPORT.md)：双端原签名正式包、Android隔离实装读回及Mac精确包正常采图完成，README四张当前预览；[Release](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.30)三附件上传并下载核对通过，云端三项全通过；标签0494e0f，构建源码7c42456。主设备仍上一轮1.0.29同业务修复包，本轮不重装。
 
@@ -44,14 +58,24 @@
 
 ## In Progress
 
-- 新v5逐事实真实Provider返回、完整原件范围与原模型长答：旧原件部分覆盖/回放不替代新版服务验收。
+- 当前v6逐事实证据与原模型长答的更广真实验收仍有缺口；旧v5或局部原件回放不替代新版服务证据。
 - Muse新Responses多可读附件/媒体及正式双端UI/picker/生命周期/扫描媒体；普通文字已通过，不能扩大到所有材料。
 
 ## Blocked
 
-- 真实服务旧失败仍未闭环：RC Gemini Pro附件回答404、旧Mac原件UNKNOWN、Sol另一题504。本地checkpoint不因此阻塞，但不能宣称全部真实链路通过；未知结果不自动重发。
+- 真实服务旧失败仍未闭环：RC Gemini Pro历史404／本轮控制中断结果未知、旧Mac原件UNKNOWN、Sol另一题504。本地checkpoint不因此阻塞，但不能宣称全部真实链路通过；未知结果不自动重发。
 
 ## Tests
+
+最终checkpoint（2026-10-15）：Android1535总/1525PASS/10skip/326套件及ReleaseLint；Rust457/36ignored；Node554/12skip与lint/typecheck/inventory/build；维护45、Supabase静态10、三golden及Go通过。暂存快照1222输入一致/六门PASS，见[回归](verification/2026-10-15-code-checkpoint/regression.json)。
+
+完整复盘（2026-10-15）：45协议/治理维护单测、合同/模型门、5类Skill与UI元数据、交付链接/隐私与保真核验。全清单2156、HEAD历史189/全refs191；7历史XML失败及37迁移快照缺链保留。应用测试/构建/真实服务本轮未重跑，见[复盘回执](verification/2026-10-15-project-retrospective/REPORT.md)。
+
+合同统一（2026-10-15）：29维护测试／0失败；登记、语义哨兵／owner、模型门、链接与hash保真通过。全库结构扫描保留7份历史XML证据格式失败；应用构建、真实服务与设备验收本任务未重跑，见[合同报告](verification/2026-10-15-contract-unification/REPORT.md)。
+
+其他模型复查（2026-10-15）：Android1525 PASS／10 skip、326套件，正式构建／Release Lint通过；Rust457 PASS／36 ignored；21模型42请求准备与21+1/7、114/40门PASS，代表真实服务与未闭环项见[报告](verification/2026-10-15-other-model-network-review/REPORT.md)。
+
+附件不限主题增量（2026-10-15）：Android1513 PASS／10 skip、324套件、Debug／正式构建／Release Lint；Rust455 PASS／36 ignored、cargo check、Mac正式包验签／DMG通过；21＋1／7及114／40门PASS。真实混合样例、网络失败、费用、重开与安装边界见[报告](verification/2026-10-15-attachment-search-all-topics/REPORT.md)。
 
 联网收口（2026-10-15）：Android1506 PASS／10 skip、323套件、Debug构建；Rust448 PASS／36 ignored、cargo check；Node553 PASS／12 skip、lint（前端未再改）；模型16／21+1/7、合同治理15／114/40门PASS。[实际结果](verification/2026-10-15-haiku-search-switch/verification.json)。Haiku真实双端短图／重开单独见报告，主设备／正式UI未测。
 
@@ -72,6 +96,8 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 ## Verification Gaps
 
+- 本轮正式保数据覆盖已完成，但正式UI／用户原始材料未实测；不是21模型×全部格式的真实矩阵，模型生成内容仍出现单位／表述错误，不能将联网通过等同事实准确性通过。
+
 - 新标题三场景已双端真实生成／落库／重开；正式原生UI的主进度／标题刷新与本增量正式覆盖未做。注入超时不证明DeepSeek或Qwen当前上游故障。
 
 - 新增Argon尚未做真实Provider生成／来源／媒体、双端原生菜单验证；本地回归不能替代。
@@ -83,18 +109,18 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 ## Sync & Safety
 
-- 最新标题／进度／联网修复为LOCAL ONLY，未提交／推送／正式安装；现装仍12:33／12:34的OpenRouter Argon正式包，不含本增量。
+- 当前未提交／推送的联网、流式／TLS与设置入口增量已双端正式覆盖；现装源码与最新安全验证报告绑定，不由底层HEAD或同版本GitHub包推断。
 
 - 2026-10-15：Argon源码／合同增量LOCAL ONLY，未提交／推送，正式双端已保数据覆盖；底层HEAD保留，原始未跟踪证据未处理。历史已发布范围仍见下方，不代表此次增量已同步远端。
 
 - Git working tree: 651文件变更已提交为源码checkpoint，358新增文件纳Git；排除原始/临时证据保留本地。323个原始/临时证据文件仍未跟踪且字节保留；准确提交与剩余集合见[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)。
 - Remote sync: main 与 v1.0.29 已推送／正式发布，三个资产下载hash一致，云端源码三项PASS；原私有checkpoint不推送，结果见发布回执。
-- Installed sync: 10月15日双端正式已覆盖仅OpenRouter Argon源码增量，精确候选读回及数据保留见最新安装报告；本地Git SHA仍不代表未提交WORKTREE。
+- Installed sync: 10月15日本轮双端已覆盖附件联网、Android流式／TLS及隐藏诊断入口增量；OPPO精确APK读回、Mac1595数据文件hash不变，见最新报告；本地Git SHA仍不代表未提交WORKTREE。
 - Rollback point: 本轮源码checkpoint/tag及限定改前副本；禁止全仓reset/clean/stash覆盖排除证据。
 - Secrets/config: 本安装阶段原应用凭据未改、0新增Provider请求，正式数据保留；此前获授权创建的RC反重力网站Key未接入应用，3次404/504调用费用UNKNOWN与暂缓决定单独留档。临时凭据通道已关闭；原始回执/正文/before/日志不进入提交。
 
 ## Next
 
-1. 按新要求补最小必要v5逐事实/原模型真实链路，再评估完整原件；先回放已有回执，克制收费。
-2. 定位Pro404和Muse新材料边界，不换模型/Key/渠道或自动重发UNKNOWN。
-3. 按范围补正式原生/系统入口与线上/发布验证；不要重复已完成复盘、全合同整理或安装。
+1. 下一次实现变更先按合同索引反查同领域入口／子合同与生产owner，沿已建立回归维护，避免重复全库整理。
+2. 后续按新证据处理RC Pro与Muse材料缺口，不换模型／Key／渠道，不自动重发UNKNOWN。
+3. 仅在后续任务需要时补正式原生／系统入口及线上验证，不重复已完成合同整理或安装。

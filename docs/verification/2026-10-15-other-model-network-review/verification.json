@@ -1,0 +1,137 @@
+{
+  "catalogModels": 21,
+  "offlineRequestCases": 42,
+  "offlineMode": "production cold-start resolver/profiles + adapter request preparation with search on/off, not live availability",
+  "userAcceptance": {
+    "haikuIssueResolved": true,
+    "source": "user feedback in this chat; not extrapolated to other models"
+  },
+  "android": {
+    "tests": 1535,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10,
+    "passed": 1525,
+    "suites": 326,
+    "releaseBuild": "PASS",
+    "lintRelease": "PASS"
+  },
+  "rust": {
+    "passed": 457,
+    "ignored": 36,
+    "failed": 0
+  },
+  "freshCompletedCases": [
+    {
+      "preset": "DEEPSEEK_V4_FLASH",
+      "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+      "elapsedMs": 12742,
+      "coverage": "2/2项检索结果",
+      "webSearchUsed": true,
+      "footerCostLabel": "¥0.036411",
+      "costSource": "LOCAL_ESTIMATE",
+      "physicalCalls": 2,
+      "exactReopenText": true,
+      "exactReopenCost": true,
+      "reopenNetworkCalls": 0
+    },
+    {
+      "preset": "GLM_5_3_FLASH",
+      "result": "SentWithNotice(notice=REASONING_NOT_SAVED)",
+      "elapsedMs": 92278,
+      "coverage": "2/2项检索结果",
+      "webSearchUsed": true,
+      "footerCostLabel": "¥0.020079",
+      "costSource": "LOCAL_ESTIMATE",
+      "physicalCalls": 3,
+      "exactReopenText": true,
+      "exactReopenCost": true,
+      "reopenNetworkCalls": 0
+    },
+    {
+      "preset": "RELAYCORE_GEMINI_3_8_FLASH",
+      "result": "Sent",
+      "elapsedMs": 11131,
+      "coverage": null,
+      "webSearchUsed": false,
+      "footerCostLabel": "¥0.000157",
+      "costSource": "LOCAL_ESTIMATE",
+      "physicalCalls": 1,
+      "exactReopenText": true,
+      "exactReopenCost": true,
+      "reopenNetworkCalls": 0
+    }
+  ],
+  "displayedLocalEstimateSubtotalCny": "0.056647",
+  "providerSettlementTotal": "UNKNOWN: one interrupted RC Pro control has no returned outcome/cost",
+  "rcPro": {
+    "historicalError": "HTTP404",
+    "currentControl": "interrupted by premature supervisor completion; persisted SENDING, outcome/charge unknown; not resent",
+    "currentReadOnlyCatalogHttpStatus": 200,
+    "exactIdStillListed": true,
+    "passed": false
+  },
+  "cleanup": {
+    "officialCredentialsCleared": true,
+    "capabilityConsumed": true,
+    "emulatorProxyUnchanged": true,
+    "interruptedRcCredentialCopiesRemoved": true,
+    "temporaryMetadataProbeRemoved": true,
+    "isolatedAppStopped": true
+  },
+  "formalCover": {
+    "mac": {
+      "installed": true,
+      "version": "1.0.30",
+      "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+      "exactCandidateFiles": true,
+      "dataFiles": 1595,
+      "dataChanges": {
+        "added": 0,
+        "deleted": 0,
+        "changed": 0
+      }
+    },
+    "androidProtocolFixInstalled": {
+      "installed": true,
+      "versionName": "1.0.30",
+      "versionCode": 94,
+      "debuggable": false,
+      "sha256": "00a5ccec9919e6cfe85ec570e922a7bdc44a5edcc473bc97b1d95ca3371c4b58",
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "exactCandidateBytes": true,
+      "dataMetadataPreserved": true
+    },
+    "androidFinalOptionalMetadataCandidate": {
+      "versionName": "1.0.30",
+      "versionCode": 94,
+      "debuggable": false,
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "sha256": "021e81e46089152221a9730b61f855f9fa2108086c6726babff9a1c243a134ca",
+      "signedAndVerified": true,
+      "finalReasoningRetentionIncluded": true,
+      "installed": true,
+      "exactCandidateBytes": true,
+      "dataMetadataPreserved": true
+    }
+  },
+  "frozenSourceInputs": 1180,
+  "frozenSourceDrift": 0,
+  "gates": "21+1/7 and 114/40 PASS",
+  "notRun": [
+    "fresh paid tests for every remaining model",
+    "all models x all attachment formats real matrix",
+    "new primary-device business generation",
+    "GitHub publication"
+  ],
+  "completedRuntimeRetention": {
+    "fixed": true,
+    "failedImmutableSaveReplaced": true,
+    "originalBodyCostAndStatusPreserved": true,
+    "idempotentAndConflictGuardTested": true,
+    "jvmStreamAndJsonReopenPassed": true,
+    "liveCasesPredateRetentionFix": true,
+    "newPaidRunsAfterRetentionFix": 0,
+    "latestIsolatedApkReadback": "three old real cases, zero model calls; no retroactive reasoning reconstruction"
+  }
+}

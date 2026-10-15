@@ -335,7 +335,7 @@
       "path": "docs/P0_USAGE_LEDGER_CONTRACT.md",
       "domain": "usage",
       "status": "SCOPED",
-      "scope": "南枫 AI P0 Usage Ledger 合同"
+      "scope": "append-only数量事实内核；Android独立Room与Mac生产账本接线分开，不替代当前计量合同"
     },
     {
       "path": "docs/P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md",
@@ -461,7 +461,7 @@
       "path": "docs/P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md",
       "domain": "message-actions",
       "status": "SCOPED",
-      "scope": "南枫 AI P3-B 类型化流事件与本地对话运行状态机合同"
+      "scope": "规范化运行事件、Room原子投影与完成后可选元数据追加；fixture不定义生产外发开关"
     },
     {
       "path": "docs/P3C_CONVERSATION_ACTION_LINEAGE_CONTRACT.md",
@@ -563,7 +563,7 @@
       "path": "docs/P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md",
       "domain": "knowledge",
       "status": "SCOPED",
-      "scope": "南枫 AI P4-E 本地 Knowledge 检索与显式 Context 选择合同"
+      "scope": "Knowledge CRUD与显式本机Context预览；普通聊天相关性检索另归运行时上下文"
     },
     {
       "path": "docs/P4F_LOCAL_KNOWLEDGE_DEDUPLICATION_CANDIDATES_CONTRACT.md",
@@ -634,8 +634,8 @@
     {
       "path": "docs/P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md",
       "domain": "settings",
-      "status": "SCOPED",
-      "scope": "P5-A 更多本地控制面入口合同"
+      "status": "HISTORICAL",
+      "scope": "2026-08-20旧本地控制面恢复任务与验收；当前可达性只读设置合同，不恢复隐藏入口"
     },
     {
       "path": "docs/P5B_BACKGROUND_CANCELLATION_BATTERY_CONTRACT.md",
@@ -719,7 +719,7 @@
       "path": "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
       "domain": "search-preview",
       "status": "SCOPED",
-      "scope": "P6-F2 统一搜索、搜索历史与本地内容预览合同"
+      "scope": "本地搜索索引／历史及受控预览；当前平台UI和日期投影分开，不复用旧实施状态"
     },
     {
       "path": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
@@ -743,7 +743,7 @@
       "path": "docs/P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md",
       "domain": "local-data",
       "status": "SCOPED",
-      "scope": "南枫 AI P6-I Claude export JSON Adapter 合同"
+      "scope": "Claude JSON严格文本树、私有任务与原子导入；旧检查点不否定现有双端实现"
     },
     {
       "path": "docs/P6J_NANFENG_KNOWLEDGE_EXPORT_ADAPTER_CONTRACT.md",
@@ -839,7 +839,7 @@
       "path": "docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md",
       "domain": "agent-local",
       "status": "EXPERIMENTAL",
-      "scope": "P8-A 受控 Agent 本地基础合同"
+      "scope": "本地Agent预算／权限／状态与ledger；不包含普通聊天Provider或后续只读inspect的否定"
     },
     {
       "path": "docs/P8B_READ_ONLY_AGENT_LEDGER_STATUS_CONTRACT.md",
@@ -875,7 +875,7 @@
       "path": "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
       "domain": "cache",
       "status": "SCOPED",
-      "scope": "独立本地精确引用索引；不替代搜索检查点/Provider缓存或普通发送"
+      "scope": "L1索引／L2本地持久化／L3分派／L4引用校验；未接普通发送，不替代检索检查点或Provider缓存"
     },
     {
       "path": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",

@@ -2228,12 +2228,10 @@ private fun SettingsCategoryList(
             SettingsCategoryDivider()
             SettingsCategoryRow(Icons.Rounded.Info, "关于", iconTint = settingsUtilityIconTint(), grouped = true) { onSelect(SettingsDestination.ABOUT) }
         }
-        SettingsCategoryGroup(title = "高级") {
-            if (com.nanzhufeng.ai.domain.ProductScope.workspacesVisible) {
+        if (com.nanzhufeng.ai.domain.ProductScope.workspacesVisible) {
+            SettingsCategoryGroup(title = "高级") {
                 SettingsCategoryRow(Icons.Rounded.FolderOpen, "项目与知识", grouped = true) { onSelect(SettingsDestination.WORKSPACE) }
-                SettingsCategoryDivider()
             }
-            SettingsCategoryRow(Icons.Rounded.Tune, "开发与诊断", grouped = true) { onSelect(SettingsDestination.DEVELOPMENT) }
         }
     }
 }

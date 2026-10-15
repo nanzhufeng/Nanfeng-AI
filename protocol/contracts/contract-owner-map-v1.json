@@ -159,7 +159,9 @@
       "owners": [
         "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
         "desktop/src-tauri/src/desktop_local_backup_v1.rs",
-        "desktop/src/local-data-view.mjs"
+        "desktop/src/local-data-view.mjs",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ClaudeExportJson.kt",
+        "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
       ],
       "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
     },
@@ -227,7 +229,10 @@
         "app/src/main/java/com/nanzhufeng/ai/domain/P3CConversationActions.kt",
         "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
         "desktop/src/chat-shell.mjs",
-        "app/src/main/java/com/nanzhufeng/ai/domain/TranscriptPresentation.kt"
+        "app/src/main/java/com/nanzhufeng/ai/domain/TranscriptPresentation.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationRuntime.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/Ports.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomConversationRepository.kt"
       ],
       "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
     },
@@ -251,7 +256,8 @@
         "app/src/main/java/com/nanzhufeng/ai/domain/AssistantResponseModelAttribution.kt",
         "app/src/main/java/com/nanzhufeng/ai/ui/AssistantFooterFormatting.kt",
         "desktop/src/desktop-cost-estimator.mjs",
-        "desktop/src/usage-ledger-display.mjs"
+        "desktop/src/usage-ledger-display.mjs",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomUsageLedgerRepository.kt"
       ],
       "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
     },
@@ -329,7 +335,8 @@
       "owners": [
         "app/src/main/java/com/nanzhufeng/ai/domain/LocalExactReuseV1.kt",
         "app/src/main/java/com/nanzhufeng/ai/domain/LocalExactReuseDispatch.kt",
-        "desktop/src-tauri/src/local_exact_reuse_v1.rs"
+        "desktop/src-tauri/src/local_exact_reuse_v1.rs",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomLocalExactReuseEntryStore.kt"
       ],
       "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
     },

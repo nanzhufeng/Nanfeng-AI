@@ -9,9 +9,9 @@
 
 ## 目标与边界
 
-本合同只为既有 Android 本地优先产品建立可测试的紧凑/展开 UI 壳层、可访问性与窗口连续性基线。它不改变任何 Domain、Room Schema（保持 17）、Repository、Provider、RunSpec、egress、导入导出语义或 launcher icon。
+本合同只为既有 Android 本地优先产品建立可测试的紧凑/展开 UI 壳层、可访问性与窗口连续性基线。它不改变Domain、Repository、导入导出或launcher icon；Schema 17是该初期增量的历史基线，不是当前全库版本。
 
-- `OpenRouterEgressPolicy.Disabled` 保持；不读取、写入或测试 Key，不构造 Prompt/RunSpec，不发 Provider HTTP。
+- 自适应布局owner自身不读取或测试Key、不构造Prompt／RunSpec、不发送Provider HTTP；当前普通生成链的授权和网络能力由P3-J／C12持有，不能将早期Disabled状态当作应用全局开关。
 - 只允许 当次隔离模拟器 的自动化与可见验收；不得操作 OPPO，不安装任何 test/helper APK 到 OPPO。
 - 所有 app-owned light Dialog、DropdownMenu、Popup 与 picker selection 内容面为 `#FFFFFFFF`；灰色只可用于外部 scrim。
 - 不做 P5-B（后台/电量）、P5-C（隐私/数据管理/诊断）、P5-D（备份恢复/发布）、P6–P8 或图标工作。
@@ -56,7 +56,7 @@
 
 1. 纯逻辑测试：窗口分类、字体回退、route 保存/恢复、显式 Intent route 解析、不可识别 route 安全回退。
 2. Compose/Robolectric 可行测试：导航 label/selected state、heading、触摸几何/形状 token、白色 selection surface、Compact/Expanded 的 route 一致性与草稿入口连续性。
-3. 全量 unit、Lint、Debug/Release 正式签名构建；connected/instrumentation 只在 当次隔离模拟器 且不触及 OPPO。
+3. 按改动范围运行本地unit、Lint和必要构建；永久禁止任何 `connected*AndroidTest`，不能通过隔离模拟器、设备号或脚本绕过。采用现有JVM／Robolectric、非仪器化隔离应用和可见UI路径验证；主设备边界唯一见项目AGENTS与测试交付流程。
 4. 可见模拟器验收：phone portrait/landscape、tablet/foldable-like 大窗口；`1.3x/2.0x`、IME 开关、旋转/resize、force-stop 恢复、同签名 `install -r` 与 `base.apk` hash 回读。
 
 ## 非完成声明

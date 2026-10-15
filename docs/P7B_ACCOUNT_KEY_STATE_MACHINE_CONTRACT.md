@@ -43,7 +43,7 @@ P7-A data key 仅通过 `withUnsealedDataKey` 传入回调，回调结束的 `fi
 
 Android Room 17→18 仅新增 `sync_account_metadata` 与 `sync_intents`：状态、revision、key alias/ref、wrapped blob ref/hash、direction fact、last safe error、intent/receipt；不重写旧业务表。Desktop SQLite `user_version` 3→4 仅新增同类 metadata/intent 表。两端皆不可保存秘密或业务正文，并以 schema migration 证明既有业务数据保持。
 
-Android 最小 Settings 仅可显示“Google 账号与同步：尚未连接；本机安全基础已就绪”的未连接状态，不能显示伪账号、头像、云端 revision 或成功。若不增加 UI，Domain/Room/Rust 合同即为权威。所有 app-owned Dialog 内容面保持纯白。
+旧 P7-B 最小 Settings 阶段曾只显示“Google 账号与同步：尚未连接；本机安全基础已就绪”；该历史文案不覆盖当前真实账号页面。当前身份、头像、direct 同步资格及失败展示由 [P7-F](P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md) 和设置合同持有；不能伪造登录或同步成功。保留模块的弹层消费当前主题前景色，浅／深色不由旧“纯白”措辞另行定义。
 
 ## 验收与外部门
 

@@ -1,0 +1,89 @@
+{
+  "mainFailure": {
+    "observedAt": "2026-10-15T16:35:00+08:00",
+    "model": "anthropic/claude-haiku-5.5",
+    "diagnostic": "TRANSPORT_TLS_SSLHandshakeException",
+    "phaseLatencyMs": 5200,
+    "screenshotTotalSeconds": 205,
+    "readOnlyInspection": true,
+    "unknownRequestResent": false
+  },
+  "android": {
+    "tests": 1529,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10,
+    "passed": 1519,
+    "suites": 325,
+    "formalBuild": true,
+    "lintRelease": true,
+    "tlsRegressionTests": 4
+  },
+  "desktop": {
+    "settingsRenderChecksPassed": 8,
+    "formalBundleBuild": true
+  },
+  "gates": {
+    "modelService": "PASS 21+1/7",
+    "contractGovernance": "PASS 114/40",
+    "contractConsistency": "PASS 114/40"
+  },
+  "realStreamingSample": {
+    "recipient": "anthropic/claude-haiku-5.5",
+    "fixture": "public image + Markdown",
+    "elapsedMs": 76806,
+    "result": "Sent",
+    "coverage": "4/4项检索结果",
+    "webSearchUsed": true,
+    "physicalCalls": 7,
+    "knownUsdMicros": 43771,
+    "unknownCharges": 0,
+    "footerCostLabel": "¥0.294155",
+    "proxyBefore": "null",
+    "proxyAfter": "null",
+    "allCallsStreamed": true,
+    "reopenNetworkCalls": 0,
+    "exactReopenedText": true
+  },
+  "formalCover": {
+    "android": {
+      "versionName": "1.0.30",
+      "versionCode": 94,
+      "debuggable": false,
+      "sha256": "e31dee68a005f6356e34835da3dc14dce1096c8fc504cf40eabedbc5865f6eed",
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "installed": true,
+      "exactCandidateBytes": true,
+      "dataMetadataPreserved": true,
+      "settingsUiVerified": true,
+      "noGenerationTriggered": true
+    },
+    "mac": {
+      "version": "1.0.30",
+      "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+      "installed": true,
+      "exactCandidateFiles": true,
+      "dataFiles": 1595,
+      "dataChanges": {
+        "added": 0,
+        "deleted": 0,
+        "changed": 0
+      },
+      "launched": false
+    }
+  },
+  "mainSettingsUi": {
+    "settingsOpened": true,
+    "aboutVisible": true,
+    "developmentEntryAbsent": true,
+    "emptyAdvancedGroupAbsent": true
+  },
+  "sourceInputCount": 1179,
+  "sourceInputDrift": 0,
+  "limits": [
+    "Actual main-device record has only SSLHandshakeException, no nested cause from old build; not proven to be recoverable EOF.",
+    "Real streaming sample ran before the subsequent pre-body TLS recovery and safe cause-class addition; final TLS behavior is covered by boundary tests, no production TLS fault injection.",
+    "No automatic resend of the main-device failed request and no new main-device generation acceptance.",
+    "No 21-model all-format matrix, no GitHub publication."
+  ]
+}

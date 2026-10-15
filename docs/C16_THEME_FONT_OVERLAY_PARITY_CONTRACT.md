@@ -8,7 +8,7 @@
 ## 范围与唯一事实源
 
 - 本增量只处理 C-16，不改写 C-01～C-15，不代替最终全量审计。
-- Android 当前源码是唯一产品事实：`AppearanceSettings.kt` 定义系统／浅色／深色与小 `0.80`／标准 `1.00`／大 `1.24`；`NanfengAiApp.kt` 的 `applyAppearancePalette`、`LocalAppTextScale` 与当前弹层组件定义表面、字号与层级。Desktop 旧样式不能反推 Android。
+- Android的`AppearanceSettings.kt`定义系统／浅色／深色与小`0.80`／标准`1.00`／大`1.24`，`NanfengAiApp.kt`的`applyAppearancePalette`、`LocalAppTextScale`及弹层组件定义该端投影；Desktop由`desktop-theme-owner.mjs`与`desktop-parity-preferences.mjs`持有自身投影。两端各核对实际owner，不用旧样式或另一端实现替代；当前主题色可配置，旧子合同的固定橙色／纯白只解释当时浅色默认值。
 - 2026-09-03该轮C-16固定验收矩阵是：系统（分别解析浅／深）／显式浅色／显式深色 × 小／标准／大 × 模型根层／日常／深度／加号根层／基础风格和语气／搜索与历史／设置与主题选择层，共 `84` 个合同项。
 
 模型弹窗的克制字体缩放与RelayCore子层是后续当前规则，读取会话／设置及RelayCore合同；不能以本轮旧84项矩阵排除新增模型层或把应用整体字体倍率直接套到所有弹窗。

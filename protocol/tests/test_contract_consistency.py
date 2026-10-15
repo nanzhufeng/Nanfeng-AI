@@ -102,4 +102,34 @@ class ContractConsistencyTests(unittest.TestCase):
                     return original(path,*args,**kwargs)
                 with patch.object(Path,'read_text',altered):
                     self.assertEqual('FAILED',AUDIT.audit(ROOT)['state'])
+
+    def test_explicit_history_markers_and_fences_preserve_real_current_rules(self):
+        for title in ['1. 2026-09-03 Android 历史事实', '初期P6-D2输入与失败关闭记录（历史范围）', '历史2026-08-15 实施检查点']:
+            with self.subTest(title=title):
+                text = '## ' + title + '\nold\n### Child\nold child\n## 当前规则\ncurrent\n'
+                self.assertEqual(['## 当前规则', 'current'], [line for _, line in AUDIT.active_lines(text)])
+        for fence in ['~~~', '````']:
+            text = fence + '\n## 历史伪标题\n```\n' + fence + '\ncurrent obligation\n'
+            self.assertIn('current obligation', [line for _, line in AUDIT.active_lines(text)])
+
+    def test_newly_reviewed_obsolete_claims_are_rejected(self):
+        cases = [
+            ('P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md', '生产 OpenRouter egress 固定 `Disabled`。'),
+            ('P0_USAGE_LEDGER_CONTRACT.md', '当前没有 production caller。'),
+            ('P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md', '因此 App 诚实地保持“无 Provider、无外部工具”。'),
+            ('P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md', 'P6-F2-E、P6-G 仍未实施，须独立启动。'),
+            ('P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md', 'Android 最小 Settings 仅可显示尚未连接。'),
+            ('P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md', 'connected/instrumentation 只在 当次隔离模拟器。'),
+            ('P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md', 'Knowledge 在 Context 中默认关闭，不自动检索或注入。'),
+            ('ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md', '| 工作区 | 项目与知识、开发与诊断 | 必须置底 |'),
+        ]
+        original = Path.read_text
+        for filename, claim in cases:
+            with self.subTest(contract=filename):
+                def altered(path, *args, **kwargs):
+                    text = original(path, *args, **kwargs)
+                    return text + '\n## 当前规则\n' + claim + '\n' if path.name == filename else text
+                with patch.object(Path, 'read_text', altered):
+                    self.assertTrue(any('known active semantic drift' in error for error in AUDIT.audit(ROOT)['errors']))
+
 if __name__=='__main__':unittest.main()

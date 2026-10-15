@@ -1,0 +1,88 @@
+{
+  "verifiedAt": "2026-10-15T18:46:42+08:00",
+  "baseline": "5a52aa2a8928cc46bad136cb608fd1eb3b62517e",
+  "scope": "WORKTREE before source commit; exact input hashes frozen",
+  "android": {
+    "tests": 1535,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10,
+    "suites": 326,
+    "passed": 1525,
+    "releaseLint": "PASS",
+    "forcedUnitRerun": true,
+    "elapsedSeconds": 261.12
+  },
+  "rust": {
+    "passed": 457,
+    "ignored": 36,
+    "failed": 0,
+    "offline": true
+  },
+  "desktop": {
+    "tests": 566,
+    "passed": 554,
+    "skipped": 12,
+    "failed": 0,
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "inventory": "PASS",
+    "staticBuild": "PASS",
+    "initialFailures": 2,
+    "initialFailureCause": "Two stale tests required the hidden development settings entry",
+    "testUpdates": [
+      {
+        "path": "desktop/tests/chat-first-ui.test.mjs",
+        "before": "a3c827cef8a33bf9f023715de2fb113f62b4f0e6bf709978fe4c41a73f4ab7d2",
+        "after": "7b4726770bc9fccd7a7056d93e25d4f3214aedad33e476358e2902c9883cd3db",
+        "reason": "retired development settings assertions; production behavior unchanged"
+      },
+      {
+        "path": "desktop/tests/icon-control-card-audit.test.mjs",
+        "before": "27b105e51c9c3cedc9c2f1db8e71a9391e9c863c9afbe7d4d67b08ef9681ab32",
+        "after": "e7a93573588a353d65e15cc7e2372e7672c818836381410e7f2ec41b3dd7fe75",
+        "reason": "retired development settings assertions; production behavior unchanged"
+      }
+    ]
+  },
+  "maintenance": {
+    "tests": 45,
+    "failures": 0,
+    "contracts": 114,
+    "domains": 40,
+    "chatModels": 21,
+    "specialModels": 1,
+    "credentialGroups": 7
+  },
+  "protocolGolden": {
+    "exchangeV1": "PASS",
+    "exchangeV2": "PASS",
+    "sync": "PASS"
+  },
+  "supabaseStatic": {
+    "tests": 10,
+    "failed": 0,
+    "scope": "existing .mjs contracts and avatar policy; not real Postgres/RLS/Deno deployment"
+  },
+  "gateway": {
+    "goTest": "PASS",
+    "scope": "local package tests, no deployment"
+  },
+  "sourceInputs": 1222,
+  "sourceDrift": 0,
+  "newPaidProviderCalls": 0,
+  "appLaunchOrInstallation": 0,
+  "nativePackageRebuild": "NOT RUN; original signed candidates reused by original hash/scope",
+  "runtimeGapsRemain": [
+    "RC Gemini Pro interrupted current control outcome/charge unknown, historical404",
+    "Full models/platforms/materials and formal UI/lifecycle not all accepted",
+    "Current cloud deployment/Google sync/gateway/Windows delivery not verified"
+  ],
+  "stagedSourceProof": {
+    "paths": 87,
+    "trackedFiles": 1839,
+    "inputs": 1222,
+    "sourceDrift": 0,
+    "exportGates": "6 PASS"
+  }
+}

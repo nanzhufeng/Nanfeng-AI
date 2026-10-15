@@ -42,6 +42,16 @@ class P2JOpenRouterRegistryContractsTest {
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
 
     @Test
+    fun `text completion streaming is available when optional catalog parameters omit stream`() {
+        val snapshot = requireNotNull(OpenRouterRegistrySnapshotVerifier().verify(
+            OpenRouterCatalogResponse(claudeCatalog() + catalogModel("anthropic/claude-haiku-5.5", "Haiku 5.5", null, null), null), now,
+        ))
+        val model=snapshot.models.single {it.id=="anthropic/claude-haiku-5.5"}
+        assertFalse(model.supportedParameters.contains("stream"))
+        assertTrue(model.capabilities.supportsStreaming)
+    }
+
+    @Test
     fun `parser retains only registry whitelist and request policy has no inference shape`() {
         val parsed = OpenRouterCatalogJsonParser.parse(
             """{"data":[{"id":"anthropic/claude-sonnet-test","name":"Claude Test","description":"must-not-persist","api_key":"must-not-persist","context_length":8192,"architecture":{"input_modalities":["text","image"],"output_modalities":["text"]},"supported_parameters":["response_format"],"pricing":{"prompt":"0.000003","completion":"0.000015","cache_read":"0"}}]}""".toByteArray(),

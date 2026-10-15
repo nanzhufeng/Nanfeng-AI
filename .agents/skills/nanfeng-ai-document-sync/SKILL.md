@@ -15,6 +15,9 @@ description: Synchronize Nanfeng AI contracts, handoff, development archive, dec
    - 完整复盘再运行 `scripts/audit_inventory.py --repo <仓库> --inventory <证据目录>/files.json --output <证据目录>/structure.json`；逐文件记录清单范围内的结构路由、适用格式语法结果与快照一致性，不输出正文。此脚本不编译 Kotlin／Rust、不执行 SQL，也不替代定向语义检查。缺失工具和历史证据格式失败单列，不修改原件掩盖。
 4. 核查组合根、真实入口、持久化／迁移、发送／导入链、凭据、IPC、后台／部署配置及相关测试。提交主题／日期只证明仓库记录，不补作者动机或实际工作时长。
 
+- 全历史统计同时给出全部本地ref可达与当前HEAD祖先链；backup／改写前ref可保留相似checkpoint，不把两者主题/路径相同推导为两轮主线开发。提交日期不代替阶段报告日期。
+- 产品版本、已发布构建源码点、当前WIP与同版本已装产物hash分开记录；更新旧“当前”技术栈、模型数、证据版本和测试表正文，保留历史验收的原日期。
+
 ## 写入唯一位置
 
 5. 当前行为 → 一份领域合同；动态 checkpoint／构建／设备／测试 → 当前交接；重要取舍与依据 → decision-log；项目目标、架构、目录、模块、数据流、过程、坑、验证、部署、问题与路线 → 完整开发档案；可迁移方法 → 可迁移开发经验。

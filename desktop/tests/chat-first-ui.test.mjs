@@ -199,9 +199,9 @@ test('P6-K exposes current ZIP imports and keeps recovery controls inside ZIP im
 
 test('settings primary menu is the latest Android hierarchy and contains no retired desktop registry', () => {
   const rendered = renderChatFirstShell({ data: fixture, native: true, pane: 'settings', settingsSection: 'personalization', status: '', error: '', connection: {} });
-  const labels = ['个性化', '模型与联网', '提醒', '对话管理', '外观', '字体大小', '主题色', 'Google 账号与同步', '导入与导出', '本机数据', '关于', '高级', '开发与诊断'];
+  const labels = ['个性化', '模型与联网', '提醒', '对话管理', '外观', '字体大小', '主题色', 'Google 账号与同步', '导入与导出', '本机数据', '关于'];
   labels.forEach(label => assert.ok(rendered.includes(label)));
-  for (const retired of ['搜索设置', '功能审阅', 'AI 模型服务', '基础</p>']) assert.ok(!rendered.includes(retired));
+  for (const retired of ['搜索设置', '功能审阅', 'AI 模型服务', '基础</p>', '高级', '开发与诊断', 'data-page="development"']) assert.ok(!rendered.includes(retired));
 });
 
 test('retained workspace settings route returns to chat settings without work navigation', () => {

@@ -46,8 +46,9 @@ class OpenRouterRegistrySnapshotVerifier {
                 capabilities = ModelCapabilities(
                     supportsText = "text" in model.inputModalities && "text" in model.outputModalities,
                     supportsVision = "image" in model.inputModalities,
-                    supportsStreaming = "stream" in model.supportedParameters ||
-                        model.id == "x-ai/grok-4.1-fast" || model.id == "x-ai/grok-4.6",
+                    // OpenRouter streaming is a text endpoint capability, not an optional
+                    // model parameter published in supported_parameters.
+                    supportsStreaming = "text" in model.outputModalities,
                     supportsStructuredOutput = "response_format" in model.supportedParameters,
                 ),
                 contextWindowTokens = model.contextWindowTokens,

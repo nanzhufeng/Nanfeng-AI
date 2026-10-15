@@ -11,6 +11,25 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class ProviderSseDecoderContractsTest {
+    @Test fun `DeepSeek final answer after retrieval needs completion but does not search twice`() {
+        val adapter=DeepSeekChatAdapter()
+        val wire="""data: {"type":"message_start","message":{"model":"deepseek-flash","usage":{"input_tokens":100}}}
+
+data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"根据已取得的检索证据给出最终回答。"}}
+
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":20}}
+
+data: {"type":"message_stop"}
+
+"""
+        for (grounded in listOf(false,true)) {
+            val options=ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_MESSAGES,groundedAnswer=grounded)
+            val result=ProviderSseDecoder.read(wire.byteInputStream(),{}, {adapter.decodeStreamingEvent(it,options)},adapter.streamTextMode(options))
+            assertEquals(if(grounded) "COMPLETED" else "FAILED",result.finishReason)
+            assertEquals(100L,result.inputTokens);assertEquals(20L,result.outputTokens)
+            assertTrue(result.webSources.isEmpty());assertTrue(!result.webSearchPerformed)
+        }
+    }
     @Test fun `typed Responses error cannot become unknown missing completion`() {
         val adapter=QwenChatAdapter();val options=ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
         val stream="data: {\"type\":\"error\",\"code\":\"rate_limit_exceeded\"}\n\n".byteInputStream()

@@ -1,11 +1,17 @@
 # P5-A 更多本地控制面入口合同
 
 <!-- contract-governance:start -->
-> **合同口径：领域／模块限定合同。** 领域入口：[ Android设置界面 ](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
-> **适用范围：** P5-A 更多本地控制面入口合同
+> **合同口径：历史阶段记录。** 领域入口：[ Android设置界面 ](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
+> **适用范围：** 2026-08-20旧本地控制面恢复任务与验收；当前可达性只读设置合同，不恢复隐藏入口
 <!-- contract-governance:end -->
 
-## 目标与停止边界
+## 当前替代入口
+
+2026-08-20的“更多本地控制面”恢复任务及其验收保留如下。现行正式入口只由[当前设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)和产品可达性决定；不得据此重新显示已隐藏的工作区、开发与诊断或功能审阅入口。原管理owner与数据保留，隐藏入口不构成删除。
+
+<a id="目标与停止边界"></a>
+
+## 历史2026-08-20目标与停止边界
 
 恢复紧凑 Android 和 Desktop 正常用户界面对既有 Project、Knowledge（含关系）与长期 Memory owner 的可达路径，为 P6 完整 owner 文件链重新建立前置条件。
 

@@ -194,8 +194,8 @@ mod tests {
     #[test] fn retrieval_excludes_plain_text_file_blocks_as_well_as_binary_parts() {
         let mut parent=parent();
         parent.messages=json!([
-            {"role":"user","content":[{"type":"text","text":"previous question"},{"type":"text","text":"### 附件：old.md\nprivate-old-file-fixture"}]},
-            {"role":"user","content":[{"type":"text","text":"分析报告"},{"type":"text","text":"### 附件：report.md\nprivate-new-file-fixture"}]}
+            {"role":"user","content":[{"type":"text","text":"previous question"},{"type":"text","text":"### 附件：old.md\nconfidential: private-old-file-fixture"}]},
+            {"role":"user","content":[{"type":"text","text":"分析报告"},{"type":"text","text":"### 附件：report.md\nconfidential: private-new-file-fixture"}]}
         ]);
         assert!(matches!(retrieval_request(&parent),Err(Failure::Explicit{code:"WEB_SEARCH_QUERY_EMPTY",..})));
         parent.messages.as_array_mut().unwrap()[1]["content"].as_array_mut().unwrap().push(json!({"type":"text","text":"### 附件：public.md\n(1) Python 3.14.0在2025年发布。"}));

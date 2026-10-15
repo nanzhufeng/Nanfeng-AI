@@ -113,7 +113,7 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                             observed.copy(jsonBody=limited.toString(),body=null)
                         } else observed
                         val outcome=actualTransport.execute(outbound,credential)
-                        val wire=if(config.optString("fixture")=="haiku-image") {
+                        val wire=if(outbound.body!=null) {
                             val bytes=ByteArrayOutputStream();outbound.effectiveBody().writeTo(bytes)
                             JSONObject(bytes.toString(Charsets.UTF_8.name()))
                         } else JSONObject(outbound.jsonBody)
@@ -193,6 +193,10 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                 val rust=if(fresh) listOf("128.0","127.0").take(count).map {"- Firefox $it 正式发布，核验mozilla.org官方发布日期。"} else listOf("1.90.0","1.89.0","1.88.0","1.87.0","1.86.0","1.85.0","1.84.0","1.83.0").take(count).map {"- Rust $it 正式发布，核验blog.rust-lang.org官方发布日期。"}
                 val fixture=config.optString("fixture")
                 val suites=when(fixture) {
+                    "public-topic-mixed" -> listOf(listOf(
+                        import(container,"image/png","public-finance.png",File(filesDir,"public-finance.png").readBytes()),
+                        import(container,"text/markdown","public-art.md",File(filesDir,"public-art.md").readBytes()),
+                    ))
                     "haiku-image" -> {
                         check(config.optString("filter")=="CLAUDE_HAIKU_5_5")
                         listOf(listOf(import(container,"image/png","public-sample-order.png",assets.open("public-search-fixtures/public-sample-order.png").use {it.readBytes()})))
@@ -222,7 +226,7 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                     val snapshot = container.conversationRepository.save(ConversationTreeService(Clock.systemUTC()).create("公开双文件-${preset.name}"))
                     val id = snapshot.conversation.id
                     val draft = container.conversationRepository.saveDraft(id, ConversationDraft(
-                        text=if(fixture=="haiku-image") "分析这张订单图，用100字以内回答。" else if(fixture=="rc-usage") "只回答算式结果：1+1。不要解释。" else if(fixture=="user-report") config.optString("requestText","分析报告") else if(fixture=="rc-text") config.optString("requestText","请实际联网核验 Go 1.23.0 与 Firefox 138.0 的官方发布日期，中文简短列出两项日期与官方来源，并比较两者发布节奏。") else "分析本次全部公开附件，所有事项都实际联网核验，中文简短回答并引用来源。",
+                        text=if(fixture=="haiku-image") "分析这张订单图，用100字以内回答。" else if(fixture=="public-topic-mixed") "分析这两份附件，给出简洁结论和相关来源。" else if(fixture=="rc-usage") "只回答算式结果：1+1。不要解释。" else if(fixture=="user-report") config.optString("requestText","分析报告") else if(fixture=="rc-text") config.optString("requestText","请实际联网核验 Go 1.23.0 与 Firefox 138.0 的官方发布日期，中文简短列出两项日期与官方来源，并比较两者发布节奏。") else "分析本次全部公开附件，所有事项都实际联网核验，中文简短回答并引用来源。",
                         attachments=references, updatedAt=java.time.Instant.now()))
                     val executor = container.normalChatOpenRouterExecutor
                     val routing=executor.routingSnapshot().copy(webSearchEnabled=fixture!="rc-usage").let { if(preset==ModelPresetId.QWEN_3_6_FLASH) it.copy(usablePresets=setOf(preset)) else it }

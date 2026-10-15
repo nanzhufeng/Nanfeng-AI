@@ -2,10 +2,10 @@
 
 <!-- contract-governance:start -->
 > **合同口径：领域／模块限定合同。** 领域入口：[ 本地搜索与安全预览 ](P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
-> **适用范围：** P6-F2 统一搜索、搜索历史与本地内容预览合同
+> **适用范围：** 本地搜索索引／历史及受控预览；当前平台UI和日期投影分开，不复用旧实施状态
 <!-- contract-governance:end -->
 
-状态：P6-F2-A Search Index Adapter、P6-F2-B Image Preview Adapter、P6-F2-C PDF Preview Adapter 与 P6-F2-D Video Preview Adapter 已完成（D 的证据：`P6F2D_VIDEO_PREVIEW_ADAPTER_EVIDENCE.md`）。P6-F2-E、P6-G 仍未实施，须独立启动。平台：Desktop + Android 同阶段。
+状态：本地搜索与预览的领域合同；Audio／Generic File 子路径见[P6-F2-E](P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md)，模型选择另归[P6-G](P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md)。不从早期Adapter实施顺序推断当前功能尚未接入或双端已完成相同验收。
 
 > **当前 Android UI 路由（2026-08-26）：** 本文保留搜索索引、资料类型、安全预览与本地数据边界。Android 搜索首屏目录、月份分组、卡片视觉、状态栏避让、音频播放器、正文来源入口、主题／暗色皮肤和会话内 UI 均以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为唯一正文；本文历史浮层或媒体展示数值不得成为第二套 Android UI。
 
@@ -62,10 +62,10 @@
 
 ## 会话列表日期与紧凑操作
 
-- 普通会话列表每项右侧显示小号日期元数据：今天为 `HH:mm`，昨天为`昨天`，本年度为`M月d日`，更早为`YYYY/M/D`；可访问名称和详情始终包含本地时区完整时间。
-- 日期使用会话最后一条可见消息时间；无消息时用创建时间。不得用导入时间覆盖第三方对话原始时间，也不得用当前设置倒填历史。
+- 普通会话列表显示本地绝对日期，不再使用“今天／昨天”的旧相对日期层级。Desktop 由 `chat-shell.mjs::conversationLocalDate` 读取 `createdAt`（缺失时 `updatedAt`）格式化年／月／日；Android 日期与布局只见[当前会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)，详情保留实际时间。
+- 列表日期使用各平台现有读取 owner 的实际字段，不以当前时间或导入时间重写原始事实；日期格式化不修改会话或消息时间。排序与日期展示的字段用途分别核对，不为文档统一而改写实现。
 - Desktop 未悬停时显示日期；hover/focus 时日期可让位给置顶/归档图标，但行宽高、标题截断与列表位置不变。Android 日期保持可读，操作统一经长按/更多面板，不把多个小图标塞进窄行。
-- 置顶区、最近区、项目区共享同一日期格式；排序与日期显示使用同一时间 owner，不能一个按更新时间排序、另一个显示导入时间。
+- 置顶区、最近区、保留的项目区共享对应平台的日期格式；排序仍由既有置顶／未读／更新时间策略持有，不能将列表日期误作排序或导入事实的第二所有者。
 
 ## 对话中的本地附件呈现
 

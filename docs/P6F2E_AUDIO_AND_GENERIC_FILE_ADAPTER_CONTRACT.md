@@ -16,7 +16,7 @@
 
 ## 共同安全与状态
 
-- import 继续受 20 MB 单项、4 项、40 MB 总量、SHA-256、普通文件/非符号链接与真实 magic 限制；只保存安全名、MIME、大小、摘要和 opaque owner reference。
+- import 继续使用[P6-D2附件合同](P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md)指定的各平台／类型容量、SHA-256、普通文件/非符号链接与真实magic owner；本预览Adapter不另设容量或缩窄当前可选择格式。只保存安全名、MIME、大小、摘要和opaque owner reference，能选取不等于此预览器已能播放／解码。
 - card metadata 惰性读取；仅用户打开的 audio/text 项读取已校验的 private copy。单项失败隔离，不阻塞 transcript。TEMP、已清理项、路径/URI/Key、原始正文、播放字节与任何 Provider payload 不进入搜索索引、历史、导出或同步。
 - 必须覆盖取消、重复、损坏/缺失、超限、跨 workspace/会话拒绝、关闭前保存失败、重启读回与中文可执行提示。P6-F2-E 不读 Key、不发 HTTP、不外发附件、不操作 OPPO、不改图标，也不进入 P6-G。
 

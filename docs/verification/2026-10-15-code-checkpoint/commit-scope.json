@@ -1,0 +1,186 @@
+{
+  "baseline": "5a52aa2a8928cc46bad136cb608fd1eb3b62517e",
+  "selectedPaths": [
+    ".agents/skills/nanfeng-ai-code-review/SKILL.md",
+    ".agents/skills/nanfeng-ai-debugging/SKILL.md",
+    ".agents/skills/nanfeng-ai-development/SKILL.md",
+    ".agents/skills/nanfeng-ai-document-sync/SKILL.md",
+    ".agents/skills/nanfeng-ai-testing-delivery/SKILL.md",
+    "AGENTS.md",
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchInventory.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+    "app/src/main/java/com/nanzhufeng/ai/data/local/RoomConversationRepository.kt",
+    "app/src/main/java/com/nanzhufeng/ai/domain/Ports.kt",
+    "app/src/main/java/com/nanzhufeng/ai/domain/RegistryVerification.kt",
+    "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+    "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlanTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/CurrentModelNetworkReadinessTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/ProviderSseDecoderContractsTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/ProviderTlsConnectionRecoveryTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/data/P2JOpenRouterRegistryContractsTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ui/SettingsCategoryCardContractsTest.kt",
+    "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+    "desktop/src-tauri/src/attachment_web_search_v1.rs",
+    "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+    "desktop/src-tauri/src/relaycore_web_search_v1.rs",
+    "desktop/src/android-settings-shell.mjs",
+    "desktop/tests/c11-settings-appearance-parity.test.mjs",
+    "desktop/tests/chat-first-ui.test.mjs",
+    "desktop/tests/chat-product-scope.test.mjs",
+    "desktop/tests/icon-control-card-audit.test.mjs",
+    "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+    "docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md",
+    "docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+    "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+    "docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md",
+    "docs/C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md",
+    "docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md",
+    "docs/CONTRACT_GOVERNANCE_CURRENT.md",
+    "docs/CURRENT_HANDOFF.md",
+    "docs/DESKTOP_CHAT_FIRST_UI_CONTRACT.md",
+    "docs/P0_USAGE_LEDGER_CONTRACT.md",
+    "docs/P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md",
+    "docs/P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md",
+    "docs/P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md",
+    "docs/P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md",
+    "docs/P6C_DESKTOP_LOCAL_WRITE_WORKBENCH_CONTRACT.md",
+    "docs/P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md",
+    "docs/P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md",
+    "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+    "docs/P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md",
+    "docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md",
+    "docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md",
+    "docs/PROJECT_STATUS.md",
+    "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
+    "docs/contracts/CONTRACT_INDEX.md",
+    "docs/contracts/DOMAIN_OWNER_MAP.md",
+    "docs/model-service/MODEL_SERVICE_ARCHITECTURE.md",
+    "docs/verification/2026-10-15-attachment-search-all-topics/REPORT.md",
+    "docs/verification/2026-10-15-attachment-search-all-topics/source-hashes.json",
+    "docs/verification/2026-10-15-attachment-search-all-topics/verification.json",
+    "docs/verification/2026-10-15-code-checkpoint/REPORT.md",
+    "docs/verification/2026-10-15-code-checkpoint/commit-scope.json",
+    "docs/verification/2026-10-15-code-checkpoint/regression.json",
+    "docs/verification/2026-10-15-code-checkpoint/source-hashes.json",
+    "docs/verification/2026-10-15-contract-unification/REPORT.md",
+    "docs/verification/2026-10-15-contract-unification/review.json",
+    "docs/verification/2026-10-15-haiku-tls-streaming/REPORT.md",
+    "docs/verification/2026-10-15-haiku-tls-streaming/source-hashes.json",
+    "docs/verification/2026-10-15-haiku-tls-streaming/verification.json",
+    "docs/verification/2026-10-15-hide-development-settings/REPORT.md",
+    "docs/verification/2026-10-15-other-model-network-review/REPORT.md",
+    "docs/verification/2026-10-15-other-model-network-review/source-hashes.json",
+    "docs/verification/2026-10-15-other-model-network-review/verification.json",
+    "docs/verification/2026-10-15-project-retrospective/REPORT.md",
+    "docs/verification/2026-10-15-project-retrospective/summary.json",
+    "docs/南枫AI完整开发档案.md",
+    "docs/南枫AI开发经验增量审计.md",
+    "docs/可迁移开发经验.md",
+    "protocol/contracts/contract-owner-map-v1.json",
+    "protocol/contracts/contract-registry-v1.json",
+    "protocol/fixtures/attachment-search-plan-v1.json",
+    "protocol/scripts/audit-contract-consistency.py",
+    "protocol/tests/test_contract_consistency.py"
+  ],
+  "coreAddedTests": [
+    "app/src/test/java/com/nanzhufeng/ai/ai/CurrentModelNetworkReadinessTest.kt",
+    "app/src/test/java/com/nanzhufeng/ai/ai/ProviderTlsConnectionRecoveryTest.kt"
+  ],
+  "excludedUntrackedCount": 323,
+  "excludedGroups": {
+    "docs/design/model-settings": 1,
+    "docs/verification/2026-10-13-contract-consistency": 129,
+    "docs/verification/2026-10-13-contract-post-delivery-review": 34,
+    "docs/verification/2026-10-13-deepseek-terminal-fix": 1,
+    "docs/verification/2026-10-13-dual-platform-risk-followup": 25,
+    "docs/verification/2026-10-13-formal-cover-install": 4,
+    "docs/verification/2026-10-13-luna-routing-implementation": 31,
+    "docs/verification/2026-10-13-native-search-consistency": 1,
+    "docs/verification/2026-10-13-openrouter-search-proof": 1,
+    "docs/verification/2026-10-13-real-report-footer-fix": 38,
+    "docs/verification/2026-10-13-retrieval-cost-grouping": 1,
+    "docs/verification/2026-10-13-search-routing-plan": 57
+  },
+  "excludedManifestSha256": "6b99d627e5dedc09f8eefdbdd27c9b31ca41d10a64f8d9c65a632d39afbd812d",
+  "scopeRules": [
+    "No raw payload/private materials/before/log/source duplicate artifacts",
+    "Existing excluded files remain unchanged locally",
+    "No GitHub push or release",
+    "Staged snapshot source identity must match source-hashes.json"
+  ],
+  "status": "staged source closure verified; source commit readback recorded after commit",
+  "indexIdentity": {
+    "stagedPaths": 87,
+    "exportedTrackedFiles": 1839,
+    "sourceInputs": 1222,
+    "mismatch": [],
+    "privacy": "PASS",
+    "whitespace": "PASS"
+  },
+  "exportGates": [
+    {
+      "command": [
+        "python3",
+        "protocol/scripts/verify-contract-governance.py"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.12
+    },
+    {
+      "command": [
+        "python3",
+        "protocol/scripts/audit-contract-consistency.py"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.13
+    },
+    {
+      "command": [
+        "python3",
+        "protocol/scripts/verify-model-service-contract.py"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.06
+    },
+    {
+      "command": [
+        "npm",
+        "--prefix",
+        "desktop",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.21
+    },
+    {
+      "command": [
+        "npm",
+        "--prefix",
+        "desktop",
+        "run",
+        "lint"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 1.62
+    },
+    {
+      "command": [
+        "npm",
+        "--prefix",
+        "desktop",
+        "run",
+        "build"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.2
+    }
+  ]
+}

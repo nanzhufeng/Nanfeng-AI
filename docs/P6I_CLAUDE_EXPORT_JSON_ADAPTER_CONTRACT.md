@@ -2,11 +2,11 @@
 
 <!-- contract-governance:start -->
 > **合同口径：领域／模块限定合同。** 领域入口：[ 本机数据与导入导出表面 ](C14_LOCAL_DATA_PARITY_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
-> **适用范围：** 南枫 AI P6-I Claude export JSON Adapter 合同
+> **适用范围：** Claude JSON严格文本树、私有任务与原子导入；旧检查点不否定现有双端实现
 <!-- contract-governance:end -->
 
 日期：2026-08-14  
-状态：实施中；本文件是 P6-I 的唯一合同，不复用或重新打开 P6-H。
+状态：严格 Claude JSON 格式、任务与事务的限定合同；Android与Desktop均有现有入口和解析owner。实际可见退出门逐平台记录于当前状态，不以2026-08-15检查点断言Desktop尚无实现，也不凭源码存在补造最终验收。
 
 ## 目标与唯一链
 
@@ -47,7 +47,9 @@ Desktop 原生文件选择器 / Android OpenDocument
 
 不读 Key、不构造 Prompt/RunSpec、不发送 Provider HTTP、不执行模型、Agent 或 tool；不操作 OPPO、不改图标、不实现知识库 Adapter、同步、发布或实际 Claude 账号导出动作。 
 
-## 2026-08-15 实施检查点：纯严格解析器与领域任务机（未完成 P6-I）
+<a id="2026-08-15-实施检查点纯严格解析器与领域任务机未完成-p6-i"></a>
+
+## 历史2026-08-15 实施检查点：纯严格解析器与领域任务机（未完成 P6-I）
 
 - Android domain 已新增无 I/O 的 `ClaudeExportJsonAdapter`、私有资产/任务/原子 commit 端口与定向 JVM 合同。它只消费调用方给出的字节：严格拒绝非 UTF-8、重复 key、过深/超长 JSON 与非数组包；对包内各会话分别校验 UUID、ISO 时间、`chat_messages` 上限、sender、纯文本 `text/content`、重复 message UUID 与唯一可达树。
 - 合法项只输出 source UUID、父 UUID、数组稳定的同级顺序、`USER/ASSISTANT/TOOL`、惰性文本、时间与内容 hash；未知字段不执行。单个会话错误保留为 item failure，不吞没相邻合法候选；包级语法/安全错误整体失败关闭。

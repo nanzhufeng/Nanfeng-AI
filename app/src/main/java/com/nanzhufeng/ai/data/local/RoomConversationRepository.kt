@@ -96,6 +96,31 @@ class RoomConversationRepository(
         persistSnapshot(database.conversationDao(), snapshot)
     }
 
+    override fun retainCompletedProviderContinuation(state: ConversationRuntimeState, reasoning: String?, toolCalls: List<ContentBlock.ProviderToolCall>): Boolean = database.inConversationTransaction {
+        if (state.status != ConversationRuntimeStatus.COMPLETED) return@inConversationTransaction false
+        val dao = database.conversationDao()
+        val sequence = state.lastCheckpointSequence ?: return@inConversationTransaction false
+        val completed = dao.runtimeEventAt(state.invocationId.value, sequence) ?: return@inConversationTransaction false
+        if (completed.conversationId != state.conversationId.value || completed.messageId != state.messageId.value) return@inConversationTransaction false
+        val snapshot = dao.loadSnapshot(state.conversationId) ?: return@inConversationTransaction false
+        val target = snapshot.nodes.firstOrNull { it.id == state.messageId } ?: return@inConversationTransaction false
+        if (target.role != MessageRole.ASSISTANT || target.deliveryState != com.nanzhufeng.ai.domain.MessageDeliveryState.COMPLETE || target.checkpoint?.lastPersistedSequence != sequence) return@inConversationTransaction false
+        val existingReasoning = target.content.filterIsInstance<ContentBlock.Reasoning>()
+        val existingCalls = target.content.filterIsInstance<ContentBlock.ProviderToolCall>()
+        if (reasoning != null && existingReasoning.any { it.text != reasoning }) return@inConversationTransaction false
+        if (toolCalls.isNotEmpty() && existingCalls.isNotEmpty() && existingCalls != toolCalls) return@inConversationTransaction false
+        val additions = buildList {
+            if (reasoning != null && existingReasoning.isEmpty()) add(ContentBlock.Reasoning(reasoning))
+            if (existingCalls.isEmpty()) addAll(toolCalls)
+        }
+        if (additions.isEmpty()) return@inConversationTransaction true
+        dao.deleteBlocks(target.id.value)
+        dao.insertBlocks((additions + target.content).mapIndexed { index, block -> block.toEntity(target.id, index) })
+        // Preserve concurrent title/draft data and the completed reply's activity timestamp.
+        dao.update(snapshot.conversation.copy(revision = Math.addExact(snapshot.conversation.revision, 1L)).toEntity())
+        true
+    }
+
     override fun completeAutomaticTitle(id: ConversationId, title: String, updatedAt: Instant): Boolean =
         database.inConversationTransaction {
             // Use only the database writer here: the legacy timestamp repair takes the

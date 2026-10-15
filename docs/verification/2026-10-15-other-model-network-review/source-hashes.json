@@ -1,0 +1,14 @@
+{
+  "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchInventory.kt": "c60f44732784b676c7b645bd32b7c857bc54b77ec89d2c6bc072d9975c7f946c",
+  "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt": "f63b65669ddda568dc02f14c88d731656e9710a48f7ea64a6de697951cdead2e",
+  "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "7daabdef9a79b9f04c451ec7703f89163764afe1a1ae16bc86d6381724405b1a",
+  "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt": "61ec34b011035ece6718af0b4184471bb5127314e3ca784f2e589b2d27e65214",
+  "app/src/main/java/com/nanzhufeng/ai/data/local/RoomConversationRepository.kt": "8d50121d50c5ec92a2b2bbd3cee2350aba3b858fe6a9261effdabe426bf391b0",
+  "app/src/main/java/com/nanzhufeng/ai/domain/Ports.kt": "8c0b3619d39c1e9d8c2e13b1749aa4fb773fe7b407099d62dfafc601742ff68e",
+  "app/src/test/java/com/nanzhufeng/ai/ai/CurrentModelNetworkReadinessTest.kt": "3871e97b3ff1b8ade5a3926098cfbc8ffafb7f32766fc21206684d1c04defdd9",
+  "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt": "9c7735aedcb2dd5ec282c67f551e158e15141623566c6074d8299bf2c5038966",
+  "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt": "4168a7d8f1def9f8de463f83d5b25c6690def682b2ea9099fef589bb479a5d62",
+  "app/src/test/java/com/nanzhufeng/ai/ai/ProviderSseDecoderContractsTest.kt": "a02096ad2ab93527dfe6c584ff46868a132bee4e85cb84265978a2b4f4241997",
+  "desktop/src-tauri/src/attachment_web_search_execution_v1.rs": "6a9d349d54190ffdc3ce04304545dd6470c2f5556eca0653a4f3c58a25328879",
+  "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs": "be0f3ae910cb2972bff05c6e0a8117df1d716ff8f5e291fab91461fb59a9e429"
+}

@@ -11,6 +11,23 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
 
 class ProviderAdapterContractsTest {
+    @Test fun `DeepSeek completed JSON final stage does not require repeated native search evidence`() {
+        val adapter=DeepSeekChatAdapter()
+        val body="""{"model":"deepseek-flash","content":[{"type":"text","text":"最终回答"}],"stop_reason":"end_turn","usage":{"input_tokens":100,"output_tokens":20}}"""
+        val options=ChatRequestOptions(OfficialWebSearchRoute.DEEPSEEK_MESSAGES)
+        assertTrue(adapter.decodeNonStreaming(body,options) is ChatAdapterDecodedResult.Incomplete)
+        val final=adapter.decodeNonStreaming(body,options.copy(groundedAnswer=true))
+        assertTrue(final is ChatAdapterDecodedResult.Text)
+        assertEquals(100L,(final as ChatAdapterDecodedResult.Text).inputTokens)
+        assertFalse(final.webSearchPerformed);assertTrue(final.webSources.isEmpty())
+    }
+    @Test fun `OpenRouter text streaming does not depend on a stale catalog stream flag`() {
+        val resolved = model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,
+            modelId="anthropic/claude-haiku-5.5", capabilities=model().capabilities.copy(supportsStreaming=false))
+        val adapter=OpenRouterChatAdapter()
+        assertTrue(adapter.supportsStreaming(resolved,ChatRequestOptions.Standard))
+        assertTrue(adapter.supportsStreaming(resolved,ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL)))
+    }
     @Test fun `Gemini own enabled search explicitly requests live tool execution without unsupported force`() {
         val selected=model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,modelId="google/gemini-3.8-flash")
         val adapter=OpenRouterChatAdapter()
@@ -582,7 +599,7 @@ class ProviderAdapterContractsTest {
         assertTrue(options.liveWebSearch)
         assertEquals(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL, options.webSearchRoute)
         assertTrue(grounded.jsonBody.contains("\"type\":\"openrouter:web_search\""))
-        assertFalse(OpenRouterChatAdapter().supportsStreaming(openRouter, options))
+        assertTrue(OpenRouterChatAdapter().supportsStreaming(openRouter, options))
         val qwen = QwenChatAdapter()
         val qwenOptions = ChatRequestOptions(OfficialWebSearchRoute.QWEN_RESPONSES)
         val qwenModel = model().copy(

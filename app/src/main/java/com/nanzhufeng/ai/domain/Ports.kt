@@ -178,6 +178,8 @@ interface ConversationRuntimeRepository {
         event: RuntimeRunStarted,
     ): ConversationRuntimePersistenceResult
     fun stateFor(conversationId: ConversationId): ConversationRuntimeState?
+    /** Append optional provider metadata to its completed assistant only; never rewrite visible text. */
+    fun retainCompletedProviderContinuation(state: ConversationRuntimeState, reasoning: String?, toolCalls: List<ContentBlock.ProviderToolCall>): Boolean = false
 }
 
 /** P3-C persists action lineage and its RUN_STARTED projection atomically. */

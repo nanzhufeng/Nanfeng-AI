@@ -74,7 +74,7 @@
 | [NANFENG_ISLAND_CURRENT_CONTRACT.md](../NANFENG_ISLAND_CURRENT_CONTRACT.md) | 现行领域合同 | 后台生成展示 | 持久生成元数据的后台展示/查看/停止；前台隐藏且展示不重发任务 |
 | [NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md](../NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md) | 现行领域合同 | 新对话草稿留存 | 新对话草稿保留合同 |
 | [NFAI_EXCHANGE_V1_CONTRACT.md](../NFAI_EXCHANGE_V1_CONTRACT.md) | 领域／模块限定合同 | 交换v1格式 | nfai.exchange.v1 跨端语义交换合同 |
-| [P0_USAGE_LEDGER_CONTRACT.md](../P0_USAGE_LEDGER_CONTRACT.md) | 领域／模块限定合同 | 当前调用计量与币种 | 南枫 AI P0 Usage Ledger 合同 |
+| [P0_USAGE_LEDGER_CONTRACT.md](../P0_USAGE_LEDGER_CONTRACT.md) | 领域／模块限定合同 | 当前调用计量与币种 | append-only数量事实内核；Android独立Room与Mac生产账本接线分开，不替代当前计量合同 |
 | [P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md](../P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md) | 本地实验／独立专项合同 | 双路径本地配置实验 | P10-A 双路径连接能力、状态与配置表面合同 |
 | [P10B_DUAL_PATH_SELECTION_FEEDBACK_CONTRACT.md](../P10B_DUAL_PATH_SELECTION_FEEDBACK_CONTRACT.md) | 本地实验／独立专项合同 | 双路径本地配置实验 | P10-B 双路径选择反馈合同 |
 | [P1_ATTACHMENT_EGRESS_ELIGIBILITY_CONTRACT.md](../P1_ATTACHMENT_EGRESS_ELIGIBILITY_CONTRACT.md) | 领域／模块限定合同 | Composer材料与附件桥 | 南枫 AI P1 附件外发资格与授权投影合同 |
@@ -95,7 +95,7 @@
 | [P2M_P3_BACKGROUND_BRIDGE_CONTRACT.md](../P2M_P3_BACKGROUND_BRIDGE_CONTRACT.md) | 领域／模块限定合同 | 普通发送授权与执行 | 南枫 AI P2-M → P3 后台桥接合同 |
 | [P2M_REAL_TEXT_EXECUTION_CONTRACT.md](../P2M_REAL_TEXT_EXECUTION_CONTRACT.md) | 历史阶段记录 | 普通发送授权与执行 | 南枫 AI P2-M 一次真实文本执行合同 |
 | [P3A_CONVERSATION_MESSAGE_TREE_CONTRACT.md](../P3A_CONVERSATION_MESSAGE_TREE_CONTRACT.md) | 领域／模块限定合同 | 对话管理与回收 | 南枫 AI P3-A Conversation / Message Tree 本地持久化合同 |
-| [P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md](../P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md) | 领域／模块限定合同 | 消息与动作领域 | 南枫 AI P3-B 类型化流事件与本地对话运行状态机合同 |
+| [P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md](../P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md) | 领域／模块限定合同 | 消息与动作领域 | 规范化运行事件、Room原子投影与完成后可选元数据追加；fixture不定义生产外发开关 |
 | [P3C_CONVERSATION_ACTION_LINEAGE_CONTRACT.md](../P3C_CONVERSATION_ACTION_LINEAGE_CONTRACT.md) | 领域／模块限定合同 | 对话管理与回收 | 南枫 AI P3-C 继续、重试与换模型重答合同 |
 | [P3D_PRESENTATION_VIRTUALIZATION_DRAFT_RECOVERY_CONTRACT.md](../P3D_PRESENTATION_VIRTUALIZATION_DRAFT_RECOVERY_CONTRACT.md) | 领域／模块限定合同 | 消息与动作领域 | 南枫 AI P3-D 安全展示、长会话虚拟化与草稿恢复合同 |
 | [P3E_CONVERSATION_MANAGEMENT_SEARCH_EXPORT_CONTRACT.md](../P3E_CONVERSATION_MANAGEMENT_SEARCH_EXPORT_CONTRACT.md) | 领域／模块限定合同 | 对话管理与回收 | 南枫 AI P3-E 会话管理、搜索与本地导出合同 |
@@ -112,7 +112,7 @@
 | [P4B_CONTEXT_SELECTION_OWNERSHIP_CONTRACT.md](../P4B_CONTEXT_SELECTION_OWNERSHIP_CONTRACT.md) | 领域／模块限定合同 | 普通生成上下文与临时隔离 | 南枫 AI P4-B 上下文选择所有权与 Memory 边界合同 |
 | [P4C_MEMORY_GOVERNANCE_CONTRACT.md](../P4C_MEMORY_GOVERNANCE_CONTRACT.md) | 领域／模块限定合同 | Memory显式治理 | 南枫 AI P4-C 长期 Memory 本地治理合同 |
 | [P4D_EXPLICIT_CONTEXT_BODY_SELECTION_CONTRACT.md](../P4D_EXPLICIT_CONTEXT_BODY_SELECTION_CONTRACT.md) | 领域／模块限定合同 | 普通生成上下文与临时隔离 | 南枫 AI P4-D L0-L3 Context 正文选择与显式控制合同 |
-| [P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md](../P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md) | 领域／模块限定合同 | 项目与Knowledge本地领域 | 南枫 AI P4-E 本地 Knowledge 检索与显式 Context 选择合同 |
+| [P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md](../P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md) | 领域／模块限定合同 | 项目与Knowledge本地领域 | Knowledge CRUD与显式本机Context预览；普通聊天相关性检索另归运行时上下文 |
 | [P4F_LOCAL_KNOWLEDGE_DEDUPLICATION_CANDIDATES_CONTRACT.md](../P4F_LOCAL_KNOWLEDGE_DEDUPLICATION_CANDIDATES_CONTRACT.md) | 领域／模块限定合同 | 项目与Knowledge本地领域 | 南枫 AI P4-F 本地 Knowledge 去重候选合同 |
 | [P4G_LOCAL_KNOWLEDGE_RELATIONSHIPS_CONTRACT.md](../P4G_LOCAL_KNOWLEDGE_RELATIONSHIPS_CONTRACT.md) | 领域／模块限定合同 | 项目与Knowledge本地领域 | 南枫 AI P4-G 本地 Knowledge 人工关系合同 |
 | [P4H_MARKDOWN_KNOWLEDGE_PORTABILITY_CONTRACT.md](../P4H_MARKDOWN_KNOWLEDGE_PORTABILITY_CONTRACT.md) | 领域／模块限定合同 | 项目与Knowledge本地领域 | 南枫 AI P4-H 本地 Markdown Knowledge 导入/导出与可恢复队列合同 |
@@ -124,7 +124,7 @@
 | [P4N_PDF_TEXT_KNOWLEDGE_ADAPTER_CONTRACT.md](../P4N_PDF_TEXT_KNOWLEDGE_ADAPTER_CONTRACT.md) | 领域／模块限定合同 | 项目与Knowledge本地领域 | 南枫 AI P4-N 本地 PDF 文本资料 Adapter 合同 |
 | [P4O_HTTPS_WEB_TEXT_SNAPSHOT_CONTRACT.md](../P4O_HTTPS_WEB_TEXT_SNAPSHOT_CONTRACT.md) | 领域／模块限定合同 | 项目与Knowledge本地领域 | 南枫 AI P4-O 严格 HTTPS 网页文本快照 Adapter 合同 |
 | [P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md](../P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md) | 领域／模块限定合同 | Android设置界面 | P5-A Android 自适应布局与无障碍产品化基线合同 |
-| [P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md](../P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md) | 领域／模块限定合同 | Android设置界面 | P5-A 更多本地控制面入口合同 |
+| [P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md](../P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md) | 历史阶段记录 | Android设置界面 | 2026-08-20旧本地控制面恢复任务与验收；当前可达性只读设置合同，不恢复隐藏入口 |
 | [P5B_BACKGROUND_CANCELLATION_BATTERY_CONTRACT.md](../P5B_BACKGROUND_CANCELLATION_BATTERY_CONTRACT.md) | 领域／模块限定合同 | 后台生成展示 | 南枫 AI P5-B Android 后台、取消/恢复与电量产品化基线合同 |
 | [P5C_PRIVACY_DATA_DIAGNOSTICS_CONTRACT.md](../P5C_PRIVACY_DATA_DIAGNOSTICS_CONTRACT.md) | 领域／模块限定合同 | 隐私／诊断领域 | 南枫 AI P5-C 隐私、数据管理与安全诊断合同 |
 | [P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md](../P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md) | 领域／模块限定合同 | 本机备份恢复 | 南枫 AI P5-D 本地备份、恢复与交付合同 |
@@ -138,11 +138,11 @@
 | [P6D_WINDOWS_NATIVE_DELIVERY_CONTRACT.md](../P6D_WINDOWS_NATIVE_DELIVERY_CONTRACT.md) | 领域／模块限定合同 | Mac会话与侧栏界面 | P6-D Windows 原生交付独立合同 |
 | [P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md](../P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md) | 现行领域合同 | 本地临时聊天 | 仅本地临时消息与隔离24小时恢复记录；不接Provider/普通同步 |
 | [P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md](../P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md) | 领域／模块限定合同 | 本地搜索与安全预览 | P6-F2-E Audio & Generic File Adapter 合同 |
-| [P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md](../P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md) | 领域／模块限定合同 | 本地搜索与安全预览 | P6-F2 统一搜索、搜索历史与本地内容预览合同 |
+| [P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md](../P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md) | 领域／模块限定合同 | 本地搜索与安全预览 | 本地搜索索引／历史及受控预览；当前平台UI和日期投影分开，不复用旧实施状态 |
 | [P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md](../P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md) | 领域／模块限定合同 | 消息与动作领域 | P6-F Conversation Transcript Presentation & Message Actions Contract |
 | [P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md](../P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md) | 现行领域合同 | 模型选择与Auto | 普通会话手动/Auto、下次默认和冻结身份；旧P6-G实验不裁决生产候选 |
 | [P6H_CHATGPT_EXPORT_JSON_ADAPTER_CONTRACT.md](../P6H_CHATGPT_EXPORT_JSON_ADAPTER_CONTRACT.md) | 领域／模块限定合同 | 本机数据与导入导出表面 | 南枫 AI P6-H ChatGPT export JSON Adapter 合同 |
-| [P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md](../P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md) | 领域／模块限定合同 | 本机数据与导入导出表面 | 南枫 AI P6-I Claude export JSON Adapter 合同 |
+| [P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md](../P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md) | 领域／模块限定合同 | 本机数据与导入导出表面 | Claude JSON严格文本树、私有任务与原子导入；旧检查点不否定现有双端实现 |
 | [P6J_NANFENG_KNOWLEDGE_EXPORT_ADAPTER_CONTRACT.md](../P6J_NANFENG_KNOWLEDGE_EXPORT_ADAPTER_CONTRACT.md) | 领域／模块限定合同 | 本机数据与导入导出表面 | 南枫 AI P6-J 南枫知识库对话／知识 export Adapter 合同 |
 | [P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md](../P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md) | 领域／模块限定合同 | 本机数据与导入导出表面 | 南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同 |
 | [P6K_ZIP_ATTACHMENT_OCCURRENCE_CONTRACT.md](../P6K_ZIP_ATTACHMENT_OCCURRENCE_CONTRACT.md) | 领域／模块限定合同 | 本机数据与导入导出表面 | P6-K ChatGPT ZIP 附件口径契约 |
@@ -158,13 +158,13 @@
 | [P7D_SYNC_COORDINATOR_AND_ACCOUNT_UI_CONTRACT.md](../P7D_SYNC_COORDINATOR_AND_ACCOUNT_UI_CONTRACT.md) | 领域／模块限定合同 | 已选对话云同步与账号边界 | 南枫 AI P7-D 冲突、自动同步协调器与账号页合同 |
 | [P7E_CROSS_DEVICE_RESTORE_AND_DEPLOYMENT_READINESS_CONTRACT.md](../P7E_CROSS_DEVICE_RESTORE_AND_DEPLOYMENT_READINESS_CONTRACT.md) | 领域／模块限定合同 | 已选对话云同步与账号边界 | 南枫 AI P7-E 跨设备加密恢复、冲突与部署验证就绪合同 |
 | [P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md](../P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md) | 现行领域合同 | 已选对话云同步与账号边界 | Google登录后的已选对话direct同步、账号/区域隔离；不以旧恢复码判资格 |
-| [P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md](../P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md) | 本地实验／独立专项合同 | 本地受控Agent实验 | P8-A 受控 Agent 本地基础合同 |
+| [P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md](../P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md) | 本地实验／独立专项合同 | 本地受控Agent实验 | 本地Agent预算／权限／状态与ledger；不包含普通聊天Provider或后续只读inspect的否定 |
 | [P8B_READ_ONLY_AGENT_LEDGER_STATUS_CONTRACT.md](../P8B_READ_ONLY_AGENT_LEDGER_STATUS_CONTRACT.md) | 本地实验／独立专项合同 | 本地受控Agent实验 | P8-B 受控本地 Agent harness 与生产只读状态合同 |
 | [P8C_LOCAL_VISIBLE_AGENT_INSPECT_CONTRACT.md](../P8C_LOCAL_VISIBLE_AGENT_INSPECT_CONTRACT.md) | 本地实验／独立专项合同 | 本地受控Agent实验 | P8-C 本地可见受控运行与退出审计合同 |
 | [P8D_LOCAL_EXIT_RED_TEAM_AUDIT_CONTRACT.md](../P8D_LOCAL_EXIT_RED_TEAM_AUDIT_CONTRACT.md) | 本地实验／独立专项合同 | 本地受控Agent实验 | P8-D 本地退出与红队审计合同 |
 | [P9A_READ_ONLY_ECOSYSTEM_ENTRY_AUDIT_CONTRACT.md](../P9A_READ_ONLY_ECOSYSTEM_ENTRY_AUDIT_CONTRACT.md) | 本地实验／独立专项合同 | 只读生态／本地Integration实验 | 南枫 AI P9-A 最小只读生态入口审计合同 |
 | [P9B_LOCAL_TEST_ONLY_INTEGRATION_CONTRACT.md](../P9B_LOCAL_TEST_ONLY_INTEGRATION_CONTRACT.md) | 本地实验／独立专项合同 | 只读生态／本地Integration实验 | 南枫 AI P9-B 本地 Integration Contract 与 LOCAL_TEST_ONLY harness 合同 |
-| [PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md](../PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md) | 领域／模块限定合同 | 本地精确引用复用 | 独立本地精确引用索引；不替代搜索检查点/Provider缓存或普通发送 |
+| [PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md](../PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md) | 领域／模块限定合同 | 本地精确引用复用 | L1索引／L2本地持久化／L3分派／L4引用校验；未接普通发送，不替代检索检查点或Provider缓存 |
 | [RELAYCORE_MODEL_CURRENT_CONTRACT.md](../RELAYCORE_MODEL_CURRENT_CONTRACT.md) | 现行领域合同 | Relay渠道与协作检索 | RC预设/渠道/别名/历史身份；联网规则归C12，准确授权归P3J |
 | [SETTINGS_CENTER_CONTRACT.md](../SETTINGS_CENTER_CONTRACT.md) | 领域／模块限定合同 | Android设置界面 | 南枫 AI Settings Center 历史与领域边界合同 |
 

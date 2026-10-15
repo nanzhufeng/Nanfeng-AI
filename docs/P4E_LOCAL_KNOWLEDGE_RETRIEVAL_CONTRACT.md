@@ -2,7 +2,7 @@
 
 <!-- contract-governance:start -->
 > **合同口径：领域／模块限定合同。** 领域入口：[ 项目与Knowledge本地领域 ](P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
-> **适用范围：** 南枫 AI P4-E 本地 Knowledge 检索与显式 Context 选择合同
+> **适用范围：** Knowledge CRUD与显式本机Context预览；普通聊天相关性检索另归运行时上下文
 <!-- contract-governance:end -->
 
 日期：2026-08-13  
@@ -25,7 +25,7 @@ Knowledge UI（明确用户操作）
 
 ## Context 边界
 
-- Knowledge 在 Context 中默认关闭，不自动检索或注入。用户先输入检索，再逐项选择结果，最后才可请求本机预览。
+- P4-D/E 的显式 Context 预览选择默认关闭；用户先检索、逐项选择，再请求本机预览。此内存预览不等于普通聊天的资料库开关：普通聊天由 `LocalContextBroker` 按已保存开关、相关性与预算检索，准确规则只见[运行时上下文合同](ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md)，不能据本条禁用已经启用的普通检索。
 - `ReadExplicitContextBodyUseCase` 重读 P4-B 当前 conversation/project metadata，并重新验证 Knowledge 为 `ACTIVE`、GLOBAL 或当前 Project、revision/hash 与高敏门禁。缺失、归档、删除、跨项目、revision/hash 变化或敏感正文均整体拒绝，绝不返回部分正文。
 - Context 选择只保存在 ViewModel 内存；关闭、切换会话或进程重建即丢弃。不得触碰 `ConversationSettings.memorySources`、Room、导出包、Invocation、日志、同步或诊断。
 - 统一复用 `MemoryDomain.sensitiveRejection`；命中密码、API Key、Authorization/Bearer、恢复码或完整支付卡号时，Knowledge 写入前拒绝，Context 返回前也拒绝。来源引用、URI、路径、附件字节和 Tool/网页内容均不进入检索或 Context 正文。

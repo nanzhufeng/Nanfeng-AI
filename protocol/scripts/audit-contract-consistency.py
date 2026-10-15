@@ -22,20 +22,36 @@ OBSOLETE={
  'docs/P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md':[r'未注册\s*`NfaiExchangeV2PackageWriter`'],
  'docs/P3_PROVIDER_TRANSPORT_BOUNDARY_CONTRACT.md':[r'当前唯一 production transport 是\s*`DisabledNoNetworkProviderTransport`'],
  'docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md':[r'消息下方常驻信息只允许用户友好本地时间与真实模型'],
+ 'docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md':[r'\|\s*工作区\s*\|\s*项目与知识、开发与诊断'],
+ 'docs/P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md':[r'生产 OpenRouter egress 固定\s*`Disabled`'],
+ 'docs/P0_USAGE_LEDGER_CONTRACT.md':[r'当前没有 production caller'],
+ 'docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md':[r'因此 App 诚实地保持'],
+ 'docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md':[r'P6-F2-E、P6-G 仍未实施'],
+ 'docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md':[r'Android 最小 Settings 仅可显示'],
+ 'docs/P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md':[r'Knowledge 在 Context 中默认关闭，不自动检索或注入'],
+ 'docs/P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md':[r'connected/instrumentation\s*只在'],
 }
 
 def active_lines(text):
-    excluded_level=None;in_fence=False
+    excluded_level=None;fence=None
     for number,line in enumerate(text.splitlines(),1):
-        if line.startswith('```'):in_fence=not in_fence
-        heading=None if in_fence else re.match(r'^(#{1,6})\s+(.+)',line)
+        marker=re.match(r'^ {0,3}(`{3,}|~{3,})(.*)$',line)
+        if marker:
+            if fence is None:
+                fence=marker[1]
+            elif marker[1][0]==fence[0] and len(marker[1])>=len(fence) and not marker[2].strip():
+                fence=None
+            if excluded_level is None:yield number,line
+            continue
+        heading=None if fence else re.match(r'^(#{1,6})\s+(.+)',line)
         if heading:
             level=len(heading[1])
             if excluded_level is not None and level<=excluded_level:excluded_level=None
             title=re.sub(r'^(?:[0-9]+[.)、]\s*)?(?:[0-9]{4}-[0-9]{2}-[0-9]{2}\s+)?','',heading[2])
             # Product history views and the current gap/order section remain active.
             current_history_topic=(re.match(r'历史(?:模式|资料库|对话|消息|内容|整理)',title) is not None and not re.search(r'旧阶段|历史阶段|当次验收|验收记录|阶段证据',title)) or re.search(r'历史缺口与当前(?:顺序|规则|实现)',title) is not None
-            if excluded_level is None and not current_history_topic and re.match(r'(?:历史|未来|.*实验.*|.*规划.*)',title):excluded_level=level
+            explicitly_historical=re.search(r'历史事实|（历史范围）|\(历史范围\)',title) is not None
+            if excluded_level is None and not current_history_topic and (explicitly_historical or re.match(r'(?:历史|未来|.*实验.*|.*规划.*)',title)):excluded_level=level
         if excluded_level is None:yield number,line
 
 def read_map(root,registry):

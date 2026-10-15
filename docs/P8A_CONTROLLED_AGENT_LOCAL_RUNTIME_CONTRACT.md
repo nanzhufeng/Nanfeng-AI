@@ -2,7 +2,7 @@
 
 <!-- contract-governance:start -->
 > **合同口径：本地实验／独立专项合同。** 领域入口：[ 本地受控Agent实验 ](P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
-> **适用范围：** P8-A 受控 Agent 本地基础合同
+> **适用范围：** 本地Agent预算／权限／状态与ledger；不包含普通聊天Provider或后续只读inspect的否定
 <!-- contract-governance:end -->
 
 日期：2026-08-13  
@@ -56,7 +56,7 @@ Tool Schema 固定 `version=1`，每个 Tool 声明不可省略的 `id`、versio
 
 只有测试显式注入的三项 schema v1 fixture：`fixture_research`（只读）、`fixture_draft`（本地草稿候选）和 `fixture_reversible_action`（可审计可回滚 fixture）。它们不读取用户正文、不读取 Key、不打开文件、不发 HTTP，也不写业务 Room/Desktop workspace。
 
-生产默认没有 Agent tool registry、没有 executor DI、没有 UI 或 Tauri command；因此 App 诚实地保持“无 Provider、无外部工具”。P8-A 不实现模型规划、自动循环、真实研究、任意系统文件访问、购买、删除、外发、跨应用、Provider/OpenRouter、图片、费用、P9 或 P10。
+P8-A 的任意工具／模型规划器没有生产注册，测试 fixture 不进入 release 工具目录；后续 P8-B/C 只有受限账本状态／只读 inspect 路径，分别按其合同接线。本 Agent 子系统仍未连接模型和外部工具；此限制不描述已接入 Provider 的普通聊天，也不能否认已存在的本地 inspect 页面。P8-A 不实现模型规划、自动循环、真实研究、任意系统文件访问、购买、删除、外发、跨应用、Provider/OpenRouter、图片、费用、P9 或 P10。
 
 ## 最小验证与停止条件
 

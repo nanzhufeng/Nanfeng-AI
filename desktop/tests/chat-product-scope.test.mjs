@@ -17,6 +17,7 @@ test('chat-only shell hides work entry and cross-area actions while keeping mode
 test('settings hides project navigation and states the retained-data product decision', () => {
   const html = renderAndroidSettingsShell({ page: 'development', native: true });
   assert.doesNotMatch(html, /data-page="workspace"|项目与知识/);
+  assert.doesNotMatch(html, /data-page="development"|<h2>高级<\/h2>/);
   assert.match(html, /多模型聊天 AI/);
   assert.match(html, /已有工作区数据保留/);
 });

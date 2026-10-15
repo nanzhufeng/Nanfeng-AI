@@ -2,8 +2,8 @@
 
 ## 事实来源与任务范围
 
-- 开始先读 [项目状态](docs/PROJECT_STATUS.md) 与 [当前交接](docs/CURRENT_HANDOFF.md)，核对 checkout、工作树及未跟踪实现。HEAD 不代表未提交软件；保留范围外 WIP，不以 reset／clean／stash 收口。
-- 当前源码与适用验证优先于旧文档；冲突记录来源、裁决和影响。按 [合同索引](docs/contracts/CONTRACT_INDEX.md)、[合同治理](docs/CONTRACT_GOVERNANCE_CURRENT.md) 定位唯一行为正文；[开发档案](docs/南枫AI完整开发档案.md) 只提供架构、历史与证据导航。
+- 开始先读 [项目状态](docs/PROJECT_STATUS.md) 与 [当前交接](docs/CURRENT_HANDOFF.md)，核对 checkout、工作树及未跟踪实现。HEAD或产品版本号不代表当前WIP、现装包或全部本地可达Git历史；保留范围外 WIP，不以 reset／clean／stash 收口。
+- 当前源码与适用验证优先于旧文档；冲突记录来源、裁决和影响。按 [合同索引](docs/contracts/CONTRACT_INDEX.md)、[合同治理](docs/CONTRACT_GOVERNANCE_CURRENT.md) 定位唯一行为正文，修改owner时反查同领域CURRENT和SCOPED子合同；[开发档案](docs/南枫AI完整开发档案.md) 只提供架构、历史与证据导航。
 - 模型服务变更先读 [统一架构](docs/model-service/MODEL_SERVICE_ARCHITECTURE.md) 与 [维护流程](docs/model-service/MODEL_SERVICE_MAINTENANCE.md)，同时核对维护目录、双端生产 owner 和离线门禁。历史菜单、阶段方案与外部目录声明不等于当前能力。
 
 ## 所有权、数据与外部动作

@@ -1,5 +1,66 @@
 > 当前合同读取门：[全项目合同索引](contracts/CONTRACT_INDEX.md) · [合同治理](CONTRACT_GOVERNANCE_CURRENT.md)。
 
+
+
+
+## 2026-10-15：当前代码checkpoint／最终回归固化
+
+- [checkpoint报告](verification/2026-10-15-code-checkpoint/REPORT.md)、[回归](verification/2026-10-15-code-checkpoint/regression.json)、[提交范围](verification/2026-10-15-code-checkpoint/commit-scope.json)、[增量正式审计](南枫AI开发经验增量审计.md)持有本轮事实，完整复盘/五Skill/已安装与真实模型比较不重做。
+- 最终Android1525 PASS/10skip/326套件、ReleaseLint；Rust457/36ignored；Node554/12skip与lint/typecheck/inventory/build；维护45、协议golden、Supabase静态10/Go通过。两条Node初次失败是仍要求隐藏设置入口的陈旧断言，已修并补设置合同负向验收，产品行为未改。
+- 暂存87变更/20新增，独立导出1839跟踪文件；1222源码/配置/资源/测试/维护输入精确一致，导出三合同/模型门与Desktop三静态门均PASS。两份核心新增测试纳索引；323旧原始/before/日志/设计草案未删除且不入提交。
+- 本地源码提交及tag建立后由报告回填；文档薄提交不递归追自身SHA。无Provider/主设备/正式数据动作，不推送/发布；RCPro与完整模型/原生/云端/Windows等旧缺口保留。
+
+## 2026-10-15：完整项目复盘完成（文档与五类Skill）
+
+- 交付入口：[复盘报告](verification/2026-10-15-project-retrospective/REPORT.md)、[摘要](verification/2026-10-15-project-retrospective/summary.json)、[完整开发档案](南枫AI完整开发档案.md)、[可迁移经验](可迁移开发经验.md)。AGENTS仅补长期辨别/合同反查，五类现有Skill增量更新，未建平行副本。
+- 冻结1819跟踪＋337未跟踪＝2156文件；全本地ref191提交、HEAD祖先链189，另两条checkpoint不在主链。结构/范围扫描与热点语义复核分开，不称逐行或全部真实验收。
+- 纠正档案当前1.0.29/20模型/v5、全部十月WIP等旧断言：配置1.0.30/code94、21模型、v6；已发布源码7c42456/标签0494e0f与HEAD后同版本覆盖修复不同。最新前轮Android1525/Rust457仅复用原执行阶段，未新跑。
+- 本轮45协议/维护测试、三门、五Skill及UI元数据通过；2146份非本轮写入文件hash0变动、HEAD5a52aa2a8928cc46bad136cb608fd1eb3b62517e不变。无业务/配置/Schema/应用测试改动，无安装/收费/提交/推送/发布。
+- 7历史XML证据ParseError、37 before-docs迁移缺链保留；CI尚未调用一致性脚本/测试，记录后续配置缺口不擅改。RCPro未知/旧404、全模型格式/正式原生/线上同步/部署/Windows等缺口保持。
+- 系统和捆绑Python均缺PyYAML，校验仅使用私有临时环境，未改应用依赖或系统包。后续不要因该环境失败误改Skill内容。
+- 本任务完成；下一次根据用户任务进入对应Skill/领域合同，保护全部既有WIP。不重复全库复盘、重打已验证包或重发UNKNOWN。
+
+## 2026-10-15：全项目合同统一完成（不改功能）
+
+- [审查报告](verification/2026-10-15-contract-unification/REPORT.md)及[114份逐合同清单](verification/2026-10-15-contract-unification/review.json)：40领域全部登记／引用／owner扫描，18份正文修正，8项范围标签、4个领域owner索引更新；旧P5-A恢复入口任务归历史，不恢复隐藏设置。
+- 修正fixture与生产网络、Android独立账本与Mac生产账本、显式Context预览与普通检索、Agent与普通聊天、Claude旧检查点、精确复用L1/L2状态、v1/v2导入、列表日期与主题/容量重复规则；永久connected禁令覆盖旧模拟器例外。
+- 29项维护测试通过；新增回归先观察10个失败再绿。登记／一致性／模型门PASS；1234份非本轮文档/治理输入hash0变动、HEAD保持5a52aa2a8928cc46bad136cb608fd1eb3b62517e。未重编译应用、未调用收费服务、未提交／推送／发布。
+- 7份历史原生XML证据仍有ParseError，原件保留；全量扫描不冒称每句自然语言或所有真实链路验证。前轮RC Pro与全模型/格式验收缺口不关闭。
+- 用户补答USB已连接后，前轮最后Android思考保存包已完成同签名保数据覆盖，精确APK读回一致，未启动生成；原模型报告已更新。此安装是前轮授权补完，不是合同任务验证。
+- 下一次修改只按领域入口及子合同反查当前owner，保留现有WIP；不要重做本轮全合同清点、重装已覆盖包或重发UNKNOWN。
+
+## 2026-10-15：其他模型复查／双端协议及Android思考补丁已覆盖
+
+- 用户确认Haiku问题已解决，属于用户反馈证据，不外推所有模型。
+- [最新报告](verification/2026-10-15-other-model-network-review/REPORT.md)：修DeepSeek最终阶段重复要求搜索、Mac非流式千问Responses／DeepSeek与RC Claude Messages分发、RC Opus既有别名在读取和最终提示误判。原模型／Key／渠道、终态／来源／计量边界保留。
+- 当前21模型42请求准备检查、Android1525 PASS／10 skip与正式构建／Lint、Rust457 PASS／36 ignored和21+1/7、114/40门通过。官方DeepSeek Flash12.7秒与GLM Flash92.3秒双附件2/2、正文／来源／LOCAL_ESTIMATE及重开0请求成立；两条原有REASONING_NOT_SAVED提示，末尾定位为本地不可变save误用；已改完成运行追加Room owner并用公开executor/JVM重开验证，非服务没返回，不回写旧回执或重复收费。RC Flash仅基础1+1通过。
+- RC Pro仍未闭环：旧404保留；当前只读目录200仍有原ID。本轮监督脚本曾提前停第二条Pro控制，Room SENDING／结果与金额未知，未重发；等待全行＋cleanup条件已修，后续官方双模型结束清理通过；残留隔离加密副本已精确删。不能把这条算通过或断言仍404，不换preview／Key／渠道。
+- 本轮双端原签名保数据覆盖已完成：OPPO精确APK读回／身份保持；Mac1595数据文件0变化。1180输入快照漂移0，原app备份保留。未触发主设备生成，未提交／推送／发布。
+- 最后Android思考补丁正式包／Lint及1525 JVM/10skip已通过，最新隔离APK三条旧真实回执重开0模型调用。初次USB断开使最后覆盖预检失败；用户重连后已完成同签名保数据覆盖，精确APK读回与身份保持均通过；此前协议证据独立保留。未启动应用或付费重测，无需再构建。
+- 当前不是所有模型×格式的付费实时矩阵。不要重做已通过的长报告或重发UNKNOWN；后续仅按新证据／授权处理Pro或必要实际业务验收。
+
+## 2026-10-15：Haiku TLS／流式修复及双端正式覆盖完成
+
+- [最新报告](verification/2026-10-15-haiku-tls-streaming/REPORT.md)：用户主设备16:35实际诊断为TLS握手失败（最终阶段5.2秒，总205秒）；旧版无嵌套根因，不能断言必为可恢复EOF。
+- Android目录漏stream误判非流式已修，旧缓存适配器亦修；仅正文未开始写出、EOF／Socket导致的TLS握手断开重连一次，证书错误和已发正文不重试。诊断仅增加安全根因类。
+- 最终1519 JVM／10 skip、325套件及正式构建／Lint通过；Desktop设置8检查／正式包通过；21+1/7与114/40门通过。流式修正的隔离Android样例未添加Mac代理，76.8秒、4/4覆盖、7次流式调用、USD0.043771，重开0请求；该真实样例在后续TLS恢复增量前，恢复分支用边界测试验证，无额外收费调用。
+- OPPO／Mac本轮原签名保数据覆盖完成，OPPO精确APK读回、身份保持，Mac1595数据文件0变化。OPPO正式设置实看“开发与诊断”及空“高级”组均隐藏。
+- 主设备失败会话／未知费用保留且未重发，新生成仍未验；不要重复收费调用或用安装成功宣称所有网络／原图业务通过。源码WIP未提交／推送／发布。
+
+## 2026-10-15：正式设置隐藏开发与诊断
+
+- 按用户要求，双端设置隐藏“开发与诊断”，空“高级”分组一并隐藏；仅调整导航，不删除诊断／功能审阅实现或数据，不改联网 owner。
+- [本轮验证](verification/2026-10-15-hide-development-settings/REPORT.md)：Android 19 JVM 与 Debug 构建、Desktop 8 渲染检查与静态构建通过。未正式打包／安装；主设备仍为上轮已覆盖附件联网修复包，不能把本次入口变更写成已安装。
+- 未提交／推送，保留全部上一轮联网 WIP。
+
+## 2026-10-15：附件不限主题联网修复／双端正式覆盖完成
+
+- 用户最后授权“覆盖安装”已执行；[本轮报告](verification/2026-10-15-attachment-search-all-topics/REPORT.md)与[安全回执](verification/2026-10-15-attachment-search-all-topics/verification.json)为最新入口。OPPO v1.0.30／94与Mac v1.0.30原签名保数据覆盖、精确候选读回通过，Mac1595数据文件0变化。旧Mac app保留；不重新构建／重签或重复安装已冻结包。
+- 当前 WORKTREE，HEAD `5a52aa2a8928cc46bad136cb608fd1eb3b62517e`；没有 commit／push／GitHub发布。GitHub同版本旧包不含本修复，不把旧发布资产当当前候选。
+- 已完成：取消短中文／单字符／无数字英文主题筛选；原选接收方忠实读取媒体后查询；Android真实body；普通主题已检索语义；原件、读取、证据分开；批次不带泛化最终提问；标签／操作元要求及明确无关来源不混入支持证据；v6缓存隔离旧语义。
+- 最终本地 Android1513 PASS／10 skip＋Debug／正式编译／Release Lint；Rust455 PASS／36 ignored＋cargo check／Mac正式包；维护21＋1／7与114／40门通过。真实Haiku双端PNG＋Markdown两主题均正常搜索／保存／重开；Android受控代理结束恢复，旧直连失败／超时和费用UNKNOWN保留。不要为了确认再重复收费调用。
+- 覆盖与业务验收分开：未自动启动正式App或调用主设备Provider；正式UI／用户原始截图／全部模型格式组合未验。回执中的模型单位／表述错误不冒充业务准确性通过。
+
 ## 2026-10-15：v1.0.30正式GitHub发布
 
 - 用户授权打包上传；构建源码 `7c4245666bf9bf1d1bac1247a09c9793442053fa`，Android94／双端1.0.30，业务较上轮仅版本元数据变化。双端正式构建与验签、隔离Android精确读回、Mac原身份正常采图／只读DMG比对完成；[候选与预览回执](verification/2026-10-15-github-v1.0.30/REPORT.md)。四张新预览进README，原始／临时证据不上传。

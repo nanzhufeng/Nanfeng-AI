@@ -2,7 +2,7 @@
 
 <!-- contract-governance:start -->
 > **合同口径：领域／模块限定合同。** 领域入口：[ 本地精确引用复用 ](PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
-> **适用范围：** 独立本地精确引用索引；不替代搜索检查点/Provider缓存或普通发送
+> **适用范围：** L1索引／L2本地持久化／L3分派／L4引用校验；未接普通发送，不替代检索检查点或Provider缓存
 <!-- contract-governance:end -->
 
 <a id="prompt-cache-与精确复用合同p6-l4-本地消息引用有效性门已实现provider-缓存仍未实现"></a>
@@ -17,7 +17,7 @@
 
 - Android `LocalExactReuseIndex` 与 Desktop `local_exact_reuse_v1::LocalExactReuseIndex` 是唯一 owner。它们只接收已经计算的 canonical request hash、各项安全 hash、scope/provider/model/endpoint/template/policy 元数据与既有本地 `responseMessageId`；不接收 Prompt、回答、Key、URI/path、Provider event 或网络状态。
 - 仅非临时、非高敏感且字段完整的同一精确键可记录与命中。撤销、过期、任何字段变化、临时会话或高敏感请求均不命中；缺键或非法键为 `UNKNOWN`，绝不推断为命中。命中只返回既有本地消息引用，并明确“不请求 Provider”。
-- 本阶段是**领域索引和双端合同**，尚未持久化、尚未接入 P3/P2 执行、消息 renderer、Provider cache 或用量台账；不得把它写成普通聊天已经复用、真实节省成本或 Provider cache 命中。
+- L1只定义领域索引，持久化由下节L2持有；L3/L4另定义分派和引用校验。当前仍未接入普通聊天的执行／renderer或Provider缓存计量，不能将已持久化本地索引说成已产生真实复用、节省或Provider命中。
 
 ## P6-L2：双端 content-free 持久化与重启读回（2026-08-20）
 

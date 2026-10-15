@@ -6,7 +6,7 @@
 <!-- contract-governance:end -->
 
 日期：2026-08-14  
-状态：FB-P6-025 已登记；与 FB-P6-023/024 共同实施、共同验收
+状态：意图优先与对象绑定的信息架构合同；早期FB实施／参考视觉保留历史边界，当前可达性读取产品owner与平台界面合同
 
 > **Android UI 路由（2026-08-24）：** 本文继续定义 intent-first 信息架构；当前 Android 会话界面的颜色、尺寸、顶栏状态、抽屉行、Composer、模型面和手势以 [Android 当前会话界面合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md) 为唯一正文。本文较早的 Android 视觉描述不再单独形成冲突规则。
 
@@ -28,12 +28,18 @@
 | 表面 | 用户目的 | 允许内容 | 明确禁止 |
 | --- | --- | --- | --- |
 | 对话根与 Composer | 交代或继续当前事情 | 对话、空态、当前对象的输入/附件/可选模型 override | 工程模块目录、Dashboard、模型/数据源前置步骤 |
-| Drawer / Desktop 侧栏 | 延续已开始的任务 | search、pinned、recent；底部仅 Settings 入口 | Provider/Model/Files/Memory/Tools 的模块总目录或 Settings 内容 |
-| 聊天 / 工作 | 切换当前对象范围与连续工作语境 | scope 对应的会话、按需对象页和返回同一对话 | 选择“能力模式”、第二套 workbench 或主页 |
+| Drawer / Desktop 侧栏 | 延续已开始的任务 | 当前平台已实现的搜索、会话与定时任务／南枫转写等既有入口；底部设置 | Provider/Model/Files/Memory/Tools 的模块总目录或 Settings 内容 |
+| 保留的聊天／工作范围 | 当前正式产品仅开放CHAT；WORK隐藏、数据继续隔离 | scope对应的既有会话与对象页；不据本文恢复隐藏入口 | 选择“能力模式”、第二套 workbench 或主页 |
 | 消息及对象上下文 | 完成本轮任务 | 来源、附件、预览、编辑、消息动作、route metadata | 将所有可用能力常驻铺开 |
 | Settings | 持久治理 | 独立 Settings Center 内的已存在模型 catalog/policy、隐私、安全、数据、生命周期、明确管理 override | 日常任务菜单堆放、profile 浮层长列表、无返回对话路径，或未授权 account/Provider/sync/费用能力 |
 
-## 四图合并验收映射
+## 当前界面规则的唯一归属
+
+Android／Mac的现行导航、消息页脚与动作、附件、主题色和尺寸分别由[Android会话合同](ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)、[Desktop会话合同](DESKTOP_CHAT_FIRST_UI_CONTRACT.md)、[当前设置合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)及[C16主题合同](C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md)持有。下方旧hover／橙色／模式切换／日期布局仅保存参考与历史反馈，不作为第二套当前UI规则；业务对象和授权原则仍按上文执行。
+
+## 历史2026-08-14参考映射与反馈
+
+### 四图合并验收映射
 
 | 权威参考结构 | 同时成立的产品原则 | 验收判定 |
 | --- | --- | --- |
@@ -44,7 +50,7 @@
 | 聊天 / 工作 | Object-bound state | 真实改变对象范围或连续工作语境，不迫使用户选择工具或能力模式。 |
 | 极轻顶栏、线性图标、留白 | 降低认知负担 | 结构、节奏与可识别性服务任务进入，不能只作表面仿制。 |
 
-## FB-P6-027..032 补充规则
+### FB-P6-027..032 补充规则
 
 - transcript 默认只投影正文；Desktop hover/focus 与 Android 长按才显示各自允许的消息动作和真实 metadata。
 - 会话导航始终单行：标题左、绝对日期右；禁止相对日期与第二行日期。Desktop hover/focus 可用操作图标替代日期，Android 用长按菜单。
@@ -57,7 +63,7 @@
 
 视觉 QA 必须同时比较四图的结构/节奏与本合同的 Intent-first、Progressive Disclosure、Object-bound state；任何一项失败，`design-qa.md` 不得标为 passed。
 
-## FB-P6-042 顶栏 Settings 唯一归属（CLOSED，2026-08-14）
+### FB-P6-042 顶栏 Settings 唯一归属（CLOSED，2026-08-14）
 
 - Desktop 移除 chat/work switch 旁的 `show-settings` DOM 入口；Settings 只由侧栏底部的既有 `show-settings` 进入 Settings Center。Android 顶栏语义继续只有 drawer、对话/工作及既有 Ghost 右侧主动作；Settings 只在 drawer 底部。
 - 不移除临时聊天 Ghost，不新增 overflow，不改变对话/工作切换、Settings route、焦点顺序、drawer 或持久化 owner。宽窄布局都不得出现幽灵 Settings Tab/semantics。

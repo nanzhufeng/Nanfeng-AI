@@ -42,13 +42,13 @@ P6-C 在 P6-B 的 Rust-owned app-private SQLite 基础上，建立 Desktop 本�
 
 - P6-C 不改变 `nfai.exchange.v1` schema、packageVersion、Android app version 或 Android import 写库边界。Desktop 的本地状态映射回 v1 已允许的 Project / Conversation / Knowledge / Memory / Relation 字段；软删除使用既有 `archived`、`DELETED`、`REVOKED` 表达。
 - provenance、ledger、undo stack、conflict receipt、provider/model metadata 与成本摘要是 Desktop 私有 metadata，绝不作为 v1 未知字段导出。
-- 导出仍使用 Rust canonical package 和同文件 strict preflight；产物必须可被 Node runner 与 Android `NfaiExchangeV1Gateway` 的只读 preflight 接受。Android 未获得导入写库能力。
+- 导出仍使用 Rust canonical package 和同文件 strict preflight；产物必须可被 Node runner 与 Android `NfaiExchangeV1Gateway` 的只读 preflight 接受。本条只说明旧 v1 preflight 的能力；当前 Android v2 原子恢复已由[P6 v2字段合同](P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md)的既有 owner 接线，不能扩大为 Android 完全没有导入写库能力。
 
 ## 模型与成本 metadata
 
 - Provider/Model preset 只保存用户明确配置或本地 fixture 的名称、capability、价格版本、币种、来源、更新时间和“非真实价格/仅 metadata”状态；禁止字段与交换协议相同，不可存 Key/endpoint/HTTP 内容。
 - Invocation cost 面板只读本地安全聚合或 fixture metadata：计数、已知 token/cost、币种、价格版本、来源与更新时间。`null` 表示未知，`0` 表示明确零；不读取 raw payload/chunk，也不计算或宣称真实费用。
-- 价格/catalog 不联网拉取；未配置时 UI 明确为空或未配置，而非假定默认模型、价格或可用能力。
+- P6-C 的手工／fixture metadata 不自行联网拉取价格或目录，未配置不伪造可用性。当前模型设置、真实目录读取和调用费用归模型维护入口及费用合同，不受此旧工作台 metadata 边界禁用。
 
 ## UI 与安全
 

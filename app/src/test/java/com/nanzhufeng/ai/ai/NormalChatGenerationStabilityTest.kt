@@ -18,6 +18,39 @@ import java.util.concurrent.CancellationException
 /** Production executor + Room owners; only provider I/O and credentials are synthetic. */
 @RunWith(RobolectricTestRunner::class)
 class NormalChatGenerationStabilityTest {
+    @Test fun `completed provider reasoning is retained through the Room owner and reopen`() {
+        for(stream in listOf(false,true)) {
+            val name="reasoning-retention-$stream-${System.nanoTime()}"
+            val f=Fixture(databaseName=name,presetId=ModelPresetId.CLAUDE_HAIKU_5_5)
+            try {
+                f.answerOutcome=if(stream) ProviderChatOutcome.StreamedResponse(200,"公开回答","合成思考内容",100,20,null,false,finishReason="COMPLETED",returnedModelId=f.model.modelId)
+                else ProviderChatOutcome.HttpResponse(200,"""{"model":"${f.model.modelId}","choices":[{"message":{"content":"公开回答","reasoning_content":"合成思考内容"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":20}}""")
+                val (id,result)=f.send();assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+                val before=f.conversations.findById(id)!!;val answer=before.nodes.single {it.role==MessageRole.ASSISTANT}
+                assertEquals("合成思考内容",answer.content.filterIsInstance<ContentBlock.Reasoning>().single().text)
+                assertEquals(NormalChatSendAttemptStatus.COMPLETED,f.attempts.findLatestForConversation(id)!!.status)
+                val state=f.conversations.stateFor(id)!!
+                assertTrue(f.conversations.retainCompletedProviderContinuation(state,"合成思考内容",emptyList()))
+                assertFalse(f.conversations.retainCompletedProviderContinuation(state,"不得覆盖原思考",emptyList()))
+                assertFalse(f.conversations.retainCompletedProviderContinuation(state.copy(messageId=before.nodes.first {it.role==MessageRole.USER}.id),"不得修改用户消息",emptyList()))
+                assertEquals(before,f.conversations.findById(id))
+                f.close()
+                val reopened=Room.databaseBuilder(f.context,NanfengAiDatabase::class.java,name).allowMainThreadQueries().build()
+                try {assertEquals(before,RoomConversationRepository(reopened).findById(id))} finally {reopened.close()}
+            } finally {runCatching {f.close()};f.context.deleteDatabase(name)}
+        }
+    }
+    @Test fun `verified Opus aliases do not report a model change while unrelated models still do`() {
+        for(stream in listOf(false,true)) for(returned in listOf("claude-opus-5-5","claude-sonnet-5-5")) {
+            Fixture(presetId=ModelPresetId.RELAYCORE_OPUS_5_5).use {f ->
+                f.answerOutcome=if(stream) ProviderChatOutcome.StreamedResponse(200,"公开回答",null,100,20,null,false,finishReason="COMPLETED",returnedModelId=returned)
+                else ProviderChatOutcome.HttpResponse(200,"""{"model":"$returned","content":[{"type":"text","text":"公开回答"}],"stop_reason":"end_turn","usage":{"input_tokens":100,"output_tokens":20}}""")
+                val (_,result)=f.send()
+                if(returned=="claude-opus-5-5") assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+                else assertEquals(NormalChatOpenRouterExecutor.Result.SentWithNotice(NormalChatOpenRouterExecutor.CompletionNotice.MODEL_IDENTITY_MISMATCH),result)
+            }
+        }
+    }
     private class Fixture(databaseName: String? = null, presetId: ModelPresetId = ModelPresetId.RELAYCORE_SONNET_5_5, private val webSearch: Boolean = false, private val customInstructions: String = "", modelContextWindow: Long? = 200000,private val independentSearch:Boolean=false,clockOverride:Clock?=null, asynchronousCompletion:Boolean=false, private val imageOnlyInput:Boolean=false) : AutoCloseable {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val db = (if(databaseName==null) Room.inMemoryDatabaseBuilder(context,NanfengAiDatabase::class.java) else Room.databaseBuilder(context,NanfengAiDatabase::class.java,databaseName)).allowMainThreadQueries().build()
@@ -45,6 +78,8 @@ class NormalChatGenerationStabilityTest {
         var auditFailure: (DirectChatCallAuditRecord) -> Boolean = { false }
         var providerFailure: Exception? = null
         var answerOutcome: ProviderChatOutcome? = null
+        var providerFactory: ((ProviderChatRequest) -> ProviderChatOutcome)? = null
+        var providerAssertion: Throwable? = null
         var streamed = false
         var afterPartial: () -> Unit = {}
         var afterChunk: () -> Unit = {}
@@ -85,6 +120,7 @@ class NormalChatGenerationStabilityTest {
             transport=object : ProviderChatTransport {
                 override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome {
                     requestCount++;requests+=request;request.onAccepted()
+                    providerFactory?.let { factory -> return try {factory(request)} catch(e:Throwable) {providerAssertion=e;throw e} }
                     if(request.endpoint==IndependentSearchServiceGrant.ENDPOINT) return retrievalFactory?.invoke(request) ?: retrievalOutcome
                     if (webSearch && model.providerId != ProviderId.OPENROUTER && request.endpoint.startsWith("https://openrouter.ai/")) return retrievalFactory?.invoke(request) ?: retrievalOutcome
                     if (streamed || providerFailure!=null || returnsCancelled) { (streamChunks ?: listOf(partialText)).forEach {request.onTextDelta(it);afterChunk()} }
@@ -144,18 +180,46 @@ class NormalChatGenerationStabilityTest {
         override fun close() { completionExecutor?.shutdown(); completionExecutor?.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS); db.close() }
     }
 
-    @Test fun `Haiku opening image keeps enabled native search and completes with real tool sources`() {
+    @Test fun `Haiku image facts reach search before final answer with original image retained`() {
+        Fixture(presetId=ModelPresetId.CLAUDE_HAIKU_5_5,webSearch=true,imageOnlyInput=true).use { f ->
+            f.providerFactory = { request ->
+                val wire=java.io.ByteArrayOutputStream().also {request.effectiveBody().writeTo(it)}.toString(Charsets.UTF_8.name())
+                val body=org.json.JSONObject(wire)
+                assertTrue("Haiku reading, retrieval and final answer must stream even with old catalog metadata",request.expectsStream)
+                assertTrue(body.getBoolean("stream"))
+                val text=when(f.requestCount) {
+                    1 -> {assertFalse(body.has("plugins")); "### 附件\n台积电2026年第三季度营收467.2亿美元。"}
+                    2 -> {assertTrue(wire.contains("台积电"));assertTrue(wire.contains("467.2"));assertTrue(body.has("plugins")); "[A1] 已核实\n台积电公开了2026年第三季度财报。\n来源：https://investor.tsmc.com/quarterly-results"}
+                    else -> {assertTrue(wire.contains("image_url"));assertFalse(body.has("plugins")); "根据台积电官方财报核对图片。"}
+                }
+                ProviderChatOutcome.StreamedResponse(200,text,null,100,20,null,false,
+                    webSources=if(f.requestCount==2) listOf(ProviderWebSource("https://investor.tsmc.com/quarterly-results")) else emptyList(),
+                    webSearchPerformed=f.requestCount==2,returnedModelId="anthropic/claude-haiku-5.5")
+            }
+            val (id,result)=f.send()
+            f.providerAssertion?.let {throw it}
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(3,f.requestCount)
+            assertEquals(NormalChatSendAttemptStatus.COMPLETED,f.attempts.findLatestForConversation(id)!!.status)
+        }
+    }
+
+    @Test fun `Haiku opening image without public facts keeps enabled search and original image`() {
         for (search in listOf(true,false)) Fixture(presetId=ModelPresetId.CLAUDE_HAIKU_5_5,webSearch=search,imageOnlyInput=true).use { f ->
             f.streamed=true
             f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"图片解读与查询结果",null,100,20,null,false,
                 webSources=if(search) listOf(ProviderWebSource("https://example.org/public-result")) else emptyList(),
                 webSearchPerformed=search,returnedModelId="anthropic/claude-haiku-5.5")
+            if(search) f.providerFactory={ request ->
+                if(f.requestCount==1) ProviderChatOutcome.StreamedResponse(200,"无公开事实",null,100,20,null,false,returnedModelId="anthropic/claude-haiku-5.5")
+                else requireNotNull(f.answerOutcome)
+            }
             val (id,result)=f.send()
             assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
             assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
             assertEquals(NormalChatSendAttemptStatus.COMPLETED,f.attempts.findLatestForConversation(id)!!.status)
-            assertEquals("Native image must not be diverted to a no-facts inventory",1,f.requestCount)
-            val bytes=java.io.ByteArrayOutputStream().also { f.requests.single().effectiveBody().writeTo(it) }
+            assertEquals(if(search) 2 else 1,f.requestCount)
+            val bytes=java.io.ByteArrayOutputStream().also { f.requests.last().effectiveBody().writeTo(it) }
             val body=org.json.JSONObject(bytes.toString(Charsets.UTF_8.name()))
             assertTrue(body.toString().contains("image_url"))
             assertEquals(search,body.has("plugins"))
@@ -171,9 +235,13 @@ class NormalChatGenerationStabilityTest {
         f.streamed=true; f.partialText="已收到的图片分析"
         f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"已收到的图片分析",null,100,20,ProviderReportedCost(120,"USD","test-receipt"),false,
             returnedModelId="anthropic/claude-haiku-5.5")
+        f.providerFactory={ request ->
+            if(f.requestCount==1) ProviderChatOutcome.StreamedResponse(200,"无公开事实",null,100,20,null,false,returnedModelId="anthropic/claude-haiku-5.5")
+            else requireNotNull(f.answerOutcome)
+        }
         val (id,result)=f.send()
         assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.WEB_SEARCH_NO_SOURCES),result)
-        assertEquals(1,f.requestCount)
+        assertEquals(2,f.requestCount)
         assertEquals(NormalChatSendAttemptStatus.FAILED,f.attempts.findLatestForConversation(id)!!.status)
         assertTrue(f.conversations.findById(id)!!.nodes.last {it.role==MessageRole.ASSISTANT}.content.filterIsInstance<ContentBlock.Text>().any {it.text.contains("已收到的图片分析")})
         assertTrue(f.durableAudit.listNewestFirst().any {it.accounting?.cost?.totalMicros==120L})
@@ -472,14 +540,28 @@ class NormalChatGenerationStabilityTest {
             assertEquals(MessageDeliveryState.FAILED,answer.deliveryState)
         }
     }
-    @Test fun `no public attachment clues never searches generic report methods`() {
+    @Test fun `personal attachment derives safe subject and searches without a public event gate`() {
         Fixture(webSearch=true).use {f ->
-            f.attachmentText="这是没有外部核验事项的普通说明。"
+            f.attachmentText="我的持仓预算是98765元，想理解风险分散。"
+            f.providerFactory={ request ->
+                val wire=java.io.ByteArrayOutputStream().also {request.effectiveBody().writeTo(it)}.toString(Charsets.UTF_8.name())
+                val text=when(f.requestCount) {
+                    1 -> "风险分散与资产配置"
+                    2 -> {
+                        assertTrue(wire.contains("风险分散"));assertFalse(wire.contains("98765"))
+                        "[A1] 未核实\n风险分散与资产配置属于投资风险管理主题，不能直接核实个人持仓。\n来源：https://example.org/diversification"
+                    }
+                    else -> "结合材料与检索资料解释风险分散。"
+                }
+                ProviderChatOutcome.StreamedResponse(200,text,null,100,20,null,false,
+                    webSources=if(f.requestCount==2) listOf(ProviderWebSource("https://example.org/diversification")) else emptyList(),
+                    webSearchPerformed=f.requestCount==2,returnedModelId=if(f.requestCount==2) "openai/gpt-6-luna" else f.model.modelId)
+            }
             val(id,result)=f.send(withAttachment=true)
-            assertEquals(1,f.requestCount)
-            assertFalse(f.requests.single().endpoint.endsWith("/responses"))
-            assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
-            assertEquals(MessageDeliveryState.FAILED,f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}.deliveryState)
+            f.providerAssertion?.let {throw it}
+            assertEquals(3,f.requestCount)
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(MessageDeliveryState.COMPLETE,f.conversations.findById(id)!!.nodes.single {it.role==MessageRole.ASSISTANT}.deliveryState)
         }
     }
 

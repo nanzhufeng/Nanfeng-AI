@@ -2,13 +2,15 @@
 
 <!-- contract-governance:start -->
 > **合同口径：领域／模块限定合同。** 领域入口：[ 消息与动作领域 ](P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
-> **适用范围：** 南枫 AI P3-B 类型化流事件与本地对话运行状态机合同
+> **适用范围：** 规范化运行事件、Room原子投影与完成后可选元数据追加；fixture不定义生产外发开关
 <!-- contract-governance:end -->
 
 日期：2026-08-12  
-状态：本地确定性 fixture、Room Schema 4→5、状态机和最小可见验证；不含真实 Provider、真实 Key 或网络
+状态：运行事件与 Room 原子投影的限定合同；Schema 4→5及本地 fixture 验收是2026-08-12阶段事实，不是当前整机联网状态
 
 ## 目标、边界与所有权
+
+2026-10-15：完成后的可选 Provider 思考／工具协议只经 `retainCompletedProviderContinuation` 追加到已完成的对应 assistant。Room 同事务核对 invocation、事件、消息和完成 checkpoint；不得改正文、终态、费用、标题、草稿或活动时间。同值重放无变化，冲突内容／其他消息拒绝。仅增加内容修订供同步观察，不增加 Schema 或伪造新运行事件。追加失败仍保留已完成正文／标题／费用并如实提示；普通 `save(snapshot)` 的消息不可改写规则保持。
 
 ```text
 DeterministicFixtureStreamingAdapter
@@ -26,7 +28,7 @@ DeterministicFixtureStreamingAdapter
 | 原子持久化与重建 | `RoomConversationRepository` | Repository 解释分支或 Provider 语义 |
 | 每次尝试的唯一 Invocation | Invocation ID / 后续 `Invocation Ledger` | 正文进入 Ledger |
 
-生产 OpenRouter egress 固定 `Disabled`。本阶段没有 Key 读取、Authorization、HTTP、真实 RunSpec、费用或图片路径；fixture 的安全元数据固定声明零网络、零凭据读取、零 Provider 原始负载保留。
+确定性 fixture 路径不读取 Key、不发送 HTTP，其安全元数据声明零网络、零凭据读取、零 Provider 原始负载保留。现行普通聊天由 [P3-J](P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md) 的已注册执行器将规范化事件交给同一运行状态／Room owner；Provider 协议、联网、来源与计量分别归 C12 和费用合同，不能从 fixture 的 Disabled 默认值推断生产外发关闭。
 
 ## 版本化事件协议
 
@@ -65,7 +67,9 @@ DeterministicFixtureStreamingAdapter
 
 每次被接受事件在一个 Room 事务中同时写入事件事实、MessageNode 投影、Conversation 当前叶/更新时间和 runtime state。Activity 或进程重建时 Repository 重新读取 MessageNode 与 runtime state，因此可显示部分、完成、失败或取消的真实状态；没有内存事件队列作为真值。
 
-## 最小可见 UI 和验证等级
+<a id="最小可见-ui-和验证等级"></a>
+
+## 历史2026-08-12最小可见 UI 和验证等级
 
 本地对话卡可创建本地会话、启动确定性流、观察逐段输出、停止并保留部分输出；所有按钮只调用 ViewModel UseCase。卡片与按钮使用现有白色表面、同一圆角 shape 和匹配的 ripple/focus/shadow，不新增 Dialog/Popup。
 

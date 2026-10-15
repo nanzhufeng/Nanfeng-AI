@@ -109,10 +109,9 @@ function home({ appearance, page, capabilities }) {
       row({ glyph: settingsIcons.data, title: '本机数据', page: 'privacy', muted: true, selected: page === 'privacy' }),
       row({ glyph: settingsIcons.info, title: '关于', page: 'about', muted: true, selected: page === 'about' }),
     ])}
-    ${group('高级', [
-      ...(WORKSPACES_VISIBLE ? [row({ glyph: settingsIcons.folder, title: '项目与知识', page: 'workspace', selected: page === 'workspace' })] : []),
-      row({ glyph: settingsIcons.tune, title: '开发与诊断', page: 'development', selected: page === 'development' }),
-    ])}
+    ${WORKSPACES_VISIBLE ? group('高级', [
+      row({ glyph: settingsIcons.folder, title: '项目与知识', page: 'workspace', selected: page === 'workspace' }),
+    ]) : ''}
   </div>`;
 }
 

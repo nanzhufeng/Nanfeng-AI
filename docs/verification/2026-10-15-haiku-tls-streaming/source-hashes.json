@@ -1,0 +1,12 @@
+{
+  "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt": "297200f46977789ff972aedd6d5a7bd92af278920b7f833b4d2a91cb3b4fc502",
+  "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "a8529383102e3981801be356e884a6b70e41262c5d82a9a14b7da27f5bab9894",
+  "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt": "2cbeace4942299cae4082abb74703cf74c636447e414f39850304296fd0045e8",
+  "app/src/main/java/com/nanzhufeng/ai/domain/RegistryVerification.kt": "a7d5cd35f44e43e08e3f9d35532b931ba85824e29c769889d07fc5cc7630aff2",
+  "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt": "8ed051fe658ddc589c83b443a4327bf4f0fd9cf70e028d263a92b8b1600b7f8d",
+  "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt": "cb12ca165885677bcc92758f08b664ae050f64e80a6ccae7b035dcfde22e70fa",
+  "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt": "4f341aa868cf78c9a351e44436e59a341b0c39185e0b667b575876c9561f9307",
+  "app/src/test/java/com/nanzhufeng/ai/data/P2JOpenRouterRegistryContractsTest.kt": "fc277f6a180e3d67bb1898b34056bc5622bc84d1ba8aa57e7d6974abe3563f86",
+  "desktop/src/android-settings-shell.mjs": "88c156b325fd65a7cf8a71b2f7428b90b6c83dd584060a92bb42efe168ac2be6",
+  "app/src/test/java/com/nanzhufeng/ai/ai/ProviderTlsConnectionRecoveryTest.kt": "0e8db4cd2ee5abc72025160ff4c7db8f2544ef0e61389255e07891076ac45fe1"
+}

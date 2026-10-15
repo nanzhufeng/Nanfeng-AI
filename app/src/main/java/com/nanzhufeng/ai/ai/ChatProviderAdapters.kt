@@ -49,6 +49,7 @@ interface ChatProviderAdapter {
     /** Provider protocol traces are buffered only for routes that have exhibited exact leakage. */
     fun streamTextMode(options: ChatRequestOptions): ProviderStreamTextMode = ProviderStreamTextMode.IMMEDIATE
     fun decodeNonStreaming(body: String): ChatAdapterDecodedResult
+    fun decodeNonStreaming(body: String, options: ChatRequestOptions): ChatAdapterDecodedResult = decodeNonStreaming(body)
     /** The Adapter, rather than the transport, owns its SSE JSON field names. */
     fun decodeStreamingEvent(body: String): ProviderSseEvent?
     /** Request options select a provider protocol without making the transport inspect JSON. */
@@ -358,6 +359,11 @@ abstract class OpenAiCompatibleChatAdapter : ChatProviderAdapter {
 open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
     override open val providerId = ProviderId.OPENROUTER
 
+    // Older persisted catalogs incorrectly treated missing optional `stream` as unsupported.
+    // Use the endpoint's text streaming contract without requiring a catalog refresh/migration.
+    override fun supportsStreaming(model: ResolvedModel, options: ChatRequestOptions): Boolean =
+        model.capabilities.supportsText
+
     override fun endpointPath(options: ChatRequestOptions): String = if(options.openRouterResponsesSearch) "/responses" else "/chat/completions"
     override fun decodeNonStreaming(body: String): ChatAdapterDecodedResult = ResponsesWebSearchJsonCodec.decode(body,providerId) ?: super.decodeNonStreaming(body)
     override fun decodeStreamingEvent(body: String, options: ChatRequestOptions): ProviderSseEvent? =
@@ -580,7 +586,10 @@ class DeepSeekChatAdapter : OpenAiCompatibleChatAdapter() {
     }
     override fun decodeStreamingEvent(body: String) = decodeOpenAiCompatibleStreamingEvent(body)
     override fun decodeStreamingEvent(body: String, options: ChatRequestOptions): ProviderSseEvent? =
-        if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_MESSAGES) MessagesProviderSseCodec.decode(body)?.copy(requiresNativeWebSources = true) else decodeStreamingEvent(body)
+        if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_MESSAGES) MessagesProviderSseCodec.decode(body)?.copy(requiresNativeWebSources = !options.groundedAnswer) else decodeStreamingEvent(body)
+    override fun decodeNonStreaming(body: String, options: ChatRequestOptions): ChatAdapterDecodedResult =
+        if (options.groundedAnswer) DeepSeekMessagesJsonCodec.decode(body) ?: super.decodeNonStreaming(body)
+        else decodeNonStreaming(body)
     override fun decodeNonStreaming(body: String): ChatAdapterDecodedResult =
         DeepSeekMessagesJsonCodec.decode(body)?.let { decoded ->
             if (decoded is ChatAdapterDecodedResult.Text && !decoded.webSearchPerformed)

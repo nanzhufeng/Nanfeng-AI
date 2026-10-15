@@ -2,23 +2,23 @@
 
 <!-- contract-governance:start -->
 > **合同口径：领域／模块限定合同。** 领域入口：[ 当前调用计量与币种 ](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)；[全项目口径与维护索引](contracts/CONTRACT_INDEX.md)。本文的独立owner／格式边界不因归类改变；阶段状态、Schema与验收记录只适用于注明的范围，不能覆盖其他领域或推断整机当前能力。
-> **适用范围：** 南枫 AI P0 Usage Ledger 合同
+> **适用范围：** append-only数量事实内核；Android独立Room与Mac生产账本接线分开，不替代当前计量合同
 <!-- contract-governance:end -->
 
 日期：2026-08-15  
-状态：P0 独立安全内核与 Android Room / Desktop SQLite sidecar；未接入 UI、Compose、Provider、HTTP、Key、附件外发或 P3 Adapter 注册
+状态：append-only数量账本内核与平台存储合同；当前生产消费者按平台区分，不由早期未接入状态推断
 
 ## 目标与边界
 
-`usage-ledger-v1` 是独立、append-only 的本地数量事实账本，服务于将来的费用、预算和运行核对；它不是 Provider 调用器、密钥存储、内容存储或 UI 数据源。本阶段新增 Android Room `usage_ledger_entries` 与 Desktop app-private `usage-ledger-v1.sqlite3`，两端都以内存派生 read model；不改变 P3-I receipt、Invocation Ledger、Conversation、消息、附件或现有表。
+`usage-ledger-v1` 是独立、append-only 的本地数量事实账本，定义数量、费用事实与对账的内核；它不是 Provider 调用器、密钥存储或内容存储。当前用户界面经[费用合同](AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)指定的只读投影消费，不直接改写账本。本阶段新增 Android Room `usage_ledger_entries` 与 Desktop app-private `usage-ledger-v1.sqlite3`，两端都以内存派生 read model；不改变 P3-I receipt、Invocation Ledger、Conversation、消息、附件或现有表。
 
 唯一合法边界为：
 
 ```text
-future explicit owner → immutable UsageLedgerEntry → Room append-only table → in-memory UsageLedgerReadModel
+authorized accounting owner → immutable entry → platform append-only store → read model
 ```
 
-当前没有 production caller；`RoomUsageLedgerRepository` 未注入 `AppContainer`，Desktop `usage_ledger_v1::Ledger` 也未出现在 Tauri command、IPC、前端或 Adapter registry 中。
+Android 的独立 `RoomUsageLedgerRepository` 未注入 `AppContainer`，普通聊天实际计量沿 `ChatCallAccounting` 及其持久化投影。Desktop 的 `usage_ledger_v1::Ledger` 已由 workspace 生产 owner 记录普通调用与标题等事实，再通过 IPC 读取；`usage_ledger_call_metadata` 的附属元数据事务与重开恢复遵循费用合同。不能把 Android 独立内核的接线状态扩大到 Desktop，或将旧 sidecar 定位解释为整机无真实计量。
 
 ## 字段白名单与隐私
 

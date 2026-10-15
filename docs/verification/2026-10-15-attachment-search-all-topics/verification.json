@@ -1,0 +1,153 @@
+{
+  "verifiedAt": "2026-10-15T16:32:20+08:00",
+  "baseline": "5a52aa2a8928cc46bad136cb608fd1eb3b62517e",
+  "scope": "WORKTREE",
+  "androidTests": {
+    "tests": 1523,
+    "skipped": 10,
+    "failures": 0,
+    "errors": 0,
+    "passed": 1513,
+    "suites": 324
+  },
+  "rustTests": {
+    "passed": 455,
+    "ignored": 36,
+    "failed": 0
+  },
+  "androidDebugBuild": "PASS",
+  "androidFormalBuild": "PASS",
+  "releaseLint": "PASS",
+  "macCargoCheck": "PASS",
+  "macFormalBundle": "PASS",
+  "node": "NOT RUN; frontend source unchanged",
+  "modelServiceGate": {
+    "state": "PASS",
+    "chatModels": 21,
+    "specialModels": 1,
+    "credentialGroups": 7
+  },
+  "contractGovernance": {
+    "state": "PASS",
+    "contracts": 114,
+    "domains": 40
+  },
+  "live": {
+    "model": "anthropic/claude-haiku-5.5",
+    "provider": "OPENROUTER",
+    "files": [
+      "PNG",
+      "Markdown"
+    ],
+    "themes": [
+      "TSMC earnings",
+      "Impressionism"
+    ],
+    "android": {
+      "result": "Sent",
+      "coverage": "2/2项检索结果",
+      "calls": 4,
+      "knownUsdMicros": 17912,
+      "footerCostLabel": "¥0.120374",
+      "elapsedMs": 165972,
+      "reopenedExact": true,
+      "reopenNetworkCalls": 0,
+      "testedWithTemporaryEmulatorProxy": true
+    },
+    "mac": {
+      "result": "COMPLETED",
+      "coverage": 2,
+      "calls": 4,
+      "knownUsdMicros": 17771,
+      "reopenedExact": true,
+      "reopenedAccountingExact": true,
+      "reopenedProof": true
+    },
+    "macAttempts": [
+      {
+        "case": "mac-live-owner-isolation",
+        "status": "COMPLETED",
+        "error": null,
+        "knownUsdMicros": 17771
+      },
+      {
+        "case": "mac-live-production-budget",
+        "status": "COMPLETED",
+        "error": null,
+        "knownUsdMicros": 53344
+      },
+      {
+        "case": "mac-live-r2",
+        "status": "FAILED",
+        "error": "Explicit { code: \"OUTPUT_LIMIT\", http_status: Some(200), quantified_reply_present: true }",
+        "knownUsdMicros": 36910
+      },
+      {
+        "case": "mac-live-topic-semantics",
+        "status": "PARTIAL",
+        "error": null,
+        "knownUsdMicros": 88168
+      },
+      {
+        "case": "mac-live",
+        "status": "FAILED",
+        "error": "Explicit { code: \"OUTPUT_LIMIT\", http_status: Some(200), quantified_reply_present: true }",
+        "knownUsdMicros": 69482
+      }
+    ],
+    "androidEarlierAttempts": {
+      "a": "Sent but rejected as sufficient acceptance: metadata topics/unrelated sources",
+      "b": "NETWORK; preserved, not replayed",
+      "c": "NETWORK; preserved, not replayed",
+      "d": "inventory timeout; obsolete isolated run stopped, pending result remains UNKNOWN; not zero cost"
+    },
+    "costBoundary": "Known final call charges are not the total experiment cost. Earlier Mac charges retained above; Android failed/unknown attempts are not represented as zero."
+  },
+  "install": {
+    "android": {
+      "package": "com.nanzhufeng.ai",
+      "versionCode": 94,
+      "versionName": "1.0.30",
+      "debuggable": false,
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "sha256": "a4f0e85642ccfd7a6c0d841e5ae2f2bc221ab57b741c5b339b50e2383377b9e4",
+      "bytes": 28688865,
+      "installed": true,
+      "completedAt": "2026-10-15T16:29:40.145267+08:00",
+      "exactCandidateBytes": true,
+      "dataMetadataPreserved": true,
+      "remoteTempRemoved": true,
+      "launched": false
+    },
+    "mac": {
+      "installed": true,
+      "completedAt": "2026-10-15T16:28:49.274414+08:00",
+      "bundleFiles": 4,
+      "exactCandidateFiles": true,
+      "dataFiles": 1595,
+      "dataChanges": {
+        "added": 0,
+        "deleted": 0,
+        "changed": 0
+      },
+      "launched": false,
+      "version": "1.0.30",
+      "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3"
+    }
+  },
+  "frozenInputs": {
+    "files": 1178,
+    "drift": 0
+  },
+  "proxyCleanup": {
+    "before": "null",
+    "after": "null",
+    "restored": true
+  },
+  "credentialCleanup": {
+    "encryptedCredentialsCleared": true,
+    "capabilityConsumed": true
+  },
+  "mainDeviceBusinessAcceptance": "NOT RUN; formal cover and readback only",
+  "fullPaidModelFormatMatrix": "NOT RUN"
+}

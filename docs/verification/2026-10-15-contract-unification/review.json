@@ -1,0 +1,2414 @@
+{
+  "verifiedAt": "2026-10-15T18:26:19+08:00",
+  "baseline": "5a52aa2a8928cc46bad136cb608fd1eb3b62517e",
+  "scope": "WORKTREE; all tracked and non-ignored untracked inputs preserved",
+  "inventory": {
+    "files": 2154,
+    "tracked": 1819,
+    "untracked": 335,
+    "localGitCommits": 191
+  },
+  "contracts": 114,
+  "domains": 40,
+  "classifications": {
+    "CURRENT": 24,
+    "SCOPED": 77,
+    "EXPERIMENTAL": 8,
+    "HISTORICAL": 5
+  },
+  "contractBodiesChanged": 18,
+  "registeredScopesUpdated": 8,
+  "ownerDomainsExpanded": 4,
+  "protectedInputs": {
+    "files": 1234,
+    "changed": 0,
+    "missing": 0,
+    "unexpectedNew": 0
+  },
+  "tests": {
+    "maintenanceUnitTests": 29,
+    "failures": 0,
+    "governance": "PASS",
+    "consistency": "PASS",
+    "modelService": "PASS",
+    "initialNewMaintenanceRegressions": "10 failures observed before implementation",
+    "newSemanticGateBeforeCorrections": [
+      "known active semantic drift: docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+      "known active semantic drift: docs/P0_USAGE_LEDGER_CONTRACT.md",
+      "known active semantic drift: docs/P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md",
+      "known active semantic drift: docs/P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md",
+      "known active semantic drift: docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+      "known active semantic drift: docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md",
+      "known active semantic drift: docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md"
+    ],
+    "markdownAnchorPreflight": {
+      "checks": 11,
+      "issues": []
+    }
+  },
+  "historicalEvidenceXmlParseErrors": 7,
+  "coverageLimits": [
+    "No line-by-line proof of every natural-language sentence",
+    "No new app build or behavior tests; compiled application inputs unchanged",
+    "No paid Provider calls, remote sync/deployment, UI or device acceptance for this contract task",
+    "Historical native XML evidence remains unmodified; 7 files fail XML parser",
+    "Prior authorized Android overlay completed separately; not validation of contract edits"
+  ],
+  "newSemanticRegressionCases": 8,
+  "businessFunctionChanges": false,
+  "commitPushOrRelease": false,
+  "remainingBusinessGaps": [
+    "RC Gemini Pro and broader live model/format acceptance remain open as recorded in prior model review"
+  ],
+  "contractRows": [
+    {
+      "path": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+      "domain": "usage",
+      "status": "CURRENT",
+      "scope": "本机物理调用用量/币种/事实等级；余额和跨软件预算仅规划",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "86c245cc23790226472258daae08f189f7616740b7a6871d15ca91a84696b307",
+      "afterSha256": "86c245cc23790226472258daae08f189f7616740b7a6871d15ca91a84696b307",
+      "bytes": 15161,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+      "domain": "android-conversation",
+      "status": "CURRENT",
+      "scope": "南枫 AI Android 当前会话与搜索界面合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "e5c979f52684e97699c574968cf5f4bfcbf222b41f60a7f2d2fba3f2516aa168",
+      "afterSha256": "e5c979f52684e97699c574968cf5f4bfcbf222b41f60a7f2d2fba3f2516aa168",
+      "bytes": 81669,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "CURRENT",
+      "scope": "南枫 AI Android 当前普通聊天运行时上下文合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "168c9eea2d14032486404b1f1479b4454bb89a1a493925c988ea683b1003f206",
+      "afterSha256": "e1025fe4416fe63f7988bd5a189694b97d990812d5aa20ccb734ef9c19b51c5b",
+      "bytes": 22148,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+      "domain": "settings",
+      "status": "CURRENT",
+      "scope": "南枫 AI Android 当前设置界面合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "00fd849a29e524f9ea8baecdb0a1226d8e2f80a21f8a6c6e094a622037509fc7",
+      "afterSha256": "8c4bd95a216784496ea7472f21c3d3ca653cdeba38734f96b2273a42fd54176f",
+      "bytes": 42655,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md",
+      "domain": "transcription",
+      "status": "CURRENT",
+      "scope": "Android 南枫转写当前界面合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "f832d7f4fefc0385a80a2301f6ff4c077981f94c8747fd70fddb15007c36ead9",
+      "afterSha256": "f832d7f4fefc0385a80a2301f6ff4c077981f94c8747fd70fddb15007c36ead9",
+      "bytes": 4526,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/ANSWER_LANGUAGE_CURRENT_CONTRACT.md",
+      "domain": "language",
+      "status": "CURRENT",
+      "scope": "普通回答语言与外语来源合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "44d13a6e2d79dcc39634eaaa908e4bf7b9bfe9b49ed725ac3cffbc77807fdd93",
+      "afterSha256": "44d13a6e2d79dcc39634eaaa908e4bf7b9bfe9b49ed725ac3cffbc77807fdd93",
+      "bytes": 3317,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "domain": "model-network",
+      "status": "CURRENT",
+      "scope": "普通发送按渠道/材料选择工具、来源与范围终态；旧独立搜索服务只读兼容",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "054eb06c5b2f1448ad5b84d102b8b1badce0e84f246becb9cb3dffb0ca47c6f3",
+      "afterSha256": "054eb06c5b2f1448ad5b84d102b8b1badce0e84f246becb9cb3dffb0ca47c6f3",
+      "bytes": 40002,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "CURRENT",
+      "scope": "C-13 对话生命周期 Android → Desktop 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "1f789545247627e2bbc3844d2f50a0f20cd9489f28f31e6538fe0456f586b82e",
+      "afterSha256": "1f789545247627e2bbc3844d2f50a0f20cd9489f28f31e6538fe0456f586b82e",
+      "bytes": 4804,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/C14_LOCAL_DATA_PARITY_CONTRACT.md",
+      "domain": "local-data",
+      "status": "CURRENT",
+      "scope": "C-14 导入导出／本机数据跨端合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "5f941d3fd0a8c6bc56bc5bcecca3da477fa54556624e5308fa988e9204e725ed",
+      "afterSha256": "5f941d3fd0a8c6bc56bc5bcecca3da477fa54556624e5308fa988e9204e725ed",
+      "bytes": 7776,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md",
+      "domain": "workspace",
+      "status": "CURRENT",
+      "scope": "CHAT/WORK存储、恢复与手动引用隔离；WORK隐藏不构成删除或恢复入口授权",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "b537e4296154b3d4f1307290e0351c500fb04c6317904afeb2b95db937562218",
+      "afterSha256": "0ceee9900d2ae22a4f05cf213e4b7d4cf3a97bc8f71c9c8b789d7b7e67b6275b",
+      "bytes": 9501,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md",
+      "domain": "theme",
+      "status": "CURRENT",
+      "scope": "C-16 主题／字体／弹层跨端合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "5385b8523aa35c4e74352ad7a7201602016fa155d80cd752a3c9fc2f6f3f7014",
+      "afterSha256": "7f91fd28f374f3438c4469340e3f491acfd210d04f51fdfb0073c1cf7576c0fe",
+      "bytes": 6740,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md",
+      "domain": "product",
+      "status": "CURRENT",
+      "scope": "南枫 AI 意图优先组织合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "bb097812436dff2dd81ba3dabcf432ec4a7075800d1c5e4a7eb99c790d6fd5a6",
+      "afterSha256": "e6bffc38ee1bd497ad5711b883fb948914854d712bdb92992a647ed2fb77f14d",
+      "bytes": 8295,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/CONVERSATION_APP_ENTRY_CONTRACT.md",
+      "domain": "startup",
+      "status": "CURRENT",
+      "scope": "会话启动合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "edbf8fa6991122dc0180808b02243dd1def9b88c1de7b5291f94f706d7b7fecd",
+      "afterSha256": "edbf8fa6991122dc0180808b02243dd1def9b88c1de7b5291f94f706d7b7fecd",
+      "bytes": 2609,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/DESKTOP_CHAT_FIRST_UI_CONTRACT.md",
+      "domain": "desktop-conversation",
+      "status": "CURRENT",
+      "scope": "南枫 AI Desktop 对话优先 UI 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "cb6fda692d07cac11461f6bea67f4256a35f0e47a50ef370d44582ea9f85b4f0",
+      "afterSha256": "cb6fda692d07cac11461f6bea67f4256a35f0e47a50ef370d44582ea9f85b4f0",
+      "bytes": 26928,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/DESKTOP_COMPARE_EXECUTION_CONTRACT.md",
+      "domain": "compare",
+      "status": "SCOPED",
+      "scope": "Desktop Compare 真实执行合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "123cff1f2f29136e1f4faa489f41fe29ab42c53fa33cdd6ebedad561984f072e",
+      "afterSha256": "123cff1f2f29136e1f4faa489f41fe29ab42c53fa33cdd6ebedad561984f072e",
+      "bytes": 3956,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/DESKTOP_HISTORY_KNOWLEDGE_CONTRACT.md",
+      "domain": "history-library",
+      "status": "CURRENT",
+      "scope": "Desktop 历史资料库与隐藏 interests 当前合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "2b3f603ae0c40f25f8499f807772bba9967e5ea84c34d076aea66dec460a6775",
+      "afterSha256": "2b3f603ae0c40f25f8499f807772bba9967e5ea84c34d076aea66dec460a6775",
+      "bytes": 4591,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md",
+      "domain": "ocr",
+      "status": "CURRENT",
+      "scope": "用户显式发起的独立GLM-OCR材料任务；不自动介入普通搜索",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "aaba1a9bcfe91f6986cb5dc04190c46efd2217b26b9ceb5490057cf026fd1262",
+      "afterSha256": "aaba1a9bcfe91f6986cb5dc04190c46efd2217b26b9ceb5490057cf026fd1262",
+      "bytes": 7309,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/ICONOGRAPHY_CONTRACT.md",
+      "domain": "icon",
+      "status": "SCOPED",
+      "scope": "图标语汇合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "4b198ce7b39f10a5e247883e93c46ef20088897fedee63c90b16a2a1aaa5cba8",
+      "afterSha256": "4b198ce7b39f10a5e247883e93c46ef20088897fedee63c90b16a2a1aaa5cba8",
+      "bytes": 3366,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/NANFENG_ISLAND_CURRENT_CONTRACT.md",
+      "domain": "island",
+      "status": "CURRENT",
+      "scope": "持久生成元数据的后台展示/查看/停止；前台隐藏且展示不重发任务",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "4b9c39a5d6a6fa713cacd8aff8bdf7f4895ac1a09fc4816e66df43782f87eb66",
+      "afterSha256": "4b9c39a5d6a6fa713cacd8aff8bdf7f4895ac1a09fc4816e66df43782f87eb66",
+      "bytes": 6906,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md",
+      "domain": "draft",
+      "status": "CURRENT",
+      "scope": "新对话草稿保留合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "440b955f9ce68a3dc0c15f1a1898cf65ccd6edb62da047914ba14b1e8260851f",
+      "afterSha256": "440b955f9ce68a3dc0c15f1a1898cf65ccd6edb62da047914ba14b1e8260851f",
+      "bytes": 2224,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/NFAI_EXCHANGE_V1_CONTRACT.md",
+      "domain": "exchange-v1",
+      "status": "SCOPED",
+      "scope": "nfai.exchange.v1 跨端语义交换合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "413ca6b56f25f6230a74f9e37d47d2bcf6280371c4f9c35a087b2ecd8c59ffbc",
+      "afterSha256": "413ca6b56f25f6230a74f9e37d47d2bcf6280371c4f9c35a087b2ecd8c59ffbc",
+      "bytes": 3922,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P0_USAGE_LEDGER_CONTRACT.md",
+      "domain": "usage",
+      "status": "SCOPED",
+      "scope": "append-only数量事实内核；Android独立Room与Mac生产账本接线分开，不替代当前计量合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "9225b69f62d2aa786d15843b338cf0470027b4748df7fb54f2a2ff3535c08324",
+      "afterSha256": "8cc5080600ea03a385d26e1cb32cf437ccf9551f77cd23fbbfb2b85bedf66dad",
+      "bytes": 4373,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md",
+      "domain": "connection-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P10-A 双路径连接能力、状态与配置表面合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "db619dd46375bad7546db3cd83a55279cc5471731e666805404d5286d22a22b0",
+      "afterSha256": "db619dd46375bad7546db3cd83a55279cc5471731e666805404d5286d22a22b0",
+      "bytes": 4257,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P10B_DUAL_PATH_SELECTION_FEEDBACK_CONTRACT.md",
+      "domain": "connection-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P10-B 双路径选择反馈合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "86ebe69962588c7eece40858737eadf2a07a2e84444b689662e744d3c9e8c8ce",
+      "afterSha256": "86ebe69962588c7eece40858737eadf2a07a2e84444b689662e744d3c9e8c8ce",
+      "bytes": 3564,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P1_ATTACHMENT_EGRESS_ELIGIBILITY_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P1 附件外发资格与授权投影合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "7a3a9583ceb27f700267c10636e33f693c5bdd501cecac20e24d8d76eebeb264",
+      "afterSha256": "7a3a9583ceb27f700267c10636e33f693c5bdd501cecac20e24d8d76eebeb264",
+      "bytes": 3277,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P1_TASK_CONTRACT.md",
+      "domain": "product",
+      "status": "HISTORICAL",
+      "scope": "南枫 AI P1 任务合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "da39869619dcd8ef2d0792105928db4b3136c6f13fc5fbe5b63d6a7a25ccea28",
+      "afterSha256": "da39869619dcd8ef2d0792105928db4b3136c6f13fc5fbe5b63d6a7a25ccea28",
+      "bytes": 5361,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2A_LOCAL_DATA_AND_ATTACHMENT_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-A 本地数据与附件合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "0730aacda358968ece09a906cec85fcbb612102ae3e216cdf1f56812b4b1fad2",
+      "afterSha256": "0730aacda358968ece09a906cec85fcbb612102ae3e216cdf1f56812b4b1fad2",
+      "bytes": 5868,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2B_CAPTURE_UI_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-B 自适应捕获 UI 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "6d112be3ac04714cd73ddcc9f2d52519fc03545289752917bea821ad85a415e6",
+      "afterSha256": "6d112be3ac04714cd73ddcc9f2d52519fc03545289752917bea821ad85a415e6",
+      "bytes": 4241,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2B_GALLERY_CAPTURE_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-B 相册捕获与真实验收合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "fb2901ade836e3765438cf3a918ec6ea2458c4bb9f9eba6b1178cba289e9690f",
+      "afterSha256": "fb2901ade836e3765438cf3a918ec6ea2458c4bb9f9eba6b1178cba289e9690f",
+      "bytes": 6182,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2C_TEXT_CAPTURE_CONTRACT.md",
+      "domain": "attachments",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-C 文本捕获与系统分享合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "977a85add1b71aa18b7e998dda22301621f1af5e4c788861107b453342938739",
+      "afterSha256": "977a85add1b71aa18b7e998dda22301621f1af5e4c788861107b453342938739",
+      "bytes": 2944,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2D_MODEL_SETTINGS_CONTRACT.md",
+      "domain": "models",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-D 模型设置与本机凭据合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "185e0430a8ce5bd50bb5856135957011c621d2b3168cf31d37f112582a1055a6",
+      "afterSha256": "185e0430a8ce5bd50bb5856135957011c621d2b3168cf31d37f112582a1055a6",
+      "bytes": 5213,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2E_OFFLINE_PROVIDER_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-E 离线 Provider 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "de36171e80113797e88a60f4861e8950bfd322bb53d2e5c00024e2ea56b91063",
+      "afterSha256": "de36171e80113797e88a60f4861e8950bfd322bb53d2e5c00024e2ea56b91063",
+      "bytes": 4589,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2F_INVOCATION_LEDGER_CONTRACT.md",
+      "domain": "usage",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-F 本地 Invocation Room Ledger 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "6978aacbdc5a915cd44334127661e6be1d2607e9cefe80dbbd69a51f14260221",
+      "afterSha256": "6978aacbdc5a915cd44334127661e6be1d2607e9cefe80dbbd69a51f14260221",
+      "bytes": 4167,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2G_MOCK_CANDIDATE_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-G 本地确认、Mock 与候选核对合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "3462fab5e2d78d805d5f3febb8d4654b29bc4777925d6e6af07f895d01d2aec1",
+      "afterSha256": "3462fab5e2d78d805d5f3febb8d4654b29bc4777925d6e6af07f895d01d2aec1",
+      "bytes": 3746,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2H_KNOWLEDGE_READ_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-H 最小 Knowledge 读取合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "8c1aed9aeb6c5cfd96c942f793ab7fb04f89f2ab8c622be49b3e13b87fb0a2d1",
+      "afterSha256": "8c1aed9aeb6c5cfd96c942f793ab7fb04f89f2ab8c622be49b3e13b87fb0a2d1",
+      "bytes": 3340,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2I_LOCAL_EXPORT_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-I 最小本地 Knowledge 导出合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "e8d8e9ee6a41317db2b97a931009a2d2ae2d450ef8375f252c75d57bb261cd07",
+      "afterSha256": "e8d8e9ee6a41317db2b97a931009a2d2ae2d450ef8375f252c75d57bb261cd07",
+      "bytes": 4294,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2J_OPENROUTER_REGISTRY_VERIFICATION_CONTRACT.md",
+      "domain": "models",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-J OpenRouter Model Registry 只读核验合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "a161a89e7d1ca37f3b23967f1069f344f1744ebbb4b1aa7ab15f242b2272cf13",
+      "afterSha256": "a161a89e7d1ca37f3b23967f1069f344f1744ebbb4b1aa7ab15f242b2272cf13",
+      "bytes": 6284,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2K_OPENROUTER_INFERENCE_TRANSPORT_CONTRACT.md",
+      "domain": "models",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-K OpenRouter 推理传输与强制门禁合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "dae28247f3cd7eac936a6e120c1415a8d03b87b1c6cc85fc75f9e7933a7a332f",
+      "afterSha256": "dae28247f3cd7eac936a6e120c1415a8d03b87b1c6cc85fc75f9e7933a7a332f",
+      "bytes": 6484,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2L_REAL_SERVICE_ACCEPTANCE_CONTRACT.md",
+      "domain": "egress",
+      "status": "HISTORICAL",
+      "scope": "南枫 AI P2-L 真实服务验收准备合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "f847f1db571ccef4ac09cbbf9e445f38846dc73dccd24f3ea007ea2245d85a64",
+      "afterSha256": "f847f1db571ccef4ac09cbbf9e445f38846dc73dccd24f3ea007ea2245d85a64",
+      "bytes": 6812,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2M_P3_BACKGROUND_BRIDGE_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P2-M → P3 后台桥接合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "c28382a49cf9065d168b9ee83bf5a914a05b8af6ec2e7d10773beb8d028cdc8f",
+      "afterSha256": "c28382a49cf9065d168b9ee83bf5a914a05b8af6ec2e7d10773beb8d028cdc8f",
+      "bytes": 2017,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P2M_REAL_TEXT_EXECUTION_CONTRACT.md",
+      "domain": "egress",
+      "status": "HISTORICAL",
+      "scope": "南枫 AI P2-M 一次真实文本执行合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "42d9401789b39134861618c4f6956e8b2ab6597ca0937dbcab36124e1cd070b6",
+      "afterSha256": "42d9401789b39134861618c4f6956e8b2ab6597ca0937dbcab36124e1cd070b6",
+      "bytes": 5900,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3A_CONVERSATION_MESSAGE_TREE_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-A Conversation / Message Tree 本地持久化合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "6be7dea5183f57dc02fda64696c03284c867a40bd857c2ede5c17a20366ce7c0",
+      "afterSha256": "6be7dea5183f57dc02fda64696c03284c867a40bd857c2ede5c17a20366ce7c0",
+      "bytes": 4049,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md",
+      "domain": "message-actions",
+      "status": "SCOPED",
+      "scope": "规范化运行事件、Room原子投影与完成后可选元数据追加；fixture不定义生产外发开关",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "41ca44aa2f397504f911f5cdd0ee2dd63a811cd862c6465e44d79ec94a93be93",
+      "afterSha256": "82b5dd5dfdbafcba1486659a1afcc6a1119d2ec7f28597c6f4599ce0c2b457af",
+      "bytes": 6224,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3C_CONVERSATION_ACTION_LINEAGE_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-C 继续、重试与换模型重答合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "7628d604f99cae5068150a7eb2dbfb39005aa47b2cc0d138c7f94b8bc6fb92e5",
+      "afterSha256": "7628d604f99cae5068150a7eb2dbfb39005aa47b2cc0d138c7f94b8bc6fb92e5",
+      "bytes": 6232,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3D_PRESENTATION_VIRTUALIZATION_DRAFT_RECOVERY_CONTRACT.md",
+      "domain": "message-actions",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-D 安全展示、长会话虚拟化与草稿恢复合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "0b79222d9e2b1641880110db3b4164e4717eaa10534f4a018a118e53344351ae",
+      "afterSha256": "0b79222d9e2b1641880110db3b4164e4717eaa10534f4a018a118e53344351ae",
+      "bytes": 6437,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3E_CONVERSATION_MANAGEMENT_SEARCH_EXPORT_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-E 会话管理、搜索与本地导出合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "db217eb30749a5b3bcbaa2094c2432c8447450cf6c95764a041c657c900e2c2b",
+      "afterSha256": "db217eb30749a5b3bcbaa2094c2432c8447450cf6c95764a041c657c900e2c2b",
+      "bytes": 6680,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3F_CONVERSATION_EDIT_BRANCH_HISTORY_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-F 用户消息编辑与分支历史合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "d7a798afbb98a7355fdffd57d97f6668845f227faa6368720263559ef4ba6cfe",
+      "afterSha256": "d7a798afbb98a7355fdffd57d97f6668845f227faa6368720263559ef4ba6cfe",
+      "bytes": 3523,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3G_CONVERSATION_ATTACHMENT_LIFECYCLE_CONTRACT.md",
+      "domain": "attachment-lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-G 对话附件本地引用与生命周期合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "75f3cf3dcf5791787214939206c8486bc6b47402d81df66d6b0a10e68c0daa87",
+      "afterSha256": "75f3cf3dcf5791787214939206c8486bc6b47402d81df66d6b0a10e68c0daa87",
+      "bytes": 5539,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3H_CONVERSATION_ATTEMPT_HISTORY_CONTRACT.md",
+      "domain": "lifecycle",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-H 会话本地尝试历史投影合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "ec668d8bbe2d79bb09c46628bbdfbdd1140c976dc4b4e80b53b5d93afe68d963",
+      "afterSha256": "ec668d8bbe2d79bb09c46628bbdfbdd1140c976dc4b4e80b53b5d93afe68d963",
+      "bytes": 5356,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3I_CONVERSATION_REAL_TEXT_EXECUTION_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3-I ConversationRealTextExecution 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "6df4c663da0706089da56b45b8c0fa15b840077d20b03aaba0169649c8534b74",
+      "afterSha256": "6df4c663da0706089da56b45b8c0fa15b840077d20b03aaba0169649c8534b74",
+      "bytes": 4299,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+      "domain": "egress",
+      "status": "CURRENT",
+      "scope": "普通发送与显式重试的准确材料/接收方授权；旧账本读取不授予外发",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "b11189567f9985ffaef3f14402ddf097d52debf53080b6c516f63307c803fd86",
+      "afterSha256": "b11189567f9985ffaef3f14402ddf097d52debf53080b6c516f63307c803fd86",
+      "bytes": 18228,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3_OPENAI_COMPATIBLE_PROVIDER_HTTP_TRANSPORT_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3 OpenAI-compatible Provider HTTP Transport 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "65bbbb0d7aa604fe0cd019df068737810154ad6dc061e3edb8265c4c3ecd9f52",
+      "afterSha256": "65bbbb0d7aa604fe0cd019df068737810154ad6dc061e3edb8265c4c3ecd9f52",
+      "bytes": 3546,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3_PROVIDER_TRANSPORT_BOUNDARY_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3 Provider Transport Boundary 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "bca3013380109f4b60176541b04ffacb96f07d2b36de7042cf50b6a839a5b253",
+      "afterSha256": "bca3013380109f4b60176541b04ffacb96f07d2b36de7042cf50b6a839a5b253",
+      "bytes": 3960,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3_REAL_TEXT_EXECUTION_COORDINATOR_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3 RealTextExecutionCoordinator 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "ecf7236561f8fe7a853494ebad6a79cbf6e14c1bb2f19c955483d6c1e251acac",
+      "afterSha256": "ecf7236561f8fe7a853494ebad6a79cbf6e14c1bb2f19c955483d6c1e251acac",
+      "bytes": 4463,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P3_REAL_TEXT_EXECUTION_PREFLIGHT_CONTRACT.md",
+      "domain": "egress",
+      "status": "SCOPED",
+      "scope": "南枫 AI P3 RealTextExecution Preflight / Orchestrator 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "26077ab24374a8e402525ce669bfcb706d41a53c8ccb02905c867f258b596854",
+      "afterSha256": "26077ab24374a8e402525ce669bfcb706d41a53c8ccb02905c867f258b596854",
+      "bytes": 3307,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-A Projects、项目指令与知识范围合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "fe5849abd8f09c8ca3c28c6debc6c56a2cf08da0b392cb4e97600416d8d64c0e",
+      "afterSha256": "fe5849abd8f09c8ca3c28c6debc6c56a2cf08da0b392cb4e97600416d8d64c0e",
+      "bytes": 5950,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4B_CONTEXT_SELECTION_OWNERSHIP_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-B 上下文选择所有权与 Memory 边界合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "edb6c5350471ff5e3970eeddc8324e646e790a4a0e8996564dacf4e10dabd0cb",
+      "afterSha256": "edb6c5350471ff5e3970eeddc8324e646e790a4a0e8996564dacf4e10dabd0cb",
+      "bytes": 5340,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4C_MEMORY_GOVERNANCE_CONTRACT.md",
+      "domain": "memory",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-C 长期 Memory 本地治理合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "f9e32e1811640008a88ba9b7289af80f892fb2175c377037e71cc07142994b14",
+      "afterSha256": "f9e32e1811640008a88ba9b7289af80f892fb2175c377037e71cc07142994b14",
+      "bytes": 5634,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4D_EXPLICIT_CONTEXT_BODY_SELECTION_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-D L0-L3 Context 正文选择与显式控制合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "76121d44d78a80b0e8b4f09246984a34a04299e42061c0d70b36851e387a00a7",
+      "afterSha256": "76121d44d78a80b0e8b4f09246984a34a04299e42061c0d70b36851e387a00a7",
+      "bytes": 6366,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4E_LOCAL_KNOWLEDGE_RETRIEVAL_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "Knowledge CRUD与显式本机Context预览；普通聊天相关性检索另归运行时上下文",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "f3c46dda35cd7fa4be17201cf6fd29095ae4ce1b0adbcc21abd79169c8be121f",
+      "afterSha256": "73fdb6eb1e45d1b1b98c8108a9cd3026def52cb4b22ade2c65f420e2a4809bd2",
+      "bytes": 5284,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4F_LOCAL_KNOWLEDGE_DEDUPLICATION_CANDIDATES_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-F 本地 Knowledge 去重候选合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "112efbb06290d815f203ac4c6acff0fc950ba8af013471c8f135722f2496f917",
+      "afterSha256": "112efbb06290d815f203ac4c6acff0fc950ba8af013471c8f135722f2496f917",
+      "bytes": 2799,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4G_LOCAL_KNOWLEDGE_RELATIONSHIPS_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-G 本地 Knowledge 人工关系合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "b1684e6e08243d98c7f3bd911c8deacdd72ebbd08eb4c8256f5762d11f6f195e",
+      "afterSha256": "b1684e6e08243d98c7f3bd911c8deacdd72ebbd08eb4c8256f5762d11f6f195e",
+      "bytes": 3878,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4H_MARKDOWN_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-H 本地 Markdown Knowledge 导入/导出与可恢复队列合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "22b3422e2c1e17586baca19b4a240ac9d7b2aca8eb03971f9bf854617ee5bfa2",
+      "afterSha256": "22b3422e2c1e17586baca19b4a240ac9d7b2aca8eb03971f9bf854617ee5bfa2",
+      "bytes": 3877,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4I_OFFLINE_EVAL_BASELINE_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-I 版本化离线 Eval 基线合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "fabdaf616132c175658ef161e50844ed875875841160773d2299536661e57bb4",
+      "afterSha256": "fabdaf616132c175658ef161e50844ed875875841160773d2299536661e57bb4",
+      "bytes": 5247,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4J_LOCAL_CONTEXT_COMPRESSION_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-J 版本化本地 Context 摘要/压缩合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "dd88e07154ac3057122b8707dd5993fa1a84948500e39ce3114522c81f022986",
+      "afterSha256": "dd88e07154ac3057122b8707dd5993fa1a84948500e39ce3114522c81f022986",
+      "bytes": 7319,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4K_LOCAL_CONTEXT_PREVIEW_STABLE_PREFIX_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-K 本机抽取预览与稳定前缀元数据合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "e1b21367b2edb0b380d63e461ece5075f00e010b3cd1e6b84697fd92cd2a052d",
+      "afterSha256": "e1b21367b2edb0b380d63e461ece5075f00e010b3cd1e6b84697fd92cd2a052d",
+      "bytes": 4100,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4L_JSON_KNOWLEDGE_PORTABILITY_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-L 版本化 JSON Knowledge Adapter 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "8c57441ad3b0f29fcf9465a76a5354582a0ff4d8380016009e465573fb620637",
+      "afterSha256": "8c57441ad3b0f29fcf9465a76a5354582a0ff4d8380016009e465573fb620637",
+      "bytes": 6971,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4M_L3_LOCAL_ACTION_TRACE_CONTRACT.md",
+      "domain": "runtime-context",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-M L3 本地短期操作轨迹合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "cf71cbc393c52ea71badd82678d44bacb439161512d089ed5477f3920491ac67",
+      "afterSha256": "cf71cbc393c52ea71badd82678d44bacb439161512d089ed5477f3920491ac67",
+      "bytes": 4902,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4N_PDF_TEXT_KNOWLEDGE_ADAPTER_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-N 本地 PDF 文本资料 Adapter 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "60990985eb63df3fdea4f257706ca359cdf1c22a19b4a238ff4a976f31b41a33",
+      "afterSha256": "60990985eb63df3fdea4f257706ca359cdf1c22a19b4a238ff4a976f31b41a33",
+      "bytes": 4628,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P4O_HTTPS_WEB_TEXT_SNAPSHOT_CONTRACT.md",
+      "domain": "knowledge",
+      "status": "SCOPED",
+      "scope": "南枫 AI P4-O 严格 HTTPS 网页文本快照 Adapter 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "5d2a4f7903ccbd39a3ca21c87536adf97e272f84da075e7e365b77c06a51ea36",
+      "afterSha256": "5d2a4f7903ccbd39a3ca21c87536adf97e272f84da075e7e365b77c06a51ea36",
+      "bytes": 4478,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P5A_ADAPTIVE_ACCESSIBILITY_BASELINE_CONTRACT.md",
+      "domain": "settings",
+      "status": "SCOPED",
+      "scope": "P5-A Android 自适应布局与无障碍产品化基线合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "8bd761d6ca4e9409d538e944e55171efaf1777af5b6eaa2a7bce6f8d9cb6698c",
+      "afterSha256": "0cda76434df011a153a76e6c7be356cfbba0e24a921858af8b173d930ca83152",
+      "bytes": 6468,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P5A_LOCAL_CONTROL_SURFACE_ENTRY_CONTRACT.md",
+      "domain": "settings",
+      "status": "HISTORICAL",
+      "scope": "2026-08-20旧本地控制面恢复任务与验收；当前可达性只读设置合同，不恢复隐藏入口",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "b5d19ab9b5711b633764321416b285393282685e7530b7538aab8b032c0a2891",
+      "afterSha256": "ef80680fe29854de65c230e52a583482c6c8777c6efd1fe424075d8e63bd9fd1",
+      "bytes": 5395,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P5B_BACKGROUND_CANCELLATION_BATTERY_CONTRACT.md",
+      "domain": "island",
+      "status": "SCOPED",
+      "scope": "南枫 AI P5-B Android 后台、取消/恢复与电量产品化基线合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "10403d1030f2a9f40c46e4ae43953eba399cc57dd7e6e8cca05d8ec8f884e2d2",
+      "afterSha256": "10403d1030f2a9f40c46e4ae43953eba399cc57dd7e6e8cca05d8ec8f884e2d2",
+      "bytes": 4670,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P5C_PRIVACY_DATA_DIAGNOSTICS_CONTRACT.md",
+      "domain": "privacy",
+      "status": "SCOPED",
+      "scope": "南枫 AI P5-C 隐私、数据管理与安全诊断合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "7646e56d75e7b5a60d4cfa9ddc5d46fe0c7a6c8458bd27491c48be2641636018",
+      "afterSha256": "7646e56d75e7b5a60d4cfa9ddc5d46fe0c7a6c8458bd27491c48be2641636018",
+      "bytes": 6141,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md",
+      "domain": "backup",
+      "status": "SCOPED",
+      "scope": "南枫 AI P5-D 本地备份、恢复与交付合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "777564dba8b6f4e1df77fe7abe46c1649f0740f906c4e58b589d6833ee1f5ddd",
+      "afterSha256": "777564dba8b6f4e1df77fe7abe46c1649f0740f906c4e58b589d6833ee1f5ddd",
+      "bytes": 5567,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6A_ANDROID_TEXT_CONVERSATION_EXCHANGE_EXPORT_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6-A Android 文本会话跨端交换导出合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "7d9290fe035187c334bbdc28d473e039c7904c3d5fe6644a36e78f85c2602440",
+      "afterSha256": "7d9290fe035187c334bbdc28d473e039c7904c3d5fe6644a36e78f85c2602440",
+      "bytes": 3054,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6B_DESKTOP_LOCAL_WORKBENCH_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6-B：离线 Desktop 工作台、本地所有权与交换导入导出合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "70d4ca8d58392ebd121182b26d4352565455d0c6db5af4e4614dbd688a226d0e",
+      "afterSha256": "70d4ca8d58392ebd121182b26d4352565455d0c6db5af4e4614dbd688a226d0e",
+      "bytes": 6294,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6C_DESKTOP_LOCAL_WRITE_WORKBENCH_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6-C：Desktop 本地领域写入、可逆动作与模型/成本 metadata 工作台合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "b8a7845dadaefd58cf69e0b066f7b1847f4fe7a29e4cda07ba7c92e93dea8195",
+      "afterSha256": "d8466531ade0954a44d25d852064b3e8daacbb2920f03179b9e2b77000da1dd9",
+      "bytes": 8251,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "domain": "attachments",
+      "status": "CURRENT",
+      "scope": "选择/本机解析/私有副本到已授权普通发送的材料桥；本模块不自行外发",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "21f50fa2afa462dfaf0448768a7b51dbd536774f2684a152fec88941a460096f",
+      "afterSha256": "21f50fa2afa462dfaf0448768a7b51dbd536774f2684a152fec88941a460096f",
+      "bytes": 9516,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6D_COMPACT_CHAT_SCROLL_AND_WINDOW_RECOVERY_CONTRACT.md",
+      "domain": "scroll",
+      "status": "SCOPED",
+      "scope": "P6-D 紧凑态消息长列表滚动与窗口恢复合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "6e743da0fa3e354db37b2faab49adce80e5065d11ea2addfd0d1726f6e8b3aed",
+      "afterSha256": "6e743da0fa3e354db37b2faab49adce80e5065d11ea2addfd0d1726f6e8b3aed",
+      "bytes": 4308,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6D_DESKTOP_SIDEBAR_INFORMATION_ARCHITECTURE_CONTRACT.md",
+      "domain": "desktop-conversation",
+      "status": "SCOPED",
+      "scope": "P6-D 双端侧栏生产信息架构增量合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "c91dc7a9552f261a77220379fc49f7478b94e3dbedc8bced724e2589b730a9b1",
+      "afterSha256": "c91dc7a9552f261a77220379fc49f7478b94e3dbedc8bced724e2589b730a9b1",
+      "bytes": 12193,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6D_MACOS_GUI_ACCEPTANCE_AND_DESKTOP_DELIVERY_CONTRACT.md",
+      "domain": "desktop-conversation",
+      "status": "HISTORICAL",
+      "scope": "P6-D：macOS Tauri GUI 黑箱验收与 Desktop 交付收口合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "f3a4e462a4d73aed838f244c2b3a8778676afff120c2b3fa0bd78695e10e92a2",
+      "afterSha256": "f3a4e462a4d73aed838f244c2b3a8778676afff120c2b3fa0bd78695e10e92a2",
+      "bytes": 5699,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6D_WINDOWS_NATIVE_DELIVERY_CONTRACT.md",
+      "domain": "desktop-conversation",
+      "status": "SCOPED",
+      "scope": "P6-D Windows 原生交付独立合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "f1293a695f51357d81402e22785043798ce60638ed02a90e23d2d47d733b84f3",
+      "afterSha256": "f1293a695f51357d81402e22785043798ce60638ed02a90e23d2d47d733b84f3",
+      "bytes": 1893,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md",
+      "domain": "temporary",
+      "status": "CURRENT",
+      "scope": "仅本地临时消息与隔离24小时恢复记录；不接Provider/普通同步",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "7e2ef881e1d137b8a2e5de9b5fca3b13be5421552a75eb0d99253b030bd69325",
+      "afterSha256": "15c0406022174c5abd671a221fe91a375c6db8bae80d68b109a9fa9c05956d8d",
+      "bytes": 9759,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6F2E_AUDIO_AND_GENERIC_FILE_ADAPTER_CONTRACT.md",
+      "domain": "search-preview",
+      "status": "SCOPED",
+      "scope": "P6-F2-E Audio & Generic File Adapter 合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "d34273185677247061ff63dbfa397bda94d2a89c7ef27c103d3b64d80325a8c5",
+      "afterSha256": "d50ee5b124cdb629cfab08f31cafb8ced28cbcd75086902110a67322f0af96fe",
+      "bytes": 3961,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+      "domain": "search-preview",
+      "status": "SCOPED",
+      "scope": "本地搜索索引／历史及受控预览；当前平台UI和日期投影分开，不复用旧实施状态",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "47503047b6731e6b88ffe7ba27a40789309518223d1f39968814c74aaf8907df",
+      "afterSha256": "dd17684746077c7a81b27697125477bbf52a4fed0158801d6f949c5c8b5f45d3",
+      "bytes": 13021,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+      "domain": "message-actions",
+      "status": "SCOPED",
+      "scope": "P6-F Conversation Transcript Presentation & Message Actions Contract",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "7c87321384649cdf49e4a5d413e5717742e214915bf7d5f08c57ec1063c2b46f",
+      "afterSha256": "7c87321384649cdf49e4a5d413e5717742e214915bf7d5f08c57ec1063c2b46f",
+      "bytes": 35662,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "domain": "models",
+      "status": "CURRENT",
+      "scope": "普通会话手动/Auto、下次默认和冻结身份；旧P6-G实验不裁决生产候选",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "07c5b3c5df3cb5250baaf34e868c5176862bb3ad8e18240e4958e9514550c9e3",
+      "afterSha256": "07c5b3c5df3cb5250baaf34e868c5176862bb3ad8e18240e4958e9514550c9e3",
+      "bytes": 12688,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6H_CHATGPT_EXPORT_JSON_ADAPTER_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "南枫 AI P6-H ChatGPT export JSON Adapter 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "ea93ebd8d92dabf1f790c95533a2be0378af30fdba0f8bc803bc75fe4bbac178",
+      "afterSha256": "ea93ebd8d92dabf1f790c95533a2be0378af30fdba0f8bc803bc75fe4bbac178",
+      "bytes": 7044,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6I_CLAUDE_EXPORT_JSON_ADAPTER_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "Claude JSON严格文本树、私有任务与原子导入；旧检查点不否定现有双端实现",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "9cbf38d6903c21a790401a3adeadafda0f84a18e999e54b87e9e5e4b22746c5d",
+      "afterSha256": "c964072952b99443bb10235952ffec95c8069bea36ec112acb5293fc0b27efd3",
+      "bytes": 7809,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6J_NANFENG_KNOWLEDGE_EXPORT_ADAPTER_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "南枫 AI P6-J 南枫知识库对话／知识 export Adapter 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "5238a4eba569a05b4a4b8ab1cee7c6edbf4edba4f99179fc5f60135af046fad5",
+      "afterSha256": "5238a4eba569a05b4a4b8ab1cee7c6edbf4edba4f99179fc5f60135af046fad5",
+      "bytes": 4472,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6K_CHATGPT_CLAUDE_ZIP_IMPORT_ADOPTION_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "南枫 AI P6-K ChatGPT / Claude ZIP 导入采纳合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "80d94774c20990dbd89ed8eb131433bd3f6ff5c12237963520ad4b48824ed7ad",
+      "afterSha256": "80d94774c20990dbd89ed8eb131433bd3f6ff5c12237963520ad4b48824ed7ad",
+      "bytes": 27358,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6K_ZIP_ATTACHMENT_OCCURRENCE_CONTRACT.md",
+      "domain": "local-data",
+      "status": "SCOPED",
+      "scope": "P6-K ChatGPT ZIP 附件口径契约",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "d0aad2c13da65caf49de718b1f111933146bb36f73f677e2dc1c3587d8092ad4",
+      "afterSha256": "d0aad2c13da65caf49de718b1f111933146bb36f73f677e2dc1c3587d8092ad4",
+      "bytes": 2418,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6_ANDROID_V2_ATOMIC_RESTORE_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 Android v2 原子恢复合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "a70b5aed418ad9c93bda819397130bc9b0fcead5777d0dd66a3e6d80ce5b61ee",
+      "afterSha256": "a70b5aed418ad9c93bda819397130bc9b0fcead5777d0dd66a3e6d80ce5b61ee",
+      "bytes": 10791,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6_ANDROID_V2_OPEN_DOCUMENT_RESTORE_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 Android v2 OpenDocument 受控恢复合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "19f863662df11023ea5caab734bb440e2b8971441414b3e12074e779a0e0b062",
+      "afterSha256": "19f863662df11023ea5caab734bb440e2b8971441414b3e12074e779a0e0b062",
+      "bytes": 5279,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6_WORKSPACE_EXCHANGE_MAPPER_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 工作区语义交换 Mapper 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "409c0d353a002b2c39457c0412ccef6d9ea33b7e4d2ef2d47690d0c3c2505199",
+      "afterSha256": "409c0d353a002b2c39457c0412ccef6d9ea33b7e4d2ef2d47690d0c3c2505199",
+      "bytes": 6379,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6_WORKSPACE_EXCHANGE_V2_ANDROID_IMPORT_FOUNDATION_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 工作区交换 v2 Android 严格读取基础合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "a48d44a04b118c226522461a77e54106cb2cc880eaabf983fa0949d3ffafb966",
+      "afterSha256": "a48d44a04b118c226522461a77e54106cb2cc880eaabf983fa0949d3ffafb966",
+      "bytes": 2449,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6_WORKSPACE_EXCHANGE_V2_DESKTOP_IMPORT_TRANSACTION_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 工作区交换 v2 Desktop 私有暂存、原子导入与回导合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "820a41e00e35c17f5fe8a859ed3f5d4f52c2825a6479f81bc7faf9643c1ce150",
+      "afterSha256": "820a41e00e35c17f5fe8a859ed3f5d4f52c2825a6479f81bc7faf9643c1ce150",
+      "bytes": 10348,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md",
+      "domain": "exchange-v2",
+      "status": "SCOPED",
+      "scope": "P6 工作区交换 v2 字段保真与拒绝合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "cf9357db774898d779ed94e0529eb5ce069bb9b6454cbee6280fe9a7cbf8b27d",
+      "afterSha256": "cf9357db774898d779ed94e0529eb5ce069bb9b6454cbee6280fe9a7cbf8b27d",
+      "bytes": 11097,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P7A_LOCAL_E2EE_SYNC_FOUNDATION_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-A 本地跨端端到端加密快照基础合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "471100319db3e5faa82c1670ee13124c8010a2732447a13e68abc2730cdab0e2",
+      "afterSha256": "471100319db3e5faa82c1670ee13124c8010a2732447a13e68abc2730cdab0e2",
+      "bytes": 8130,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P7B_ACCOUNT_KEY_STATE_MACHINE_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-B 账号级本机密钥与同步状态机合同",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "4b15ff549504f68557ff5d7615dd4faffaf4a3812aedcd45ca039d2ce0e99395",
+      "afterSha256": "da37c3a331dcfcc5fc32c3f88aac814f57cc1f60fbedfb1a27f5377f24b67be7",
+      "bytes": 7151,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P7C_REAL_SERVICE_CONFIGURATION_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-C Google/Supabase 可部署服务合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "e65d05c5f3878c3c1326602a25ef1f87101f72586e47fff80e1567c3ed2c7d0a",
+      "afterSha256": "e65d05c5f3878c3c1326602a25ef1f87101f72586e47fff80e1567c3ed2c7d0a",
+      "bytes": 9014,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P7D_SYNC_COORDINATOR_AND_ACCOUNT_UI_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-D 冲突、自动同步协调器与账号页合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "84262a1acadf581d47f02f9b07c62d1c52da74c33d03f014829a048580d63410",
+      "afterSha256": "84262a1acadf581d47f02f9b07c62d1c52da74c33d03f014829a048580d63410",
+      "bytes": 7254,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P7E_CROSS_DEVICE_RESTORE_AND_DEPLOYMENT_READINESS_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "SCOPED",
+      "scope": "南枫 AI P7-E 跨设备加密恢复、冲突与部署验证就绪合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "fcf62614ab9e25320637e5fa5baa36055515e642911ee1bdf3a82cd227e54ad1",
+      "afterSha256": "fcf62614ab9e25320637e5fa5baa36055515e642911ee1bdf3a82cd227e54ad1",
+      "bytes": 8916,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md",
+      "domain": "account-sync",
+      "status": "CURRENT",
+      "scope": "Google登录后的已选对话direct同步、账号/区域隔离；不以旧恢复码判资格",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "ccd8641262c5dd2b9da23ea823fd028fc76de49fcc95430d554832bf8513c90c",
+      "afterSha256": "ccd8641262c5dd2b9da23ea823fd028fc76de49fcc95430d554832bf8513c90c",
+      "bytes": 13855,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md",
+      "domain": "agent-local",
+      "status": "EXPERIMENTAL",
+      "scope": "本地Agent预算／权限／状态与ledger；不包含普通聊天Provider或后续只读inspect的否定",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "e69ba0f1abb93e9ad37e2579b03172dbfd8ee9a9b43516bd316c534e89f318a3",
+      "afterSha256": "422bbea848cf23441a0d4c8115194a37e65e39c45e2bf463b7c435f7bb980edf",
+      "bytes": 6402,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P8B_READ_ONLY_AGENT_LEDGER_STATUS_CONTRACT.md",
+      "domain": "agent-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P8-B 受控本地 Agent harness 与生产只读状态合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "1464b79f47f476b6c687a654550b9a234a45b2f68dc6e1ac7a8b14037bd525a4",
+      "afterSha256": "1464b79f47f476b6c687a654550b9a234a45b2f68dc6e1ac7a8b14037bd525a4",
+      "bytes": 6199,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P8C_LOCAL_VISIBLE_AGENT_INSPECT_CONTRACT.md",
+      "domain": "agent-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P8-C 本地可见受控运行与退出审计合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "fde9d89e582dc409da9a7e4b59298f1ecdbf19164902ee427dc027f337e23803",
+      "afterSha256": "fde9d89e582dc409da9a7e4b59298f1ecdbf19164902ee427dc027f337e23803",
+      "bytes": 3193,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P8D_LOCAL_EXIT_RED_TEAM_AUDIT_CONTRACT.md",
+      "domain": "agent-local",
+      "status": "EXPERIMENTAL",
+      "scope": "P8-D 本地退出与红队审计合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "4089afb01617562524d8c159927fa07863fca35a36e6ebdf4d18d2c057abd8cd",
+      "afterSha256": "4089afb01617562524d8c159927fa07863fca35a36e6ebdf4d18d2c057abd8cd",
+      "bytes": 4929,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P9A_READ_ONLY_ECOSYSTEM_ENTRY_AUDIT_CONTRACT.md",
+      "domain": "integration-local",
+      "status": "EXPERIMENTAL",
+      "scope": "南枫 AI P9-A 最小只读生态入口审计合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "a10eff6ff04d501394fead5384d23bb5c7b06ddbb4b053d262c6880527ae59c1",
+      "afterSha256": "a10eff6ff04d501394fead5384d23bb5c7b06ddbb4b053d262c6880527ae59c1",
+      "bytes": 4689,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/P9B_LOCAL_TEST_ONLY_INTEGRATION_CONTRACT.md",
+      "domain": "integration-local",
+      "status": "EXPERIMENTAL",
+      "scope": "南枫 AI P9-B 本地 Integration Contract 与 LOCAL_TEST_ONLY harness 合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "3e72a87108c722aab7d3a1023461e81fe23e35907c488464c31d3c923f037c0e",
+      "afterSha256": "3e72a87108c722aab7d3a1023461e81fe23e35907c488464c31d3c923f037c0e",
+      "bytes": 6711,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
+      "domain": "cache",
+      "status": "SCOPED",
+      "scope": "L1索引／L2本地持久化／L3分派／L4引用校验；未接普通发送，不替代检索检查点或Provider缓存",
+      "bodyReviewedForNewConflicts": true,
+      "beforeSha256": "2e5252554b56b7cad8283c8687827ede9241b373b022cbf7d53e8912dcd13c38",
+      "afterSha256": "5aaf968adfe67ddd4956cb7372b8c19f64c768c76e46968da25f1ecbf6f0af5c",
+      "bytes": 8492,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "domain": "relay",
+      "status": "CURRENT",
+      "scope": "RC预设/渠道/别名/历史身份；联网规则归C12，准确授权归P3J",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "12b62487f3a2490b684197d947e85b91304359d0aa7ef62dfdf290508c0d2bb5",
+      "afterSha256": "12b62487f3a2490b684197d947e85b91304359d0aa7ef62dfdf290508c0d2bb5",
+      "bytes": 24407,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    },
+    {
+      "path": "docs/SETTINGS_CENTER_CONTRACT.md",
+      "domain": "settings",
+      "status": "SCOPED",
+      "scope": "南枫 AI Settings Center 历史与领域边界合同",
+      "bodyReviewedForNewConflicts": false,
+      "beforeSha256": "ad1b1484a9e7f1d0b70a72159eb036857de64c7b6027ea7880256a4a058b216d",
+      "afterSha256": "ad1b1484a9e7f1d0b70a72159eb036857de64c7b6027ea7880256a4a058b216d",
+      "bytes": 6107,
+      "checks": [
+        "registry/scope/header",
+        "local references",
+        "headings/current-history triage",
+        "reviewed regression assertions"
+      ],
+      "coverage": "full machine scan; targeted semantic corrections only; not runtime proof"
+    }
+  ],
+  "domainOwnerRows": [
+    {
+      "domain": "android-conversation",
+      "authority": "docs/ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "desktop-conversation",
+      "authority": "docs/DESKTOP_CHAT_FIRST_UI_CONTRACT.md",
+      "owners": [
+        "desktop/src/chat-shell.mjs",
+        "desktop/src/app.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "settings",
+      "authority": "docs/ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+        "desktop/src/android-settings-shell.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "runtime-context",
+      "authority": "docs/ANDROID_RUNTIME_CONTEXT_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextBroker.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ContextBudget.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "product",
+      "authority": "docs/CHAT_FIRST_INTENT_ORGANIZATION_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+        "desktop/src/product-scope.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "models",
+      "authority": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/P6GModelSelectionOwner.kt",
+        "desktop/src/auto-chat-routing.mjs",
+        "desktop/src-tauri/src/desktop_model_service_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "model-network",
+      "authority": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+        "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+        "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+        "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+        "desktop/src-tauri/src/attachment_web_search_v1.rs",
+        "desktop/src-tauri/src/relaycore_web_search_v1.rs",
+        "app/src/main/java/com/nanzhufeng/ai/ai/MessagesProviderSseCodec.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "relay",
+      "authority": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/RelayCoreModels.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt",
+        "desktop/src-tauri/src/relaycore_web_search_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "language",
+      "authority": "docs/ANSWER_LANGUAGE_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ai/AnswerLanguagePolicy.kt",
+        "desktop/src-tauri/src/answer_language_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "egress",
+      "authority": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatEgressAuthorization.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "island",
+      "authority": "docs/NANFENG_ISLAND_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/GenerationIsland.kt",
+        "app/src/main/java/com/nanzhufeng/ai/background/GenerationIslandOverlay.kt",
+        "desktop/src-tauri/src/nanfeng_island_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "startup",
+      "authority": "docs/CONVERSATION_APP_ENTRY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAppEntryPolicy.kt",
+        "desktop/src/desktop-app-entry.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "draft",
+      "authority": "docs/NEW_CONVERSATION_DRAFT_RETENTION_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/NewConversationDraftPolicy.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "account-sync",
+      "authority": "docs/P7F_SELECTED_CONVERSATION_SYNC_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/data/P7FManualConversationSync.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/P7FConversationSyncWireFormat.kt",
+        "desktop/src-tauri/src/desktop_account_sync_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "workspace",
+      "authority": "docs/C15_WORKSPACE_KNOWLEDGE_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ProductScope.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/ConversationAreaFileContext.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "local-data",
+      "authority": "docs/C14_LOCAL_DATA_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+        "desktop/src-tauri/src/desktop_local_backup_v1.rs",
+        "desktop/src/local-data-view.mjs",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ClaudeExportJson.kt",
+        "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "lifecycle",
+      "authority": "docs/C13_CONVERSATION_LIFECYCLE_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "theme",
+      "authority": "docs/C16_THEME_FONT_OVERLAY_PARITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+        "desktop/src/desktop-theme-owner.mjs",
+        "desktop/src/desktop-parity-preferences.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "icon",
+      "authority": "docs/ICONOGRAPHY_CONTRACT.md",
+      "owners": [
+        "desktop/src/icon-source.mjs",
+        "desktop/src/android-action-icons.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "attachments",
+      "authority": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+        "desktop/src-tauri/src/attachment_document_text_v1.rs",
+        "desktop/src/attachment-document-types.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "attachment-lifecycle",
+      "authority": "docs/P3G_CONVERSATION_ATTACHMENT_LIFECYCLE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationAttachments.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "search-preview",
+      "authority": "docs/P6F2_UNIFIED_SEARCH_HISTORY_AND_LOCAL_CONTENT_PREVIEW_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/LocalContextIndex.kt",
+        "desktop/src/desktop-attachment-preview-owner.mjs",
+        "desktop/src/desktop-search-page.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "message-actions",
+      "authority": "docs/P6F_CONVERSATION_TRANSCRIPT_PRESENTATION_AND_MESSAGE_ACTIONS_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P3CConversationActions.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+        "desktop/src/chat-shell.mjs",
+        "app/src/main/java/com/nanzhufeng/ai/domain/TranscriptPresentation.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationRuntime.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/Ports.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomConversationRepository.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "scroll",
+      "authority": "docs/P6D_COMPACT_CHAT_SCROLL_AND_WINDOW_RECOVERY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+        "desktop/src/chat-shell.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "usage",
+      "authority": "docs/AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/ChatCallAccounting.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+        "desktop/src-tauri/src/chat_call_accounting_v1.rs",
+        "desktop/src-tauri/src/usage_ledger_v1.rs",
+        "app/src/main/java/com/nanzhufeng/ai/domain/AssistantResponseModelAttribution.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ui/AssistantFooterFormatting.kt",
+        "desktop/src/desktop-cost-estimator.mjs",
+        "desktop/src/usage-ledger-display.mjs",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomUsageLedgerRepository.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "backup",
+      "authority": "docs/P5D_LOCAL_BACKUP_RESTORE_DELIVERY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P5DLocalBackupRestore.kt",
+        "desktop/src-tauri/src/desktop_local_backup_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "privacy",
+      "authority": "docs/P5C_PRIVACY_DATA_DIAGNOSTICS_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/PrivacyData.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/AndroidPrivacyDataManager.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "temporary",
+      "authority": "docs/P6E_TEMPORARY_CONVERSATION_DUAL_PLATFORM_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/TemporaryConversation.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomTemporaryConversationRecoveryStore.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "ocr",
+      "authority": "docs/GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/GlmOcr.kt",
+        "app/src/main/java/com/nanzhufeng/ai/ai/OfficialGlmOcrTransport.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "transcription",
+      "authority": "docs/ANDROID_TRANSCRIPTION_UI_CURRENT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+        "desktop/src-tauri/src/desktop_transcription_v1.rs",
+        "desktop/src/desktop-transcription-page.mjs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "history-library",
+      "authority": "docs/DESKTOP_HISTORY_KNOWLEDGE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/HistoryKnowledgeCuration.kt",
+        "desktop/src-tauri/src/desktop_history_knowledge_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "compare",
+      "authority": "docs/DESKTOP_COMPARE_EXECUTION_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/CompareConversationSessionOwner.kt",
+        "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "cache",
+      "authority": "docs/PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/LocalExactReuseV1.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/LocalExactReuseDispatch.kt",
+        "desktop/src-tauri/src/local_exact_reuse_v1.rs",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomLocalExactReuseEntryStore.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "exchange-v1",
+      "authority": "docs/NFAI_EXCHANGE_V1_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/NfaiExchangeV1.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "exchange-v2",
+      "authority": "docs/P6_WORKSPACE_EXCHANGE_V2_FIELD_FIDELITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2AtomicRestore.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/WorkspaceExchangeV2OwnerMapper.kt",
+        "desktop/src-tauri/src/p6_workspace_exchange_v2.rs",
+        "app/src/main/java/com/nanzhufeng/ai/data/AndroidWorkspaceExchangeV2ExportPort.kt",
+        "app/src/main/java/com/nanzhufeng/ai/app/AppContainer.kt"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "knowledge",
+      "authority": "docs/P4A_PROJECTS_INSTRUCTIONS_KNOWLEDGE_SCOPE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeManagement.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/KnowledgeRelationships.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/MarkdownKnowledgePortability.kt",
+        "app/src/main/java/com/nanzhufeng/ai/domain/JsonKnowledgePortability.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "memory",
+      "authority": "docs/P4C_MEMORY_GOVERNANCE_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/MemorySummaryPolicy.kt",
+        "app/src/main/java/com/nanzhufeng/ai/data/local/RoomMemoryRepository.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "agent-local",
+      "authority": "docs/P8A_CONTROLLED_AGENT_LOCAL_RUNTIME_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P8ControlledAgentRuntime.kt",
+        "desktop/src-tauri/src/p8_agent_ledger_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "integration-local",
+      "authority": "docs/P9A_READ_ONLY_ECOSYSTEM_ENTRY_AUDIT_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/P9BIntegrationContract.kt",
+        "desktop/src-tauri/src/p9b_integration_contract_v1.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    },
+    {
+      "domain": "connection-local",
+      "authority": "docs/P10A_DUAL_PATH_CONNECTION_CAPABILITY_CONTRACT.md",
+      "owners": [
+        "app/src/main/java/com/nanzhufeng/ai/domain/DualPathConnection.kt",
+        "desktop/src-tauri/src/lib.rs"
+      ],
+      "reviewScope": "领域入口与实现定位、历史/独立模块边界；不是逐行功能或真实设备验收"
+    }
+  ]
+}

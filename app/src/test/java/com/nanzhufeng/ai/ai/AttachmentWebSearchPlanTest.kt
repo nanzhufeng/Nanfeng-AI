@@ -8,6 +8,24 @@ import org.json.JSONObject
 
 @RunWith(RobolectricTestRunner::class)
 class AttachmentWebSearchPlanTest {
+    @Test fun `ordinary topic carries searched information without a factual truth verdict`() {
+        val result=AttachmentWebSearchPlan.evidence(AttachmentWebSearchPlan.build("印象派"),"[A1] 已检索\n印象派关注现代生活与光影。\n来源：https://www.metmuseum.org/essays/impressionism",listOf("https://www.metmuseum.org/essays/impressionism"))
+        assertNotNull(result);assertTrue(requireNotNull(result).contains("已检索"));assertFalse(result.contains("证据不足"));assertFalse(result.contains("已核实"))
+    }
+    @Test fun `sources explicitly disclaimed as unrelated never become supporting citations`() {
+        val plan=AttachmentWebSearchPlan.build("台积电财报")
+        val result=AttachmentWebSearchPlan.evidence(plan,"[A1] 未核实\n检索资料与台积电无关，不能作为核验依据。\n来源：https://example.org/unrelated",listOf("https://example.org/unrelated"),allowUnverified=true)
+        assertNotNull(result);assertFalse(requireNotNull(result).contains("https://example.org/unrelated"))
+    }
+    @Test fun `all attachment subjects are searchable without dates digits or news keywords`() {
+        for(topic in listOf("印象派","Photosynthesis","古典诗词的意象与乡愁","禅","C","R")) {
+            val plan=AttachmentWebSearchPlan.build("### 附件：内容.txt\n$topic")
+            assertEquals(topic,1,plan.items.size)
+            assertTrue(plan.items.single().query.contains(topic))
+        }
+        val report=AttachmentWebSearchPlan.build("# 1. 文学\n山水意象寄托乡愁。\n# 2. 美术\n印象派注重光影。")
+        assertEquals(2,report.items.size)
+    }
     @Test fun `numbered report facts own distinct IDs context and source bindings on both platforms`() {
         val rows=JSONObject(java.io.File("../protocol/fixtures/attachment-report-facts-v1.json").readText()).getJSONArray("cases")
         for(i in 0 until rows.length()) {

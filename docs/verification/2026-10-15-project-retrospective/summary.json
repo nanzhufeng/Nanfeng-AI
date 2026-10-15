@@ -1,0 +1,140 @@
+{
+  "verifiedAt": "2026-10-15T18:38:26+08:00",
+  "branch": "main",
+  "baseline": "5a52aa2a8928cc46bad136cb608fd1eb3b62517e",
+  "verificationScope": "WORKTREE; documentation and workflow only",
+  "inventory": {
+    "head": "5a52aa2a8928cc46bad136cb608fd1eb3b62517e",
+    "scope": "Tracked and non-ignored untracked working-tree bytes and all locally available Git refs; no file bodies or secrets emitted",
+    "tracked_files": 1819,
+    "inventory_files": 2156,
+    "untracked_files": 337,
+    "bytes": 86953374,
+    "kinds": {
+      "text": 2046,
+      "binary": 110
+    },
+    "commits": 191,
+    "limitations": [
+      "No ignored data read",
+      "No binary visual verification",
+      "Not a line-by-line semantic or external deployment audit"
+    ]
+  },
+  "headAncestryCommits": 189,
+  "allRefCommits": 191,
+  "localRefs": 9,
+  "historyMonths": {
+    "2026-08": 142,
+    "2026-09": 40,
+    "2026-10": 9
+  },
+  "structure": {
+    "inventory_files": 2156,
+    "syntax": {
+      "not-checked": 1354,
+      "python:passed": 15,
+      "json:passed": 364,
+      "xml:passed": 87,
+      "non-text": 110,
+      "node:passed": 213,
+      "failed:ParseError": 7,
+      "bash:passed": 5,
+      "zsh:passed": 1
+    },
+    "changed_since_inventory": [],
+    "limitations": [
+      "Marker counts are routing hints, not findings or coverage.",
+      "No Kotlin/Rust/SQL type or runtime validation in this script.",
+      "Only supplied inventory paths; no file bodies emitted. Ignored inputs must be excluded by the inventory producer."
+    ]
+  },
+  "markdownBaseline": {
+    "files": 297,
+    "relativeLinksChecked": 1625,
+    "missingHistoricalSnapshotLinks": 37,
+    "allMissingUnderBeforeDocs": true
+  },
+  "protectedInputs": {
+    "files": 2146,
+    "drift": [],
+    "headUnchanged": true
+  },
+  "priorAppEvidenceReuse": {
+    "frozenInputs": 1180,
+    "unchangedInputs": 1176,
+    "changedMaintenanceInputs": [
+      "protocol/contracts/contract-owner-map-v1.json",
+      "protocol/contracts/contract-registry-v1.json",
+      "protocol/scripts/audit-contract-consistency.py",
+      "protocol/tests/test_contract_consistency.py"
+    ],
+    "applicationBuildOrPaidRunsThisTask": 0
+  },
+  "tests": {
+    "protocolAndMaintenanceUnitTests": 45,
+    "failures": 0,
+    "contractGovernance": "PASS",
+    "contractConsistency": "PASS",
+    "modelService": "PASS",
+    "projectSkills": {
+      "skills": [
+        {
+          "skill": "nanfeng-ai-code-review",
+          "validator": "PASS"
+        },
+        {
+          "skill": "nanfeng-ai-debugging",
+          "validator": "PASS"
+        },
+        {
+          "skill": "nanfeng-ai-development",
+          "validator": "PASS"
+        },
+        {
+          "skill": "nanfeng-ai-document-sync",
+          "validator": "PASS"
+        },
+        {
+          "skill": "nanfeng-ai-testing-delivery",
+          "validator": "PASS"
+        }
+      ],
+      "uiMetadataCount": 5,
+      "isolatedValidatorDependency": "PyYAML 6.0.3; repository/system packages unchanged"
+    },
+    "diffCheck": "PASS"
+  },
+  "modified": [
+    "AGENTS.md",
+    "docs/南枫AI完整开发档案.md",
+    "docs/可迁移开发经验.md",
+    ".agents/skills/nanfeng-ai-code-review/SKILL.md",
+    ".agents/skills/nanfeng-ai-debugging/SKILL.md",
+    ".agents/skills/nanfeng-ai-development/SKILL.md",
+    ".agents/skills/nanfeng-ai-document-sync/SKILL.md",
+    ".agents/skills/nanfeng-ai-testing-delivery/SKILL.md",
+    "docs/PROJECT_STATUS.md",
+    "docs/CURRENT_HANDOFF.md"
+  ],
+  "new": [
+    "docs/verification/2026-10-15-project-retrospective/REPORT.md",
+    "docs/verification/2026-10-15-project-retrospective/summary.json"
+  ],
+  "knownGaps": [
+    "RC Gemini Pro historical404 and interrupted current control remain unclosed; do not resend UNKNOWN",
+    "Not all model/platform/material live combinations or latest formal UI/lifecycle accepted",
+    "Supabase/Google/gateway current deployment not verified",
+    "Windows delivery and notarization not verified",
+    "Latest same-version WIP cover is distinct from the recorded public v1.0.30 release",
+    "CI does not call audit-contract-consistency.py or its tests",
+    "7 historical XML ParseErrors and37 before-docs missing relative links retained"
+  ],
+  "scopeLimits": [
+    "Full inventory and structure scan is not line-by-line semantic proof",
+    "No binary visual review, ignored secrets/data access, external deployment or current remote-state query",
+    "No business source/config/schema/application-test edits; existing WIP retained",
+    "Prior application test/installation/service receipts retain original dates and scope"
+  ],
+  "rollback": "Per-file before snapshots retained privately; do not reset or restore the entire dirty worktree"
+}

@@ -1,0 +1,17 @@
+{
+  "baseline": "5a52aa2a8928cc46bad136cb608fd1eb3b62517e",
+  "scope": "WORKTREE",
+  "paths": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchInventory.kt": "0d49de5857f2b531039ca269edded539069ef2af291155bd4059200a789305fb",
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt": "fb5725fc658ccb7b1cddd4da74860ccc3c102cd00df81672c710a21842661419",
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "8793ec940efd3784a31020bbfe417510fa7b3702a7585637f2432235430466d0",
+    "app/src/main/java/com/nanzhufeng/ai/ai/RelayCoreWebSearchCompanion.kt": "89b06ab839f901e0446a5d30f880f29e6ad3c611b9f1bf3b5bc7f256e8f3961e",
+    "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt": "c0ac592e8df966315ed492eb554688afe958caa9c973b17a0e8741678cd7aa19",
+    "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlanTest.kt": "7ab286da247c16109800214f399de90a7769ff70d2cb29dc78eb645819c73c2e",
+    "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt": "0aa75ca2f03004c69c499dd17afa8598bfa287ab2b3717a35f58092b8ca4aa5c",
+    "desktop/src-tauri/src/attachment_web_search_execution_v1.rs": "e558102dae1ce5b60ff03b7e1a47eb2c449ad10d2a1482dedf7a2d3e0331a77d",
+    "desktop/src-tauri/src/attachment_web_search_v1.rs": "4763b30649019f4b715632ea421c0070641263aa456186ba73bc6ee6fc73e980",
+    "desktop/src-tauri/src/relaycore_web_search_v1.rs": "ea3c896cc3598fdcf1550a41d7cfe6bf9213d252fcdb3e470b61ea9ed25b1905",
+    "protocol/fixtures/attachment-search-plan-v1.json": "af03df1d5eb4b1f196f5ea694829dba99591b3d3a6994c41dc9c89ae5eadc093"
+  }
+}

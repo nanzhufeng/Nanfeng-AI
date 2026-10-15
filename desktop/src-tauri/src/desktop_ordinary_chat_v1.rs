@@ -796,10 +796,10 @@ pub async fn execute_non_streaming(
     }
     let bytes = read_bounded_response(response).await?;
     let elapsed_ms = started.elapsed().as_millis().min(i64::MAX as u128) as i64;
-    let decoded = if muse_responses_search(&request) {decode_responses_non_streaming(&bytes,elapsed_ms)} else if request.web_search_route == "RELAYCORE_GPT_RESPONSES" && !request.grounded_answer {
+    let decoded = if muse_responses_search(&request) || request.web_search_route=="QWEN_RESPONSES" {decode_responses_non_streaming(&bytes,elapsed_ms)} else if request.web_search_route == "RELAYCORE_GPT_RESPONSES" && !request.grounded_answer {
         decode_relay_gpt_responses(&bytes, elapsed_ms)
     } else if request.web_search_route=="RELAYCORE_GPT_RESPONSES" {decode_responses_non_streaming(&bytes,elapsed_ms)}
-    else if request.web_search_route=="RELAYCORE_CLAUDE_MESSAGES" { decode_messages(&bytes,elapsed_ms,!request.grounded_answer) } else { decode_non_streaming(&bytes, elapsed_ms) };
+    else if matches!(request.web_search_route.as_str(),"DEEPSEEK_MESSAGES"|"RELAYCORE_CLAUDE_MESSAGES") || request.provider_id=="RELAYCORE_CLAUDE" { decode_messages(&bytes,elapsed_ms,!request.grounded_answer && request.web_search_route!="NONE") } else { decode_non_streaming(&bytes, elapsed_ms) };
     let mut completed=decoded.map_err(|mut failure| {
         if request.provider_id.starts_with("RELAYCORE_") {if let Failure::Quantified{reply,..}=&mut failure {reply.actual_model_id=relay_model_identity(reply.actual_model_id.as_deref());reply.reported_cost_micros=None;}}
         failure
@@ -1641,6 +1641,38 @@ pub async fn execute_streaming(
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn non_streaming_qwen_and_relay_claude_use_their_actual_response_protocols() {
+        for (provider,model,route) in [
+            ("QWEN","qwen3.7-plus","QWEN_RESPONSES"),("QWEN","qwen3.8-max","QWEN_RESPONSES"),("QWEN","qwen3.6-flash","QWEN_RESPONSES"),
+            ("RELAYCORE_CLAUDE","claude-opus-5.5","NONE"),("RELAYCORE_CLAUDE","claude-sonnet-5-5","NONE"),
+        ] {
+            let body=if provider=="QWEN" {
+                json!({"object":"response","status":"completed","model":model,"output":[{"type":"web_search_call","status":"completed"},{"type":"message","content":[{"type":"output_text","text":"公开回答","annotations":[{"type":"url_citation","url":"https://www.python.org/","title":"Python"}]}]}],"usage":{"input_tokens":100,"output_tokens":20}})
+            } else {json!({"model":model,"content":[{"type":"text","text":"公开回答"}],"stop_reason":"end_turn","usage":{"input_tokens":100,"output_tokens":20}})}.to_string();
+            let raw=format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",body.len(),body);
+            let mut input=request(mock_server_with_stream(raw.as_bytes(),false));input.provider_id=provider.into();input.model_id=model.into();input.web_search_route=route.into();
+            let reply=execute_non_streaming(input,Zeroizing::new(b"fixture-only".to_vec())).await.unwrap();
+            assert!(reply.text.contains("公开回答"));assert_eq!(reply.usage.input_tokens,Some(100));assert_eq!(reply.usage.output_tokens,Some(20));
+            assert_eq!(reply.web_search_verified,provider=="QWEN");
+        }
+    }
+    #[tokio::test]
+    async fn deepseek_json_final_stage_keeps_prior_retrieval_separate_from_completion() {
+        for model in ["deepseek-v4-pro", "deepseek-flash"] {
+            for grounded in [false, true] {
+                let body=json!({"model":model,"content":[{"type":"text","text":"最终回答"}],"stop_reason":"end_turn","usage":{"input_tokens":100,"output_tokens":20}}).to_string();
+                let raw=format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",body.len(),body);
+                let mut input=request(mock_server_with_stream(raw.as_bytes(),false));
+                input.provider_id="DEEPSEEK".into();input.model_id=model.into();input.web_search_route="DEEPSEEK_MESSAGES".into();input.grounded_answer=grounded;
+                let result=execute_non_streaming(input,Zeroizing::new(b"fixture-only".to_vec())).await;
+                if grounded {
+                    let reply=result.unwrap();assert_eq!(reply.text,"最终回答");assert_eq!(reply.usage.input_tokens,Some(100));assert_eq!(reply.usage.output_tokens,Some(20));
+                    assert!(!reply.web_search_verified);assert!(reply.native_sources.is_empty());
+                } else {assert!(matches!(result,Err(Failure::Quantified{code:"WEB_SEARCH_NO_SOURCES",..})));}
+            }
+        }
+    }
     #[test]
     fn short_title_requests_disable_thinking_without_changing_normal_chat() {
         for (provider, model, thinking_field) in [("QWEN", "qwen3.6-flash", "enable_thinking"), ("DEEPSEEK", "deepseek-flash", "thinking")] {
@@ -2092,7 +2124,7 @@ mod tests {
     #[test]
     fn relay_non_streaming_invalid_identity_stays_unverified() {
         for model in ["null", "", "bad\nmodel"] {
-            let json = serde_json::json!({"model": model, "choices": [{"message": {"content": "answer"}}], "usage": {"cost": 0.01}});
+            let json = serde_json::json!({"model": model, "content": [{"type":"text","text":"answer"}], "stop_reason":"end_turn", "usage": {"cost": 0.01}});
             let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{}", json);
             let body = Box::leak(response.into_bytes().into_boxed_slice());
             let mut input = request(mock_server_with_stream(body, false));
