@@ -95,6 +95,8 @@ test('fresh native data without retained entry finishes metadata loading',async(
   assert.equal(ctx.state.current,null);
   assert.equal(ctx.state.selectedConversationId,null);
   assert.equal(ctx.state.entryResolved,true);
-  assert.ok(calls.includes('read_desktop_p6g_selection'));
+  assert.ok(calls.includes('read_desktop_p6g_catalog'));
+  assert.ok(calls.includes('read_desktop_p6g_global_default'));
+  assert.ok(!calls.includes('read_desktop_p6g_selection'));
   assert.ok(!calls.includes('read_desktop_workspace'));
 });
