@@ -3,11 +3,12 @@
 
 
 
-## 2026-10-15：v1.0.31发布候选与首次空数据启动修复
+## 2026-10-15：v1.0.31正式发布完成与首次空数据启动修复
 
-- 构建源码 `fe504fec14b53b7bd2093d5b9929e99248695705`；[发布报告](verification/2026-10-15-github-v1.0.31/REPORT.md)持有APK/DMG/hash、四预览及测试边界。双端原证书验签、Android隔离实装精确读回、Mac最终DMG应用独立空数据根冷启通过，待上传GitHub。
+- 构建源码 `fe504fec14b53b7bd2093d5b9929e99248695705`；[发布报告](verification/2026-10-15-github-v1.0.31/REPORT.md)持有APK/DMG/hash、四预览及测试边界。双端原证书验签、Android隔离实装精确读回、Mac最终DMG应用独立空数据根冷启通过；[正式Release](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.31)三资产公开下载大小/hash一致，标签1ffacaf、构建fe504fe，云端三项SUCCESS。
 - Mac入口空值问题已修并补refresh回归：Node555 PASS/12skip、typecheck/lint；双端从最终源码重建。其他未变输入沿同日checkpoint，不重跑付费/主设备。323旧原始证据保持。
 - 本机采图初次窗口重启未继承隔离根，立即停止；此轮最终截图均重新从独立根采集，无私人内容，原始材料不上传。
+- 当前任务已完成；后续不要重复打包/重签或重发未知请求。本次没有主设备覆盖或付费服务；主设备仍原1.0.30修复包。323原始未跟踪文件不变，私有checkpoint标签不推送；最终回执仅文档薄提交。
 
 ## 2026-10-15：当前代码checkpoint／最终回归固化
 

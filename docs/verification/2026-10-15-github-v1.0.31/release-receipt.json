@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "releaseTag": "v1.0.31",
   "buildSourceCommit": "fe504fec14b53b7bd2093d5b9929e99248695705",
-  "state": "CANDIDATES_VERIFIED_NOT_UPLOADED",
+  "state": "PUBLISHED_DOWNLOAD_VERIFIED",
   "assets": [
     {
       "name": "Nanfeng-AI-Android-1.0.31.apk",
@@ -109,5 +109,90 @@
     "desktop/src/app.mjs",
     "desktop/tests/desktop-app-entry.test.mjs"
   ],
-  "excludedOriginalUntracked": 323
+  "excludedOriginalUntracked": 323,
+  "cloudChecks": {
+    "runId": 38725359765,
+    "url": "https://github.com/nanzhufeng/Nanfeng-AI/actions/runs/38725359765",
+    "headSha": "1ffacaf36bd5a5b29c6e9f45ceb7933a1ec1e5e4",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "Android compile only",
+        "conclusion": "success"
+      },
+      {
+        "name": "Protocol, Supabase contracts, and gateway",
+        "conclusion": "success"
+      },
+      {
+        "name": "Desktop source checks",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "tagCommit": "1ffacaf36bd5a5b29c6e9f45ceb7933a1ec1e5e4",
+  "embeddedSourceCommit": "fe504fec14b5",
+  "releaseUrl": "https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.31",
+  "releaseId": 413712320,
+  "publishedAt": "2026-10-15T11:16:31Z",
+  "isDraft": false,
+  "isPrerelease": false,
+  "downloadVerification": {
+    "verifiedAt": "2026-10-15T11:16:51.065688+00:00",
+    "assets": [
+      {
+        "name": "Nanfeng-AI-Android-1.0.31.apk",
+        "bytes": 28705242,
+        "sha256": "87fe3143668aac53a8f24b8f40582e0007fbc39099f196a44235c17dbd11531d",
+        "downloadUrl": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.31/Nanfeng-AI-Android-1.0.31.apk",
+        "matched": true
+      },
+      {
+        "name": "Nanfeng-AI-macOS-1.0.31.dmg",
+        "bytes": 17478030,
+        "sha256": "7a847f47e1bf823022c00e1253f627b13eade64be8eb2588b0cc870129284177",
+        "downloadUrl": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.31/Nanfeng-AI-macOS-1.0.31.dmg",
+        "matched": true
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "bytes": 190,
+        "sha256": "316379ef71ff6e083a24bbcd017f1be52b50be5f8185b25623ddb9379e487cc3",
+        "downloadUrl": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.31/SHA256SUMS.txt",
+        "matched": true
+      }
+    ]
+  },
+  "uploadedRemoteAssets": [
+    {
+      "id": 643605662,
+      "name": "Nanfeng-AI-Android-1.0.31.apk",
+      "size": 28705242,
+      "state": "uploaded",
+      "digest": "sha256:87fe3143668aac53a8f24b8f40582e0007fbc39099f196a44235c17dbd11531d",
+      "browser_download_url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.31/Nanfeng-AI-Android-1.0.31.apk"
+    },
+    {
+      "id": 643611168,
+      "name": "Nanfeng-AI-macOS-1.0.31.dmg",
+      "size": 17478030,
+      "state": "uploaded",
+      "digest": "sha256:7a847f47e1bf823022c00e1253f627b13eade64be8eb2588b0cc870129284177",
+      "browser_download_url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.31/Nanfeng-AI-macOS-1.0.31.dmg"
+    },
+    {
+      "id": 643601653,
+      "name": "SHA256SUMS.txt",
+      "size": 190,
+      "state": "uploaded",
+      "digest": "sha256:316379ef71ff6e083a24bbcd017f1be52b50be5f8185b25623ddb9379e487cc3",
+      "browser_download_url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.31/SHA256SUMS.txt"
+    }
+  ],
+  "embeddedSourceProof": {
+    "sourceCommit": "fe504fec14b53b7bd2093d5b9929e99248695705",
+    "embeddedShortCommit": "fe504fec14b5",
+    "android": true,
+    "macos": true
+  }
 }

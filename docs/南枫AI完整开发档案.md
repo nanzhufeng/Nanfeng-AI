@@ -4,7 +4,7 @@
 
 当前行为从[合同索引](contracts/CONTRACT_INDEX.md)和[合同治理](CONTRACT_GOVERNANCE_CURRENT.md)进入；模型规则从[统一架构](model-service/MODEL_SERVICE_ARCHITECTURE.md)进入。动态事实看[项目状态](PROJECT_STATUS.md)与[当前交接](CURRENT_HANDOFF.md)。本文保存带日期的复盘，不建立第二套行为权威。
 
-> 发布增量：v1.0.31候选及首次空数据启动修复见[发布报告](verification/2026-10-15-github-v1.0.31/REPORT.md)；下方历史复盘保持原执行日期，当前远端状态以发布回执为准。
+> 发布增量：v1.0.31正式发布及首次空数据启动修复见[发布报告](verification/2026-10-15-github-v1.0.31/REPORT.md)；下方历史复盘保持原执行日期，当前远端状态以发布回执为准。
 
 ## 1. 复盘方法、范围与证据等级
 
@@ -218,7 +218,7 @@ flowchart LR
 - **macOS**：`npm --prefix desktop run bundle:macos` 先构建静态产物，再 Tauri app；脚本读取本机公开云配置并选择环境指定／可用 Apple Development 身份，codesign严格验签和DMG验证。脚本选到证书不保证与已装一致，覆盖前仍需比对身份与数据。未在该脚本实现 notarization。[bundle脚本](../desktop/scripts/bundle-macos.mjs)、[Tauri配置](../desktop/src-tauri/tauri.conf.json)。
 - **已完成的本地覆盖**：10月15日同版本1.0.30双端原证书保数据覆盖；Android最后思考补丁候选SHA以[模型复查安全摘要](verification/2026-10-15-other-model-network-review/verification.json)为准，精确APK读回、应用/首装/数据目录身份保持。该身份检查不等于完整私有数据库hash；Mac1595数据文件逐项不变。覆盖不替代主设备新业务生成。
 - **Supabase／网关**：按有序migration与头像函数部署，网关需要HTTPS、持久卷、专属token、TTL与offset/hash校验。仓库没有证明目标服务现部署版本；本轮不读取secret或创建资源。[SQL](../supabase/migrations)、[头像](../supabase/functions/google-avatar)、[网关部署](../upload-gateway/README.md)。
-- **GitHub**：README与[仓库发布回执](verification/2026-10-15-github-v1.0.30/release-receipt.json)记录v1.0.30，标签0494e0f、构建7c42456，APK／DMG／校验文件均曾下载比对成功。复盘基线后的同版本修复现已本地checkpoint固化，尚未上传；相同版本不代表相同源码或字节。本轮未fetch／提交／推送或查询远端当前状态。
+- **GitHub（2026-10-15发布增量）**：当前[v1.0.31正式发布](verification/2026-10-15-github-v1.0.31/REPORT.md)，构建fe504fe、标签1ffacaf，三资产公开下载大小/hash一致，GitHub三项源码检查通过；主设备仍按原1.0.30修复包，不以发布推断已安装。v1.0.30旧发布7c42456/0494e0f保留历史定位。
 
 ## 9. 文档冲突与裁决
 

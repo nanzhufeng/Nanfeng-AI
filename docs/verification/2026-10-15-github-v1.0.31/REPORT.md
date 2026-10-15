@@ -1,6 +1,6 @@
 # v1.0.31 Android／macOS 正式发布
 
-构建源码：`fe504fec14b53b7bd2093d5b9929e99248695705`。在已完成代码checkpoint基础上发布当前联网／协议／设置修复，不重复收费测试或已完成全库复盘。候选包与四张预览均已冻结；远端发布/下载结果随后回填[结构化回执](release-receipt.json)。
+构建源码：`fe504fec14b53b7bd2093d5b9929e99248695705`。在已完成代码checkpoint基础上发布当前联网／协议／设置修复，不重复收费测试或已完成全库复盘。候选包与四张预览均已冻结；[正式Release](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.31)三附件上传并从公开地址重新下载，大小/SHA-256全部一致；准确身份见[结构化回执](release-receipt.json)。
 
 ## 本轮增量与验证
 
@@ -23,7 +23,11 @@
 
 ## 发布状态
 
-候选/签名/隔离原生/四预览已通过；待GitHub上传及下载回读。该行在实际完成后更新。
+- 正式发布于 `2026-10-15T11:16:31Z`，非草稿/非Pre-release；标签源码 `1ffacaf36bd5a5b29c6e9f45ceb7933a1ec1e5e4`，与构建源码不同部分只含文档/预览。APK与Mac可执行文件均检出构建源码的既有12字符标记 `fe504fec14b5`。
+- 三附件远端名称、字节数、GitHub SHA-256和公开下载hash均精确一致；无截图附件。
+- [GitHub源码验证](https://github.com/nanzhufeng/Nanfeng-AI/actions/runs/38725359765)：Android compile-only、Desktop source checks、Protocol/Supabase contracts/gateway三项全部SUCCESS；该run对应正式标签提交。
+- 大附件gh客户端停滞后，先停止精确本轮进程并读回草稿状态，再用现有本机代理/HTTP1客户端补传同一冻结文件；未改系统代理/签名/候选包，也未重建草稿。
+- 当前回执为纯文档薄提交；应用输入与已发布包保持不变，使用skip-ci避免重复源码构建，已完成的标签CI结果保留。
 
 ## 保留的验收边界
 

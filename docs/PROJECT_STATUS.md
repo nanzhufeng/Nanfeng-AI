@@ -4,7 +4,7 @@
 
 ## Verified
 
-- Last verified: 2026-10-15T19:07:53+08:00（v1.0.31构建、验签及隔离原生预览；待远端发布）
+- Last verified: 2026-10-15T19:17:47+08:00（v1.0.31三资产公开下载校验及GitHub三项CI）
 - Verified branch: main
 - Code baseline: fe504fec14b53b7bd2093d5b9929e99248695705；v1.0.31最终构建源码，后续仅发布证据/预览文档。
 - Verification scope: COMMIT / 双端正式构建与原证书、Android隔离精确APK读回、Mac最终DMG应用独立数据根冷启及四预览；新Node555/12skip与typecheck/lint，合同/模型门PASS。Android JVM/Rust/协议等复用同日checkpoint的未变输入。无主设备/收费动作。
@@ -13,7 +13,7 @@
 
 ## Current
 
-- [v1.0.31发布候选](verification/2026-10-15-github-v1.0.31/REPORT.md)：双端原签名正式包与四张当前预览已通过本机门；Mac空数据恢复入口空值修复已补回归和原生冷启。GitHub发布及回拉待完成。
+- [v1.0.31发布候选](verification/2026-10-15-github-v1.0.31/REPORT.md)：双端原签名正式包与四张当前预览完成；Mac空数据恢复入口已修。正式Release三资产上传/公开下载hash一致，标签CI三项SUCCESS；主设备不重装。
 
 - [代码checkpoint与最终回归](verification/2026-10-15-code-checkpoint/REPORT.md)：准确纳入当前联网/协议/思考/设置/合同WIP与两份新增测试；最终全套通过。仅修两条陈旧Node断言，323份原始/临时证据保留本地，本地源码d92b0da/标签checkpoint-model-network-20261015已读回；无推送/发布/安装/新收费。
 
@@ -115,10 +115,10 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 - 联网、流式／TLS、设置与合同增量已纳入源码checkpoint及v1.0.31发布候选；原双端覆盖与候选hash按原安全报告保留，不由新Git提交或同版本GitHub包推断新安装。
 
-- 2026-10-15发布准备：相关源码/合同已本地提交，v1.0.31待上传；323份原始/临时未跟踪证据保留。历史v1.0.30已发布范围与本地checkpoint不同，不能据同版本号推断远端已有此次修复。
+- 2026-10-15发布完成：相关源码/合同已推main，v1.0.31三资产正式发布且公开下载验证通过；323份原始/临时未跟踪证据保留。历史v1.0.30已发布范围与本地checkpoint不同，不能据同版本号推断远端已有此次修复。
 
-- Git working tree: 651文件变更已提交为源码checkpoint，358新增文件纳Git；排除原始/临时证据保留本地。323个原始/临时证据文件仍未跟踪且字节保留；准确提交与剩余集合见[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)。
-- Remote sync: v1.0.31待推送/上传；v1.0.30历史发布不能替代本次候选。私有checkpoint标签不推送。
+- Git working tree: 当前源码/合同/核心新增测试、发布文档及四张当前预览均已提交；本摘要回填前仅回执文档变化。323份原始/临时证据仍未跟踪且逐项hash保留，无新增产物入Git。
+- Remote sync: main与v1.0.31正式标签已推送，标签1ffacaf36bd5a5b29c6e9f45ceb7933a1ec1e5e4；三资产远端/公开下载hash一致、标签CI三项PASS。构建源码fe504fec14b53b7bd2093d5b9929e99248695705；随后纯文档回执薄提交不重建/移动标签。私有checkpoint标签未推送。
 - Installed sync: 主设备保留10月15日已授权覆盖的1.0.30修复包；本次1.0.31仅隔离模拟器实装及Mac精确候选独立数据根启动，不冒称主设备已更新。
 - Rollback point: 本轮源码checkpoint/tag及限定改前副本；禁止全仓reset/clean/stash覆盖排除证据。
 - Secrets/config: 本安装阶段原应用凭据未改、0新增Provider请求，正式数据保留；此前获授权创建的RC反重力网站Key未接入应用，3次404/504调用费用UNKNOWN与暂缓决定单独留档。临时凭据通道已关闭；原始回执/正文/before/日志不进入提交。
