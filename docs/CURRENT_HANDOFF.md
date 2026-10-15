@@ -3,6 +3,12 @@
 
 
 
+## 2026-10-15：v1.0.31发布候选与首次空数据启动修复
+
+- 构建源码 `fe504fec14b53b7bd2093d5b9929e99248695705`；[发布报告](verification/2026-10-15-github-v1.0.31/REPORT.md)持有APK/DMG/hash、四预览及测试边界。双端原证书验签、Android隔离实装精确读回、Mac最终DMG应用独立空数据根冷启通过，待上传GitHub。
+- Mac入口空值问题已修并补refresh回归：Node555 PASS/12skip、typecheck/lint；双端从最终源码重建。其他未变输入沿同日checkpoint，不重跑付费/主设备。323旧原始证据保持。
+- 本机采图初次窗口重启未继承隔离根，立即停止；此轮最终截图均重新从独立根采集，无私人内容，原始材料不上传。
+
 ## 2026-10-15：当前代码checkpoint／最终回归固化
 
 - [checkpoint报告](verification/2026-10-15-code-checkpoint/REPORT.md)、[回归](verification/2026-10-15-code-checkpoint/regression.json)、[提交范围](verification/2026-10-15-code-checkpoint/commit-scope.json)、[增量正式审计](南枫AI开发经验增量审计.md)持有本轮事实，完整复盘/五Skill/已安装与真实模型比较不重做。

@@ -4,6 +4,8 @@
 
 当前行为从[合同索引](contracts/CONTRACT_INDEX.md)和[合同治理](CONTRACT_GOVERNANCE_CURRENT.md)进入；模型规则从[统一架构](model-service/MODEL_SERVICE_ARCHITECTURE.md)进入。动态事实看[项目状态](PROJECT_STATUS.md)与[当前交接](CURRENT_HANDOFF.md)。本文保存带日期的复盘，不建立第二套行为权威。
 
+> 发布增量：v1.0.31候选及首次空数据启动修复见[发布报告](verification/2026-10-15-github-v1.0.31/REPORT.md)；下方历史复盘保持原执行日期，当前远端状态以发布回执为准。
+
 ## 1. 复盘方法、范围与证据等级
 
 | 检查层 | 当前覆盖 | 结论边界 |
@@ -37,11 +39,11 @@
 
 | 层 | 当前配置／实现 | 依据 |
 |---|---|---|
-| Android 构建 | 单 `:app`；AGP 9.3.1、Gradle 9.5.0、Compose plugin 2.2.10、KSP 2.2.10-2.0.2；minSdk 26、compile/targetSdk 36；正式1.0.30/code94 | [根 Gradle](../build.gradle.kts)、[wrapper](../gradle/wrapper/gradle-wrapper.properties)、[app Gradle](../app/build.gradle.kts) |
+| Android 构建 | 单 `:app`；AGP 9.3.1、Gradle 9.5.0、Compose plugin 2.2.10、KSP 2.2.10-2.0.2；minSdk 26、compile/targetSdk 36；正式1.0.31/code95 | [根 Gradle](../build.gradle.kts)、[wrapper](../gradle/wrapper/gradle-wrapper.properties)、[app Gradle](../app/build.gradle.kts) |
 | Android 业务 | Kotlin、Compose/Material 3、Room 2.8.4、WorkManager、Credentials/Google ID、PDFBox Android；Keystore 与私有文件 | [依赖及签名门](../app/build.gradle.kts)、[Manifest](../app/src/main/AndroidManifest.xml) |
 | Android 数据 | `NanfengAiDatabase` 注解 version 72，连续迁移与 Room schema；CHAT/WORK 各自文件 | [数据库](../app/src/main/java/com/nanzhufeng/ai/data/local/NanfengAiDatabase.kt)、[schemas](../app/schemas)、[area owner](../app/src/main/java/com/nanzhufeng/ai/data/local/ConversationAreaDatabaseOwner.kt) |
 | Desktop | HTML/CSS/ESM，无 React/Vite；Tauri 2、Rust 2021、rusqlite 0.37、reqwest 0.12、serde、PDF/ZIP/XML adapter | [package](../desktop/package.json)、[Cargo](../desktop/src-tauri/Cargo.toml) |
-| Desktop 身份与存储 | bundle 1.0.30／`com.nanzhufeng.ai.desktop`；`lib.rs` 主库迁移推进至 user_version 44，TEMP 与模型配置另有版本 owner | [Tauri 配置](../desktop/src-tauri/tauri.conf.json)、[主 store](../desktop/src-tauri/src/lib.rs)、[area](../desktop/src-tauri/src/desktop_data_area.rs) |
+| Desktop 身份与存储 | bundle 1.0.31／`com.nanzhufeng.ai.desktop`；`lib.rs` 主库迁移推进至 user_version 44，TEMP 与模型配置另有版本 owner | [Tauri 配置](../desktop/src-tauri/tauri.conf.json)、[主 store](../desktop/src-tauri/src/lib.rs)、[area](../desktop/src-tauri/src/desktop_data_area.rs) |
 | 共享协议／维护目录 | exchange v1/v2、sync golden、模型维护 JSON、合同 registry/owner map；不是共享运行时数据库或第二个 ModelRegistry | [protocol](../protocol)、[模型架构](model-service/MODEL_SERVICE_ARCHITECTURE.md) |
 | 云服务 | Supabase SQL/RPC/RLS，Google avatar Edge Function 与来源策略 | [migrations](../supabase/migrations)、[头像函数](../supabase/functions/google-avatar/index.ts) |
 | 附件中转 | Go 1.24 独立服务、Docker、断点 offset／SHA-256／短时签名 URL | [go.mod](../upload-gateway/go.mod)、[服务](../upload-gateway/main.go)、[部署说明](../upload-gateway/README.md) |

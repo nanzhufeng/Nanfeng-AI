@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "releaseTag": "v1.0.31",
+  "buildSourceCommit": "fe504fec14b53b7bd2093d5b9929e99248695705",
+  "state": "CANDIDATES_VERIFIED_NOT_UPLOADED",
+  "assets": [
+    {
+      "name": "Nanfeng-AI-Android-1.0.31.apk",
+      "bytes": 28705242,
+      "sha256": "87fe3143668aac53a8f24b8f40582e0007fbc39099f196a44235c17dbd11531d"
+    },
+    {
+      "name": "Nanfeng-AI-macOS-1.0.31.dmg",
+      "bytes": 17478030,
+      "sha256": "7a847f47e1bf823022c00e1253f627b13eade64be8eb2588b0cc870129284177"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 190,
+      "sha256": "316379ef71ff6e083a24bbcd017f1be52b50be5f8185b25623ddb9379e487cc3"
+    }
+  ],
+  "signatures": {
+    "android": {
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "versionCode": 95,
+      "debuggable": false
+    },
+    "macos": {
+      "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+      "type": "Apple Development",
+      "notarized": false
+    }
+  },
+  "previews": {
+    "android-conversation-1.0.31.png": {
+      "sha256": "0cf06568bcc56b701ebe275891fbcc945344f6f8a8d0d280320c341db46e02a0",
+      "sourceSize": [
+        1600,
+        1800
+      ],
+      "publishedSize": [
+        1244,
+        1400
+      ],
+      "crop": "none"
+    },
+    "android-settings-1.0.31.png": {
+      "sha256": "331b87dad9653b2213def8e888db94247d7e3a5f7a5bba750096d992913d93e9",
+      "sourceSize": [
+        1600,
+        1800
+      ],
+      "publishedSize": [
+        1244,
+        1400
+      ],
+      "crop": "none"
+    },
+    "macos-conversation-1.0.31.png": {
+      "sha256": "c10f6906d8e96fc25e0781ab7d54a2b52cb7969085149717024eae847720bd7b",
+      "sourceSize": [
+        3456,
+        2182
+      ],
+      "publishedSize": [
+        1600,
+        1010
+      ],
+      "crop": "remove 64px capture header; app viewport intact"
+    },
+    "macos-settings-1.0.31.png": {
+      "sha256": "c66a5f9de365fdef6c5c168351dd8a7bd5f81b548b7319cb48b87144b73c0c67",
+      "sourceSize": [
+        3456,
+        2182
+      ],
+      "publishedSize": [
+        1600,
+        1010
+      ],
+      "crop": "remove 64px capture header; app viewport intact"
+    }
+  },
+  "nativeChecks": {
+    "android": "isolated emulator; installed APK pulled back with exact SHA256; normal new-conversation and settings UI",
+    "macos": "exact app extracted from frozen DMG; original signature; isolated data root; empty cold start and settings UI",
+    "mainDevices": "NOT_RUN",
+    "paidServices": "NOT_RUN"
+  },
+  "tests": {
+    "freshDesktopNode": {
+      "total": 567,
+      "pass": 555,
+      "skipped": 12,
+      "fail": 0
+    },
+    "desktopTypecheck": "PASS",
+    "desktopLint": "PASS",
+    "androidReleaseBuild": "PASS",
+    "macosBundleSignatureDmg": "PASS",
+    "contractRegistry": "114/40 PASS",
+    "modelService": "21+1/7 PASS",
+    "reusedRegression": "../2026-10-15-code-checkpoint/regression.json"
+  },
+  "sourceDeltaFromCheckpoint": [
+    "app/build.gradle.kts",
+    "desktop/src-tauri/tauri.conf.json",
+    "desktop/src/app.mjs",
+    "desktop/tests/desktop-app-entry.test.mjs"
+  ],
+  "excludedOriginalUntracked": 323
+}

@@ -4,14 +4,16 @@
 
 ## Verified
 
-- Last verified: 2026-10-15T18:49:08+08:00（最终离线回归与暂存源码闭包）
+- Last verified: 2026-10-15T19:07:53+08:00（v1.0.31构建、验签及隔离原生预览；待远端发布）
 - Verified branch: main
-- Code baseline: d92b0daf70597f7447b6dc7ad6649938692f8f5b；本地tag checkpoint-model-network-20261015，源提交包含已验WORKTREE增量；后续仅文档回填。
-- Verification scope: COMMIT / 源码checkpoint绑定1222输入；Android1525 PASS/10skip/ReleaseLint，Node554 PASS/12skip与静态构建，Rust457 PASS/36ignored，45维护、协议/Supabase静态10/Go通过；独立索引导出六门PASS。运行发生于提交前同字节WORKTREE，原生/服务/安装不扩大。
+- Code baseline: fe504fec14b53b7bd2093d5b9929e99248695705；v1.0.31最终构建源码，后续仅发布证据/预览文档。
+- Verification scope: COMMIT / 双端正式构建与原证书、Android隔离精确APK读回、Mac最终DMG应用独立数据根冷启及四预览；新Node555/12skip与typecheck/lint，合同/模型门PASS。Android JVM/Rust/协议等复用同日checkpoint的未变输入。无主设备/收费动作。
 - Verified by: Codex
 - Status: Active
 
 ## Current
+
+- [v1.0.31发布候选](verification/2026-10-15-github-v1.0.31/REPORT.md)：双端原签名正式包与四张当前预览已通过本机门；Mac空数据恢复入口空值修复已补回归和原生冷启。GitHub发布及回拉待完成。
 
 - [代码checkpoint与最终回归](verification/2026-10-15-code-checkpoint/REPORT.md)：准确纳入当前联网/协议/思考/设置/合同WIP与两份新增测试；最终全套通过。仅修两条陈旧Node断言，323份原始/临时证据保留本地，本地源码d92b0da/标签checkpoint-model-network-20261015已读回；无推送/发布/安装/新收费。
 
@@ -111,13 +113,13 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 - 本轮源码checkpoint d92b0daf70597f7447b6dc7ad6649938692f8f5b 与本地tag已读回；同步观察为LOCAL ONLY，未push。该同步快照取最终文档提交前，当时仅7份文档待回填提交，业务输入1222项无漂移；最终文档HEAD由Git读取，不要求本字段与自身提交SHA相等。
 
-- 联网、流式／TLS、设置与合同增量已纳入本地源码checkpoint d92b0daf70597f7447b6dc7ad6649938692f8f5b，未推送；原双端覆盖与候选hash按原安全报告保留，不由新Git提交或同版本GitHub包推断新安装。
+- 联网、流式／TLS、设置与合同增量已纳入源码checkpoint及v1.0.31发布候选；原双端覆盖与候选hash按原安全报告保留，不由新Git提交或同版本GitHub包推断新安装。
 
-- 2026-10-15当前：相关源码/合同已本地提交，尚未推送；323份原始/临时未跟踪证据保留。历史v1.0.30已发布范围与本地checkpoint不同，不能据同版本号推断远端已有此次修复。
+- 2026-10-15发布准备：相关源码/合同已本地提交，v1.0.31待上传；323份原始/临时未跟踪证据保留。历史v1.0.30已发布范围与本地checkpoint不同，不能据同版本号推断远端已有此次修复。
 
 - Git working tree: 651文件变更已提交为源码checkpoint，358新增文件纳Git；排除原始/临时证据保留本地。323个原始/临时证据文件仍未跟踪且字节保留；准确提交与剩余集合见[提交范围](verification/2026-10-14-code-checkpoint/commit-scope.json)。
-- Remote sync: main 与 v1.0.29 已推送／正式发布，三个资产下载hash一致，云端源码三项PASS；原私有checkpoint不推送，结果见发布回执。
-- Installed sync: 10月15日本轮双端已覆盖附件联网、Android流式／TLS及隐藏诊断入口增量；OPPO精确APK读回、Mac1595数据文件hash不变，见最新报告；本地Git SHA仍不代表未提交WORKTREE。
+- Remote sync: v1.0.31待推送/上传；v1.0.30历史发布不能替代本次候选。私有checkpoint标签不推送。
+- Installed sync: 主设备保留10月15日已授权覆盖的1.0.30修复包；本次1.0.31仅隔离模拟器实装及Mac精确候选独立数据根启动，不冒称主设备已更新。
 - Rollback point: 本轮源码checkpoint/tag及限定改前副本；禁止全仓reset/clean/stash覆盖排除证据。
 - Secrets/config: 本安装阶段原应用凭据未改、0新增Provider请求，正式数据保留；此前获授权创建的RC反重力网站Key未接入应用，3次404/504调用费用UNKNOWN与暂缓决定单独留档。临时凭据通道已关闭；原始回执/正文/before/日志不进入提交。
 
