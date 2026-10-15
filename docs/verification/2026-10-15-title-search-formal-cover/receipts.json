@@ -1,0 +1,61 @@
+{
+  "verifiedAt": "2026-10-15T14:35:04+08:00",
+  "baseline": "d64d71026418b9325931b6cbbb94544b28a81309",
+  "scope": "Current WORKTREE formal data-preserving overlay; no commit/push/release",
+  "android": {
+    "installed": true,
+    "completedAt": "2026-10-15T14:34:04+08:00",
+    "package": "com.nanzhufeng.ai",
+    "versionCode": 93,
+    "versionName": "1.0.29",
+    "debuggable": false,
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "sha256": "7527d000d9dd85390290ae1907557b9b4dfe32dcb86c654304842443b7ff3960",
+    "bytes": 28688870,
+    "exactCandidateBytes": true,
+    "dataMetadataPreserved": true,
+    "remoteTempRemoved": true,
+    "lastUpdateTime": "2026-10-15 14:34:03",
+    "launched": false
+  },
+  "mac": {
+    "bundleId": "com.nanzhufeng.ai.desktop",
+    "version": "1.0.29",
+    "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+    "bundleFiles": 4,
+    "dmgSha256": "7788161da166eb8c75e0ca3ea27c7a952cb60477e38040373f9ce3a968a54b87",
+    "installed": true,
+    "completedAt": "2026-10-15T14:30:47+08:00",
+    "exactCandidateFiles": true,
+    "dataFiles": 1599,
+    "dataChanges": {
+      "added": 0,
+      "deleted": 0,
+      "changed": 0
+    },
+    "launched": false
+  },
+  "verification": {
+    "android": {
+      "tests": 1519,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 10,
+      "suites": 324,
+      "passed": 1509
+    },
+    "androidReleaseBuildAndLint": "PASS",
+    "macReleaseBuildSignatureAndDmg": "PASS",
+    "nodeLintAndTypecheck": "PASS",
+    "rustPriorApplicablePassed": 449,
+    "rustPriorIgnored": 36,
+    "rustPriorSourceHashMatch": true
+  },
+  "sourceFreeze": {
+    "files": 1215,
+    "sha256": "4b147635497e1564fec8783c00439ad03b722d0487c9871cc076ef32f07e1e92",
+    "postInstallDrift": 0
+  },
+  "newProviderRequests": 0,
+  "nativeBusinessUiAcceptance": "NOT RUN"
+}

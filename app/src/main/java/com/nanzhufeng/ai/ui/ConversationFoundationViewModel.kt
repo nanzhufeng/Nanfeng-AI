@@ -707,6 +707,11 @@ class ConversationFoundationViewModel(
         }
     }
 
+    /** Title refreshes read current execution ownership; a late title cannot clear or revive Send. */
+    fun onConversationCompletionMetadataChanged() {
+        reload(keepSending = if (normalChatBackgroundExecution.ownsExecution()) false else state.isSending)
+    }
+
     /** Service broadcasts contain only an opaque local conversation id and terminal/running state. */
     fun onNormalChatBackgroundExecutionStateChanged(
         conversationId: com.nanzhufeng.ai.domain.ConversationId,

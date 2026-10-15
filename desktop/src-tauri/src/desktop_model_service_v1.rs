@@ -377,7 +377,7 @@ pub struct PresetDescriptor {
     pub chat_selectable: bool,
 }
 
-pub const PRESETS: [PresetDescriptor; 29] = [
+pub const PRESETS: [PresetDescriptor; 30] = [
     PresetDescriptor {
         id: "CLAUDE_OPUS_5_5",
         provider_id: "OPENROUTER",
@@ -424,6 +424,11 @@ pub const PRESETS: [PresetDescriptor; 29] = [
         chat_selectable: true,
     },
 
+    PresetDescriptor {
+        id: "GEMINI_4_ARGON", provider_id: "OPENROUTER", model_id: "google/gemini-4-argon",
+        display_name: "Gemini 4 Argon", description: "适合深度推理、复杂分析与代码任务。",
+        family: "Google", chat_selectable: true,
+    },
     PresetDescriptor {
         id: "MUSE_WONDER", provider_id: "OPENROUTER", model_id: "meta/muse-wonder",
         display_name: "Muse Wonder", description: "适合复杂分析与长程任务。",

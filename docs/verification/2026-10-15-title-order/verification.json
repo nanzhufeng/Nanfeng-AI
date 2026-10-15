@@ -1,0 +1,35 @@
+{
+  "verifiedAt": "2026-10-15T14:20:28+08:00",
+  "baseline": "d64d71026418b9325931b6cbbb94544b28a81309",
+  "scope": "WORKTREE title metadata preserves conversation activity and ordering",
+  "android": {
+    "relatedTestsPassed": 38,
+    "failed": 0,
+    "debugBuild": "PASS",
+    "nativeUi": "NOT RUN"
+  },
+  "mac": {
+    "rustLibPassed": 449,
+    "failed": 0,
+    "ignored": 36,
+    "listProjectionPassed": 7,
+    "nativeUi": "NOT RUN"
+  },
+  "contractGovernance": {
+    "state": "PASS",
+    "contracts": 114,
+    "domains": 40
+  },
+  "contractConsistencyAudit": "PASS",
+  "providerRequests": 0,
+  "installations": 0,
+  "schemaChanges": false,
+  "redSignals": [
+    "Android Room manual title advances old updatedAt before fix",
+    "Mac domain manual title advances old updatedAt before fix"
+  ],
+  "limitations": [
+    "Native UI gestures not exercised",
+    "Existing provider and release verification gaps remain unchanged"
+  ]
+}

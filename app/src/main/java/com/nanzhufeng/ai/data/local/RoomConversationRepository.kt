@@ -96,6 +96,21 @@ class RoomConversationRepository(
         persistSnapshot(database.conversationDao(), snapshot)
     }
 
+    override fun completeAutomaticTitle(id: ConversationId, title: String, updatedAt: Instant): Boolean =
+        database.inConversationTransaction {
+            // Use only the database writer here: the legacy timestamp repair takes the
+            // repository monitor before its transaction, so acquiring that monitor here
+            // would invert the lock order during the first concurrent list read.
+            val latest = findById(id) ?: return@inConversationTransaction false
+            if (!latest.conversation.autoTitlePending) return@inConversationTransaction false
+            persistSnapshot(database.conversationDao(), latest.copy(conversation = latest.conversation.copy(
+                title = title, autoTitlePending = false,
+                titleRevision = Math.addExact(latest.conversation.titleRevision ?: 0L, 1L),
+                revision = Math.addExact(latest.conversation.revision, 1L),
+            )))
+            true
+        }
+
     override fun saveVerifiedCloudMerge(snapshot: ConversationSnapshot): ConversationSnapshot = database.inConversationTransaction {
         persistVerifiedCloudSnapshot(database.conversationDao(), snapshot)
     }

@@ -1,0 +1,114 @@
+{
+  "paidCalls": 3,
+  "rows": [
+    {
+      "appliedCallbacks": 1,
+      "case": "qwen-primary",
+      "ledger": [
+        {
+          "chargeMicros": 403,
+          "costSource": "LOCAL_ESTIMATE",
+          "currency": "CNY",
+          "inputTokens": 282,
+          "model": "qwen3.6-flash",
+          "outputTokens": 9
+        }
+      ],
+      "mainAnswerSynthetic": true,
+      "pending": false,
+      "physical": [
+        {
+          "cachedInputTokens": null,
+          "elapsedMs": 610,
+          "faultInjected": false,
+          "inputTokens": 282,
+          "model": "qwen3.6-flash",
+          "outputTokens": 9,
+          "provider": "QWEN",
+          "returnedModel": "qwen3.6-flash",
+          "sent": true,
+          "status": "COMPLETED",
+          "titleContractValid": true
+        }
+      ],
+      "platform": "Mac native Rust title owner",
+      "reopenedTitle": "整理应用设置页面层级",
+      "titleValid": true
+    },
+    {
+      "appliedCallbacks": 1,
+      "case": "deepseek-only",
+      "ledger": [
+        {
+          "chargeMicros": 49,
+          "costSource": "LOCAL_ESTIMATE",
+          "currency": "USD",
+          "inputTokens": 288,
+          "model": "deepseek-flash",
+          "outputTokens": 9
+        }
+      ],
+      "mainAnswerSynthetic": true,
+      "pending": false,
+      "physical": [
+        {
+          "cachedInputTokens": 0,
+          "elapsedMs": 412,
+          "faultInjected": false,
+          "inputTokens": 288,
+          "model": "deepseek-flash",
+          "outputTokens": 9,
+          "provider": "DEEPSEEK",
+          "returnedModel": "deepseek-flash",
+          "sent": true,
+          "status": "COMPLETED",
+          "titleContractValid": true
+        }
+      ],
+      "platform": "Mac native Rust title owner",
+      "reopenedTitle": "整理应用设置页层级",
+      "titleValid": true
+    },
+    {
+      "appliedCallbacks": 1,
+      "case": "qwen-timeout-backup",
+      "ledger": [
+        {
+          "chargeMicros": 30,
+          "costSource": "LOCAL_ESTIMATE",
+          "currency": "USD",
+          "inputTokens": 288,
+          "model": "deepseek-flash",
+          "outputTokens": 9
+        }
+      ],
+      "mainAnswerSynthetic": true,
+      "pending": false,
+      "physical": [
+        {
+          "error": "TIMEOUT",
+          "faultInjected": true,
+          "model": "qwen3.6-flash",
+          "provider": "QWEN",
+          "sent": false
+        },
+        {
+          "cachedInputTokens": 128,
+          "elapsedMs": 582,
+          "faultInjected": false,
+          "inputTokens": 288,
+          "model": "deepseek-flash",
+          "outputTokens": 9,
+          "provider": "DEEPSEEK",
+          "returnedModel": "deepseek-flash",
+          "sent": true,
+          "status": "COMPLETED",
+          "titleContractValid": true
+        }
+      ],
+      "platform": "Mac native Rust title owner",
+      "reopenedTitle": "整理应用设置页层级",
+      "titleValid": true
+    }
+  ]
+}

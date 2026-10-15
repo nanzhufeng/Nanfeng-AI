@@ -1,0 +1,9 @@
+{
+  "app/src/main/java/com/nanzhufeng/ai/domain/ConversationManagement.kt": "315c410cea369af89f22994df9c863305a619fd262accdf02d5e7ce02ebb4c66",
+  "app/src/main/java/com/nanzhufeng/ai/domain/Ports.kt": "3c272b36d1fd174d46eaf748139a6eef01b58d6aed1a4e4a341a665284d1ab3a",
+  "app/src/main/java/com/nanzhufeng/ai/data/local/RoomConversationRepository.kt": "98fe461256391de1dc9fc4d8efb4354664aa3b9493251c3710589c98a15732c7",
+  "app/src/test/java/com/nanzhufeng/ai/data/ConversationTitleActivityOrderTest.kt": "641a8d60af54c6ff3fdccf455e1fae74cbecc9d5e9176e3808ec6c11bf40aaf4",
+  "desktop/src-tauri/src/lib.rs": "42119577162de21722bf24c24b7841ba7958f05701be3ef3327f646b2d66f75a",
+  "desktop/src-tauri/src/conversation_title_activity_order_tests.rs": "6cbeb9fc464f22fa09892512a4144cfad281022a97af16c14c713d1d748c7a61",
+  "desktop/tests/desktop-conversation-unread.test.mjs": "4f9f153e3fe438a74138265207b886fee6d208df648e5bad2284805054b93590"
+}

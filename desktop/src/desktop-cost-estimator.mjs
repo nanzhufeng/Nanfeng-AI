@@ -8,6 +8,7 @@ const price = (priceVersion, input, output, cachedInput = null, currencyCode = '
 });
 
 const flatPrices = new Map([
+  ['google/gemini-4-argon', price('openrouter-gemini-4-argon-2026-10-15-v1', 2, 10, 0.1)],
   ['anthropic/claude-opus-5.5', price('openrouter-public-prices-2026-10-09-v1', 4, 20, 0.2)],
   ['anthropic/claude-sonnet-5.5', price('openrouter-public-prices-2026-10-09-v1', 2, 10, 0.1)],
   ['anthropic/claude-fable-5', price('openrouter-public-prices-2026-08-v1', 10, 50)],

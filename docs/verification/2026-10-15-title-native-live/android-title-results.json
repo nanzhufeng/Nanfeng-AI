@@ -1,0 +1,119 @@
+{
+  "rows": [
+    {
+      "platform": "Android application process title owner",
+      "case": "qwen-primary",
+      "mainAnswerSynthetic": true,
+      "uid": 10210,
+      "result": "Title(value=应用设置页面层级整理)",
+      "physical": [
+        {
+          "model": "qwen3.6-flash",
+          "faultInjected": false,
+          "sent": true,
+          "outcome": "HttpResponse",
+          "elapsedMs": 1922,
+          "http": 200,
+          "returnedModel": "qwen3.6-flash",
+          "titleContractValid": true
+        }
+      ],
+      "reopenedTitle": "应用设置页面层级整理",
+      "pending": false,
+      "titleValid": true,
+      "records": [
+        {
+          "provider": "QWEN",
+          "model": "qwen3.6-flash",
+          "status": "SUCCEEDED",
+          "inputTokens": 332,
+          "outputTokens": 9,
+          "chargeMicros": 463,
+          "currency": "CNY",
+          "costSource": "LOCAL_ESTIMATE"
+        }
+      ]
+    },
+    {
+      "platform": "Android application process title owner",
+      "case": "deepseek-only",
+      "mainAnswerSynthetic": true,
+      "uid": 10210,
+      "result": "Title(value=应用设置页层级整理)",
+      "physical": [
+        {
+          "model": "deepseek-flash",
+          "faultInjected": false,
+          "sent": true,
+          "outcome": "HttpResponse",
+          "elapsedMs": 1844,
+          "http": 200,
+          "returnedModel": "deepseek-flash",
+          "titleContractValid": true
+        }
+      ],
+      "reopenedTitle": "应用设置页层级整理",
+      "pending": false,
+      "titleValid": true,
+      "records": [
+        {
+          "provider": "DEEPSEEK",
+          "model": "deepseek-flash",
+          "status": "SUCCEEDED",
+          "inputTokens": 329,
+          "outputTokens": 9,
+          "chargeMicros": 55,
+          "currency": "USD",
+          "costSource": "LOCAL_ESTIMATE"
+        }
+      ]
+    },
+    {
+      "platform": "Android application process title owner",
+      "case": "qwen-timeout-backup",
+      "mainAnswerSynthetic": true,
+      "uid": 10210,
+      "result": "Title(value=应用设置页面层级整理)",
+      "physical": [
+        {
+          "model": "qwen3.6-flash",
+          "faultInjected": true,
+          "sent": false,
+          "error": "TIMEOUT"
+        },
+        {
+          "model": "deepseek-flash",
+          "faultInjected": false,
+          "sent": true,
+          "outcome": "HttpResponse",
+          "elapsedMs": 524,
+          "http": 200,
+          "returnedModel": "deepseek-flash",
+          "titleContractValid": true
+        }
+      ],
+      "reopenedTitle": "应用设置页面层级整理",
+      "pending": false,
+      "titleValid": true,
+      "records": [
+        {
+          "provider": "QWEN",
+          "model": "qwen3.6-flash",
+          "status": "FAILED",
+          "error": "TIMEOUT"
+        },
+        {
+          "provider": "DEEPSEEK",
+          "model": "deepseek-flash",
+          "status": "SUCCEEDED",
+          "inputTokens": 329,
+          "outputTokens": 9,
+          "chargeMicros": 36,
+          "currency": "USD",
+          "costSource": "LOCAL_ESTIMATE"
+        }
+      ]
+    }
+  ],
+  "paidCalls": 3
+}

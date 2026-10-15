@@ -1,5 +1,61 @@
 > 当前合同读取门：[全项目合同索引](contracts/CONTRACT_INDEX.md) · [合同治理](CONTRACT_GOVERNANCE_CURRENT.md)。
 
+## 2026-10-15：双端当前修复正式保数据覆盖完成
+
+- 用户“覆盖安装”已完成：[安装回执](verification/2026-10-15-title-search-formal-cover/REPORT.md)。OPPO 2026-10-15T14:34:04+08:00，Mac 2026-10-15T14:30:47+08:00；原正式身份1.0.29／Android93。Android精确APK读回及appId／首次安装时间／dataDir／CE-DE inode保持；Mac4文件逐项一致，1599数据文件0变化，原bundle保留。
+- 当前标题独立生成与兜底、联网开关／Haiku、双端标题保序和Android改名弹窗已进入现装包。Android本轮1509PASS／10skip、正式编译／Lint，Mac正式构建／验签／DMG与Node lint/typecheck通过；Rust449／36ignored复用相同输入验证，1215输入0漂移。没有新Provider调用／正式UI或业务实测，不关闭历史缺口。
+- 未commit／push／GitHub发布；不重复安装或付费矩阵。候选、旧包、完整hash和日志由本机 `/tmp/nfai-current-cover-path.txt` 定位，其他WIP保持。
+
+## 2026-10-15：Android正常改名输入框恢复
+
+- 按用户最新要求，手机标题双击／菜单改名恢复弹窗、标准输入框、取消／确认、全选和软键盘请求；入口互斥避免主标题与侧栏同时弹出。沿用既有RENAME保存，纯标题不提升排序保持，Mac原位编辑不变。
+- [回执](verification/2026-10-15-mobile-rename-editor/REPORT.md)：4项实际Compose交互与相关静态UI／Room排序共97项通过，Debug通过。0新Provider调用，未安装／触碰真机／提交／推送；真机视觉及实际软键盘展示未验。其他WIP／旧验收缺口保持。
+
+## 2026-10-15：纯标题变更保留原排序
+
+- 用户最新要求已实现：双端手动改名与异步自动标题不再更新对话活动时间；保留 titleRevision／revision 和索引／同步变更，消息内容更新继续提升排序。无 schema 变更，不修写历史时间。
+- [回执](verification/2026-10-15-title-order/REPORT.md)：独立 Room／Mac SQLite 覆盖两种标题写入、重开、版本和内容追加，Android另验等时间戳标题同步；列表投影回归通过。没有新 Provider 调用／安装／commit／push；正式包尚不含本增量，其他原有缺口保持。不要重跑付费模型矩阵。
+
+## 2026-10-15：联网开关统一／Haiku双端真实通过（本轮完成，正式未安装）
+
+- 用户最终规则：联网由开关决定，开启必须实际搜索，关闭不搜索；禁止核验关键词门、默认不联网或仅提供可选工具即成功。此前optional／blank-image-off候选已撤回，不得按旧候选继续。当前21聊天部署共用指令及执行证明；各Provider保留原有正常协议，RC接收方不变。
+- 首个分叉：原生媒体强制inventory，空公共计划QUERY_EMPTY后离线分析仍失败。现对无可读公共计划的已支持OpenRouter媒体保留原件同请求搜索回答；可读／混合公共计划仍逐项核验。Android在完成前统一证明门，避免外层失败而Attempt先COMPLETED；Mac流式与通用非流式统一，保留正文／计量；grounded最终回答不重复搜索。
+- Haiku精确兼容例外：OpenRouter Chat Completions web plugin engine=exa入口检索，原Haiku回答。server tool＋required、native plugin以及native＋required的实际候选仍可跳过，不能把一次native成功扩成稳定。Exa来源是OpenRouter检索注入结构化annotation，不冒充Haiku原生工具事件。不新增Luna／第二回答模型／Key。当前C12和模型维护例外／矩阵已同步。
+- [真实回执与候选失败](verification/2026-10-15-haiku-search-switch/REPORT.md)：公开合成订单图，Android独立模拟器AppContainer→executor→Room，一物理调用5来源，USD8278µ／页脚¥0.055631，重开0网络且正文／联网标记／金额一致；Mac原生Rust owner／SQLite，5来源、USD7968µ、完成／来源／账本重开一致。不是原用户附件同次回执，不是系统picker或正式UI。原生候选失败及验收helper一次JSON解析失败金额UNKNOWN保留，不记零；后续只本地回归，没有重发旧UNKNOWN任务。
+- 最终本地：Android1506PASS／10skip、323套件、Debug；Rust448PASS／36ignored、cargo check；Node553PASS／12skip、lint（前端未再改）；维护16／21+1/7与治理15／114/40门PASS。源码hash绑定[最终验证](verification/2026-10-15-haiku-search-switch/verification.json)。全模型共用规则和路由回归不代表21款本轮全量付费实测，未扩大所有格式／媒体／生命周期验收。
+- 自动标题此前双端各Qwen首选、DeepSeek独立、注入Qwen超时后真实DeepSeek备用，共6次真实调用／写回／重开通过，见[标题实测](verification/2026-10-15-title-native-live/REPORT.md)。不重复付费，不拿标题当联网证明；主回答为合成，正式UI进度仍未验。
+- 本轮仅更新同签名隔离模拟器验收包；主Android／Mac仍12:34／12:33的Argon正式包，不含本修复。临时凭据桥、控制文件、此次reverse及隔离进程均清理，未卸载／清数据／动真机；无commit／push／正式安装。HEAD d64d71026418b9325931b6cbbb94544b28a81309与其他WIP保持。
+- 已完成部分不要重做。后续按用户新授权处理正式交付或实际缺口；原件全范围、新媒体／picker、旧Pro404／UNKNOWN／504和正式UI缺口未关闭。私有原始证据仅由/tmp/nfai-switch-search-task-path.txt及/tmp/nfai-title-live-task-path.txt定位，仓库不存原始payload／用户正文／控制token。
+
+## 2026-10-15：订单图片反馈待诊断，未放宽联网门禁
+
+- 用户最新要求说清“未打通搜索”还是“证据规则拦截”。截图仅证明本次没有可验证来源；Haiku多附件曾有真实成功，普通文字也有未验证历史，不能概括为全部不通或已稳定。当前Haiku自身请求提供可选OpenRouter搜索工具，缺来源却被完成门槛判失败；模型说“不需要搜索”不是执行成功证据。本次服务事件仍未取得，不能把未调用／无结果／证据未回传混成确定结论。
+- 已撤回未经确认的“空文字首轮图片关闭强制检索”候选；严格恢复4份本轮改前源码／测试并移出3份新增候选，自动标题修复24输入hash全部不变。候选及合成红绿取证仅留本机私有目录，不启用。无Provider请求、无安装；不通过放宽门禁替代联网原因排查。
+
+## 2026-10-15：自动标题失败必须兜底／主完成修复（源码完成，未安装）
+
+- 用户最新纠正：目标是正常生成自动标题，首选失败必须启动备用。双端标题独立为千问Flash→DeepSeek Flash，非思考／JSON／256输出／短超时；超时及网络失败进入有限备用，保留实际失败与未知费用。不改主回答／检索UNKNOWN规则或历史整理顺序。
+- Android生产executor＋Room已复现慢标题阻塞完成的红灯；双端独立次级调度，主owner及时结束。Room事务写标题保护手动标题／新草稿；Mac迟到标题刷新不回写岛，不影响下一轮状态。
+- Android1502PASS／10skip、Debug；Rust446PASS／34ignored、cargo check；Node553PASS／12skip、lint；维护16与21+1/7PASS。[报告及24输入hash](verification/2026-10-15-auto-title-completion/REPORT.md)。0新Provider请求；真实上游／原生UI NOT RUN。未安装／提交／推送，保留原WIP，现装仍上一Argon包。不能将DeepSeek当前故障当成已证实。
+- 后续只按需要进行最小真实标题／原生UI核对或获授权正式覆盖，不重做模型网格。原始改前／红绿日志保留本机私有任务目录，仓库仅存结构化证据。原RC暂缓及真实联网缺口保持。
+
+## 2026-10-15：仅OpenRouter Argon双端正式覆盖完成
+
+- [正式覆盖回执](verification/2026-10-15-openrouter-argon-cover/REPORT.md)：用户最新授权Android／Mac保数据覆盖已完成；OPPO 2026-10-15 12:34:33 +0800，Mac 2026-10-15 12:33:02 +0800。正式1.0.29/code93原签名，Android精确APK读回／目录元数据保持；Mac4份bundle精确一致、1599数据文件hash0变化。现装含OpenRouter Argon，RC新增已撤回。
+- 恢复后JVM1497/10skip、Rust444/34ignored、Node定向26、维护16及21+1/7、114/40门通过；双端正式构建／Release Lint／验签与DMG通过。1153生产输入及原23已验输入无漂移。安装阶段0新Provider请求，未启动正式UI或新增业务实测，不关闭历史真实验收缺口。无commit/push/发布，GitHub v1.0.29不含此次增量；本次安装任务已收口。
+
+## 2026-10-15：RC Argon暂缓，仅保留OpenRouter
+
+- 用户最终要求RC先不加，只配置OpenRouter；本轮28份跟踪输入恢复接入前、两份新增RC测试移回私有证据，23份OpenRouter冻结输入hash全一致。维护21+1/7与16项、恢复后Node定向26项通过；[撤回与服务失败回执](verification/2026-10-15-rc-argon-deferred/REPORT.md)。
+- RC新独立Gemini反重力Key已按授权创建但未接入应用，旧Key分组不变。High404、普通版非流式与Mac生产流式均504，3次调用无完整答案／费用UNKNOWN；已停止付费，临时凭据通道与引用清理。不得继续RC实施或把网站展示当可用。无安装／提交／推送，现装不含OpenRouter增量。
+
+## 2026-10-15：Gemini 4 Argon 双端深度档接入（未安装／未发布）
+
+- [接入报告](verification/2026-10-15-gemini-4-argon/REPORT.md)：preset GEMINI_4_ARGON，经OpenRouter精确google/gemini-4-argon，双端Muse→Argon→智谱；默认与Auto不变。目录／映射／冷启动／旧快照拒绝变体、native搜索白名单与三处费用owner同步；无schema变更。
+- Android1497PASS/10skip＋Debug，Rust444PASS/34ignored＋Mac编译，Node553PASS/12skip＋lint/typecheck/build、维护16与21+1/7门通过；[源输入hash](verification/2026-10-15-gemini-4-argon/source-hashes.json)绑定WORKTREE，HEAD d64d71026418b9325931b6cbbb94544b28a81309。未提交／推送，勿将底层HEAD或v1.0.29包当成当前增量。
+- 公开供应商目录已核对（免费），实际Provider生成／联网来源／媒体与双端原生菜单NOT RUN；未读Key、未动正式数据、0付费请求／0安装。旧验收缺口保留。后续若用户要求交付再正式构建与验签，不扩张本轮授权。
+
+
 ## 2026-10-14：v1.0.29 GitHub 双端发布完成
 
 - [正式 Release](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.29) 已公开，main／产品标签 a69447ded567beff03f57b351900470c7e0dcc46 读回一致；APK／DMG／校验文件均下载hash相同，云端源码三项PASS。原私有分支／checkpoint未推送；此后仅薄文档提交固化完成回执。

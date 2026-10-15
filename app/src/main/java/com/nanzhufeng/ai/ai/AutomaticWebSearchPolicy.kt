@@ -47,6 +47,10 @@ internal object AutomaticWebSearchPolicy {
 
 /** An explicit search request requires provider-owned execution evidence. */
 internal object WebSearchGroundingPolicy {
+    const val ENABLED_INSTRUCTION = "本轮已启用实时网页搜索。以联网开关为准，必须实际执行搜索，不按问题关键词判断是否联网。若本请求已附服务端实际搜索资料则据此作答；否则在回答前调用已提供的搜索工具。只查询与问题或图片相关的最小公开关键词，不搜索私人信息。引用实际返回来源；不得把模型记忆或自行编写的网址当作搜索结果。工具失败或实际结果为空时如实说明。"
+    fun missingExecutionEvidence(options: ChatRequestOptions, sources: List<ProviderWebSource>, performed: Boolean): Boolean =
+        options.liveWebSearch && !performed && sources.none { ProviderWebSource.isValidPublicHttpUrl(it.url) }
+
     fun completedAuditStatus(options: ChatRequestOptions, sources: List<ProviderWebSource>, streamed: Boolean, performed: Boolean = false): String = when {
         !options.liveWebSearch -> if (streamed) "STREAM_SUCCEEDED" else "SUCCEEDED"
         sources.any { ProviderWebSource.isValidPublicHttpUrl(it.url) } ->

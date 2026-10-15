@@ -264,6 +264,7 @@ export function compactModelName(value) {
     'openai/gpt-5.6-sol': '5.6 Sol', 'openai/gpt-5.6-terra': '5.6 Terra', 'google/gemini-3.7-flash': 'Gemini 3.7', 'google/gemini-3.8-flash': 'Gemini 3.8',
     'deepseek-v4-pro': 'DS V4', 'deepseek-v4-flash': 'DS V4', 'deepseek-flash': 'DS V4.1',
     'meta/muse-wonder': 'Muse Wonder',
+    'google/gemini-4-argon': 'Gemini 4 Argon',
     'qwen3.7-plus': 'Qwen 3.7', 'qwen3.8-max': 'Qwen 3.8', 'glm-5.3-flash': 'GLM 5.3', 'x-ai/grok-4.6': '4.6 High', 'moonshotai/kimi-k3': 'Kimi K3',
   })[normalized] || normalized;
 }
@@ -274,7 +275,7 @@ const DAILY_COMPOSER_MODEL_IDS = Object.freeze([
 ]);
 const DEEP_COMPOSER_MODEL_IDS = Object.freeze([
   'CLAUDE_OPUS_5_5', 'GPT_6_1_SOL', 'DEEPSEEK_V4_PRO',
-  'MUSE_WONDER', 'GLM_5_3', 'QWEN_3_8_MAX',
+  'MUSE_WONDER', 'GEMINI_4_ARGON', 'GLM_5_3', 'QWEN_3_8_MAX',
 ]);
 
 const COMPOSER_MODEL_PROVIDER_LABELS = Object.freeze({

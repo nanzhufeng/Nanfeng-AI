@@ -33,6 +33,15 @@ test('manual unread sorts first only inside the pinned or recent partition', () 
   );
 });
 
+test('title metadata keeps recent position while new conversation content moves it forward', () => {
+  const old = conversation('old', '2026-09-01T07:00:00Z');
+  const newer = conversation('newer', '2026-09-01T11:00:00Z');
+  const order = items => activeConversations({ exchange: { conversations: items } }).map(item => item.id);
+  const renamed = { ...old, title: '修改后的标题', titleRevision: 2, revision: 3, autoTitlePending: false };
+  assert.deepEqual(order([renamed, newer]), ['newer', 'old']);
+  assert.deepEqual(order([{ ...renamed, updatedAt: '2026-09-02T11:00:00Z' }, newer]), ['old', 'newer']);
+});
+
 test('conversation rows render one theme dot and stable conversation-dot-progress-title order', () => {
   const runningData = {
     ...data,

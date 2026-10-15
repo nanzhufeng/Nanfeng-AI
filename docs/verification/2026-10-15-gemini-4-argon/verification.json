@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-15",
+  "baseline": "d64d71026418b9325931b6cbbb94544b28a81309",
+  "scope": "WORKTREE",
+  "android": {
+    "tests": 1507,
+    "passed": 1497,
+    "skipped": 10,
+    "failures": 0,
+    "errors": 0,
+    "suites": 322,
+    "skippedTests": [
+      {
+        "class": "com.nanzhufeng.ai.domain.P6KUserSelectedChatGptZipAssetAcceptanceTest",
+        "name": "selected official export maps every source-owned current-path asset without guessing"
+      },
+      {
+        "class": "com.nanzhufeng.ai.ai.RelayCoreAttachmentWireReplayTest",
+        "name": "public multiple attachment wire passes actual Android decoder and item coverage"
+      },
+      {
+        "class": "com.nanzhufeng.ai.data.P6KUserSelectedChatGptZipAttachmentChainAcceptanceTest",
+        "name": "selected real source package restores every officially owned attachment into Room"
+      },
+      {
+        "class": "com.nanzhufeng.ai.ai.RelayCoreNativeSearchTest",
+        "name": "authorized production adapter verifies Opus own live search"
+      },
+      {
+        "class": "com.nanzhufeng.ai.ai.RelayCoreNativeSearchTest",
+        "name": "authorized live Android adapter and transport return real Relay search evidence"
+      },
+      {
+        "class": "com.nanzhufeng.ai.data.P6KUserSelectedChatGptZipMergeAcceptanceTest",
+        "name": "older selected ChatGPT export then newer selected cumulative export deduplicates and preserves navigation search and task history"
+      },
+      {
+        "class": "com.nanzhufeng.ai.ai.AttachmentWebSearchPlanTest",
+        "name": "private saved topic receipts cannot prove complete fact scope without network"
+      },
+      {
+        "class": "com.nanzhufeng.ai.ai.RelayCoreWebSearchCompanionTest",
+        "name": "authorized live Android companion and selected model produce sourced answer"
+      },
+      {
+        "class": "com.nanzhufeng.ai.ai.RelayCoreWebSearchCompanionTest",
+        "name": "authorized selected models answer actual recorded Sol evidence with production JSON transport"
+      },
+      {
+        "class": "com.nanzhufeng.ai.ai.RelayCoreWebSearchCompanionTest",
+        "name": "recorded approved Astra response passes production decoder without another paid call"
+      }
+    ],
+    "testAndDebugBuild": "PASS"
+  },
+  "rust": {
+    "passed": 444,
+    "ignored": 34,
+    "failed": 0,
+    "nativeBuild": "PASS"
+  },
+  "desktop": {
+    "passed": 553,
+    "skipped": 12,
+    "failed": 0,
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "staticBuild": "PASS"
+  },
+  "modelMaintenance": {
+    "testsPassed": 16,
+    "chatModels": 21,
+    "specialModels": 1,
+    "credentialGroups": 7
+  },
+  "providerCatalog": "OpenRouter public GET; exact realtime ID confirmed",
+  "paidRequests": 0,
+  "nativeUI": "NOT RUN",
+  "providerGeneration": "NOT RUN",
+  "installation": "NOT RUN",
+  "gitCommitPush": "NOT RUN"
+}

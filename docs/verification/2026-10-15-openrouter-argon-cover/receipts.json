@@ -1,0 +1,61 @@
+{
+  "verifiedAt": "2026-10-15T12:35:16+08:00",
+  "baseline": "d64d71026418b9325931b6cbbb94544b28a81309",
+  "scope": "WORKTREE; OpenRouter Argon only; RC addition withdrawn",
+  "android": {
+    "installed": true,
+    "versionCode": 93,
+    "versionName": "1.0.29",
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "sha256": "1b4b2c3b6b2366c4f729e02a31a2dda19bffd92402012fb47aa583c1a98c67eb",
+    "exactCandidateBytes": true,
+    "dataMetadataPreserved": true,
+    "remoteTempRemoved": true,
+    "launched": false,
+    "completedAt": "2026-10-15 12:34:33 +0800"
+  },
+  "mac": {
+    "installed": true,
+    "version": "1.0.29",
+    "bundleId": "com.nanzhufeng.ai.desktop",
+    "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+    "exactCandidateFiles": true,
+    "dataFiles": 1599,
+    "dataBytes": 6069584915,
+    "dataChanges": {
+      "added": 0,
+      "deleted": 0,
+      "changed": 0
+    },
+    "launched": false,
+    "completedAt": "2026-10-15 12:33:02 +0800"
+  },
+  "macDmgSha256": "20059749abed7f40101402f95314334aa216e50db86ee0661a4ccc8577d0fb05",
+  "sourceFreeze": {
+    "files": 1153,
+    "sha256": "9c6aa6d89602d41b319044bf94688f1394dbd98f1e11bc38f8375f8a6c824960",
+    "postInstallDrift": 0,
+    "originalArgonVerifiedInputs": 23,
+    "originalInputDrift": 0
+  },
+  "verification": {
+    "androidPassed": 1497,
+    "androidSkipped": 10,
+    "androidFailures": 0,
+    "androidReleaseBuildAndLint": "PASS",
+    "rustPassed": 444,
+    "rustIgnored": 34,
+    "macBuildSignAndDmg": "PASS",
+    "restoredDesktopTargetedPassed": 26,
+    "maintenanceTestsPassed": 16,
+    "contracts": 114,
+    "domains": 40,
+    "chatModels": 21,
+    "specialModels": 1,
+    "credentialGroups": 7
+  },
+  "installationPhaseNewProviderRequests": 0,
+  "providerGenerationForOpenRouterArgon": "NOT RUN",
+  "nativeUiAcceptance": "NOT RUN",
+  "gitCommitPushRelease": "NOT RUN"
+}

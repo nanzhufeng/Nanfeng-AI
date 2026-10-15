@@ -9,6 +9,8 @@
 
 本节是双端当前费用记录的权威规则；后面的余额、账单对账、预算和跨软件台账仍是未来规划。数据库版本以各存储owner为准，下文70→71是引入计量表的历史迁移，不是当前全库版本。
 
+Gemini 4 Argon（OpenRouter）的新增估算快照由双端计费owner及Desktop投影同步维护，仍遵守供应商结算优先／未知费用不补零；目录核验日期、促销快照和未验边界见[接入记录](verification/2026-10-15-gemini-4-argon/REPORT.md)。
+
 - Android：`ChatCallAccounting`记录一笔实际请求的稳定Call ID、root attempt、会话、ANSWER／RETRIEVAL／BACKGROUND、请求／返回模型、冻结渠道名称、时间、状态、输入／输出／缓存／思考用量、费用来源与已知上下文信息。生产`AndroidDirectChatCallAuditStore`和`AndroidContextSelectionAuditStore`由Room拥有；70→71只增元数据表／归因JSON字段，旧500条preferences／240条上下文文件按稳定ID导入，新记录不沿用旧裁剪上限。区域分库manifest通过显式conversationId保持CHAT／WORK所有权。
 - Android计量JSON的时间单位统一为epoch毫秒；新记录和重放记录先按同一精度规范化再比较，纳秒差异不能误判同一Call的归属冲突。Call ID、root attempt、会话、role、Provider、请求模型及毫秒请求时间仍须一致；完成后的用量和金额不可改写。回复归因中的物理Call列表按同一规范比较，支持关闭重开后的幂等补写。
 - 普通发送与手动重试共用本机异常收敛：审计pending未落库时不外发；收到完整回答后，单独计量写入失败不阻止正文完成和已知归因保存，并单列本机计量未完成。未预期异常保留收到的部分内容、将未完成发送标为UNKNOWN并结束本机生成态；完整正文不退回失败正文。协程取消保持取消语义，所有已载入的临时凭据在退出时清零；不自动重发UNKNOWN，不换Provider补救本机错误。

@@ -10,7 +10,8 @@ import org.robolectric.RobolectricTestRunner
 class GeminiNativeSearchContractsTest {
     private fun model() = ResolvedModel(ProviderId.OPENROUTER,"google/gemini-3.8-flash","Gemini",ModelCapabilities(true,true,false,false),8192,ModelHealth.AVAILABLE,null,null)
     @Test fun `Gemini search toggle selects native grounding for text files and media without optional server tool`() {
-        val selected=model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,modelId="google/gemini-3.8-flash",capabilities=model().capabilities.copy(supportsVision=true))
+        for (modelId in listOf("google/gemini-3.8-flash", "google/gemini-4-argon")) {
+        val selected=model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,modelId=modelId,capabilities=model().capabilities.copy(supportsVision=true))
         val files=listOf(ChatAttachment(ChatAttachmentKind.FILE,"text/markdown","one.md","first fact".toByteArray()),ChatAttachment(ChatAttachmentKind.FILE,"application/json","two.json","{\"second\":true}".toByteArray()))
         val image=ChatAttachment(ChatAttachmentKind.IMAGE,"image/png","public.png",byteArrayOf(1,2,3))
         for(attachments in listOf(emptyList(),files,files+image)) for(stream in listOf(false,true)) for(search in listOf(false,true)) {
@@ -27,6 +28,7 @@ class GeminiNativeSearchContractsTest {
         }
         val grounded=(OpenRouterChatAdapter().prepare(selected,listOf("user" to "已有证据回答"),emptyList(),false,ChatRequestOptions(OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL,groundedAnswer=true)) as ChatAdapterPrepareResult.Ready).jsonBody
         assertFalse(org.json.JSONObject(grounded).has("plugins"));assertFalse(org.json.JSONObject(grounded).has("tools"))
+        }
     }
 
 }

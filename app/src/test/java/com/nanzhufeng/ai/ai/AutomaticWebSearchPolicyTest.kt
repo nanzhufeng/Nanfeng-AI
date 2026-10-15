@@ -8,6 +8,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AutomaticWebSearchPolicyTest {
+    @Test fun `all maintained models obey the switch without query keyword gates`() {
+        val rows=(StrictJson.parse(java.io.File("../protocol/model-service/model-service-v1.json").readText()) as Map<*,*>)["models"] as List<*>
+        assertEquals(com.nanzhufeng.ai.domain.NanfengModelServiceCatalog.chatPresets.size,rows.size)
+        for (i in 0 until rows.size) {
+            val row=rows[i] as Map<*,*>;val provider=ProviderId.valueOf(row["providerId"] as String)
+            for (attachments in listOf(emptyList(),listOf(ChatAttachment(ChatAttachmentKind.IMAGE,"image/png","sample.png",byteArrayOf(1))))) {
+                val enabled=AutomaticWebSearchPolicy.requestOptions(provider,ChatRequestOptions.Standard,true,"你好",attachments,row["modelId"] as String)
+                assertTrue(row["presetId"] as String,enabled.liveWebSearch)
+                assertTrue(WebSearchGroundingPolicy.missingExecutionEvidence(enabled,emptyList(),false))
+                assertFalse(WebSearchGroundingPolicy.missingExecutionEvidence(enabled,emptyList(),true))
+                val disabled=AutomaticWebSearchPolicy.requestOptions(provider,enabled,false,"请联网核验",attachments,row["modelId"] as String)
+                assertFalse(disabled.liveWebSearch)
+                assertFalse(WebSearchGroundingPolicy.missingExecutionEvidence(disabled,emptyList(),false))
+            }
+        }
+    }
+
+    @Test fun `every search route requires actual execution and never treats unused tools as success`() {
+        for (route in OfficialWebSearchRoute.entries) {
+            val options=ChatRequestOptions(route)
+            assertEquals(route != OfficialWebSearchRoute.NONE,WebSearchGroundingPolicy.missingExecutionEvidence(options,emptyList(),false))
+            assertFalse(WebSearchGroundingPolicy.missingExecutionEvidence(options,emptyList(),true))
+            assertFalse(WebSearchGroundingPolicy.missingExecutionEvidence(options,listOf(ProviderWebSource("https://example.org/result")),false))
+        }
+    }
+
     @Test
     fun `only absolute HTTP sources with a real host can prove live search`() {
         listOf(

@@ -6,6 +6,11 @@
 
 use serde_json::{json, Value};
 
+// Short titles have a separate low-latency policy from history-library synthesis.
+pub const PRESET_IDS: [&str; 2] = ["QWEN_3_6_FLASH", "DEEPSEEK_V4_FLASH"];
+pub const MAX_OUTPUT_TOKENS: u32 = 256;
+pub const REQUEST_TIMEOUT_SECS: u64 = 15;
+
 pub const NEW_CONVERSATION_TITLE: &str = "新对话";
 const MAX_SOURCE_CHARS: usize = 4_000;
 const GENERIC_TITLES: &[&str] = &[

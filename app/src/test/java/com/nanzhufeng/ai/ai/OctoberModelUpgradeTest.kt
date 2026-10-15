@@ -6,6 +6,20 @@ import org.junit.Test
 
 @org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
 class OctoberModelUpgradeTest {
+    @Test fun `Argon resolves exact realtime identity and sits immediately above GLM`() {
+        val preset = ModelPresetId.valueOf("GEMINI_4_ARGON")
+        val deep = ComposerModelRoutingCatalog.deep.flatMap { it.routes }
+        assertEquals(preset, deep[deep.indexOf(ModelPresetId.GLM_5_3) - 1])
+        assertEquals(ProviderId.OPENROUTER, NanfengModelServiceCatalog.providerFor(preset))
+        val old = com.nanzhufeng.ai.data.OpenRouterCatalogJsonParser.parse(java.io.File("../protocol/fixtures/model-upgrade-20261009.json").readBytes())
+        val argon = com.nanzhufeng.ai.data.OpenRouterCatalogJsonParser.parse(java.io.File("../protocol/fixtures/gemini-4-argon-20261015.json").readBytes())
+        val snapshot = OpenRouterRegistrySnapshotVerifier().verify(OpenRouterCatalogResponse(old + argon, null), java.time.Instant.parse("2026-10-15T00:00:00Z"))!!
+        assertEquals("google/gemini-4-argon", snapshot.modelFor(preset)?.id)
+        val mapped = snapshot.presetMappings.map { if (it.presetId == preset) it.copy(modelId = "google/gemini-4-argon:batch") else it }
+        assertTrue(InMemoryVersionedModelRegistry(listOf(snapshot.copy(models = snapshot.models.map { if (it.id == "google/gemini-4-argon") it.copy(id = "google/gemini-4-argon:batch") else it }, presetMappings = mapped))).resolve(ProviderId.OPENROUTER, preset) is ModelRegistryResolution.Rejected)
+        assertTrue(AutoModelRouter.candidates(AutoRoutingFacts()).none { it == preset })
+    }
+
     @Test fun `current standard selections reject alternate cached API identities`() {
         val catalog = com.nanzhufeng.ai.data.OpenRouterCatalogJsonParser.parse(java.io.File("../protocol/fixtures/model-upgrade-20261009.json").readBytes())
         val snapshot = OpenRouterRegistrySnapshotVerifier().verify(OpenRouterCatalogResponse(catalog, null), java.time.Instant.parse("2026-10-09T00:00:00Z"))!!

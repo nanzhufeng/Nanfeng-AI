@@ -1,0 +1,44 @@
+{
+  "verifiedAt": "2026-10-15T13:04:26+08:00",
+  "baseline": "d64d71026418b9325931b6cbbb94544b28a81309",
+  "scope": "WORKTREE; local behavior tests and builds only",
+  "android": {
+    "command": ":app:testDebugUnitTest",
+    "suites": 323,
+    "tests": 1512,
+    "skipped": 10,
+    "failures": 0
+  },
+  "rust": {
+    "command": "cargo test --manifest-path desktop/src-tauri/Cargo.toml --lib",
+    "passed": 446,
+    "ignored": 34,
+    "failed": 0
+  },
+  "node": {
+    "command": "npm --prefix desktop test",
+    "passed": 553,
+    "skipped": 12,
+    "failed": 0
+  },
+  "builds": {
+    "androidAssembleDebug": "PASS",
+    "macCargoCheck": "PASS",
+    "desktopLint": "PASS"
+  },
+  "maintenance": {
+    "modelContract": "PASS 21 chat + 1 OCR / 7 groups",
+    "modelContractTests": "PASS 16",
+    "workflowAudit": "HARD_ERRORS none; existing UI metadata and AGENTS soft warnings",
+    "contractGovernance": "PASS 114 contracts / 40 domains"
+  },
+  "redEvidence": {
+    "completionOwner": "production executor + Room; blocked title caused TimeoutException before detached scheduling",
+    "titleFallback": "6 of 9 title contract tests failed before bounded backup policy; same tests passed after fix"
+  },
+  "realProvider": "NOT RUN",
+  "nativeUI": "NOT RUN",
+  "installation": "NOT RUN; installed packages remain prior OpenRouter Argon increment",
+  "newPaidRequests": 0,
+  "commitPushRelease": "NOT RUN"
+}

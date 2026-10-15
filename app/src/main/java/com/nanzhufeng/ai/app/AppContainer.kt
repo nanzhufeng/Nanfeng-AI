@@ -827,6 +827,9 @@ class AppContainer(baseContext: Context, private val clock: Clock = Clock.system
                 ),
             )
         },
+        scheduleCompletionWork = { id, work ->
+            com.nanzhufeng.ai.background.ConversationCompletionWork.enqueue(context, dataArea, id, work)
+        },
         onConversationCompleted = { conversationId ->
             if (loadAssistantExperienceSettings.execute().historyLibraryEnabled) {
                 historyKnowledgeAutoCurationScheduler.enqueueConversation(conversationId)

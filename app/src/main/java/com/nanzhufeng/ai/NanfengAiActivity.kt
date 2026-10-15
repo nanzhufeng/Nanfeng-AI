@@ -120,12 +120,16 @@ open class NanfengAiActivity : ComponentActivity() {
     private var normalChatExecutionReceiverRegistered = false
     private val normalChatExecutionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != NormalChatGenerationForegroundService.ACTION_EXECUTION_STATE_CHANGED) return
+            if (intent.action !in setOf(NormalChatGenerationForegroundService.ACTION_EXECUTION_STATE_CHANGED, com.nanzhufeng.ai.background.ConversationCompletionWork.ACTION_METADATA_CHANGED)) return
             if ((intent.getStringExtra("dataArea") ?: "CHAT") != dataArea.name) return
             val conversationId = intent.getStringExtra(NormalChatGenerationForegroundService.EXTRA_CONVERSATION_ID)
                 ?.takeIf(String::isNotBlank)
                 ?.let(::ConversationId)
                 ?: return
+            if (intent.action == com.nanzhufeng.ai.background.ConversationCompletionWork.ACTION_METADATA_CHANGED) {
+                conversationFoundationViewModel.onConversationCompletionMetadataChanged()
+                return
+            }
             conversationFoundationViewModel.onNormalChatBackgroundExecutionStateChanged(
                 conversationId,
                 intent.getBooleanExtra(NormalChatGenerationForegroundService.EXTRA_RUNNING, false),
@@ -493,7 +497,7 @@ open class NanfengAiActivity : ComponentActivity() {
         ContextCompat.registerReceiver(
             this,
             normalChatExecutionReceiver,
-            IntentFilter(NormalChatGenerationForegroundService.ACTION_EXECUTION_STATE_CHANGED),
+            IntentFilter(NormalChatGenerationForegroundService.ACTION_EXECUTION_STATE_CHANGED).apply { addAction(com.nanzhufeng.ai.background.ConversationCompletionWork.ACTION_METADATA_CHANGED) },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         normalChatExecutionReceiverRegistered = true

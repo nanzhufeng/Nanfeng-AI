@@ -1,0 +1,25 @@
+{
+  "verifiedAt": "2026-10-15T13:25:45+08:00",
+  "realCalls": 6,
+  "faultsInjectedNotSent": 2,
+  "nativeMainAnswers": "synthetic opening exchange; actual title providers, secondary owner, persistence and reopen",
+  "androidAcceptanceApkSha256": "4745b2c43ac9b5f82db9b079707ca5c946b2b9998bc8cf1639b69ebd07b72d71",
+  "costs": {
+    "CNY": {
+      "micros": 866,
+      "source": "LOCAL_ESTIMATE"
+    },
+    "USD": {
+      "micros": 170,
+      "source": "LOCAL_ESTIMATE"
+    },
+    "providerSettlement": "UNKNOWN; no settled amount returned"
+  },
+  "cleanup": {
+    "oneShotBridgeClosed": true,
+    "adbReverseRemoved": true,
+    "androidMemoryProcessStopped": true,
+    "newApiKeyFiles": false
+  },
+  "installation": "isolated emulator acceptance package only; formal Android/Mac unchanged"
+}

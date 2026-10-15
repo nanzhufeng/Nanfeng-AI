@@ -68,6 +68,12 @@ object NanfengModelServiceCatalog {
         ),
 
         ModelPresetDescriptor(
+            id = ModelPresetId.GEMINI_4_ARGON,
+            displayName = "Gemini 4 Argon",
+            description = "适合深度推理、复杂分析与代码任务。",
+            modelFamilyHint = "Google",
+        ),
+        ModelPresetDescriptor(
             id = ModelPresetId.MUSE_WONDER,
             displayName = "Muse Wonder",
             description = "适合复杂分析与长程任务。",

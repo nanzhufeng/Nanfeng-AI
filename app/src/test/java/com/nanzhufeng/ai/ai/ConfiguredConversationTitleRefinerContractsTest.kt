@@ -52,11 +52,14 @@ class ConfiguredConversationTitleRefinerContractsTest {
         assertEquals(2, transport.requestBodies.size)
     }
 
-    @Test fun `unknown timeout does not trigger another provider request`() {
-        val transport = RecordingTransport(listOf(ProviderChatOutcome.TimedOut))
-        val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), Records(), transport).refine(ConversationId("conversation"), source)
-        assertEquals(ConversationTitleRefinementResult.Failed("TIMEOUT"), result)
-        assertEquals(listOf("deepseek-flash"), transport.modelIds())
+    @Test fun `title timeout starts configured backup and retains the failed receipt`() {
+        val transport = RecordingTransport(listOf(ProviderChatOutcome.TimedOut, success("标题备用生成正常")))
+        val records = Records()
+        val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), records, transport).refine(ConversationId("conversation"), source)
+        assertEquals(ConversationTitleRefinementResult.Title("标题备用生成正常"), result)
+        assertEquals(listOf("qwen3.6-flash", "deepseek-flash"), transport.modelIds())
+        assertEquals("TIMEOUT", records.values.first().safeErrorCode)
+        assertEquals(null, records.values.first().cost.totalMicros)
     }
 
     @Test fun `intentional empty title does not get format correction`() {
@@ -66,45 +69,51 @@ class ConfiguredConversationTitleRefinerContractsTest {
         assertEquals(1, transport.requestBodies.size)
     }
 
-    @Test fun `DeepSeek V4 point 1 Flash is the shared first choice when all background providers are available`() {
+    @Test fun `short titles use Qwen first with explicit nonthinking JSON and bounded output`() {
         val transport = RecordingTransport(listOf(success("Android设置规划")))
         val records = Records()
         val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), records, transport).refine(ConversationId("conversation"), source)
 
         assertEquals(ConversationTitleRefinementResult.Title("Android设置规划"), result)
-        assertEquals(listOf("deepseek-flash"), transport.modelIds())
+        assertEquals(listOf("qwen3.6-flash"), transport.modelIds())
         assertFalse(transport.requestBodies.single().contains("gpt-5.6-sol"))
         assertFalse(transport.requestBodies.single().contains("claude-opus-5"))
         assertTrue(transport.requestBodies.single().contains("汉字、英文字母或阿拉伯数字"))
         assertEquals(ConversationTitleGenerationStatus.SUCCEEDED, records.values.single().status)
-        assertEquals(ProviderId.DEEPSEEK, records.values.single().providerId)
-        assertEquals("deepseek-flash", records.values.single().modelId)
+        assertEquals(ProviderId.QWEN, records.values.single().providerId)
+        assertEquals("qwen3.6-flash", records.values.single().modelId)
+        val body = org.json.JSONObject(transport.requestBodies.single())
+        assertFalse(body.getBoolean("enable_thinking"))
+        assertEquals(256, body.getInt("max_tokens"))
+        assertEquals("json_object", body.getJSONObject("response_format").getString("type"))
+        assertEquals(listOf(15_000), transport.readTimeouts)
         assertEquals(ConversationCostSource.LOCAL_ESTIMATE, records.values.single().costSource)
     }
 
-    @Test fun `GLM 5_3 Flash is the second choice when DeepSeek fails`() {
+    @Test fun `DeepSeek is used when Qwen explicitly fails`() {
         val transport = RecordingTransport(listOf(ProviderChatOutcome.HttpResponse(503, "temporarily unavailable"), success("标题整理模型规则")))
         val records = Records()
         val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), records, transport).refine(ConversationId("conversation"), source)
 
         assertEquals(ConversationTitleRefinementResult.Title("标题整理模型规则"), result)
-        assertEquals(listOf("deepseek-flash", "glm-5.3-flash"), transport.modelIds())
-        assertEquals(listOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU), records.values.map { it.providerId })
+        assertEquals(listOf("qwen3.6-flash", "deepseek-flash"), transport.modelIds())
+        assertEquals(listOf(ProviderId.QWEN, ProviderId.DEEPSEEK), records.values.map { it.providerId })
     }
 
-    @Test fun `Qwen Flash stays last after DeepSeek and GLM fail`() {
-        val transport = RecordingTransport(listOf(
-            ProviderChatOutcome.HttpResponse(503, "temporarily unavailable"),
-            ProviderChatOutcome.HttpResponse(503, "temporarily unavailable"),
-            success("千问末位兜底标题"),
-        ))
+    @Test fun `both title providers failing stops after a bounded pass`() {
+        val transport = RecordingTransport(listOf(ProviderChatOutcome.TimedOut, ProviderChatOutcome.TimedOut))
         val records = Records()
         val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), records, transport).refine(ConversationId("conversation"), source)
+        assertEquals(ConversationTitleRefinementResult.Failed("ALL_CONFIGURED_TITLE_MODELS_FAILED"), result)
+        assertEquals(listOf("qwen3.6-flash", "deepseek-flash"), transport.modelIds())
+        assertEquals(2, records.values.size)
+    }
 
-        assertEquals(ConversationTitleRefinementResult.Title("千问末位兜底标题"), result)
-        assertEquals(listOf("deepseek-flash", "glm-5.3-flash", "qwen3.6-flash"), transport.modelIds())
-        assertEquals(listOf(ConversationTitleGenerationStatus.FAILED, ConversationTitleGenerationStatus.FAILED, ConversationTitleGenerationStatus.SUCCEEDED), records.values.map { it.status })
-        assertEquals("HTTP_503", records.values.first().safeErrorCode)
+    @Test fun `cancelled title does not start backup`() {
+        val transport = RecordingTransport(listOf(ProviderChatOutcome.Cancelled))
+        val result = refiner(setOf(ProviderId.DEEPSEEK, ProviderId.QWEN), Records(), transport).refine(ConversationId("conversation"), source)
+        assertEquals(ConversationTitleRefinementResult.Failed("CANCELLED"), result)
+        assertEquals(listOf("qwen3.6-flash"), transport.modelIds())
     }
 
     @Test fun `no configured service leaves a safe retryable failure record`() {
@@ -114,8 +123,8 @@ class ConfiguredConversationTitleRefinerContractsTest {
 
         assertEquals(ConversationTitleRefinementResult.Failed("NO_CONFIGURED_TITLE_MODEL"), result)
         assertTrue(transport.requestBodies.isEmpty())
-        assertEquals(listOf(ProviderId.DEEPSEEK, ProviderId.ZHIPU, ProviderId.QWEN), records.values.map { it.providerId })
-        assertEquals(listOf("SERVICE_DISABLED", "SERVICE_DISABLED", "SERVICE_DISABLED"), records.values.map { it.safeErrorCode })
+        assertEquals(listOf(ProviderId.QWEN, ProviderId.DEEPSEEK), records.values.map { it.providerId })
+        assertEquals(listOf("SERVICE_DISABLED", "SERVICE_DISABLED"), records.values.map { it.safeErrorCode })
     }
 
     private fun refiner(enabled: Set<ProviderId>, records: Records, transport: RecordingTransport) = ConfiguredConversationTitleRefiner(
@@ -141,7 +150,7 @@ class ConfiguredConversationTitleRefinerContractsTest {
         health = ModelHealth.AVAILABLE,
         metadataUpdatedAt = clock.instant(),
         healthCheckedAt = clock.instant(),
-        maxOutputTokens = 256,
+        maxOutputTokens = 8192,
     )
 
     private fun success(title: String) = ProviderChatOutcome.HttpResponse(
@@ -170,7 +179,9 @@ class ConfiguredConversationTitleRefinerContractsTest {
         private val remaining = outcomes.toMutableList()
         val requestBodies = mutableListOf<String>()
         val idempotencyKeys = mutableListOf<String>()
+        val readTimeouts = mutableListOf<Int>()
         override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome {
+            readTimeouts += request.readTimeoutMillis
             requestBodies += request.jsonBody
             idempotencyKeys += request.idempotencyKey
             return remaining.removeAt(0)

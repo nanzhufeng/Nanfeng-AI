@@ -1,0 +1,50 @@
+{
+  "verifiedAt": "2026-10-15T14:05:05+08:00",
+  "scope": "WORKTREE; no formal installs, commits or push",
+  "android": {
+    "tests": 1516,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10,
+    "suites": 323,
+    "passed": 1506,
+    "build": "Debug PASS"
+  },
+  "rust": {
+    "passed": 448,
+    "failed": 0,
+    "ignored": 36
+  },
+  "desktopNode": {
+    "passed": 553,
+    "failed": 0,
+    "skipped": 12,
+    "reuse": "JS sources unchanged after this run"
+  },
+  "cargoCheck": "PASS",
+  "desktopLint": "PASS",
+  "modelContract": {
+    "passed": 16,
+    "chatModels": 21,
+    "specialModels": 1,
+    "credentialGroups": 7
+  },
+  "governance": {
+    "passed": 15,
+    "contracts": 114,
+    "domains": 40
+  },
+  "realService": "Haiku dual-end public image PASS; title three cases per platform previously PASS; not all-model paid matrix",
+  "installation": "only same-signed independent emulator acceptance package; no main Android or formal Mac",
+  "cleanup": "in-memory bridges closed; control files and own adb reverse removed; isolated process stopped",
+  "logSha256": {
+    "android": "126023b4aab7b48b344a687eb28ac4f6d72b11e0c82246b5242293c565ad2500",
+    "rust": "647075c6627720e72b7a31782bd7b771f8b0b585dcdd2104ab91f16f9d0068e4",
+    "node": "5902a7ce4c94571c5dc932675c714c90ef7fc5f1f75b895f2c4854df4c3e3aab",
+    "cargo_check": "d0f8fb5d3f37000fdc8e95eb6551b16e9dee20e0bb59469ab27afc4aa78fe24c",
+    "lint": "203c1f0e58892332c4fe151df539aabea94f4305da2e164f5bfc6f259809732e",
+    "model_contract": "6c9912447ff9a37ce37ffe1e1169ac4bbfcf6e7b60fb41ed4c76270b19097cb1",
+    "governance": "465c1b32608951229c28c86fd573f3f0841dfff892a2f020456c75e005b2a51c",
+    "governance_tests": "fd0527b28830ecc9a70b94bf4d3fba080b7aa361bab50f2c8fd81844cd19cc1b"
+  }
+}

@@ -14,7 +14,11 @@
 
 ## 1. 当前事实与范围
 
-- OpenRouter Muse的纯文字与本地完整可读文件使用同模型／渠道／Key的Responses原生搜索，媒体仍保留既有Chat Completions路径，不推断媒体已验收。该上游拒绝required与指定工具名，不能照搬Luna参数；原生来源、终态和计量由实际回执裁决。OpenRouter Gemini Flash开启自身联网时，在原Chat Completions请求中使用web plugin（engine=native）启动原生grounding，并保留搜索指令；不同时发送可被模型跳过的server tool，也不发送不兼容required。文字、多可读文件及媒体共用此序列化规则，禁用／grounded回答不注入。原模型／渠道／Key、附件字节与真实来源成功门保持；plugin是针对该模型的兼容例外，官方已标记deprecated，后续迁移须先验证同题真实来源，不能仅按推荐接口名回退到可选搜索。
+- 联网以全局设置与会话override解析后的开关为准：开启要求实际搜索，关闭不发起搜索。不得按是否出现“核验”等关键词限制开启的联网，也不得把仅提供可选工具当作已经联网；已执行但证据不足、实际执行失败、未提供执行证明分别保留，不能编造来源或静默改离线。
+
+- OpenRouter Muse的纯文字与本地完整可读文件使用同模型／渠道／Key的Responses原生搜索，媒体仍保留既有Chat Completions路径，不推断媒体已验收。该上游拒绝required与指定工具名，不能照搬Luna参数；原生来源、终态和计量由实际回执裁决。OpenRouter Gemini 3.8 Flash与Gemini 4 Argon开启自身联网时，在原Chat Completions请求中使用web plugin（engine=native）启动原生grounding，并保留搜索指令；不同时发送可被模型跳过的server tool，也不发送不兼容required。文字、多可读文件及媒体共用此序列化规则，禁用／grounded回答不注入。原模型／渠道／Key、附件字节与真实来源成功门保持；plugin是针对这两个精确部署的兼容例外，官方已标记deprecated，后续迁移须先验证同题真实来源，不能仅按推荐接口名回退到可选搜索。
+- Haiku 5.5联网开启采用同一OpenRouter Chat Completions请求中的web plugin（engine=exa）在请求入口检索，再由原Haiku作答，不新增Luna／第二回答模型或其他API Key。原因：可选server tool、required及native plugin组合在订单图实测仍会跳过搜索；一次native有来源不能证明开关稳定生效。此路径的结构化URL是OpenRouter检索注入来源，不标成Haiku原生工具事件。关闭／grounded不注入；其他模型已正常的原生、Responses及RC辅助路线不套Haiku参数。
+- 所有支持原生媒体的OpenRouter请求，在没有本地可读公共事实计划时保留全部原件与开启的搜索，由原模型一次处理；不先强制提取inventory，不因空公共计划报QUERY_EMPTY或转离线。存在可读公共事实计划的单／多／混合附件仍逐项核验。双端任何模型未提供实际执行证明时保留收到正文、费用及失败状态，不能先将Attempt写COMPLETED再只改变页脚；已证明执行但证据不足不编造来源。关闭时没有这一搜索完成要求。真实服务／设备覆盖见当前交接，不从共用规则推断全部模型和媒体实测通过。
 - Chat流式finish_reason=error必须保持失败，尾部usage仍保留；[DONE]不能把服务错误转为成功。Mac完成但空正文保留已返回计量，cost-only已知失败也进入本地重开恢复，未返回金额不填零。 Mac Chat的length／max_tokens／content_filter／sensitive终态同样保留正文及已报告计量；流式等待末尾usage帧再结算，JSON保留已有partial事实，仍失败／联网未核实。已提交但未结账的上述失败可在重开时本地恢复，不新增请求；RC无验证币种的usage.cost不当USD。
 
 - Android 可见与行为事实只读取 `ModelSettingsUi.kt`、`ConversationCostLedgerUi.kt`、`AutomaticWebSearchPolicy.kt` 和 [Android 当前设置界面合同](ANDROID_SETTINGS_UI_CURRENT_CONTRACT.md)。本合同不根据 Provider 品牌或模型常识推测能力。

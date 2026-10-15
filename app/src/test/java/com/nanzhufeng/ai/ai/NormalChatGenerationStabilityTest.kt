@@ -18,19 +18,19 @@ import java.util.concurrent.CancellationException
 /** Production executor + Room owners; only provider I/O and credentials are synthetic. */
 @RunWith(RobolectricTestRunner::class)
 class NormalChatGenerationStabilityTest {
-    private class Fixture(databaseName: String? = null, presetId: ModelPresetId = ModelPresetId.RELAYCORE_SONNET_5_5, private val webSearch: Boolean = false, private val customInstructions: String = "", modelContextWindow: Long? = 200000,private val independentSearch:Boolean=false,clockOverride:Clock?=null) : AutoCloseable {
+    private class Fixture(databaseName: String? = null, presetId: ModelPresetId = ModelPresetId.RELAYCORE_SONNET_5_5, private val webSearch: Boolean = false, private val customInstructions: String = "", modelContextWindow: Long? = 200000,private val independentSearch:Boolean=false,clockOverride:Clock?=null, asynchronousCompletion:Boolean=false, private val imageOnlyInput:Boolean=false) : AutoCloseable {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val db = (if(databaseName==null) Room.inMemoryDatabaseBuilder(context,NanfengAiDatabase::class.java) else Room.databaseBuilder(context,NanfengAiDatabase::class.java,databaseName)).allowMainThreadQueries().build()
         val clock = clockOverride ?: Clock.fixed(Instant.parse("2026-10-10T07:38:57.123456789Z"), ZoneOffset.UTC)
         val tree = ConversationTreeService(clock)
-        val conversations = RoomConversationRepository(db)
+        val conversations = RoomConversationRepository(db, draftClock=clock)
         val attempts = RoomNormalChatSendAttemptStore(db)
         val attribution = RoomAssistantResponseModelAttributionStore(db)
         val durableAudit = AndroidDirectChatCallAuditStore(context, db)
         val preset = presetId
-        private val spec = RelayCoreModels.spec(preset)!!
-        val model = ResolvedModel(spec.provider,spec.apiId,spec.compactName,
-            ModelCapabilities(true,false,true),modelContextWindow,ModelHealth.AVAILABLE,clock.instant(),null,8192)
+        private val spec = RelayCoreModels.spec(preset)
+        val model = ResolvedModel(spec?.provider ?: ProviderId.OPENROUTER,spec?.apiId ?: "anthropic/claude-haiku-5.5",spec?.compactName ?: "Haiku 5.5",
+            ModelCapabilities(true,imageOnlyInput,true),modelContextWindow,ModelHealth.AVAILABLE,clock.instant(),null,8192)
         var extraAttachmentTexts: List<String> = emptyList()
         var attachmentText = "公开附件测试：系统处理100个请求，出现5次超时。"
         var retrievalFactory:((ProviderChatRequest)->ProviderChatOutcome)?=null
@@ -49,6 +49,8 @@ class NormalChatGenerationStabilityTest {
         var afterPartial: () -> Unit = {}
         var afterChunk: () -> Unit = {}
         var completedCallbackFails = false
+        var titlePending = false
+        var titleRefine: () -> ConversationTitleRefinementResult = { ConversationTitleRefinementResult.Failed("SYNTHETIC_DISABLED") }
         var lastConversationId: ConversationId? = null
         private val credentials = object : ProviderCredentialStore {
             override fun hasCredential(providerId: ProviderId) = providerId == model.providerId || (webSearch && providerId == ProviderId.OPENROUTER) || (independentSearch && providerId==ProviderId.ZHIPU)
@@ -61,7 +63,7 @@ class NormalChatGenerationStabilityTest {
         }
         private val registry = InMemoryVersionedModelRegistry()
         private val verification = VerifyOpenRouterRegistryUseCase(object : OpenRouterRegistryCatalogClient {
-            override fun fetchCatalog(): OpenRouterCatalogFetchResult = error("Relay must not refresh OpenRouter")
+            override fun fetchCatalog(): OpenRouterCatalogFetchResult = OpenRouterCatalogFetchResult.Failed(OpenRouterCatalogFailure.NETWORK)
         },OpenRouterRegistrySnapshotVerifier(),registry,object : ModelRegistrySnapshotStore {
             override fun load() = StoredModelRegistrySnapshots(null,null)
             override fun persist(snapshots: StoredModelRegistrySnapshots) = false
@@ -74,6 +76,8 @@ class NormalChatGenerationStabilityTest {
             override fun status() = LocalContextIndexStatus.AVAILABLE
         }
         private val machine = ConversationRuntimeStateMachine(clock)
+        private val completionExecutor = if(asynchronousCompletion) java.util.concurrent.Executors.newSingleThreadExecutor() else null
+        private val completionQueue = completionExecutor?.let(::ConversationCompletionWorkQueue)
         val executor = NormalChatOpenRouterExecutor(
             configuration=LoadModelServiceConfigurationUseCase(settings,credentials),conversations=conversations,
             registry=registry,credentials=credentials,submitDraft=SubmitConversationDraftUseCase(conversations,conversations,tree),
@@ -82,7 +86,7 @@ class NormalChatGenerationStabilityTest {
                 override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome {
                     requestCount++;requests+=request;request.onAccepted()
                     if(request.endpoint==IndependentSearchServiceGrant.ENDPOINT) return retrievalFactory?.invoke(request) ?: retrievalOutcome
-                    if (webSearch && request.endpoint.startsWith("https://openrouter.ai/")) return retrievalFactory?.invoke(request) ?: retrievalOutcome
+                    if (webSearch && model.providerId != ProviderId.OPENROUTER && request.endpoint.startsWith("https://openrouter.ai/")) return retrievalFactory?.invoke(request) ?: retrievalOutcome
                     if (streamed || providerFailure!=null || returnsCancelled) { (streamChunks ?: listOf(partialText)).forEach {request.onTextDelta(it);afterChunk()} }
                     afterPartial()
                     providerFailure?.let { throw it }
@@ -109,25 +113,70 @@ class NormalChatGenerationStabilityTest {
             submitDraftAndStartProviderRuntime=SubmitConversationDraftAndStartProviderRuntimeUseCase(conversations,conversations,conversations,machine,tree,clock),
             startProviderRuntimeForExistingUser=StartProviderRuntimeForExistingUserUseCase(conversations,conversations,machine,clock),
             applyRuntimeEvent=ApplyConversationRuntimeEventUseCase(conversations,conversations,machine),runtimeRepository=conversations,
+            scheduleCompletionWork={ id, work -> if(completionQueue != null) completionQueue.enqueue(id.value, work) else work() },
             conversationTitleRefiner=object : ConversationTitleRefiner {
-                override fun refine(sourceConversationId: ConversationId,source: ConversationTitleSource) = ConversationTitleRefinementResult.Failed("SYNTHETIC_DISABLED")
+                override fun refine(sourceConversationId: ConversationId,source: ConversationTitleSource) = titleRefine()
             },loadAssistantExperienceSettings={AssistantExperienceSettings(webSearchEnabled=webSearch,customInstructions=customInstructions)},
             onConversationCompleted={if(completedCallbackFails) throw IllegalStateException("synthetic completion callback")},
         )
         fun send(withAttachment: Boolean = false): Pair<ConversationId,NormalChatOpenRouterExecutor.Result> {
-            val snapshot=conversations.save(tree.create("稳定性测试"));val id=snapshot.conversation.id;lastConversationId=id
-            val refs=if(withAttachment) {
+            val initial=tree.create(if(titlePending) ConversationAutoTitle.NEW_CONVERSATION_TITLE else "稳定性测试", autoTitlePending=titlePending); val snapshot=conversations.save(initial);val id=snapshot.conversation.id;lastConversationId=id
+            val refs=if(imageOnlyInput) {
+                val bytes=java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aemkAAAAASUVORK5CYII=")
+                val imported=AndroidPrivateAttachmentStore(context).import(AttachmentImportRequest(bytes.inputStream(),"image/png","public-pixel.png")) as AttachmentImportResult.Imported
+                listOf(RoomPrivateAttachmentRepository(db).save(imported.attachment).toConversationReference())
+            } else if(withAttachment) {
                 (listOf(attachmentText)+extraAttachmentTexts).mapIndexed {index,text ->
                     val imported=AndroidPrivateAttachmentStore(context).import(AttachmentImportRequest(text.byteInputStream(),"text/markdown","public-fixture-$index.md")) as AttachmentImportResult.Imported
                     RoomPrivateAttachmentRepository(db).save(imported.attachment).toConversationReference()
                 }
             } else emptyList()
-            val draft=conversations.saveDraft(id,ConversationDraft(text=if(withAttachment) "分析报告" else "合成测试问题",attachments=refs,updatedAt=clock.instant()))
+            val draft=conversations.saveDraft(id,ConversationDraft(text=if(imageOnlyInput) "" else if(withAttachment) "分析报告" else "合成测试问题",attachments=refs,updatedAt=clock.instant()))
             val choice=ComposerModelRoutingCatalog.choices.single {it.routes==listOf(preset)}
             val approval=NormalChatEgressAuthorization.forUserSend(draft,clock.millis(),choice.id,executor.routingSnapshot().copy(webSearchEnabled=webSearch))
             return id to executor.execute(id,approval)
         }
-        override fun close() = db.close()
+        fun awaitCompletion(id: ConversationId) {
+            val done = java.util.concurrent.CountDownLatch(1)
+            checkNotNull(completionQueue).enqueue(id.value) { done.countDown() }
+            assertTrue(done.await(10, java.util.concurrent.TimeUnit.SECONDS))
+        }
+        override fun close() { completionExecutor?.shutdown(); completionExecutor?.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS); db.close() }
+    }
+
+    @Test fun `Haiku opening image keeps enabled native search and completes with real tool sources`() {
+        for (search in listOf(true,false)) Fixture(presetId=ModelPresetId.CLAUDE_HAIKU_5_5,webSearch=search,imageOnlyInput=true).use { f ->
+            f.streamed=true
+            f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"图片解读与查询结果",null,100,20,null,false,
+                webSources=if(search) listOf(ProviderWebSource("https://example.org/public-result")) else emptyList(),
+                webSearchPerformed=search,returnedModelId="anthropic/claude-haiku-5.5")
+            val (id,result)=f.send()
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
+            assertEquals(NormalChatSendAttemptStatus.COMPLETED,f.attempts.findLatestForConversation(id)!!.status)
+            assertEquals("Native image must not be diverted to a no-facts inventory",1,f.requestCount)
+            val bytes=java.io.ByteArrayOutputStream().also { f.requests.single().effectiveBody().writeTo(it) }
+            val body=org.json.JSONObject(bytes.toString(Charsets.UTF_8.name()))
+            assertTrue(body.toString().contains("image_url"))
+            assertEquals(search,body.has("plugins"))
+            assertFalse(body.has("tools"))
+            if(search) assertEquals("exa",body.getJSONArray("plugins").getJSONObject(0).getString("engine"))
+            assertTrue(f.conversations.findById(id)!!.nodes.any {it.role==MessageRole.ASSISTANT && it.deliveryState==MessageDeliveryState.COMPLETE})
+        }
+    }
+
+    @Test fun `Haiku enabled search without execution proof retains answer and fee as incomplete`() = Fixture(
+        presetId=ModelPresetId.CLAUDE_HAIKU_5_5,webSearch=true,imageOnlyInput=true,
+    ).use { f ->
+        f.streamed=true; f.partialText="已收到的图片分析"
+        f.answerOutcome=ProviderChatOutcome.StreamedResponse(200,"已收到的图片分析",null,100,20,ProviderReportedCost(120,"USD","test-receipt"),false,
+            returnedModelId="anthropic/claude-haiku-5.5")
+        val (id,result)=f.send()
+        assertEquals(NormalChatOpenRouterExecutor.Result.Failed(NormalChatOpenRouterExecutor.Code.WEB_SEARCH_NO_SOURCES),result)
+        assertEquals(1,f.requestCount)
+        assertEquals(NormalChatSendAttemptStatus.FAILED,f.attempts.findLatestForConversation(id)!!.status)
+        assertTrue(f.conversations.findById(id)!!.nodes.last {it.role==MessageRole.ASSISTANT}.content.filterIsInstance<ContentBlock.Text>().any {it.text.contains("已收到的图片分析")})
+        assertTrue(f.durableAudit.listNewestFirst().any {it.accounting?.cost?.totalMicros==120L})
     }
 
     @Test fun `Luna retrieval keeps provider settlement for both grounded and rejected results`() {
@@ -663,6 +712,34 @@ class NormalChatGenerationStabilityTest {
         assertTrue(duplicate is NormalChatOpenRouterExecutor.Result.Failed || duplicate is NormalChatOpenRouterExecutor.Result.Blocked)
         assertEquals(2,f.requestCount);assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
     }
+    @Test fun `completed answer returns while automatic title provider is still blocked`() = Fixture(asynchronousCompletion=true).use { f ->
+        val titleEntered = java.util.concurrent.CountDownLatch(1)
+        val titleRelease = java.util.concurrent.CountDownLatch(1)
+        f.titlePending = true
+        f.titleRefine = { titleEntered.countDown(); titleRelease.await(); ConversationTitleRefinementResult.Title("公开问题分析结果") }
+        val sender = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val sent = sender.submit<Pair<ConversationId, NormalChatOpenRouterExecutor.Result>> { f.send() }
+        try {
+            val entered = titleEntered.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            assertTrue("title not reached: result=${if(sent.isDone) runCatching {sent.get().second}.toString() else "still sending"}; runtime=${f.lastConversationId?.let { f.conversations.stateFor(it)?.status }}", entered)
+            val id = f.lastConversationId!!
+            assertEquals(ConversationRuntimeStatus.COMPLETED, f.conversations.stateFor(id)!!.status)
+            assertEquals(NormalChatSendAttemptStatus.COMPLETED, f.attempts.findLatestForConversation(id)!!.status)
+            assertEquals("completed answer must release send ownership before a slow title", NormalChatOpenRouterExecutor.Result.Sent, sent.get(1, java.util.concurrent.TimeUnit.SECONDS).second)
+            assertEquals(1, f.requestCount)
+            f.conversations.saveDraft(id, ConversationDraft(text="下一轮正在编辑的问题", updatedAt=f.clock.instant()))
+        } finally {
+            titleRelease.countDown()
+            sender.shutdown(); assertTrue(sender.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS))
+        }
+        val id = f.lastConversationId!!
+        f.awaitCompletion(id)
+        val titled = f.conversations.findById(id)!!
+        assertEquals("公开问题分析结果", titled.conversation.title)
+        assertEquals(false, titled.conversation.autoTitlePending)
+        assertEquals("下一轮正在编辑的问题", titled.draft.text)
+    }
+
     @Test fun `unexpected failure seals physical call instead of leaving pending forever`() = Fixture().use {f ->
         f.providerFailure=IllegalStateException("synthetic failure");f.send()
         val record=f.durableAudit.listNewestFirst().single()
@@ -685,7 +762,7 @@ class NormalChatGenerationStabilityTest {
     }
     @Test fun `exception after committed answer cannot revoke text usage or completion`() = Fixture().use {f ->
         f.completedCallbackFails=true;val (id,result)=f.send()
-        assertTrue(result is NormalChatOpenRouterExecutor.Result.Failed)
+        assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
         assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
         assertEquals(NormalChatSendAttemptStatus.COMPLETED,f.attempts.findLatestForConversation(id)!!.status)
         assertEquals(1,f.durableAudit.summary().recordCount)

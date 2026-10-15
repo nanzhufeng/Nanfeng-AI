@@ -1,0 +1,29 @@
+{
+  "baseline": "d64d71026418b9325931b6cbbb94544b28a81309",
+  "scope": "WORKTREE",
+  "files": {
+    "app/src/main/assets/model_profiles.json": "5cf2cd38560a28cae745bbaf16033d75d2ee4d3196547672cb8478dc497147c3",
+    "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt": "3bc8a9c87bbff1977bbffdaf61565cf1f521cb2f18f2dcc564207579074e25bf",
+    "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt": "602a76a46e71570defad565765cc6a3ad78e5297aa415eb31003fa485c259e90",
+    "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt": "e8406fe1e829fc7e8b24bc221769d2352b30deb109cf4501dc13514a4a379ab3",
+    "app/src/main/java/com/nanzhufeng/ai/domain/DomainModels.kt": "0d7274697a3869c8a4e330c8f3ab5106d60083dd5bee461a4276c1fa4925d0cb",
+    "app/src/main/java/com/nanzhufeng/ai/domain/ModelRegistry.kt": "27e0ee80ba00f4febfc630ff97e1fdcf6edc4cd41c156d1dc094fdc474b16bba",
+    "app/src/main/java/com/nanzhufeng/ai/domain/ModelService.kt": "7a6c75d9c6bb3c04fcdb2d354010f8750ce53eea1bd0451e3ffcd8d1d34ebec3",
+    "app/src/main/java/com/nanzhufeng/ai/domain/RegistryVerification.kt": "19605aba5988b2a5f92aa25e6f27b2f319a229e796678cebdc2734bd0645b5da",
+    "app/src/main/java/com/nanzhufeng/ai/domain/ResolvedModel.kt": "bb39d84b4eb6eead3ac0df4d37c15f82e50a0dac809c35a1c10470d848bee24b",
+    "app/src/test/java/com/nanzhufeng/ai/ai/GeminiNativeSearchContractsTest.kt": "cfab3dd52929ea2a80c600decccf2f355d19ecd717cbb93cee74d296480a3609",
+    "app/src/test/java/com/nanzhufeng/ai/ai/OctoberModelUpgradeTest.kt": "6ed705064f5d88a9e71cee5a97104107fb805b65552c28927e330f6cab8789dc",
+    "app/src/test/java/com/nanzhufeng/ai/domain/ConversationCostEstimatorTest.kt": "b8c895ff9395384e8598e3fbcf00d873d87a9f7b59eb9a308079ed0d4adec23f",
+    "app/src/test/java/com/nanzhufeng/ai/domain/P6GModelRouterContractsTest.kt": "8a8feecf9e12e79b89127397e892ee54bb14e3862f3c721c5e9f9b8aa1382a78",
+    "desktop/src-tauri/src/chat_call_accounting_v1.rs": "093c2219debedf06b1f95addee02339fbd42e647a3947fd35abf78f6fdd2322f",
+    "desktop/src-tauri/src/desktop_model_service_v1.rs": "7508dbbc6e72feb28dda98d447975211eeb0d921f4cbb1b14b070605eb5cdf8a",
+    "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs": "00ef2fff87feaa84bbed9eeb8cc5392dd8af93165c5ae8e248a4201623ef8e16",
+    "desktop/src/android-settings-shell.mjs": "6ed56e3e074b396c7bffd586eabe848e5b419dfc49b04a88495bab1d5e6a6b81",
+    "desktop/src/chat-shell.mjs": "9dbd8935baf46dd28beaff17382b28cb6ad6db2d5e8420a3cd9dd818d46a1fdf",
+    "desktop/src/desktop-cost-estimator.mjs": "eb6a809886ce14bdee0f7cd80b849c91bd6047e44442aaa3780e026462ec576b",
+    "desktop/tests/model-settings-browser.test.mjs": "d3893e20f87a743eb04a20f46f82cda3ca809cc8ee4a8136fc0a13f068158ea6",
+    "desktop/tests/october-model-upgrade.test.mjs": "c97519be868f118f0ea61985b9348aa8258637d0523093d8d6c11e46be415dbe",
+    "protocol/fixtures/gemini-4-argon-20261015.json": "569924103c9de1b55cffa6f05a588675df5f5f9a9b9f94418e7e5954b847391d",
+    "protocol/model-service/model-service-v1.json": "a7dd6fe163b1fa0b9ad77687fbc2141e266d7eb2f38b68362b7f7f42431d2bb7"
+  }
+}

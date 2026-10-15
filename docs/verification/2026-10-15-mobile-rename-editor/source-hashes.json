@@ -1,0 +1,7 @@
+{
+  "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt": "181915cc17aca0a12b34b973bfd8fe1ce31fc8545b3154578d92e3655f4db6b1",
+  "app/src/test/java/com/nanzhufeng/ai/ui/InlineConversationTitleTest.kt": "cbc3e993256e4f8ff281ca27ab690441e0034a267a8aeec7ab2daaaf0210f0db",
+  "app/src/test/java/com/nanzhufeng/ai/ui/ConversationRenameDialogFocusContractsTest.kt": "f3257bf455325e700161ff18727c5b5dd163b0a48df4f521e1e46e80306bd452",
+  "app/src/test/java/com/nanzhufeng/ai/data/ConversationTitleActivityOrderTest.kt": "641a8d60af54c6ff3fdccf455e1fae74cbecc9d5e9176e3808ec6c11bf40aaf4",
+  "app/src/test/java/com/nanzhufeng/ai/ui/P6DConversationRowAccessibilityContractsTest.kt": "db4a264a6eb9b359db43676b76c0a71b7e6bf0bb876aa8a641d6c59a15643916"
+}

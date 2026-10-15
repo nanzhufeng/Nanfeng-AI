@@ -1,0 +1,14 @@
+{
+  "app/src/main/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicy.kt": "c40020a97ae48cd9e6955468426ca9c2330a4d706970370a5cb971e4be815a6d",
+  "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt": "b3695101e259e3725549f294fbef9446a1a5db9817ca75e7fa6c947a35509c52",
+  "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "cb30baf1d80def1a772fec8083f144f001e270e9d2d3ef28f1285d9794519ca5",
+  "app/src/test/java/com/nanzhufeng/ai/ai/AutomaticWebSearchPolicyTest.kt": "283b64167ce77d38a64a3e76c0daf67aa452080d8bfd5d7d3975c7f242cbd2b6",
+  "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt": "05e406c62c6af41c36c77971a76024cc05c8bc8a97f690375dac7dfaaa5c3c3d",
+  "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt": "d5f55d2a0446c499e980e29b369d9dbbd01e74a64202ad6ea4dc764dea9af5e2",
+  "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs": "0291558f333213eb058726871f112f1c002e6242b14681130e8703a07c595cc0",
+  "desktop/src-tauri/src/attachment_web_search_execution_v1.rs": "e8da798901c9e5d613256bb9fdc3bc712badfac73ae22d57c041fa40ec9830cf",
+  "desktop/src-tauri/src/lib.rs": "2b55f504e194b208790bcaccc7351e118baf9049ae8c9ffc456a750245df33ff",
+  "desktop/src-tauri/src/title_generation_live_acceptance.rs": "6ed94e2cf7214084f7f2637313361705f1663f5925a88499deacedb4205c5d4d",
+  "protocol/model-service/model-service-v1.json": "f0e75bcc3f02af8601e041a5d76ba7011c59b9956f72269a4a34219480e4e0fe",
+  "app/src/publicModelAcceptance/assets/public-search-fixtures/public-sample-order.png": "3393790e8a1e53eedfcd2675cc5b7ca43584c201310b485c5fdb909f7e470902"
+}

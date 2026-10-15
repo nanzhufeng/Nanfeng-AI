@@ -23,7 +23,7 @@ import org.robolectric.annotation.GraphicsMode
 class InlineConversationTitleTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun `double tap edits in place selects all and Done saves once`() {
+    @Test fun `double tap opens a rename dialog selects all and Done saves once`() {
         val saved = mutableListOf<String>()
         compose.setContent {
             MaterialTheme {
@@ -33,6 +33,9 @@ class InlineConversationTitleTest {
             }
         }
         compose.onNodeWithText("原来的标题").performTouchInput { doubleClick() }
+        compose.onNodeWithText("重命名").assertIsDisplayed()
+        compose.onNodeWithText("取消").assertIsDisplayed()
+        compose.onNodeWithText("确认").assertIsDisplayed()
         val editor = compose.onNode(hasSetTextAction())
         editor.assertIsFocused()
         assertEquals(TextRange(0, 5), editor.fetchSemanticsNode().config[SemanticsProperties.TextSelectionRange])
@@ -40,6 +43,39 @@ class InlineConversationTitleTest {
         editor.performImeAction()
         compose.onNodeWithText("原来的标题").assertExists()
         assertEquals(listOf("新标题"), saved)
+    }
+
+    @Test fun `menu rename provides a cancellable input and prevents blank titles`() {
+        val saved = mutableListOf<String>()
+        var finished = 0
+        compose.setContent {
+            MaterialTheme {
+                InlineConversationTitle("菜单改名", Modifier.width(240.dp), MaterialTheme.typography.bodyLarge,
+                    renameRequested = true, onRename = { saved.add(it) }, onRenameFinished = { finished++ })
+            }
+        }
+        val editor = compose.onNode(hasSetTextAction())
+        editor.assertIsFocused()
+        editor.performTextReplacement("   ")
+        compose.onNodeWithText("确认").assertIsNotEnabled()
+        editor.performTextReplacement("不应保存的标题")
+        compose.onNodeWithText("取消").performClick()
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        compose.runOnIdle { assertTrue(saved.isEmpty()); assertEquals(1, finished) }
+    }
+
+    @Test fun `confirm button saves the edited title once`() {
+        val saved = mutableListOf<String>()
+        compose.setContent {
+            MaterialTheme {
+                InlineConversationTitle("原标题", Modifier.width(240.dp), MaterialTheme.typography.bodyLarge,
+                    renameRequested = true, onRename = { saved.add(it) })
+            }
+        }
+        compose.onNode(hasSetTextAction()).performTextReplacement("  已编辑标题  ")
+        compose.onNodeWithText("确认").performClick()
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        compose.runOnIdle { assertEquals(listOf("已编辑标题"), saved) }
     }
 
     @Test fun `title still opens row on one tap and retains long press actions`() {

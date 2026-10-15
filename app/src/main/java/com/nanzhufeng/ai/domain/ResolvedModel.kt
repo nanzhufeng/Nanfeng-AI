@@ -145,6 +145,7 @@ private object OpenRouterColdStartTextFallback {
         ModelPresetId.GPT_6_1_SOL to "openai/gpt-6.1-sol",
         ModelPresetId.GPT_6_LUNA to "openai/gpt-6-luna",
         ModelPresetId.MUSE_WONDER to "meta/muse-wonder",
+        ModelPresetId.GEMINI_4_ARGON to "google/gemini-4-argon",
 
         ModelPresetId.CLAUDE_FABLE_5 to "anthropic/claude-fable-5",
         ModelPresetId.CLAUDE_FABLE_5_1 to "anthropic/claude-fable-5.1-20260831",

@@ -1,0 +1,67 @@
+{
+  "material": "public synthetic lunch order PNG",
+  "materialSha256": "3393790e8a1e53eedfcd2675cc5b7ca43584c201310b485c5fdb909f7e470902",
+  "model": "anthropic/claude-haiku-5.5",
+  "provider": "OPENROUTER",
+  "engine": "exa",
+  "proofKind": "OPENROUTER_PROVIDER_SEARCH_ANNOTATIONS_NOT_HAIKU_NATIVE_TOOL",
+  "android": {
+    "environment": "isolated emulator-5592 application process / AppContainer / executor / Room",
+    "package": "com.nanzhufeng.ai.publicmodelacceptance",
+    "apkSha256": "47de7300d85175eab84e5a9be5cb3dbcb6cf80d51ed14b081ebe4d00770870c6",
+    "result": "Sent",
+    "structuredSourceCount": 5,
+    "nativeToolPerformedFlag": false,
+    "searchUsed": true,
+    "requestedModel": "anthropic/claude-haiku-5.5",
+    "accountingCalls": [
+      {
+        "role": "ANSWER",
+        "requested": "anthropic/claude-haiku-5.5",
+        "returned": "anthropic/claude-haiku-5.5",
+        "currency": "USD",
+        "chargeMicros": 8278
+      }
+    ],
+    "footerCostLabel": "¥0.055631",
+    "answerChars": 745,
+    "reopenNetworkCalls": 0,
+    "reopenExactAnswer": true,
+    "reopenSearchUsed": true,
+    "reopenExactFee": true,
+    "physicalCalls": 1,
+    "credentialsCleared": true
+  },
+  "mac": {
+    "environment": "native Rust production ordinary chat owner / isolated SQLite",
+    "result": "COMPLETED",
+    "structuredSourceCount": 5,
+    "requestedModel": "anthropic/claude-haiku-5.5",
+    "actualModel": "anthropic/claude-haiku-5.5",
+    "searchUsed": true,
+    "ledgerCalls": [
+      {
+        "actual": "anthropic/claude-haiku-5.5",
+        "currency": "USD",
+        "kind": "FINAL_MEASURED",
+        "micros": 7968,
+        "model": "anthropic/claude-haiku-5.5",
+        "source": "PROVIDER_RESPONSE"
+      },
+      {
+        "actual": null,
+        "currency": null,
+        "kind": "STREAM_PENDING",
+        "micros": null,
+        "model": "anthropic/claude-haiku-5.5",
+        "source": null
+      }
+    ],
+    "reopenedState": "COMPLETED",
+    "reopenedSearchUsed": true,
+    "reopenedSourcesPresent": true,
+    "reopenedExactAnswer": true,
+    "reopenedExactAccounting": true
+  },
+  "acceptanceBoundary": "Haiku request-entry search path; later shared switch instructions and completion gates validated offline without repeating paid calls. No formal main-device/Mac installation or native picker/UI acceptance."
+}

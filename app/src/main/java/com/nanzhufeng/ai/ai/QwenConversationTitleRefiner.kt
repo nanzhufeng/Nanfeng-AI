@@ -25,9 +25,8 @@ import org.json.JSONObject
  * Sends only the opening user message and its first completed assistant reply to a configured,
  * economical background model. It never receives profile data, later turns or attachments.
  *
- * Title and history-library refinement intentionally share one fixed candidate order. This keeps
- * these background jobs on the user's low-cost direct providers without changing normal chat or
- * Auto routing.
+ * Automatic titles use their own bounded Qwen -> DeepSeek fallback, including timeout failures.
+ * This title-only policy never changes normal chat, Auto or history-library routing.
  */
 class ConfiguredConversationTitleRefiner(
     private val records: ConversationTitleGenerationRecordStore,
@@ -53,7 +52,7 @@ class ConfiguredConversationTitleRefiner(
             ))
         }
         val preflightFailures = mutableListOf<Pair<ProviderId, String>>()
-        val configuredProviders = TitleAndHistoryRefinementRouting.candidates.map { it.providerId }.distinct()
+        val configuredProviders = ConversationTitleRouting.candidates.map { it.providerId }.distinct()
             .mapNotNull { providerId ->
                 val config = configuration.execute(providerId)
                 when {
@@ -79,7 +78,7 @@ class ConfiguredConversationTitleRefiner(
             }
             return ConversationTitleRefinementResult.Failed("NO_CONFIGURED_TITLE_MODEL")
         }
-        TitleAndHistoryRefinementRouting.candidates.filter { it.providerId in configuredProviders }.forEach { candidate ->
+        ConversationTitleRouting.candidates.filter { it.providerId in configuredProviders }.forEach { candidate ->
             val config = checkNotNull(configuredProviders[candidate.providerId])
             val resolved = modelResolver.resolve(candidate.preset) as? ResolvedModelResult.Resolved
             if (resolved == null || resolved.model.providerId != candidate.providerId) {
@@ -94,12 +93,12 @@ class ConfiguredConversationTitleRefiner(
             var correction: List<Pair<String, String>>? = null
             for (formatAttempt in 0..1) {
                 val prepared = adapter.prepare(
-                    model = resolved.model,
+                    model = resolved.model.copy(maxOutputTokens = ConversationTitleRouting.MAX_OUTPUT_TOKENS),
                     messages = listOf(
                         "system" to TITLE_CONTRACT,
                         "user" to source.promptInput(),
                     ) + correction.orEmpty(),
-                    attachments = emptyList(), stream = false,
+                    attachments = emptyList(), stream = false, options = ChatRequestOptions(shortTitle = true),
                 ) as? ChatAdapterPrepareResult.Ready
                 if (prepared == null) {
                     record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = "REQUEST_UNSUPPORTED")
@@ -115,7 +114,7 @@ class ConfiguredConversationTitleRefiner(
                         endpoint = "${config.provider.fixedEndpoint}${adapter.endpointPath(ChatRequestOptions.Standard)}",
                         jsonBody = prepared.jsonBody, body = prepared.body, expectsStream = false,
                         idempotencyKey = "conversation-title-${requestedAt.toEpochMilli()}-${sourceConversationId.value}-${candidate.preset.name}-$formatAttempt",
-                        readTimeoutMillis = adapter.readTimeoutMillis(resolved.model, emptyList(), false),
+                        readTimeoutMillis = ConversationTitleRouting.READ_TIMEOUT_MILLIS,
                         maxResponseBytes = ProviderResponseByteBudget.forMaxOutputTokens(256),
                     ), credential)
                 } finally { credential.fill('\u0000') }
@@ -125,7 +124,7 @@ class ConfiguredConversationTitleRefiner(
                 }
                 if (reply == null) {
                     record(ConversationTitleGenerationStatus.FAILED, candidate.providerId, resolved.model.modelId, safeCode = outcome.safeCode())
-                    if (outcome is ProviderChatOutcome.TimedOut || outcome is ProviderChatOutcome.NetworkFailure || outcome is ProviderChatOutcome.Cancelled) {
+                    if (outcome is ProviderChatOutcome.Cancelled) {
                         return ConversationTitleRefinementResult.Failed(outcome.safeCode())
                     }
                     return@forEach

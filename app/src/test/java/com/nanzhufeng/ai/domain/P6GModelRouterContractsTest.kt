@@ -131,7 +131,7 @@ class P6GModelRouterContractsTest {
             ComposerModelRoutingCatalog.daily.map { it.label },
         )
         assertEquals(
-            listOf("Claude Opus 5.5", "GPT-6.1 Sol", "DeepSeek V4 Pro", "Muse Wonder", "GLM-5.3", "Qwen3.8-Max"),
+            listOf("Claude Opus 5.5", "GPT-6.1 Sol", "DeepSeek V4 Pro", "Muse Wonder", "Gemini 4 Argon", "GLM-5.3", "Qwen3.8-Max"),
             ComposerModelRoutingCatalog.deep.map { it.label },
         )
     }

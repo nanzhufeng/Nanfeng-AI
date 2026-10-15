@@ -127,6 +127,7 @@ class OpenRouterRegistrySnapshotVerifier {
             ModelPresetId.GPT_6_1_SOL to "openai/gpt-6.1-sol",
             ModelPresetId.GPT_6_LUNA to "openai/gpt-6-luna",
         ModelPresetId.MUSE_WONDER to "meta/muse-wonder",
+        ModelPresetId.GEMINI_4_ARGON to "google/gemini-4-argon",
         ).mapNotNull { (preset, id) -> candidates.firstOrNull { it.id == id }?.let { ModelPresetMapping(preset, it.id) } }
         if (current.isEmpty() && (opus == null || sol == null || terra == null)) return null
         val mappings = buildList {

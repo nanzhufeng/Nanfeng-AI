@@ -20,7 +20,7 @@ class P6DConversationRowAccessibilityContractsTest {
             "Android 会话、抽屉、Composer、搜索与暗色皮肤的唯一视觉／交互正文",
             "普通与批量行分别以 `36dp`／`44dp`",
             "会话右滑带依次为置顶／取消置顶、收藏／取消收藏、重命名、删除",
-            "双端侧栏标题与主界面标题双击（触屏双击）直接原位改名",
+            "Android 侧栏／主界面标题双击、菜单／滑出操作带“重命名”统一打开正常改名弹窗",
             "点击遮罩关闭",
             "禁止遗留橙色常量",
             "会话标题使用 `14sp / 18sp / Normal`",
@@ -286,14 +286,16 @@ class P6DConversationRowAccessibilityContractsTest {
     }
 
     @Test
-    fun `inline rename is shared by header and drawer without a modal`() {
+    fun `mobile rename dialog is shared by header and drawer with a single active entry`() {
         val inline = source.substringAfter("internal fun InlineConversationTitle").substringBefore("private fun CompactConversationSelectionCheckbox")
-        assertTrue(inline.contains("BasicTextField("))
+        assertTrue(inline.contains("OutlinedTextField("))
+        assertTrue(inline.contains("AlertDialog("))
         assertTrue(inline.contains("onDoubleTap"))
         assertTrue(inline.contains("TextRange(0, title.length)"))
         assertTrue(inline.contains("KeyboardActions(onDone = { finish(true) })"))
         assertTrue(inline.contains("Key.Enter"))
-        assertFalse(source.contains("if (renameVisible) CompactConversationRenameDialog"))
+        assertTrue(source.contains("renameConversationId = renameConversationId.takeIf { drawerOpen }"))
+        assertTrue(source.contains("renameRequested = !drawerOpen && selectedConversation?.id?.value == renameConversationId"))
         assertTrue(source.contains("onRename = { title -> onManage(conversation, ConversationManagementAction.RENAME, title)"))
     }
 

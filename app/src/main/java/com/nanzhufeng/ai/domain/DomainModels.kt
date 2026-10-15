@@ -133,6 +133,7 @@ enum class ModelPresetId {
     GPT_6_1_SOL,
     GPT_6_LUNA,
     MUSE_WONDER,
+    GEMINI_4_ARGON,
 
     CLAUDE_FABLE_5,
     CLAUDE_FABLE_5_1,

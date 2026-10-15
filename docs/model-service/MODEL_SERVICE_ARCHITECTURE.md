@@ -74,7 +74,7 @@ Android链为Compose/ViewModel → domain/ai/data/background；Mac为ESM → Tau
 
 [发送授权合同](../P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md)唯一拥有材料与接收方披露；当前正常发送和显式重试共用规则。新增检索接收方／材料范围属于授权语义变化，不能靠旧receipt放行。历史版本读取兼容、当前授权有效性、默认预设升级映射、同组API别名、冻结Attempt重试分别验证，不写成一个通用“fallback”。
 
-保存当前模型与重开、旧会话、分支、云端恢复、失败正文和用量的历史保真分别由现有owner负责。UNKNOWN仅保留状态与断点，不自动重新付费发送。取消／本地写入失败后不得继续下一段网络调用。
+保存当前模型与重开、旧会话、分支、云端恢复、失败正文和用量的历史保真分别由现有owner负责。主回答／检索的UNKNOWN仅保留状态与断点，不自动重新付费发送。自动标题按用户明确授权的[短任务有界兜底](../ANDROID_CONVERSATION_UI_CURRENT_CONTRACT.md)执行，不能扩展为普通聊天换模型。取消／本地写入失败后不得继续下一段网络调用。
 
 ## 6. 附件与联网
 
@@ -84,7 +84,7 @@ Android链为Compose/ViewModel → domain/ai/data/background；Mac为ESM → Tau
 
 文本接口先本机提取完整正文；原生多模态接口保留它实际支持的原件。图片、扫描PDF、音视频、Office嵌入媒体不是“文本文件支持”的同义词，需要相应原生接口或用户明确选择的转写。Auto筛选必须看正在使用的联网接口，不只看模型离线视觉能力。
 
-附件规划、按批检索及原模型回答是不同阶段，每个阶段实际发出的物理调用独立计量。检索失败后的材料分析仍要保留失败语义、正文和真实用量，不能改成联网成功；取消阻止后续调用。语言由[回答语言合同](../ANSWER_LANGUAGE_CURRENT_CONTRACT.md)统一控制，不在UI事后删英文或重新付费翻译。
+存在公共核验计划时，附件规划、按批检索及原模型回答是不同阶段，每个阶段实际发出的物理调用独立计量；无可读公共计划的已支持原生媒体与搜索同请求处理，准确边界由联网合同持有。检索失败后的材料分析仍要保留失败语义、正文和真实用量，不能改成联网成功；取消阻止后续调用。语言由[回答语言合同](../ANSWER_LANGUAGE_CURRENT_CONTRACT.md)统一控制，不在UI事后删英文或重新付费翻译。
 
 ## 7. 终态、后台与反馈
 
@@ -102,7 +102,7 @@ Android链为Compose/ViewModel → domain/ai/data/background；Mac为ESM → Tau
 
 ## 9. 独立任务与实验模块
 
-GLM-OCR按[OCR合同](../GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md)走独立解析接口，不进入普通聊天或Auto。标题／历史整理由TitleAndHistoryRefinementRouting和desktop_conversation_title_v1等既有owner选择，不因为普通聊天新增模型而自动迁移。
+GLM-OCR按[OCR合同](../GLM_OCR_DOCUMENT_MARKDOWN_CONTRACT.md)走独立解析接口，不进入普通聊天或Auto。自动标题由ConversationTitleRouting／desktop_conversation_title_v1独立选择；历史整理由TitleAndHistoryRefinementRouting／BACKGROUND_TEXT_REFINEMENT_PRESET_IDS保留原顺序，不因为普通聊天新增模型而自动迁移。
 
 定时监控、转写、P6G实验规划器、Android Compare实验端口、Desktop历史Compare分支兼容与未来Agent能力分别遵守自身合同及授权。实验类源码存在不等于已经接入生产；普通聊天目录不能自动启用Compare、工具执行、多步Agent或扩大自动任务付费范围。
 

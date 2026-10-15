@@ -8,6 +8,7 @@ pub mod desktop_app_settings_v1;
 pub mod desktop_background_runtime_v1;
 pub mod desktop_conversation_read_state_v1;
 pub mod desktop_conversation_title_v1;
+mod desktop_conversation_completion_v1;
 mod desktop_docx_preview;
 mod attachment_document_text_v1;
 pub mod desktop_history_knowledge_v1;
@@ -34,6 +35,10 @@ pub mod dual_path_contract_v1;
 pub mod local_exact_reuse_v1;
 #[cfg(test)]
 mod model_generation_live_audit;
+#[cfg(test)]
+mod title_generation_live_acceptance;
+#[cfg(test)]
+mod conversation_title_activity_order_tests;
 #[allow(
     dead_code,
     reason = "P6 v2 kernel is intentionally unregistered until the later picker/UI contract"
@@ -3301,7 +3306,10 @@ fn apply_domain_mutation(
         .checked_add(1)
         .ok_or_else(|| json_error("revision 溢出"))?;
     item.insert("revision".into(), Value::Number(next.into()));
-    if args.entity != "relation" {
+    // A title edit changes sync metadata, not conversation activity or list recency.
+    if args.entity != "relation"
+        && !(args.entity == "conversation" && args.action == "update")
+    {
         item.insert("updatedAt".into(), Value::String(now.into()));
     }
     Ok((id.to_owned(), next))
@@ -13614,7 +13622,7 @@ impl DesktopWorkspaceStore {
         let settings = self.read_desktop_model_service_setting_records()?;
         let credentials = &self.credentials;
         let presets = desktop_model_service_v1::chat_presets();
-        let selected = desktop_model_service_v1::BACKGROUND_TEXT_REFINEMENT_PRESET_IDS
+        let selected = desktop_conversation_title_v1::PRESET_IDS
             .iter()
             .find_map(|preset_id| {
                 presets
@@ -13752,7 +13760,6 @@ impl DesktopWorkspaceStore {
             .ok_or_else(|| json_error("标题版本溢出"))?);
         conversation["autoTitlePending"] = Value::Bool(false);
         conversation["revision"] = Value::Number(revision.into());
-        conversation["updatedAt"] = Value::String(local_now().into());
         let semantic_hash = refresh_exchange_hash(&mut exchange)?;
         validate_exchange(&exchange)?;
         transaction
@@ -13999,6 +14006,9 @@ impl DesktopWorkspaceStore {
 
         // Trusted answer policy is separate from quoted memory / library evidence.
         result.push(json!({"role":"system","content":answer_language_v1::INSTRUCTION}));
+        if self.ordinary_chat_web_search_enabled(connection,workspace_id,conversation_id)? {
+            result.push(json!({"role":"system","content":desktop_ordinary_chat_v1::OPENROUTER_LIVE_SEARCH_INSTRUCTION}));
+        }
         let mut context_sections = Vec::<String>::new();
 
         let conversation_preferences =
@@ -19358,12 +19368,179 @@ async fn send_pending_desktop_reminder_notification(
     }
 }
 
+// One title execution owner, shared by production and explicitly authorized native acceptance.
+fn run_desktop_conversation_title_work(
+    store: &Mutex<DesktopWorkspaceStore>,
+    credentials: &desktop_model_service_v1::AppPrivateProviderCredentialStore,
+    workspace_id: &str,
+    conversation_id: &str,
+    eligible: bool,
+    mut transport: impl FnMut(desktop_ordinary_chat_v1::TransportRequest, Zeroizing<Vec<u8>>) -> Result<desktop_ordinary_chat_v1::Completed, desktop_ordinary_chat_v1::Failure>,
+    mut on_applied: impl FnMut(),
+) {
+    let mut attempted_title_providers = Vec::new();
+    let mut title_format_correction =
+        desktop_conversation_title_v1::FormatCorrection::default();
+    while eligible {
+        let title_prepared = store.lock().ok().and_then(|store| {
+            store
+                .prepare_desktop_conversation_title(
+                    workspace_id,
+                    conversation_id,
+                    &attempted_title_providers,
+                )
+                .ok()
+                .flatten()
+        });
+        let Some(mut title_prepared) = title_prepared else {
+            break;
+        };
+        title_format_correction
+            .apply(&title_prepared.provider_id, &mut title_prepared.messages);
+        attempted_title_providers.push(title_prepared.provider_id.clone());
+        let credential_store = credentials;
+        let title_secret = credential_store
+            .with_secret(&title_prepared.provider_id, |bytes| {
+                Ok(Zeroizing::new(bytes.to_vec()))
+            })
+            .ok();
+        if let Some(title_secret) = title_secret {
+            let title_request = desktop_ordinary_chat_v1::TransportRequest {
+                endpoint: title_prepared.endpoint.clone(),
+                provider_id: title_prepared.provider_id.clone(),
+                model_id: title_prepared.model_id.clone(),
+                messages: title_prepared.messages.clone(),
+                idempotency_key: title_prepared.idempotency_key.clone(),
+                max_output_tokens: desktop_conversation_title_v1::MAX_OUTPUT_TOKENS,
+                web_search_route: "NONE".into(),
+                structured_json: true,
+                disable_thinking: true, grounded_answer:false,explicit_search_query:None,
+            };
+            match transport(title_request, title_secret) {
+                Ok(reply) => {
+                    // Do not collapse an intentional manual rename, an invalid title
+                    // and a local write failure into TITLE_NOT_APPLIED. The old `.ok()`
+                    // chain hid the real recovery path and discarded valid titles.
+                    let (title_applied, title_outcome) =
+                        match desktop_conversation_title_v1::parse_response(&reply.text)
+                        {
+                            None => (false, Some("TITLE_CONTRACT")),
+                            Some(title) => match store.lock() {
+                                Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
+                                Ok(store) => match store
+                                    .complete_desktop_conversation_title(
+                                        &title_prepared,
+                                        &title,
+                                    ) {
+                                    Ok(true) => (true, None),
+                                    Ok(false) => (false, Some("TITLE_MANUAL_OVERRIDE")),
+                                    Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
+                                },
+                            },
+                        };
+                    if let Ok(store) = store.lock() {
+                        // A provider response can still be chargeable even if a manual rename won
+                        // the race.  Record the invocation fact; do not overwrite the user's title.
+                        let _ = store.update_desktop_conversation_title_attempt(
+                            &title_prepared,
+                            "RESPONSE_COMMITTED",
+                            title_outcome,
+                            Some(&reply),
+                        );
+                        if store
+                            .complete_desktop_conversation_title_accounting(
+                                &title_prepared,
+                                &reply,
+                            )
+                            .is_ok()
+                        {
+                            let _ = store.update_desktop_conversation_title_attempt(
+                                &title_prepared,
+                                "COMPLETED",
+                                title_outcome,
+                                Some(&reply),
+                            );
+                        } else {
+                            let _ = store.update_desktop_conversation_title_attempt(
+                                &title_prepared,
+                                "COMPLETED_ACCOUNTING_PENDING",
+                                Some("LOCAL_ACCOUNTING_PERSISTENCE"),
+                                Some(&reply),
+                            );
+                        }
+                        if title_applied {
+                            on_applied();
+                        }
+                    }
+                    // Android advances to the next configured direct provider only
+                    // when this provider returned no contract-valid title. Local
+                    // persistence or an intentional manual rename must never trigger
+                    // another external request.
+                    if title_applied
+                        || matches!(
+                            title_outcome,
+                            Some("TITLE_MANUAL_OVERRIDE" | "TITLE_LOCAL_PERSISTENCE")
+                        )
+                    {
+                        break;
+                    }
+                    if title_outcome == Some("TITLE_CONTRACT")
+                        && title_format_correction
+                            .retry(&title_prepared.provider_id, &reply.text)
+                    {
+                        // A separate, audited correction request; never reuse the failed receipt.
+                        attempted_title_providers.pop();
+                    }
+                }
+                Err(failure) => {
+                    let (state_name, code) = match failure {
+                        desktop_ordinary_chat_v1::Failure::Cancelled => {
+                            ("CANCELLED", "CANCELLED")
+                        }
+                        desktop_ordinary_chat_v1::Failure::Explicit {code,..} | desktop_ordinary_chat_v1::Failure::Quantified {code,..} => ("FAILED", code),
+                        desktop_ordinary_chat_v1::Failure::Unknown { code } => {
+                            ("UNKNOWN", code)
+                        }
+                    };
+                    if let Ok(store) = store.lock() {
+                        let _ = store.update_desktop_conversation_title_attempt(
+                            &title_prepared,
+                            state_name,
+                            Some(code),
+                            None,
+                        );
+                    }
+                    if state_name == "CANCELLED" {
+                        break;
+                    }
+                }
+            }
+        } else if let Ok(store) = store.lock() {
+            let _ = store.update_desktop_conversation_title_attempt(
+                &title_prepared,
+                "FAILED",
+                Some("CREDENTIAL_UNAVAILABLE"),
+                None,
+            );
+        }
+    }
+}
+
 fn emit_ordinary_chat_event(
     app: &AreaAppHandle,
     projection: &DesktopOrdinaryChatAttemptProjection,
     client_submission_id: &str,
 ) {
     nanfeng_island_v1::record(app, projection);
+    emit_ordinary_chat_metadata_event(app, projection, client_submission_id);
+}
+
+// A late title refresh must never overwrite the island state of a newer reply.
+fn emit_ordinary_chat_metadata_event(
+    app: &AreaAppHandle,
+    projection: &DesktopOrdinaryChatAttemptProjection,
+    client_submission_id: &str,
+) {
     let _ = app.emit(
         "desktop-ordinary-chat-runtime-v1",
         DesktopOrdinaryChatRuntimeEvent {
@@ -19635,167 +19812,23 @@ async fn execute_desktop_ordinary_chat_prepared(
                     }
                 };
                 emit_ordinary_chat_event(&worker_app, &accounted, &client_submission_id);
-                // The answer is already durable and visible.  Title generation is intentionally
-                // secondary and cannot turn a successful chat into a failed one.
-                let mut attempted_title_providers = Vec::new();
-                let mut title_format_correction =
-                    desktop_conversation_title_v1::FormatCorrection::default();
-                while !no_progress && !attachment_search_incomplete {
-                    let title_prepared = state.store.lock().ok().and_then(|store| {
-                        store
-                            .prepare_desktop_conversation_title(
-                                &accounted.workspace_id,
-                                &accounted.conversation_id,
-                                &attempted_title_providers,
-                            )
-                            .ok()
-                            .flatten()
-                    });
-                    let Some(mut title_prepared) = title_prepared else {
-                        break;
-                    };
-                    title_format_correction
-                        .apply(&title_prepared.provider_id, &mut title_prepared.messages);
-                    attempted_title_providers.push(title_prepared.provider_id.clone());
-                    let credential_store = &state.credentials;
-                    let title_secret = credential_store
-                        .with_secret(&title_prepared.provider_id, |bytes| {
-                            Ok(Zeroizing::new(bytes.to_vec()))
-                        })
-                        .ok();
-                    if let Some(title_secret) = title_secret {
-                        let title_request = desktop_ordinary_chat_v1::TransportRequest {
-                            endpoint: title_prepared.endpoint.clone(),
-                            provider_id: title_prepared.provider_id.clone(),
-                            model_id: title_prepared.model_id.clone(),
-                            messages: title_prepared.messages.clone(),
-                            idempotency_key: title_prepared.idempotency_key.clone(),
-                            // GLM's budget includes reasoning; 256 could end before any title.
-                            max_output_tokens: if title_prepared.provider_id == "DEEPSEEK" {
-                                256
-                            } else {
-                                8192
-                            },
-                            web_search_route: "NONE".into(),
-                            structured_json: title_prepared.provider_id == "DEEPSEEK",
-                            disable_thinking: title_prepared.provider_id == "DEEPSEEK", grounded_answer:false,explicit_search_query:None,
-                        };
-                        match tauri::async_runtime::block_on(
-                            desktop_ordinary_chat_v1::execute_non_streaming(
-                                title_request,
-                                title_secret,
-                            ),
-                        ) {
-                            Ok(reply) => {
-                                // Do not collapse an intentional manual rename, an invalid title
-                                // and a local write failure into TITLE_NOT_APPLIED. The old `.ok()`
-                                // chain hid the real recovery path and discarded valid titles.
-                                let (title_applied, title_outcome) =
-                                    match desktop_conversation_title_v1::parse_response(&reply.text)
-                                    {
-                                        None => (false, Some("TITLE_CONTRACT")),
-                                        Some(title) => match state.store.lock() {
-                                            Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
-                                            Ok(store) => match store
-                                                .complete_desktop_conversation_title(
-                                                    &title_prepared,
-                                                    &title,
-                                                ) {
-                                                Ok(true) => (true, None),
-                                                Ok(false) => (false, Some("TITLE_MANUAL_OVERRIDE")),
-                                                Err(_) => (false, Some("TITLE_LOCAL_PERSISTENCE")),
-                                            },
-                                        },
-                                    };
-                                if let Ok(store) = state.store.lock() {
-                                    // A provider response can still be chargeable even if a manual rename won
-                                    // the race.  Record the invocation fact; do not overwrite the user's title.
-                                    let _ = store.update_desktop_conversation_title_attempt(
-                                        &title_prepared,
-                                        "RESPONSE_COMMITTED",
-                                        title_outcome,
-                                        Some(&reply),
-                                    );
-                                    if store
-                                        .complete_desktop_conversation_title_accounting(
-                                            &title_prepared,
-                                            &reply,
-                                        )
-                                        .is_ok()
-                                    {
-                                        let _ = store.update_desktop_conversation_title_attempt(
-                                            &title_prepared,
-                                            "COMPLETED",
-                                            title_outcome,
-                                            Some(&reply),
-                                        );
-                                    } else {
-                                        let _ = store.update_desktop_conversation_title_attempt(
-                                            &title_prepared,
-                                            "COMPLETED_ACCOUNTING_PENDING",
-                                            Some("LOCAL_ACCOUNTING_PERSISTENCE"),
-                                            Some(&reply),
-                                        );
-                                    }
-                                    if title_applied {
-                                        emit_ordinary_chat_event(
-                                            &worker_app,
-                                            &accounted,
-                                            &client_submission_id,
-                                        );
-                                    }
-                                }
-                                // Android advances to the next configured direct provider only
-                                // when this provider returned no contract-valid title. Local
-                                // persistence or an intentional manual rename must never trigger
-                                // another external request.
-                                if title_applied
-                                    || matches!(
-                                        title_outcome,
-                                        Some("TITLE_MANUAL_OVERRIDE" | "TITLE_LOCAL_PERSISTENCE")
-                                    )
-                                {
-                                    break;
-                                }
-                                if title_outcome == Some("TITLE_CONTRACT")
-                                    && title_format_correction
-                                        .retry(&title_prepared.provider_id, &reply.text)
-                                {
-                                    // A separate, audited correction request; never reuse the failed receipt.
-                                    attempted_title_providers.pop();
-                                }
-                            }
-                            Err(failure) => {
-                                let (state_name, code) = match failure {
-                                    desktop_ordinary_chat_v1::Failure::Cancelled => {
-                                        ("CANCELLED", "CANCELLED")
-                                    }
-                                    desktop_ordinary_chat_v1::Failure::Explicit {code,..} | desktop_ordinary_chat_v1::Failure::Quantified {code,..} => ("FAILED", code),
-                                    desktop_ordinary_chat_v1::Failure::Unknown { code } => {
-                                        ("UNKNOWN", code)
-                                    }
-                                };
-                                if let Ok(store) = state.store.lock() {
-                                    let _ = store.update_desktop_conversation_title_attempt(
-                                        &title_prepared,
-                                        state_name,
-                                        Some(code),
-                                        None,
-                                    );
-                                }
-                                if state_name == "UNKNOWN" || state_name == "CANCELLED" {
-                                    break;
-                                }
-                            }
-                        }
-                    } else if let Ok(store) = state.store.lock() {
-                        let _ = store.update_desktop_conversation_title_attempt(
-                            &title_prepared,
-                            "FAILED",
-                            Some("CREDENTIAL_UNAVAILABLE"),
-                            None,
+                // Reply ownership ends independently of the bounded automatic title job.
+                if let Some(lease) = desktop_conversation_completion_v1::TitleWorkLease::acquire(
+                    worker_app.area().wire(), &accounted.workspace_id, &accounted.conversation_id,
+                ) {
+                    let worker_app = worker_app.clone();
+                    let accounted = accounted.clone();
+                    let client_submission_id = client_submission_id.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let _lease = lease;
+                        let state = worker_app.area_state();
+                        run_desktop_conversation_title_work(
+                            &state.store, &state.credentials, &accounted.workspace_id, &accounted.conversation_id,
+                            !no_progress && !attachment_search_incomplete,
+                            |request, secret| tauri::async_runtime::block_on(desktop_ordinary_chat_v1::execute_non_streaming(request, secret)),
+                            || emit_ordinary_chat_metadata_event(&worker_app, &accounted, &client_submission_id),
                         );
-                    }
+                    });
                 }
                 accounted
             }
@@ -29279,7 +29312,7 @@ mod tests {
             .save_desktop_model_service_setting_record("DEEPSEEK", true, "DEEPSEEK_V4_FLASH", 0)
             .unwrap();
         store
-            .save_desktop_model_service_setting_record("ZHIPU", true, "GLM_5_3_FLASH", 0)
+            .save_desktop_model_service_setting_record("QWEN", true, "QWEN_3_6_FLASH", 0)
             .unwrap();
         store
             .credentials
@@ -29287,7 +29320,7 @@ mod tests {
             .unwrap();
         store
             .credentials
-            .save_user_provided_secret("ZHIPU", b"fixture-secret-456")
+            .save_user_provided_secret("QWEN", b"fixture-secret-456")
             .unwrap();
         let prepared_chat = store
             .prepare_ordinary_chat(
@@ -29324,7 +29357,7 @@ mod tests {
             )
             .unwrap()
             .unwrap();
-        assert_eq!(first.provider_id, "DEEPSEEK");
+        assert_eq!(first.provider_id, "QWEN");
         store
             .update_desktop_conversation_title_attempt(
                 &first,
@@ -29341,8 +29374,8 @@ mod tests {
             )
             .unwrap()
             .unwrap();
-        assert_eq!(second.provider_id, "ZHIPU");
-        assert_eq!(second.model_id, "glm-5.3-flash");
+        assert_eq!(second.provider_id, "DEEPSEEK");
+        assert_eq!(second.model_id, "deepseek-flash");
     }
 
     #[test]

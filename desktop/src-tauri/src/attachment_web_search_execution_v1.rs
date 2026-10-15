@@ -72,6 +72,11 @@ pub fn cache_fingerprint(parent: &TransportRequest) -> String {
     ))
 }
 pub fn required(parent: &TransportRequest) -> bool {
+    if parent.provider_id == "OPENROUTER"
+        && scope::from_messages(&parent.messages).items.is_empty() && !native_parts(parent).is_empty() {
+        // Supported original media and enabled search stay in the same provider request.
+        return false;
+    }
     parent.web_search_route != "NONE"
         && (!scope::from_messages(&parent.messages).items.is_empty()
             || !native_parts(parent).is_empty())
@@ -513,6 +518,23 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn haiku_native_image_uses_search_enabled_original_request() {
+        let mut input=parent("OPENROUTER","anthropic/claude-haiku-5.5","OPENROUTER_SERVER_TOOL",0);
+        input.messages=json!([{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}]}]);
+        assert!(!required(&input), "No public text plan: native Haiku owns image and search together");
+        let body=chat::transport_body(&input);
+        assert_eq!(body["plugins"][0]["id"],"web");
+        assert_eq!(body["plugins"][0]["engine"],"exa");
+        assert!(body.get("tools").is_none());
+        assert!(body["messages"].to_string().contains("image_url"));
+        input.web_search_route="NONE".into();
+        let off=chat::transport_body(&input);
+        assert!(off.get("tools").is_none());assert!(off.get("tool_choice").is_none());assert!(off.get("plugins").is_none());
+        input.web_search_route="OPENROUTER_SERVER_TOOL".into();
+        input.messages=json!([{"role":"user","content":[{"type":"text","text":"分析"},{"type":"text","text":"### 附件：公开.md\n- Python 3.14于2025年发布。"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}]}]);
+        assert!(required(&input),"Readable report scope must remain fully covered");
+    }
     #[test]
     fn prose_footer_without_structured_sources_cannot_prove_attachment_evidence() {
         let input=parent("OPENROUTER","openai/gpt-6.1-sol","OPENROUTER_SERVER_TOOL",1);

@@ -83,6 +83,7 @@ import java.time.ZoneOffset
             submitDraftAndStartProviderRuntime=SubmitConversationDraftAndStartProviderRuntimeUseCase(conversations,conversations,conversations,machine,tree,clock),
             startProviderRuntimeForExistingUser=StartProviderRuntimeForExistingUserUseCase(conversations,conversations,machine,clock),
             applyRuntimeEvent=ApplyConversationRuntimeEventUseCase(conversations,conversations,machine),runtimeRepository=conversations,
+            scheduleCompletionWork={ _, work -> work() },
             conversationTitleRefiner=object : ConversationTitleRefiner {
                 override fun refine(sourceConversationId: ConversationId,source: ConversationTitleSource) = ConversationTitleRefinementResult.Failed("SYNTHETIC_DISABLED")
             },loadAssistantExperienceSettings={AssistantExperienceSettings(webSearchEnabled=webSearch,customInstructions=customInstructions)},

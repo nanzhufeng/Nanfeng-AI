@@ -1106,7 +1106,7 @@ internal fun ConversationWorkspaceDialog(
                             workMode = workMode,
                             onModeChanged = { enabled -> onSurfaceChanged(if (enabled) com.nanzhufeng.ai.domain.ConversationSurface.WORK else com.nanzhufeng.ai.domain.ConversationSurface.CHAT) },
                             onRequestRename = { conversation -> renameConversationId = conversation.id.value },
-                            renameConversationId = renameConversationId,
+                            renameConversationId = renameConversationId.takeIf { drawerOpen },
                             onRenameFinished = { renameConversationId = null },
                             onRequestProject = { conversation -> onSelect(conversation.id); choosingProject = true },
                             onRequestDelete = { conversation -> onSelect(conversation.id); confirmingDelete = true },
@@ -1437,7 +1437,7 @@ internal fun ConversationWorkspaceDialog(
                     temporaryTint = ConversationControlGlyph,
                     showContentActions = hasConversationContent,
                     title = selectedConversation?.title,
-                    renameRequested = selectedConversation?.id?.value == renameConversationId,
+                    renameRequested = !drawerOpen && selectedConversation?.id?.value == renameConversationId,
                     onRename = { title -> selectedConversation?.let { onManage(it, ConversationManagementAction.RENAME, title) }; renameConversationId = null },
                     onRenameFinished = { renameConversationId = null },
                     onCreateConversation = onCreate,
@@ -5502,35 +5502,55 @@ internal fun InlineConversationTitle(
 ) {
     var editing by remember(title) { mutableStateOf(false) }
     var value by remember(title) { mutableStateOf(TextFieldValue(title, TextRange(0, title.length))) }
-    var hadFocus by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     val currentClick by rememberUpdatedState(onClick)
     val currentLongClick by rememberUpdatedState(onLongClick)
     fun finish(save: Boolean) {
-        if (!editing) return
+        if (!editing || (save && value.text.isBlank())) return
         editing = false
+        keyboard?.hide()
         val updated = value.text.trim()
-        if (save && updated.isNotBlank() && updated != title) onRename(updated)
+        if (save && updated != title) onRename(updated)
         onRenameFinished()
     }
-    LaunchedEffect(renameRequested) { if (renameRequested && enabled) { value = TextFieldValue(title, TextRange(0, title.length)); editing = true } }
-    LaunchedEffect(editing) { if (editing) { hadFocus = false; focus.requestFocus() } }
-    if (editing) BasicTextField(
-        value = value, onValueChange = { value = it }, singleLine = true,
-        textStyle = style.copy(color = BodyText),
-        keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { finish(true) }),
-        modifier = modifier.focusRequester(focus)
-            .onFocusChanged { if (it.isFocused) hadFocus = true else if (hadFocus) finish(true) }
-            .onPreviewKeyEvent {
-                if (it.type == KeyEventType.KeyDown && (it.key == Key.Enter || it.key == Key.NumPadEnter)) { finish(true); true }
-                else if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { finish(false); true } else false
-            },
-    ) else Text(
+    fun begin() {
+        value = TextFieldValue(title, TextRange(0, title.length))
+        editing = true
+    }
+    LaunchedEffect(renameRequested) { if (renameRequested && enabled) begin() }
+    Text(
         title, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis,
         modifier = modifier.pointerInput(title, enabled) {
-            detectTapGestures(onTap = { currentClick() }, onLongPress = { currentLongClick() }, onDoubleTap = { if (enabled) { value = TextFieldValue(title, TextRange(0, title.length)); editing = true } })
+            detectTapGestures(onTap = { currentClick() }, onLongPress = { currentLongClick() },
+                onDoubleTap = { if (enabled) begin() })
         },
+    )
+    if (editing) AlertDialog(
+        onDismissRequest = { finish(false) },
+        containerColor = ForegroundSurface,
+        shape = RoundedCornerShape(24.dp),
+        title = { Text("重命名") },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { value = it },
+                singleLine = true,
+                label = { Text("对话标题") },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = BodyText),
+                shape = RoundedCornerShape(14.dp),
+                keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { finish(true) }),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus)
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown && (it.key == Key.Enter || it.key == Key.NumPadEnter)) { finish(true); true }
+                        else if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { finish(false); true } else false
+                    },
+            )
+            LaunchedEffect(Unit) { focus.requestFocus(); keyboard?.show() }
+        },
+        confirmButton = { TextButton(onClick = { finish(true) }, enabled = value.text.isNotBlank()) { Text("确认") } },
+        dismissButton = { TextButton(onClick = { finish(false) }) { Text("取消") } },
     )
 }
 

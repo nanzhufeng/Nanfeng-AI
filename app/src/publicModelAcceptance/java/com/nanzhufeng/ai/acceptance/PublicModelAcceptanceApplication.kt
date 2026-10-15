@@ -28,6 +28,10 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
         // Consume capability before constructing any owners. Restart never resends a paid task.
         val config = JSONObject(bootstrap.readText())
         check(bootstrap.delete())
+        if(config.optString("runner")=="automatic-title-native") {
+            Thread({TitleNativeAcceptanceOwner.run(this,config)},"automatic-title-native").start()
+            return
+        }
         if(config.optString("runner")=="reopen-existing") {
             Thread({
                 var calls=0
@@ -109,7 +113,10 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                             observed.copy(jsonBody=limited.toString(),body=null)
                         } else observed
                         val outcome=actualTransport.execute(outbound,credential)
-                        val wire=JSONObject(outbound.jsonBody)
+                        val wire=if(config.optString("fixture")=="haiku-image") {
+                            val bytes=ByteArrayOutputStream();outbound.effectiveBody().writeTo(bytes)
+                            JSONObject(bytes.toString(Charsets.UTF_8.name()))
+                        } else JSONObject(outbound.jsonBody)
                         val model=wire.optString("model","unknown")
                         physical.put(JSONObject().apply {
                             put("terminalFrames",terminalFrames);put("requestedModel",model);put("outcome",outcome.javaClass.simpleName)
@@ -157,7 +164,7 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                                 put("tools",JSONArray().apply {val tools=wire.optJSONArray("tools");for(i in 0 until (tools?.length()?:0)){val t=tools!!.optJSONObject(i)?:continue;put(JSONObject().apply {put("type",t.optString("type"));put("keys",JSONArray(t.keys().asSequence().toList()));put("externalWebAccess",t.opt("external_web_access"));put("searchContextSize",t.opt("search_context_size"))})}})
                                 val choice=wire.opt("tool_choice");put("choiceKind",if(choice is JSONObject) "object" else if(choice is String) "string" else "absent");if(choice is String)put("choiceValue",choice);if(choice is JSONObject){put("choiceType",choice.opt("type"));put("choiceMode",choice.opt("mode"))}
                                 put("input",JSONArray().apply {val input=wire.optJSONArray("input");for(i in 0 until (input?.length()?:0)){val item=input!!.optJSONObject(i)?:continue;put(JSONObject().apply {put("role",item.opt("role"));put("type",item.opt("type"));put("partTypes",JSONArray().apply {val parts=item.optJSONArray("content");for(j in 0 until (parts?.length()?:0))put(parts!!.optJSONObject(j)?.opt("type"))})})}})
-                                put("routingKeyPresent",wire.has("prompt_cache_key"));wire.optString("prompt_cache_key").takeIf {it.isNotEmpty()}?.let {key->put("routingKeyFingerprint",java.security.MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString(""){"%02x".format(it.toInt() and 255)})};put("maxOutputTokens",wire.opt("max_output_tokens"));put("stream",wire.opt("stream"));put("store",wire.opt("store"))})
+                                put("searchPlugins",wire.optJSONArray("plugins"));put("routingKeyPresent",wire.has("prompt_cache_key"));wire.optString("prompt_cache_key").takeIf {it.isNotEmpty()}?.let {key->put("routingKeyFingerprint",java.security.MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString(""){"%02x".format(it.toInt() and 255)})};put("maxOutputTokens",wire.opt("max_output_tokens"));put("stream",wire.opt("stream"));put("store",wire.opt("store"))})
                             if(outcome is ProviderChatOutcome.StreamedResponse) {
                                 put("httpStatus",outcome.statusCode);put("finish",outcome.finishReason);put("returnedModel",outcome.returnedModelId)
                                 put("nativeSources",JSONArray(outcome.webSources.map {it.url}));put("webSearchPerformed",outcome.webSearchPerformed)
@@ -186,6 +193,10 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                 val rust=if(fresh) listOf("128.0","127.0").take(count).map {"- Firefox $it 正式发布，核验mozilla.org官方发布日期。"} else listOf("1.90.0","1.89.0","1.88.0","1.87.0","1.86.0","1.85.0","1.84.0","1.83.0").take(count).map {"- Rust $it 正式发布，核验blog.rust-lang.org官方发布日期。"}
                 val fixture=config.optString("fixture")
                 val suites=when(fixture) {
+                    "haiku-image" -> {
+                        check(config.optString("filter")=="CLAUDE_HAIKU_5_5")
+                        listOf(listOf(import(container,"image/png","public-sample-order.png",assets.open("public-search-fixtures/public-sample-order.png").use {it.readBytes()})))
+                    }
                     "rc-text", "rc-usage" -> listOf(emptyList())
                     "user-report" -> listOf(listOf(import(container,"text/markdown","20261011-OCR.md",File(filesDir,"actual-report.md").readBytes())))
                     "formats" -> {
@@ -211,7 +222,7 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                     val snapshot = container.conversationRepository.save(ConversationTreeService(Clock.systemUTC()).create("公开双文件-${preset.name}"))
                     val id = snapshot.conversation.id
                     val draft = container.conversationRepository.saveDraft(id, ConversationDraft(
-                        text=if(fixture=="rc-usage") "只回答算式结果：1+1。不要解释。" else if(fixture=="user-report") config.optString("requestText","分析报告") else if(fixture=="rc-text") config.optString("requestText","请实际联网核验 Go 1.23.0 与 Firefox 138.0 的官方发布日期，中文简短列出两项日期与官方来源，并比较两者发布节奏。") else "分析本次全部公开附件，所有事项都实际联网核验，中文简短回答并引用来源。",
+                        text=if(fixture=="haiku-image") "分析这张订单图，用100字以内回答。" else if(fixture=="rc-usage") "只回答算式结果：1+1。不要解释。" else if(fixture=="user-report") config.optString("requestText","分析报告") else if(fixture=="rc-text") config.optString("requestText","请实际联网核验 Go 1.23.0 与 Firefox 138.0 的官方发布日期，中文简短列出两项日期与官方来源，并比较两者发布节奏。") else "分析本次全部公开附件，所有事项都实际联网核验，中文简短回答并引用来源。",
                         attachments=references, updatedAt=java.time.Instant.now()))
                     val executor = container.normalChatOpenRouterExecutor
                     val routing=executor.routingSnapshot().copy(webSearchEnabled=fixture!="rc-usage").let { if(preset==ModelPresetId.QWEN_3_6_FLASH) it.copy(usablePresets=setOf(preset)) else it }

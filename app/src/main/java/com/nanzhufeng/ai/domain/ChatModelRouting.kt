@@ -50,6 +50,7 @@ object ComposerModelRoutingCatalog {
         ComposerModelChoice("${PREFIX}deep:gpt-sol", ComposerModelSlot.DEEP, "GPT-6.1 Sol", listOf(ModelPresetId.GPT_6_1_SOL)),
         ComposerModelChoice("${PREFIX}deep:deepseek-pro", ComposerModelSlot.DEEP, "DeepSeek V4 Pro", listOf(ModelPresetId.DEEPSEEK_V4_PRO)),
         ComposerModelChoice("${PREFIX}deep:muse-wonder", ComposerModelSlot.DEEP, "Muse Wonder", listOf(ModelPresetId.MUSE_WONDER)),
+        ComposerModelChoice("${PREFIX}deep:gemini-4-argon", ComposerModelSlot.DEEP, "Gemini 4 Argon", listOf(ModelPresetId.GEMINI_4_ARGON)),
         ComposerModelChoice("${PREFIX}deep:glm-5.3", ComposerModelSlot.DEEP, "GLM-5.3", listOf(ModelPresetId.GLM_5_3)),
         ComposerModelChoice("${PREFIX}deep:qwen-max", ComposerModelSlot.DEEP, "Qwen3.8-Max", listOf(ModelPresetId.QWEN_3_8_MAX)),
     )

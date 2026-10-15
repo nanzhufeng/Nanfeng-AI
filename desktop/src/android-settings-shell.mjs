@@ -33,6 +33,7 @@ export const MODEL_SERVICE_PREVIEW_SETTINGS = Object.freeze([
     modelPreset('CLAUDE_HAIKU_5_5', 'Claude Haiku 5.5', '快速获得简洁答案。', 'Anthropic · OpenRouter'),
     modelPreset('GPT_6_1_SOL', 'GPT-6.1 Sol', '前沿能力，适合专业复杂任务。', 'OpenAI · OpenRouter'),
     modelPreset('GPT_6_LUNA', 'GPT-6 Luna', '能力与成本更均衡。', 'OpenAI · OpenRouter'),
+    modelPreset('GEMINI_4_ARGON', 'Gemini 4 Argon', '适合深度推理、复杂分析与代码任务。', 'Google · OpenRouter'),
     modelPreset('MUSE_WONDER', 'Muse Wonder', '适合复杂分析与长程任务。', 'Meta · OpenRouter'),
     modelPreset('GEMINI_3_8_FLASH', 'Gemini 3.8 Flash', '快速处理文字、图片和文件任务。', 'Google · OpenRouter'),
   ], nonChatCapabilities: [] },

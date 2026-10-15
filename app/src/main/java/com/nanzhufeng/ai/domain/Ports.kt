@@ -55,6 +55,17 @@ interface ConversationRepository {
      */
     fun saveVerifiedCloudMerge(snapshot: ConversationSnapshot): ConversationSnapshot = save(snapshot)
     fun findById(id: ConversationId): ConversationSnapshot?
+    /** Commit only against the latest pending title, preserving conversation activity time. Persistent owners make read/write atomic. */
+    fun completeAutomaticTitle(id: ConversationId, title: String, updatedAt: java.time.Instant): Boolean = synchronized(this) {
+        val latest = findById(id) ?: return@synchronized false
+        if (!latest.conversation.autoTitlePending) return@synchronized false
+        save(latest.copy(conversation = latest.conversation.copy(
+            title = title, autoTitlePending = false,
+            titleRevision = Math.addExact(latest.conversation.titleRevision ?: 0L, 1L),
+            revision = Math.addExact(latest.conversation.revision, 1L),
+        )))
+        true
+    }
     fun listActive(): List<Conversation>
     /** A recycle-bin purge is explicit and irreversible; implementations must remove the local conversation tree atomically. */
     fun permanentlyDelete(conversationId: ConversationId, expectedRevision: Long): ConversationPurgeResult =

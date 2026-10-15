@@ -55,6 +55,25 @@ class P6IConversationAutoTitleRoomContractsTest {
         }
     }
 
+    @Test fun `late title preserves current draft and never replaces manual title`() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, NanfengAiDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val repository = RoomConversationRepository(database, draftClock = clock)
+            val created = CreateConversationUseCase(ConversationTreeService(clock), repository).execute() as ConversationMutationResult.Saved
+            val id = created.snapshot.conversation.id
+            SaveConversationDraftUseCase(repository, clock).execute(id, "下一条正在编辑的问题", emptyList())
+            assertTrue(repository.completeAutomaticTitle(id, "自动标题正常生成", clock.instant()))
+            val titled = repository.findById(id)!!
+            assertEquals("自动标题正常生成", titled.conversation.title)
+            assertEquals("下一条正在编辑的问题", titled.draft.text)
+            repository.save(titled.copy(conversation = titled.conversation.copy(title = "用户手动设置标题")))
+            assertEquals(false, repository.completeAutomaticTitle(id, "迟到的自动标题结果", clock.instant()))
+            assertEquals("用户手动设置标题", repository.findById(id)!!.conversation.title)
+            assertEquals("下一条正在编辑的问题", repository.findById(id)!!.draft.text)
+        } finally { database.close() }
+    }
+
     @Test fun `schema twenty five to twenty six preserves conversations and keeps old titles ineligible`() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val name = "p6i-${UUID.randomUUID()}.db"

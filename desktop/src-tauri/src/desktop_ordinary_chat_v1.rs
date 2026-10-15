@@ -530,7 +530,7 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
             "max_tokens":request.max_output_tokens,"output_config":{"effort":if matches!(request.model_id.as_str(),"claude-opus-5-5"|"claude-opus-5.5") {"medium"}else{"high"}}});
     }
     if muse_responses_search(request) {
-        return json!({"model":request.model_id,"input":responses_input(&request.messages),
+        return json!({"model":request.model_id,"input":responses_input(&{let mut messages=request.messages.as_array().cloned().unwrap_or_default();messages.insert(0,json!({"role":"system","content":OPENROUTER_LIVE_SEARCH_INSTRUCTION}));Value::Array(messages)}),
             "tools":[{"type":"openrouter:web_search"}],"store":false,"stream":true,"max_output_tokens":request.max_output_tokens});
     }
     let mut body = match request.web_search_route.as_str() {
@@ -569,7 +569,7 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
                 "stream_options":{"include_usage":true},"max_tokens":request.max_output_tokens,"temperature":0.2
             });
             let object = body.as_object_mut().expect("request body is an object");
-            if request.provider_id=="OPENROUTER" && request.model_id=="google/gemini-3.8-flash" && request.web_search_route=="OPENROUTER_SERVER_TOOL" && !request.grounded_answer {
+            if request.provider_id=="OPENROUTER" && request.web_search_route=="OPENROUTER_SERVER_TOOL" && !request.grounded_answer {
                 if let Some(messages)=object.get_mut("messages").and_then(Value::as_array_mut) {messages.insert(0,json!({"role":"system","content":OPENROUTER_LIVE_SEARCH_INSTRUCTION}));}
             }
             if request.provider_id.starts_with("RELAYCORE_") { object.remove("temperature"); }
@@ -578,6 +578,9 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
             }
             if request.structured_json {
                 object.insert("response_format".into(), json!({"type":"json_object"}));
+            }
+            if request.disable_thinking && request.provider_id == "QWEN" {
+                object.insert("enable_thinking".into(), json!(false));
             }
             if request.disable_thinking && request.provider_id == "DEEPSEEK" {
                 object.insert("thinking".into(), json!({"type":"disabled"}));
@@ -614,10 +617,10 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
                     object.insert("provider".into(),json!({"only":["OpenAI"],"allow_fallbacks":false}));
                 }
                 "OPENROUTER_SERVER_TOOL" => {
-                    if request.provider_id=="OPENROUTER" && request.model_id=="google/gemini-3.8-flash" {
+                    if request.provider_id=="OPENROUTER" && matches!(request.model_id.as_str(), "google/gemini-3.8-flash" | "google/gemini-4-argon" | "anthropic/claude-haiku-5.5") {
                         // The optional server tool can skip historical questions. Start native
                         // grounding at request entry without changing model, key or recipient.
-                        if !request.grounded_answer {object.insert("plugins".into(),json!([{"id":"web","engine":"native","max_results":5}]));}
+                        if !request.grounded_answer {object.insert("plugins".into(),json!([{"id":"web","engine":if request.model_id=="anthropic/claude-haiku-5.5" {"exa"} else {"native"},"max_results":5}]));}
                     } else {
                         object.insert("tools".into(), json!([{"type":"openrouter:web_search","parameters":{"max_results":5,"max_total_results":10}}]));
                     }
@@ -683,7 +686,7 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
     body
 }
 
-const OPENROUTER_LIVE_SEARCH_INSTRUCTION: &str = "本轮已启用实时网页搜索。回答前必须调用已提供的原生网页搜索工具，核对当前问题并引用实际返回来源；不得用模型记忆或自行编写的网址冒充联网，工具失败或没有证据时如实说明。";
+pub(crate) const OPENROUTER_LIVE_SEARCH_INSTRUCTION: &str = "本轮已启用实时网页搜索。以联网开关为准，必须实际执行搜索，不按问题关键词判断是否联网。若本请求已附服务端实际搜索资料则据此作答；否则在回答前调用已提供的搜索工具。只查询与问题或图片相关的最小公开关键词，不搜索私人信息。引用实际返回来源；不得把模型记忆或自行编写的网址当作搜索结果。工具失败或实际结果为空时如实说明。";
 
 fn muse_responses_search(request: &TransportRequest) -> bool {
     request.provider_id=="OPENROUTER" && request.model_id=="meta/muse-wonder"
@@ -755,11 +758,10 @@ pub async fn execute_non_streaming(
     let mut builder = Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(if request.provider_id == "DEEPSEEK" {
-            90
-        } else {
-            180
-        }))
+        .timeout(Duration::from_secs(if request.idempotency_key.starts_with("conversation-title-")
+            && request.disable_thinking && request.structured_json {
+            crate::desktop_conversation_title_v1::REQUEST_TIMEOUT_SECS
+        } else if request.provider_id == "DEEPSEEK" { 90 } else { 180 }))
         .build()
         .map_err(|_| Failure::Unknown { code: "CLIENT" })?
         .post(if muse_responses_search(&request) {muse_responses_endpoint(&request.endpoint)} else {request.endpoint.clone()})
@@ -806,6 +808,9 @@ pub async fn execute_non_streaming(
         completed.actual_model_id = relay_model_identity(completed.actual_model_id.as_deref());
         // Relay's unqualified usage.cost has no verified settlement currency.
         completed.reported_cost_micros = None;
+    }
+    if !request.grounded_answer && request.web_search_route!="NONE" && !completed.web_search_verified {
+        return Err(Failure::Quantified{code:"WEB_SEARCH_NO_SOURCES",http_status:Some(status),reply:Box::new(completed)});
     }
     if muse_responses_search(&request) {
         if !completed.web_search_verified || completed.native_sources.is_empty() {return Err(Failure::Quantified{code:"WEB_SEARCH_NO_SOURCES",http_status:Some(status),reply:Box::new(completed)});}
@@ -1636,6 +1641,25 @@ pub async fn execute_streaming(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn short_title_requests_disable_thinking_without_changing_normal_chat() {
+        for (provider, model, thinking_field) in [("QWEN", "qwen3.6-flash", "enable_thinking"), ("DEEPSEEK", "deepseek-flash", "thinking")] {
+            let mut r = request("https://example.invalid/chat/completions".into());
+            r.provider_id=provider.into(); r.model_id=model.into();
+            r.max_output_tokens=crate::desktop_conversation_title_v1::MAX_OUTPUT_TOKENS;
+            r.structured_json=true; r.disable_thinking=true;
+            let body=non_streaming_body(&r);
+            assert_eq!(body["max_tokens"],256);
+            assert_eq!(body["response_format"]["type"],"json_object");
+            if provider=="QWEN" { assert_eq!(body[thinking_field],false); }
+            else { assert_eq!(body[thinking_field]["type"],"disabled"); }
+            r.disable_thinking=false; r.structured_json=false;
+            let normal=non_streaming_body(&r);
+            assert!(normal.get(thinking_field).is_none());
+            assert!(normal.get("response_format").is_none());
+        }
+    }
+
     #[tokio::test]
     async fn messages_empty_query_does_not_abort_later_verified_answer() {
         let empty = json!({"type":"content_block_start","content_block":{"type":"web_search_tool_result","content":[]}});
@@ -2083,14 +2107,16 @@ mod tests {
     }
     #[test]
     fn gemini_toggle_selects_native_grounding_for_all_message_shapes_only_when_enabled() {
+        for model_id in ["google/gemini-3.8-flash", "google/gemini-4-argon"] {
         for messages in [json!([{"role":"user","content":"力帆与理想有什么关系"}]),json!([{"role":"user","content":[{"type":"text","text":"first.md fact"},{"type":"text","text":"second.json fact"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AQID"}}]}])] {
             for route in ["NONE","OPENROUTER_SERVER_TOOL"] {for grounded in [false,true] {
-                let mut input=request("https://openrouter.ai/api/v1/chat/completions".into());input.provider_id="OPENROUTER".into();input.model_id="google/gemini-3.8-flash".into();input.web_search_route=route.into();input.grounded_answer=grounded;input.messages=messages.clone();
+                let mut input=request("https://openrouter.ai/api/v1/chat/completions".into());input.provider_id="OPENROUTER".into();input.model_id=model_id.into();input.web_search_route=route.into();input.grounded_answer=grounded;input.messages=messages.clone();
                 let body=transport_body(&input);let search=route=="OPENROUTER_SERVER_TOOL" && !grounded;
                 assert_eq!(body.get("plugins").is_some(),search);assert!(body.get("tools").is_none());assert!(body.get("tool_choice").is_none());assert_eq!(body["model"],input.model_id);
                 if search {assert_eq!(body["plugins"],json!([{"id":"web","engine":"native","max_results":5}]));}
                 assert_eq!(body["messages"].as_array().unwrap().last(),messages.as_array().unwrap().last());
             }}
+        }
         }
         let mut other=request("https://openrouter.ai/api/v1/chat/completions".into());other.provider_id="OPENROUTER".into();other.model_id="anthropic/claude-sonnet-5.5".into();other.web_search_route="OPENROUTER_SERVER_TOOL".into();
         let body=transport_body(&other);assert!(body.get("plugins").is_none());assert_eq!(body["tools"][0]["type"],"openrouter:web_search");
@@ -2141,9 +2167,9 @@ mod tests {
     fn muse_readable_file_parts_keep_all_text_and_native_media_keeps_original_wire() {
         let mut input=request("https://openrouter.ai/api/v1/chat/completions".into());input.provider_id="OPENROUTER".into();input.model_id="meta/muse-wonder".into();input.web_search_route="OPENROUTER_SERVER_TOOL".into();
         input.messages=json!([{"role":"user","content":[{"type":"text","text":"first Markdown file"},{"type":"text","text":"second JSON file"}]}]);
-        let body=transport_body(&input);assert_eq!(body["input"][0]["content"][0]["text"],"first Markdown file");assert_eq!(body["input"][0]["content"][1]["text"],"second JSON file");assert_eq!(muse_responses_endpoint(&input.endpoint),"https://openrouter.ai/api/v1/responses");
+        let body=transport_body(&input);let user=body["input"].as_array().unwrap().iter().find(|m|m["role"]=="user").unwrap();assert_eq!(user["content"][0]["text"],"first Markdown file");assert_eq!(user["content"][1]["text"],"second JSON file");assert_eq!(muse_responses_endpoint(&input.endpoint),"https://openrouter.ai/api/v1/responses");
         input.messages[0]["content"].as_array_mut().unwrap().push(json!({"type":"image_url","image_url":{"url":"data:image/png;base64,AQID"}}));
-        assert!(!muse_responses_search(&input));let native=transport_body(&input);assert_eq!(native["messages"],input.messages);assert!(native.get("input").is_none());assert!(native.get("tool_choice").is_none());
+        assert!(!muse_responses_search(&input));let native=transport_body(&input);assert_eq!(native["messages"].as_array().unwrap().iter().filter(|m|m["role"]!="system").cloned().collect::<Vec<_>>(),input.messages.as_array().unwrap().clone());assert_eq!(native["messages"][0]["content"],OPENROUTER_LIVE_SEARCH_INSTRUCTION);assert!(native.get("input").is_none());assert!(native.get("tool_choice").is_none());
     }
 
     #[test]
@@ -2195,6 +2221,20 @@ mod tests {
             web_search_route: "NONE".into(),
             structured_json: false,
             disable_thinking: false, grounded_answer:false,explicit_search_query:None,
+        }
+    }
+
+    #[test]
+    fn non_streaming_web_switch_requires_actual_proof_and_keeps_missing_proof_fee() {
+        for (enabled,grounded) in [(false,false),(true,false),(true,true)] {
+            let raw=format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{}",json!({"model":"anthropic/claude-haiku-5.5","choices":[{"message":{"content":"received image analysis"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":20,"cost":0.0001}}));
+            let mut input=request(mock_server_with_stream(Box::leak(raw.into_bytes().into_boxed_slice()),false));
+            input.grounded_answer=grounded;input.model_id="anthropic/claude-haiku-5.5".into();input.web_search_route=if enabled {"OPENROUTER_SERVER_TOOL"}else{"NONE"}.into();
+            let result=tokio::runtime::Runtime::new().unwrap().block_on(execute_non_streaming(input,Zeroizing::new(b"fixture-secret-123".to_vec())));
+            if enabled && !grounded {
+                let failure=result.unwrap_err();assert!(matches!(failure,Failure::Quantified{code:"WEB_SEARCH_NO_SOURCES",..}));
+                let reply=failure.quantified_reply().unwrap();assert_eq!(reply.text,"received image analysis");assert_eq!(reply.reported_cost_micros,Some(100));
+            } else {assert_eq!(result.unwrap().text,"received image analysis");}
         }
     }
 

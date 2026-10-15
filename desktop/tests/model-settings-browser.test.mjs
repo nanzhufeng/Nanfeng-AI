@@ -14,7 +14,7 @@ test('all provider models remain directly selectable and only RC has family tabs
     assert.equal([...html.matchAll(/aria-label="模型平台"/g)].length, 1);
   }
   const openrouter = renderAndroidSettingsShell({page:'model-configuration'});
-  assert.equal([...openrouter.matchAll(/role="radio"/g)].length,7);
+  assert.equal([...openrouter.matchAll(/role="radio"/g)].length,8);
   assert.ok(openrouter.includes('model-settings-model-list scrollable'));
   assert.match(openrouter,/data-preset-id="MUSE_WONDER"/);
   assert.ok(!openrouter.includes('Claude Fable 5') && !openrouter.includes('Kimi K3'));

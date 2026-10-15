@@ -100,6 +100,8 @@ data class ChatRequestOptions(
     val explicitSearchQuery:String?=null,
     /** Opaque identity for this one retrieval task; never derived from user material. */
     val relayTaskRoutingKey:String?=null,
+    /** Explicit short-title task; ordinary chat never enables this flag. */
+    val shortTitle: Boolean = false,
 ) {
     init { require(relayTaskRoutingKey==null || relayTaskRoutingKey.matches(Regex("[0-9a-f]{64}"))) }
     val liveWebSearch: Boolean get() = webSearchRoute != OfficialWebSearchRoute.NONE
@@ -382,8 +384,8 @@ open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
     }
 
     override fun prepareContinuation(model: ResolvedModel, messages: List<ChatHistoryMessage>, attachments: List<ChatAttachment>, stream: Boolean, options: ChatRequestOptions): ChatAdapterPrepareResult {
-        val searchMessages=if(model.modelId=="google/gemini-3.8-flash" && options.webSearchRoute==OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL && !options.groundedAnswer)
-            listOf(ChatHistoryMessage("system",OPENROUTER_LIVE_SEARCH_INSTRUCTION))+messages else messages
+        val searchMessages=if(options.webSearchRoute==OfficialWebSearchRoute.OPENROUTER_SERVER_TOOL && !options.groundedAnswer)
+            listOf(ChatHistoryMessage("system",WebSearchGroundingPolicy.ENABLED_INSTRUCTION))+messages else messages
         val effectiveOptions = if (options.reasoningEffort == null) options.copy(reasoningEffort = openRouterDefaultReasoningEffort(model.modelId)) else options
         // OpenRouter's `file` content part is for provider-supported file modalities such as PDF.
         // Markdown/TXT/JSON/CSV must remain model-visible text; sending them as generic `file`
@@ -413,7 +415,6 @@ open class OpenRouterChatAdapter : OpenAiCompatibleChatAdapter() {
     override fun decodeStreamingEvent(body: String) = decodeOpenAiCompatibleStreamingEvent(body)
 }
 
-private const val OPENROUTER_LIVE_SEARCH_INSTRUCTION = "本轮已启用实时网页搜索。回答前必须调用已提供的原生网页搜索工具，核对当前问题并引用实际返回来源；不得用模型记忆或自行编写的网址冒充联网，工具失败或没有证据时如实说明。"
 
 internal const val KIMI_K3_MODEL_ID = "moonshotai/kimi-k3"
 internal const val GROK_4_1_FAST_MODEL_ID = "x-ai/grok-4.1-fast"
@@ -481,6 +482,9 @@ class QwenChatAdapter : OpenAiCompatibleChatAdapter() {
     }
 
     protected override fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel, options: ChatRequestOptions) {
+        if (options.shortTitle) {
+            append(",\"enable_thinking\":false,\"response_format\":{\"type\":\"json_object\"}")
+        }
         if (model.modelId == QWEN_3_8_MAX_MODEL_ID) {
             // Qwen3.8-Max otherwise defaults to xhigh (131,072 reasoning tokens). Low preserves
             // deliberate reasoning with a provider-defined 4,096-token budget. Historical
@@ -537,6 +541,12 @@ class QwenChatAdapter : OpenAiCompatibleChatAdapter() {
 }
 class DeepSeekChatAdapter : OpenAiCompatibleChatAdapter() {
     override val providerId = ProviderId.DEEPSEEK
+
+    protected override fun StringBuilder.appendProviderOwnedRequestOptions(model: ResolvedModel, options: ChatRequestOptions) {
+        if (options.shortTitle) {
+            append(",\"thinking\":{\"type\":\"disabled\"},\"response_format\":{\"type\":\"json_object\"}")
+        }
+    }
 
     override fun endpointPath(options: ChatRequestOptions): String =
         if (options.webSearchRoute == OfficialWebSearchRoute.DEEPSEEK_MESSAGES) "/anthropic/v1/messages" else super.endpointPath(options)
@@ -733,14 +743,18 @@ private fun StringBuilder.appendZhipuWebSearch(query: String? = null, count: Int
     append(",\"content_size\":\"medium\"}}],\"tool_choice\":\"auto\"")
 }
 
-/** Gemini's server tool may skip historical questions. Native web grounding starts at
+/** These deployments can skip a callable server tool. Native web grounding starts at
  * request entry; it keeps the selected model/recipient and still requires actual sources. */
 private fun StringBuilder.appendOpenRouterSearch(options: ChatRequestOptions, model: ResolvedModel?) {
-    if(model?.providerId==ProviderId.OPENROUTER && model.modelId=="google/gemini-3.8-flash") {
+    if(model?.providerId==ProviderId.OPENROUTER && model.modelId=="anthropic/claude-haiku-5.5") {
+        if(!options.groundedAnswer) append(",\"plugins\":[{\"id\":\"web\",\"engine\":\"exa\",\"max_results\":5}]")
+    } else if(model?.providerId==ProviderId.OPENROUTER && model.modelId in setOf("google/gemini-3.8-flash", "google/gemini-4-argon")) {
         if(!options.groundedAnswer) append(",\"plugins\":[{\"id\":\"web\",\"engine\":\"native\",\"max_results\":5}]")
     } else if(options.openRouterNativeSearchOnly) {
         append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"engine\":\"native\"}}],\"tool_choice\":\"required\",\"provider\":{\"only\":[\"OpenAI\"],\"allow_fallbacks\":false}")
-    } else append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"max_results\":5,\"max_total_results\":10}}]")
+    } else {
+        append(",\"tools\":[{\"type\":\"openrouter:web_search\",\"parameters\":{\"max_results\":5,\"max_total_results\":10}}]")
+    }
 }
 
 private fun StringBuilder.appendRequestOptions(options: ChatRequestOptions, stream: Boolean, webSearchQuery: String? = null, webSearchResultCount: Int = 5, model: ResolvedModel? = null) {

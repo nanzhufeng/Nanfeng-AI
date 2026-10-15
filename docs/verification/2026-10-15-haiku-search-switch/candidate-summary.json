@@ -1,0 +1,83 @@
+{
+  "macCandidates": [
+    {
+      "candidate": "mac-live.json",
+      "state": "FAILED",
+      "error": "Explicit { code: \"OUTPUT_LIMIT\", http_status: Some(200), quantified_reply_present: true }",
+      "sourceCount": 0,
+      "settlements": [
+        {
+          "actual": "anthropic/claude-haiku-5.5",
+          "currency": "USD",
+          "kind": "FINAL_MEASURED",
+          "micros": 11990,
+          "model": "anthropic/claude-haiku-5.5",
+          "source": "PROVIDER_RESPONSE"
+        }
+      ]
+    },
+    {
+      "candidate": "mac-live-2048.json",
+      "state": "FAILED",
+      "error": "Explicit { code: \"WEB_SEARCH_NO_SOURCES\", http_status: Some(200), quantified_reply_present: true }",
+      "sourceCount": 0,
+      "settlements": [
+        {
+          "actual": "anthropic/claude-haiku-5.5",
+          "currency": "USD",
+          "kind": "FINAL_MEASURED",
+          "micros": 11963,
+          "model": "anthropic/claude-haiku-5.5",
+          "source": "PROVIDER_RESPONSE"
+        }
+      ]
+    },
+    {
+      "candidate": "mac-live-native-plugin.json",
+      "state": "COMPLETED",
+      "error": null,
+      "sourceCount": 1,
+      "settlements": [
+        {
+          "actual": "anthropic/claude-haiku-5.5",
+          "currency": "USD",
+          "kind": "FINAL_MEASURED",
+          "micros": 12048,
+          "model": "anthropic/claude-haiku-5.5",
+          "source": "PROVIDER_RESPONSE"
+        }
+      ]
+    },
+    {
+      "candidate": "mac-live-native-required.json",
+      "state": "FAILED",
+      "error": "Explicit { code: \"WEB_SEARCH_NO_SOURCES\", http_status: Some(200), quantified_reply_present: true }",
+      "sourceCount": 0,
+      "settlements": [
+        {
+          "actual": "anthropic/claude-haiku-5.5",
+          "currency": "USD",
+          "kind": "FINAL_MEASURED",
+          "micros": 12020,
+          "model": "anthropic/claude-haiku-5.5",
+          "source": "PROVIDER_RESPONSE"
+        }
+      ]
+    }
+  ],
+  "androidCandidates": [
+    {
+      "candidate": "first media acceptance helper",
+      "state": "LOCAL_EXECUTION_INTERRUPTED",
+      "reason": "test receipt helper parsed a segmented media body as compact JSON after transport returned",
+      "fee": "UNKNOWN; not zero; not counted as business pass"
+    },
+    {
+      "candidate": "native plugin",
+      "state": "WEB_SEARCH_NO_SOURCES",
+      "sourceCount": 0,
+      "footerCostLabel": "¥0.005699"
+    }
+  ],
+  "retryPolicy": "separate bounded test cases with explicit completion receipts; no retry of UNKNOWN historical user attempts"
+}

@@ -48,6 +48,7 @@ object ConversationCostEstimator {
     )
 
     private val prices = mapOf(
+        "google/gemini-4-argon" to price("openrouter-gemini-4-argon-2026-10-15-v1", "2", "10", "0.1"),
         "meta/muse-wonder" to price("openrouter-muse-wonder-2026-10-13-v1", "4", "20", "0.2"),
         "anthropic/claude-opus-5.5" to price("openrouter-public-prices-2026-10-09-v1", "4", "20", "0.2"),
         "anthropic/claude-sonnet-5.5" to price("openrouter-public-prices-2026-10-09-v1", "2", "10", "0.1"),

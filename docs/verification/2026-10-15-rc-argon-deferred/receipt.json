@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-15",
+  "decision": "User deferred RelayCore Argon; retain OpenRouter Argon only",
+  "rcSourceRestored": 28,
+  "onlyNewRcTestsRemoved": 2,
+  "sourceDriftAgainstPreRcSnapshot": 0,
+  "openRouterFrozenInputsUnchanged": 23,
+  "modelMaintenance": {
+    "chat": 21,
+    "special": 1,
+    "credentialGroups": 7,
+    "testsPassed": 16
+  },
+  "targetedDesktop": {
+    "passed": 26,
+    "failed": 0
+  },
+  "serviceCalls": [
+    {
+      "requested": "gemini-4-argon-high",
+      "http": 404,
+      "elapsedMs": 335,
+      "state": "GROUP_MODEL_NOT_SUPPORTED",
+      "fee": "UNKNOWN"
+    },
+    {
+      "requested": "gemini-4-argon",
+      "protocol": "Chat Completions nonstreaming",
+      "http": 504,
+      "elapsedMs": 59430,
+      "state": "FAILED_OR_UNKNOWN",
+      "fee": "UNKNOWN"
+    },
+    {
+      "requested": "gemini-4-argon",
+      "protocol": "Mac production streaming owner",
+      "http": 504,
+      "elapsedMs": 59364,
+      "state": "FAILED_OR_UNKNOWN",
+      "fee": "UNKNOWN"
+    }
+  ],
+  "completeAnswers": 0,
+  "qualityComparison": "NOT POSSIBLE",
+  "remainingPaidWork": false,
+  "newWebsiteKey": "Created with explicit authorization; retained outside application; no existing key group modified",
+  "temporaryCredentialBroker": "CLOSED; control file removed; in-memory references cleared",
+  "install": "NOT RUN",
+  "commitPush": "NOT RUN",
+  "restoredMac": {
+    "rustPassed": 444,
+    "rustIgnored": 34,
+    "nativeBuild": "PASS",
+    "webBuild": "PASS"
+  },
+  "contractGovernance": {
+    "contracts": 114,
+    "domains": 40,
+    "result": "PASS"
+  },
+  "restoredAndroid": {
+    "tests": 1507,
+    "passed": 1497,
+    "skipped": 10,
+    "failures": 0,
+    "errors": 0,
+    "suites": 322,
+    "debugBuild": "PASS"
+  },
+  "subsequentUserAuthorization": "User requested preserved-data formal overlay for Android and Mac after this withdrawal"
+}

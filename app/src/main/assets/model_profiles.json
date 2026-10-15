@@ -1,5 +1,6 @@
 {
   "profiles": [
+    {"presetId": "GEMINI_4_ARGON", "providerId": "OPENROUTER", "modelId": "google/gemini-4-argon", "displayName": "Gemini 4 Argon", "capabilities": {"text": true, "image": true, "pdf": true, "video": true, "audio": true, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true}, "contextWindowTokens": 1048576, "maxOutputTokens": 65536, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "health": "UNKNOWN", "metadataUpdatedAt": "2026-10-15T00:00:00Z"},
     {"presetId": "MUSE_WONDER", "providerId": "OPENROUTER", "modelId": "meta/muse-wonder", "displayName": "Muse Wonder", "capabilities": {"text": true, "image": true, "pdf": true, "video": true, "audio": true, "streaming": true, "tools": true, "reasoning": true, "structuredOutput": true}, "contextWindowTokens": 1048576, "maxOutputTokens": 943718, "tokenizerId": "heuristic-v1", "alternateModelIds": [], "health": "UNKNOWN", "metadataUpdatedAt": "2026-10-13T07:15:00Z"},
     {
       "presetId": "GROK_4_1_FAST", "providerId": "OPENROUTER", "modelId": "x-ai/grok-4.1-fast", "displayName": "Grok 4.1 Fast",

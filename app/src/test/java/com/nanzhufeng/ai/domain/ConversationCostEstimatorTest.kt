@@ -7,6 +7,13 @@ import org.junit.Test
 import java.time.Instant
 
 class ConversationCostEstimatorTest {
+    @Test fun `Argon uses verified introduction tariff and cache rate`() {
+        val price = requireNotNull(ConversationCostEstimator.estimate("google/gemini-4-argon", ProviderUsage(1_000, 100, cachedInputTokens=500), Instant.parse("2026-10-15T00:00:00Z")))
+        assertEquals(2050L, price.totalMicros)
+        assertEquals("USD", price.currencyCode)
+        assertEquals("openrouter-gemini-4-argon-2026-10-15-v1", price.priceVersion)
+    }
+
     @Test fun `current Beijing Qwen price is native CNY on both sides`() {
         val at=Instant.parse("2026-10-10T00:00:00Z")
         val plus=requireNotNull(ConversationCostEstimator.estimate("qwen3.7-plus",ProviderUsage(1_000_000,1_000_000),at))

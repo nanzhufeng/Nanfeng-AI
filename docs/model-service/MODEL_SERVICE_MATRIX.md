@@ -23,13 +23,14 @@
 |---|---|---|---|---|---|
 | `CLAUDE_OPUS_5_5` | Claude Opus 5.5 | `anthropic/claude-opus-5.5` | `OPENROUTER` | 深度 | OR_OPUS_MEDIUM |
 | `CLAUDE_SONNET_5_5` | Claude Sonnet 5.5 | `anthropic/claude-sonnet-5.5` | `OPENROUTER` | 日常 | OR_HIGH |
-| `CLAUDE_HAIKU_5_5` | Claude Haiku 5.5 | `anthropic/claude-haiku-5.5` | `OPENROUTER` | 日常 | 共用规则 |
+| `CLAUDE_HAIKU_5_5` | Claude Haiku 5.5 | `anthropic/claude-haiku-5.5` | `OPENROUTER` | 日常 | OR_HAIKU_SEARCH_ENTRY |
 | `GPT_6_1_SOL` | GPT-6.1 Sol | `openai/gpt-6.1-sol` | `OPENROUTER` | 深度 | OR_HIGH |
 | `GPT_6_LUNA` | GPT-6 Luna | `openai/gpt-6-luna` | `OPENROUTER` | 日常 | 共用规则 |
 | `GEMINI_3_8_FLASH` | Gemini 3.8 Flash | `google/gemini-3.8-flash` | `OPENROUTER` | 日常 | OR_GEMINI_SEARCH_INTENT |
 | `DEEPSEEK_V4_PRO` | DeepSeek V4 Pro | `deepseek-v4-pro` | `DEEPSEEK` | 深度 | DEEPSEEK_MESSAGES |
 | `DEEPSEEK_V4_FLASH` | DeepSeek V4.1 Flash | `deepseek-flash` | `DEEPSEEK` | 日常 | DEEPSEEK_MESSAGES |
 | `MUSE_WONDER` | Muse Wonder | `meta/muse-wonder` | `OPENROUTER` | 深度 | OR_MUSE_RESPONSES |
+| `GEMINI_4_ARGON` | Gemini 4 Argon | `google/gemini-4-argon` | `OPENROUTER` | 深度 | OR_GEMINI_SEARCH_INTENT |
 | `GLM_5_3` | GLM-5.3 | `glm-5.3` | `ZHIPU` | 深度 | GLM_BUDGET, ZHIPU_SCOPE |
 | `GLM_5_3_FLASH` | GLM-5.3 Flash | `glm-5.3-flash` | `ZHIPU` | 日常 | GLM_BUDGET, ZHIPU_SCOPE |
 | `QWEN_3_7_PLUS` | Qwen3.7-Plus | `qwen3.7-plus` | `QWEN` | 日常 | QWEN_CNY |
@@ -67,4 +68,5 @@
 | QWEN_CNY | `QWEN_3_7_PLUS`, `QWEN_3_8_MAX`, `QWEN_3_6_FLASH` | 新本地估算按冻结北京标准价CNY，历史金额不重算，估算不是结算。（[合同](../AI_USAGE_COST_AND_BALANCE_LEDGER_CONTRACT.md)） |
 | RC_GEMINI_GROUNDED_OUTPUT | `RELAYCORE_GEMINI_3_8_FLASH`, `RELAYCORE_GEMINI_3_1_PRO` | 检索后grounded普通回答与Android现行profile对齐，不发送legacy max_tokens；同模型／Key／端点，无自动协议恢复。合法完成但无可见正文明确EMPTY_COMPLETION，不伪造回答。（[合同](../C12_MODEL_NETWORK_PARITY_CONTRACT.md)） |
 | OR_MUSE_RESPONSES | `MUSE_WONDER` | Muse纯文字与完整本地可读文件经同OpenRouter／同模型／同Key的Responses原生搜索；不发送不兼容required，不转换媒体路线。结构化真实来源与终态仍验收；费用按真实Responses回执保留。（[合同](../C12_MODEL_NETWORK_PARITY_CONTRACT.md)） |
-| OR_GEMINI_SEARCH_INTENT | `GEMINI_3_8_FLASH` | 开启自身搜索时在原Chat Completions请求中使用web plugin（engine=native）启动原生grounding，保留搜索指令；不同时发可选server tool或不兼容required。文字／可读文件／媒体共用，禁用或grounded回答不注入；同模型／渠道／Key、来源成功门保持。该plugin兼容例外的后续迁移须同题真实验收。（[合同](../C12_MODEL_NETWORK_PARITY_CONTRACT.md)） |
+| OR_GEMINI_SEARCH_INTENT | `GEMINI_3_8_FLASH`, `GEMINI_4_ARGON` | 开启自身搜索时在原Chat Completions请求中使用web plugin（engine=native）启动原生grounding，保留搜索指令；不同时发可选server tool或不兼容required。文字／可读文件／媒体共用，禁用或grounded回答不注入；同模型／渠道／Key、来源成功门保持。该plugin兼容例外的后续迁移须同题真实验收。（[合同](../C12_MODEL_NETWORK_PARITY_CONTRACT.md)） |
+| OR_HAIKU_SEARCH_ENTRY | `CLAUDE_HAIKU_5_5` | 联网开启使用原模型OpenRouter Chat Completions web plugin engine=exa，在请求入口检索后由原Haiku回答；原生可选工具与required组合实测仍可跳过。无可读公共计划的原生媒体同请求处理，可读材料仍逐项核验，关闭或grounded不注入。（[合同](../C12_MODEL_NETWORK_PARITY_CONTRACT.md)） |

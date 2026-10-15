@@ -129,6 +129,7 @@ class NormalChatOpenRouterExecutor(
     },
     private val onConversationCompleted: (ConversationId) -> Unit = {},
     private val conversationTitleRefiner: ConversationTitleRefiner,
+    private val scheduleCompletionWork: (ConversationId, () -> Unit) -> Unit,
 ) {
     private val activeCalls = ConcurrentHashMap<ConversationId, ProviderChatCancellation>()
     private val cancellationRequested = ConcurrentHashMap.newKeySet<ConversationId>()
@@ -281,7 +282,7 @@ class NormalChatOpenRouterExecutor(
                     retried.webSearchUsed,
                 )
                 retried.incompleteCode?.let { return Result.Failed(it) }
-                completedResult(listOf(retried)).also { maybeRefineOpeningTitle(conversationId); onConversationCompleted(conversationId) }
+                completedResult(listOf(retried)).also { scheduleAfterCompletion(conversationId) }
             }
             is OneResult.Blocked -> Result.Blocked(retried.code).also { resumedRuntime.fail(retried.code.name) }
             is OneResult.Failed -> Result.Failed(retried.code).also { resumedRuntime.fail(retried.code.name) }
@@ -475,8 +476,7 @@ class NormalChatOpenRouterExecutor(
         if (replies.isEmpty()) return (lastBlocked?.let(Result::Blocked) ?: Result.Failed(lastFailed ?: Code.SERVICE)).also { runtime?.fail((lastBlocked ?: lastFailed ?: Code.SERVICE).name) }
         if (choice.isCompare && replies.size != choice.routes.size) return lastBlocked?.let(Result::Blocked) ?: Result.Failed(lastFailed ?: Code.SERVICE)
         if (runtime != null) return completedResult(replies.map { it.second }).also {
-            maybeRefineOpeningTitle(conversationId)
-            onConversationCompleted(conversationId)
+            scheduleAfterCompletion(conversationId)
         }
         val openingPrefix = loadAssistantExperienceSettings().firstReplyAddressPrefix(
             userMessage = userMessage,
@@ -510,8 +510,7 @@ class NormalChatOpenRouterExecutor(
                 replies.forEach { (_, reply) ->
                     contextSelectionAudits.bindAnswer(reply.attempt.attemptId, messageId, reply.webSearchUsed)
                 }
-                maybeRefineOpeningTitle(conversationId)
-                onConversationCompleted(conversationId)
+                scheduleAfterCompletion(conversationId)
             }
             }
             is com.nanzhufeng.ai.domain.ConversationMutationResult.Rejected -> Result.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
@@ -634,7 +633,7 @@ class NormalChatOpenRouterExecutor(
         val independentSearchRequired=independentGrant!=null
         if(independentSearchRequired && !credentials.hasCredential(ProviderId.ZHIPU)) return OneResult.Blocked(Code.WEB_SEARCH_COMPANION_NOT_CONFIGURED)
         val companionRequired = !independentSearchRequired && requestOptions.webSearchRoute == OfficialWebSearchRoute.RELAYCORE_COMPANION
-        val attachmentRetrievalRequired = attachments.isNotEmpty() && requestOptions.liveWebSearch
+        var attachmentRetrievalRequired = attachments.isNotEmpty() && requestOptions.liveWebSearch
         val searchModel = if (companionRequired) (modelResolver.resolve(RelayCoreWebSearchCompanion.preset) as? ResolvedModelResult.Resolved)?.model else if(attachmentRetrievalRequired) resolvedModel else null
         val searchConfig = if (companionRequired) configuration.execute(ProviderId.OPENROUTER) else if(attachmentRetrievalRequired) configuration.execute(adapter.executionProviderId(requestOptions)) else null
         if (companionRequired && (searchModel == null || searchConfig?.settings?.enabled != true || !credentials.hasCredential(ProviderId.OPENROUTER))) return OneResult.Blocked(Code.WEB_SEARCH_COMPANION_NOT_CONFIGURED)
@@ -685,6 +684,12 @@ class NormalChatOpenRouterExecutor(
         )) {
             is ChatAttachmentBridgeResult.Ready -> result
             is ChatAttachmentBridgeResult.Failed -> return OneResult.Blocked(Code.ATTACHMENT_MODEL_UNSUPPORTED)
+        }
+        // A supported OpenRouter multimodal route keeps original media and enabled search together.
+        // No extracted public text plan is not an inventory failure or permission to go offline.
+        if (providerId == ProviderId.OPENROUTER &&
+            bridged.unprojectedSearchAttachments.isNotEmpty() && AttachmentWebSearchPlan.build(bridged.searchText).items.isEmpty()) {
+            attachmentRetrievalRequired = false
         }
         val providerAttachments = bridged.providerAttachments
         val attachmentFact = attachmentReferenceInstruction(attachments)
@@ -799,8 +804,8 @@ class NormalChatOpenRouterExecutor(
             }
         }
         var frozenSearchCredential:CharArray?=null
-        var attachmentSearchIncomplete = false
-        var attachmentSearchIncompleteCode=Code.WEB_SEARCH_NO_SOURCES
+        var searchIncomplete = false
+        var searchIncompleteCode=Code.WEB_SEARCH_NO_SOURCES
         val serviceRequestTimes=mutableMapOf<String,java.time.Instant>()
         try {
         frozenSearchCredential=if(independentSearchRequired) credentials.loadCredential(ProviderId.ZHIPU) else if(companionRequired) credentials.loadCredential(ProviderId.OPENROUTER) else if(attachmentRetrievalRequired) credential.copyOf() else null
@@ -891,7 +896,7 @@ class NormalChatOpenRouterExecutor(
                     sendAttempts.transition(attempt.attemptId,setOf(NormalChatSendAttemptStatus.SENDING,NormalChatSendAttemptStatus.ACCEPTED),state,clock.instant(),failed.code)
                     return if (failed.code == "USER_CANCELLED" || cancellation?.isCancelled() == true) OneResult.Cancelled else OneResult.Failed(if(failed.code.startsWith("LOCAL_")) Code.LOCAL_ATTEMPT_PERSISTENCE else if(failed.code.startsWith("EGRESS_")) Code.EGRESS_AUTHORIZATION_REQUIRED else Code.WEB_SEARCH_COMPANION_FAILED)
                 }
-                attachmentSearchIncomplete = true
+                searchIncomplete = true
                 val materialSystem = listOfNotNull(
                     systemFactForRequest(ChatRequestOptions.Standard,experience,analysisMode.copy(liveEvidence=false),userMessage,isFirstAssistantReply),
                     attachmentFact,
@@ -907,8 +912,8 @@ class NormalChatOpenRouterExecutor(
                 null
             } else {
             val ready = result as RelayCoreWebSearchCompanion.Result.Ready
-            attachmentSearchIncomplete = !ready.completeScope
-            if(attachmentSearchIncomplete) attachmentSearchIncompleteCode=Code.WEB_SEARCH_SCOPE_INCOMPLETE
+            searchIncomplete = !ready.completeScope
+            if(searchIncomplete) searchIncompleteCode=Code.WEB_SEARCH_SCOPE_INCOMPLETE
             val evidenceText = ready.answerContext()
             val finalContext = contextBroker.assemble(snapshot,userMessage,budget,
                 attachmentMaterialInputTokens + com.nanzhufeng.ai.domain.ModelTokenEstimators.estimate(resolvedModel.tokenizerId,evidenceText),
@@ -1039,7 +1044,8 @@ class NormalChatOpenRouterExecutor(
                 }).copy(actualModelId=reply?.returnedModelId,cachedInputTokens=reply?.cachedInputTokens,reasoningTokens=reply?.reasoningTokens,
                     cost=reply?.let { resolvedConversationCost(com.nanzhufeng.ai.domain.accountingPricingModelId(executionProviderId,modelId,it.returnedModelId),ProviderUsage(it.inputTokens,it.outputTokens,cachedInputTokens=it.cachedInputTokens,reasoningTokens=it.reasoningTokens),it.reportedProviderCost,resolvedModel.displayName,requestedAt).first } ?: ProviderCost(),
                     costSource=reply?.let { resolvedConversationCost(com.nanzhufeng.ai.domain.accountingPricingModelId(executionProviderId,modelId,it.returnedModelId),ProviderUsage(it.inputTokens,it.outputTokens,cachedInputTokens=it.cachedInputTokens,reasoningTokens=it.reasoningTokens),it.reportedProviderCost,resolvedModel.displayName,requestedAt).second }))
-                val unverifiedSearch = requestOptions.liveWebSearch && reply != null && !reply.webSearchPerformed && reply.webSources.isEmpty()
+                val unverifiedSearch = reply != null && WebSearchGroundingPolicy.missingExecutionEvidence(requestOptions,reply.webSources,reply.webSearchPerformed)
+                if (unverifiedSearch) searchIncomplete = true
                 if(incomplete!=null){
                     val code=if(incomplete.safeCode=="OUTPUT_LIMIT") Code.OUTPUT_LIMIT else Code.RESPONSE_INCOMPLETE
                     runtime?.append(com.nanzhufeng.ai.domain.ChatContinuation.stripEcho(continuationText,incomplete.partial.text))
@@ -1073,10 +1079,10 @@ class NormalChatOpenRouterExecutor(
                         .withRequiredOpeningAddress(openingAddressPrefix))
                     runtime?.append(visibleReply.removePrefix(continuationText))
                     if (runtime?.persistenceRejected == true) return OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
-                    if(attachmentSearchIncomplete) runtime?.retainPartialAndFail(visibleReply,attachmentSearchIncompleteCode.name) else runtime?.complete(visibleReply)
+                    if(searchIncomplete) runtime?.retainPartialAndFail(visibleReply,searchIncompleteCode.name) else runtime?.complete(visibleReply)
                     if (runtime?.persistenceRejected == true) OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE) else {
                         val reasoningRetained = runtime?.retainProviderContinuation(reply.reasoning, if (modelId == KIMI_K3_MODEL_ID) reply.toolCalls else emptyList()) ?: true
-                        sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), if(attachmentSearchIncomplete) NormalChatSendAttemptStatus.FAILED else NormalChatSendAttemptStatus.COMPLETED, clock.instant(), if(attachmentSearchIncomplete) attachmentSearchIncompleteCode.name else null)
+                        sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), if(searchIncomplete) NormalChatSendAttemptStatus.FAILED else NormalChatSendAttemptStatus.COMPLETED, clock.instant(), if(searchIncomplete) searchIncompleteCode.name else null)
                         val usage = ProviderUsage(
                             inputTokens = reply.inputTokens,
                             outputTokens = reply.outputTokens,
@@ -1101,7 +1107,7 @@ class NormalChatOpenRouterExecutor(
                             webSearchRequested = requestOptions.liveWebSearch,
                             accountingCalls = accountingFacts.values.toList(),
                             accountingPersisted = !auditPersistenceFailed,
-                            incompleteCode = if(attachmentSearchIncomplete) attachmentSearchIncompleteCode else null,
+                            incompleteCode = if(searchIncomplete) searchIncompleteCode else null,
                         )
                     }
                 }
@@ -1110,6 +1116,7 @@ class NormalChatOpenRouterExecutor(
                 val bufferedTail = continuationStream.finish()
                 if(bufferedTail.isNotEmpty()) runtime?.append(bufferedTail)
                 val reply = outcome.text.cleanReply()
+                if (retrieval == null && WebSearchGroundingPolicy.missingExecutionEvidence(requestOptions,outcome.webSources,outcome.webSearchPerformed)) searchIncomplete = true
                 val incompleteResponsesStream = outcome.finishReason in setOf("INCOMPLETE", "FAILED", "MISSING_COMPLETION", "CONTENT_FILTER", "sensitive", "content_filter", "STREAM_PROVIDER_ERROR")
                 boundAudit.append(auditRecord(executionProviderId, endpoint, modelId, preset, choice, requestedEffortWire, requestedAt, outcome.inputTokens, outcome.outputTokens, when {
                     incompleteResponsesStream -> "RESPONSE_INCOMPLETE"
@@ -1155,10 +1162,10 @@ class NormalChatOpenRouterExecutor(
                     val visibleReply = com.nanzhufeng.ai.domain.ChatContinuation.join(continuationText,appendProviderWebSources(reply, outcome.webSources)
                         .withoutLeakedReasoningTailBeforeOpeningAddress(outcome.reasoning, openingAddressPrefix)
                         .withRequiredOpeningAddress(openingAddressPrefix))
-                    if(attachmentSearchIncomplete) runtime?.retainPartialAndFail(visibleReply,attachmentSearchIncompleteCode.name) else runtime?.complete(visibleReply)
+                    if(searchIncomplete) runtime?.retainPartialAndFail(visibleReply,searchIncompleteCode.name) else runtime?.complete(visibleReply)
                     if (runtime?.persistenceRejected == true) return OneResult.Failed(Code.LOCAL_RESPONSE_PERSISTENCE)
                     val reasoningRetained = runtime?.retainProviderContinuation(outcome.reasoning, if (modelId == KIMI_K3_MODEL_ID) outcome.toolCalls else emptyList()) ?: true
-                    sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), if(attachmentSearchIncomplete) NormalChatSendAttemptStatus.FAILED else NormalChatSendAttemptStatus.COMPLETED, clock.instant(), if(attachmentSearchIncomplete) attachmentSearchIncompleteCode.name else null)
+                    sendAttempts.transition(attempt.attemptId, setOf(NormalChatSendAttemptStatus.ACCEPTED, NormalChatSendAttemptStatus.STREAMING), if(searchIncomplete) NormalChatSendAttemptStatus.FAILED else NormalChatSendAttemptStatus.COMPLETED, clock.instant(), if(searchIncomplete) searchIncompleteCode.name else null)
                     val usage = ProviderUsage(
                         inputTokens = outcome.inputTokens,
                         outputTokens = outcome.outputTokens,
@@ -1167,7 +1174,7 @@ class NormalChatOpenRouterExecutor(
                     )
                     val (cost, source) = com.nanzhufeng.ai.domain.combinedAccountingCost(accountingFacts.values.toList())
                     val k3Tools = if (modelId == KIMI_K3_MODEL_ID) outcome.toolCalls else emptyList()
-                    val unverifiedSearch = requestOptions.liveWebSearch && !outcome.webSearchPerformed && outcome.webSources.isEmpty()
+                    val unverifiedSearch = WebSearchGroundingPolicy.missingExecutionEvidence(requestOptions,outcome.webSources,outcome.webSearchPerformed)
                     val notice = when {
                         providerId in com.nanzhufeng.ai.domain.RelayCoreModels.providers && outcome.returnedModelId == null -> CompletionNotice.MODEL_IDENTITY_UNVERIFIED
                         providerId in com.nanzhufeng.ai.domain.RelayCoreModels.providers && outcome.returnedModelId != modelId -> CompletionNotice.MODEL_IDENTITY_MISMATCH
@@ -1184,7 +1191,7 @@ class NormalChatOpenRouterExecutor(
                         webSearchRequested = requestOptions.liveWebSearch,
                             accountingCalls = accountingFacts.values.toList(),
                             accountingPersisted = !auditPersistenceFailed,
-                            incompleteCode = if(attachmentSearchIncomplete) attachmentSearchIncompleteCode else null,
+                            incompleteCode = if(searchIncomplete) searchIncompleteCode else null,
                     )
                 }
             }
@@ -1346,7 +1353,7 @@ class NormalChatOpenRouterExecutor(
     ): String {
         val date = clock.instant().atZone(clock.zone).toLocalDate()
         val runtimeFact = if (options.liveWebSearch) {
-            "系统事实：当前本机日期为 $date。本轮请求已由服务端启用${options.webSearchRoute.userLabel()}。请直接基于服务端提供的检索结果形成最终答复；不要输出、模拟或重复任何工具调用、工具参数、工具结果或 XML 工具标签。能取得公开来源时以 Markdown 链接标注；不得声称没有联网搜索能力。"
+            "系统事实：当前本机日期为 $date。${WebSearchGroundingPolicy.ENABLED_INSTRUCTION} 不要输出、模拟或重复工具调用、工具参数、工具结果或 XML 工具标签。"
         } else {
             "系统事实：当前本机日期为 $date。本轮已连接模型服务，但没有附带可验证的实时网页检索结果。不得把训练数据截止时间说成当前日期，也不得编造已联网检索；若问题依赖实时资料，应明确说明本轮未取得实时来源。"
         }
@@ -1510,6 +1517,16 @@ class NormalChatOpenRouterExecutor(
      * The regular reply has already been stored before this secondary request begins.  Re-read
      * immediately before committing so a manual rename wins even if it happened during title work.
      */
+    private fun scheduleAfterCompletion(conversationId: ConversationId) {
+        // These optional requests cannot extend Send ownership or revoke its committed result.
+        runCatching {
+            scheduleCompletionWork(conversationId) {
+                runCatching { maybeRefineOpeningTitle(conversationId) }
+                runCatching { onConversationCompleted(conversationId) }
+            }
+        }
+    }
+
     private fun maybeRefineOpeningTitle(conversationId: ConversationId) {
         val snapshot = conversations.findById(conversationId) ?: return
         if (!snapshot.conversation.autoTitlePending) return
@@ -1520,16 +1537,8 @@ class NormalChatOpenRouterExecutor(
         }
     }
 
-    private fun completeAutomaticTitle(conversationId: ConversationId, generated: String?) {
-        val latest = conversations.findById(conversationId) ?: return
-        if (!latest.conversation.autoTitlePending) return
-        val conversation = latest.conversation.copy(
-            title = generated ?: ConversationAutoTitle.NEW_CONVERSATION_TITLE,
-            autoTitlePending = false,
-            updatedAt = clock.instant(),
-            revision = latest.conversation.revision + 1,
-        )
-        conversations.save(latest.copy(conversation = conversation))
+    private fun completeAutomaticTitle(conversationId: ConversationId, generated: String) {
+        conversations.completeAutomaticTitle(conversationId, generated, clock.instant())
     }
 
     private fun auditRecord(provider: ProviderId, endpoint: String, modelId: String, preset: ModelPresetId, choice: com.nanzhufeng.ai.domain.ComposerModelChoice, reasoningOverride: String?, requestedAt: java.time.Instant, inputTokens: Long?, outputTokens: Long?, status: String) =

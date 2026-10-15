@@ -1,0 +1,36 @@
+{
+  "verifiedAt": "2026-10-15T14:25:54+08:00",
+  "scope": "WORKTREE Android rename editor restoration",
+  "tests": {
+    "InlineConversationTitleTest": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "ConversationRenameDialogFocusContractsTest": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "ConversationTitleActivityOrderTest": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "P6DConversationRowAccessibilityContractsTest": {
+      "tests": 91,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "androidDebug": "PASS",
+  "contractGovernance": "PASS 114/40",
+  "contractConsistencyAudit": "PASS",
+  "nativeDeviceUi": "NOT RUN",
+  "installations": 0,
+  "providerRequests": 0
+}

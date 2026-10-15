@@ -79,7 +79,11 @@ class ConversationManagementDomain(private val clock: Clock) {
         }
         // Exact repeated intent is handled before this point. A fresh, semantically idempotent
         // action must not churn ordering or create a false update.
-        return snapshot.copy(conversation = if (next == before) before else next.copy(updatedAt = now, revision = before.revision + 1))
+        return snapshot.copy(conversation = if (next == before) before else next.copy(
+            // Title metadata has its own version; it is not new conversation activity.
+            updatedAt = if (intent.action == ConversationManagementAction.RENAME) before.updatedAt else now,
+            revision = before.revision + 1,
+        ))
     }
 
     fun listOrder(scope: ConversationListScope): Comparator<Conversation> = Comparator { left, right ->
