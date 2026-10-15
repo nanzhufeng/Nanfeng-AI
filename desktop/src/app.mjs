@@ -2487,7 +2487,7 @@ async function refresh() {
   owner.workspaces = workspaces;
   owner.current = current;
   if (!owner.entryResolved) {
-    owner.selectedConversationId = entry?.workspaceId === workspaceId && resolveConversation(current, entry.conversationId)
+    owner.selectedConversationId = entry && entry.workspaceId === workspaceId && resolveConversation(current, entry.conversationId)
       ? entry.conversationId : null;
     owner.entryResolved = true;
   } else if (!resolveConversation(current, owner.selectedConversationId)) {

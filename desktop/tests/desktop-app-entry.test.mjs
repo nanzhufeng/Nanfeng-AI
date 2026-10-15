@@ -81,3 +81,20 @@ test('missing retained conversation lands on a new conversation',async()=>{
   await vm.runInContext('refresh()',ctx);
   assert.equal(ctx.state.selectedConversationId,null);
 });
+
+test('fresh native data without retained entry finishes metadata loading',async()=>{
+  const calls=[];
+  const ctx=context(async command=>{
+    calls.push(command);
+    if(command==='list_desktop_workspaces') return [];
+    return {};
+  });
+  ctx.state.current=null;ctx.state.selectedConversationId=null;ctx.state.entryResolved=false;
+  ctx.desktopAppEntry={read:()=>null};
+  await vm.runInContext('refresh()',ctx);
+  assert.equal(ctx.state.current,null);
+  assert.equal(ctx.state.selectedConversationId,null);
+  assert.equal(ctx.state.entryResolved,true);
+  assert.ok(calls.includes('read_desktop_p6g_selection'));
+  assert.ok(!calls.includes('read_desktop_workspace'));
+});
