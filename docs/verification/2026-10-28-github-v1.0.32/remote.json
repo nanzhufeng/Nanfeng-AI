@@ -1,0 +1,45 @@
+{
+  "checked_at": "2026-10-28T09:36:42.177390+00:00",
+  "release": "https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.32",
+  "release_tag": "v1.0.32",
+  "release_commit": "7fc45689117302c01fbb73d0e2eddcaf2014d25d",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-28T09:36:04Z",
+  "assets": [
+    {
+      "name": "Nanfeng-AI-Android-1.0.32.apk",
+      "size": 28705469,
+      "github_digest": "sha256:0147eac142f1cf0c2cf223315da7c477e21495b7254aa2c44bee491a46d81b37",
+      "public_download_sha256": "0147eac142f1cf0c2cf223315da7c477e21495b7254aa2c44bee491a46d81b37",
+      "url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.32/Nanfeng-AI-Android-1.0.32.apk"
+    },
+    {
+      "name": "Nanfeng-AI-macOS-1.0.32.dmg",
+      "size": 17547413,
+      "github_digest": "sha256:885b6d7b6bf6f976bc0593b72131467038b901b5f1fa89901690bfb4ec00f94e",
+      "public_download_sha256": "885b6d7b6bf6f976bc0593b72131467038b901b5f1fa89901690bfb4ec00f94e",
+      "url": "https://github.com/nanzhufeng/Nanfeng-AI/releases/download/v1.0.32/Nanfeng-AI-macOS-1.0.32.dmg"
+    }
+  ],
+  "code_ci": {
+    "url": "https://github.com/nanzhufeng/Nanfeng-AI/actions/runs/40664764577",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "Desktop source checks",
+        "conclusion": "success"
+      },
+      {
+        "name": "Android compile only",
+        "conclusion": "success"
+      },
+      {
+        "name": "Protocol, Supabase contracts, and gateway",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "main_device_install_this_release": false,
+  "mac_primary_install_this_release": false
+}

@@ -4,14 +4,16 @@
 
 ## Verified
 
-- Last verified: 2026-10-28T15:13:31.510176+08:00（Terra真实文本／四类附件／附件联网与重开通过；识读普通编号误滤已修，正式包已保数据覆盖；初次IO UNKNOWN保留）
+- Last verified: 2026-10-28T17:34:35+08:00（v1.0.32 双端正式包构建、验签、隔离实装／启动与四张预览；GitHub 正式发布与公开下载字节通过）
 - Verified branch: main
-- Code baseline: dd3c8e89921feee8be5bc0185bf3174e6fed4bae；既有WIP保留，本轮双端观察保真规则及原生实发验收；未提交。
-- Verification scope: Android1548PASS／10skip、正式编译与Lint；Rust相关21PASS，模型23／协议16通过。Terra两轮文本、PNG/PDF/WAV/MP4混合五值、附件联网2/2官方引用，8会话重开与原生可见正文已验。16物理调用中15完整＋1历史IO未知保留；Desktop本轮真实服务未验，先前全Rust云同步红灯未修改。
+- Code baseline: 7fc45689117302c01fbb73d0e2eddcaf2014d25d；双端最终可执行文件内实读同一提交，后续文档／图片增量不重建。
+- Verification scope: COMMIT；Android 1548 PASS／10 skip、Release Lint／正式编译；Rust 469 PASS／38 ignored；Node 563 PASS／12 skip、lint／typecheck／inventory；维护45、114合同／40域与23聊天模型门通过。隔离界面不替代既有真实服务证据。
 - Verified by: Codex
 - Status: Active
 
 ## Current
+
+- [v1.0.32 发布回执](verification/2026-10-28-github-v1.0.32/REPORT.md)：当前核心源码已推 main，双端最终包验签、准确字节与四张隔离空数据预览完成；正式 Release 两安装包已上传，公开下载字节一致，三个源码 CI 检查全部成功。云同步测试 mock 的 TCP 分段读取已修，本轮完整 Rust 默认回归通过；真实云服务未新增验收。
 
 - [Terra真实链路验收与修复](verification/2026-10-28-terra-live-chain/REPORT.md)：两轮对话、原件四类混合／五项内容、附件联网2/2来源、保存／重开及原生显示已通过。普通编号误滤在双端读取owner修复，正式包已保数据覆盖OPPO。初次IO和未知费用保留；范围不扩展为所有格式或Desktop真实通过。
 
@@ -91,6 +93,8 @@
 
 ## Tests
 
+v1.0.32（2026-10-28）：Android1548 PASS／10 skip、Release Lint；Rust469 PASS／38 ignored；Node563 PASS／12 skip、lint／typecheck／inventory；维护45、golden v1/v2/sync、114合同／40域、23聊天／1独立／7组门通过。正式双端构建／原证书验签、隔离准确安装包回读与正常页面采图通过，见[本次检查](verification/2026-10-28-github-v1.0.32/checks.json)。不新增付费业务或主设备覆盖。以下保留原日期历史范围。
+
 最终checkpoint（2026-10-15）：Android1535总/1525PASS/10skip/326套件及ReleaseLint；Rust457/36ignored；Node554/12skip与lint/typecheck/inventory/build；维护45、Supabase静态10、三golden及Go通过。暂存快照1222输入一致/六门PASS，见[回归](verification/2026-10-15-code-checkpoint/regression.json)。
 
 完整复盘（2026-10-15）：45协议/治理维护单测、合同/模型门、5类Skill与UI元数据、交付链接/隐私与保真核验。全清单2156、HEAD历史189/全refs191；7历史XML失败及37迁移快照缺链保留。应用测试/构建/真实服务本轮未重跑，见[复盘回执](verification/2026-10-15-project-retrospective/REPORT.md)。
@@ -135,17 +139,12 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 ## Sync & Safety
 
-- 本轮源码checkpoint d92b0daf70597f7447b6dc7ad6649938692f8f5b 与本地tag已读回；同步观察为LOCAL ONLY，未push。该同步快照取最终文档提交前，当时仅7份文档待回填提交，业务输入1222项无漂移；最终文档HEAD由Git读取，不要求本字段与自身提交SHA相等。
-
-- 联网、流式／TLS、设置与合同增量已纳入源码checkpoint及v1.0.31发布候选；原双端覆盖与候选hash按原安全报告保留，不由新Git提交或同版本GitHub包推断新安装。
-
-- 2026-10-15发布完成：相关源码/合同已推main，v1.0.31三资产正式发布且公开下载验证通过；323份原始/临时未跟踪证据保留。历史v1.0.30已发布范围与本地checkpoint不同，不能据同版本号推断远端已有此次修复。
-
-- Git working tree: 当前源码/合同/核心新增测试、发布文档及四张当前预览均已提交；本摘要回填前仅回执文档变化。323份原始/临时证据仍未跟踪且逐项hash保留，无新增产物入Git。
-- Remote sync: main与v1.0.31正式标签已推送，标签1ffacaf36bd5a5b29c6e9f45ceb7933a1ec1e5e4；三资产远端/公开下载hash一致、标签CI三项PASS。构建源码fe504fec14b53b7bd2093d5b9929e99248695705；随后纯文档回执薄提交不重建/移动标签。私有checkpoint标签未推送。
-- Installed sync: 10月20日Argon错误归因补丁已原签名保数据覆盖主设备至1.0.31/code95，准确APK/hash及身份保持见诊断回执；不是GitHub旧同版本包。Mac未改变，原失败未重发。
-- Rollback point: 本轮源码checkpoint/tag及限定改前副本；禁止全仓reset/clean/stash覆盖排除证据。
-- Secrets/config: 本安装阶段原应用凭据未改、0新增Provider请求，正式数据保留；此前获授权创建的RC反重力网站Key未接入应用，3次404/504调用费用UNKNOWN与暂缓决定单独留档。临时凭据通道已关闭；原始回执/正文/before/日志不进入提交。
+- Sync checked at: 2026-10-28T17:37:12+08:00；本节写入前观察，当前回执提交尚未推送。
+- Code baseline：`7fc45689117302c01fbb73d0e2eddcaf2014d25d` 已推 main；核心新增实现／回归／合同与脱敏验收均已提交。README、四张当前预览与发布回执作为后续纯文档／图片提交。
+- Remote sync: 源码 PUSHED；v1.0.32 正式标签指向构建源码，两个安装包已公开下载核对一致，三个源码 CI 检查全部成功。以[发布回执](verification/2026-10-28-github-v1.0.32/REPORT.md)最终结果为准。
+- Installed sync: 本轮仅隔离模拟器与 Mac 独立数据根；OPPO 及 `/Applications` 未覆盖。上次主设备 d3abf030 修复包与 GitHub 新版本不能只按版本号推断一致。
+- Rollback point: 原 main `dd3c8e89921feee8be5bc0185bf3174e6fed4bae` 保留于历史；禁止 reset／clean／stash 覆盖本地排除材料。
+- Secrets/config: 本轮 0 新 Provider 请求；不改原应用配置；高置信凭据与私有用户目录扫描通过，历史原始材料留本地。
 
 ## Next
 

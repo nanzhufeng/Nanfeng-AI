@@ -1,0 +1,50 @@
+{
+  "version": "1.0.32",
+  "build_source_commit": "7fc45689117302c01fbb73d0e2eddcaf2014d25d",
+  "android": {
+    "package": "com.nanzhufeng.ai",
+    "versionCode": 96,
+    "versionName": "1.0.32",
+    "debuggable": false,
+    "certificate_sha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "isolated_installed_readback_matches": true
+  },
+  "macos": {
+    "architecture": "arm64",
+    "version": "1.0.32",
+    "certificate_sha1": "21D18F50D6AAE3BAEBFA64DEC186758710DA83AC",
+    "signature": "existing Apple Development; not notarized",
+    "frozen_dmg_bundle_files_match_launched_copy": 4,
+    "isolated_data_root": true
+  },
+  "assets": [
+    {
+      "name": "Nanfeng-AI-Android-1.0.32.apk",
+      "bytes": 28705469,
+      "sha256": "0147eac142f1cf0c2cf223315da7c477e21495b7254aa2c44bee491a46d81b37"
+    },
+    {
+      "name": "Nanfeng-AI-macOS-1.0.32.dmg",
+      "bytes": 17547413,
+      "sha256": "885b6d7b6bf6f976bc0593b72131467038b901b5f1fa89901690bfb4ec00f94e"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "docs/preview/android-conversation-1.0.32.png",
+      "sha256": "c4d46bbc6e1db2400f108c443cfc49a8d01953166453e6362367ccc2844067a7"
+    },
+    {
+      "path": "docs/preview/android-settings-1.0.32.png",
+      "sha256": "74993e1bf22078ee302b23b6cd1820b2ac7addf132241d7300d473390c432a59"
+    },
+    {
+      "path": "docs/preview/macos-conversation-1.0.32.png",
+      "sha256": "9f99120a6019e2be3c64f126d59105b2bfe2c5b784d108bcc86e1d532c752399"
+    },
+    {
+      "path": "docs/preview/macos-settings-1.0.32.png",
+      "sha256": "6dc7c3b071b3896db52d904fe5a8c23cb9e385163f50d19d0f853c385aa24091"
+    }
+  ]
+}

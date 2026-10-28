@@ -1,0 +1,39 @@
+{
+  "node": {
+    "summary": [
+      "ℹ tests 575",
+      "ℹ pass 563",
+      "ℹ fail 0",
+      "ℹ skipped 12"
+    ]
+  },
+  "protocol-tests": {
+    "summary": [
+      "Ran 45 tests in 1.907s",
+      "OK"
+    ]
+  },
+  "rust-full": {
+    "summary": [
+      "test result: ok. 469 passed; 0 failed; 38 ignored; 0 measured; 0 filtered out; finished in 31.97s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ]
+  },
+  "android": {
+    "tests": 1558,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10
+  },
+  "other_gates": {
+    "desktop lint/typecheck/inventory": "PASS; action/invoke/registration errors 0; unreferenced invokes 41 informational",
+    "protocol golden v1/v2/sync": "PASS",
+    "contract governance and consistency": "114 contracts / 40 domains PASS",
+    "model service contract": "23 chat deployments / 1 special / 7 credential groups PASS",
+    "exported index Node suite": "563 PASS / 12 skipped / 0 failed",
+    "final installer build": "Android assembleRelease and macOS native bundle PASS",
+    "paid provider requests_this_release": 0,
+    "main_device_install_this_release": "NOT RUN"
+  }
+}
