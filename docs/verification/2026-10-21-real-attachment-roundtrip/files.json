@@ -1,0 +1,86 @@
+[
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+    "sha256": "27ac15fac274b2c6ae19b39fb8f051a55729aa9cb5f374f986f5782ed15279c5"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/AttachmentInputPolicy.kt",
+    "sha256": "c24155fcae4627e0a8b6ab80de9af04ae75f2a686812e6401f3e0273cfc77564"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/RelayCoreModels.kt",
+    "sha256": "1f7a2a3ec312e7c2af2569338bb9a71f0b0d2c7fa0d573fc9fe956963db422de"
+  },
+  {
+    "path": "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt",
+    "sha256": "c00bb7f12d4f79d8df08cfcaa6064232dfc649db255971a697e2c6c526dfb9fb"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt",
+    "sha256": "62480821a6a2bf58996b0c56ef66457aa1a13ac203a7f69c74562a450daa6df9"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/RelayCoreIntegrationTest.kt",
+    "sha256": "904a209cb73d1455d8fb3c4c83c3dcc67e9dc8f6ab163b30c296349ac576732c"
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_input_policy_v1.rs",
+    "sha256": "aa60005a1acab83e2c9f699107a9012c2aec53887680df32a95d01f0f0b3b763"
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_search_live_matrix_tests.rs",
+    "sha256": "21092a5ca637c0a13c657beb5cc90a6de6a6b15e8eaece0f7dfeee9a07f134a2"
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+    "sha256": "a7a90234603fc59279ba9b1cb7cd02e0f97ab41bb38982465bdae9eef7d3cafe"
+  },
+  {
+    "path": "desktop/src-tauri/src/desktop_model_service_v1.rs",
+    "sha256": "8de660b4219bbe7cd038bba7177a87c7a7d65f53e908e36bf8d2d6d6149aa51c"
+  },
+  {
+    "path": "desktop/src-tauri/src/lib.rs",
+    "sha256": "6f93bb88445f6f795b7be0d942cdfef9295bad6c660b64b4b8d155c136ac0c1e"
+  },
+  {
+    "path": "docs/CURRENT_HANDOFF.md",
+    "sha256": "6f7cdeac10f4c3867d2c16c1ec6a656318435749bde2cf7ebfd9d8df06bb8802"
+  },
+  {
+    "path": "docs/P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md",
+    "sha256": "b3fdefda041fb81e9e74387cb01f4b101e039f43af69b7f6cba310854eefc450"
+  },
+  {
+    "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+    "sha256": "0345af8219a996225fe0dbb18d75fbb594ae43e6c656a247c283c36b98b72d54"
+  },
+  {
+    "path": "docs/PROJECT_STATUS.md",
+    "sha256": "893e48d1a1b6585e1e72a05c2e8921fc06673e0a10e30f446bdb318a19a237c1"
+  },
+  {
+    "path": "docs/RELAYCORE_MODEL_CURRENT_CONTRACT.md",
+    "sha256": "cff4de7899a92828f560080071b891a46735fd13fb30507066144bd0a79313c9"
+  },
+  {
+    "path": "docs/model-service/MODEL_SERVICE_MATRIX.md",
+    "sha256": "3c322d96ba633c9ae71c3a40fe4e9db0f98f67b361787e20e69e97ea6d6df681"
+  },
+  {
+    "path": "docs/verification/2026-10-21-real-attachment-roundtrip/REPORT.md",
+    "sha256": "5a98ca832a6d76fe38540a19403fe7361557ce28266264cb4b6f63693d924b73"
+  },
+  {
+    "path": "docs/verification/2026-10-21-real-attachment-roundtrip/checks.json",
+    "sha256": "d98376aaccb4f677d532a80794a4f7d082cf9b5d602f372144f74ad1db368a46"
+  },
+  {
+    "path": "docs/verification/2026-10-21-real-attachment-roundtrip/matrix.json",
+    "sha256": "9063bb16206379f0bd011d36edc3e29328cb2b4797b3f2a2cc42d3ab9e7e4fad"
+  },
+  {
+    "path": "protocol/model-service/model-service-v1.json",
+    "sha256": "f4a91c4aad34864b8a7b1d88ccdff2419fa90154ace5a3764de85320e639c6bf"
+  }
+]

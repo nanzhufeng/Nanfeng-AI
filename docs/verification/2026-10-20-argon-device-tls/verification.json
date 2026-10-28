@@ -1,0 +1,151 @@
+{
+  "date": "2026-10-20",
+  "sourceBase": "dd3c8e89921feee8be5bc0185bf3174e6fed4bae",
+  "scope": "WORKTREE",
+  "installedAndroid": {
+    "version": "1.0.31",
+    "versionCode": 95,
+    "apkSha256": "417bad73a9de798df8a4c47e26f899c25e7ead867d4e0cdfcd331358175c3072",
+    "overlayPerformed": true
+  },
+  "deviceDiagnostics": {
+    "recordAt": "2026-10-19T21:34:00+08:00",
+    "provider": "OPENROUTER",
+    "modelId": "google/gemini-4-argon",
+    "host": "openrouter.ai",
+    "screenshotTotalSeconds": 13.2,
+    "records": [
+      {
+        "phase": "attachment-inventory",
+        "detail": "RETRIEVAL_ATTACHMENT_SEARCH_INVENTORY_UNKNOWN",
+        "seconds": 7.8,
+        "httpStatus": null
+      },
+      {
+        "phase": "final-request",
+        "detail": "TRANSPORT_TLS_SSLHandshakeException_CAUSE_EOFException",
+        "seconds": 5.3,
+        "httpStatus": null
+      }
+    ],
+    "bodyTransmissionPhase": "UNKNOWN",
+    "cost": "UNKNOWN",
+    "requestResent": false
+  },
+  "publicReadOnlyProbes": [
+    {
+      "probe": "openrouter-default",
+      "exitCode": 0,
+      "measurement": [
+        "200",
+        "0",
+        "0.008343",
+        "0.265052",
+        "0.942337"
+      ]
+    },
+    {
+      "probe": "openrouter-tls12",
+      "exitCode": 0,
+      "measurement": [
+        "200",
+        "0",
+        "0.010306",
+        "0.518179",
+        "1.329833"
+      ]
+    },
+    {
+      "probe": "deepseek-default",
+      "exitCode": 0,
+      "measurement": [
+        "401",
+        "0",
+        "0.007459",
+        "0.086825",
+        "0.172867"
+      ]
+    }
+  ],
+  "tests": {
+    "suites": 4,
+    "tests": 119,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "rows": [
+      {
+        "name": "com.nanzhufeng.ai.ai.AttachmentInventoryFailureContractsTest",
+        "tests": "5",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "com.nanzhufeng.ai.ai.NormalChatGenerationStabilityTest",
+        "tests": "49",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "com.nanzhufeng.ai.ai.ProviderAdapterContractsTest",
+        "tests": "61",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "com.nanzhufeng.ai.ai.ProviderTlsConnectionRecoveryTest",
+        "tests": "4",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      }
+    ]
+  },
+  "redBaseline": {
+    "tests": 4,
+    "failures": 3,
+    "cause": "inventory timeout/network/HTTP collapsed to unknown before patch"
+  },
+  "releaseBuild": "PASS",
+  "realProviderGeneration": "NOT_RUN",
+  "mainDeviceInstall": "PASS",
+  "macosChanges": false,
+  "releaseLint": "PASS",
+  "candidate": {
+    "apkSha256": "417bad73a9de798df8a4c47e26f899c25e7ead867d4e0cdfcd331358175c3072",
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "version": "1.0.31",
+    "versionCode": 95,
+    "debuggable": false,
+    "installed": true
+  },
+  "sourceHashes": {
+    "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchInventory.kt": "54d780c8dab263f21c08c746cd90ffd01d65d6e36d8e614c8353d81014ac5f00",
+    "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt": "b6c766068ca28097ae3dfbfbab4087ba8a14e2be965918a8fd6c938068c719e3",
+    "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt": "a2b938c1ae9d50e358563ed028f22b7e4c4ccbb176b6ac0d6c4f137f81861004",
+    "app/src/test/java/com/nanzhufeng/ai/ai/AttachmentInventoryFailureContractsTest.kt": "9c3cf44819c458194776afe92d2e49bd09b4f0c20ca5f91d62beffdba913cbad"
+  },
+  "diagnosisInstalledAndroid": {
+    "version": "1.0.30",
+    "versionCode": 94,
+    "apkSha256": "021e81e46089152221a9730b61f855f9fa2108086c6726babff9a1c243a134ca",
+    "overlayPerformed": false
+  },
+  "overlay": {
+    "installedAt": "2026-10-20T02:04:33.994963+00:00",
+    "fromVersion": "1.0.30",
+    "fromVersionCode": 94,
+    "toVersion": "1.0.31",
+    "toVersionCode": 95,
+    "sameOriginalSignature": true,
+    "exactInstalledApkReadback": true,
+    "applicationUidFirstInstallTimeAndDataDirectoryIdentityPreserved": true,
+    "fullPrivateDatabaseHash": "NOT_READ",
+    "deviceTemporaryApkRemoved": true,
+    "appLaunched": false,
+    "providerRequests": 0
+  }
+}

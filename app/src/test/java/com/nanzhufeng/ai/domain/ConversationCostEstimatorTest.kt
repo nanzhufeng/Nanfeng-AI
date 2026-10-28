@@ -7,6 +7,14 @@ import org.junit.Test
 import java.time.Instant
 
 class ConversationCostEstimatorTest {
+    @Test fun `Terra uses its current tariff and exact long context threshold`() {
+        val regular=requireNotNull(ConversationCostEstimator.estimate("openai/gpt-6.1-terra",ProviderUsage(1_000,100,cachedInputTokens=500)))
+        assertEquals(1025L,regular.totalMicros)
+        assertEquals("USD",regular.currencyCode)
+        val long=requireNotNull(ConversationCostEstimator.estimate("openai/gpt-6.1-terra",ProviderUsage(272_000,100,cachedInputTokens=0)))
+        assertEquals(544750L,long.totalMicros)
+    }
+
     @Test fun `Argon uses verified introduction tariff and cache rate`() {
         val price = requireNotNull(ConversationCostEstimator.estimate("google/gemini-4-argon", ProviderUsage(1_000, 100, cachedInputTokens=500), Instant.parse("2026-10-15T00:00:00Z")))
         assertEquals(2050L, price.totalMicros)

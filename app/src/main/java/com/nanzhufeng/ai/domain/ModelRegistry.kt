@@ -68,7 +68,9 @@ class InMemoryVersionedModelRegistry(
     private fun ModelDescriptor.normalizedStandardGptPreset(presetId: ModelPresetId): ModelDescriptor? {
         val currentExactId = when (presetId) {
             ModelPresetId.GPT_6_1_SOL -> "openai/gpt-6.1-sol"
+            ModelPresetId.GPT_6_1_TERRA -> "openai/gpt-6.1-terra"
             ModelPresetId.GPT_6_LUNA -> "openai/gpt-6-luna"
+            ModelPresetId.MERCURY_3 -> "inception/mercury-3"
             ModelPresetId.MUSE_WONDER -> "meta/muse-wonder"
             ModelPresetId.GEMINI_4_ARGON -> "google/gemini-4-argon"
             ModelPresetId.GEMINI_3_8_FLASH -> "google/gemini-3.8-flash"

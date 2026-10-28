@@ -34,9 +34,13 @@ object RelayCoreModels {
         RelayCoreModelSpec(ModelPresetId.RELAYCORE_GEMINI_3_8_FLASH, ProviderId.RELAYCORE_GEMINI, "gemini-3.8-flash", "Gemini 3.8 Flash", "Gemini", "0.28", ComposerModelSlot.DAILY),
         RelayCoreModelSpec(ModelPresetId.RELAYCORE_GEMINI_3_1_PRO, ProviderId.RELAYCORE_GEMINI, "gemini-3.1-pro", "Gemini 3.1 Pro", "Gemini", "0.28", ComposerModelSlot.DEEP),
     )
-    /** Two published IDs in the same Kiro standard group; only this verified pair is canonicalized. */
+    /** Exact published Claude alias pairs only. Sonnet's configured request ID stays unchanged. */
     fun canonicalApiId(provider: ProviderId, modelId: String): String =
-        if (provider == ProviderId.RELAYCORE_CLAUDE && modelId == "claude-opus-5-5") "claude-opus-5.5" else modelId
+        if (provider != ProviderId.RELAYCORE_CLAUDE) modelId else when (modelId) {
+            "claude-opus-5-5" -> "claude-opus-5.5"
+            "claude-sonnet-5.5" -> "claude-sonnet-5-5"
+            else -> modelId
+        }
     fun sameApiModel(provider: ProviderId, left: String, right: String) =
         canonicalApiId(provider,left) == canonicalApiId(provider,right)
     val providers = specs.map { it.provider }.distinct()

@@ -12,6 +12,7 @@ export const MODEL_SETTINGS_PURPOSES = Object.freeze({
   CLAUDE_HAIKU_5_5: '快速回复 · 高频轻量任务',
   GPT_6_1_SOL: '专业分析 · 工程与复杂任务',
   RELAYCORE_GPT_6_1_SOL: '专业分析 · 工程与复杂任务',
+  GPT_6_1_TERRA: '日常工作 · 图像理解与代码',
   GPT_6_LUNA: '轻量问答 · 成本与速度均衡',
   RELAYCORE_GPT_6_ASTRA: '高难推理 · 长程复杂任务',
   GEMINI_3_8_FLASH: '快速处理文字、图片与文件',

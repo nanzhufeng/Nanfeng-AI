@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-27",
+  "feature": "GPT_6_1_TERRA daily immediately before GPT_6_LUNA",
+  "catalog": {
+    "chatModels": 23,
+    "specialModels": 1,
+    "credentialGroups": 7,
+    "validation": "PASS"
+  },
+  "baselineRed": {
+    "isolated": true,
+    "chooserAndSettingsMatchPreChangeHashes": true,
+    "correctedTestFailsForMissingTerra": true
+  },
+  "android": {
+    "tests": 1557,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10,
+    "passed": 1547,
+    "assembleRelease": "PASS",
+    "lintRelease": "PASS"
+  },
+  "desktopJs": {
+    "tests": 575,
+    "passed": 563,
+    "failed": 0,
+    "skipped": 12,
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "frontendBuild": "PASS"
+  },
+  "rust": {
+    "passed": 465,
+    "failed": 1,
+    "ignored": 20,
+    "filteredLive": 21,
+    "terraRequestTest": "PASS",
+    "failure": "desktop_account_sync_v1::tests::supabase_empty_read_result_means_document_is_not_yet_in_the_cloud",
+    "failureReproducedIndividuallyAndSerially": true,
+    "affectedSourceUnchangedSinceTaskStart": true,
+    "observation": "mock server reads TCP once and asserts body presence; partial request read lacks document field",
+    "fixedInThisTask": false
+  },
+  "protocolUnitTests": {
+    "passed": 16,
+    "failed": 0
+  },
+  "delivery": {
+    "sha256": "44514c059995537b3df154fda43f334d7fbb50a4d5587ebeda190327d3ce5487",
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "versionCode": 95,
+    "versionName": "1.0.31",
+    "debuggable": false,
+    "bytes": 28705475,
+    "installed": true,
+    "fileName": "南枫AI-GPT-6.1-Terra-20261027.apk",
+    "installedAt": "2026-10-28T12:43:20.033305+08:00",
+    "installedReadbackSha256": "44514c059995537b3df154fda43f334d7fbb50a4d5587ebeda190327d3ce5487",
+    "receipt": "../2026-10-28-gpt-terra-cover/checks.json"
+  },
+  "verificationGaps": [
+    "Real model chat, attachments and web search NOT RUN: no available test credential",
+    "Mac native bundle and main entry installation NOT RUN",
+    "Existing cloud-sync test remains failing; not a full green Rust suite"
+  ]
+}

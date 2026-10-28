@@ -1,0 +1,51 @@
+{
+  "verifiedAt": "2026-10-21T21:46:52+08:00",
+  "rootCause": "Explicit OpenAI completion terminal dropped by default IMMEDIATE SSE mode before strict attachment reader",
+  "red": {
+    "tests": 1,
+    "failures": 1,
+    "reason": "Complete wire response returned Failed before fix"
+  },
+  "targeted": {
+    "tests": 91,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0
+  },
+  "androidFull": {
+    "tests": 1552,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 10
+  },
+  "releaseLint": "PASS (99 warnings, 19 hints; zero errors)",
+  "firstCombinedBuild": "packageRelease FAILED; full tests and lint completed",
+  "releaseBuild": "PASS; isolated assembleRelease retry in 35s",
+  "contracts": {
+    "governance": 114,
+    "chatModels": 22,
+    "state": "PASS"
+  },
+  "android": {
+    "package": "com.nanzhufeng.ai",
+    "versionName": "1.0.31",
+    "versionCode": 95,
+    "debuggable": false,
+    "sha256": "e4a3ade4516137b7c1f3c54940af21bdb9785b24f2963a0be06f9eecc352cd3c",
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "bytes": 28705449,
+    "installed": true,
+    "completedAt": "2026-10-21T21:46:52+08:00",
+    "exactApkReadback": true,
+    "identityAndDataMetadataPreserved": true,
+    "remoteTempRemoved": true,
+    "retriedOldMessage": false,
+    "businessAcceptance": "NOT RUN",
+    "newProviderRequests": 0
+  },
+  "desktop": "NOT CHANGED by terminal fix; preceding no-copy source change retained",
+  "newProviderRequests": 0,
+  "originalFailureAttemptReadback": "UNAVAILABLE in read-only shell metadata/logs",
+  "businessAcceptance": "NOT RUN; no old-message retry",
+  "git": "No commit/push/release"
+}

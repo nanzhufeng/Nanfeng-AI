@@ -1,0 +1,226 @@
+{
+  "baseline": "dd3c8e89921feee8be5bc0185bf3174e6fed4bae",
+  "files": [
+    {
+      "path": "app/src/main/assets/model_profiles.json",
+      "sha256": "76832458fa673447b26c689755bd415223e8afbedc8af6c8533499dc2974d018",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchInventory.kt",
+      "sha256": "d4c93ebc6686692d4fa6b08d3bd193b9fd0a24c9c2d42d3302d828be47a977c8",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+      "sha256": "30a3b8725e247b812be6001d81ebcf3406ac98bd163ca1446ab572093726aa1c",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt",
+      "sha256": "a5c82e40ea90ddec94f14d77ad9837cad5df003416ca7ce1e671ba0f03d93539",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ai/UniversalChatAttachmentBridge.kt",
+      "sha256": "fd641bbcc56f61d60d70c52bc723490bcdcea5379566e9ffea55b051996b0755",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/domain/AttachmentInputPolicy.kt",
+      "sha256": "9ce2f615861a9b3ae35df461519e222d56f021960f68ac0dd40de6f33453c072",
+      "change": "added"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/domain/NormalChatRoutingSnapshot.kt",
+      "sha256": "7349a4e82c64646e44634cafb2af34d67af8fb81080587c97635b8c2e2ff00e4",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/domain/VisualAttachmentReadingPolicy.kt",
+      "sha256": null,
+      "change": "deleted"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+      "sha256": "24d4428352b1cf58106dbaf5012376725d5fead435a1e9fb64c97b17be560d70",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt",
+      "sha256": "a7db7a454ced8f919421199b8027b2797de2044ddc41b2e0c15843a7fc696935",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/AllModelAttachmentPreparationTest.kt",
+      "sha256": "478adad5492fefa0c0393c2cb0bd0086e803e9c422bf6a1df69f681370b1270a",
+      "change": "added"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/MercuryVisionPreparationTest.kt",
+      "sha256": "a752eebea7964ba7087dd859a960859f04f522947bfe6695d49ae55701d36f73",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/NormalChatGenerationStabilityTest.kt",
+      "sha256": "481278cbad4d919f3ec4819d512fabb4c1eec26db05cd68424b970324d2b73e0",
+      "change": "modified"
+    },
+    {
+      "path": "app/src/test/java/com/nanzhufeng/ai/ai/UniversalChatAttachmentBridgeContractsTest.kt",
+      "sha256": "b31a4e665677bca9fa411c890d2ddc2681507d9f85564ca47b27d99e8c559842",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/scripts/build.mjs",
+      "sha256": "029880b179568bd3339732821f43a0dca0ecaad29d1712382ec57ec2cfb1cbac",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/attachment_document_text_v1.rs",
+      "sha256": "7606ed7932e0d1ee9f6cc9bdc03637f868003a82b6752541537cbb7f4fe2be9e",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/attachment_input_policy_v1.rs",
+      "sha256": "ea3302a85e39829d22370c5746342a4c643152016600f91e75ec7b96e6f96010",
+      "change": "added"
+    },
+    {
+      "path": "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+      "sha256": "e889fa3fc731772fbb34dd49a1ed1dd2ca35f6cdf4bbe05f8c3106ebe65f4dda",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/auto_chat_routing_v1.rs",
+      "sha256": "702b942a0d0c3fdec2ae92cb0857de37933d26ef45fe553473d69cef7fafc2f1",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/desktop_model_service_v1.rs",
+      "sha256": "ac7ea9f46ce3e819b3264505b63a750e1b3a026636678d69eeb2263ed856d51e",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+      "sha256": "e16a65b068104e535e68c1d8ca332bc3d6077938f702d3a3fddd7bf59ccff64f",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src-tauri/src/lib.rs",
+      "sha256": "c19ba2aa4f18eee44c30131c4af7831d2f184e5e417aa914e0e4bcde4f0b8cd7",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src/android-settings-shell.mjs",
+      "sha256": "b192cfeb8fef97c17e48e332a973c2d6654b4834ef1620bdf7cddf6205ca8ecb",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src/app.mjs",
+      "sha256": "718dd320211856483d7206052f642241e09574e0948f25ee4fe1f2c65eb531ce",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src/attachment-input-policy.mjs",
+      "sha256": "7e725b3bafd77a8e85c97a07fe5c118023f38abd8348e31c997776288b48c2f4",
+      "change": "added"
+    },
+    {
+      "path": "desktop/src/auto-chat-routing.mjs",
+      "sha256": "abc28f970409377304a01eaa8cbe936efd6238cf784354685ac6629296fc99a7",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src/chat-shell.mjs",
+      "sha256": "29a015537614b4d76a143119be943e2af4a86d6d834ca3f3c9141b8f6601ffaf",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/src/visual-attachment-reading.mjs",
+      "sha256": null,
+      "change": "deleted"
+    },
+    {
+      "path": "desktop/tests/auto-chat-routing.test.mjs",
+      "sha256": "d296a9c8b07cdb084e39ba82456ccc1e1d1a45a59ee7fd682ce4c2b79bd9fd87",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/tests/chat-first-ui.test.mjs",
+      "sha256": "7b4726770bc9fccd7a7056d93e25d4f3214aedad33e476358e2902c9883cd3db",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/tests/helpers/enabled-model-catalog.mjs",
+      "sha256": "3e91c65483ce303022617e835705052c59ba3ec31863936070d30cb422c00f3b",
+      "change": "modified"
+    },
+    {
+      "path": "desktop/tests/visual-attachment-reading.test.mjs",
+      "sha256": "6f872812f7e8e279bb8f3150784e910dda92719cc5fab18387d5928e888e0083",
+      "change": "modified"
+    },
+    {
+      "path": "docs/C12_MODEL_NETWORK_PARITY_CONTRACT.md",
+      "sha256": "c56365a544a75f20399b441ad183b23bc47f31d9f5a772a1431a47d1f0668c13",
+      "change": "modified"
+    },
+    {
+      "path": "docs/CURRENT_HANDOFF.md",
+      "sha256": "c7c37bd1cb396f06ee1128a66c6e3014f54f225397f4c4ecc506df4d13bdd1b9",
+      "change": "modified"
+    },
+    {
+      "path": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+      "sha256": "12592b404dc13c79c194075707c7976f51f0a4e5dc6eb211a348d1d60f135137",
+      "change": "modified"
+    },
+    {
+      "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+      "sha256": "bea62deb0ed028f77bd3678fca9e92d542dc0b30d8b82a748a8e735767a7688a",
+      "change": "modified"
+    },
+    {
+      "path": "docs/PROJECT_STATUS.md",
+      "sha256": "0c3d9014098cdbf3e0c4c548005ac7be56eea229e891d5a851daff584d6aea6f",
+      "change": "modified"
+    },
+    {
+      "path": "docs/decision-log.md",
+      "sha256": "63a38e26a544f4702872691e8cfcc9406c795a10d3934203a47fee50dbdd37f1",
+      "change": "modified"
+    },
+    {
+      "path": "docs/model-service/MODEL_SERVICE_ARCHITECTURE.md",
+      "sha256": "dd43659e1bd8355882e1530b2d5eb80feb3a404a7e1ff3ca1f922dca6066406f",
+      "change": "modified"
+    },
+    {
+      "path": "docs/model-service/MODEL_SERVICE_MAINTENANCE.md",
+      "sha256": "07ed5f7184e9f1d4ecd65c1f78491ee95878c7653808a7896578da43d0bf64f6",
+      "change": "modified"
+    },
+    {
+      "path": "docs/model-service/MODEL_SERVICE_MATRIX.md",
+      "sha256": "185d8a34afb039ca25a53bdb8fb98f30bb6245cf28feb867e5b9e41587b5a8bf",
+      "change": "modified"
+    },
+    {
+      "path": "docs/南枫AI完整开发档案.md",
+      "sha256": "e69c753e50a421a8147cf43fa25e421f00f0dd28f07812a6fa4077229b9878c9",
+      "change": "modified"
+    },
+    {
+      "path": "protocol/model-service/model-service-v1.json",
+      "sha256": "00e0d0c0a065c6aed5b59930146af405493174101f70e53b2260acbcd943f8b0",
+      "change": "modified"
+    }
+  ],
+  "verificationFiles": [
+    "REPORT.md",
+    "checks.json",
+    "files.json"
+  ],
+  "note": "Preserved pre-existing WIP. No commit, push or release."
+}

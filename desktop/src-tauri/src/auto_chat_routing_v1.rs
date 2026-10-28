@@ -9,10 +9,10 @@ pub fn candidates(text: &str, mimes: &[String]) -> Vec<String> {
 }
 pub fn projects(provider: &str, model: &str, mime: &str) -> bool {
     crate::attachment_document_text_v1::supports(mime) ||
-    (matches!(mime,"image/jpeg"|"image/png"|"image/webp"|"image/gif") && (matches!(provider,"OPENROUTER"|"QWEN") || provider == "DEEPSEEK" && model == "deepseek-flash")) || mime == "application/pdf" && provider == "OPENROUTER"
+    crate::attachment_input_policy_v1::native(provider,model,mime,false)
 }
 pub fn projects_with_search(provider:&str,model:&str,mime:&str,web:bool)->bool {
-    projects(provider,model,mime) && (!web || provider=="OPENROUTER" || !mime.starts_with("image/") && !mime.starts_with("audio/") && !mime.starts_with("video/"))
+    crate::attachment_document_text_v1::supports(mime) || crate::attachment_input_policy_v1::native(provider,model,mime,web && provider!="OPENROUTER")
 }
 
 #[cfg(test)] mod tests {
@@ -20,11 +20,11 @@ pub fn projects_with_search(provider:&str,model:&str,mime:&str,web:bool)->bool {
  #[test] fn classifier_and_projection_match_actual_transport() {
   assert_eq!(task("分析一下这家公司",&[]),"DEFAULT_TEXT"); assert_eq!(task("debugging",&[]),"DEFAULT_TEXT");assert_eq!(task("debug this",&[]),"COMPLEX_REASONING");assert_eq!(task(&"a".repeat(2400),&[]),"COMPLEX_REASONING");
   assert_eq!(task("架构设计",&["image/png".into()]),"ATTACHMENT");
-  assert!(!projects("RELAYCORE_GPT","gpt-6.1-sol","image/png"));assert!(!projects("QWEN","qwen-plus","application/pdf"));assert!(projects("OPENROUTER","fixture","application/pdf"));
-  assert!(projects_with_search("QWEN","qwen-plus","image/png",false));
-  assert!(!projects_with_search("QWEN","qwen-plus","image/png",true));
+  assert!(!projects("RELAYCORE_GPT","gpt-6.1-sol","image/png"));assert!(!projects("QWEN","qwen-plus","application/pdf"));assert!(projects("OPENROUTER","anthropic/claude-haiku-5.5","application/pdf"));
+  assert!(projects_with_search("QWEN","qwen3.7-plus","image/png",false));
+  assert!(!projects_with_search("QWEN","qwen3.7-plus","image/png",true));
   assert!(!projects_with_search("DEEPSEEK","deepseek-flash","image/png",true));
-  assert!(projects_with_search("OPENROUTER","fixture","image/png",true));
+  assert!(projects_with_search("OPENROUTER","anthropic/claude-haiku-5.5","image/png",true));
   assert!(projects_with_search("QWEN","qwen-plus","text/markdown",true));
  }
 }

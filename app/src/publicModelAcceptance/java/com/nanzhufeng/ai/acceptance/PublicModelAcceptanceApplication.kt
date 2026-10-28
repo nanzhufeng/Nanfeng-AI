@@ -71,7 +71,12 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
             try {
                 val physical=JSONArray()
                 val traceFile=File(filesDir,"public-physical-${config.getString("runId")}.json")
-                val actualTransport=OfficialProviderChatTransport()
+                val roundTrip=config.optString("fixture") in setOf("attachment-roundtrip","terra-live-text","terra-web-attachments","terra-audio-only","terra-video-only")
+                val budgetFile=File(filesDir,"public-roundtrip-budget.json")
+                var spentMicros=if(roundTrip && budgetFile.isFile) JSONObject(budgetFile.readText()).optLong("cnyMicros") else 0L
+                val budgetLimit=config.optLong("budgetCnyMicros",20_000_000L)
+                val callReserve=config.optLong("callReserveCnyMicros",3_000_000L).also { check(it in 1_000_000L..3_000_000L) }
+                val actualTransport=OfficialProviderChatTransport { url -> PublicLiveConnectionTrace.open(url,File(filesDir,"public-connection-${config.getString("runId")}.json")) }
                 val container = AppContainer(this,normalChatTransport=object:ProviderChatTransport {
                     override fun execute(request:ProviderChatRequest,credential:CharArray):ProviderChatOutcome {
                         val started=System.nanoTime();var frames=0;var reasoningChars=0L;var firstFrameMillis:Long?=null
@@ -105,21 +110,46 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                             }
                             request.streamEventDecoder(data)?.also {event->frames++;reasoningChars+=event.reasoning?.length ?: 0;if(firstFrameMillis==null) firstFrameMillis=(System.nanoTime()-started)/1_000_000}
                         })
-                        val outbound=if(config.has("outputLimit")) {
+                        val outbound=if(roundTrip) {
+                            val cap=config.optInt("outputLimit",8192);check(cap in 4096..8192)
+                            val bytes=ByteArrayOutputStream();request.effectiveBody().writeTo(bytes)
+                            val limited=JSONObject(bytes.toString(Charsets.UTF_8.name()))
+                            val field=if(request.endpoint.endsWith("/responses")) "max_output_tokens" else if(limited.has("max_completion_tokens")) "max_completion_tokens" else "max_tokens"
+                            val current=limited.optLong(field,cap.toLong());limited.put(field,minOf(current,cap.toLong()))
+
+                            observed.copy(jsonBody=limited.toString(),body=null)
+                        } else if(config.has("outputLimit")) {
                             check(config.optString("fixture")=="rc-text" && (request.body==null || request.body is ProviderChatRequestBody.Utf8Json))
                             val cap=config.getInt("outputLimit");check(cap in 32..2048)
                             val limited=JSONObject(request.jsonBody);check(limited.optString("model") in setOf("meta/muse-wonder","google/gemini-3.8-flash"))
                             limited.put(if(request.endpoint.endsWith("/responses")) "max_output_tokens" else "max_tokens",cap)
                             observed.copy(jsonBody=limited.toString(),body=null)
                         } else observed
-                        val outcome=actualTransport.execute(outbound,credential)
+                        if(roundTrip) check(spentMicros+(if(JSONObject(outbound.jsonBody).optString("model")=="anthropic/claude-haiku-5.5") 1_000_000L else callReserve)<=budgetLimit) { "PUBLIC_ACCEPTANCE_BUDGET_STOP" }
+                        if(roundTrip) File(filesDir,"public-request-${config.getString("runId")}-${physical.length()}.json").writeText(outbound.jsonBody)
+                        val replay=if(roundTrip && config.optBoolean("replayReader",false)) JSONArray(File(filesDir,"public-reader-replay.json").readText()) else null
+                        val requested=if(roundTrip) JSONObject(outbound.jsonBody).optString("model") else ""
+                        val recorded=(0 until (replay?.length()?:0)).map {replay!!.getJSONObject(it)}.firstOrNull {it.optString("requestedModel")==requested && requested!="inception/mercury-3"}
+                        val outcome=if(recorded!=null) ProviderChatOutcome.StreamedResponse(200,recorded.getString("publicFixtureReply"),null,recorded.optLong("input"),recorded.optLong("output"),null,false,finishReason=recorded.getString("finish"),returnedModelId=recorded.getString("returnedModel"))
+                            else if(config.optBoolean("dryHandoff",false)) ProviderChatOutcome.Cancelled
+                            else actualTransport.execute(outbound,credential)
+                        if(roundTrip && !config.optBoolean("dryHandoff",false) && recorded==null) {
+                            val reply=outcome as? ProviderChatOutcome.StreamedResponse
+                            val reported=reply?.reportedProviderCost
+                            val wireModel=JSONObject(outbound.jsonBody).optString("model")
+                            val estimate=reply?.let {ConversationCostEstimator.estimate(wireModel,ProviderUsage(it.inputTokens,it.outputTokens),modelDisplayName=wireModel)}
+                            val cost=reported?.let {ProviderCost(priceVersion=it.priceVersion,totalMicros=it.totalMicros,currencyCode=it.currencyCode)} ?: estimate
+                            val charged=cost?.totalMicros?.let {if(cost.currencyCode=="USD") it*8L else if(cost.currencyCode=="CNY") it else null} ?: if(wireModel=="anthropic/claude-haiku-5.5") 1_000_000L else callReserve
+                            spentMicros+=charged
+                            budgetFile.writeText(JSONObject().put("cnyMicros",spentMicros).put("unknownReserveMicros",if(cost==null)charged else 0L).toString())
+                        }
                         val wire=if(outbound.body!=null) {
                             val bytes=ByteArrayOutputStream();outbound.effectiveBody().writeTo(bytes)
                             JSONObject(bytes.toString(Charsets.UTF_8.name()))
                         } else JSONObject(outbound.jsonBody)
                         val model=wire.optString("model","unknown")
                         physical.put(JSONObject().apply {
-                            put("terminalFrames",terminalFrames);put("requestedModel",model);put("outcome",outcome.javaClass.simpleName)
+                            put("readingReplayed",recorded!=null);put("sentToProvider",recorded==null && !config.optBoolean("dryHandoff",false));put("terminalFrames",terminalFrames);put("requestedModel",model);put("outcome",outcome.javaClass.simpleName)
                             put("validFrames",frames);put("reasoningChars",reasoningChars);put("firstFrameMillis",firstFrameMillis)
                             put("readTimeoutMillis",request.readTimeoutMillis);put("maxStreamDurationMillis",request.maxStreamDurationMillis);put("streamTextMode",request.streamTextMode.name)
                             put("endpointPath",java.net.URI(request.endpoint).path)
@@ -176,7 +206,7 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                         return outcome
                     }
                 })
-                val keys = receive(config)
+                val keys = if(config.optBoolean("dryHandoff",false)) JSONObject().put("OPENROUTER","synthetic-not-sent-key") else receive(config)
                 for (provider in ProviderId.entries.mapNotNull(NanfengModelServiceCatalog::provider)) {
                     val key = keys.optString(provider.id.name)
                     if (key.isEmpty()) continue
@@ -186,13 +216,24 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                 }
                 check(keys.length() == 0)
                 container.saveAssistantExperienceSettings.execute(AssistantExperienceSettings(
-                    webSearchEnabled=config.optString("fixture")!="rc-usage", librarySearchEnabled=false, memoryRetrievalEnabled=false))
+                    webSearchEnabled=if(roundTrip) config.optBoolean("web",false) else config.optString("fixture")!="rc-usage", librarySearchEnabled=false, memoryRetrievalEnabled=false))
                 val count=config.optInt("claimCountPerFile",2).also {check(it in 1..8)}
                 val fresh=config.optString("fixture")=="go-firefox"
                 val python=if(fresh) listOf("1.24.0","1.23.0").take(count).joinToString("\n") {"- Go $it 正式发布，核验go.dev官方发布日期。"} else listOf("3.14.0","3.13.0","3.12.0","3.11.0","3.10.0","3.9.0","3.8.0","3.7.0").take(count).joinToString("\n") {"- Python $it 正式发布，核验python.org官方发布日期。"}
                 val rust=if(fresh) listOf("128.0","127.0").take(count).map {"- Firefox $it 正式发布，核验mozilla.org官方发布日期。"} else listOf("1.90.0","1.89.0","1.88.0","1.87.0","1.86.0","1.85.0","1.84.0","1.83.0").take(count).map {"- Rust $it 正式发布，核验blog.rust-lang.org官方发布日期。"}
                 val fixture=config.optString("fixture")
                 val suites=when(fixture) {
+                    "terra-live-text" -> listOf(emptyList())
+                    "terra-audio-only" -> listOf(listOf(import(container,"audio/wav","fresh-audio.wav",File(filesDir,"fresh-audio.wav").readBytes())))
+                    "terra-video-only" -> listOf(listOf(import(container,"video/mp4","fresh-video.mp4",File(filesDir,"fresh-video.mp4").readBytes())))
+                    "terra-web-attachments" -> listOf(listOf(
+                        import(container,"image/png","public-web-image.png",File(filesDir,"public-web-image.png").readBytes()),
+                        import(container,"application/pdf","public-web-document.pdf",File(filesDir,"public-web-document.pdf").readBytes())))
+                    "attachment-roundtrip" -> listOf(listOf(
+                        import(container,"image/png","roundtrip-image.png",File(filesDir,"roundtrip-image.png").readBytes()),
+                        import(container,"application/pdf","roundtrip-document.pdf",File(filesDir,"roundtrip-document.pdf").readBytes()),
+                        import(container,"audio/wav","roundtrip-audio.wav",File(filesDir,"roundtrip-audio.wav").readBytes()),
+                        import(container,"video/mp4","roundtrip-video.mp4",File(filesDir,"roundtrip-video.mp4").readBytes())))
                     "public-topic-mixed" -> listOf(listOf(
                         import(container,"image/png","public-finance.png",File(filesDir,"public-finance.png").readBytes()),
                         import(container,"text/markdown","public-art.md",File(filesDir,"public-art.md").readBytes()),
@@ -219,19 +260,23 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                 val catalogCases=ComposerModelRoutingCatalog.choices.filter {it.routes.size==1 && it.id!=ComposerModelRoutingCatalog.auto.id}.map {it to it.routes.single()} + (ComposerModelRoutingCatalog.auto to ModelPresetId.QWEN_3_6_FLASH)
                 check(catalogCases.map {it.second}.toSet()==NanfengModelServiceCatalog.chatPresets.map {it.id}.toSet())
                 val cases=if(fixture in setOf("formats","chinese")) catalogCases.filter {it.second.name==config.optString("formatPreset","RELAYCORE_SONNET_5_5")} else catalogCases
-                for ((group,references) in suites.withIndex()) for ((choice,preset) in cases) {
+                matrix@ for ((group,references) in suites.withIndex()) for ((choice,preset) in cases) {
                     val groupFilter=config.optString("groupFilter").split(',').mapNotNull(String::toIntOrNull)
                     if(groupFilter.isNotEmpty() && group !in groupFilter) continue
                     if (filter.isNotEmpty() && preset.name !in filter) continue
-                    val snapshot = container.conversationRepository.save(ConversationTreeService(Clock.systemUTC()).create("公开双文件-${preset.name}"))
+                    val snapshot = config.optString("conversationId").takeIf { it.isNotBlank() }?.let {
+                        check(fixture=="terra-live-text" && preset==ModelPresetId.GPT_6_1_TERRA)
+                        requireNotNull(container.conversationRepository.findById(ConversationId(it)))
+                    } ?: container.conversationRepository.save(ConversationTreeService(Clock.systemUTC()).create("公开双文件-${preset.name}"))
                     val id = snapshot.conversation.id
                     val draft = container.conversationRepository.saveDraft(id, ConversationDraft(
-                        text=if(fixture=="haiku-image") "分析这张订单图，用100字以内回答。" else if(fixture=="public-topic-mixed") "分析这两份附件，给出简洁结论和相关来源。" else if(fixture=="rc-usage") "只回答算式结果：1+1。不要解释。" else if(fixture=="user-report") config.optString("requestText","分析报告") else if(fixture=="rc-text") config.optString("requestText","请实际联网核验 Go 1.23.0 与 Firefox 138.0 的官方发布日期，中文简短列出两项日期与官方来源，并比较两者发布节奏。") else "分析本次全部公开附件，所有事项都实际联网核验，中文简短回答并引用来源。",
+                        text=if(roundTrip) config.getString("requestText") else if(fixture=="haiku-image") "分析这张订单图，用100字以内回答。" else if(fixture=="public-topic-mixed") "分析这两份附件，给出简洁结论和相关来源。" else if(fixture=="rc-usage") "只回答算式结果：1+1。不要解释。" else if(fixture=="user-report") config.optString("requestText","分析报告") else if(fixture=="rc-text") config.optString("requestText","请实际联网核验 Go 1.23.0 与 Firefox 138.0 的官方发布日期，中文简短列出两项日期与官方来源，并比较两者发布节奏。") else "分析本次全部公开附件，所有事项都实际联网核验，中文简短回答并引用来源。",
                         attachments=references, updatedAt=java.time.Instant.now()))
                     val executor = container.normalChatOpenRouterExecutor
-                    val routing=executor.routingSnapshot().copy(webSearchEnabled=fixture!="rc-usage").let { if(preset==ModelPresetId.QWEN_3_6_FLASH) it.copy(usablePresets=setOf(preset)) else it }
+                    val routing=executor.routingSnapshot().copy(webSearchEnabled=if(roundTrip) config.optBoolean("web",false) else fixture!="rc-usage").let { if(preset==ModelPresetId.QWEN_3_6_FLASH) it.copy(usablePresets=setOf(preset,ModelPresetId.CLAUDE_HAIKU_5_5,ModelPresetId.GEMINI_4_ARGON)) else it }
                     val approval = NormalChatEgressAuthorization.forUserSend(draft, System.currentTimeMillis(), choice.id,routing)
                     check(approval.recipientPresets==listOf(preset))
+                    if(roundTrip && spentMicros+callReserve>budgetLimit) {rows.put(JSONObject().put("preset",preset.name).put("notRunReason","PUBLIC_ACCEPTANCE_BUDGET_STOP"));save();break@matrix}
                     val started = System.currentTimeMillis()
                     val result = executor.execute(id, approval)
                     val after = container.conversationRepository.findById(id)!!
@@ -243,7 +288,7 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                         put("preset",preset.name);put("result",result.toString());put("conversationId",id.value)
                         put("elapsedMs",System.currentTimeMillis()-started);put("coverage",coverage)
                         put("attachmentCount",references.size);put("mimes",JSONArray(references.map { it.mimeType }))
-                        put("fixture",fixture);put("group",group);put("fileCount",references.size);put("assistantPresent",assistant!=null);put("webSearchUsed",attribution?.webSearchUsed)
+                        put("readingReplayed",config.optBoolean("replayReader",false));put("fixture",fixture);put("group",group);put("fileCount",references.size);put("assistantPresent",assistant!=null);put("webSearchUsed",attribution?.webSearchUsed)
                         put("diagnostics",JSONArray(container.providerDiagnostics.recent(100).filter {it.conversationId==id.value}.map {record -> JSONObject().apply {
                             put("errorClass",record.errorClass.name);put("httpStatus",record.httpStatus);put("safeDetail",record.redactedBody);put("model",record.apiModelId);put("elapsedMs",record.latencyMs)
                         }}))
@@ -258,7 +303,7 @@ class PublicModelAcceptanceApplication : Application(), Configuration.Provider {
                     }); save()
                 }
             } catch (error: Throwable) {
-                rows.put(JSONObject().put("bootstrapError",true).put("errorClass",error.javaClass.simpleName));save()
+                rows.put(JSONObject().put("bootstrapError",true).put("errorClass",error.javaClass.simpleName).put("frames",JSONArray(error.stackTrace.take(8).map {it.className+"."+it.methodName+":"+it.lineNumber})));save()
             } finally {
                 // Only this disposable package's encrypted copies are removed, never the credential owner.
                 check(getSharedPreferences("provider_credentials_v2", MODE_PRIVATE).edit().clear().commit())

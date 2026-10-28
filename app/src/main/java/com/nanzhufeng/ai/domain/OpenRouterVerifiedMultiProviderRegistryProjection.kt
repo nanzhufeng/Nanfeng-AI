@@ -14,7 +14,7 @@ object DirectV1OpenRouterLogicalModelMappings {
     val values = listOf(
         OpenRouterLogicalModelMapping(
             CompareMvpLogicalModels.chatgpt,
-            setOf(ModelPresetId.GPT_6_1_SOL, ModelPresetId.GPT_6_LUNA, ModelPresetId.GPT_5_6_SOL, ModelPresetId.GPT_5_6_TERRA, ModelPresetId.GPT_5_6_LUNA, ModelPresetId.GPT_6_ASTRA),
+            setOf(ModelPresetId.GPT_6_1_TERRA, ModelPresetId.GPT_6_1_SOL, ModelPresetId.GPT_6_LUNA, ModelPresetId.GPT_5_6_SOL, ModelPresetId.GPT_5_6_TERRA, ModelPresetId.GPT_5_6_LUNA, ModelPresetId.GPT_6_ASTRA),
         ),
         OpenRouterLogicalModelMapping(
             CompareMvpLogicalModels.claude,

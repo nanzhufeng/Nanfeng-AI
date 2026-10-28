@@ -1,0 +1,122 @@
+[
+  {
+    "path": "app/src/main/assets/model_profiles.json",
+    "sha256": "bee8d2f4099ac148f7629073cc6c40298a4230bed70a2608668f04d27f5c46cc"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt",
+    "sha256": "6ea6c13456b611442d68d51ede0cab11e88563c4d95a55996085af97649bad85"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt",
+    "sha256": "a3dd936baf07bee0f90d32f240abf09d373f7208c3e5b8f163e69f0e38e87210"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/DomainModels.kt",
+    "sha256": "6a8419975b1062ec5301e3ffd74bef1023ff9967d6f06cfe5f948cadce80c3b3"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ModelRegistry.kt",
+    "sha256": "9122559d1874956ed6166eb2f19d9ba84c37478b27a4022b1b6418f06f06b318"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ModelService.kt",
+    "sha256": "6041e55387f74039f92cea0f5dbfac3cec9dc3bf46b6bbf8959b1bf9decaf8e2"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/OpenRouterVerifiedMultiProviderRegistryProjection.kt",
+    "sha256": "c6b833c6594019345f2c2b7f0e57c6066d38daa665e66129fc2cb48c7414cc7f"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/RegistryVerification.kt",
+    "sha256": "f19b02c71531fab1daa918029a4460287f37008e7d21ebdb0416b0480996aece"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/ResolvedModel.kt",
+    "sha256": "3fda367e6f79458b0c8e635afe3ace1a38ec0293eb6a22d760800590b2945e4e"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/ProviderAdapterContractsTest.kt",
+    "sha256": "18b85919d040cc5b9406863b09f10fc90615f2503ed729665f51bb99d8283457"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/data/ModelProfileUpgradeTest.kt",
+    "sha256": "517a39455ba36c633ba8609d537e92227fa9034f391de516f7c9a01bdae86e45"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/data/P2JOpenRouterRegistryContractsTest.kt",
+    "sha256": "b4b57db8b21cbe0eef48922f12a525b6ee90d734b656311a94ab9a0f8e64ff46"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/domain/ConversationCostEstimatorTest.kt",
+    "sha256": "057b32ee089eab932f4c2cf4799e3dc94dbf9dbe417c902f8593d60389633afd"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/domain/P6GModelRouterContractsTest.kt",
+    "sha256": "5d33c3dfeeafd369bd8596092dacaeee406953b58c8270de989cb39408d5125d"
+  },
+  {
+    "path": "desktop/src-tauri/src/desktop_model_service_v1.rs",
+    "sha256": "7c339d8a03c617b6fe92c05a7bfb0364c066977c93025138f10f846f4f4c8b35"
+  },
+  {
+    "path": "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+    "sha256": "b2ab2a6e84dfe91f27eab729d9868434c9625608a6b63311fedf340dfb8221f0"
+  },
+  {
+    "path": "desktop/src/android-settings-shell.mjs",
+    "sha256": "9673a12bdfaf2e235cd8ccbc270100f2ff76d232f33f763668fc2e7dc0e4cff2"
+  },
+  {
+    "path": "desktop/src/chat-shell.mjs",
+    "sha256": "22ddbf7cdff2b8f7aea207ffd14e196c170e6d3a553ea7a619eea712590b983a"
+  },
+  {
+    "path": "desktop/src/desktop-cost-estimator.mjs",
+    "sha256": "f2f67af7472a64963e757e15a65e7cddaca4eaf1c40e6a6b7f55aba488d760a8"
+  },
+  {
+    "path": "desktop/src/model-settings-browser.mjs",
+    "sha256": "edc327e5d9dcb3268252c6973a993dba41b7e4bdf579e2eab2e517560111a0e5"
+  },
+  {
+    "path": "desktop/tests/desktop-cost-estimator.test.mjs",
+    "sha256": "14a564474baadc6d9d1978aaf59eac83ece66dbede4af57ff8a9d8eb43d25430"
+  },
+  {
+    "path": "desktop/tests/model-settings-browser.test.mjs",
+    "sha256": "69d89c45eb952973458402e6d88704ad24c3da051f7b41856d6aa4760757c404"
+  },
+  {
+    "path": "docs/CURRENT_HANDOFF.md",
+    "sha256": "8e4b17216a6c9aa6b199ad3b46887f5dcd71da7f87dc6e99c7ab87b545624dda"
+  },
+  {
+    "path": "docs/P6G_MODEL_SELECTION_AUTO_ROUTER_CONTRACT.md",
+    "sha256": "a749312900988af4ac940bc56dd77335e2e68f1ebea1116deaf30cdd85b90b45"
+  },
+  {
+    "path": "docs/PROJECT_STATUS.md",
+    "sha256": "2604424b2750c78822064ea837515fe1577e5c155e2a260a464e09d6cd693688"
+  },
+  {
+    "path": "docs/model-service/MODEL_SERVICE_MATRIX.md",
+    "sha256": "0ea412312aeec40c280b6db8f450b48470f9317fd0247d91f9581cd68afd726a"
+  },
+  {
+    "path": "docs/verification/2026-10-27-gpt-terra/REPORT.md",
+    "sha256": "29fb4f5ea24ab7ba54f5fb90e551cc9207bee847313fd228f55aac39aa56bf7d"
+  },
+  {
+    "path": "docs/verification/2026-10-27-gpt-terra/checks.json",
+    "sha256": "d89ced6a5f689dca9037f3deda8b6b831dc021f938e8175b5b28c34d7cd30e6f"
+  },
+  {
+    "path": "docs/verification/2026-10-27-gpt-terra/provider-metadata.json",
+    "sha256": "1d7e832f791a4cec0573fa271beace47a775cc6ac3a33e3cd8f050d00aa0adbe"
+  },
+  {
+    "path": "protocol/model-service/model-service-v1.json",
+    "sha256": "127787967a69d3b7a78f9758053cb7e854896724f8558a0912f5394cc0f74b7b"
+  }
+]

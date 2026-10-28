@@ -1,0 +1,70 @@
+{
+  "nativeAndWeb": [
+    {
+      "case": "terra-native-two-v2",
+      "actualOriginals": [
+        {
+          "original": "public-web-image.png",
+          "mime": "image/png",
+          "bytes": 12385,
+          "sha256": "fe7a210d86e1344567c7ed2a53f0b6154dee5c62fbeb64553c7e1533e5a36541"
+        },
+        {
+          "original": "public-web-document.pdf",
+          "mime": "application/pdf",
+          "bytes": 1427,
+          "sha256": "5d1d10e706ba31a2c86d5ca0e3183be8405bc0a385bc4181f1fff8b54b8ad7a2"
+        }
+      ]
+    },
+    {
+      "case": "terra-web-two-v2",
+      "actualOriginals": [
+        {
+          "original": "public-web-image.png",
+          "mime": "image/png",
+          "bytes": 12385,
+          "sha256": "fe7a210d86e1344567c7ed2a53f0b6154dee5c62fbeb64553c7e1533e5a36541"
+        },
+        {
+          "original": "public-web-image.png",
+          "mime": "image/png",
+          "bytes": 12385,
+          "sha256": "fe7a210d86e1344567c7ed2a53f0b6154dee5c62fbeb64553c7e1533e5a36541"
+        },
+        {
+          "original": "public-web-document.pdf",
+          "mime": "application/pdf",
+          "bytes": 1427,
+          "sha256": "5d1d10e706ba31a2c86d5ca0e3183be8405bc0a385bc4181f1fff8b54b8ad7a2"
+        }
+      ]
+    }
+  ],
+  "fixedMixedFour": [
+    {
+      "mime": "audio/wav",
+      "bytes": 213730,
+      "sha256": "7a1740d1ddd5887ed6408b3226f045bda5b26470d09d719d75b497b80fba3cb0",
+      "original": "mixed-audio.wav"
+    },
+    {
+      "mime": "video/mp4",
+      "bytes": 93488,
+      "sha256": "0fcea33d6448990ff452311c25106cc219301d1aa44207e04be5b796e87a3840",
+      "original": "mixed-video.mp4"
+    },
+    {
+      "mime": "image/png",
+      "bytes": 10583,
+      "sha256": "e5d18a8d560a89906a369b1df17b9d8cc734fd2a38ab4c98ff949873f870eaf4",
+      "original": "roundtrip-image.png"
+    },
+    {
+      "mime": "application/pdf",
+      "bytes": 1395,
+      "sha256": "959f763f04468148f38feb4aa3480bbf60d6516a251dfc8498daee97a0446079",
+      "original": "roundtrip-document.pdf"
+    }
+  ]
+}

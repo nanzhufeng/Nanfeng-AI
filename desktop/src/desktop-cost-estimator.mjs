@@ -8,6 +8,7 @@ const price = (priceVersion, input, output, cachedInput = null, currencyCode = '
 });
 
 const flatPrices = new Map([
+  ['inception/mercury-3', price('openrouter-mercury-3-2026-10-20-v1', 0.1, 0.35, 0.01)],
   ['google/gemini-4-argon', price('openrouter-gemini-4-argon-2026-10-15-v1', 2, 10, 0.1)],
   ['anthropic/claude-opus-5.5', price('openrouter-public-prices-2026-10-09-v1', 4, 20, 0.2)],
   ['anthropic/claude-sonnet-5.5', price('openrouter-public-prices-2026-10-09-v1', 2, 10, 0.1)],
@@ -25,6 +26,7 @@ const flatPrices = new Map([
 const tieredPrices = new Map([
   ['anthropic/claude-haiku-5.5', [[99_999, price('openrouter-public-prices-2026-10-09-v1', 0.1, 0.5, 0.01)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-09-v1', 0.5, 2.5, 0.05)]]],
   ['openai/gpt-6.1-sol', [[271_999, price('openrouter-public-prices-2026-10-09-v1', 2, 10, 0.1)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-09-v1', 4, 15, 0.2)]]],
+  ['openai/gpt-6.1-terra', [[271_999, price('openrouter-public-prices-2026-10-27-v1', 1, 5, 0.05)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-27-v1', 2, 7.5, 0.1)]]],
   ['openai/gpt-6-luna', [[271_999, price('openrouter-public-prices-2026-10-09-v1', 0.1, 0.5, 0.01)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-10-09-v1', 0.2, 0.75, 0.02)]]],
   ['openai/gpt-5.6-sol', [[271_999, price('openrouter-public-prices-2026-08-v1', 2, 10)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-08-v1', 4, 15)]]],
   ['openai/gpt-5.6-terra', [[271_999, price('openrouter-public-prices-2026-08-v1', 2, 12)], [Number.MAX_SAFE_INTEGER, price('openrouter-public-prices-2026-08-v1', 4, 18)]]],

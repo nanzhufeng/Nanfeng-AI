@@ -1,0 +1,23 @@
+{
+  "newFiles": [
+    {
+      "name": "mixed-audio.wav",
+      "bytes": 213730,
+      "sha256": "7a1740d1ddd5887ed6408b3226f045bda5b26470d09d719d75b497b80fba3cb0"
+    },
+    {
+      "name": "mixed-video.mp4",
+      "bytes": 93488,
+      "sha256": "0fcea33d6448990ff452311c25106cc219301d1aa44207e04be5b796e87a3840"
+    }
+  ],
+  "expected": {
+    "IMAGE_CODE": "37.26",
+    "PDF_CODE": "58.42",
+    "AUDIO_CODE": "52.17",
+    "VIDEO_VISUAL_CODE": "63.28",
+    "VIDEO_AUDIO_CODE": "34.92"
+  },
+  "videoSeconds": 8.339687999999999,
+  "oldUnknownUnmodified": true
+}

@@ -4,14 +4,36 @@
 
 ## Verified
 
-- Last verified: 2026-10-15T19:17:47+08:00（v1.0.31三资产公开下载校验及GitHub三项CI）
+- Last verified: 2026-10-28T15:13:31.510176+08:00（Terra真实文本／四类附件／附件联网与重开通过；识读普通编号误滤已修，正式包已保数据覆盖；初次IO UNKNOWN保留）
 - Verified branch: main
-- Code baseline: fe504fec14b53b7bd2093d5b9929e99248695705；v1.0.31最终构建源码，后续仅发布证据/预览文档。
-- Verification scope: COMMIT / 双端正式构建与原证书、Android隔离精确APK读回、Mac最终DMG应用独立数据根冷启及四预览；新Node555/12skip与typecheck/lint，合同/模型门PASS。Android JVM/Rust/协议等复用同日checkpoint的未变输入。无主设备/收费动作。
+- Code baseline: dd3c8e89921feee8be5bc0185bf3174e6fed4bae；既有WIP保留，本轮双端观察保真规则及原生实发验收；未提交。
+- Verification scope: Android1548PASS／10skip、正式编译与Lint；Rust相关21PASS，模型23／协议16通过。Terra两轮文本、PNG/PDF/WAV/MP4混合五值、附件联网2/2官方引用，8会话重开与原生可见正文已验。16物理调用中15完整＋1历史IO未知保留；Desktop本轮真实服务未验，先前全Rust云同步红灯未修改。
 - Verified by: Codex
 - Status: Active
 
 ## Current
+
+- [Terra真实链路验收与修复](verification/2026-10-28-terra-live-chain/REPORT.md)：两轮对话、原件四类混合／五项内容、附件联网2/2来源、保存／重开及原生显示已通过。普通编号误滤在双端读取owner修复，正式包已保数据覆盖OPPO。初次IO和未知费用保留；范围不扩展为所有格式或Desktop真实通过。
+
+- [GPT-6.1 Terra日常接入](verification/2026-10-27-gpt-terra/REPORT.md)：位于Luna上方，双端目录／精确路由／能力种子／费用同步，默认和Auto不变。正式包已[保数据覆盖OPPO并回读一致](verification/2026-10-28-gpt-terra-cover/REPORT.md)；本轮Android真实链路结果见上方验收；Desktop未实测。
+
+- [真实四附件到最终回答验收](verification/2026-10-21-real-attachment-roundtrip/REPORT.md)：22模型已具备实际原件／55完整物理调用／110内容项／身份与本机终态／重开证据；修观察用途、开头空白帧及Sonnet精确别名，Desktop3实测通过。最终原签名正式包已[保数据覆盖OPPO并回读一致](verification/2026-10-22-attachment-formal-cover/REPORT.md)；网页检索缺口不因此关闭。
+
+- [Mercury识读完成状态误判修复](verification/2026-10-21-mercury-reading-terminal/REPORT.md)：真实SSE→读取回归复现并修复Android默认流模式丢失显式stop终态；1542通过／10跳过，正式编译／Lint与合同门通过。OPPO同签名保数据覆盖并回读hash一致，包含上一增量去字；旧消息不重试，真实业务未验。
+
+- [删除输入框附件识读小字](verification/2026-10-21-remove-composer-reading-copy/REPORT.md)：Android／Mac共享Composer已去掉附件识读／接收方／计费常驻说明，P3J同步禁止重加；定向UI3/3、构建及合同门通过。已随本次终态修复合包覆盖OPPO；不关闭上一阶段联网红灯。
+
+- [10月21日全模型附件统一排查与修复](verification/2026-10-21-all-model-attachments/REPORT.md)：按维护目录覆盖全部模型，修冷启动能力缺项、跨Provider读取／独立授权、音视频、混合图片/PDF遗漏和PDF视觉内容；OPPO最终包已保数据覆盖。Mac候选未覆盖；真实服务未全部通过，按报告保留未完成项。
+
+- [10月21日Mercury图片识读与Mac系统代理修复](verification/2026-10-21-mercury-image-reading/REPORT.md)：当前图片明确披露Haiku接收方后识读，原选Mercury回答；目录仍为真实文字能力。全量回归与双端正式候选验签完成，读图回答已实测；联网图片NETWORK和主设备覆盖尚待验收。
+
+- [10月21日Mercury与复查修复双端正式覆盖](verification/2026-10-21-mercury-formal-cover/REPORT.md)：OPPO 1.0.31/code95按原签名保数据覆盖，精确APK读回一致；Mac从1.0.30覆盖为1.0.31，原证书／4份bundle内容匹配，1595数据文件0变化，旧bundle保留。包含Mercury／输入框短名及4项复查修复；没有新业务实测或收费。
+
+- [10月21日Mercury／Argon遗漏风险复查](verification/2026-10-21-mercury-risk-review/REPORT.md)：修固定OpenRouter缓存错误ID、Argon简称误影响回复页脚、Mercury旧记录显示API ID、付费矩阵误计数／无效筛选零请求绿色。完整回归与双端原签名候选通过；复查候选已按随后授权正式覆盖双端，不重复收费；原生业务缺口保留。
+
+- [10月20日Mercury 3与Argon输入框短名](verification/2026-10-20-mercury-daily/REPORT.md)：双端日常Luna后新增精确OpenRouter Mercury 3，Auto不变；Android Composer显示4 Argon，归因保留全名。真实普通回答／双文本联网2/2及最终回归通过；当轮候选未覆盖主设备；已随最新复查修复包覆盖双端，原生UI未验缺口保持。
+
+- [10月20日Argon设备诊断](verification/2026-10-20-argon-device-tls/REPORT.md)：昨日图片请求实际TLS握手EOF，无HTTP；当前手机公开接口可达，仅shell层证据。修附件规划将网络/超时/HTTP错报格式问题，119相关JVM通过；不宣称外部链路已修，不重发未知请求。主设备已按随后授权原签名保数据覆盖至1.0.31/code95，精确APK读回及身份保持。
 
 - [v1.0.31发布候选](verification/2026-10-15-github-v1.0.31/REPORT.md)：双端原签名正式包与四张当前预览完成；Mac空数据恢复入口已修。正式Release三资产上传/公开下载hash一致，标签CI三项SUCCESS；主设备不重装。
 
@@ -98,6 +120,8 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 ## Verification Gaps
 
+- 本次Mercury图片：原手机当前未连接，正式修复候选未覆盖；公开图片联网请求NETWORK未知，不重发。公开订单图读图＋回答成功只覆盖该独立样本；复杂图表、外屏实际布局、原图原网络及其他媒体未验收。
+
 - 本轮正式保数据覆盖已完成，但正式UI／用户原始材料未实测；不是21模型×全部格式的真实矩阵，模型生成内容仍出现单位／表述错误，不能将联网通过等同事实准确性通过。
 
 - 新标题三场景已双端真实生成／落库／重开；正式原生UI的主进度／标题刷新与本增量正式覆盖未做。注入超时不证明DeepSeek或Qwen当前上游故障。
@@ -119,7 +143,7 @@ Argon增量（2026-10-15）：Android1497 PASS/10 skip＋Debug构建；Rust444 P
 
 - Git working tree: 当前源码/合同/核心新增测试、发布文档及四张当前预览均已提交；本摘要回填前仅回执文档变化。323份原始/临时证据仍未跟踪且逐项hash保留，无新增产物入Git。
 - Remote sync: main与v1.0.31正式标签已推送，标签1ffacaf36bd5a5b29c6e9f45ceb7933a1ec1e5e4；三资产远端/公开下载hash一致、标签CI三项PASS。构建源码fe504fec14b53b7bd2093d5b9929e99248695705；随后纯文档回执薄提交不重建/移动标签。私有checkpoint标签未推送。
-- Installed sync: 主设备保留10月15日已授权覆盖的1.0.30修复包；本次1.0.31仅隔离模拟器实装及Mac精确候选独立数据根启动，不冒称主设备已更新。
+- Installed sync: 10月20日Argon错误归因补丁已原签名保数据覆盖主设备至1.0.31/code95，准确APK/hash及身份保持见诊断回执；不是GitHub旧同版本包。Mac未改变，原失败未重发。
 - Rollback point: 本轮源码checkpoint/tag及限定改前副本；禁止全仓reset/clean/stash覆盖排除证据。
 - Secrets/config: 本安装阶段原应用凭据未改、0新增Provider请求，正式数据保留；此前获授权创建的RC反重力网站Key未接入应用，3次404/504调用费用UNKNOWN与暂缓决定单独留档。临时凭据通道已关闭；原始回执/正文/before/日志不进入提交。
 

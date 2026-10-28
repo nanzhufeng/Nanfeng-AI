@@ -6,6 +6,10 @@
 
 > 发布增量：v1.0.31正式发布及首次空数据启动修复见[发布报告](verification/2026-10-15-github-v1.0.31/REPORT.md)；下方历史复盘保持原执行日期，当前远端状态以发布回执为准。
 
+> 2026-10-20增量：双端日常加入Mercury 3，Android Argon输入框简称、22聊天部署和分层验收见[Mercury报告](verification/2026-10-20-mercury-daily/REPORT.md)。下方带日期的历史验证不扩大为新模型／主设备验收。
+
+> 2026-10-21增量：当前模型的附件准备、独立辅助授权、混合媒体及PDF完整性统一收敛，见[全模型排查报告](verification/2026-10-21-all-model-attachments/REPORT.md)。Android最终包已覆盖；真实服务仍有未通过项，历史验收不扩大为全部模型联网成功。
+
 ## 1. 复盘方法、范围与证据等级
 
 | 检查层 | 当前覆盖 | 结论边界 |
@@ -87,8 +91,9 @@ flowchart LR
 ### 普通发送与附件联网
 
 1. 草稿／材料本地准备 → 当前路由与精确身份冻结 → 接收方／材料资格校验 → 持久 Attempt → 实际 Adapter／运输 → 正常完成、已知失败、取消或 UNKNOWN → 正文、来源与独立用量事实落库 → UI 回读。依据：[Android executor](../app/src/main/java/com/nanzhufeng/ai/ai/NormalChatOpenRouterExecutor.kt)、[Desktop 普通回答 owner](../desktop/src-tauri/src/desktop_ordinary_chat_v1.rs)、[P3B](P3B_RUNTIME_EVENT_STATE_MACHINE_CONTRACT.md)。
-2. 正常 OpenRouter／官方模型维持各自联网。RC 普通文字 Sol/Astra 自身 Responses；另外四款 RC 文字及六款 RC 附件通过固定 OpenRouter Luna 检索，再交回原 RC 模型／渠道／Key 回答。维护目录当前21个聊天部署：OpenRouter8／官方7／RC6，另1个独立OCR与7组凭据。不是上游可用性承诺。[生成矩阵](model-service/MODEL_SERVICE_MATRIX.md)、[RC 合同](RELAYCORE_MODEL_CURRENT_CONTRACT.md)、[Luna 实施报告](verification/2026-10-13-luna-routing-implementation/REPORT.md)。
-3. Muse Wonder 位于深度档 DeepSeek Pro 后、智谱前，经 OpenRouter；可读文字材料使用已登记 Responses 例外，媒体保持原路线。OpenRouter Gemini Flash与Argon自身搜索使用native web plugin例外；Haiku使用同请求入口的exa plugin，关闭搜索／grounded 回答不注入；不把其他模型一起切到 Luna。[Adapter](../app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt)、[维护矩阵](model-service/MODEL_SERVICE_MATRIX.md)、[Gemini/Muse 报告](verification/2026-10-14-gemini-muse-risk-fix/REPORT.md)、[Gemini 同题报告](verification/2026-10-14-gemini-search-repeat/REPORT.md)。
+2. 正常 OpenRouter／官方模型维持各自联网。RC 普通文字 Sol/Astra 自身 Responses；另外四款 RC 文字及六款 RC 附件通过固定 OpenRouter Luna 检索，再交回原 RC 模型／渠道／Key 回答。维护目录当前22个聊天部署（2026-10-20增量）：OpenRouter9／官方7／RC6，另1个独立OCR与7组凭据。不是上游可用性承诺。[生成矩阵](model-service/MODEL_SERVICE_MATRIX.md)、[RC 合同](RELAYCORE_MODEL_CURRENT_CONTRACT.md)、[Luna 实施报告](verification/2026-10-13-luna-routing-implementation/REPORT.md)。
+3. Mercury保持文字原生能力；当前图片通过已披露的Haiku 5.5 · OpenRouter识读，再由Mercury回答，原模型与两段计费分别保留；不改变上述RC联网分流。Mac模型HTTP请求读取现有系统HTTP／HTTPS代理，回环入口直连。行为见[C12](C12_MODEL_NETWORK_PARITY_CONTRACT.md)，本轮证据和未验层见[图片修复报告](verification/2026-10-21-mercury-image-reading/REPORT.md)。
+4. Muse Wonder 位于深度档 DeepSeek Pro 后、智谱前，经 OpenRouter；可读文字材料使用已登记 Responses 例外，媒体保持原路线。OpenRouter Gemini Flash与Argon自身搜索使用native web plugin例外；Haiku使用同请求入口的exa plugin，关闭搜索／grounded 回答不注入；不把其他模型一起切到 Luna。[Adapter](../app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt)、[维护矩阵](model-service/MODEL_SERVICE_MATRIX.md)、[Gemini/Muse 报告](verification/2026-10-14-gemini-muse-risk-fix/REPORT.md)、[Gemini 同题报告](verification/2026-10-14-gemini-search-repeat/REPORT.md)。
 4. 编号报告按完整事实句／分号提取独立 ID，保留必要段落上下文与参考 URL，过滤个人材料／评述控制句；逐项来源与实际搜索状态独立判定。Android 常规四项一批，智谱一项；执行受 48 次／600 秒边界约束。已知完成但缺证可以定向补查，UNKNOWN 停止；补查失败不能删除已有证据。[Android planner](../app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchPlan.kt)、[coordinator](../app/src/main/java/com/nanzhufeng/ai/ai/AttachmentWebSearchCoordinator.kt)、[Rust planner](../desktop/src-tauri/src/attachment_web_search_v1.rs)、[执行](../desktop/src-tauri/src/attachment_web_search_execution_v1.rs)。
 5. 检索检查点验证任务／ID／query／原模型／来源／完成调用与有效期，当前语义v6拒绝旧v5与topic-v4证据；它不是 Provider token cache 或未接入的 LocalExactReuse。[Android cache](../app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchCheckpointCache.kt)、[Rust checkpoint](../desktop/src-tauri/src/attachment_search_checkpoint_v1.rs)、[缓存合同](PROMPT_CACHE_AND_EXACT_REUSE_CONTRACT.md)。
 

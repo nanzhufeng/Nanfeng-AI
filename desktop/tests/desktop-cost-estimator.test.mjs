@@ -21,3 +21,11 @@ test('Desktop estimates a completed reply from explicitly marked local token est
   assert.equal(projectedMessageCost(message)?.costSource, 'LOCAL_ESTIMATE');
   assert.match(cnyCostLabel(projectedMessageCost(message), { maximumFractionDigits: 4, trimTrailingZeros: false }), /^¥\d+\.\d{4}$/);
 });
+
+ test('Terra pricing uses verified cache and long-context tiers', () => {
+  const regular=projectedCost({modelId:'openai/gpt-6.1-terra',occurredAtMs:Date.UTC(2026,9,27),inputTokens:1000,outputTokens:100,cachedInputTokens:500});
+  assert.equal(regular.chargeMicros,1025);
+  assert.equal(regular.currencyCode,'USD');
+  assert.equal(regular.priceVersion,'openrouter-public-prices-2026-10-27-v1');
+  assert.equal(projectedCost({modelId:'openai/gpt-6.1-terra',occurredAtMs:Date.UTC(2026,9,27),inputTokens:272000,outputTokens:100,cachedInputTokens:0}).chargeMicros,544750);
+});

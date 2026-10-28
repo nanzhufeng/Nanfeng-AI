@@ -1,0 +1,17 @@
+{
+  "sha256": "df226cbbcf5ccc7b18778a855fe6316d0e166f5dc88353f70e6eefd598a05cf1",
+  "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+  "package": "com.nanzhufeng.ai",
+  "versionName": "1.0.31",
+  "versionCode": 95,
+  "debuggable": false,
+  "installed": false,
+  "nodeTests": {
+    "passed": 3,
+    "failed": 0
+  },
+  "desktopBuild": "PASS",
+  "contracts": "PASS",
+  "androidBuild": "PASS",
+  "newPaidRequests": 0
+}

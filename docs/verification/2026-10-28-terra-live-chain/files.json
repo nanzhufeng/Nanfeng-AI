@@ -1,0 +1,74 @@
+[
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ai/AttachmentSearchInventory.kt",
+    "sha256": "7f629b15d5a698b3f2d9bbb30accf05c1f2658e017744e2148fac221f72efcce"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/AttachmentInputPolicy.kt",
+    "sha256": "c2a03666062eab3a75bd8a54694059774680482ddbf8262fba794701908c200f"
+  },
+  {
+    "path": "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicLiveConnectionTrace.kt",
+    "sha256": "5f0efd3a1b7210dab8fba4d820c611eb5b06f6ac1448b6d198f96bfe657ac187"
+  },
+  {
+    "path": "app/src/publicModelAcceptance/java/com/nanzhufeng/ai/acceptance/PublicModelAcceptanceApplication.kt",
+    "sha256": "b29875a615f9c986bb83d438199adb587372904d7e3ee36da5ea6cea2b14754e"
+  },
+  {
+    "path": "app/src/test/java/com/nanzhufeng/ai/ai/ProviderSseDecoderContractsTest.kt",
+    "sha256": "b5d4e374c80802c4a1c4d48c6a05cdbf56247f735d8abee68f63f55fcb54a955"
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_input_policy_v1.rs",
+    "sha256": "c04438ee7ba4d4352cc26bf23ca947af865de56f33f21f624acd0b86d2f63cef"
+  },
+  {
+    "path": "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+    "sha256": "bbee7daf82c942277c32efbc625c8b8514be2a1ab9197910de06670f41714daa"
+  },
+  {
+    "path": "docs/CURRENT_HANDOFF.md",
+    "sha256": "191d973a19b5ab74f3dc7abd5f334e8009f4707b86ee3d1b91c1181b51fb2b6f"
+  },
+  {
+    "path": "docs/P6D2_CROSS_PLATFORM_COMPOSER_ATTACHMENT_ADAPTER_CONTRACT.md",
+    "sha256": "63aaa4a968d1b5ddd56c6f8d1110f36af8a5d0af2acf7873be012323842b0fed"
+  },
+  {
+    "path": "docs/PROJECT_STATUS.md",
+    "sha256": "5591b82a8fb8c73b348285b37d243b4519d734bb4c6c724dba493e30b072b910"
+  },
+  {
+    "path": "docs/verification/2026-10-28-terra-live-chain/REPORT.md",
+    "sha256": "1a0e5ea23ecfdf08c95eb27bed20c8806a1f078a2866f3178354c9207660c0b1"
+  },
+  {
+    "path": "docs/verification/2026-10-28-terra-live-chain/byte-checks.json",
+    "sha256": "fba84dd566ad3d93c03c92926b860130840f4d1f9a3c8116e65a4d52299930b5"
+  },
+  {
+    "path": "docs/verification/2026-10-28-terra-live-chain/checks.json",
+    "sha256": "a1075fffcc5be91ca9a19748a27dd2eb90dde1e3dc230c2df18fb996c8269d4f"
+  },
+  {
+    "path": "docs/verification/2026-10-28-terra-live-chain/delivery.json",
+    "sha256": "5e3c4539804bb7d035ab3931b14e5dafeb07c8e72cf78d957bcd66b43d8db6db"
+  },
+  {
+    "path": "docs/verification/2026-10-28-terra-live-chain/input-manifest-v3.json",
+    "sha256": "12d209160f842e5280b418c1337cc02b5d14c5a1823b2153293a0f6dd09b59d5"
+  },
+  {
+    "path": "docs/verification/2026-10-28-terra-live-chain/input-manifest.json",
+    "sha256": "fe5354621ebd6111931ed17e605efa38e6f81c5c6e2d63adfdc36740cfd3ea87"
+  },
+  {
+    "path": "docs/verification/2026-10-28-terra-live-chain/matrix.json",
+    "sha256": "74a53c737f00160d1d3b22cc173bc9a8efdea71e47df4837ed90b18f7a1c7d6f"
+  },
+  {
+    "path": "docs/verification/2026-10-28-terra-live-chain/physical-summary.json",
+    "sha256": "2720a3eaf7fd785433a794bd5fdcb8092883f456be367acb3bd2baba13a0e77c"
+  }
+]

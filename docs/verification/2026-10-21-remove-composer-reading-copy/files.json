@@ -1,0 +1,37 @@
+[
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt",
+    "beforeSha256": "24d4428352b1cf58106dbaf5012376725d5fead435a1e9fb64c97b17be560d70",
+    "afterSha256": "b9f1ab0fc7a56351b5778da126a8f92e917a3ce1147f2e43f4db6e6fbdb73a7a"
+  },
+  {
+    "path": "app/src/main/java/com/nanzhufeng/ai/domain/AttachmentInputPolicy.kt",
+    "beforeSha256": "9ce2f615861a9b3ae35df461519e222d56f021960f68ac0dd40de6f33453c072",
+    "afterSha256": "437b32a19dafc60bc1d6c122cd9c359a3319a3a953ca374a7e7960733068d54f"
+  },
+  {
+    "path": "desktop/src/chat-shell.mjs",
+    "beforeSha256": "29a015537614b4d76a143119be943e2af4a86d6d834ca3f3c9141b8f6601ffaf",
+    "afterSha256": "5122448fcab34593312d31c520ba2288f0eca3cf61ba7befd4574f46b4aff6f8"
+  },
+  {
+    "path": "desktop/src/chat-shell.css",
+    "beforeSha256": "0e65fe3083b4f72e476beb33383aa86bb871602501bba3089d88c2763c7bdd02",
+    "afterSha256": "d2bd7b42fddd00daa3cf55af5745b911c8735c9bb0fde14cf64451ab02d3ff06"
+  },
+  {
+    "path": "desktop/src/attachment-input-policy.mjs",
+    "beforeSha256": "7e725b3bafd77a8e85c97a07fe5c118023f38abd8348e31c997776288b48c2f4",
+    "afterSha256": "11bd786ac9d61ca6cf7add6d0bbeff1b03e3b15f45c5753358d00e336577e56a"
+  },
+  {
+    "path": "desktop/tests/visual-attachment-reading.test.mjs",
+    "beforeSha256": "6f872812f7e8e279bb8f3150784e910dda92719cc5fab18387d5928e888e0083",
+    "afterSha256": "25b07bb753bcf119048abc07aedb09d09daba116fa74bb3ec61e7142e9c266d2"
+  },
+  {
+    "path": "docs/P3J_NORMAL_CHAT_EXPLICIT_EGRESS_CONFIRMATION_CONTRACT.md",
+    "beforeSha256": "12592b404dc13c79c194075707c7976f51f0a4e5dc6eb211a348d1d60f135137",
+    "afterSha256": "b3d9b4af273b069cfd0bb1740514319bc029701bea2a8400d18b8a7de3814d18"
+  }
+]

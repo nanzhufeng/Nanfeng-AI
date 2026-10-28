@@ -1,3 +1,4 @@
+import { createAttachmentReadingGrant } from './attachment-input-policy.mjs';
 import { modelSettingsProviderTarget, installModelSettingsKeyboardNavigation } from './model-settings-browser.mjs';
 import { autoCandidate, conversationAutoMimeTypes } from "./auto-chat-routing.mjs";
 import { RELAYCORE_MODELS, relayCoreEgressVersion, relayCoreNeedsCompanion, createLunaRetrievalGrant } from './relaycore-models.mjs';
@@ -5293,6 +5294,7 @@ async function sendLocalMessage() {
     ordinaryChatAttemptRegistry.add(clientSubmissionId);
     const directSearch = usesIndependentSearch(state.modelServiceSettings, sentAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
     const searchService = directSearch ? await createSearchServiceGrant(text, sentAttachments.map(item => item.id)) : null;
+    const attachmentReading = await createAttachmentReadingGrant(text, sentAttachments.map(item=>item.id), state.modelServiceSettings, selectedPresetId, sentAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
     const retrievalRecipient = relayCoreNeedsCompanion(selectedPresetId,state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled,sentAttachments.length>0) ? await createLunaRetrievalGrant(text,sentAttachments.map(item=>item.id)) : null;
     const execution = invoke('submit_desktop_ordinary_chat', { args: {
       workspaceId,
@@ -5306,7 +5308,7 @@ async function sendLocalMessage() {
       webSearchOverride: typeof pendingPreferences?.webSearchOverride === 'boolean' ? pendingPreferences.webSearchOverride : null,
       // The visible Send press is the only authorization action; the Rust boundary refuses
       // to construct a provider request without this short, content-free receipt.
-      egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: (directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(selectedPresetId, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled, sentAttachments.length > 0)) + (autoSelected && selectedPresetId ? `:auto=${selectedPresetId}` : ''), clientSubmissionId, searchService, retrievalRecipient },
+      egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: (directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(selectedPresetId, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled, sentAttachments.length > 0)) + (autoSelected && selectedPresetId ? `:auto=${selectedPresetId}` : ''), clientSubmissionId, searchService, retrievalRecipient, attachmentReading },
     } }).finally(() => ordinaryChatAttemptRegistry.delete(clientSubmissionId));
     state.composerAttachments = []; writeComposerAttachments();
     state.composerDraft = '';
@@ -6065,9 +6067,10 @@ app.addEventListener('click', async event => {
       const directSearch = usesIndependentSearch(state.modelServiceSettings, originalAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
       const searchService = directSearch ? await createSearchServiceGrant(originalMaterial.text, originalAttachments.map(item => item.id)) : null;
       const originalPreset = RELAYCORE_MODELS.find(model => model.providerId === original?.modelSnapshot?.providerId && (model.modelId === original?.modelSnapshot?.modelId || (model.presetId === "RELAYCORE_OPUS_5_5" && original?.modelSnapshot?.modelId === "claude-opus-5-5")))?.presetId;
+      const attachmentReading = await createAttachmentReadingGrant(originalMaterial.text, originalAttachments.map(item=>item.id), state.modelServiceSettings, original?.modelSnapshot?.modelId, originalAttachments, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled);
       const retrievalRecipient = relayCoreNeedsCompanion(originalPreset,state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled,originalAttachments.length>0) ? await createLunaRetrievalGrant(originalMaterial.text,originalAttachments.map(item=>item.id)) : null;
       ordinaryChatAttemptRegistry.add(retryOwnerId);
-      const result = await invoke('retry_desktop_ordinary_chat', { args: { attemptId, egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(originalPreset, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled, originalAttachments.length > 0), searchService, retrievalRecipient } } }).finally(() => ordinaryChatAttemptRegistry.delete(retryOwnerId));
+      const result = await invoke('retry_desktop_ordinary_chat', { args: { attemptId, egressAuthorization: { approvedAtMs: Date.now(), disclosureVersion: directSearch ? 'normal-chat-egress-v3' : relayCoreEgressVersion(originalPreset, state.conversationPreferences?.webSearchOverride ?? state.productSettings.webSearchEnabled, originalAttachments.length > 0), searchService, retrievalRecipient, attachmentReading } } }).finally(() => ordinaryChatAttemptRegistry.delete(retryOwnerId));
       state.status = result.state === 'COMPLETED' ? '重试已完成并写入用量账本。' : ['COMPLETED_ACCOUNTING_PENDING', 'RESPONSE_COMMITTED'].includes(result.state) ? '回答已保存，计量记录待恢复。' : result.state === 'UNKNOWN' ? '重试结果仍未知，未再次自动重发。' : '重试未完成。';
       await loadDesktopContextRecords();
       await loadDesktopDiagnosticRecords();

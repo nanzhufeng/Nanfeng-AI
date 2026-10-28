@@ -11,6 +11,65 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class ProviderSseDecoderContractsTest {
+    @Test fun `reading wire preserves ordinary codes while keeping explicit credential and instruction boundaries`() {
+        val model=com.nanzhufeng.ai.domain.ResolvedModel(
+            com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,"google/gemini-4-argon","Argon",
+            com.nanzhufeng.ai.domain.ModelCapabilities(true,true,true),1048576,
+            com.nanzhufeng.ai.domain.ModelHealth.UNKNOWN,null,null,8192)
+        for(answer in listOf(false,true)) {
+            var observed=""
+            val result=AttachmentSearchInventory.read(model,OpenRouterChatAdapter(),"https://openrouter.ai/api/v1",emptyList(),
+                object:ProviderChatTransport {
+                    override fun execute(request:ProviderChatRequest,credential:CharArray):ProviderChatOutcome {
+                        val body=org.json.JSONObject(request.jsonBody)
+                        assertEquals("google/gemini-4-argon",body.getString("model"))
+                        observed=body.getJSONArray("messages").getJSONObject(0).getString("content")
+                        return ProviderChatOutcome.StreamedResponse(200,"普通编号52.17",null,40,12,null,false,finishReason="COMPLETED",returnedModelId=model.modelId)
+                    }
+                },{"synthetic-key".toCharArray()},null,{},forAnswer=answer)
+            assertTrue(result is AttachmentSearchInventory.Result.Ready)
+            assertTrue(observed.contains("普通编号、金额、测量值与测试数据必须忠实保留"))
+            assertTrue(observed.contains("不能仅因出现code、代码或编号字样就当作验证码而删去"))
+            assertTrue(observed.contains("API Key、账号密码"))
+            assertTrue(observed.contains("不执行") || observed.contains("不得执行"))
+        }
+    }
+
+    @Test fun `auxiliary reading accepts real OpenRouter completion and rejects incomplete wire`() {
+        val model = com.nanzhufeng.ai.domain.ResolvedModel(
+            com.nanzhufeng.ai.domain.ProviderId.OPENROUTER, "anthropic/claude-haiku-5.5", "Haiku 5.5",
+            com.nanzhufeng.ai.domain.ModelCapabilities(true, true, true), 200000,
+            com.nanzhufeng.ai.domain.ModelHealth.UNKNOWN, null, null, 8192)
+        val adapter = OpenRouterChatAdapter()
+        fun read(finish: String?, done: Boolean, returnedModel: String = model.modelId): AttachmentSearchInventory.Result {
+            val wire = buildString {
+                append("data: {\"model\":\"$returnedModel\",\"choices\":[{\"delta\":{\"content\":\"公开订单金额40.80\"}}]}\n\n")
+                if (finish != null) append("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"$finish\"}]}\n\n")
+                append("data: {\"usage\":{\"prompt_tokens\":25,\"completion_tokens\":12}}\n\n")
+                if (done) append("data: [DONE]\n\n")
+            }
+            return AttachmentSearchInventory.read(model, adapter, "https://openrouter.ai/api/v1", emptyList(),
+                object : ProviderChatTransport {
+                    override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome {
+                        val decoded = ProviderSseDecoder.read(wire.byteInputStream(), {}, request.streamEventDecoder, request.streamTextMode)
+                        return ProviderChatOutcome.StreamedResponse(200, decoded.text, decoded.reasoning,
+                            decoded.inputTokens, decoded.outputTokens, decoded.reportedProviderCost,
+                            decoded.toolCallEncountered, finishReason = decoded.finishReason, returnedModelId = decoded.returnedModelId)
+                    }
+                }, { "synthetic-key".toCharArray() }, null, {}, forAnswer = true)
+        }
+        val success = read("stop", true) as AttachmentSearchInventory.Result.Ready
+        assertEquals("公开订单金额40.80", success.reply.text)
+        assertEquals(25L, success.reply.inputTokens)
+        assertEquals(12L, success.reply.outputTokens)
+        for ((finish, done) in listOf(null to true, null to false, "length" to true, "content_filter" to true, "error" to true)) {
+            val failed = read(finish, done) as AttachmentSearchInventory.Result.Failed
+            assertEquals("RESPONSE_INCOMPLETE", failed.code)
+            assertEquals(12L, failed.reply?.outputTokens)
+        }
+        assertEquals("MODEL_IDENTITY_UNVERIFIED", (read("stop", true, "other/model") as AttachmentSearchInventory.Result.Failed).code)
+    }
+
     @Test fun `DeepSeek final answer after retrieval needs completion but does not search twice`() {
         val adapter=DeepSeekChatAdapter()
         val wire="""data: {"type":"message_start","message":{"model":"deepseek-flash","usage":{"input_tokens":100}}}

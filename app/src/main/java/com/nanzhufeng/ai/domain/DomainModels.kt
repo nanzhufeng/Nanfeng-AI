@@ -131,7 +131,9 @@ enum class ModelPresetId {
     CLAUDE_SONNET_5_5,
     CLAUDE_HAIKU_5_5,
     GPT_6_1_SOL,
+    GPT_6_1_TERRA,
     GPT_6_LUNA,
+    MERCURY_3,
     MUSE_WONDER,
     GEMINI_4_ARGON,
 

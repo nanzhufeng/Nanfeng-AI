@@ -126,7 +126,9 @@ class OpenRouterRegistrySnapshotVerifier {
             ModelPresetId.CLAUDE_SONNET_5_5 to "anthropic/claude-sonnet-5.5",
             ModelPresetId.CLAUDE_HAIKU_5_5 to "anthropic/claude-haiku-5.5",
             ModelPresetId.GPT_6_1_SOL to "openai/gpt-6.1-sol",
+            ModelPresetId.GPT_6_1_TERRA to "openai/gpt-6.1-terra",
             ModelPresetId.GPT_6_LUNA to "openai/gpt-6-luna",
+            ModelPresetId.MERCURY_3 to "inception/mercury-3",
         ModelPresetId.MUSE_WONDER to "meta/muse-wonder",
         ModelPresetId.GEMINI_4_ARGON to "google/gemini-4-argon",
         ).mapNotNull { (preset, id) -> candidates.firstOrNull { it.id == id }?.let { ModelPresetMapping(preset, it.id) } }

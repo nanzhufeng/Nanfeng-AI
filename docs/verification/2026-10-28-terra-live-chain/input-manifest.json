@@ -1,0 +1,52 @@
+{
+  "files": [
+    {
+      "name": "roundtrip-image.png",
+      "bytes": 10583,
+      "sha256": "e5d18a8d560a89906a369b1df17b9d8cc734fd2a38ab4c98ff949873f870eaf4"
+    },
+    {
+      "name": "roundtrip-document.pdf",
+      "bytes": 1395,
+      "sha256": "959f763f04468148f38feb4aa3480bbf60d6516a251dfc8498daee97a0446079"
+    },
+    {
+      "name": "roundtrip-audio.wav",
+      "bytes": 201842,
+      "sha256": "503a630dd8c4cf93f6295450dfda63e6288f368a3233ce91d89352e6ce402d6f"
+    },
+    {
+      "name": "roundtrip-video.mp4",
+      "bytes": 95335,
+      "sha256": "5c81d07dec067f59f0938458d0c525140d50370198325a642e77d73581c8a75f"
+    },
+    {
+      "name": "public-web-image.png",
+      "bytes": 12385,
+      "sha256": "fe7a210d86e1344567c7ed2a53f0b6154dee5c62fbeb64553c7e1533e5a36541"
+    },
+    {
+      "name": "public-web-document.pdf",
+      "bytes": 1427,
+      "sha256": "5d1d10e706ba31a2c86d5ca0e3183be8405bc0a385bc4181f1fff8b54b8ad7a2"
+    }
+  ],
+  "expectedCodes": {
+    "IMAGE_CODE": "37.26",
+    "PDF_CODE": "58.42",
+    "AUDIO_CODE": "81.65",
+    "VIDEO_VISUAL_CODE": "49.73",
+    "VIDEO_AUDIO_CODE": "26.84"
+  },
+  "webSources": {
+    "Python 3.13.0": {
+      "date": "2024-10-07",
+      "url": "https://www.python.org/downloads/release/python-3130/"
+    },
+    "Rust 1.82.0": {
+      "date": "2024-10-17",
+      "url": "https://blog.rust-lang.org/2024/10/17/Rust-1.82.0/"
+    }
+  },
+  "videoSeconds": 8.3165
+}

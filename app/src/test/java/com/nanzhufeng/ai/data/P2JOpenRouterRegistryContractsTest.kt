@@ -38,6 +38,18 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class P2JOpenRouterRegistryContractsTest {
+    @Test fun `Terra public catalog mapping resolves only its exact current deployment`() {
+        val snapshot = requireNotNull(OpenRouterRegistrySnapshotVerifier().verify(
+            OpenRouterCatalogResponse(claudeCatalog() + catalogModel("openai/gpt-6.1-terra", "GPT-6.1 Terra", "0.000001", "0.000005"), null),
+            Instant.parse("2026-10-27T00:00:00Z"),
+        ))
+        val registry=InMemoryVersionedModelRegistry()
+        registry.publishVerified(snapshot)
+        val resolved=registry.resolve(ProviderId.OPENROUTER,ModelPresetId.GPT_6_1_TERRA) as ModelRegistryResolution.Resolved
+        assertEquals("openai/gpt-6.1-terra",resolved.model.id)
+        assertFalse(snapshot.mappingUsesFallback)
+    }
+
     private val now = Instant.parse("2026-08-12T13:23:55Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
 

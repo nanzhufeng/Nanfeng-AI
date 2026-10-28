@@ -9,20 +9,26 @@ pub fn supports(mime: &str) -> bool {
     matches!(mime, "text/plain" | "text/markdown" | "application/json" | "text/csv" |
         "application/xml" | "text/xml" | "application/x-yaml" | "text/yaml" | "text/html" | DOCX | XLSX | PPTX | "application/zip")
 }
-pub fn pdf_text(bytes: &[u8]) -> Result<String, String> {
-    let document=lopdf::Document::load_mem(bytes).map_err(|_| "PDF 文本层无法读取")?;
-    if document.is_encrypted() { return Err("加密 PDF 无法本机提取正文".into()); }
-    let pages=document.get_pages().keys().copied().collect::<Vec<_>>();
-    if pages.len()>2000 { return Err("PDF 页数超出本机提取上限".into()); }
-    let mut text=String::new();
-    for page in pages {
-        text.push_str(&document.extract_text(&[page]).map_err(|_| "PDF 文本层无法完整读取")?);
-        text.push('\n');
-        if text.len()>3_200_000 { return Err("PDF 可读文本超出完整投影限制".into()); }
+pub fn pdf_projection(bytes:&[u8])->Result<Option<String>,String> {
+    let document=lopdf::Document::load_mem(bytes).map_err(|_| "PDF 结构无法完整读取")?;
+    if document.is_encrypted() {return Err("加密 PDF 无法读取".into())}
+    let pages=document.get_pages();
+    if pages.is_empty() || pages.len()>2000 {return Err("PDF 页数超出完整投影限制".into())}
+    let mut text=String::new();let mut needs_reading=false;
+    for (page,id) in pages {
+        let body=document.extract_text(&[page]).unwrap_or_default();
+        let xobjects=document.get_page_resources(id).map(|(resources,ids)| {
+            resources.is_some_and(|r|r.has(b"XObject")) || ids.iter().any(|id|document.get_dictionary(*id).is_ok_and(|r|r.has(b"XObject")))
+        }).unwrap_or(true);
+        let drawings=document.get_page_content(id).ok().and_then(|bytes|lopdf::content::Content::decode(&bytes).ok()).is_none_or(|content|content.operations.iter().any(|op|matches!(op.operator.as_str(),"S"|"s"|"f"|"F"|"f*"|"B"|"B*"|"b"|"b*"|"sh"|"Do")));
+        if body.trim().is_empty() || xobjects || drawings {needs_reading=true;}
+        text.push_str(&body);text.push('\n');
+        if text.len()>3_200_000 || text.chars().count()>800_000 {return Err("PDF 可读文本超出完整投影限制".into())}
     }
-    if text.trim().is_empty() { return Err("PDF 没有可读取的文本层，请先使用附件转写".into()); }
-    if text.chars().count()>800_000 { return Err("PDF 可读文本超出完整投影限制".into()); }
-    Ok(text)
+    Ok(if needs_reading {None}else{Some(text)})
+}
+pub fn pdf_text(bytes:&[u8])->Result<String,String> {
+    pdf_projection(bytes)?.ok_or_else(||"PDF 含扫描页或视觉材料，需要完整附件识读".into())
 }
 pub fn extract(bytes: &[u8], mime: &str) -> Result<String, String> {
     if !supports(mime) { return Err("附件不是受支持的文本格式".into()); }

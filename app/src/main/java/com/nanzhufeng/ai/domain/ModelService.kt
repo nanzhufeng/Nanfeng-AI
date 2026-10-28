@@ -61,12 +61,24 @@ object NanfengModelServiceCatalog {
             modelFamilyHint = "OpenAI",
         ),
         ModelPresetDescriptor(
+            id = ModelPresetId.GPT_6_1_TERRA,
+            displayName = "GPT-6.1 Terra",
+            description = "适合日常工作、图像理解与代码任务。",
+            modelFamilyHint = "OpenAI",
+        ),
+        ModelPresetDescriptor(
             id = ModelPresetId.GPT_6_LUNA,
             displayName = "GPT-6 Luna",
             description = "适合高频、轻量任务。",
             modelFamilyHint = "OpenAI",
         ),
 
+        ModelPresetDescriptor(
+            id = ModelPresetId.MERCURY_3,
+            displayName = "Mercury 3",
+            description = "适合快速文字问答、代码与联网检索。",
+            modelFamilyHint = "Inception",
+        ),
         ModelPresetDescriptor(
             id = ModelPresetId.GEMINI_4_ARGON,
             displayName = "Gemini 4 Argon",
@@ -358,6 +370,7 @@ fun modelDisplayNameForUser(displayName: String): String {
     RelayCoreModels.specByName(displayName)?.takeIf { " · " in displayName }?.let { return "${it.uiName} · RC" }
     if (displayName.substringAfterLast(" · ", "") in (RelayCoreModels.specs.map { it.channel } + setOf("Kiro", "Kiro正价", "Pro1", "Pro2", "Pro3"))) return "${displayName.trim().substringBeforeLast(" · ")} · RC"
     val raw = displayName.trim().removePrefix("模型：").trim()
+    if (raw == "inception/mercury-3") return NanfengModelServiceCatalog.preset(ModelPresetId.MERCURY_3).displayName
     NanfengModelServiceCatalog.presets
         .sortedByDescending { it.displayName.length }
         .firstOrNull { preset -> raw.contains(preset.displayName, ignoreCase = true) }
@@ -400,6 +413,7 @@ fun composerModelShortNameForUser(displayName: String): String = if (displayName
     "Claude Haiku 5.5" -> "Haiku 5.5"
     "GPT-6.1 Sol" -> "6.1 Sol"
     "GPT-6 Luna" -> "6 Luna"
+    "Gemini 4 Argon" -> "4 Argon"
     "Claude Fable 5" -> "Fable 5"
     "Claude Fable 5.1" -> "Fable 5.1"
     "Claude Opus 5" -> "Opus 5"

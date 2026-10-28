@@ -18,6 +18,9 @@
 - Android复用P6GModelSelectionOwner／私有preferences，选模同时提交会话选择与下次默认，CreateConversationUseCase初始化并回读创建结果；默认保存失败时保留可恢复草稿并报告未完成。Mac由Rust区域SQLite保存下次默认，与已有会话选模同一事务；尚无会话的Composer选模经受限IPC直接保存，首条发送把显示的精确选择（含Auto）与会话一同保存。Mac工作区schema44前向新增p6g_composer_default，旧43记录不改写；该设备偏好不外发，同区域本地恢复保留设备当前默认。
 
 - 当前手动菜单与部署身份唯一读取 `ComposerModelRoutingCatalog`、Desktop选择器及[生成维护矩阵](model-service/MODEL_SERVICE_MATRIX.md)；本合同不再维护第二份完整名单。深度档对应顺序为DeepSeek Pro → Muse Wonder → Gemini 4 Argon → 智谱GLM，Muse与Argon均经OpenRouter；RelayCore六项独立二级菜单。Muse与Argon只新增手动入口，既有Auto计划不变；Qwen3.6 Flash仍为Auto专用。退役选择保留精确历史识别，不能静默转Auto或改历史归因。
+- 日常档 GPT-6.1 Terra 紧接在 GPT-6 Luna 之前；独立预设 `GPT_6_1_TERRA`、选择 ID `logical:daily:gpt-6.1-terra`，OpenRouter API ID `openai/gpt-6.1-terra`。复用现有聊天、附件、联网与计量 owner；不改变 Luna 默认、Auto／后台计划或旧 `logical:daily:gpt-terra` → Luna 的历史升级映射。能力档案与价格核验／未验范围见[接入记录](verification/2026-10-27-gpt-terra/REPORT.md)。
+- 日常档 Mercury 3 紧接 GPT-6 Luna，固定 `MERCURY_3`／`inception/mercury-3`，复用 OpenRouter 配置、Adapter、联网与计量；仅增加手动选择，不改变 Auto／后台默认或历史模型身份。原生输入能力依当前目录，文本文件／可读 PDF 等本机提取沿用材料 owner，不能把不支持的媒体冒充已读取。
+- OpenRouter冷启动使用已验证seed的固定API身份；缓存profile只能贡献同一ID的健康／时效信息，不得以错误或旧ID覆盖所选模型。已有官方直连的显式别名刷新语义保持原owner，不将此规则推广为猜测近似型号。
 - `Grok 4.1 Fast`（`x-ai/grok-4.1-fast`）在既有目录核验阶段被标为不可发送；当前产品按已维护目录保持退役：保留其逻辑 ID 仅用于旧会话识别与归因，不出现在选择器、Auto 候选或重试发送中。旧选择必须在读取 Key、外发正文前以“模型已不在服务商目录”失败，绝不静默替换。
 - `Grok 4.5`（`x-ai/grok-4.5`）与 `Grok 4.6 High`（`x-ai/grok-4.6`）都已从产品模型列表与 Auto 候选移除；持久化旧选择只能失败关闭，不能回退、近似替换或继续外发。历史消息仍保留当时实际模型归因。
 - 普通聊天 Auto 使用 `protocol/fixtures/auto-routing-rc-domestic-20261010.json` 的版本化顺序，独立于模型选择列表顺序：日常文本优先 RC Sol、RC Gemini Flash、国内 DeepSeek Flash；显式深度任务优先 RC Astra、RC Opus、RC Sol，再选国内强模型。附件任务优先国内模型；RC 原始多媒体路径未实现，不进入附件计划。OpenRouter 在全部 RC／国内候选之后，仅在前者未启用、缺少凭据、健康不可用或不能处理对应材料时才可在发送前选中。失败后不自动换模型重发。

@@ -6766,8 +6766,15 @@ private fun AnswerContextSourceRow(source: AnswerContextSourceGroup) {
 }
 
 /** The footer is a reading aid, not a technical route ledger. */
-private fun assistantFooterModelName(label: String?): String? = label
-    ?.let { if (it.endsWith(" · RC")) it else com.nanzhufeng.ai.domain.composerModelShortNameForUser(it) }
+internal fun assistantFooterModelName(label: String?): String? = label
+    ?.let { label ->
+        val fullName = com.nanzhufeng.ai.domain.modelDisplayNameForUser(label)
+        when {
+            label.endsWith(" · RC") -> label
+            fullName == "Gemini 4 Argon" -> fullName
+            else -> com.nanzhufeng.ai.domain.composerModelShortNameForUser(label)
+        }
+    }
     ?.trim()
     ?.takeIf { it.isNotBlank() }
 

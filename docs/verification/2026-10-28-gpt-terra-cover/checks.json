@@ -1,0 +1,34 @@
+{
+  "status": "PASS",
+  "candidateSha256": "44514c059995537b3df154fda43f334d7fbb50a4d5587ebeda190327d3ce5487",
+  "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+  "beforeSha256": "b91d232afc0a14aa01a480fa0dbea3a5d09473e0ff91eae0694834279e391988",
+  "installedSha256": "44514c059995537b3df154fda43f334d7fbb50a4d5587ebeda190327d3ce5487",
+  "before": {
+    "appId": "10611",
+    "dataDir": "/data/user/0/com.nanzhufeng.ai",
+    "firstInstallTime": "2026-08-20 15:15:31",
+    "lastUpdateTime": "2026-10-22 08:23:57",
+    "versionCode": "95",
+    "versionName": "1.0.31",
+    "ceDataInode": "1459104",
+    "deDataInode": "1433378",
+    "debuggable": false
+  },
+  "after": {
+    "appId": "10611",
+    "dataDir": "/data/user/0/com.nanzhufeng.ai",
+    "firstInstallTime": "2026-08-20 15:15:31",
+    "lastUpdateTime": "2026-10-28 12:43:18",
+    "versionCode": "95",
+    "versionName": "1.0.31",
+    "ceDataInode": "1459104",
+    "deDataInode": "1433378",
+    "debuggable": false
+  },
+  "completedAt": "2026-10-28T12:43:20.033305+08:00",
+  "dataMetadataPreserved": true,
+  "temporaryApkRemoved": true,
+  "oldMessagesRetried": false,
+  "appLaunched": false
+}

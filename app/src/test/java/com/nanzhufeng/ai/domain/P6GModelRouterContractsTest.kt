@@ -7,6 +7,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class P6GModelRouterContractsTest {
+    @Test fun `Terra is an exact daily selection before Luna and never revives the old Terra route`() {
+        val daily = ComposerModelRoutingCatalog.daily
+        val terra = daily.single { it.label == "GPT-6.1 Terra" }
+        assertEquals("logical:daily:gpt-6.1-terra", terra.id)
+        assertEquals(ModelPresetId.GPT_6_1_TERRA, terra.routes.single())
+        assertEquals(daily.indexOf(terra) + 1, daily.indexOfFirst { it.routes == listOf(ModelPresetId.GPT_6_LUNA) })
+        assertEquals(ModelPresetId.GPT_6_LUNA, ComposerModelRoutingCatalog.choice("logical:daily:gpt-terra").routes.single())
+        assertEquals(ProviderId.OPENROUTER, NanfengModelServiceCatalog.providerFor(terra.routes.single()))
+        assertEquals(ModelPresetId.GPT_6_LUNA, NanfengModelServiceCatalog.defaultPreset(ProviderId.OPENROUTER))
+        assertFalse(ModelPresetId.GPT_6_1_TERRA in NanfengModelServiceCatalog.autoRoutingCandidates(AutoRoutingFacts()))
+    }
+
     @Test fun `Qwen Max is the seventh deep picker model and retired selections fail closed`() {
         assertTrue(ComposerModelRoutingCatalog.deep.any { it.routes == listOf(ModelPresetId.QWEN_3_8_MAX) && it.label == "Qwen3.8-Max" })
         assertFalse(ComposerModelRoutingCatalog.deep.any { ModelPresetId.KIMI_K3 in it.routes })
@@ -127,7 +139,7 @@ class P6GModelRouterContractsTest {
 
     @Test fun `composer picker preserves the approved daily and deep ordering`() {
         assertEquals(
-            listOf("Claude Sonnet 5.5", "Claude Haiku 5.5", "DeepSeek V4.1 Flash", "GPT-6 Luna", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 3.8 Flash"),
+            listOf("Claude Sonnet 5.5", "Claude Haiku 5.5", "DeepSeek V4.1 Flash", "GPT-6.1 Terra", "GPT-6 Luna", "Mercury 3", "GLM-5.3 Flash", "Qwen3.7-Plus", "Gemini 3.8 Flash"),
             ComposerModelRoutingCatalog.daily.map { it.label },
         )
         assertEquals(

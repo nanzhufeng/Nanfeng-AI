@@ -2969,6 +2969,8 @@ private fun FeatureReviewSettingsCard() {
             Text("已确认保留：OpenRouter／官方模型和 RC 普通文字 Sol／Astra 使用自身联网；其余 RC 普通文字及全部 RC 附件由 OpenRouter GPT-6 Luna 搜索，再交回原选 RC 模型回答。入口：原发送与显式重试，不新增常驻按钮。",color=SecondaryText,style=MaterialTheme.typography.bodySmall)
             Text("理由：按渠道与材料选择稳定路径；发送流程核验 Luna 接收方和当前材料；对话界面去掉重复说明，逐事项保留真实来源，原模型、原渠道及费用分别记录。",color=SecondaryText,style=MaterialTheme.typography.labelSmall)
             Text("理由：避免只搜报告写法或遗漏后面的文件；来源对应事项。扫描件和媒体按模型能力或转写结果处理，不以截取或目录代替全文，无新增常驻按钮。", color = SecondaryText, style = MaterialTheme.typography.labelSmall)
+            Text("建议保留：所有当前模型共用附件处理流程；原生支持的原件直接交原模型，本机无法完整读取的图片／PDF由已披露的 Haiku 5.5 · OpenRouter 识读，音视频由 Gemini 4 Argon · OpenRouter 识读，原选模型回答，按实际调用分别计费。沿用附件与发送入口，不新增常驻按钮；理由：避免文字接口拒收或混合附件遗漏，识读失败须停止，未知结果不自动重发。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+            Text("已确认：日常档加入 Mercury 3，经 OpenRouter，紧接 Luna；深度档 Gemini 4 Argon 在 Android 输入框显示为 4 Argon，沿用原选模入口。理由：便于日常调用与外屏辨认；设置和历史归因保留完整身份，无新增常驻按键。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text("已确认：深度档加入 Muse Wonder，经 OpenRouter，位于智谱 GLM 上方；沿用原模型选择入口。已确认：新对话沿用上一次最后选择的模型；重启后保留，只有最后选择自动才沿用自动。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text("已确认：模型选择弹窗默认字号缩小一档；小、标准、大仅轻微变化，保持辨认稳定。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
             Text("已确认：所有模型选择入口的具体模型项显示所属平台图标，便于辨认；沿用原入口，不新增按钮。", color = SecondaryText, style = MaterialTheme.typography.bodySmall)

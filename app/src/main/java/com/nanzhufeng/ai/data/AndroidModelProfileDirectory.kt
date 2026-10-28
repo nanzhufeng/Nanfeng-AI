@@ -14,8 +14,8 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The app ships a verified offline seed, but always prefers the last successfully persisted
- * provider directory.  No model ID or capability is duplicated in a chat, UI or Adapter class.
+ * The verified seed owns fixed routes and capabilities. Cached provider metadata contributes
+ * health and recency; direct-provider aliases still require the existing verified profile policy.
  */
 class AndroidModelProfileDirectory(context: Context) : ModelProfileDirectory {
     private val cacheFile = File(context.filesDir, "model-profile-directory-v1.json")
@@ -104,7 +104,8 @@ internal fun mergeCachedProfiles(bundled: Map<ModelPresetId, ResolvedModel>, cac
     return bundled.mapValues { (preset, seed) ->
         // Stable preset identity survives upgrades; a retired API ID must not override the seed.
         val cachedProfile = cached[preset]?.takeUnless {
-            preset in setOf(ModelPresetId.DEEPSEEK_V4_FLASH,ModelPresetId.RELAYCORE_OPUS_5_5) && it.modelId != seed.modelId
+            (seed.providerId == ProviderId.OPENROUTER ||
+                preset in setOf(ModelPresetId.DEEPSEEK_V4_FLASH,ModelPresetId.RELAYCORE_OPUS_5_5)) && it.modelId != seed.modelId
         }
         cachedProfile?.copy(
             providerId = seed.providerId,

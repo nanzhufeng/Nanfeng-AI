@@ -1,0 +1,11 @@
+{
+  "app/src/main/java/com/nanzhufeng/ai/data/AndroidModelProfileDirectory.kt": "56f2f73363d0b5d4130e49f86cb26850add55cef00b1901facca905878a0cc4a",
+  "app/src/main/java/com/nanzhufeng/ai/domain/ModelService.kt": "b3e6972da84cae3f9ea3e9c19465817820b4ce85c77399eea79478686718d231",
+  "app/src/main/java/com/nanzhufeng/ai/ui/ConversationWorkspace.kt": "b9f1ab0fc7a56351b5778da126a8f92e917a3ce1147f2e43f4db6e6fbdb73a7a",
+  "app/src/test/java/com/nanzhufeng/ai/data/ModelProfileUpgradeTest.kt": "a62132e01359a62653b7059bcd5a34c3f239666ea488f19556083f9806e34bc3",
+  "app/src/test/java/com/nanzhufeng/ai/ui/SettingsScrollAndFooterModelContractsTest.kt": "2148323f1ba06992e4824ff20b1f02b683b2f247b7c5a72e6f174b4beba03396",
+  "desktop/src-tauri/src/attachment_search_live_matrix_tests.rs": "5f92ee515a4f2a53890ec441964205adf4a6db60b21ef8792222b7435bd3ce9e",
+  "desktop/src/chat-shell.mjs": "5122448fcab34593312d31c520ba2288f0eca3cf61ba7befd4574f46b4aff6f8",
+  "app/src/test/java/com/nanzhufeng/ai/ai/MercuryModelIntegrationTest.kt": "9dc202695319e101118f89e9fd01515790fafd62777ecc3cb68b8eac74cd5bd5",
+  "desktop/tests/mercury-model-integration.test.mjs": "00370f5150a21f9c1ca16aaaa898a963bb5d2b1dec3472ea5efca2a41935a6aa"
+}

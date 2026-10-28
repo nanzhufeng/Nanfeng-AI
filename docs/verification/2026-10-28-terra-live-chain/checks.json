@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-28",
+  "status": "ACCEPTANCE_PASSED_HISTORICAL_UNKNOWN_RETAINED",
+  "selectedPathsPassed": [
+    "Two real text turns and persisted context",
+    "PNG and PDF originals to original Terra answer",
+    "Audio number before/after fidelity fix",
+    "Mixed PNG/PDF/WAV/MP4 originals and five distinct values",
+    "Attachment web search 2/2 relevant official sources and original Terra final answer",
+    "Database and AppContainer reopen plus native visible answer"
+  ],
+  "environment": {
+    "isolatedAndroidRealProvider": true,
+    "productionEgressHost": "openrouter.ai",
+    "mainDeviceProviderTest": false,
+    "mainDeviceFormalCover": true,
+    "desktopRealProviderTest": false
+  },
+  "calls": {
+    "total": 16,
+    "completeResponses": 15,
+    "historicalUnknown": 1,
+    "replays": 0,
+    "dryRuns": 0,
+    "contentFailureBeforeFixPreserved": true,
+    "allUsedRealProviderTransport": true
+  },
+  "regression": {
+    "android": {
+      "tests": 1558,
+      "passed": 1548,
+      "skipped": 10,
+      "failures": 0,
+      "errors": 0,
+      "assembleRelease": "PASS",
+      "lintRelease": "PASS"
+    },
+    "rustRelated": {
+      "passed": 21,
+      "failed": 0,
+      "filteredOut": 486,
+      "fullRustSuiteRunThisIncrement": false
+    },
+    "protocolUnitTests": {
+      "passed": 16
+    },
+    "modelCatalog": {
+      "chat": 23,
+      "special": 1,
+      "credentialGroups": 7
+    }
+  },
+  "reopen": {
+    "conversations": 8,
+    "providerCalls": 0,
+    "allLatestTextAndCostExact": true,
+    "nativeAnswerAndSourcesVisible": true,
+    "failedAndUnknownHistoryPreserved": true
+  },
+  "budget": {
+    "userApprovedLimitCnyMicros": 6000000,
+    "conservativeOccupancyCnyMicros": 3696184,
+    "knownCallsConservativeCnyMicros": 696184,
+    "historicalUnknownReserveCnyMicros": 3000000,
+    "unknownReserveNotRemoved": true,
+    "usdBudgetFactor": 8,
+    "notActualSettlementTotal": true
+  },
+  "delivery": {
+    "fileName": "南枫AI-Terra真实链路修复-20261028.apk",
+    "sha256": "d3abf0302c2b89688a35a5ba74d279ce8c7c9a9a8ec4f74f709f73adc24da34d",
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "versionName": "1.0.31",
+    "versionCode": 95,
+    "debuggable": false,
+    "bytes": 28705474,
+    "installed": true,
+    "installedAt": "2026-10-28T15:13:31.510176+08:00",
+    "readbackSha256": "d3abf0302c2b89688a35a5ba74d279ce8c7c9a9a8ec4f74f709f73adc24da34d"
+  },
+  "cleanup": {
+    "encryptedCredentialEntries": 0,
+    "bootstrapAbsent": true,
+    "reverseMappings": 0,
+    "ownEmulatorStopped": true,
+    "ownAvdDeleted": true,
+    "sourceCredentialsUnchanged": true,
+    "privateReceiptsAndDatabasePreserved": true,
+    "otherEmulatorsUntouched": true,
+    "mainDeviceOnlyFormalCover": true
+  },
+  "limits": [
+    "Initial IO failure has no confirmed exact transport cause; old request not resent or marked successful",
+    "New mixed media reader request 436880 bytes completed; this does not rewrite the historical UNKNOWN",
+    "Real validation covers these synthetic inputs and Android owners, not every file type or all Desktop paths",
+    "Previous unrelated full-Rust cloud-sync test failure not changed in this task"
+  ]
+}

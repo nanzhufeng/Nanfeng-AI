@@ -440,6 +440,13 @@ pub fn provider_endpoint(base: &str, route: &str) -> String {
     }
 }
 
+/// Cloud requests use the existing system HTTP/HTTPS proxy; loopback owners stay local.
+fn provider_client_builder(endpoint: &str) -> reqwest::ClientBuilder {
+    let builder=Client::builder();
+    let loopback=reqwest::Url::parse(endpoint).ok().is_some_and(|u|u.host_str().is_some_and(|h| h=="localhost" || h=="[::1]" || h.parse::<std::net::IpAddr>().is_ok_and(|a|a.is_loopback())));
+    if loopback {builder.no_proxy()} else {builder}
+}
+
 pub fn ordinary_provider_endpoint(provider_id: &str, base: &str, route: &str) -> String {
     if provider_id == "RELAYCORE_CLAUDE" && matches!(route, "NONE" | "RELAYCORE_COMPANION") {
         format!("{}/messages", base.trim_end_matches('/'))
@@ -463,7 +470,7 @@ fn public_provider_error_metadata(value: &Value) -> Value {
     }
     let message=error["message"].as_str().or(value["message"].as_str()).unwrap_or("");
     let field_mentions=["model","input","instructions","max_output_tokens","tools","tool_choice","reasoning","store","stream","service_tier","temperature","search_context_size","name","namespace","additional_tools","type","function","allowed_tools","parameters","cover_all_turns","web_search","web_search_preview"].into_iter().filter(|field|message.contains(field)).collect::<Vec<_>>();
-    let known_reasons=[("unsupported_parameter","Unsupported parameter"),("unsupported_value","Unsupported value"),("missing_parameter","Missing required parameter"),("context_limit","context length"),("invalid_model","model does not exist"),("tool_limit","Too many tools"),("rate_limit","rate limit"),("quota_exceeded","quota")].into_iter().filter_map(|(code,needle)|message.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()).then_some(code)).collect::<Vec<_>>();
+    let known_reasons=[("unsupported_parameter","Unsupported parameter"),("unsupported_value","Unsupported value"),("missing_parameter","Missing required parameter"),("context_limit","context length"),("invalid_model","model does not exist"),("tool_limit","Too many tools"),("rate_limit","rate limit"),("quota_exceeded","quota"),("region_restricted","region"),("country_restricted","country"),("policy_restricted","data policy"),("permission_denied","permission"),("account_disabled","disabled")].into_iter().filter_map(|(code,needle)|message.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()).then_some(code)).collect::<Vec<_>>();
     let terms=["unsupported","supported","not","cannot","required","available","allowed","hosted","built-in","web_search","search","account","plan","subscription","model","streaming","parallel","tool_choice","incompatible","disabled","must","parameter","list","non-empty","nonempty","provided","present","passed","responses Lite","top-level","additional_tools","function","custom","name","namespace","type","allowed_tools","parameters","cover_all_turns","web_search_preview","include","contain","omitted","set","array","dictionary","object","string","format","supplied","null","empty","live","external_web_access","context","value"].into_iter().filter(|term|message.to_ascii_lowercase().contains(term)).collect::<Vec<_>>();
     json!({"reasonTerms":terms,"fieldMentions":field_mentions,"knownReasons":known_reasons,"messageChars":message.chars().count(),"code":safe_code(&error["code"]),"errorType":safe_code(&error["type"]),"topLevelCode":safe_code(&value["code"]),
         "rateLimits": value["rate_limits"].as_object().map(|o|o.iter().filter_map(|(k,v)| {
@@ -609,7 +616,7 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
                     object.insert("reasoning".into(), json!({"effort": effort}));
                 }
             }
-            if matches!(request.model_id.as_str(), "anthropic/claude-opus-5.5" | "anthropic/claude-sonnet-5.5" | "anthropic/claude-haiku-5.5" | "openai/gpt-6.1-sol" | "openai/gpt-6-luna") { object.remove("temperature"); }
+            if matches!(request.model_id.as_str(), "anthropic/claude-opus-5.5" | "anthropic/claude-sonnet-5.5" | "anthropic/claude-haiku-5.5" | "openai/gpt-6.1-sol" | "openai/gpt-6.1-terra" | "openai/gpt-6-luna") { object.remove("temperature"); }
             match request.web_search_route.as_str() {
                 "OPENROUTER_LUNA_SEARCH" => {
                     object.insert("tools".into(),json!([{"type":"openrouter:web_search","parameters":{"engine":"native"}}]));
@@ -681,6 +688,10 @@ pub(crate) fn transport_body(request: &TransportRequest) -> Value {
         body["tools"][0]["parameters"]["max_results"]=json!(1);
         body["tools"][0]["parameters"]["max_total_results"]=json!(1);
         body["stop_server_tools_when"]=json!([{"type":"step_count_is","step_count":1},{"type":"max_cost","max_cost_in_dollars":0.1}]);
+    }
+    if request.provider_id=="OPENROUTER" && request.messages.as_array().into_iter().flatten().filter_map(|m|m["content"].as_array()).flatten().any(|p|p["type"]=="file") {
+        let plugins=body.as_object_mut().unwrap().entry("plugins").or_insert_with(||json!([]));
+        if let Some(plugins)=plugins.as_array_mut(){plugins.push(json!({"id":"file-parser","pdf":{"engine":"native"}}));}
     }
     #[cfg(test)] if std::env::var("NFAI_PUBLIC_SHAPE_TRACE").as_deref()==Ok("1") && std::env::var("NFAI_PUBLIC_MATRIX").as_deref()==Ok("1") {eprintln!("PUBLIC_REQUEST_BUDGET {}",json!({"model":request.model_id,"maxTokens":body["max_tokens"],"maxCompletionTokens":body["max_completion_tokens"],"maxOutputTokens":body["max_output_tokens"],"grounded":request.grounded_answer,"tools":body["tools"].as_array().map(Vec::len).unwrap_or(0)}));}
     body
@@ -755,7 +766,7 @@ pub async fn execute_non_streaming(
     secret.zeroize();
     let body = non_streaming_body(&request);
     let started = Instant::now();
-    let mut builder = Client::builder()
+    let mut builder = provider_client_builder(&request.endpoint)
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(if request.idempotency_key.starts_with("conversation-title-")
@@ -1224,7 +1235,7 @@ pub async fn execute_streaming(
     secret.zeroize();
     let body = transport_body(&request);
     let started = Instant::now();
-    let builder = Client::builder()
+    let builder = provider_client_builder(&request.endpoint)
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(15))
         .timeout(STREAM_TOTAL_TIMEOUT);
@@ -1943,6 +1954,7 @@ mod tests {
             "rc-astra"=>("RELAYCORE_GPT","gpt-6-astra","https://api.relaycore.cn/v1","NONE",0.02),
             "rc-flash"=>("RELAYCORE_GEMINI","gemini-3.8-flash","https://api.relaycore.cn/v1","NONE",0.02),
             "rc-pro"=>("RELAYCORE_GEMINI","gemini-3.1-pro","https://api.relaycore.cn/v1","NONE",0.02),
+            "openrouter-mercury"=>("OPENROUTER","inception/mercury-3","https://openrouter.ai/api/v1","NONE",0.02),
             "openrouter-opus"=>("OPENROUTER","anthropic/claude-opus-5.5","https://openrouter.ai/api/v1","OPENROUTER_SERVER_TOOL",0.4),
             "deepseek-flash"=>("DEEPSEEK","deepseek-flash","https://api.deepseek.com/v1","DEEPSEEK_MESSAGES",0.4),
             "qwen-max"=>("QWEN","qwen3.8-max","https://dashscope.aliyuncs.com/compatible-mode/v1","QWEN_CHAT_COMPLETIONS",0.7),
@@ -1958,7 +1970,7 @@ mod tests {
             let mut file=options.open(&output).expect("record exists: never resend");file.write_all(initial.to_string().as_bytes()).unwrap();}
         if credentials.presence(provider)!=CredentialPresence::Stored {std::fs::write(output,json!({"label":label,"state":"SKIPPED_NO_CREDENTIAL","reservedCny":0}).to_string()).unwrap();return;}
         let secret=credentials.with_secret(provider,|bytes|Ok(Zeroizing::new(bytes.to_vec()))).expect("credential read for authorized call");
-        let mut input=request(ordinary_provider_endpoint(provider,base,route));input.provider_id=provider.into();input.model_id=model.into();input.web_search_route=route.into();input.max_output_tokens=512;
+        let mut input=request(ordinary_provider_endpoint(provider,base,route));input.provider_id=provider.into();input.model_id=model.into();input.web_search_route=route.into();input.max_output_tokens=if label=="openrouter-mercury" {2048}else{512};
         input.idempotency_key=format!("authorized-stream-{label}-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
         input.messages=json!([{"role":"user","content":if route=="NONE" {"不用联网，仅用三句简短中文解释Python是什么、常见用途和官网地址。每句不超过20字。"} else {"请查Python官方网站，仅用三句简短中文解释Python是什么、常见用途和官网地址。每句不超过20字。"}}]);
         let started=Instant::now();let mut first=None;let mut last=None;let mut count=0;let mut visible_chars=0;
@@ -1966,6 +1978,40 @@ mod tests {
         let elapsed=started.elapsed().as_millis();let mut record=initial;record["elapsedMs"]=json!(elapsed);record["firstDeltaMs"]=json!(first);record["lastDeltaMs"]=json!(last);record["deltaCount"]=json!(count);record["visibleChars"]=json!(visible_chars);
         match result {Ok(done)=>{record["state"]=json!("COMPLETED");record["returnedModel"]=json!(done.actual_model_id);record["usage"]=json!(done.usage);record["reportedCostMicros"]=json!(done.reported_cost_micros);record["searchVerified"]=json!(done.web_search_verified);record["incrementalBeforeCompletion"]=json!(first.is_some_and(|first|first<elapsed));},Err(error)=>{record["state"]=json!("FAILED_OR_UNKNOWN");record["safeFailure"]=json!(format!("{error:?}"));}}
         std::fs::write(&output,record.to_string()).unwrap();println!("LIVE_STREAM_RESULT {}",record);
+    }
+
+    #[test]
+    fn terra_exact_catalog_identity_reaches_streaming_request_without_temperature() {
+        let preset = crate::desktop_model_service_v1::preset("OPENROUTER", "GPT_6_1_TERRA").unwrap();
+        let mut input = request("https://openrouter.ai/api/v1/chat/completions".into());
+        input.model_id = preset.model_id.into();
+        input.web_search_route = "NONE".into();
+        let body = transport_body(&input);
+        assert_eq!(body["model"], "openai/gpt-6.1-terra");
+        assert_eq!(body["stream"], true);
+        assert!(body.get("temperature").is_none());
+        assert_eq!(crate::desktop_model_service_v1::default_reasoning_effort(preset.model_id), None);
+    }
+
+    #[test]
+    fn mercury_exact_catalog_identity_reaches_streaming_request_and_preserves_sources_usage() {
+        let preset = crate::desktop_model_service_v1::preset("OPENROUTER", "MERCURY_3").unwrap();
+        let mut input = request("https://openrouter.ai/api/v1/chat/completions".into());
+        input.model_id = preset.model_id.into();
+        input.web_search_route = "OPENROUTER_SERVER_TOOL".into();
+        let body = transport_body(&input);
+        assert_eq!(body["model"], "inception/mercury-3");
+        assert_eq!(body["stream"], true);
+        assert_eq!(body["tools"][0]["type"], "openrouter:web_search");
+        let raw = format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {}\n\ndata: [DONE]\n\n", json!({"model":"inception/mercury-3","choices":[{"delta":{"content":"Python official answer","annotations":[{"type":"url_citation","url_citation":{"url":"https://www.python.org/","title":"Python"}}]},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":20,"cost":0.000017}}));
+        input.endpoint = mock_server(Box::leak(raw.into_bytes().into_boxed_slice()));
+        let done = tokio::runtime::Runtime::new().unwrap().block_on(execute_streaming(input, Zeroizing::new(b"fixture-only".to_vec()), Arc::new(AtomicBool::new(false)), |_| Ok(()))).unwrap();
+        assert_eq!(done.actual_model_id.as_deref(), Some("inception/mercury-3"));
+        assert!(done.text.contains("Python official answer"));
+        assert!(done.web_search_verified);
+        assert_eq!(done.native_sources.len(), 1);
+        assert_eq!(done.usage.input_tokens, Some(100));
+        assert_eq!(done.reported_cost_micros, Some(17));
     }
 
     #[test]

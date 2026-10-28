@@ -18,6 +18,21 @@ import java.util.concurrent.CancellationException
 /** Production executor + Room owners; only provider I/O and credentials are synthetic. */
 @RunWith(RobolectricTestRunner::class)
 class NormalChatGenerationStabilityTest {
+    @Test fun `leading whitespace stream frames do not fail response persistence`() {
+        Fixture(presetId=ModelPresetId.RELAYCORE_GPT_6_ASTRA,currentProfile=true).use {f ->
+            f.streamed=true
+            f.streamChunks=listOf(" ","\n", "图片：63.27", "\nPDF：29.14")
+            f.replyText=" \n图片：63.27\nPDF：29.14"
+            val (id,result)=f.send()
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(NormalChatSendAttemptStatus.COMPLETED,f.attempts.findLatestForConversation(id)!!.status)
+            assertEquals(ConversationRuntimeStatus.COMPLETED,f.conversations.stateFor(id)!!.status)
+            val answer=f.conversations.findById(id)!!.nodes.last {it.role==MessageRole.ASSISTANT}
+            assertEquals(MessageDeliveryState.COMPLETE,answer.deliveryState)
+            assertEquals("图片：63.27\nPDF：29.14",answer.content.filterIsInstance<ContentBlock.Text>().joinToString("\n"){it.text})
+        }
+    }
+
     @Test fun `completed provider reasoning is retained through the Room owner and reopen`() {
         for(stream in listOf(false,true)) {
             val name="reasoning-retention-$stream-${System.nanoTime()}"
@@ -51,7 +66,7 @@ class NormalChatGenerationStabilityTest {
             }
         }
     }
-    private class Fixture(databaseName: String? = null, presetId: ModelPresetId = ModelPresetId.RELAYCORE_SONNET_5_5, private val webSearch: Boolean = false, private val customInstructions: String = "", modelContextWindow: Long? = 200000,private val independentSearch:Boolean=false,clockOverride:Clock?=null, asynchronousCompletion:Boolean=false, private val imageOnlyInput:Boolean=false) : AutoCloseable {
+    private class Fixture(databaseName: String? = null, presetId: ModelPresetId = ModelPresetId.RELAYCORE_SONNET_5_5, private val webSearch: Boolean = false, private val customInstructions: String = "", modelContextWindow: Long? = 200000,private val independentSearch:Boolean=false,clockOverride:Clock?=null, asynchronousCompletion:Boolean=false, private val imageOnlyInput:Boolean=false,private val currentProfile:Boolean=false) : AutoCloseable {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val db = (if(databaseName==null) Room.inMemoryDatabaseBuilder(context,NanfengAiDatabase::class.java) else Room.databaseBuilder(context,NanfengAiDatabase::class.java,databaseName)).allowMainThreadQueries().build()
         val clock = clockOverride ?: Clock.fixed(Instant.parse("2026-10-10T07:38:57.123456789Z"), ZoneOffset.UTC)
@@ -62,8 +77,9 @@ class NormalChatGenerationStabilityTest {
         val durableAudit = AndroidDirectChatCallAuditStore(context, db)
         val preset = presetId
         private val spec = RelayCoreModels.spec(preset)
-        val model = ResolvedModel(spec?.provider ?: ProviderId.OPENROUTER,spec?.apiId ?: "anthropic/claude-haiku-5.5",spec?.compactName ?: "Haiku 5.5",
-            ModelCapabilities(true,imageOnlyInput,true),modelContextWindow,ModelHealth.AVAILABLE,clock.instant(),null,8192)
+        private val profiles=com.nanzhufeng.ai.data.AndroidModelProfileDirectory(context)
+        val model = if(currentProfile) requireNotNull(profiles.profile(preset)).copy(health=ModelHealth.AVAILABLE,maxOutputTokens=8192) else ResolvedModel(spec?.provider ?: ProviderId.OPENROUTER,spec?.apiId ?: if(preset==ModelPresetId.MERCURY_3) "inception/mercury-3" else "anthropic/claude-haiku-5.5",spec?.compactName ?: "Haiku 5.5",
+            ModelCapabilities(true,imageOnlyInput && preset!=ModelPresetId.MERCURY_3,true),modelContextWindow,ModelHealth.AVAILABLE,clock.instant(),null,8192)
         var extraAttachmentTexts: List<String> = emptyList()
         var attachmentText = "公开附件测试：系统处理100个请求，出现5次超时。"
         var retrievalFactory:((ProviderChatRequest)->ProviderChatOutcome)?=null
@@ -88,12 +104,12 @@ class NormalChatGenerationStabilityTest {
         var titleRefine: () -> ConversationTitleRefinementResult = { ConversationTitleRefinementResult.Failed("SYNTHETIC_DISABLED") }
         var lastConversationId: ConversationId? = null
         private val credentials = object : ProviderCredentialStore {
-            override fun hasCredential(providerId: ProviderId) = providerId == model.providerId || (webSearch && providerId == ProviderId.OPENROUTER) || (independentSearch && providerId==ProviderId.ZHIPU)
+            override fun hasCredential(providerId: ProviderId) = providerId == model.providerId || ((webSearch || currentProfile) && providerId == ProviderId.OPENROUTER) || (independentSearch && providerId==ProviderId.ZHIPU)
             override fun saveCredential(providerId: ProviderId, credential: CharArray) = false
-            override fun loadCredential(providerId: ProviderId) = if(hasCredential(providerId)) "synthetic-test-key".toCharArray().also { credential=it } else null
+            override fun loadCredential(providerId: ProviderId) = if(hasCredential(providerId)) (if(currentProfile) "synthetic-${providerId.name}-key" else "synthetic-test-key").toCharArray().also { credential=it } else null
         }
         private val settings = object : ModelServiceSettingsRepository {
-            override fun load(providerId: ProviderId) = ProviderSettings(providerId,providerId==model.providerId || (webSearch && providerId == ProviderId.OPENROUTER),NanfengModelServiceCatalog.defaultPreset(providerId))
+            override fun load(providerId: ProviderId) = ProviderSettings(providerId,providerId==model.providerId || ((webSearch || currentProfile) && providerId == ProviderId.OPENROUTER),NanfengModelServiceCatalog.defaultPreset(providerId))
             override fun save(settings: ProviderSettings) = settings
         }
         private val registry = InMemoryVersionedModelRegistry()
@@ -120,6 +136,7 @@ class NormalChatGenerationStabilityTest {
             transport=object : ProviderChatTransport {
                 override fun execute(request: ProviderChatRequest, credential: CharArray): ProviderChatOutcome {
                     requestCount++;requests+=request;request.onAccepted()
+                    if(currentProfile) assertEquals("synthetic-${if(request.endpoint.startsWith("https://openrouter.ai/")) ProviderId.OPENROUTER.name else model.providerId.name}-key",String(credential))
                     providerFactory?.let { factory -> return try {factory(request)} catch(e:Throwable) {providerAssertion=e;throw e} }
                     if(request.endpoint==IndependentSearchServiceGrant.ENDPOINT) return retrievalFactory?.invoke(request) ?: retrievalOutcome
                     if (webSearch && model.providerId != ProviderId.OPENROUTER && request.endpoint.startsWith("https://openrouter.ai/")) return retrievalFactory?.invoke(request) ?: retrievalOutcome
@@ -137,7 +154,7 @@ class NormalChatGenerationStabilityTest {
                     durableAudit.append(record)
                 }
             },diagnostics=RoomProviderDiagnosticStore(db),sendAttempts=attempts,responseModelAttributions=attribution,
-            attachmentBridge=UniversalChatAttachmentBridge(),adapters=ChatProviderAdapters(),modelResolver=ModelResolver { if(it==preset) ResolvedModelResult.Resolved(model) else if(webSearch && it==ModelPresetId.GPT_6_LUNA) ResolvedModelResult.Resolved(model.copy(providerId=ProviderId.OPENROUTER,modelId="openai/gpt-6-luna")) else ResolvedModelResult.Unavailable("fixture") },
+            attachmentBridge=UniversalChatAttachmentBridge(),adapters=ChatProviderAdapters(),modelResolver=ModelResolver { if(currentProfile) profiles.profile(it)?.let {m->ResolvedModelResult.Resolved(m.copy(health=ModelHealth.AVAILABLE,maxOutputTokens=8192))} ?: ResolvedModelResult.Unavailable("fixture") else if(it==preset) ResolvedModelResult.Resolved(model) else if(preset==ModelPresetId.MERCURY_3 && it==ModelPresetId.CLAUDE_HAIKU_5_5) ResolvedModelResult.Resolved(model.copy(providerId=ProviderId.OPENROUTER,modelId="anthropic/claude-haiku-5.5",capabilities=model.capabilities.copy(supportsVision=true))) else if(webSearch && it==ModelPresetId.GPT_6_LUNA) ResolvedModelResult.Resolved(model.copy(providerId=ProviderId.OPENROUTER,modelId="openai/gpt-6-luna",capabilities=model.capabilities.copy(supportsVision=true))) else ResolvedModelResult.Unavailable("fixture") },
             modelHealthReporter=object : ModelHealthReporter {
                 override fun recordSuccess(presetId: ModelPresetId) = Unit
                 override fun recordFailure(presetId: ModelPresetId,error: ProviderDiagnosticErrorClass) = Unit
@@ -155,7 +172,7 @@ class NormalChatGenerationStabilityTest {
             },loadAssistantExperienceSettings={AssistantExperienceSettings(webSearchEnabled=webSearch,customInstructions=customInstructions)},
             onConversationCompleted={if(completedCallbackFails) throw IllegalStateException("synthetic completion callback")},
         )
-        fun send(withAttachment: Boolean = false): Pair<ConversationId,NormalChatOpenRouterExecutor.Result> {
+        fun send(withAttachment: Boolean = false, approveReader:Boolean=true): Pair<ConversationId,NormalChatOpenRouterExecutor.Result> {
             val initial=tree.create(if(titlePending) ConversationAutoTitle.NEW_CONVERSATION_TITLE else "稳定性测试", autoTitlePending=titlePending); val snapshot=conversations.save(initial);val id=snapshot.conversation.id;lastConversationId=id
             val refs=if(imageOnlyInput) {
                 val bytes=java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aemkAAAAASUVORK5CYII=")
@@ -168,9 +185,9 @@ class NormalChatGenerationStabilityTest {
                 }
             } else emptyList()
             val draft=conversations.saveDraft(id,ConversationDraft(text=if(imageOnlyInput) "" else if(withAttachment) "分析报告" else "合成测试问题",attachments=refs,updatedAt=clock.instant()))
-            val choice=ComposerModelRoutingCatalog.choices.single {it.routes==listOf(preset)}
+            val choice=ComposerModelRoutingCatalog.choices.first {it!=ComposerModelRoutingCatalog.auto && it.routes==listOf(preset)}
             val approval=NormalChatEgressAuthorization.forUserSend(draft,clock.millis(),choice.id,executor.routingSnapshot().copy(webSearchEnabled=webSearch))
-            return id to executor.execute(id,approval)
+            return id to executor.execute(id,if(approveReader) approval else approval.copy(auxiliaryRecipientModelIds=emptyMap()))
         }
         fun awaitCompletion(id: ConversationId) {
             val done = java.util.concurrent.CountDownLatch(1)
@@ -178,6 +195,81 @@ class NormalChatGenerationStabilityTest {
             assertTrue(done.await(10, java.util.concurrent.TimeUnit.SECONDS))
         }
         override fun close() { completionExecutor?.shutdown(); completionExecutor?.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS); db.close() }
+    }
+
+    @Test fun `every selectable current model uses authorized image preparation and its original final identity`() {
+        val manifest=org.json.JSONObject(java.io.File("../protocol/model-service/model-service-v1.json").readText()).getJSONArray("models")
+        for(i in 0 until manifest.length()) {
+            val preset=ModelPresetId.valueOf(manifest.getJSONObject(i).getString("presetId"))
+            if(ComposerModelRoutingCatalog.choices.none {it!=ComposerModelRoutingCatalog.auto && it.routes==listOf(preset)}) continue // Auto-only routes are covered by the manifest preparation matrix.
+            for(web in listOf(false,true)) Fixture(presetId=preset,webSearch=web,imageOnlyInput=true,currentProfile=true).use {f->
+                f.providerFactory={request->
+                    val wire=java.io.ByteArrayOutputStream().also {request.effectiveBody().writeTo(it)}.toString(Charsets.UTF_8.name())
+                    val model=org.json.JSONObject(wire).getString("model")
+                    val reading=wire.contains("忠实读取") || wire.contains("忠实识读")
+                    ProviderChatOutcome.StreamedResponse(200,if(reading) "### 附件\nPython 3.13于2024年10月7日发布。" else "[A1] 已核实\nPython 3.13于2024年10月7日发布。\n来源：https://www.python.org/downloads/release/python-3130/",null,100,20,null,false,finishReason="stop",returnedModelId=model,webSearchPerformed=web && !reading,webSources=if(web && !reading) listOf(ProviderWebSource("https://www.python.org/downloads/release/python-3130/")) else emptyList())
+                }
+                val (id,result)=f.send();f.providerAssertion?.let {throw it}
+                assertEquals("$preset/web=$web",NormalChatOpenRouterExecutor.Result.Sent,result)
+                val attempt=requireNotNull(f.attempts.findLatestForConversation(id))
+                assertEquals(f.model.modelId,attempt.modelId);assertEquals(NormalChatSendAttemptStatus.COMPLETED,attempt.status)
+                val final=f.requests.last();val finalWire=java.io.ByteArrayOutputStream().also {final.effectiveBody().writeTo(it)}.toString(Charsets.UTF_8.name())
+                assertEquals(f.model.modelId,org.json.JSONObject(finalWire).getString("model"))
+                if(!AttachmentInputPolicy.acceptsNative(f.model,"image/png",web && f.model.providerId!=ProviderId.OPENROUTER)) assertFalse("$preset raw image leaked to text route",finalWire.contains("image_url"))
+                assertTrue(f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.any {it.rootAttemptId==attempt.attemptId.value && it.requestedModelId==f.model.modelId})
+            }
+        }
+    }
+
+    @Test fun `Mercury reads images with disclosed Haiku then answers as Mercury without raw image`() {
+        for(search in listOf(false,true)) Fixture(presetId=ModelPresetId.MERCURY_3,webSearch=search,imageOnlyInput=true).use { f ->
+            f.providerFactory={ request ->
+                val wire=java.io.ByteArrayOutputStream().also {request.effectiveBody().writeTo(it)}.toString(Charsets.UTF_8.name())
+                val body=org.json.JSONObject(wire)
+                val reader=f.requestCount==1
+                assertEquals(if(reader) "anthropic/claude-haiku-5.5" else "inception/mercury-3",body.getString("model"))
+                assertEquals(reader,wire.contains("image_url"))
+                if(!reader) {
+                    assertTrue(wire.contains("台积电"))
+                }
+                ProviderChatOutcome.StreamedResponse(200,if(reader) "### 附件\n台积电2026年第三季度营收467.2亿美元。" else if(search && f.requestCount==2) "[A1] 已核实\n台积电公开了2026年第三季度财报。\n来源：https://investor.tsmc.com/quarterly-results" else "根据材料分析台积电营收。",null,100,20,null,false,
+                    finishReason="stop",returnedModelId=body.getString("model"),webSearchPerformed=search && !reader,
+                    webSources=if(search && !reader) listOf(ProviderWebSource("https://investor.tsmc.com/quarterly-results")) else emptyList())
+            }
+            val (id,result)=f.send();f.providerAssertion?.let {throw it}
+            assertEquals(NormalChatOpenRouterExecutor.Result.Sent,result)
+            assertEquals(if(search) 3 else 2,f.requestCount)
+            val finalBody=java.io.ByteArrayOutputStream().also {f.requests.last().effectiveBody().writeTo(it)}.toString(Charsets.UTF_8.name())
+            val messages=org.json.JSONObject(finalBody).getJSONArray("messages")
+            assertTrue((0 until messages.length()).any {i->messages.getJSONObject(i).let {it.optString("role")=="system" && it.optString("content").contains(AttachmentInputPolicy.ANSWER_MATERIAL_INSTRUCTION)}})
+            val attempt=f.attempts.findLatestForConversation(id)!!
+            assertEquals("inception/mercury-3",attempt.modelId)
+            assertEquals(NormalChatSendAttemptStatus.COMPLETED,attempt.status)
+            val facts=f.durableAudit.listNewestFirst().mapNotNull {it.accounting}.filter {it.rootAttemptId==attempt.attemptId.value}.distinctBy {it.callId}
+            assertEquals(if(search) 3 else 2,facts.size)
+            assertEquals(setOf("anthropic/claude-haiku-5.5","inception/mercury-3"),facts.map {it.requestedModelId}.toSet())
+        }
+    }
+
+    @Test fun `Mercury image cannot egress without exact auxiliary recipient approval`() {
+        Fixture(presetId=ModelPresetId.MERCURY_3,imageOnlyInput=true).use {f ->
+            val (_,result)=f.send(approveReader=false)
+            assertTrue(result is NormalChatOpenRouterExecutor.Result.Blocked)
+            assertEquals(0,f.requestCount)
+        }
+    }
+
+    @Test fun `Mercury reader failure missing identity truncation and cancellation never reaches answer`() {
+        val outcomes=listOf(ProviderChatOutcome.TimedOut,ProviderChatOutcome.Cancelled,
+            ProviderChatOutcome.StreamedResponse(200,"观察材料",null,100,20,null,false,finishReason="length",returnedModelId="anthropic/claude-haiku-5.5"),
+            ProviderChatOutcome.StreamedResponse(200,"观察材料",null,100,20,null,false,finishReason="stop",returnedModelId=null))
+        for(outcome in outcomes) Fixture(presetId=ModelPresetId.MERCURY_3,imageOnlyInput=true).use { f ->
+            f.providerFactory={outcome}
+            val (id,result)=f.send()
+            if(outcome!=ProviderChatOutcome.Cancelled) assertFalse(result==NormalChatOpenRouterExecutor.Result.Sent)
+            assertEquals(1,f.requestCount)
+            assertFalse(f.attempts.findLatestForConversation(id)!!.status==NormalChatSendAttemptStatus.COMPLETED)
+        }
     }
 
     @Test fun `Haiku image facts reach search before final answer with original image retained`() {

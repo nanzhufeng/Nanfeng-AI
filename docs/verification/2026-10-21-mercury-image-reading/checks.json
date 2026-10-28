@@ -1,0 +1,72 @@
+{
+  "baseline": "dd3c8e89921feee8be5bc0185bf3174e6fed4bae",
+  "worktree": true,
+  "android": {
+    "sha256": "59c1338fbd8ee962db602eb5e9c76eba1dc7f571ad8da1210902cdefd6ea89c4",
+    "version": "1.0.31",
+    "code": 95,
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "debuggable": false,
+    "junit": {
+      "tests": 1549,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 10
+    }
+  },
+  "node": {
+    "pass": 560,
+    "skip": 12,
+    "fail": 0
+  },
+  "rust": {
+    "pass": 464,
+    "ignored": 38,
+    "fail": 0
+  },
+  "liveImageReading": {
+    "state": "PASS",
+    "source": "preserved public owner receipt; no network replay",
+    "correctAmounts": true,
+    "reopenedCompleted": true,
+    "finalModel": "inception/mercury-3",
+    "physicalCalls": [
+      {
+        "currency": "USD",
+        "micros": 219,
+        "requested": "anthropic/claude-haiku-5.5",
+        "returned": "anthropic/claude-haiku-5.5",
+        "source": "PROVIDER_RESPONSE"
+      },
+      {
+        "currency": "USD",
+        "micros": 218,
+        "requested": "inception/mercury-3",
+        "returned": "inception/mercury-3",
+        "source": "PROVIDER_RESPONSE"
+      }
+    ],
+    "reportedChargeMicros": 437,
+    "currency": "USD",
+    "ledgerSnapshots": 4,
+    "reconciledPendingSnapshots": 2
+  },
+  "liveImageWeb": {
+    "status": "UNKNOWN",
+    "safeCode": "NETWORK",
+    "automaticRetry": false,
+    "source": "independent public Python topic image"
+  },
+  "mainDeviceOverlay": "NOT RUN - only emulators attached",
+  "macFormal": {
+    "version": "1.0.31",
+    "bundleId": "com.nanzhufeng.ai.desktop",
+    "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+    "dmgSha256": "fd9c6389a3aa983dd09e72ef9b2560631fb95ad06a624f90a1cc9101c3b5b580",
+    "bundleManifestSha256": "3d406c839c93587911975ca63cbb222c6dc44f72687ec27d2b2f341eab15ea4a",
+    "signature": "PASS",
+    "dmgVerification": "PASS",
+    "mainOverlay": "NOT RUN"
+  },
+  "originalUserConversationRetry": false
+}

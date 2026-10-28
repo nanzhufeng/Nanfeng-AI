@@ -365,8 +365,7 @@ pub const PROVIDERS: [ProviderDescriptor; 7] = [
     ProviderDescriptor { id: "RELAYCORE_GEMINI", display_name: "RelayCore Gemini", endpoint: "https://api.relaycore.cn/v1", default_preset_id: "RELAYCORE_GEMINI_3_8_FLASH" },
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PresetDescriptor {
     pub id: &'static str,
     pub provider_id: &'static str,
@@ -377,7 +376,20 @@ pub struct PresetDescriptor {
     pub chat_selectable: bool,
 }
 
-pub const PRESETS: [PresetDescriptor; 30] = [
+impl Serialize for PresetDescriptor {
+    fn serialize<S:serde::Serializer>(&self,serializer:S)->Result<S::Ok,S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut row=serializer.serialize_struct("PresetDescriptor",8)?;
+        row.serialize_field("id",self.id)?;row.serialize_field("providerId",self.provider_id)?;
+        row.serialize_field("modelId",self.model_id)?;row.serialize_field("displayName",self.display_name)?;
+        row.serialize_field("description",self.description)?;row.serialize_field("family",self.family)?;
+        row.serialize_field("chatSelectable",&self.chat_selectable)?;
+        row.serialize_field("nativeInputTypes",&crate::attachment_input_policy_v1::native_types(self.provider_id,self.model_id))?;
+        row.end()
+    }
+}
+
+pub const PRESETS: [PresetDescriptor; 32] = [
     PresetDescriptor {
         id: "CLAUDE_OPUS_5_5",
         provider_id: "OPENROUTER",
@@ -415,6 +427,15 @@ pub const PRESETS: [PresetDescriptor; 30] = [
         chat_selectable: true,
     },
     PresetDescriptor {
+        id: "GPT_6_1_TERRA",
+        provider_id: "OPENROUTER",
+        model_id: "openai/gpt-6.1-terra",
+        display_name: "GPT-6.1 Terra",
+        description: "适合日常工作、图像理解与代码任务。",
+        family: "OpenAI · OpenRouter",
+        chat_selectable: true,
+    },
+    PresetDescriptor {
         id: "GPT_6_LUNA",
         provider_id: "OPENROUTER",
         model_id: "openai/gpt-6-luna",
@@ -424,6 +445,11 @@ pub const PRESETS: [PresetDescriptor; 30] = [
         chat_selectable: true,
     },
 
+    PresetDescriptor {
+        id: "MERCURY_3", provider_id: "OPENROUTER", model_id: "inception/mercury-3",
+        display_name: "Mercury 3", description: "适合快速文字问答、代码与联网检索。",
+        family: "Inception · OpenRouter", chat_selectable: true,
+    },
     PresetDescriptor {
         id: "GEMINI_4_ARGON", provider_id: "OPENROUTER", model_id: "google/gemini-4-argon",
         display_name: "Gemini 4 Argon", description: "适合深度推理、复杂分析与代码任务。",
@@ -687,9 +713,20 @@ pub fn current_preset_id(value: &str) -> &str {
     }
 }
 
-/// Published Opus 5.5 aliases in the same Claude-Kiro standard group. No cross-model fallback.
+/// Exact published Claude alias pairs; Sonnet's configured request ID is unchanged.
 pub fn canonical_relay_model_id<'a>(provider: &str, id: &'a str) -> &'a str {
-    if provider == "RELAYCORE_CLAUDE" && id == "claude-opus-5-5" { "claude-opus-5.5" } else { id }
+    if provider != "RELAYCORE_CLAUDE" { return id; }
+    match id { "claude-opus-5-5" => "claude-opus-5.5", "claude-sonnet-5.5" => "claude-sonnet-5-5", _ => id }
+}
+
+#[cfg(test)]
+#[test]
+fn published_claude_aliases_preserve_model_and_provider_boundaries() {
+    assert_eq!(canonical_relay_model_id("RELAYCORE_CLAUDE","claude-sonnet-5.5"),"claude-sonnet-5-5");
+    assert_eq!(canonical_relay_model_id("RELAYCORE_CLAUDE","claude-sonnet-5-5"),"claude-sonnet-5-5");
+    assert_eq!(canonical_relay_model_id("OPENROUTER","claude-sonnet-5.5"),"claude-sonnet-5.5");
+    assert_ne!(canonical_relay_model_id("RELAYCORE_CLAUDE","claude-opus-5.5"),canonical_relay_model_id("RELAYCORE_CLAUDE","claude-sonnet-5.5"));
+    assert_ne!(canonical_relay_model_id("RELAYCORE_CLAUDE","claude-sonnet-5.6"),"claude-sonnet-5-5");
 }
 
 pub fn preset(provider_id: &str, preset_id: &str) -> Result<PresetDescriptor, String> {

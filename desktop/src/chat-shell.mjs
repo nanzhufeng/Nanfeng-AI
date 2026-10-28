@@ -226,6 +226,7 @@ export function transcriptMetadata(message) {
   }
   if (snapshot?.providerId && !relayResponse && String(model || '').endsWith(' · RC')) model = String(model).slice(0,-5);
   if (String(model || '').endsWith(' · RC')) model = compactModelName(model);
+  else if (!snapshot?.displayName && model === 'inception/mercury-3') model = compactModelName(model);
   const created = Date.parse(message?.createdAt || '');
   const timestamp = Number.isFinite(created)
     ? new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(created))
@@ -263,6 +264,7 @@ export function compactModelName(value) {
     'anthropic/claude-fable-5': 'Fable 5', 'anthropic/claude-opus-5': 'Opus 5', 'anthropic/claude-opus-5-fast': 'Opus 5', 'anthropic/claude-sonnet-5': 'Sonnet 5',
     'openai/gpt-5.6-sol': '5.6 Sol', 'openai/gpt-5.6-terra': '5.6 Terra', 'google/gemini-3.7-flash': 'Gemini 3.7', 'google/gemini-3.8-flash': 'Gemini 3.8',
     'deepseek-v4-pro': 'DS V4', 'deepseek-v4-flash': 'DS V4', 'deepseek-flash': 'DS V4.1',
+    'inception/mercury-3': 'Mercury 3',
     'meta/muse-wonder': 'Muse Wonder',
     'google/gemini-4-argon': 'Gemini 4 Argon',
     'qwen3.7-plus': 'Qwen 3.7', 'qwen3.8-max': 'Qwen 3.8', 'glm-5.3-flash': 'GLM 5.3', 'x-ai/grok-4.6': '4.6 High', 'moonshotai/kimi-k3': 'Kimi K3',
@@ -270,7 +272,7 @@ export function compactModelName(value) {
 }
 
 const DAILY_COMPOSER_MODEL_IDS = Object.freeze([
-  'CLAUDE_SONNET_5_5', 'CLAUDE_HAIKU_5_5', 'DEEPSEEK_V4_FLASH', 'GPT_6_LUNA',
+  'CLAUDE_SONNET_5_5', 'CLAUDE_HAIKU_5_5', 'DEEPSEEK_V4_FLASH', 'GPT_6_1_TERRA', 'GPT_6_LUNA', 'MERCURY_3',
   'GLM_5_3_FLASH', 'QWEN_3_7_PLUS', 'GEMINI_3_8_FLASH',
 ]);
 const DEEP_COMPOSER_MODEL_IDS = Object.freeze([

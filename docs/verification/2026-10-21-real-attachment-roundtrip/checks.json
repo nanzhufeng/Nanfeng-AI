@@ -1,0 +1,119 @@
+{
+  "verifiedAt": "2026-10-22T02:47:05+08:00",
+  "scope": "Android22 maintained models; real mixed image/PDF/audio/video originals,110 labeled values, original final models, runtime/message/attempt complete and zero-network reopen; three Desktop representatives",
+  "androidReal": {
+    "modelsVerified": 22,
+    "physicalCompleteCallsForSelectedResults": 55,
+    "originalFileByteChecks": 88,
+    "labeledContentChecks": 110,
+    "reopenExact": 22,
+    "reopenNetworkCalls": 0,
+    "transportMocked": false,
+    "readingReplayed": false,
+    "webSearch": false,
+    "testOutputCap": 8192,
+    "sonnetAlias": "One real response false notice reclassified against authenticated published catalog and exact alias unit replay; no extra generation for alias"
+  },
+  "desktopReal": [
+    {
+      "preset": "RELAYCORE_OPUS_5_5",
+      "requested": "claude-opus-5.5",
+      "actualModel": "claude-opus-5.5",
+      "status": "COMPLETED",
+      "reopenedState": "COMPLETED",
+      "reopenedMessageExact": true,
+      "reopenedAccountingExact": true
+    },
+    {
+      "preset": "MERCURY_3",
+      "requested": "inception/mercury-3",
+      "actualModel": "inception/mercury-3",
+      "status": "COMPLETED",
+      "reopenedState": "COMPLETED",
+      "reopenedMessageExact": true,
+      "reopenedAccountingExact": true
+    },
+    {
+      "preset": "QWEN_3_7_PLUS",
+      "requested": "qwen3.7-plus",
+      "actualModel": "qwen3.7-plus",
+      "status": "COMPLETED",
+      "reopenedState": "COMPLETED",
+      "reopenedMessageExact": true,
+      "reopenedAccountingExact": true
+    }
+  ],
+  "localVerification": {
+    "android": {
+      "tests": 1553,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 10
+    },
+    "rust": {
+      "passed": 468,
+      "ignored": 38,
+      "failures": 0,
+      "disjointRuns": "465 pass20ignore --skip live;3pass18ignore live filter; no ignored generation test in these runs"
+    },
+    "releaseBuildAndLint": "PASS",
+    "contractGovernance": 114,
+    "modelCatalog": 22
+  },
+  "delivery": {
+    "package": "com.nanzhufeng.ai",
+    "versionCode": 95,
+    "versionName": "1.0.31",
+    "debuggable": false,
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "sha256": "b91d232afc0a14aa01a480fa0dbea3a5d09473e0ff91eae0694834279e391988",
+    "bytes": 28705463,
+    "mainDeviceInstalled": true,
+    "installedAt": "2026-10-22T08:24:47.786797+08:00",
+    "installedReadbackSha256": "b91d232afc0a14aa01a480fa0dbea3a5d09473e0ff91eae0694834279e391988",
+    "dataMetadataPreserved": true,
+    "receipt": "../2026-10-22-attachment-formal-cover/checks.json"
+  },
+  "budget": {
+    "capCnyMicros": 20000000,
+    "conservativeUsedIncludingUnknownReservesCnyMicros": 12704868,
+    "notActualSettlementTotal": true,
+    "usdBudgetConversion": 8,
+    "historicalUnknownTransportCalls": 5,
+    "successfulCostUnknown": [
+      {
+        "model": "glm-5.3",
+        "role": "ANSWER"
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "role": "ANSWER"
+      }
+    ],
+    "current22StoredKnownCostsByCurrencyMicros": {
+      "USD": 284133,
+      "CNY": 157388
+    },
+    "storedCostsMixProviderSettlementAndVersionedLocalEstimates": true,
+    "unknownPreservedNotZero": true
+  },
+  "verificationGaps": [
+    "Not an all-model web-search/source relevance acceptance; prior search coverage gaps retained",
+    "Not all Desktop22 deployments; three real representative backend paths",
+    "No claim for every file size, codec, encrypted/damaged file or compare-mode attachment path",
+    "Mac main installed bundle not updated in this task",
+    "Historical UNKNOWN and failed local Astra records left intact; no user old-message retry",
+    "Synthetic video/audio track durations differ; specified spoken values verified, not every-frame/every-word media fidelity"
+  ],
+  "git": "WORKTREE on dd3c8e8; no commit/push/release",
+  "isolationCleanup": {
+    "temporaryAvd": "NanfengAiAttachments20261021",
+    "stopped": true,
+    "deleted": true,
+    "capabilityConsumed": true,
+    "reversePortsRemaining": 0,
+    "disposableEncryptedCredentialEntries": 0,
+    "privateEvidenceAndDatabasePreserved": true,
+    "mainDeviceTouched": false
+  }
+}

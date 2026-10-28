@@ -1,0 +1,23 @@
+{
+  "app/src/main/assets/model_profiles.json": "187d48b6a600deeeb302bcfbf9f2dac9753b045769d9eab328e78336158a0d41",
+  "app/src/main/java/com/nanzhufeng/ai/domain/ChatModelRouting.kt": "913b7fccda18188ff468f8b019756ed4f738b24ce08b506c39566004194ce925",
+  "app/src/main/java/com/nanzhufeng/ai/domain/ConversationCostEstimator.kt": "0b96aee6952d63183943ed5ac169c3d777f5158f1c32c9602e9929f029494605",
+  "app/src/main/java/com/nanzhufeng/ai/domain/DomainModels.kt": "772f925a264444e5c42121f1a5a0bcfedd4a2e7363d2d24b9ad70b8d73998cfd",
+  "app/src/main/java/com/nanzhufeng/ai/domain/ModelRegistry.kt": "669421274142501c95b6825a49ca8d792e615bfb126427ed38369316b193f7ff",
+  "app/src/main/java/com/nanzhufeng/ai/domain/ModelService.kt": "4262dead7387882cd8e3ac7b4504771a96c03cd2836d9cb098332984aec5be3c",
+  "app/src/main/java/com/nanzhufeng/ai/domain/RegistryVerification.kt": "bd5e5e3751a1b518dd7e7b42f842445694184708fb0e8267469ee80d437806ee",
+  "app/src/main/java/com/nanzhufeng/ai/domain/ResolvedModel.kt": "9d6ca7a29f29cf26415972bf0eed7d7f4ec16057c0a5acd27f464b0e4ddd83c1",
+  "app/src/main/java/com/nanzhufeng/ai/ui/NanfengAiApp.kt": "f6ad852a6d673b9aa05d24ae46a44ff903b1ce3a27d41c37957cadd9f460657a",
+  "app/src/test/java/com/nanzhufeng/ai/domain/P6GModelRouterContractsTest.kt": "b3823df92073d3f62369fbc4eefa88aaafa43f24a9ba7d1e4cc7b48e567b3f83",
+  "desktop/src-tauri/src/attachment_search_live_matrix_tests.rs": "97495d4802f78848cad7b8dc7b59020164e018b2412dd0d1f945d0a7cc47d700",
+  "desktop/src-tauri/src/chat_call_accounting_v1.rs": "f36baa27195b496179df832092ee1ec1cf476c966d5f21ba19b3ef2a15284199",
+  "desktop/src-tauri/src/desktop_model_service_v1.rs": "d451d957b2ddb6dc7c58ec9a855f0c3db4382484dc52c192d9b9b7a7bb658a9b",
+  "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs": "edce3fc11456722276f6f60e113779c0aeeec8ad89129205b295383ed449e44b",
+  "desktop/src/android-settings-shell.mjs": "d28773e308b1beaff2e017d4addfc9efd749cf07d6fce97c2d94b896fd3584ff",
+  "desktop/src/chat-shell.mjs": "73bf7703d1c4defcc124df44e51f3f4066510502fdca2359bdaab328b633fe9d",
+  "desktop/src/desktop-cost-estimator.mjs": "daf5ac1412a41f124c9472f8b4cb3839b2a7f867c06eec93d6be921463f37173",
+  "protocol/model-service/model-service-v1.json": "b872daf44ead473daa67fc85fc60f4ce51f9297bb945a54323e671eb4731b12c",
+  "app/src/test/java/com/nanzhufeng/ai/ai/MercuryModelIntegrationTest.kt": "3991b139f7a6f0cf500f4acd9ab2dede2e948c015a63bf2214639df53eaee778",
+  "desktop/tests/mercury-model-integration.test.mjs": "97bc7bf119af65319cfdb12c9309dda387cdc43f70272855250c619d548598ef",
+  "protocol/fixtures/mercury-3-20261020.json": "bbd7b2818381aba79f6d2f34de55636d481c121f0af91614f4127b4fda105de9"
+}

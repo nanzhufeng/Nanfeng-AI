@@ -14,7 +14,7 @@ test('all provider models remain directly selectable and only RC has family tabs
     assert.equal([...html.matchAll(/aria-label="模型平台"/g)].length, 1);
   }
   const openrouter = renderAndroidSettingsShell({page:'model-configuration'});
-  assert.equal([...openrouter.matchAll(/role="radio"/g)].length,8);
+  assert.equal([...openrouter.matchAll(/role="radio"/g)].length,MODEL_SERVICE_PREVIEW_SETTINGS[0].presets.length);
   assert.ok(openrouter.includes('model-settings-model-list scrollable'));
   assert.match(openrouter,/data-preset-id="MUSE_WONDER"/);
   assert.ok(!openrouter.includes('Claude Fable 5') && !openrouter.includes('Kimi K3'));
@@ -78,4 +78,15 @@ test('GLM OCR is selectable as a settings probe target without advertising a cha
  assert.ok(!html.match(/data-action="test-model-service-connection" disabled/));
  assert.ok(!html.includes('控制该平台模型显示')&&!html.includes('控制该组模型显示'));
  assert.ok(!settings.presets.some(p=>p.id==='GLM_OCR'));
+});
+
+ test('Terra is selectable immediately above Luna without replacing the default', () => {
+  const service = MODEL_SERVICE_PREVIEW_SETTINGS[0];
+  assert.equal(service.presetId, 'GPT_6_LUNA');
+  const settings = MODEL_SERVICE_PREVIEW_SETTINGS.map(s => ({...s, enabled:true}));
+  const html = renderChatFirstShell({modelServiceSettings:settings, p6gModelPickerOpen:true, p6gSelection:{pickerTier:'DAILY'}});
+  const ids = [...html.matchAll(/data-model-id="([^"]+)"/g)].map(m=>m[1]);
+  assert.ok(ids.includes('GPT_6_1_TERRA'));
+  assert.equal(ids.indexOf('GPT_6_1_TERRA') + 1, ids.indexOf('GPT_6_LUNA'));
+  assert.match(html, /GPT-6.1 Terra/);
 });

@@ -82,13 +82,14 @@ pub fn estimate(id:&str, display:&str, input:Option<i64>, output:Option<i64>, ca
                 "anthropic/claude-haiku-5.5"=>if input<=99999 {(0.1,0.5,Some(0.01))}else{(0.5,2.5,Some(0.05))},
                 "openai/gpt-6.1-sol"=>if large {(4.,15.,Some(0.2))}else{(2.,10.,Some(0.1))},
                 "openai/gpt-6-luna"=>if large {(0.2,0.75,Some(0.02))}else{(0.1,0.5,Some(0.01))},
+                "inception/mercury-3"=>(0.1,0.35,Some(0.01)),
                 "meta/muse-wonder"=>(4.,20.,Some(0.2)),
                 "google/gemini-4-argon"=>(2.,10.,Some(0.1)),
                 "google/gemini-3.8-flash"=>(0.75,3.75,Some(0.075)),"moonshotai/kimi-k3"=>(2.55,12.75,Some(0.256)),
                 "x-ai/grok-4.6"=>if input>199999 {(4.,12.,Some(1.))}else{(2.,6.,Some(0.5))},
                 "anthropic/claude-fable-5"|"anthropic/claude-opus-5:fast"=>(10.,50.,None),"anthropic/claude-opus-5"=>(5.,25.,None),"anthropic/claude-sonnet-5"=>(2.,10.,None),"anthropic/claude-haiku-4.5"=>(1.,5.,None),"google/gemini-3.7-flash"=>(0.375,1.875,None),
                 "openai/gpt-5.6-sol"=>if large {(4.,15.,None)}else{(2.,10.,None)},"openai/gpt-5.6-terra"=>if large {(4.,18.,None)}else{(2.,12.,None)},"openai/gpt-5.6-luna"=>if large {(0.4,1.8,None)}else{(0.2,1.2,None)},_=>return None};
-            let v=if id=="google/gemini-4-argon" {"openrouter-gemini-4-argon-2026-10-15-v1"}else if id=="meta/muse-wonder" {"openrouter-muse-wonder-2026-10-13-v1"}else if id=="google/gemini-3.8-flash" {"openrouter-gemini-3.8-flash-intro-2026-09-v1"}else if id.starts_with("openai/gpt-5.6") || ["moonshotai/kimi-k3","x-ai/grok-4.6","anthropic/claude-fable-5","anthropic/claude-opus-5:fast","anthropic/claude-opus-5","anthropic/claude-sonnet-5","anthropic/claude-haiku-4.5","google/gemini-3.7-flash"].contains(&id){"openrouter-public-prices-2026-08-v1"}else{v};
+            let v=if id=="inception/mercury-3" {"openrouter-mercury-3-2026-10-20-v1"}else if id=="google/gemini-4-argon" {"openrouter-gemini-4-argon-2026-10-15-v1"}else if id=="meta/muse-wonder" {"openrouter-muse-wonder-2026-10-13-v1"}else if id=="google/gemini-3.8-flash" {"openrouter-gemini-3.8-flash-intro-2026-09-v1"}else if id.starts_with("openai/gpt-5.6") || ["moonshotai/kimi-k3","x-ai/grok-4.6","anthropic/claude-fable-5","anthropic/claude-opus-5:fast","anthropic/claude-opus-5","anthropic/claude-sonnet-5","anthropic/claude-haiku-4.5","google/gemini-3.7-flash"].contains(&id){"openrouter-public-prices-2026-08-v1"}else{v};
             (a,b,c,"USD",v.into())
         }
     };
@@ -98,6 +99,11 @@ pub fn estimate(id:&str, display:&str, input:Option<i64>, output:Option<i64>, ca
     Some(Cost{micros:amount as i64,currency:currency.into(),version})
 }
 #[cfg(test)] mod tests {
+    #[test] fn mercury_tariff_preserves_cache_rate() {
+        let cost=super::estimate("inception/mercury-3","Mercury 3",Some(1000),Some(100),Some(500),1792454400000).unwrap();
+        assert_eq!(cost.micros,90);assert_eq!(cost.currency,"USD");assert_eq!(cost.version,"openrouter-mercury-3-2026-10-20-v1");
+    }
+
     #[test] fn argon_intro_tariff_preserves_cached_input_rate() {
         let cost=super::estimate("google/gemini-4-argon","Gemini 4 Argon",Some(1000),Some(100),Some(500),1792022400000).unwrap();
         assert_eq!(cost.micros,2050);assert_eq!(cost.currency,"USD");assert_eq!(cost.version,"openrouter-gemini-4-argon-2026-10-15-v1");

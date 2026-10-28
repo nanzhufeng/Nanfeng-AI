@@ -60,6 +60,10 @@ class RelayCoreIntegrationTest {
         assertTrue(RelayCoreModels.responseName(ModelPresetId.RELAYCORE_OPUS_5_5,"claude-opus-5-5").startsWith("Opus 5.5"))
         assertFalse(RelayCoreModels.sameApiModel(ProviderId.OPENROUTER,"claude-opus-5-5","claude-opus-5.5"))
         assertFalse(RelayCoreModels.sameApiModel(ProviderId.RELAYCORE_CLAUDE,"claude-opus-5-5","claude-sonnet-5-5"))
+        assertTrue(RelayCoreModels.sameApiModel(ProviderId.RELAYCORE_CLAUDE,"claude-sonnet-5-5","claude-sonnet-5.5"))
+        assertEquals("claude-sonnet-5-5",RelayCoreModels.canonicalApiId(ProviderId.RELAYCORE_CLAUDE,"claude-sonnet-5.5"))
+        assertFalse(RelayCoreModels.sameApiModel(ProviderId.OPENROUTER,"claude-sonnet-5-5","claude-sonnet-5.5"))
+        assertFalse(RelayCoreModels.sameApiModel(ProviderId.RELAYCORE_CLAUDE,"claude-sonnet-5-5","claude-sonnet-5.6"))
     }
 
     @Test fun `Relay clean EOF without terminal keeps partial text incomplete`() {

@@ -11,6 +11,17 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
 
 class ProviderAdapterContractsTest {
+    @Test fun `Terra sends the exact selected model with streaming and leaves unsupported temperature unset`() {
+        val selected=model().copy(providerId=com.nanzhufeng.ai.domain.ProviderId.OPENROUTER,modelId="openai/gpt-6.1-terra")
+        val adapter=OpenRouterChatAdapter()
+        val body=(adapter.prepare(selected,listOf("user" to "Terra synthetic check"),emptyList(),true,ChatRequestOptions.Standard) as ChatAdapterPrepareResult.Ready).jsonBody
+        assertTrue(body.contains("\"model\":\"openai/gpt-6.1-terra\""))
+        assertTrue(body.contains("\"stream\":true"))
+        assertFalse(body.contains("\"temperature\""))
+        assertEquals("/chat/completions",adapter.endpointPath(ChatRequestOptions.Standard))
+        assertTrue(body.contains("Terra synthetic check"))
+    }
+
     @Test fun `DeepSeek completed JSON final stage does not require repeated native search evidence`() {
         val adapter=DeepSeekChatAdapter()
         val body="""{"model":"deepseek-flash","content":[{"type":"text","text":"最终回答"}],"stop_reason":"end_turn","usage":{"input_tokens":100,"output_tokens":20}}"""

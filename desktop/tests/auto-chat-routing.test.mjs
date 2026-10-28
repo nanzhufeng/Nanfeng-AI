@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {AUTO_PLANS,autoCandidate,autoTask,conversationAutoMimeTypes} from '../src/auto-chat-routing.mjs';
 const policy=JSON.parse(readFileSync(new URL('../../protocol/fixtures/auto-routing-rc-domestic-20261010.json',import.meta.url)));
-const service=(providerId,ids,enabled=true,credentialStored=true)=>({providerId,enabled,credentialStored,presets:ids.map(id=>({id,displayName:id,chatSelectable:true}))});
+const profiles=JSON.parse(readFileSync(new URL('../../app/src/main/assets/model_profiles.json',import.meta.url))).profiles;
+const service=(providerId,ids,enabled=true,credentialStored=true)=>({providerId,enabled,credentialStored,presets:ids.map(id=>({id,displayName:id,chatSelectable:true,modelId:profiles.find(p=>p.presetId===id)?.modelId,nativeInputTypes:Object.entries(profiles.find(p=>p.presetId===id)?.capabilities||{}).filter(([k,v])=>v && ["image","pdf","audio","video"].includes(k)).map(([k])=>k==="pdf"?"file":k)}))});
 const services=[service('RELAYCORE_GPT',['RELAYCORE_GPT_6_1_SOL','RELAYCORE_GPT_6_ASTRA']),service('RELAYCORE_GEMINI',['RELAYCORE_GEMINI_3_8_FLASH']),service('DEEPSEEK',['DEEPSEEK_V4_FLASH','DEEPSEEK_V4_PRO']),service('QWEN',['QWEN_3_7_PLUS']),service('OPENROUTER',policy.openRouter)];
 test('shared Auto plans keep OpenRouter behind RC and domestic candidates',()=>{
  assert.deepEqual(AUTO_PLANS,policy.plans);

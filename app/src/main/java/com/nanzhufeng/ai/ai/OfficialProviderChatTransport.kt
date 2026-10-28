@@ -226,7 +226,11 @@ sealed interface ProviderChatOutcome {
      * A bounded local transport fact. It deliberately contains no exception message, URL,
      * credential, request body, or response data, so it is safe to persist in diagnostics.
      */
-    data class NetworkFailure(val kind: ProviderNetworkFailureKind, val exceptionClass: String? = null, val causeClass: String? = null) : ProviderChatOutcome
+    data class NetworkFailure(val kind: ProviderNetworkFailureKind, val exceptionClass: String? = null, val causeClass: String? = null) : ProviderChatOutcome {
+        fun diagnosticCode(): String = "TRANSPORT_${kind.name}" +
+            (exceptionClass?.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) }?.let { "_$it" } ?: "") +
+            (causeClass?.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) }?.let { "_CAUSE_$it" } ?: "")
+    }
     data object ResponseTooLarge : ProviderChatOutcome
     data object Cancelled : ProviderChatOutcome
 }
@@ -468,9 +472,10 @@ internal object ProviderSseDecoder {
             terminal == ProviderStreamTerminal.FAILED -> "FAILED"
             textMode in setOf(ProviderStreamTextMode.MESSAGES_API,ProviderStreamTextMode.MESSAGES_SEARCH_API) && !messageEndTurn -> "MISSING_COMPLETION"
             textMode == ProviderStreamTextMode.COMPLETIONS_API -> if (terminal == ProviderStreamTerminal.COMPLETED || done) "COMPLETED" else "MISSING_COMPLETION"
-            textMode !in setOf(ProviderStreamTextMode.RESPONSES_API, ProviderStreamTextMode.MESSAGES_API, ProviderStreamTextMode.MESSAGES_SEARCH_API) -> null
             terminal == ProviderStreamTerminal.COMPLETED && requiresNativeWebSources && webSources.isEmpty() -> "FAILED"
             terminal == ProviderStreamTerminal.COMPLETED -> "COMPLETED"
+            // Preserve an explicit stop terminal in ordinary chat too; strict readers consume it.
+            textMode !in setOf(ProviderStreamTextMode.RESPONSES_API, ProviderStreamTextMode.MESSAGES_API, ProviderStreamTextMode.MESSAGES_SEARCH_API) -> null
             else -> "MISSING_COMPLETION"
         }
         if(textMode==ProviderStreamTextMode.MESSAGES_SEARCH_API && output.isNotEmpty()) onDelta(output.toString())

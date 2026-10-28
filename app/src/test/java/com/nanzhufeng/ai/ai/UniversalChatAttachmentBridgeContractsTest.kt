@@ -25,7 +25,7 @@ import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 class UniversalChatAttachmentBridgeContractsTest {
     private val now = Instant.parse("2026-08-30T10:00:00Z")
 
-    @Test fun `text only target rejects an image without calling another model`() {
+    @Test fun `text only target stages image for the explicitly authorized reader without calling it`() {
         val result = UniversalChatAttachmentBridge().resolve(
             ConversationId("conversation-a"),
             model(ProviderId.DEEPSEEK, "deepseek-flash", vision = false, video = false),
@@ -34,7 +34,9 @@ class UniversalChatAttachmentBridgeContractsTest {
             false,
         )
 
-        assertEquals(ChatAttachmentBridgeResult.Failed(ChatAttachmentBridgeResult.Failure.FORMAT), result)
+        assertTrue(result is ChatAttachmentBridgeResult.Ready)
+        result as ChatAttachmentBridgeResult.Ready
+        assertTrue(result.providerAttachments.isEmpty());assertEquals(1,result.readingAttachments.size)
     }
 
     @Test fun `non-native PDF stays local or rejects without falling back to OCR`() {
@@ -164,12 +166,12 @@ class UniversalChatAttachmentBridgeContractsTest {
         assertTrue(resolve(archive("binary.txt" to "\u0000opaque")) is ChatAttachmentBridgeResult.Failed)
     }
 
-    @Test fun `native OpenRouter search retains each supported media type and text-only search rejects media`() {
+    @Test fun `native OpenRouter search retains media while text-only routes stage explicit projection`() {
         val target=model(ProviderId.OPENROUTER,"media-capable-fixture",true,video=true).let { it.copy(capabilities=it.capabilities.copy(supportsPdf=true,supportsAudio=true)) }
         val options=AutomaticWebSearchPolicy.requestOptions(ProviderId.OPENROUTER,ChatRequestOptions.Standard,true,"分析附件并核验",emptyList(),target.modelId)
         val media=listOf(
             ChatAttachment(ChatAttachmentKind.IMAGE,"image/png","image.png",byteArrayOf(1,2,3)),
-            ChatAttachment(ChatAttachmentKind.PDF,"application/pdf","file.pdf",byteArrayOf(4,5,6)),
+            ChatAttachment(ChatAttachmentKind.PDF,"application/pdf","file.pdf",pdf("Public complete text")),
             ChatAttachment(ChatAttachmentKind.AUDIO,"audio/mpeg","audio.mp3",byteArrayOf(7,8,9)),
             ChatAttachment(ChatAttachmentKind.VIDEO,"video/mp4","video.mp4",byteArrayOf(10,11,12)),
         )
@@ -182,7 +184,9 @@ class UniversalChatAttachmentBridgeContractsTest {
             assertEquals("openrouter:web_search",body.getJSONArray("tools").getJSONObject(0).getString("type"))
             assertTrue(bytes.toString(Charsets.UTF_8).contains(listOf("image_url","file_data","input_audio","video_url")[index]))
             val textOnly=ChatRequestOptions(OfficialWebSearchRoute.RELAYCORE_GPT_RESPONSES)
-            assertTrue(UniversalChatAttachmentBridge().resolve(ConversationId("text-search"),target,"分析",listOf(attachment),textOnly.requiresAttachmentTextProjection) is ChatAttachmentBridgeResult.Failed)
+            val staged=UniversalChatAttachmentBridge().resolve(ConversationId("text-search"),target,"分析",listOf(attachment),textOnly.requiresAttachmentTextProjection) as ChatAttachmentBridgeResult.Ready
+            assertTrue(staged.providerAttachments.isEmpty())
+            assertTrue(staged.readingAttachments.isNotEmpty() || staged.contextText.isNotBlank())
         }
     }
 

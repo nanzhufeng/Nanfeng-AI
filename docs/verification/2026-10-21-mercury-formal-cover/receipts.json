@@ -1,0 +1,48 @@
+{
+  "verifiedAt": "2026-10-21T10:22:51+08:00",
+  "scope": "User-authorized formal data-preserving overlay; no business operation or provider requests",
+  "codeBaseline": "dd3c8e89921feee8be5bc0185bf3174e6fed4bae WORKTREE",
+  "android": {
+    "installed": true,
+    "completedAt": "2026-10-21T10:15:03+08:00",
+    "package": "com.nanzhufeng.ai",
+    "versionName": "1.0.31",
+    "versionCode": 95,
+    "debuggable": false,
+    "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+    "sha256": "71fa25020f36d70abbb6f3db1a4120026c2334855b1677cef1b059a8237419f9",
+    "exactCandidateBytes": true,
+    "dataMetadataPreserved": true,
+    "remoteTempRemoved": true,
+    "lastUpdateTime": "2026-10-21 10:15:00",
+    "launched": false
+  },
+  "mac": {
+    "versionName": "1.0.31",
+    "dmgSha256": "e4d26640ebfbe8940bdf84d590eef7b430390992e9961c17da3424426489b9b3",
+    "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+    "signatureVerified": true,
+    "dmgVerified": true,
+    "installed": true,
+    "completedAt": "2026-10-21T10:21:27+08:00",
+    "exactCandidateFiles": 4,
+    "dataFiles": 1595,
+    "dataChanges": 0,
+    "dataAdded": 0,
+    "dataRemoved": 0,
+    "oldBundlePreserved": true,
+    "launched": false
+  },
+  "validation": {
+    "sourceInputs": 1001,
+    "postInstallSourceDrift": 0,
+    "priorRegressionReport": "../2026-10-21-mercury-risk-review/REPORT.md",
+    "newProviderCalls": 0,
+    "nativeBusinessUiAcceptance": "NOT RUN",
+    "githubPublished": false
+  },
+  "limitations": [
+    "Android database contents not directly readable; only application and data directory identity verified",
+    "Installation and byte readback do not close existing outer-screen/native business UI or TLS/rate-limit gaps"
+  ]
+}

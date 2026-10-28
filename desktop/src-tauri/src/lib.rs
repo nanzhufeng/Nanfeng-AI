@@ -24,6 +24,7 @@ mod relaycore_web_search_v1;
 mod attachment_web_search_v1;
 mod independent_web_search_v1;
 mod attachment_web_search_execution_v1;
+mod attachment_input_policy_v1;
 mod attachment_search_checkpoint_v1;
 mod desktop_pdf_page_render;
 pub mod desktop_reminder_notification_v1;
@@ -1153,6 +1154,14 @@ struct DesktopOrdinaryChatEgressAuthorization {
     search_service:Option<independent_web_search_v1::ServiceGrant>,
     #[serde(default)]
     retrieval_recipient:Option<relaycore_web_search_v1::RetrievalGrant>,
+    #[serde(default)]
+    attachment_reading:Option<attachment_input_policy_v1::Grant>,
+}
+
+impl DesktopOrdinaryChatEgressAuthorization {
+    fn stored_disclosure_version(&self)->String {
+        if self.attachment_reading.is_some(){format!("{}:{}",self.disclosure_version,attachment_input_policy_v1::VERSION)}else{self.disclosure_version.clone()}
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -13552,14 +13561,15 @@ impl DesktopWorkspaceStore {
                 .copied()
                 .ok_or_else(|| json_error("当前会话指定的模型未启用或缺少凭据，未自动换模型"))?
         } else {
-            auto_chat_routing_v1::candidates(text, mimes)
-                .iter()
+            let mut candidates=auto_chat_routing_v1::candidates(text,mimes);
+            candidates.sort_by_key(|id|presets.iter().find(|p|p.id==id).map(|p|mimes.iter().filter(|mime|!auto_chat_routing_v1::projects_with_search(p.provider_id,p.model_id,mime,web)).count()).unwrap_or(usize::MAX));
+            candidates.iter()
                 .find_map(|id| {
                     presets
                         .iter()
                         .find(|preset| preset.id == id.as_str())
                         .filter(|preset| choose(preset)
-                            && mimes.iter().all(|mime| auto_chat_routing_v1::projects_with_search(preset.provider_id, preset.model_id, mime, web))
+                            && mimes.iter().all(|mime| auto_chat_routing_v1::projects_with_search(preset.provider_id, preset.model_id, mime, web) || attachment_input_policy_v1::recipient(mime).is_some() && settings.iter().any(|setting|setting.provider_id=="OPENROUTER" && setting.enabled) && credentials.presence("OPENROUTER")==desktop_model_service_v1::CredentialPresence::Stored)
                             && (!web || !(matches!(preset.provider_id, "RELAYCORE_CLAUDE" | "RELAYCORE_GEMINI") || preset.provider_id=="RELAYCORE_GPT" && !mimes.is_empty()) ||
                                 settings.iter().any(|setting| setting.provider_id == "OPENROUTER" && setting.enabled)
                                 && credentials.presence("OPENROUTER") == desktop_model_service_v1::CredentialPresence::Stored))
@@ -14193,6 +14203,7 @@ impl DesktopWorkspaceStore {
             message.get("role").and_then(Value::as_str) == Some("assistant")
                 && !ordinary_chat_message_text(message).trim().is_empty()
         });
+        let current_user_id=path.iter().rev().find(|m|m["role"]=="user").and_then(|m|m["id"].as_str()).map(str::to_owned);
         for message in path {
             let role = message.get("role").and_then(Value::as_str).unwrap_or("");
             if !matches!(role, "user" | "assistant") {
@@ -14229,6 +14240,11 @@ impl DesktopWorkspaceStore {
                     .get("displayName")
                     .and_then(Value::as_str)
                     .unwrap_or("附件");
+                let force_text=self.ordinary_chat_web_search_enabled(connection,workspace_id,conversation_id)? && provider_id!="OPENROUTER";
+                if attachment_input_policy_v1::recipient(mime).is_some() && !attachment_input_policy_v1::native(provider_id,model_id,mime,force_text) && message["id"].as_str()!=current_user_id.as_deref() {
+                    content.push(json!({"type":"text","text":"历史附件本次未重新授权辅助识读；请结合已保存的历史回答，不得猜测未提供的细节。"}));
+                    continue;
+                }
                 let path = self.root.join("assets").join(hash);
                 let bytes = fs::read(&path).map_err(|_| json_error("附件私有副本缺失"))?;
                 if sha256(&bytes) != hash {
@@ -14238,30 +14254,29 @@ impl DesktopWorkspaceStore {
                     let body = attachment_document_text_v1::extract(&bytes, mime)
                         .map_err(|error| json_error(&error))?;
                     content.push(json!({"type":"text","text":format!("\n\n### 附件：{display_name}\n{body}")}));
-                } else if matches!(
-                    mime,
-                    "image/jpeg" | "image/png" | "image/webp" | "image/gif"
-                ) && (matches!(provider_id, "OPENROUTER" | "QWEN")
-                    || (provider_id == "DEEPSEEK" && model_id == "deepseek-flash"))
-                {
-                    if provider_id == "DEEPSEEK" && bytes.len() > 32 * 1024 * 1024 {
-                        return Err(json_error("DeepSeek 图片超过 32 MiB 上限"));
-                    }
-                    content.push(json!({"type":"image_url","image_url":{"url":format!("data:{mime};base64,{}", BASE64.encode(bytes))}}));
-                } else if mime == "application/pdf" && provider_id != "OPENROUTER" {
-                    let body=attachment_document_text_v1::pdf_text(&bytes).map_err(|error| json_error(&error))?;
-                    content.push(json!({"type":"text","text":format!("\n\n### 附件：{display_name}\n{body}")}));
-                } else if mime == "application/pdf" && provider_id == "OPENROUTER" {
-                    content.push(json!({"type":"file","file":{"filename":display_name,"file_data":format!("data:application/pdf;base64,{}", BASE64.encode(&bytes))}}));
-                    if self.ordinary_chat_web_search_enabled(connection,workspace_id,conversation_id)? {
-                        if let Ok(text)=attachment_document_text_v1::pdf_text(&bytes) {
-                            content.push(json!({"type":"text","text":format!("本机 PDF 文本层\n### 附件：{display_name}\n{text}")}));
+                } else if attachment_input_policy_v1::recipient(mime).is_some() {
+                    content.push(json!({"type":"text","text":format!("附件原件：{display_name}（{mime}）")}));
+                    if mime=="application/pdf" {
+                        let local=attachment_document_text_v1::pdf_projection(&bytes).map_err(|error|json_error(&error))?;
+                        if !attachment_input_policy_v1::native(provider_id,model_id,mime,force_text) {
+                            if let Some(text)=local.as_ref() {
+                                content.push(json!({"type":"text","text":format!("本机 PDF 文本层\n### 附件：{display_name}\n{text}")}));
+                                continue;
+                            }
                         }
+                        content.push(json!({"type":"file","file":{"filename":display_name,"file_data":format!("data:application/pdf;base64,{}",BASE64.encode(&bytes))}}));
+                        if !force_text {if let Some(text)=local {content.push(json!({"type":"text","text":format!("本机 PDF 文本层\n### 附件：{display_name}\n{text}")}));}}
+                    } else if mime.starts_with("image/") {
+                        if provider_id=="DEEPSEEK" && bytes.len()>32*1024*1024 {return Err(json_error("DeepSeek 图片超过 32 MiB 上限"));}
+                        content.push(json!({"type":"image_url","image_url":{"url":format!("data:{mime};base64,{}",BASE64.encode(&bytes))}}));
+                    } else if mime.starts_with("video/") {
+                        content.push(json!({"type":"video_url","video_url":{"url":format!("data:{mime};base64,{}",BASE64.encode(&bytes))}}));
+                    } else {
+                        let format=match mime {"audio/mpeg"|"audio/mp3"=>"mp3","audio/x-wav"=>"wav","audio/mp4"=>"m4a",_=>mime.strip_prefix("audio/").unwrap_or("")};
+                        content.push(json!({"type":"input_audio","input_audio":{"data":BASE64.encode(&bytes),"format":format}}));
                     }
                 } else {
-                    return Err(json_error(
-                        "当前模型不支持该附件原文投影，未发送缩略图或封面代替",
-                    ));
+                    return Err(json_error("附件格式无法完整读取，未发送缩略图或封面代替"));
                 }
             }
             result.push(json!({"role":role,"content":content}));
@@ -14506,6 +14521,10 @@ impl DesktopWorkspaceStore {
             &provider_id,
             &model_id,
         )?;
+        let reading=attachment_web_search_execution_v1::reading_recipients(&provider_id,&model_id,&web_search_route,&request_messages);
+        if !reading.is_empty() && !args.egress_authorization.as_ref().is_some_and(|r|r.approved_at_ms>0 && r.attachment_reading.as_ref().is_some_and(|g|g.allows(&provider_id,&model_id,text,&args.attachment_ids,&reading))) {
+            return Err(json_error("本次附件辅助识读接收方或材料未获得明确授权；未发送"));
+        }
         let request_fingerprint = sha256(canonical_json(&request_messages)?.as_bytes());
         let after_hash = refresh_exchange_hash(&mut after)?;
         validate_exchange(&after)?;
@@ -14523,7 +14542,7 @@ impl DesktopWorkspaceStore {
             )
             .map_err(|_| json_error("无法更新聊天 hash"))?;
         transaction.execute("INSERT INTO domain_intents(intent_id,workspace_id,entity,action,object_id,expected_revision,before_exchange_json,after_exchange_json,before_semantic_hash,after_semantic_hash,undone,created_at,result_revision) VALUES(?1,?2,'conversation',?3,?4,?5,?6,?7,?8,?9,0,?10,?11)", params![intent_id,args.workspace_id,mutation.action,conversation_id,args.expected_revision,before_text,canonical_json(&after)?,semantic_hash(&serde_json::from_str::<Value>(&before_text).map_err(|_| json_error("原会话无效"))?)?,after_hash,local_now(),revision + 1]).map_err(|_| json_error("无法记录聊天 intent"))?;
-        transaction.execute("INSERT INTO desktop_ordinary_chat_attempts(attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,retry_count,idempotency_key,request_fingerprint,provider_id,requested_model_id,model_display_name,state,created_at_ms,updated_at_ms,web_search_route,egress_approved_at_ms,egress_disclosure_version) VALUES(?1,?2,?3,?4,?5,0,?6,?7,?8,?9,?10,'PENDING',?11,?11,?12,?13,?14)", params![attempt_id,args.workspace_id,conversation_id,user_message_id,assistant_message_id,idempotency_key,request_fingerprint,provider_id,model_id,model_display_name,now,web_search_route,args.egress_authorization.as_ref().map(|value| value.approved_at_ms),args.egress_authorization.as_ref().map(|value| value.disclosure_version.as_str())]).map_err(|_| json_error("无法记录聊天 Attempt"))?;
+        transaction.execute("INSERT INTO desktop_ordinary_chat_attempts(attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,retry_count,idempotency_key,request_fingerprint,provider_id,requested_model_id,model_display_name,state,created_at_ms,updated_at_ms,web_search_route,egress_approved_at_ms,egress_disclosure_version) VALUES(?1,?2,?3,?4,?5,0,?6,?7,?8,?9,?10,'PENDING',?11,?11,?12,?13,?14)", params![attempt_id,args.workspace_id,conversation_id,user_message_id,assistant_message_id,idempotency_key,request_fingerprint,provider_id,model_id,model_display_name,now,web_search_route,args.egress_authorization.as_ref().map(|value| value.approved_at_ms),args.egress_authorization.as_ref().map(|value| value.stored_disclosure_version())]).map_err(|_| json_error("无法记录聊天 Attempt"))?;
         for (ordinal, source) in selected_sources.iter().enumerate() {
             transaction.execute(
                 "INSERT INTO desktop_ordinary_chat_context_sources(attempt_id,ordinal,source_kind,source_id,title) VALUES(?1,?2,?3,?4,?5)",
@@ -14714,11 +14733,13 @@ impl DesktopWorkspaceStore {
                 "OPENROUTER",
                 preset.model_id,
             )?;
+            let reading=attachment_web_search_execution_v1::reading_recipients("OPENROUTER",preset.model_id,&web_search_route,&request_messages);
+            if !reading.is_empty() && !args.egress_authorization.as_ref().is_some_and(|r|r.approved_at_ms>0 && r.attachment_reading.as_ref().is_some_and(|g|g.allows("OPENROUTER",preset.model_id,text,&args.attachment_ids,&reading))) {return Err(json_error("此对比附件需要按回答模型分别授权辅助识读；请选择单模型发送"));}
             let idempotency_key = format!("compare-{execution_id}-{logical_model}");
             let request_fingerprint = sha256(canonical_json(&request_messages)?.as_bytes());
             transaction.execute(
                 "INSERT INTO desktop_ordinary_chat_attempts(attempt_id,workspace_id,conversation_id,user_message_id,assistant_message_id,retry_count,idempotency_key,request_fingerprint,provider_id,requested_model_id,model_display_name,state,created_at_ms,updated_at_ms,web_search_route,compare_execution_id,compare_logical_model,egress_approved_at_ms,egress_disclosure_version) VALUES(?1,?2,?3,?4,?5,0,?6,?7,'OPENROUTER',?8,?9,'PENDING',?10,?10,?11,?12,?13,?14,?15)",
-                params![attempt_id,args.workspace_id,conversation_id,user_message_id,assistant_message_id,idempotency_key,request_fingerprint,preset.model_id,preset.display_name,now,web_search_route,execution_id,logical_model,args.egress_authorization.as_ref().map(|value| value.approved_at_ms),args.egress_authorization.as_ref().map(|value| value.disclosure_version.as_str())],
+                params![attempt_id,args.workspace_id,conversation_id,user_message_id,assistant_message_id,idempotency_key,request_fingerprint,preset.model_id,preset.display_name,now,web_search_route,execution_id,logical_model,args.egress_authorization.as_ref().map(|value| value.approved_at_ms),args.egress_authorization.as_ref().map(|value| value.stored_disclosure_version())],
             ).map_err(|_| json_error("无法记录 Compare branch Attempt"))?;
             for (ordinal, source) in selected_sources.iter().enumerate() {
                 transaction.execute(
@@ -14875,9 +14896,9 @@ impl DesktopWorkspaceStore {
         attempt_id: &str,
         mock_endpoint: Option<&str>,
     ) -> Result<DesktopOrdinaryChatPrepared, String> {
-        self.prepare_ordinary_chat_retry_with_service(attempt_id,mock_endpoint,None,None)
+        self.prepare_ordinary_chat_retry_with_service(attempt_id,mock_endpoint,None,None,None)
     }
-    fn prepare_ordinary_chat_retry_with_service(&self,attempt_id:&str,mock_endpoint:Option<&str>,service_grant:Option<independent_web_search_v1::ServiceGrant>,retrieval_grant:Option<relaycore_web_search_v1::RetrievalGrant>)->Result<DesktopOrdinaryChatPrepared,String> {
+    fn prepare_ordinary_chat_retry_with_service(&self,attempt_id:&str,mock_endpoint:Option<&str>,service_grant:Option<independent_web_search_v1::ServiceGrant>,retrieval_grant:Option<relaycore_web_search_v1::RetrievalGrant>,reading_grant:Option<attachment_input_policy_v1::Grant>)->Result<DesktopOrdinaryChatPrepared,String> {
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction()
@@ -14986,7 +15007,7 @@ impl DesktopWorkspaceStore {
             .find(|message| {
                 message.get("id").and_then(Value::as_str) == Some(previous.user_message_id.as_str())
             })
-            .ok_or_else(|| json_error("重试原用户消息不存在"))?;
+            .ok_or_else(|| json_error("重试原用户消息不存在"))?.clone();
         let has_attachments = original_user
             .get("blocks")
             .and_then(Value::as_array)
@@ -15004,14 +15025,15 @@ impl DesktopWorkspaceStore {
             has_attachments,
         )
         .to_owned();
+        // Validate actual prepared parts below: readable PDF text may avoid the optional recipient.
         if web_search_route=="RELAYCORE_COMPANION" && mock_endpoint.is_none() {
             let ids=original_user["blocks"].as_array().into_iter().flatten().filter_map(|b|b["asset"]["id"].as_str()).map(str::to_owned).collect::<Vec<_>>();
-            if !retrieval_grant.as_ref().is_some_and(|g|g.allows(&ordinary_chat_message_text(original_user),&ids)){return Err(json_error("Luna检索授权与原材料不一致；未重试"));}
+            if !retrieval_grant.as_ref().is_some_and(|g|g.allows(&ordinary_chat_message_text(&original_user),&ids)){return Err(json_error("Luna检索授权与原材料不一致；未重试"));}
         }
         if service_grant.is_some() {return Err(json_error("旧搜索服务授权不适用于当前重试；请重新披露接收方"));}
         if let Some(grant)=service_grant.as_ref() {
             let mut ids=original_user["blocks"].as_array().into_iter().flatten().filter_map(|b|b["asset"]["id"].as_str()).map(str::to_owned).collect::<Vec<_>>();ids.sort();
-            let fingerprint=sha256(serde_json::to_string(&json!([ordinary_chat_message_text(original_user).trim(),ids])).map_err(|_|json_error("原材料指纹无效"))?.as_bytes());
+            let fingerprint=sha256(serde_json::to_string(&json!([ordinary_chat_message_text(&original_user).trim(),ids])).map_err(|_|json_error("原材料指纹无效"))?.as_bytes());
             if !has_attachments || web_search_route=="NONE" || !grant.allows(&fingerprint) {return Err(json_error("新检索服务授权与原材料不一致；未重试"));}
             self.require_independent_search_config()?;
         }
@@ -15038,6 +15060,9 @@ impl DesktopWorkspaceStore {
             &provider_id,
             &model_id,
         )?;
+        let reading=attachment_web_search_execution_v1::reading_recipients(&provider_id,&model_id,&web_search_route,&request_messages);
+        let ids=original_user["blocks"].as_array().into_iter().flatten().filter_map(|b|b["asset"]["id"].as_str()).map(str::to_owned).collect::<Vec<_>>();
+        if !reading.is_empty() && !reading_grant.as_ref().is_some_and(|g|g.allows(&provider_id,&model_id,&ordinary_chat_message_text(&original_user),&ids,&reading)) {return Err(json_error("原附件辅助识读接收方或材料未授权；未重试"));}
         let request_fingerprint = sha256(canonical_json(&request_messages)?.as_bytes());
         let hash = refresh_exchange_hash(&mut exchange)?;
         validate_exchange(&exchange)?;
@@ -19605,7 +19630,8 @@ async fn execute_desktop_ordinary_chat_prepared(
             None,
         )?;
     emit_ordinary_chat_event(&app, &running, &client_submission_id);
-    let search_secret = if prepared.web_search_route == "RELAYCORE_COMPANION" || prepared.search_service.is_some() {
+    let needs_reading=prepared.provider_id!="OPENROUTER" && !attachment_web_search_execution_v1::reading_recipients(&prepared.provider_id,&prepared.model_id,&prepared.web_search_route,&prepared.messages).is_empty();
+    let search_secret = if prepared.web_search_route == "RELAYCORE_COMPANION" || prepared.search_service.is_some() || needs_reading {
         let config = if prepared.search_service.is_some(){state.store.lock().map_err(|_|json_error("Desktop store 被锁定"))?.require_independent_search_config()}else{state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.require_relay_search_config()};
         if config.is_err() {
             let failed = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.update_ordinary_chat_message(&prepared.projection.attempt_id, "", "FAILED", None, None, Some("WEB_SEARCH_COMPANION_NOT_CONFIGURED"))?;
@@ -19733,7 +19759,7 @@ async fn execute_desktop_ordinary_chat_prepared(
         };
         let service_grant=prepared.search_service.clone();
         let scoped_search_requested=service_grant.is_none() && attachment_web_search_execution_v1::required(&request);
-        let companion_requested=request.web_search_route=="RELAYCORE_COMPANION" || scoped_search_requested;
+        let companion_requested=request.web_search_route=="RELAYCORE_COMPANION" || (request.web_search_route!="NONE" && scoped_search_requested);
         let transport = tauri::async_runtime::block_on(async {
             if let Some(grant)=service_grant {
                 let fingerprint=grant.material_fingerprint.clone();
@@ -19892,7 +19918,7 @@ async fn submit_desktop_ordinary_chat(
         .as_ref()
         .ok_or_else(|| json_error("本次发送未形成外发授权事实；未向服务商建立连接"))?;
     if authorization.approved_at_ms <= 0
-        || !matches!(authorization.disclosure_version.split(":auto=").next().unwrap_or(""), "normal-chat-egress-v1" | "normal-chat-egress-v3" | relaycore_web_search_v1::DISCLOSURE_VERSION)
+        || !matches!(authorization.disclosure_version.split(":auto=").next().unwrap_or(""), "normal-chat-egress-v1" | "normal-chat-egress-v3" | relaycore_web_search_v1::DISCLOSURE_VERSION | attachment_web_search_execution_v1::IMAGE_READING_VERSION)
     {
         return Err(json_error("本次发送授权事实无效；未向服务商建立连接"));
     }
@@ -20088,6 +20114,9 @@ async fn retry_desktop_ordinary_chat(
     args: DesktopOrdinaryChatRetryArgs,
 ) -> Result<DesktopOrdinaryChatAttemptProjection, String> {
     state.require_external_access()?;
+    let image_reading=args.egress_authorization.as_ref().is_some_and(|r|r.attachment_reading.is_some());
+    if image_reading && !args.egress_authorization.as_ref().is_some_and(|r|r.approved_at_ms>0) {return Err(json_error("本次附件识读授权已失效；未重试"));}
+
     {
         let store = state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?;
         let connection = store.connection()?;
@@ -20107,12 +20136,13 @@ async fn retry_desktop_ordinary_chat(
             state.ordinary_chat_mock_endpoint.as_deref(),
             args.egress_authorization.as_ref().and_then(|r|r.search_service.clone()),
             args.egress_authorization.as_ref().and_then(|r|r.retrieval_recipient.clone()),
+            args.egress_authorization.as_ref().and_then(|r|r.attachment_reading.clone()),
         )?;
-    if prepared.web_search_route == "RELAYCORE_COMPANION" {
+    if prepared.web_search_route == "RELAYCORE_COMPANION" || image_reading {
         let receipt = args.egress_authorization.as_ref().ok_or_else(|| json_error("检索授权缺失"))?;
         state.store.lock().map_err(|_| json_error("Desktop store 被锁定"))?.connection()?.execute(
             "UPDATE desktop_ordinary_chat_attempts SET egress_approved_at_ms=?1,egress_disclosure_version=?2 WHERE attempt_id=?3",
-            params![receipt.approved_at_ms,receipt.disclosure_version,args.attempt_id],
+            params![receipt.approved_at_ms,receipt.stored_disclosure_version(),args.attempt_id],
         ).map_err(|_| json_error("恢复授权未保存；未发送"))?;
     }
     execute_desktop_ordinary_chat_prepared(app, prepared).await
@@ -25585,7 +25615,7 @@ mod tests {
         let denied=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs {
             workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,
             text:"public local fixture".into(),attachment_ids:vec![],model_id:None,tone_override:None,web_search_override:Some(false),
-            egress_authorization:Some(DesktopOrdinaryChatEgressAuthorization {approved_at_ms:1,disclosure_version:"normal-chat-egress-v1:auto=RELAYCORE_GPT_6_ASTRA".into(),client_submission_id:None,search_service:None, retrieval_recipient:None}),
+            egress_authorization:Some(DesktopOrdinaryChatEgressAuthorization {approved_at_ms:1,disclosure_version:"normal-chat-egress-v1:auto=RELAYCORE_GPT_6_ASTRA".into(),client_submission_id:None,search_service:None, retrieval_recipient:None,attachment_reading:None}),
         },None).err().expect("changed Auto parent must fail before external request");
         assert!(denied.contains("Auto 配置已变化"));
 
@@ -28528,11 +28558,11 @@ mod tests {
                     project_id: None,
                     expected_revision: conversation["revision"].as_u64(),
                     text: "read image".into(),
-                    attachment_ids: vec![attachment.id],
+                    attachment_ids: vec![attachment.id.clone()],
                     model_id: None,
                     tone_override: None,
                     web_search_override: None,
-                    egress_authorization: None,
+                    egress_authorization: Some(DesktopOrdinaryChatEgressAuthorization{approved_at_ms:1,disclosure_version:"normal-chat-egress-v1".into(),client_submission_id:None,search_service:None,retrieval_recipient:None,attachment_reading:Some(attachment_input_policy_v1::Grant{disclosure_version:attachment_input_policy_v1::VERSION.into(),material_fingerprint:relaycore_web_search_v1::material_fingerprint("read image",&[attachment.id.clone()]),answer_provider_id:"OPENROUTER".into(),answer_model_id:"openai/gpt-5.6-terra".into(),recipients:vec![attachment_input_policy_v1::recipient("image/png").unwrap()]})}),
                 },
                 Some("http://127.0.0.1:1/chat/completions"),
             )
@@ -28558,7 +28588,8 @@ mod tests {
             .0
             .to_string()
             .contains(&BASE64.encode(&png)));
-        assert!(project("deepseek-v4-pro").is_err());
+        let staged=project("deepseek-v4-pro").unwrap().0;
+        assert_eq!(attachment_web_search_execution_v1::reading_recipients("DEEPSEEK","deepseek-v4-pro","NONE",&staged),vec![attachment_input_policy_v1::recipient("image/png").unwrap()]);
         assert_eq!(
             canonical_desktop_model_choice("deepseek-v4-flash"),
             "DEEPSEEK_V4_FLASH"
@@ -28627,10 +28658,10 @@ mod tests {
         let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:Some(cid.clone()),project_id:None,expected_revision:revision,text:text.into(),attachment_ids:ids,model_id:None,tone_override:None,web_search_override:None,egress_authorization:None},Some("http://127.0.0.1:1/chat/completions")).unwrap();
         let attempt=prepared.projection.attempt_id.clone();store.update_ordinary_chat_message(&attempt,"","UNKNOWN",None,None,Some("NETWORK")).unwrap();let root=store.root.clone();drop(store);let reopened=DesktopWorkspaceStore::open(root).unwrap();
         assert_eq!(DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),&attempt).unwrap().state,"UNKNOWN");
-        let mut old=grant.clone();old.disclosure_version="normal-chat-egress-v2".into();assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(old),None).is_err());
-        let mut changed=grant.clone();changed.material_fingerprint="b".repeat(64);assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(changed),None).is_err());
-        assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(grant),None).is_err());
-        let retry=reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),None,None).unwrap();
+        let mut old=grant.clone();old.disclosure_version="normal-chat-egress-v2".into();assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(old),None,None).is_err());
+        let mut changed=grant.clone();changed.material_fingerprint="b".repeat(64);assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(changed),None,None).is_err());
+        assert!(reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),Some(grant),None,None).is_err());
+        let retry=reopened.prepare_ordinary_chat_retry_with_service(&attempt,Some("http://127.0.0.1:1/chat/completions"),None,None,None).unwrap();
         assert_eq!(retry.provider_id,prepared.provider_id);assert_eq!(retry.model_id,prepared.model_id);assert!(retry.search_service.is_none());
         assert_eq!(attachment_web_search_v1::current_material(&retry.messages),attachment_web_search_v1::current_material(&prepared.messages));assert!(retry.messages.to_string().contains("Python 3.14.0"));assert!(retry.messages.to_string().contains("Rust 1.90.0"));
     }
@@ -30214,22 +30245,25 @@ mod search_routing_target_tests {
         let files=std::env::var("NFAI_OWNER_FILES").unwrap_or_else(|_|"public-02.md,public-10.docx".into());let mut ids=Vec::new();
         for name in files.split(',').filter(|name|!name.is_empty()) {let a=store.import_conversation_attachment(DesktopAttachmentImportArgs{workspace_id:imported.summary.id.clone(),selected_path:fixture_dir.join(name).to_string_lossy().into_owned()}).unwrap();ids.push(a.id);}
         let text_value=std::env::var("NFAI_OWNER_TEXT").unwrap_or_else(|_|"分析本次全部公开附件，逐项实际联网核验发布日期、数字与主张，用简短中文给出结论和对应官方来源。".into());let text=text_value.as_str();
+        let web=std::env::var("NFAI_OWNER_WEB").as_deref()!=Ok("0");
+        let disclosure=if web && (relaycore_web_search_v1::requires_companion(p.id,true) || p.provider_id=="RELAYCORE_GPT" && !files.is_empty()) {relaycore_web_search_v1::DISCLOSURE_VERSION}else{"normal-chat-egress-v1"};
         let grant=relaycore_web_search_v1::RetrievalGrant{disclosure_version:relaycore_web_search_v1::DISCLOSURE_VERSION.into(),provider_id:"OPENROUTER".into(),preset_id:relaycore_web_search_v1::RETRIEVAL_PRESET.into(),model_id:relaycore_web_search_v1::RETRIEVAL_MODEL.into(),material_fingerprint:relaycore_web_search_v1::material_fingerprint(text,&ids)};
-        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:text.into(),attachment_ids:ids,model_id:Some(p.id.into()),tone_override:None,web_search_override:Some(true),egress_authorization:Some(DesktopOrdinaryChatEgressAuthorization{approved_at_ms:system_now_millis(),disclosure_version:relaycore_web_search_v1::DISCLOSURE_VERSION.into(),client_submission_id:None,search_service:None,retrieval_recipient:Some(grant)})},None).unwrap();
+        let reading=attachment_input_policy_v1::Grant{disclosure_version:attachment_input_policy_v1::VERSION.into(),material_fingerprint:relaycore_web_search_v1::material_fingerprint(text,&ids),answer_provider_id:p.provider_id.into(),answer_model_id:p.model_id.into(),recipients:vec![attachment_input_policy_v1::recipient("image/png").unwrap(),attachment_input_policy_v1::recipient("audio/wav").unwrap()]};
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:text.into(),attachment_ids:ids,model_id:Some(p.id.into()),tone_override:None,web_search_override:Some(web),egress_authorization:Some(DesktopOrdinaryChatEgressAuthorization{approved_at_ms:system_now_millis(),disclosure_version:disclosure.into(),client_submission_id:None,search_service:None,retrieval_recipient:Some(grant),attachment_reading:Some(reading)})},None).unwrap();
         assert_eq!(prepared.provider_id,p.provider_id);assert_eq!(prepared.model_id,p.model_id);
-        let request=desktop_ordinary_chat_v1::TransportRequest{endpoint:prepared.endpoint.clone(),provider_id:prepared.provider_id.clone(),model_id:prepared.model_id.clone(),messages:prepared.messages.clone(),idempotency_key:prepared.idempotency_key.clone(),max_output_tokens:std::env::var("NFAI_OWNER_OUTPUT_LIMIT").ok().map(|v|v.parse::<u32>().expect("test output limit")).map(|v|{assert!((32..=2048).contains(&v));v}).unwrap_or_else(||desktop_ordinary_chat_v1::ordinary_output_token_limit(p.provider_id,p.model_id)),web_search_route:prepared.web_search_route.clone(),structured_json:false,disable_thinking:false,grounded_answer:false,explicit_search_query:None};
+        let request=desktop_ordinary_chat_v1::TransportRequest{endpoint:prepared.endpoint.clone(),provider_id:prepared.provider_id.clone(),model_id:prepared.model_id.clone(),messages:prepared.messages.clone(),idempotency_key:prepared.idempotency_key.clone(),max_output_tokens:std::env::var("NFAI_OWNER_OUTPUT_LIMIT").ok().map(|v|v.parse::<u32>().expect("test output limit")).map(|v|{assert!((32..=8192).contains(&v));v}).unwrap_or_else(||desktop_ordinary_chat_v1::ordinary_output_token_limit(p.provider_id,p.model_id)),web_search_route:prepared.web_search_route.clone(),structured_json:false,disable_thinking:false,grounded_answer:false,explicit_search_query:None};
         let plan=attachment_web_search_v1::from_messages(&request.messages);let fingerprint=attachment_web_search_execution_v1::cache_fingerprint(&request);let attempt=&prepared.projection.attempt_id;
         let cache=attachment_search_checkpoint_v1::Callbacks{load:|item:&str|store.load_attachment_search_checkpoint(attempt,&fingerprint,item).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),save:|item:&str,value:attachment_search_checkpoint_v1::Entry|store.save_attachment_search_checkpoint(attempt,&fingerprint,item,value).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"}),coverage:|planned,covered|store.record_attachment_search_coverage(attempt,planned,covered).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_PERSISTENCE"})};
-        let key=store.credentials.with_secret(p.provider_id,|k|Ok(Zeroizing::new(k.to_vec()))).unwrap();let search=if prepared.web_search_route=="RELAYCORE_COMPANION" {Some(store.credentials.with_secret("OPENROUTER",|k|Ok(Zeroizing::new(k.to_vec()))).unwrap())}else{None};
+        let key=store.credentials.with_secret(p.provider_id,|k|Ok(Zeroizing::new(k.to_vec()))).unwrap();let search=if p.provider_id!="OPENROUTER" && (prepared.web_search_route=="RELAYCORE_COMPANION" || attachment_web_search_execution_v1::visual_reading_required(&request)) {Some(store.credentials.with_secret("OPENROUTER",|k|Ok(Zeroizing::new(k.to_vec()))).unwrap())}else{None};
         let mut physical=Vec::new();let runtime=tokio::runtime::Runtime::new().unwrap();
-        let result=if attachment_web_search_execution_v1::required(&request) {runtime.block_on(attachment_web_search_execution_v1::execute(request,key,search,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),cache,|r,reply|{
+        let result=if attachment_web_search_execution_v1::required(&request) {runtime.block_on(attachment_web_search_execution_v1::execute_cached_core(request,key,search,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),cache,|r,reply|{
             store.record_scoped_search_usage(&prepared.projection,r,reply).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})?;
-            if let Some(c)=reply {physical.push(json!({"requested":r.model_id,"returned":c.actual_model_id,"nativeSources":c.native_sources,"reportedMicros":c.reported_cost_micros,"input":c.usage.input_tokens,"output":c.usage.output_tokens}));}Ok(())
-        },||store.record_answer_pending(&prepared.projection).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"}),|_|Ok(())))} else if let Some(search_secret)=search {
+            if let Some(c)=reply {physical.push(json!({"requested":r.model_id,"returned":c.actual_model_id,"nativeSources":c.native_sources,"reportedMicros":c.reported_cost_micros,"input":c.usage.input_tokens,"output":c.usage.output_tokens,"publicObservation":c.text}));}Ok(())
+        },|r,k,cancel|async move {desktop_ordinary_chat_v1::execute_streaming(r,k,cancel,|_|Ok(())).await},|r,k,cancel|async {store.record_answer_pending(&prepared.projection).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})?;desktop_ordinary_chat_v1::execute_streaming(r,k,cancel,|_|Ok(())).await}))} else if let Some(search_secret)=search {
             // Mirror the production no-attachment companion branch, including both physical calls.
             runtime.block_on(relaycore_web_search_v1::execute_companion(request,key,search_secret,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),|reply| {
                 store.record_relay_search_usage(&prepared.projection,reply).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"})?;
-                if let Some(c)=reply {physical.push(json!({"requested":relaycore_web_search_v1::RETRIEVAL_MODEL,"returned":c.actual_model_id,"nativeSources":c.native_sources,"reportedMicros":c.reported_cost_micros,"input":c.usage.input_tokens,"output":c.usage.output_tokens}));}Ok(())
+                if let Some(c)=reply {physical.push(json!({"requested":relaycore_web_search_v1::RETRIEVAL_MODEL,"returned":c.actual_model_id,"nativeSources":c.native_sources,"reportedMicros":c.reported_cost_micros,"input":c.usage.input_tokens,"output":c.usage.output_tokens,"publicObservation":c.text}));}Ok(())
             },||store.record_answer_pending(&prepared.projection).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"}),|_|Ok(()))).map(|reply|attachment_web_search_execution_v1::ScopedCompleted{complete:true,planned:0,covered:0,reply})
         } else {
             store.record_answer_pending(&prepared.projection).unwrap();
@@ -30240,18 +30274,97 @@ mod search_routing_target_tests {
         let companion_sources=physical.iter().flat_map(|call|call["nativeSources"].as_array().into_iter().flatten().cloned()).collect::<Vec<_>>();
         let mut row=json!({"unusedRelayGptCredentialPresent":store.credentials.presence("RELAYCORE_GPT")==desktop_model_service_v1::CredentialPresence::Stored,"preset":p.id,"requested":p.model_id,"planned":plan.items.len(),"files":files,"physical":physical,"status":"UNKNOWN"});
         match result {
-            Ok(r)=>{row["status"]=json!(if r.complete{"COMPLETED"}else{"PARTIAL"});row["covered"]=json!(r.covered);row["actualModel"]=json!(r.reply.actual_model_id);row["publicAnswer"]=json!(r.reply.text);row["sources"]=if r.reply.native_sources.is_empty() && prepared.web_search_route=="RELAYCORE_COMPANION" {json!(companion_sources)} else {json!(r.reply.native_sources)};row["sourceOrigin"]=json!(if prepared.web_search_route=="RELAYCORE_COMPANION" {"RETRIEVAL_NATIVE"}else{"ANSWER_NATIVE"});row["webProof"]=json!(r.reply.web_search_verified);store.update_ordinary_chat_message(attempt,&r.reply.text,if r.complete {"COMPLETE"} else {"FAILED"},r.reply.reasoning.as_deref(),Some(&r.reply),if r.complete {None} else {Some("WEB_SEARCH_SCOPE_INCOMPLETE")}).unwrap();store.complete_ordinary_chat_accounting(attempt,&r.reply).unwrap();},
+            Ok(r)=>{row["status"]=json!(if r.complete{"COMPLETED"}else{"PARTIAL"});row["planned"]=json!(r.planned);row["covered"]=json!(r.covered);row["actualModel"]=json!(r.reply.actual_model_id);row["publicAnswer"]=json!(r.reply.text);row["sources"]=if r.reply.native_sources.is_empty() && prepared.web_search_route=="RELAYCORE_COMPANION" {json!(companion_sources)} else {json!(r.reply.native_sources)};row["sourceOrigin"]=json!(if prepared.web_search_route=="RELAYCORE_COMPANION" {"RETRIEVAL_NATIVE"}else{"ANSWER_NATIVE"});row["webProof"]=json!(r.reply.web_search_verified);store.update_ordinary_chat_message(attempt,&r.reply.text,if r.complete {"COMPLETE"} else {"FAILED"},r.reply.reasoning.as_deref(),Some(&r.reply),if r.complete {None} else {Some("WEB_SEARCH_SCOPE_INCOMPLETE")}).unwrap();store.complete_ordinary_chat_accounting(attempt,&r.reply).unwrap();},
             Err(e)=>{row["error"]=json!(format!("{e:?}"));let (code,state)=match &e {desktop_ordinary_chat_v1::Failure::Explicit{code,..}|desktop_ordinary_chat_v1::Failure::Quantified{code,..}=>(*code,"FAILED"),desktop_ordinary_chat_v1::Failure::Unknown{code}=>(*code,"UNKNOWN"),_=>("USER_CANCELLED","CANCELLED")};row["status"]=json!(state);let facts=e.quantified_reply();if let Some(r)=facts {row["actualModel"]=json!(r.actual_model_id);row["publicAnswer"]=json!(r.text);row["webProof"]=json!(r.web_search_verified);row["sources"]=json!(r.native_sources);}store.update_ordinary_chat_message(attempt,facts.map(|r|r.text.as_str()).unwrap_or(""),state,facts.and_then(|r|r.reasoning.as_deref()),facts,Some(code)).unwrap();if let Some(r)=facts {store.complete_ordinary_chat_accounting(attempt,r).unwrap();}}
         }
         let message_for=|projection:WorkspaceProjection|projection.exchange["conversations"].as_array().unwrap().iter().flat_map(|c|c["messages"].as_array().into_iter().flatten()).find(|m|m["id"].as_str()==Some(prepared.projection.assistant_message_id.as_str())).unwrap().clone();
         let before_reopen=message_for(store.workspace_projection(&imported.summary.id).unwrap());
         let root=store.root.clone();let id=attempt.clone();drop(store);let reopened=DesktopWorkspaceStore::open(root.clone()).unwrap();let ledger=usage_ledger_v1::Ledger::open(&root.join("usage-ledger")).unwrap();let facts=ledger.entries_for_execution(&id).unwrap();row["ledgerCalls"]=json!(facts.iter().map(|f|json!({"model":f.requested_model_id,"actual":f.actual_model_id,"micros":f.charge_micros,"currency":f.currency_code,"source":f.cost_source,"kind":f.kind.as_str()})).collect::<Vec<_>>());
-        let restored=DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),&id).unwrap();row["reopenedState"]=json!(restored.state);row["reopenedModel"]=json!(restored.actual_model_id);row["reopenedCheckpoints"]=json!(plan.items.iter().filter(|i|reopened.load_attachment_search_checkpoint(&id,&fingerprint,&i.id).unwrap().is_some()).count());
+        let restored=DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),&id).unwrap();row["reopenedState"]=json!(restored.state);row["reopenedModel"]=json!(restored.actual_model_id);row["reopenedCheckpoints"]=json!((1..=row["planned"].as_u64().unwrap_or(0)).filter(|ordinal|reopened.load_attachment_search_checkpoint(&id,&fingerprint,&format!("A{ordinal}")).unwrap().is_some()).count());
         let after_reopen=message_for(reopened.workspace_projection(&imported.summary.id).unwrap());
         row["reopenedAccountingCalls"]=after_reopen["accountingCalls"].clone();row["reopenedMessageExact"]=json!(ordinary_chat_message_text(&before_reopen)==ordinary_chat_message_text(&after_reopen));row["reopenedAccountingExact"]=json!(before_reopen["accountingCalls"]==after_reopen["accountingCalls"]);row["changedProjectionFields"]=json!(before_reopen.as_object().unwrap().keys().filter(|k|before_reopen[*k]!=after_reopen[*k]).collect::<Vec<_>>());row["reopenedWebProof"]=json!(restored.web_search_verified);
         let restored_text=ordinary_chat_message_text(&after_reopen);row["reopenedSourcesPresent"]=json!(row["sources"].as_array().is_some_and(|sources|!sources.is_empty() && sources.iter().all(|s|s[1].as_str().is_some_and(|url|restored_text.contains(url)))));
         fs::write(output,serde_json::to_vec_pretty(&row).unwrap()).unwrap();println!("LUNA_OWNER preset={} status={} covered={} sources={} ledger={}",p.id,row["status"],row["covered"],row["sources"].as_array().map(Vec::len).unwrap_or(0),facts.len());
-        assert_eq!(row["status"],"COMPLETED");assert!(row["publicAnswer"].as_str().is_some_and(|s|!s.trim().is_empty()));assert_eq!(row["reopenedCheckpoints"],plan.items.len());assert!(row["sources"].as_array().is_some_and(|s|!s.is_empty()));assert_eq!(row["actualModel"],p.model_id);assert_eq!(row["reopenedState"],"COMPLETED");assert_eq!(row["reopenedMessageExact"],true);assert_eq!(row["reopenedSourcesPresent"],true);assert_eq!(row["reopenedAccountingExact"],true);assert_eq!(row["reopenedWebProof"],true);assert!(facts.iter().any(|f|f.requested_model_id==p.model_id));drop(dir);
+        assert_eq!(row["status"],"COMPLETED");assert!(row["publicAnswer"].as_str().is_some_and(|s|!s.trim().is_empty()));assert_eq!(row["reopenedCheckpoints"],if web {row["planned"].as_u64().unwrap_or(0)} else {0});if web {assert!(row["sources"].as_array().is_some_and(|s|!s.is_empty()));}assert_eq!(desktop_model_service_v1::canonical_relay_model_id(p.provider_id,row["actualModel"].as_str().unwrap_or("")),desktop_model_service_v1::canonical_relay_model_id(p.provider_id,p.model_id));assert_eq!(row["reopenedState"],"COMPLETED");assert_eq!(row["reopenedMessageExact"],true);if web {assert_eq!(row["reopenedSourcesPresent"],true);}assert_eq!(row["reopenedAccountingExact"],true);assert_eq!(row["reopenedWebProof"],web);assert!(facts.iter().any(|f|f.requested_model_id==p.model_id));drop(dir);
+    }
+
+    #[test]
+    fn mercury_image_preparation_rejects_missing_or_changed_recipient_grants() {
+        use desktop_model_service_v1::ProviderCredentialStore;
+        for valid in [false,true] {
+            let (_dir,mut store,imported)=tests::imported_store();
+            store.credentials=desktop_model_service_v1::AppPrivateProviderCredentialStore::at(store.root.join("fixture-credentials"));
+            store.credentials.save_user_provided_secret("OPENROUTER",b"synthetic-fixture-only").unwrap();
+            let setting=store.read_desktop_model_service_setting_records().unwrap().into_iter().find(|s|s.provider_id=="OPENROUTER").unwrap();
+            store.save_desktop_model_service_setting_record("OPENROUTER",true,"GPT_6_LUNA",setting.revision).unwrap();
+            let fixture=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../app/src/publicModelAcceptance/assets/public-search-fixtures/public-sample-order.png");
+            let asset=store.import_conversation_attachment(DesktopAttachmentImportArgs{workspace_id:imported.summary.id.clone(),selected_path:fixture.to_string_lossy().into_owned()}).unwrap();
+            let ids=vec![asset.id];let text="读图";
+            let grant=relaycore_web_search_v1::RetrievalGrant{disclosure_version:attachment_web_search_execution_v1::IMAGE_READING_VERSION.into(),provider_id:"OPENROUTER".into(),preset_id:attachment_web_search_execution_v1::IMAGE_READER_PRESET.into(),model_id:attachment_web_search_execution_v1::IMAGE_READER_MODEL.into(),material_fingerprint:relaycore_web_search_v1::material_fingerprint(if valid {text}else{"changed"},&ids)};
+            let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:text.into(),attachment_ids:ids,model_id:Some("MERCURY_3".into()),tone_override:None,web_search_override:Some(false),egress_authorization:Some(DesktopOrdinaryChatEgressAuthorization{approved_at_ms:system_now_millis(),disclosure_version:attachment_web_search_execution_v1::IMAGE_READING_VERSION.into(),client_submission_id:None,search_service:None,retrieval_recipient:None,attachment_reading:Some(attachment_input_policy_v1::Grant{disclosure_version:attachment_input_policy_v1::VERSION.into(),material_fingerprint:grant.material_fingerprint,answer_provider_id:"OPENROUTER".into(),answer_model_id:"inception/mercury-3".into(),recipients:vec![attachment_input_policy_v1::recipient("image/png").unwrap()]})})},None);
+            assert_eq!(prepared.is_ok(),valid);
+        }
+    }
+
+    #[test]
+    #[ignore="explicit read-only OpenRouter authorization metadata, no generation"]
+    fn authorized_openrouter_permission_metadata() {
+        use desktop_model_service_v1::ProviderCredentialStore;
+        assert_eq!(std::env::var("NFAI_PUBLIC_MATRIX").as_deref(),Ok("1"));
+        let output=PathBuf::from(std::env::var("NFAI_OWNER_OUTPUT").unwrap());assert!(!output.exists());
+        let credentials=desktop_model_service_v1::AppPrivateProviderCredentialStore::at(std::env::var("NFAI_CREDENTIAL_ROOT").unwrap());
+        let key=credentials.with_secret("OPENROUTER",|k|Ok(Zeroizing::new(k.to_vec()))).unwrap();
+        let result=tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let response=reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).timeout(std::time::Duration::from_secs(20)).build().unwrap().get("https://openrouter.ai/api/v1/key").bearer_auth(std::str::from_utf8(&key).unwrap()).send().await.unwrap();
+            let status=response.status().as_u16();let bytes=response.bytes().await.unwrap();assert!(bytes.len()<65536);
+            let value:Value=serde_json::from_slice(&bytes).unwrap_or_default();let message=value["error"]["message"].as_str().unwrap_or("").to_lowercase();
+            json!({"httpStatus":status,"validMetadata":value["data"].is_object(),"reasonClasses":(["region","country","disabled","permission","credit","quota","expired","blocked"].into_iter().filter(|s|message.contains(s)).collect::<Vec<_>>()),"errorMessageChars":message.chars().count()})
+        });fs::write(output,serde_json::to_vec_pretty(&result).unwrap()).unwrap();
+    }
+
+    #[test]
+    #[ignore="authorized minimal public Mercury image reading and original model answer"]
+    fn authorized_mercury_image_reading_owner_chain() {
+        use desktop_model_service_v1::ProviderCredentialStore;
+        assert_eq!(std::env::var("NFAI_PUBLIC_MATRIX").as_deref(),Ok("1"));
+        let output=PathBuf::from(std::env::var("NFAI_OWNER_OUTPUT").unwrap());
+        use std::io::Write;
+        std::fs::OpenOptions::new().write(true).create_new(true).open(&output).unwrap().write_all(b"{\"status\":\"STARTED\"}").unwrap();
+        let (dir,mut store,imported)=tests::imported_store();
+        store.credentials=desktop_model_service_v1::AppPrivateProviderCredentialStore::at(std::env::var("NFAI_CREDENTIAL_ROOT").unwrap());
+        let setting=store.read_desktop_model_service_setting_records().unwrap().into_iter().find(|s|s.provider_id=="OPENROUTER").unwrap();
+        store.save_desktop_model_service_setting_record("OPENROUTER",true,"GPT_6_LUNA",setting.revision).unwrap();
+        let fixture=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../app/src/publicModelAcceptance/assets/public-search-fixtures/public-sample-order.png");
+        let asset=store.import_conversation_attachment(DesktopAttachmentImportArgs{workspace_id:imported.summary.id.clone(),selected_path:fixture.to_string_lossy().into_owned()}).unwrap();
+        let ids=vec![asset.id];let text="读取图片，简短给出实付金额和优惠金额，不补充其他内容。";
+        let grant=relaycore_web_search_v1::RetrievalGrant{disclosure_version:attachment_web_search_execution_v1::IMAGE_READING_VERSION.into(),provider_id:"OPENROUTER".into(),preset_id:attachment_web_search_execution_v1::IMAGE_READER_PRESET.into(),model_id:attachment_web_search_execution_v1::IMAGE_READER_MODEL.into(),material_fingerprint:relaycore_web_search_v1::material_fingerprint(text,&ids)};
+        let prepared=store.prepare_ordinary_chat(DesktopOrdinaryChatSubmitArgs{workspace_id:imported.summary.id.clone(),conversation_id:None,project_id:None,expected_revision:None,text:text.into(),attachment_ids:ids,model_id:Some("MERCURY_3".into()),tone_override:None,web_search_override:Some(false),egress_authorization:Some(DesktopOrdinaryChatEgressAuthorization{approved_at_ms:system_now_millis(),disclosure_version:attachment_web_search_execution_v1::IMAGE_READING_VERSION.into(),client_submission_id:None,search_service:None,retrieval_recipient:Some(grant),attachment_reading:None})},None).unwrap();
+        let request=desktop_ordinary_chat_v1::TransportRequest{endpoint:prepared.endpoint.clone(),provider_id:prepared.provider_id.clone(),model_id:prepared.model_id.clone(),messages:prepared.messages.clone(),idempotency_key:prepared.idempotency_key.clone(),max_output_tokens:2048,web_search_route:prepared.web_search_route.clone(),structured_json:false,disable_thinking:false,grounded_answer:false,explicit_search_query:None};
+        assert!(attachment_web_search_execution_v1::visual_reading_required(&request));
+        let key=store.credentials.with_secret("OPENROUTER",|k|Ok(Zeroizing::new(k.to_vec()))).unwrap();
+        let result=tokio::runtime::Runtime::new().unwrap().block_on(attachment_web_search_execution_v1::execute(request,key,None,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),attachment_search_checkpoint_v1::None,
+            |r,reply|store.record_scoped_search_usage(&prepared.projection,r,reply).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"}),
+            ||store.record_answer_pending(&prepared.projection).map_err(|_|desktop_ordinary_chat_v1::Failure::Unknown{code:"LOCAL_ACCOUNTING_PERSISTENCE"}),|_|Ok(())));
+        let attempt=&prepared.projection.attempt_id;
+        let mut row=json!({"status":"UNKNOWN","fixture":"public-sample-order.png"});
+        match result {
+            Ok(result)=>{
+                let reply=result.reply;
+                store.update_ordinary_chat_message(attempt,&reply.text,"COMPLETE",reply.reasoning.as_deref(),Some(&reply),None).unwrap();
+                store.complete_ordinary_chat_accounting(attempt,&reply).unwrap();
+                row["status"]=json!("COMPLETE");row["answer"]=json!(reply.text);row["returned"]=json!(reply.actual_model_id);
+                row["correctAmounts"]=json!(reply.text.contains("40.8") && reply.text.contains("26.8"));
+                let ledger=usage_ledger_v1::Ledger::open(&store.root.join("usage-ledger")).unwrap();let calls=ledger.entries_for_execution(attempt).unwrap();row["physicalCalls"]=json!(calls.iter().filter(|f|f.kind==usage_ledger_v1::Kind::FinalMeasured).map(|f|json!({"requested":f.requested_model_id,"returned":f.actual_model_id,"micros":f.charge_micros,"currency":f.currency_code,"source":f.cost_source})).collect::<Vec<_>>());
+                let root=store.root.clone();drop(store);let reopened=DesktopWorkspaceStore::open(root).unwrap();
+                let projection=DesktopWorkspaceStore::ordinary_chat_projection(&reopened.connection().unwrap(),attempt).unwrap();
+                row["reopenedCompleted"]=json!(projection.state=="COMPLETED");
+            },
+            Err(error)=>{row["status"]=json!(match &error {desktop_ordinary_chat_v1::Failure::Unknown{..}=>"UNKNOWN",desktop_ordinary_chat_v1::Failure::Cancelled=>"CANCELLED",_=>"FAILED"});row["failure"]=json!(format!("{error:?}"));}
+        }
+        std::fs::write(&output,serde_json::to_vec_pretty(&row).unwrap()).unwrap();
+        assert_eq!(row["status"],"COMPLETE");assert_eq!(row["correctAmounts"],true);assert_eq!(row["returned"],"inception/mercury-3");assert_eq!(row["reopenedCompleted"],true);
+        let calls=row["physicalCalls"].as_array().unwrap();assert_eq!(calls.len(),2);
+        drop(dir);
     }
 
     #[test]

@@ -50,7 +50,7 @@ fn public_android_one_shot_credential_broker() {
     let mut random=[0u8;32];std::fs::File::open("/dev/urandom").unwrap().read_exact(&mut random).unwrap();
     let token=Zeroizing::new(random.iter().map(|b|format!("{b:02x}")).collect::<String>());
     let run=std::env::var("NFAI_ANDROID_RUN").unwrap();assert!(run.chars().all(|c|c.is_ascii_alphanumeric()||c=='-'));
-    let config=Zeroizing::new(serde_json::to_vec(&json!({"port":port,"token":token.as_str(),"runId":run,"filter":std::env::var("NFAI_MATRIX_FILTER").unwrap_or_default(),"fixture":std::env::var("NFAI_PUBLIC_FIXTURE").unwrap_or_default(),"claimCountPerFile":std::env::var("NFAI_PUBLIC_MULTIFILE_COUNT").ok().and_then(|v|v.parse::<usize>().ok()).unwrap_or(2).clamp(1,8)})).unwrap());
+    let mut config_value=json!({"port":port,"token":token.as_str(),"runId":run,"filter":std::env::var("NFAI_MATRIX_FILTER").unwrap_or_default(),"fixture":std::env::var("NFAI_PUBLIC_FIXTURE").unwrap_or_default(),"web":std::env::var("NFAI_ROUNDTRIP_WEB").as_deref()==Ok("1"),"requestText":std::env::var("NFAI_ROUNDTRIP_TEXT").unwrap_or_default(),"budgetCnyMicros":20_000_000,"replayReader":std::env::var("NFAI_REPLAY_READER").as_deref()==Ok("1"),"outputLimit":if std::env::var("NFAI_PUBLIC_FIXTURE").as_deref()==Ok("attachment-roundtrip"){serde_json::json!(8192)}else{serde_json::Value::Null},"claimCountPerFile":std::env::var("NFAI_PUBLIC_MULTIFILE_COUNT").ok().and_then(|v|v.parse::<usize>().ok()).unwrap_or(2).clamp(1,8)});if config_value["outputLimit"].is_null(){config_value.as_object_mut().unwrap().remove("outputLimit");}let config=Zeroizing::new(serde_json::to_vec(&config_value).unwrap());
     let mut child=Command::new(&adb).args(["-s",DEVICE,"shell","run-as com.nanzhufeng.ai.publicmodelacceptance sh -c 'mkdir -p files; cat > files/public-bootstrap.json'"])
         .stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
     child.stdin.take().unwrap().write_all(&config).unwrap();assert!(child.wait().unwrap().success());
@@ -72,6 +72,7 @@ fn public_android_one_shot_credential_broker() {
     let mut providers=crate::desktop_model_service_v1::chat_presets().into_iter().filter(|p|filter.as_ref().is_none_or(|f|f.split(',').any(|id|id==p.id))).map(|p|p.provider_id).collect::<std::collections::BTreeSet<_>>();
     if providers.contains("RELAYCORE_CLAUDE") || providers.contains("RELAYCORE_GEMINI") {providers.insert("RELAYCORE_GPT");}
     if std::env::var("NFAI_PUBLIC_DIRECT_SEARCH").as_deref()==Ok("1") {providers.insert("ZHIPU");}
+    if std::env::var("NFAI_PUBLIC_FIXTURE").as_deref()==Ok("attachment-roundtrip") {providers.insert("OPENROUTER");}
     assert!(!providers.is_empty(),"no authorized preset selected");
     for (index,provider) in providers.iter().enumerate(){
         if index>0 {payload.push(b',');}payload.extend_from_slice(format!("\"{provider}\":").as_bytes());
@@ -83,6 +84,31 @@ fn public_android_one_shot_credential_broker() {
     payload.push(b'}');socket.write_all(&payload).unwrap();socket.shutdown(std::net::Shutdown::Write).unwrap();
     println!("PUBLIC_ANDROID_CAPABILITY delivered_once providers={} device={DEVICE} run={run}",providers.len());
 }
+fn public_matrix_presets(filter: Option<&str>) -> Result<Vec<crate::desktop_model_service_v1::PresetDescriptor>, &'static str> {
+    let current=crate::desktop_model_service_v1::chat_presets().into_iter()
+        .filter(|p|p.chat_selectable).collect::<Vec<_>>();
+    if current.is_empty() { return Err("no current chat models selected"); }
+    let Some(filter)=filter else { return Ok(current); };
+    let requested=filter.split(',').map(str::trim).collect::<std::collections::BTreeSet<_>>();
+    if requested.iter().any(|id|id.is_empty() || !current.iter().any(|p|p.id==*id)) {
+        return Err("matrix filter must contain only current chat preset IDs");
+    }
+    Ok(current.into_iter().filter(|p|requested.contains(p.id)).collect())
+}
+
+#[test]
+fn public_matrix_selection_matches_current_chat_catalog_and_rejects_missing_cases() {
+    let manifest: Value=serde_json::from_str(include_str!("../../../protocol/model-service/model-service-v1.json")).unwrap();
+    let expected=manifest["models"].as_array().unwrap().iter().map(|m|m["presetId"].as_str().unwrap()).collect::<std::collections::BTreeSet<_>>();
+    let selected=public_matrix_presets(None).unwrap();
+    let actual=selected.iter().map(|p|p.id).collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(actual,expected);
+    assert_eq!(public_matrix_presets(Some("MERCURY_3")).unwrap().len(),1);
+    for filter in ["", "MISSING", "MERCURY_3,MISSING", "GLM_OCR", "CLAUDE_FABLE_5"] {
+        assert!(public_matrix_presets(Some(filter)).is_err(), "invalid paid matrix selection: {filter}");
+    }
+}
+
 #[tokio::test]
 #[ignore = "paid public API calls; requires explicit user-authorized opt-in"]
 async fn all_current_models_public_search_and_original_answer() {
@@ -95,16 +121,9 @@ async fn all_current_models_public_search_and_original_answer() {
     let store = AppPrivateProviderCredentialStore::at(root);
     let mut rows = Vec::new();
     let filter = std::env::var("NFAI_MATRIX_FILTER").ok();
-    for preset in crate::desktop_model_service_v1::chat_presets()
-        .into_iter()
-        .filter(|p| p.chat_selectable)
-    {
-        if filter
-            .as_ref()
-            .is_some_and(|f| !f.split(',').any(|id| id == preset.id))
-        {
-            continue;
-        }
+    let selected=public_matrix_presets(filter.as_deref()).expect("invalid paid matrix scope; no requests sent");
+    let expected=selected.len();
+    for preset in selected {
         let route =
             crate::ordinary_chat_web_search_route(preset.provider_id, preset.model_id, true, true);
         let request = TransportRequest {
@@ -196,9 +215,7 @@ async fn all_current_models_public_search_and_original_answer() {
         rows.push(row);
         std::fs::write(&output, serde_json::to_vec_pretty(&rows).unwrap()).unwrap();
     }
-    if filter.is_none() {
-        assert_eq!(rows.len(), 19);
-    }
+    assert_eq!(rows.len(), expected);
     assert!(
         rows.iter().all(|r| r["scopeComplete"] == true
             && r["webProof"] == true

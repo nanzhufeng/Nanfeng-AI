@@ -827,7 +827,11 @@ private fun openRouterMultimodalBody(model: ResolvedModel, messages: List<ChatHi
     text("]}]")
     openRouterRequestOutputLimit(model)?.let { text(",\"max_tokens\":$it") }
     text(openRouterModelOptionsSuffix(model.modelId))
-    text(requestOptionsSuffix(options, stream, model))
+    val suffix=requestOptionsSuffix(options,stream,model)
+    val nativePdf="{\"id\":\"file-parser\",\"pdf\":{\"engine\":\"native\"}}"
+    text(if(attachments.any {it.kind==ChatAttachmentKind.PDF}) {
+        if(suffix.contains("\"plugins\":[")) suffix.replace("\"plugins\":[","\"plugins\":[$nativePdf,") else ",\"plugins\":[$nativePdf]$suffix"
+    } else suffix)
     return ProviderChatRequestBody.Segmented(parts)
 }
 

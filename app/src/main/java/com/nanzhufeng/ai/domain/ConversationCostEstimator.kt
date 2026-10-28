@@ -48,6 +48,7 @@ object ConversationCostEstimator {
     )
 
     private val prices = mapOf(
+        "inception/mercury-3" to price("openrouter-mercury-3-2026-10-20-v1", "0.1", "0.35", "0.01"),
         "google/gemini-4-argon" to price("openrouter-gemini-4-argon-2026-10-15-v1", "2", "10", "0.1"),
         "meta/muse-wonder" to price("openrouter-muse-wonder-2026-10-13-v1", "4", "20", "0.2"),
         "anthropic/claude-opus-5.5" to price("openrouter-public-prices-2026-10-09-v1", "4", "20", "0.2"),
@@ -107,6 +108,10 @@ object ConversationCostEstimator {
         "openai/gpt-6.1-sol" to listOf(
             InputTier(271_999, price("openrouter-public-prices-2026-10-09-v1", "2", "10", "0.1")),
             InputTier(Long.MAX_VALUE, price("openrouter-public-prices-2026-10-09-v1", "4", "15", "0.2")),
+        ),
+        "openai/gpt-6.1-terra" to listOf(
+            InputTier(271_999, price("openrouter-public-prices-2026-10-27-v1", "1", "5", "0.05")),
+            InputTier(Long.MAX_VALUE, price("openrouter-public-prices-2026-10-27-v1", "2", "7.5", "0.1")),
         ),
         "openai/gpt-6-luna" to listOf(
             InputTier(271_999, price("openrouter-public-prices-2026-10-09-v1", "0.1", "0.5", "0.01")),

@@ -9,7 +9,7 @@ import com.tom_roush.pdfbox.text.PDFTextStripper
 /**
  * App-level attachment capability: a selected model receives only its own native media parts,
  * plus bounded text extracted locally. Unsupported binary material is rejected before egress;
- * ordinary chat never sends it through another model as an implicit conversion step.
+ * ordinary chat never sends it through an undisclosed recipient. Explicit auxiliary reading is authorized by the executor.
  */
 fun interface ChatAttachmentBridge {
     fun resolve(
@@ -27,6 +27,7 @@ sealed interface ChatAttachmentBridgeResult {
         val providerAttachments: List<ChatAttachment>,
         val receivers: Set<String> = emptySet(),
         val searchProjection:()->Pair<String,List<ChatAttachment>> = {contextText to providerAttachments.filter {it.kind!=ChatAttachmentKind.FILE}},
+        val readingAttachments: List<ChatAttachment> = emptyList(),
     ) : ChatAttachmentBridgeResult {
         private val projected by lazy(searchProjection)
         val searchText:String get()=projected.first
@@ -59,6 +60,7 @@ class UniversalChatAttachmentBridge : ChatAttachmentBridge {
         if (attachments.isEmpty()) return ChatAttachmentBridgeResult.Ready("", emptyList())
         val providerAttachments = mutableListOf<ChatAttachment>()
         val localText = mutableListOf<String>()
+        val reading = mutableListOf<ChatAttachment>()
 
 
         attachments.forEach { attachment ->
@@ -69,16 +71,16 @@ class UniversalChatAttachmentBridge : ChatAttachmentBridge {
                 localText += text
                 return@forEach
             }
-            // A text-only search protocol may not carry media even when the ordinary endpoint
-            // can. It may use a local PDF text layer, but never a second provider as a bridge.
-            if (!forceTextProjection && targetModel.nativelyAccepts(attachment.kind)) {
+            val pdf=if(attachment.kind==ChatAttachmentKind.PDF) readPdf(attachment)
+                ?: return ChatAttachmentBridgeResult.Failed(ChatAttachmentBridgeResult.Failure.FORMAT) else null
+            if (com.nanzhufeng.ai.domain.AttachmentInputPolicy.acceptsNative(targetModel,attachment.mimeType,forceTextProjection)) {
                 providerAttachments += attachment
                 return@forEach
             }
-            if (attachment.kind == ChatAttachmentKind.PDF) {
-                val text = extractPdfText(attachment)
-                    ?: return ChatAttachmentBridgeResult.Failed(ChatAttachmentBridgeResult.Failure.FORMAT)
-                localText += materialText(attachment, "本机 PDF 文本层", text)
+            if(pdf?.text!=null) {
+                localText += materialText(attachment,"本机 PDF 文本层",pdf.text)
+            } else if(com.nanzhufeng.ai.domain.AttachmentInputPolicy.readerFor(attachment.mimeType)!=null) {
+                reading += attachment
             } else {
                 return ChatAttachmentBridgeResult.Failed(ChatAttachmentBridgeResult.Failure.FORMAT)
             }
@@ -95,19 +97,29 @@ class UniversalChatAttachmentBridge : ChatAttachmentBridge {
                 if(pdf!=null) extra+=materialText(attachment,"本机 PDF 文本层",pdf) else unprojected+=attachment
             }
             (localText+extra).joinToString("\n\n") to unprojected
-        })
+        }, receivers=reading.mapNotNull {com.nanzhufeng.ai.domain.AttachmentInputPolicy.readerFor(it.mimeType)?.label}.toSet(), readingAttachments=reading.toList())
     }
 
-    private fun extractPdfText(attachment: ChatAttachment): String? = runCatching {
-        val bytes = attachment.open().use { it.readBytes() }
-        if (bytes.size < 5 || !bytes.copyOfRange(0, minOf(bytes.size, 8)).toString(Charsets.ISO_8859_1).startsWith("%PDF-")) return null
-        PDDocument.load(bytes, "", null, null, MemoryUsageSetting.setupMixed(2L * 1024 * 1024)).use { document ->
-            if (document.isEncrypted || !document.currentAccessPermission.canExtractContent()) return null
-            val text = PDFTextStripper().apply { sortByPosition = false }.getText(document)
-                .replace("\r\n", "\n").replace('\r', '\n').trim()
-            text.takeIf(String::isNotBlank)
+    private data class PdfProjection(val text:String?)
+    private fun readPdf(attachment:ChatAttachment):PdfProjection? = runCatching {
+        val bytes=attachment.open().use {it.readBytes()}
+        if(!bytes.take(5).toByteArray().contentEquals("%PDF-".toByteArray())) return null
+        PDDocument.load(bytes,"",null,null,MemoryUsageSetting.setupMixed(2L*1024*1024)).use {document ->
+            if(document.isEncrypted || !document.currentAccessPermission.canExtractContent() || document.numberOfPages !in 1..2000) return null
+            val pieces=mutableListOf<String>();var requiresReading=false;var count=0
+            for(index in 0 until document.numberOfPages) {
+                val page=document.getPage(index)
+                val text=PDFTextStripper().apply {startPage=index+1;endPage=index+1}.getText(document).replace("\r\n","\n").trim()
+                count+=text.length;if(count>MAX_BRIDGE_CONTEXT_CHARS) return null
+                val parser=com.tom_roush.pdfbox.pdfparser.PDFStreamParser(page).apply {parse()}
+                val hasDrawing=parser.tokens.any {(it as? com.tom_roush.pdfbox.contentstream.operator.Operator)?.name in setOf("S","s","f","F","f*","B","B*","b","b*","sh","Do")}
+                if(text.isBlank() || hasDrawing || page.resources?.xObjectNames?.iterator()?.hasNext()==true) requiresReading=true
+                pieces+=text
+            }
+            PdfProjection(if(requiresReading) null else pieces.joinToString("\n\n"))
         }
     }.getOrNull()
+    private fun extractPdfText(attachment:ChatAttachment):String?=readPdf(attachment)?.text
 
     private fun materialText(attachment: ChatAttachment, source: String, text: String): String =
         "以下是附件 ${attachment.fileName} 经${source}完整转换的内容：\n---\n$text\n---"
@@ -161,12 +173,5 @@ class UniversalChatAttachmentBridge : ChatAttachmentBridge {
         texts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
     }.getOrNull()
 
-    private fun ResolvedModel.nativelyAccepts(kind: ChatAttachmentKind): Boolean = when (kind) {
-        ChatAttachmentKind.IMAGE -> capabilities.supportsVision
-        ChatAttachmentKind.PDF -> capabilities.supportsPdf
-        ChatAttachmentKind.VIDEO -> capabilities.supportsVideo
-        ChatAttachmentKind.AUDIO -> capabilities.supportsAudio
-        ChatAttachmentKind.FILE -> true
-    }
     private companion object { const val MAX_BRIDGE_CONTEXT_CHARS = 800_000 }
 }

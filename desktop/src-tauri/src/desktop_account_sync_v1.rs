@@ -566,7 +566,8 @@ pub fn read_session<C: CredentialStore>(credentials: &C) -> Result<Option<Sessio
 /// Exchanges an expiring Supabase access token without opening Google again. The refresh token
 /// stays inside the app-owned credential boundary and is never included in diagnostics.
 fn refresh_session(config: &ServiceConfig, current: &Session) -> Result<Session, String> {
-    let client = Client::builder()
+    let builder = Client::builder();
+    let client = if config.localhost_mock {builder.no_proxy()} else {builder}
         .redirect(Policy::none())
         .timeout(Duration::from_secs(30))
         .build()
@@ -785,7 +786,8 @@ pub fn authorize_with_system_browser<B: Browser>(
         .append_pair("prompt", "select_account");
     browser.open(&authorize)?;
     let code = callback_code(listener, &state)?;
-    let client = Client::builder()
+    let builder = Client::builder();
+    let client = if config.localhost_mock {builder.no_proxy()} else {builder}
         .redirect(Policy::none())
         .timeout(Duration::from_secs(30))
         .build()
@@ -6433,9 +6435,25 @@ mod tests {
             stream
                 .set_read_timeout(Some(Duration::from_secs(2)))
                 .unwrap();
-            let mut request = [0u8; 8192];
-            let count = stream.read(&mut request).unwrap();
-            let request = String::from_utf8_lossy(&request[..count]);
+            // TCP can split headers and body across reads; wait for the declared body.
+            let mut request = Vec::new();
+            let mut chunk = [0u8; 2048];
+            loop {
+                let count = stream.read(&mut chunk).unwrap();
+                assert!(count > 0, "request ended before its declared body");
+                request.extend_from_slice(&chunk[..count]);
+                assert!(request.len() <= 8192, "fixture request exceeds its bound");
+                if let Some(marker) = request.windows(4).position(|part| part == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&request[..marker]);
+                    let length = headers.lines().find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length")
+                            .then(|| value.trim().parse::<usize>().unwrap())
+                    }).expect("fixture client must declare content length");
+                    if request.len() >= marker + 4 + length { break; }
+                }
+            }
+            let request = String::from_utf8_lossy(&request);
             assert!(request.starts_with("POST /rest/v1/rpc/nanfeng_sync_read_document "));
             assert!(request.contains("\"p_document_id\":\"conversation-safe\""));
             let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]";

@@ -1,0 +1,117 @@
+{
+  "verifiedAt": "2026-10-21T00:37:55+08:00",
+  "scope": "Mercury/Argon integration follow-up risk review; not a full-project semantic audit",
+  "codeBaseline": "dd3c8e89921feee8be5bc0185bf3174e6fed4bae",
+  "state": "WORKTREE",
+  "findings": [
+    {
+      "id": "R1",
+      "priority": "P1",
+      "problem": "Cached fixed OpenRouter route can override the verified cold-start seed and resolve a different API ID under the selected model name",
+      "fix": "Reject cached ID mismatch for fixed OpenRouter routes; preserve valid health/recency and existing direct-provider alias policy",
+      "red": "ModelProfileUpgradeTest fixed OpenRouter identity failed through UnifiedModelResolver",
+      "state": "FIXED"
+    },
+    {
+      "id": "R2",
+      "priority": "P2",
+      "problem": "Argon composer abbreviation also affected the actual assistant footer via the shared compact-name helper",
+      "fix": "Keep 4 Argon in composer and full Gemini 4 Argon in actual footer, preserving other compact/RC labels",
+      "red": "MercuryModelIntegrationTest real assistantFooterModelName returned 4 Argon",
+      "state": "FIXED"
+    },
+    {
+      "id": "R3",
+      "priority": "P2",
+      "problem": "Mercury route-only historical/imported metadata can expose raw API ID as a reading label",
+      "fix": "Exact API-ID display fallback on both platforms; frozen human labels and stored IDs remain unchanged",
+      "red": "Android readable-label test and Node transcriptMetadata test returned inception/mercury-3",
+      "state": "FIXED"
+    },
+    {
+      "id": "R4",
+      "priority": "P2",
+      "problem": "Paid matrix expected count included retired/OCR models while dispatch filtered them; unknown or empty filters could also pass with zero or missing requests",
+      "fix": "One validated current chat selection owns dispatch and expected count; fail invalid/retired/OCR filters before secret read and network",
+      "red": "Offline public_matrix_selection test mismatched current model manifest",
+      "state": "FIXED"
+    }
+  ],
+  "verification": {
+    "android": {
+      "tests": 1545,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 10,
+      "passed": 1535,
+      "releaseBuild": "PASS",
+      "releaseLint": "PASS"
+    },
+    "node": {
+      "passed": 558,
+      "skipped": 12,
+      "failed": 0,
+      "lint": "PASS",
+      "typecheck": "PASS"
+    },
+    "rust": {
+      "passed": 460,
+      "ignored": 36,
+      "failed": 0
+    },
+    "modelServiceContract": {
+      "state": "PASS",
+      "chatModels": 22,
+      "specialModels": 1,
+      "credentialGroups": 7
+    },
+    "protocolUnitTests": 16,
+    "contractGovernance": {
+      "state": "PASS",
+      "contracts": 114,
+      "domains": 40
+    },
+    "sourceInputsFrozen": 1001,
+    "postBuildDrift": 0,
+    "preReviewSourceTestFilesChanged": 9,
+    "unrelatedPreReviewFilesDrift": 0,
+    "newProviderCalls": 0,
+    "unchangedTransportAndManifestOwners": [
+      "app/src/main/java/com/nanzhufeng/ai/ai/ChatProviderAdapters.kt",
+      "app/src/main/java/com/nanzhufeng/ai/ai/OfficialProviderChatTransport.kt",
+      "desktop/src-tauri/src/desktop_ordinary_chat_v1.rs",
+      "desktop/src-tauri/src/attachment_web_search_execution_v1.rs",
+      "protocol/model-service/model-service-v1.json"
+    ]
+  },
+  "formalCandidates": {
+    "android": {
+      "package": "com.nanzhufeng.ai",
+      "versionName": "1.0.31",
+      "versionCode": 95,
+      "debuggable": false,
+      "certificateSha256": "6d1d56ec5ae2d554f1085f2859d6bf19a9d3a8f0e5c0e96507cf4e198d8661f8",
+      "sha256": "71fa25020f36d70abbb6f3db1a4120026c2334855b1677cef1b059a8237419f9",
+      "bytes": 28705322
+    },
+    "mac": {
+      "versionName": "1.0.31",
+      "dmgSha256": "e4d26640ebfbe8940bdf84d590eef7b430390992e9961c17da3424426489b9b3",
+      "certificateSha256": "e427918fedfc3842938551595bd6d3cd77666fc3a3a2ccdb67a43bc26684e7f3",
+      "signatureVerified": true,
+      "dmgVerified": true
+    }
+  },
+  "deployment": {
+    "mainDeviceOverlay": "NOT RUN",
+    "macFormalInstall": "NOT RUN",
+    "emulatorInstallOfReviewedCandidate": "NOT RUN",
+    "githubPublish": "NOT RUN"
+  },
+  "verificationGaps": [
+    "Native outer-screen visual/click/reopen acceptance from prior task remains NOT RUN",
+    "Historical and independent-probe TLS/rate-limit causes remain unresolved; no unknown request replayed",
+    "Android Mercury paid request not separately exercised; prior desktop synthetic public service receipts remain dated evidence",
+    "Original model media limitations remain; no new binary/media capability claimed"
+  ]
+}
