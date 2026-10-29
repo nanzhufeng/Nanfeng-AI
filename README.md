@@ -1,6 +1,19 @@
 # 南枫 AI
 
-本地优先的个人 AI 工作台，支持 Android 与 macOS。
+本地优先的个人 AI 工作台，支持 Android、macOS 与 Windows。
+
+
+## Windows
+
+[下载 Windows 1.0.32 安装包](https://github.com/nanzhufeng/Nanfeng-AI/releases/tag/v1.0.32-windows.1)（x64，未签名 NotSigned）。本次未执行实际覆盖安装，真实模型服务需在软件内配置。
+
+[对应 Windows 源码](https://github.com/nanzhufeng/Nanfeng-AI/tree/codex/windows-release-1.0.32)保存在同仓库发布分支；Mac/Android 主线保持现有实现。
+
+以下为 Windows 1.0.32 当前构建在隔离合成数据中的真实运行截图（1440 × 932）。截图使用独立验收身份，与发布程序共享 409 项构建输入；红色标题栏为隔离标识，未配置真实 API Key。
+
+| 聊天主页 | 模型选择 |
+| --- | --- |
+| ![Windows 聊天主页](docs/release-previews/v1.0.32-windows.1/windows-home.jpg) | ![Windows 模型选择](docs/release-previews/v1.0.32-windows.1/windows-models.jpg) |
 
 ## 下载
 
@@ -30,7 +43,7 @@
 | 目录 | 内容 |
 | --- | --- |
 | `app/` | Android |
-| `desktop/` | macOS 与未来 Windows 共用的桌面端 |
+| `desktop/` | macOS 与 Windows 共用的桌面端 |
 | `protocol/` | 跨端协议 |
 | `supabase/`、`upload-gateway/` | 可选云端组件 |
 
