@@ -1,0 +1,60 @@
+name: Assemble verified Windows release upload
+on:
+  push:
+    branches: [codex/windows-release-transfer-1-0-32]
+permissions:
+  contents: write
+concurrency:
+  group: nfai-owned-release-transfer-427438345
+  cancel-in-progress: false
+jobs:
+  assemble:
+    if: github.repository == 'nanzhufeng/Nanfeng-AI' && github.actor == 'nanzhufeng'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify parts, reassemble exact Setup, upload and clean owned transfer parts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, subprocess, hashlib, os
+          from pathlib import Path
+          m=json.loads('{"schema":1,"releaseId":427438345,"repo":"nanzhufeng/Nanfeng-AI","tag":"v1.0.32-windows.1","assetName":"Nanfeng-AI-Windows-1.0.32-Setup.exe","bytes":279022244,"sha256":"df87a7cf77ddc8ed090fd7733c742c9744af5993dbb9d51a4ca4cc93dd4dea94","parts":[{"name":"nfai-transfer-df87a7cf-001-of-034.part","bytes":8388608,"sha256":"9a93648b0f615ac81bd89e549074d6b2d3e84805d6fce2f89859e3af7d1e6ac2"},{"name":"nfai-transfer-df87a7cf-002-of-034.part","bytes":8388608,"sha256":"ad5edc22faf7c3eadc7cd188dcdd4860bbec1af952d447e22bfc032203415383"},{"name":"nfai-transfer-df87a7cf-003-of-034.part","bytes":8388608,"sha256":"400d93f5e295bff7a4445c8bc8875b7d0e828cbc363620fe2dea684c105e4659"},{"name":"nfai-transfer-df87a7cf-004-of-034.part","bytes":8388608,"sha256":"d96cb7cc1209116ca48851e42b5bf17bdb454f7d5fb9aeed3658e8dbee4c1fa9"},{"name":"nfai-transfer-df87a7cf-005-of-034.part","bytes":8388608,"sha256":"69946e43f298593764933d596659f2098d1ad90ee5c65a45ce294f8fb3b77195"},{"name":"nfai-transfer-df87a7cf-006-of-034.part","bytes":8388608,"sha256":"93a3d6794983e89d1a5e1ed2fa8dfbe2a938e38db86763f123f10739d27033a3"},{"name":"nfai-transfer-df87a7cf-007-of-034.part","bytes":8388608,"sha256":"393d3dc4576afeabbae4ced4af2bd7cc6bdfa8d3c759fa200e71040a7fdd4d91"},{"name":"nfai-transfer-df87a7cf-008-of-034.part","bytes":8388608,"sha256":"d52eb4d1eafa9f2f5fbb1823de423e7f0742ea35a7e1161b45e8fda34f9783b1"},{"name":"nfai-transfer-df87a7cf-009-of-034.part","bytes":8388608,"sha256":"a3180e9cbeb517633b0cdcdcb8b2fba30c3eb3911947f3ca123475a2516696d3"},{"name":"nfai-transfer-df87a7cf-010-of-034.part","bytes":8388608,"sha256":"a5f83ecda1c8aa505a2786bd0ed3a4b69ccc9c8faed26d4dd4c7d8f45d31b5ae"},{"name":"nfai-transfer-df87a7cf-011-of-034.part","bytes":8388608,"sha256":"abcde26115702f3c2fa2f31272873f588659af043250789431017621520607f3"},{"name":"nfai-transfer-df87a7cf-012-of-034.part","bytes":8388608,"sha256":"1f8e4c6ccbc6898377af5b0b5ddc1deebbb7765d594eb947b653fb80a96acb27"},{"name":"nfai-transfer-df87a7cf-013-of-034.part","bytes":8388608,"sha256":"0413204943b79f2a36047f4ef7c567791981a10529b2424531a4ab696ae62e5b"},{"name":"nfai-transfer-df87a7cf-014-of-034.part","bytes":8388608,"sha256":"84ca7770b95e39958e5e2c27efe1116e49438fd98c53ee5afe39443ed6831bd5"},{"name":"nfai-transfer-df87a7cf-015-of-034.part","bytes":8388608,"sha256":"31487ca2053f7f482dd9510a1b92604b81e9d266fd302f3a1d7721ebc83eced9"},{"name":"nfai-transfer-df87a7cf-016-of-034.part","bytes":8388608,"sha256":"1e29a3bf20d444ce2a5e50dfae6bc99caafc03de36845f2d2f5ec75b32869a78"},{"name":"nfai-transfer-df87a7cf-017-of-034.part","bytes":8388608,"sha256":"c770291bacee5415eacf7fa9ada269efe70072a77e947007a32b2919e70cbd2f"},{"name":"nfai-transfer-df87a7cf-018-of-034.part","bytes":8388608,"sha256":"6007ff898a398e0072bf4153a3dfc77d538c583518583d421ad25fcb6a98b3a0"},{"name":"nfai-transfer-df87a7cf-019-of-034.part","bytes":8388608,"sha256":"4ae775814a4ab1881539013913be3d34b3296127a19b26822faadba35b5eee7f"},{"name":"nfai-transfer-df87a7cf-020-of-034.part","bytes":8388608,"sha256":"81091e7f51f003f5632314346219322e56adb0ee02ba0a7e5191383e4dcb0d65"},{"name":"nfai-transfer-df87a7cf-021-of-034.part","bytes":8388608,"sha256":"bd065e3d8211c0658c31aa89d7139efcd085df46eb076105e42353b2509685fd"},{"name":"nfai-transfer-df87a7cf-022-of-034.part","bytes":8388608,"sha256":"b78e07b0aa978404322895ea992aa919054bb5051d0363c14d87dcb0e4ff5d0b"},{"name":"nfai-transfer-df87a7cf-023-of-034.part","bytes":8388608,"sha256":"8c01eacd9c59287bbbffb37f1a992a8c47aa93f762942f92b12c9359e0edc5f4"},{"name":"nfai-transfer-df87a7cf-024-of-034.part","bytes":8388608,"sha256":"93f3c620365cef6516b22205c929d9e10e4190dda56cfefe47fbbe90d766ebd8"},{"name":"nfai-transfer-df87a7cf-025-of-034.part","bytes":8388608,"sha256":"2593838566fd27178a12b14e1a81606a46e8744bdbe8cbcab61f9fef54ffe4b9"},{"name":"nfai-transfer-df87a7cf-026-of-034.part","bytes":8388608,"sha256":"d8e1e7366d9ce0d3b92ecc32f843278957aaf69710d92fef2b2687f789d0d5cd"},{"name":"nfai-transfer-df87a7cf-027-of-034.part","bytes":8388608,"sha256":"354651e1c78afd9d79f58bc290ce1c94ba14f1787036462e101933d4b4d998d2"},{"name":"nfai-transfer-df87a7cf-028-of-034.part","bytes":8388608,"sha256":"8f3a8f514fcedd9b913f828ded817dd6596b89ddde46206ae38c118d95751a7b"},{"name":"nfai-transfer-df87a7cf-029-of-034.part","bytes":8388608,"sha256":"b83af759af7436999a42c06e6eeff3e2b74d67063a991bfc866ffbe3f4d9f59b"},{"name":"nfai-transfer-df87a7cf-030-of-034.part","bytes":8388608,"sha256":"8603296e2d72029ef36a88c650342737e71ddcfaa11b9a363d875da26c9980bf"},{"name":"nfai-transfer-df87a7cf-031-of-034.part","bytes":8388608,"sha256":"453c070711fb6e07c7506ec95d984115a8382089ff1983e552645d11a888c4cb"},{"name":"nfai-transfer-df87a7cf-032-of-034.part","bytes":8388608,"sha256":"22eea7550322f0161acd2199c5e0b9e2a651e55043982ea3d4e69b82032222e8"},{"name":"nfai-transfer-df87a7cf-033-of-034.part","bytes":8388608,"sha256":"75d13a7931f283dbda66c8116234dd36c0089475e31a5fc4494b8aeb0866b6cc"},{"name":"nfai-transfer-df87a7cf-034-of-034.part","bytes":2198180,"sha256":"55ed3857c734e426578e5bb2d5e285b40e2a5f87e52f431923cbd33a930786d1"}]}')
+          repo=m['repo']; rid=m['releaseId']; base=f'repos/{repo}/releases/{rid}'
+          def gh(*args,output=None):
+           p=subprocess.run(['gh',*args],check=True,stdout=output or subprocess.PIPE,timeout=180)
+           return p.stdout
+          def assets():return {a['name']:a for a in json.loads(gh('api',base+'/assets?per_page=100'))}
+          def matches(a,p):return a and a['state']=='uploaded' and a['size']==p['bytes'] and a.get('digest')=='sha256:'+p['sha256']
+          meta=json.loads(gh('api',base)); assert meta['draft'] and meta['tag_name']==m['tag']
+          remote=assets();allowed={p['name'] for p in m['parts']}|{m['assetName']};assert set(remote)<=allowed,'Unexpected asset preserved'
+          final=remote.get(m['assetName'])
+          expected={'bytes':m['bytes'],'sha256':m['sha256']}
+          if final:assert matches(final,expected),'Existing final asset differs; preserved'
+          else:
+           for p in m['parts']:assert matches(remote.get(p['name']),p),'Missing or mismatched transfer part'
+           out=Path(os.environ['RUNNER_TEMP'])/m['assetName']; whole=hashlib.sha256();total=0
+           with out.open('wb') as result:
+            for n,p in enumerate(m['parts']):
+             part=Path(os.environ['RUNNER_TEMP'])/p['name']
+             with part.open('wb') as target:gh('api','-H','Accept: application/octet-stream',f"repos/{repo}/releases/assets/{remote[p['name']]['id']}",output=target)
+             raw=part.read_bytes();assert len(raw)==p['bytes'] and hashlib.sha256(raw).hexdigest()==p['sha256']
+             result.write(raw);whole.update(raw);total+=len(raw);part.unlink();print(f'Verified part {n+1}/{len(m["parts"])}',flush=True)
+           assert total==m['bytes'] and whole.hexdigest()==m['sha256'],'Reassembled bytes mismatch'
+           gh('release','upload',m['tag'],str(out),'--repo',repo)
+           final=assets().get(m['assetName']);assert matches(final,expected),'Final server digest mismatch'
+           print('Final Setup uploaded; exact SHA-256 and size verified',flush=True)
+           # Remove only the just-verified owned temporary transfer assets, while still draft.
+          assert json.loads(gh('api',base))['draft']
+          remote=assets()
+          for p in m['parts']:
+           a=remote.get(p['name'])
+           if not a:continue
+           assert matches(a,p)
+           gh('api','--method','DELETE',f"repos/{repo}/releases/assets/{a['id']}")
+          remaining=assets();assert set(remaining)=={m['assetName']} and matches(remaining[m['assetName']],expected)
+          print('Temporary parts removed; exactly one verified Setup remains. Release stays draft.',flush=True)
+          PY
